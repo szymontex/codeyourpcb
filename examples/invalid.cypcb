@@ -1,0 +1,7 @@
+// Invalid file - syntax error
+version 1
+
+board test {
+    size 50mm x 30mm
+    layers  // missing value
+}
