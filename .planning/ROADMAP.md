@@ -9,7 +9,7 @@
 | # | Phase | Goal | Requirements | Status |
 |---|-------|------|--------------|--------|
 | 1 | Foundation | Working parser and board model | 12 | Complete |
-| 2 | Rendering | Visual feedback with hot reload | 7 | Gaps Closing |
+| 2 | Rendering | Visual feedback with hot reload | 7 | Complete |
 | 3 | Validation | DRC prevents invalid designs | 7 | Pending |
 | 4 | Export | Manufacturable output | 5 | Pending |
 | 5 | Intelligence | Autorouting and IDE integration | 6 | Pending |
@@ -104,13 +104,11 @@ Plans:
 - [x] 02-05-PLAN.md -- Interaction (zoom, pan, select, layer toggles)
 - [x] 02-06-PLAN.md -- Hot reload (file watcher, WebSocket)
 - [x] 02-07-PLAN.md -- Visual verification checkpoint
-- [ ] 02-08-PLAN.md -- [GAP CLOSURE] Fix WASM build (getrandom compatibility)
-- [ ] 02-09-PLAN.md -- [GAP CLOSURE] Enable real WASM integration
+- [x] 02-08-PLAN.md -- [GAP CLOSURE] Fix WASM build (getrandom compatibility)
+- [x] 02-09-PLAN.md -- [GAP CLOSURE] Enable real WASM integration
 
-**Gap Closure Notes:**
-Plans 02-08 and 02-09 address gaps identified in verification:
-1. WASM build fails due to bevy_ecs/getrandom WASM incompatibility
-2. TypeScript currently uses MockPcbEngine instead of real WASM
+**Gap Closure Complete:**
+Both gaps successfully resolved — WASM builds with feature flags, real PcbEngine integrated via adapter.
 
 ---
 
@@ -253,4 +251,4 @@ Phase 2 (Rendering)  Phase 3 (Validation)
 ---
 
 *Roadmap created: 2026-01-21*
-*Last updated: 2026-01-21 - Phase 2 gap closure plans added (02-08, 02-09)*
+*Last updated: 2026-01-21 - Phase 2 complete (9/9 plans, gaps closed)*
