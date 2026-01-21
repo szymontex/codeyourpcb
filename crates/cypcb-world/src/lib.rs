@@ -89,6 +89,7 @@
 //! ```
 
 pub mod components;
+pub mod footprint;
 
 // Re-export all component types at crate root for convenience
 pub use components::{
