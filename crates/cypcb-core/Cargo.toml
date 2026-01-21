@@ -1,0 +1,10 @@
+[package]
+name = "cypcb-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Core types for CodeYourPCB: coordinates, units, and geometry"
+
+[dependencies]
+serde = { workspace = true }
+thiserror = { workspace = true }
