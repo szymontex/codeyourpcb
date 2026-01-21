@@ -11,7 +11,7 @@ component R1 resistor "0402" {
     value "10k"
     at 10mm, 15mm
 }
-
+ 
 component R2 resistor "0402" {
     value "10k"
     at 10.5mm, 15mm

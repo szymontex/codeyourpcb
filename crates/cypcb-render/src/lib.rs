@@ -209,15 +209,17 @@ impl PcbEngine {
         }
 
         // Register footprints from snapshot data (needed for DRC)
-        // Use a set to avoid re-registering the same footprint multiple times
+        // If snapshot has pads, use those. Otherwise use builtin library.
+        // Note: JS parser doesn't populate pads, so we fall back to builtin library.
         let mut registered: std::collections::HashSet<String> = std::collections::HashSet::new();
         for comp in &snapshot.components {
-            if !comp.footprint.is_empty()
-                && !registered.contains(&comp.footprint)
-                && !comp.pads.is_empty()
-            {
-                let footprint = self.footprint_from_pads(&comp.footprint, &comp.pads);
-                self.footprint_lib.register(footprint);
+            if !comp.footprint.is_empty() && !registered.contains(&comp.footprint) {
+                if !comp.pads.is_empty() {
+                    // Use pads from snapshot (custom footprint)
+                    let footprint = self.footprint_from_pads(&comp.footprint, &comp.pads);
+                    self.footprint_lib.register(footprint);
+                }
+                // If pads are empty, the builtin library (loaded in new()) should have it
                 registered.insert(comp.footprint.clone());
             }
         }
