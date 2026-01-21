@@ -578,4 +578,80 @@ mod tests {
         assert_eq!(snapshot.nets[0].name, "VCC");
         assert_eq!(snapshot.nets[0].connections.len(), 2);
     }
+
+    #[test]
+    fn test_drc_detects_clearance_violations() {
+        // Test clearance violation detection using native source parsing
+        let mut engine = PcbEngine::new();
+        let error = engine.load_source(
+            r#"
+            version 1
+            board drc_test { size 30mm x 30mm layers 2 }
+            component R1 resistor "0402" {
+                value "10k"
+                at 10mm, 15mm
+            }
+            component R2 resistor "0402" {
+                value "10k"
+                at 10.5mm, 15mm
+            }
+            "#,
+        );
+        assert!(error.is_empty(), "Unexpected error: {}", error);
+
+        // With components 0.5mm apart and 0402 footprints (1.5mm courtyard),
+        // the courtyards overlap significantly, so clearance should be violated
+        let violations = engine.violation_count();
+        assert!(violations > 0, "Expected clearance violations but found {}", violations);
+    }
+
+    #[test]
+    fn test_drc_from_snapshot_detects_violations() {
+        // Simulate WASM mode by creating a snapshot and loading it
+        use crate::snapshot::*;
+
+        let snapshot = BoardSnapshot {
+            board: Some(BoardInfo {
+                name: "drc_test".to_string(),
+                width_nm: 30_000_000,  // 30mm
+                height_nm: 30_000_000, // 30mm
+                layer_count: 2,
+            }),
+            components: vec![
+                ComponentInfo {
+                    refdes: "R1".to_string(),
+                    value: "10k".to_string(),
+                    x_nm: 10_000_000,   // 10mm
+                    y_nm: 15_000_000,   // 15mm
+                    rotation_mdeg: 0,
+                    footprint: "0402".to_string(),
+                    pads: vec![], // Empty - should use builtin library
+                },
+                ComponentInfo {
+                    refdes: "R2".to_string(),
+                    value: "10k".to_string(),
+                    x_nm: 10_500_000,   // 10.5mm (0.5mm from R1)
+                    y_nm: 15_000_000,   // 15mm
+                    rotation_mdeg: 0,
+                    footprint: "0402".to_string(),
+                    pads: vec![], // Empty - should use builtin library
+                },
+            ],
+            nets: vec![],
+            violations: vec![],
+        };
+
+        let mut engine = PcbEngine::new();
+        engine.populate_from_snapshot(&snapshot);
+        engine.run_drc_internal();
+
+        // Check spatial index was built
+        let spatial_count = engine.world.spatial().len();
+        assert_eq!(spatial_count, 2, "Spatial index should have 2 entries, found {}", spatial_count);
+
+        // Check for violations
+        let violations = engine.violation_count();
+        assert!(violations > 0, "Expected clearance violations but found {} - spatial entries: {}",
+            violations, spatial_count);
+    }
 }

@@ -283,29 +283,15 @@ class WasmPcbEngineAdapter implements PcbEngine {
   }
 
   get_snapshot(): BoardSnapshot {
-    // Return the JS-parsed snapshot (WASM engine's snapshot may not have pads)
-    return this.currentSnapshot;
+    // Get snapshot from WASM engine - includes DRC violations computed in Rust
+    // The WASM engine rebuilds spatial index and runs DRC in load_snapshot()
+    return this.wasmEngine.get_snapshot();
   }
 
   query_point(x_nm: number, y_nm: number): string[] {
-    // Use JS-based query since WASM spatial index isn't populated by load_snapshot
-    // (The WASM engine's populate_from_snapshot doesn't rebuild the spatial index)
-    const result: string[] = [];
-
-    for (const comp of this.currentSnapshot.components) {
-      // Check if point is within component bounds (simplified)
-      const compWidth = 2_000_000; // 2mm default
-      const compHeight = 1_000_000; // 1mm default
-
-      if (x_nm >= comp.x_nm - compWidth / 2 &&
-          x_nm <= comp.x_nm + compWidth / 2 &&
-          y_nm >= comp.y_nm - compHeight / 2 &&
-          y_nm <= comp.y_nm + compHeight / 2) {
-        result.push(comp.refdes);
-      }
-    }
-
-    return result;
+    // Use WASM spatial index for efficient queries
+    // The WASM engine rebuilds the spatial index in populate_from_snapshot()
+    return this.wasmEngine.query_point(BigInt(x_nm), BigInt(y_nm));
   }
 
   free(): void {
