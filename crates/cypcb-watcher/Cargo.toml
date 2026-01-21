@@ -1,0 +1,10 @@
+[package]
+name = "cypcb-watcher"
+version.workspace = true
+edition.workspace = true
+description = "File watcher for CodeYourPCB hot reload"
+license.workspace = true
+
+[dependencies]
+notify = { workspace = true }
+notify-debouncer-full = { workspace = true }
