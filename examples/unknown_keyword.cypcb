@@ -1,0 +1,11 @@
+// Test unknown keyword
+version 1
+
+board test {
+    size 50mm x 30mm
+    layers 2
+}
+
+module R1 resistor "0402" {
+    value "10k"
+}
