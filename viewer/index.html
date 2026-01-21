@@ -39,6 +39,23 @@
       padding: 4px 8px;
       border-radius: 4px;
       font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    #error-badge {
+      background: #dc3545;
+      color: white;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 11px;
+      cursor: pointer;
+    }
+    #error-badge:hover {
+      background: #c82333;
+    }
+    #error-badge.hidden {
+      display: none;
     }
   </style>
 </head>
@@ -51,7 +68,10 @@
   </div>
   <div id="canvas-container">
     <canvas id="pcb-canvas"></canvas>
-    <div id="status">Loading...</div>
+    <div id="status">
+      <span id="status-text">Loading...</span>
+      <span id="error-badge" class="hidden"><span id="error-count">0</span> errors</span>
+    </div>
   </div>
   <script type="module" src="/src/main.ts"></script>
 </body>
