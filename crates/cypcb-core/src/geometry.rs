@@ -110,6 +110,27 @@ impl Rect {
         }
     }
 
+    /// Create a rectangle from a center point and full size (width, height).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use cypcb_core::{Rect, Point, Nm};
+    ///
+    /// let rect = Rect::from_center_size(
+    ///     Point::from_mm(10.0, 10.0),
+    ///     (Nm::from_mm(10.0), Nm::from_mm(6.0)),
+    /// );
+    ///
+    /// assert_eq!(rect.min, Point::from_mm(5.0, 7.0));
+    /// assert_eq!(rect.max, Point::from_mm(15.0, 13.0));
+    /// ```
+    pub fn from_center_size(center: Point, size: (Nm, Nm)) -> Self {
+        let half_width = Nm(size.0 .0 / 2);
+        let half_height = Nm(size.1 .0 / 2);
+        Self::from_center_half_size(center, half_width, half_height)
+    }
+
     /// Create a rectangle from origin and size.
     ///
     /// # Examples
