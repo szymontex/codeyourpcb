@@ -127,6 +127,7 @@ pub fn run_drc(world: &mut BoardWorld, rules: &DesignRules) -> DrcResult {
     let checkers: Vec<Box<dyn DrcRule>> = vec![
         Box::new(rules::ClearanceRule),
         Box::new(rules::MinDrillSizeRule),
+        Box::new(rules::MinTraceWidthRule),  // Placeholder - returns empty until traces exist
         Box::new(rules::UnconnectedPinRule),
         Box::new(rules::KeepoutRule),
     ];
