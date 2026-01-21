@@ -234,6 +234,20 @@ impl PcbEngine {
             self.world.spawn_component(refdes, value, position, rotation, footprint_ref, nets);
         }
 
+        // Rebuild spatial index for DRC queries
+        let lib = &self.footprint_lib;
+        self.world.rebuild_spatial_index(|name| {
+            lib.get(name)
+                .map(|fp| fp.courtyard)
+                .unwrap_or_else(|| {
+                    // Default 1mm x 1mm bounds for unknown footprints
+                    cypcb_core::Rect::from_center_size(
+                        Point::ORIGIN,
+                        (Nm::from_mm(1.0), Nm::from_mm(1.0)),
+                    )
+                })
+        });
+
         // Note: Nets are stored in the snapshot for rendering but not
         // re-created in the world as ECS entities (they're derived data).
     }
