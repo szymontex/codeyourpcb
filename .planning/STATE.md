@@ -3,8 +3,8 @@
 ## Current Status
 
 **Phase:** 1 of 6 (Foundation)
-**Plan:** 3 of 9 complete
-**Last Activity:** 2026-01-21 - Completed 01-03-grammar-PLAN.md
+**Plan:** 4 of 9 complete
+**Last Activity:** 2026-01-21 - Completed 01-04-ecs-components-PLAN.md
 
 ## Project Reference
 
@@ -17,14 +17,14 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 
 | Phase | Status | Progress |
 |-------|--------|----------|
-| 1. Foundation | ◐ In progress | 33% (3/9 plans) |
+| 1. Foundation | ◐ In progress | 44% (4/9 plans) |
 | 2. Rendering | ○ Not started | 0% |
 | 3. Validation | ○ Not started | 0% |
 | 4. Export | ○ Not started | 0% |
 | 5. Intelligence | ○ Not started | 0% |
 | 6. Desktop | ○ Not started | 0% |
 
-Progress: ███░░░░░░░ 33%
+Progress: ████░░░░░░ 44%
 
 ## Phase 1 Plan Status
 
@@ -33,7 +33,7 @@ Progress: ███░░░░░░░ 33%
 | 01-01 | Project Setup | ● Complete |
 | 01-02 | Core Types | ● Complete |
 | 01-03 | Grammar | ● Complete |
-| 01-04 | ECS Components | ○ Pending |
+| 01-04 | ECS Components | ● Complete |
 | 01-05 | AST Parser | ○ Pending |
 | 01-06 | Board World | ○ Pending |
 | 01-07 | Footprints | ○ Pending |
@@ -42,7 +42,7 @@ Progress: ███░░░░░░░ 33%
 
 ## Next Action
 
-Execute plan 01-04-ecs-components-PLAN.md (ECS components for board model).
+Execute plan 01-05-ast-parser-PLAN.md (AST construction from Tree-sitter).
 
 ## Key Decisions Log
 
@@ -55,8 +55,19 @@ Execute plan 01-04-ecs-components-PLAN.md (ECS components for board model).
 | 2026-01-21 | FreeRouting for MVP autorouter | Proven, defer custom to v2 |
 | 2026-01-21 | i64 for Nm coordinates | Deterministic precision, i128 for intermediates |
 | 2026-01-21 | Bottom-left origin, Y-up | Mathematical convention, matches Gerber viewers |
+| 2026-01-21 | Millidegrees for rotation | i32 (0-359999), deterministic comparison |
+| 2026-01-21 | u32 layer mask | Bit mask for copper layers, supports 32 layers |
 
 ## Session History
+
+### 2026-01-21: Execute 01-04 ECS Components
+- Created 15 ECS components for board model
+- Position: wraps cypcb_core::Point, Rotation in millidegrees
+- Electrical: NetId, RefDes, Value, NetConnections, PinConnection
+- Physical: Layer enum (10 variants), FootprintRef, Pad, PadShape
+- Board: Board marker, BoardSize, LayerStack (2-32 layers)
+- Metadata: SourceSpan (miette integration), ComponentKind enum
+- 28 unit tests + 20 doc tests passing
 
 ### 2026-01-21: Execute 01-03 Grammar
 - Created Tree-sitter grammar (234 lines) for CodeYourPCB DSL
@@ -110,11 +121,17 @@ Execute plan 01-04-ecs-components-PLAN.md (ECS components for board model).
 | crates/cypcb-parser/grammar/queries/highlights.scm | Syntax highlighting |
 | crates/cypcb-parser/build.rs | C parser compilation |
 | crates/cypcb-parser/src/lib.rs | Parser bindings and tests |
+| crates/cypcb-world/src/components/mod.rs | Component module |
+| crates/cypcb-world/src/components/position.rs | Position, Rotation |
+| crates/cypcb-world/src/components/electrical.rs | NetId, RefDes, Value, NetConnections |
+| crates/cypcb-world/src/components/physical.rs | Layer, FootprintRef, Pad, PadShape |
+| crates/cypcb-world/src/components/metadata.rs | SourceSpan, ComponentKind |
+| crates/cypcb-world/src/components/board.rs | Board, BoardSize, LayerStack |
 
 ## Session Continuity
 
-**Last session:** 2026-01-21 10:33 UTC
-**Stopped at:** Completed 01-03-grammar-PLAN.md
+**Last session:** 2026-01-21 10:54 UTC
+**Stopped at:** Completed 01-04-ecs-components-PLAN.md
 **Resume file:** None
 
 ---
