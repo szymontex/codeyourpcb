@@ -6,6 +6,51 @@
 use bevy_ecs::prelude::*;
 use serde::{Deserialize, Serialize};
 
+/// A name component for named entities (board, etc.).
+///
+/// # Examples
+///
+/// ```
+/// use cypcb_world::components::metadata::Name;
+///
+/// let name = Name("MyBoard".to_string());
+/// assert_eq!(name.as_str(), "MyBoard");
+/// ```
+#[derive(Component, Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct Name(pub String);
+
+impl Name {
+    /// Create a new name component.
+    #[inline]
+    pub fn new(name: impl Into<String>) -> Self {
+        Name(name.into())
+    }
+
+    /// Get the name as a string slice.
+    #[inline]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Display for Name {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl From<&str> for Name {
+    fn from(s: &str) -> Self {
+        Name(s.to_string())
+    }
+}
+
+impl From<String> for Name {
+    fn from(s: String) -> Self {
+        Name(s)
+    }
+}
+
 /// Link back to source file location.
 ///
 /// Used for error reporting and "go to definition" functionality.
