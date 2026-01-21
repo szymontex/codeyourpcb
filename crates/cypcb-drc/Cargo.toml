@@ -18,6 +18,7 @@ bevy_ecs = { workspace = true }
 thiserror = { workspace = true }
 miette = { workspace = true }
 hashbrown = "0.15"
+rstar = { workspace = true }
 
 # Optional parallelism
 rayon = { version = "1.10", optional = true }
