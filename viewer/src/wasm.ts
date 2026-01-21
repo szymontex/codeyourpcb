@@ -288,8 +288,24 @@ class WasmPcbEngineAdapter implements PcbEngine {
   }
 
   query_point(x_nm: number, y_nm: number): string[] {
-    // Use WASM engine for spatial queries (more efficient)
-    return this.wasmEngine.query_point(BigInt(Math.round(x_nm)), BigInt(Math.round(y_nm)));
+    // Use JS-based query since WASM spatial index isn't populated by load_snapshot
+    // (The WASM engine's populate_from_snapshot doesn't rebuild the spatial index)
+    const result: string[] = [];
+
+    for (const comp of this.currentSnapshot.components) {
+      // Check if point is within component bounds (simplified)
+      const compWidth = 2_000_000; // 2mm default
+      const compHeight = 1_000_000; // 1mm default
+
+      if (x_nm >= comp.x_nm - compWidth / 2 &&
+          x_nm <= comp.x_nm + compWidth / 2 &&
+          y_nm >= comp.y_nm - compHeight / 2 &&
+          y_nm <= comp.y_nm + compHeight / 2) {
+        result.push(comp.refdes);
+      }
+    }
+
+    return result;
   }
 
   free(): void {
