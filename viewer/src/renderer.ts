@@ -3,7 +3,7 @@
  * Draws board outline, components, pads, and grid
  */
 
-import type { BoardSnapshot, ComponentInfo, PadInfo } from './types';
+import type { BoardSnapshot, ComponentInfo, PadInfo, ViolationInfo } from './types';
 import type { Viewport } from './viewport';
 import { worldToScreen, screenToWorld } from './viewport';
 import { LAYER_COLORS, getPadColor, type LayerVisibility } from './layers';
@@ -13,13 +13,14 @@ export interface RenderState {
   viewport: Viewport;
   layers: LayerVisibility;
   selectedRefdes: string | null;
+  showViolations: boolean;
 }
 
 /**
  * Main render function - draws entire board state
  */
 export function render(ctx: CanvasRenderingContext2D, state: RenderState): void {
-  const { snapshot, viewport, layers, selectedRefdes } = state;
+  const { snapshot, viewport, layers, selectedRefdes, showViolations } = state;
 
   // Clear canvas with background color
   ctx.fillStyle = LAYER_COLORS.background;
@@ -40,6 +41,13 @@ export function render(ctx: CanvasRenderingContext2D, state: RenderState): void 
   for (const comp of snapshot.components) {
     const isSelected = comp.refdes === selectedRefdes;
     drawComponent(ctx, viewport, comp, layers, isSelected);
+  }
+
+  // Draw violations on top of everything
+  if (showViolations && snapshot.violations) {
+    for (const violation of snapshot.violations) {
+      drawViolation(ctx, viewport, violation);
+    }
   }
 }
 
@@ -106,6 +114,35 @@ function drawBoardOutline(ctx: CanvasRenderingContext2D, vp: Viewport, width: nu
   ctx.lineWidth = 2;
   // Note: y0/y1 are flipped due to Y-down screen coords
   ctx.strokeRect(x0, y1, x1 - x0, y0 - y1);
+}
+
+/**
+ * Draw a violation marker (red circle/ring) at the violation location
+ * KiCad-style marker with outer ring and inner highlight
+ */
+function drawViolation(
+  ctx: CanvasRenderingContext2D,
+  vp: Viewport,
+  violation: ViolationInfo
+): void {
+  const [sx, sy] = worldToScreen(vp, violation.x_nm, violation.y_nm);
+
+  // Ring style marker (KiCad-like)
+  const radius = 15; // Fixed screen pixels
+  const innerRadius = 10;
+
+  // Outer ring
+  ctx.beginPath();
+  ctx.arc(sx, sy, radius, 0, Math.PI * 2);
+  ctx.strokeStyle = LAYER_COLORS.violation_ring;
+  ctx.lineWidth = 3;
+  ctx.stroke();
+
+  // Inner highlight (semi-transparent fill)
+  ctx.beginPath();
+  ctx.arc(sx, sy, innerRadius, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(255, 0, 0, 0.3)';
+  ctx.fill();
 }
 
 /**
@@ -253,6 +290,7 @@ export function createRenderState(viewport: Viewport, layers: LayerVisibility): 
     viewport,
     layers,
     selectedRefdes: null,
+    showViolations: true,
   };
 }
 
