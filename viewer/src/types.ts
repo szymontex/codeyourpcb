@@ -7,6 +7,21 @@ export interface BoardSnapshot {
   board: BoardInfo | null;
   components: ComponentInfo[];
   nets: NetInfo[];
+  violations: ViolationInfo[];
+}
+
+/**
+ * A DRC violation for display in the viewer
+ */
+export interface ViolationInfo {
+  /** Violation type: clearance, drill-size, unconnected-pin, etc. */
+  kind: string;
+  /** X location in nanometers */
+  x_nm: number;
+  /** Y location in nanometers */
+  y_nm: number;
+  /** Human-readable message */
+  message: string;
 }
 
 export interface BoardInfo {
