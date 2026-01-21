@@ -318,6 +318,28 @@ impl BoardWorld {
     // Spatial Index
     // ========================================================================
 
+    /// Get a reference to the spatial index.
+    ///
+    /// Use this for direct spatial queries, iteration, or DRC checks.
+    ///
+    /// # Note
+    ///
+    /// The spatial index must be rebuilt after component changes
+    /// using [`rebuild_spatial_index`](Self::rebuild_spatial_index).
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use cypcb_world::BoardWorld;
+    ///
+    /// let world = BoardWorld::new();
+    /// let spatial = world.spatial();
+    /// assert!(spatial.is_empty());
+    /// ```
+    pub fn spatial(&self) -> &SpatialIndex {
+        self.world.resource::<SpatialIndex>()
+    }
+
     /// Rebuild the spatial index from current component positions.
     ///
     /// Call this after modifying component positions or spawning
