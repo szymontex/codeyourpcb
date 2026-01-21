@@ -10,7 +10,7 @@
 |---|-------|------|--------------|--------|
 | 1 | Foundation | Working parser and board model | 12 | Complete |
 | 2 | Rendering | Visual feedback with hot reload | 7 | Complete |
-| 3 | Validation | DRC prevents invalid designs | 7 | Pending |
+| 3 | Validation | DRC prevents invalid designs | 7 | Planned |
 | 4 | Export | Manufacturable output | 5 | Pending |
 | 5 | Intelligence | Autorouting and IDE integration | 6 | Pending |
 | 6 | Desktop | Full application experience | v2 | Pending |
@@ -134,9 +134,23 @@ Both gaps successfully resolved — WASM builds with feature flags, real PcbEngi
 5. No false positives on valid designs
 
 **Key Decisions:**
-- Rule configuration format
-- Error severity levels
-- Real-time vs batch checking trade-off
+- Manufacturer presets (JLCPCB, PCBWay) as base rules
+- Single severity level (errors only) for MVP
+- DRC runs on file save (like ESLint)
+- Non-invasive error display (status bar + markers)
+
+**Plans:** 9 plans in 6 waves
+
+Plans:
+- [ ] 03-01-PLAN.md -- DRC crate setup (types, traits, violation struct)
+- [ ] 03-02-PLAN.md -- IC footprints (SOIC, SOT, QFP families)
+- [ ] 03-03-PLAN.md -- Manufacturer presets (JLCPCB, PCBWay rules)
+- [ ] 03-04-PLAN.md -- Custom footprint DSL syntax
+- [ ] 03-05-PLAN.md -- Clearance checking rule (spatial index)
+- [ ] 03-06-PLAN.md -- Drill size and connectivity rules
+- [ ] 03-07-PLAN.md -- DRC integration with rendering pipeline
+- [ ] 03-08-PLAN.md -- Violation display (markers, status bar, panel)
+- [ ] 03-09-PLAN.md -- Visual verification checkpoint
 
 ---
 
@@ -251,4 +265,4 @@ Phase 2 (Rendering)  Phase 3 (Validation)
 ---
 
 *Roadmap created: 2026-01-21*
-*Last updated: 2026-01-21 - Phase 2 complete (9/9 plans, gaps closed)*
+*Last updated: 2026-01-21 - Phase 3 planned (9 plans in 6 waves)*
