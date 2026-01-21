@@ -436,7 +436,9 @@ version = "0.1.0"
 dependencies = [
  "bevy_ecs",
  "cypcb-core",
+ "miette",
  "rstar",
+ "serde",
 ]
 
 [[package]]
