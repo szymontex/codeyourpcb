@@ -1,0 +1,32 @@
+[workspace]
+members = ["crates/*"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/codeyourpcb/codeyourpcb"
+
+[workspace.dependencies]
+# Core libraries
+tree-sitter = "0.25"
+bevy_ecs = "0.15"
+rstar = "0.12"
+thiserror = "2.0"
+miette = { version = "7.6", features = ["fancy"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# CLI
+clap = { version = "4.0", features = ["derive"] }
+
+# Observability
+tracing = "0.1"
+
+# Internal crates
+cypcb-core = { path = "crates/cypcb-core" }
+cypcb-parser = { path = "crates/cypcb-parser" }
+cypcb-world = { path = "crates/cypcb-world" }

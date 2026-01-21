@@ -1,0 +1,11 @@
+[package]
+name = "cypcb-world"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "ECS-based board model for CodeYourPCB"
+
+[dependencies]
+cypcb-core = { workspace = true }
+bevy_ecs = { workspace = true }
+rstar = { workspace = true }
