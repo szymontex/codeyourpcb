@@ -92,6 +92,7 @@ pub mod components;
 pub mod footprint;
 pub mod registry;
 pub mod spatial;
+pub mod world;
 
 // Re-export all component types at crate root for convenience
 pub use components::{
@@ -121,3 +122,6 @@ pub use components::{
 // Re-export registry and spatial types
 pub use registry::NetRegistry;
 pub use spatial::{SpatialEntry, SpatialIndex};
+
+// Re-export BoardWorld
+pub use world::BoardWorld;
