@@ -3,34 +3,34 @@
 ## Current Status
 
 **Phase:** 2 of 6 (Rendering) - IN PROGRESS
-**Plan:** 2 of 5 complete
-**Last Activity:** 2026-01-21 - Completed 02-02-PLAN.md
+**Plan:** 3 of 5 complete
+**Last Activity:** 2026-01-21 - Completed 02-01-PLAN.md
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-01-21)
 
 **Core value:** The source file is the design - git-friendly, AI-editable, deterministic
-**Current focus:** Phase 2 Rendering - Frontend scaffolding complete, WASM crate next
+**Current focus:** Phase 2 Rendering - WASM crate complete, canvas rendering next
 
 ## Phase Progress
 
 | Phase | Status | Progress |
 |-------|--------|----------|
 | 1. Foundation | Complete | 100% (9/9 plans) |
-| 2. Rendering | In progress | 40% (2/5 plans) |
+| 2. Rendering | In progress | 60% (3/5 plans) |
 | 3. Validation | Not started | 0% |
 | 4. Export | Not started | 0% |
 | 5. Intelligence | Not started | 0% |
 | 6. Desktop | Not started | 0% |
 
-Progress: ███████████░░░░░░░░░ 55%
+Progress: ████████████░░░░░░░░ 60%
 
 ## Phase 2 Plan Status
 
 | Plan | Name | Status |
 |------|------|--------|
-| 02-01 | WASM Crate Setup | In progress |
+| 02-01 | WASM Crate Setup | Complete |
 | 02-02 | Frontend Scaffolding | Complete |
 | 02-03 | WASM Binding | Not started |
 | 02-04 | Canvas 2D Rendering | Not started |
@@ -38,7 +38,7 @@ Progress: ███████████░░░░░░░░░ 55%
 
 ## Next Action
 
-Continue with 02-01 (WASM crate setup) or 02-03 (WASM binding integration).
+Continue with 02-03 (WASM binding integration) - requires resolving wasm-bindgen build issue.
 
 ## Key Decisions Log
 
@@ -59,8 +59,18 @@ Continue with 02-01 (WASM crate setup) or 02-03 (WASM binding integration).
 | 2026-01-21 | CLI without world dep | Workaround cargo resolver issue; parse-only validation |
 | 2026-01-21 | Vanilla TypeScript | No UI framework for minimal verification viewer |
 | 2026-01-21 | Vite build tool | Fast dev server with native WASM support |
+| 2026-01-21 | WASM bindings deferred | Build environment issue with wasm-bindgen linking |
+| 2026-01-21 | Entity re-export | Re-export bevy_ecs::Entity from cypcb-world |
 
 ## Session History
+
+### 2026-01-21: Execute 02-01 WASM Crate Setup
+- Created cypcb-render crate with snapshot types
+- Implemented BoardSnapshot, ComponentInfo, PadInfo, NetInfo types
+- Implemented PcbEngine with load_source, get_snapshot, query_point
+- Added 7 unit tests (all passing)
+- Re-exported Entity from cypcb-world for convenience
+- WASM bindings temporarily disabled due to build environment issue
 
 ### 2026-01-21: Execute 02-02 Frontend Scaffolding
 - Created Vite + TypeScript project structure in viewer/
@@ -182,6 +192,9 @@ Continue with 02-01 (WASM crate setup) or 02-03 (WASM binding integration).
 | crates/cypcb-cli/src/commands/parse.rs | Parse command |
 | crates/cypcb-cli/src/commands/check.rs | Check command |
 | crates/cypcb-cli/tests/cli_integration.rs | CLI integration tests |
+| crates/cypcb-render/Cargo.toml | WASM crate config |
+| crates/cypcb-render/src/lib.rs | PcbEngine implementation |
+| crates/cypcb-render/src/snapshot.rs | BoardSnapshot types |
 | examples/blink.cypcb | Example LED circuit |
 | examples/invalid.cypcb | Invalid syntax example |
 | examples/unknown_keyword.cypcb | Unknown keyword example |
@@ -197,7 +210,7 @@ Continue with 02-01 (WASM crate setup) or 02-03 (WASM binding integration).
 ## Session Continuity
 
 **Last session:** 2026-01-21
-**Stopped at:** Completed 02-02-PLAN.md
+**Stopped at:** Completed 02-01-PLAN.md
 **Resume file:** None
 
 ---
