@@ -6,6 +6,7 @@
 pub mod clearance;
 pub mod connectivity;
 pub mod drill_size;
+pub mod trace_width;
 
 use cypcb_world::BoardWorld;
 
@@ -15,6 +16,7 @@ use crate::violation::DrcViolation;
 pub use clearance::ClearanceRule;
 pub use connectivity::UnconnectedPinRule;
 pub use drill_size::MinDrillSizeRule;
+pub use trace_width::MinTraceWidthRule;
 
 /// A single DRC rule that can be executed against a board.
 ///
@@ -138,6 +140,7 @@ mod tests {
     fn test_rule_names() {
         assert_eq!(ClearanceRule.name(), "clearance");
         assert_eq!(MinDrillSizeRule.name(), "min-drill-size");
+        assert_eq!(MinTraceWidthRule.name(), "min-trace-width");
         assert_eq!(UnconnectedPinRule.name(), "unconnected-pin");
         assert_eq!(KeepoutRule.name(), "keepout");
     }
@@ -147,9 +150,10 @@ mod tests {
         let mut world = BoardWorld::new();
         let rules = DesignRules::default();
 
-        // All placeholder rules should return empty
+        // All rules should return empty on empty world
         assert!(ClearanceRule.check(&mut world, &rules).is_empty());
         assert!(MinDrillSizeRule.check(&mut world, &rules).is_empty());
+        assert!(MinTraceWidthRule.check(&mut world, &rules).is_empty());
         assert!(UnconnectedPinRule.check(&mut world, &rules).is_empty());
         assert!(KeepoutRule.check(&mut world, &rules).is_empty());
     }
@@ -160,14 +164,16 @@ mod tests {
         let rules: Vec<Box<dyn DrcRule>> = vec![
             Box::new(ClearanceRule),
             Box::new(MinDrillSizeRule),
+            Box::new(MinTraceWidthRule),
             Box::new(UnconnectedPinRule),
             Box::new(KeepoutRule),
         ];
-        assert_eq!(rules.len(), 4);
+        assert_eq!(rules.len(), 5);
         assert_eq!(rules[0].name(), "clearance");
         assert_eq!(rules[1].name(), "min-drill-size");
-        assert_eq!(rules[2].name(), "unconnected-pin");
-        assert_eq!(rules[3].name(), "keepout");
+        assert_eq!(rules[2].name(), "min-trace-width");
+        assert_eq!(rules[3].name(), "unconnected-pin");
+        assert_eq!(rules[4].name(), "keepout");
     }
 
     #[test]
