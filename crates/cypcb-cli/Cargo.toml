@@ -1,0 +1,18 @@
+[package]
+name = "cypcb-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Command-line interface for CodeYourPCB"
+
+[[bin]]
+name = "cypcb"
+path = "src/main.rs"
+
+[dependencies]
+cypcb-core = { workspace = true }
+cypcb-parser = { workspace = true }
+cypcb-world = { workspace = true }
+clap = { workspace = true }
+serde_json = { workspace = true }
+miette = { workspace = true }

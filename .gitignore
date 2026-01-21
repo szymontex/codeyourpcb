@@ -1,0 +1,20 @@
+# Rust build artifacts
+/target
+
+# Editor files
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Generated Tree-sitter parser files
+crates/cypcb-parser/grammar/src/
+
+# Environment files
+.env
+.env.local

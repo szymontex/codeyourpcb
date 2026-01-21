@@ -1,0 +1,12 @@
+[package]
+name = "cypcb-parser"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Tree-sitter grammar and parser for CodeYourPCB DSL"
+
+[dependencies]
+cypcb-core = { workspace = true }
+tree-sitter = { workspace = true }
+miette = { workspace = true }
+thiserror = { workspace = true }
