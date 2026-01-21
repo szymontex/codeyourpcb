@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CodeYourPCB Viewer</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: system-ui, sans-serif;
+      background: #f5f5f5;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    #toolbar {
+      background: #fff;
+      border-bottom: 1px solid #ddd;
+      padding: 8px 16px;
+      display: flex;
+      gap: 16px;
+      align-items: center;
+    }
+    #canvas-container {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+    #pcb-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+    #status {
+      position: absolute;
+      bottom: 8px;
+      left: 8px;
+      background: rgba(255,255,255,0.9);
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div id="toolbar">
+    <span>Layers:</span>
+    <label><input type="checkbox" id="layer-top" checked> Top</label>
+    <label><input type="checkbox" id="layer-bottom" checked> Bottom</label>
+    <span id="coords"></span>
+  </div>
+  <div id="canvas-container">
+    <canvas id="pcb-canvas"></canvas>
+    <div id="status">Loading...</div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
