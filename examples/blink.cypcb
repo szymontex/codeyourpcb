@@ -1,0 +1,30 @@
+// Simple LED blink circuit
+version 1
+
+board blink {
+    size 50mm x 30mm
+    layers 2
+}
+
+component LED1 led "0805" {
+    value "RED"
+    at 25mm, 15mm
+}
+
+component R1 resistor "0402" {
+    value "330"
+    at 15mm, 15mm
+}
+
+net VCC {
+    R1.1
+}
+
+net LED_ANODE {
+    R1.2
+    LED1.A
+}
+
+net GND {
+    LED1.K
+}
