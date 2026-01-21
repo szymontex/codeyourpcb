@@ -3,8 +3,8 @@
 ## Current Status
 
 **Phase:** 3 of 6 (Validation) - In Progress
-**Plan:** 7 of 10 complete
-**Last Activity:** 2026-01-21 - Completed 03-06-PLAN.md (Drill Size, Trace Width, Connectivity Rules)
+**Plan:** 8 of 10 complete
+**Last Activity:** 2026-01-21 - Completed 03-07-PLAN.md (DRC Integration with Rendering Pipeline)
 
 ## Project Reference
 
@@ -19,12 +19,12 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 |-------|--------|----------|
 | 1. Foundation | Complete | 100% (9/9 plans) |
 | 2. Rendering | Complete | 100% (9/9 plans) |
-| 3. Validation | In Progress | 70% (7/10 plans) |
+| 3. Validation | In Progress | 80% (8/10 plans) |
 | 4. Export | Not started | 0% |
 | 5. Intelligence | Not started | 0% |
 | 6. Desktop | Not started | 0% |
 
-Progress: █████████████████░░░ 81%
+Progress: ██████████████████░░ 84%
 
 ## Phase 3 Plan Status
 
@@ -36,14 +36,14 @@ Progress: █████████████████░░░ 81%
 | 03-04 | Custom Footprint DSL | Complete |
 | 03-05 | Clearance Checking Rule | Complete |
 | 03-06 | Drill Size, Trace Width, Connectivity Rules | Complete |
-| 03-07 | TBD | Not started |
+| 03-07 | DRC Integration with Rendering Pipeline | Complete |
 | 03-08 | TBD | Not started |
 | 03-09 | TBD | Not started |
 | 03-10 | Zones and Keepouts | Complete |
 
 ## Next Action
 
-Continue Phase 3 (Validation) - Execute 03-07-PLAN.md through 03-09-PLAN.md
+Continue Phase 3 (Validation) - Execute 03-08-PLAN.md and 03-09-PLAN.md
 
 ## Key Decisions Log
 
@@ -97,8 +97,21 @@ Continue Phase 3 (Validation) - Execute 03-07-PLAN.md through 03-09-PLAN.md
 | 2026-01-21 | i128 for distance calculation | Nanometer squared values can overflow i64 |
 | 2026-01-21 | FootprintLibrary for DRC pad lookup | Rules query footprint defs for pad/pin info |
 | 2026-01-21 | MinTraceWidthRule deferred | Placeholder until Phase 5 adds Trace entities |
+| 2026-01-21 | DRC after every load | Real-time feedback for DRC-05 requirement |
+| 2026-01-21 | ViolationKind as string in TS | Simpler JS serialization than enum mapping |
 
 ## Session History
+
+### 2026-01-21: Complete 03-07 DRC Integration with Rendering Pipeline
+- Added cypcb-drc dependency to cypcb-render crate
+- Created ViolationInfo struct for JS-friendly serialization
+- Added violations field to BoardSnapshot
+- PcbEngine runs DRC automatically after load_source()
+- Stores violations and timing in PcbEngine struct
+- Added violation_count() and drc_duration_ms() accessor methods
+- Updated TypeScript ViolationInfo interface
+- Updated MockPcbEngine to return empty violations
+- 10 tests passing, WASM build successful (251KB)
 
 ### 2026-01-21: Complete 03-06 Drill Size, Trace Width, Connectivity Rules
 - Created drill_size.rs with MinDrillSizeRule implementation
@@ -413,7 +426,7 @@ Continue Phase 3 (Validation) - Execute 03-07-PLAN.md through 03-09-PLAN.md
 ## Session Continuity
 
 **Last session:** 2026-01-21
-**Stopped at:** Completed 03-06-PLAN.md (Drill Size, Trace Width, Connectivity Rules)
+**Stopped at:** Completed 03-07-PLAN.md (DRC Integration with Rendering Pipeline)
 **Resume file:** None
 
 ---
