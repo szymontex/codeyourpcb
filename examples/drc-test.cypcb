@@ -1,0 +1,45 @@
+version 1
+
+board drc_test {
+    size 30mm x 30mm
+    layers 2
+}
+
+// Two resistors placed too close together (should trigger clearance violation)
+// 0402 pads extend 0.8mm from component center, so at 0.5mm spacing the pads overlap
+component R1 resistor "0402" {
+    value "10k"
+    at 10mm, 15mm
+}
+
+component R2 resistor "0402" {
+    value "10k"
+    at 10.5mm, 15mm
+}
+
+// Through-hole component with drills - test drill rule
+component J1 connector "PIN-HDR-1x2" {
+    at 20mm, 15mm
+}
+
+// Unconnected component (no net assignments) - test connectivity rule
+// Both pins are unconnected
+component C1 capacitor "0805" {
+    value "100nF"
+    at 15mm, 10mm
+}
+
+// Properly connected component for comparison - no violations expected
+component R3 resistor "0805" {
+    value "1k"
+    at 25mm, 15mm
+}
+
+// R3 is fully connected to nets
+net VCC {
+    R3.1
+}
+
+net GND {
+    R3.2
+}
