@@ -100,7 +100,10 @@ component U1 ic "DIP-8" {
 async function init(): Promise<void> {
   const statusText = document.getElementById('status-text')!;
   const errorBadge = document.getElementById('error-badge')!;
-  const errorCount = document.getElementById('error-count')!;
+  const errorCountEl = document.getElementById('error-count')!;
+  const errorPanel = document.getElementById('error-panel')!;
+  const errorList = document.getElementById('error-list')!;
+  const errorPanelClose = document.getElementById('error-panel-close')!;
   const canvas = document.getElementById('pcb-canvas') as HTMLCanvasElement;
   const container = document.getElementById('canvas-container')!;
   const coordsEl = document.getElementById('coords')!;
@@ -114,10 +117,11 @@ async function init(): Promise<void> {
    */
   function updateErrorBadge(violations: ViolationInfo[]): void {
     if (violations.length > 0) {
-      errorCount.textContent = String(violations.length);
+      errorCountEl.textContent = String(violations.length);
       errorBadge.classList.remove('hidden');
     } else {
       errorBadge.classList.add('hidden');
+      errorPanel.classList.add('hidden');
     }
   }
 
@@ -228,6 +232,61 @@ async function init(): Promise<void> {
   };
 
   setupInteraction(canvas, interactionState);
+
+  /**
+   * Populate the error list with current violations
+   */
+  function populateErrorList(): void {
+    if (!snapshot?.violations) {
+      errorList.innerHTML = '<div class="error-item">No errors</div>';
+      return;
+    }
+
+    errorList.innerHTML = snapshot.violations.map((v, i) => `
+      <div class="error-item" data-index="${i}">
+        <span class="error-kind">[${v.kind}]</span>
+        <span class="error-message">${v.message}</span>
+      </div>
+    `).join('');
+
+    // Add click handlers for zoom-to-location
+    errorList.querySelectorAll('.error-item').forEach(el => {
+      el.addEventListener('click', () => {
+        const idx = parseInt(el.getAttribute('data-index')!, 10);
+        const violation = snapshot!.violations[idx];
+        zoomToLocation(violation.x_nm, violation.y_nm);
+      });
+    });
+  }
+
+  /**
+   * Zoom viewport to center on a specific location
+   */
+  function zoomToLocation(x_nm: number, y_nm: number): void {
+    // Zoom to fit a 10mm x 10mm area around the point
+    const margin = 5_000_000; // 5mm in nm
+    viewport = {
+      ...viewport,
+      centerX: x_nm,
+      centerY: y_nm,
+      scale: Math.min(viewport.width, viewport.height) / (margin * 2),
+    };
+    interactionState.viewport = viewport;
+    dirty = true;
+  }
+
+  // Error badge click - toggle error panel
+  errorBadge.addEventListener('click', () => {
+    errorPanel.classList.toggle('hidden');
+    if (!errorPanel.classList.contains('hidden')) {
+      populateErrorList();
+    }
+  });
+
+  // Close button for error panel
+  errorPanelClose.addEventListener('click', () => {
+    errorPanel.classList.add('hidden');
+  });
 
   // Coordinate display on mouse move
   canvas.addEventListener('mousemove', (e) => {

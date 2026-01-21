@@ -57,6 +57,64 @@
     #error-badge.hidden {
       display: none;
     }
+    /* Error panel (VS Code style) */
+    #error-panel {
+      position: absolute;
+      bottom: 40px;
+      left: 8px;
+      width: 350px;
+      max-height: 200px;
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+      overflow: hidden;
+    }
+    #error-panel.hidden {
+      display: none;
+    }
+    #error-panel-header {
+      padding: 8px 12px;
+      background: #f5f5f5;
+      border-bottom: 1px solid #ddd;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-weight: 500;
+    }
+    #error-panel-close {
+      background: none;
+      border: none;
+      font-size: 18px;
+      cursor: pointer;
+      color: #666;
+    }
+    #error-panel-close:hover {
+      color: #333;
+    }
+    #error-list {
+      overflow-y: auto;
+      max-height: 160px;
+    }
+    .error-item {
+      padding: 8px 12px;
+      border-bottom: 1px solid #eee;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .error-item:hover {
+      background: #f8f8f8;
+    }
+    .error-item:last-child {
+      border-bottom: none;
+    }
+    .error-kind {
+      color: #dc3545;
+      font-weight: 500;
+    }
+    .error-message {
+      color: #333;
+    }
   </style>
 </head>
 <body>
@@ -71,6 +129,14 @@
     <div id="status">
       <span id="status-text">Loading...</span>
       <span id="error-badge" class="hidden"><span id="error-count">0</span> errors</span>
+    </div>
+    <!-- Error panel (VS Code style - appears on badge click) -->
+    <div id="error-panel" class="hidden">
+      <div id="error-panel-header">
+        <span>DRC Errors</span>
+        <button id="error-panel-close">&times;</button>
+      </div>
+      <div id="error-list"></div>
     </div>
   </div>
   <script type="module" src="/src/main.ts"></script>
