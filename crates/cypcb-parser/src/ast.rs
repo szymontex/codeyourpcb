@@ -110,6 +110,10 @@ pub enum Definition {
     Component(ComponentDef),
     /// A net definition.
     Net(NetDef),
+    /// A custom footprint definition.
+    Footprint(FootprintDef),
+    /// A zone definition (keepout or copper pour).
+    Zone(ZoneDef),
 }
 
 impl Definition {
@@ -119,6 +123,8 @@ impl Definition {
             Definition::Board(b) => b.span,
             Definition::Component(c) => c.span,
             Definition::Net(n) => n.span,
+            Definition::Footprint(f) => f.span,
+            Definition::Zone(z) => z.span,
         }
     }
 }
@@ -462,6 +468,144 @@ impl std::fmt::Display for Dimension {
     }
 }
 
+/// Pad shape for footprint definitions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PadShape {
+    /// Rectangular pad.
+    Rect,
+    /// Circular pad.
+    Circle,
+    /// Rounded rectangle pad.
+    RoundRect,
+    /// Oblong (stadium) pad.
+    Oblong,
+}
+
+impl PadShape {
+    /// Parse a pad shape from a string.
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s {
+            "rect" => Some(PadShape::Rect),
+            "circle" => Some(PadShape::Circle),
+            "roundrect" => Some(PadShape::RoundRect),
+            "oblong" => Some(PadShape::Oblong),
+            _ => None,
+        }
+    }
+}
+
+/// A pad definition within a footprint.
+///
+/// # Example DSL
+///
+/// ```cypcb
+/// pad 1 rect at -2.7mm, -1.905mm size 1.5mm x 0.6mm
+/// pad 2 circle at 0mm, 0mm size 1.8mm x 1.8mm drill 1.0mm
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PadDef {
+    /// Pad number (e.g., 1, 2, 3).
+    pub number: u32,
+    /// Pad shape.
+    pub shape: PadShape,
+    /// X position relative to footprint origin.
+    pub x: Dimension,
+    /// Y position relative to footprint origin.
+    pub y: Dimension,
+    /// Pad width.
+    pub width: Dimension,
+    /// Pad height.
+    pub height: Dimension,
+    /// Optional drill diameter for through-hole pads.
+    pub drill: Option<Dimension>,
+    /// Source span.
+    pub span: Span,
+}
+
+/// A custom footprint definition.
+///
+/// # Example DSL
+///
+/// ```cypcb
+/// footprint MY_SOIC_8 {
+///     description "Custom SOIC-8 with thermal pad"
+///     pad 1 rect at -2.7mm, -1.905mm size 1.5mm x 0.6mm
+///     pad 2 rect at -2.7mm, -0.635mm size 1.5mm x 0.6mm
+///     courtyard 6mm x 5mm
+/// }
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FootprintDef {
+    /// Footprint name/identifier.
+    pub name: Identifier,
+    /// Optional description.
+    pub description: Option<String>,
+    /// Pad definitions.
+    pub pads: Vec<PadDef>,
+    /// Optional explicit courtyard dimensions (width, height).
+    pub courtyard: Option<(Dimension, Dimension)>,
+    /// Source span.
+    pub span: Span,
+}
+
+/// Zone type (keepout vs copper pour).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ZoneKind {
+    /// No copper allowed in this region.
+    Keepout,
+    /// Copper fill zone (pour) - connected to a net.
+    CopperPour,
+}
+
+impl ZoneKind {
+    /// Parse a zone kind from a string.
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s {
+            "keepout" => Some(ZoneKind::Keepout),
+            "zone" => Some(ZoneKind::CopperPour),
+            _ => None,
+        }
+    }
+}
+
+/// A zone definition (keepout or copper pour).
+///
+/// Zones define rectangular regions with special properties:
+/// - Keepouts prevent copper from being placed in the region
+/// - Copper pours fill the region with copper connected to a net
+///
+/// # Example DSL
+///
+/// ```cypcb
+/// keepout antenna_clearance {
+///     bounds 10mm, 10mm to 20mm, 20mm
+///     layer all
+/// }
+///
+/// zone gnd_pour {
+///     bounds 0mm, 0mm to 50mm, 50mm
+///     layer bottom
+///     net GND
+/// }
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ZoneDef {
+    /// Zone type (keepout or copper pour).
+    pub kind: ZoneKind,
+    /// Optional zone name for reference.
+    pub name: Option<Identifier>,
+    /// Zone bounds (min_x, min_y, max_x, max_y).
+    pub bounds: (Dimension, Dimension, Dimension, Dimension),
+    /// Layer this zone applies to (None = all layers).
+    pub layer: Option<String>,
+    /// Net for copper pour zones (keepouts don't have this).
+    pub net: Option<Identifier>,
+    /// Source span.
+    pub span: Span,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -530,5 +674,12 @@ mod tests {
         let json = serde_json::to_string(&source_file).expect("serialize");
         assert!(json.contains("\"version\":1"));
         assert!(json.contains("\"type\":\"board\""));
+    }
+
+    #[test]
+    fn test_zone_kind_parse() {
+        assert_eq!(ZoneKind::from_str("keepout"), Some(ZoneKind::Keepout));
+        assert_eq!(ZoneKind::from_str("zone"), Some(ZoneKind::CopperPour));
+        assert_eq!(ZoneKind::from_str("unknown"), None);
     }
 }
