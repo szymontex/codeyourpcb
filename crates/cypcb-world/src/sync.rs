@@ -40,10 +40,10 @@
 //! ```
 
 use std::collections::HashMap;
+use std::fmt;
 
 use bevy_ecs::prelude::Entity;
-use miette::{Diagnostic, SourceSpan};
-use thiserror::Error;
+use miette::{Diagnostic, LabeledSpan, SourceCode, SourceSpan};
 
 use cypcb_core::{Nm, Point, Rect};
 use cypcb_parser::ast::{
@@ -62,61 +62,116 @@ use crate::world::BoardWorld;
 /// These errors are distinct from parse errors - they occur when the AST
 /// is syntactically valid but has semantic issues like unknown footprints
 /// or duplicate reference designators.
-#[derive(Error, Debug, Diagnostic)]
+#[derive(Debug, Clone)]
 pub enum SyncError {
     /// A component references a footprint that doesn't exist in the library.
-    #[error("unknown footprint: '{name}'")]
-    #[diagnostic(
-        code(cypcb::sync::unknown_footprint),
-        help("add this footprint to the library or use a built-in footprint like '0402', '0603', 'DIP-8'")
-    )]
     UnknownFootprint {
         /// The unknown footprint name.
         name: String,
         /// Source code for miette display.
-        #[source_code]
         src: String,
         /// Source span of the footprint reference.
-        #[label("footprint not found in library")]
-        span: SourceSpan,
+        span: miette::SourceSpan,
     },
 
     /// A reference designator is used more than once.
-    #[error("duplicate reference designator: '{refdes}'")]
-    #[diagnostic(
-        code(cypcb::sync::duplicate_refdes),
-        help("each component must have a unique reference designator")
-    )]
     DuplicateRefDes {
         /// The duplicated refdes.
         refdes: String,
         /// Source code for miette display.
-        #[source_code]
         src: String,
         /// Span of the first definition.
-        #[label("first defined here")]
-        first: SourceSpan,
+        first: miette::SourceSpan,
         /// Span of the duplicate.
-        #[label("duplicate definition")]
-        duplicate: SourceSpan,
+        duplicate: miette::SourceSpan,
     },
 
     /// A net references a component that doesn't exist.
-    #[error("unknown component: '{component}'")]
-    #[diagnostic(
-        code(cypcb::sync::unknown_component),
-        help("define the component before referencing it in a net")
-    )]
     UnknownComponent {
         /// The unknown component refdes.
         component: String,
         /// Source code for miette display.
-        #[source_code]
         src: String,
         /// Source span of the component reference.
-        #[label("component not defined")]
-        span: SourceSpan,
+        span: miette::SourceSpan,
     },
+}
+
+impl fmt::Display for SyncError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            SyncError::UnknownFootprint { name, .. } => {
+                write!(f, "unknown footprint: '{}'", name)
+            }
+            SyncError::DuplicateRefDes { refdes, .. } => {
+                write!(f, "duplicate reference designator: '{}'", refdes)
+            }
+            SyncError::UnknownComponent { component, .. } => {
+                write!(f, "unknown component: '{}'", component)
+            }
+        }
+    }
+}
+
+impl std::error::Error for SyncError {}
+
+impl Diagnostic for SyncError {
+    fn code<'a>(&'a self) -> Option<Box<dyn fmt::Display + 'a>> {
+        match self {
+            SyncError::UnknownFootprint { .. } => {
+                Some(Box::new("cypcb::sync::unknown_footprint"))
+            }
+            SyncError::DuplicateRefDes { .. } => {
+                Some(Box::new("cypcb::sync::duplicate_refdes"))
+            }
+            SyncError::UnknownComponent { .. } => {
+                Some(Box::new("cypcb::sync::unknown_component"))
+            }
+        }
+    }
+
+    fn help<'a>(&'a self) -> Option<Box<dyn fmt::Display + 'a>> {
+        match self {
+            SyncError::UnknownFootprint { .. } => {
+                Some(Box::new("add this footprint to the library or use a built-in footprint like '0402', '0603', 'DIP-8'"))
+            }
+            SyncError::DuplicateRefDes { .. } => {
+                Some(Box::new("each component must have a unique reference designator"))
+            }
+            SyncError::UnknownComponent { .. } => {
+                Some(Box::new("define the component before referencing it in a net"))
+            }
+        }
+    }
+
+    fn source_code(&self) -> Option<&dyn SourceCode> {
+        match self {
+            SyncError::UnknownFootprint { src, .. } => Some(src),
+            SyncError::DuplicateRefDes { src, .. } => Some(src),
+            SyncError::UnknownComponent { src, .. } => Some(src),
+        }
+    }
+
+    fn labels(&self) -> Option<Box<dyn Iterator<Item = LabeledSpan> + '_>> {
+        match self {
+            SyncError::UnknownFootprint { span, .. } => {
+                Some(Box::new(std::iter::once(
+                    LabeledSpan::new_with_span(Some("footprint not found in library".to_string()), *span)
+                )))
+            }
+            SyncError::DuplicateRefDes { first, duplicate, .. } => {
+                Some(Box::new(vec![
+                    LabeledSpan::new_with_span(Some("first defined here".to_string()), *first),
+                    LabeledSpan::new_with_span(Some("duplicate definition".to_string()), *duplicate),
+                ].into_iter()))
+            }
+            SyncError::UnknownComponent { span, .. } => {
+                Some(Box::new(std::iter::once(
+                    LabeledSpan::new_with_span(Some("component not defined".to_string()), *span)
+                )))
+            }
+        }
+    }
 }
 
 /// Result of AST to ECS synchronization.
