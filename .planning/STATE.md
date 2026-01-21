@@ -3,8 +3,8 @@
 ## Current Status
 
 **Phase:** 3 of 6 (Validation) - In Progress
-**Plan:** 2 of 10 complete
-**Last Activity:** 2026-01-21 - Completed 03-02-PLAN.md (IC Footprints)
+**Plan:** 3 of 10 complete
+**Last Activity:** 2026-01-21 - Completed 03-03-PLAN.md (Manufacturer Presets)
 
 ## Project Reference
 
@@ -19,7 +19,7 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 |-------|--------|----------|
 | 1. Foundation | Complete | 100% (9/9 plans) |
 | 2. Rendering | Complete | 100% (9/9 plans) |
-| 3. Validation | In Progress | 20% (2/10 plans) |
+| 3. Validation | In Progress | 30% (3/10 plans) |
 | 4. Export | Not started | 0% |
 | 5. Intelligence | Not started | 0% |
 | 6. Desktop | Not started | 0% |
@@ -32,7 +32,7 @@ Progress: ███████████████░░░░░ 74%
 |------|------|--------|
 | 03-01 | DRC Crate Setup | Complete |
 | 03-02 | IC Footprints (SOIC/SOT/QFP) | Complete |
-| 03-03 | TBD | Not started |
+| 03-03 | Manufacturer Presets | Complete |
 | 03-04 | TBD | Not started |
 | 03-05 | TBD | Not started |
 | 03-06 | TBD | Not started |
@@ -43,7 +43,7 @@ Progress: ███████████████░░░░░ 74%
 
 ## Next Action
 
-Continue Phase 3 (Validation) - Execute 03-03-PLAN.md
+Continue Phase 3 (Validation) - Execute 03-04-PLAN.md
 
 ## Key Decisions Log
 
@@ -84,8 +84,20 @@ Continue Phase 3 (Validation) - Execute 03-03-PLAN.md
 | 2026-01-21 | Parametric gullwing generator | gullwing_footprint() for dual-row ICs, reduces duplication |
 | 2026-01-21 | Counter-clockwise pin numbering | Standard IC convention, matches KiCad/Altium |
 | 2026-01-21 | IPC-7351B courtyard | Body + 0.5mm margin for assembly clearance |
+| 2026-01-21 | Preset enum for lookup | from_name() enables DSL string-to-preset mapping |
+| 2026-01-21 | Default JLCPCB 2-layer | Most common hobbyist manufacturer |
 
 ## Session History
+
+### 2026-01-21: Complete 03-03 Manufacturer Presets
+- Created presets module with full DesignRules struct (7 constraint fields)
+- Implemented JLCPCB 2-layer preset: 0.15mm clearance, 0.3mm drill, 0.2mm via
+- Implemented JLCPCB 4-layer preset: 0.1mm clearance, 0.2mm drill (tighter)
+- Implemented PCBWay standard preset: 0.15mm clearance, 0.22mm silk
+- Implemented Prototype preset: 0.2mm clearance, 0.25mm trace (relaxed)
+- Added Preset enum with from_name() for DSL string lookup
+- Updated rules/mod.rs to import DesignRules from presets module
+- 23 new preset tests, 35 total cypcb-drc tests passing
 
 ### 2026-01-21: Complete 03-02 IC Footprints
 - Created gullwing.rs (687 lines) with parametric IC footprint generator
@@ -310,7 +322,10 @@ Continue Phase 3 (Validation) - Execute 03-03-PLAN.md
 | crates/cypcb-drc/Cargo.toml | DRC crate config |
 | crates/cypcb-drc/src/lib.rs | DrcResult, run_drc() |
 | crates/cypcb-drc/src/violation.rs | DrcViolation, ViolationKind |
-| crates/cypcb-drc/src/rules/mod.rs | DrcRule trait, DesignRules |
+| crates/cypcb-drc/src/rules/mod.rs | DrcRule trait |
+| crates/cypcb-drc/src/presets/mod.rs | DesignRules, Preset enum |
+| crates/cypcb-drc/src/presets/jlcpcb.rs | JLCPCB 2-layer/4-layer presets |
+| crates/cypcb-drc/src/presets/pcbway.rs | PCBWay and Prototype presets |
 | examples/blink.cypcb | Example LED circuit |
 | examples/invalid.cypcb | Invalid syntax example |
 | examples/unknown_keyword.cypcb | Unknown keyword example |
@@ -336,7 +351,7 @@ Continue Phase 3 (Validation) - Execute 03-03-PLAN.md
 ## Session Continuity
 
 **Last session:** 2026-01-21
-**Stopped at:** Completed 03-02-PLAN.md (IC Footprints)
+**Stopped at:** Completed 03-03-PLAN.md (Manufacturer Presets)
 **Resume file:** None
 
 ---
