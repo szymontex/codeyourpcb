@@ -9,7 +9,7 @@
 | # | Phase | Goal | Requirements | Status |
 |---|-------|------|--------------|--------|
 | 1 | Foundation | Working parser and board model | 12 | ✓ Complete |
-| 2 | Rendering | Visual feedback with hot reload | 7 | ○ Pending |
+| 2 | Rendering | Visual feedback with hot reload | 7 | ○ Planned |
 | 3 | Validation | DRC prevents invalid designs | 7 | ○ Pending |
 | 4 | Export | Manufacturable output | 5 | ○ Pending |
 | 5 | Intelligence | Autorouting and IDE integration | 6 | ○ Pending |
@@ -64,30 +64,46 @@ Plans:
 
 ## Phase 2: Rendering
 
-**Goal:** See the board design with instant hot reload
+**Goal:** Minimal UI to verify board rendering with hot reload
 
-**Requirements:**
-- DSL-05: Module/import system for reusable blocks
+**Scope (MINIMAL - verification only):**
 - DSL-06: Hot reload on file save
 - RND-01: 2D top/bottom board view
 - RND-02: Layer visibility toggle
 - RND-03: Zoom/pan navigation
 - RND-04: Component selection and highlighting
-- RND-05: Net highlighting
-- RND-06: Grid display and snapping
 - DEV-04: Web-based viewer
 
+**Deferred to later:**
+- DSL-05: Module/import system (not needed for verification)
+- RND-05: Net highlighting (can add later)
+- RND-06: Grid snapping (grid display only, no snap)
+- Dark mode (light mode default)
+- Flip view (can add later)
+
 **Success Criteria:**
-1. Saving .cypcb file triggers re-render within 100ms
-2. All copper layers visible with correct colors
-3. Components show pads and silkscreen
-4. User can zoom to component level detail
-5. Selecting net highlights all connected elements
+1. Saving .cypcb file triggers re-render within 500ms
+2. Board outline and component pads visible
+3. User can zoom/pan to navigate
+4. User can select components (visual highlight)
+5. Layer visibility toggles work
 
 **Key Decisions:**
-- Canvas 2D vs WebGL/wgpu for initial renderer
-- Color scheme and layer styling
-- Selection interaction model
+- Canvas 2D for MVP (simpler than WebGL/wgpu)
+- KiCad-style colors (red=top, blue=bottom)
+- Light mode default
+- WASM bridge via serde-wasm-bindgen
+
+**Plans:** 7 plans in 5 waves
+
+Plans:
+- [ ] 02-01-PLAN.md — WASM crate setup (cypcb-render, BoardSnapshot)
+- [ ] 02-02-PLAN.md — Frontend scaffolding (Vite, TypeScript, HTML)
+- [ ] 02-03-PLAN.md — WASM build and integration
+- [ ] 02-04-PLAN.md — Canvas renderer with viewport transforms
+- [ ] 02-05-PLAN.md — Interaction (zoom, pan, select, layer toggles)
+- [ ] 02-06-PLAN.md — Hot reload (file watcher, WebSocket)
+- [ ] 02-07-PLAN.md — Visual verification checkpoint
 
 ---
 
@@ -230,4 +246,4 @@ Phase 2 (Rendering)  Phase 3 (Validation)
 ---
 
 *Roadmap created: 2026-01-21*
-*Last updated: 2026-01-21 - Phase 1 complete (9/9 plans, verified)*
+*Last updated: 2026-01-21 - Phase 2 planned (7 plans, 5 waves)*
