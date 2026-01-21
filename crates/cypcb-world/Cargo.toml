@@ -5,9 +5,14 @@ edition.workspace = true
 license.workspace = true
 description = "ECS-based board model for CodeYourPCB"
 
+[features]
+default = ["sync"]
+# Enable AST-to-ECS synchronization (requires cypcb-parser with tree-sitter)
+sync = ["cypcb-parser/tree-sitter-parser"]
+
 [dependencies]
 cypcb-core = { workspace = true }
-cypcb-parser = { workspace = true }
+cypcb-parser = { workspace = true, default-features = false }
 bevy_ecs = { workspace = true }
 rstar = { workspace = true }
 serde = { workspace = true }

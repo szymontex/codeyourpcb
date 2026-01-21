@@ -6,13 +6,13 @@
 //! All types use primitive types (i64, i32, u32, String) that serialize
 //! cleanly to JavaScript numbers and strings.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 /// Complete snapshot of the board state for rendering.
 ///
 /// This is the main type returned by `PcbEngine::get_snapshot()`.
 /// It contains all information needed to render the board in JavaScript.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct BoardSnapshot {
     /// Board information (if a board has been defined).
     pub board: Option<BoardInfo>,
@@ -23,7 +23,7 @@ pub struct BoardSnapshot {
 }
 
 /// Board-level information.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct BoardInfo {
     /// Board name/identifier.
     pub name: String,
@@ -36,7 +36,7 @@ pub struct BoardInfo {
 }
 
 /// Component information for rendering.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ComponentInfo {
     /// Reference designator (R1, C1, U1, etc.).
     pub refdes: String,
@@ -57,7 +57,7 @@ pub struct ComponentInfo {
 /// Pad information for rendering.
 ///
 /// Positions are relative to the component origin.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct PadInfo {
     /// Pad number/name (e.g., "1", "2", "A1", "VCC").
     pub number: String,
@@ -78,7 +78,7 @@ pub struct PadInfo {
 }
 
 /// Net information.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct NetInfo {
     /// Net name.
     pub name: String,
@@ -89,7 +89,7 @@ pub struct NetInfo {
 }
 
 /// Reference to a component pin.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct PinRef {
     /// Component reference designator.
     pub component: String,

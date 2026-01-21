@@ -92,6 +92,7 @@ pub mod components;
 pub mod footprint;
 pub mod registry;
 pub mod spatial;
+#[cfg(feature = "sync")]
 pub mod sync;
 pub mod world;
 
@@ -130,5 +131,6 @@ pub use world::BoardWorld;
 // Re-export Entity for convenience
 pub use bevy_ecs::entity::Entity;
 
-// Re-export sync functionality
+// Re-export sync functionality (only with sync feature)
+#[cfg(feature = "sync")]
 pub use sync::{sync_ast_to_world, SyncError, SyncResult};

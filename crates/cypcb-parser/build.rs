@@ -3,8 +3,18 @@
 //! Compiles the Tree-sitter grammar's generated C parser into a static library.
 //! The grammar/src/ directory must be generated before building:
 //!   cd grammar && npx tree-sitter generate
+//!
+//! This build script only runs when the `tree-sitter-parser` feature is enabled.
+//! For WASM builds, disable the feature to skip C compilation.
 
 fn main() {
+    // Only compile tree-sitter when the feature is enabled
+    #[cfg(feature = "tree-sitter-parser")]
+    compile_tree_sitter();
+}
+
+#[cfg(feature = "tree-sitter-parser")]
+fn compile_tree_sitter() {
     let grammar_dir = std::path::Path::new("grammar");
     let src_dir = grammar_dir.join("src");
 

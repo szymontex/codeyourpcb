@@ -3,26 +3,40 @@
 //! This crate provides the interface for the CodeYourPCB web viewer.
 //! It bridges Rust board data to JavaScript, enabling the web UI to:
 //!
-//! - Load and parse `.cypcb` source files
+//! - Load and parse `.cypcb` source files (native mode)
+//! - Load pre-parsed JSON snapshots (WASM mode)
 //! - Retrieve structured board snapshots for rendering
 //! - Query components at specific coordinates
+//!
+//! # Feature Flags
+//!
+//! - `native` (default): Full parsing support with tree-sitter
+//! - `wasm`: WASM-compatible build without tree-sitter (parsing done in JavaScript)
 //!
 //! # Architecture
 //!
 //! The rendering happens in JavaScript/Canvas - this crate only provides data.
 //! The `PcbEngine` struct maintains the board state and provides query methods.
+//!
+//! In native mode, `load_source()` parses the .cypcb source directly.
+//! In WASM mode, `load_snapshot()` receives pre-parsed JSON from JavaScript.
 
 mod snapshot;
 
 pub use snapshot::*;
 
 use cypcb_core::{Nm, Point};
-use cypcb_parser::parse;
 use cypcb_world::footprint::FootprintLibrary;
 use cypcb_world::{
-    sync_ast_to_world, BoardWorld, Entity, FootprintRef, Layer, NetConnections, NetId, PadShape,
-    PinConnection, Position, RefDes, Rotation, Value,
+    BoardWorld, Entity, FootprintRef, Layer, NetConnections, NetId, PadShape, PinConnection,
+    Position, RefDes, Rotation, Value,
 };
+
+// Import sync and parse only in native mode
+#[cfg(feature = "native")]
+use cypcb_parser::parse;
+#[cfg(feature = "native")]
+use cypcb_world::sync_ast_to_world;
 
 // WASM-specific imports (only when targeting wasm32)
 #[cfg(target_arch = "wasm32")]
@@ -39,6 +53,7 @@ pub struct PcbEngine {
     source: String,
 }
 
+// WASM-exposed methods
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 impl PcbEngine {
     /// Create a new PcbEngine instance.
@@ -51,10 +66,72 @@ impl PcbEngine {
         }
     }
 
-    /// Load and parse source code.
+    /// Load a pre-parsed board snapshot (WASM mode).
+    ///
+    /// This method receives a BoardSnapshot that was parsed in JavaScript
+    /// and populates the internal world state for queries.
+    ///
+    /// Returns an empty string on success, or an error message on failure.
+    #[cfg(target_arch = "wasm32")]
+    pub fn load_snapshot(&mut self, snapshot_js: wasm_bindgen::JsValue) -> String {
+        // Deserialize the snapshot from JavaScript
+        let snapshot: Result<BoardSnapshot, _> = serde_wasm_bindgen::from_value(snapshot_js);
+        match snapshot {
+            Ok(snap) => {
+                self.populate_from_snapshot(&snap);
+                String::new()
+            }
+            Err(e) => format!("Failed to deserialize snapshot: {}", e),
+        }
+    }
+
+    /// Get a snapshot of the current board state for rendering (WASM version).
+    ///
+    /// Returns a JsValue that can be used directly in JavaScript.
+    #[cfg(target_arch = "wasm32")]
+    pub fn get_snapshot(&mut self) -> wasm_bindgen::JsValue {
+        let snapshot = self.build_snapshot();
+        serde_wasm_bindgen::to_value(&snapshot).unwrap_or(wasm_bindgen::JsValue::NULL)
+    }
+
+    /// Get a snapshot of the current board state for rendering (native version).
+    ///
+    /// Returns a JSON string for non-WASM targets.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn get_snapshot(&mut self) -> String {
+        let snapshot = self.build_snapshot();
+        serde_json::to_string(&snapshot).unwrap_or_else(|_| "{}".to_string())
+    }
+
+    /// Query components at a specific point.
+    ///
+    /// Returns reference designator strings.
+    pub fn query_point(&mut self, x_nm: i64, y_nm: i64) -> Vec<String> {
+        let point: Point = Point::new(Nm(x_nm), Nm(y_nm));
+        let entities: Vec<Entity> = self.world.query_point(point);
+
+        let mut refdes_list: Vec<String> = Vec::new();
+        for entity in entities {
+            let maybe_refdes: Option<&RefDes> = self.world.get::<RefDes>(entity);
+            if let Some(refdes) = maybe_refdes {
+                let s: String = refdes.as_str().to_string();
+                refdes_list.push(s);
+            }
+        }
+
+        refdes_list
+    }
+}
+
+// Internal methods (not exposed to WASM)
+impl PcbEngine {
+    /// Load and parse source code (native mode only).
     ///
     /// Returns an empty string on success, or an error message on failure.
     /// The board state is updated even if there are errors (partial results).
+    ///
+    /// In WASM mode, use `load_snapshot()` instead.
+    #[cfg(feature = "native")]
     pub fn load_source(&mut self, source: &str) -> String {
         self.source = source.to_string();
         self.world.clear();
@@ -84,41 +161,33 @@ impl PcbEngine {
         }
     }
 
-    /// Get a snapshot of the current board state for rendering (WASM version).
-    ///
-    /// Returns a JsValue that can be used directly in JavaScript.
-    #[cfg(target_arch = "wasm32")]
-    pub fn get_snapshot(&mut self) -> wasm_bindgen::JsValue {
-        let snapshot = self.build_snapshot();
-        serde_wasm_bindgen::to_value(&snapshot).unwrap_or(wasm_bindgen::JsValue::NULL)
-    }
+    /// Populate the world from a BoardSnapshot.
+    fn populate_from_snapshot(&mut self, snapshot: &BoardSnapshot) {
+        self.world.clear();
 
-    /// Get a snapshot of the current board state for rendering (native version).
-    ///
-    /// Returns a JSON string for non-WASM targets.
-    #[cfg(not(target_arch = "wasm32"))]
-    pub fn get_snapshot(&mut self) -> String {
-        let snapshot = self.build_snapshot();
-        serde_json::to_string(&snapshot).unwrap_or_else(|_| "{}".to_string())
-    }
-
-    /// Query components at a specific point.
-    ///
-    /// Returns reference designator strings as a JavaScript array.
-    pub fn query_point(&mut self, x_nm: i64, y_nm: i64) -> Vec<String> {
-        let point: Point = Point::new(Nm(x_nm), Nm(y_nm));
-        let entities: Vec<Entity> = self.world.query_point(point);
-
-        let mut refdes_list: Vec<String> = Vec::new();
-        for entity in entities {
-            let maybe_refdes: Option<&RefDes> = self.world.get::<RefDes>(entity);
-            if let Some(refdes) = maybe_refdes {
-                let s: String = refdes.as_str().to_string();
-                refdes_list.push(s);
-            }
+        // Create board entity if present
+        if let Some(board) = &snapshot.board {
+            self.world.set_board(
+                board.name.clone(),
+                (Nm(board.width_nm), Nm(board.height_nm)),
+                board.layer_count,
+            );
         }
 
-        refdes_list
+        // Create component entities
+        for comp in &snapshot.components {
+            let refdes = RefDes::new(&comp.refdes);
+            let value = Value::new(&comp.value);
+            let position = Position(Point::new(Nm(comp.x_nm), Nm(comp.y_nm)));
+            let rotation = Rotation(comp.rotation_mdeg);
+            let footprint_ref = FootprintRef::new(&comp.footprint);
+            let nets = NetConnections::new();
+
+            self.world.spawn_component(refdes, value, position, rotation, footprint_ref, nets);
+        }
+
+        // Note: Nets are stored in the snapshot for rendering but not
+        // re-created in the world as ECS entities (they're derived data).
     }
 
     /// Build a BoardSnapshot from the current world state.
@@ -268,7 +337,7 @@ fn pad_shape_to_string(shape: &PadShape) -> String {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "native"))]
 mod tests {
     use super::*;
 
