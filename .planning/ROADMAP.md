@@ -8,7 +8,7 @@
 
 | # | Phase | Goal | Requirements | Status |
 |---|-------|------|--------------|--------|
-| 1 | Foundation | Working parser and board model | 10 | ○ Pending |
+| 1 | Foundation | Working parser and board model | 12 | ○ Planned |
 | 2 | Rendering | Visual feedback with hot reload | 7 | ○ Pending |
 | 3 | Validation | DRC prevents invalid designs | 7 | ○ Pending |
 | 4 | Export | Manufacturable output | 5 | ○ Pending |
@@ -22,7 +22,7 @@
 **Goal:** Working DSL parser that produces a valid board model
 
 **Requirements:**
-- DSL-01: Custom Tree-sitter grammar for .pcb files
+- DSL-01: Custom Tree-sitter grammar for .cypcb files
 - DSL-02: Board definition (size, layers, stackup)
 - DSL-03: Component instantiation with footprint reference
 - DSL-04: Net connections with constraint syntax
@@ -36,7 +36,7 @@
 - DEV-03: Error messages with line/column info
 
 **Success Criteria:**
-1. User can write a .pcb file defining a board with components
+1. User can write a .cypcb file defining a board with components
 2. Parser produces valid AST with error recovery
 3. Board model contains all components and nets
 4. CLI can parse file and output JSON representation
@@ -46,6 +46,19 @@
 - DSL syntax design (critical - affects everything downstream)
 - ECS vs traditional OOP for board model
 - Coordinate system (origin, units, precision)
+
+**Plans:** 9 plans in 5 waves
+
+Plans:
+- [ ] 01-01-PLAN.md — Project setup (workspace, crates, dependencies)
+- [ ] 01-02-PLAN.md — Core types (Nm, Point, Rect, Unit)
+- [ ] 01-03-PLAN.md — Tree-sitter grammar definition
+- [ ] 01-04-PLAN.md — ECS components for board model
+- [ ] 01-05-PLAN.md — AST types and parser implementation
+- [ ] 01-06-PLAN.md — BoardWorld and spatial indexing
+- [ ] 01-07-PLAN.md — Footprint library (SMD + THT)
+- [ ] 01-08-PLAN.md — AST-to-ECS synchronization
+- [ ] 01-09-PLAN.md — CLI with parse/check commands
 
 ---
 
@@ -65,7 +78,7 @@
 - DEV-04: Web-based viewer
 
 **Success Criteria:**
-1. Saving .pcb file triggers re-render within 100ms
+1. Saving .cypcb file triggers re-render within 100ms
 2. All copper layers visible with correct colors
 3. Components show pads and silkscreen
 4. User can zoom to component level detail
@@ -122,7 +135,7 @@
 2. Drill files align with Gerber copper layers
 3. Files accepted by JLCPCB/PCBWay DFM check
 4. BOM contains all components with values
-5. CLI can export without GUI (`cypcb export project.pcb`)
+5. CLI can export without GUI (`cypcb export project.cypcb`)
 
 **Key Decisions:**
 - Gerber X2 vs X3 features
@@ -217,4 +230,4 @@ Phase 2 (Rendering)  Phase 3 (Validation)
 ---
 
 *Roadmap created: 2026-01-21*
-*Last updated: 2026-01-21*
+*Last updated: 2026-01-21 - Phase 1 planned (9 plans, 5 waves)*
