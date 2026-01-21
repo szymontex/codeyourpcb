@@ -10,7 +10,7 @@
 |---|-------|------|--------------|--------|
 | 1 | Foundation | Working parser and board model | 12 | Complete |
 | 2 | Rendering | Visual feedback with hot reload | 7 | Complete |
-| 3 | Validation | DRC prevents invalid designs | 7 | Planned |
+| 3 | Validation | DRC prevents invalid designs | 8 | Planned |
 | 4 | Export | Manufacturable output | 5 | Pending |
 | 5 | Intelligence | Autorouting and IDE integration | 6 | Pending |
 | 6 | Desktop | Full application experience | v2 | Pending |
@@ -139,18 +139,24 @@ Both gaps successfully resolved — WASM builds with feature flags, real PcbEngi
 - DRC runs on file save (like ESLint)
 - Non-invasive error display (status bar + markers)
 
-**Plans:** 9 plans in 6 waves
+**Plans:** 10 plans in 6 waves
 
 Plans:
 - [ ] 03-01-PLAN.md -- DRC crate setup (types, traits, violation struct)
 - [ ] 03-02-PLAN.md -- IC footprints (SOIC, SOT, QFP families)
 - [ ] 03-03-PLAN.md -- Manufacturer presets (JLCPCB, PCBWay rules)
-- [ ] 03-04-PLAN.md -- Custom footprint DSL syntax
+- [ ] 03-04-PLAN.md -- Custom footprint DSL syntax and library registration
 - [ ] 03-05-PLAN.md -- Clearance checking rule (spatial index)
-- [ ] 03-06-PLAN.md -- Drill size and connectivity rules
+- [ ] 03-06-PLAN.md -- Drill size, trace width, and connectivity rules
 - [ ] 03-07-PLAN.md -- DRC integration with rendering pipeline
 - [ ] 03-08-PLAN.md -- Violation display (markers, status bar, panel)
 - [ ] 03-09-PLAN.md -- Visual verification checkpoint
+- [ ] 03-10-PLAN.md -- Zones and keepouts (BRD-05)
+
+**Notes:**
+- DRC-02 (trace width) is a placeholder until traces exist (Phase 5)
+- Plan 03-04 now includes library registration wiring
+- Plan 03-10 added for zones/keepouts requirement
 
 ---
 
@@ -265,4 +271,4 @@ Phase 2 (Rendering)  Phase 3 (Validation)
 ---
 
 *Roadmap created: 2026-01-21*
-*Last updated: 2026-01-21 - Phase 3 planned (9 plans in 6 waves)*
+*Last updated: 2026-01-21 - Phase 3 revised (10 plans in 6 waves, added zones/keepouts)*
