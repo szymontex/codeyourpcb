@@ -1,0 +1,23 @@
+[package]
+name = "cypcb-drc"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Design Rule Check engine for CodeYourPCB"
+
+[features]
+default = []
+parallel = ["rayon"]
+
+[dependencies]
+cypcb-core = { workspace = true }
+cypcb-parser = { workspace = true, default-features = false }
+cypcb-world = { workspace = true, default-features = false }
+
+bevy_ecs = { workspace = true }
+thiserror = { workspace = true }
+miette = { workspace = true }
+hashbrown = "0.15"
+
+# Optional parallelism
+rayon = { version = "1.10", optional = true }
