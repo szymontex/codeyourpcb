@@ -8,12 +8,12 @@
 
 | # | Phase | Goal | Requirements | Status |
 |---|-------|------|--------------|--------|
-| 1 | Foundation | Working parser and board model | 12 | ✓ Complete |
-| 2 | Rendering | Visual feedback with hot reload | 7 | ○ Planned |
-| 3 | Validation | DRC prevents invalid designs | 7 | ○ Pending |
-| 4 | Export | Manufacturable output | 5 | ○ Pending |
-| 5 | Intelligence | Autorouting and IDE integration | 6 | ○ Pending |
-| 6 | Desktop | Full application experience | v2 | ○ Pending |
+| 1 | Foundation | Working parser and board model | 12 | Complete |
+| 2 | Rendering | Visual feedback with hot reload | 7 | Gaps Closing |
+| 3 | Validation | DRC prevents invalid designs | 7 | Pending |
+| 4 | Export | Manufacturable output | 5 | Pending |
+| 5 | Intelligence | Autorouting and IDE integration | 6 | Pending |
+| 6 | Desktop | Full application experience | v2 | Pending |
 
 ---
 
@@ -50,15 +50,15 @@
 **Plans:** 9 plans in 5 waves
 
 Plans:
-- [x] 01-01-PLAN.md — Project setup (workspace, crates, dependencies)
-- [x] 01-02-PLAN.md — Core types (Nm, Point, Rect, Unit)
-- [x] 01-03-PLAN.md — Tree-sitter grammar definition
-- [x] 01-04-PLAN.md — ECS components for board model
-- [x] 01-05-PLAN.md — AST types and parser implementation
-- [x] 01-06-PLAN.md — BoardWorld and spatial indexing
-- [x] 01-07-PLAN.md — Footprint library (SMD + THT)
-- [x] 01-08-PLAN.md — AST-to-ECS synchronization
-- [x] 01-09-PLAN.md — CLI with parse/check commands
+- [x] 01-01-PLAN.md -- Project setup (workspace, crates, dependencies)
+- [x] 01-02-PLAN.md -- Core types (Nm, Point, Rect, Unit)
+- [x] 01-03-PLAN.md -- Tree-sitter grammar definition
+- [x] 01-04-PLAN.md -- ECS components for board model
+- [x] 01-05-PLAN.md -- AST types and parser implementation
+- [x] 01-06-PLAN.md -- BoardWorld and spatial indexing
+- [x] 01-07-PLAN.md -- Footprint library (SMD + THT)
+- [x] 01-08-PLAN.md -- AST-to-ECS synchronization
+- [x] 01-09-PLAN.md -- CLI with parse/check commands
 
 ---
 
@@ -94,16 +94,23 @@ Plans:
 - Light mode default
 - WASM bridge via serde-wasm-bindgen
 
-**Plans:** 7 plans in 5 waves
+**Plans:** 9 plans in 6 waves
 
 Plans:
-- [ ] 02-01-PLAN.md — WASM crate setup (cypcb-render, BoardSnapshot)
-- [ ] 02-02-PLAN.md — Frontend scaffolding (Vite, TypeScript, HTML)
-- [ ] 02-03-PLAN.md — WASM build and integration
-- [ ] 02-04-PLAN.md — Canvas renderer with viewport transforms
-- [ ] 02-05-PLAN.md — Interaction (zoom, pan, select, layer toggles)
-- [ ] 02-06-PLAN.md — Hot reload (file watcher, WebSocket)
-- [ ] 02-07-PLAN.md — Visual verification checkpoint
+- [x] 02-01-PLAN.md -- WASM crate setup (cypcb-render, BoardSnapshot)
+- [x] 02-02-PLAN.md -- Frontend scaffolding (Vite, TypeScript, HTML)
+- [x] 02-03-PLAN.md -- WASM build and integration (mock fallback)
+- [x] 02-04-PLAN.md -- Canvas renderer with viewport transforms
+- [x] 02-05-PLAN.md -- Interaction (zoom, pan, select, layer toggles)
+- [x] 02-06-PLAN.md -- Hot reload (file watcher, WebSocket)
+- [x] 02-07-PLAN.md -- Visual verification checkpoint
+- [ ] 02-08-PLAN.md -- [GAP CLOSURE] Fix WASM build (getrandom compatibility)
+- [ ] 02-09-PLAN.md -- [GAP CLOSURE] Enable real WASM integration
+
+**Gap Closure Notes:**
+Plans 02-08 and 02-09 address gaps identified in verification:
+1. WASM build fails due to bevy_ecs/getrandom WASM incompatibility
+2. TypeScript currently uses MockPcbEngine instead of real WASM
 
 ---
 
@@ -209,19 +216,19 @@ Plans:
 
 ```
 Phase 1 (Foundation)
-    │
-    ├──────────────────┐
-    ▼                  ▼
+    |
+    +------------------+
+    v                  v
 Phase 2 (Rendering)  Phase 3 (Validation)
-    │                  │
-    └────────┬─────────┘
-             ▼
+    |                  |
+    +--------+---------+
+             v
       Phase 4 (Export)
-             │
-             ▼
+             |
+             v
       Phase 5 (Intelligence)
-             │
-             ▼
+             |
+             v
       Phase 6 (Desktop)
 ```
 
@@ -246,4 +253,4 @@ Phase 2 (Rendering)  Phase 3 (Validation)
 ---
 
 *Roadmap created: 2026-01-21*
-*Last updated: 2026-01-21 - Phase 2 planned (7 plans, 5 waves)*
+*Last updated: 2026-01-21 - Phase 2 gap closure plans added (02-08, 02-09)*
