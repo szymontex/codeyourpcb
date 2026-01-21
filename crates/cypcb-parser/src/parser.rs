@@ -33,7 +33,7 @@
 use crate::ast::{
     BoardDef, ComponentDef, ComponentKind, Definition, Dimension, Identifier, LayerType,
     NetAssignment, NetConstraints, NetDef, PinId, PinRef, PositionExpr, RotationExpr, SizeProperty,
-    SourceFile, Span, StackupDef, StackupLayer, StringLit,
+    SourceFile, Span, StackupDef, StackupLayer, StringLit, ZoneDef, ZoneKind,
 };
 use crate::errors::{ParseError, ParseResult};
 use crate::node_kinds;
@@ -125,6 +125,11 @@ impl CypcbParser {
                 node_kinds::NET_DEFINITION => {
                     if let Some(net) = self.convert_net(source, &child, errors) {
                         definitions.push(Definition::Net(net));
+                    }
+                }
+                "zone_definition" => {
+                    if let Some(zone) = self.convert_zone(source, &child, errors) {
+                        definitions.push(Definition::Zone(zone));
                     }
                 }
                 _ => {}
@@ -590,6 +595,74 @@ impl CypcbParser {
         let value = full_text.trim_matches('"').to_string();
         StringLit::new(value, span_of(node))
     }
+
+    /// Convert a zone definition node.
+    fn convert_zone(&self, source: &str, node: &Node, errors: &mut Vec<ParseError>) -> Option<ZoneDef> {
+        let kind_node = get_child_by_field(node, "kind")?;
+        let kind_text = node_text(source, &kind_node);
+        let kind = ZoneKind::from_str(kind_text)?;
+
+        let name = get_child_by_field(node, "name")
+            .map(|n| Identifier::new(node_text(source, &n), span_of(&n)));
+
+        let mut bounds: Option<(Dimension, Dimension, Dimension, Dimension)> = None;
+        let mut layer: Option<String> = None;
+        let mut net: Option<Identifier> = None;
+
+        let mut cursor = node.walk();
+        for child in node.children(&mut cursor) {
+            let property_node = if child.kind() == "zone_property" {
+                child.named_child(0)
+            } else {
+                Some(child)
+            };
+
+            if let Some(prop) = property_node {
+                match prop.kind() {
+                    "zone_bounds" => {
+                        let min_x = get_child_by_field(&prop, "min_x")
+                            .and_then(|n| self.convert_dimension(source, &n, errors));
+                        let min_y = get_child_by_field(&prop, "min_y")
+                            .and_then(|n| self.convert_dimension(source, &n, errors));
+                        let max_x = get_child_by_field(&prop, "max_x")
+                            .and_then(|n| self.convert_dimension(source, &n, errors));
+                        let max_y = get_child_by_field(&prop, "max_y")
+                            .and_then(|n| self.convert_dimension(source, &n, errors));
+
+                        if let (Some(x1), Some(y1), Some(x2), Some(y2)) = (min_x, min_y, max_x, max_y) {
+                            bounds = Some((x1, y1, x2, y2));
+                        }
+                    }
+                    "zone_layer" => {
+                        if let Some(layer_node) = get_child_by_field(&prop, "name") {
+                            layer = Some(node_text(source, &layer_node).to_string());
+                        }
+                    }
+                    "zone_net" => {
+                        if let Some(net_node) = get_child_by_field(&prop, "net") {
+                            net = Some(Identifier::new(
+                                node_text(source, &net_node),
+                                span_of(&net_node),
+                            ));
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        // Bounds are required
+        let bounds = bounds?;
+
+        Some(ZoneDef {
+            kind,
+            name,
+            bounds,
+            layer,
+            net,
+            span: span_of(node),
+        })
+    }
 }
 
 impl Default for CypcbParser {
@@ -1035,5 +1108,95 @@ board test {
         let result = parse(source);
         assert!(result.is_ok(), "errors: {:?}", result.errors);
         assert_eq!(result.value.version, Some(1));
+    }
+
+    #[test]
+    fn test_parse_keepout_zone() {
+        let source = r#"
+keepout antenna_clearance {
+    bounds 10mm, 10mm to 20mm, 20mm
+    layer top
+}
+"#;
+        let result = parse(source);
+        assert!(result.is_ok(), "errors: {:?}", result.errors);
+
+        let ast = result.value;
+        assert_eq!(ast.definitions.len(), 1);
+
+        if let Definition::Zone(zone) = &ast.definitions[0] {
+            assert_eq!(zone.kind, crate::ast::ZoneKind::Keepout);
+            assert_eq!(zone.name.as_ref().map(|n| &n.value), Some(&"antenna_clearance".to_string()));
+            assert!((zone.bounds.0.value - 10.0).abs() < 0.001); // min_x
+            assert!((zone.bounds.1.value - 10.0).abs() < 0.001); // min_y
+            assert!((zone.bounds.2.value - 20.0).abs() < 0.001); // max_x
+            assert!((zone.bounds.3.value - 20.0).abs() < 0.001); // max_y
+            assert_eq!(zone.layer.as_deref(), Some("top"));
+            assert!(zone.net.is_none());
+        } else {
+            panic!("expected zone definition");
+        }
+    }
+
+    #[test]
+    fn test_parse_copper_pour_zone() {
+        let source = r#"
+zone gnd_pour {
+    bounds 0mm, 0mm to 50mm, 50mm
+    layer bottom
+    net GND
+}
+"#;
+        let result = parse(source);
+        assert!(result.is_ok(), "errors: {:?}", result.errors);
+
+        let ast = result.value;
+        assert_eq!(ast.definitions.len(), 1);
+
+        if let Definition::Zone(zone) = &ast.definitions[0] {
+            assert_eq!(zone.kind, crate::ast::ZoneKind::CopperPour);
+            assert_eq!(zone.name.as_ref().map(|n| &n.value), Some(&"gnd_pour".to_string()));
+            assert_eq!(zone.layer.as_deref(), Some("bottom"));
+            assert_eq!(zone.net.as_ref().map(|n| &n.value), Some(&"GND".to_string()));
+        } else {
+            panic!("expected zone definition");
+        }
+    }
+
+    #[test]
+    fn test_parse_keepout_all_layers() {
+        let source = r#"
+keepout mechanical_clearance {
+    bounds 5mm, 5mm to 10mm, 10mm
+    layer all
+}
+"#;
+        let result = parse(source);
+        assert!(result.is_ok(), "errors: {:?}", result.errors);
+
+        if let Definition::Zone(zone) = &result.value.definitions[0] {
+            assert_eq!(zone.layer.as_deref(), Some("all"));
+        } else {
+            panic!("expected zone definition");
+        }
+    }
+
+    #[test]
+    fn test_parse_anonymous_keepout() {
+        let source = r#"
+keepout {
+    bounds 0mm, 0mm to 5mm, 5mm
+}
+"#;
+        let result = parse(source);
+        assert!(result.is_ok(), "errors: {:?}", result.errors);
+
+        if let Definition::Zone(zone) = &result.value.definitions[0] {
+            assert_eq!(zone.kind, crate::ast::ZoneKind::Keepout);
+            assert!(zone.name.is_none());
+            assert!(zone.layer.is_none()); // Defaults to all layers
+        } else {
+            panic!("expected zone definition");
+        }
     }
 }
