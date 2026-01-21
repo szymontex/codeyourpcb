@@ -11,7 +11,16 @@ import { setupInteraction, type InteractionState } from './interaction';
 import { createLayerVisibility } from './layers';
 
 // WebSocket server URL for hot reload
-const WS_URL = 'ws://localhost:3001';
+// Dynamic: if accessing via dev1.flightcore.pl, use dev2.flightcore.pl for WS
+function getWsUrl(): string {
+  const host = window.location.hostname;
+  if (host === 'dev1.flightcore.pl') {
+    return 'wss://dev2.flightcore.pl';
+  }
+  // Local development
+  return 'ws://localhost:4322';
+}
+const WS_URL = getWsUrl();
 
 /**
  * WebSocket message types from the dev server
