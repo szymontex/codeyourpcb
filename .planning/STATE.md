@@ -3,8 +3,8 @@
 ## Current Status
 
 **Phase:** 1 of 6 (Foundation)
-**Plan:** 5 of 9 complete
-**Last Activity:** 2026-01-21 - Completed 01-05-ast-parser-PLAN.md
+**Plan:** 8 of 9 complete
+**Last Activity:** 2026-01-21 - Completed 01-08-ast-sync-PLAN.md
 
 ## Project Reference
 
@@ -17,14 +17,14 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 
 | Phase | Status | Progress |
 |-------|--------|----------|
-| 1. Foundation | In progress | 56% (5/9 plans) |
+| 1. Foundation | In progress | 89% (8/9 plans) |
 | 2. Rendering | Not started | 0% |
 | 3. Validation | Not started | 0% |
 | 4. Export | Not started | 0% |
 | 5. Intelligence | Not started | 0% |
 | 6. Desktop | Not started | 0% |
 
-Progress: █████░░░░░ 56%
+Progress: ████████░░ 89%
 
 ## Phase 1 Plan Status
 
@@ -35,14 +35,14 @@ Progress: █████░░░░░ 56%
 | 01-03 | Grammar | Complete |
 | 01-04 | ECS Components | Complete |
 | 01-05 | AST Parser | Complete |
-| 01-06 | Board World | Pending |
-| 01-07 | Footprints | Pending |
-| 01-08 | AST Sync | Pending |
+| 01-06 | Board World | Complete |
+| 01-07 | Footprints | Complete |
+| 01-08 | AST Sync | Complete |
 | 01-09 | CLI | Pending |
 
 ## Next Action
 
-Execute plan 01-06-board-world-PLAN.md (Board world wrapper over ECS).
+Execute plan 01-09-cli-PLAN.md (Command-line interface for parsing and validation).
 
 ## Key Decisions Log
 
@@ -59,8 +59,21 @@ Execute plan 01-06-board-world-PLAN.md (Board world wrapper over ECS).
 | 2026-01-21 | u32 layer mask | Bit mask for copper layers, supports 32 layers |
 | 2026-01-21 | AST Span tracking | All nodes carry source span for error reporting |
 | 2026-01-21 | Error recovery parsing | ParseResult returns partial AST + errors |
+| 2026-01-21 | Sync error recovery | Continue sync on semantic errors, collect all |
 
 ## Session History
+
+### 2026-01-21: Execute 01-08 AST Sync
+- Created sync.rs (747 lines) bridging parser and board model
+- Implemented sync_ast_to_world function for AST-to-ECS conversion
+- Added SyncError enum with miette-compatible error types:
+  - UnknownFootprint: component references missing footprint
+  - DuplicateRefDes: same refdes used twice
+  - UnknownComponent: net references undefined component
+- Sync continues on errors for better user experience
+- Source spans preserved on entities for error reporting
+- Spatial index rebuilt after sync using footprint bounds
+- 11 unit tests + doc tests passing (128 total crate tests)
 
 ### 2026-01-21: Execute 01-05 AST Parser
 - Created AST types (ast.rs) with Span tracking on all nodes
@@ -140,11 +153,19 @@ Execute plan 01-06-board-world-PLAN.md (Board world wrapper over ECS).
 | crates/cypcb-world/src/components/physical.rs | Layer, FootprintRef, Pad, PadShape |
 | crates/cypcb-world/src/components/metadata.rs | SourceSpan, ComponentKind |
 | crates/cypcb-world/src/components/board.rs | Board, BoardSize, LayerStack |
+| crates/cypcb-world/src/world.rs | BoardWorld high-level API |
+| crates/cypcb-world/src/registry.rs | NetRegistry for name interning |
+| crates/cypcb-world/src/spatial.rs | SpatialIndex for region queries |
+| crates/cypcb-world/src/footprint/mod.rs | Footprint module |
+| crates/cypcb-world/src/footprint/library.rs | FootprintLibrary type |
+| crates/cypcb-world/src/footprint/smd.rs | SMD footprints (0402-2512) |
+| crates/cypcb-world/src/footprint/tht.rs | THT footprints (DIP-8, etc) |
+| crates/cypcb-world/src/sync.rs | AST-to-ECS synchronization |
 
 ## Session Continuity
 
-**Last session:** 2026-01-21 13:50 UTC
-**Stopped at:** Completed 01-05-ast-parser-PLAN.md
+**Last session:** 2026-01-21 13:52 UTC
+**Stopped at:** Completed 01-08-ast-sync-PLAN.md
 **Resume file:** None
 
 ---
