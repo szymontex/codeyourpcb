@@ -236,6 +236,19 @@ impl DrcViolation {
         self.source_span = Some(span);
         self
     }
+
+    /// Add pad information to a drill size violation message.
+    ///
+    /// Updates the message to include component refdes and pad number.
+    pub fn with_pad_info(mut self, refdes: &str, pad_number: &str) -> Self {
+        if self.kind == ViolationKind::DrillSize {
+            // Parse existing message to get dimensions
+            if let Some(rest) = self.message.strip_prefix("Drill size violation: ") {
+                self.message = format!("Drill size violation at {}.{}: {}", refdes, pad_number, rest);
+            }
+        }
+        self
+    }
 }
 
 #[cfg(test)]
