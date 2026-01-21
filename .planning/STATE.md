@@ -3,28 +3,28 @@
 ## Current Status
 
 **Phase:** 2 of 6 (Rendering) - IN PROGRESS
-**Plan:** 3 of 5 complete
-**Last Activity:** 2026-01-21 - Completed 02-01-PLAN.md
+**Plan:** 4 of 5 complete
+**Last Activity:** 2026-01-21 - Completed 02-04-PLAN.md
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-01-21)
 
 **Core value:** The source file is the design - git-friendly, AI-editable, deterministic
-**Current focus:** Phase 2 Rendering - WASM crate complete, canvas rendering next
+**Current focus:** Phase 2 Rendering - Canvas 2D rendering complete, layer visibility UI next
 
 ## Phase Progress
 
 | Phase | Status | Progress |
 |-------|--------|----------|
 | 1. Foundation | Complete | 100% (9/9 plans) |
-| 2. Rendering | In progress | 60% (3/5 plans) |
+| 2. Rendering | In progress | 80% (4/5 plans) |
 | 3. Validation | Not started | 0% |
 | 4. Export | Not started | 0% |
 | 5. Intelligence | Not started | 0% |
 | 6. Desktop | Not started | 0% |
 
-Progress: ████████████░░░░░░░░ 60%
+Progress: █████████████░░░░░░░ 65%
 
 ## Phase 2 Plan Status
 
@@ -33,12 +33,12 @@ Progress: ████████████░░░░░░░░ 60%
 | 02-01 | WASM Crate Setup | Complete |
 | 02-02 | Frontend Scaffolding | Complete |
 | 02-03 | WASM Binding | Not started |
-| 02-04 | Canvas 2D Rendering | Not started |
+| 02-04 | Canvas 2D Rendering | Complete |
 | 02-05 | Layer Visibility | Not started |
 
 ## Next Action
 
-Continue with 02-03 (WASM binding integration) - requires resolving wasm-bindgen build issue.
+Continue with 02-05 (Layer visibility UI) - connect layer checkboxes to rendering state.
 
 ## Key Decisions Log
 
@@ -61,6 +61,8 @@ Continue with 02-03 (WASM binding integration) - requires resolving wasm-bindgen
 | 2026-01-21 | Vite build tool | Fast dev server with native WASM support |
 | 2026-01-21 | WASM bindings deferred | Build environment issue with wasm-bindgen linking |
 | 2026-01-21 | Entity re-export | Re-export bevy_ecs::Entity from cypcb-world |
+| 2026-01-21 | Light mode default | Light background (#FFFFFF) per user preference |
+| 2026-01-21 | Immutable state | All viewport/layer/render state updates return new objects |
 
 ## Session History
 
@@ -71,6 +73,16 @@ Continue with 02-03 (WASM binding integration) - requires resolving wasm-bindgen
 - Added 7 unit tests (all passing)
 - Re-exported Entity from cypcb-world for convenience
 - WASM bindings temporarily disabled due to build environment issue
+
+### 2026-01-21: Execute 02-04 Canvas 2D Rendering
+- Created viewport.ts with coordinate transforms (nm/Y-up to px/Y-down)
+- Created layers.ts with KiCad-style colors and visibility state
+- Created renderer.ts with full Canvas 2D rendering
+- Supports all pad shapes: circle, rect, roundrect, oblong
+- Zoom-at-point, pan, fitBoard utilities
+- Selection highlighting in orange
+- Through-hole drill holes rendered
+- Adaptive grid density based on zoom
 
 ### 2026-01-21: Execute 02-02 Frontend Scaffolding
 - Created Vite + TypeScript project structure in viewer/
@@ -206,11 +218,14 @@ Continue with 02-03 (WASM binding integration) - requires resolving wasm-bindgen
 | viewer/src/main.ts | Application entry point |
 | viewer/src/wasm.ts | WASM loading utilities |
 | viewer/src/types.ts | TypeScript types for BoardSnapshot |
+| viewer/src/viewport.ts | Viewport state and coordinate transforms |
+| viewer/src/layers.ts | Layer colors and visibility |
+| viewer/src/renderer.ts | Canvas 2D rendering functions |
 
 ## Session Continuity
 
 **Last session:** 2026-01-21
-**Stopped at:** Completed 02-01-PLAN.md
+**Stopped at:** Completed 02-04-PLAN.md
 **Resume file:** None
 
 ---
