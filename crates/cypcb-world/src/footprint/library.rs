@@ -135,7 +135,7 @@ impl Footprint {
 ///     println!("{}: {} pads", name, fp.pads.len());
 /// }
 /// ```
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct FootprintLibrary {
     footprints: HashMap<String, Footprint>,
 }

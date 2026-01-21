@@ -559,11 +559,20 @@ impl CypcbParser {
 
     /// Convert a dimension node.
     fn convert_dimension(&self, source: &str, node: &Node, errors: &mut Vec<ParseError>) -> Option<Dimension> {
+        // Check for negative sign
+        let is_negative = get_child_by_field(node, "sign").is_some();
+
         let value_node = get_child_by_field(node, "value")?;
         let text = node_text(source, &value_node);
 
         let value = match text.parse::<f64>() {
-            Ok(v) => v,
+            Ok(v) => {
+                if is_negative {
+                    -v
+                } else {
+                    v
+                }
+            }
             Err(_) => {
                 errors.push(ParseError::invalid_number(
                     text,

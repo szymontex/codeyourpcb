@@ -202,8 +202,9 @@ module.exports = grammar({
       $.identifier,
     ),
 
-    // Dimension: number with optional unit (10mm, 100mil, 1in, 1000nm)
+    // Dimension: number with optional unit (10mm, 100mil, 1in, 1000nm, -5mm)
     dimension: $ => seq(
+      optional(field('sign', '-')),
       field('value', $.number),
       optional(field('unit', $.unit)),
     ),
