@@ -3,6 +3,14 @@
 //! Tree-sitter based parser for the CodeYourPCB DSL.
 //! Provides incremental parsing with error recovery.
 //!
+//! # Overview
+//!
+//! This crate provides:
+//! - Tree-sitter grammar bindings for the CodeYourPCB DSL
+//! - AST (Abstract Syntax Tree) type definitions
+//! - Tree-sitter CST to typed AST conversion
+//! - Rich error reporting with miette integration
+//!
 //! # Grammar
 //!
 //! The grammar supports the following constructs:
@@ -26,9 +34,27 @@
 //! }
 //! ```
 //!
-//! # Usage
+//! # Quick Start
 //!
-//! ```rust,ignore
+//! ```rust
+//! use cypcb_parser::{parse, CypcbParser};
+//!
+//! // Convenience function
+//! let result = parse("version 1\nboard test { size 10mm x 10mm }");
+//! if result.is_ok() {
+//!     println!("Parsed {} definitions", result.value.definitions.len());
+//! }
+//!
+//! // Or use the parser struct for multiple parses
+//! let mut parser = CypcbParser::new();
+//! let result = parser.parse("board another { size 20mm x 20mm }");
+//! ```
+//!
+//! # Low-level Usage
+//!
+//! For direct access to the Tree-sitter parse tree:
+//!
+//! ```rust
 //! use cypcb_parser::language;
 //! use tree_sitter::Parser;
 //!
@@ -40,7 +66,19 @@
 //! println!("{}", tree.root_node().to_sexp());
 //! ```
 
+pub mod ast;
+pub mod errors;
+pub mod parser;
+
 use tree_sitter::Language;
+
+// Re-export key types for convenience
+pub use ast::{
+    BoardDef, ComponentDef, ComponentKind, Definition, Dimension, Identifier, NetDef, PinId,
+    PinRef, PositionExpr, SizeProperty, SourceFile, Span, StringLit,
+};
+pub use errors::{ParseError, ParseResult};
+pub use parser::{parse, CypcbParser};
 
 // Link to the compiled Tree-sitter grammar
 extern "C" {
