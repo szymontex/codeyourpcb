@@ -3,8 +3,8 @@
 ## Current Status
 
 **Phase:** 1 of 6 (Foundation)
-**Plan:** 4 of 9 complete
-**Last Activity:** 2026-01-21 - Completed 01-04-ecs-components-PLAN.md
+**Plan:** 5 of 9 complete
+**Last Activity:** 2026-01-21 - Completed 01-07-footprints-PLAN.md
 
 ## Project Reference
 
@@ -17,14 +17,14 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 
 | Phase | Status | Progress |
 |-------|--------|----------|
-| 1. Foundation | ◐ In progress | 44% (4/9 plans) |
+| 1. Foundation | ◐ In progress | 56% (5/9 plans) |
 | 2. Rendering | ○ Not started | 0% |
 | 3. Validation | ○ Not started | 0% |
 | 4. Export | ○ Not started | 0% |
 | 5. Intelligence | ○ Not started | 0% |
 | 6. Desktop | ○ Not started | 0% |
 
-Progress: ████░░░░░░ 44%
+Progress: █████░░░░░ 56%
 
 ## Phase 1 Plan Status
 
@@ -36,13 +36,13 @@ Progress: ████░░░░░░ 44%
 | 01-04 | ECS Components | ● Complete |
 | 01-05 | AST Parser | ○ Pending |
 | 01-06 | Board World | ○ Pending |
-| 01-07 | Footprints | ○ Pending |
+| 01-07 | Footprints | ● Complete |
 | 01-08 | AST Sync | ○ Pending |
 | 01-09 | CLI | ○ Pending |
 
 ## Next Action
 
-Execute plan 01-05-ast-parser-PLAN.md (AST construction from Tree-sitter).
+Execute plan 01-05-ast-parser-PLAN.md (AST construction from Tree-sitter) or 01-06-board-world-PLAN.md.
 
 ## Key Decisions Log
 
@@ -57,8 +57,17 @@ Execute plan 01-05-ast-parser-PLAN.md (AST construction from Tree-sitter).
 | 2026-01-21 | Bottom-left origin, Y-up | Mathematical convention, matches Gerber viewers |
 | 2026-01-21 | Millidegrees for rotation | i32 (0-359999), deterministic comparison |
 | 2026-01-21 | u32 layer mask | Bit mask for copper layers, supports 32 layers |
+| 2026-01-21 | IPC-7351B nominal density | Standard pad dimensions for footprints |
 
 ## Session History
+
+### 2026-01-21: Execute 01-07 Footprints
+- Created footprint library with 8 built-in footprints
+- SMD: 0402, 0603, 0805, 1206, 2512 (IPC-7351B nominal)
+- THT: AXIAL-300, DIP-8, PIN-HDR-1x2
+- PadDef, Footprint, FootprintLibrary types
+- Added Rect::from_center_size helper to cypcb-core
+- 16 unit tests + 9 doc tests passing
 
 ### 2026-01-21: Execute 01-04 ECS Components
 - Created 15 ECS components for board model
@@ -127,11 +136,15 @@ Execute plan 01-05-ast-parser-PLAN.md (AST construction from Tree-sitter).
 | crates/cypcb-world/src/components/physical.rs | Layer, FootprintRef, Pad, PadShape |
 | crates/cypcb-world/src/components/metadata.rs | SourceSpan, ComponentKind |
 | crates/cypcb-world/src/components/board.rs | Board, BoardSize, LayerStack |
+| crates/cypcb-world/src/footprint/mod.rs | Footprint module definition |
+| crates/cypcb-world/src/footprint/library.rs | PadDef, Footprint, FootprintLibrary |
+| crates/cypcb-world/src/footprint/smd.rs | SMD footprint generators |
+| crates/cypcb-world/src/footprint/tht.rs | THT footprint generators |
 
 ## Session Continuity
 
-**Last session:** 2026-01-21 10:54 UTC
-**Stopped at:** Completed 01-04-ecs-components-PLAN.md
+**Last session:** 2026-01-21 11:30 UTC
+**Stopped at:** Completed 01-07-footprints-PLAN.md
 **Resume file:** None
 
 ---
