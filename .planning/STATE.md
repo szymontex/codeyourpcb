@@ -3,8 +3,8 @@
 ## Current Status
 
 **Phase:** 3 of 6 (Validation) - In Progress
-**Plan:** 8 of 10 complete
-**Last Activity:** 2026-01-21 - Completed 03-07-PLAN.md (DRC Integration with Rendering Pipeline)
+**Plan:** 9 of 10 complete
+**Last Activity:** 2026-01-21 - Completed 03-08-PLAN.md (Violation Display - markers, status bar, panel)
 
 ## Project Reference
 
@@ -19,12 +19,12 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 |-------|--------|----------|
 | 1. Foundation | Complete | 100% (9/9 plans) |
 | 2. Rendering | Complete | 100% (9/9 plans) |
-| 3. Validation | In Progress | 80% (8/10 plans) |
+| 3. Validation | In Progress | 90% (9/10 plans) |
 | 4. Export | Not started | 0% |
 | 5. Intelligence | Not started | 0% |
 | 6. Desktop | Not started | 0% |
 
-Progress: ██████████████████░░ 84%
+Progress: ███████████████████░ 87%
 
 ## Phase 3 Plan Status
 
@@ -37,13 +37,13 @@ Progress: ██████████████████░░ 84%
 | 03-05 | Clearance Checking Rule | Complete |
 | 03-06 | Drill Size, Trace Width, Connectivity Rules | Complete |
 | 03-07 | DRC Integration with Rendering Pipeline | Complete |
-| 03-08 | TBD | Not started |
+| 03-08 | Violation Display (markers, status bar, panel) | Complete |
 | 03-09 | TBD | Not started |
 | 03-10 | Zones and Keepouts | Complete |
 
 ## Next Action
 
-Continue Phase 3 (Validation) - Execute 03-08-PLAN.md and 03-09-PLAN.md
+Continue Phase 3 (Validation) - Execute 03-09-PLAN.md (final plan)
 
 ## Key Decisions Log
 
@@ -99,8 +99,21 @@ Continue Phase 3 (Validation) - Execute 03-08-PLAN.md and 03-09-PLAN.md
 | 2026-01-21 | MinTraceWidthRule deferred | Placeholder until Phase 5 adds Trace entities |
 | 2026-01-21 | DRC after every load | Real-time feedback for DRC-05 requirement |
 | 2026-01-21 | ViolationKind as string in TS | Simpler JS serialization than enum mapping |
+| 2026-01-21 | Fixed 15px marker radius | Screen-space size ensures visibility at any zoom |
+| 2026-01-21 | 5mm zoom margin for violations | Provides context around violation location |
 
 ## Session History
+
+### 2026-01-21: Complete 03-08 Violation Display (markers, status bar, panel)
+- Added violation and violation_ring colors to LAYER_COLORS
+- Implemented drawViolation() rendering red ring markers at violation locations
+- Added showViolations to RenderState for visibility toggle
+- Added error-badge to status bar with pill-style appearance
+- Badge shows violation count, hidden when no violations
+- Added error-panel overlay (VS Code style) with scrollable list
+- Each error shows [kind] message format
+- Click error item triggers zoomToLocation() centering on violation
+- Panel toggles on badge click, close button dismisses
 
 ### 2026-01-21: Complete 03-07 DRC Integration with Rendering Pipeline
 - Added cypcb-drc dependency to cypcb-render crate
@@ -426,7 +439,7 @@ Continue Phase 3 (Validation) - Execute 03-08-PLAN.md and 03-09-PLAN.md
 ## Session Continuity
 
 **Last session:** 2026-01-21
-**Stopped at:** Completed 03-07-PLAN.md (DRC Integration with Rendering Pipeline)
+**Stopped at:** Completed 03-08-PLAN.md (Violation Display)
 **Resume file:** None
 
 ---
