@@ -3,15 +3,15 @@
 ## Current Status
 
 **Phase:** 3 of 6 (Validation) - In Progress
-**Plan:** 1 of 8 complete
-**Last Activity:** 2026-01-21 - Completed 03-01-PLAN.md (DRC Crate Setup)
+**Plan:** 2 of 10 complete
+**Last Activity:** 2026-01-21 - Completed 03-02-PLAN.md (IC Footprints)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-01-21)
 
 **Core value:** The source file is the design - git-friendly, AI-editable, deterministic
-**Current focus:** Phase 3 Validation - DRC crate foundation established
+**Current focus:** Phase 3 Validation - DRC engine and IC footprints
 
 ## Phase Progress
 
@@ -19,29 +19,31 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 |-------|--------|----------|
 | 1. Foundation | Complete | 100% (9/9 plans) |
 | 2. Rendering | Complete | 100% (9/9 plans) |
-| 3. Validation | In progress | 12.5% (1/8 plans) |
+| 3. Validation | In Progress | 20% (2/10 plans) |
 | 4. Export | Not started | 0% |
 | 5. Intelligence | Not started | 0% |
 | 6. Desktop | Not started | 0% |
 
-Progress: ██████████████░░░░░░ 73%
+Progress: ███████████████░░░░░ 74%
 
 ## Phase 3 Plan Status
 
 | Plan | Name | Status |
 |------|------|--------|
 | 03-01 | DRC Crate Setup | Complete |
-| 03-02 | Manufacturer Presets | Not started |
-| 03-03 | Clearance Rule | Not started |
-| 03-04 | Additional Rules | Not started |
-| 03-05 | DRC Integration | Not started |
-| 03-06 | Violation Display | Not started |
-| 03-07 | IC Footprints | Not started |
-| 03-08 | Custom Footprints | Not started |
+| 03-02 | IC Footprints (SOIC/SOT/QFP) | Complete |
+| 03-03 | TBD | Not started |
+| 03-04 | TBD | Not started |
+| 03-05 | TBD | Not started |
+| 03-06 | TBD | Not started |
+| 03-07 | TBD | Not started |
+| 03-08 | TBD | Not started |
+| 03-09 | TBD | Not started |
+| 03-10 | TBD | Not started |
 
 ## Next Action
 
-Continue Phase 3 with 03-02 (Manufacturer Presets DSL) or 03-03 (Clearance Rule Implementation).
+Continue Phase 3 (Validation) - Execute 03-03-PLAN.md
 
 ## Key Decisions Log
 
@@ -79,8 +81,22 @@ Continue Phase 3 with 03-02 (Manufacturer Presets DSL) or 03-03 (Clearance Rule 
 | 2026-01-21 | WasmPcbEngineAdapter | Adapter bridges JS parsing to WASM load_snapshot() |
 | 2026-01-21 | DrcRule trait object-safe | Allows Vec<Box<dyn DrcRule>> for flexible composition |
 | 2026-01-21 | Rust structs for DRC presets | Type-safe manufacturer rules, no config file parsing |
+| 2026-01-21 | Parametric gullwing generator | gullwing_footprint() for dual-row ICs, reduces duplication |
+| 2026-01-21 | Counter-clockwise pin numbering | Standard IC convention, matches KiCad/Altium |
+| 2026-01-21 | IPC-7351B courtyard | Body + 0.5mm margin for assembly clearance |
 
 ## Session History
+
+### 2026-01-21: Complete 03-02 IC Footprints
+- Created gullwing.rs (687 lines) with parametric IC footprint generator
+- Implemented gullwing_footprint() for dual-row packages (SOIC, SSOP)
+- Added soic8(), soic14() with 1.27mm pitch, 5.4mm row span
+- Added sot23() asymmetric 3-pin, sot23_5() 5-pin layouts
+- Added tqfp32() quad-flat 32-pin, 0.8mm pitch
+- Counter-clockwise pin numbering from bottom-left (IC standard)
+- IPC-7351B courtyard calculation (body + 0.5mm margin)
+- Registered all footprints in FootprintLibrary
+- 14 new tests, 148 total cypcb-world tests passing
 
 ### 2026-01-21: Complete 03-01 DRC Crate Setup
 - Created cypcb-drc crate with core DRC infrastructure
@@ -281,6 +297,7 @@ Continue Phase 3 with 03-02 (Manufacturer Presets DSL) or 03-03 (Clearance Rule 
 | crates/cypcb-world/src/footprint/library.rs | FootprintLibrary type |
 | crates/cypcb-world/src/footprint/smd.rs | SMD footprints (0402-2512) |
 | crates/cypcb-world/src/footprint/tht.rs | THT footprints (DIP-8, etc) |
+| crates/cypcb-world/src/footprint/gullwing.rs | IC footprints (SOIC, SOT, QFP) |
 | crates/cypcb-world/src/sync.rs | AST-to-ECS synchronization |
 | crates/cypcb-cli/src/main.rs | CLI entrypoint |
 | crates/cypcb-cli/src/commands/mod.rs | Commands module |
@@ -319,7 +336,7 @@ Continue Phase 3 with 03-02 (Manufacturer Presets DSL) or 03-03 (Clearance Rule 
 ## Session Continuity
 
 **Last session:** 2026-01-21
-**Stopped at:** Completed 03-01-PLAN.md (DRC crate setup complete)
+**Stopped at:** Completed 03-02-PLAN.md (IC Footprints)
 **Resume file:** None
 
 ---
