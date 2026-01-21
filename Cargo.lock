@@ -423,6 +423,7 @@ dependencies = [
 name = "cypcb-parser"
 version = "0.1.0"
 dependencies = [
+ "cc",
  "cypcb-core",
  "miette",
  "thiserror",
