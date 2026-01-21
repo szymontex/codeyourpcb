@@ -20,21 +20,18 @@ if ! rustup target list --installed | grep -q wasm32-unknown-unknown; then
     rustup target add wasm32-unknown-unknown
 fi
 
-# Build the WASM module
-# Note: This may fail due to bevy_ecs/getrandom compatibility issues
-# When it does, the viewer will use the mock implementation
+# Work around TLS allocation issue on some Linux systems
+export GLIBC_TUNABLES=glibc.rtld.optional_static_tls=2048
+
+# Build the WASM module with the wasm feature (excludes tree-sitter)
 wasm-pack build crates/cypcb-render \
   --target web \
   --out-dir ../../viewer/pkg \
-  --out-name cypcb_render || {
-    echo ""
-    echo "WASM build failed (likely due to bevy_ecs/getrandom WASM compatibility)"
-    echo "The viewer will use the mock implementation until this is resolved."
-    echo ""
-    echo "To use the full WASM version, the getrandom dependency needs WASM support."
-    echo "See: https://github.com/rust-random/getrandom/issues/295"
-    exit 0
-}
+  --out-name cypcb_render \
+  --no-default-features \
+  --features wasm
 
-echo "WASM build complete: viewer/pkg/"
+echo ""
+echo "WASM build complete!"
+echo "Output: viewer/pkg/"
 ls -la viewer/pkg/
