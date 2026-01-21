@@ -2,23 +2,23 @@
 
 ## Current Status
 
-**Phase:** 2 of 6 (Rendering) - VERIFIED COMPLETE
-**Plan:** 7 of 7 complete
-**Last Activity:** 2026-01-21 - Completed 02-07-PLAN.md (Visual Verification)
+**Phase:** 2 of 6 (Rendering) - COMPLETE (Gap Closure Done)
+**Plan:** 8 of 8 complete (including gap closure plan)
+**Last Activity:** 2026-01-21 - Completed 02-08-PLAN.md (WASM Build Fix)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-01-21)
 
 **Core value:** The source file is the design - git-friendly, AI-editable, deterministic
-**Current focus:** Phase 2 Rendering VERIFIED - Ready for Phase 3 Validation
+**Current focus:** Phase 2 Rendering fully complete with WASM builds working - Ready for Phase 3 Validation
 
 ## Phase Progress
 
 | Phase | Status | Progress |
 |-------|--------|----------|
 | 1. Foundation | Complete | 100% (9/9 plans) |
-| 2. Rendering | Verified Complete | 100% (7/7 plans) |
+| 2. Rendering | Complete | 100% (8/8 plans) |
 | 3. Validation | Not started | 0% |
 | 4. Export | Not started | 0% |
 | 5. Intelligence | Not started | 0% |
@@ -37,6 +37,7 @@ Progress: ██████████████░░░░░░ 70%
 | 02-05 | Layer Visibility | Complete |
 | 02-06 | Hot Reload | Complete |
 | 02-07 | Visual Verification | Verified |
+| 02-08 | WASM Build Fix | Complete |
 
 ## Next Action
 
@@ -72,8 +73,21 @@ Begin Phase 3 (Validation) - Design rule checking and error display.
 | 2026-01-21 | Dual watcher implementations | Rust for Tauri, Node.js for dev server |
 | 2026-01-21 | WebSocket port 3001 | Separate from Vite (5173) |
 | 2026-01-21 | 200ms debounce | Handles editor save patterns |
+| 2026-01-21 | tree-sitter feature flag | Conditional compilation for WASM compatibility |
+| 2026-01-21 | Split impl blocks for WASM | Separate WASM-exposed from internal methods |
+| 2026-01-21 | JS parsing for WASM mode | tree-sitter requires C, so JS handles parsing in WASM |
 
 ## Session History
+
+### 2026-01-21: Complete 02-08 WASM Build Fix
+- Added tree-sitter-parser feature to cypcb-parser for conditional compilation
+- Added sync feature to cypcb-world to exclude parser dependency for WASM
+- Split PcbEngine impl blocks to separate WASM-exposed and internal methods
+- Updated build-wasm.sh with --no-default-features --features wasm
+- Added GLIBC_TUNABLES workaround for Linux TLS allocation issue
+- WASM build produces: cypcb_render_bg.wasm (240KB), cypcb_render.js, types
+- Created test-wasm.mjs smoke test (passes all checks)
+- Gap #1 from VERIFICATION.md now closed
 
 ### 2026-01-21: Complete 02-07 Visual Verification
 - Human verification checkpoint passed
@@ -226,7 +240,7 @@ Begin Phase 3 (Validation) - Design rule checking and error display.
 | crates/cypcb-parser/grammar/package.json | Tree-sitter CLI config |
 | crates/cypcb-parser/grammar/tree-sitter.json | ABI 15 config |
 | crates/cypcb-parser/grammar/queries/highlights.scm | Syntax highlighting |
-| crates/cypcb-parser/build.rs | C parser compilation |
+| crates/cypcb-parser/build.rs | C parser compilation (conditional) |
 | crates/cypcb-parser/src/lib.rs | Parser bindings and tests |
 | crates/cypcb-parser/src/ast.rs | AST type definitions |
 | crates/cypcb-parser/src/parser.rs | CST to AST conversion |
@@ -250,7 +264,7 @@ Begin Phase 3 (Validation) - Design rule checking and error display.
 | crates/cypcb-cli/src/commands/parse.rs | Parse command |
 | crates/cypcb-cli/src/commands/check.rs | Check command |
 | crates/cypcb-cli/tests/cli_integration.rs | CLI integration tests |
-| crates/cypcb-render/Cargo.toml | WASM crate config |
+| crates/cypcb-render/Cargo.toml | WASM crate config (with features) |
 | crates/cypcb-render/src/lib.rs | PcbEngine implementation |
 | crates/cypcb-render/src/snapshot.rs | BoardSnapshot types |
 | examples/blink.cypcb | Example LED circuit |
@@ -268,7 +282,8 @@ Begin Phase 3 (Validation) - Design rule checking and error display.
 | viewer/src/layers.ts | Layer colors and visibility |
 | viewer/src/renderer.ts | Canvas 2D rendering functions |
 | viewer/src/interaction.ts | Mouse interaction handlers |
-| viewer/build-wasm.sh | WASM build script |
+| viewer/build-wasm.sh | WASM build script (working) |
+| viewer/test-wasm.mjs | WASM smoke test for Node.js |
 | crates/cypcb-watcher/Cargo.toml | File watcher crate config |
 | crates/cypcb-watcher/src/lib.rs | Debounced file watching |
 | viewer/server.ts | Dev server with WebSocket |
@@ -276,7 +291,7 @@ Begin Phase 3 (Validation) - Design rule checking and error display.
 ## Session Continuity
 
 **Last session:** 2026-01-21
-**Stopped at:** Completed 02-07-PLAN.md (Phase 2 verified complete)
+**Stopped at:** Completed 02-08-PLAN.md (WASM build now working)
 **Resume file:** None
 
 ---
