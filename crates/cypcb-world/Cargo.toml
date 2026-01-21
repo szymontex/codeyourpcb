@@ -7,7 +7,9 @@ description = "ECS-based board model for CodeYourPCB"
 
 [dependencies]
 cypcb-core = { workspace = true }
+cypcb-parser = { workspace = true }
 bevy_ecs = { workspace = true }
 rstar = { workspace = true }
 serde = { workspace = true }
 miette = { workspace = true }
+thiserror = { workspace = true }

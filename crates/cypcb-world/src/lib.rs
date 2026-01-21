@@ -92,6 +92,7 @@ pub mod components;
 pub mod footprint;
 pub mod registry;
 pub mod spatial;
+pub mod sync;
 pub mod world;
 
 // Re-export all component types at crate root for convenience
@@ -125,3 +126,6 @@ pub use spatial::{SpatialEntry, SpatialIndex};
 
 // Re-export BoardWorld
 pub use world::BoardWorld;
+
+// Re-export sync functionality
+pub use sync::{sync_ast_to_world, SyncError, SyncResult};
