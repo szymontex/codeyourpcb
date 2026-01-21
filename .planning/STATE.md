@@ -2,16 +2,16 @@
 
 ## Current Status
 
-**Phase:** 2 of 6 (Rendering) - COMPLETE (All Gaps Closed)
-**Plan:** 9 of 9 complete (including gap closure plans)
-**Last Activity:** 2026-01-21 - Completed 02-09-PLAN.md (WASM Integration)
+**Phase:** 3 of 6 (Validation) - In Progress
+**Plan:** 1 of 8 complete
+**Last Activity:** 2026-01-21 - Completed 03-01-PLAN.md (DRC Crate Setup)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-01-21)
 
 **Core value:** The source file is the design - git-friendly, AI-editable, deterministic
-**Current focus:** Phase 2 Rendering fully complete with real WASM integration - Ready for Phase 3 Validation
+**Current focus:** Phase 3 Validation - DRC crate foundation established
 
 ## Phase Progress
 
@@ -19,30 +19,29 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 |-------|--------|----------|
 | 1. Foundation | Complete | 100% (9/9 plans) |
 | 2. Rendering | Complete | 100% (9/9 plans) |
-| 3. Validation | Not started | 0% |
+| 3. Validation | In progress | 12.5% (1/8 plans) |
 | 4. Export | Not started | 0% |
 | 5. Intelligence | Not started | 0% |
 | 6. Desktop | Not started | 0% |
 
-Progress: ██████████████░░░░░░ 70%
+Progress: ██████████████░░░░░░ 73%
 
-## Phase 2 Plan Status
+## Phase 3 Plan Status
 
 | Plan | Name | Status |
 |------|------|--------|
-| 02-01 | WASM Crate Setup | Complete |
-| 02-02 | Frontend Scaffolding | Complete |
-| 02-03 | WASM Binding | Complete |
-| 02-04 | Canvas 2D Rendering | Complete |
-| 02-05 | Layer Visibility | Complete |
-| 02-06 | Hot Reload | Complete |
-| 02-07 | Visual Verification | Verified |
-| 02-08 | WASM Build Fix | Complete |
-| 02-09 | WASM Integration | Complete |
+| 03-01 | DRC Crate Setup | Complete |
+| 03-02 | Manufacturer Presets | Not started |
+| 03-03 | Clearance Rule | Not started |
+| 03-04 | Additional Rules | Not started |
+| 03-05 | DRC Integration | Not started |
+| 03-06 | Violation Display | Not started |
+| 03-07 | IC Footprints | Not started |
+| 03-08 | Custom Footprints | Not started |
 
 ## Next Action
 
-Begin Phase 3 (Validation) - Design rule checking and error display.
+Continue Phase 3 with 03-02 (Manufacturer Presets DSL) or 03-03 (Clearance Rule Implementation).
 
 ## Key Decisions Log
 
@@ -78,8 +77,21 @@ Begin Phase 3 (Validation) - Design rule checking and error display.
 | 2026-01-21 | Split impl blocks for WASM | Separate WASM-exposed from internal methods |
 | 2026-01-21 | JS parsing for WASM mode | tree-sitter requires C, so JS handles parsing in WASM |
 | 2026-01-21 | WasmPcbEngineAdapter | Adapter bridges JS parsing to WASM load_snapshot() |
+| 2026-01-21 | DrcRule trait object-safe | Allows Vec<Box<dyn DrcRule>> for flexible composition |
+| 2026-01-21 | Rust structs for DRC presets | Type-safe manufacturer rules, no config file parsing |
 
 ## Session History
+
+### 2026-01-21: Complete 03-01 DRC Crate Setup
+- Created cypcb-drc crate with core DRC infrastructure
+- Implemented DrcViolation type with kind, location, entities, source_span, message
+- Added ViolationKind enum: Clearance, TraceWidth, DrillSize, UnconnectedPin, ViaDrill, AnnularRing
+- Defined object-safe DrcRule trait with name() and check() methods
+- Created DesignRules struct with JLCPCB and PCBWay manufacturer presets
+- Implemented constructor methods for violations (clearance, drill_size, unconnected_pin)
+- Added DrcResult with passed() and violation_count() methods
+- Created placeholder rule structs: ClearanceRule, MinDrillSizeRule, UnconnectedPinRule
+- 17 unit tests + 7 doc tests passing
 
 ### 2026-01-21: Complete 02-09 WASM Integration
 - Created WasmPcbEngineAdapter to bridge JS parsing to WASM engine
@@ -278,6 +290,10 @@ Begin Phase 3 (Validation) - Design rule checking and error display.
 | crates/cypcb-render/Cargo.toml | WASM crate config (with features) |
 | crates/cypcb-render/src/lib.rs | PcbEngine implementation |
 | crates/cypcb-render/src/snapshot.rs | BoardSnapshot types |
+| crates/cypcb-drc/Cargo.toml | DRC crate config |
+| crates/cypcb-drc/src/lib.rs | DrcResult, run_drc() |
+| crates/cypcb-drc/src/violation.rs | DrcViolation, ViolationKind |
+| crates/cypcb-drc/src/rules/mod.rs | DrcRule trait, DesignRules |
 | examples/blink.cypcb | Example LED circuit |
 | examples/invalid.cypcb | Invalid syntax example |
 | examples/unknown_keyword.cypcb | Unknown keyword example |
@@ -303,7 +319,7 @@ Begin Phase 3 (Validation) - Design rule checking and error display.
 ## Session Continuity
 
 **Last session:** 2026-01-21
-**Stopped at:** Completed 02-09-PLAN.md (WASM integration complete)
+**Stopped at:** Completed 03-01-PLAN.md (DRC crate setup complete)
 **Resume file:** None
 
 ---
