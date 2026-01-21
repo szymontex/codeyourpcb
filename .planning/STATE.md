@@ -3,8 +3,8 @@
 ## Current Status
 
 **Phase:** 3 of 6 (Validation) - In Progress
-**Plan:** 4 of 10 complete
-**Last Activity:** 2026-01-21 - Completed 03-04-PLAN.md (Custom Footprint DSL)
+**Plan:** 5 of 10 complete
+**Last Activity:** 2026-01-21 - Completed 03-10-PLAN.md (Zones and Keepouts)
 
 ## Project Reference
 
@@ -19,12 +19,12 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 |-------|--------|----------|
 | 1. Foundation | Complete | 100% (9/9 plans) |
 | 2. Rendering | Complete | 100% (9/9 plans) |
-| 3. Validation | In Progress | 40% (4/10 plans) |
+| 3. Validation | In Progress | 50% (5/10 plans) |
 | 4. Export | Not started | 0% |
 | 5. Intelligence | Not started | 0% |
 | 6. Desktop | Not started | 0% |
 
-Progress: ███████████████░░░░░ 74%
+Progress: ████████████████░░░░ 76%
 
 ## Phase 3 Plan Status
 
@@ -39,11 +39,11 @@ Progress: ███████████████░░░░░ 74%
 | 03-07 | TBD | Not started |
 | 03-08 | TBD | Not started |
 | 03-09 | TBD | Not started |
-| 03-10 | TBD | Not started |
+| 03-10 | Zones and Keepouts | Complete |
 
 ## Next Action
 
-Continue Phase 3 (Validation) - Execute 03-05-PLAN.md
+Continue Phase 3 (Validation) - Execute 03-05-PLAN.md through 03-09-PLAN.md
 
 ## Key Decisions Log
 
@@ -90,8 +90,21 @@ Continue Phase 3 (Validation) - Execute 03-05-PLAN.md
 | 2026-01-21 | Clone library for custom FP | Non-breaking change, custom footprints without mutable ref |
 | 2026-01-21 | THT pads = TopCopper+BottomCopper | Through-hole naturally spans both copper layers |
 | 2026-01-21 | SMD pads = Top+Paste+Mask | Standard SMD pad stack for reflow soldering |
+| 2026-01-21 | DrcRule::check takes &mut BoardWorld | bevy_ecs queries need mutable access for cache initialization |
+| 2026-01-21 | Keepout checks component center | Simpler than full footprint bounds, adequate for MVP |
 
 ## Session History
+
+### 2026-01-21: Complete 03-10 Zones and Keepouts
+- Extended grammar with zone_definition rule (zone/keepout keywords)
+- Created ZoneDef and ZoneKind AST types with bounds, layer, net support
+- Implemented Zone ECS component with bounds, kind, layer_mask, name
+- Added sync_zone() to convert ZoneDef to Zone entities
+- Implemented KeepoutRule for DRC to detect components in keepout zones
+- Changed DrcRule::check to take &mut BoardWorld for ECS query access
+- Added KeepoutViolation variant and DrcViolation::keepout() constructor
+- Added BoardWorld::zones() query method for zone iteration
+- 12 new tests for zone parsing, sync, and DRC checking
 
 ### 2026-01-21: Complete 03-04 Custom Footprint DSL
 - Extended Tree-sitter grammar with footprint_definition, pad_definition rules
@@ -318,6 +331,7 @@ Continue Phase 3 (Validation) - Execute 03-05-PLAN.md
 | crates/cypcb-world/src/components/physical.rs | Layer, FootprintRef, Pad, PadShape |
 | crates/cypcb-world/src/components/metadata.rs | SourceSpan, ComponentKind |
 | crates/cypcb-world/src/components/board.rs | Board, BoardSize, LayerStack |
+| crates/cypcb-world/src/components/zone.rs | Zone, ZoneKind components |
 | crates/cypcb-world/src/world.rs | BoardWorld high-level API |
 | crates/cypcb-world/src/registry.rs | NetRegistry for name interning |
 | crates/cypcb-world/src/spatial.rs | SpatialIndex for region queries |
@@ -367,7 +381,7 @@ Continue Phase 3 (Validation) - Execute 03-05-PLAN.md
 ## Session Continuity
 
 **Last session:** 2026-01-21
-**Stopped at:** Completed 03-04-PLAN.md (Custom Footprint DSL)
+**Stopped at:** Completed 03-10-PLAN.md (Zones and Keepouts)
 **Resume file:** None
 
 ---
