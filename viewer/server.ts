@@ -14,7 +14,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import * as chokidar from 'chokidar';
 import { spawn } from 'child_process';
 
-const WS_PORT = 3001;
+const WS_PORT = 4322;
 const WATCH_DIR = resolve(process.argv[2] || '../examples');
 
 // Track connected WebSocket clients
@@ -27,8 +27,8 @@ console.log(`Watch directory: ${WATCH_DIR}`);
 console.log(`WebSocket port: ${WS_PORT}`);
 console.log('');
 
-// Create WebSocket server
-const wss = new WebSocketServer({ port: WS_PORT });
+// Create WebSocket server (bind to 0.0.0.0 for external access)
+const wss = new WebSocketServer({ port: WS_PORT, host: '0.0.0.0' });
 
 wss.on('connection', (ws) => {
   console.log('[WS] Client connected');

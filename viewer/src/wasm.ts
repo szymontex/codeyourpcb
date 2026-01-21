@@ -269,32 +269,25 @@ export async function loadWasm(): Promise<PcbEngine> {
     return engineInstance;
   }
 
-  // Try to load actual WASM module
-  try {
-    // Dynamic import of wasm-pack generated module
-    // Note: This path is resolved at runtime, not compile time
-    // The module will be available after running: npm run build:wasm
-    // @ts-ignore - Module may not exist until WASM is built
-    const wasm = await import(/* @vite-ignore */ '../pkg/cypcb_render.js');
+  // WASM build is currently blocked by getrandom/bevy_ecs compatibility issues.
+  // Using MockPcbEngine which provides the same API with JavaScript parsing.
+  // To enable WASM later: npm run build:wasm, then uncomment the dynamic import below.
+  //
+  // try {
+  //   const wasmPath = '../pkg/cypcb_render.js';
+  //   const wasm = await import(/* @vite-ignore */ wasmPath);
+  //   await wasm.default();
+  //   wasmModule = wasm;
+  //   engineInstance = new wasm.PcbEngine() as PcbEngine;
+  //   console.log('WASM module loaded successfully');
+  //   return engineInstance;
+  // } catch (e) {
+  //   console.log('WASM not available, using mock');
+  // }
 
-    // Initialize WASM (required for web target)
-    await wasm.default();
-
-    wasmModule = wasm;
-
-    // Create engine instance
-    engineInstance = new wasm.PcbEngine() as PcbEngine;
-
-    console.log('WASM module loaded successfully');
-    return engineInstance;
-  } catch (e) {
-    // WASM not available, use mock implementation
-    console.log('WASM module not available, using mock implementation');
-    console.log('To build WASM: cd viewer && npm run build:wasm');
-
-    engineInstance = new MockPcbEngine();
-    return engineInstance;
-  }
+  console.log('Using MockPcbEngine (WASM build pending)');
+  engineInstance = new MockPcbEngine();
+  return engineInstance;
 }
 
 /**
