@@ -2,29 +2,29 @@
 
 ## Current Status
 
-**Phase:** 1 of 6 (Foundation)
-**Plan:** 8 of 9 complete
-**Last Activity:** 2026-01-21 - Completed 01-08-ast-sync-PLAN.md
+**Phase:** 1 of 6 (Foundation) - COMPLETE
+**Plan:** 9 of 9 complete
+**Last Activity:** 2026-01-21 - Completed 01-09-cli-PLAN.md
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-01-21)
 
-**Core value:** The source file is the design — git-friendly, AI-editable, deterministic
-**Current focus:** Phase 1 - Foundation
+**Core value:** The source file is the design - git-friendly, AI-editable, deterministic
+**Current focus:** Phase 1 Complete - Ready for Phase 2 (Rendering)
 
 ## Phase Progress
 
 | Phase | Status | Progress |
 |-------|--------|----------|
-| 1. Foundation | In progress | 89% (8/9 plans) |
+| 1. Foundation | Complete | 100% (9/9 plans) |
 | 2. Rendering | Not started | 0% |
 | 3. Validation | Not started | 0% |
 | 4. Export | Not started | 0% |
 | 5. Intelligence | Not started | 0% |
 | 6. Desktop | Not started | 0% |
 
-Progress: ████████░░ 89%
+Progress: ██████████ 100%
 
 ## Phase 1 Plan Status
 
@@ -38,11 +38,11 @@ Progress: ████████░░ 89%
 | 01-06 | Board World | Complete |
 | 01-07 | Footprints | Complete |
 | 01-08 | AST Sync | Complete |
-| 01-09 | CLI | Pending |
+| 01-09 | CLI | Complete |
 
 ## Next Action
 
-Execute plan 01-09-cli-PLAN.md (Command-line interface for parsing and validation).
+Phase 1 (Foundation) is complete. Ready to begin Phase 2 (Rendering).
 
 ## Key Decisions Log
 
@@ -60,8 +60,19 @@ Execute plan 01-09-cli-PLAN.md (Command-line interface for parsing and validatio
 | 2026-01-21 | AST Span tracking | All nodes carry source span for error reporting |
 | 2026-01-21 | Error recovery parsing | ParseResult returns partial AST + errors |
 | 2026-01-21 | Sync error recovery | Continue sync on semantic errors, collect all |
+| 2026-01-21 | CLI without world dep | Workaround cargo resolver issue; parse-only validation |
 
 ## Session History
+
+### 2026-01-21: Execute 01-09 CLI
+- Set up CLI structure with clap (parse, check commands)
+- Implemented parse command outputting AST as JSON
+- Implemented check command validating syntax
+- Integrated miette for fancy error display with source context
+- Added 9 integration tests
+- Created example files (blink.cypcb, invalid.cypcb, unknown_keyword.cypcb)
+- Worked around cargo resolver issue by removing cypcb-world dependency
+- Refactored SyncError to manual Diagnostic impl
 
 ### 2026-01-21: Execute 01-08 AST Sync
 - Created sync.rs (747 lines) bridging parser and board model
@@ -161,11 +172,19 @@ Execute plan 01-09-cli-PLAN.md (Command-line interface for parsing and validatio
 | crates/cypcb-world/src/footprint/smd.rs | SMD footprints (0402-2512) |
 | crates/cypcb-world/src/footprint/tht.rs | THT footprints (DIP-8, etc) |
 | crates/cypcb-world/src/sync.rs | AST-to-ECS synchronization |
+| crates/cypcb-cli/src/main.rs | CLI entrypoint |
+| crates/cypcb-cli/src/commands/mod.rs | Commands module |
+| crates/cypcb-cli/src/commands/parse.rs | Parse command |
+| crates/cypcb-cli/src/commands/check.rs | Check command |
+| crates/cypcb-cli/tests/cli_integration.rs | CLI integration tests |
+| examples/blink.cypcb | Example LED circuit |
+| examples/invalid.cypcb | Invalid syntax example |
+| examples/unknown_keyword.cypcb | Unknown keyword example |
 
 ## Session Continuity
 
-**Last session:** 2026-01-21 13:52 UTC
-**Stopped at:** Completed 01-08-ast-sync-PLAN.md
+**Last session:** 2026-01-21 15:30 UTC
+**Stopped at:** Completed 01-09-cli-PLAN.md - Phase 1 Complete
 **Resume file:** None
 
 ---
