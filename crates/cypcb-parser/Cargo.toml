@@ -10,3 +10,6 @@ cypcb-core = { workspace = true }
 tree-sitter = { workspace = true }
 miette = { workspace = true }
 thiserror = { workspace = true }
+
+[build-dependencies]
+cc = "1.0"

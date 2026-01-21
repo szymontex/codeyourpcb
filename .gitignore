@@ -15,6 +15,10 @@ Thumbs.db
 # Generated Tree-sitter parser files
 crates/cypcb-parser/grammar/src/
 
+# Node.js dependencies (tree-sitter-cli)
+crates/cypcb-parser/grammar/node_modules/
+crates/cypcb-parser/grammar/package-lock.json
+
 # Environment files
 .env
 .env.local
