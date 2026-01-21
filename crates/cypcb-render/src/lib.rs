@@ -197,6 +197,7 @@ impl PcbEngine {
     /// Populate the world from a BoardSnapshot.
     fn populate_from_snapshot(&mut self, snapshot: &BoardSnapshot) {
         self.world.clear();
+        self.violations.clear();
 
         // Create board entity if present
         if let Some(board) = &snapshot.board {
@@ -205,6 +206,20 @@ impl PcbEngine {
                 (Nm(board.width_nm), Nm(board.height_nm)),
                 board.layer_count,
             );
+        }
+
+        // Register footprints from snapshot data (needed for DRC)
+        // Use a set to avoid re-registering the same footprint multiple times
+        let mut registered: std::collections::HashSet<String> = std::collections::HashSet::new();
+        for comp in &snapshot.components {
+            if !comp.footprint.is_empty()
+                && !registered.contains(&comp.footprint)
+                && !comp.pads.is_empty()
+            {
+                let footprint = self.footprint_from_pads(&comp.footprint, &comp.pads);
+                self.footprint_lib.register(footprint);
+                registered.insert(comp.footprint.clone());
+            }
         }
 
         // Create component entities
@@ -221,6 +236,87 @@ impl PcbEngine {
 
         // Note: Nets are stored in the snapshot for rendering but not
         // re-created in the world as ECS entities (they're derived data).
+    }
+
+    /// Create a Footprint from PadInfo data.
+    fn footprint_from_pads(&self, name: &str, pads: &[PadInfo]) -> cypcb_world::footprint::Footprint {
+        use cypcb_world::footprint::{Footprint, PadDef};
+
+        let mut pad_defs: Vec<PadDef> = Vec::with_capacity(pads.len());
+
+        for pad in pads {
+            // Convert shape string to PadShape
+            let shape = match pad.shape.as_str() {
+                "circle" => PadShape::Circle,
+                "roundrect" => PadShape::RoundRect { corner_ratio: 25 },
+                "oblong" => PadShape::Oblong,
+                _ => PadShape::Rect, // default to rect
+            };
+
+            // Convert layer_mask to Vec<Layer>
+            let mut layers: Vec<Layer> = Vec::new();
+            if pad.layer_mask & 1 != 0 {
+                layers.push(Layer::TopCopper);
+            }
+            if pad.layer_mask & 2 != 0 {
+                layers.push(Layer::BottomCopper);
+            }
+            for i in 0..30 {
+                if pad.layer_mask & (1 << (2 + i)) != 0 {
+                    layers.push(Layer::Inner(i));
+                }
+            }
+            // If no layers specified, default to top copper
+            if layers.is_empty() {
+                layers.push(Layer::TopCopper);
+            }
+
+            pad_defs.push(PadDef {
+                number: pad.number.clone(),
+                shape,
+                position: Point::new(Nm(pad.x_nm), Nm(pad.y_nm)),
+                size: (Nm(pad.width_nm), Nm(pad.height_nm)),
+                drill: pad.drill_nm.map(Nm),
+                layers,
+            });
+        }
+
+        // Calculate bounds from pads
+        let mut min_x = i64::MAX;
+        let mut min_y = i64::MAX;
+        let mut max_x = i64::MIN;
+        let mut max_y = i64::MIN;
+
+        for pad in &pad_defs {
+            let half_w = pad.size.0.0 / 2;
+            let half_h = pad.size.1.0 / 2;
+            min_x = min_x.min(pad.position.x.0 - half_w);
+            min_y = min_y.min(pad.position.y.0 - half_h);
+            max_x = max_x.max(pad.position.x.0 + half_w);
+            max_y = max_y.max(pad.position.y.0 + half_h);
+        }
+
+        use cypcb_core::Rect;
+        let bounds = if min_x <= max_x && min_y <= max_y {
+            Rect::new(Point::new(Nm(min_x), Nm(min_y)), Point::new(Nm(max_x), Nm(max_y)))
+        } else {
+            Rect::new(Point::new(Nm(0), Nm(0)), Point::new(Nm(0), Nm(0)))
+        };
+
+        // Courtyard is bounds with margin
+        let margin = Nm(250_000); // 0.25mm margin
+        let courtyard = Rect::new(
+            Point::new(Nm(min_x - margin.0), Nm(min_y - margin.0)),
+            Point::new(Nm(max_x + margin.0), Nm(max_y + margin.0)),
+        );
+
+        Footprint {
+            name: name.to_string(),
+            description: format!("Reconstructed from snapshot: {}", name),
+            pads: pad_defs,
+            bounds,
+            courtyard,
+        }
     }
 
     /// Build a BoardSnapshot from the current world state.
