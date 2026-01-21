@@ -433,6 +433,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "cypcb-render"
+version = "0.1.0"
+dependencies = [
+ "cypcb-core",
+ "cypcb-parser",
+ "cypcb-world",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "cypcb-world"
 version = "0.1.0"
 dependencies = [

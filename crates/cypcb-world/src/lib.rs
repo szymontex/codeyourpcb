@@ -127,5 +127,8 @@ pub use spatial::{SpatialEntry, SpatialIndex};
 // Re-export BoardWorld
 pub use world::BoardWorld;
 
+// Re-export Entity for convenience
+pub use bevy_ecs::entity::Entity;
+
 // Re-export sync functionality
 pub use sync::{sync_ast_to_world, SyncError, SyncResult};
