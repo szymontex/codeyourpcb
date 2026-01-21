@@ -86,6 +86,8 @@ impl PcbEngine {
         match snapshot {
             Ok(snap) => {
                 self.populate_from_snapshot(&snap);
+                // Run DRC after populating world
+                self.run_drc_internal();
                 String::new()
             }
             Err(e) => format!("Failed to deserialize snapshot: {}", e),
