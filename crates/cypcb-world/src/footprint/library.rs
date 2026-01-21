@@ -146,6 +146,7 @@ impl FootprintLibrary {
         let mut lib = Self::default();
         lib.register_builtin_smd();
         lib.register_builtin_tht();
+        lib.register_builtin_gullwing();
         lib
     }
 
@@ -204,6 +205,17 @@ impl FootprintLibrary {
         self.register(axial_300mil());
         self.register(dip8());
         self.register(pin_header_1x2());
+    }
+
+    /// Register all built-in gull-wing IC footprints.
+    fn register_builtin_gullwing(&mut self) {
+        use super::gullwing::*;
+
+        self.register(soic8());
+        self.register(soic14());
+        self.register(sot23());
+        self.register(sot23_5());
+        self.register(tqfp32());
     }
 }
 
@@ -288,5 +300,62 @@ mod tests {
         assert!(fp.get_pad("1").is_some());
         assert!(fp.get_pad("2").is_some());
         assert!(fp.get_pad("3").is_none());
+    }
+
+    #[test]
+    fn test_library_has_gullwing_footprints() {
+        let lib = FootprintLibrary::new();
+
+        // SOIC footprints
+        assert!(lib.contains("SOIC-8"));
+        assert!(lib.contains("SOIC-14"));
+
+        // SOT footprints
+        assert!(lib.contains("SOT-23"));
+        assert!(lib.contains("SOT-23-5"));
+
+        // QFP footprints
+        assert!(lib.contains("TQFP-32"));
+    }
+
+    #[test]
+    fn test_soic8_from_library() {
+        let lib = FootprintLibrary::new();
+        let fp = lib.get("SOIC-8").expect("SOIC-8 should exist");
+
+        assert_eq!(fp.pads.len(), 8);
+        assert!(fp.get_pad("1").is_some());
+        assert!(fp.get_pad("8").is_some());
+    }
+
+    #[test]
+    fn test_sot23_from_library() {
+        let lib = FootprintLibrary::new();
+        let fp = lib.get("SOT-23").expect("SOT-23 should exist");
+
+        assert_eq!(fp.pads.len(), 3);
+        assert!(fp.get_pad("1").is_some());
+        assert!(fp.get_pad("2").is_some());
+        assert!(fp.get_pad("3").is_some());
+    }
+
+    #[test]
+    fn test_tqfp32_from_library() {
+        let lib = FootprintLibrary::new();
+        let fp = lib.get("TQFP-32").expect("TQFP-32 should exist");
+
+        assert_eq!(fp.pads.len(), 32);
+
+        // Check first and last pins
+        assert!(fp.get_pad("1").is_some());
+        assert!(fp.get_pad("32").is_some());
+
+        // Check pins at each side boundary
+        assert!(fp.get_pad("8").is_some());  // End of bottom side
+        assert!(fp.get_pad("9").is_some());  // Start of right side
+        assert!(fp.get_pad("16").is_some()); // End of right side
+        assert!(fp.get_pad("17").is_some()); // Start of top side
+        assert!(fp.get_pad("24").is_some()); // End of top side
+        assert!(fp.get_pad("25").is_some()); // Start of left side
     }
 }
