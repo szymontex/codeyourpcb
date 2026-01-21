@@ -1,0 +1,27 @@
+{
+  "$schema": "https://tree-sitter.github.io/tree-sitter/assets/schemas/config.schema.json",
+  "metadata": {
+    "version": "0.1.0",
+    "license": "MIT OR Apache-2.0",
+    "authors": [
+      {
+        "name": "CodeYourPCB"
+      }
+    ],
+    "links": {
+      "repository": "https://github.com/codeyourpcb/codeyourpcb"
+    }
+  },
+  "grammars": [
+    {
+      "name": "cypcb",
+      "scope": "source.cypcb",
+      "injection-regex": "^cypcb$",
+      "path": ".",
+      "file-types": [
+        "cypcb"
+      ],
+      "highlights": "queries/highlights.scm"
+    }
+  ]
+}
