@@ -3,8 +3,8 @@
 ## Current Status
 
 **Phase:** 1 of 6 (Foundation)
-**Plan:** 6 of 9 complete
-**Last Activity:** 2026-01-21 - Completed 01-06-board-world-PLAN.md
+**Plan:** 5 of 9 complete
+**Last Activity:** 2026-01-21 - Completed 01-05-ast-parser-PLAN.md
 
 ## Project Reference
 
@@ -17,14 +17,14 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 
 | Phase | Status | Progress |
 |-------|--------|----------|
-| 1. Foundation | In progress | 67% (6/9 plans) |
+| 1. Foundation | In progress | 56% (5/9 plans) |
 | 2. Rendering | Not started | 0% |
 | 3. Validation | Not started | 0% |
 | 4. Export | Not started | 0% |
 | 5. Intelligence | Not started | 0% |
 | 6. Desktop | Not started | 0% |
 
-Progress: ██████░░░░ 67%
+Progress: █████░░░░░ 56%
 
 ## Phase 1 Plan Status
 
@@ -34,15 +34,15 @@ Progress: ██████░░░░ 67%
 | 01-02 | Core Types | Complete |
 | 01-03 | Grammar | Complete |
 | 01-04 | ECS Components | Complete |
-| 01-05 | AST Parser | Pending |
-| 01-06 | Board World | Complete |
-| 01-07 | Footprints | Complete |
+| 01-05 | AST Parser | Complete |
+| 01-06 | Board World | Pending |
+| 01-07 | Footprints | Pending |
 | 01-08 | AST Sync | Pending |
 | 01-09 | CLI | Pending |
 
 ## Next Action
 
-Execute plan 01-05-ast-parser-PLAN.md (AST construction from Tree-sitter).
+Execute plan 01-06-board-world-PLAN.md (Board world wrapper over ECS).
 
 ## Key Decisions Log
 
@@ -57,28 +57,18 @@ Execute plan 01-05-ast-parser-PLAN.md (AST construction from Tree-sitter).
 | 2026-01-21 | Bottom-left origin, Y-up | Mathematical convention, matches Gerber viewers |
 | 2026-01-21 | Millidegrees for rotation | i32 (0-359999), deterministic comparison |
 | 2026-01-21 | u32 layer mask | Bit mask for copper layers, supports 32 layers |
-| 2026-01-21 | IPC-7351B nominal density | Standard pad dimensions for footprints |
-| 2026-01-21 | BoardWorld wraps bevy_ecs | Clean API over raw ECS |
-| 2026-01-21 | String interning for nets | O(1) comparison via u32 IDs |
-| 2026-01-21 | R*-tree for spatial index | O(log n) region queries |
+| 2026-01-21 | AST Span tracking | All nodes carry source span for error reporting |
+| 2026-01-21 | Error recovery parsing | ParseResult returns partial AST + errors |
 
 ## Session History
 
-### 2026-01-21: Execute 01-06 Board World
-- Created BoardWorld wrapper over bevy_ecs::World
-- NetRegistry: string interning for net names to u32 IDs
-- SpatialIndex: R*-tree via rstar for O(log n) region queries
-- BoardWorld API: set_board, spawn_component, intern_net, query_region
-- Added Name component to metadata for named entities
-- 69 unit tests + 46 doc tests passing
-
-### 2026-01-21: Execute 01-07 Footprints
-- Created footprint library with 8 built-in footprints
-- SMD: 0402, 0603, 0805, 1206, 2512 (IPC-7351B nominal)
-- THT: AXIAL-300, DIP-8, PIN-HDR-1x2
-- PadDef, Footprint, FootprintLibrary types
-- Added Rect::from_center_size helper to cypcb-core
-- 16 unit tests + 9 doc tests passing
+### 2026-01-21: Execute 01-05 AST Parser
+- Created AST types (ast.rs) with Span tracking on all nodes
+- Implemented CST to AST conversion (parser.rs)
+- Added miette-compatible error types (errors.rs)
+- ParseResult type enables error recovery with partial results
+- Handles Tree-sitter choice nodes (board_property, net_constraint)
+- 36 unit tests + 4 doc tests passing
 
 ### 2026-01-21: Execute 01-04 ECS Components
 - Created 15 ECS components for board model
@@ -141,24 +131,20 @@ Execute plan 01-05-ast-parser-PLAN.md (AST construction from Tree-sitter).
 | crates/cypcb-parser/grammar/queries/highlights.scm | Syntax highlighting |
 | crates/cypcb-parser/build.rs | C parser compilation |
 | crates/cypcb-parser/src/lib.rs | Parser bindings and tests |
+| crates/cypcb-parser/src/ast.rs | AST type definitions |
+| crates/cypcb-parser/src/parser.rs | CST to AST conversion |
+| crates/cypcb-parser/src/errors.rs | Parse error types |
 | crates/cypcb-world/src/components/mod.rs | Component module |
 | crates/cypcb-world/src/components/position.rs | Position, Rotation |
 | crates/cypcb-world/src/components/electrical.rs | NetId, RefDes, Value, NetConnections |
 | crates/cypcb-world/src/components/physical.rs | Layer, FootprintRef, Pad, PadShape |
-| crates/cypcb-world/src/components/metadata.rs | SourceSpan, ComponentKind, Name |
+| crates/cypcb-world/src/components/metadata.rs | SourceSpan, ComponentKind |
 | crates/cypcb-world/src/components/board.rs | Board, BoardSize, LayerStack |
-| crates/cypcb-world/src/footprint/mod.rs | Footprint module definition |
-| crates/cypcb-world/src/footprint/library.rs | PadDef, Footprint, FootprintLibrary |
-| crates/cypcb-world/src/footprint/smd.rs | SMD footprint generators |
-| crates/cypcb-world/src/footprint/tht.rs | THT footprint generators |
-| crates/cypcb-world/src/registry.rs | NetRegistry for net name interning |
-| crates/cypcb-world/src/spatial.rs | SpatialIndex with R*-tree |
-| crates/cypcb-world/src/world.rs | BoardWorld wrapper API |
 
 ## Session Continuity
 
 **Last session:** 2026-01-21 13:50 UTC
-**Stopped at:** Completed 01-06-board-world-PLAN.md
+**Stopped at:** Completed 01-05-ast-parser-PLAN.md
 **Resume file:** None
 
 ---
