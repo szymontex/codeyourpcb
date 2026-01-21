@@ -4,14 +4,14 @@
 
 **Phase:** 2 of 6 (Rendering) - IN PROGRESS
 **Plan:** 4 of 5 complete
-**Last Activity:** 2026-01-21 - Completed 02-04-PLAN.md
+**Last Activity:** 2026-01-21 - Completed 02-03-PLAN.md
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-01-21)
 
 **Core value:** The source file is the design - git-friendly, AI-editable, deterministic
-**Current focus:** Phase 2 Rendering - Canvas 2D rendering complete, layer visibility UI next
+**Current focus:** Phase 2 Rendering - WASM integration complete (with mock), layer visibility UI next
 
 ## Phase Progress
 
@@ -32,7 +32,7 @@ Progress: █████████████░░░░░░░ 65%
 |------|------|--------|
 | 02-01 | WASM Crate Setup | Complete |
 | 02-02 | Frontend Scaffolding | Complete |
-| 02-03 | WASM Binding | Not started |
+| 02-03 | WASM Binding | Complete |
 | 02-04 | Canvas 2D Rendering | Complete |
 | 02-05 | Layer Visibility | Not started |
 
@@ -63,8 +63,19 @@ Continue with 02-05 (Layer visibility UI) - connect layer checkboxes to renderin
 | 2026-01-21 | Entity re-export | Re-export bevy_ecs::Entity from cypcb-world |
 | 2026-01-21 | Light mode default | Light background (#FFFFFF) per user preference |
 | 2026-01-21 | Immutable state | All viewport/layer/render state updates return new objects |
+| 2026-01-21 | Mock fallback for WASM | MockPcbEngine in TypeScript when WASM unavailable |
+| 2026-01-21 | bevy_ecs no multi_threaded | Disabled for WASM compatibility |
 
 ## Session History
+
+### 2026-01-21: Execute 02-03 WASM Integration
+- Created viewer/build-wasm.sh for wasm-pack builds
+- Enabled wasm-bindgen with conditional compilation
+- Implemented MockPcbEngine as JavaScript fallback
+- Mock parses .cypcb syntax and returns BoardSnapshot
+- Integration test shows board visualization on canvas
+- WASM build blocked by getrandom/bevy_ecs compatibility
+- All 246 Rust tests passing
 
 ### 2026-01-21: Execute 02-01 WASM Crate Setup
 - Created cypcb-render crate with snapshot types
@@ -216,16 +227,17 @@ Continue with 02-05 (Layer visibility UI) - connect layer checkboxes to renderin
 | viewer/.gitignore | Frontend ignores |
 | viewer/index.html | HTML shell with canvas |
 | viewer/src/main.ts | Application entry point |
-| viewer/src/wasm.ts | WASM loading utilities |
+| viewer/src/wasm.ts | WASM loading with mock fallback |
 | viewer/src/types.ts | TypeScript types for BoardSnapshot |
 | viewer/src/viewport.ts | Viewport state and coordinate transforms |
 | viewer/src/layers.ts | Layer colors and visibility |
 | viewer/src/renderer.ts | Canvas 2D rendering functions |
+| viewer/build-wasm.sh | WASM build script |
 
 ## Session Continuity
 
 **Last session:** 2026-01-21
-**Stopped at:** Completed 02-04-PLAN.md
+**Stopped at:** Completed 02-03-PLAN.md
 **Resume file:** None
 
 ---
