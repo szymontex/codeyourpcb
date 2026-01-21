@@ -426,6 +426,8 @@ dependencies = [
  "cc",
  "cypcb-core",
  "miette",
+ "serde",
+ "serde_json",
  "thiserror",
  "tree-sitter",
 ]
