@@ -3,8 +3,8 @@
 ## Current Status
 
 **Phase:** 3 of 6 (Validation) - In Progress
-**Plan:** 3 of 10 complete
-**Last Activity:** 2026-01-21 - Completed 03-03-PLAN.md (Manufacturer Presets)
+**Plan:** 4 of 10 complete
+**Last Activity:** 2026-01-21 - Completed 03-04-PLAN.md (Custom Footprint DSL)
 
 ## Project Reference
 
@@ -19,7 +19,7 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 |-------|--------|----------|
 | 1. Foundation | Complete | 100% (9/9 plans) |
 | 2. Rendering | Complete | 100% (9/9 plans) |
-| 3. Validation | In Progress | 30% (3/10 plans) |
+| 3. Validation | In Progress | 40% (4/10 plans) |
 | 4. Export | Not started | 0% |
 | 5. Intelligence | Not started | 0% |
 | 6. Desktop | Not started | 0% |
@@ -33,7 +33,7 @@ Progress: ███████████████░░░░░ 74%
 | 03-01 | DRC Crate Setup | Complete |
 | 03-02 | IC Footprints (SOIC/SOT/QFP) | Complete |
 | 03-03 | Manufacturer Presets | Complete |
-| 03-04 | TBD | Not started |
+| 03-04 | Custom Footprint DSL | Complete |
 | 03-05 | TBD | Not started |
 | 03-06 | TBD | Not started |
 | 03-07 | TBD | Not started |
@@ -43,7 +43,7 @@ Progress: ███████████████░░░░░ 74%
 
 ## Next Action
 
-Continue Phase 3 (Validation) - Execute 03-04-PLAN.md
+Continue Phase 3 (Validation) - Execute 03-05-PLAN.md
 
 ## Key Decisions Log
 
@@ -86,8 +86,24 @@ Continue Phase 3 (Validation) - Execute 03-04-PLAN.md
 | 2026-01-21 | IPC-7351B courtyard | Body + 0.5mm margin for assembly clearance |
 | 2026-01-21 | Preset enum for lookup | from_name() enables DSL string-to-preset mapping |
 | 2026-01-21 | Default JLCPCB 2-layer | Most common hobbyist manufacturer |
+| 2026-01-21 | Negative dimension support | Footprint pads need negative offsets from origin |
+| 2026-01-21 | Clone library for custom FP | Non-breaking change, custom footprints without mutable ref |
+| 2026-01-21 | THT pads = TopCopper+BottomCopper | Through-hole naturally spans both copper layers |
+| 2026-01-21 | SMD pads = Top+Paste+Mask | Standard SMD pad stack for reflow soldering |
 
 ## Session History
+
+### 2026-01-21: Complete 03-04 Custom Footprint DSL
+- Extended Tree-sitter grammar with footprint_definition, pad_definition rules
+- Added PadShape enum (rect, circle, roundrect, oblong) to AST
+- Created FootprintDef and PadDef AST types with full pad geometry
+- Implemented convert_footprint_definition() and convert_pad_definition() in parser
+- Added support for negative dimensions (-1mm, -3.81mm) in grammar
+- Updated sync_ast_to_world() to register custom footprints BEFORE component sync
+- Clone FootprintLibrary to allow custom registration without mutable reference
+- Conversion applies IPC-7351B courtyard margin (0.5mm) if not explicit
+- THT pads default to TopCopper+BottomCopper, SMD to Top+Paste+Mask
+- 6 new tests, all 211 tests passing (48 parser + 106 world + 57 doctests)
 
 ### 2026-01-21: Complete 03-03 Manufacturer Presets
 - Created presets module with full DesignRules struct (7 constraint fields)
@@ -351,7 +367,7 @@ Continue Phase 3 (Validation) - Execute 03-04-PLAN.md
 ## Session Continuity
 
 **Last session:** 2026-01-21
-**Stopped at:** Completed 03-03-PLAN.md (Manufacturer Presets)
+**Stopped at:** Completed 03-04-PLAN.md (Custom Footprint DSL)
 **Resume file:** None
 
 ---
