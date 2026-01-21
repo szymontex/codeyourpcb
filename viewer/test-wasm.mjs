@@ -48,7 +48,8 @@ async function main() {
                 pads: []
             }
         ],
-        nets: []
+        nets: [],
+        violations: []  // Will be populated by WASM DRC
     };
 
     console.log('Loading snapshot...');

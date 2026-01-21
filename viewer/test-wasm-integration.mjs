@@ -152,7 +152,7 @@ function parseSource(source) {
     braceDepth += openBraces;
   }
 
-  return { snapshot: { board, components, nets: Array.from(nets.values()) }, errors };
+  return { snapshot: { board, components, nets: Array.from(nets.values()), violations: [] }, errors };
 }
 
 async function main() {
