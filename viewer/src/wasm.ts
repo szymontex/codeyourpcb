@@ -269,23 +269,24 @@ export async function loadWasm(): Promise<PcbEngine> {
     return engineInstance;
   }
 
-  // WASM build is currently blocked by getrandom/bevy_ecs compatibility issues.
-  // Using MockPcbEngine which provides the same API with JavaScript parsing.
-  // To enable WASM later: npm run build:wasm, then uncomment the dynamic import below.
-  //
-  // try {
-  //   const wasmPath = '../pkg/cypcb_render.js';
-  //   const wasm = await import(/* @vite-ignore */ wasmPath);
-  //   await wasm.default();
-  //   wasmModule = wasm;
-  //   engineInstance = new wasm.PcbEngine() as PcbEngine;
-  //   console.log('WASM module loaded successfully');
-  //   return engineInstance;
-  // } catch (e) {
-  //   console.log('WASM not available, using mock');
-  // }
+  // Try to load the real WASM module first
+  try {
+    const wasmPath = '../pkg/cypcb_render.js';
+    const wasm = await import(/* @vite-ignore */ wasmPath);
+    await wasm.default();
+    wasmModule = wasm;
+    engineInstance = new wasm.PcbEngine() as PcbEngine;
+    console.log('WASM module loaded successfully');
+    return engineInstance;
+  } catch (e) {
+    console.log('WASM not available, using mock:', e);
+  }
 
-  console.log('Using MockPcbEngine (WASM build pending)');
+  // Fallback to MockPcbEngine when:
+  // - Development without WASM build
+  // - Environments where WASM fails to load
+  // - Testing without the Rust backend
+  console.log('Using MockPcbEngine (WASM fallback)');
   engineInstance = new MockPcbEngine();
   return engineInstance;
 }
