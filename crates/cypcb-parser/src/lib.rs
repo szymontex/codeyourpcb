@@ -296,4 +296,56 @@ mod tests {
         let root = tree.root_node();
         assert!(!root.has_error());
     }
+
+    #[test]
+    fn test_parse_footprint_definition() {
+        let tree = parse(
+            r#"
+            footprint MY_PKG {
+                description "Custom package"
+                pad 1 rect at 0mm, 0mm size 1mm x 0.5mm
+                pad 2 rect at 2mm, 0mm size 1mm x 0.5mm
+                courtyard 4mm x 2mm
+            }
+            "#,
+        );
+        let root = tree.root_node();
+        assert!(!root.has_error(), "Parse errors: {}", root.to_sexp());
+
+        let footprint = root.child(0).unwrap();
+        assert_eq!(footprint.kind(), "footprint_definition");
+    }
+
+    #[test]
+    fn test_parse_footprint_with_drill() {
+        let tree = parse(
+            r#"
+            footprint THT_2PIN {
+                pad 1 circle at 0mm, 0mm size 1.8mm x 1.8mm drill 1.0mm
+                pad 2 circle at 2.54mm, 0mm size 1.8mm x 1.8mm drill 1.0mm
+            }
+            "#,
+        );
+        let root = tree.root_node();
+        assert!(!root.has_error(), "Parse errors: {}", root.to_sexp());
+
+        let footprint = root.child(0).unwrap();
+        assert_eq!(footprint.kind(), "footprint_definition");
+    }
+
+    #[test]
+    fn test_parse_footprint_all_pad_shapes() {
+        let tree = parse(
+            r#"
+            footprint ALL_SHAPES {
+                pad 1 rect at 0mm, 0mm size 1mm x 1mm
+                pad 2 circle at 2mm, 0mm size 1mm x 1mm
+                pad 3 roundrect at 4mm, 0mm size 1mm x 1mm
+                pad 4 oblong at 6mm, 0mm size 1mm x 2mm
+            }
+            "#,
+        );
+        let root = tree.root_node();
+        assert!(!root.has_error(), "Parse errors: {}", root.to_sexp());
+    }
 }

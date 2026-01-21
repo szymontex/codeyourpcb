@@ -11,14 +11,19 @@
 //! # Usage
 //!
 //! ```rust,ignore
-//! use cypcb_drc::{run_drc, DesignRules, DrcResult};
+//! use cypcb_drc::{run_drc, DesignRules, DrcResult, Preset};
 //! use cypcb_world::BoardWorld;
 //!
 //! let world = BoardWorld::new();
 //! // ... load board ...
 //!
+//! // Use a manufacturer preset
 //! let rules = DesignRules::jlcpcb_2layer();
 //! let result = run_drc(&world, &rules);
+//!
+//! // Or lookup by name (from DSL parsing)
+//! let preset = Preset::from_name("pcbway").unwrap();
+//! let rules = preset.rules();
 //!
 //! if result.passed() {
 //!     println!("Board passes DRC!");
@@ -30,10 +35,12 @@
 //! }
 //! ```
 
+pub mod presets;
 pub mod rules;
 pub mod violation;
 
-pub use rules::{DesignRules, DrcRule};
+pub use presets::{DesignRules, Preset};
+pub use rules::DrcRule;
 pub use violation::{DrcViolation, ViolationKind};
 
 use cypcb_world::BoardWorld;

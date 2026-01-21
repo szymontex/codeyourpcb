@@ -41,6 +41,8 @@ module.exports = grammar({
       $.board_definition,
       $.component_definition,
       $.net_definition,
+      $.footprint_definition,
+      $.zone_definition,
     ),
 
     // board name { properties }
@@ -230,5 +232,89 @@ module.exports = grammar({
       /[^*]*\*+([^/*][^*]*\*+)*/,
       '/',
     )),
+
+    // footprint NAME { ... }
+    footprint_definition: $ => seq(
+      'footprint',
+      field('name', $.identifier),
+      '{',
+      repeat($.footprint_property),
+      '}',
+    ),
+
+    footprint_property: $ => choice(
+      $.description_property,
+      $.pad_definition,
+      $.courtyard_property,
+    ),
+
+    // description "text"
+    description_property: $ => seq(
+      'description',
+      field('text', $.string),
+    ),
+
+    // pad N shape at X, Y size W x H [drill D]
+    pad_definition: $ => seq(
+      'pad',
+      field('number', $.number),
+      field('shape', $.pad_shape),
+      'at',
+      field('x', $.dimension),
+      ',',
+      field('y', $.dimension),
+      'size',
+      field('width', $.dimension),
+      'x',
+      field('height', $.dimension),
+      optional(field('drill', $.drill_spec)),
+    ),
+
+    drill_spec: $ => seq('drill', $.dimension),
+
+    pad_shape: $ => choice('rect', 'circle', 'roundrect', 'oblong'),
+
+    // courtyard W x H
+    courtyard_property: $ => seq(
+      'courtyard',
+      field('width', $.dimension),
+      'x',
+      field('height', $.dimension),
+    ),
+
+    // zone NAME { ... } or keepout NAME { ... }
+    zone_definition: $ => seq(
+      field('kind', choice('zone', 'keepout')),
+      optional(field('name', $.identifier)),
+      '{',
+      repeat($.zone_property),
+      '}',
+    ),
+
+    zone_property: $ => choice(
+      $.zone_bounds,
+      $.zone_layer,
+      $.zone_net,
+    ),
+
+    // bounds X1, Y1 to X2, Y2
+    zone_bounds: $ => seq(
+      'bounds',
+      field('min_x', $.dimension),
+      ',',
+      field('min_y', $.dimension),
+      'to',
+      field('max_x', $.dimension),
+      ',',
+      field('max_y', $.dimension),
+    ),
+
+    // layer top | bottom | all
+    zone_layer: $ => seq('layer', field('name', $.layer_name)),
+
+    layer_name: $ => choice('top', 'bottom', 'all'),
+
+    // net NETNAME (for copper pour zones)
+    zone_net: $ => seq('net', field('net', $.identifier)),
   },
 });
