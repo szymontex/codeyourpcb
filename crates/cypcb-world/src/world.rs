@@ -504,6 +504,18 @@ impl BoardWorld {
             .collect()
     }
 
+    /// Iterate over all zones.
+    ///
+    /// Returns a vector of (Entity, Zone clone) tuples.
+    /// Uses clones to avoid lifetime issues with the query.
+    pub fn zones(&mut self) -> Vec<(Entity, Zone)> {
+        let mut query = self.world.query::<(Entity, &Zone)>();
+        query
+            .iter(&self.world)
+            .map(|(e, z)| (e, z.clone()))
+            .collect()
+    }
+
     // ========================================================================
     // Direct ECS Access
     // ========================================================================

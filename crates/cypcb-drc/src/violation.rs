@@ -41,6 +41,8 @@ pub enum ViolationKind {
     ViaDrill,
     /// Annular ring is below minimum (placeholder for future).
     AnnularRing,
+    /// Component placed in a keepout zone.
+    KeepoutViolation,
 }
 
 impl std::fmt::Display for ViolationKind {
@@ -52,6 +54,7 @@ impl std::fmt::Display for ViolationKind {
             ViolationKind::UnconnectedPin => write!(f, "unconnected-pin"),
             ViolationKind::ViaDrill => write!(f, "via-drill"),
             ViolationKind::AnnularRing => write!(f, "annular-ring"),
+            ViolationKind::KeepoutViolation => write!(f, "keepout-violation"),
         }
     }
 }
@@ -179,6 +182,53 @@ impl DrcViolation {
         }
     }
 
+    /// Create a keepout violation.
+    ///
+    /// # Arguments
+    ///
+    /// * `entity` - Component entity in the keepout zone
+    /// * `zone_entity` - Zone entity being violated
+    /// * `refdes` - Component reference designator
+    /// * `zone_name` - Optional zone name (for error message)
+    /// * `location` - Board location for click-to-zoom
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use bevy_ecs::entity::Entity;
+    /// use cypcb_core::Point;
+    /// use cypcb_drc::DrcViolation;
+    ///
+    /// let violation = DrcViolation::keepout(
+    ///     Entity::from_raw(1),
+    ///     Entity::from_raw(2),
+    ///     "R1",
+    ///     Some("antenna_clearance"),
+    ///     Point::from_mm(15.0, 15.0),
+    /// );
+    /// assert_eq!(violation.kind, cypcb_drc::ViolationKind::KeepoutViolation);
+    /// assert!(violation.message.contains("R1"));
+    /// ```
+    pub fn keepout(
+        entity: Entity,
+        zone_entity: Entity,
+        refdes: &str,
+        zone_name: Option<&str>,
+        location: Point,
+    ) -> Self {
+        let zone_desc = zone_name
+            .map(|n| format!("keepout zone '{}'", n))
+            .unwrap_or_else(|| "keepout zone".to_string());
+        DrcViolation {
+            kind: ViolationKind::KeepoutViolation,
+            location,
+            entity,
+            other_entity: Some(zone_entity),
+            source_span: None,
+            message: format!("Component {} placed in {}", refdes, zone_desc),
+        }
+    }
+
     /// Set the source span for this violation.
     ///
     /// This enables the DSL error display to show the exact source location.
@@ -252,5 +302,39 @@ mod tests {
         assert!(v.source_span.is_some());
         assert_eq!(v.source_span.unwrap().start, 10);
         assert_eq!(v.source_span.unwrap().end, 20);
+    }
+
+    #[test]
+    fn test_keepout_violation() {
+        let v = DrcViolation::keepout(
+            Entity::from_raw(1),
+            Entity::from_raw(2),
+            "R1",
+            Some("antenna_area"),
+            Point::from_mm(15.0, 15.0),
+        );
+        assert_eq!(v.kind, ViolationKind::KeepoutViolation);
+        assert!(v.other_entity.is_some());
+        assert!(v.message.contains("R1"));
+        assert!(v.message.contains("antenna_area"));
+    }
+
+    #[test]
+    fn test_keepout_violation_no_name() {
+        let v = DrcViolation::keepout(
+            Entity::from_raw(1),
+            Entity::from_raw(2),
+            "U1",
+            None,
+            Point::ORIGIN,
+        );
+        assert_eq!(v.kind, ViolationKind::KeepoutViolation);
+        assert!(v.message.contains("U1"));
+        assert!(v.message.contains("keepout zone"));
+    }
+
+    #[test]
+    fn test_violation_kind_display_keepout() {
+        assert_eq!(format!("{}", ViolationKind::KeepoutViolation), "keepout-violation");
     }
 }

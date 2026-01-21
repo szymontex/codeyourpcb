@@ -99,7 +99,7 @@ impl Default for DrcResult {
 ///
 /// # Arguments
 ///
-/// * `world` - The board world to check
+/// * `world` - The board world to check (mutable for ECS queries)
 /// * `rules` - Design rules to check against
 ///
 /// # Returns
@@ -112,12 +112,12 @@ impl Default for DrcResult {
 /// use cypcb_drc::{run_drc, DesignRules};
 /// use cypcb_world::BoardWorld;
 ///
-/// let world = BoardWorld::new();
+/// let mut world = BoardWorld::new();
 /// let rules = DesignRules::default();
-/// let result = run_drc(&world, &rules);
+/// let result = run_drc(&mut world, &rules);
 /// println!("DRC completed in {}ms", result.duration_ms);
 /// ```
-pub fn run_drc(world: &BoardWorld, rules: &DesignRules) -> DrcResult {
+pub fn run_drc(world: &mut BoardWorld, rules: &DesignRules) -> DrcResult {
     use std::time::Instant;
 
     let start = Instant::now();
@@ -128,6 +128,7 @@ pub fn run_drc(world: &BoardWorld, rules: &DesignRules) -> DrcResult {
         Box::new(rules::ClearanceRule),
         Box::new(rules::MinDrillSizeRule),
         Box::new(rules::UnconnectedPinRule),
+        Box::new(rules::KeepoutRule),
     ];
 
     // Run each checker
@@ -175,9 +176,9 @@ mod tests {
 
     #[test]
     fn test_run_drc_empty_world() {
-        let world = BoardWorld::new();
+        let mut world = BoardWorld::new();
         let rules = DesignRules::default();
-        let result = run_drc(&world, &rules);
+        let result = run_drc(&mut world, &rules);
 
         // Empty world should have no violations
         assert!(result.passed());
