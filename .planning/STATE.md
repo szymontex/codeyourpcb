@@ -30,7 +30,7 @@ Progress: ██░░░░░░░░ 22%
 
 | Plan | Name | Status |
 |------|------|--------|
-| 01-01 | Project Setup | ○ Pending (done as blocking fix in 01-02) |
+| 01-01 | Project Setup | ● Complete |
 | 01-02 | Core Types | ● Complete |
 | 01-03 | Grammar | ○ Pending |
 | 01-04 | ECS Components | ○ Pending |
@@ -97,8 +97,8 @@ Execute plan 01-03-grammar-PLAN.md (Tree-sitter grammar for DSL).
 
 ## Session Continuity
 
-**Last session:** 2026-01-21 10:24 UTC
-**Stopped at:** Completed 01-02-core-types-PLAN.md
+**Last session:** 2026-01-21 10:27 UTC
+**Stopped at:** Verified 01-01-project-setup-PLAN.md (created SUMMARY.md)
 **Resume file:** None
 
 ---
