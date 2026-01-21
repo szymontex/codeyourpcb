@@ -31,9 +31,10 @@
 //! ```
 
 use crate::ast::{
-    BoardDef, ComponentDef, ComponentKind, Definition, Dimension, Identifier, LayerType,
-    NetAssignment, NetConstraints, NetDef, PinId, PinRef, PositionExpr, RotationExpr, SizeProperty,
-    SourceFile, Span, StackupDef, StackupLayer, StringLit, ZoneDef, ZoneKind,
+    BoardDef, ComponentDef, ComponentKind, Definition, Dimension, FootprintDef, Identifier,
+    LayerType, NetAssignment, NetConstraints, NetDef, PadDef, PadShape, PinId, PinRef,
+    PositionExpr, RotationExpr, SizeProperty, SourceFile, Span, StackupDef, StackupLayer,
+    StringLit, ZoneDef, ZoneKind,
 };
 use crate::errors::{ParseError, ParseResult};
 use crate::node_kinds;
@@ -125,6 +126,11 @@ impl CypcbParser {
                 node_kinds::NET_DEFINITION => {
                     if let Some(net) = self.convert_net(source, &child, errors) {
                         definitions.push(Definition::Net(net));
+                    }
+                }
+                "footprint_definition" => {
+                    if let Some(fp) = self.convert_footprint_definition(source, &child, errors) {
+                        definitions.push(Definition::Footprint(fp));
                     }
                 }
                 "zone_definition" => {
@@ -594,6 +600,134 @@ impl CypcbParser {
         // Strip quotes
         let value = full_text.trim_matches('"').to_string();
         StringLit::new(value, span_of(node))
+    }
+
+    /// Convert a footprint definition node.
+    fn convert_footprint_definition(
+        &self,
+        source: &str,
+        node: &Node,
+        errors: &mut Vec<ParseError>,
+    ) -> Option<FootprintDef> {
+        let name_node = get_child_by_field(node, "name")?;
+        let name = Identifier::new(node_text(source, &name_node), span_of(&name_node));
+
+        let mut description: Option<String> = None;
+        let mut pads: Vec<PadDef> = Vec::new();
+        let mut courtyard: Option<(Dimension, Dimension)> = None;
+
+        let mut cursor = node.walk();
+        for child in node.children(&mut cursor) {
+            // footprint_property is a choice node
+            let property_node = if child.kind() == "footprint_property" {
+                child.named_child(0)
+            } else {
+                Some(child)
+            };
+
+            if let Some(prop) = property_node {
+                match prop.kind() {
+                    "description_property" => {
+                        if let Some(text_node) = get_child_by_field(&prop, "text") {
+                            let lit = self.convert_string_literal(source, &text_node);
+                            description = Some(lit.value);
+                        }
+                    }
+                    "pad_definition" => {
+                        if let Some(pad) = self.convert_pad_definition(source, &prop, errors) {
+                            pads.push(pad);
+                        }
+                    }
+                    "courtyard_property" => {
+                        let width = get_child_by_field(&prop, "width")
+                            .and_then(|n| self.convert_dimension(source, &n, errors));
+                        let height = get_child_by_field(&prop, "height")
+                            .and_then(|n| self.convert_dimension(source, &n, errors));
+
+                        if let (Some(w), Some(h)) = (width, height) {
+                            courtyard = Some((w, h));
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        Some(FootprintDef {
+            name,
+            description,
+            pads,
+            courtyard,
+            span: span_of(node),
+        })
+    }
+
+    /// Convert a pad definition node.
+    fn convert_pad_definition(
+        &self,
+        source: &str,
+        node: &Node,
+        errors: &mut Vec<ParseError>,
+    ) -> Option<PadDef> {
+        let number_node = get_child_by_field(node, "number")?;
+        let number_text = node_text(source, &number_node);
+        let number = match number_text.parse::<u32>() {
+            Ok(n) => n,
+            Err(_) => {
+                errors.push(ParseError::invalid_number(
+                    number_text,
+                    source.to_string(),
+                    span_of(&number_node).to_miette(),
+                ));
+                return None;
+            }
+        };
+
+        let shape_node = get_child_by_field(node, "shape")?;
+        let shape_text = node_text(source, &shape_node);
+        let shape = match PadShape::from_str(shape_text) {
+            Some(s) => s,
+            None => {
+                errors.push(ParseError::syntax(
+                    format!("unknown pad shape: '{}'", shape_text),
+                    source.to_string(),
+                    span_of(&shape_node).to_miette(),
+                ));
+                return None;
+            }
+        };
+
+        let x = get_child_by_field(node, "x")
+            .and_then(|n| self.convert_dimension(source, &n, errors))?;
+        let y = get_child_by_field(node, "y")
+            .and_then(|n| self.convert_dimension(source, &n, errors))?;
+        let width = get_child_by_field(node, "width")
+            .and_then(|n| self.convert_dimension(source, &n, errors))?;
+        let height = get_child_by_field(node, "height")
+            .and_then(|n| self.convert_dimension(source, &n, errors))?;
+
+        // Optional drill spec
+        let drill = get_child_by_field(node, "drill").and_then(|drill_spec| {
+            // drill_spec has a dimension child
+            let mut drill_cursor = drill_spec.walk();
+            for drill_child in drill_spec.children(&mut drill_cursor) {
+                if drill_child.kind() == "dimension" {
+                    return self.convert_dimension(source, &drill_child, errors);
+                }
+            }
+            None
+        });
+
+        Some(PadDef {
+            number,
+            shape,
+            x,
+            y,
+            width,
+            height,
+            drill,
+            span: span_of(node),
+        })
     }
 
     /// Convert a zone definition node.
@@ -1197,6 +1331,103 @@ keepout {
             assert!(zone.layer.is_none()); // Defaults to all layers
         } else {
             panic!("expected zone definition");
+        }
+    }
+
+    #[test]
+    fn test_parse_footprint_definition() {
+        let source = r#"
+footprint MY_PKG {
+    description "Test package"
+    pad 1 rect at 0mm, 0mm size 1mm x 0.5mm
+    pad 2 rect at 2mm, 0mm size 1mm x 0.5mm
+    courtyard 4mm x 2mm
+}
+"#;
+        let result = parse(source);
+        assert!(result.is_ok(), "errors: {:?}", result.errors);
+
+        let ast = result.value;
+        assert_eq!(ast.definitions.len(), 1);
+
+        if let Definition::Footprint(fp) = &ast.definitions[0] {
+            assert_eq!(fp.name.value, "MY_PKG");
+            assert_eq!(fp.description, Some("Test package".to_string()));
+            assert_eq!(fp.pads.len(), 2);
+
+            // Check pad 1
+            let pad1 = &fp.pads[0];
+            assert_eq!(pad1.number, 1);
+            assert_eq!(pad1.shape, PadShape::Rect);
+            assert!((pad1.x.value - 0.0).abs() < 0.001);
+            assert!((pad1.y.value - 0.0).abs() < 0.001);
+            assert!((pad1.width.value - 1.0).abs() < 0.001);
+            assert!((pad1.height.value - 0.5).abs() < 0.001);
+            assert!(pad1.drill.is_none());
+
+            // Check pad 2
+            let pad2 = &fp.pads[1];
+            assert_eq!(pad2.number, 2);
+            assert!((pad2.x.value - 2.0).abs() < 0.001);
+
+            // Check courtyard
+            let (cy_w, cy_h) = fp.courtyard.as_ref().expect("courtyard should be present");
+            assert!((cy_w.value - 4.0).abs() < 0.001);
+            assert!((cy_h.value - 2.0).abs() < 0.001);
+        } else {
+            panic!("expected footprint definition");
+        }
+    }
+
+    #[test]
+    fn test_parse_footprint_with_drill() {
+        let source = r#"
+footprint THT_2PIN {
+    pad 1 circle at 0mm, 0mm size 1.8mm x 1.8mm drill 1.0mm
+    pad 2 circle at 2.54mm, 0mm size 1.8mm x 1.8mm drill 1.0mm
+}
+"#;
+        let result = parse(source);
+        assert!(result.is_ok(), "errors: {:?}", result.errors);
+
+        if let Definition::Footprint(fp) = &result.value.definitions[0] {
+            assert_eq!(fp.name.value, "THT_2PIN");
+            assert_eq!(fp.pads.len(), 2);
+            assert!(fp.description.is_none());
+            assert!(fp.courtyard.is_none());
+
+            // Check pad with drill
+            let pad1 = &fp.pads[0];
+            assert_eq!(pad1.shape, PadShape::Circle);
+            let drill = pad1.drill.as_ref().expect("drill should be present");
+            assert!((drill.value - 1.0).abs() < 0.001);
+            assert_eq!(drill.unit, Unit::Mm);
+        } else {
+            panic!("expected footprint definition");
+        }
+    }
+
+    #[test]
+    fn test_parse_footprint_all_pad_shapes() {
+        let source = r#"
+footprint ALL_SHAPES {
+    pad 1 rect at 0mm, 0mm size 1mm x 1mm
+    pad 2 circle at 2mm, 0mm size 1mm x 1mm
+    pad 3 roundrect at 4mm, 0mm size 1mm x 1mm
+    pad 4 oblong at 6mm, 0mm size 1mm x 2mm
+}
+"#;
+        let result = parse(source);
+        assert!(result.is_ok(), "errors: {:?}", result.errors);
+
+        if let Definition::Footprint(fp) = &result.value.definitions[0] {
+            assert_eq!(fp.pads.len(), 4);
+            assert_eq!(fp.pads[0].shape, PadShape::Rect);
+            assert_eq!(fp.pads[1].shape, PadShape::Circle);
+            assert_eq!(fp.pads[2].shape, PadShape::RoundRect);
+            assert_eq!(fp.pads[3].shape, PadShape::Oblong);
+        } else {
+            panic!("expected footprint definition");
         }
     }
 }
