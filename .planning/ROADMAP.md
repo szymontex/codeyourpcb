@@ -1,0 +1,220 @@
+# Roadmap: CodeYourPCB
+
+**Created:** 2026-01-21
+**Phases:** 6
+**Target:** Code-first PCB design tool
+
+## Phase Overview
+
+| # | Phase | Goal | Requirements | Status |
+|---|-------|------|--------------|--------|
+| 1 | Foundation | Working parser and board model | 10 | ○ Pending |
+| 2 | Rendering | Visual feedback with hot reload | 7 | ○ Pending |
+| 3 | Validation | DRC prevents invalid designs | 7 | ○ Pending |
+| 4 | Export | Manufacturable output | 5 | ○ Pending |
+| 5 | Intelligence | Autorouting and IDE integration | 6 | ○ Pending |
+| 6 | Desktop | Full application experience | v2 | ○ Pending |
+
+---
+
+## Phase 1: Foundation
+
+**Goal:** Working DSL parser that produces a valid board model
+
+**Requirements:**
+- DSL-01: Custom Tree-sitter grammar for .pcb files
+- DSL-02: Board definition (size, layers, stackup)
+- DSL-03: Component instantiation with footprint reference
+- DSL-04: Net connections with constraint syntax
+- BRD-01: Component placement (absolute and relative)
+- BRD-02: Multi-layer support (2-32 layers)
+- BRD-03: Net/connection tracking
+- BRD-04: Board outline definition
+- BRD-06: Spatial indexing (R*-tree)
+- FTP-01: Basic SMD footprints (0402-2512)
+- FTP-02: Basic through-hole footprints
+- DEV-03: Error messages with line/column info
+
+**Success Criteria:**
+1. User can write a .pcb file defining a board with components
+2. Parser produces valid AST with error recovery
+3. Board model contains all components and nets
+4. CLI can parse file and output JSON representation
+5. Integer nanometer coordinates throughout (no floating-point)
+
+**Key Decisions:**
+- DSL syntax design (critical - affects everything downstream)
+- ECS vs traditional OOP for board model
+- Coordinate system (origin, units, precision)
+
+---
+
+## Phase 2: Rendering
+
+**Goal:** See the board design with instant hot reload
+
+**Requirements:**
+- DSL-05: Module/import system for reusable blocks
+- DSL-06: Hot reload on file save
+- RND-01: 2D top/bottom board view
+- RND-02: Layer visibility toggle
+- RND-03: Zoom/pan navigation
+- RND-04: Component selection and highlighting
+- RND-05: Net highlighting
+- RND-06: Grid display and snapping
+- DEV-04: Web-based viewer
+
+**Success Criteria:**
+1. Saving .pcb file triggers re-render within 100ms
+2. All copper layers visible with correct colors
+3. Components show pads and silkscreen
+4. User can zoom to component level detail
+5. Selecting net highlights all connected elements
+
+**Key Decisions:**
+- Canvas 2D vs WebGL/wgpu for initial renderer
+- Color scheme and layer styling
+- Selection interaction model
+
+---
+
+## Phase 3: Validation
+
+**Goal:** DRC prevents manufacturing-invalid designs
+
+**Requirements:**
+- BRD-05: Zones and keepouts
+- DRC-01: Clearance checking (trace-trace, trace-pad)
+- DRC-02: Minimum trace width validation
+- DRC-03: Minimum drill size validation
+- DRC-04: Unconnected pin detection
+- DRC-05: Real-time DRC feedback
+- FTP-03: QFP/SOIC/SOT packages
+- FTP-04: Custom footprint definition in DSL
+
+**Success Criteria:**
+1. DRC runs in <1s for 100-component board
+2. Violations shown in renderer with markers
+3. Violations listed with location and rule violated
+4. All basic manufacturability rules covered
+5. No false positives on valid designs
+
+**Key Decisions:**
+- Rule configuration format
+- Error severity levels
+- Real-time vs batch checking trade-off
+
+---
+
+## Phase 4: Export
+
+**Goal:** Generate files manufacturers can use
+
+**Requirements:**
+- EXP-01: Gerber X2 export (all layers)
+- EXP-02: Excellon drill file export
+- EXP-03: BOM generation (CSV/JSON)
+- EXP-04: Pick and place file
+- DEV-01: CLI interface for headless operation
+
+**Success Criteria:**
+1. Gerber files pass validation in gerbv and online viewers
+2. Drill files align with Gerber copper layers
+3. Files accepted by JLCPCB/PCBWay DFM check
+4. BOM contains all components with values
+5. CLI can export without GUI (`cypcb export project.pcb`)
+
+**Key Decisions:**
+- Gerber X2 vs X3 features
+- Output folder structure
+- Manufacturer presets
+
+---
+
+## Phase 5: Intelligence
+
+**Goal:** Autorouting and professional IDE experience
+
+**Requirements:**
+- FTP-05: KiCad footprint import
+- DEV-02: LSP server for IDE integration
+- INT-01: Autorouter integration (FreeRouting)
+- INT-02: Trace width calculator (IPC-2221)
+- INT-03: Electrical-aware constraints (crosstalk, impedance hints)
+
+**Success Criteria:**
+1. FreeRouting can route exported board and import results
+2. LSP provides autocomplete for components and nets
+3. Hover shows component/net info
+4. Diagnostics appear as squiggles in editor
+5. Trace width suggestions based on current requirements
+
+**Key Decisions:**
+- FreeRouting integration method (DSN export or embedded)
+- LSP feature prioritization
+- Constraint syntax for electrical properties
+
+---
+
+## Phase 6: Desktop & Polish
+
+**Goal:** Full desktop application experience
+
+**Requirements (v2):**
+- ADV-01: 3D board preview
+- DSK-01: Tauri desktop application
+- DSK-02: Native file dialogs
+- DSK-03: Undo/redo system
+- Additional v2 features as prioritized
+
+**Success Criteria:**
+1. Native app launches in <2s
+2. 3D preview shows component heights and board thickness
+3. Undo/redo works for all editing operations
+4. File open/save uses native dialogs
+5. App works offline
+
+---
+
+## Dependency Graph
+
+```
+Phase 1 (Foundation)
+    │
+    ├──────────────────┐
+    ▼                  ▼
+Phase 2 (Rendering)  Phase 3 (Validation)
+    │                  │
+    └────────┬─────────┘
+             ▼
+      Phase 4 (Export)
+             │
+             ▼
+      Phase 5 (Intelligence)
+             │
+             ▼
+      Phase 6 (Desktop)
+```
+
+**Notes:**
+- Phase 2 and 3 can run in parallel after Phase 1
+- Phase 4 requires both rendering (visual verification) and validation (DRC pass)
+- Phase 5 builds on complete core functionality
+- Phase 6 is polish and can be started earlier for basic Tauri shell
+
+---
+
+## Risk Mitigation
+
+| Risk | Phase | Mitigation |
+|------|-------|------------|
+| DSL syntax lock-in | 1 | Version grammar, dogfood extensively |
+| Floating-point precision | 1 | Integer nanometers from start |
+| Gerber edge cases | 4 | Test with multiple viewers + fabs |
+| FreeRouting determinism | 5 | Verify early, patch if needed |
+| Performance at scale | 3 | Benchmark 1K+ component boards |
+
+---
+
+*Roadmap created: 2026-01-21*
+*Last updated: 2026-01-21*
