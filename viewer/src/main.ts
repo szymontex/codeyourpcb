@@ -4,7 +4,7 @@
  */
 
 import { loadWasm, isWasmLoaded, type PcbEngine } from './wasm';
-import type { BoardSnapshot } from './types';
+import type { BoardSnapshot, ViolationInfo } from './types';
 import { createViewport, fitBoard, screenToWorld } from './viewport';
 import { render, type RenderState } from './renderer';
 import { setupInteraction, type InteractionState } from './interaction';
@@ -98,7 +98,9 @@ component U1 ic "DIP-8" {
  * Initialize the PCB viewer application
  */
 async function init(): Promise<void> {
-  const status = document.getElementById('status')!;
+  const statusText = document.getElementById('status-text')!;
+  const errorBadge = document.getElementById('error-badge')!;
+  const errorCount = document.getElementById('error-count')!;
   const canvas = document.getElementById('pcb-canvas') as HTMLCanvasElement;
   const container = document.getElementById('canvas-container')!;
   const coordsEl = document.getElementById('coords')!;
@@ -106,6 +108,18 @@ async function init(): Promise<void> {
   const bottomLayerCb = document.getElementById('layer-bottom') as HTMLInputElement;
 
   const ctx = canvas.getContext('2d')!;
+
+  /**
+   * Update error badge with violation count
+   */
+  function updateErrorBadge(violations: ViolationInfo[]): void {
+    if (violations.length > 0) {
+      errorCount.textContent = String(violations.length);
+      errorBadge.classList.remove('hidden');
+    } else {
+      errorBadge.classList.add('hidden');
+    }
+  }
 
   // State
   let snapshot: BoardSnapshot | null = null;
@@ -145,18 +159,18 @@ async function init(): Promise<void> {
   });
 
   // Load WASM
-  status.textContent = 'Loading WASM...';
+  statusText.textContent = 'Loading WASM...';
   let engine: PcbEngine;
   try {
     engine = await loadWasm();
   } catch (err) {
     console.error('WASM load failed:', err);
-    status.textContent = `WASM Error: ${err}`;
+    statusText.textContent = `WASM Error: ${err}`;
     return;
   }
 
   const usingWasm = isWasmLoaded();
-  status.textContent = usingWasm
+  statusText.textContent = usingWasm
     ? 'WASM loaded, parsing...'
     : 'Mock engine loaded, parsing...';
 
@@ -174,9 +188,14 @@ async function init(): Promise<void> {
     viewport = fitBoard(viewport, snapshot.board.width_nm, snapshot.board.height_nm);
   }
 
-  status.textContent = errors
+  statusText.textContent = errors
     ? `Warnings: ${errors.split('\n').filter(Boolean).length}`
     : usingWasm ? 'Ready (WASM)' : 'Ready (Mock)';
+
+  // Update error badge with initial violations
+  if (snapshot.violations) {
+    updateErrorBadge(snapshot.violations);
+  }
 
   // Interaction setup
   const interactionState: InteractionState = {
@@ -194,11 +213,11 @@ async function init(): Promise<void> {
         // Show selected in status
         const comp = snapshot?.components.find(c => c.refdes === selectedRefdes);
         if (comp) {
-          status.textContent = `Selected: ${comp.refdes} (${comp.value})`;
+          statusText.textContent = `Selected: ${comp.refdes} (${comp.value})`;
         }
       } else {
         selectedRefdes = null;
-        status.textContent = usingWasm ? 'Ready (WASM)' : 'Ready (Mock)';
+        statusText.textContent = usingWasm ? 'Ready (WASM)' : 'Ready (Mock)';
       }
       dirty = true;
     },
@@ -276,18 +295,23 @@ async function init(): Promise<void> {
     }
 
     // Show "Reloaded" status briefly
-    const errorCount = errors ? errors.split('\n').filter(Boolean).length : 0;
-    status.textContent = errorCount > 0 ? `Reloaded (${errorCount} warnings)` : 'Reloaded';
+    const parseErrorCount = errors ? errors.split('\n').filter(Boolean).length : 0;
+    statusText.textContent = parseErrorCount > 0 ? `Reloaded (${parseErrorCount} warnings)` : 'Reloaded';
+
+    // Update error badge with new violations
+    if (snapshot.violations) {
+      updateErrorBadge(snapshot.violations);
+    }
 
     // After 1.5s, show normal status
     setTimeout(() => {
       if (selectedRefdes && snapshot) {
         const comp = snapshot.components.find(c => c.refdes === selectedRefdes);
         if (comp) {
-          status.textContent = `Selected: ${comp.refdes} (${comp.value})`;
+          statusText.textContent = `Selected: ${comp.refdes} (${comp.value})`;
         }
       } else {
-        status.textContent = usingWasm ? 'Ready (WASM)' : 'Ready (Mock)';
+        statusText.textContent = usingWasm ? 'Ready (WASM)' : 'Ready (Mock)';
       }
     }, 1500);
 
@@ -306,8 +330,8 @@ async function init(): Promise<void> {
 // Start the application
 init().catch((error) => {
   console.error('Failed to initialize viewer:', error);
-  const status = document.getElementById('status');
-  if (status) {
-    status.textContent = 'Error: ' + (error instanceof Error ? error.message : String(error));
+  const statusText = document.getElementById('status-text');
+  if (statusText) {
+    statusText.textContent = 'Error: ' + (error instanceof Error ? error.message : String(error));
   }
 });
