@@ -8,7 +8,7 @@
 
 | # | Phase | Goal | Requirements | Status |
 |---|-------|------|--------------|--------|
-| 1 | Foundation | Working parser and board model | 12 | ○ Planned |
+| 1 | Foundation | Working parser and board model | 12 | ✓ Complete |
 | 2 | Rendering | Visual feedback with hot reload | 7 | ○ Pending |
 | 3 | Validation | DRC prevents invalid designs | 7 | ○ Pending |
 | 4 | Export | Manufacturable output | 5 | ○ Pending |
@@ -50,15 +50,15 @@
 **Plans:** 9 plans in 5 waves
 
 Plans:
-- [ ] 01-01-PLAN.md — Project setup (workspace, crates, dependencies)
-- [ ] 01-02-PLAN.md — Core types (Nm, Point, Rect, Unit)
-- [ ] 01-03-PLAN.md — Tree-sitter grammar definition
-- [ ] 01-04-PLAN.md — ECS components for board model
-- [ ] 01-05-PLAN.md — AST types and parser implementation
-- [ ] 01-06-PLAN.md — BoardWorld and spatial indexing
-- [ ] 01-07-PLAN.md — Footprint library (SMD + THT)
-- [ ] 01-08-PLAN.md — AST-to-ECS synchronization
-- [ ] 01-09-PLAN.md — CLI with parse/check commands
+- [x] 01-01-PLAN.md — Project setup (workspace, crates, dependencies)
+- [x] 01-02-PLAN.md — Core types (Nm, Point, Rect, Unit)
+- [x] 01-03-PLAN.md — Tree-sitter grammar definition
+- [x] 01-04-PLAN.md — ECS components for board model
+- [x] 01-05-PLAN.md — AST types and parser implementation
+- [x] 01-06-PLAN.md — BoardWorld and spatial indexing
+- [x] 01-07-PLAN.md — Footprint library (SMD + THT)
+- [x] 01-08-PLAN.md — AST-to-ECS synchronization
+- [x] 01-09-PLAN.md — CLI with parse/check commands
 
 ---
 
@@ -230,4 +230,4 @@ Phase 2 (Rendering)  Phase 3 (Validation)
 ---
 
 *Roadmap created: 2026-01-21*
-*Last updated: 2026-01-21 - Phase 1 planned (9 plans, 5 waves)*
+*Last updated: 2026-01-21 - Phase 1 complete (9/9 plans, verified)*

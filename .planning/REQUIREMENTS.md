@@ -103,18 +103,18 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DSL-01 | Phase 1 | Pending |
-| DSL-02 | Phase 1 | Pending |
-| DSL-03 | Phase 1 | Pending |
-| DSL-04 | Phase 1 | Pending |
+| DSL-01 | Phase 1 | Complete |
+| DSL-02 | Phase 1 | Complete |
+| DSL-03 | Phase 1 | Complete |
+| DSL-04 | Phase 1 | Complete |
 | DSL-05 | Phase 2 | Pending |
 | DSL-06 | Phase 2 | Pending |
-| BRD-01 | Phase 1 | Pending |
-| BRD-02 | Phase 1 | Pending |
-| BRD-03 | Phase 1 | Pending |
-| BRD-04 | Phase 1 | Pending |
+| BRD-01 | Phase 1 | Complete |
+| BRD-02 | Phase 1 | Complete |
+| BRD-03 | Phase 1 | Complete |
+| BRD-04 | Phase 1 | Complete |
 | BRD-05 | Phase 3 | Pending |
-| BRD-06 | Phase 1 | Pending |
+| BRD-06 | Phase 1 | Complete |
 | RND-01 | Phase 2 | Pending |
 | RND-02 | Phase 2 | Pending |
 | RND-03 | Phase 2 | Pending |
@@ -130,14 +130,14 @@
 | EXP-02 | Phase 4 | Pending |
 | EXP-03 | Phase 4 | Pending |
 | EXP-04 | Phase 4 | Pending |
-| FTP-01 | Phase 1 | Pending |
-| FTP-02 | Phase 1 | Pending |
+| FTP-01 | Phase 1 | Complete |
+| FTP-02 | Phase 1 | Complete |
 | FTP-03 | Phase 3 | Pending |
 | FTP-04 | Phase 3 | Pending |
 | FTP-05 | Phase 5 | Pending |
 | DEV-01 | Phase 4 | Pending |
 | DEV-02 | Phase 5 | Pending |
-| DEV-03 | Phase 1 | Pending |
+| DEV-03 | Phase 1 | Complete |
 | DEV-04 | Phase 2 | Pending |
 | INT-01 | Phase 5 | Pending |
 | INT-02 | Phase 5 | Pending |
