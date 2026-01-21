@@ -9,11 +9,18 @@ repository.workspace = true
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+[features]
+default = ["native"]
+# Native build with full parsing support
+native = ["cypcb-parser/tree-sitter-parser", "cypcb-world/sync"]
+# WASM build without tree-sitter (parsing done in JS)
+wasm = []
+
 [dependencies]
 # Workspace dependencies
 cypcb-core = { workspace = true }
-cypcb-parser = { workspace = true }
-cypcb-world = { workspace = true }
+cypcb-parser = { workspace = true, default-features = false }
+cypcb-world = { workspace = true, default-features = false }
 
 # Serialization
 serde = { workspace = true }
