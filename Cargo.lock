@@ -434,6 +434,7 @@ name = "cypcb-render"
 version = "0.1.0"
 dependencies = [
  "cypcb-core",
+ "cypcb-drc",
  "cypcb-parser",
  "cypcb-world",
  "getrandom 0.2.17",

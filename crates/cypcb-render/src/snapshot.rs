@@ -6,6 +6,7 @@
 //! All types use primitive types (i64, i32, u32, String) that serialize
 //! cleanly to JavaScript numbers and strings.
 
+use cypcb_drc::DrcViolation;
 use serde::{Deserialize, Serialize};
 
 /// Complete snapshot of the board state for rendering.
@@ -20,6 +21,55 @@ pub struct BoardSnapshot {
     pub components: Vec<ComponentInfo>,
     /// All nets and their connections.
     pub nets: Vec<NetInfo>,
+    /// DRC violations found after loading.
+    pub violations: Vec<ViolationInfo>,
+}
+
+/// A DRC violation for display in the viewer.
+///
+/// This is a simplified representation of `cypcb_drc::DrcViolation`
+/// suitable for JavaScript serialization and rendering.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ViolationInfo {
+    /// Violation type (clearance, drill_size, unconnected_pin, etc.)
+    pub kind: String,
+    /// Board location X in nanometers.
+    pub x_nm: i64,
+    /// Board location Y in nanometers.
+    pub y_nm: i64,
+    /// Human-readable message.
+    pub message: String,
+}
+
+impl ViolationInfo {
+    /// Create a ViolationInfo from a DrcViolation.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use cypcb_drc::{DrcViolation, ViolationKind};
+    /// use cypcb_core::Point;
+    /// use cypcb_world::Entity;
+    /// use cypcb_render::ViolationInfo;
+    ///
+    /// let v = DrcViolation::unconnected_pin(
+    ///     Entity::from_raw(1),
+    ///     "1",
+    ///     "R1",
+    ///     Point::from_mm(10.0, 20.0),
+    /// );
+    /// let info = ViolationInfo::from_drc(&v);
+    /// assert_eq!(info.kind, "unconnected-pin");
+    /// assert!(info.message.contains("R1.1"));
+    /// ```
+    pub fn from_drc(v: &DrcViolation) -> Self {
+        ViolationInfo {
+            kind: format!("{}", v.kind),
+            x_nm: v.location.x.0,
+            y_nm: v.location.y.0,
+            message: v.message.clone(),
+        }
+    }
 }
 
 /// Board-level information.
@@ -148,6 +198,7 @@ mod tests {
                     pin: "1".to_string(),
                 }],
             }],
+            violations: vec![],
         };
 
         // Verify it can serialize to JSON (serde-wasm-bindgen uses serde)
@@ -155,5 +206,40 @@ mod tests {
         assert!(json.contains("\"name\":\"Test\""));
         assert!(json.contains("\"refdes\":\"R1\""));
         assert!(json.contains("\"name\":\"VCC\""));
+        assert!(json.contains("\"violations\":[]"));
+    }
+
+    #[test]
+    fn test_violation_info_from_drc() {
+        use cypcb_core::Point;
+        use cypcb_world::Entity;
+
+        let violation = cypcb_drc::DrcViolation::unconnected_pin(
+            Entity::from_raw(1),
+            "1",
+            "R1",
+            Point::from_mm(10.0, 20.0),
+        );
+        let info = ViolationInfo::from_drc(&violation);
+
+        assert_eq!(info.kind, "unconnected-pin");
+        assert_eq!(info.x_nm, 10_000_000);
+        assert_eq!(info.y_nm, 20_000_000);
+        assert!(info.message.contains("R1.1"));
+    }
+
+    #[test]
+    fn test_violation_info_serializes() {
+        let violation = ViolationInfo {
+            kind: "clearance".to_string(),
+            x_nm: 5_000_000,
+            y_nm: 10_000_000,
+            message: "Clearance violation: 0.10mm actual, 0.15mm required".to_string(),
+        };
+
+        let json = serde_json::to_string(&violation).unwrap();
+        assert!(json.contains("\"kind\":\"clearance\""));
+        assert!(json.contains("\"x_nm\":5000000"));
+        assert!(json.contains("\"message\""));
     }
 }

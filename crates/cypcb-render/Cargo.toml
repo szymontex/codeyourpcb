@@ -21,6 +21,7 @@ wasm = []
 cypcb-core = { workspace = true }
 cypcb-parser = { workspace = true, default-features = false }
 cypcb-world = { workspace = true, default-features = false }
+cypcb-drc = { path = "../cypcb-drc" }
 
 # Serialization
 serde = { workspace = true }
