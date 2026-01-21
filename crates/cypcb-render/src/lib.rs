@@ -26,6 +26,7 @@ mod snapshot;
 pub use snapshot::*;
 
 use cypcb_core::{Nm, Point};
+use cypcb_drc::{run_drc, DesignRules, DrcViolation};
 use cypcb_world::footprint::FootprintLibrary;
 use cypcb_world::{
     BoardWorld, Entity, FootprintRef, Layer, NetConnections, NetId, PadShape, PinConnection,
@@ -51,6 +52,10 @@ pub struct PcbEngine {
     world: BoardWorld,
     footprint_lib: FootprintLibrary,
     source: String,
+    /// DRC violations from the last load.
+    violations: Vec<DrcViolation>,
+    /// Time taken for last DRC run in milliseconds.
+    drc_duration_ms: u64,
 }
 
 // WASM-exposed methods
@@ -63,6 +68,8 @@ impl PcbEngine {
             world: BoardWorld::new(),
             footprint_lib: FootprintLibrary::new(),
             source: String::new(),
+            violations: Vec::new(),
+            drc_duration_ms: 0,
         }
     }
 
@@ -129,12 +136,15 @@ impl PcbEngine {
     ///
     /// Returns an empty string on success, or an error message on failure.
     /// The board state is updated even if there are errors (partial results).
+    /// DRC is run automatically after successful sync.
     ///
     /// In WASM mode, use `load_snapshot()` instead.
     #[cfg(feature = "native")]
     pub fn load_source(&mut self, source: &str) -> String {
         self.source = source.to_string();
         self.world.clear();
+        self.violations.clear();
+        self.drc_duration_ms = 0;
 
         // Parse the source
         let parse_result = parse(source);
@@ -154,11 +164,32 @@ impl PcbEngine {
             errors.push(format!("{}", err));
         }
 
+        // Run DRC after sync (even if there were parse/sync errors, check what we have)
+        self.run_drc_internal();
+
         if errors.is_empty() {
             String::new()
         } else {
             errors.join("\n")
         }
+    }
+
+    /// Run DRC using default rules (JLCPCB 2-layer).
+    fn run_drc_internal(&mut self) {
+        let rules = DesignRules::default();
+        let result = run_drc(&mut self.world, &rules);
+        self.violations = result.violations;
+        self.drc_duration_ms = result.duration_ms;
+    }
+
+    /// Get the number of DRC violations from the last load.
+    pub fn violation_count(&self) -> usize {
+        self.violations.len()
+    }
+
+    /// Get the time taken for the last DRC run in milliseconds.
+    pub fn drc_duration_ms(&self) -> u64 {
+        self.drc_duration_ms
     }
 
     /// Populate the world from a BoardSnapshot.
@@ -313,10 +344,18 @@ impl PcbEngine {
             });
         }
 
+        // Build violations info
+        let violations: Vec<ViolationInfo> = self
+            .violations
+            .iter()
+            .map(ViolationInfo::from_drc)
+            .collect();
+
         BoardSnapshot {
             board,
             components,
             nets,
+            violations,
         }
     }
 }
