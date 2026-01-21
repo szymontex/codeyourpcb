@@ -3,8 +3,8 @@
 ## Current Status
 
 **Phase:** 2 of 6 (Rendering) - COMPLETE
-**Plan:** 5 of 5 complete
-**Last Activity:** 2026-01-21 - Completed 02-05-PLAN.md
+**Plan:** 6 of 6 complete
+**Last Activity:** 2026-01-21 - Completed 02-06-PLAN.md (Hot Reload)
 
 ## Project Reference
 
@@ -18,7 +18,7 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 | Phase | Status | Progress |
 |-------|--------|----------|
 | 1. Foundation | Complete | 100% (9/9 plans) |
-| 2. Rendering | Complete | 100% (5/5 plans) |
+| 2. Rendering | Complete | 100% (6/6 plans) |
 | 3. Validation | Not started | 0% |
 | 4. Export | Not started | 0% |
 | 5. Intelligence | Not started | 0% |
@@ -35,6 +35,7 @@ Progress: ██████████████░░░░░░ 70%
 | 02-03 | WASM Binding | Complete |
 | 02-04 | Canvas 2D Rendering | Complete |
 | 02-05 | Layer Visibility | Complete |
+| 02-06 | Hot Reload | Complete |
 
 ## Next Action
 
@@ -67,8 +68,19 @@ Begin Phase 3 (Validation) - Design rule checking and error display.
 | 2026-01-21 | bevy_ecs no multi_threaded | Disabled for WASM compatibility |
 | 2026-01-21 | Middle-click pan | Standard CAD convention for panning |
 | 2026-01-21 | Zoom factors 1.15x/0.87x | Smooth zoom feel per wheel event |
+| 2026-01-21 | Dual watcher implementations | Rust for Tauri, Node.js for dev server |
+| 2026-01-21 | WebSocket port 3001 | Separate from Vite (5173) |
+| 2026-01-21 | 200ms debounce | Handles editor save patterns |
 
 ## Session History
+
+### 2026-01-21: Execute 02-06 Hot Reload
+- Created cypcb-watcher crate with notify 7.0 and debouncing
+- Created viewer/server.ts with chokidar and WebSocket
+- Added WebSocket client to main.ts with auto-reconnect
+- Viewport and selection preserved across reloads
+- "Reloaded" notification shown for 1.5s
+- Graceful fallback without WebSocket server
 
 ### 2026-01-21: Execute 02-05 Layer Visibility Integration
 - Created interaction.ts (114 lines) with mouse handlers
@@ -246,11 +258,14 @@ Begin Phase 3 (Validation) - Design rule checking and error display.
 | viewer/src/renderer.ts | Canvas 2D rendering functions |
 | viewer/src/interaction.ts | Mouse interaction handlers |
 | viewer/build-wasm.sh | WASM build script |
+| crates/cypcb-watcher/Cargo.toml | File watcher crate config |
+| crates/cypcb-watcher/src/lib.rs | Debounced file watching |
+| viewer/server.ts | Dev server with WebSocket |
 
 ## Session Continuity
 
 **Last session:** 2026-01-21
-**Stopped at:** Completed 02-05-PLAN.md (Phase 2 complete)
+**Stopped at:** Completed 02-06-PLAN.md (Phase 2 complete with hot reload)
 **Resume file:** None
 
 ---
