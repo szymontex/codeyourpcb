@@ -3,12 +3,66 @@
  * Integrates WASM engine, rendering, and user interaction
  */
 
-import { loadWasm, isWasmLoaded } from './wasm';
+import { loadWasm, isWasmLoaded, type PcbEngine } from './wasm';
 import type { BoardSnapshot } from './types';
 import { createViewport, fitBoard, screenToWorld } from './viewport';
 import { render, type RenderState } from './renderer';
 import { setupInteraction, type InteractionState } from './interaction';
 import { createLayerVisibility } from './layers';
+
+// WebSocket server URL for hot reload
+const WS_URL = 'ws://localhost:3001';
+
+/**
+ * WebSocket message types from the dev server
+ */
+interface WsMessage {
+  type: 'init' | 'reload';
+  file: string;
+  content: string;
+  timestamp?: number;
+}
+
+/**
+ * Connect to the WebSocket server for hot reload notifications.
+ * Automatically reconnects on disconnect.
+ */
+function connectWebSocket(
+  onReload: (content: string, file: string) => void
+): void {
+  let ws: WebSocket;
+
+  function connect(): void {
+    ws = new WebSocket(WS_URL);
+
+    ws.onopen = () => {
+      console.log('[HotReload] WebSocket connected');
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const msg: WsMessage = JSON.parse(event.data);
+        if (msg.type === 'init' || msg.type === 'reload') {
+          console.log(`[HotReload] ${msg.type}: ${msg.file}`);
+          onReload(msg.content, msg.file);
+        }
+      } catch (err) {
+        console.error('[HotReload] Message parse error:', err);
+      }
+    };
+
+    ws.onclose = () => {
+      console.log('[HotReload] WebSocket disconnected, reconnecting in 2s...');
+      setTimeout(connect, 2000);
+    };
+
+    ws.onerror = () => {
+      // Error is handled by onclose
+    };
+  }
+
+  connect();
+}
 
 // Test source for initial verification
 const TEST_SOURCE = `
@@ -83,7 +137,7 @@ async function init(): Promise<void> {
 
   // Load WASM
   status.textContent = 'Loading WASM...';
-  let engine;
+  let engine: PcbEngine;
   try {
     engine = await loadWasm();
   } catch (err) {
@@ -181,6 +235,59 @@ async function init(): Promise<void> {
     requestAnimationFrame(frame);
   }
   frame();
+
+  // Hot reload handler - preserves viewport and selection
+  function reload(content: string, _file: string): void {
+    // Save current state
+    const savedViewport = { ...viewport };
+    const savedSelection = selectedRefdes;
+
+    // Parse new content
+    const errors = engine.load_source(content);
+    if (errors) {
+      console.warn('[HotReload] Parse warnings:', errors);
+    }
+
+    snapshot = engine.get_snapshot();
+    console.log('[HotReload] Reloaded snapshot:', snapshot);
+
+    // Restore viewport (preserved exactly)
+    viewport = savedViewport;
+    interactionState.viewport = savedViewport;
+
+    // Restore selection if component still exists
+    if (savedSelection && snapshot.components.some(c => c.refdes === savedSelection)) {
+      selectedRefdes = savedSelection;
+    } else {
+      selectedRefdes = null;
+    }
+
+    // Show "Reloaded" status briefly
+    const errorCount = errors ? errors.split('\n').filter(Boolean).length : 0;
+    status.textContent = errorCount > 0 ? `Reloaded (${errorCount} warnings)` : 'Reloaded';
+
+    // After 1.5s, show normal status
+    setTimeout(() => {
+      if (selectedRefdes && snapshot) {
+        const comp = snapshot.components.find(c => c.refdes === selectedRefdes);
+        if (comp) {
+          status.textContent = `Selected: ${comp.refdes} (${comp.value})`;
+        }
+      } else {
+        status.textContent = usingWasm ? 'Ready (WASM)' : 'Ready (Mock)';
+      }
+    }, 1500);
+
+    // Trigger re-render
+    dirty = true;
+  }
+
+  // Connect WebSocket for hot reload (fails gracefully if server not running)
+  try {
+    connectWebSocket(reload);
+  } catch (err) {
+    console.log('[HotReload] WebSocket not available, hot reload disabled');
+  }
 }
 
 // Start the application
