@@ -2,23 +2,23 @@
 
 ## Current Status
 
-**Phase:** 2 of 6 (Rendering) - COMPLETE (Gap Closure Done)
-**Plan:** 8 of 8 complete (including gap closure plan)
-**Last Activity:** 2026-01-21 - Completed 02-08-PLAN.md (WASM Build Fix)
+**Phase:** 2 of 6 (Rendering) - COMPLETE (All Gaps Closed)
+**Plan:** 9 of 9 complete (including gap closure plans)
+**Last Activity:** 2026-01-21 - Completed 02-09-PLAN.md (WASM Integration)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-01-21)
 
 **Core value:** The source file is the design - git-friendly, AI-editable, deterministic
-**Current focus:** Phase 2 Rendering fully complete with WASM builds working - Ready for Phase 3 Validation
+**Current focus:** Phase 2 Rendering fully complete with real WASM integration - Ready for Phase 3 Validation
 
 ## Phase Progress
 
 | Phase | Status | Progress |
 |-------|--------|----------|
 | 1. Foundation | Complete | 100% (9/9 plans) |
-| 2. Rendering | Complete | 100% (8/8 plans) |
+| 2. Rendering | Complete | 100% (9/9 plans) |
 | 3. Validation | Not started | 0% |
 | 4. Export | Not started | 0% |
 | 5. Intelligence | Not started | 0% |
@@ -38,6 +38,7 @@ Progress: ██████████████░░░░░░ 70%
 | 02-06 | Hot Reload | Complete |
 | 02-07 | Visual Verification | Verified |
 | 02-08 | WASM Build Fix | Complete |
+| 02-09 | WASM Integration | Complete |
 
 ## Next Action
 
@@ -76,8 +77,18 @@ Begin Phase 3 (Validation) - Design rule checking and error display.
 | 2026-01-21 | tree-sitter feature flag | Conditional compilation for WASM compatibility |
 | 2026-01-21 | Split impl blocks for WASM | Separate WASM-exposed from internal methods |
 | 2026-01-21 | JS parsing for WASM mode | tree-sitter requires C, so JS handles parsing in WASM |
+| 2026-01-21 | WasmPcbEngineAdapter | Adapter bridges JS parsing to WASM load_snapshot() |
 
 ## Session History
+
+### 2026-01-21: Complete 02-09 WASM Integration
+- Created WasmPcbEngineAdapter to bridge JS parsing to WASM engine
+- Raw WASM has load_snapshot(), adapter provides load_source()
+- Extracted parseSource() as shared function for Mock and Adapter
+- Fixed query_point to use JS-based hit testing (WASM spatial index not populated)
+- Added test-wasm-integration.mjs for full integration verification
+- Gap #2 from VERIFICATION.md now closed
+- Phase 2 Rendering fully complete with real WASM integration
 
 ### 2026-01-21: Complete 02-08 WASM Build Fix
 - Added tree-sitter-parser feature to cypcb-parser for conditional compilation
@@ -284,6 +295,7 @@ Begin Phase 3 (Validation) - Design rule checking and error display.
 | viewer/src/interaction.ts | Mouse interaction handlers |
 | viewer/build-wasm.sh | WASM build script (working) |
 | viewer/test-wasm.mjs | WASM smoke test for Node.js |
+| viewer/test-wasm-integration.mjs | WASM integration test (parse+load+query) |
 | crates/cypcb-watcher/Cargo.toml | File watcher crate config |
 | crates/cypcb-watcher/src/lib.rs | Debounced file watching |
 | viewer/server.ts | Dev server with WebSocket |
@@ -291,7 +303,7 @@ Begin Phase 3 (Validation) - Design rule checking and error display.
 ## Session Continuity
 
 **Last session:** 2026-01-21
-**Stopped at:** Completed 02-08-PLAN.md (WASM build now working)
+**Stopped at:** Completed 02-09-PLAN.md (WASM integration complete)
 **Resume file:** None
 
 ---
