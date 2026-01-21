@@ -48,11 +48,12 @@ use miette::{Diagnostic, LabeledSpan, SourceCode, SourceSpan};
 use cypcb_core::{Nm, Point, Rect};
 use cypcb_parser::ast::{
     BoardDef, ComponentDef, Definition, NetDef, PinId as AstPinId, SourceFile, Span,
+    ZoneDef, ZoneKind as AstZoneKind,
 };
 
 use crate::components::{
     ComponentKind, FootprintRef, NetConnections, PinConnection, Position, RefDes, Rotation,
-    SourceSpan as EcsSourceSpan, Value,
+    SourceSpan as EcsSourceSpan, Value, Zone, ZoneKind as EcsZoneKind,
 };
 use crate::footprint::FootprintLibrary;
 use crate::world::BoardWorld;
@@ -275,6 +276,13 @@ pub fn sync_ast_to_world(
             Definition::Net(net) => {
                 sync_net(net, source, world, &component_entities, &mut result);
             }
+            Definition::Zone(zone) => {
+                sync_zone(zone, world, &mut result);
+            }
+            Definition::Footprint(_) => {
+                // Footprint definitions are handled by the footprint library
+                // They don't need to be synced to entities
+            }
         }
     }
 
@@ -434,6 +442,49 @@ fn sync_net(
             });
         }
     }
+}
+
+/// Synchronize a zone definition to the world.
+fn sync_zone(zone_def: &ZoneDef, world: &mut BoardWorld, _result: &mut SyncResult) {
+    // Convert bounds to Rect
+    let min = Point::new(zone_def.bounds.0.to_nm(), zone_def.bounds.1.to_nm());
+    let max = Point::new(zone_def.bounds.2.to_nm(), zone_def.bounds.3.to_nm());
+    let bounds = Rect::new(min, max);
+
+    // Convert zone kind
+    let kind = match zone_def.kind {
+        AstZoneKind::Keepout => EcsZoneKind::Keepout,
+        AstZoneKind::CopperPour => EcsZoneKind::CopperPour,
+    };
+
+    // Parse layer to layer mask
+    let layer_mask = match zone_def.layer.as_deref() {
+        Some("top") => 0b01,      // Layer 0 (top copper)
+        Some("bottom") => 0b10,   // Layer 1 (bottom copper)
+        Some("all") | None => 0xFFFFFFFF, // All layers
+        Some(_) => 0xFFFFFFFF,    // Unknown layer defaults to all
+    };
+
+    // Create zone component
+    let zone = Zone {
+        bounds,
+        kind,
+        layer_mask,
+        name: zone_def.name.as_ref().map(|n| n.value.clone()),
+    };
+
+    // If copper pour, we would also store the net reference
+    // For now, we store it in the name if present
+    if zone_def.kind == AstZoneKind::CopperPour {
+        if let Some(net) = &zone_def.net {
+            // Could intern the net and store it, but for now just note it
+            // In the future this would be used for DRC checks
+            let _ = net;
+        }
+    }
+
+    // Spawn zone entity
+    world.ecs_mut().spawn(zone);
 }
 
 /// Convert AST Span to miette SourceSpan.
@@ -798,5 +849,98 @@ component R1 resistor "0402" { at 10mm, 10mm }
         let span = world.get::<EcsSourceSpan>(r1).expect("should have source span");
         assert!(span.start_byte > 0); // Not at start of file
         assert!(span.end_byte > span.start_byte);
+    }
+
+    #[test]
+    fn test_sync_keepout_zone() {
+        let source = r#"
+version 1
+board test { size 50mm x 30mm }
+keepout antenna_area {
+    bounds 10mm, 10mm to 20mm, 20mm
+    layer top
+}
+"#;
+        let parse_result = parse(source);
+        assert!(parse_result.is_ok(), "parse errors: {:?}", parse_result.errors);
+
+        let mut world = BoardWorld::new();
+        let lib = FootprintLibrary::new();
+
+        let result = sync_ast_to_world(&parse_result.value, source, &mut world, &lib);
+        assert!(result.is_ok(), "sync errors: {:?}", result.errors);
+
+        // Query for zone entities
+        let mut found_zone = false;
+        let mut query = world.ecs_mut().query::<&Zone>();
+        for zone in query.iter(world.ecs()) {
+            found_zone = true;
+            assert!(zone.is_keepout());
+            assert_eq!(zone.name.as_deref(), Some("antenna_area"));
+            assert_eq!(zone.layer_mask, 0b01); // Top layer only
+            assert_eq!(zone.bounds.min.x, Nm::from_mm(10.0));
+            assert_eq!(zone.bounds.min.y, Nm::from_mm(10.0));
+            assert_eq!(zone.bounds.max.x, Nm::from_mm(20.0));
+            assert_eq!(zone.bounds.max.y, Nm::from_mm(20.0));
+        }
+        assert!(found_zone, "zone entity should be created");
+    }
+
+    #[test]
+    fn test_sync_copper_pour_zone() {
+        let source = r#"
+version 1
+board test { size 50mm x 30mm }
+zone gnd_pour {
+    bounds 0mm, 0mm to 50mm, 30mm
+    layer bottom
+    net GND
+}
+"#;
+        let parse_result = parse(source);
+        assert!(parse_result.is_ok(), "parse errors: {:?}", parse_result.errors);
+
+        let mut world = BoardWorld::new();
+        let lib = FootprintLibrary::new();
+
+        let result = sync_ast_to_world(&parse_result.value, source, &mut world, &lib);
+        assert!(result.is_ok(), "sync errors: {:?}", result.errors);
+
+        // Query for zone entities
+        let mut found_zone = false;
+        let mut query = world.ecs_mut().query::<&Zone>();
+        for zone in query.iter(world.ecs()) {
+            found_zone = true;
+            assert!(zone.is_copper_pour());
+            assert_eq!(zone.name.as_deref(), Some("gnd_pour"));
+            assert_eq!(zone.layer_mask, 0b10); // Bottom layer only
+        }
+        assert!(found_zone, "zone entity should be created");
+    }
+
+    #[test]
+    fn test_sync_zone_all_layers() {
+        let source = r#"
+version 1
+board test { size 50mm x 30mm }
+keepout restricted {
+    bounds 5mm, 5mm to 15mm, 15mm
+    layer all
+}
+"#;
+        let parse_result = parse(source);
+        assert!(parse_result.is_ok(), "parse errors: {:?}", parse_result.errors);
+
+        let mut world = BoardWorld::new();
+        let lib = FootprintLibrary::new();
+
+        let result = sync_ast_to_world(&parse_result.value, source, &mut world, &lib);
+        assert!(result.is_ok(), "sync errors: {:?}", result.errors);
+
+        // Query for zone entities
+        let mut query = world.ecs_mut().query::<&Zone>();
+        for zone in query.iter(world.ecs()) {
+            assert_eq!(zone.layer_mask, 0xFFFFFFFF); // All layers
+        }
     }
 }
