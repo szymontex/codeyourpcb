@@ -118,9 +118,10 @@ impl Default for DrcResult {
 /// println!("DRC completed in {}ms", result.duration_ms);
 /// ```
 pub fn run_drc(world: &mut BoardWorld, rules: &DesignRules) -> DrcResult {
-    use std::time::Instant;
+    // Timing - skip in WASM (Instant may not work reliably)
+    #[cfg(not(target_arch = "wasm32"))]
+    let start = std::time::Instant::now();
 
-    let start = Instant::now();
     let mut violations = Vec::new();
 
     // Create all rule checkers
@@ -137,9 +138,14 @@ pub fn run_drc(world: &mut BoardWorld, rules: &DesignRules) -> DrcResult {
         violations.extend(checker.check(world, rules));
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
+    let duration_ms = start.elapsed().as_millis() as u64;
+    #[cfg(target_arch = "wasm32")]
+    let duration_ms = 0; // Skip timing in WASM
+
     DrcResult {
         violations,
-        duration_ms: start.elapsed().as_millis() as u64,
+        duration_ms,
     }
 }
 
