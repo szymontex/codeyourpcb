@@ -883,4 +883,157 @@ board test {
             assert_eq!(size.height.unit, Unit::Mm);
         }
     }
+
+    #[test]
+    fn test_all_units() {
+        let source = r#"
+board test {
+    size 100mm x 50mm
+}
+component R1 resistor "0402" {
+    at 50mil, 25mil
+}
+"#;
+        let result = parse(source);
+        assert!(result.is_ok(), "errors: {:?}", result.errors);
+
+        if let Definition::Board(board) = &result.value.definitions[0] {
+            let size = board.size.as_ref().unwrap();
+            assert_eq!(size.width.unit, Unit::Mm);
+        }
+
+        if let Definition::Component(comp) = &result.value.definitions[1] {
+            let pos = comp.position.as_ref().unwrap();
+            assert_eq!(pos.x.unit, Unit::Mil);
+            assert_eq!(pos.y.unit, Unit::Mil);
+        }
+    }
+
+    #[test]
+    fn test_all_component_types() {
+        let types = [
+            "resistor", "capacitor", "inductor", "ic", "led",
+            "connector", "diode", "transistor", "crystal", "generic"
+        ];
+
+        for comp_type in types {
+            let source = format!(
+                r#"component X1 {} "fp" {{ at 0mm, 0mm }}"#,
+                comp_type
+            );
+            let result = parse(&source);
+            assert!(
+                result.is_ok(),
+                "failed to parse component type '{}': {:?}",
+                comp_type,
+                result.errors
+            );
+        }
+    }
+
+    #[test]
+    fn test_pin_ref_numeric_and_named() {
+        let source = r#"
+net TEST {
+    U1.1
+    U1.VCC
+    U1.123
+    U1.PIN_A
+}
+"#;
+        let result = parse(source);
+        assert!(result.is_ok(), "errors: {:?}", result.errors);
+
+        if let Definition::Net(net) = &result.value.definitions[0] {
+            assert_eq!(net.connections.len(), 4);
+
+            // Pin 1 (numeric)
+            assert!(matches!(net.connections[0].pin, PinId::Number(1)));
+
+            // VCC (named)
+            if let PinId::Name(name) = &net.connections[1].pin {
+                assert_eq!(name, "VCC");
+            } else {
+                panic!("expected named pin VCC");
+            }
+
+            // 123 (numeric)
+            assert!(matches!(net.connections[2].pin, PinId::Number(123)));
+
+            // PIN_A (named)
+            if let PinId::Name(name) = &net.connections[3].pin {
+                assert_eq!(name, "PIN_A");
+            } else {
+                panic!("expected named pin PIN_A");
+            }
+        }
+    }
+
+    #[test]
+    fn test_version_only() {
+        let source = "version 1";
+        let result = parse(source);
+        assert!(result.is_ok());
+        assert_eq!(result.value.version, Some(1));
+        assert!(result.value.definitions.is_empty());
+    }
+
+    #[test]
+    fn test_no_version() {
+        let source = r#"
+board test {
+    size 10mm x 10mm
+}
+"#;
+        let result = parse(source);
+        assert!(result.is_ok());
+        assert_eq!(result.value.version, None);
+        assert_eq!(result.value.definitions.len(), 1);
+    }
+
+    #[test]
+    fn test_decimal_dimensions() {
+        let source = r#"
+board test {
+    size 25.4mm x 12.7mm
+}
+component R1 resistor "0402" {
+    at 1.5mm, 0.75mm
+    rotate 45.5
+}
+"#;
+        let result = parse(source);
+        assert!(result.is_ok(), "errors: {:?}", result.errors);
+
+        if let Definition::Board(board) = &result.value.definitions[0] {
+            let size = board.size.as_ref().unwrap();
+            assert!((size.width.value - 25.4).abs() < 0.001);
+            assert!((size.height.value - 12.7).abs() < 0.001);
+        }
+
+        if let Definition::Component(comp) = &result.value.definitions[1] {
+            let pos = comp.position.as_ref().unwrap();
+            assert!((pos.x.value - 1.5).abs() < 0.001);
+            assert!((pos.y.value - 0.75).abs() < 0.001);
+
+            let rot = comp.rotation.as_ref().unwrap();
+            assert!((rot.angle - 45.5).abs() < 0.001);
+        }
+    }
+
+    #[test]
+    fn test_comments_preserved() {
+        let source = r#"
+// This is a comment
+version 1
+
+/* Block comment */
+board test {
+    size 10mm x 10mm // inline comment
+}
+"#;
+        let result = parse(source);
+        assert!(result.is_ok(), "errors: {:?}", result.errors);
+        assert_eq!(result.value.version, Some(1));
+    }
 }
