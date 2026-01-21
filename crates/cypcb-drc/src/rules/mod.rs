@@ -3,11 +3,16 @@
 //! This module defines the [`DrcRule`] trait that all rules implement.
 //! Design rules configuration is defined in the [`presets`](crate::presets) module.
 
+pub mod clearance;
+pub mod drill_size;
+
 use cypcb_world::BoardWorld;
-use cypcb_world::components::{Position, RefDes, Zone};
 
 use crate::presets::DesignRules;
 use crate::violation::DrcViolation;
+
+pub use clearance::ClearanceRule;
+pub use drill_size::MinDrillSizeRule;
 
 /// A single DRC rule that can be executed against a board.
 ///
@@ -49,38 +54,6 @@ pub trait DrcRule: Send + Sync {
     /// Note: Takes `&mut BoardWorld` because bevy_ecs queries need to
     /// initialize their cache. No actual board data is modified.
     fn check(&self, world: &mut BoardWorld, rules: &DesignRules) -> Vec<DrcViolation>;
-}
-
-/// Placeholder rule for clearance checking.
-///
-/// Will be fully implemented in a later plan.
-pub struct ClearanceRule;
-
-impl DrcRule for ClearanceRule {
-    fn name(&self) -> &'static str {
-        "clearance"
-    }
-
-    fn check(&self, _world: &mut BoardWorld, _rules: &DesignRules) -> Vec<DrcViolation> {
-        // TODO: Implement clearance checking using spatial index
-        Vec::new()
-    }
-}
-
-/// Placeholder rule for minimum drill size checking.
-///
-/// Will be fully implemented in a later plan.
-pub struct MinDrillSizeRule;
-
-impl DrcRule for MinDrillSizeRule {
-    fn name(&self) -> &'static str {
-        "drill-size"
-    }
-
-    fn check(&self, _world: &mut BoardWorld, _rules: &DesignRules) -> Vec<DrcViolation> {
-        // TODO: Implement drill size checking
-        Vec::new()
-    }
 }
 
 /// Placeholder rule for unconnected pin detection.
@@ -165,7 +138,7 @@ impl DrcRule for KeepoutRule {
 mod tests {
     use super::*;
     use cypcb_core::{Point, Rect};
-    use cypcb_world::components::{FootprintRef, NetConnections, Rotation, Value};
+    use cypcb_world::components::{FootprintRef, NetConnections, Position, RefDes, Rotation, Value, Zone};
     use cypcb_world::components::zone::ZoneKind;
     use crate::ViolationKind;
 
@@ -178,7 +151,7 @@ mod tests {
     #[test]
     fn test_rule_names() {
         assert_eq!(ClearanceRule.name(), "clearance");
-        assert_eq!(MinDrillSizeRule.name(), "drill-size");
+        assert_eq!(MinDrillSizeRule.name(), "min-drill-size");
         assert_eq!(UnconnectedPinRule.name(), "unconnected-pin");
         assert_eq!(KeepoutRule.name(), "keepout");
     }
@@ -206,7 +179,7 @@ mod tests {
         ];
         assert_eq!(rules.len(), 4);
         assert_eq!(rules[0].name(), "clearance");
-        assert_eq!(rules[1].name(), "drill-size");
+        assert_eq!(rules[1].name(), "min-drill-size");
         assert_eq!(rules[2].name(), "unconnected-pin");
         assert_eq!(rules[3].name(), "keepout");
     }
