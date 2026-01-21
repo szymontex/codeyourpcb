@@ -2,29 +2,29 @@
 
 ## Current Status
 
-**Phase:** 2 of 6 (Rendering) - IN PROGRESS
-**Plan:** 4 of 5 complete
-**Last Activity:** 2026-01-21 - Completed 02-03-PLAN.md
+**Phase:** 2 of 6 (Rendering) - COMPLETE
+**Plan:** 5 of 5 complete
+**Last Activity:** 2026-01-21 - Completed 02-05-PLAN.md
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-01-21)
 
 **Core value:** The source file is the design - git-friendly, AI-editable, deterministic
-**Current focus:** Phase 2 Rendering - WASM integration complete (with mock), layer visibility UI next
+**Current focus:** Phase 2 Rendering COMPLETE - Ready for Phase 3 Validation
 
 ## Phase Progress
 
 | Phase | Status | Progress |
 |-------|--------|----------|
 | 1. Foundation | Complete | 100% (9/9 plans) |
-| 2. Rendering | In progress | 80% (4/5 plans) |
+| 2. Rendering | Complete | 100% (5/5 plans) |
 | 3. Validation | Not started | 0% |
 | 4. Export | Not started | 0% |
 | 5. Intelligence | Not started | 0% |
 | 6. Desktop | Not started | 0% |
 
-Progress: █████████████░░░░░░░ 65%
+Progress: ██████████████░░░░░░ 70%
 
 ## Phase 2 Plan Status
 
@@ -34,11 +34,11 @@ Progress: █████████████░░░░░░░ 65%
 | 02-02 | Frontend Scaffolding | Complete |
 | 02-03 | WASM Binding | Complete |
 | 02-04 | Canvas 2D Rendering | Complete |
-| 02-05 | Layer Visibility | Not started |
+| 02-05 | Layer Visibility | Complete |
 
 ## Next Action
 
-Continue with 02-05 (Layer visibility UI) - connect layer checkboxes to rendering state.
+Begin Phase 3 (Validation) - Design rule checking and error display.
 
 ## Key Decisions Log
 
@@ -65,8 +65,20 @@ Continue with 02-05 (Layer visibility UI) - connect layer checkboxes to renderin
 | 2026-01-21 | Immutable state | All viewport/layer/render state updates return new objects |
 | 2026-01-21 | Mock fallback for WASM | MockPcbEngine in TypeScript when WASM unavailable |
 | 2026-01-21 | bevy_ecs no multi_threaded | Disabled for WASM compatibility |
+| 2026-01-21 | Middle-click pan | Standard CAD convention for panning |
+| 2026-01-21 | Zoom factors 1.15x/0.87x | Smooth zoom feel per wheel event |
 
 ## Session History
+
+### 2026-01-21: Execute 02-05 Layer Visibility Integration
+- Created interaction.ts (114 lines) with mouse handlers
+- Implemented zoom-at-cursor, middle-click pan, left-click select
+- Integrated main.ts with all rendering modules
+- Connected layer checkboxes to rendering state
+- Added coordinate display in mm on mouse move
+- Status bar shows selected component
+- Added DIP-8 through-hole footprint to mock engine
+- Request animation frame render loop with dirty flag
 
 ### 2026-01-21: Execute 02-03 WASM Integration
 - Created viewer/build-wasm.sh for wasm-pack builds
@@ -232,12 +244,13 @@ Continue with 02-05 (Layer visibility UI) - connect layer checkboxes to renderin
 | viewer/src/viewport.ts | Viewport state and coordinate transforms |
 | viewer/src/layers.ts | Layer colors and visibility |
 | viewer/src/renderer.ts | Canvas 2D rendering functions |
+| viewer/src/interaction.ts | Mouse interaction handlers |
 | viewer/build-wasm.sh | WASM build script |
 
 ## Session Continuity
 
 **Last session:** 2026-01-21
-**Stopped at:** Completed 02-03-PLAN.md
+**Stopped at:** Completed 02-05-PLAN.md (Phase 2 complete)
 **Resume file:** None
 
 ---
