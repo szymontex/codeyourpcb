@@ -9,3 +9,5 @@ description = "ECS-based board model for CodeYourPCB"
 cypcb-core = { workspace = true }
 bevy_ecs = { workspace = true }
 rstar = { workspace = true }
+serde = { workspace = true }
+miette = { workspace = true }
