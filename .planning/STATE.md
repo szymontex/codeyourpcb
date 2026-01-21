@@ -3,8 +3,8 @@
 ## Current Status
 
 **Phase:** 3 of 6 (Validation) - In Progress
-**Plan:** 6 of 10 complete
-**Last Activity:** 2026-01-21 - Completed 03-05-PLAN.md (Clearance Checking Rule)
+**Plan:** 7 of 10 complete
+**Last Activity:** 2026-01-21 - Completed 03-06-PLAN.md (Drill Size, Trace Width, Connectivity Rules)
 
 ## Project Reference
 
@@ -19,12 +19,12 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 |-------|--------|----------|
 | 1. Foundation | Complete | 100% (9/9 plans) |
 | 2. Rendering | Complete | 100% (9/9 plans) |
-| 3. Validation | In Progress | 60% (6/10 plans) |
+| 3. Validation | In Progress | 70% (7/10 plans) |
 | 4. Export | Not started | 0% |
 | 5. Intelligence | Not started | 0% |
 | 6. Desktop | Not started | 0% |
 
-Progress: █████████████████░░░ 79%
+Progress: █████████████████░░░ 81%
 
 ## Phase 3 Plan Status
 
@@ -35,7 +35,7 @@ Progress: █████████████████░░░ 79%
 | 03-03 | Manufacturer Presets | Complete |
 | 03-04 | Custom Footprint DSL | Complete |
 | 03-05 | Clearance Checking Rule | Complete |
-| 03-06 | TBD | Not started |
+| 03-06 | Drill Size, Trace Width, Connectivity Rules | Complete |
 | 03-07 | TBD | Not started |
 | 03-08 | TBD | Not started |
 | 03-09 | TBD | Not started |
@@ -43,7 +43,7 @@ Progress: █████████████████░░░ 79%
 
 ## Next Action
 
-Continue Phase 3 (Validation) - Execute 03-05-PLAN.md through 03-09-PLAN.md
+Continue Phase 3 (Validation) - Execute 03-07-PLAN.md through 03-09-PLAN.md
 
 ## Key Decisions Log
 
@@ -95,8 +95,23 @@ Continue Phase 3 (Validation) - Execute 03-05-PLAN.md through 03-09-PLAN.md
 | 2026-01-21 | Two-phase spatial clearance checking | AABB query then exact distance for O(log n) |
 | 2026-01-21 | Canonical pair ordering for DRC | Prevents duplicate A-B/B-A violation reports |
 | 2026-01-21 | i128 for distance calculation | Nanometer squared values can overflow i64 |
+| 2026-01-21 | FootprintLibrary for DRC pad lookup | Rules query footprint defs for pad/pin info |
+| 2026-01-21 | MinTraceWidthRule deferred | Placeholder until Phase 5 adds Trace entities |
 
 ## Session History
+
+### 2026-01-21: Complete 03-06 Drill Size, Trace Width, Connectivity Rules
+- Created drill_size.rs with MinDrillSizeRule implementation
+- Checks THT pads via FootprintLibrary lookup against min_drill_size
+- SMD pads (no drill) automatically exempt from drill checking
+- Created connectivity.rs with UnconnectedPinRule implementation
+- Checks all footprint pins have NetConnections via pin_net()
+- Reports unconnected pins as refdes.pin format (R1.2)
+- Created trace_width.rs as documented placeholder (DRC-02)
+- Defers implementation to Phase 5 when Trace entities exist
+- Updated run_drc() to include all 5 rules
+- Added with_pad_info() to violation.rs for detailed messages
+- 17 new tests, 70 total cypcb-drc tests passing
 
 ### 2026-01-21: Complete 03-05 Clearance Checking Rule
 - Created clearance.rs with full ClearanceRule implementation
@@ -370,6 +385,9 @@ Continue Phase 3 (Validation) - Execute 03-05-PLAN.md through 03-09-PLAN.md
 | crates/cypcb-drc/src/presets/jlcpcb.rs | JLCPCB 2-layer/4-layer presets |
 | crates/cypcb-drc/src/presets/pcbway.rs | PCBWay and Prototype presets |
 | crates/cypcb-drc/src/rules/clearance.rs | ClearanceRule implementation |
+| crates/cypcb-drc/src/rules/drill_size.rs | MinDrillSizeRule implementation |
+| crates/cypcb-drc/src/rules/connectivity.rs | UnconnectedPinRule implementation |
+| crates/cypcb-drc/src/rules/trace_width.rs | MinTraceWidthRule placeholder |
 | examples/blink.cypcb | Example LED circuit |
 | examples/invalid.cypcb | Invalid syntax example |
 | examples/unknown_keyword.cypcb | Unknown keyword example |
@@ -395,7 +413,7 @@ Continue Phase 3 (Validation) - Execute 03-05-PLAN.md through 03-09-PLAN.md
 ## Session Continuity
 
 **Last session:** 2026-01-21
-**Stopped at:** Completed 03-05-PLAN.md (Clearance Checking Rule)
+**Stopped at:** Completed 03-06-PLAN.md (Drill Size, Trace Width, Connectivity Rules)
 **Resume file:** None
 
 ---
