@@ -2,47 +2,43 @@
 
 ## Current Status
 
-**Phase:** 1 of 6 (Foundation) - COMPLETE
-**Plan:** 9 of 9 complete
-**Last Activity:** 2026-01-21 - Completed 01-09-cli-PLAN.md
+**Phase:** 2 of 6 (Rendering) - IN PROGRESS
+**Plan:** 2 of 5 complete
+**Last Activity:** 2026-01-21 - Completed 02-02-PLAN.md
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-01-21)
 
 **Core value:** The source file is the design - git-friendly, AI-editable, deterministic
-**Current focus:** Phase 1 Complete - Ready for Phase 2 (Rendering)
+**Current focus:** Phase 2 Rendering - Frontend scaffolding complete, WASM crate next
 
 ## Phase Progress
 
 | Phase | Status | Progress |
 |-------|--------|----------|
 | 1. Foundation | Complete | 100% (9/9 plans) |
-| 2. Rendering | Not started | 0% |
+| 2. Rendering | In progress | 40% (2/5 plans) |
 | 3. Validation | Not started | 0% |
 | 4. Export | Not started | 0% |
 | 5. Intelligence | Not started | 0% |
 | 6. Desktop | Not started | 0% |
 
-Progress: ██████████ 100%
+Progress: ███████████░░░░░░░░░ 55%
 
-## Phase 1 Plan Status
+## Phase 2 Plan Status
 
 | Plan | Name | Status |
 |------|------|--------|
-| 01-01 | Project Setup | Complete |
-| 01-02 | Core Types | Complete |
-| 01-03 | Grammar | Complete |
-| 01-04 | ECS Components | Complete |
-| 01-05 | AST Parser | Complete |
-| 01-06 | Board World | Complete |
-| 01-07 | Footprints | Complete |
-| 01-08 | AST Sync | Complete |
-| 01-09 | CLI | Complete |
+| 02-01 | WASM Crate Setup | In progress |
+| 02-02 | Frontend Scaffolding | Complete |
+| 02-03 | WASM Binding | Not started |
+| 02-04 | Canvas 2D Rendering | Not started |
+| 02-05 | Layer Visibility | Not started |
 
 ## Next Action
 
-Phase 1 (Foundation) is complete. Ready to begin Phase 2 (Rendering).
+Continue with 02-01 (WASM crate setup) or 02-03 (WASM binding integration).
 
 ## Key Decisions Log
 
@@ -61,8 +57,17 @@ Phase 1 (Foundation) is complete. Ready to begin Phase 2 (Rendering).
 | 2026-01-21 | Error recovery parsing | ParseResult returns partial AST + errors |
 | 2026-01-21 | Sync error recovery | Continue sync on semantic errors, collect all |
 | 2026-01-21 | CLI without world dep | Workaround cargo resolver issue; parse-only validation |
+| 2026-01-21 | Vanilla TypeScript | No UI framework for minimal verification viewer |
+| 2026-01-21 | Vite build tool | Fast dev server with native WASM support |
 
 ## Session History
+
+### 2026-01-21: Execute 02-02 Frontend Scaffolding
+- Created Vite + TypeScript project structure in viewer/
+- Added HTML shell with canvas and layer toggle toolbar
+- Created TypeScript types matching Rust BoardSnapshot
+- Added WASM loading utilities (placeholder for integration)
+- Dev server runs, TypeScript compiles without errors
 
 ### 2026-01-21: Execute 01-09 CLI
 - Set up CLI structure with clap (parse, check commands)
@@ -180,11 +185,19 @@ Phase 1 (Foundation) is complete. Ready to begin Phase 2 (Rendering).
 | examples/blink.cypcb | Example LED circuit |
 | examples/invalid.cypcb | Invalid syntax example |
 | examples/unknown_keyword.cypcb | Unknown keyword example |
+| viewer/package.json | Frontend npm package |
+| viewer/tsconfig.json | TypeScript config |
+| viewer/vite.config.ts | Vite build config |
+| viewer/.gitignore | Frontend ignores |
+| viewer/index.html | HTML shell with canvas |
+| viewer/src/main.ts | Application entry point |
+| viewer/src/wasm.ts | WASM loading utilities |
+| viewer/src/types.ts | TypeScript types for BoardSnapshot |
 
 ## Session Continuity
 
-**Last session:** 2026-01-21 15:30 UTC
-**Stopped at:** Completed 01-09-cli-PLAN.md - Phase 1 Complete
+**Last session:** 2026-01-21
+**Stopped at:** Completed 02-02-PLAN.md
 **Resume file:** None
 
 ---
