@@ -239,6 +239,19 @@ class MockPcbEngine implements PcbEngine {
         { number: '1', x_nm: -950_000, y_nm: 0, width_nm: 1_100_000, height_nm: 1_200_000, shape: 'rect', layer_mask: 1, drill_nm: null },
         { number: '2', x_nm: 950_000, y_nm: 0, width_nm: 1_100_000, height_nm: 1_200_000, shape: 'rect', layer_mask: 1, drill_nm: null },
       ],
+      // DIP-8: 8-pin through-hole, 100mil pitch, 300mil row spacing
+      // Pins 1-4 on left side, 5-8 on right side (standard DIP numbering)
+      // layer_mask: 3 = both top (1) and bottom (2) = through-hole
+      'DIP-8': [
+        { number: '1', x_nm: -3_810_000, y_nm:  1_905_000, width_nm: 1_600_000, height_nm: 1_600_000, shape: 'circle', layer_mask: 3, drill_nm: 800_000 },
+        { number: '2', x_nm: -3_810_000, y_nm:   635_000, width_nm: 1_600_000, height_nm: 1_600_000, shape: 'circle', layer_mask: 3, drill_nm: 800_000 },
+        { number: '3', x_nm: -3_810_000, y_nm:  -635_000, width_nm: 1_600_000, height_nm: 1_600_000, shape: 'circle', layer_mask: 3, drill_nm: 800_000 },
+        { number: '4', x_nm: -3_810_000, y_nm: -1_905_000, width_nm: 1_600_000, height_nm: 1_600_000, shape: 'circle', layer_mask: 3, drill_nm: 800_000 },
+        { number: '5', x_nm:  3_810_000, y_nm: -1_905_000, width_nm: 1_600_000, height_nm: 1_600_000, shape: 'circle', layer_mask: 3, drill_nm: 800_000 },
+        { number: '6', x_nm:  3_810_000, y_nm:  -635_000, width_nm: 1_600_000, height_nm: 1_600_000, shape: 'circle', layer_mask: 3, drill_nm: 800_000 },
+        { number: '7', x_nm:  3_810_000, y_nm:   635_000, width_nm: 1_600_000, height_nm: 1_600_000, shape: 'circle', layer_mask: 3, drill_nm: 800_000 },
+        { number: '8', x_nm:  3_810_000, y_nm:  1_905_000, width_nm: 1_600_000, height_nm: 1_600_000, shape: 'circle', layer_mask: 3, drill_nm: 800_000 },
+      ],
     };
 
     return padTemplates[footprint] || padTemplates['0402'];
