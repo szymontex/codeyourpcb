@@ -11,7 +11,8 @@ repository = "https://github.com/codeyourpcb/codeyourpcb"
 [workspace.dependencies]
 # Core libraries
 tree-sitter = "0.25"
-bevy_ecs = "0.15"
+# Note: multi_threaded feature disabled for WASM compatibility
+bevy_ecs = { version = "0.15", default-features = false }
 rstar = "0.12"
 thiserror = "2.0"
 miette = { version = "7.6", features = ["fancy", "derive"] }
