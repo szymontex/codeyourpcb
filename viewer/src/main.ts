@@ -228,6 +228,9 @@ async function init(): Promise<void> {
     coordsEl.textContent = '';
   });
 
+  // Violation visibility state
+  let showViolations = true;
+
   // Render loop
   function frame(): void {
     if (dirty || interactionState.dirty) {
@@ -236,6 +239,7 @@ async function init(): Promise<void> {
         viewport,
         layers,
         selectedRefdes,
+        showViolations,
       };
       render(ctx, renderState);
       dirty = false;

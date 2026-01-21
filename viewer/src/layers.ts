@@ -13,6 +13,8 @@ export const LAYER_COLORS = {
   board_outline: '#FFFF00',    // Yellow
   background: '#FFFFFF',       // Light mode background (per user preference)
   grid: '#E0E0E0',             // Light gray grid
+  violation: '#FF0000',        // Red for DRC errors
+  violation_ring: '#FF0000',   // Ring outline for violation markers
 } as const;
 
 // Layer bit masks (match cypcb-world Layer enum)
