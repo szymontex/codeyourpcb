@@ -6,10 +6,8 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 
-# Note: cdylib will be added when building for WASM
-# For now, use rlib only to avoid cdylib-specific linking issues
 [lib]
-crate-type = ["rlib"]
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 # Workspace dependencies
@@ -21,6 +19,11 @@ cypcb-world = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 
-# WASM support (optional for now due to build issues)
-# wasm-bindgen = { workspace = true }
-# serde-wasm-bindgen = { workspace = true }
+# WASM support
+wasm-bindgen = { workspace = true }
+serde-wasm-bindgen = { workspace = true }
+
+# Fix for getrandom WASM compilation (required by bevy_ecs -> ahash and uuid)
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom_02 = { package = "getrandom", version = "0.2", features = ["js"] }
+getrandom_03 = { package = "getrandom", version = "0.3", features = ["wasm_js"] }
