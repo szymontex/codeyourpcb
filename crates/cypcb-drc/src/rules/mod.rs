@@ -4,6 +4,7 @@
 //! Design rules configuration is defined in the [`presets`](crate::presets) module.
 
 pub mod clearance;
+pub mod connectivity;
 pub mod drill_size;
 
 use cypcb_world::BoardWorld;
@@ -12,6 +13,7 @@ use crate::presets::DesignRules;
 use crate::violation::DrcViolation;
 
 pub use clearance::ClearanceRule;
+pub use connectivity::UnconnectedPinRule;
 pub use drill_size::MinDrillSizeRule;
 
 /// A single DRC rule that can be executed against a board.
@@ -54,22 +56,6 @@ pub trait DrcRule: Send + Sync {
     /// Note: Takes `&mut BoardWorld` because bevy_ecs queries need to
     /// initialize their cache. No actual board data is modified.
     fn check(&self, world: &mut BoardWorld, rules: &DesignRules) -> Vec<DrcViolation>;
-}
-
-/// Placeholder rule for unconnected pin detection.
-///
-/// Will be fully implemented in a later plan.
-pub struct UnconnectedPinRule;
-
-impl DrcRule for UnconnectedPinRule {
-    fn name(&self) -> &'static str {
-        "unconnected-pin"
-    }
-
-    fn check(&self, _world: &mut BoardWorld, _rules: &DesignRules) -> Vec<DrcViolation> {
-        // TODO: Implement unconnected pin detection
-        Vec::new()
-    }
 }
 
 /// Rule for checking components against keepout zones.
