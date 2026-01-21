@@ -47,15 +47,16 @@ use miette::{Diagnostic, LabeledSpan, SourceCode, SourceSpan};
 
 use cypcb_core::{Nm, Point, Rect};
 use cypcb_parser::ast::{
-    BoardDef, ComponentDef, Definition, NetDef, PinId as AstPinId, SourceFile, Span,
-    ZoneDef, ZoneKind as AstZoneKind,
+    BoardDef, ComponentDef, Definition, FootprintDef, NetDef, PadShape as AstPadShape,
+    PinId as AstPinId, SourceFile, Span, ZoneDef, ZoneKind as AstZoneKind,
 };
 
 use crate::components::{
-    ComponentKind, FootprintRef, NetConnections, PinConnection, Position, RefDes, Rotation,
-    SourceSpan as EcsSourceSpan, Value, Zone, ZoneKind as EcsZoneKind,
+    ComponentKind, FootprintRef, Layer, NetConnections, PadShape as EcsPadShape, PinConnection,
+    Position, RefDes, Rotation, SourceSpan as EcsSourceSpan, Value, Zone,
+    ZoneKind as EcsZoneKind,
 };
-use crate::footprint::FootprintLibrary;
+use crate::footprint::{Footprint, FootprintLibrary, PadDef as FootprintPadDef};
 use crate::world::BoardWorld;
 
 /// Semantic errors that can occur during AST to ECS synchronization.
@@ -249,6 +250,18 @@ pub fn sync_ast_to_world(
 ) -> SyncResult {
     let mut result = SyncResult::new();
 
+    // Clone the library so we can add custom footprints from the AST
+    let mut lib = footprint_lib.clone();
+
+    // Phase 0: Register custom footprints BEFORE component sync
+    // This ensures custom footprints are available when components reference them
+    for def in &ast.definitions {
+        if let Definition::Footprint(fp_def) = def {
+            let footprint = convert_footprint_def(fp_def);
+            lib.register(footprint);
+        }
+    }
+
     // Track reference designators for duplicate detection
     // Maps refdes string to (span, entity)
     let mut refdes_spans: HashMap<String, Span> = HashMap::new();
@@ -256,7 +269,7 @@ pub fn sync_ast_to_world(
     // Track component entities for net resolution
     let mut component_entities: HashMap<String, Entity> = HashMap::new();
 
-    // Process definitions in order
+    // Process definitions in order (footprints already handled above)
     for def in &ast.definitions {
         match def {
             Definition::Board(board) => {
@@ -267,7 +280,7 @@ pub fn sync_ast_to_world(
                     comp,
                     source,
                     world,
-                    footprint_lib,
+                    &lib, // Use our modified library with custom footprints
                     &mut refdes_spans,
                     &mut component_entities,
                     &mut result,
@@ -280,16 +293,14 @@ pub fn sync_ast_to_world(
                 sync_zone(zone, world, &mut result);
             }
             Definition::Footprint(_) => {
-                // Footprint definitions are handled by the footprint library
-                // They don't need to be synced to entities
+                // Already handled in Phase 0 above
             }
         }
     }
 
     // Rebuild spatial index after all entities are added
     world.rebuild_spatial_index(|name| {
-        footprint_lib
-            .get(name)
+        lib.get(name)
             .map(|fp| fp.courtyard)
             .unwrap_or_else(|| {
                 // Default 1mm x 1mm bounds for unknown footprints
@@ -506,6 +517,88 @@ fn ast_kind_to_ecs_kind(kind: cypcb_parser::ast::ComponentKind) -> ComponentKind
         cypcb_parser::ast::ComponentKind::Crystal => ComponentKind::Crystal,
         cypcb_parser::ast::ComponentKind::Generic => ComponentKind::Generic,
     }
+}
+
+/// Convert an AST FootprintDef to a library Footprint.
+fn convert_footprint_def(fp_def: &FootprintDef) -> Footprint {
+    let pads: Vec<FootprintPadDef> = fp_def
+        .pads
+        .iter()
+        .map(|p| {
+            let is_tht = p.drill.is_some();
+            FootprintPadDef {
+                number: p.number.to_string(),
+                shape: convert_pad_shape(p.shape),
+                position: Point::new(p.x.to_nm(), p.y.to_nm()),
+                size: (p.width.to_nm(), p.height.to_nm()),
+                drill: p.drill.as_ref().map(|d| d.to_nm()),
+                layers: if is_tht {
+                    // Through-hole pads span both copper layers
+                    vec![Layer::TopCopper, Layer::BottomCopper]
+                } else {
+                    // SMD pads on top copper with paste and mask
+                    vec![Layer::TopCopper, Layer::TopPaste, Layer::TopMask]
+                },
+            }
+        })
+        .collect();
+
+    // Calculate bounds from pad positions and sizes
+    let bounds = calculate_footprint_bounds(&pads);
+
+    // Courtyard: use explicit if provided, otherwise expand bounds by IPC-7351B margin
+    let courtyard = fp_def
+        .courtyard
+        .as_ref()
+        .map(|(w, h)| Rect::from_center_size(Point::ORIGIN, (w.to_nm(), h.to_nm())))
+        .unwrap_or_else(|| bounds.expand(Nm::from_mm(0.5)));
+
+    Footprint {
+        name: fp_def.name.value.clone(),
+        description: fp_def.description.clone().unwrap_or_default(),
+        pads,
+        bounds,
+        courtyard,
+    }
+}
+
+/// Convert AST PadShape to ECS PadShape.
+fn convert_pad_shape(shape: AstPadShape) -> EcsPadShape {
+    match shape {
+        AstPadShape::Rect => EcsPadShape::Rect,
+        AstPadShape::Circle => EcsPadShape::Circle,
+        AstPadShape::RoundRect => EcsPadShape::RoundRect { corner_ratio: 25 }, // Default 25%
+        AstPadShape::Oblong => EcsPadShape::Oblong,
+    }
+}
+
+/// Calculate the bounding box for a set of pads.
+fn calculate_footprint_bounds(pads: &[FootprintPadDef]) -> Rect {
+    if pads.is_empty() {
+        return Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(1.0), Nm::from_mm(1.0)));
+    }
+
+    let mut min_x = Nm(i64::MAX);
+    let mut min_y = Nm(i64::MAX);
+    let mut max_x = Nm(i64::MIN);
+    let mut max_y = Nm(i64::MIN);
+
+    for pad in pads {
+        let half_w = Nm(pad.size.0 .0 / 2);
+        let half_h = Nm(pad.size.1 .0 / 2);
+
+        let pad_min_x = Nm(pad.position.x.0 - half_w.0);
+        let pad_min_y = Nm(pad.position.y.0 - half_h.0);
+        let pad_max_x = Nm(pad.position.x.0 + half_w.0);
+        let pad_max_y = Nm(pad.position.y.0 + half_h.0);
+
+        min_x = Nm(min_x.0.min(pad_min_x.0));
+        min_y = Nm(min_y.0.min(pad_min_y.0));
+        max_x = Nm(max_x.0.max(pad_max_x.0));
+        max_y = Nm(max_y.0.max(pad_max_y.0));
+    }
+
+    Rect::new(Point::new(min_x, min_y), Point::new(max_x, max_y))
 }
 
 #[cfg(test)]
@@ -942,5 +1035,79 @@ keepout restricted {
         for zone in query.iter(world.ecs()) {
             assert_eq!(zone.layer_mask, 0xFFFFFFFF); // All layers
         }
+    }
+
+    #[test]
+    fn test_custom_footprint_registration() {
+        let source = r#"
+version 1
+
+footprint CUSTOM_2PIN {
+    description "Custom 2-pin"
+    pad 1 rect at -1mm, 0mm size 0.5mm x 0.5mm
+    pad 2 rect at 1mm, 0mm size 0.5mm x 0.5mm
+}
+
+board test { size 20mm x 20mm }
+
+component R1 resistor "CUSTOM_2PIN" {
+    at 10mm, 10mm
+}
+"#;
+        let parse_result = parse(source);
+        assert!(parse_result.is_ok(), "parse errors: {:?}", parse_result.errors);
+
+        let mut world = BoardWorld::new();
+        let lib = FootprintLibrary::new();
+
+        // CUSTOM_2PIN is not in the built-in library
+        assert!(lib.get("CUSTOM_2PIN").is_none());
+
+        // But sync should still succeed because we register custom footprints first
+        let result = sync_ast_to_world(&parse_result.value, source, &mut world, &lib);
+        assert!(result.is_ok(), "sync errors: {:?}", result.errors);
+
+        // Component should be synced
+        assert_eq!(world.component_count(), 1);
+        let r1 = world.find_by_refdes("R1").expect("R1 should exist");
+        let fp_ref = world.get::<FootprintRef>(r1).unwrap();
+        assert_eq!(fp_ref.as_str(), "CUSTOM_2PIN");
+    }
+
+    #[test]
+    fn test_custom_footprint_with_tht_pads() {
+        let source = r#"
+version 1
+
+footprint MY_DIP8 {
+    description "Custom DIP-8"
+    pad 1 circle at -3.81mm, 3.81mm size 1.8mm x 1.8mm drill 1.0mm
+    pad 2 circle at -3.81mm, 1.27mm size 1.8mm x 1.8mm drill 1.0mm
+    pad 3 circle at -3.81mm, -1.27mm size 1.8mm x 1.8mm drill 1.0mm
+    pad 4 circle at -3.81mm, -3.81mm size 1.8mm x 1.8mm drill 1.0mm
+    pad 5 circle at 3.81mm, -3.81mm size 1.8mm x 1.8mm drill 1.0mm
+    pad 6 circle at 3.81mm, -1.27mm size 1.8mm x 1.8mm drill 1.0mm
+    pad 7 circle at 3.81mm, 1.27mm size 1.8mm x 1.8mm drill 1.0mm
+    pad 8 circle at 3.81mm, 3.81mm size 1.8mm x 1.8mm drill 1.0mm
+    courtyard 10mm x 10mm
+}
+
+board test { size 30mm x 30mm }
+
+component U1 ic "MY_DIP8" {
+    at 15mm, 15mm
+}
+"#;
+        let parse_result = parse(source);
+        assert!(parse_result.is_ok(), "parse errors: {:?}", parse_result.errors);
+
+        let mut world = BoardWorld::new();
+        let lib = FootprintLibrary::new();
+
+        let result = sync_ast_to_world(&parse_result.value, source, &mut world, &lib);
+        assert!(result.is_ok(), "sync errors: {:?}", result.errors);
+
+        // Component should be synced
+        assert_eq!(world.component_count(), 1);
     }
 }
