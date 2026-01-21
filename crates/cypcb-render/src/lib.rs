@@ -24,18 +24,25 @@ use cypcb_world::{
     PinConnection, Position, RefDes, Rotation, Value,
 };
 
+// WASM-specific imports (only when targeting wasm32)
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen::prelude::*;
+
 /// PCB Engine - main interface for JavaScript.
 ///
 /// Maintains the board state and provides methods for loading source,
 /// getting snapshots, and querying the board.
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 pub struct PcbEngine {
     world: BoardWorld,
     footprint_lib: FootprintLibrary,
     source: String,
 }
 
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 impl PcbEngine {
     /// Create a new PcbEngine instance.
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen(constructor))]
     pub fn new() -> PcbEngine {
         PcbEngine {
             world: BoardWorld::new(),
@@ -77,14 +84,27 @@ impl PcbEngine {
         }
     }
 
-    /// Get a snapshot of the current board state for rendering.
-    pub fn get_snapshot(&mut self) -> BoardSnapshot {
-        self.build_snapshot()
+    /// Get a snapshot of the current board state for rendering (WASM version).
+    ///
+    /// Returns a JsValue that can be used directly in JavaScript.
+    #[cfg(target_arch = "wasm32")]
+    pub fn get_snapshot(&mut self) -> wasm_bindgen::JsValue {
+        let snapshot = self.build_snapshot();
+        serde_wasm_bindgen::to_value(&snapshot).unwrap_or(wasm_bindgen::JsValue::NULL)
+    }
+
+    /// Get a snapshot of the current board state for rendering (native version).
+    ///
+    /// Returns a JSON string for non-WASM targets.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn get_snapshot(&mut self) -> String {
+        let snapshot = self.build_snapshot();
+        serde_json::to_string(&snapshot).unwrap_or_else(|_| "{}".to_string())
     }
 
     /// Query components at a specific point.
     ///
-    /// Returns reference designator strings.
+    /// Returns reference designator strings as a JavaScript array.
     pub fn query_point(&mut self, x_nm: i64, y_nm: i64) -> Vec<String> {
         let point: Point = Point::new(Nm(x_nm), Nm(y_nm));
         let entities: Vec<Entity> = self.world.query_point(point);
@@ -102,7 +122,7 @@ impl PcbEngine {
     }
 
     /// Build a BoardSnapshot from the current world state.
-    fn build_snapshot(&mut self) -> BoardSnapshot {
+    pub fn build_snapshot(&mut self) -> BoardSnapshot {
         // Build board info
         let board: Option<BoardInfo> = match self.world.board_info() {
             Some((size, layers)) => {
