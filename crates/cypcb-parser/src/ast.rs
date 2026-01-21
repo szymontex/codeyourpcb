@@ -682,4 +682,13 @@ mod tests {
         assert_eq!(ZoneKind::from_str("zone"), Some(ZoneKind::CopperPour));
         assert_eq!(ZoneKind::from_str("unknown"), None);
     }
+
+    #[test]
+    fn test_pad_shape_parse() {
+        assert_eq!(PadShape::from_str("rect"), Some(PadShape::Rect));
+        assert_eq!(PadShape::from_str("circle"), Some(PadShape::Circle));
+        assert_eq!(PadShape::from_str("roundrect"), Some(PadShape::RoundRect));
+        assert_eq!(PadShape::from_str("oblong"), Some(PadShape::Oblong));
+        assert_eq!(PadShape::from_str("unknown"), None);
+    }
 }
