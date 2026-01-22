@@ -47,11 +47,12 @@ pub fn run_diagnostics(doc: &DocumentState) -> Vec<Diagnostic> {
         }
     }
 
-    // 2. Run DRC if we have a world
-    // Note: run_drc requires &mut but we only have &doc.world
-    // We need to defer DRC to when we have mutable access
-    // For now, DRC runs during build_world phase in document.rs
-    // TODO: Store DRC violations in DocumentState for retrieval here
+    // 2. Convert DRC violations (run during build_world)
+    for violation in &doc.drc_violations {
+        if let Some(diag) = violation_to_diagnostic(doc, violation) {
+            diagnostics.push(diag);
+        }
+    }
 
     // Cap diagnostics
     if diagnostics.len() > MAX_DIAGNOSTICS {
@@ -157,7 +158,7 @@ mod tests {
     use super::*;
 
     fn make_doc(content: &str) -> DocumentState {
-        let mut doc = DocumentState::new(content.to_string(), 1);
+        let mut doc = DocumentState::new("test://file".into(), content.to_string(), 1);
         doc.parse();
         doc.build_world();
         doc
@@ -205,5 +206,39 @@ component R1 resistor "0402" {
     fn test_diagnostic_limit() {
         assert!(MAX_DIAGNOSTICS >= 50);
         assert!(MAX_DIAGNOSTICS <= 200);
+    }
+
+    #[test]
+    fn test_drc_violation_diagnostic() {
+        // Create a document with components that have unconnected pins
+        // This will trigger DRC violations
+        let doc = make_doc(
+            r#"
+version 1
+
+board test {
+    size 30mm x 20mm
+    layers 2
+}
+
+component R1 resistor "0402" {
+    at 10mm, 8mm
+}
+"#,
+        );
+
+        let diagnostics = run_diagnostics(&doc);
+
+        // R1 has 2 pins, neither connected to any net -> 2 unconnected pin violations
+        let drc_errors: Vec<_> = diagnostics
+            .iter()
+            .filter(|d| d.source == "cypcb-drc")
+            .collect();
+
+        // Should have unconnected pin errors
+        assert!(
+            !drc_errors.is_empty(),
+            "Should have DRC errors for unconnected pins"
+        );
     }
 }
