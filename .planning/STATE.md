@@ -3,8 +3,8 @@
 ## Current Status
 
 **Phase:** 8 of 8 (File Picker) - In Progress
-**Plan:** 1 of 3 complete
-**Last Activity:** 2026-01-22 - Completed 08-01-PLAN.md (File Picker Infrastructure)
+**Plan:** 2 of 3 complete
+**Last Activity:** 2026-01-22 - Completed 08-02-PLAN.md (File Loading Integration)
 
 ## Project Reference
 
@@ -24,21 +24,21 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 | 5. Intelligence | In progress | 90% (9/10 plans) |
 | 6. Desktop | Not started | 0% |
 | 7. Navigation | Not started | 0% |
-| 8. File Picker | In progress | 33% (1/3 plans) |
+| 8. File Picker | In progress | 67% (2/3 plans) |
 
-Progress: █████████████████████████████░ 97% (37/38 plans)
+Progress: █████████████████████████████░ 97% (38/39 plans)
 
 ## Phase 8 Plan Status
 
 | Plan | Name | Status |
 |------|------|--------|
 | 08-01 | File Picker Infrastructure | Complete |
-| 08-02 | File Loading Integration | Not started |
+| 08-02 | File Loading Integration | Complete |
 | 08-03 | Multi-file Support | Not started |
 
 ## Next Action
 
-Continue Phase 8 (File Picker) - Execute 08-02-PLAN.md
+Continue Phase 8 (File Picker) - Execute 08-03-PLAN.md
 
 ## Key Decisions Log
 
@@ -116,6 +116,18 @@ Continue Phase 8 (File Picker) - Execute 08-02-PLAN.md
 | 2026-01-22 | Layer-ordered rendering | Bottom -> top -> vias -> ratsnest for proper z-order |
 
 ## Session History
+
+### 2026-01-22: Complete 08-02 File Loading Integration
+- Integrated file picker utilities with main.ts viewer
+- Added handleFileLoad() async function for .cypcb and .ses files
+- Wired Open button click to trigger file picker dialog
+- Set up drop zone on canvas container
+- Viewer starts clean with no auto-loaded test data
+- Status bar shows "Ready - Open a file" initially
+- .cypcb files load board and fit to view
+- .ses files load routes (requires board loaded first)
+- Removed embedded TEST_SOURCE/TEST_SES (use examples/ files)
+- TypeScript compiles, all integrations verified
 
 ### 2026-01-22: Complete 08-01 File Picker Infrastructure
 - Created file-picker.ts (102 lines) with three utility functions
@@ -566,7 +578,7 @@ Continue Phase 8 (File Picker) - Execute 08-02-PLAN.md
 ## Session Continuity
 
 **Last session:** 2026-01-22
-**Stopped at:** Completed 08-01-PLAN.md (File Picker Infrastructure)
+**Stopped at:** Completed 08-02-PLAN.md (File Loading Integration)
 **Resume file:** None
 
 ---
