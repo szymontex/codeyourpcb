@@ -3,8 +3,8 @@
 ## Current Status
 
 **Phase:** 5 of 6 (Intelligence) - In Progress
-**Plan:** 3 of 10 complete
-**Last Activity:** 2026-01-22 - Completed 05-01-PLAN.md (Trace & Via ECS + DSL)
+**Plan:** 4 of 10 complete
+**Last Activity:** 2026-01-22 - Completed 05-04-PLAN.md (DSN Export for FreeRouting)
 
 ## Project Reference
 
@@ -21,11 +21,11 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 | 2. Rendering | Complete | 100% (9/9 plans) |
 | 3. Validation | Complete | 100% (10/10 plans) |
 | 4. Export | Not started | 0% |
-| 5. Intelligence | In progress | 30% (3/10 plans) |
+| 5. Intelligence | In progress | 40% (4/10 plans) |
 | 6. Desktop | Not started | 0% |
 | 7. Navigation | Not started | 0% |
 
-Progress: ███████████████████████████░░░ 94% (31/33 plans)
+Progress: ████████████████████████████░░ 97% (32/33 plans)
 
 ## Phase 5 Plan Status
 
@@ -34,7 +34,7 @@ Progress: ███████████████████████�
 | 05-01 | Trace & Via ECS + DSL Extensions | Complete |
 | 05-02 | IPC-2221 Trace Width Calculator | Complete |
 | 05-03 | KiCad Footprint Import | Complete |
-| 05-04 | DRC Engine Improvements | Not started |
+| 05-04 | DSN Export for FreeRouting | Complete |
 | 05-05 | LSP Core Server | Not started |
 | 05-06 | Autorouter Integration | Not started |
 | 05-07 | Export Enhancements | Not started |
@@ -111,8 +111,21 @@ Continue Phase 5 (Intelligence) - Execute remaining plans
 | 2026-01-22 | Trace as polyline | Vec<TraceSegment> for flexible routing |
 | 2026-01-22 | Locked trace flag | Boolean flag for autorouter to respect |
 | 2026-01-22 | CurrentUnit enum | mA/A variants with type-safe conversion |
+| 2026-01-22 | Mil resolution for DSN | 0.1 mil (resolution 10) matches FreeRouting |
+| 2026-01-22 | Mutable world for export | bevy_ecs queries need &mut for cache init |
+| 2026-01-22 | Locked trace as fixed wire | (type fix) prevents FreeRouting modification |
 
 ## Session History
+
+### 2026-01-22: Complete 05-04 DSN Export for FreeRouting
+- Created cypcb-router crate for autorouting integration
+- Implemented types.rs with RoutingStatus, RouteSegment, ViaPlacement, RoutingResult
+- Implemented dsn.rs with full Specctra DSN export (712 lines)
+- Export includes: boundary, layers, components, nets, padstacks, locked traces
+- Coordinate conversion: nm to mil (1 mil = 25,400 nm)
+- Locked traces exported with (type fix) to prevent FreeRouting modification
+- Integration test suite with 13 tests covering all DSN sections
+- 29 total tests passing (16 unit + 13 integration)
 
 ### 2026-01-22: Complete 05-01 Trace & Via ECS + DSL Extensions
 - Created trace.rs with TraceSegment, Trace, Via, TraceSource types
@@ -468,6 +481,11 @@ Continue Phase 5 (Intelligence) - Execute remaining plans
 | crates/cypcb-kicad/src/footprint.rs | KiCad .kicad_mod import |
 | crates/cypcb-kicad/src/library.rs | KiCad library scanning |
 | crates/cypcb-world/src/components/trace.rs | Trace, Via, TraceSegment ECS components |
+| crates/cypcb-router/Cargo.toml | Autorouter integration crate config |
+| crates/cypcb-router/src/lib.rs | Router crate API and exports |
+| crates/cypcb-router/src/types.rs | RoutingResult, RouteSegment, ViaPlacement |
+| crates/cypcb-router/src/dsn.rs | Specctra DSN export implementation |
+| crates/cypcb-router/tests/dsn_integration.rs | DSN export integration tests |
 | examples/blink.cypcb | Example LED circuit |
 | examples/invalid.cypcb | Invalid syntax example |
 | examples/unknown_keyword.cypcb | Unknown keyword example |
@@ -493,7 +511,7 @@ Continue Phase 5 (Intelligence) - Execute remaining plans
 ## Session Continuity
 
 **Last session:** 2026-01-22
-**Stopped at:** Completed 05-01-PLAN.md (Trace & Via ECS + DSL)
+**Stopped at:** Completed 05-04-PLAN.md (DSN Export for FreeRouting)
 **Resume file:** None
 
 ---
