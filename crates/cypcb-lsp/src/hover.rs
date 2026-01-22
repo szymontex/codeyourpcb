@@ -337,7 +337,7 @@ mod tests {
     use super::*;
 
     fn make_doc(content: &str) -> DocumentState {
-        let mut doc = DocumentState::new(content.to_string(), 1);
+        let mut doc = DocumentState::new("test://file".into(), content.to_string(), 1);
         doc.parse();
         doc
     }

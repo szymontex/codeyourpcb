@@ -2,6 +2,7 @@
 //!
 //! Tracks open documents, their content, parsed ASTs, and board worlds.
 
+use cypcb_drc::DrcViolation;
 use cypcb_parser::ast::SourceFile;
 use cypcb_parser::ParseError;
 use cypcb_world::BoardWorld;
@@ -28,17 +29,22 @@ pub struct DocumentState {
     pub world: Option<BoardWorld>,
     /// Parse errors encountered.
     pub parse_errors: Vec<ParseError>,
+    /// DRC violations from the last check.
+    pub drc_violations: Vec<DrcViolation>,
 }
 
 impl DocumentState {
     /// Create a new document state.
-    pub fn new(content: String, version: i32) -> Self {
+    ///
+    /// The URI is used for debugging but not stored (we key by URI in the map).
+    pub fn new(_uri: String, content: String, version: i32) -> Self {
         DocumentState {
             content,
             version,
             ast: None,
             world: None,
             parse_errors: Vec::new(),
+            drc_violations: Vec::new(),
         }
     }
 
@@ -49,6 +55,7 @@ impl DocumentState {
         self.ast = None;
         self.world = None;
         self.parse_errors.clear();
+        self.drc_violations.clear();
     }
 
     /// Parse the document content and update AST and errors.
@@ -60,10 +67,11 @@ impl DocumentState {
         self.parse_errors = result.errors;
     }
 
-    /// Build the board world from the AST.
+    /// Build the board world from the AST and run DRC.
     ///
     /// Returns true if the world was built successfully.
     pub fn build_world(&mut self) -> bool {
+        use cypcb_drc::{run_drc, DesignRules};
         use cypcb_world::footprint::FootprintLibrary;
         use cypcb_world::sync::sync_ast_to_world;
 
@@ -72,10 +80,16 @@ impl DocumentState {
             let library = FootprintLibrary::new();
             let sync_result = sync_ast_to_world(ast, &self.content, &mut world, &library);
 
+            // Run DRC on the built world
+            let rules = DesignRules::default();
+            let drc_result = run_drc(&mut world, &rules);
+            self.drc_violations = drc_result.violations;
+
             self.world = Some(world);
             sync_result.is_ok()
         } else {
             self.world = None;
+            self.drc_violations.clear();
             false
         }
     }
@@ -142,7 +156,7 @@ mod tests {
 
     #[test]
     fn test_document_state_new() {
-        let doc = DocumentState::new("version 1".into(), 1);
+        let doc = DocumentState::new("test://file".into(), "version 1".into(), 1);
 
         assert_eq!(doc.content, "version 1");
         assert_eq!(doc.version, 1);
@@ -153,7 +167,7 @@ mod tests {
 
     #[test]
     fn test_document_update() {
-        let mut doc = DocumentState::new("version 1".into(), 1);
+        let mut doc = DocumentState::new("test://file".into(), "version 1".into(), 1);
         doc.update("version 2".into(), 2);
 
         assert_eq!(doc.content, "version 2");
@@ -162,7 +176,7 @@ mod tests {
 
     #[test]
     fn test_offset_to_position_simple() {
-        let doc = DocumentState::new("hello\nworld".into(), 1);
+        let doc = DocumentState::new("test://file".into(), "hello\nworld".into(), 1);
 
         let pos = doc.offset_to_position(0);
         assert_eq!(pos.line, 0);
@@ -183,7 +197,7 @@ mod tests {
 
     #[test]
     fn test_position_to_offset_simple() {
-        let doc = DocumentState::new("hello\nworld".into(), 1);
+        let doc = DocumentState::new("test://file".into(), "hello\nworld".into(), 1);
 
         let offset = doc.position_to_offset(&Position { line: 0, character: 0 });
         assert_eq!(offset, Some(0));

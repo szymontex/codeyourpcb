@@ -8,9 +8,10 @@ use std::sync::Arc;
 use dashmap::DashMap;
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::{
-    DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
-    DidSaveTextDocumentParams, Hover, HoverParams, HoverProviderCapability, InitializedParams,
-    InitializeParams, InitializeResult, SaveOptions, ServerCapabilities, ServerInfo,
+    DiagnosticSeverity, DidChangeTextDocumentParams, DidCloseTextDocumentParams,
+    DidOpenTextDocumentParams, DidSaveTextDocumentParams, Hover, HoverContents, HoverParams,
+    HoverProviderCapability, InitializedParams, InitializeParams, InitializeResult,
+    MarkedString, NumberOrString, Position, Range, SaveOptions, ServerCapabilities, ServerInfo,
     TextDocumentSyncCapability, TextDocumentSyncKind, TextDocumentSyncOptions,
     TextDocumentSyncSaveOptions, Uri,
 };
@@ -57,9 +58,37 @@ impl Backend {
     /// Publish diagnostics for a document.
     async fn publish_diagnostics(&self, uri: &Uri) {
         if let Some(doc) = self.documents.get(uri) {
-            let diagnostics = run_diagnostics(&doc);
+            let our_diagnostics = run_diagnostics(&doc);
+
+            // Convert our Diagnostic type to tower_lsp's Diagnostic type
+            let lsp_diagnostics: Vec<tower_lsp::lsp_types::Diagnostic> = our_diagnostics
+                .into_iter()
+                .map(|d| tower_lsp::lsp_types::Diagnostic {
+                    range: Range {
+                        start: Position {
+                            line: d.start_line,
+                            character: d.start_col,
+                        },
+                        end: Position {
+                            line: d.end_line,
+                            character: d.end_col,
+                        },
+                    },
+                    severity: Some(match d.severity {
+                        "error" => DiagnosticSeverity::ERROR,
+                        "warning" => DiagnosticSeverity::WARNING,
+                        "info" => DiagnosticSeverity::INFORMATION,
+                        _ => DiagnosticSeverity::HINT,
+                    }),
+                    code: Some(NumberOrString::String(d.code)),
+                    source: Some(d.source.to_string()),
+                    message: d.message,
+                    ..Default::default()
+                })
+                .collect();
+
             self.client
-                .publish_diagnostics(uri.clone(), diagnostics, Some(doc.version))
+                .publish_diagnostics(uri.clone(), lsp_diagnostics, Some(doc.version))
                 .await;
         }
     }
@@ -115,7 +144,7 @@ impl LanguageServer for Backend {
         debug!("Document opened: {:?}", uri);
 
         // Create document state
-        let doc = DocumentState::new(uri.clone(), content, version);
+        let doc = DocumentState::new(uri.to_string(), content, version);
         self.documents.insert(uri.clone(), doc);
 
         // Parse and build world
@@ -189,7 +218,22 @@ impl LanguageServer for Backend {
         debug!("Hover request at {:?}", position);
 
         if let Some(doc) = self.documents.get(&uri) {
-            Ok(hover_at_position(&doc, &position))
+            // Convert tower_lsp Position to our Position type
+            let our_position = crate::document::Position {
+                line: position.line,
+                character: position.character,
+            };
+
+            // Get hover info from our implementation
+            if let Some(hover_info) = hover_at_position(&doc, &our_position) {
+                // Convert to tower_lsp Hover type
+                Ok(Some(Hover {
+                    contents: HoverContents::Scalar(MarkedString::String(hover_info.content)),
+                    range: None,
+                }))
+            } else {
+                Ok(None)
+            }
         } else {
             Ok(None)
         }

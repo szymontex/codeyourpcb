@@ -10,10 +10,10 @@ name = "cypcb-lsp"
 path = "src/main.rs"
 
 [features]
-# Server feature requires async runtime and is disabled by default to avoid
-# TLS memory issues in some build environments
+# Server feature requires async runtime - disabled by default due to
+# build environment issues with proc-macro loading
 default = []
-server = ["dep:async-trait", "dep:tower-lsp", "dep:tokio"]
+server = ["dep:async-trait", "dep:tower-lsp", "dep:tokio", "dep:dashmap", "dep:serde_json"]
 
 [dependencies]
 # Internal crates - always available for diagnostics/hover modules
