@@ -31,10 +31,10 @@
 //! ```
 
 use crate::ast::{
-    BoardDef, ComponentDef, ComponentKind, Definition, Dimension, FootprintDef, Identifier,
-    LayerType, NetAssignment, NetConstraints, NetDef, PadDef, PadShape, PinId, PinRef,
-    PositionExpr, RotationExpr, SizeProperty, SourceFile, Span, StackupDef, StackupLayer,
-    StringLit, ZoneDef, ZoneKind,
+    BoardDef, ComponentDef, ComponentKind, CurrentUnit, CurrentValue, Definition, Dimension,
+    FootprintDef, Identifier, LayerType, NetAssignment, NetConstraints, NetDef, PadDef, PadShape,
+    PinId, PinRef, PositionExpr, RotationExpr, SizeProperty, SourceFile, Span, StackupDef,
+    StackupLayer, StringLit, TraceDef, ZoneDef, ZoneKind,
 };
 use crate::errors::{ParseError, ParseResult};
 use crate::node_kinds;
@@ -136,6 +136,11 @@ impl CypcbParser {
                 "zone_definition" => {
                     if let Some(zone) = self.convert_zone(source, &child, errors) {
                         definitions.push(Definition::Zone(zone));
+                    }
+                }
+                "trace_definition" => {
+                    if let Some(trace) = self.convert_trace_definition(source, &child, errors) {
+                        definitions.push(Definition::Trace(trace));
                     }
                 }
                 _ => {}
@@ -481,10 +486,11 @@ impl CypcbParser {
     fn convert_net_constraints(&self, source: &str, node: &Node, errors: &mut Vec<ParseError>) -> Option<NetConstraints> {
         let mut width = None;
         let mut clearance = None;
+        let mut current = None;
 
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
-            // net_constraint is a choice node wrapping width_constraint or clearance_constraint
+            // net_constraint is a choice node wrapping width_constraint, clearance_constraint, or current_constraint
             let constraint_node = if child.kind() == "net_constraint" {
                 child.named_child(0)
             } else {
@@ -503,6 +509,11 @@ impl CypcbParser {
                             clearance = self.convert_dimension(source, &val_node, errors);
                         }
                     }
+                    "current_constraint" => {
+                        if let Some(val_node) = get_child_by_field(&constraint, "value") {
+                            current = self.convert_current_value(source, &val_node, errors);
+                        }
+                    }
                     _ => {}
                 }
             }
@@ -511,8 +522,44 @@ impl CypcbParser {
         Some(NetConstraints {
             width,
             clearance,
+            current,
             span: span_of(node),
         })
+    }
+
+    /// Convert a current value node (e.g., "500mA" or "2A").
+    fn convert_current_value(&self, source: &str, node: &Node, errors: &mut Vec<ParseError>) -> Option<CurrentValue> {
+        let amount_node = get_child_by_field(node, "amount")?;
+        let text = node_text(source, &amount_node);
+
+        let value = match text.parse::<f64>() {
+            Ok(v) => v,
+            Err(_) => {
+                errors.push(ParseError::invalid_number(
+                    text,
+                    source.to_string(),
+                    span_of(&amount_node).to_miette(),
+                ));
+                return None;
+            }
+        };
+
+        let unit_node = get_child_by_field(node, "unit")?;
+        let unit_text = node_text(source, &unit_node);
+
+        let unit = match CurrentUnit::from_str(unit_text) {
+            Some(u) => u,
+            None => {
+                errors.push(ParseError::unknown_unit(
+                    unit_text,
+                    source.to_string(),
+                    span_of(&unit_node).to_miette(),
+                ));
+                return None;
+            }
+        };
+
+        Some(CurrentValue::new(value, unit, span_of(node)))
     }
 
     /// Convert a pin reference list.
@@ -803,6 +850,79 @@ impl CypcbParser {
             bounds,
             layer,
             net,
+            span: span_of(node),
+        })
+    }
+
+    /// Convert a trace definition node.
+    fn convert_trace_definition(
+        &self,
+        source: &str,
+        node: &Node,
+        errors: &mut Vec<ParseError>,
+    ) -> Option<TraceDef> {
+        let net_node = get_child_by_field(node, "net")?;
+        let net = Identifier::new(node_text(source, &net_node), span_of(&net_node));
+
+        let mut from: Option<PinRef> = None;
+        let mut to: Option<PinRef> = None;
+        let mut waypoints: Vec<PositionExpr> = Vec::new();
+        let mut layer: Option<String> = None;
+        let mut width: Option<Dimension> = None;
+        let mut locked = false;
+
+        let mut cursor = node.walk();
+        for child in node.children(&mut cursor) {
+            match child.kind() {
+                "trace_from" => {
+                    if let Some(pin_node) = get_child_by_field(&child, "pin") {
+                        from = self.convert_pin_ref(source, &pin_node, errors);
+                    }
+                }
+                "trace_to" => {
+                    if let Some(pin_node) = get_child_by_field(&child, "pin") {
+                        to = self.convert_pin_ref(source, &pin_node, errors);
+                    }
+                }
+                "trace_via" => {
+                    let x = get_child_by_field(&child, "x")
+                        .and_then(|n| self.convert_dimension(source, &n, errors));
+                    let y = get_child_by_field(&child, "y")
+                        .and_then(|n| self.convert_dimension(source, &n, errors));
+
+                    if let (Some(x), Some(y)) = (x, y) {
+                        waypoints.push(PositionExpr {
+                            x,
+                            y,
+                            span: span_of(&child),
+                        });
+                    }
+                }
+                "trace_layer" => {
+                    if let Some(name_node) = get_child_by_field(&child, "name") {
+                        layer = Some(node_text(source, &name_node).to_string());
+                    }
+                }
+                "trace_width" => {
+                    if let Some(val_node) = get_child_by_field(&child, "value") {
+                        width = self.convert_dimension(source, &val_node, errors);
+                    }
+                }
+                "trace_locked" => {
+                    locked = true;
+                }
+                _ => {}
+            }
+        }
+
+        Some(TraceDef {
+            net,
+            from,
+            to,
+            waypoints,
+            layer,
+            width,
+            locked,
             span: span_of(node),
         })
     }
@@ -1437,6 +1557,207 @@ footprint ALL_SHAPES {
             assert_eq!(fp.pads[3].shape, PadShape::Oblong);
         } else {
             panic!("expected footprint definition");
+        }
+    }
+
+    #[test]
+    fn test_parse_net_with_current_constraint() {
+        let source = r#"
+net POWER [width 0.5mm clearance 0.3mm current 500mA] {
+    J1.1
+    U1.VIN
+}
+"#;
+        let result = parse(source);
+        assert!(result.is_ok(), "errors: {:?}", result.errors);
+
+        if let Definition::Net(net) = &result.value.definitions[0] {
+            assert_eq!(net.name.value, "POWER");
+            let constraints = net.constraints.as_ref().expect("constraints should be present");
+
+            // Check width
+            let width = constraints.width.as_ref().expect("width should be present");
+            assert!((width.value - 0.5).abs() < 0.001);
+
+            // Check clearance
+            let clearance = constraints.clearance.as_ref().expect("clearance should be present");
+            assert!((clearance.value - 0.3).abs() < 0.001);
+
+            // Check current
+            let current = constraints.current.as_ref().expect("current should be present");
+            assert!((current.value - 500.0).abs() < 0.001);
+            assert_eq!(current.unit, crate::ast::CurrentUnit::Milliamps);
+            assert!((current.to_milliamps() - 500.0).abs() < 0.001);
+        } else {
+            panic!("expected net definition");
+        }
+    }
+
+    #[test]
+    fn test_parse_net_with_current_in_amps() {
+        let source = r#"
+net HIGH_POWER [current 2A] {
+    J1.1
+}
+"#;
+        let result = parse(source);
+        assert!(result.is_ok(), "errors: {:?}", result.errors);
+
+        if let Definition::Net(net) = &result.value.definitions[0] {
+            let constraints = net.constraints.as_ref().expect("constraints should be present");
+            let current = constraints.current.as_ref().expect("current should be present");
+            assert!((current.value - 2.0).abs() < 0.001);
+            assert_eq!(current.unit, crate::ast::CurrentUnit::Amps);
+            assert!((current.to_amps() - 2.0).abs() < 0.001);
+            assert!((current.to_milliamps() - 2000.0).abs() < 0.001);
+        } else {
+            panic!("expected net definition");
+        }
+    }
+
+    #[test]
+    fn test_parse_simple_trace() {
+        let source = r#"
+trace VCC {
+    from R1.1
+    to C1.1
+    layer Top
+    width 0.3mm
+}
+"#;
+        let result = parse(source);
+        assert!(result.is_ok(), "errors: {:?}", result.errors);
+
+        let ast = result.value;
+        assert_eq!(ast.definitions.len(), 1);
+
+        if let Definition::Trace(trace) = &ast.definitions[0] {
+            assert_eq!(trace.net.value, "VCC");
+
+            // Check from pin
+            let from = trace.from.as_ref().expect("from should be present");
+            assert_eq!(from.component.value, "R1");
+            assert!(matches!(from.pin, PinId::Number(1)));
+
+            // Check to pin
+            let to = trace.to.as_ref().expect("to should be present");
+            assert_eq!(to.component.value, "C1");
+            assert!(matches!(to.pin, PinId::Number(1)));
+
+            // Check layer
+            assert_eq!(trace.layer.as_deref(), Some("Top"));
+
+            // Check width
+            let width = trace.width.as_ref().expect("width should be present");
+            assert!((width.value - 0.3).abs() < 0.001);
+
+            // Check not locked by default
+            assert!(!trace.locked);
+
+            // No waypoints
+            assert!(trace.waypoints.is_empty());
+        } else {
+            panic!("expected trace definition");
+        }
+    }
+
+    #[test]
+    fn test_parse_trace_with_waypoints() {
+        let source = r#"
+trace GND {
+    from R1.2
+    to LED1.cathode
+    via 5mm, 8mm
+    via 10mm, 8mm
+    layer Bottom
+}
+"#;
+        let result = parse(source);
+        assert!(result.is_ok(), "errors: {:?}", result.errors);
+
+        if let Definition::Trace(trace) = &result.value.definitions[0] {
+            assert_eq!(trace.net.value, "GND");
+            assert_eq!(trace.waypoints.len(), 2);
+
+            // First waypoint
+            let wp1 = &trace.waypoints[0];
+            assert!((wp1.x.value - 5.0).abs() < 0.001);
+            assert!((wp1.y.value - 8.0).abs() < 0.001);
+
+            // Second waypoint
+            let wp2 = &trace.waypoints[1];
+            assert!((wp2.x.value - 10.0).abs() < 0.001);
+            assert!((wp2.y.value - 8.0).abs() < 0.001);
+
+            assert_eq!(trace.layer.as_deref(), Some("Bottom"));
+        } else {
+            panic!("expected trace definition");
+        }
+    }
+
+    #[test]
+    fn test_parse_locked_trace() {
+        let source = r#"
+trace SENSITIVE {
+    from U1.1
+    to U2.1
+    locked
+}
+"#;
+        let result = parse(source);
+        assert!(result.is_ok(), "errors: {:?}", result.errors);
+
+        if let Definition::Trace(trace) = &result.value.definitions[0] {
+            assert_eq!(trace.net.value, "SENSITIVE");
+            assert!(trace.locked);
+        } else {
+            panic!("expected trace definition");
+        }
+    }
+
+    #[test]
+    fn test_parse_trace_named_pins() {
+        let source = r#"
+trace LED_SIGNAL {
+    from R1.2
+    to LED1.anode
+    layer Top
+}
+"#;
+        let result = parse(source);
+        assert!(result.is_ok(), "errors: {:?}", result.errors);
+
+        if let Definition::Trace(trace) = &result.value.definitions[0] {
+            let to = trace.to.as_ref().expect("to should be present");
+            if let PinId::Name(name) = &to.pin {
+                assert_eq!(name, "anode");
+            } else {
+                panic!("expected named pin");
+            }
+        } else {
+            panic!("expected trace definition");
+        }
+    }
+
+    #[test]
+    fn test_parse_trace_minimal() {
+        let source = r#"
+trace NET1 {
+}
+"#;
+        let result = parse(source);
+        assert!(result.is_ok(), "errors: {:?}", result.errors);
+
+        if let Definition::Trace(trace) = &result.value.definitions[0] {
+            assert_eq!(trace.net.value, "NET1");
+            assert!(trace.from.is_none());
+            assert!(trace.to.is_none());
+            assert!(trace.waypoints.is_empty());
+            assert!(trace.layer.is_none());
+            assert!(trace.width.is_none());
+            assert!(!trace.locked);
+        } else {
+            panic!("expected trace definition");
         }
     }
 }
