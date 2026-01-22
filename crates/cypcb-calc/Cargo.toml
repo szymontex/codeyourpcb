@@ -1,0 +1,10 @@
+[package]
+name = "cypcb-calc"
+version = "0.1.0"
+edition = "2021"
+description = "Electrical calculations for PCB design (IPC-2221, impedance)"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+cypcb-core = { path = "../cypcb-core" }
+thiserror = "2.0"

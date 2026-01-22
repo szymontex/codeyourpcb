@@ -1,0 +1,13 @@
+[package]
+name = "cypcb-kicad"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "KiCad file format import for CodeYourPCB"
+
+[dependencies]
+cypcb-core = { path = "../cypcb-core" }
+cypcb-world = { path = "../cypcb-world", default-features = false }
+kicad_parse_gen = "0.7"
+thiserror.workspace = true
+walkdir = "2"
