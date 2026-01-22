@@ -21,6 +21,10 @@
       gap: 16px;
       align-items: center;
     }
+    #toolbar .separator {
+      color: #ccc;
+      margin: 0 -8px;
+    }
     #canvas-container {
       flex: 1;
       position: relative;
@@ -206,6 +210,8 @@
     <span>Layers:</span>
     <label><input type="checkbox" id="layer-top" checked> Top</label>
     <label><input type="checkbox" id="layer-bottom" checked> Bottom</label>
+    <span class="separator">|</span>
+    <label><input type="checkbox" id="layer-ratsnest" checked> Ratsnest</label>
     <span id="coords"></span>
     <label id="auto-route-label"><input type="checkbox" id="auto-route"> Auto-route</label>
     <button id="route-btn">Route</button>
