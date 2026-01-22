@@ -76,7 +76,7 @@ impl RouteCommand {
         // Build world from AST
         eprintln!("Building board model...");
         let mut world = BoardWorld::new();
-        let library = FootprintLibrary::default();
+        let library = FootprintLibrary::new();
         let sync_result = sync_ast_to_world(&ast, &source, &mut world, &library);
 
         if !sync_result.errors.is_empty() {
