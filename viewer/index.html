@@ -115,6 +115,90 @@
     .error-message {
       color: #333;
     }
+    /* Route button */
+    #route-btn {
+      background: #28a745;
+      color: white;
+      border: none;
+      padding: 4px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      margin-left: auto;
+    }
+    #route-btn:hover {
+      background: #218838;
+    }
+    #route-btn:disabled {
+      background: #6c757d;
+      cursor: not-allowed;
+    }
+    #route-btn.routing {
+      background: #ffc107;
+      color: #212529;
+    }
+    /* Cancel button */
+    #cancel-route-btn {
+      background: #dc3545;
+      color: white;
+      border: none;
+      padding: 4px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    #cancel-route-btn:hover {
+      background: #c82333;
+    }
+    #cancel-route-btn.hidden {
+      display: none;
+    }
+    /* Auto-route toggle */
+    #auto-route-label {
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    /* Routing status */
+    #routing-status {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(255,255,255,0.95);
+      padding: 16px 24px;
+      border-radius: 8px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+      text-align: center;
+      z-index: 100;
+    }
+    #routing-status.hidden {
+      display: none;
+    }
+    #routing-status h3 {
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+    #routing-progress {
+      font-size: 12px;
+      color: #666;
+    }
+    .spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid #f3f3f3;
+      border-top: 2px solid #28a745;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-right: 8px;
+      vertical-align: middle;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
   </style>
 </head>
 <body>
@@ -123,12 +207,20 @@
     <label><input type="checkbox" id="layer-top" checked> Top</label>
     <label><input type="checkbox" id="layer-bottom" checked> Bottom</label>
     <span id="coords"></span>
+    <label id="auto-route-label"><input type="checkbox" id="auto-route"> Auto-route</label>
+    <button id="route-btn">Route</button>
+    <button id="cancel-route-btn" class="hidden">Cancel</button>
   </div>
   <div id="canvas-container">
     <canvas id="pcb-canvas"></canvas>
     <div id="status">
       <span id="status-text">Loading...</span>
       <span id="error-badge" class="hidden"><span id="error-count">0</span> errors</span>
+    </div>
+    <!-- Routing status overlay -->
+    <div id="routing-status" class="hidden">
+      <h3><span class="spinner"></span>Routing...</h3>
+      <div id="routing-progress">Initializing...</div>
     </div>
     <!-- Error panel (VS Code style - appears on badge click) -->
     <div id="error-panel" class="hidden">
