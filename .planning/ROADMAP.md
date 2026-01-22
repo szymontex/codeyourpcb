@@ -1,7 +1,7 @@
 # Roadmap: CodeYourPCB
 
 **Created:** 2026-01-21
-**Phases:** 6
+**Phases:** 7
 **Target:** Code-first PCB design tool
 
 ## Phase Overview
@@ -10,10 +10,11 @@
 |---|-------|------|--------------|--------|
 | 1 | Foundation | Working parser and board model | 12 | Complete |
 | 2 | Rendering | Visual feedback with hot reload | 7 | Complete |
-| 3 | Validation | DRC prevents invalid designs | 8 | Planned |
+| 3 | Validation | DRC prevents invalid designs | 8 | Complete |
 | 4 | Export | Manufacturable output | 5 | Pending |
 | 5 | Intelligence | Autorouting and IDE integration | 6 | Pending |
 | 6 | Desktop | Full application experience | v2 | Pending |
+| 7 | Navigation | Alternative pan/zoom for laptops | 3 | Pending |
 
 ---
 
@@ -142,16 +143,16 @@ Both gaps successfully resolved — WASM builds with feature flags, real PcbEngi
 **Plans:** 10 plans in 6 waves
 
 Plans:
-- [ ] 03-01-PLAN.md -- DRC crate setup (types, traits, violation struct)
-- [ ] 03-02-PLAN.md -- IC footprints (SOIC, SOT, QFP families)
-- [ ] 03-03-PLAN.md -- Manufacturer presets (JLCPCB, PCBWay rules)
-- [ ] 03-04-PLAN.md -- Custom footprint DSL syntax and library registration
-- [ ] 03-05-PLAN.md -- Clearance checking rule (spatial index)
-- [ ] 03-06-PLAN.md -- Drill size, trace width, and connectivity rules
-- [ ] 03-07-PLAN.md -- DRC integration with rendering pipeline
-- [ ] 03-08-PLAN.md -- Violation display (markers, status bar, panel)
-- [ ] 03-09-PLAN.md -- Visual verification checkpoint
-- [ ] 03-10-PLAN.md -- Zones and keepouts (BRD-05)
+- [x] 03-01-PLAN.md -- DRC crate setup (types, traits, violation struct)
+- [x] 03-02-PLAN.md -- IC footprints (SOIC, SOT, QFP families)
+- [x] 03-03-PLAN.md -- Manufacturer presets (JLCPCB, PCBWay rules)
+- [x] 03-04-PLAN.md -- Custom footprint DSL syntax and library registration
+- [x] 03-05-PLAN.md -- Clearance checking rule (spatial index)
+- [x] 03-06-PLAN.md -- Drill size, trace width, and connectivity rules
+- [x] 03-07-PLAN.md -- DRC integration with rendering pipeline
+- [x] 03-08-PLAN.md -- Violation display (markers, status bar, panel)
+- [x] 03-09-PLAN.md -- Visual verification checkpoint
+- [x] 03-10-PLAN.md -- Zones and keepouts (BRD-05)
 
 **Notes:**
 - DRC-02 (trace width) is a placeholder until traces exist (Phase 5)
@@ -204,9 +205,32 @@ Plans:
 5. Trace width suggestions based on current requirements
 
 **Key Decisions:**
-- FreeRouting integration method (DSN export or embedded)
-- LSP feature prioritization
-- Constraint syntax for electrical properties
+- FreeRouting via CLI (DSN/SES file exchange) - proven stable approach
+- tower-lsp-server crate for LSP (community fork with updated lsp-types)
+- kicad_parse_gen crate for KiCad .kicad_mod parsing
+- IPC-2221 formulas for trace width (k=0.048 external, k=0.024 internal)
+- Routes stored in separate .routes file (keeps source clean, regenerable)
+
+**Plans:** 10 plans in 5 waves
+
+Plans:
+- [ ] 05-01-PLAN.md -- Trace/Via ECS components and DSL net constraints
+- [ ] 05-02-PLAN.md -- IPC-2221 trace width calculator (cypcb-calc)
+- [ ] 05-03-PLAN.md -- KiCad footprint import (cypcb-kicad)
+- [ ] 05-04-PLAN.md -- FreeRouting DSN export (cypcb-router)
+- [ ] 05-05-PLAN.md -- LSP server setup with hover and diagnostics
+- [ ] 05-06-PLAN.md -- FreeRouting SES import and CLI wrapper
+- [ ] 05-07-PLAN.md -- LSP completions and go-to-definition
+- [ ] 05-08-PLAN.md -- Trace and ratsnest rendering
+- [ ] 05-09-PLAN.md -- Autorouter UI integration (CLI, progress, cancel)
+- [ ] 05-10-PLAN.md -- Visual verification checkpoint
+
+**Notes:**
+- Wave 1 (parallel): 05-01, 05-02, 05-03 - independent foundation work
+- Wave 2: 05-04, 05-05 - router export and LSP basics
+- Wave 3: 05-06, 05-07 - router import and LSP completions
+- Wave 4: 05-08, 05-09 - rendering and UI integration
+- Wave 5: 05-10 - human verification
 
 ---
 
@@ -227,6 +251,28 @@ Plans:
 3. Undo/redo works for all editing operations
 4. File open/save uses native dialogs
 5. App works offline
+
+---
+
+## Phase 7: Navigation Controls
+
+**Goal:** Alternative pan/zoom controls for laptops without middle-click
+
+**Requirements:**
+- NAV-01: Ctrl+LMB drag for panning (alternative to middle-click)
+- NAV-02: Two-finger/three-finger touchpad panning
+- NAV-03: Pinch-to-zoom on touchpad
+
+**Success Criteria:**
+1. Ctrl+click and drag pans the viewport
+2. Touchpad gestures work for pan/zoom
+3. Existing middle-click pan still works
+4. Works across Chrome, Firefox, Safari
+
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 7 to break down)
 
 ---
 
@@ -271,4 +317,4 @@ Phase 2 (Rendering)  Phase 3 (Validation)
 ---
 
 *Roadmap created: 2026-01-21*
-*Last updated: 2026-01-21 - Phase 3 revised (10 plans in 6 waves, added zones/keepouts)*
+*Last updated: 2026-01-22 - Phase 5 planned (10 plans in 5 waves)*
