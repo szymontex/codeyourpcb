@@ -8,16 +8,19 @@ use std::sync::Arc;
 use dashmap::DashMap;
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::{
-    DiagnosticSeverity, DidChangeTextDocumentParams, DidCloseTextDocumentParams,
-    DidOpenTextDocumentParams, DidSaveTextDocumentParams, Hover, HoverContents, HoverParams,
-    HoverProviderCapability, InitializedParams, InitializeParams, InitializeResult,
-    MarkedString, NumberOrString, Position, Range, SaveOptions, ServerCapabilities, ServerInfo,
+    CompletionItem as LspCompletionItem, CompletionItemKind as LspCompletionItemKind,
+    CompletionOptions, CompletionParams, CompletionResponse, DiagnosticSeverity,
+    DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
+    DidSaveTextDocumentParams, Hover, HoverContents, HoverParams, HoverProviderCapability,
+    InitializedParams, InitializeParams, InitializeResult, InsertTextFormat, MarkedString,
+    NumberOrString, Position, Range, SaveOptions, ServerCapabilities, ServerInfo,
     TextDocumentSyncCapability, TextDocumentSyncKind, TextDocumentSyncOptions,
     TextDocumentSyncSaveOptions, Uri,
 };
 use tower_lsp::{Client, LanguageServer};
 use tracing::{debug, info};
 
+use crate::completion::{completion_at_position, CompletionItemKind};
 use crate::diagnostics::run_diagnostics;
 use crate::document::DocumentState;
 use crate::hover::hover_at_position;
@@ -114,8 +117,16 @@ impl LanguageServer for Backend {
                 )),
                 // Hover provider for component/net info
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
+                // Completion provider for autocomplete
+                completion_provider: Some(CompletionOptions {
+                    trigger_characters: Some(vec![
+                        ".".to_string(),
+                        " ".to_string(),
+                        "\"".to_string(),
+                    ]),
+                    ..Default::default()
+                }),
                 // We'll add more capabilities as we implement them:
-                // - completion_provider
                 // - definition_provider
                 // - references_provider
                 ..Default::default()
@@ -234,6 +245,65 @@ impl LanguageServer for Backend {
             } else {
                 Ok(None)
             }
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
+        let uri = params.text_document_position.text_document.uri;
+        let position = params.text_document_position.position;
+
+        debug!("Completion request at {:?}", position);
+
+        if let Some(doc) = self.documents.get(&uri) {
+            // Convert tower_lsp Position to our Position type
+            let our_position = crate::document::Position {
+                line: position.line,
+                character: position.character,
+            };
+
+            // Get completions from our implementation
+            let items = completion_at_position(&doc, &our_position);
+
+            if items.is_empty() {
+                return Ok(None);
+            }
+
+            // Convert to tower_lsp CompletionItem type
+            let lsp_items: Vec<LspCompletionItem> = items
+                .into_iter()
+                .map(|item| {
+                    let kind = match item.kind {
+                        CompletionItemKind::Class => LspCompletionItemKind::CLASS,
+                        CompletionItemKind::Variable => LspCompletionItemKind::VARIABLE,
+                        CompletionItemKind::Property => LspCompletionItemKind::PROPERTY,
+                        CompletionItemKind::Enum => LspCompletionItemKind::ENUM_MEMBER,
+                        CompletionItemKind::Keyword => LspCompletionItemKind::KEYWORD,
+                        CompletionItemKind::Snippet => LspCompletionItemKind::SNIPPET,
+                    };
+
+                    let insert_text_format = if item.is_snippet {
+                        Some(InsertTextFormat::SNIPPET)
+                    } else {
+                        Some(InsertTextFormat::PLAIN_TEXT)
+                    };
+
+                    LspCompletionItem {
+                        label: item.label,
+                        kind: Some(kind),
+                        detail: item.detail,
+                        documentation: item.documentation.map(|d| {
+                            tower_lsp::lsp_types::Documentation::String(d)
+                        }),
+                        insert_text: item.insert_text,
+                        insert_text_format,
+                        ..Default::default()
+                    }
+                })
+                .collect();
+
+            Ok(Some(CompletionResponse::Array(lsp_items)))
         } else {
             Ok(None)
         }
