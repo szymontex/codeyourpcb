@@ -202,6 +202,9 @@ async function init(): Promise<void> {
   snapshot = engine.get_snapshot();
   console.log('Loaded snapshot:', snapshot);
 
+  // Set default file path for initial TEST_SOURCE (enables Route button)
+  currentFilePath = 'test.cypcb';
+
   // Fit board in view
   if (snapshot.board) {
     viewport = fitBoard(viewport, snapshot.board.width_nm, snapshot.board.height_nm);
