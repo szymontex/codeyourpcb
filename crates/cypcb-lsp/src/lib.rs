@@ -34,6 +34,7 @@ pub mod backend;
 pub mod completion;
 pub mod diagnostics;
 pub mod document;
+pub mod goto;
 pub mod hover;
 
 // Re-exports
@@ -43,4 +44,5 @@ pub use backend::Backend;
 pub use completion::{completion_at_position, CompletionItem, CompletionItemKind};
 pub use diagnostics::run_diagnostics;
 pub use document::DocumentState;
+pub use goto::{goto_definition, Location};
 pub use hover::hover_at_position;
