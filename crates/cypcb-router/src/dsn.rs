@@ -198,6 +198,9 @@ fn write_structure(
     writeln!(output, "      (clearance 6)")?; // 6 mil (0.15mm) default clearance
     writeln!(output, "    )")?;
 
+    // Via rule (required for FreeRouting to route multi-layer boards)
+    writeln!(output, "    (via via_default)")?;
+
     writeln!(output, "  )")?;
     Ok(())
 }
@@ -328,6 +331,15 @@ fn write_library(
             }
         }
     }
+
+    // Write default via padstack (required for FreeRouting)
+    // Standard via: 0.8mm pad, 0.4mm drill
+    writeln!(output, "    (padstack via_default")?;
+    writeln!(output, "      (shape (circle F.Cu 31.4961))")?; // 0.8mm = 31.5 mil
+    writeln!(output, "      (shape (circle B.Cu 31.4961))")?;
+    writeln!(output, "      (attach off)")?;
+    writeln!(output, "      (hole round 15.7480)")?; // 0.4mm drill = 15.75 mil
+    writeln!(output, "    )")?;
 
     writeln!(output, "  )")?;
     Ok(())
