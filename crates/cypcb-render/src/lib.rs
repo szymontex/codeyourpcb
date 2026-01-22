@@ -31,6 +31,7 @@ use cypcb_world::footprint::FootprintLibrary;
 use cypcb_world::{
     BoardWorld, Entity, FootprintRef, Layer, NetConnections, NetId, PadShape, PinConnection,
     Position, RefDes, Rotation, Value,
+    components::trace::{Trace, Via},
 };
 
 // Import sync and parse only in native mode
@@ -465,12 +466,190 @@ impl PcbEngine {
             .map(ViolationInfo::from_drc)
             .collect();
 
+        // Build trace info
+        let traces = self.collect_traces();
+
+        // Build via info
+        let vias = self.collect_vias();
+
+        // Build ratsnest info (unrouted connections)
+        let ratsnest = self.collect_ratsnest(&nets);
+
         BoardSnapshot {
             board,
             components,
             nets,
             violations,
+            traces,
+            vias,
+            ratsnest,
         }
+    }
+
+    /// Collect all traces from the world.
+    fn collect_traces(&mut self) -> Vec<TraceInfo> {
+        // First, collect trace data (cloning to avoid borrow issues)
+        let trace_data: Vec<Trace> = {
+            let world_ref = self.world.ecs_mut();
+            let mut query = world_ref.query::<&Trace>();
+            query.iter(world_ref).cloned().collect()
+        };
+
+        // Now process with net names
+        let mut traces: Vec<TraceInfo> = Vec::new();
+        for trace in trace_data {
+            let layer_name = match trace.layer {
+                Layer::TopCopper => "Top".to_string(),
+                Layer::BottomCopper => "Bottom".to_string(),
+                Layer::Inner(n) => format!("Inner{}", n),
+                _ => "Top".to_string(),
+            };
+
+            let net_name = self.world.net_name(trace.net_id)
+                .unwrap_or("(no net)")
+                .to_string();
+
+            let segments: Vec<TraceSegmentInfo> = trace.segments.iter().map(|seg| {
+                TraceSegmentInfo {
+                    start_x: seg.start.x.0 as f64,
+                    start_y: seg.start.y.0 as f64,
+                    end_x: seg.end.x.0 as f64,
+                    end_y: seg.end.y.0 as f64,
+                }
+            }).collect();
+
+            traces.push(TraceInfo {
+                segments,
+                width: trace.width.0 as f64,
+                layer: layer_name,
+                net_name,
+                locked: trace.locked,
+            });
+        }
+
+        traces
+    }
+
+    /// Collect all vias from the world.
+    fn collect_vias(&mut self) -> Vec<ViaInfo> {
+        // First, collect via data (copying to avoid borrow issues)
+        let via_data: Vec<Via> = {
+            let world_ref = self.world.ecs_mut();
+            let mut query = world_ref.query::<&Via>();
+            query.iter(world_ref).copied().collect()
+        };
+
+        // Now process with net names
+        let mut vias: Vec<ViaInfo> = Vec::new();
+        for via in via_data {
+            let net_name = self.world.net_name(via.net_id)
+                .unwrap_or("(no net)")
+                .to_string();
+
+            vias.push(ViaInfo {
+                x: via.position.x.0 as f64,
+                y: via.position.y.0 as f64,
+                drill: via.drill.0 as f64,
+                outer_diameter: via.outer_diameter.0 as f64,
+                net_name,
+            });
+        }
+
+        vias
+    }
+
+    /// Calculate ratsnest (unrouted connections).
+    ///
+    /// For each net with multiple pins, if there are no traces connecting
+    /// all pins, we show ratsnest lines between unconnected pin pairs.
+    ///
+    /// Simple algorithm: For nets with pins but no traces, show lines
+    /// from first pin to all other pins (star topology for visualization).
+    fn collect_ratsnest(&mut self, nets: &[NetInfo]) -> Vec<RatsnestInfo> {
+        use std::collections::HashMap;
+
+        let mut ratsnest: Vec<RatsnestInfo> = Vec::new();
+
+        // Get trace count per net to determine if net is routed
+        let mut traces_per_net: HashMap<String, usize> = HashMap::new();
+        for trace in self.collect_traces() {
+            *traces_per_net.entry(trace.net_name.clone()).or_insert(0) += 1;
+        }
+
+        // For each net with connections
+        for net in nets {
+            if net.connections.len() < 2 {
+                continue; // Need at least 2 pins to show ratsnest
+            }
+
+            // If net has traces, assume it's at least partially routed
+            // (A full ratsnest would check actual connectivity, but this is MVP)
+            if traces_per_net.contains_key(&net.name) {
+                continue;
+            }
+
+            // Get pin positions
+            let mut pin_positions: Vec<(f64, f64)> = Vec::new();
+
+            for conn in &net.connections {
+                // Find the component
+                if let Some(entity) = self.world.find_by_refdes(&conn.component) {
+                    if let Some(pos) = self.world.get::<Position>(entity) {
+                        // Get the pad offset from footprint
+                        let footprint_name = self.world.get::<FootprintRef>(entity)
+                            .map(|f| f.as_str().to_string())
+                            .unwrap_or_default();
+
+                        let pad_offset = self.get_pad_offset(&footprint_name, &conn.pin);
+                        let rotation = self.world.get::<Rotation>(entity)
+                            .map(|r| r.0)
+                            .unwrap_or(0);
+
+                        // Apply rotation to pad offset
+                        let radians = (rotation as f64 / 1000.0) * (std::f64::consts::PI / 180.0);
+                        let cos = radians.cos();
+                        let sin = radians.sin();
+
+                        let rotated_x = pad_offset.0 * cos - pad_offset.1 * sin;
+                        let rotated_y = pad_offset.0 * sin + pad_offset.1 * cos;
+
+                        let pin_x = pos.0.x.0 as f64 + rotated_x;
+                        let pin_y = pos.0.y.0 as f64 + rotated_y;
+
+                        pin_positions.push((pin_x, pin_y));
+                    }
+                }
+            }
+
+            // Create star-topology ratsnest from first pin to all others
+            if pin_positions.len() >= 2 {
+                let (first_x, first_y) = pin_positions[0];
+                for (x, y) in pin_positions.iter().skip(1) {
+                    ratsnest.push(RatsnestInfo {
+                        start_x: first_x,
+                        start_y: first_y,
+                        end_x: *x,
+                        end_y: *y,
+                        net_name: net.name.clone(),
+                    });
+                }
+            }
+        }
+
+        ratsnest
+    }
+
+    /// Get pad offset from component origin for a given footprint and pin.
+    fn get_pad_offset(&self, footprint_name: &str, pin: &str) -> (f64, f64) {
+        if let Some(fp) = self.footprint_lib.get(footprint_name) {
+            for pad in &fp.pads {
+                if pad.number == pin {
+                    return (pad.position.x.0 as f64, pad.position.y.0 as f64);
+                }
+            }
+        }
+        // Default to origin if pad not found
+        (0.0, 0.0)
     }
 }
 
@@ -639,6 +818,9 @@ mod tests {
             ],
             nets: vec![],
             violations: vec![],
+            traces: vec![],
+            vias: vec![],
+            ratsnest: vec![],
         };
 
         let mut engine = PcbEngine::new();
