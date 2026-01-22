@@ -9,6 +9,7 @@ import { createViewport, fitBoard, screenToWorld } from './viewport';
 import { render, type RenderState } from './renderer';
 import { setupInteraction, type InteractionState } from './interaction';
 import { createLayerVisibility } from './layers';
+import { createFilePicker, setupDropZone, readFileAsText } from './file-picker';
 
 // WebSocket server URL for hot reload
 // Dynamic: if accessing via dev1.flightcore.pl, use dev2.flightcore.pl for WS
@@ -73,26 +74,7 @@ function connectWebSocket(
   connect();
 }
 
-// Test source for initial verification
-const TEST_SOURCE = `
-version 1
-board test {
-  size 50mm x 30mm
-  layers 2
-}
-component R1 resistor "0402" {
-  value "10k"
-  at 10mm, 15mm
-}
-component C1 capacitor "0402" {
-  value "100nF"
-  at 20mm, 15mm
-}
-component U1 ic "DIP-8" {
-  value "ATtiny85"
-  at 35mm, 15mm
-}
-`;
+// Note: Test data removed. Use examples/routing-test.cypcb and examples/routing-test.ses via file picker.
 
 /**
  * Initialize the PCB viewer application
@@ -115,6 +97,7 @@ async function init(): Promise<void> {
   const autoRouteCb = document.getElementById('auto-route') as HTMLInputElement;
   const routingStatus = document.getElementById('routing-status')!;
   const routingProgress = document.getElementById('routing-progress')!;
+  const openBtn = document.getElementById('open-btn') as HTMLButtonElement;
 
   const ctx = canvas.getContext('2d')!;
 
@@ -189,37 +172,13 @@ async function init(): Promise<void> {
   }
 
   const usingWasm = isWasmLoaded();
-  statusText.textContent = usingWasm
-    ? 'WASM loaded, parsing...'
-    : 'Mock engine loaded, parsing...';
 
-  // Load test source
-  const errors = engine.load_source(TEST_SOURCE);
-  if (errors) {
-    console.warn('Parse errors:', errors);
-  }
-
+  // Start with empty state - user will open a file
   snapshot = engine.get_snapshot();
-  console.log('Loaded snapshot:', snapshot);
+  currentFilePath = null;
+  statusText.textContent = usingWasm ? 'Ready (WASM) - Open a file' : 'Ready (Mock) - Open a file';
 
-  // Set default file path for initial TEST_SOURCE (enables Route button)
-  currentFilePath = 'test.cypcb';
-
-  // Fit board in view
-  if (snapshot.board) {
-    viewport = fitBoard(viewport, snapshot.board.width_nm, snapshot.board.height_nm);
-  }
-
-  statusText.textContent = errors
-    ? `Warnings: ${errors.split('\n').filter(Boolean).length}`
-    : usingWasm ? 'Ready (WASM)' : 'Ready (Mock)';
-
-  // Update error badge with initial violations
-  if (snapshot.violations) {
-    updateErrorBadge(snapshot.violations);
-  }
-
-  // Interaction setup
+  // Interaction setup (must be defined before handleFileLoad which uses it)
   const interactionState: InteractionState = {
     viewport,
     isPanning: false,
@@ -250,6 +209,78 @@ async function init(): Promise<void> {
   };
 
   setupInteraction(canvas, interactionState);
+
+  /**
+   * Handle loading a file (.cypcb or .ses) from file picker or drag-drop
+   */
+  async function handleFileLoad(file: File): Promise<void> {
+    const ext = file.name.toLowerCase().split('.').pop();
+
+    try {
+      const content = await readFileAsText(file);
+
+      if (ext === 'cypcb') {
+        // Load new board
+        const errors = engine.load_source(content);
+        if (errors) {
+          console.warn('Parse errors:', errors);
+        }
+
+        // Update current file path for routing
+        currentFilePath = file.name;
+
+        // Get new snapshot and fit board
+        snapshot = engine.get_snapshot();
+        if (snapshot.board) {
+          viewport = fitBoard(viewport, snapshot.board.width_nm, snapshot.board.height_nm);
+          interactionState.viewport = viewport;
+        }
+
+        // Update error badge
+        if (snapshot.violations) {
+          updateErrorBadge(snapshot.violations);
+        }
+
+        // Show status
+        const errorCount = errors ? errors.split('\n').filter(Boolean).length : 0;
+        statusText.textContent = errorCount > 0
+          ? `Loaded ${file.name} (${errorCount} warnings)`
+          : `Loaded ${file.name}`;
+
+        dirty = true;
+
+      } else if (ext === 'ses') {
+        // Check if board is loaded
+        if (!snapshot?.board) {
+          statusText.textContent = 'Load a .cypcb file first';
+          return;
+        }
+
+        // Load routes
+        engine.load_routes(content);
+        snapshot = engine.get_snapshot();
+
+        statusText.textContent = `Loaded routes from ${file.name}`;
+        dirty = true;
+
+      } else {
+        statusText.textContent = `Unknown file type: .${ext}`;
+      }
+    } catch (err) {
+      console.error('File load error:', err);
+      statusText.textContent = `Error loading ${file.name}`;
+    }
+  }
+
+  // File picker setup
+  const filePicker = createFilePicker('.cypcb,.ses', handleFileLoad);
+
+  openBtn.addEventListener('click', () => {
+    filePicker.click();
+  });
+
+  // Drag-drop setup
+  setupDropZone(container, handleFileLoad);
 
   /**
    * Populate the error list with current violations
