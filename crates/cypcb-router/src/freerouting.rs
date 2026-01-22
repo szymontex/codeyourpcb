@@ -330,7 +330,8 @@ impl FreeRoutingRunner {
             cmd.arg("-mp").arg(mp.to_string());
         }
 
-        // Run headless
+        // Run headless (required for CLI mode in FreeRouting 2.x)
+        cmd.arg("--gui.enabled=false");
         cmd.arg("-dct"); // Don't check freerouting.net for updates
 
         // Capture stdout/stderr
