@@ -40,3 +40,4 @@ cypcb-core = { path = "crates/cypcb-core" }
 cypcb-parser = { path = "crates/cypcb-parser", default-features = false }
 cypcb-world = { path = "crates/cypcb-world", default-features = false }
 cypcb-drc = { path = "crates/cypcb-drc" }
+cypcb-calc = { path = "crates/cypcb-calc" }

@@ -382,6 +382,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "460fbee9c2c2f33933d720630a6a0bac33ba7053db5344fac858d4b8952d77d5"
 
 [[package]]
+name = "cypcb-calc"
+version = "0.1.0"
+dependencies = [
+ "cypcb-core",
+ "thiserror",
+]
+
+[[package]]
 name = "cypcb-cli"
 version = "0.1.0"
 dependencies = [
@@ -414,6 +422,17 @@ dependencies = [
  "rayon",
  "rstar",
  "thiserror",
+]
+
+[[package]]
+name = "cypcb-kicad"
+version = "0.1.0"
+dependencies = [
+ "cypcb-core",
+ "cypcb-world",
+ "kicad_parse_gen",
+ "thiserror",
+ "walkdir",
 ]
 
 [[package]]
@@ -778,6 +797,15 @@ checksum = "8c942ebf8e95485ca0d52d97da7c5a2c387d0e7f0ba4c35e93bfcaee045955b3"
 dependencies = [
  "once_cell",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "kicad_parse_gen"
+version = "0.7.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f66369362cb59859b5c1d8c7314a40aafc37b709f94e9bfc05988249504b9c37"
+dependencies = [
+ "symbolic_expressions",
 ]
 
 [[package]]
@@ -1262,6 +1290,12 @@ name = "supports-unicode"
 version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b7401a30af6cb5818bb64852270bb722533397edcfc7344954a38f420819ece2"
+
+[[package]]
+name = "symbolic_expressions"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a9c89bc8e8c90247709699fbb4b06b79b9e5a9d9a172ec4bebeb497ed208eb56"
 
 [[package]]
 name = "syn"
