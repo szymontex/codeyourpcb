@@ -4,7 +4,7 @@
 
 **Phase:** 5 of 6 (Intelligence) - In Progress
 **Plan:** 3 of 10 complete
-**Last Activity:** 2026-01-22 - Completed 05-03-PLAN.md (KiCad Footprint Import)
+**Last Activity:** 2026-01-22 - Completed 05-01-PLAN.md (Trace & Via ECS + DSL)
 
 ## Project Reference
 
@@ -31,15 +31,15 @@ Progress: ███████████████████████�
 
 | Plan | Name | Status |
 |------|------|--------|
-| 05-01 | LSP Server Setup | Not started |
+| 05-01 | Trace & Via ECS + DSL Extensions | Complete |
 | 05-02 | IPC-2221 Trace Width Calculator | Complete |
 | 05-03 | KiCad Footprint Import | Complete |
-| 05-04 | LSP Diagnostics | Not started |
-| 05-05 | LSP Completion | Not started |
-| 05-06 | LSP Hover | Not started |
-| 05-07 | Autorouter DSN Export | Not started |
-| 05-08 | Autorouter FreeRouting Integration | Not started |
-| 05-09 | Autorouter SES Import | Not started |
+| 05-04 | DRC Engine Improvements | Not started |
+| 05-05 | LSP Core Server | Not started |
+| 05-06 | Autorouter Integration | Not started |
+| 05-07 | Export Enhancements | Not started |
+| 05-08 | Board Statistics | Not started |
+| 05-09 | Netlist Analysis | Not started |
 | 05-10 | Visual Verification Checkpoint | Not started |
 
 ## Next Action
@@ -108,8 +108,24 @@ Continue Phase 5 (Intelligence) - Execute remaining plans
 | 2026-01-22 | kicad_parse_gen for import | Mature S-expr parser handles KiCad format quirks |
 | 2026-01-22 | .pretty suffix stripping | Standard KiCad library naming convention |
 | 2026-01-22 | courtyard fallback 0.5mm | IPC-7351B margin when courtyard not in file |
+| 2026-01-22 | Trace as polyline | Vec<TraceSegment> for flexible routing |
+| 2026-01-22 | Locked trace flag | Boolean flag for autorouter to respect |
+| 2026-01-22 | CurrentUnit enum | mA/A variants with type-safe conversion |
 
 ## Session History
+
+### 2026-01-22: Complete 05-01 Trace & Via ECS + DSL Extensions
+- Created trace.rs with TraceSegment, Trace, Via, TraceSource types
+- TraceSegment: line segment with length/midpoint calculations (i128 for overflow safety)
+- Trace: ECS component with segments vec, width, layer, net_id, locked, source
+- Via: drill holes with start_layer/end_layer for blind/buried vias
+- Extended grammar with current constraint (500mA, 2A syntax)
+- Extended grammar with manual trace definition (from, to, via, layer, width, locked)
+- Added TraceDef, CurrentValue, CurrentUnit AST types
+- Updated NetConstraints with optional current field
+- Added sync_trace() to sync TraceDef to Trace entities
+- New error types: InvalidTracePin, MissingNet, UnknownLayer
+- 19 trace tests + 7 parser tests + 5 sync tests all passing
 
 ### 2026-01-22: Complete 05-03 KiCad Footprint Import
 - Created cypcb-kicad crate for KiCad file import (crate structure from 05-02)
@@ -451,6 +467,7 @@ Continue Phase 5 (Intelligence) - Execute remaining plans
 | crates/cypcb-kicad/src/lib.rs | KiCad crate API |
 | crates/cypcb-kicad/src/footprint.rs | KiCad .kicad_mod import |
 | crates/cypcb-kicad/src/library.rs | KiCad library scanning |
+| crates/cypcb-world/src/components/trace.rs | Trace, Via, TraceSegment ECS components |
 | examples/blink.cypcb | Example LED circuit |
 | examples/invalid.cypcb | Invalid syntax example |
 | examples/unknown_keyword.cypcb | Unknown keyword example |
@@ -476,7 +493,7 @@ Continue Phase 5 (Intelligence) - Execute remaining plans
 ## Session Continuity
 
 **Last session:** 2026-01-22
-**Stopped at:** Completed 05-03-PLAN.md (KiCad Footprint Import)
+**Stopped at:** Completed 05-01-PLAN.md (Trace & Via ECS + DSL)
 **Resume file:** None
 
 ---
