@@ -185,6 +185,161 @@ impl PcbEngine {
         self.drc_duration_ms = result.duration_ms;
     }
 
+    /// Load routes from a .routes file content string.
+    ///
+    /// This parses the routes file format and adds Trace/Via entities
+    /// to the world. Existing autorouted traces are cleared first.
+    ///
+    /// Returns an empty string on success, or error message on failure.
+    #[cfg(feature = "native")]
+    pub fn load_routes(&mut self, routes_content: &str) -> String {
+        let mut errors: Vec<String> = Vec::new();
+
+        // Clear existing autorouted traces and vias
+        self.clear_autorouted_traces();
+
+        // Parse routes file
+        for line in routes_content.lines() {
+            let line = line.trim();
+
+            // Skip comments and empty lines
+            if line.is_empty() || line.starts_with('#') {
+                continue;
+            }
+
+            // Parse segment: net_id layer width_nm x1 y1 x2 y2
+            if line.starts_with("segment ") {
+                if let Err(e) = self.parse_route_segment(line) {
+                    errors.push(format!("Invalid segment: {} - {}", line, e));
+                }
+            }
+            // Parse via: net_id x y drill_nm start_layer end_layer
+            else if line.starts_with("via ") {
+                if let Err(e) = self.parse_route_via(line) {
+                    errors.push(format!("Invalid via: {} - {}", line, e));
+                }
+            }
+            // Skip other lines (version, metrics, etc.)
+        }
+
+        if errors.is_empty() {
+            String::new()
+        } else {
+            errors.join("\n")
+        }
+    }
+
+    /// Clear autorouted traces and vias from the world.
+    fn clear_autorouted_traces(&mut self) {
+        use cypcb_world::components::trace::{Trace, TraceSource, Via};
+
+        // Collect entities to remove
+        let entities_to_remove: Vec<Entity> = {
+            let ecs = self.world.ecs_mut();
+            let mut trace_query = ecs.query::<(Entity, &Trace)>();
+            let trace_entities: Vec<Entity> = trace_query
+                .iter(ecs)
+                .filter(|(_, trace)| trace.source == TraceSource::Autorouted && !trace.locked)
+                .map(|(entity, _)| entity)
+                .collect();
+            trace_entities
+        };
+
+        let via_entities_to_remove: Vec<Entity> = {
+            let ecs = self.world.ecs_mut();
+            let mut via_query = ecs.query::<(Entity, &Via)>();
+            let via_entities: Vec<Entity> = via_query
+                .iter(ecs)
+                .filter(|(_, via)| !via.locked)
+                .map(|(entity, _)| entity)
+                .collect();
+            via_entities
+        };
+
+        // Remove entities
+        let ecs = self.world.ecs_mut();
+        for entity in entities_to_remove {
+            ecs.despawn(entity);
+        }
+        for entity in via_entities_to_remove {
+            ecs.despawn(entity);
+        }
+    }
+
+    /// Parse a segment line from routes file.
+    #[cfg(feature = "native")]
+    fn parse_route_segment(&mut self, line: &str) -> Result<(), String> {
+        use cypcb_world::components::trace::{Trace, TraceSegment, TraceSource};
+
+        // segment net_id layer width_nm x1 y1 x2 y2
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.len() != 8 {
+            return Err(format!("expected 8 parts, got {}", parts.len()));
+        }
+
+        let net_id_num: u32 = parts[1].parse().map_err(|e| format!("net_id: {}", e))?;
+        let layer_str = parts[2];
+        let width: i64 = parts[3].parse().map_err(|e| format!("width: {}", e))?;
+        let x1: i64 = parts[4].parse().map_err(|e| format!("x1: {}", e))?;
+        let y1: i64 = parts[5].parse().map_err(|e| format!("y1: {}", e))?;
+        let x2: i64 = parts[6].parse().map_err(|e| format!("x2: {}", e))?;
+        let y2: i64 = parts[7].parse().map_err(|e| format!("y2: {}", e))?;
+
+        // Parse layer
+        let layer = parse_layer(layer_str)?;
+
+        // Create trace
+        let trace = Trace {
+            segments: vec![TraceSegment::new(
+                Point::new(Nm(x1), Nm(y1)),
+                Point::new(Nm(x2), Nm(y2)),
+            )],
+            width: Nm(width),
+            layer,
+            net_id: NetId::new(net_id_num),
+            locked: false,
+            source: TraceSource::Autorouted,
+        };
+
+        self.world.spawn_entity(trace);
+        Ok(())
+    }
+
+    /// Parse a via line from routes file.
+    #[cfg(feature = "native")]
+    fn parse_route_via(&mut self, line: &str) -> Result<(), String> {
+        use cypcb_world::components::trace::Via;
+
+        // via net_id x y drill_nm start_layer end_layer
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.len() != 7 {
+            return Err(format!("expected 7 parts, got {}", parts.len()));
+        }
+
+        let net_id_num: u32 = parts[1].parse().map_err(|e| format!("net_id: {}", e))?;
+        let x: i64 = parts[2].parse().map_err(|e| format!("x: {}", e))?;
+        let y: i64 = parts[3].parse().map_err(|e| format!("y: {}", e))?;
+        let drill: i64 = parts[4].parse().map_err(|e| format!("drill: {}", e))?;
+        let start_layer_str = parts[5];
+        let end_layer_str = parts[6];
+
+        let start_layer = parse_layer(start_layer_str)?;
+        let end_layer = parse_layer(end_layer_str)?;
+
+        let via = Via {
+            position: Point::new(Nm(x), Nm(y)),
+            drill: Nm(drill),
+            outer_diameter: Nm(drill * 2), // Default annular ring
+            start_layer,
+            end_layer,
+            net_id: NetId::new(net_id_num),
+            locked: false,
+        };
+
+        self.world.spawn_entity(via);
+        Ok(())
+    }
+
     /// Get the number of DRC violations from the last load.
     pub fn violation_count(&self) -> usize {
         self.violations.len()
@@ -666,6 +821,25 @@ fn pad_shape_to_string(shape: &PadShape) -> String {
         PadShape::Rect => "rect".to_string(),
         PadShape::RoundRect { .. } => "roundrect".to_string(),
         PadShape::Oblong => "oblong".to_string(),
+    }
+}
+
+/// Parse layer string from routes file format.
+fn parse_layer(layer_str: &str) -> Result<Layer, String> {
+    match layer_str {
+        "TopCopper" | "Top" => Ok(Layer::TopCopper),
+        "BottomCopper" | "Bottom" => Ok(Layer::BottomCopper),
+        _ if layer_str.starts_with("Inner(") && layer_str.ends_with(")") => {
+            let inner = &layer_str[6..layer_str.len() - 1];
+            let num: u8 = inner.parse().map_err(|e| format!("Invalid inner layer: {}", e))?;
+            Ok(Layer::Inner(num))
+        }
+        _ if layer_str.starts_with("Inner") => {
+            let num_str = &layer_str[5..];
+            let num: u8 = num_str.parse().map_err(|e| format!("Invalid inner layer: {}", e))?;
+            Ok(Layer::Inner(num))
+        }
+        _ => Err(format!("Unknown layer: {}", layer_str)),
     }
 }
 
