@@ -109,6 +109,7 @@ async function init(): Promise<void> {
   const coordsEl = document.getElementById('coords')!;
   const topLayerCb = document.getElementById('layer-top') as HTMLInputElement;
   const bottomLayerCb = document.getElementById('layer-bottom') as HTMLInputElement;
+  const ratsnestCb = document.getElementById('layer-ratsnest') as HTMLInputElement;
   const routeBtn = document.getElementById('route-btn') as HTMLButtonElement;
   const cancelRouteBtn = document.getElementById('cancel-route-btn') as HTMLButtonElement;
   const autoRouteCb = document.getElementById('auto-route') as HTMLInputElement;
@@ -169,6 +170,10 @@ async function init(): Promise<void> {
       ...layers,
       bottomCopper: bottomLayerCb.checked,
     };
+    dirty = true;
+  });
+  ratsnestCb.addEventListener('change', () => {
+    showRatsnest = ratsnestCb.checked;
     dirty = true;
   });
 
@@ -318,7 +323,7 @@ async function init(): Promise<void> {
 
   // Visibility state
   const showViolations = true;
-  const showRatsnest = true;
+  let showRatsnest = true;
 
   // Render loop
   function frame(): void {
