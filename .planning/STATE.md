@@ -3,8 +3,8 @@
 ## Current Status
 
 **Phase:** 5 of 6 (Intelligence) - In Progress
-**Plan:** 4 of 10 complete
-**Last Activity:** 2026-01-22 - Completed 05-04-PLAN.md (DSN Export for FreeRouting)
+**Plan:** 5 of 10 complete
+**Last Activity:** 2026-01-22 - Completed 05-05-PLAN.md (LSP Core Server)
 
 ## Project Reference
 
@@ -21,7 +21,7 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 | 2. Rendering | Complete | 100% (9/9 plans) |
 | 3. Validation | Complete | 100% (10/10 plans) |
 | 4. Export | Not started | 0% |
-| 5. Intelligence | In progress | 40% (4/10 plans) |
+| 5. Intelligence | In progress | 50% (5/10 plans) |
 | 6. Desktop | Not started | 0% |
 | 7. Navigation | Not started | 0% |
 
@@ -35,7 +35,7 @@ Progress: ███████████████████████�
 | 05-02 | IPC-2221 Trace Width Calculator | Complete |
 | 05-03 | KiCad Footprint Import | Complete |
 | 05-04 | DSN Export for FreeRouting | Complete |
-| 05-05 | LSP Core Server | Not started |
+| 05-05 | LSP Core Server | Complete |
 | 05-06 | Autorouter Integration | Not started |
 | 05-07 | Export Enhancements | Not started |
 | 05-08 | Board Statistics | Not started |
@@ -114,8 +114,22 @@ Continue Phase 5 (Intelligence) - Execute remaining plans
 | 2026-01-22 | Mil resolution for DSN | 0.1 mil (resolution 10) matches FreeRouting |
 | 2026-01-22 | Mutable world for export | bevy_ecs queries need &mut for cache init |
 | 2026-01-22 | Locked trace as fixed wire | (type fix) prevents FreeRouting modification |
+| 2026-01-22 | Server feature optional | Build environment proc-macro issue with tower-lsp |
+| 2026-01-22 | DocumentState stores DRC | run_drc requires &mut; store during build_world |
+| 2026-01-22 | Diagnostic cap 100 | Prevent editor flooding per RESEARCH.md guidance |
 
 ## Session History
+
+### 2026-01-22: Complete 05-05 LSP Core Server
+- Created cypcb-lsp crate with LSP protocol implementation
+- Implemented document.rs with DocumentState, Position, offset conversion
+- Implemented hover.rs with hover info for components, nets, footprints, zones, traces
+- Implemented diagnostics.rs with parse error and DRC violation conversion
+- Implemented backend.rs with tower-lsp LanguageServer trait
+- DRC violations stored in DocumentState during build_world()
+- Diagnostics capped at 100 per file to prevent editor flooding
+- Server feature optional due to build environment proc-macro issue
+- 11 tests passing (4 document + 3 hover + 4 diagnostics)
 
 ### 2026-01-22: Complete 05-04 DSN Export for FreeRouting
 - Created cypcb-router crate for autorouting integration
@@ -486,6 +500,13 @@ Continue Phase 5 (Intelligence) - Execute remaining plans
 | crates/cypcb-router/src/types.rs | RoutingResult, RouteSegment, ViaPlacement |
 | crates/cypcb-router/src/dsn.rs | Specctra DSN export implementation |
 | crates/cypcb-router/tests/dsn_integration.rs | DSN export integration tests |
+| crates/cypcb-lsp/Cargo.toml | LSP crate config (server feature optional) |
+| crates/cypcb-lsp/src/lib.rs | LSP crate API and exports |
+| crates/cypcb-lsp/src/main.rs | LSP server binary entry point |
+| crates/cypcb-lsp/src/backend.rs | tower-lsp LanguageServer impl |
+| crates/cypcb-lsp/src/document.rs | DocumentState, Position, offset conversion |
+| crates/cypcb-lsp/src/hover.rs | Hover provider for all AST types |
+| crates/cypcb-lsp/src/diagnostics.rs | Parse error and DRC violation diagnostics |
 | examples/blink.cypcb | Example LED circuit |
 | examples/invalid.cypcb | Invalid syntax example |
 | examples/unknown_keyword.cypcb | Unknown keyword example |
@@ -511,7 +532,7 @@ Continue Phase 5 (Intelligence) - Execute remaining plans
 ## Session Continuity
 
 **Last session:** 2026-01-22
-**Stopped at:** Completed 05-04-PLAN.md (DSN Export for FreeRouting)
+**Stopped at:** Completed 05-05-PLAN.md (LSP Core Server)
 **Resume file:** None
 
 ---
