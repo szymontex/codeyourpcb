@@ -206,6 +206,109 @@ impl Default for RoutingResult {
     }
 }
 
+/// Quality metrics for routing results.
+///
+/// Used to evaluate the "satisfaction score" of a routing solution.
+/// Lower values generally indicate better routing quality.
+///
+/// # Example
+///
+/// ```
+/// use cypcb_router::types::RoutingMetrics;
+/// use cypcb_core::Nm;
+///
+/// let metrics = RoutingMetrics {
+///     total_length: Nm::from_mm(150.0),
+///     via_count: 5,
+///     layer_changes: 5,
+///     unrouted_nets: 0,
+/// };
+///
+/// assert!(metrics.is_complete());
+/// ```
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RoutingMetrics {
+    /// Total routed wire length in nanometers.
+    pub total_length: Nm,
+
+    /// Number of vias used.
+    pub via_count: u32,
+
+    /// Number of layer changes (equals via_count for simple designs).
+    pub layer_changes: u32,
+
+    /// Number of nets that could not be routed.
+    pub unrouted_nets: u32,
+}
+
+impl RoutingMetrics {
+    /// Check if all nets were successfully routed.
+    pub fn is_complete(&self) -> bool {
+        self.unrouted_nets == 0
+    }
+
+    /// Calculate a simple quality score (lower is better).
+    ///
+    /// Scoring formula:
+    /// - Base: total_length in mm
+    /// - Penalty: +5mm per via
+    /// - Penalty: +1000mm per unrouted net
+    ///
+    /// This provides a rough measure for comparing routing solutions.
+    pub fn quality_score(&self) -> f64 {
+        let length_mm = self.total_length.0 as f64 / 1_000_000.0;
+        let via_penalty = self.via_count as f64 * 5.0;
+        let unrouted_penalty = self.unrouted_nets as f64 * 1000.0;
+
+        length_mm + via_penalty + unrouted_penalty
+    }
+}
+
+/// Calculate routing metrics from a RoutingResult.
+///
+/// # Example
+///
+/// ```
+/// use cypcb_router::types::{RoutingResult, RouteSegment, ViaPlacement, calculate_metrics};
+/// use cypcb_world::{Layer, NetId};
+/// use cypcb_core::{Nm, Point};
+///
+/// let routes = vec![
+///     RouteSegment::new(NetId::new(0), Layer::TopCopper, Nm::from_mm(0.2),
+///         Point::from_mm(0.0, 0.0), Point::from_mm(10.0, 0.0)),
+/// ];
+/// let vias = vec![
+///     ViaPlacement::through_hole(NetId::new(0), Point::from_mm(10.0, 0.0), Nm::from_mm(0.3)),
+/// ];
+///
+/// let result = RoutingResult::complete(routes, vias);
+/// let metrics = calculate_metrics(&result);
+///
+/// assert_eq!(metrics.via_count, 1);
+/// assert_eq!(metrics.total_length, Nm::from_mm(10.0));
+/// ```
+pub fn calculate_metrics(result: &RoutingResult) -> RoutingMetrics {
+    let total_length = result.total_length();
+    let via_count = result.vias.len() as u32;
+
+    // Count layer changes (each via represents a layer change)
+    let layer_changes = via_count;
+
+    // Count unrouted nets from status
+    let unrouted_nets = match &result.status {
+        RoutingStatus::Complete => 0,
+        RoutingStatus::Partial { unrouted_count } => *unrouted_count as u32,
+        RoutingStatus::Failed { .. } => u32::MAX, // Unknown, assume worst
+    };
+
+    RoutingMetrics {
+        total_length,
+        via_count,
+        layer_changes,
+        unrouted_nets,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -330,5 +433,118 @@ mod tests {
         assert!(result.is_complete());
         assert!(result.routes.is_empty());
         assert!(result.vias.is_empty());
+    }
+
+    #[test]
+    fn test_routing_metrics_complete() {
+        let metrics = RoutingMetrics {
+            total_length: Nm::from_mm(100.0),
+            via_count: 3,
+            layer_changes: 3,
+            unrouted_nets: 0,
+        };
+
+        assert!(metrics.is_complete());
+    }
+
+    #[test]
+    fn test_routing_metrics_incomplete() {
+        let metrics = RoutingMetrics {
+            total_length: Nm::from_mm(50.0),
+            via_count: 1,
+            layer_changes: 1,
+            unrouted_nets: 2,
+        };
+
+        assert!(!metrics.is_complete());
+    }
+
+    #[test]
+    fn test_routing_metrics_quality_score() {
+        // Simple case: 100mm length, 0 vias, 0 unrouted
+        let metrics = RoutingMetrics {
+            total_length: Nm::from_mm(100.0),
+            via_count: 0,
+            layer_changes: 0,
+            unrouted_nets: 0,
+        };
+
+        // Score should be just the length
+        assert!((metrics.quality_score() - 100.0).abs() < 0.01);
+
+        // With vias
+        let metrics_with_vias = RoutingMetrics {
+            total_length: Nm::from_mm(100.0),
+            via_count: 2,
+            layer_changes: 2,
+            unrouted_nets: 0,
+        };
+
+        // Score = 100 + (2 * 5) = 110
+        assert!((metrics_with_vias.quality_score() - 110.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_calculate_metrics_complete() {
+        let routes = vec![
+            RouteSegment::new(
+                NetId::new(0),
+                Layer::TopCopper,
+                Nm::from_mm(0.2),
+                Point::from_mm(0.0, 0.0),
+                Point::from_mm(10.0, 0.0),
+            ),
+            RouteSegment::new(
+                NetId::new(0),
+                Layer::BottomCopper,
+                Nm::from_mm(0.2),
+                Point::from_mm(10.0, 0.0),
+                Point::from_mm(20.0, 0.0),
+            ),
+        ];
+        let vias = vec![ViaPlacement::through_hole(
+            NetId::new(0),
+            Point::from_mm(10.0, 0.0),
+            Nm::from_mm(0.3),
+        )];
+
+        let result = RoutingResult::complete(routes, vias);
+        let metrics = calculate_metrics(&result);
+
+        assert_eq!(metrics.total_length, Nm::from_mm(20.0));
+        assert_eq!(metrics.via_count, 1);
+        assert_eq!(metrics.layer_changes, 1);
+        assert_eq!(metrics.unrouted_nets, 0);
+        assert!(metrics.is_complete());
+    }
+
+    #[test]
+    fn test_calculate_metrics_partial() {
+        let routes = vec![RouteSegment::new(
+            NetId::new(0),
+            Layer::TopCopper,
+            Nm::from_mm(0.2),
+            Point::from_mm(0.0, 0.0),
+            Point::from_mm(5.0, 0.0),
+        )];
+
+        let result = RoutingResult::partial(routes, Vec::new(), 3);
+        let metrics = calculate_metrics(&result);
+
+        assert_eq!(metrics.total_length, Nm::from_mm(5.0));
+        assert_eq!(metrics.via_count, 0);
+        assert_eq!(metrics.unrouted_nets, 3);
+        assert!(!metrics.is_complete());
+    }
+
+    #[test]
+    fn test_routing_metrics_default() {
+        let metrics = RoutingMetrics::default();
+
+        assert_eq!(metrics.total_length, Nm(0));
+        assert_eq!(metrics.via_count, 0);
+        assert_eq!(metrics.layer_changes, 0);
+        assert_eq!(metrics.unrouted_nets, 0);
+        assert!(metrics.is_complete());
     }
 }

@@ -7,6 +7,7 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+bevy_ecs = { workspace = true }
 cypcb-core = { path = "../cypcb-core" }
 cypcb-world = { path = "../cypcb-world", default-features = false }
 thiserror = { workspace = true }
