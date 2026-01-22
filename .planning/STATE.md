@@ -3,8 +3,8 @@
 ## Current Status
 
 **Phase:** 5 of 6 (Intelligence) - In Progress
-**Plan:** 5 of 10 complete
-**Last Activity:** 2026-01-22 - Completed 05-05-PLAN.md (LSP Core Server)
+**Plan:** 8 of 10 complete
+**Last Activity:** 2026-01-22 - Completed 05-08-PLAN.md (Trace and Ratsnest Rendering)
 
 ## Project Reference
 
@@ -21,11 +21,11 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 | 2. Rendering | Complete | 100% (9/9 plans) |
 | 3. Validation | Complete | 100% (10/10 plans) |
 | 4. Export | Not started | 0% |
-| 5. Intelligence | In progress | 50% (5/10 plans) |
+| 5. Intelligence | In progress | 80% (8/10 plans) |
 | 6. Desktop | Not started | 0% |
 | 7. Navigation | Not started | 0% |
 
-Progress: ████████████████████████████░░ 97% (32/33 plans)
+Progress: █████████████████████████████░ 97% (35/36 plans)
 
 ## Phase 5 Plan Status
 
@@ -36,9 +36,9 @@ Progress: ███████████████████████�
 | 05-03 | KiCad Footprint Import | Complete |
 | 05-04 | DSN Export for FreeRouting | Complete |
 | 05-05 | LSP Core Server | Complete |
-| 05-06 | Autorouter Integration | Not started |
-| 05-07 | Export Enhancements | Not started |
-| 05-08 | Board Statistics | Not started |
+| 05-06 | Autorouter Integration | Complete |
+| 05-07 | LSP Enhancements | Complete |
+| 05-08 | Trace and Ratsnest Rendering | Complete |
 | 05-09 | Netlist Analysis | Not started |
 | 05-10 | Visual Verification Checkpoint | Not started |
 
@@ -117,8 +117,23 @@ Continue Phase 5 (Intelligence) - Execute remaining plans
 | 2026-01-22 | Server feature optional | Build environment proc-macro issue with tower-lsp |
 | 2026-01-22 | DocumentState stores DRC | run_drc requires &mut; store during build_world |
 | 2026-01-22 | Diagnostic cap 100 | Prevent editor flooding per RESEARCH.md guidance |
+| 2026-01-22 | Star-topology ratsnest | First pin to all others for simple MVP visualization |
+| 2026-01-22 | Gold ratsnest color | #FFD700 for high visibility against copper colors |
+| 2026-01-22 | Layer-ordered rendering | Bottom -> top -> vias -> ratsnest for proper z-order |
 
 ## Session History
+
+### 2026-01-22: Complete 05-08 Trace and Ratsnest Rendering
+- Extended BoardSnapshot with TraceInfo, ViaInfo, RatsnestInfo types
+- Added collect_traces() and collect_vias() methods to PcbEngine
+- Implemented collect_ratsnest() with star-topology for unrouted nets
+- Added drawTrace() with layer colors and locked indicator
+- Added drawVia() with copper ring and drill hole
+- Added drawRatsnest() with dashed yellow lines
+- Added Ratsnest checkbox to viewer toolbar
+- Added sample traces/ratsnest to MockPcbEngine for testing
+- Layer-ordered rendering: bottom -> top -> vias -> ratsnest
+- 15 tests passing in cypcb-render
 
 ### 2026-01-22: Complete 05-05 LSP Core Server
 - Created cypcb-lsp crate with LSP protocol implementation
@@ -532,7 +547,7 @@ Continue Phase 5 (Intelligence) - Execute remaining plans
 ## Session Continuity
 
 **Last session:** 2026-01-22
-**Stopped at:** Completed 05-05-PLAN.md (LSP Core Server)
+**Stopped at:** Completed 05-08-PLAN.md (Trace and Ratsnest Rendering)
 **Resume file:** None
 
 ---
