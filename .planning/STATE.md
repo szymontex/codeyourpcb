@@ -2,16 +2,16 @@
 
 ## Current Status
 
-**Phase:** 5 of 6 (Intelligence) - In Progress
-**Plan:** 9 of 10 complete
-**Last Activity:** 2026-01-22 - Completed 05-09-PLAN.md (Autoroute Integration)
+**Phase:** 8 of 8 (File Picker) - In Progress
+**Plan:** 1 of 3 complete
+**Last Activity:** 2026-01-22 - Completed 08-01-PLAN.md (File Picker Infrastructure)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-01-21)
 
 **Core value:** The source file is the design - git-friendly, AI-editable, deterministic
-**Current focus:** Phase 5 Intelligence - LSP, autorouting, and electrical calculations
+**Current focus:** Phase 8 File Picker - Client-side file loading for viewer
 
 ## Phase Progress
 
@@ -24,27 +24,21 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 | 5. Intelligence | In progress | 90% (9/10 plans) |
 | 6. Desktop | Not started | 0% |
 | 7. Navigation | Not started | 0% |
+| 8. File Picker | In progress | 33% (1/3 plans) |
 
-Progress: █████████████████████████████░ 97% (36/37 plans)
+Progress: █████████████████████████████░ 97% (37/38 plans)
 
-## Phase 5 Plan Status
+## Phase 8 Plan Status
 
 | Plan | Name | Status |
 |------|------|--------|
-| 05-01 | Trace & Via ECS + DSL Extensions | Complete |
-| 05-02 | IPC-2221 Trace Width Calculator | Complete |
-| 05-03 | KiCad Footprint Import | Complete |
-| 05-04 | DSN Export for FreeRouting | Complete |
-| 05-05 | LSP Core Server | Complete |
-| 05-06 | Autorouter Integration | Complete |
-| 05-07 | LSP Enhancements | Complete |
-| 05-08 | Trace and Ratsnest Rendering | Complete |
-| 05-09 | Autoroute Integration | Complete |
-| 05-10 | Visual Verification Checkpoint | Not started |
+| 08-01 | File Picker Infrastructure | Complete |
+| 08-02 | File Loading Integration | Not started |
+| 08-03 | Multi-file Support | Not started |
 
 ## Next Action
 
-Continue Phase 5 (Intelligence) - Execute remaining plans
+Continue Phase 8 (File Picker) - Execute 08-02-PLAN.md
 
 ## Key Decisions Log
 
@@ -122,6 +116,17 @@ Continue Phase 5 (Intelligence) - Execute remaining plans
 | 2026-01-22 | Layer-ordered rendering | Bottom -> top -> vias -> ratsnest for proper z-order |
 
 ## Session History
+
+### 2026-01-22: Complete 08-01 File Picker Infrastructure
+- Created file-picker.ts (102 lines) with three utility functions
+- readFileAsText: Promise wrapper for FileReader.readAsText()
+- createFilePicker: Hidden input element with change handler
+- setupDropZone: Drag events with visual feedback class and drag counter
+- Window-level dragover/drop handlers prevent accidental file navigation
+- Added Open button to toolbar with blue styling (#007bff)
+- Added drag-over CSS with dashed green outline (#28a745)
+- Added drop-hint element that appears during drag
+- TypeScript compiles, all exports verified
 
 ### 2026-01-22: Complete 05-09 Autoroute Integration
 - Created CLI route command (crates/cypcb-cli/src/commands/route.rs, 398 lines)
@@ -556,11 +561,12 @@ Continue Phase 5 (Intelligence) - Execute remaining plans
 | crates/cypcb-watcher/Cargo.toml | File watcher crate config |
 | crates/cypcb-watcher/src/lib.rs | Debounced file watching |
 | viewer/server.ts | Dev server with WebSocket |
+| viewer/src/file-picker.ts | File selection and reading utilities |
 
 ## Session Continuity
 
 **Last session:** 2026-01-22
-**Stopped at:** Completed 05-09-PLAN.md (Autoroute Integration)
+**Stopped at:** Completed 08-01-PLAN.md (File Picker Infrastructure)
 **Resume file:** None
 
 ---
