@@ -43,6 +43,7 @@ module.exports = grammar({
       $.net_definition,
       $.footprint_definition,
       $.zone_definition,
+      $.trace_definition,
     ),
 
     // board name { properties }
@@ -166,6 +167,7 @@ module.exports = grammar({
     net_constraint: $ => choice(
       $.width_constraint,
       $.clearance_constraint,
+      $.current_constraint,
     ),
 
     // width 0.3mm
@@ -179,6 +181,20 @@ module.exports = grammar({
       'clearance',
       field('value', $.dimension),
     ),
+
+    // current 500mA or current 2A
+    current_constraint: $ => seq(
+      'current',
+      field('value', $.current_value),
+    ),
+
+    // Current value with unit (mA or A)
+    current_value: $ => seq(
+      field('amount', $.number),
+      field('unit', $.current_unit),
+    ),
+
+    current_unit: $ => choice('mA', 'A'),
 
     // Comma-separated list of pin references
     pin_ref_list: $ => seq(
@@ -317,5 +333,64 @@ module.exports = grammar({
 
     // net NETNAME (for copper pour zones)
     zone_net: $ => seq('net', field('net', $.identifier)),
+
+    // ========================================================================
+    // Manual Trace Definitions
+    // ========================================================================
+
+    // trace NET_NAME { from PIN to PIN [via X, Y] [layer L] [width W] [locked] }
+    trace_definition: $ => seq(
+      'trace',
+      field('net', $.identifier),
+      '{',
+      repeat($._trace_property),
+      '}',
+    ),
+
+    _trace_property: $ => choice(
+      $.trace_from,
+      $.trace_to,
+      $.trace_via,
+      $.trace_layer,
+      $.trace_width,
+      $.trace_locked,
+    ),
+
+    // from R1.1
+    trace_from: $ => seq(
+      'from',
+      field('pin', $.pin_ref),
+    ),
+
+    // to C1.1
+    trace_to: $ => seq(
+      'to',
+      field('pin', $.pin_ref),
+    ),
+
+    // via 5mm, 8mm (waypoint position)
+    trace_via: $ => seq(
+      'via',
+      field('x', $.dimension),
+      ',',
+      field('y', $.dimension),
+    ),
+
+    // layer Top or layer Bottom
+    trace_layer: $ => seq(
+      'layer',
+      field('name', $.trace_layer_name),
+    ),
+
+    trace_layer_name: $ => choice('Top', 'Bottom', 'Inner1', 'Inner2', 'Inner3', 'Inner4'),
+
+    // width 0.3mm
+    trace_width: $ => seq(
+      'width',
+      field('value', $.dimension),
+    ),
+
+    // locked (keyword only, no value)
+    trace_locked: $ => 'locked',
   },
 });

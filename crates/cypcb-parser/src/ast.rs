@@ -114,6 +114,8 @@ pub enum Definition {
     Footprint(FootprintDef),
     /// A zone definition (keepout or copper pour).
     Zone(ZoneDef),
+    /// A manual trace definition.
+    Trace(TraceDef),
 }
 
 impl Definition {
@@ -125,6 +127,7 @@ impl Definition {
             Definition::Net(n) => n.span,
             Definition::Footprint(f) => f.span,
             Definition::Zone(z) => z.span,
+            Definition::Trace(t) => t.span,
         }
     }
 }
@@ -331,15 +334,87 @@ pub struct NetDef {
     pub span: Span,
 }
 
-/// Net constraints: `[width 0.3mm, clearance 0.2mm]`.
+/// Net constraints: `[width 0.3mm, clearance 0.2mm, current 500mA]`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NetConstraints {
     /// Trace width constraint.
     pub width: Option<Dimension>,
     /// Clearance constraint.
     pub clearance: Option<Dimension>,
+    /// Current carrying requirement (for IPC-2221 calculation).
+    pub current: Option<CurrentValue>,
     /// Span covering the constraint block.
     pub span: Span,
+}
+
+/// Current value with unit: `500mA` or `2A`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CurrentValue {
+    /// Numeric value.
+    pub value: f64,
+    /// Unit of current measurement.
+    pub unit: CurrentUnit,
+    /// Span covering the current value.
+    pub span: Span,
+}
+
+impl CurrentValue {
+    /// Create a new current value.
+    pub fn new(value: f64, unit: CurrentUnit, span: Span) -> Self {
+        CurrentValue { value, unit, span }
+    }
+
+    /// Convert to milliamps.
+    pub fn to_milliamps(&self) -> f64 {
+        match self.unit {
+            CurrentUnit::Milliamps => self.value,
+            CurrentUnit::Amps => self.value * 1000.0,
+        }
+    }
+
+    /// Convert to amps.
+    pub fn to_amps(&self) -> f64 {
+        match self.unit {
+            CurrentUnit::Milliamps => self.value / 1000.0,
+            CurrentUnit::Amps => self.value,
+        }
+    }
+}
+
+impl std::fmt::Display for CurrentValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}{}", self.value, self.unit)
+    }
+}
+
+/// Unit of current measurement.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CurrentUnit {
+    /// Milliamps (mA).
+    Milliamps,
+    /// Amps (A).
+    Amps,
+}
+
+impl CurrentUnit {
+    /// Parse a current unit from a string.
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s {
+            "mA" => Some(CurrentUnit::Milliamps),
+            "A" => Some(CurrentUnit::Amps),
+            _ => None,
+        }
+    }
+}
+
+impl std::fmt::Display for CurrentUnit {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CurrentUnit::Milliamps => write!(f, "mA"),
+            CurrentUnit::Amps => write!(f, "A"),
+        }
+    }
 }
 
 /// A pin reference: `J1.1` or `U1.VCC`.
@@ -606,6 +681,44 @@ pub struct ZoneDef {
     pub span: Span,
 }
 
+/// A manual trace definition.
+///
+/// Manual traces allow users to define explicit routing between two pins,
+/// optionally with via waypoints. These traces can be locked to prevent
+/// the autorouter from modifying them.
+///
+/// # Example DSL
+///
+/// ```cypcb
+/// trace VCC {
+///     from R1.1
+///     to C1.1
+///     via 5mm, 8mm
+///     layer Top
+///     width 0.4mm
+///     locked
+/// }
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TraceDef {
+    /// Net name this trace belongs to.
+    pub net: Identifier,
+    /// Starting pin reference.
+    pub from: Option<PinRef>,
+    /// Ending pin reference.
+    pub to: Option<PinRef>,
+    /// Via waypoints (positions between from and to).
+    pub waypoints: Vec<PositionExpr>,
+    /// Copper layer (None = use net default or TopCopper).
+    pub layer: Option<String>,
+    /// Trace width (None = use net constraint or default).
+    pub width: Option<Dimension>,
+    /// If true, autorouter should not modify this trace.
+    pub locked: bool,
+    /// Source span.
+    pub span: Span,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -690,5 +803,32 @@ mod tests {
         assert_eq!(PadShape::from_str("roundrect"), Some(PadShape::RoundRect));
         assert_eq!(PadShape::from_str("oblong"), Some(PadShape::Oblong));
         assert_eq!(PadShape::from_str("unknown"), None);
+    }
+
+    #[test]
+    fn test_current_unit_parse() {
+        assert_eq!(CurrentUnit::from_str("mA"), Some(CurrentUnit::Milliamps));
+        assert_eq!(CurrentUnit::from_str("A"), Some(CurrentUnit::Amps));
+        assert_eq!(CurrentUnit::from_str("unknown"), None);
+    }
+
+    #[test]
+    fn test_current_value_conversions() {
+        let ma_val = CurrentValue::new(500.0, CurrentUnit::Milliamps, Span::new(0, 5));
+        assert!((ma_val.to_milliamps() - 500.0).abs() < 0.001);
+        assert!((ma_val.to_amps() - 0.5).abs() < 0.001);
+
+        let a_val = CurrentValue::new(2.0, CurrentUnit::Amps, Span::new(0, 2));
+        assert!((a_val.to_milliamps() - 2000.0).abs() < 0.001);
+        assert!((a_val.to_amps() - 2.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_current_value_display() {
+        let ma = CurrentValue::new(500.0, CurrentUnit::Milliamps, Span::new(0, 5));
+        assert_eq!(format!("{}", ma), "500mA");
+
+        let a = CurrentValue::new(2.5, CurrentUnit::Amps, Span::new(0, 4));
+        assert_eq!(format!("{}", a), "2.5A");
     }
 }
