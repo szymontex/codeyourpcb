@@ -3,10 +3,10 @@
  * Draws board outline, components, pads, and grid
  */
 
-import type { BoardSnapshot, ComponentInfo, PadInfo, ViolationInfo } from './types';
+import type { BoardSnapshot, ComponentInfo, PadInfo, ViolationInfo, TraceInfo, ViaInfo, RatsnestInfo } from './types';
 import type { Viewport } from './viewport';
 import { worldToScreen, screenToWorld } from './viewport';
-import { LAYER_COLORS, getPadColor, type LayerVisibility } from './layers';
+import { LAYER_COLORS, getPadColor, getTraceColor, type LayerVisibility } from './layers';
 
 export interface RenderState {
   snapshot: BoardSnapshot | null;
@@ -14,13 +14,14 @@ export interface RenderState {
   layers: LayerVisibility;
   selectedRefdes: string | null;
   showViolations: boolean;
+  showRatsnest: boolean;
 }
 
 /**
  * Main render function - draws entire board state
  */
 export function render(ctx: CanvasRenderingContext2D, state: RenderState): void {
-  const { snapshot, viewport, layers, selectedRefdes, showViolations } = state;
+  const { snapshot, viewport, layers, selectedRefdes, showViolations, showRatsnest } = state;
 
   // Clear canvas with background color
   ctx.fillStyle = LAYER_COLORS.background;
@@ -37,10 +38,49 @@ export function render(ctx: CanvasRenderingContext2D, state: RenderState): void 
   // Draw board outline
   drawBoardOutline(ctx, viewport, snapshot.board.width_nm, snapshot.board.height_nm);
 
+  // Draw traces by layer (bottom first, then top)
+  if (snapshot.traces) {
+    // Bottom traces first
+    for (const trace of snapshot.traces) {
+      if (trace.layer === 'Bottom' && layers.bottomCopper) {
+        drawTrace(ctx, viewport, trace, layers);
+      }
+    }
+    // Top traces on top
+    for (const trace of snapshot.traces) {
+      if (trace.layer === 'Top' && layers.topCopper) {
+        drawTrace(ctx, viewport, trace, layers);
+      }
+    }
+    // Inner layers
+    for (const trace of snapshot.traces) {
+      if (trace.layer !== 'Top' && trace.layer !== 'Bottom') {
+        drawTrace(ctx, viewport, trace, layers);
+      }
+    }
+  }
+
   // Draw components (pads and labels)
   for (const comp of snapshot.components) {
     const isSelected = comp.refdes === selectedRefdes;
     drawComponent(ctx, viewport, comp, layers, isSelected);
+  }
+
+  // Draw vias on top of traces but below ratsnest
+  if (snapshot.vias) {
+    for (const via of snapshot.vias) {
+      // Vias visible if any copper layer is visible
+      if (layers.topCopper || layers.bottomCopper) {
+        drawVia(ctx, viewport, via);
+      }
+    }
+  }
+
+  // Draw ratsnest on top of everything (except violations)
+  if (showRatsnest && snapshot.ratsnest) {
+    for (const line of snapshot.ratsnest) {
+      drawRatsnest(ctx, viewport, line);
+    }
   }
 
   // Draw violations on top of everything
@@ -143,6 +183,123 @@ function drawViolation(
   ctx.arc(sx, sy, innerRadius, 0, Math.PI * 2);
   ctx.fillStyle = 'rgba(255, 0, 0, 0.3)';
   ctx.fill();
+}
+
+/**
+ * Draw a copper trace
+ * Renders as a thick polyline with rounded ends
+ */
+function drawTrace(
+  ctx: CanvasRenderingContext2D,
+  vp: Viewport,
+  trace: TraceInfo,
+  layers: LayerVisibility
+): void {
+  if (trace.segments.length === 0) return;
+
+  // Get color based on layer
+  const color = getTraceColor(trace.layer, layers);
+  if (!color) return;
+
+  // Calculate line width in screen pixels
+  const lineWidth = trace.width * vp.scale;
+
+  // Don't render if too thin to see
+  if (lineWidth < 0.5) return;
+
+  ctx.strokeStyle = color;
+  ctx.lineWidth = lineWidth;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  // Draw the polyline
+  ctx.beginPath();
+  const firstSeg = trace.segments[0];
+  const [startX, startY] = worldToScreen(vp, firstSeg.start_x, firstSeg.start_y);
+  ctx.moveTo(startX, startY);
+
+  for (const seg of trace.segments) {
+    const [endX, endY] = worldToScreen(vp, seg.end_x, seg.end_y);
+    ctx.lineTo(endX, endY);
+  }
+
+  ctx.stroke();
+
+  // Draw locked indicator (subtle dashed overlay) if trace is locked
+  if (trace.locked && lineWidth > 2) {
+    ctx.save();
+    ctx.setLineDash([5, 5]);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+    ctx.lineWidth = Math.max(1, lineWidth * 0.3);
+
+    ctx.beginPath();
+    const [lockStartX, lockStartY] = worldToScreen(vp, firstSeg.start_x, firstSeg.start_y);
+    ctx.moveTo(lockStartX, lockStartY);
+
+    for (const seg of trace.segments) {
+      const [endX, endY] = worldToScreen(vp, seg.end_x, seg.end_y);
+      ctx.lineTo(endX, endY);
+    }
+
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+/**
+ * Draw a via (plated through-hole connecting layers)
+ * Renders as a filled circle with a drill hole
+ */
+function drawVia(
+  ctx: CanvasRenderingContext2D,
+  vp: Viewport,
+  via: ViaInfo
+): void {
+  const [sx, sy] = worldToScreen(vp, via.x, via.y);
+  const outerRadius = (via.outer_diameter * vp.scale) / 2;
+  const drillRadius = (via.drill * vp.scale) / 2;
+
+  // Don't render if too small to see
+  if (outerRadius < 1) return;
+
+  // Draw outer copper ring (use via color - blend of top/bottom)
+  ctx.beginPath();
+  ctx.arc(sx, sy, outerRadius, 0, Math.PI * 2);
+  ctx.fillStyle = LAYER_COLORS.via;
+  ctx.fill();
+
+  // Draw drill hole
+  if (drillRadius > 0.5) {
+    ctx.beginPath();
+    ctx.arc(sx, sy, drillRadius, 0, Math.PI * 2);
+    ctx.fillStyle = LAYER_COLORS.background;
+    ctx.fill();
+  }
+}
+
+/**
+ * Draw a ratsnest line (unrouted connection indicator)
+ * Thin dashed line in high-visibility color
+ */
+function drawRatsnest(
+  ctx: CanvasRenderingContext2D,
+  vp: Viewport,
+  line: RatsnestInfo
+): void {
+  const [startX, startY] = worldToScreen(vp, line.start_x, line.start_y);
+  const [endX, endY] = worldToScreen(vp, line.end_x, line.end_y);
+
+  ctx.save();
+  ctx.strokeStyle = LAYER_COLORS.ratsnest;
+  ctx.lineWidth = 1; // Always 1px regardless of zoom
+  ctx.setLineDash([5, 3]); // Dashed pattern
+
+  ctx.beginPath();
+  ctx.moveTo(startX, startY);
+  ctx.lineTo(endX, endY);
+  ctx.stroke();
+
+  ctx.restore();
 }
 
 /**
@@ -291,6 +448,7 @@ export function createRenderState(viewport: Viewport, layers: LayerVisibility): 
     layers,
     selectedRefdes: null,
     showViolations: true,
+    showRatsnest: true,
   };
 }
 

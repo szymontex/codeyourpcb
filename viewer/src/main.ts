@@ -109,8 +109,18 @@ async function init(): Promise<void> {
   const coordsEl = document.getElementById('coords')!;
   const topLayerCb = document.getElementById('layer-top') as HTMLInputElement;
   const bottomLayerCb = document.getElementById('layer-bottom') as HTMLInputElement;
+  const routeBtn = document.getElementById('route-btn') as HTMLButtonElement;
+  const cancelRouteBtn = document.getElementById('cancel-route-btn') as HTMLButtonElement;
+  const autoRouteCb = document.getElementById('auto-route') as HTMLInputElement;
+  const routingStatus = document.getElementById('routing-status')!;
+  const routingProgress = document.getElementById('routing-progress')!;
 
   const ctx = canvas.getContext('2d')!;
+
+  // Routing state
+  let isRouting = false;
+  let routingCancelled = false;
+  let currentFilePath: string | null = null;
 
   /**
    * Update error badge with violation count
@@ -306,8 +316,9 @@ async function init(): Promise<void> {
     coordsEl.textContent = '';
   });
 
-  // Violation visibility state
-  let showViolations = true;
+  // Visibility state
+  const showViolations = true;
+  const showRatsnest = true;
 
   // Render loop
   function frame(): void {
@@ -318,6 +329,7 @@ async function init(): Promise<void> {
         layers,
         selectedRefdes,
         showViolations,
+        showRatsnest,
       };
       render(ctx, renderState);
       dirty = false;
@@ -378,9 +390,158 @@ async function init(): Promise<void> {
     dirty = true;
   }
 
+  // ========================================================================
+  // Routing Integration
+  // ========================================================================
+
+  /**
+   * Routing state for UI updates
+   */
+  interface RoutingState {
+    isRouting: boolean;
+    pass: number;
+    routed: number;
+    unrouted: number;
+    elapsed: number;
+  }
+
+  /**
+   * Update UI to reflect routing state
+   */
+  function updateRoutingUI(state: RoutingState): void {
+    if (state.isRouting) {
+      routeBtn.disabled = true;
+      routeBtn.classList.add('routing');
+      routeBtn.textContent = 'Routing...';
+      cancelRouteBtn.classList.remove('hidden');
+      routingStatus.classList.remove('hidden');
+      routingProgress.textContent = `Pass ${state.pass}: ${state.routed} routed, ${state.unrouted} unrouted (${state.elapsed}s)`;
+    } else {
+      routeBtn.disabled = false;
+      routeBtn.classList.remove('routing');
+      routeBtn.textContent = 'Route';
+      cancelRouteBtn.classList.add('hidden');
+      routingStatus.classList.add('hidden');
+    }
+  }
+
+  /**
+   * Trigger routing via WebSocket message or CLI subprocess.
+   * For MVP, we use a polling approach with the CLI.
+   */
+  async function triggerRouting(): Promise<void> {
+    if (isRouting || !currentFilePath) {
+      console.log('[Routing] Cannot start routing: already routing or no file loaded');
+      return;
+    }
+
+    isRouting = true;
+    routingCancelled = false;
+
+    updateRoutingUI({
+      isRouting: true,
+      pass: 0,
+      routed: 0,
+      unrouted: 0,
+      elapsed: 0,
+    });
+
+    console.log('[Routing] Starting routing for:', currentFilePath);
+    statusText.textContent = 'Routing...';
+
+    // For the viewer, we simulate routing progress
+    // In a real implementation, this would communicate with a backend
+    // that runs the CLI route command and reports progress via WebSocket
+
+    // Simulate routing progress
+    let elapsed = 0;
+    const progressInterval = setInterval(() => {
+      if (routingCancelled) {
+        clearInterval(progressInterval);
+        updateRoutingUI({ isRouting: false, pass: 0, routed: 0, unrouted: 0, elapsed: 0 });
+        statusText.textContent = 'Routing cancelled';
+        isRouting = false;
+        return;
+      }
+
+      elapsed++;
+      updateRoutingUI({
+        isRouting: true,
+        pass: Math.floor(elapsed / 3) + 1,
+        routed: Math.min(elapsed * 2, 20),
+        unrouted: Math.max(20 - elapsed * 2, 0),
+        elapsed,
+      });
+    }, 1000);
+
+    // Simulate routing completion after 5 seconds
+    // In real implementation, this would wait for CLI completion
+    setTimeout(() => {
+      clearInterval(progressInterval);
+
+      if (!routingCancelled) {
+        isRouting = false;
+        updateRoutingUI({ isRouting: false, pass: 0, routed: 0, unrouted: 0, elapsed: 0 });
+        statusText.textContent = 'Routing complete (simulated)';
+
+        // In real implementation:
+        // 1. Poll for .routes file
+        // 2. Load routes into engine
+        // 3. Update snapshot
+        // 4. Trigger re-render
+
+        console.log('[Routing] Routing complete (simulated)');
+
+        // Show completion status briefly
+        setTimeout(() => {
+          statusText.textContent = usingWasm ? 'Ready (WASM)' : 'Ready (Mock)';
+        }, 2000);
+      }
+    }, 5000);
+  }
+
+  /**
+   * Cancel the current routing operation
+   */
+  function cancelRouting(): void {
+    if (isRouting) {
+      console.log('[Routing] Cancelling routing...');
+      routingCancelled = true;
+    }
+  }
+
+  // Route button click handler
+  routeBtn.addEventListener('click', () => {
+    triggerRouting();
+  });
+
+  // Cancel button click handler
+  cancelRouteBtn.addEventListener('click', () => {
+    cancelRouting();
+  });
+
+  // Keyboard shortcut: Escape to cancel routing
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && isRouting) {
+      cancelRouting();
+    }
+  });
+
   // Connect WebSocket for hot reload (fails gracefully if server not running)
   try {
-    connectWebSocket(reload);
+    connectWebSocket((content, file) => {
+      // Track current file for routing
+      currentFilePath = file;
+      reload(content, file);
+
+      // Auto-route if enabled
+      if (autoRouteCb.checked && !isRouting) {
+        // Small delay to let reload complete
+        setTimeout(() => {
+          triggerRouting();
+        }, 500);
+      }
+    });
   } catch (err) {
     console.log('[HotReload] WebSocket not available, hot reload disabled');
   }
