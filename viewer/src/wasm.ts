@@ -244,7 +244,7 @@ function parseSource(source: string): { snapshot: BoardSnapshot; errors: string[
   }
 
   return {
-    snapshot: { board, components, nets: Array.from(nets.values()), violations: [] },
+    snapshot: { board, components, nets: Array.from(nets.values()), violations: [], traces: [], vias: [], ratsnest: [] },
     errors,
   };
 }
@@ -262,7 +262,6 @@ function parseSource(source: string): { snapshot: BoardSnapshot; errors: string[
  */
 class WasmPcbEngineAdapter implements PcbEngine {
   private wasmEngine: WasmPcbEngine;
-  private currentSnapshot: BoardSnapshot = { board: null, components: [], nets: [], violations: [] };
 
   constructor(wasmEngine: WasmPcbEngine) {
     this.wasmEngine = wasmEngine;
@@ -271,9 +270,8 @@ class WasmPcbEngineAdapter implements PcbEngine {
   load_source(source: string): string {
     // Parse in JavaScript
     const { snapshot, errors } = parseSource(source);
-    this.currentSnapshot = snapshot;
 
-    // Load into WASM engine for queries
+    // Store snapshot and load into WASM engine for queries
     const wasmError = this.wasmEngine.load_snapshot(snapshot);
     if (wasmError) {
       errors.push(wasmError);
@@ -308,7 +306,7 @@ class WasmPcbEngineAdapter implements PcbEngine {
  * Uses the same JavaScript parser as the WASM adapter.
  */
 class MockPcbEngine implements PcbEngine {
-  private snapshot: BoardSnapshot = { board: null, components: [], nets: [], violations: [] };
+  private snapshot: BoardSnapshot = { board: null, components: [], nets: [], violations: [], traces: [], vias: [], ratsnest: [] };
 
   load_source(source: string): string {
     const { snapshot, errors } = parseSource(source);

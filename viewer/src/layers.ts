@@ -15,6 +15,8 @@ export const LAYER_COLORS = {
   grid: '#E0E0E0',             // Light gray grid
   violation: '#FF0000',        // Red for DRC errors
   violation_ring: '#FF0000',   // Ring outline for violation markers
+  via: '#808080',              // Gray for vias (between top/bottom)
+  ratsnest: '#FFD700',         // Gold/Yellow for unrouted connections
 } as const;
 
 // Layer bit masks (match cypcb-world Layer enum)
@@ -95,4 +97,23 @@ export function isBottomLayer(layerMask: number): boolean {
  */
 export function isThroughHole(layerMask: number): boolean {
   return isTopLayer(layerMask) && isBottomLayer(layerMask);
+}
+
+/**
+ * Get color for a trace based on its layer name and visibility settings
+ * Returns null if the layer is not visible
+ */
+export function getTraceColor(layer: string, visibility: LayerVisibility): string | null {
+  switch (layer) {
+    case 'Top':
+      return visibility.topCopper ? LAYER_COLORS.top_copper : null;
+    case 'Bottom':
+      return visibility.bottomCopper ? LAYER_COLORS.bottom_copper : null;
+    default:
+      // Inner layers - show if any copper layer is visible
+      if (visibility.topCopper || visibility.bottomCopper) {
+        return '#34C834'; // Green for inner layers
+      }
+      return null;
+  }
 }
