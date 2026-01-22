@@ -119,6 +119,19 @@
     .error-message {
       color: #333;
     }
+    /* Open button */
+    #open-btn {
+      background: #007bff;
+      color: white;
+      border: none;
+      padding: 4px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    #open-btn:hover {
+      background: #0069d9;
+    }
     /* Route button */
     #route-btn {
       background: #28a745;
@@ -203,6 +216,26 @@
       0% { transform: rotate(0deg); }
       100% { transform: rotate(360deg); }
     }
+    /* Drag-over visual feedback */
+    #canvas-container.drag-over {
+      outline: 3px dashed #28a745;
+      outline-offset: -3px;
+      background: rgba(40, 167, 69, 0.05);
+    }
+    #drop-hint {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 18px;
+      color: #28a745;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+    #canvas-container.drag-over #drop-hint {
+      opacity: 1;
+    }
   </style>
 </head>
 <body>
@@ -213,12 +246,14 @@
     <span class="separator">|</span>
     <label><input type="checkbox" id="layer-ratsnest" checked> Ratsnest</label>
     <span id="coords"></span>
+    <button id="open-btn">Open</button>
     <label id="auto-route-label"><input type="checkbox" id="auto-route"> Auto-route</label>
     <button id="route-btn">Route</button>
     <button id="cancel-route-btn" class="hidden">Cancel</button>
   </div>
   <div id="canvas-container">
     <canvas id="pcb-canvas"></canvas>
+    <div id="drop-hint">Drop .cypcb or .ses file</div>
     <div id="status">
       <span id="status-text">Loading...</span>
       <span id="error-badge" class="hidden"><span id="error-count">0</span> errors</span>
