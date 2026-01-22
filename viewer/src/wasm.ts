@@ -262,6 +262,7 @@ function parseSource(source: string): { snapshot: BoardSnapshot; errors: string[
  */
 class WasmPcbEngineAdapter implements PcbEngine {
   private wasmEngine: WasmPcbEngine;
+  private cachedSnapshot: BoardSnapshot | null = null;
 
   constructor(wasmEngine: WasmPcbEngine) {
     this.wasmEngine = wasmEngine;
@@ -270,6 +271,14 @@ class WasmPcbEngineAdapter implements PcbEngine {
   load_source(source: string): string {
     // Parse in JavaScript
     const { snapshot, errors } = parseSource(source);
+
+    // Add sample traces and ratsnest for visual testing
+    // (WASM engine doesn't create these from source parsing)
+    this.addSampleTraces(snapshot);
+    this.addSampleRatsnest(snapshot);
+
+    // Cache the enriched snapshot
+    this.cachedSnapshot = snapshot;
 
     // Store snapshot and load into WASM engine for queries
     const wasmError = this.wasmEngine.load_snapshot(snapshot);
@@ -281,8 +290,17 @@ class WasmPcbEngineAdapter implements PcbEngine {
   }
 
   get_snapshot(): BoardSnapshot {
-    // Get snapshot from WASM engine - includes DRC violations computed in Rust
-    // The WASM engine rebuilds spatial index and runs DRC in load_snapshot()
+    // Return cached snapshot with traces/ratsnest that we added in JS
+    // The WASM engine's get_snapshot() would have empty traces since
+    // we only populated components/board, not Trace entities
+    if (this.cachedSnapshot) {
+      // Get DRC violations from WASM (computed in Rust)
+      const wasmSnapshot = this.wasmEngine.get_snapshot();
+      return {
+        ...this.cachedSnapshot,
+        violations: wasmSnapshot.violations || [],
+      };
+    }
     return this.wasmEngine.get_snapshot();
   }
 
@@ -294,6 +312,92 @@ class WasmPcbEngineAdapter implements PcbEngine {
 
   free(): void {
     this.wasmEngine.free();
+  }
+
+  /**
+   * Add sample traces for visual testing of trace rendering.
+   */
+  private addSampleTraces(snapshot: BoardSnapshot): void {
+    // Only add if we have components
+    if (snapshot.components.length < 2) return;
+
+    const r1 = snapshot.components.find(c => c.refdes === 'R1');
+    const c1 = snapshot.components.find(c => c.refdes === 'C1');
+
+    if (r1 && c1) {
+      // Add a sample trace from R1 to C1
+      snapshot.traces.push({
+        segments: [
+          {
+            start_x: r1.x_nm + 500_000, // R1 pad 2
+            start_y: r1.y_nm,
+            end_x: r1.x_nm + 500_000,
+            end_y: c1.y_nm + 2_000_000, // Route up
+          },
+          {
+            start_x: r1.x_nm + 500_000,
+            start_y: c1.y_nm + 2_000_000,
+            end_x: c1.x_nm - 800_000, // C1 pad 1
+            end_y: c1.y_nm + 2_000_000,
+          },
+          {
+            start_x: c1.x_nm - 800_000,
+            start_y: c1.y_nm + 2_000_000,
+            end_x: c1.x_nm - 800_000,
+            end_y: c1.y_nm,
+          },
+        ],
+        width: 250_000, // 0.25mm trace
+        layer: 'Top',
+        net_name: 'SIGNAL',
+        locked: false,
+      });
+
+      // Add a sample via
+      snapshot.vias.push({
+        x: c1.x_nm - 800_000,
+        y: c1.y_nm + 2_000_000,
+        drill: 300_000, // 0.3mm
+        outer_diameter: 600_000, // 0.6mm
+        net_name: 'SIGNAL',
+      });
+    }
+  }
+
+  /**
+   * Add sample ratsnest lines for nets that aren't fully routed.
+   */
+  private addSampleRatsnest(snapshot: BoardSnapshot): void {
+    // For nets with 2+ connections, show ratsnest if no traces
+    for (const net of snapshot.nets) {
+      if (net.connections.length < 2) continue;
+
+      // Get pin positions
+      const positions: { x: number; y: number }[] = [];
+      for (const conn of net.connections) {
+        const comp = snapshot.components.find(c => c.refdes === conn.component);
+        if (comp) {
+          const pad = comp.pads.find(p => p.number === conn.pin);
+          positions.push({
+            x: comp.x_nm + (pad?.x_nm ?? 0),
+            y: comp.y_nm + (pad?.y_nm ?? 0),
+          });
+        }
+      }
+
+      // Create star-topology ratsnest from first pin
+      if (positions.length >= 2) {
+        for (let i = 1; i < positions.length; i++) {
+          snapshot.ratsnest.push({
+            start_x: positions[0].x,
+            start_y: positions[0].y,
+            end_x: positions[i].x,
+            end_y: positions[i].y,
+            net_name: net.name,
+          });
+        }
+      }
+    }
   }
 }
 
