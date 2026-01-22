@@ -11,3 +11,6 @@ cypcb-world = { path = "../cypcb-world", default-features = false }
 kicad_parse_gen = "0.7"
 thiserror.workspace = true
 walkdir = "2"
+
+[dev-dependencies]
+tempfile = "3"

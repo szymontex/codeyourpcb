@@ -22,4 +22,4 @@ pub mod footprint;
 pub mod library;
 
 pub use footprint::{import_footprint, import_footprint_from_str, KicadImportError};
-pub use library::{scan_library, scan_libraries, LibraryEntry};
+pub use library::{scan_library, scan_libraries, find_by_name, find_by_library, LibraryEntry};
