@@ -119,6 +119,8 @@ pub use components::{
     // Position components
     Position,
     Rotation,
+    // Trace components
+    trace::{Trace, TraceSegment, TraceSource, Via},
 };
 
 // Re-export registry and spatial types

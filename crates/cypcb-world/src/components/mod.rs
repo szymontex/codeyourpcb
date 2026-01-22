@@ -36,6 +36,7 @@ mod electrical;
 pub mod metadata;
 mod physical;
 mod position;
+pub mod trace;
 pub mod zone;
 
 // Re-export all components
