@@ -11,11 +11,11 @@ use tower_lsp::lsp_types::{
     CompletionItem as LspCompletionItem, CompletionItemKind as LspCompletionItemKind,
     CompletionOptions, CompletionParams, CompletionResponse, DiagnosticSeverity,
     DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
-    DidSaveTextDocumentParams, Hover, HoverContents, HoverParams, HoverProviderCapability,
-    InitializedParams, InitializeParams, InitializeResult, InsertTextFormat, MarkedString,
-    NumberOrString, Position, Range, SaveOptions, ServerCapabilities, ServerInfo,
-    TextDocumentSyncCapability, TextDocumentSyncKind, TextDocumentSyncOptions,
-    TextDocumentSyncSaveOptions, Uri,
+    DidSaveTextDocumentParams, GotoDefinitionParams, GotoDefinitionResponse, Hover, HoverContents,
+    HoverParams, HoverProviderCapability, InitializedParams, InitializeParams, InitializeResult,
+    InsertTextFormat, MarkedString, NumberOrString, Position, Range, SaveOptions,
+    ServerCapabilities, ServerInfo, TextDocumentSyncCapability, TextDocumentSyncKind,
+    TextDocumentSyncOptions, TextDocumentSyncSaveOptions, Uri,
 };
 use tower_lsp::{Client, LanguageServer};
 use tracing::{debug, info};
@@ -23,6 +23,7 @@ use tracing::{debug, info};
 use crate::completion::{completion_at_position, CompletionItemKind};
 use crate::diagnostics::run_diagnostics;
 use crate::document::DocumentState;
+use crate::goto::goto_definition;
 use crate::hover::hover_at_position;
 
 /// LSP Backend holding server state and implementing LanguageServer.
@@ -126,8 +127,9 @@ impl LanguageServer for Backend {
                     ]),
                     ..Default::default()
                 }),
+                // Definition provider for go-to-definition
+                definition_provider: Some(tower_lsp::lsp_types::OneOf::Left(true)),
                 // We'll add more capabilities as we implement them:
-                // - definition_provider
                 // - references_provider
                 ..Default::default()
             },
@@ -304,6 +306,48 @@ impl LanguageServer for Backend {
                 .collect();
 
             Ok(Some(CompletionResponse::Array(lsp_items)))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn goto_definition(
+        &self,
+        params: GotoDefinitionParams,
+    ) -> Result<Option<GotoDefinitionResponse>> {
+        let uri = params.text_document_position_params.text_document.uri;
+        let position = params.text_document_position_params.position;
+
+        debug!("Go-to-definition request at {:?}", position);
+
+        if let Some(doc) = self.documents.get(&uri) {
+            // Convert tower_lsp Position to our Position type
+            let our_position = crate::document::Position {
+                line: position.line,
+                character: position.character,
+            };
+
+            // Get definition location from our implementation
+            if let Some(loc) = goto_definition(&doc, &our_position) {
+                // Convert to tower_lsp Location type
+                let lsp_location = tower_lsp::lsp_types::Location {
+                    uri: uri.clone(),
+                    range: Range {
+                        start: Position {
+                            line: loc.start_line,
+                            character: loc.start_col,
+                        },
+                        end: Position {
+                            line: loc.end_line,
+                            character: loc.end_col,
+                        },
+                    },
+                };
+
+                Ok(Some(GotoDefinitionResponse::Scalar(lsp_location)))
+            } else {
+                Ok(None)
+            }
         } else {
             Ok(None)
         }
