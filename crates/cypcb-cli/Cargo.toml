@@ -12,11 +12,10 @@ path = "src/main.rs"
 [dependencies]
 cypcb-core = { path = "../cypcb-core" }
 cypcb-parser = { path = "../cypcb-parser" }
-# Note: cypcb-world dependency temporarily removed due to cargo resolver issues
-# with feature unification in the complex bevy_ecs/miette/serde dependency graph.
-# The CLI currently only uses parser-level validation.
-# cypcb-world = { path = "../cypcb-world" }
+cypcb-world = { path = "../cypcb-world" }
+cypcb-router = { path = "../cypcb-router" }
 clap = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 miette = { workspace = true }
+thiserror = { workspace = true }

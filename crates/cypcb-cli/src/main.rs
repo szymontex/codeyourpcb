@@ -4,6 +4,7 @@
 //!
 //! - `cypcb parse <file>` - Parse a .cypcb file and output JSON
 //! - `cypcb check <file>` - Validate a .cypcb file and report errors
+//! - `cypcb route <file>` - Route a .cypcb file using FreeRouting autorouter
 //!
 //! # Examples
 //!
@@ -16,6 +17,9 @@
 //!
 //! # Validate a design file
 //! cypcb check examples/blink.cypcb
+//!
+//! # Route a design using FreeRouting
+//! cypcb route examples/blink.cypcb --freerouting /path/to/freerouting.jar
 //! ```
 
 use clap::{Parser, Subcommand};
@@ -39,6 +43,8 @@ enum Commands {
     Parse(commands::ParseCommand),
     /// Check a .cypcb file for errors
     Check(commands::CheckCommand),
+    /// Route a .cypcb file using FreeRouting autorouter
+    Route(commands::RouteCommand),
 }
 
 fn main() -> Result<()> {
@@ -47,5 +53,6 @@ fn main() -> Result<()> {
     match cli.command {
         Commands::Parse(cmd) => cmd.run(),
         Commands::Check(cmd) => cmd.run(),
+        Commands::Route(cmd) => cmd.run(),
     }
 }
