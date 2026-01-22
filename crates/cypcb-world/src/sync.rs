@@ -48,10 +48,11 @@ use miette::{Diagnostic, LabeledSpan, SourceCode, SourceSpan};
 use cypcb_core::{Nm, Point, Rect};
 use cypcb_parser::ast::{
     BoardDef, ComponentDef, Definition, FootprintDef, NetDef, PadShape as AstPadShape,
-    PinId as AstPinId, SourceFile, Span, ZoneDef, ZoneKind as AstZoneKind,
+    PinId as AstPinId, SourceFile, Span, TraceDef, ZoneDef, ZoneKind as AstZoneKind,
 };
 
 use crate::components::{
+    trace::{Trace, TraceSegment, TraceSource},
     ComponentKind, FootprintRef, Layer, NetConnections, PadShape as EcsPadShape, PinConnection,
     Position, RefDes, Rotation, SourceSpan as EcsSourceSpan, Value, Zone,
     ZoneKind as EcsZoneKind,
@@ -97,6 +98,40 @@ pub enum SyncError {
         /// Source span of the component reference.
         span: miette::SourceSpan,
     },
+
+    /// A trace references an invalid pin.
+    InvalidTracePin {
+        /// The trace net name.
+        net: String,
+        /// The component refdes.
+        component: String,
+        /// The pin name/number.
+        pin: String,
+        /// Source code for miette display.
+        src: String,
+        /// Source span of the pin reference.
+        span: miette::SourceSpan,
+    },
+
+    /// A trace references a net that doesn't exist.
+    MissingNet {
+        /// The unknown net name.
+        net: String,
+        /// Source code for miette display.
+        src: String,
+        /// Source span of the net reference.
+        span: miette::SourceSpan,
+    },
+
+    /// A trace references an unknown layer.
+    UnknownLayer {
+        /// The unknown layer name.
+        layer: String,
+        /// Source code for miette display.
+        src: String,
+        /// Source span of the layer reference.
+        span: miette::SourceSpan,
+    },
 }
 
 impl fmt::Display for SyncError {
@@ -110,6 +145,15 @@ impl fmt::Display for SyncError {
             }
             SyncError::UnknownComponent { component, .. } => {
                 write!(f, "unknown component: '{}'", component)
+            }
+            SyncError::InvalidTracePin { net, component, pin, .. } => {
+                write!(f, "trace '{}': invalid pin {}.{}", net, component, pin)
+            }
+            SyncError::MissingNet { net, .. } => {
+                write!(f, "trace references undefined net: '{}'", net)
+            }
+            SyncError::UnknownLayer { layer, .. } => {
+                write!(f, "unknown layer: '{}'", layer)
             }
         }
     }
@@ -129,6 +173,15 @@ impl Diagnostic for SyncError {
             SyncError::UnknownComponent { .. } => {
                 Some(Box::new("cypcb::sync::unknown_component"))
             }
+            SyncError::InvalidTracePin { .. } => {
+                Some(Box::new("cypcb::sync::invalid_trace_pin"))
+            }
+            SyncError::MissingNet { .. } => {
+                Some(Box::new("cypcb::sync::missing_net"))
+            }
+            SyncError::UnknownLayer { .. } => {
+                Some(Box::new("cypcb::sync::unknown_layer"))
+            }
         }
     }
 
@@ -143,6 +196,15 @@ impl Diagnostic for SyncError {
             SyncError::UnknownComponent { .. } => {
                 Some(Box::new("define the component before referencing it in a net"))
             }
+            SyncError::InvalidTracePin { .. } => {
+                Some(Box::new("ensure the component and pin exist before defining a trace"))
+            }
+            SyncError::MissingNet { .. } => {
+                Some(Box::new("define the net before creating manual traces for it"))
+            }
+            SyncError::UnknownLayer { .. } => {
+                Some(Box::new("use a valid layer name: Top, Bottom, Inner1, Inner2, etc."))
+            }
         }
     }
 
@@ -151,6 +213,9 @@ impl Diagnostic for SyncError {
             SyncError::UnknownFootprint { src, .. } => Some(src),
             SyncError::DuplicateRefDes { src, .. } => Some(src),
             SyncError::UnknownComponent { src, .. } => Some(src),
+            SyncError::InvalidTracePin { src, .. } => Some(src),
+            SyncError::MissingNet { src, .. } => Some(src),
+            SyncError::UnknownLayer { src, .. } => Some(src),
         }
     }
 
@@ -170,6 +235,21 @@ impl Diagnostic for SyncError {
             SyncError::UnknownComponent { span, .. } => {
                 Some(Box::new(std::iter::once(
                     LabeledSpan::new_with_span(Some("component not defined".to_string()), *span)
+                )))
+            }
+            SyncError::InvalidTracePin { span, .. } => {
+                Some(Box::new(std::iter::once(
+                    LabeledSpan::new_with_span(Some("invalid pin reference".to_string()), *span)
+                )))
+            }
+            SyncError::MissingNet { span, .. } => {
+                Some(Box::new(std::iter::once(
+                    LabeledSpan::new_with_span(Some("net not defined".to_string()), *span)
+                )))
+            }
+            SyncError::UnknownLayer { span, .. } => {
+                Some(Box::new(std::iter::once(
+                    LabeledSpan::new_with_span(Some("unknown layer".to_string()), *span)
                 )))
             }
         }
@@ -291,6 +371,9 @@ pub fn sync_ast_to_world(
             }
             Definition::Zone(zone) => {
                 sync_zone(zone, world, &mut result);
+            }
+            Definition::Trace(trace) => {
+                sync_trace(trace, source, world, &component_entities, &mut result);
             }
             Definition::Footprint(_) => {
                 // Already handled in Phase 0 above
@@ -496,6 +579,179 @@ fn sync_zone(zone_def: &ZoneDef, world: &mut BoardWorld, _result: &mut SyncResul
 
     // Spawn zone entity
     world.ecs_mut().spawn(zone);
+}
+
+/// Synchronize a trace definition to the ECS world.
+///
+/// Creates a Trace entity with the specified net, endpoints, and waypoints.
+fn sync_trace(
+    trace_def: &TraceDef,
+    source: &str,
+    world: &mut BoardWorld,
+    component_entities: &HashMap<String, Entity>,
+    result: &mut SyncResult,
+) {
+    // Look up the net ID - the net must be defined before the trace
+    let net_id = match world.get_net(&trace_def.net.value) {
+        Some(id) => id,
+        None => {
+            result.errors.push(SyncError::MissingNet {
+                net: trace_def.net.value.clone(),
+                src: source.to_string(),
+                span: span_to_source_span(&trace_def.net.span),
+            });
+            return;
+        }
+    };
+
+    // Parse the layer
+    let layer = if let Some(layer_name) = &trace_def.layer {
+        match parse_layer_name(layer_name) {
+            Some(l) => l,
+            None => {
+                result.errors.push(SyncError::UnknownLayer {
+                    layer: layer_name.clone(),
+                    src: source.to_string(),
+                    span: span_to_source_span(&trace_def.span),
+                });
+                Layer::TopCopper // Default to top copper
+            }
+        }
+    } else {
+        Layer::TopCopper // Default layer
+    };
+
+    // Parse the width
+    let width = trace_def
+        .width
+        .as_ref()
+        .map(|d| d.to_nm())
+        .unwrap_or_else(|| Nm::from_mm(0.2)); // Default 0.2mm
+
+    // Get positions for from/to pins (if specified)
+    let from_position = if let Some(ref pin_ref) = trace_def.from {
+        match get_pin_position(world, component_entities, pin_ref, source, result, &trace_def.net.value) {
+            Some(pos) => Some(pos),
+            None => None, // Error already recorded
+        }
+    } else {
+        None
+    };
+
+    let to_position = if let Some(ref pin_ref) = trace_def.to {
+        match get_pin_position(world, component_entities, pin_ref, source, result, &trace_def.net.value) {
+            Some(pos) => Some(pos),
+            None => None, // Error already recorded
+        }
+    } else {
+        None
+    };
+
+    // Build the trace segments
+    // Connect: from -> waypoints -> to
+    let mut segments = Vec::new();
+    let mut all_points: Vec<Point> = Vec::new();
+
+    if let Some(start) = from_position {
+        all_points.push(start);
+    }
+
+    // Add waypoints
+    for waypoint in &trace_def.waypoints {
+        let point = Point::new(waypoint.x.to_nm(), waypoint.y.to_nm());
+        all_points.push(point);
+    }
+
+    if let Some(end) = to_position {
+        all_points.push(end);
+    }
+
+    // Create segments from consecutive points
+    for window in all_points.windows(2) {
+        if let [start, end] = window {
+            segments.push(TraceSegment::new(*start, *end));
+        }
+    }
+
+    // Create the trace entity
+    let trace = Trace {
+        segments,
+        width,
+        layer,
+        net_id,
+        locked: trace_def.locked,
+        source: TraceSource::Manual,
+    };
+
+    // Add source span for error reporting
+    // Note: We don't have line/column from the AST Span, so use defaults
+    let span = EcsSourceSpan::new(trace_def.span.start, trace_def.span.end, 0, 0);
+
+    // Spawn the trace entity
+    world.ecs_mut().spawn((trace, span));
+}
+
+/// Helper to get the position of a pin reference.
+fn get_pin_position(
+    world: &BoardWorld,
+    component_entities: &HashMap<String, Entity>,
+    pin_ref: &cypcb_parser::ast::PinRef,
+    source: &str,
+    result: &mut SyncResult,
+    net_name: &str,
+) -> Option<Point> {
+    let component_name = &pin_ref.component.value;
+
+    // Look up the component entity
+    let entity = match component_entities.get(component_name) {
+        Some(e) => *e,
+        None => {
+            result.errors.push(SyncError::InvalidTracePin {
+                net: net_name.to_string(),
+                component: component_name.clone(),
+                pin: format!("{}", pin_ref.pin),
+                src: source.to_string(),
+                span: span_to_source_span(&pin_ref.span),
+            });
+            return None;
+        }
+    };
+
+    // Get the component's position
+    let position = match world.get::<Position>(entity) {
+        Some(p) => p.0,
+        None => {
+            // Component exists but has no position - use origin
+            Point::ORIGIN
+        }
+    };
+
+    // For now, we return the component position.
+    // In a more complete implementation, we would look up the specific pad
+    // position within the footprint and add it to the component position.
+    // This requires:
+    // 1. Get the component's FootprintRef
+    // 2. Look up the footprint in the library
+    // 3. Find the pad with the matching number/name
+    // 4. Return component position + pad position (transformed by rotation)
+    //
+    // For the initial implementation, component position is a good approximation.
+    Some(position)
+}
+
+/// Parse a layer name string to a Layer enum.
+fn parse_layer_name(name: &str) -> Option<Layer> {
+    match name {
+        "Top" => Some(Layer::TopCopper),
+        "Bottom" => Some(Layer::BottomCopper),
+        "Inner1" => Some(Layer::Inner(0)),
+        "Inner2" => Some(Layer::Inner(1)),
+        "Inner3" => Some(Layer::Inner(2)),
+        "Inner4" => Some(Layer::Inner(3)),
+        "Inner5" => Some(Layer::Inner(4)),
+        "Inner6" => Some(Layer::Inner(5)),
+        _ => None,
+    }
 }
 
 /// Convert AST Span to miette SourceSpan.
@@ -1109,5 +1365,176 @@ component U1 ic "MY_DIP8" {
 
         // Component should be synced
         assert_eq!(world.component_count(), 1);
+    }
+
+    #[test]
+    fn test_sync_trace_basic() {
+        let source = r#"
+version 1
+board test { size 50mm x 30mm }
+
+component R1 resistor "0402" { at 10mm, 10mm }
+component C1 capacitor "0402" { at 20mm, 10mm }
+
+net VCC {
+    R1.1
+    C1.1
+}
+
+trace VCC {
+    from R1.1
+    to C1.1
+    layer Top
+    width 0.3mm
+}
+"#;
+        let parse_result = parse(source);
+        assert!(parse_result.is_ok(), "parse errors: {:?}", parse_result.errors);
+
+        let mut world = BoardWorld::new();
+        let lib = FootprintLibrary::new();
+
+        let result = sync_ast_to_world(&parse_result.value, source, &mut world, &lib);
+        assert!(result.is_ok(), "sync errors: {:?}", result.errors);
+
+        // Query for trace entities
+        use crate::components::trace::Trace;
+        let mut trace_count = 0;
+        let mut query = world.ecs_mut().query::<&Trace>();
+        for trace in query.iter(world.ecs()) {
+            trace_count += 1;
+            assert_eq!(trace.layer, Layer::TopCopper);
+            assert_eq!(trace.width, Nm::from_mm(0.3));
+            assert!(!trace.locked);
+            // Should have one segment (from R1 to C1)
+            assert_eq!(trace.segments.len(), 1);
+        }
+        assert_eq!(trace_count, 1, "should have one trace");
+    }
+
+    #[test]
+    fn test_sync_trace_with_waypoints() {
+        let source = r#"
+version 1
+board test { size 50mm x 30mm }
+
+component R1 resistor "0402" { at 10mm, 10mm }
+component C1 capacitor "0402" { at 30mm, 20mm }
+
+net SIG {
+    R1.2
+    C1.1
+}
+
+trace SIG {
+    from R1.2
+    to C1.1
+    via 20mm, 10mm
+    via 20mm, 20mm
+    layer Bottom
+}
+"#;
+        let parse_result = parse(source);
+        assert!(parse_result.is_ok(), "parse errors: {:?}", parse_result.errors);
+
+        let mut world = BoardWorld::new();
+        let lib = FootprintLibrary::new();
+
+        let result = sync_ast_to_world(&parse_result.value, source, &mut world, &lib);
+        assert!(result.is_ok(), "sync errors: {:?}", result.errors);
+
+        use crate::components::trace::Trace;
+        let mut query = world.ecs_mut().query::<&Trace>();
+        for trace in query.iter(world.ecs()) {
+            assert_eq!(trace.layer, Layer::BottomCopper);
+            // From R1 -> via1 -> via2 -> to C1 = 3 segments
+            assert_eq!(trace.segments.len(), 3);
+        }
+    }
+
+    #[test]
+    fn test_sync_trace_locked() {
+        let source = r#"
+version 1
+board test { size 50mm x 30mm }
+
+component R1 resistor "0402" { at 10mm, 10mm }
+component C1 capacitor "0402" { at 20mm, 10mm }
+
+net VCC { R1.1, C1.1 }
+
+trace VCC {
+    from R1.1
+    to C1.1
+    locked
+}
+"#;
+        let parse_result = parse(source);
+        assert!(parse_result.is_ok(), "parse errors: {:?}", parse_result.errors);
+
+        let mut world = BoardWorld::new();
+        let lib = FootprintLibrary::new();
+
+        let result = sync_ast_to_world(&parse_result.value, source, &mut world, &lib);
+        assert!(result.is_ok(), "sync errors: {:?}", result.errors);
+
+        use crate::components::trace::Trace;
+        let mut query = world.ecs_mut().query::<&Trace>();
+        for trace in query.iter(world.ecs()) {
+            assert!(trace.locked);
+        }
+    }
+
+    #[test]
+    fn test_sync_trace_missing_net() {
+        let source = r#"
+version 1
+board test { size 50mm x 30mm }
+
+component R1 resistor "0402" { at 10mm, 10mm }
+component C1 capacitor "0402" { at 20mm, 10mm }
+
+trace UNDEFINED_NET {
+    from R1.1
+    to C1.1
+}
+"#;
+        let parse_result = parse(source);
+        assert!(parse_result.is_ok(), "parse errors: {:?}", parse_result.errors);
+
+        let mut world = BoardWorld::new();
+        let lib = FootprintLibrary::new();
+
+        let result = sync_ast_to_world(&parse_result.value, source, &mut world, &lib);
+
+        assert!(result.has_errors());
+        assert!(matches!(result.errors[0], SyncError::MissingNet { .. }));
+    }
+
+    #[test]
+    fn test_sync_trace_invalid_component() {
+        let source = r#"
+version 1
+board test { size 50mm x 30mm }
+
+component R1 resistor "0402" { at 10mm, 10mm }
+
+net VCC { R1.1 }
+
+trace VCC {
+    from R1.1
+    to UNKNOWN.1
+}
+"#;
+        let parse_result = parse(source);
+        assert!(parse_result.is_ok(), "parse errors: {:?}", parse_result.errors);
+
+        let mut world = BoardWorld::new();
+        let lib = FootprintLibrary::new();
+
+        let result = sync_ast_to_world(&parse_result.value, source, &mut world, &lib);
+
+        assert!(result.has_errors());
+        assert!(matches!(result.errors[0], SyncError::InvalidTracePin { .. }));
     }
 }
