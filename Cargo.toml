@@ -41,3 +41,10 @@ cypcb-parser = { path = "crates/cypcb-parser", default-features = false }
 cypcb-world = { path = "crates/cypcb-world", default-features = false }
 cypcb-drc = { path = "crates/cypcb-drc" }
 cypcb-calc = { path = "crates/cypcb-calc" }
+cypcb-router = { path = "crates/cypcb-router" }
+cypcb-lsp = { path = "crates/cypcb-lsp" }
+
+# LSP (using fork for Rust 2024 compatibility)
+tower-lsp = { package = "tower-lsp-f", version = "0.24" }
+dashmap = "6"
+tokio = { version = "1", features = ["full"] }

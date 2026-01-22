@@ -1,0 +1,12 @@
+[package]
+name = "cypcb-router"
+version = "0.1.0"
+edition = "2021"
+description = "Autorouting integration for CodeYourPCB (FreeRouting)"
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+cypcb-core = { path = "../cypcb-core" }
+cypcb-world = { path = "../cypcb-world", default-features = false }
+thiserror = { workspace = true }
