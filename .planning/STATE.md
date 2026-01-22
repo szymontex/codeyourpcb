@@ -3,8 +3,8 @@
 ## Current Status
 
 **Phase:** 5 of 6 (Intelligence) - In Progress
-**Plan:** 8 of 10 complete
-**Last Activity:** 2026-01-22 - Completed 05-08-PLAN.md (Trace and Ratsnest Rendering)
+**Plan:** 9 of 10 complete
+**Last Activity:** 2026-01-22 - Completed 05-09-PLAN.md (Autoroute Integration)
 
 ## Project Reference
 
@@ -21,11 +21,11 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 | 2. Rendering | Complete | 100% (9/9 plans) |
 | 3. Validation | Complete | 100% (10/10 plans) |
 | 4. Export | Not started | 0% |
-| 5. Intelligence | In progress | 80% (8/10 plans) |
+| 5. Intelligence | In progress | 90% (9/10 plans) |
 | 6. Desktop | Not started | 0% |
 | 7. Navigation | Not started | 0% |
 
-Progress: █████████████████████████████░ 97% (35/36 plans)
+Progress: █████████████████████████████░ 97% (36/37 plans)
 
 ## Phase 5 Plan Status
 
@@ -39,7 +39,7 @@ Progress: ███████████████████████�
 | 05-06 | Autorouter Integration | Complete |
 | 05-07 | LSP Enhancements | Complete |
 | 05-08 | Trace and Ratsnest Rendering | Complete |
-| 05-09 | Netlist Analysis | Not started |
+| 05-09 | Autoroute Integration | Complete |
 | 05-10 | Visual Verification Checkpoint | Not started |
 
 ## Next Action
@@ -122,6 +122,19 @@ Continue Phase 5 (Intelligence) - Execute remaining plans
 | 2026-01-22 | Layer-ordered rendering | Bottom -> top -> vias -> ratsnest for proper z-order |
 
 ## Session History
+
+### 2026-01-22: Complete 05-09 Autoroute Integration
+- Created CLI route command (crates/cypcb-cli/src/commands/route.rs, 398 lines)
+- Workflow: Parse -> Build world -> Export DSN -> Run FreeRouting -> Import SES -> Save .routes
+- Progress output shows pass/routed/unrouted/elapsed during routing
+- Dry-run mode exports DSN only for manual FreeRouting usage
+- Added viewer Route button with progress overlay and cancel support
+- Auto-route checkbox enables routing on file save (simulated for MVP)
+- Added load_routes() to PcbEngine for loading .routes files
+- Routes file format: segment/via text lines with layer/coords/dimensions
+- Verified workflow with blink.cypcb dry-run export
+- Fixed FootprintLibrary::default() -> new() for built-in footprints
+- 12 CLI tests + 15 render tests passing
 
 ### 2026-01-22: Complete 05-08 Trace and Ratsnest Rendering
 - Extended BoardSnapshot with TraceInfo, ViaInfo, RatsnestInfo types
@@ -547,7 +560,7 @@ Continue Phase 5 (Intelligence) - Execute remaining plans
 ## Session Continuity
 
 **Last session:** 2026-01-22
-**Stopped at:** Completed 05-08-PLAN.md (Trace and Ratsnest Rendering)
+**Stopped at:** Completed 05-09-PLAN.md (Autoroute Integration)
 **Resume file:** None
 
 ---
