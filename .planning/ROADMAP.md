@@ -1,7 +1,7 @@
 # Roadmap: CodeYourPCB
 
 **Created:** 2026-01-21
-**Phases:** 7
+**Phases:** 8
 **Target:** Code-first PCB design tool
 
 ## Phase Overview
@@ -15,6 +15,7 @@
 | 5 | Intelligence | Autorouting and IDE integration | 6 | Pending |
 | 6 | Desktop | Full application experience | v2 | Pending |
 | 7 | Navigation | Alternative pan/zoom for laptops | 3 | Pending |
+| 8 | File Picker | Load .cypcb + .ses files in viewer | 3 | Pending |
 
 ---
 
@@ -276,6 +277,38 @@ Plans:
 
 ---
 
+## Phase 8: File Picker
+
+**Goal:** UI to load .cypcb and .ses files directly in the viewer
+
+**Requirements:**
+- FP-01: File picker UI to select .cypcb source files
+- FP-02: Load corresponding .ses routing files
+- FP-03: Drag & drop support for files
+
+**Success Criteria:**
+1. User can click button to open file picker dialog
+2. Loading .cypcb file updates viewer with new board
+3. If .ses file exists alongside .cypcb, traces are shown
+4. Drag & drop .cypcb file onto viewer loads it
+5. Works without requiring backend/server
+
+**Depends on:** Phase 5 (for .ses file support)
+
+**Plans:** 3 plans in 3 waves
+
+Plans:
+- [ ] 08-01-PLAN.md -- File picker utilities and UI elements
+- [ ] 08-02-PLAN.md -- Integration with viewer (Open button, drag-drop)
+- [ ] 08-03-PLAN.md -- Human verification checkpoint
+
+**Notes:**
+- Wave 1: 08-01 - create file-picker.ts utilities
+- Wave 2: 08-02 - wire up to main.ts and engine
+- Wave 3: 08-03 - human verification
+
+---
+
 ## Dependency Graph
 
 ```
@@ -317,4 +350,4 @@ Phase 2 (Rendering)  Phase 3 (Validation)
 ---
 
 *Roadmap created: 2026-01-21*
-*Last updated: 2026-01-22 - Phase 5 planned (10 plans in 5 waves)*
+*Last updated: 2026-01-22 - Phase 8 planned (3 plans in 3 waves)*
