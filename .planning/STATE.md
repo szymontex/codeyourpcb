@@ -2,16 +2,16 @@
 
 ## Current Status
 
-**Phase:** 3 of 6 (Validation) - In Progress
-**Plan:** 9 of 10 complete
-**Last Activity:** 2026-01-21 - Completed 03-08-PLAN.md (Violation Display - markers, status bar, panel)
+**Phase:** 5 of 6 (Intelligence) - In Progress
+**Plan:** 2 of 10 complete
+**Last Activity:** 2026-01-22 - Completed 05-02-PLAN.md (IPC-2221 Trace Width Calculator)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-01-21)
 
 **Core value:** The source file is the design - git-friendly, AI-editable, deterministic
-**Current focus:** Phase 3 Validation - DRC engine and IC footprints
+**Current focus:** Phase 5 Intelligence - LSP, autorouting, and electrical calculations
 
 ## Phase Progress
 
@@ -19,31 +19,32 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 |-------|--------|----------|
 | 1. Foundation | Complete | 100% (9/9 plans) |
 | 2. Rendering | Complete | 100% (9/9 plans) |
-| 3. Validation | In Progress | 90% (9/10 plans) |
+| 3. Validation | Complete | 100% (10/10 plans) |
 | 4. Export | Not started | 0% |
-| 5. Intelligence | Not started | 0% |
+| 5. Intelligence | In progress | 20% (2/10 plans) |
 | 6. Desktop | Not started | 0% |
+| 7. Navigation | Not started | 0% |
 
-Progress: ███████████████████░ 87%
+Progress: ███████████████████████████░░░ 91% (30/33 plans)
 
-## Phase 3 Plan Status
+## Phase 5 Plan Status
 
 | Plan | Name | Status |
 |------|------|--------|
-| 03-01 | DRC Crate Setup | Complete |
-| 03-02 | IC Footprints (SOIC/SOT/QFP) | Complete |
-| 03-03 | Manufacturer Presets | Complete |
-| 03-04 | Custom Footprint DSL | Complete |
-| 03-05 | Clearance Checking Rule | Complete |
-| 03-06 | Drill Size, Trace Width, Connectivity Rules | Complete |
-| 03-07 | DRC Integration with Rendering Pipeline | Complete |
-| 03-08 | Violation Display (markers, status bar, panel) | Complete |
-| 03-09 | TBD | Not started |
-| 03-10 | Zones and Keepouts | Complete |
+| 05-01 | LSP Server Setup | Not started |
+| 05-02 | IPC-2221 Trace Width Calculator | Complete |
+| 05-03 | KiCad Footprint Import | Not started |
+| 05-04 | LSP Diagnostics | Not started |
+| 05-05 | LSP Completion | Not started |
+| 05-06 | LSP Hover | Not started |
+| 05-07 | Autorouter DSN Export | Not started |
+| 05-08 | Autorouter FreeRouting Integration | Not started |
+| 05-09 | Autorouter SES Import | Not started |
+| 05-10 | Visual Verification Checkpoint | Not started |
 
 ## Next Action
 
-Continue Phase 3 (Validation) - Execute 03-09-PLAN.md (final plan)
+Continue Phase 5 (Intelligence) - Execute remaining plans
 
 ## Key Decisions Log
 
@@ -101,8 +102,21 @@ Continue Phase 3 (Validation) - Execute 03-09-PLAN.md (final plan)
 | 2026-01-21 | ViolationKind as string in TS | Simpler JS serialization than enum mapping |
 | 2026-01-21 | Fixed 15px marker radius | Screen-space size ensures visibility at any zoom |
 | 2026-01-21 | 5mm zoom margin for violations | Provides context around violation location |
+| 2026-01-22 | IPC-2221 formula constants | k=0.048 external, k=0.024 internal |
+| 2026-01-22 | Builder pattern for TraceWidthParams | Ergonomic API with method chaining |
+| 2026-01-22 | Warning enum for accuracy limits | Clear categorization of out-of-range conditions |
 
 ## Session History
+
+### 2026-01-22: Complete 05-02 IPC-2221 Trace Width Calculator
+- Created cypcb-calc crate for electrical calculations
+- Implemented IPC-2221 formula: I = k * dT^0.44 * A^0.725
+- Added TraceWidthParams with builder pattern (current, temp_rise, copper_oz, is_external)
+- Added TraceWidthResult with width (Nm), cross_section_mm2, warnings
+- Implemented TraceWidthWarning enum: CurrentTooHigh, TempRiseTooLow, TempRiseTooHigh, WidthExceedsMax, CopperWeightNonStandard
+- Added convenience methods: min_width_for_current(), with_defaults()
+- 18 unit tests + 7 doc tests passing
+- Verified against IPC-2221 reference values (within 30%)
 
 ### 2026-01-21: Complete 03-08 Violation Display (markers, status bar, panel)
 - Added violation and violation_ring colors to LAYER_COLORS
@@ -414,6 +428,9 @@ Continue Phase 3 (Validation) - Execute 03-09-PLAN.md (final plan)
 | crates/cypcb-drc/src/rules/drill_size.rs | MinDrillSizeRule implementation |
 | crates/cypcb-drc/src/rules/connectivity.rs | UnconnectedPinRule implementation |
 | crates/cypcb-drc/src/rules/trace_width.rs | MinTraceWidthRule placeholder |
+| crates/cypcb-calc/Cargo.toml | Electrical calculator crate config |
+| crates/cypcb-calc/src/lib.rs | Calculator crate API |
+| crates/cypcb-calc/src/trace_width.rs | IPC-2221 trace width calculator |
 | examples/blink.cypcb | Example LED circuit |
 | examples/invalid.cypcb | Invalid syntax example |
 | examples/unknown_keyword.cypcb | Unknown keyword example |
@@ -438,9 +455,9 @@ Continue Phase 3 (Validation) - Execute 03-09-PLAN.md (final plan)
 
 ## Session Continuity
 
-**Last session:** 2026-01-21
-**Stopped at:** Completed 03-08-PLAN.md (Violation Display)
+**Last session:** 2026-01-22
+**Stopped at:** Completed 05-02-PLAN.md (IPC-2221 Trace Width Calculator)
 **Resume file:** None
 
 ---
-*State updated: 2026-01-21*
+*State updated: 2026-01-22*
