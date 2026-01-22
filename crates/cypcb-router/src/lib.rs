@@ -46,9 +46,11 @@
 //! - Routing statistics
 
 pub mod dsn;
+pub mod freerouting;
 pub mod ses;
 pub mod types;
 
 pub use dsn::{export_dsn, DsnExportError};
+pub use freerouting::{FreeRoutingRunner, RoutingConfig, RoutingError, RoutingProgress};
 pub use ses::{import_ses, import_ses_from_str, SesImportError};
 pub use types::{RouteSegment, RoutingResult, RoutingStatus, ViaPlacement};
