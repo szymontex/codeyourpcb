@@ -212,19 +212,20 @@ Plans:
 - IPC-2221 formulas for trace width (k=0.048 external, k=0.024 internal)
 - Routes stored in separate .routes file (keeps source clean, regenerable)
 
-**Plans:** 10 plans in 5 waves
+**Plans:** 11 plans in 5 waves
 
 Plans:
-- [ ] 05-01-PLAN.md -- Trace/Via ECS components and DSL net constraints
-- [ ] 05-02-PLAN.md -- IPC-2221 trace width calculator (cypcb-calc)
-- [ ] 05-03-PLAN.md -- KiCad footprint import (cypcb-kicad)
-- [ ] 05-04-PLAN.md -- FreeRouting DSN export (cypcb-router)
-- [ ] 05-05-PLAN.md -- LSP server setup with hover and diagnostics
-- [ ] 05-06-PLAN.md -- FreeRouting SES import and CLI wrapper
-- [ ] 05-07-PLAN.md -- LSP completions and go-to-definition
-- [ ] 05-08-PLAN.md -- Trace and ratsnest rendering
-- [ ] 05-09-PLAN.md -- Autorouter UI integration (CLI, progress, cancel)
+- [x] 05-01-PLAN.md -- Trace/Via ECS components and DSL net constraints
+- [x] 05-02-PLAN.md -- IPC-2221 trace width calculator (cypcb-calc)
+- [x] 05-03-PLAN.md -- KiCad footprint import (cypcb-kicad)
+- [x] 05-04-PLAN.md -- FreeRouting DSN export (cypcb-router)
+- [x] 05-05-PLAN.md -- LSP server setup with hover and diagnostics
+- [x] 05-06-PLAN.md -- FreeRouting SES import and CLI wrapper
+- [x] 05-07-PLAN.md -- LSP completions and go-to-definition
+- [x] 05-08-PLAN.md -- Trace and ratsnest rendering
+- [x] 05-09-PLAN.md -- Autorouter UI integration (CLI, progress, cancel)
 - [ ] 05-10-PLAN.md -- Visual verification checkpoint
+- [ ] 05-11-PLAN.md -- [GAP CLOSURE] DSL syntax documentation
 
 **Notes:**
 - Wave 1 (parallel): 05-01, 05-02, 05-03 - independent foundation work
@@ -232,6 +233,10 @@ Plans:
 - Wave 3: 05-06, 05-07 - router import and LSP completions
 - Wave 4: 05-08, 05-09 - rendering and UI integration
 - Wave 5: 05-10 - human verification
+- Gap closure: 05-11 - documentation for net constraint syntax (UAT finding)
+
+**Gap Closure (UAT Finding):**
+Users expected `current 500mA` inside net braces, but grammar requires constraints in square brackets before braces: `net VCC [current 500mA] { pins }`. This is documentation gap, not code bug.
 
 ---
 
@@ -298,8 +303,8 @@ Plans:
 **Plans:** 3 plans in 3 waves
 
 Plans:
-- [ ] 08-01-PLAN.md -- File picker utilities and UI elements
-- [ ] 08-02-PLAN.md -- Integration with viewer (Open button, drag-drop)
+- [x] 08-01-PLAN.md -- File picker utilities and UI elements
+- [x] 08-02-PLAN.md -- Integration with viewer (Open button, drag-drop)
 - [ ] 08-03-PLAN.md -- Human verification checkpoint
 
 **Notes:**
@@ -350,4 +355,4 @@ Phase 2 (Rendering)  Phase 3 (Validation)
 ---
 
 *Roadmap created: 2026-01-21*
-*Last updated: 2026-01-22 - Phase 8 planned (3 plans in 3 waves)*
+*Last updated: 2026-01-28 - Phase 5 gap closure plan added (05-11)*
