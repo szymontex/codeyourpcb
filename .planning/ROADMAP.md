@@ -181,9 +181,28 @@ Plans:
 5. CLI can export without GUI (`cypcb export project.cypcb`)
 
 **Key Decisions:**
-- Gerber X2 vs X3 features
-- Output folder structure
-- Manufacturer presets
+- Gerber X2 format with attributes (not X1 or X3)
+- gerber-types crate for type-safe Gerber generation
+- Hand-rolled Excellon writer (simple text format)
+- Manufacturer presets control file naming and validation
+- Organized output: gerber/, drill/, assembly/ folders
+
+**Plans:** 7 plans in 4 waves
+
+Plans:
+- [ ] 04-01-PLAN.md -- Export crate setup, coordinate conversion, apertures
+- [ ] 04-02-PLAN.md -- Gerber copper/mask/paste layer export
+- [ ] 04-03-PLAN.md -- Board outline and silkscreen export
+- [ ] 04-04-PLAN.md -- Excellon drill file export
+- [ ] 04-05-PLAN.md -- BOM and pick-and-place (CPL) export
+- [ ] 04-06-PLAN.md -- CLI export command and presets
+- [ ] 04-07-PLAN.md -- Visual verification checkpoint
+
+**Notes:**
+- Wave 1: 04-01 - foundation (coordinate conversion, apertures)
+- Wave 2 (parallel): 04-02, 04-03, 04-04, 04-05 - all export formats
+- Wave 3: 04-06 - CLI integration
+- Wave 4: 04-07 - human verification with external viewers
 
 ---
 
@@ -355,4 +374,4 @@ Phase 2 (Rendering)  Phase 3 (Validation)
 ---
 
 *Roadmap created: 2026-01-21*
-*Last updated: 2026-01-28 - Phase 5 gap closure plan added (05-11)*
+*Last updated: 2026-01-28 - Phase 4 Export planned (7 plans in 4 waves)*
