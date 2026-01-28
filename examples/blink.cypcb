@@ -10,13 +10,14 @@ component LED1 led "0805" {
     value "RED"
     at 25mm, 15mm
 }
-
+ 
 component R1 resistor "0402" {
     value "330"
     at 15mm, 15mm
 }
 
-net VCC {
+// Net constraints go in square brackets BEFORE the braces
+net VCC [current 20mA] {
     R1.1
 }
 
