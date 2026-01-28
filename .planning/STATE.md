@@ -2,8 +2,8 @@
 
 ## Current Status
 
-**Phase:** 5 - Intelligence (UAT Complete with Gaps)
-**Last Activity:** 2026-01-28 - Completed 05-10 UAT Verification
+**Phase:** 4 - Export (In Progress)
+**Last Activity:** 2026-01-28 - Completed 04-01 Export Foundation
 
 ## Project Reference
 
@@ -19,13 +19,13 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 | 1. Foundation | Complete | 100% (9/9 plans) |
 | 2. Rendering | Complete | 100% (9/9 plans) |
 | 3. Validation | Complete | 100% (10/10 plans) |
-| 4. Export | Not started | 0% |
+| 4. Export | In progress | 11% (1/9 plans) |
 | 5. Intelligence | Complete | 100% (10/10 plans) |
 | 6. Desktop | Not started | 0% |
 | 7. Navigation | Not started | 0% |
 | 8. File Picker | In progress | 67% (2/3 plans) |
 
-Progress: ██████████████████████████████ 100% (39/39 plans)
+Progress: ███████████████████████████████ 100% (40/48 plans)
 
 ## Quick Start
 
@@ -38,19 +38,24 @@ Open http://localhost:5173, click Open button, select a .cypcb file from example
 
 ## Next Action
 
-Phase 5 Intelligence UAT complete with documented gaps.
+Phase 4 Export in progress - foundation complete (coordinate conversion, aperture management).
 
-**Identified Gaps:**
+**Current Focus:** 04-02 Gerber Layer Export
+
+**Phase 4 Export Plans:**
+1. ✓ 04-01: Export foundation (coords, apertures)
+2. 04-02: Gerber layer export (copper, mask, silk)
+3. 04-03: Excellon drill file
+4. 04-04: Board outline export
+5. 04-05: BOM generation
+6. 04-06: Pick-and-place (CPL)
+7. 04-07: Gerber job file
+8. 04-08: ZIP packaging
+9. 04-09: Export CLI integration
+
+**Outstanding Gaps from Phase 5:**
 1. LSP server compilation errors (high priority) - blocks developer experience
-2. Java dependency undocumented (low priority) - blocks autorouting runtime
-3. File picker UI visibility issue (medium priority) - workaround exists
-
-Next priorities:
-1. Fix LSP compilation errors (gap closure)
-2. Phase 4 Export for Gerber generation
-3. Complete Phase 8 if needed (08-03 multi-file support)
-4. Phase 6 Desktop Application (Tauri integration)
-5. Phase 7 Navigation (advanced viewer features)
+2. File picker UI visibility issue (low priority) - workaround exists (drag/drop)
 
 ## Key Decisions Log
 
@@ -134,8 +139,36 @@ Next priorities:
 | 2026-01-22 | Layer-ordered rendering | Bottom -> top -> vias -> ratsnest for proper z-order |
 | 2026-01-22 | WebSocket routing | Dev server handles route requests, runs CLI, streams results |
 | 2026-01-22 | Unified start command | `npm run start` builds WASM + starts Vite + hot reload |
+| 2026-01-28 | Integer arithmetic conversion | nm→Gerber decimal via integer math, avoids float precision loss |
+| 2026-01-28 | D-code start at 10 | D01-D03 reserved for draw/move/flash per Gerber standard |
+| 2026-01-28 | RoundRect fallback | Standard Gerber lacks RoundRect, use Rect+comment until polygon impl |
+| 2026-01-28 | Format MM 2.6 default | 2 integer, 6 decimal (mm) most common modern format, 1µm precision |
 
 ## Session History
+
+### 2026-01-28: Complete 04-01 Export Foundation
+- **Created cypcb-export crate** - New workspace crate for manufacturing file export
+  - Dependencies: gerber-types 0.7, cypcb-world, cypcb-core
+  - Module structure: coords, apertures
+  - Commit e21ae88
+- **Implemented coordinate conversion** - Integer arithmetic nm to Gerber decimal
+  - Unit enum (Millimeters, Inches)
+  - CoordinateFormat struct with FORMAT_MM_2_6, FORMAT_INCH_2_4 constants
+  - nm_to_gerber() using integer-only math for precision
+  - gerber_format_string() generates %FSLAX26Y26*%
+  - 11 unit tests, all passing
+  - Commit 5e88de3
+- **Implemented aperture management** - D-code generation and deduplication
+  - ApertureShape enum (Circle, Rectangle, Oblong, RoundRect)
+  - ApertureManager with HashMap-based deduplication
+  - get_or_create() assigns D-codes starting at D10
+  - to_definitions() generates %ADD...% statements
+  - aperture_for_pad() maps PadDef to ApertureShape
+  - RoundRect falls back to Rectangle with G04 comment
+  - 13 unit tests, all passing
+  - Commit e86cc18
+- **Total test coverage:** 24 unit tests + 7 doc tests = 31 tests passing
+- **Created SUMMARY:** .planning/phases/04-export/04-01-SUMMARY.md
 
 ### 2026-01-28: Complete 05-10 UAT Verification
 - **Verified Phase 5 Intelligence features with documented limitations**
@@ -620,6 +653,10 @@ Next priorities:
 | crates/cypcb-router/src/types.rs | RoutingResult, RouteSegment, ViaPlacement |
 | crates/cypcb-router/src/dsn.rs | Specctra DSN export implementation |
 | crates/cypcb-router/tests/dsn_integration.rs | DSN export integration tests |
+| crates/cypcb-export/Cargo.toml | Export crate config |
+| crates/cypcb-export/src/lib.rs | Export crate API and re-exports |
+| crates/cypcb-export/src/coords.rs | Coordinate conversion (nm to Gerber decimal) |
+| crates/cypcb-export/src/apertures.rs | Aperture management and D-code generation |
 | crates/cypcb-lsp/Cargo.toml | LSP crate config (server feature optional) |
 | crates/cypcb-lsp/src/lib.rs | LSP crate API and exports |
 | crates/cypcb-lsp/src/main.rs | LSP server binary entry point |
@@ -656,7 +693,7 @@ Next priorities:
 ## Session Continuity
 
 **Last session:** 2026-01-28
-**Stopped at:** Completed 05-10-PLAN.md (UAT Verification) - Phase 5 complete with gaps
+**Stopped at:** Completed 04-01-PLAN.md (Export Foundation) - Phase 4 in progress
 **Resume file:** None
 
 ---
