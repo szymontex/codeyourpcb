@@ -6,6 +6,9 @@
 pub mod csv;
 pub mod json;
 
+pub use csv::export_bom_csv;
+pub use json::export_bom_json;
+
 use serde::{Deserialize, Serialize};
 use cypcb_world::BoardWorld;
 use cypcb_world::components::{RefDes, Value, FootprintRef};

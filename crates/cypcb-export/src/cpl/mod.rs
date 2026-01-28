@@ -5,6 +5,8 @@
 
 pub mod csv;
 
+pub use csv::export_cpl;
+
 use serde::{Deserialize, Serialize};
 
 /// A single component placement entry.
