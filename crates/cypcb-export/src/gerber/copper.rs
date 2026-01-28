@@ -241,7 +241,7 @@ fn export_vias(
 /// Calculate absolute pad position accounting for component rotation.
 ///
 /// Rotates the pad offset around the component origin, then adds component position.
-fn calculate_pad_position(component_pos: Point, pad_offset: Point, rotation_millideg: i32) -> Point {
+pub(crate) fn calculate_pad_position(component_pos: Point, pad_offset: Point, rotation_millideg: i32) -> Point {
     if rotation_millideg == 0 {
         // No rotation, simple addition
         return Point::new(
