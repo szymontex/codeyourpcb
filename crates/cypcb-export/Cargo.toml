@@ -21,3 +21,6 @@ serde = { workspace = true }
 
 # Date/time for Gerber headers
 chrono = { workspace = true }
+
+# ECS for queries
+bevy_ecs = { workspace = true }
