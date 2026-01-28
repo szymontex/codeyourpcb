@@ -18,9 +18,13 @@ thiserror = { workspace = true }
 
 # Serialization
 serde = { workspace = true }
+serde_json = { workspace = true }
 
 # Date/time for Gerber headers
 chrono = { workspace = true }
 
 # ECS for queries
 bevy_ecs = { workspace = true }
+
+# CSV export
+csv = "1.4"
