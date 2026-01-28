@@ -190,13 +190,13 @@ Plans:
 **Plans:** 7 plans in 4 waves
 
 Plans:
-- [ ] 04-01-PLAN.md -- Export crate setup, coordinate conversion, apertures
-- [ ] 04-02-PLAN.md -- Gerber copper/mask/paste layer export
-- [ ] 04-03-PLAN.md -- Board outline and silkscreen export
-- [ ] 04-04-PLAN.md -- Excellon drill file export
-- [ ] 04-05-PLAN.md -- BOM and pick-and-place (CPL) export
-- [ ] 04-06-PLAN.md -- CLI export command and presets
-- [ ] 04-07-PLAN.md -- Visual verification checkpoint
+- [x] 04-01-PLAN.md -- Export crate setup, coordinate conversion, apertures
+- [x] 04-02-PLAN.md -- Gerber copper/mask/paste layer export
+- [x] 04-03-PLAN.md -- Board outline and silkscreen export
+- [x] 04-04-PLAN.md -- Excellon drill file export
+- [x] 04-05-PLAN.md -- BOM and pick-and-place (CPL) export
+- [x] 04-06-PLAN.md -- CLI export command and presets
+- [x] 04-07-PLAN.md -- Visual verification checkpoint
 
 **Notes:**
 - Wave 1: 04-01 - foundation (coordinate conversion, apertures)

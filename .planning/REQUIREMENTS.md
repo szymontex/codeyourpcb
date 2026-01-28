@@ -42,10 +42,10 @@
 
 ### Export
 
-- [ ] **EXP-01**: Gerber X2 export (all layers)
-- [ ] **EXP-02**: Excellon drill file export
-- [ ] **EXP-03**: BOM generation (CSV/JSON)
-- [ ] **EXP-04**: Pick and place file
+- [x] **EXP-01**: Gerber X2 export (all layers)
+- [x] **EXP-02**: Excellon drill file export
+- [x] **EXP-03**: BOM generation (CSV/JSON)
+- [x] **EXP-04**: Pick and place file
 
 ### Footprints
 
@@ -57,7 +57,7 @@
 
 ### Developer Experience
 
-- [ ] **DEV-01**: CLI interface for headless operation
+- [x] **DEV-01**: CLI interface for headless operation
 - [x] **DEV-02**: LSP server for IDE integration
 - [ ] **DEV-03**: Error messages with line/column info
 - [ ] **DEV-04**: Web-based viewer
@@ -126,16 +126,16 @@
 | DRC-03 | Phase 3 | Pending |
 | DRC-04 | Phase 3 | Pending |
 | DRC-05 | Phase 3 | Pending |
-| EXP-01 | Phase 4 | Pending |
-| EXP-02 | Phase 4 | Pending |
-| EXP-03 | Phase 4 | Pending |
-| EXP-04 | Phase 4 | Pending |
+| EXP-01 | Phase 4 | Complete |
+| EXP-02 | Phase 4 | Complete |
+| EXP-03 | Phase 4 | Complete |
+| EXP-04 | Phase 4 | Complete |
 | FTP-01 | Phase 1 | Complete |
 | FTP-02 | Phase 1 | Complete |
 | FTP-03 | Phase 3 | Pending |
 | FTP-04 | Phase 3 | Pending |
 | FTP-05 | Phase 5 | Complete |
-| DEV-01 | Phase 4 | Pending |
+| DEV-01 | Phase 4 | Complete |
 | DEV-02 | Phase 5 | Complete |
 | DEV-03 | Phase 1 | Complete |
 | DEV-04 | Phase 2 | Pending |
