@@ -152,7 +152,7 @@ pub fn write_header(
 
     // Coordinate format declaration
     let format_str = crate::coords::gerber_format_string(format);
-    header.push_str(&format!("{}n", format_str));
+    header.push_str(&format!("{}\n", format_str));
 
     // Unit mode declaration
     let unit_str = match format.unit {
