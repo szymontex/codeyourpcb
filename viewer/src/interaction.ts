@@ -18,8 +18,10 @@ export interface InteractionState {
 
 /**
  * Set up all interaction handlers for the canvas
- * - Scroll wheel: zoom centered on cursor
+ * - Scroll wheel: zoom centered on cursor (also pinch-to-zoom on touchpad)
+ * - Two-finger touchpad/touchscreen drag: pan
  * - Middle-click + drag: pan
+ * - Ctrl + left-click + drag: pan (alternative for laptops)
  * - Left-click: select component at point
  * - Right-click: reserved (context menu prevented)
  */
@@ -27,6 +29,9 @@ export function setupInteraction(
   canvas: HTMLCanvasElement,
   state: InteractionState
 ): void {
+  // Pointer cache for multi-touch pan detection
+  const pointerCache: Array<{ pointerId: number; clientX: number; clientY: number }> = [];
+
   // Wheel zoom (zoom to cursor position)
   canvas.addEventListener('wheel', (e) => {
     e.preventDefault();
@@ -41,9 +46,53 @@ export function setupInteraction(
     state.onViewportChange(state.viewport);
   }, { passive: false });
 
-  // Middle-click pan
+  // Pointer Events for two-finger touchpad/touchscreen pan
+  canvas.addEventListener('pointerdown', (e) => {
+    pointerCache.push({
+      pointerId: e.pointerId,
+      clientX: e.clientX,
+      clientY: e.clientY,
+    });
+  });
+
+  canvas.addEventListener('pointermove', (e) => {
+    // Find this pointer in cache
+    const index = pointerCache.findIndex(p => p.pointerId === e.pointerId);
+    if (index === -1) return;
+
+    // If exactly 2 pointers, perform two-finger pan
+    if (pointerCache.length === 2) {
+      const cached = pointerCache[index];
+      const dx = e.clientX - cached.clientX;
+      const dy = e.clientY - cached.clientY;
+
+      // Half delta since both fingers contribute to pan
+      state.viewport = pan(state.viewport, dx / 2, dy / 2);
+      state.dirty = true;
+      state.onViewportChange(state.viewport);
+    }
+
+    // Update cached position
+    pointerCache[index].clientX = e.clientX;
+    pointerCache[index].clientY = e.clientY;
+  });
+
+  // Shared cleanup function for pointer removal
+  const removePointer = (e: PointerEvent) => {
+    const index = pointerCache.findIndex(p => p.pointerId === e.pointerId);
+    if (index !== -1) {
+      pointerCache.splice(index, 1);
+    }
+  };
+
+  canvas.addEventListener('pointerup', removePointer);
+  canvas.addEventListener('pointercancel', removePointer);
+  canvas.addEventListener('pointerout', removePointer);
+  canvas.addEventListener('pointerleave', removePointer);
+
+  // Middle-click pan OR Ctrl+left-click pan (for laptops without middle button)
   canvas.addEventListener('mousedown', (e) => {
-    if (e.button === 1) { // Middle button
+    if (e.button === 1 || (e.button === 0 && e.ctrlKey)) {
       state.isPanning = true;
       state.lastX = e.clientX;
       state.lastY = e.clientY;
@@ -78,9 +127,9 @@ export function setupInteraction(
     }
   });
 
-  // Left-click selection
+  // Left-click selection (but not if Ctrl held - that's pan)
   canvas.addEventListener('click', (e) => {
-    if (e.button !== 0) return; // Left click only
+    if (e.button !== 0 || e.ctrlKey) return; // Left click only, no Ctrl
 
     const rect = canvas.getBoundingClientRect();
     const screenX = e.clientX - rect.left;
