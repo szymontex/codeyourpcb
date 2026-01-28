@@ -231,16 +231,19 @@ fn make_footprint_hover(footprint_name: &str) -> HoverInfo {
             for pad in &fp.pads {
                 let shape_str = format!("{:?}", pad.shape).to_lowercase();
                 let drill_str = if let Some(d) = pad.drill {
-                    format!(", drill {:.2}mm", d.to_mm())
+                    let d_mm: f64 = d.to_mm();
+                    format!(", drill {:.2}mm", d_mm)
                 } else {
                     String::new()
                 };
+                let width_mm: f64 = pad.size.0.to_mm();
+                let height_mm: f64 = pad.size.1.to_mm();
                 lines.push(format!(
                     "- {}: {} {:.2}mm x {:.2}mm{}",
                     pad.number,
                     shape_str,
-                    pad.size.0.to_mm(),
-                    pad.size.1.to_mm(),
+                    width_mm,
+                    height_mm,
                     drill_str
                 ));
             }
@@ -308,12 +311,14 @@ fn make_net_hover(net: &NetDef) -> HoverInfo {
             lines.push(format!("- Current: {}", current));
 
             // Calculate recommended trace width based on IPC-2221
-            if let Some(calc_width) = calculate_trace_width(current.to_amps()) {
+            let amps: f64 = current.to_amps();
+            if let Some(calc_width) = calculate_trace_width(amps) {
                 lines.push(format!("- IPC-2221 width: {:.2}mm (external, 10C rise)", calc_width));
 
                 // Warning if specified width is less than calculated
                 if let Some(specified) = &constraints.width {
-                    let specified_mm = specified.to_nm().to_mm();
+                    let specified_nm: cypcb_core::Nm = specified.to_nm();
+                    let specified_mm: f64 = specified_nm.to_mm();
                     if specified_mm < calc_width {
                         lines.push(format!(
                             "  **Warning:** Specified width ({:.2}mm) < recommended ({:.2}mm)",
