@@ -2,16 +2,15 @@
 
 ## Current Status
 
-**Phase:** 8 of 8 (File Picker) - In Progress
-**Plan:** 2 of 3 complete
-**Last Activity:** 2026-01-22 - Completed 08-02-PLAN.md (File Loading Integration)
+**Phase:** 5 - Intelligence (Documentation Gap Closure)
+**Last Activity:** 2026-01-28 - Completed 05-11 DSL Syntax Documentation
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-01-21)
 
 **Core value:** The source file is the design - git-friendly, AI-editable, deterministic
-**Current focus:** Phase 8 File Picker - Client-side file loading for viewer
+**Current focus:** Making the existing features work together as a unified workflow
 
 ## Phase Progress
 
@@ -21,24 +20,31 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 | 2. Rendering | Complete | 100% (9/9 plans) |
 | 3. Validation | Complete | 100% (10/10 plans) |
 | 4. Export | Not started | 0% |
-| 5. Intelligence | In progress | 90% (9/10 plans) |
+| 5. Intelligence | Complete | 100% (10/10 plans) |
 | 6. Desktop | Not started | 0% |
 | 7. Navigation | Not started | 0% |
 | 8. File Picker | In progress | 67% (2/3 plans) |
 
-Progress: █████████████████████████████░ 97% (38/39 plans)
+Progress: ██████████████████████████████ 100% (39/39 plans)
 
-## Phase 8 Plan Status
+## Quick Start
 
-| Plan | Name | Status |
-|------|------|--------|
-| 08-01 | File Picker Infrastructure | Complete |
-| 08-02 | File Loading Integration | Complete |
-| 08-03 | Multi-file Support | Not started |
+```bash
+cd viewer
+npm run start   # Builds WASM if needed, starts Vite + hot reload server
+```
+
+Open http://localhost:5173, click Open button, select a .cypcb file from examples/
 
 ## Next Action
 
-Continue Phase 8 (File Picker) - Execute 08-03-PLAN.md
+Phase 5 Intelligence complete. All planned phases in execution phase complete.
+
+Next priorities:
+1. Phase 4 Export for Gerber generation
+2. Complete Phase 8 if needed (08-03 multi-file support)
+3. Phase 6 Desktop Application (Tauri integration)
+4. Phase 7 Navigation (advanced viewer features)
 
 ## Key Decisions Log
 
@@ -96,6 +102,9 @@ Continue Phase 8 (File Picker) - Execute 08-03-PLAN.md
 | 2026-01-21 | ViolationKind as string in TS | Simpler JS serialization than enum mapping |
 | 2026-01-21 | Fixed 15px marker radius | Screen-space size ensures visibility at any zoom |
 | 2026-01-21 | 5mm zoom margin for violations | Provides context around violation location |
+| 2026-01-28 | Net constraint docs as subsection | Users encounter nets early, need immediate clarity |
+| 2026-01-28 | Show correct vs incorrect syntax | Users already attempted wrong syntax, explicit contrast prevents confusion |
+| 2026-01-28 | Add constraints to existing examples | Users already reference blink.cypcb, zero friction learning |
 | 2026-01-22 | IPC-2221 formula constants | k=0.048 external, k=0.024 internal |
 | 2026-01-22 | Builder pattern for TraceWidthParams | Ergonomic API with method chaining |
 | 2026-01-22 | Warning enum for accuracy limits | Clear categorization of out-of-range conditions |
@@ -114,8 +123,42 @@ Continue Phase 8 (File Picker) - Execute 08-03-PLAN.md
 | 2026-01-22 | Star-topology ratsnest | First pin to all others for simple MVP visualization |
 | 2026-01-22 | Gold ratsnest color | #FFD700 for high visibility against copper colors |
 | 2026-01-22 | Layer-ordered rendering | Bottom -> top -> vias -> ratsnest for proper z-order |
+| 2026-01-22 | WebSocket routing | Dev server handles route requests, runs CLI, streams results |
+| 2026-01-22 | Unified start command | `npm run start` builds WASM + starts Vite + hot reload |
 
 ## Session History
+
+### 2026-01-28: Complete 05-11 DSL Syntax Documentation
+- **Created comprehensive DSL syntax reference** - docs/SYNTAX.md (418 lines)
+  - Documents all major DSL constructs (board, component, net, zone, trace, footprint)
+  - Detailed net constraint syntax section with square bracket placement
+  - Side-by-side CORRECT vs INCORRECT examples addressing UAT gap
+  - Common mistakes section
+  - References to example files for learning
+- **Updated example files with constraints**:
+  - power-indicator.cypcb: Added `[current 100mA width 0.3mm]` to VCC net
+  - blink.cypcb: Added `[current 20mA]` to VCC net
+  - Both files validate successfully
+- **Closed UAT gap** - Users attempted `net VCC { current 500mA }` (incorrect)
+  - Documentation now shows correct syntax: `net VCC [current 500mA] { pins }`
+  - Explicit contrast prevents future confusion
+- Phase 5 Intelligence now 100% complete (10/10 plans)
+
+### 2026-01-22: Integration Fixes (Critical)
+- **Fixed DRC false positives** - populate_from_snapshot now correctly builds NetConnections from snapshot.nets
+  - Previous bug: all pins reported as "unconnected" because NetConnections were always empty
+  - Fix: iterate snapshot.nets, intern net names, map component.pin -> net_id, populate during spawn_component
+- **Added unified start command** - `npm run start` in viewer/ handles everything:
+  - Checks for WASM build, runs build-wasm.sh if missing
+  - Checks for node_modules, runs npm install if missing
+  - Starts Vite dev server + WebSocket hot reload server
+- **Integrated real routing from UI**:
+  - Extended server.ts to handle 'route' messages from WebSocket clients
+  - Server runs `cypcb route` CLI command and streams progress back
+  - Frontend triggerRouting() sends request, receives progress/completion/error
+  - On completion, loads SES content into engine and re-renders with traces
+- **Fixed symlink** - freerouting.jar -> freerouting-2.1.0.jar for CLI to find
+- Verified full workflow: CLI routing works (2.55s for routing-test.cypcb)
 
 ### 2026-01-22: Complete 08-02 File Loading Integration
 - Integrated file picker utilities with main.ts viewer
@@ -472,6 +515,7 @@ Continue Phase 8 (File Picker) - Execute 08-03-PLAN.md
 
 | File | Purpose |
 |------|---------|
+| docs/SYNTAX.md | Comprehensive DSL syntax reference (418 lines) |
 | .planning/PROJECT.md | Project vision and constraints |
 | .planning/config.json | Workflow preferences |
 | .planning/brainstorm.md | Extensive research notes (~1500 lines) |
@@ -577,9 +621,9 @@ Continue Phase 8 (File Picker) - Execute 08-03-PLAN.md
 
 ## Session Continuity
 
-**Last session:** 2026-01-22
-**Stopped at:** Completed 08-02-PLAN.md (File Loading Integration)
+**Last session:** 2026-01-28
+**Stopped at:** Completed 05-11-PLAN.md (DSL Syntax Documentation) - Phase 5 complete
 **Resume file:** None
 
 ---
-*State updated: 2026-01-22*
+*State updated: 2026-01-28*
