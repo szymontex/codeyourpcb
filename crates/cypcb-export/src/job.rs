@@ -356,7 +356,7 @@ mod tests {
             board_name: "test".to_string(),
         };
 
-        let _result = run_export(&job, &mut world, &library).unwrap();
+        let result = run_export(&job, &mut world, &library).unwrap();
 
         // Should have generated multiple files
         assert!(!result.files.is_empty());
@@ -383,7 +383,7 @@ mod tests {
             board_name: "test".to_string(),
         };
 
-        let _result = run_export(&job, &mut world, &library).unwrap();
+        let result = run_export(&job, &mut world, &library).unwrap();
 
         // Duration should be tracked (u64 is always >= 0, just verify it exists)
         let _duration = result.duration_ms;
