@@ -3,7 +3,7 @@
 ## Current Status
 
 **Phase:** 4 - Export (In Progress)
-**Last Activity:** 2026-01-28 - Completed 04-03 Board Outline and Silkscreen
+**Last Activity:** 2026-01-28 - Completed 04-04 Excellon Drill File Export
 
 ## Project Reference
 
@@ -19,13 +19,13 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 | 1. Foundation | Complete | 100% (9/9 plans) |
 | 2. Rendering | Complete | 100% (9/9 plans) |
 | 3. Validation | Complete | 100% (10/10 plans) |
-| 4. Export | In progress | 33% (3/9 plans) |
+| 4. Export | In progress | 44% (4/9 plans) |
 | 5. Intelligence | Complete | 100% (10/10 plans) |
 | 6. Desktop | Not started | 0% |
 | 7. Navigation | Not started | 0% |
 | 8. File Picker | In progress | 67% (2/3 plans) |
 
-Progress: ████████████████████████████████░ 88% (42/48 plans)
+Progress: ████████████████████████████████░ 90% (43/48 plans)
 
 ## Quick Start
 
@@ -46,10 +46,8 @@ Phase 4 Export in progress - foundation complete (coordinate conversion, apertur
 1. ✓ 04-01: Export foundation (coords, apertures)
 2. ✓ 04-02: Gerber layer export (copper, mask, paste)
 3. ✓ 04-03: Board outline and silkscreen Gerber export
-4. 04-04: Excellon drill file export
-5. 04-05: BOM and CPL file export
-6. 04-06: CLI export command with presets
-7. 04-07: Visual verification
+4. ✓ 04-04: Excellon drill file export
+5. 04-05: BOM generation
 6. 04-06: Pick-and-place (CPL)
 7. 04-07: Gerber job file
 8. 04-08: ZIP packaging
@@ -153,8 +151,45 @@ Phase 4 Export in progress - foundation complete (coordinate conversion, apertur
 | 2026-01-28 | 0.05mm mask expansion | Common tolerance for solder mask openings, configurable |
 | 2026-01-28 | THT pads excluded from paste | Through-hole doesn't use solder paste |
 | 2026-01-28 | Rotation via trigonometry | Accurate pad positioning, <0.1µm floating-point error |
+| 2026-01-28 | Excellon tool numbers start T1 | Standard convention, T0 invalid in most CAM software |
+| 2026-01-28 | METRIC,TZ Excellon format | Metric units with trailing zero suppression, modern standard |
+| 2026-01-28 | Explicit decimal Excellon coords | X50.800Y30.480 more readable than implicit format |
+| 2026-01-28 | PTH default for all drills | Component pads and vias always plated, NPTH stub for future |
+| 2026-01-28 | Group drill hits by tool | Minimizes tool changes during manufacturing |
 
 ## Session History
+
+### 2026-01-28: Complete 04-04 Excellon Drill File Export
+- **Created Excellon module and tool table** - drill size to tool number mapping
+  - ToolTable with HashMap-based deduplication
+  - get_or_create() assigns tool numbers sequentially (T1, T2, ...)
+  - to_header() generates Excellon tool definitions (T{n}C{diameter})
+  - Drill size constants (VIA_DRILL_DEFAULT, THT_DRILL_SMALL, THT_DRILL_LARGE)
+  - 9 unit tests for tool assignment and header generation
+  - Commit 349f1ae
+- **Implemented Excellon drill file export** - full file generation with M48 header
+  - export_excellon() with header, tool definitions, drill hits, M30
+  - collect_drill_hits() from component pads (THT) and vias
+  - calculate_pad_position() handles component rotation via trigonometry
+  - group_hits_by_tool() minimizes tool changes
+  - METRIC,TZ format with explicit decimal coordinates
+  - 8 unit tests for export, collection, grouping, positioning
+  - Commit 127d3ed
+- **Added PTH/NPTH drill separation** - filter by drill type
+  - DrillType enum (Plated, NonPlated)
+  - export_excellon() extended with drill_type_filter parameter
+  - Header comments identify drill type (PTH/NPTH/All)
+  - group_hits_by_tool_refs() for reference-based grouping after filtering
+  - All drills currently Plated (pads, vias); NPTH stub for future mounting holes
+  - 3 unit tests for filtering behavior
+  - Commit 34044ff
+- **Test coverage:** 20 tests (9 tool table + 8 writer + 3 filtering), all passing
+- **Created SUMMARY:** .planning/phases/04-export/04-04-SUMMARY.md
+
+### 2026-01-28: Complete 04-03 Board Outline and Silkscreen
+- **Silkscreen export implemented** - Gerber files for component markings
+- **Board outline export implemented** - Profile layer for board edge
+- **Created SUMMARY:** .planning/phases/04-export/04-03-SUMMARY.md
 
 ### 2026-01-28: Complete 04-02 Gerber Layer Export
 - **Created Gerber X2 header module** - write_header() with file function attributes
