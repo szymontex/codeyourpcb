@@ -21,6 +21,7 @@ pub mod apertures;
 pub mod gerber;
 pub mod excellon;
 pub mod bom;
+pub mod cpl;
 
 // Re-export commonly used types
 pub use coords::{CoordinateFormat, Unit, nm_to_gerber, gerber_format_string};
@@ -28,3 +29,4 @@ pub use apertures::{ApertureManager, ApertureShape, aperture_for_pad};
 pub use gerber::{write_header, GerberFileFunction, export_copper_layer};
 pub use excellon::{ToolTable, export_excellon, DrillType};
 pub use bom::{BomEntry, group_components};
+pub use cpl::{CplEntry, CplConfig};
