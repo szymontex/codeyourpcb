@@ -3,7 +3,7 @@
 ## Current Status
 
 **Phase:** 4 - Export (In Progress)
-**Last Activity:** 2026-01-28 - Completed 04-05 BOM and Pick-and-Place Export
+**Last Activity:** 2026-01-28 - Completed 04-06 CLI Export Integration
 
 ## Project Reference
 
@@ -19,13 +19,13 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 | 1. Foundation | Complete | 100% (9/9 plans) |
 | 2. Rendering | Complete | 100% (9/9 plans) |
 | 3. Validation | Complete | 100% (10/10 plans) |
-| 4. Export | In progress | 56% (5/9 plans) |
+| 4. Export | In progress | 67% (6/9 plans) |
 | 5. Intelligence | Complete | 100% (10/10 plans) |
 | 6. Desktop | Not started | 0% |
 | 7. Navigation | Not started | 0% |
 | 8. File Picker | In progress | 67% (2/3 plans) |
 
-Progress: ████████████████████████████████░ 92% (44/48 plans)
+Progress: ████████████████████████████████░ 94% (45/48 plans)
 
 ## Quick Start
 
@@ -40,7 +40,7 @@ Open http://localhost:5173, click Open button, select a .cypcb file from example
 
 Phase 4 Export in progress - foundation complete (coordinate conversion, aperture management).
 
-**Current Focus:** Wave 2 execution - manufacturing file generation
+**Current Focus:** Wave 3 execution - CLI integration and packaging
 
 **Phase 4 Export Plans:**
 1. ✓ 04-01: Export foundation (coords, apertures)
@@ -48,9 +48,10 @@ Phase 4 Export in progress - foundation complete (coordinate conversion, apertur
 3. ✓ 04-03: Board outline and silkscreen Gerber export
 4. ✓ 04-04: Excellon drill file export
 5. ✓ 04-05: BOM and pick-and-place (CPL) export
-6. 04-06: Gerber job file
-7. 04-07: ZIP packaging
-8. 04-08: Export CLI integration
+6. ✓ 04-06: CLI export integration with manufacturer presets
+7. 04-07: Gerber job file
+8. 04-08: ZIP packaging
+9. 04-09: Export integration testing
 
 **Outstanding Gaps from Phase 5:**
 1. LSP server compilation errors (high priority) - blocks developer experience
@@ -160,8 +161,51 @@ Phase 4 Export in progress - foundation complete (coordinate conversion, apertur
 | 2026-01-28 | CPL coordinates with mm suffix | JLCPCB format requires explicit unit (50.800mm) |
 | 2026-01-28 | CPL rotation in integer degrees | Pick-and-place machines use whole degrees |
 | 2026-01-28 | CplConfig for machine variations | Different rotation conventions and Y-axis directions |
+| 2026-01-28 | Preset-based export configuration | Avoid hardcoding manufacturer rules, extensible for new manufacturers |
+| 2026-01-28 | Organized export directory structure | gerber/, drill/, assembly/ folders for clear separation |
+| 2026-01-28 | CLI dry-run mode | Preview files before generation, user confidence |
+| 2026-01-28 | JLCPCB default preset | Most common hobbyist manufacturer, zero configuration |
+| 2026-01-28 | CLI as primary export interface | Headless operation for automation, CI/CD integration |
 
 ## Session History
+
+### 2026-01-28: Complete 04-06 CLI Export Integration
+- **Implemented manufacturer presets module** - Configuration system for different manufacturers
+  - Created ExportPreset struct with coordinate format and layer configuration
+  - FileNaming struct for manufacturer-specific file suffixes (KiCad vs traditional)
+  - ExportLayers struct for selective layer export
+  - JLCPCB 2-layer preset with KiCad-style naming (-F_Cu.gbr, -PTH.drl)
+  - PCBWay standard preset with traditional naming (_top.gtl, _drill.xln)
+  - Case-insensitive preset lookup via from_name()
+  - 11 tests for preset content and lookup
+  - Commit d8b64d9
+- **Implemented export job orchestrator** - Coordinates complete file generation
+  - ExportJob struct with source path, output dir, preset, board name
+  - run_export() generates all files based on preset configuration
+  - Organized output structure: gerber/, drill/, assembly/
+  - Exports all Gerber layers (copper, mask, paste, silk, outline)
+  - Exports Excellon drill files (PTH)
+  - Exports assembly files (BOM CSV/JSON, CPL) when enabled
+  - ExportResult with files list, warnings, duration tracking
+  - ExportedFile with path, type description, size
+  - 4 integration tests for job execution
+  - Commit 87f98b7
+- **Implemented CLI export command** - User-facing interface for manufacturing file generation
+  - clap-based argument parsing with clear options
+  - Input file, output directory (-o), preset selection (-p)
+  - --no-assembly flag to skip BOM/CPL generation
+  - --dry-run mode to preview files without generating
+  - Error handling for parse errors, sync errors, unknown presets
+  - Clear progress output during export
+  - Success summary with file list, sizes, and duration
+  - Integrated into main CLI as export subcommand
+  - 3 unit tests for command construction and preset lookup
+  - Verified with examples/blink.cypcb: generates 13 files in 67ms
+  - Commit b186cd8
+- **Fixed test compilation** - Restored result variable in job tests
+  - Commit 1c40375
+- **Test coverage:** 130 tests passing in cypcb-export (18 new), 9 CLI tests passing
+- **Created SUMMARY:** .planning/phases/04-export/04-06-SUMMARY.md
 
 ### 2026-01-28: Complete 04-05 BOM and Pick-and-Place Export
 - **Implemented BOM CSV and JSON export** - Component grouping and consolidation
