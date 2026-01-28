@@ -1,0 +1,20 @@
+[package]
+name = "cypcb-export"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+# Gerber export
+gerber-types = "0.7"
+
+# Internal crates
+cypcb-world = { workspace = true }
+cypcb-core = { workspace = true }
+
+# Error handling
+thiserror = { workspace = true }
+
+# Serialization
+serde = { workspace = true }

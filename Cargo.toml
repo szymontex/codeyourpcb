@@ -43,6 +43,7 @@ cypcb-drc = { path = "crates/cypcb-drc" }
 cypcb-calc = { path = "crates/cypcb-calc" }
 cypcb-router = { path = "crates/cypcb-router" }
 cypcb-lsp = { path = "crates/cypcb-lsp" }
+cypcb-export = { path = "crates/cypcb-export" }
 
 # LSP (using fork for Rust 2024 compatibility)
 tower-lsp = { package = "tower-lsp-f", version = "0.24" }
