@@ -28,7 +28,7 @@
 //! ```
 
 pub mod tools;
-// pub mod writer; // TODO: Implement writer module
+pub mod writer;
 
 pub use tools::{ToolTable, VIA_DRILL_DEFAULT, THT_DRILL_SMALL, THT_DRILL_LARGE};
-// pub use writer::{export_excellon, DrillType}; // TODO: Implement writer module
+pub use writer::{export_excellon, DrillType};
