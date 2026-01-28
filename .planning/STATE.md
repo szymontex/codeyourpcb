@@ -3,7 +3,7 @@
 ## Current Status
 
 **Phase:** 4 - Export (In Progress)
-**Last Activity:** 2026-01-28 - Completed 04-02 Gerber Layer Export
+**Last Activity:** 2026-01-28 - Completed 04-03 Board Outline and Silkscreen
 
 ## Project Reference
 
@@ -19,13 +19,13 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 | 1. Foundation | Complete | 100% (9/9 plans) |
 | 2. Rendering | Complete | 100% (9/9 plans) |
 | 3. Validation | Complete | 100% (10/10 plans) |
-| 4. Export | In progress | 22% (2/9 plans) |
+| 4. Export | In progress | 33% (3/9 plans) |
 | 5. Intelligence | Complete | 100% (10/10 plans) |
 | 6. Desktop | Not started | 0% |
 | 7. Navigation | Not started | 0% |
 | 8. File Picker | In progress | 67% (2/3 plans) |
 
-Progress: ████████████████████████████████ 100% (41/48 plans)
+Progress: ████████████████████████████████░ 88% (42/48 plans)
 
 ## Quick Start
 
@@ -40,14 +40,16 @@ Open http://localhost:5173, click Open button, select a .cypcb file from example
 
 Phase 4 Export in progress - foundation complete (coordinate conversion, aperture management).
 
-**Current Focus:** 04-02 Gerber Layer Export
+**Current Focus:** Wave 2 execution - manufacturing file generation
 
 **Phase 4 Export Plans:**
 1. ✓ 04-01: Export foundation (coords, apertures)
 2. ✓ 04-02: Gerber layer export (copper, mask, paste)
-3. 04-03: Excellon drill file
-4. 04-04: Board outline export
-5. 04-05: BOM generation
+3. ✓ 04-03: Board outline and silkscreen Gerber export
+4. 04-04: Excellon drill file export
+5. 04-05: BOM and CPL file export
+6. 04-06: CLI export command with presets
+7. 04-07: Visual verification
 6. 04-06: Pick-and-place (CPL)
 7. 04-07: Gerber job file
 8. 04-08: ZIP packaging
@@ -88,6 +90,9 @@ Phase 4 Export in progress - foundation complete (coordinate conversion, apertur
 | 2026-01-21 | WebSocket port 3001 | Separate from Vite (5173) |
 | 2026-01-21 | 200ms debounce | Handles editor save patterns |
 | 2026-01-21 | tree-sitter feature flag | Conditional compilation for WASM compatibility |
+| 2026-01-28 | Silkscreen MVP crosshairs | Crosshair markers instead of text rendering for MVP |
+| 2026-01-28 | Courtyard rotation deferred | Axis-aligned rectangles acceptable for MVP |
+| 2026-01-28 | Line widths standardized | 0.1mm outline, 0.15mm silkscreen per industry standards |
 | 2026-01-21 | Split impl blocks for WASM | Separate WASM-exposed from internal methods |
 | 2026-01-21 | JS parsing for WASM mode | tree-sitter requires C, so JS handles parsing in WASM |
 | 2026-01-21 | WasmPcbEngineAdapter | Adapter bridges JS parsing to WASM load_snapshot() |
