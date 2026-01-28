@@ -14,6 +14,7 @@ cypcb-core = { path = "../cypcb-core" }
 cypcb-parser = { path = "../cypcb-parser" }
 cypcb-world = { path = "../cypcb-world" }
 cypcb-router = { path = "../cypcb-router" }
+cypcb-export = { path = "../cypcb-export" }
 clap = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

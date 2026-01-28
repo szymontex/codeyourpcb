@@ -45,6 +45,8 @@ enum Commands {
     Check(commands::CheckCommand),
     /// Route a .cypcb file using FreeRouting autorouter
     Route(commands::RouteCommand),
+    /// Export a .cypcb file to manufacturing files
+    Export(commands::ExportCommand),
 }
 
 fn main() -> Result<()> {
@@ -54,5 +56,6 @@ fn main() -> Result<()> {
         Commands::Parse(cmd) => cmd.run(),
         Commands::Check(cmd) => cmd.run(),
         Commands::Route(cmd) => cmd.run(),
+        Commands::Export(cmd) => cmd.run(),
     }
 }
