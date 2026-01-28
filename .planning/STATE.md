@@ -3,7 +3,7 @@
 ## Current Status
 
 **Phase:** 4 - Export (In Progress)
-**Last Activity:** 2026-01-28 - Completed 04-01 Export Foundation
+**Last Activity:** 2026-01-28 - Completed 04-02 Gerber Layer Export
 
 ## Project Reference
 
@@ -19,13 +19,13 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 | 1. Foundation | Complete | 100% (9/9 plans) |
 | 2. Rendering | Complete | 100% (9/9 plans) |
 | 3. Validation | Complete | 100% (10/10 plans) |
-| 4. Export | In progress | 11% (1/9 plans) |
+| 4. Export | In progress | 22% (2/9 plans) |
 | 5. Intelligence | Complete | 100% (10/10 plans) |
 | 6. Desktop | Not started | 0% |
 | 7. Navigation | Not started | 0% |
 | 8. File Picker | In progress | 67% (2/3 plans) |
 
-Progress: ███████████████████████████████ 100% (40/48 plans)
+Progress: ████████████████████████████████ 100% (41/48 plans)
 
 ## Quick Start
 
@@ -44,7 +44,7 @@ Phase 4 Export in progress - foundation complete (coordinate conversion, apertur
 
 **Phase 4 Export Plans:**
 1. ✓ 04-01: Export foundation (coords, apertures)
-2. 04-02: Gerber layer export (copper, mask, silk)
+2. ✓ 04-02: Gerber layer export (copper, mask, paste)
 3. 04-03: Excellon drill file
 4. 04-04: Board outline export
 5. 04-05: BOM generation
@@ -143,8 +143,38 @@ Phase 4 Export in progress - foundation complete (coordinate conversion, apertur
 | 2026-01-28 | D-code start at 10 | D01-D03 reserved for draw/move/flash per Gerber standard |
 | 2026-01-28 | RoundRect fallback | Standard Gerber lacks RoundRect, use Rect+comment until polygon impl |
 | 2026-01-28 | Format MM 2.6 default | 2 integer, 6 decimal (mm) most common modern format, 1µm precision |
+| 2026-01-28 | Gerber X2 attributes | TF.FileFunction for layer identification, CAM compatibility |
+| 2026-01-28 | Dark polarity for mask/paste | Standard manufacturing convention, positive = exposed |
+| 2026-01-28 | 0.05mm mask expansion | Common tolerance for solder mask openings, configurable |
+| 2026-01-28 | THT pads excluded from paste | Through-hole doesn't use solder paste |
+| 2026-01-28 | Rotation via trigonometry | Accurate pad positioning, <0.1µm floating-point error |
 
 ## Session History
+
+### 2026-01-28: Complete 04-02 Gerber Layer Export
+- **Created Gerber X2 header module** - write_header() with file function attributes
+  - GerberFileFunction enum (Copper, Mask, Paste, Silk, Profile, Drill)
+  - X2 attributes: TF.GenerationSoftware, TF.CreationDate, TF.FileFunction, TF.Part
+  - CopperSide and Side enums for layer designation
+  - Automatic layer numbering (L1 top, Ln bottom)
+  - Commit 7743884
+- **Implemented copper layer export** - Full Gerber file generation for copper
+  - export_copper_layer() with pads, traces, vias
+  - calculate_pad_position() handles component rotation
+  - via_spans_layer() for layer span logic
+  - ExportError for footprint lookup failures
+  - D01/D02/D03 commands for draw/move/flash
+  - Commit e35d257
+- **Implemented mask and paste export** - Soldermask and solderpaste layers
+  - export_soldermask() with aperture expansion
+  - export_solderpaste() with SMD-only filtering
+  - MaskPasteConfig with builder pattern
+  - apply_expansion() and apply_reduction() for sizing
+  - %LPD*% dark polarity for standard manufacturing
+  - Commit 1dbaccc
+- **Added dependencies** - chrono for timestamps, bevy_ecs for queries
+- **Test coverage:** 29 new tests (12 header + 8 copper + 9 mask), all passing
+- **Created SUMMARY:** .planning/phases/04-export/04-02-SUMMARY.md
 
 ### 2026-01-28: Complete 04-01 Export Foundation
 - **Created cypcb-export crate** - New workspace crate for manufacturing file export
@@ -693,7 +723,7 @@ Phase 4 Export in progress - foundation complete (coordinate conversion, apertur
 ## Session Continuity
 
 **Last session:** 2026-01-28
-**Stopped at:** Completed 04-01-PLAN.md (Export Foundation) - Phase 4 in progress
+**Stopped at:** Completed 04-02-PLAN.md (Gerber Layer Export) - Phase 4 in progress
 **Resume file:** None
 
 ---
