@@ -19,8 +19,11 @@
 pub mod coords;
 pub mod apertures;
 pub mod gerber;
+pub mod excellon;
 
 // Re-export commonly used types
 pub use coords::{CoordinateFormat, Unit, nm_to_gerber, gerber_format_string};
 pub use apertures::{ApertureManager, ApertureShape, aperture_for_pad};
 pub use gerber::{write_header, GerberFileFunction, export_copper_layer};
+pub use excellon::ToolTable;
+// pub use excellon::{export_excellon, DrillType}; // TODO: Implement writer module
