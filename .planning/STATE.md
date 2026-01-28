@@ -3,7 +3,7 @@
 ## Current Status
 
 **Phase:** 4 - Export (In Progress)
-**Last Activity:** 2026-01-28 - Completed 04-04 Excellon Drill File Export
+**Last Activity:** 2026-01-28 - Completed 04-05 BOM and Pick-and-Place Export
 
 ## Project Reference
 
@@ -19,13 +19,13 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 | 1. Foundation | Complete | 100% (9/9 plans) |
 | 2. Rendering | Complete | 100% (9/9 plans) |
 | 3. Validation | Complete | 100% (10/10 plans) |
-| 4. Export | In progress | 44% (4/9 plans) |
+| 4. Export | In progress | 56% (5/9 plans) |
 | 5. Intelligence | Complete | 100% (10/10 plans) |
 | 6. Desktop | Not started | 0% |
 | 7. Navigation | Not started | 0% |
 | 8. File Picker | In progress | 67% (2/3 plans) |
 
-Progress: ████████████████████████████████░ 90% (43/48 plans)
+Progress: ████████████████████████████████░ 92% (44/48 plans)
 
 ## Quick Start
 
@@ -47,11 +47,10 @@ Phase 4 Export in progress - foundation complete (coordinate conversion, apertur
 2. ✓ 04-02: Gerber layer export (copper, mask, paste)
 3. ✓ 04-03: Board outline and silkscreen Gerber export
 4. ✓ 04-04: Excellon drill file export
-5. 04-05: BOM generation
-6. 04-06: Pick-and-place (CPL)
-7. 04-07: Gerber job file
-8. 04-08: ZIP packaging
-9. 04-09: Export CLI integration
+5. ✓ 04-05: BOM and pick-and-place (CPL) export
+6. 04-06: Gerber job file
+7. 04-07: ZIP packaging
+8. 04-08: Export CLI integration
 
 **Outstanding Gaps from Phase 5:**
 1. LSP server compilation errors (high priority) - blocks developer experience
@@ -156,8 +155,38 @@ Phase 4 Export in progress - foundation complete (coordinate conversion, apertur
 | 2026-01-28 | Explicit decimal Excellon coords | X50.800Y30.480 more readable than implicit format |
 | 2026-01-28 | PTH default for all drills | Component pads and vias always plated, NPTH stub for future |
 | 2026-01-28 | Group drill hits by tool | Minimizes tool changes during manufacturing |
+| 2026-01-28 | Comma-separated BOM designators | JLCPCB single row per group, reduces BOM size |
+| 2026-01-28 | Natural designator sorting | R1, R2, R10 order more intuitive than lexical |
+| 2026-01-28 | CPL coordinates with mm suffix | JLCPCB format requires explicit unit (50.800mm) |
+| 2026-01-28 | CPL rotation in integer degrees | Pick-and-place machines use whole degrees |
+| 2026-01-28 | CplConfig for machine variations | Different rotation conventions and Y-axis directions |
 
 ## Session History
+
+### 2026-01-28: Complete 04-05 BOM and Pick-and-Place Export
+- **Implemented BOM CSV and JSON export** - Component grouping and consolidation
+  - Created bom module with component grouping by (value, footprint)
+  - Natural sorting for designators (R1, R2, R10)
+  - CSV export in JLCPCB format with comma-separated designators
+  - JSON export with metadata (board name, export date, component counts)
+  - Added csv and serde_json dependencies
+  - 18 BOM tests passing
+  - BOM files created in prior commit 34044ff (mislabeled as 04-04)
+- **Implemented pick-and-place (CPL) CSV export** - Coordinates and rotation for assembly
+  - Created cpl module with CplEntry and CplConfig types
+  - CSV export in JLCPCB format with mm suffix (50.800mm)
+  - Coordinate conversion from nanometers to millimeters (3 decimals)
+  - Rotation conversion from millidegrees to degrees
+  - Layer detection from first pad in footprint
+  - Configuration support for rotation offset and Y-flip
+  - Natural sorting for consistent output
+  - 12 CPL tests passing
+  - Commit 89c3857
+- **Fixed excellon test compilation** - Blocking issue from 04-04 signature change
+  - Added missing None parameter to export_excellon() test calls
+  - Fixed after drill_type_filter parameter added in 04-04
+- **Total test coverage:** 115 tests passing in cypcb-export (30 new BOM+CPL)
+- **Created SUMMARY:** .planning/phases/04-export/04-05-SUMMARY.md
 
 ### 2026-01-28: Complete 04-04 Excellon Drill File Export
 - **Created Excellon module and tool table** - drill size to tool number mapping
