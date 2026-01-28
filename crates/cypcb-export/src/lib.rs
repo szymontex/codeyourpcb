@@ -23,6 +23,7 @@ pub mod excellon;
 pub mod bom;
 pub mod cpl;
 pub mod presets;
+pub mod job;
 
 // Re-export commonly used types
 pub use coords::{CoordinateFormat, Unit, nm_to_gerber, gerber_format_string};
@@ -32,3 +33,4 @@ pub use excellon::{ToolTable, export_excellon, DrillType};
 pub use bom::{BomEntry, group_components};
 pub use cpl::{CplEntry, CplConfig};
 pub use presets::{ExportPreset, FileNaming, ExportLayers};
+pub use job::{ExportJob, ExportResult, ExportedFile, ExportError, run_export};
