@@ -1,0 +1,55 @@
+version 1
+
+// Simple power indicator circuit
+// - 5V power input via 2-pin header
+// - LED with current limiting resistor (330R for ~10mA @ 5V)
+// - Decoupling capacitor for noise filtering
+  
+board power_indicator {
+    size 25mm x 20mm
+    layers 2
+}
+ 
+// Power input - 2.54mm pitch header
+component J1 connector "PIN-HDR-1x2" {
+    at 5mm, 10mm
+}
+
+// Current limiting resistor for LED
+// 5V - 2V(LED) = 3V, 3V/330R = ~9mA
+component R1 resistor "0805" {
+    value "330R"
+    at 12mm, 14mm
+}
+
+// Power indicator LED (green)
+component LED1 led "0805" {
+    value "GREEN"
+    at 18mm, 14mm
+}
+
+// Decoupling capacitor near power input
+component C1 capacitor "0805" {
+    value "100nF"
+    at 12mm, 6mm
+}
+
+// Power rail connections
+// Net constraints go in square brackets BEFORE the braces
+net VCC [current 100mA width 0.3mm] {
+    J1.1
+    R1.1
+    C1.1
+}
+
+net GND {
+    J1.2
+    LED1.2
+    C1.2
+}
+
+// LED circuit: R1 -> LED1
+net LED_ANODE {
+    R1.2
+    LED1.1
+}
