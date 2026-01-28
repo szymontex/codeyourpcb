@@ -12,7 +12,7 @@
 | 2 | Rendering | Visual feedback with hot reload | 7 | Complete |
 | 3 | Validation | DRC prevents invalid designs | 8 | Complete |
 | 4 | Export | Manufacturable output | 5 | Pending |
-| 5 | Intelligence | Autorouting and IDE integration | 6 | Pending |
+| 5 | Intelligence | Autorouting and IDE integration | 6 | Complete |
 | 6 | Desktop | Full application experience | v2 | Pending |
 | 7 | Navigation | Alternative pan/zoom for laptops | 3 | Pending |
 | 8 | File Picker | Load .cypcb + .ses files in viewer | 3 | Pending |

@@ -53,20 +53,20 @@
 - [ ] **FTP-02**: Basic through-hole footprints
 - [ ] **FTP-03**: QFP/SOIC/SOT packages
 - [ ] **FTP-04**: Custom footprint definition in DSL
-- [ ] **FTP-05**: KiCad footprint import
+- [x] **FTP-05**: KiCad footprint import
 
 ### Developer Experience
 
 - [ ] **DEV-01**: CLI interface for headless operation
-- [ ] **DEV-02**: LSP server for IDE integration
+- [x] **DEV-02**: LSP server for IDE integration
 - [ ] **DEV-03**: Error messages with line/column info
 - [ ] **DEV-04**: Web-based viewer
 
 ### Intelligence
 
-- [ ] **INT-01**: Autorouter integration (FreeRouting)
-- [ ] **INT-02**: Trace width calculator (IPC-2221)
-- [ ] **INT-03**: Electrical-aware constraints (crosstalk, impedance hints)
+- [x] **INT-01**: Autorouter integration (FreeRouting)
+- [x] **INT-02**: Trace width calculator (IPC-2221)
+- [x] **INT-03**: Electrical-aware constraints (crosstalk, impedance hints)
 
 ## v2 Requirements
 
@@ -134,14 +134,14 @@
 | FTP-02 | Phase 1 | Complete |
 | FTP-03 | Phase 3 | Pending |
 | FTP-04 | Phase 3 | Pending |
-| FTP-05 | Phase 5 | Pending |
+| FTP-05 | Phase 5 | Complete |
 | DEV-01 | Phase 4 | Pending |
-| DEV-02 | Phase 5 | Pending |
+| DEV-02 | Phase 5 | Complete |
 | DEV-03 | Phase 1 | Complete |
 | DEV-04 | Phase 2 | Pending |
-| INT-01 | Phase 5 | Pending |
-| INT-02 | Phase 5 | Pending |
-| INT-03 | Phase 5 | Pending |
+| INT-01 | Phase 5 | Complete |
+| INT-02 | Phase 5 | Complete |
+| INT-03 | Phase 5 | Complete |
 
 **Coverage:**
 - v1 requirements: 35 total
