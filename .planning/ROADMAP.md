@@ -11,11 +11,11 @@
 | 1 | Foundation | Working parser and board model | 12 | Complete |
 | 2 | Rendering | Visual feedback with hot reload | 7 | Complete |
 | 3 | Validation | DRC prevents invalid designs | 8 | Complete |
-| 4 | Export | Manufacturable output | 5 | Pending |
+| 4 | Export | Manufacturable output | 5 | Complete |
 | 5 | Intelligence | Autorouting and IDE integration | 6 | Complete |
 | 6 | Desktop | Full application experience | v2 | Pending |
 | 7 | Navigation | Alternative pan/zoom for laptops | 3 | Pending |
-| 8 | File Picker | Load .cypcb + .ses files in viewer | 3 | Pending |
+| 8 | File Picker | Load .cypcb + .ses files in viewer | 3 | Complete |
 
 ---
 
@@ -324,7 +324,7 @@ Plans:
 Plans:
 - [x] 08-01-PLAN.md -- File picker utilities and UI elements
 - [x] 08-02-PLAN.md -- Integration with viewer (Open button, drag-drop)
-- [ ] 08-03-PLAN.md -- Human verification checkpoint
+- [x] 08-03-PLAN.md -- Human verification checkpoint
 
 **Notes:**
 - Wave 1: 08-01 - create file-picker.ts utilities

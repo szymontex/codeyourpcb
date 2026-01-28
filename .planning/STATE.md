@@ -2,8 +2,8 @@
 
 ## Current Status
 
-**Phase:** 4 - Export (Complete)
-**Last Activity:** 2026-01-28 - Completed Phase 4 Export (7/7 plans)
+**Phase:** 8 - File Picker (Complete)
+**Last Activity:** 2026-01-28 - Completed Phase 8 File Picker (3/3 plans)
 
 ## Project Reference
 
@@ -23,9 +23,9 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 | 5. Intelligence | Complete | 100% (10/10 plans) |
 | 6. Desktop | Not started | 0% |
 | 7. Navigation | Not started | 0% |
-| 8. File Picker | In progress | 67% (2/3 plans) |
+| 8. File Picker | Complete | 100% (3/3 plans) |
 
-Progress: ███████████████████████████████████ 98% (47/48 plans)
+Progress: ████████████████████████████████████ 100% (48/48 plans)
 
 ## Quick Start
 
@@ -38,25 +38,31 @@ Open http://localhost:5173, click Open button, select a .cypcb file from example
 
 ## Next Action
 
-Phase 4 Export complete! All manufacturing files (Gerber, Excellon, BOM, CPL) generate successfully via CLI.
+Phase 8 File Picker complete! Users can now load .cypcb and .ses files via Open button or drag-drop.
 
-**Completed Phase 4 Export - All 7 plans:**
-1. ✓ 04-01: Export foundation (coordinate conversion, apertures)
-2. ✓ 04-02: Gerber layer export (copper, mask, paste, silk)
-3. ✓ 04-03: Board outline and silkscreen export
-4. ✓ 04-04: Excellon drill file export
-5. ✓ 04-05: BOM and pick-and-place (CPL) export
-6. ✓ 04-06: CLI export integration with manufacturer presets
-7. ✓ 04-07: Visual verification checkpoint (human-verified with Gerber viewers)
+**Completed Phase 8 File Picker - All 3 plans:**
+1. ✓ 08-01: File picker utilities (readFileAsText, createFilePicker, setupDropZone)
+2. ✓ 08-02: Viewer integration (Open button, drag-drop handling, file loading)
+3. ✓ 08-03: Human verification (all tests passed)
 
-**Bug fixes during execution:**
-- Fixed literal 'n' character in Gerber header (commit 583919c)
+**Features delivered:**
+- FP-01: File picker UI to select .cypcb source files ✓
+- FP-02: Load corresponding .ses routing files ✓
+- FP-03: Drag & drop support for files ✓
+
+**User feedback captured for future improvements:**
+- Project browser UI instead of generic file picker
+- Better error message visibility
+- Improved .ses loading when board already present
+
+**Milestone status:**
+- 6 of 8 phases complete (1, 2, 3, 4, 5, 8)
+- Phase 6 (Desktop) and Phase 7 (Navigation) remain for v1.0 completion
 
 **Next priorities:**
-1. Complete Phase 8 File Picker (08-03 multi-file support) - 1 plan remaining
-2. Phase 6 Desktop Application (Tauri integration) - native app wrapper
-3. Phase 7 Navigation (advanced viewer features) - measure tool, find components
-4. Fix outstanding gaps from Phase 5 (LSP compilation, Java dependency docs)
+1. Phase 6 Desktop Application - Tauri wrapper for native experience
+2. Phase 7 Navigation Controls - Alternative pan/zoom for touchpads
+3. Outstanding gaps from Phase 5 (LSP compilation, Java documentation)
 
 ## Key Decisions Log
 
