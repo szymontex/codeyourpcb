@@ -1,0 +1,36 @@
+version 1
+
+board test_routing {
+    size 50mm x 30mm
+    layers 2
+}
+
+component R1 resistor "0402" {
+    value "10k"
+    at 10mm, 15mm
+}
+
+component R2 resistor "0402" {
+    value "10k"
+    at 30mm, 15mm
+}
+
+component C1 capacitor "0402" {
+    value "100nF"
+    at 20mm, 10mm
+}
+
+net VCC {
+    R1.1
+    C1.1
+}
+
+net GND {
+    R1.2
+    R2.1
+    C1.2
+}
+
+net SIGNAL {
+    R2.2
+}
