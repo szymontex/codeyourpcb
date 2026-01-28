@@ -294,10 +294,11 @@ Users expected `current 500mA` inside net braces, but grammar requires constrain
 3. Existing middle-click pan still works
 4. Works across Chrome, Firefox, Safari
 
-**Plans:** 0 plans
+**Plans:** 2 plans
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 7 to break down)
+- [ ] 07-01-PLAN.md — Pointer Events multi-touch pan + touch-action CSS
+- [ ] 07-02-PLAN.md — Cross-browser navigation verification checkpoint
 
 ---
 
