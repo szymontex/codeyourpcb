@@ -225,7 +225,7 @@ Plans:
 - [x] 05-08-PLAN.md -- Trace and ratsnest rendering
 - [x] 05-09-PLAN.md -- Autorouter UI integration (CLI, progress, cancel)
 - [ ] 05-10-PLAN.md -- Visual verification checkpoint
-- [ ] 05-11-PLAN.md -- [GAP CLOSURE] DSL syntax documentation
+- [x] 05-11-PLAN.md -- [GAP CLOSURE] DSL syntax documentation
 
 **Notes:**
 - Wave 1 (parallel): 05-01, 05-02, 05-03 - independent foundation work
@@ -236,7 +236,7 @@ Plans:
 - Gap closure: 05-11 - documentation for net constraint syntax (UAT finding)
 
 **Gap Closure (UAT Finding):**
-Users expected `current 500mA` inside net braces, but grammar requires constraints in square brackets before braces: `net VCC [current 500mA] { pins }`. This is documentation gap, not code bug.
+Users expected `current 500mA` inside net braces, but grammar requires constraints in square brackets before braces: `net VCC [current 500mA] { pins }`. This is documentation gap, not code bug. **CLOSED** - Plan 05-11 created comprehensive DSL syntax documentation (docs/SYNTAX.md) and updated example files.
 
 ---
 

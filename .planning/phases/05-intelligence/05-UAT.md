@@ -1,9 +1,10 @@
 ---
-status: complete
+status: gap_closed
 phase: 05-intelligence
-source: 05-01-SUMMARY.md, 05-02-SUMMARY.md, 05-03-SUMMARY.md, 05-04-SUMMARY.md, 05-05-SUMMARY.md, 05-06-SUMMARY.md, 05-07-SUMMARY.md, 05-08-SUMMARY.md, 05-09-SUMMARY.md
+source: 05-01-SUMMARY.md, 05-02-SUMMARY.md, 05-03-SUMMARY.md, 05-04-SUMMARY.md, 05-05-SUMMARY.md, 05-06-SUMMARY.md, 05-07-SUMMARY.md, 05-08-SUMMARY.md, 05-09-SUMMARY.md, 05-11-SUMMARY.md
 started: 2026-01-22T12:00:00Z
-updated: 2026-01-22T12:30:00Z
+updated: 2026-01-28T13:30:00Z
+gap_closure_plan: 05-11-PLAN.md
 ---
 
 ## Current Test
@@ -57,11 +58,15 @@ skipped: 0
 ## Gaps
 
 - truth: "Parser accepts `current 500mA` or `current 2A` in net blocks"
-  status: failed
+  status: closed
   reason: "User reported: Syntax error: unexpected token: 'current 500mA' - parser rejects the current constraint syntax"
-  severity: major
+  severity: minor
   test: 2
-  root_cause: ""
-  artifacts: []
-  missing: []
-  debug_session: ""
+  root_cause: "NOT A BUG - SYNTAX MISMATCH. Constraints must be in square brackets BEFORE braces: `net VCC [current 500mA] { pins }` not inside body."
+  artifacts:
+    - path: "crates/cypcb-parser/grammar/grammar.js"
+      lines: "150-171"
+      issue: "Grammar designed with constraint block before braces, working as intended"
+  resolution: "Plan 05-11 created comprehensive DSL syntax documentation (docs/SYNTAX.md) and updated example files to demonstrate correct constraint syntax"
+  fixed_by: "05-11-PLAN.md"
+  debug_session: ".planning/debug/parser-current-syntax.md"
