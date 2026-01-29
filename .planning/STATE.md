@@ -13,12 +13,12 @@
 ## Current Position
 
 **Phase:** Phase 11 (Dark Mode & UI Polish)
-**Plan:** Ready for planning
-**Status:** Phase 10 complete - library management foundation ready for UI integration
+**Plan:** 1 of 3
+**Status:** In progress - theme system foundation complete
 
 **Progress:**
 ```
-[===============                                   ] 29%
+[================                                  ] 31%
 v1.1: Phase 9 ✓ → 10 ✓ → 11 → 12 → 13 → 14 → 15
 ```
 
@@ -54,7 +54,7 @@ v1.1: Phase 9 ✓ → 10 ✓ → 11 → 12 → 13 → 14 → 15
 - Pending: 47
 
 **Efficiency:**
-- Plans completed (v1.1): 9
+- Plans completed (v1.1): 10
 - Blockers encountered: 2 (pkg-config resolved, FTS5 corruption fixed)
 - Revisions needed: 0
 
@@ -201,6 +201,28 @@ v1.1: Phase 9 ✓ → 10 ✓ → 11 → 12 → 13 → 14 → 15
 - Import pipeline verified end-to-end: source → parse → index → search
 - Established in 10-05
 
+**FART Prevention for Dark Mode (Phase 11):**
+- Inline script in HTML head sets data-theme before CSS loads
+- Prevents Flash of inAccurate coloR Theme during page load
+- Synchronous localStorage read + matchMedia check executes before first paint
+- Critical for professional user experience across theme switches
+- Established in 11-01
+
+**CSS Custom Properties Over SCSS (Phase 11):**
+- Native CSS custom properties with data-theme attribute selector
+- No build step required, browser-native, dynamic theme switching
+- 16 semantic colors + 4 PCB-specific colors for both light/dark
+- WCAG AA compliant (4.5:1 minimum contrast ratios)
+- Alternative to SCSS/CSS-in-JS patterns
+- Established in 11-01
+
+**ThemeManager Singleton Pattern (Phase 11):**
+- Single source of truth for theme state
+- Coordinates localStorage persistence, matchMedia system preference, DOM updates
+- Provides subscribe() for component reactivity to theme changes
+- Critical for coordinating Monaco, Canvas, Three.js theme consistency (Phase 14)
+- Established in 11-01
+
 ### Active TODOs
 
 - [x] Plan Phase 9: Platform Abstraction Layer (completed)
@@ -255,27 +277,22 @@ v1.1: Phase 9 ✓ → 10 ✓ → 11 → 12 → 13 → 14 → 15
 ## Session Continuity
 
 **Where We Are:**
-Phase 10 complete (2026-01-29). All 6 plans executed successfully. Library management foundation ready for UI integration. Plan 06 (Metadata & Preview) added version tracking, 3D STEP model association, component metadata viewing, and footprint preview geometry extraction. LibraryManager provides complete API for library operations, search, versioning, and preview. 4 more LIB requirements satisfied (LIB-03, LIB-07, LIB-08, LIB-09).
+Phase 11 in progress (2026-01-29). Plan 11-01 (Theme System Foundation) complete. ThemeManager singleton, CSS custom properties for light/dark themes, and FART prevention inline script deployed. Theme infrastructure ready for inline style conversion (Plan 02) and theme toggle UI (Plan 03).
 
 **What's Next:**
-Begin Phase 11 (Dark Mode & Theme System) or Phase 12 (Desktop Application). Phase 11 can run in parallel with other work. Phase 12 requires desktop implementation of Platform facades from Phase 9.
+Continue Phase 11 (Plans 02-03) to convert inline styles and add theme toggle UI. Phase 12 (Desktop Application) can begin in parallel - requires desktop implementation of Platform facades from Phase 9.
 
 **Context for Next Session:**
-- Phase 10 complete: All 12 LIB requirements satisfied
-- Library foundation: ComponentId, Component, ComponentMetadata models (Plan 01)
-- SQLite schema: libraries, components, components_fts, library_versions tables (Plans 01, 06)
-- FTS5 automatic sync via DELETE+INSERT triggers (Plan 01, fixed in Plan 04)
-- CRUD operations: insert_library, insert_component, insert_components_batch, get_component (Plan 01)
-- KiCad parser: .kicad_mod S-expression parsing with LibrarySource trait (Plan 02)
-- Search engine: search_components, search_by_field, rebuild_index, component_count (Plan 03)
-- CustomSource: create_library, add_component, update_category, delete_library (Plan 04)
-- JLCPCBSource: optional feature, async search_api, Bearer auth (Plan 04)
-- LibraryManager: single entry point, unified search, import pipeline (Plan 05)
-- Version tracking: track_version, list_versions, latest_version with ISO 8601 timestamps (Plan 06)
-- 3D models: associate_step_model, get_step_model_path with validation (Plan 06)
-- Footprint preview: extract_preview parses S-expressions for pads, outlines, courtyard (Plan 06)
-- All library code uses parameterized queries (SQL injection prevention)
-- 41 comprehensive tests verify all functionality (11 added in Plan 06)
+- Phase 11 in progress: Plan 01 complete (Theme System Foundation)
+- Theme types: Theme, ResolvedTheme, ThemeChangeListener (11-01)
+- ThemeManager singleton: setTheme, getTheme, getResolvedTheme, subscribe API (11-01)
+- CSS custom properties: 16 semantic colors + 4 PCB colors for light/dark (11-01)
+- FART prevention: inline script sets data-theme before CSS loads (11-01)
+- WCAG AA compliant: all text/background pairs meet 4.5:1 minimum contrast (11-01)
+- matchMedia listener: auto-updates theme when OS switches (11-01)
+- localStorage persistence: 'theme' key stores user preference (11-01)
+- Next: Convert inline styles to use CSS custom properties (Plan 02)
+- Next: Add theme toggle UI button in toolbar (Plan 03)
 
 **Parallelization Opportunities:**
 Next phases (all independent after Phase 10):
@@ -305,12 +322,13 @@ After all feature phases complete:
 | 2026-01-29 | 10-04 | CustomSource for user libraries, JLCPCBSource API client (optional), FTS5 UPDATE bug fixed |
 | 2026-01-29 | 10-05 | LibraryManager orchestrator with unified search and import pipeline |
 | 2026-01-29 | 10-06 | Version tracking, 3D model association, footprint preview extraction |
+| 2026-01-29 | 11-01 | Theme types, ThemeManager singleton, CSS custom properties, FART prevention |
 
-**Last session:** 2026-01-29 11:52 UTC
-**Stopped at:** Completed Phase 10 (all 6 plans)
+**Last session:** 2026-01-29 12:04 UTC
+**Stopped at:** Completed 11-01 (Theme System Foundation)
 **Resume file:** None
 
-*Last updated: 2026-01-29 11:57 UTC*
+*Last updated: 2026-01-29 12:04 UTC*
 
 **Storage Strategy (Phase 9):**
 - Native: SQLite via rusqlite for structured key-value storage with table namespacing
