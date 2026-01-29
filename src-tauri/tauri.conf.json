@@ -43,5 +43,11 @@
         "description": "CodeYourPCB Design File"
       }
     ]
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": ["https://releases.codeyourpcb.com/{{target}}/{{arch}}/{{current_version}}"],
+      "pubkey": ""
+    }
   }
 }
