@@ -345,11 +345,17 @@ mod tests {
         source.add_component("MyComponents", component).unwrap();
 
         // Update category
-        source
-            .update_component_category("R_10K", "Passive/Resistors/0805")
-            .unwrap();
+        let update_result = source.update_component_category("R_10K", "Passive/Resistors/0805");
+        if let Err(e) = &update_result {
+            eprintln!("Update failed: {:?}", e);
+        }
+        update_result.unwrap();
 
-        let components = source.import_library("MyComponents").unwrap();
+        let import_result = source.import_library("MyComponents");
+        if let Err(e) = &import_result {
+            eprintln!("Import failed: {:?}", e);
+        }
+        let components = import_result.unwrap();
         assert_eq!(
             components[0].category,
             Some("Passive/Resistors/0805".to_string())

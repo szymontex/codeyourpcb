@@ -49,32 +49,23 @@ CREATE VIRTUAL TABLE IF NOT EXISTS components_fts USING fts5(
     manufacturer,
     mpn,
     value,
-    package,
-    content=components,
-    content_rowid=rowid
+    package
 );
 
 -- Triggers to keep FTS5 in sync with components table
 CREATE TRIGGER IF NOT EXISTS components_ai AFTER INSERT ON components BEGIN
-    INSERT INTO components_fts(rowid, source, name, category, description, manufacturer, mpn, value, package)
-    VALUES (new.rowid, new.source, new.name, new.category, new.description, new.manufacturer, new.mpn, new.value, new.package);
+    INSERT INTO components_fts(source, name, category, description, manufacturer, mpn, value, package)
+    VALUES (new.source, new.name, new.category, new.description, new.manufacturer, new.mpn, new.value, new.package);
 END;
 
 CREATE TRIGGER IF NOT EXISTS components_ad AFTER DELETE ON components BEGIN
-    DELETE FROM components_fts WHERE rowid = old.rowid;
+    DELETE FROM components_fts WHERE source = old.source AND name = old.name;
 END;
 
 CREATE TRIGGER IF NOT EXISTS components_au AFTER UPDATE ON components BEGIN
-    UPDATE components_fts SET
-        source = new.source,
-        name = new.name,
-        category = new.category,
-        description = new.description,
-        manufacturer = new.manufacturer,
-        mpn = new.mpn,
-        value = new.value,
-        package = new.package
-    WHERE rowid = old.rowid;
+    DELETE FROM components_fts WHERE source = old.source AND name = old.name;
+    INSERT INTO components_fts(source, name, category, description, manufacturer, mpn, value, package)
+    VALUES (new.source, new.name, new.category, new.description, new.manufacturer, new.mpn, new.value, new.package);
 END;
 "#;
 
@@ -130,8 +121,9 @@ pub fn insert_component(conn: &Connection, component: &Component) -> Result<(), 
     let metadata_json = serde_json::to_string(&component.metadata)
         .map_err(|e| LibraryError::Parse(format!("Failed to serialize metadata: {}", e)))?;
 
-    conn.execute(
-        "INSERT OR REPLACE INTO components
+    // Try INSERT first
+    let insert_result = conn.execute(
+        "INSERT INTO components
          (source, name, library, category, footprint_data, description, datasheet_url,
           manufacturer, mpn, value, package, step_model_path, metadata_json)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
@@ -150,9 +142,48 @@ pub fn insert_component(conn: &Connection, component: &Component) -> Result<(), 
             &component.metadata.step_model_path,
             &metadata_json,
         ],
-    )?;
+    );
 
-    Ok(())
+    // If INSERT failed due to UNIQUE constraint, do UPDATE instead
+    match insert_result {
+        Ok(_) => Ok(()),
+        Err(rusqlite::Error::SqliteFailure(err, _))
+            if err.code == rusqlite::ErrorCode::ConstraintViolation => {
+            // Component exists, update it
+            conn.execute(
+                "UPDATE components SET
+                    library = ?1,
+                    category = ?2,
+                    footprint_data = ?3,
+                    description = ?4,
+                    datasheet_url = ?5,
+                    manufacturer = ?6,
+                    mpn = ?7,
+                    value = ?8,
+                    package = ?9,
+                    step_model_path = ?10,
+                    metadata_json = ?11
+                 WHERE source = ?12 AND name = ?13",
+                params![
+                    &component.library,
+                    &component.category,
+                    &component.footprint_data,
+                    &component.metadata.description,
+                    &component.metadata.datasheet_url,
+                    &component.metadata.manufacturer,
+                    &component.metadata.mpn,
+                    &component.metadata.value,
+                    &component.metadata.package,
+                    &component.metadata.step_model_path,
+                    &metadata_json,
+                    &component.id.source,
+                    &component.id.name,
+                ],
+            )?;
+            Ok(())
+        }
+        Err(e) => Err(e.into()),
+    }
 }
 
 /// Insert multiple components in a single transaction
@@ -166,8 +197,9 @@ pub fn insert_components_batch(
         let metadata_json = serde_json::to_string(&component.metadata)
             .map_err(|e| LibraryError::Parse(format!("Failed to serialize metadata: {}", e)))?;
 
-        tx.execute(
-            "INSERT OR REPLACE INTO components
+        // Try INSERT first
+        let insert_result = tx.execute(
+            "INSERT INTO components
              (source, name, library, category, footprint_data, description, datasheet_url,
               manufacturer, mpn, value, package, step_model_path, metadata_json)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
@@ -186,7 +218,47 @@ pub fn insert_components_batch(
                 &component.metadata.step_model_path,
                 &metadata_json,
             ],
-        )?;
+        );
+
+        // If INSERT failed due to UNIQUE constraint, do UPDATE instead
+        match insert_result {
+            Ok(_) => {}
+            Err(rusqlite::Error::SqliteFailure(err, _))
+                if err.code == rusqlite::ErrorCode::ConstraintViolation => {
+                // Component exists, update it
+                tx.execute(
+                    "UPDATE components SET
+                        library = ?1,
+                        category = ?2,
+                        footprint_data = ?3,
+                        description = ?4,
+                        datasheet_url = ?5,
+                        manufacturer = ?6,
+                        mpn = ?7,
+                        value = ?8,
+                        package = ?9,
+                        step_model_path = ?10,
+                        metadata_json = ?11
+                     WHERE source = ?12 AND name = ?13",
+                    params![
+                        &component.library,
+                        &component.category,
+                        &component.footprint_data,
+                        &component.metadata.description,
+                        &component.metadata.datasheet_url,
+                        &component.metadata.manufacturer,
+                        &component.metadata.mpn,
+                        &component.metadata.value,
+                        &component.metadata.package,
+                        &component.metadata.step_model_path,
+                        &metadata_json,
+                        &component.id.source,
+                        &component.id.name,
+                    ],
+                )?;
+            }
+            Err(e) => return Err(e.into()),
+        }
     }
 
     tx.commit()?;
@@ -445,5 +517,45 @@ mod tests {
 
         assert_eq!(results.len(), 1);
         assert_eq!(results[0], "test::R_0805");
+    }
+
+    #[test]
+    fn test_direct_update() {
+        let conn = Connection::open_in_memory().unwrap();
+        initialize_schema(&conn).unwrap();
+
+        let library = LibraryInfo {
+            source: "test".to_string(),
+            name: "TestLib".to_string(),
+            path: None,
+            version: None,
+            enabled: true,
+            component_count: 0,
+        };
+        insert_library(&conn, &library).unwrap();
+
+        let component = Component {
+            id: crate::models::ComponentId::new("test", "R_0805"),
+            library: "TestLib".to_string(),
+            category: Some("Resistors".to_string()),
+            footprint_data: None,
+            metadata: ComponentMetadata::default(),
+        };
+
+        insert_component(&conn, &component).unwrap();
+
+        // Direct UPDATE of category
+        let result = conn.execute(
+            "UPDATE components SET category = ?1 WHERE source = ?2 AND name = ?3",
+            params!["Passive/Resistors", "test", "R_0805"],
+        );
+
+        eprintln!("UPDATE result: {:?}", result);
+        assert!(result.is_ok());
+
+        // Try to retrieve
+        let retrieved = get_component(&conn, "test", "R_0805").unwrap();
+        assert!(retrieved.is_some());
+        assert_eq!(retrieved.unwrap().category, Some("Passive/Resistors".to_string()));
     }
 }
