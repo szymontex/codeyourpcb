@@ -13,16 +13,16 @@
 ## Current Position
 
 **Phase:** Phase 12 (Tauri Desktop Foundation)
-**Plan:** 12-01 complete
-**Status:** In progress - Tauri v2 shell scaffolded, needs GTK libraries for compilation
+**Plan:** 12-02 complete
+**Status:** In progress - Native menus and file dialogs implemented, needs GTK libraries for compilation
 
 **Progress:**
 ```
-[=========================                         ] 45%
-v1.1: Phase 9 ✓ → 10 ✓ → 11 ✓ → 12 [░] → 13 → 14 → 15
+[==========================                        ] 47%
+v1.1: Phase 9 ✓ → 10 ✓ → 11 ✓ → 12 [▓░] → 13 → 14 → 15
 ```
 
-**Requirements Complete:** 30/64 (47%)
+**Requirements Complete:** 34/64 (53%)
 
 **Requirements Coverage:** 64/64 mapped to phases (100%)
 
@@ -330,10 +330,10 @@ v1.1: Phase 9 ✓ → 10 ✓ → 11 ✓ → 12 [░] → 13 → 14 → 15
 ## Session Continuity
 
 **Where We Are:**
-Phase 12 in progress (2026-01-29). Plan 12-01 complete - Tauri v2 shell scaffolded with proper config. GTK3 system libraries required for compilation verification.
+Phase 12 in progress (2026-01-29). Plan 12-02 complete - Native menus and file dialogs implemented. GTK3 system libraries required for compilation verification.
 
 **What's Next:**
-Continue Phase 12 (Desktop Application) - Native menus (12-02), file dialogs (12-03), window management (12-04). OR Phase 14 (Monaco Editor) if Phase 12 blocked. Phase 13 (Web Deployment) can run in parallel.
+Continue Phase 12 (Desktop Application) - Frontend menu event handlers (12-03), window management integration (12-04). OR Phase 14 (Monaco Editor) if Phase 12 blocked. Phase 13 (Web Deployment) can run in parallel.
 
 **Context for Next Session:**
 - Phase 12 Plan 01 complete: Tauri v2 project scaffolded (12-01)
@@ -344,8 +344,14 @@ Continue Phase 12 (Desktop Application) - Native menus (12-02), file dialogs (12
 - Icons: Placeholder PNGs created (32x32, 128x128, 256x256, ico, icns) (12-01)
 - npm packages: @tauri-apps/api@2.9.1, @tauri-apps/cli@2.9.6 installed (12-01)
 - Scripts: dev:desktop, build:desktop added to package.json (12-01)
-- GTK3 blocker: Compilation requires system libraries not available in this environment (12-01)
-- Commits: 12-01 (d01bd98, 732576a)
+- Phase 12 Plan 02 complete: Native menus and file dialogs (12-02)
+- Native menu bar: File/Edit/View/Help with keyboard shortcuts (Ctrl+ → CmdOrCtrl+) (12-02)
+- Menu modules: menu.rs (create_app_menu, build_tauri_menu, handle_menu_event) (12-02)
+- IPC commands: open_file, save_file, save_file_as with .cypcb filter (12-02)
+- Menu event forwarding: "menu-action" events emitted to frontend for handling (12-02)
+- Window management: Quit and fullscreen handled in Rust, minimize/maximize via native titlebar (12-02)
+- GTK3 blocker: Compilation requires system libraries not available in this environment (12-01, 12-02)
+- Commits: 12-01 (d01bd98, 732576a), 12-02 (2318cb0, 81fe39d)
 
 **Parallelization Opportunities:**
 Next phases (independent after Phase 11):
@@ -379,12 +385,13 @@ After all feature phases complete:
 | 2026-01-29 | 11-03 | Theme toggle UI with keyboard shortcut, WCAG AA verification |
 | 2026-01-29 | 11-04 | Monaco editor theme definitions (light/dark) with ThemeManager wiring |
 | 2026-01-29 | 12-01 | Tauri v2 desktop shell scaffolded with maximized window, file association, Vite integration |
+| 2026-01-29 | 12-02 | Native menu bar with File/Edit/View/Help and IPC commands for file open/save |
 
-**Last session:** 2026-01-29 17:05 UTC
-**Stopped at:** Completed Phase 12 Plan 01 - Tauri foundation ready, needs GTK3 for compilation
+**Last session:** 2026-01-29 17:12 UTC
+**Stopped at:** Completed Phase 12 Plan 02 - Native menus and file dialogs ready
 **Resume file:** None
 
-*Last updated: 2026-01-29 17:05 UTC*
+*Last updated: 2026-01-29 17:12 UTC*
 
 **Storage Strategy (Phase 9):**
 - Native: SQLite via rusqlite for structured key-value storage with table namespacing
