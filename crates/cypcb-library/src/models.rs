@@ -69,7 +69,7 @@ pub struct LibraryInfo {
 }
 
 /// Search filters for component queries
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SearchFilters {
     pub category: Option<String>,
     pub manufacturer: Option<String>,
@@ -80,6 +80,17 @@ pub struct SearchFilters {
 
 fn default_limit() -> usize {
     50
+}
+
+impl Default for SearchFilters {
+    fn default() -> Self {
+        Self {
+            category: None,
+            manufacturer: None,
+            source: None,
+            limit: 50,
+        }
+    }
 }
 
 /// Search result with component and relevance ranking
