@@ -10,11 +10,11 @@ Requirements for v1.1 Foundation & Desktop milestone. Each maps to roadmap phase
 
 ### Platform Abstraction
 
-- [ ] **PLAT-01**: Build-time conditional compilation separates web and desktop implementations
-- [ ] **PLAT-02**: FileSystem trait abstracts file operations (native FS vs File System Access API)
-- [ ] **PLAT-03**: Dialog trait abstracts file dialogs (Tauri vs browser)
-- [ ] **PLAT-04**: Menu trait abstracts application menus (Tauri vs HTML)
-- [ ] **PLAT-05**: Storage trait abstracts persistence (SQLite vs IndexedDB)
+- [x] **PLAT-01**: Build-time conditional compilation separates web and desktop implementations
+- [x] **PLAT-02**: FileSystem trait abstracts file operations (native FS vs File System Access API)
+- [x] **PLAT-03**: Dialog trait abstracts file dialogs (Tauri vs browser)
+- [x] **PLAT-04**: Menu trait abstracts application menus (Tauri vs HTML)
+- [x] **PLAT-05**: Storage trait abstracts persistence (SQLite vs IndexedDB)
 
 ### Library Management
 
@@ -160,11 +160,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PLAT-01 | Phase 9 | Pending |
-| PLAT-02 | Phase 9 | Pending |
-| PLAT-03 | Phase 9 | Pending |
-| PLAT-04 | Phase 9 | Pending |
-| PLAT-05 | Phase 9 | Pending |
+| PLAT-01 | Phase 9 | Complete |
+| PLAT-02 | Phase 9 | Complete |
+| PLAT-03 | Phase 9 | Complete |
+| PLAT-04 | Phase 9 | Complete |
+| PLAT-05 | Phase 9 | Complete |
 | LIB-01 | Phase 10 | Pending |
 | LIB-02 | Phase 10 | Pending |
 | LIB-03 | Phase 10 | Pending |
@@ -232,4 +232,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-01-29*
-*Last updated: 2026-01-29 (roadmap created, traceability complete)*
+*Last updated: 2026-01-29 (Phase 9 complete: PLAT-01 through PLAT-05)*
