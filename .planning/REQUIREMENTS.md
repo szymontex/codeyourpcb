@@ -160,13 +160,76 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| (To be filled by roadmapper) | | |
+| PLAT-01 | Phase 9 | Pending |
+| PLAT-02 | Phase 9 | Pending |
+| PLAT-03 | Phase 9 | Pending |
+| PLAT-04 | Phase 9 | Pending |
+| PLAT-05 | Phase 9 | Pending |
+| LIB-01 | Phase 10 | Pending |
+| LIB-02 | Phase 10 | Pending |
+| LIB-03 | Phase 10 | Pending |
+| LIB-04 | Phase 10 | Pending |
+| LIB-05 | Phase 10 | Pending |
+| LIB-06 | Phase 10 | Pending |
+| LIB-07 | Phase 10 | Pending |
+| LIB-08 | Phase 10 | Pending |
+| LIB-09 | Phase 10 | Pending |
+| LIB-10 | Phase 10 | Pending |
+| LIB-11 | Phase 10 | Pending |
+| LIB-12 | Phase 10 | Pending |
+| UI-01 | Phase 11 | Pending |
+| UI-02 | Phase 11 | Pending |
+| UI-03 | Phase 11 | Pending |
+| UI-04 | Phase 11 | Pending |
+| UI-05 | Phase 11 | Pending |
+| UI-06 | Phase 11 | Pending |
+| UI-07 | Phase 11 | Pending |
+| UI-08 | Phase 11 | Pending |
+| UI-09 | Phase 11 | Pending |
+| DESK-01 | Phase 12 | Pending |
+| DESK-02 | Phase 12 | Pending |
+| DESK-03 | Phase 12 | Pending |
+| DESK-04 | Phase 12 | Pending |
+| DESK-05 | Phase 12 | Pending |
+| DESK-06 | Phase 12 | Pending |
+| DESK-07 | Phase 12 | Pending |
+| DESK-08 | Phase 12 | Pending |
+| DESK-09 | Phase 12 | Pending |
+| DESK-10 | Phase 12 | Pending |
+| WEB-01 | Phase 13 | Pending |
+| WEB-02 | Phase 13 | Pending |
+| WEB-03 | Phase 13 | Pending |
+| WEB-04 | Phase 13 | Pending |
+| WEB-05 | Phase 13 | Pending |
+| WEB-06 | Phase 13 | Pending |
+| WEB-07 | Phase 13 | Pending |
+| WEB-08 | Phase 13 | Pending |
+| WEB-09 | Phase 13 | Pending |
+| EDIT-01 | Phase 14 | Pending |
+| EDIT-02 | Phase 14 | Pending |
+| EDIT-03 | Phase 14 | Pending |
+| EDIT-04 | Phase 14 | Pending |
+| EDIT-05 | Phase 14 | Pending |
+| EDIT-06 | Phase 14 | Pending |
+| EDIT-07 | Phase 14 | Pending |
+| EDIT-08 | Phase 14 | Pending |
+| EDIT-09 | Phase 14 | Pending |
+| EDIT-10 | Phase 14 | Pending |
+| DOC-01 | Phase 15 | Pending |
+| DOC-02 | Phase 15 | Pending |
+| DOC-03 | Phase 15 | Pending |
+| DOC-04 | Phase 15 | Pending |
+| DOC-05 | Phase 15 | Pending |
+| DOC-06 | Phase 15 | Pending |
+| DOC-07 | Phase 15 | Pending |
+| DOC-08 | Phase 15 | Pending |
+| DOC-09 | Phase 15 | Pending |
 
 **Coverage:**
-- v1.1 requirements: 60 total
-- Mapped to phases: 0 (pending roadmap)
-- Unmapped: 60 ⚠️
+- v1.1 requirements: 64 total
+- Mapped to phases: 64 (100%)
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-01-29*
-*Last updated: 2026-01-29 after initial definition*
+*Last updated: 2026-01-29 (roadmap created, traceability complete)*
