@@ -50,6 +50,16 @@ Plans:
 4. User can preview footprints visually before adding to board
 5. User can associate 3D STEP models with components and view metadata (datasheet, specs)
 
+**Plans:** 6 plans
+
+Plans:
+- [ ] 10-01-PLAN.md — Create cypcb-library crate with models, schema, and error types
+- [ ] 10-02-PLAN.md — KiCad .kicad_mod S-expression parser and .pretty folder importer
+- [ ] 10-03-PLAN.md — FTS5 full-text search engine with BM25 ranking
+- [ ] 10-04-PLAN.md — Custom library source and optional JLCPCB API client
+- [ ] 10-05-PLAN.md — LibraryManager orchestrator with unified search
+- [ ] 10-06-PLAN.md — Metadata, version tracking, footprint preview, and 3D model association
+
 **Status:** Pending
 
 ## Phase 11: Dark Mode & UI Polish
