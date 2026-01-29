@@ -4,13 +4,21 @@
   "description": "CodeYourPCB viewer frontend",
   "type": "module",
   "scripts": {
+    "start": "./start.sh",
     "build:wasm": "./build-wasm.sh",
     "dev": "vite",
     "dev:watch": "npx tsx server.ts",
     "build": "npm run build:wasm && tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "tauri": "tauri",
+    "dev:desktop": "tauri dev",
+    "build:desktop": "tauri build"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.0.0"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.0.0",
     "@types/ws": "^8.5.0",
     "chokidar": "^3.6.0",
     "tsx": "^4.0.0",
