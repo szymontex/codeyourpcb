@@ -186,9 +186,23 @@ After all feature phases complete:
 | Date | Plan | Summary |
 |------|------|---------|
 | 2026-01-29 | 09-01 | Created cypcb-platform crate with FileSystem abstraction (native + WASM) |
+| 2026-01-29 | 09-02 | Implemented Dialog wrapper (rfd) and Storage trait (SQLite + localStorage) |
 
 **Last session:** 2026-01-29 09:31 UTC  
-**Stopped at:** Completed 09-01 execution  
+**Stopped at:** Completed 09-02 execution  
 **Resume file:** None
 
 *Last updated: 2026-01-29 09:31 UTC*
+
+**Storage Strategy (Phase 9):**
+- Native: SQLite via rusqlite for structured key-value storage with table namespacing
+- Web: localStorage for v1.1 (sufficient for settings/preferences, ~5MB quota)
+- IndexedDB upgrade path documented for Phase 10 when library storage needs >5MB
+- Trait abstraction allows swapping backends without API changes
+- Established in 09-02
+
+**Dialog Limitations (Phase 9):**
+- rfd requires GUI system libraries on Linux (GTK/Wayland)
+- Made optional via desktop feature to support CI/headless builds
+- Folder picker not supported in browsers (API limitation, not implementation)
+- Established in 09-02
