@@ -3,7 +3,16 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light dark">
   <title>CodeYourPCB Viewer</title>
+  <script>
+    // FART prevention: Flash of inAccurate coloR Theme
+    // Set theme BEFORE CSS loads to prevent flash of wrong theme
+    const savedTheme = localStorage.getItem('theme');
+    const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const theme = savedTheme === 'light' || savedTheme === 'dark' ? savedTheme : (systemPrefersDark ? 'dark' : 'light');
+    document.documentElement.setAttribute('data-theme', theme);
+  </script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
