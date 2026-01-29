@@ -104,13 +104,14 @@ Plans:
 4. Application starts in less than 1 second and uses <50MB memory idle
 5. User can use standard keyboard shortcuts (Ctrl+S, Ctrl+O, Ctrl+Z) that work cross-platform
 
-**Plans:** 4 plans
+**Plans:** 5 plans
 
 Plans:
 - [ ] 12-01-PLAN.md — Scaffold Tauri v2 project structure with config, workspace integration, and Vite compatibility
 - [ ] 12-02-PLAN.md — Native menu bar from platform MenuBar data model and file open/save IPC commands
 - [ ] 12-03-PLAN.md — Frontend desktop integration module wiring menu events to viewer actions
 - [ ] 12-04-PLAN.md — Installer config, file association, updater plugin, and performance verification
+- [ ] 12-05-PLAN.md — Wire desktop menu events to viewer engine (gap closure)
 
 **Status:** Planned
 
