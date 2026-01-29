@@ -42,7 +42,7 @@ impl FileHandle for NativeHandle {
 #[derive(Debug, Clone, Copy)]
 pub struct NativeFileSystem;
 
-#[async_trait(?Send)]
+#[async_trait(?Send)] // Match trait's ?Send bound for WASM compatibility
 impl FileSystem for NativeFileSystem {
     type Handle = NativeHandle;
 

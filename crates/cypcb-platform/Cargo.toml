@@ -17,12 +17,12 @@ wasm-bindgen = "0.2"
 web-sys = { version = "0.3", features = ["Window", "File", "FileSystemFileHandle", "FileSystemWritableFileStream", "Blob"] }
 js-sys = "0.3"
 wasm-bindgen-futures = "0.4"
-rfd = { version = "0.15", default-features = false }
+rfd = "0.15"
 
 # Native-specific dependencies
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { version = "1", features = ["fs", "rt"] }
-rfd = { version = "0.15", default-features = false, features = ["tokio", "xdg-portal"], optional = true }
+rfd = { version = "0.15", optional = true }
 
 [build-dependencies]
 cfg_aliases = "0.2"
