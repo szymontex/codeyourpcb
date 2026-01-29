@@ -10,6 +10,7 @@ repository.workspace = true
 cfg-if = "1"
 async-trait = "0.1"
 thiserror.workspace = true
+serde.workspace = true
 
 # WASM-specific dependencies
 [target.'cfg(target_arch = "wasm32")'.dependencies]
