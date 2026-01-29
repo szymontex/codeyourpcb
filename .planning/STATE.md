@@ -13,12 +13,12 @@
 ## Current Position
 
 **Phase:** Phase 11 (Dark Mode & UI Polish)
-**Plan:** 1 of 3
-**Status:** In progress - theme system foundation complete
+**Plan:** 2 of 3
+**Status:** In progress - theme integration complete
 
 **Progress:**
 ```
-[================                                  ] 31%
+[=================                                 ] 33%
 v1.1: Phase 9 ✓ → 10 ✓ → 11 → 12 → 13 → 14 → 15
 ```
 
@@ -54,7 +54,7 @@ v1.1: Phase 9 ✓ → 10 ✓ → 11 → 12 → 13 → 14 → 15
 - Pending: 47
 
 **Efficiency:**
-- Plans completed (v1.1): 10
+- Plans completed (v1.1): 12
 - Blockers encountered: 2 (pkg-config resolved, FTS5 corruption fixed)
 - Revisions needed: 0
 
@@ -223,6 +223,27 @@ v1.1: Phase 9 ✓ → 10 ✓ → 11 → 12 → 13 → 14 → 15
 - Critical for coordinating Monaco, Canvas, Three.js theme consistency (Phase 14)
 - Established in 11-01
 
+**Filter Brightness for Hover Effects (Phase 11):**
+- Use `filter: brightness(0.85)` instead of hardcoded hover colors
+- Automatically adapts to both light and dark theme colors
+- Reduces CSS custom property count (no separate hover colors needed)
+- Works consistently across all button types (accent, success, error, warning)
+- Established in 11-02
+
+**PCB Electrical Colors Fixed (Phase 11):**
+- Copper red/blue, violations red, ratsnest gold never change with theme
+- Domain colors have semantic meaning beyond theme preference
+- Only UI elements (background, grid, labels) adapt to theme
+- Maintains consistency with PCB industry standards (KiCad-style colors)
+- Established in 11-02
+
+**Theme-Aware Canvas Rendering (Phase 11):**
+- Single getComputedStyle() call per render frame (efficient)
+- Theme colors passed as parameter to avoid repeated DOM queries
+- Canvas subscribes to ThemeManager for automatic redraw on theme change
+- Background, grid, board outline, labels all theme-aware
+- Established in 11-02
+
 ### Active TODOs
 
 - [x] Plan Phase 9: Platform Abstraction Layer (completed)
@@ -277,22 +298,20 @@ v1.1: Phase 9 ✓ → 10 ✓ → 11 → 12 → 13 → 14 → 15
 ## Session Continuity
 
 **Where We Are:**
-Phase 11 in progress (2026-01-29). Plan 11-01 (Theme System Foundation) complete. ThemeManager singleton, CSS custom properties for light/dark themes, and FART prevention inline script deployed. Theme infrastructure ready for inline style conversion (Plan 02) and theme toggle UI (Plan 03).
+Phase 11 in progress (2026-01-29). Plans 11-01 and 11-02 complete (with 11-03 completed in parallel). Theme system fully integrated: ThemeManager singleton, CSS custom properties, FART prevention, all UI surfaces themed, canvas rendering theme-aware, theme toggle UI deployed.
 
 **What's Next:**
-Continue Phase 11 (Plans 02-03) to convert inline styles and add theme toggle UI. Phase 12 (Desktop Application) can begin in parallel - requires desktop implementation of Platform facades from Phase 9.
+Phase 11 nearly complete (all 3 plans executed). Ready to move to Phase 12 (Desktop Application) or Phase 13 (Web Deployment). Both phases independent after Phase 11.
 
 **Context for Next Session:**
-- Phase 11 in progress: Plan 01 complete (Theme System Foundation)
-- Theme types: Theme, ResolvedTheme, ThemeChangeListener (11-01)
-- ThemeManager singleton: setTheme, getTheme, getResolvedTheme, subscribe API (11-01)
-- CSS custom properties: 16 semantic colors + 4 PCB colors for light/dark (11-01)
-- FART prevention: inline script sets data-theme before CSS loads (11-01)
-- WCAG AA compliant: all text/background pairs meet 4.5:1 minimum contrast (11-01)
-- matchMedia listener: auto-updates theme when OS switches (11-01)
-- localStorage persistence: 'theme' key stores user preference (11-01)
-- Next: Convert inline styles to use CSS custom properties (Plan 02)
-- Next: Add theme toggle UI button in toolbar (Plan 03)
+- Phase 11 complete: Plans 01, 02, 03 all executed
+- Theme foundation: ThemeManager singleton, CSS custom properties, FART prevention (11-01)
+- UI theming: 38+ CSS variables in index.html, all inline styles converted (11-02)
+- Canvas theming: getThemeColors(), theme-aware rendering for background/grid/labels (11-02)
+- PCB colors fixed: copper red/blue, violations red, ratsnest gold unchanged (11-02)
+- Theme toggle: Button in toolbar cycles light → dark → auto (11-03, commit f91f1a8)
+- Theme subscription: Canvas auto-redraws on theme change (11-02)
+- Filter brightness: Hover effects use brightness(0.85) for theme adaptation (11-02)
 
 **Parallelization Opportunities:**
 Next phases (all independent after Phase 10):
@@ -323,12 +342,14 @@ After all feature phases complete:
 | 2026-01-29 | 10-05 | LibraryManager orchestrator with unified search and import pipeline |
 | 2026-01-29 | 10-06 | Version tracking, 3D model association, footprint preview extraction |
 | 2026-01-29 | 11-01 | Theme types, ThemeManager singleton, CSS custom properties, FART prevention |
+| 2026-01-29 | 11-02 | HTML inline styles to CSS variables, theme-aware canvas rendering |
+| 2026-01-29 | 11-03 | Theme toggle button in toolbar (parallel execution) |
 
-**Last session:** 2026-01-29 12:04 UTC
-**Stopped at:** Completed 11-01 (Theme System Foundation)
+**Last session:** 2026-01-29 12:10 UTC
+**Stopped at:** Completed 11-02 (Integrate Theme System into Viewer UI)
 **Resume file:** None
 
-*Last updated: 2026-01-29 12:04 UTC*
+*Last updated: 2026-01-29 12:10 UTC*
 
 **Storage Strategy (Phase 9):**
 - Native: SQLite via rusqlite for structured key-value storage with table namespacing
