@@ -3,6 +3,8 @@
  * Integrates WASM engine, rendering, and user interaction
  */
 
+import './theme/colors.css';
+import { themeManager } from './theme/theme-manager';
 import { loadWasm, isWasmLoaded, type PcbEngine } from './wasm';
 import type { BoardSnapshot, ViolationInfo } from './types';
 import { createViewport, fitBoard, screenToWorld } from './viewport';
@@ -27,42 +29,87 @@ const WS_URL = getWsUrl();
  * WebSocket message types from the dev server
  */
 interface WsMessage {
-  type: 'init' | 'reload';
-  file: string;
-  content: string;
+  type: string;
+  file?: string;
+  content?: string;
   timestamp?: number;
+  output?: string;
+  error?: string;
+  sesContent?: string | null;
+  routesContent?: string | null;
+  pass?: number;
+  routed?: number;
+  unrouted?: number;
 }
 
 /**
- * Connect to the WebSocket server for hot reload notifications.
+ * WebSocket connection interface for two-way communication with dev server
+ */
+interface WsConnection {
+  send(message: object): void;
+  isConnected(): boolean;
+}
+
+/**
+ * Callbacks for various WebSocket events
+ */
+interface WsCallbacks {
+  onReload: (content: string, file: string) => void;
+  onRouteStart?: () => void;
+  onRouteProgress?: (output: string) => void;
+  onRouteComplete?: (sesContent: string | null, routesContent: string | null) => void;
+  onRouteError?: (error: string) => void;
+}
+
+/**
+ * Connect to the WebSocket server for hot reload and routing.
  * Automatically reconnects on disconnect.
  */
-function connectWebSocket(
-  onReload: (content: string, file: string) => void
-): void {
-  let ws: WebSocket;
+function connectWebSocket(callbacks: WsCallbacks): WsConnection {
+  let ws: WebSocket | null = null;
+  let connected = false;
 
   function connect(): void {
     ws = new WebSocket(WS_URL);
 
     ws.onopen = () => {
-      console.log('[HotReload] WebSocket connected');
+      console.log('[WS] Connected');
+      connected = true;
     };
 
     ws.onmessage = (event) => {
       try {
         const msg: WsMessage = JSON.parse(event.data);
-        if (msg.type === 'init' || msg.type === 'reload') {
-          console.log(`[HotReload] ${msg.type}: ${msg.file}`);
-          onReload(msg.content, msg.file);
+        console.log(`[WS] Received: ${msg.type}`);
+
+        switch (msg.type) {
+          case 'init':
+          case 'reload':
+            if (msg.content && msg.file) {
+              callbacks.onReload(msg.content, msg.file);
+            }
+            break;
+          case 'route-start':
+            callbacks.onRouteStart?.();
+            break;
+          case 'route-progress':
+            callbacks.onRouteProgress?.(msg.output || '');
+            break;
+          case 'route-complete':
+            callbacks.onRouteComplete?.(msg.sesContent || null, msg.routesContent || null);
+            break;
+          case 'route-error':
+            callbacks.onRouteError?.(msg.error || 'Unknown routing error');
+            break;
         }
       } catch (err) {
-        console.error('[HotReload] Message parse error:', err);
+        console.error('[WS] Message parse error:', err);
       }
     };
 
     ws.onclose = () => {
-      console.log('[HotReload] WebSocket disconnected, reconnecting in 2s...');
+      console.log('[WS] Disconnected, reconnecting in 2s...');
+      connected = false;
       setTimeout(connect, 2000);
     };
 
@@ -72,6 +119,19 @@ function connectWebSocket(
   }
 
   connect();
+
+  return {
+    send(message: object): void {
+      if (ws && connected) {
+        ws.send(JSON.stringify(message));
+      } else {
+        console.warn('[WS] Cannot send, not connected');
+      }
+    },
+    isConnected(): boolean {
+      return connected;
+    }
+  };
 }
 
 // Note: Test data removed. Use examples/routing-test.cypcb and examples/routing-test.ses via file picker.
@@ -103,7 +163,6 @@ async function init(): Promise<void> {
 
   // Routing state
   let isRouting = false;
-  let routingCancelled = false;
   let currentFilePath: string | null = null;
 
   /**
@@ -172,6 +231,11 @@ async function init(): Promise<void> {
   }
 
   const usingWasm = isWasmLoaded();
+
+  // Subscribe to theme changes to trigger canvas re-render
+  themeManager.subscribe(() => {
+    dirty = true;
+  });
 
   // Start with empty state - user will open a file
   snapshot = engine.get_snapshot();
@@ -464,9 +528,13 @@ async function init(): Promise<void> {
     }
   }
 
+  // WebSocket connection (initialized later)
+  let wsConnection: WsConnection | null = null;
+  let routingStartTime = 0;
+
   /**
-   * Trigger routing via WebSocket message or CLI subprocess.
-   * For MVP, we use a polling approach with the CLI.
+   * Trigger routing via WebSocket to dev server.
+   * The server runs the CLI route command and streams progress.
    */
   async function triggerRouting(): Promise<void> {
     if (isRouting || !currentFilePath) {
@@ -474,8 +542,14 @@ async function init(): Promise<void> {
       return;
     }
 
+    if (!wsConnection || !wsConnection.isConnected()) {
+      console.log('[Routing] WebSocket not connected, cannot route');
+      statusText.textContent = 'Error: Not connected to dev server';
+      return;
+    }
+
     isRouting = true;
-    routingCancelled = false;
+    routingStartTime = Date.now();
 
     updateRoutingUI({
       isRouting: true,
@@ -488,55 +562,67 @@ async function init(): Promise<void> {
     console.log('[Routing] Starting routing for:', currentFilePath);
     statusText.textContent = 'Routing...';
 
-    // For the viewer, we simulate routing progress
-    // In a real implementation, this would communicate with a backend
-    // that runs the CLI route command and reports progress via WebSocket
+    // Send route request to dev server
+    wsConnection.send({
+      type: 'route',
+      file: currentFilePath,
+    });
+  }
 
-    // Simulate routing progress
-    let elapsed = 0;
-    const progressInterval = setInterval(() => {
-      if (routingCancelled) {
-        clearInterval(progressInterval);
-        updateRoutingUI({ isRouting: false, pass: 0, routed: 0, unrouted: 0, elapsed: 0 });
-        statusText.textContent = 'Routing cancelled';
-        isRouting = false;
-        return;
-      }
+  /**
+   * Handle routing completion from WebSocket
+   */
+  function handleRouteComplete(sesContent: string | null, _routesContent: string | null): void {
+    isRouting = false;
+    const elapsed = Math.round((Date.now() - routingStartTime) / 1000);
+    updateRoutingUI({ isRouting: false, pass: 0, routed: 0, unrouted: 0, elapsed: 0 });
 
-      elapsed++;
+    if (sesContent) {
+      console.log('[Routing] Loading SES routes...');
+      engine.load_routes(sesContent);
+      snapshot = engine.get_snapshot();
+      dirty = true;
+      statusText.textContent = `Routing complete (${elapsed}s)`;
+    } else {
+      statusText.textContent = `Routing complete, no routes (${elapsed}s)`;
+    }
+
+    // Show completion status briefly, then normal
+    setTimeout(() => {
+      statusText.textContent = usingWasm ? 'Ready (WASM)' : 'Ready (Mock)';
+    }, 3000);
+  }
+
+  /**
+   * Handle routing error from WebSocket
+   */
+  function handleRouteError(error: string): void {
+    isRouting = false;
+    updateRoutingUI({ isRouting: false, pass: 0, routed: 0, unrouted: 0, elapsed: 0 });
+    statusText.textContent = `Routing error: ${error}`;
+    console.error('[Routing] Error:', error);
+
+    setTimeout(() => {
+      statusText.textContent = usingWasm ? 'Ready (WASM)' : 'Ready (Mock)';
+    }, 5000);
+  }
+
+  /**
+   * Handle routing progress from WebSocket
+   */
+  function handleRouteProgress(output: string): void {
+    // Parse progress output from CLI (format: "Pass X: Y routed, Z unrouted (Xs)")
+    const match = output.match(/Pass (\d+): (\d+) routed, (\d+) unrouted/);
+    if (match) {
+      const elapsed = Math.round((Date.now() - routingStartTime) / 1000);
       updateRoutingUI({
         isRouting: true,
-        pass: Math.floor(elapsed / 3) + 1,
-        routed: Math.min(elapsed * 2, 20),
-        unrouted: Math.max(20 - elapsed * 2, 0),
+        pass: parseInt(match[1], 10),
+        routed: parseInt(match[2], 10),
+        unrouted: parseInt(match[3], 10),
         elapsed,
       });
-    }, 1000);
-
-    // Simulate routing completion after 5 seconds
-    // In real implementation, this would wait for CLI completion
-    setTimeout(() => {
-      clearInterval(progressInterval);
-
-      if (!routingCancelled) {
-        isRouting = false;
-        updateRoutingUI({ isRouting: false, pass: 0, routed: 0, unrouted: 0, elapsed: 0 });
-        statusText.textContent = 'Routing complete (simulated)';
-
-        // In real implementation:
-        // 1. Poll for .routes file
-        // 2. Load routes into engine
-        // 3. Update snapshot
-        // 4. Trigger re-render
-
-        console.log('[Routing] Routing complete (simulated)');
-
-        // Show completion status briefly
-        setTimeout(() => {
-          statusText.textContent = usingWasm ? 'Ready (WASM)' : 'Ready (Mock)';
-        }, 2000);
-      }
-    }, 5000);
+    }
   }
 
   /**
@@ -545,7 +631,11 @@ async function init(): Promise<void> {
   function cancelRouting(): void {
     if (isRouting) {
       console.log('[Routing] Cancelling routing...');
-      routingCancelled = true;
+      // Note: Server-side cancellation not implemented yet
+      // For now, just update UI
+      isRouting = false;
+      updateRoutingUI({ isRouting: false, pass: 0, routed: 0, unrouted: 0, elapsed: 0 });
+      statusText.textContent = 'Routing cancelled';
     }
   }
 
@@ -566,23 +656,37 @@ async function init(): Promise<void> {
     }
   });
 
-  // Connect WebSocket for hot reload (fails gracefully if server not running)
+  // Connect WebSocket for hot reload and routing
   try {
-    connectWebSocket((content, file) => {
-      // Track current file for routing
-      currentFilePath = file;
-      reload(content, file);
+    wsConnection = connectWebSocket({
+      onReload: (content, file) => {
+        // Track current file for routing
+        currentFilePath = file;
+        reload(content, file);
 
-      // Auto-route if enabled
-      if (autoRouteCb.checked && !isRouting) {
-        // Small delay to let reload complete
-        setTimeout(() => {
-          triggerRouting();
-        }, 500);
-      }
+        // Auto-route if enabled
+        if (autoRouteCb.checked && !isRouting) {
+          // Small delay to let reload complete
+          setTimeout(() => {
+            triggerRouting();
+          }, 500);
+        }
+      },
+      onRouteStart: () => {
+        console.log('[Routing] Server started routing...');
+      },
+      onRouteProgress: (output) => {
+        handleRouteProgress(output);
+      },
+      onRouteComplete: (sesContent, routesContent) => {
+        handleRouteComplete(sesContent, routesContent);
+      },
+      onRouteError: (error) => {
+        handleRouteError(error);
+      },
     });
   } catch (err) {
-    console.log('[HotReload] WebSocket not available, hot reload disabled');
+    console.log('[WS] WebSocket not available');
   }
 }
 
