@@ -78,12 +78,13 @@ Plans:
 4. Dark mode meets WCAG AA contrast requirements (4.5:1 minimum)
 5. Light mode meets WCAG AA contrast requirements (4.5:1 minimum)
 
-**Plans:** 3 plans
+**Plans:** 4 plans
 
 Plans:
 - [ ] 11-01-PLAN.md — Theme system foundation: CSS custom properties, ThemeManager, FART prevention
 - [ ] 11-02-PLAN.md — Migrate all UI surfaces to CSS variables and make canvas renderer theme-aware
 - [ ] 11-03-PLAN.md — Theme toggle UI, keyboard shortcut, WCAG AA verification and polish
+- [ ] 11-04-PLAN.md — Monaco editor theme definitions (infrastructure for Phase 14)
 
 **Status:** Planned
 
