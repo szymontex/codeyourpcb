@@ -69,9 +69,32 @@ CREATE TRIGGER IF NOT EXISTS components_au AFTER UPDATE ON components BEGIN
 END;
 "#;
 
+/// SQLite schema for metadata (version tracking, 3D models)
+pub const METADATA_SCHEMA: &str = r#"
+-- Library versions table: tracks import history for rollback
+CREATE TABLE IF NOT EXISTS library_versions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    source TEXT NOT NULL,
+    library_name TEXT NOT NULL,
+    version_id TEXT,
+    imported_at TEXT NOT NULL,
+    component_count INTEGER NOT NULL,
+    notes TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_library_versions_lookup ON library_versions(source, library_name, imported_at);
+"#;
+
 /// Initialize the library database schema
 pub fn initialize_schema(conn: &Connection) -> Result<(), LibraryError> {
     conn.execute_batch(LIBRARY_SCHEMA)?;
+    initialize_metadata_schema(conn)?;
+    Ok(())
+}
+
+/// Initialize the metadata schema
+pub fn initialize_metadata_schema(conn: &Connection) -> Result<(), LibraryError> {
+    conn.execute_batch(METADATA_SCHEMA)?;
     Ok(())
 }
 

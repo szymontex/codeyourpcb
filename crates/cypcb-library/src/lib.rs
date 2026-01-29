@@ -1,5 +1,6 @@
 pub mod error;
 pub mod manager;
+pub mod metadata;
 pub mod models;
 pub mod schema;
 pub mod search;
