@@ -14,7 +14,7 @@
 | 4 | Export | Manufacturable output | 5 | Complete |
 | 5 | Intelligence | Autorouting and IDE integration | 6 | Complete |
 | 6 | Desktop | Full application experience | v2 | Pending |
-| 7 | Navigation | Alternative pan/zoom for laptops | 3 | Pending |
+| 7 | Navigation | Alternative pan/zoom for laptops | 3 | Complete |
 | 8 | File Picker | Load .cypcb + .ses files in viewer | 3 | Complete |
 
 ---
@@ -297,8 +297,8 @@ Users expected `current 500mA` inside net braces, but grammar requires constrain
 **Plans:** 2 plans
 
 Plans:
-- [ ] 07-01-PLAN.md — Pointer Events multi-touch pan + touch-action CSS
-- [ ] 07-02-PLAN.md — Cross-browser navigation verification checkpoint
+- [x] 07-01-PLAN.md — Pointer Events multi-touch pan + touch-action CSS
+- [x] 07-02-PLAN.md — Cross-browser navigation verification checkpoint
 
 ---
 
@@ -375,4 +375,4 @@ Phase 2 (Rendering)  Phase 3 (Validation)
 ---
 
 *Roadmap created: 2026-01-21*
-*Last updated: 2026-01-28 - Phase 4 Export planned (7 plans in 4 waves)*
+*Last updated: 2026-01-29 - Phase 7 Navigation complete (2 plans)*
