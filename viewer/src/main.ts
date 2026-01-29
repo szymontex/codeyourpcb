@@ -158,9 +158,8 @@ async function init(): Promise<void> {
   const routingStatus = document.getElementById('routing-status')!;
   const routingProgress = document.getElementById('routing-progress')!;
   const openBtn = document.getElementById('open-btn') as HTMLButtonElement;
-  // Theme toggle UI - implemented in Plan 11-03
-  // const themeToggle = document.getElementById('theme-toggle') as HTMLButtonElement;
-  // const themeIcon = document.getElementById('theme-icon')!;
+  const themeToggle = document.getElementById('theme-toggle') as HTMLButtonElement;
+  const themeIcon = document.getElementById('theme-icon')!;
 
   const ctx = canvas.getContext('2d')!;
 

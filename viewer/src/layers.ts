@@ -3,21 +3,33 @@
  * KiCad-style colors for familiar PCB visualization
  */
 
-// Layer color definitions (KiCad-style)
+// PCB electrical layer colors (fixed, not theme-dependent)
 export const LAYER_COLORS = {
   top_copper: '#C83434',       // Red
   bottom_copper: '#3434C8',    // Blue
   top_silk: '#C8C8C8',         // Light gray
   bottom_silk: '#808080',      // Gray
   drill: '#FFFFFF',            // White (on dark) or black (on light)
-  board_outline: '#FFFF00',    // Yellow
-  background: '#FFFFFF',       // Light mode background (per user preference)
-  grid: '#E0E0E0',             // Light gray grid
   violation: '#FF0000',        // Red for DRC errors
   violation_ring: '#FF0000',   // Ring outline for violation markers
   via: '#808080',              // Gray for vias (between top/bottom)
   ratsnest: '#FFD700',         // Gold/Yellow for unrouted connections
 } as const;
+
+/**
+ * Get current theme colors by reading CSS custom properties
+ * These colors change based on the active theme (light/dark)
+ */
+export function getThemeColors() {
+  const style = getComputedStyle(document.documentElement);
+  return {
+    background: style.getPropertyValue('--bg-canvas').trim() || '#ffffff',
+    grid: style.getPropertyValue('--pcb-grid').trim() || '#e0e0e0',
+    board_outline: style.getPropertyValue('--pcb-board-outline').trim() || '#cccc00',
+    empty_text: style.getPropertyValue('--pcb-empty-text').trim() || '#666666',
+    label: style.getPropertyValue('--pcb-label').trim() || '#333333',
+  };
+}
 
 // Layer bit masks (match cypcb-world Layer enum)
 export const LAYER_MASK = {

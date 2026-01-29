@@ -6,7 +6,7 @@
 import type { BoardSnapshot, ComponentInfo, PadInfo, ViolationInfo, TraceInfo, ViaInfo, RatsnestInfo } from './types';
 import type { Viewport } from './viewport';
 import { worldToScreen, screenToWorld } from './viewport';
-import { LAYER_COLORS, getPadColor, getTraceColor, type LayerVisibility } from './layers';
+import { LAYER_COLORS, getPadColor, getTraceColor, getThemeColors, type LayerVisibility } from './layers';
 
 export interface RenderState {
   snapshot: BoardSnapshot | null;
@@ -23,20 +23,23 @@ export interface RenderState {
 export function render(ctx: CanvasRenderingContext2D, state: RenderState): void {
   const { snapshot, viewport, layers, selectedRefdes, showViolations, showRatsnest } = state;
 
+  // Get theme-dependent colors
+  const themeColors = getThemeColors();
+
   // Clear canvas with background color
-  ctx.fillStyle = LAYER_COLORS.background;
+  ctx.fillStyle = themeColors.background;
   ctx.fillRect(0, 0, viewport.width, viewport.height);
 
   if (!snapshot || !snapshot.board) {
-    drawEmptyState(ctx, viewport);
+    drawEmptyState(ctx, viewport, themeColors);
     return;
   }
 
   // Draw grid (behind everything)
-  drawGrid(ctx, viewport);
+  drawGrid(ctx, viewport, themeColors);
 
   // Draw board outline
-  drawBoardOutline(ctx, viewport, snapshot.board.width_nm, snapshot.board.height_nm);
+  drawBoardOutline(ctx, viewport, snapshot.board.width_nm, snapshot.board.height_nm, themeColors);
 
   // Draw traces by layer (bottom first, then top)
   if (snapshot.traces) {
@@ -63,7 +66,7 @@ export function render(ctx: CanvasRenderingContext2D, state: RenderState): void 
   // Draw components (pads and labels)
   for (const comp of snapshot.components) {
     const isSelected = comp.refdes === selectedRefdes;
-    drawComponent(ctx, viewport, comp, layers, isSelected);
+    drawComponent(ctx, viewport, comp, layers, isSelected, themeColors);
   }
 
   // Draw vias on top of traces but below ratsnest
@@ -71,7 +74,7 @@ export function render(ctx: CanvasRenderingContext2D, state: RenderState): void 
     for (const via of snapshot.vias) {
       // Vias visible if any copper layer is visible
       if (layers.topCopper || layers.bottomCopper) {
-        drawVia(ctx, viewport, via);
+        drawVia(ctx, viewport, via, themeColors);
       }
     }
   }
@@ -94,8 +97,8 @@ export function render(ctx: CanvasRenderingContext2D, state: RenderState): void 
 /**
  * Draw placeholder when no board is loaded
  */
-function drawEmptyState(ctx: CanvasRenderingContext2D, viewport: Viewport): void {
-  ctx.fillStyle = '#666';
+function drawEmptyState(ctx: CanvasRenderingContext2D, viewport: Viewport, themeColors: ReturnType<typeof getThemeColors>): void {
+  ctx.fillStyle = themeColors.empty_text;
   ctx.font = '16px system-ui';
   ctx.textAlign = 'center';
   ctx.fillText('No board loaded', viewport.width / 2, viewport.height / 2);
@@ -105,7 +108,7 @@ function drawEmptyState(ctx: CanvasRenderingContext2D, viewport: Viewport): void
  * Draw grid lines
  * Adapts grid density based on zoom level for readability
  */
-function drawGrid(ctx: CanvasRenderingContext2D, vp: Viewport): void {
+function drawGrid(ctx: CanvasRenderingContext2D, vp: Viewport, themeColors: ReturnType<typeof getThemeColors>): void {
   // 1mm grid spacing (1,000,000 nm)
   const gridSpacing = 1_000_000;
 
@@ -113,7 +116,7 @@ function drawGrid(ctx: CanvasRenderingContext2D, vp: Viewport): void {
   const screenSpacing = gridSpacing * vp.scale;
   if (screenSpacing < 10) return;
 
-  ctx.strokeStyle = LAYER_COLORS.grid;
+  ctx.strokeStyle = themeColors.grid;
   ctx.lineWidth = 1;
 
   // Calculate visible world bounds
@@ -146,11 +149,11 @@ function drawGrid(ctx: CanvasRenderingContext2D, vp: Viewport): void {
 /**
  * Draw board outline as yellow rectangle
  */
-function drawBoardOutline(ctx: CanvasRenderingContext2D, vp: Viewport, width: number, height: number): void {
+function drawBoardOutline(ctx: CanvasRenderingContext2D, vp: Viewport, width: number, height: number, themeColors: ReturnType<typeof getThemeColors>): void {
   const [x0, y0] = worldToScreen(vp, 0, 0);
   const [x1, y1] = worldToScreen(vp, width, height);
 
-  ctx.strokeStyle = LAYER_COLORS.board_outline;
+  ctx.strokeStyle = themeColors.board_outline;
   ctx.lineWidth = 2;
   // Note: y0/y1 are flipped due to Y-down screen coords
   ctx.strokeRect(x0, y1, x1 - x0, y0 - y1);
@@ -253,7 +256,8 @@ function drawTrace(
 function drawVia(
   ctx: CanvasRenderingContext2D,
   vp: Viewport,
-  via: ViaInfo
+  via: ViaInfo,
+  themeColors: ReturnType<typeof getThemeColors>
 ): void {
   const [sx, sy] = worldToScreen(vp, via.x, via.y);
   const outerRadius = (via.outer_diameter * vp.scale) / 2;
@@ -272,7 +276,7 @@ function drawVia(
   if (drillRadius > 0.5) {
     ctx.beginPath();
     ctx.arc(sx, sy, drillRadius, 0, Math.PI * 2);
-    ctx.fillStyle = LAYER_COLORS.background;
+    ctx.fillStyle = themeColors.background;
     ctx.fill();
   }
 }
@@ -310,17 +314,18 @@ function drawComponent(
   vp: Viewport,
   comp: ComponentInfo,
   layers: LayerVisibility,
-  isSelected: boolean
+  isSelected: boolean,
+  themeColors: ReturnType<typeof getThemeColors>
 ): void {
   // Draw pads
   for (const pad of comp.pads) {
-    drawPad(ctx, vp, comp.x_nm, comp.y_nm, comp.rotation_mdeg, pad, layers, isSelected);
+    drawPad(ctx, vp, comp.x_nm, comp.y_nm, comp.rotation_mdeg, pad, layers, isSelected, themeColors);
   }
 
   // Draw refdes label if zoomed in enough
   if (vp.scale > 0.00002) {
     const [sx, sy] = worldToScreen(vp, comp.x_nm, comp.y_nm);
-    ctx.fillStyle = isSelected ? '#FF6600' : '#333';
+    ctx.fillStyle = isSelected ? '#FF6600' : themeColors.label;
     ctx.font = '10px system-ui';
     ctx.textAlign = 'center';
     ctx.fillText(comp.refdes, sx, sy - 5);
@@ -338,7 +343,8 @@ function drawPad(
   rotationMdeg: number,
   pad: PadInfo,
   layers: LayerVisibility,
-  isSelected: boolean
+  isSelected: boolean,
+  themeColors: ReturnType<typeof getThemeColors>
 ): void {
   const color = getPadColor(pad.layer_mask, layers);
   if (!color) return; // Layer not visible
@@ -399,7 +405,7 @@ function drawPad(
   if (pad.drill_nm) {
     const drillRadius = pad.drill_nm * vp.scale / 2;
     if (drillRadius > 0.5) {
-      ctx.fillStyle = LAYER_COLORS.background;
+      ctx.fillStyle = themeColors.background;
       ctx.beginPath();
       ctx.arc(0, 0, drillRadius, 0, Math.PI * 2);
       ctx.fill();
