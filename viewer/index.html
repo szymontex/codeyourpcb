@@ -22,6 +22,10 @@
       height: 100vh;
       display: flex;
       flex-direction: column;
+      transition: background-color 0.15s ease, color 0.15s ease;
+    }
+    label {
+      color: var(--text-primary);
     }
     #toolbar {
       background: var(--bg-elevated);
@@ -30,6 +34,7 @@
       display: flex;
       gap: 16px;
       align-items: center;
+      transition: background-color 0.15s ease, border-color 0.15s ease;
     }
     #toolbar .separator {
       color: var(--text-tertiary);
@@ -57,6 +62,7 @@
       display: flex;
       align-items: center;
       gap: 8px;
+      transition: background-color 0.15s ease, color 0.15s ease;
     }
     #error-badge {
       background: var(--error);
@@ -84,6 +90,7 @@
       border-radius: 4px;
       box-shadow: 0 2px 8px var(--shadow);
       overflow: hidden;
+      transition: background-color 0.15s ease, border-color 0.15s ease;
     }
     #error-panel.hidden {
       display: none;
@@ -188,6 +195,24 @@
       color: var(--text-secondary);
       text-align: right;
     }
+    /* Theme toggle button */
+    #theme-toggle {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-primary);
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      line-height: 1;
+      transition: background-color 0.15s;
+    }
+    #theme-toggle:hover {
+      background: var(--border-primary);
+    }
+    #theme-toggle:focus-visible {
+      outline: 2px solid var(--accent-primary);
+      outline-offset: 2px;
+    }
     /* Auto-route toggle */
     #auto-route-label {
       font-size: 12px;
@@ -207,6 +232,7 @@
       box-shadow: 0 4px 16px var(--shadow);
       text-align: center;
       z-index: 100;
+      transition: background-color 0.15s ease, color 0.15s ease;
     }
     #routing-status.hidden {
       display: none;
@@ -263,6 +289,10 @@
     <label><input type="checkbox" id="layer-bottom" checked> Bottom</label>
     <span class="separator">|</span>
     <label><input type="checkbox" id="layer-ratsnest" checked> Ratsnest</label>
+    <span class="separator">|</span>
+    <button id="theme-toggle" aria-label="Toggle theme" title="Toggle theme (Light / Dark / Auto)">
+      <span id="theme-icon">☀️</span>
+    </button>
     <span id="coords"></span>
     <button id="open-btn">Open</button>
     <label id="auto-route-label"><input type="checkbox" id="auto-route"> Auto-route</label>

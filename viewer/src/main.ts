@@ -158,6 +158,9 @@ async function init(): Promise<void> {
   const routingStatus = document.getElementById('routing-status')!;
   const routingProgress = document.getElementById('routing-progress')!;
   const openBtn = document.getElementById('open-btn') as HTMLButtonElement;
+  // Theme toggle UI - implemented in Plan 11-03
+  // const themeToggle = document.getElementById('theme-toggle') as HTMLButtonElement;
+  // const themeIcon = document.getElementById('theme-icon')!;
 
   const ctx = canvas.getContext('2d')!;
 
@@ -236,6 +239,40 @@ async function init(): Promise<void> {
   themeManager.subscribe(() => {
     dirty = true;
   });
+
+  // Theme toggle
+  function updateThemeIcon(): void {
+    const theme = themeManager.getTheme();
+    switch (theme) {
+      case 'light':
+        themeIcon.textContent = '☀️';
+        themeToggle.title = 'Theme: Light (click to switch)';
+        break;
+      case 'dark':
+        themeIcon.textContent = '🌙';
+        themeToggle.title = 'Theme: Dark (click to switch)';
+        break;
+      case 'auto':
+        themeIcon.textContent = '🔄';
+        themeToggle.title = 'Theme: Auto (click to switch)';
+        break;
+    }
+  }
+
+  themeToggle.addEventListener('click', () => {
+    const current = themeManager.getTheme();
+    // Cycle: light → dark → auto → light
+    const next = current === 'light' ? 'dark' : current === 'dark' ? 'auto' : 'light';
+    themeManager.setTheme(next);
+    updateThemeIcon();
+  });
+
+  // Also update icon when OS theme changes (relevant in auto mode)
+  themeManager.subscribe(() => {
+    updateThemeIcon();
+  });
+
+  updateThemeIcon();
 
   // Start with empty state - user will open a file
   snapshot = engine.get_snapshot();
@@ -649,10 +686,16 @@ async function init(): Promise<void> {
     cancelRouting();
   });
 
-  // Keyboard shortcut: Escape to cancel routing
+  // Keyboard shortcuts
   document.addEventListener('keydown', (e) => {
+    // Escape to cancel routing
     if (e.key === 'Escape' && isRouting) {
       cancelRouting();
+    }
+    // Ctrl+Shift+T to toggle theme
+    if (e.ctrlKey && e.shiftKey && e.key === 'T') {
+      e.preventDefault();
+      themeToggle.click();
     }
   });
 
