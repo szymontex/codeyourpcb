@@ -1,969 +1,1409 @@
-# Architecture Patterns: Code-First PCB Design Tool
+# Architecture Patterns: v1.1 Foundation & Desktop Integration
 
-**Domain:** Code-First PCB/EDA Tool (CodeYourPCB)
-**Researched:** 2026-01-21
-**Confidence:** HIGH (verified against established patterns from KiCad, tscircuit, bevy_ecs, tower-lsp)
+**Domain:** Code-First PCB Design Tool (CodeYourPCB)
+**Milestone:** v1.1 Foundation & Desktop
+**Researched:** 2026-01-29
+**Confidence:** HIGH (verified against Tauri 2.0, Monaco, KiCad library formats)
 
 ---
 
 ## Executive Summary
 
-CodeYourPCB requires a layered architecture separating:
-1. **Language layer** - DSL parsing, LSP, hot reload
-2. **Domain layer** - ECS-based board model with spatial indexing
-3. **Validation layer** - Parallel DRC with rule engine
-4. **Rendering layer** - 2D canvas (wgpu) + 3D preview (Three.js)
-5. **Platform layer** - Tauri shell with WASM plugin system
+v1.1 adds four major subsystems to the existing v1.0 web viewer architecture:
 
-The architecture follows the principle of **"code-first, graphics-second"** - the source DSL is the single source of truth, and all other representations (schematic, layout, 3D view) are derived views.
+1. **Library Management System** - Component/footprint library with KiCad compatibility
+2. **Tauri Desktop Wrapper** - Native desktop shell with file system access
+3. **Web Deployment** - Static site hosting for browser-only usage
+4. **Monaco Editor** - In-app code editing with LSP integration
 
----
+**Integration Strategy:** These features share the existing WASM core (cypcb-render) but diverge in execution environments:
 
-## System Overview Diagram
+- **Desktop mode** (Tauri): Full Rust backend, native file system, embedded Monaco editor
+- **Web mode** (Static): WASM-only, browser File API, external editor via LSP
 
-```
-+------------------------------------------------------------------+
-|                         TAURI SHELL                               |
-|  +-------------------------------------------------------------+  |
-|  |                    PLATFORM LAYER                           |  |
-|  |  [File Watcher] [IPC Bridge] [Native Dialogs] [Plugin Host] |  |
-|  +-------------------------------------------------------------+  |
-|                              |                                    |
-|  +---------------------------+----------------------------------+ |
-|  |                     CORE ENGINE (WASM)                       | |
-|  |                                                              | |
-|  |  +----------------+    +------------------+    +-----------+ | |
-|  |  | LANGUAGE LAYER |    |   DOMAIN LAYER   |    | RENDERING | | |
-|  |  |                |    |                  |    |   LAYER   | | |
-|  |  | [Tree-sitter]  |--->| [ECS World]      |--->| [wgpu 2D] | | |
-|  |  | [LSP Server]   |    | [Spatial Index]  |    | [Canvas]  | | |
-|  |  | [Hot Reload]   |    | [Command Stack]  |    +-----------+ | |
-|  |  +----------------+    +--------+---------+                  | |
-|  |                                 |                            | |
-|  |                    +------------v-----------+                | |
-|  |                    |   VALIDATION LAYER     |                | |
-|  |                    |                        |                | |
-|  |                    | [DRC Engine]           |                | |
-|  |                    | [ERC Engine]           |                | |
-|  |                    | [Rule Definitions]     |                | |
-|  |                    +------------------------+                | |
-|  +--------------------------------------------------------------+ |
-|                              |                                    |
-|  +---------------------------v----------------------------------+ |
-|  |                    WEBVIEW (Frontend)                        | |
-|  |  [Three.js 3D] [React UI] [Monaco Editor] [Canvas Overlay]  | |
-|  +--------------------------------------------------------------+ |
-+------------------------------------------------------------------+
-```
+The architecture preserves the existing v1.0 hot reload development experience while enabling production desktop and web deployments.
 
 ---
 
-## Component Boundaries
-
-### 1. Language Layer
-
-**Responsibility:** Parse DSL source into typed AST, provide IDE features, enable hot reload.
-
-| Component | Purpose | Inputs | Outputs |
-|-----------|---------|--------|---------|
-| **DSL Parser** | Tree-sitter grammar for PCB DSL | Source text | Concrete Syntax Tree |
-| **Semantic Analyzer** | Type checking, symbol resolution | CST | Typed AST, Diagnostics |
-| **LSP Server** | IDE integration (completion, hover, goto-def) | LSP requests | LSP responses |
-| **Hot Reload Controller** | Watch files, trigger incremental rebuild | File events | Rebuild commands |
-
-**Key decisions:**
-- Tree-sitter for incremental parsing (sub-millisecond re-parse on edit)
-- tower-lsp for LSP implementation (async, tower-based)
-- Maintain document state in-memory alongside tree-sitter tree for incremental updates
+## System Overview: v1.1 Architecture
 
 ```
-Source File --> [Tree-sitter Parser] --> CST
-                                          |
-                                          v
-                                  [Semantic Analyzer]
-                                          |
-                                          v
-                                    Typed AST --> [ECS Sync]
+┌─────────────────────────────────────────────────────────────────────────┐
+│                          DEPLOYMENT VARIANTS                              │
+├─────────────────────────────────┬───────────────────────────────────────┤
+│         DESKTOP (Tauri)         │           WEB (Static)                │
+│                                 │                                       │
+│  ┌──────────────────────────┐   │   ┌──────────────────────────────┐   │
+│  │   Tauri Native Shell     │   │   │      Browser Window          │   │
+│  │  ┌────────────────────┐  │   │   │  ┌────────────────────────┐  │   │
+│  │  │   WebView (HTML)   │  │   │   │  │     Static HTML        │  │   │
+│  │  │                    │  │   │   │  │                        │  │   │
+│  │  │  ┌──────────────┐  │  │   │   │  │  ┌──────────────┐      │  │   │
+│  │  │  │   Monaco     │  │  │   │   │  │  │  File Picker │      │  │   │
+│  │  │  │   Editor     │  │  │   │   │  │  │  (browser)   │      │  │   │
+│  │  │  └──────────────┘  │  │   │   │  │  └──────────────┘      │  │   │
+│  │  │                    │  │   │   │  │                        │  │   │
+│  │  │  ┌──────────────┐  │  │   │   │  │  ┌──────────────┐      │  │   │
+│  │  │  │   Canvas     │  │  │   │   │  │  │   Canvas     │      │  │   │
+│  │  │  │  Rendering   │  │  │   │   │  │  │  Rendering   │      │  │   │
+│  │  │  └──────────────┘  │  │   │   │  │  └──────────────┘      │  │   │
+│  │  │         ▲          │  │   │   │  │         ▲              │  │   │
+│  │  └─────────┼──────────┘  │   │   │  └─────────┼──────────────┘  │   │
+│  │            │             │   │   │            │                 │   │
+│  │  ┌─────────▼──────────┐  │   │   │  ┌─────────▼──────────┐      │   │
+│  │  │  WASM Core Engine  │  │   │   │  │  WASM Core Engine  │      │   │
+│  │  │   (cypcb-render)   │  │   │   │  │   (cypcb-render)   │      │   │
+│  │  └────────────────────┘  │   │   │  └────────────────────┘      │   │
+│  │            ▲             │   │   │            ▲                 │   │
+│  └────────────┼─────────────┘   │   └────────────┼─────────────────┘   │
+│               │                 │                │ (limited)           │
+│  ┌────────────▼─────────────┐   │   ┌────────────▼─────────────┐       │
+│  │    Tauri IPC Commands    │   │   │   Browser File API       │       │
+│  │  ┌────────────────────┐  │   │   │  (no backend access)     │       │
+│  │  │ File System Access │  │   │   └──────────────────────────┘       │
+│  │  │ Library Manager    │  │   │                                      │
+│  │  │ Project Watcher    │  │   │   External LSP Server (optional):   │
+│  │  │ Native Dialogs     │  │   │   ┌──────────────────────────────┐   │
+│  │  └────────────────────┘  │   │   │   tower-lsp (cypcb-lsp)     │   │
+│  │            ▲             │   │   │   (runs as separate process) │   │
+│  │            │             │   │   └──────────────────────────────┘   │
+│  │  ┌─────────▼──────────┐  │   │                                      │
+│  │  │ Library Storage    │  │   │                                      │
+│  │  │ ~/.codeyourpcb/    │  │   │                                      │
+│  │  │   libs/            │  │   │                                      │
+│  │  │   cache/           │  │   │                                      │
+│  │  └────────────────────┘  │   │                                      │
+│  └──────────────────────────┘   │                                      │
+└─────────────────────────────────┴───────────────────────────────────────┘
+
+                   SHARED DEVELOPMENT ENVIRONMENT
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    Dev Server (viewer/server.ts)                        │
+│  ┌──────────────────────────────────────────────────────────────────┐   │
+│  │  WebSocket Server (port 4322)                                    │   │
+│  │  - File watcher (chokidar)                                       │   │
+│  │  - Hot reload broadcasts                                         │   │
+│  │  - Route command proxy                                           │   │
+│  └──────────────────────────────────────────────────────────────────┘   │
+│                              ▲                                          │
+│                              │ WebSocket                                │
+│                    ┌─────────▼──────────┐                               │
+│                    │   Browser/Tauri    │                               │
+│                    │  (development mode) │                               │
+│                    └────────────────────┘                               │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 2. Domain Layer (ECS Board Model)
+**Key Architectural Decisions:**
 
-**Responsibility:** Central data model for the PCB design, spatial queries, undo/redo.
-
-| Component | Purpose | Inputs | Outputs |
-|-----------|---------|--------|---------|
-| **ECS World** | Entity-component storage for all board elements | Commands | State changes |
-| **Spatial Index** | R*-tree for fast region/collision queries | Geometry queries | Entity sets |
-| **Command Stack** | Undo/redo via command pattern | User actions | State mutations |
-| **Netlist Manager** | Track electrical connectivity | Component changes | Net updates |
-
-**Entity Types (ECS):**
-```rust
-// Core entities
-Component   // Resistor, Capacitor, IC, etc.
-Footprint   // Physical pad layout
-Net         // Electrical connection between pads
-Pad         // Individual connection point
-Track       // Copper trace segment
-Via         // Layer transition
-Zone        // Copper pour region
-Layer       // PCB layer definition
-```
-
-**Component Types (ECS):**
-```rust
-// Transform & Geometry
-Position { x: f64, y: f64 }
-Rotation { angle: f64 }
-BoundingBox { min: Vec2, max: Vec2 }
-
-// Electrical
-NetId(u32)
-PinNumber(String)
-ElectricalType { passive, power, input, output, ... }
-
-// Physical
-LayerMask(u32)
-Clearance(f64)
-TraceWidth(f64)
-
-// Metadata
-RefDes(String)      // R1, C1, U1
-Value(String)       // 10k, 100nF
-SourceSpan { start: usize, end: usize }  // Link back to DSL
-```
-
-**Spatial Index Pattern:**
-```rust
-// Using rstar crate for R*-tree
-use rstar::{RTree, AABB};
-
-struct SpatialIndex {
-    tree: RTree<SpatialEntry>,
-}
-
-struct SpatialEntry {
-    entity: Entity,
-    envelope: AABB<[f64; 2]>,
-    layer_mask: u32,
-}
-
-impl SpatialIndex {
-    fn query_region(&self, bounds: AABB, layer: u32) -> Vec<Entity>;
-    fn query_point(&self, point: [f64; 2], layer: u32) -> Vec<Entity>;
-    fn nearest(&self, point: [f64; 2], count: usize) -> Vec<Entity>;
-}
-```
-
-### 3. Validation Layer (DRC/ERC)
-
-**Responsibility:** Check design against manufacturing and electrical rules.
-
-| Component | Purpose | Inputs | Outputs |
-|-----------|---------|--------|---------|
-| **DRC Engine** | Design rule checking (spacing, width, etc.) | Board state, Rules | Violations |
-| **ERC Engine** | Electrical rule checking (connectivity, types) | Netlist, Rules | Violations |
-| **Rule Engine** | Rule definition and evaluation | Rule definitions | Check functions |
-| **Violation Store** | Track and manage violations | Violations | UI markers |
-
-**Parallel DRC Architecture:**
-```
-                    +------------------+
-                    |  Board Partitioner|
-                    +--------+---------+
-                             |
-              +--------------+--------------+
-              |              |              |
-              v              v              v
-        +----------+   +----------+   +----------+
-        | Worker 1 |   | Worker 2 |   | Worker N |
-        | (Region) |   | (Region) |   | (Region) |
-        +----+-----+   +----+-----+   +----+-----+
-             |              |              |
-             v              v              v
-        +------------------------------------------+
-        |           Violation Collector            |
-        +------------------------------------------+
-```
-
-**DRC Rule Categories:**
-- **Spacing rules:** Track-to-track, track-to-pad, pad-to-pad clearances
-- **Width rules:** Minimum trace width, annular ring
-- **Manufacturing rules:** Drill sizes, solder mask expansion
-- **Layer rules:** Via span, layer stackup constraints
-
-### 4. Rendering Layer
-
-**Responsibility:** Visual representation of the board.
-
-| Component | Purpose | Inputs | Outputs |
-|-----------|---------|--------|---------|
-| **2D Canvas** | wgpu-based PCB layout view | Board state | GPU commands |
-| **Layer Compositor** | Composite multiple layers with visibility | Layer data | Final image |
-| **Selection Manager** | Hit testing, selection highlighting | Mouse events | Selection state |
-| **3D Preview** | Three.js board visualization | Board state | WebGL scene |
-
-**2D Rendering Pipeline:**
-```
-Board State --> [Layer Extractor] --> Per-layer geometry
-                                            |
-                                            v
-                                   [Tessellator] --> GPU buffers
-                                            |
-                                            v
-                                   [Layer Compositor] --> Display
-```
-
-**wgpu Canvas Architecture:**
-```rust
-struct PcbCanvas {
-    device: wgpu::Device,
-    queue: wgpu::Queue,
-    layers: Vec<LayerBuffer>,
-    viewport: Viewport,
-}
-
-struct LayerBuffer {
-    layer_id: LayerId,
-    tracks: wgpu::Buffer,      // Track geometry
-    pads: wgpu::Buffer,        // Pad geometry
-    zones: wgpu::Buffer,       // Zone fill geometry
-    visible: bool,
-    color: [f32; 4],
-}
-```
-
-### 5. Platform Layer
-
-**Responsibility:** Desktop integration, plugin hosting, file system access.
-
-| Component | Purpose | Inputs | Outputs |
-|-----------|---------|--------|---------|
-| **Tauri Shell** | Native window, menus, dialogs | - | Platform services |
-| **File Watcher** | Monitor source files for changes | FS events | Change notifications |
-| **IPC Bridge** | Communication between Rust and WebView | Messages | Responses |
-| **Plugin Host** | WASM-based plugin system | Plugin requests | Plugin responses |
-
-**Plugin System Architecture (WASM-based):**
-```
-+------------------+     +-------------------+
-|   Plugin Host    |     |    Plugin (WASM)  |
-|   (Rust/Tauri)   |     |                   |
-|                  |     |  +-------------+  |
-|  +-----------+   |     |  |   Plugin    |  |
-|  | Wasmtime  |<--+---->|  |   Code      |  |
-|  | Runtime   |   |     |  +-------------+  |
-|  +-----------+   |     |                   |
-|       |          |     |  Capabilities:    |
-|       v          |     |  - Read board     |
-|  +-----------+   |     |  - Add components |
-|  | Capability|   |     |  - Run DRC rules  |
-|  | Sandbox   |   |     |  - Generate output|
-|  +-----------+   |     +-------------------+
-+------------------+
-
-WIT Interface (WebAssembly Interface Types):
-- query_components(filter) -> Vec<Component>
-- add_component(spec) -> Result<ComponentId>
-- register_drc_rule(rule) -> Result<RuleId>
-- generate_output(format) -> Result<Vec<u8>>
-```
+1. **WASM Core is Shared** - Both desktop and web modes use the same cypcb-render WASM module
+2. **Environment-Specific Facades** - File access, library storage differ by deployment
+3. **Monaco is Desktop-Only (v1.1)** - Web mode uses external editor + LSP initially
+4. **Development Mode is Unified** - Same dev server works for both targets
 
 ---
 
-## Project Structure
+## Component Integration Points
+
+### 1. Library Management System
+
+**Problem:** Users need to manage component libraries (symbols + footprints) with KiCad compatibility.
+
+**Architecture Decision:** Create dedicated `cypcb-library` crate with dual storage backends.
+
+#### Component Structure
+
+```rust
+// crates/cypcb-library/src/lib.rs
+
+/// Library management with pluggable storage
+pub struct LibraryManager {
+    storage: Box<dyn LibraryStorage>,
+    cache: ComponentCache,
+}
+
+/// Storage backend abstraction
+pub trait LibraryStorage: Send + Sync {
+    fn list_libraries(&self) -> Result<Vec<LibraryMetadata>>;
+    fn get_component(&self, lib: &str, name: &str) -> Result<Component>;
+    fn get_footprint(&self, lib: &str, name: &str) -> Result<Footprint>;
+    fn add_library(&mut self, path: &Path) -> Result<LibraryId>;
+}
+
+/// Desktop implementation
+pub struct FileSystemStorage {
+    user_libs: PathBuf,  // ~/.codeyourpcb/libs/
+    system_libs: Vec<PathBuf>,  // System-wide KiCad libs
+}
+
+/// Web implementation (future)
+pub struct BrowserStorage {
+    indexed_db: web_sys::IdbDatabase,
+}
+
+/// Component definition
+pub struct Component {
+    pub name: String,
+    pub description: String,
+    pub footprint_ref: FootprintRef,
+    pub pins: Vec<Pin>,
+    pub properties: HashMap<String, String>,
+}
+
+/// Footprint definition (KiCad-compatible)
+pub struct Footprint {
+    pub name: String,
+    pub pads: Vec<Pad>,
+    pub silkscreen: Vec<GraphicsElement>,
+    pub courtyard: Polygon,
+    pub model_3d: Option<PathBuf>,
+}
+```
+
+#### Integration with Existing Crates
 
 ```
-codeyourpcb/
-├── Cargo.toml                    # Workspace manifest
-├── .planning/
-│   └── research/
-│       └── ARCHITECTURE.md       # This file
-│
-├── crates/
-│   ├── cypcb-core/              # Core data types, shared across all crates
-│   │   ├── src/
-│   │   │   ├── lib.rs
-│   │   │   ├── entities.rs      # Entity type definitions
-│   │   │   ├── components.rs    # ECS component definitions
-│   │   │   ├── units.rs         # Physical units (mm, mil, etc.)
-│   │   │   └── geometry.rs      # Geometric primitives
-│   │   └── Cargo.toml
-│   │
-│   ├── cypcb-parser/            # DSL parser (tree-sitter based)
-│   │   ├── src/
-│   │   │   ├── lib.rs
-│   │   │   ├── grammar.rs       # Tree-sitter grammar bindings
-│   │   │   ├── ast.rs           # Typed AST definitions
-│   │   │   ├── semantic.rs      # Semantic analysis
-│   │   │   └── errors.rs        # Parse error types
-│   │   ├── tree-sitter-cypcb/   # Tree-sitter grammar definition
-│   │   │   ├── grammar.js
-│   │   │   └── src/
-│   │   └── Cargo.toml
-│   │
-│   ├── cypcb-world/             # ECS world and domain model
-│   │   ├── src/
-│   │   │   ├── lib.rs
-│   │   │   ├── world.rs         # ECS world wrapper
-│   │   │   ├── commands.rs      # Command pattern implementation
-│   │   │   ├── spatial.rs       # R*-tree spatial index
-│   │   │   ├── netlist.rs       # Netlist management
-│   │   │   └── sync.rs          # AST-to-ECS synchronization
-│   │   └── Cargo.toml
-│   │
-│   ├── cypcb-drc/               # Design rule checking
-│   │   ├── src/
-│   │   │   ├── lib.rs
-│   │   │   ├── engine.rs        # DRC engine
-│   │   │   ├── rules/           # Rule implementations
-│   │   │   │   ├── spacing.rs
-│   │   │   │   ├── width.rs
-│   │   │   │   └── manufacturing.rs
-│   │   │   ├── parallel.rs      # Parallel execution
-│   │   │   └── violations.rs    # Violation types
-│   │   └── Cargo.toml
-│   │
-│   ├── cypcb-render/            # 2D rendering (wgpu)
-│   │   ├── src/
-│   │   │   ├── lib.rs
-│   │   │   ├── canvas.rs        # Main canvas
-│   │   │   ├── layers.rs        # Layer management
-│   │   │   ├── tessellation.rs  # Geometry tessellation
-│   │   │   ├── shaders/         # WGSL shaders
-│   │   │   └── selection.rs     # Selection/hit testing
-│   │   └── Cargo.toml
-│   │
-│   ├── cypcb-lsp/               # LSP server
-│   │   ├── src/
-│   │   │   ├── lib.rs
-│   │   │   ├── server.rs        # tower-lsp server impl
-│   │   │   ├── completion.rs    # Autocomplete
-│   │   │   ├── hover.rs         # Hover information
-│   │   │   ├── diagnostics.rs   # Error reporting
-│   │   │   └── goto.rs          # Go to definition
-│   │   └── Cargo.toml
-│   │
-│   ├── cypcb-plugins/           # Plugin system
-│   │   ├── src/
-│   │   │   ├── lib.rs
-│   │   │   ├── host.rs          # Wasmtime plugin host
-│   │   │   ├── sandbox.rs       # Capability sandbox
-│   │   │   └── api.rs           # Plugin API definitions
-│   │   ├── wit/                 # WIT interface definitions
-│   │   │   └── plugin.wit
-│   │   └── Cargo.toml
-│   │
-│   ├── cypcb-export/            # Export formats
-│   │   ├── src/
-│   │   │   ├── lib.rs
-│   │   │   ├── gerber.rs        # Gerber output
-│   │   │   ├── kicad.rs         # KiCad S-expression export
-│   │   │   ├── bom.rs           # Bill of materials
-│   │   │   └── pick_place.rs    # Pick and place files
-│   │   └── Cargo.toml
-│   │
-│   └── cypcb-wasm/              # WASM bindings for core
-│       ├── src/
-│       │   └── lib.rs           # wasm-bindgen exports
-│       └── Cargo.toml
-│
-├── src-tauri/                   # Tauri application
-│   ├── src/
-│   │   ├── main.rs
-│   │   ├── commands.rs          # Tauri IPC commands
-│   │   ├── file_watcher.rs      # File system watcher
-│   │   └── plugin_loader.rs     # Plugin loading
-│   ├── Cargo.toml
-│   └── tauri.conf.json
-│
-├── src/                         # Frontend (WebView)
-│   ├── components/
-│   │   ├── Editor.tsx           # Monaco editor wrapper
-│   │   ├── Canvas2D.tsx         # 2D board view (wgpu)
-│   │   ├── Preview3D.tsx        # Three.js 3D preview
-│   │   ├── PropertyPanel.tsx    # Component properties
-│   │   └── ErrorList.tsx        # DRC violations list
-│   ├── stores/
-│   │   ├── board.ts             # Board state
-│   │   └── editor.ts            # Editor state
-│   ├── App.tsx
-│   └── main.tsx
-│
-└── examples/                    # Example DSL files
-    ├── blink.cypcb              # Simple LED blink circuit
-    └── arduino_shield.cypcb     # More complex example
+┌─────────────────┐     uses      ┌──────────────────┐
+│  cypcb-parser   │──────────────▶│  cypcb-library   │
+│  (DSL parsing)  │               │ (lib management)  │
+└─────────────────┘               └──────────────────┘
+        │                                   │
+        │ creates                           │ provides
+        │ entities                          │ definitions
+        ▼                                   ▼
+┌─────────────────┐               ┌──────────────────┐
+│   cypcb-world   │──────────────▶│  cypcb-core      │
+│  (ECS board)    │     uses      │  (shared types)  │
+└─────────────────┘               └──────────────────┘
+```
+
+**Data Flow:**
+
+1. User writes: `component R1 resistor("0805", "10k")`
+2. Parser resolves `resistor` → calls `LibraryManager::get_component("built-in", "resistor")`
+3. LibraryManager returns Component with footprint_ref → `"0805"`
+4. Parser resolves footprint → calls `LibraryManager::get_footprint("built-in", "0805")`
+5. ECS world spawns entity with Component + Footprint components
+
+#### File Format: KiCad S-Expression
+
+Use existing KiCad .kicad_mod format for footprints:
+
+```scheme
+(footprint "Resistor_SMD:R_0805_2012Metric" (version 20221018) (generator pcbnew)
+  (layer "F.Cu")
+  (attr smd)
+  (fp_text reference "REF**" (at 0 -1.65) (layer "F.SilkS")
+    (effects (font (size 1 1) (thickness 0.15)))
+  )
+  (fp_line (start -0.227064 -0.735) (end 0.227064 -0.735) (layer "F.SilkS"))
+  (fp_line (start -0.227064 0.735) (end 0.227064 0.735) (layer "F.SilkS"))
+  (pad "1" smd roundrect (at -0.9125 0) (size 1.025 1.4) (layers "F.Cu" "F.Paste" "F.Mask"))
+  (pad "2" smd roundrect (at 0.9125 0) (size 1.025 1.4) (layers "F.Cu" "F.Paste" "F.Mask"))
+)
+```
+
+**Parsing Strategy:** Use existing `cypcb-kicad` crate, extend with library directory scanning.
+
+#### Storage Locations
+
+**Desktop (Tauri):**
+```
+~/.codeyourpcb/
+├── libs/                    # User libraries
+│   ├── my-custom.pretty/   # Footprint library (KiCad format)
+│   │   ├── SOIC-8.kicad_mod
+│   │   └── QFN-32.kicad_mod
+│   └── built-in.pretty/    # Bundled footprints
+├── cache/                  # Parsed library cache
+│   └── index.json
+└── config.toml             # Library paths
+```
+
+**Web (Browser):**
+```
+IndexedDB: codeyourpcb
+├── libraries/              # Object store
+│   ├── {id: "built-in", ...}
+│   └── {id: "user-1", ...}
+└── footprints/             # Object store
+    ├── {lib: "built-in", name: "0805", ...}
+    └── ...
+```
+
+#### New Crate Structure
+
+```
+crates/cypcb-library/
+├── Cargo.toml
+├── src/
+│   ├── lib.rs              # LibraryManager API
+│   ├── storage/
+│   │   ├── mod.rs
+│   │   ├── filesystem.rs   # Desktop storage
+│   │   └── browser.rs      # Web storage (feature-gated)
+│   ├── component.rs        # Component types
+│   ├── footprint.rs        # Footprint types
+│   ├── parser.rs           # KiCad s-expr parsing (delegates to cypcb-kicad)
+│   └── cache.rs            # In-memory cache
+└── tests/
+    └── kicad_compat.rs     # KiCad library import tests
+```
+
+**Dependencies:**
+```toml
+[dependencies]
+cypcb-core = { workspace = true }
+cypcb-kicad = { path = "../cypcb-kicad" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+# Desktop-only
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+notify = { workspace = true }  # Watch library directories
+
+# Web-only
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+web-sys = { version = "0.3", features = ["IdbDatabase"] }
+wasm-bindgen-futures = "0.4"
 ```
 
 ---
 
-## Data Flow Diagrams
+### 2. Tauri Desktop Wrapper
 
-### 1. Source-to-Board Flow (Initial Load)
+**Problem:** Provide native desktop shell with file system access, native dialogs, and process management.
 
-```
-+-------------+     +---------------+     +------------------+
-| Source File |---->| Tree-sitter   |---->| Concrete Syntax  |
-| (.cypcb)    |     | Parser        |     | Tree (CST)       |
-+-------------+     +---------------+     +--------+---------+
-                                                   |
-                                                   v
-                                          +------------------+
-                                          | Semantic         |
-                                          | Analyzer         |
-                                          +--------+---------+
-                                                   |
-                    +------------------------------+
-                    |
-                    v
-+------------------+     +------------------+     +------------------+
-| Typed AST       |---->| ECS Sync         |---->| ECS World        |
-|                 |     | (creates/updates)|     | (Components +    |
-|                 |     |                  |     |  Spatial Index)  |
-+------------------+     +------------------+     +--------+---------+
-                                                          |
-                    +-------------------------------------+
-                    |
-                    v
-+------------------+     +------------------+
-| Render Extract  |---->| GPU Buffers      |---->  Display
-| (per layer)     |     | (wgpu)           |
-+------------------+     +------------------+
-```
+**Architecture Decision:** Tauri 2.0 as thin native shell around existing Vite + WASM frontend.
 
-### 2. Hot Reload Flow (File Change)
+#### Tauri Integration Architecture
 
 ```
-File Save Event
-      |
-      v
-+------------------+     +------------------+
-| File Watcher     |---->| Debounce/Batch   |
-| (notify crate)   |     | (100ms window)   |
-+------------------+     +--------+---------+
-                                  |
-                                  v
-                         +------------------+
-                         | Tree-sitter      |
-                         | Incremental      |
-                         | Re-parse         |
-                         +--------+---------+
-                                  |
-                    +-------------+-------------+
-                    |                           |
-                    v                           v
-           +---------------+           +---------------+
-           | Changed Nodes |           | Unchanged     |
-           | (diff)        |           | Nodes (skip)  |
-           +-------+-------+           +---------------+
-                   |
-                   v
-           +------------------+
-           | Incremental ECS  |
-           | Update (commands)|
-           +--------+---------+
-                    |
-                    v
-           +------------------+
-           | Partial Re-render|
-           | (dirty regions)  |
-           +------------------+
+┌─────────────────────────────────────────────────────────────┐
+│                    Tauri Application                        │
+│                                                             │
+│  ┌────────────────────────────────────────────────────┐    │
+│  │                 WebView (Frontend)                  │    │
+│  │  ┌──────────────────────────────────────────────┐  │    │
+│  │  │  Vite Dev Server (dev) / Static HTML (prod) │  │    │
+│  │  │                                              │  │    │
+│  │  │  ┌────────────────┐  ┌──────────────────┐   │  │    │
+│  │  │  │ Monaco Editor  │  │ Canvas Renderer  │   │  │    │
+│  │  │  └────────────────┘  └──────────────────┘   │  │    │
+│  │  │                                              │  │    │
+│  │  │         TypeScript/JavaScript                │  │    │
+│  │  └──────────────────────────────────────────────┘  │    │
+│  │                         │                           │    │
+│  │                         │ invoke()                  │    │
+│  │                         ▼                           │    │
+│  │  ┌──────────────────────────────────────────────┐  │    │
+│  │  │          IPC Bridge (JSON-RPC)               │  │    │
+│  │  └──────────────────────────────────────────────┘  │    │
+│  └────────────────────────────────────────────────────┘    │
+│                         │                                   │
+│                         │ Tauri Commands                    │
+│                         ▼                                   │
+│  ┌────────────────────────────────────────────────────┐    │
+│  │              Rust Backend (src-tauri/)             │    │
+│  │                                                     │    │
+│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────┐ │    │
+│  │  │ File Ops     │  │ Library Mgr  │  │ Watchers │ │    │
+│  │  │ - open()     │  │ - list()     │  │ - .cypcb │ │    │
+│  │  │ - save()     │  │ - import()   │  │ files    │ │    │
+│  │  │ - dialog()   │  │ - search()   │  └──────────┘ │    │
+│  │  └──────────────┘  └──────────────┘               │    │
+│  │                                                     │    │
+│  │  ┌──────────────────────────────────────────────┐  │    │
+│  │  │         State Management (Mutex)             │  │    │
+│  │  │  - Current project path                      │  │    │
+│  │  │  - Library manager instance                  │  │    │
+│  │  │  - File watchers                             │  │    │
+│  │  └──────────────────────────────────────────────┘  │    │
+│  │                         │                           │    │
+│  └─────────────────────────┼───────────────────────────┘    │
+│                            │                                │
+│                            ▼                                │
+│  ┌────────────────────────────────────────────────────┐    │
+│  │          Native OS Services                        │    │
+│  │  - File system (read/write)                        │    │
+│  │  - Native dialogs (open/save)                      │    │
+│  │  - Process spawning (autorouter)                   │    │
+│  │  - Window management                               │    │
+│  └────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-### 3. DRC Flow (Parallel Checking)
+#### Tauri Commands
+
+```rust
+// src-tauri/src/commands.rs
+
+use tauri::State;
+use std::sync::Mutex;
+use cypcb_library::LibraryManager;
+
+/// Application state shared across commands
+pub struct AppState {
+    pub current_project: Mutex<Option<PathBuf>>,
+    pub library_manager: Mutex<LibraryManager>,
+}
+
+/// Open file dialog and load .cypcb file
+#[tauri::command]
+async fn open_file(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> Result<ProjectData, String> {
+    // Native file dialog
+    let file_path = tauri::api::dialog::blocking::FileDialogBuilder::new()
+        .add_filter("CodeYourPCB", &["cypcb"])
+        .pick_file()
+        .ok_or("No file selected")?;
+
+    // Read file content
+    let content = tokio::fs::read_to_string(&file_path)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // Update state
+    *state.current_project.lock().unwrap() = Some(file_path.clone());
+
+    // Set up file watcher
+    start_watcher(app.clone(), file_path.clone())?;
+
+    Ok(ProjectData {
+        path: file_path.to_string_lossy().to_string(),
+        content,
+    })
+}
+
+/// Save current project
+#[tauri::command]
+async fn save_file(
+    content: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let path = state.current_project.lock().unwrap()
+        .clone()
+        .ok_or("No project open")?;
+
+    tokio::fs::write(&path, content)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+/// List available component libraries
+#[tauri::command]
+fn list_libraries(state: State<'_, AppState>) -> Result<Vec<LibraryInfo>, String> {
+    let manager = state.library_manager.lock().unwrap();
+    manager.list_libraries()
+        .map_err(|e| e.to_string())
+}
+
+/// Search for component in libraries
+#[tauri::command]
+fn search_component(
+    query: String,
+    state: State<'_, AppState>,
+) -> Result<Vec<ComponentInfo>, String> {
+    let manager = state.library_manager.lock().unwrap();
+    manager.search(query)
+        .map_err(|e| e.to_string())
+}
+
+/// Import KiCad library
+#[tauri::command]
+async fn import_library(
+    path: String,
+    state: State<'_, AppState>,
+) -> Result<LibraryId, String> {
+    let mut manager = state.library_manager.lock().unwrap();
+    manager.add_library(Path::new(&path))
+        .map_err(|e| e.to_string())
+}
+```
+
+#### File Watcher Integration
+
+```rust
+// src-tauri/src/watcher.rs
+
+use notify::{Watcher, RecursiveMode, Event};
+use tauri::{AppHandle, Manager};
+
+/// Start watching .cypcb file for external changes
+pub fn start_watcher(app: AppHandle, path: PathBuf) -> Result<(), String> {
+    let app_clone = app.clone();
+
+    let mut watcher = notify::recommended_watcher(move |res: Result<Event, _>| {
+        if let Ok(event) = res {
+            if event.kind.is_modify() {
+                // Emit event to frontend
+                app_clone.emit_all("file-changed", FileChangeEvent {
+                    path: path.clone(),
+                }).unwrap();
+            }
+        }
+    }).map_err(|e| e.to_string())?;
+
+    watcher.watch(&path, RecursiveMode::NonRecursive)
+        .map_err(|e| e.to_string())?;
+
+    // Store watcher in app state to prevent drop
+    app.state::<Mutex<Option<notify::RecommendedWatcher>>>()
+        .lock()
+        .unwrap()
+        .replace(watcher);
+
+    Ok(())
+}
+```
+
+#### Frontend Integration (TypeScript)
+
+```typescript
+// src/tauri.ts
+
+import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
+
+export interface ProjectData {
+  path: string;
+  content: string;
+}
+
+export interface LibraryInfo {
+  id: string;
+  name: string;
+  path: string;
+  component_count: number;
+}
+
+export async function openFile(): Promise<ProjectData> {
+  return await invoke<ProjectData>('open_file');
+}
+
+export async function saveFile(content: string): Promise<void> {
+  return await invoke('save_file', { content });
+}
+
+export async function listLibraries(): Promise<LibraryInfo[]> {
+  return await invoke<LibraryInfo[]>('list_libraries');
+}
+
+export async function searchComponent(query: string): Promise<ComponentInfo[]> {
+  return await invoke<ComponentInfo[]>('search_component', { query });
+}
+
+export async function importLibrary(path: string): Promise<string> {
+  return await invoke<string>('import_library', { path });
+}
+
+// Listen for file changes
+export function onFileChanged(callback: (path: string) => void) {
+  return listen<{ path: string }>('file-changed', (event) => {
+    callback(event.payload.path);
+  });
+}
+```
+
+#### Project Structure
 
 ```
-Board Change Event
-      |
-      v
-+------------------+     +------------------+
-| DRC Scheduler    |---->| Board Partitioner|
-| (debounced)      |     | (spatial grid)   |
-+------------------+     +--------+---------+
-                                  |
-         +------------------------+------------------------+
-         |                        |                        |
-         v                        v                        v
-+------------------+     +------------------+     +------------------+
-| Worker Thread 1  |     | Worker Thread 2  |     | Worker Thread N  |
-| (Region A)       |     | (Region B)       |     | (Region N)       |
-|                  |     |                  |     |                  |
-| - Spacing checks |     | - Spacing checks |     | - Spacing checks |
-| - Width checks   |     | - Width checks   |     | - Width checks   |
-+--------+---------+     +--------+---------+     +--------+---------+
-         |                        |                        |
-         +------------------------+------------------------+
-                                  |
-                                  v
-                         +------------------+
-                         | Violation        |
-                         | Collector        |
-                         | (merge + dedup)  |
-                         +--------+---------+
-                                  |
-                                  v
-                         +------------------+
-                         | UI Update        |
-                         | (markers, list)  |
-                         +------------------+
+src-tauri/
+├── Cargo.toml
+├── tauri.conf.json         # Tauri configuration
+├── icons/                  # App icons
+├── src/
+│   ├── main.rs            # App initialization
+│   ├── commands.rs        # Tauri command handlers
+│   ├── watcher.rs         # File watching
+│   └── state.rs           # Application state
+└── capabilities/          # ACL permissions
+    └── default.json
 ```
 
-### 4. LSP Flow (IDE Integration)
+**Tauri Configuration:**
 
-```
-                         +------------------+
-                         | External IDE     |
-                         | (VSCode, etc.)   |
-                         +--------+---------+
-                                  |
-                         LSP Protocol (JSON-RPC)
-                                  |
-                                  v
-+------------------+     +------------------+
-| tower-lsp        |<--->| Document State   |
-| Server           |     | Manager          |
-+--------+---------+     +------------------+
-         |
-         |  textDocument/didChange
-         v
-+------------------+     +------------------+
-| Incremental      |---->| Semantic         |
-| Parse            |     | Analysis         |
-+------------------+     +--------+---------+
-                                  |
-         +------------------------+------------------------+
-         |                        |                        |
-         v                        v                        v
-+------------------+     +------------------+     +------------------+
-| Diagnostics      |     | Completion       |     | Hover Info       |
-| (errors/warnings)|     | Items            |     |                  |
-+------------------+     +------------------+     +------------------+
-         |                        |                        |
-         +------------------------+------------------------+
-                                  |
-                                  v
-                         +------------------+
-                         | LSP Response     |
-                         | (to IDE)         |
-                         +------------------+
+```json
+// src-tauri/tauri.conf.json
+{
+  "$schema": "https://schema.tauri.app/config/2.0.0",
+  "productName": "CodeYourPCB",
+  "version": "1.1.0",
+  "identifier": "com.codeyourpcb.app",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build",
+    "devUrl": "http://localhost:5173",
+    "frontendDist": "../viewer/dist"
+  },
+  "app": {
+    "security": {
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval';"
+    }
+  }
+}
 ```
 
-### 5. Plugin Execution Flow
+**Integration with Existing Dev Server:**
+
+The existing `viewer/server.ts` WebSocket server continues to work in dev mode. Tauri's webview connects to `localhost:5173` (Vite) which connects to `localhost:4322` (WebSocket server).
+
+In production, Tauri serves static files from `viewer/dist` directly, no WebSocket server needed.
+
+---
+
+### 3. Web Deployment
+
+**Problem:** Enable browser-only usage without desktop app installation.
+
+**Architecture Decision:** Static site deployment via Vite build, no backend required.
+
+#### Deployment Architecture
 
 ```
-Plugin Request (from UI or API)
-      |
-      v
-+------------------+     +------------------+
-| Plugin Host      |---->| Capability       |
-| (wasmtime)       |     | Check            |
-+------------------+     +--------+---------+
-                                  |
-                         Allowed? |
-                    +-------------+-------------+
-                    | YES                       | NO
-                    v                           v
-           +------------------+         +------------------+
-           | WASM Sandbox     |         | Permission       |
-           | Execution        |         | Denied Error     |
-           +--------+---------+         +------------------+
-                    |
-                    v
-           +------------------+
-           | Host Function    |
-           | Calls (via WIT)  |
-           +--------+---------+
-                    |
-         +----------+----------+
-         |                     |
-         v                     v
-+------------------+   +------------------+
-| Query Board      |   | Modify Board     |
-| (read-only)      |   | (via commands)   |
-+------------------+   +------------------+
-                    |
-                    v
-           +------------------+
-           | Plugin Response  |
-           | (to host)        |
-           +------------------+
+┌─────────────────────────────────────────────────────────────┐
+│                     CDN / Static Host                       │
+│                  (Cloudflare Pages, Vercel)                 │
+│                                                             │
+│  ┌────────────────────────────────────────────────────┐    │
+│  │                  index.html                        │    │
+│  │  <script type="module" src="/assets/main-xyz.js">  │    │
+│  └────────────────────────────────────────────────────┘    │
+│                         │                                   │
+│                         ▼                                   │
+│  ┌────────────────────────────────────────────────────┐    │
+│  │         Static Assets (Vite build output)          │    │
+│  │  /assets/                                          │    │
+│  │    main-xyz.js          (app bundle)               │    │
+│  │    cypcb-render-abc.wasm (WASM core)               │    │
+│  │    monaco-editor/        (Monaco assets)           │    │
+│  │    styles-xyz.css                                  │    │
+│  └────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────┘
+                         │
+                         │ HTTPS
+                         ▼
+              ┌──────────────────────┐
+              │    User Browser      │
+              │                      │
+              │  ┌────────────────┐  │
+              │  │ WASM Runtime   │  │
+              │  └────────────────┘  │
+              │  ┌────────────────┐  │
+              │  │ File API       │  │
+              │  │ (local files)  │  │
+              │  └────────────────┘  │
+              │  ┌────────────────┐  │
+              │  │ IndexedDB      │  │
+              │  │ (persistence)  │  │
+              │  └────────────────┘  │
+              └──────────────────────┘
+```
+
+#### Web-Specific Limitations
+
+| Feature | Desktop (Tauri) | Web (Static) |
+|---------|-----------------|--------------|
+| **File Access** | Full native file system via Tauri commands | Browser File API only (user must pick files) |
+| **Library Storage** | `~/.codeyourpcb/libs/` directory | IndexedDB (browser storage) |
+| **File Watching** | Native file watcher (notify crate) | Not available (manual reload only) |
+| **Monaco Editor** | Embedded in app | Future feature (v1.2+) |
+| **LSP Server** | Can spawn cypcb-lsp process | External tower-lsp server via WebSocket |
+| **Auto-routing** | Spawn FreeRouting.jar locally | Not available (requires backend) |
+
+#### Build Configuration
+
+```typescript
+// vite.config.ts
+
+import { defineConfig } from 'vite';
+
+export default defineConfig({
+  base: './',  // Relative paths for static deployment
+  build: {
+    target: 'esnext',
+    outDir: 'dist',
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'monaco': ['monaco-editor'],  // Separate Monaco bundle
+        },
+      },
+    },
+  },
+  optimizeDeps: {
+    exclude: ['cypcb-render'],  // Don't pre-bundle WASM
+  },
+  worker: {
+    format: 'es',
+  },
+});
+```
+
+#### Web-Specific File Picker
+
+```typescript
+// src/file-picker.ts
+
+export async function openFileWeb(): Promise<{ name: string; content: string }> {
+  // Browser File API
+  const [fileHandle] = await window.showOpenFilePicker({
+    types: [{
+      description: 'CodeYourPCB Files',
+      accept: { 'text/plain': ['.cypcb'] },
+    }],
+  });
+
+  const file = await fileHandle.getFile();
+  const content = await file.text();
+
+  return {
+    name: file.name,
+    content,
+  };
+}
+
+export async function saveFileWeb(content: string, suggestedName: string): Promise<void> {
+  const handle = await window.showSaveFilePicker({
+    suggestedName,
+    types: [{
+      description: 'CodeYourPCB Files',
+      accept: { 'text/plain': ['.cypcb'] },
+    }],
+  });
+
+  const writable = await handle.createWritable();
+  await writable.write(content);
+  await writable.close();
+}
+```
+
+#### Deployment Options
+
+**Recommended: Cloudflare Pages**
+
+```yaml
+# .github/workflows/deploy.yml
+name: Deploy to Cloudflare Pages
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+      - name: Install dependencies
+        run: npm install
+        working-directory: viewer
+      - name: Build WASM
+        run: ./build-wasm.sh
+        working-directory: viewer
+      - name: Build frontend
+        run: npm run build
+        working-directory: viewer
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy viewer/dist --project-name=codeyourpcb
+```
+
+**Alternative: Vercel**
+
+```json
+// vercel.json
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": "viewer/dist",
+  "framework": "vite"
+}
+```
+
+**Alternative: GitHub Pages**
+
+```yaml
+# .github/workflows/gh-pages.yml
+- name: Deploy to GitHub Pages
+  uses: peaceiris/actions-gh-pages@v4
+  with:
+    github_token: ${{ secrets.GITHUB_TOKEN }}
+    publish_dir: ./viewer/dist
+```
+
+#### Environment Detection
+
+```typescript
+// src/environment.ts
+
+export const IS_TAURI = '__TAURI__' in window;
+export const IS_WEB = !IS_TAURI;
+export const IS_DEV = import.meta.env.DEV;
+
+export async function openFile(): Promise<ProjectData> {
+  if (IS_TAURI) {
+    // Use Tauri command
+    return await invoke<ProjectData>('open_file');
+  } else {
+    // Use browser File API
+    return await openFileWeb();
+  }
+}
+```
+
+---
+
+### 4. Monaco Editor Integration
+
+**Problem:** Provide in-app code editing with syntax highlighting and LSP features.
+
+**Architecture Decision:** Embed Monaco in desktop app, connect to existing tower-lsp server.
+
+#### Monaco Integration Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                  Monaco Editor (Frontend)                   │
+│                                                             │
+│  ┌────────────────────────────────────────────────────┐    │
+│  │         Monaco Editor Instance                     │    │
+│  │  ┌──────────────────────────────────────────────┐  │    │
+│  │  │  Text Model (.cypcb file content)            │  │    │
+│  │  └──────────────────────────────────────────────┘  │    │
+│  │  ┌──────────────────────────────────────────────┐  │    │
+│  │  │  Language Configuration (cypcb)              │  │    │
+│  │  │  - Syntax highlighting (TextMate grammar)    │  │    │
+│  │  │  - Bracket matching                          │  │    │
+│  │  │  - Comment patterns                          │  │    │
+│  │  └──────────────────────────────────────────────┘  │    │
+│  └────────────────────────────────────────────────────┘    │
+│                         │                                   │
+│                         │ LSP Protocol                      │
+│                         ▼                                   │
+│  ┌────────────────────────────────────────────────────┐    │
+│  │      monaco-languageclient (LSP adapter)           │    │
+│  └────────────────────────────────────────────────────┘    │
+│                         │                                   │
+│                         │ JSON-RPC over WebSocket/Worker    │
+│                         ▼                                   │
+└─────────────────────────┼───────────────────────────────────┘
+                          │
+         ┌────────────────┼────────────────┐
+         │                │                │
+         │ (Desktop)      │           (Web - future)
+         ▼                ▼                ▼
+┌──────────────────┐  ┌──────────────┐  ┌─────────────────┐
+│  Tauri Command   │  │ Web Worker   │  │ External Server │
+│  (spawn LSP)     │  │ (WASM LSP)   │  │  (WebSocket)    │
+│                  │  │              │  │                 │
+│  ┌────────────┐  │  │ ┌──────────┐ │  │ ┌─────────────┐ │
+│  │ cypcb-lsp  │  │  │ │cypcb-lsp │ │  │ │  cypcb-lsp  │ │
+│  │ (process)  │  │  │ │ (WASM)   │ │  │ │  (Node.js)  │ │
+│  └────────────┘  │  │ └──────────┘ │  │ └─────────────┘ │
+└──────────────────┘  └──────────────┘  └─────────────────┘
+         │                │                    │
+         └────────────────┴────────────────────┘
+                          │
+                          ▼
+                 ┌────────────────────┐
+                 │   LSP Server       │
+                 │   (tower-lsp)      │
+                 │                    │
+                 │  - Completions     │
+                 │  - Diagnostics     │
+                 │  - Hover info      │
+                 │  - Go to def       │
+                 └────────────────────┘
+```
+
+#### Monaco Setup
+
+```typescript
+// src/editor/monaco-setup.ts
+
+import * as monaco from 'monaco-editor';
+import { buildWorkerDefinition } from 'monaco-editor-workers';
+
+// Load Monaco workers
+buildWorkerDefinition(
+  '../node_modules/monaco-editor-workers/dist/workers',
+  import.meta.url,
+  false
+);
+
+// Register CodeYourPCB language
+monaco.languages.register({
+  id: 'cypcb',
+  extensions: ['.cypcb'],
+  aliases: ['CodeYourPCB', 'cypcb'],
+});
+
+// Basic syntax highlighting (TextMate grammar)
+monaco.languages.setMonarchTokensProvider('cypcb', {
+  keywords: [
+    'board', 'component', 'net', 'trace', 'via', 'zone',
+    'footprint', 'layer', 'stackup', 'rules',
+  ],
+
+  tokenizer: {
+    root: [
+      [/\b(board|component|net|trace|via)\b/, 'keyword'],
+      [/@[a-zA-Z_]\w*/, 'annotation'],
+      [/".*?"/, 'string'],
+      [/\d+(\.\d+)?(mm|mil|in)/, 'number.unit'],
+      [/\/\/.*$/, 'comment'],
+    ],
+  },
+});
+
+// Language configuration
+monaco.languages.setLanguageConfiguration('cypcb', {
+  comments: {
+    lineComment: '//',
+    blockComment: ['/*', '*/'],
+  },
+  brackets: [
+    ['{', '}'],
+    ['[', ']'],
+    ['(', ')'],
+  ],
+  autoClosingPairs: [
+    { open: '{', close: '}' },
+    { open: '[', close: ']' },
+    { open: '(', close: ')' },
+    { open: '"', close: '"' },
+  ],
+});
+```
+
+#### LSP Client Integration
+
+```typescript
+// src/editor/lsp-client.ts
+
+import {
+  MonacoLanguageClient,
+  CloseAction,
+  ErrorAction,
+  MessageTransports
+} from 'monaco-languageclient';
+import { toSocket, WebSocketMessageReader, WebSocketMessageWriter } from 'vscode-ws-jsonrpc';
+
+export async function createLspClient(): Promise<MonacoLanguageClient> {
+  // In Tauri: Connect to locally spawned LSP server
+  const wsUrl = IS_TAURI
+    ? 'ws://localhost:9257'  // Port from Tauri-spawned cypcb-lsp
+    : 'ws://localhost:9257'; // External LSP server
+
+  const webSocket = new WebSocket(wsUrl);
+
+  await new Promise((resolve, reject) => {
+    webSocket.onopen = resolve;
+    webSocket.onerror = reject;
+  });
+
+  const socket = toSocket(webSocket);
+  const reader = new WebSocketMessageReader(socket);
+  const writer = new WebSocketMessageWriter(socket);
+
+  const client = new MonacoLanguageClient({
+    name: 'CodeYourPCB Language Client',
+    clientOptions: {
+      documentSelector: [{ language: 'cypcb' }],
+      errorHandler: {
+        error: () => ({ action: ErrorAction.Continue }),
+        closed: () => ({ action: CloseAction.Restart }),
+      },
+    },
+    connectionProvider: {
+      get: () => Promise.resolve({ reader, writer }),
+    },
+  });
+
+  await client.start();
+  return client;
+}
+```
+
+#### Tauri LSP Server Management
+
+```rust
+// src-tauri/src/lsp.rs
+
+use std::process::{Command, Child};
+use tauri::State;
+
+pub struct LspServerHandle {
+    process: Mutex<Option<Child>>,
+}
+
+/// Spawn cypcb-lsp server on localhost:9257
+#[tauri::command]
+pub fn start_lsp_server(state: State<'_, LspServerHandle>) -> Result<(), String> {
+    let mut process = state.process.lock().unwrap();
+
+    if process.is_some() {
+        return Ok(()); // Already running
+    }
+
+    // Spawn LSP server binary (bundled with app)
+    let child = Command::new("cypcb-lsp")
+        .args(["--port", "9257"])
+        .spawn()
+        .map_err(|e| e.to_string())?;
+
+    *process = Some(child);
+    Ok(())
+}
+
+/// Stop LSP server on app exit
+#[tauri::command]
+pub fn stop_lsp_server(state: State<'_, LspServerHandle>) -> Result<(), String> {
+    let mut process = state.process.lock().unwrap();
+
+    if let Some(mut child) = process.take() {
+        child.kill().map_err(|e| e.to_string())?;
+    }
+
+    Ok(())
+}
+```
+
+#### Monaco Editor Component
+
+```typescript
+// src/components/Editor.tsx
+
+import { useEffect, useRef } from 'react';
+import * as monaco from 'monaco-editor';
+import { createLspClient } from '../editor/lsp-client';
+
+export function Editor({ value, onChange }: EditorProps) {
+  const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+
+    // Create editor instance
+    const editor = monaco.editor.create(containerRef.current, {
+      value,
+      language: 'cypcb',
+      theme: 'vs-dark',
+      minimap: { enabled: false },
+      fontSize: 14,
+      lineNumbers: 'on',
+      scrollBeyondLastLine: false,
+    });
+
+    editorRef.current = editor;
+
+    // Connect to LSP server
+    if (IS_TAURI) {
+      // Start LSP server via Tauri command
+      invoke('start_lsp_server').then(() => {
+        createLspClient().catch(console.error);
+      });
+    }
+
+    // Listen for content changes
+    editor.onDidChangeModelContent(() => {
+      onChange(editor.getValue());
+    });
+
+    return () => {
+      editor.dispose();
+      if (IS_TAURI) {
+        invoke('stop_lsp_server');
+      }
+    };
+  }, []);
+
+  // Update editor when value changes externally
+  useEffect(() => {
+    if (editorRef.current && editorRef.current.getValue() !== value) {
+      editorRef.current.setValue(value);
+    }
+  }, [value]);
+
+  return <div ref={containerRef} style={{ height: '100%', width: '100%' }} />;
+}
+```
+
+#### Web Worker LSP (Future)
+
+For web deployment without external server, compile tower-lsp to WASM and run in Web Worker:
+
+```typescript
+// src/editor/lsp-worker.ts (future)
+
+import { expose } from 'comlink';
+import init, { LspServer } from 'cypcb-lsp-wasm';
+
+let server: LspServer;
+
+const api = {
+  async initialize() {
+    await init();
+    server = new LspServer();
+  },
+
+  async handleRequest(method: string, params: any): Promise<any> {
+    return server.handle_request(method, JSON.stringify(params));
+  },
+};
+
+expose(api);
+```
+
+**Challenge:** tower-lsp uses Tokio, which doesn't compile to WASM. Workaround: Use wasm-bindgen-futures + custom async runtime or switch to pure async-std for WASM build.
+
+---
+
+## Data Flow: Complete Integration
+
+### Scenario 1: Desktop - Open Project with Monaco
+
+```
+1. User clicks "Open" button
+   │
+   ▼
+2. Tauri command: open_file()
+   ├─> Native file dialog
+   ├─> Read .cypcb file
+   ├─> Start file watcher
+   └─> Return { path, content }
+   │
+   ▼
+3. Frontend receives ProjectData
+   ├─> Load content into Monaco editor
+   ├─> Pass content to WASM engine
+   │   ├─> cypcb-render::load_source(content)
+   │   ├─> Parse with cypcb-parser
+   │   ├─> Resolve components via LibraryManager
+   │   ├─> Build ECS world
+   │   └─> Run DRC
+   └─> Render canvas
+   │
+   ▼
+4. Monaco connects to LSP server
+   ├─> Tauri spawns cypcb-lsp process
+   ├─> WebSocket connection on localhost:9257
+   ├─> LSP client sends initialize request
+   └─> Diagnostics/completions enabled
+   │
+   ▼
+5. User edits in Monaco
+   ├─> onChange event
+   ├─> Pass updated content to WASM engine
+   ├─> Incremental re-parse
+   ├─> Update ECS world
+   ├─> Re-run DRC
+   └─> Re-render canvas
+   │
+   ▼
+6. User adds component: component R1 resistor("0805")
+   ├─> LSP provides completion for "resistor"
+   ├─> Parser resolves via LibraryManager
+   │   └─> Tauri reads ~/.codeyourpcb/libs/built-in.pretty/
+   └─> Component appears on canvas
+```
+
+### Scenario 2: Web - Load File from Browser
+
+```
+1. User clicks "Open" button
+   │
+   ▼
+2. Browser File Picker API
+   ├─> window.showOpenFilePicker()
+   └─> Return File object
+   │
+   ▼
+3. Read file content
+   ├─> file.text()
+   └─> Load into WASM engine
+       ├─> cypcb-render::load_source(content)
+       └─> Render canvas
+   │
+   ▼
+4. NO Monaco editor (v1.1)
+   ├─> User must edit in external editor
+   └─> Manual reload button to refresh
+   │
+   ▼
+5. External LSP server (optional)
+   ├─> User runs: cypcb-lsp --port 9257
+   ├─> VS Code connects via extension
+   └─> Browser connects via WebSocket
+```
+
+### Scenario 3: Development - Hot Reload
+
+```
+1. User edits .cypcb file in external editor
+   │
+   ▼
+2. File system event
+   ├─> Chokidar detects change (viewer/server.ts)
+   └─> Read updated file content
+   │
+   ▼
+3. WebSocket broadcast
+   ├─> Send { type: 'reload', content, file }
+   └─> Both desktop and web clients receive
+   │
+   ▼
+4. Frontend processes reload
+   ├─> Monaco updates content (if open in desktop)
+   ├─> Pass to WASM engine
+   ├─> Preserve viewport/selection
+   └─> Re-render
+```
+
+---
+
+## Build Order & Dependencies
+
+### Phase Structure Recommendation
+
+```
+Level 0: Library Management Foundation
+  └─> Create cypcb-library crate
+      ├─> Define Component/Footprint types
+      ├─> Implement KiCad parser (reuse cypcb-kicad)
+      └─> FileSystemStorage backend
+
+Level 1: Tauri Shell
+  └─> Create src-tauri/ project
+      ├─> Basic window setup
+      ├─> File open/save commands
+      ├─> Integrate LibraryManager
+      └─> File watcher
+
+Level 2: Monaco Integration
+  └─> Add Monaco to frontend
+      ├─> Language registration
+      ├─> LSP client setup
+      ├─> Tauri LSP spawning
+      └─> Editor component
+
+Level 3: Web Deployment
+  └─> Static build configuration
+      ├─> Vite config for CDN
+      ├─> Environment detection
+      ├─> Browser File API fallbacks
+      └─> Deployment workflows
+```
+
+### Crate Dependency Graph (Updated)
+
+```
+Level 0 (No internal deps):
+  cypcb-core          # Shared types
+
+Level 1 (Depends on core):
+  cypcb-parser        # DSL parsing
+  cypcb-world         # ECS world
+  cypcb-kicad         # KiCad format parsing
+
+Level 2 (Depends on parser/world):
+  cypcb-library       # NEW: Library management (uses cypcb-kicad)
+  cypcb-drc           # DRC engine
+  cypcb-export        # Export formats
+
+Level 3 (Depends on library):
+  cypcb-render        # WASM bindings (uses library for component resolution)
+  cypcb-lsp           # LSP server (uses library for completions)
+
+Level 4 (Application):
+  src-tauri           # NEW: Desktop app (uses library, spawns LSP)
+  viewer/             # Frontend (uses render WASM)
 ```
 
 ---
 
 ## Architectural Patterns
 
-### Pattern 1: ECS for Board Model
+### Pattern 1: Environment-Specific Facades
 
-**What:** Use Entity-Component-System architecture for the board data model instead of traditional OOP hierarchies.
+**What:** Abstract platform differences behind common interfaces.
 
-**Why:**
-- Natural fit for spatial queries (entities with Position component)
-- Efficient parallel iteration for DRC
-- Easy to add new "aspects" to entities without modifying existing code
-- Memory-efficient for large boards (SoA layout)
+**Why:** Same frontend code works in desktop and web modes.
 
 **Example:**
-```rust
-// Creating a resistor
-let resistor = world.spawn((
-    RefDes("R1".into()),
-    Value("10k".into()),
-    Position { x: 25.4, y: 12.7 },
-    Rotation { angle: 0.0 },
-    Footprint::from_lib("0805"),
-    NetConnections(vec![
-        (PinNumber("1".into()), NetId(1)),
-        (PinNumber("2".into()), NetId(2)),
-    ]),
-));
 
-// Query all components on a specific net
-for (entity, pos, refdes) in world.query::<(Entity, &Position, &RefDes)>()
-    .filter(|e| world.get::<NetConnections>(e).contains_net(net_id))
-{
-    // Process components on net
+```typescript
+// src/platform/file-system.ts
+
+export interface FileSystem {
+  openFile(): Promise<ProjectData>;
+  saveFile(content: string): Promise<void>;
+  watchFile(path: string, callback: () => void): void;
 }
+
+class TauriFileSystem implements FileSystem {
+  async openFile(): Promise<ProjectData> {
+    return await invoke('open_file');
+  }
+  // ... Tauri implementations
+}
+
+class BrowserFileSystem implements FileSystem {
+  async openFile(): Promise<ProjectData> {
+    return await openFileWeb();
+  }
+  // ... Browser API implementations
+}
+
+export const fs: FileSystem = IS_TAURI
+  ? new TauriFileSystem()
+  : new BrowserFileSystem();
 ```
 
-### Pattern 2: Command Pattern for Undo/Redo
+### Pattern 2: Progressive Enhancement
 
-**What:** Encapsulate all state modifications as reversible command objects.
+**What:** Core functionality works everywhere, advanced features in capable environments.
 
-**Why:**
-- Full undo/redo support
-- Transaction batching (multiple operations as single undo step)
-- Enables optimistic UI updates
-- Audit trail of all changes
+**Why:** Web deployment doesn't block desktop-only features.
 
 **Example:**
-```rust
-trait Command: Send + Sync {
-    fn execute(&self, world: &mut World) -> Result<(), CommandError>;
-    fn undo(&self, world: &mut World) -> Result<(), CommandError>;
-    fn description(&self) -> &str;
-}
 
-struct MoveComponentCommand {
-    entity: Entity,
-    old_position: Position,
-    new_position: Position,
-}
+```typescript
+// Feature detection
+const features = {
+  monacoEditor: IS_TAURI,
+  fileWatcher: IS_TAURI,
+  nativeDialogs: IS_TAURI,
+  libraryImport: IS_TAURI,
+  autoRouting: IS_TAURI,
+};
 
-impl Command for MoveComponentCommand {
-    fn execute(&self, world: &mut World) -> Result<(), CommandError> {
-        world.get_mut::<Position>(self.entity)?.clone_from(&self.new_position);
-        Ok(())
-    }
-
-    fn undo(&self, world: &mut World) -> Result<(), CommandError> {
-        world.get_mut::<Position>(self.entity)?.clone_from(&self.old_position);
-        Ok(())
-    }
-
-    fn description(&self) -> &str {
-        "Move component"
-    }
-}
+// Conditional UI
+{features.monacoEditor ? (
+  <MonacoEditor />
+) : (
+  <ExternalEditorPrompt />
+)}
 ```
 
-### Pattern 3: Incremental Parsing with Tree-sitter
+### Pattern 3: Shared WASM Core
 
-**What:** Use tree-sitter's incremental parsing to efficiently re-parse only changed portions.
+**What:** Same WASM module for desktop and web.
 
-**Why:**
-- Sub-millisecond re-parse times on edit
-- Enables real-time syntax highlighting and error checking
-- Concrete syntax tree preserves all source information
+**Why:** Single source of truth, consistent behavior.
 
 **Example:**
+
 ```rust
-struct DocumentState {
-    source: String,
-    tree: Tree,
-    parser: Parser,
+// crates/cypcb-render/src/lib.rs
+
+#[wasm_bindgen]
+pub struct PcbEngine {
+    world: World,
+    library: LibraryManager,
 }
 
-impl DocumentState {
-    fn apply_edit(&mut self, edit: &TextEdit) {
-        // Apply text edit to source
-        self.source.replace_range(edit.range(), &edit.new_text);
+#[wasm_bindgen]
+impl PcbEngine {
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> Self {
+        let library = if cfg!(target_arch = "wasm32") {
+            LibraryManager::new(Box::new(BrowserStorage::new()))
+        } else {
+            LibraryManager::new(Box::new(FileSystemStorage::new()))
+        };
 
-        // Tell tree-sitter about the edit
-        self.tree.edit(&InputEdit {
-            start_byte: edit.start_byte,
-            old_end_byte: edit.old_end_byte,
-            new_end_byte: edit.new_end_byte,
-            start_position: edit.start_position,
-            old_end_position: edit.old_end_position,
-            new_end_position: edit.new_end_position,
-        });
-
-        // Incremental re-parse (only changed regions)
-        self.tree = self.parser.parse(&self.source, Some(&self.tree)).unwrap();
-    }
-}
-```
-
-### Pattern 4: Capability-based Plugin Sandbox
-
-**What:** Use WASM with explicit capability grants for plugin isolation.
-
-**Why:**
-- Plugins cannot access anything not explicitly granted
-- Prevents malicious/buggy plugins from damaging system
-- Fine-grained permission control
-- Cross-platform (plugins work on any OS)
-
-**Example:**
-```rust
-// Plugin capabilities
-enum PluginCapability {
-    ReadBoard,              // Can query board state
-    ModifyBoard,            // Can make changes (via commands)
-    RegisterDrcRule,        // Can add custom DRC rules
-    FileSystemRead(PathBuf), // Can read specific paths
-    NetworkAccess(String),  // Can access specific hosts
-}
-
-struct PluginSandbox {
-    engine: wasmtime::Engine,
-    capabilities: HashSet<PluginCapability>,
-}
-
-impl PluginSandbox {
-    fn call_host_function(&self, func: &str, args: &[WasmValue]) -> Result<WasmValue> {
-        // Check capability before allowing host function call
-        let required_cap = self.required_capability(func);
-        if !self.capabilities.contains(&required_cap) {
-            return Err(PluginError::PermissionDenied(func.to_string()));
+        Self {
+            world: World::new(),
+            library,
         }
-        // Execute host function...
     }
 }
 ```
 
-### Pattern 5: Spatial Indexing with R*-tree
+### Pattern 4: LSP as External Service
 
-**What:** Use R*-tree for all spatial queries (collision detection, region queries, hit testing).
+**What:** LSP server is separate process/service, not embedded.
 
-**Why:**
-- O(log n) queries instead of O(n)
-- Critical for DRC performance
-- Enables efficient hit testing for selection
-- Bulk loading for initial board load
+**Why:** Supports both desktop (spawned) and web (remote) scenarios.
 
 **Example:**
-```rust
-use rstar::{RTree, AABB, PointDistance};
 
-struct BoardSpatialIndex {
-    // Separate trees per layer for efficiency
-    per_layer: HashMap<LayerId, RTree<SpatialEntry>>,
-    // Combined tree for cross-layer queries
-    all_layers: RTree<SpatialEntry>,
-}
+Desktop: Tauri spawns `cypcb-lsp` subprocess on localhost.
+Web: User runs `cypcb-lsp --remote` or uses cloud-hosted instance.
 
-impl BoardSpatialIndex {
-    fn query_clearance_violations(&self, layer: LayerId, clearance: f64) -> Vec<(Entity, Entity)> {
-        let mut violations = Vec::new();
-        let tree = &self.per_layer[&layer];
-
-        for entry in tree.iter() {
-            let expanded = entry.envelope.expanded(clearance);
-            for nearby in tree.locate_in_envelope_intersecting(&expanded) {
-                if entry.entity != nearby.entity {
-                    let dist = entry.envelope.distance_2(&nearby.envelope);
-                    if dist < clearance {
-                        violations.push((entry.entity, nearby.entity));
-                    }
-                }
-            }
-        }
-        violations
-    }
-}
-```
+Both connect via WebSocket using same protocol.
 
 ---
 
 ## Anti-Patterns to Avoid
 
-### Anti-Pattern 1: Bidirectional Source-Model Sync
+### Anti-Pattern 1: Tauri-Specific Frontend Code
 
-**What:** Trying to sync changes from both DSL source AND graphical editing back to a single source of truth.
+**What:** Using Tauri APIs directly in UI components.
 
-**Why bad:**
-- Extremely complex to implement correctly
-- Round-trip conversions lose formatting/comments
-- Merge conflicts become intractable
-- Code drift from visual edits
+**Why bad:** Breaks web deployment, hard to test.
 
-**Instead:** Source file is ALWAYS the source of truth. Graphical edits generate DSL code that gets inserted/modified in the source, then re-parsed.
+**Instead:** Use facade pattern with environment detection.
 
-### Anti-Pattern 2: Monolithic State Object
+### Anti-Pattern 2: Duplicating WASM Logic in Tauri
 
-**What:** Single massive struct holding all board state.
+**What:** Implementing parser/DRC in Rust backend AND WASM.
 
-**Why bad:**
-- Cannot parallelize access
-- All updates touch same memory
-- Hard to serialize incrementally
-- Difficult to add new features
+**Why bad:** Code duplication, behavior divergence.
 
-**Instead:** Use ECS with components. State is distributed across many small, focused components that can be accessed independently.
+**Instead:** Use WASM core everywhere, Tauri only for I/O.
 
-### Anti-Pattern 3: Direct DOM/GPU Updates on Every Change
+### Anti-Pattern 3: Blocking LSP Integration on Monaco
 
-**What:** Immediately updating rendering on every state change.
+**What:** Waiting for Monaco to add LSP before shipping desktop.
 
-**Why bad:**
-- Thrashing during rapid edits (typing)
-- Wasted work for intermediate states
-- Poor perceived performance
+**Why bad:** External editor + LSP already works (v1.0).
 
-**Instead:** Batch updates with frame-aligned rendering. Debounce state changes, then render at vsync.
+**Instead:** Monaco is enhancement, not requirement.
 
-### Anti-Pattern 4: Synchronous DRC
+### Anti-Pattern 4: Requiring Backend for Web Deployment
 
-**What:** Running DRC synchronously on the main thread.
+**What:** Adding server-side rendering or API endpoints.
 
-**Why bad:**
-- Blocks UI during checks
-- Cannot leverage multi-core
-- Poor UX for large boards
+**Why bad:** Breaks static deployment, adds complexity.
 
-**Instead:** Run DRC in background workers. Report results incrementally. Allow cancellation on new edits.
-
-### Anti-Pattern 5: Tight Coupling Between Parser and ECS
-
-**What:** Parser directly creates ECS entities.
-
-**Why bad:**
-- Cannot reuse parser for LSP (which needs AST, not ECS)
-- Hard to test parser in isolation
-- Cannot do incremental ECS updates
-
-**Instead:** Parser produces typed AST. Separate "sync" layer converts AST to ECS operations. This allows AST diffing for incremental updates.
-
----
-
-## Build Order (Dependency Graph)
-
-The crates should be built in this order based on dependencies:
-
-```
-Level 0 (No internal deps):
-  cypcb-core          # Shared types, units, geometry
-
-Level 1 (Depends on core):
-  cypcb-parser        # DSL parsing (tree-sitter)
-  cypcb-world         # ECS world
-
-Level 2 (Depends on parser + world):
-  cypcb-drc           # Design rule checking
-  cypcb-render        # 2D rendering
-  cypcb-export        # Export formats
-
-Level 3 (Depends on all above):
-  cypcb-lsp           # LSP server
-  cypcb-plugins       # Plugin system
-  cypcb-wasm          # WASM bindings
-
-Level 4 (Application):
-  src-tauri           # Desktop app
-  src/                # Frontend
-```
-
-**Suggested Implementation Phases:**
-
-1. **Phase 1: Foundation**
-   - `cypcb-core` - Define all shared types
-   - `cypcb-parser` - Basic DSL grammar and parsing
-   - Minimal working parser that can read simple circuits
-
-2. **Phase 2: Domain Model**
-   - `cypcb-world` - ECS world with spatial indexing
-   - AST-to-ECS synchronization
-   - Command pattern infrastructure
-
-3. **Phase 3: Rendering**
-   - `cypcb-render` - Basic 2D canvas
-   - Layer rendering, zoom/pan
-   - Selection and hit testing
-
-4. **Phase 4: Validation**
-   - `cypcb-drc` - DRC engine
-   - Basic rules (spacing, width)
-   - Parallel execution
-
-5. **Phase 5: IDE Integration**
-   - `cypcb-lsp` - LSP server
-   - Hot reload system
-   - Diagnostics
-
-6. **Phase 6: Export & Plugins**
-   - `cypcb-export` - Gerber, KiCad export
-   - `cypcb-plugins` - WASM plugin system
-
-7. **Phase 7: Desktop Application**
-   - Tauri integration
-   - Full UI
-   - 3D preview
-
----
-
-## Scalability Considerations
-
-| Concern | At 100 components | At 10K components | At 100K components |
-|---------|-------------------|-------------------|-------------------|
-| **Parsing** | <10ms | <100ms | <500ms (incremental: <10ms) |
-| **ECS Queries** | Trivial | Fast (use archetypes) | Use parallel queries |
-| **Spatial Index** | Trivial | Fast (R*-tree) | Bulk load, consider grid |
-| **DRC** | <100ms | 1-5s (parallel) | 10-30s (partition + parallel) |
-| **Rendering** | 60fps easy | 60fps with culling | LOD + culling required |
-| **Memory** | <50MB | <200MB | <1GB |
+**Instead:** Pure static site, use edge functions only if needed.
 
 ---
 
 ## Sources
 
-### Architecture References
-- [KiCad Developer Documentation - Components](https://dev-docs.kicad.org/en/components/index.html)
-- [KiCad S-Expression Format](https://dev-docs.kicad.org/en/file-formats/sexpr-intro/)
-- [KiCad Board File Format](https://dev-docs.kicad.org/en/file-formats/sexpr-pcb/index.html)
-- [tscircuit - Code-First PCB Design](https://tscircuit.com/)
-- [JITX - Software-defined Electronics](https://www.jitx.com/)
-- [SKiDL - Python PCB Description](https://devbisme.github.io/skidl/)
+**Tauri Integration:**
+- [Tauri 2.0 Stable Release](https://v2.tauri.app/blog/tauri-20/)
+- [Tauri Inter-Process Communication](https://v2.tauri.app/concept/inter-process-communication/)
+- [Tauri State Management](https://v2.tauri.app/develop/state-management/)
+- [Tauri File System Plugin](https://deepwiki.com/tauri-apps/tauri-plugin-fs/2.1-file-operations-system)
 
-### ECS and Bevy
-- [Bevy ECS Quick Start](https://bevy.org/learn/quick-start/getting-started/ecs/)
-- [bevy_ecs Crate Documentation](https://docs.rs/bevy_ecs/latest/bevy_ecs/)
-- [bevy_ecs GitHub](https://github.com/bevyengine/bevy/blob/main/crates/bevy_ecs/README.md)
+**Monaco Editor:**
+- [Monaco Editor Integration with LSP](https://medium.com/@zsh-eng/integrating-lsp-with-the-monaco-code-editor-b054e9b5421f)
+- [TypeFox monaco-languageclient](https://github.com/TypeFox/monaco-languageclient)
+- [Tower-LSP Web Demo](https://github.com/silvanshade/tower-lsp-web-demo)
 
-### Rendering
-- [wgpu Documentation](https://docs.rs/wgpu/latest/wgpu/)
-- [wgpu_canvas Crate](https://crates.io/crates/wgpu_canvas)
+**Library Management:**
+- [KiCad Footprint Library Format](https://dev-docs.kicad.org/en/file-formats/sexpr-footprint/index.html)
+- [PCB Library Management Architecture](https://resources.altium.com/p/smart-architecture-successful-pcb-component-libraries)
 
-### Spatial Indexing
-- [rstar - R*-tree for Rust](https://github.com/georust/rstar)
-- [rstar Documentation](https://docs.rs/rstar/)
+**Web Deployment:**
+- [Vite Static Site Deployment](https://vite.dev/guide/static-deploy)
+- [WebAssembly Serverless on Edge](https://letket.com/high-performance-web-apps-in-2026-webassembly-webgpu-and-edge-architectures/)
 
-### LSP
-- [tower-lsp GitHub](https://github.com/ebkalderon/tower-lsp)
-- [tower-lsp Documentation](https://docs.rs/tower-lsp)
+---
 
-### Tree-sitter
-- [Tree-sitter GitHub](https://github.com/tree-sitter/tree-sitter)
-
-### Command Pattern
-- [Command Pattern in Rust](https://refactoring.guru/design-patterns/command/rust/example)
-- [Rust Design Patterns - Command](https://rust-unofficial.github.io/patterns/patterns/behavioural/command.html)
-
-### Plugin Systems
-- [Extism Plugin System](https://extism.org/docs/concepts/plug-in-system/)
-- [WASM Component Model Plugins](https://tartanllama.xyz/posts/wasm-plugins/)
-
-### DRC
-- [Design Rule Checking - Synopsys](https://www.synopsys.com/glossary/what-is-design-rule-checking.html)
-- [DRC - Wikipedia](https://en.wikipedia.org/wiki/Design_rule_checking)
+*Architecture research for: v1.1 Foundation & Desktop Integration*
+*Researched: 2026-01-29*
