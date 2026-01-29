@@ -7,6 +7,7 @@ pub mod fs;
 pub mod dialog;
 pub mod storage;
 pub mod menu;
+pub mod platform;
 
 // Conditional compilation for filesystem implementation
 #[cfg_attr(wasm, path = "fs_web.rs")]
@@ -26,3 +27,4 @@ pub use dialog::Dialog;
 pub use storage::Storage;
 pub use storage_impl::*;
 pub use menu::{MenuBar, Menu, MenuItem};
+pub use platform::Platform;
