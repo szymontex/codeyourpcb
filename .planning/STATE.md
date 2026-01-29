@@ -13,16 +13,16 @@
 ## Current Position
 
 **Phase:** Phase 12 (Tauri Desktop Foundation)
-**Plan:** 12-02 complete
-**Status:** In progress - Native menus and file dialogs implemented, needs GTK libraries for compilation
+**Plan:** 12-03 complete
+**Status:** In progress - Desktop integration layer complete, frontend wired to native menus
 
 **Progress:**
 ```
-[==========================                        ] 47%
-v1.1: Phase 9 ✓ → 10 ✓ → 11 ✓ → 12 [▓░] → 13 → 14 → 15
+[===========================                       ] 48%
+v1.1: Phase 9 ✓ → 10 ✓ → 11 ✓ → 12 [▓▓░] → 13 → 14 → 15
 ```
 
-**Requirements Complete:** 34/64 (53%)
+**Requirements Complete:** 36/64 (56%)
 
 **Requirements Coverage:** 64/64 mapped to phases (100%)
 
@@ -256,6 +256,18 @@ v1.1: Phase 9 ✓ → 10 ✓ → 11 ✓ → 12 [▓░] → 13 → 14 → 15
 - Alternative (default size) rejected - requires manual resizing on every launch
 - Established in 12-01
 
+**Custom Events for App-Desktop Communication (Phase 12):**
+- Desktop module dispatches custom events (`desktop:open-file`, `desktop:viewport`) to main app
+- Decouples desktop integration from main app logic
+- Alternative (direct function calls) rejected - would require tight coupling and mode detection
+- Established in 12-03
+
+**Dynamic Imports for Tauri APIs (Phase 12):**
+- Use `await import('@tauri-apps/api/event')` inside initDesktop() to prevent web build failures
+- Tauri APIs only loaded when `isDesktop()` returns true
+- Alternative (static imports with try/catch) rejected - would still fail at build time
+- Established in 12-03
+
 **Vite Watch Ignores src-tauri/ (Phase 12):**
 - Prevents infinite rebuild loop (Rust compilation triggers Vite reload)
 - Added to vite.config.ts server.watch.ignored: ['**/src-tauri/**']
@@ -386,12 +398,13 @@ After all feature phases complete:
 | 2026-01-29 | 11-04 | Monaco editor theme definitions (light/dark) with ThemeManager wiring |
 | 2026-01-29 | 12-01 | Tauri v2 desktop shell scaffolded with maximized window, file association, Vite integration |
 | 2026-01-29 | 12-02 | Native menu bar with File/Edit/View/Help and IPC commands for file open/save |
+| 2026-01-29 | 12-03 | Desktop integration layer with menu event handling and IPC file operations |
 
-**Last session:** 2026-01-29 17:12 UTC
-**Stopped at:** Completed Phase 12 Plan 02 - Native menus and file dialogs ready
+**Last session:** 2026-01-29 18:14 UTC
+**Stopped at:** Completed Phase 12 Plan 03 - Desktop integration wired to frontend
 **Resume file:** None
 
-*Last updated: 2026-01-29 17:12 UTC*
+*Last updated: 2026-01-29 18:14 UTC*
 
 **Storage Strategy (Phase 9):**
 - Native: SQLite via rusqlite for structured key-value storage with table namespacing
