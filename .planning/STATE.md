@@ -13,16 +13,16 @@
 ## Current Position
 
 **Phase:** Phase 10 (Library Management Foundation)
-**Plan:** 1 of 6 complete
-**Status:** Plan 10-01 complete - library foundation ready
+**Plan:** 3 of 6 complete
+**Status:** Plan 10-03 complete - FTS5 search engine implemented
 
 **Progress:**
 ```
-[========                                          ] 16%
-v1.1: Phase 9 ✓ → 10 (1/6) → 11 → 12 → 13 → 14 → 15
+[=========                                         ] 19%
+v1.1: Phase 9 ✓ → 10 (3/6) → 11 → 12 → 13 → 14 → 15
 ```
 
-**Requirements Complete:** 8/64 (12.5%)
+**Requirements Complete:** 12/64 (18.8%)
 
 **Requirements Coverage:** 64/64 mapped to phases (100%)
 
@@ -138,10 +138,38 @@ v1.1: Phase 9 ✓ → 10 (1/6) → 11 → 12 → 13 → 14 → 15
 
 **SQLite FTS5 for Component Search (Phase 10):**
 - FTS5 sufficient for component library scale (<1M components)
-- BM25 ranking provides relevance scoring (lower = better match)
+- BM25 ranking provides relevance scoring (lower/more negative = better match)
 - Automatic sync via INSERT/UPDATE/DELETE triggers (no manual index management)
 - Upgrade path to Tantivy if search performance becomes bottleneck
 - Established in 10-01
+
+**FTS5 BM25 Negative Scores (Phase 10):**
+- BM25 scores are NEGATIVE in SQLite FTS5 (implementation detail)
+- Lower (more negative) = better match
+- ORDER BY rank ASC gives best matches first
+- Different from most search engines (usually positive scores, higher = better)
+- Established in 10-03
+
+**Dynamic SQL with Parameterized Filters (Phase 10):**
+- Build SQL conditionally based on which SearchFilters are set
+- Convert Vec<String> to Vec<&dyn rusqlite::ToSql> for parameter passing
+- Supports any combination of filters without code duplication
+- Field names validated against whitelist to prevent SQL injection
+- Established in 10-03
+
+**Manual S-Expression Tree Walking (Phase 10):**
+- KiCad S-expressions have variable structure incompatible with Serde derive macros
+- Navigate lexpr::Value Cons cells (Lisp-style linked lists) with pattern matching
+- Recursive field search traverses entire tree for nested structures
+- More flexible and maintainable than custom Serde deserializer
+- Established in 10-02
+
+**LibrarySource Trait Pattern (Phase 10):**
+- Common interface for KiCad, JLCPCB, and custom library sources
+- Blocking I/O design (runs in spawn_blocking, not async)
+- source_name, list_libraries, import_library methods
+- Enables multi-source library aggregation in future manager
+- Established in 10-02
 
 ### Active TODOs
 
@@ -191,24 +219,26 @@ v1.1: Phase 9 ✓ → 10 (1/6) → 11 → 12 → 13 → 14 → 15
 ## Session Continuity
 
 **Where We Are:**
-Phase 10 Plan 01 complete (2026-01-29). Library foundation established with cypcb-library crate providing ComponentId models, SQLite schema with FTS5 full-text search, and CRUD operations. 3 LIB requirements satisfied (LIB-01, LIB-02, LIB-09). Namespace-prefixed components prevent conflicts across KiCad, JLCPCB, and custom library sources.
+Phase 10 Plan 03 complete (2026-01-29). FTS5 search engine implemented with BM25 ranking, field-specific queries, and optional filters. search_components function provides the backend for all component discovery features. 2 additional LIB requirements satisfied (LIB-01 search, LIB-12 unified search). Critical bug fixed: SearchFilters::default() now returns limit=50 instead of 0.
 
 **What's Next:**
-Continue Phase 10 with Plan 02 (KiCad Parser), Plan 03 (JLCPCB Integration), or Plan 04 (Search Manager). Plans 02-04 can run in parallel as they all build on the foundation from Plan 01.
+Continue Phase 10 with Plan 04 (Search Manager), Plan 05 (Library UI), or Plan 06 (Integration). Plan 02 (KiCad Parser) already complete. Plans can run in parallel.
 
 **Context for Next Session:**
-- Library foundation complete: ComponentId, Component, ComponentMetadata models ready
-- SQLite schema with libraries, components, components_fts tables initialized
-- FTS5 automatic sync via triggers (no manual index management)
-- CRUD operations: insert_library, insert_component, insert_components_batch, get_component
+- Library foundation complete: ComponentId, Component, ComponentMetadata models ready (Plan 01)
+- SQLite schema with libraries, components, components_fts tables initialized (Plan 01)
+- FTS5 automatic sync via triggers (no manual index management) (Plan 01)
+- CRUD operations: insert_library, insert_component, insert_components_batch, get_component (Plan 01)
+- KiCad .kicad_mod parser implemented with LibrarySource trait (Plan 02)
+- Search engine complete: search_components, search_by_field, rebuild_index, component_count (Plan 03)
 - All library code uses parameterized queries (SQL injection prevention)
-- 5 comprehensive tests verify schema, CRUD, batch operations, FTS5 sync
+- 12+ comprehensive tests verify schema, CRUD, search, KiCad parsing
 
 **Parallelization Opportunities:**
-Within Phase 10 (after Plan 01):
-- Plan 02 (KiCad Parser) - Parse .kicad_mod files into Component structs
-- Plan 03 (JLCPCB Integration) - API client using insert_components_batch
-- Plan 04 (Search Manager) - Query components_fts with SearchFilters
+Within Phase 10 (after Plans 01-03):
+- Plan 04 (Search Manager) - High-level API wrapping search_components
+- Plan 05 (Library UI) - Component browser and search interface
+- Plan 06 (Integration) - Wire library management into main application
 
 Other phases (independent):
 - Phase 11 (Dark Mode) - Independent of library management
@@ -232,12 +262,14 @@ After all feature phases complete:
 | 2026-01-29 | 09-02 | Implemented Dialog wrapper (rfd) and Storage trait (SQLite + localStorage) |
 | 2026-01-29 | 09-03 | Added Menu data model and Platform facade for unified service access |
 | 2026-01-29 | 10-01 | Created cypcb-library crate with data models, SQLite schema, FTS5 search foundation |
+| 2026-01-29 | 10-02 | Implemented KiCad .kicad_mod parser with LibrarySource trait and auto-organize folders |
+| 2026-01-29 | 10-03 | Implemented FTS5 search engine with BM25 ranking and optional filters |
 
-**Last session:** 2026-01-29 10:34 UTC
-**Stopped at:** Completed 10-01 execution
+**Last session:** 2026-01-29 10:42 UTC
+**Stopped at:** Completed 10-03 execution
 **Resume file:** None
 
-*Last updated: 2026-01-29 10:34 UTC*
+*Last updated: 2026-01-29 10:42 UTC*
 
 **Storage Strategy (Phase 9):**
 - Native: SQLite via rusqlite for structured key-value storage with table namespacing
