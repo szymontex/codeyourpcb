@@ -18,18 +18,18 @@ Requirements for v1.1 Foundation & Desktop milestone. Each maps to roadmap phase
 
 ### Library Management
 
-- [ ] **LIB-01**: User can search component libraries by name, MPN, value, category
-- [ ] **LIB-02**: User can organize libraries by manufacturer, function, custom categories
-- [ ] **LIB-03**: User can associate 3D STEP models with components
-- [ ] **LIB-04**: User can import libraries from KiCad (.kicad_mod, .pretty folders)
-- [ ] **LIB-05**: User can import libraries from JLCPCB (API integration)
-- [ ] **LIB-06**: User can create custom component libraries
-- [ ] **LIB-07**: User can track library versions and rollback changes
-- [ ] **LIB-08**: User can preview footprints before adding to board
-- [ ] **LIB-09**: User can view component metadata (datasheet links, specs, lifecycle)
-- [ ] **LIB-10**: User can configure library search paths
-- [ ] **LIB-11**: System auto-organizes dropped library folders ("idiot-proof")
-- [ ] **LIB-12**: User can search across all library sources in unified interface
+- [x] **LIB-01**: User can search component libraries by name, MPN, value, category
+- [x] **LIB-02**: User can organize libraries by manufacturer, function, custom categories
+- [x] **LIB-03**: User can associate 3D STEP models with components
+- [x] **LIB-04**: User can import libraries from KiCad (.kicad_mod, .pretty folders)
+- [x] **LIB-05**: User can import libraries from JLCPCB (API integration)
+- [x] **LIB-06**: User can create custom component libraries
+- [x] **LIB-07**: User can track library versions and rollback changes
+- [x] **LIB-08**: User can preview footprints before adding to board
+- [x] **LIB-09**: User can view component metadata (datasheet links, specs, lifecycle)
+- [x] **LIB-10**: User can configure library search paths
+- [x] **LIB-11**: System auto-organizes dropped library folders ("idiot-proof")
+- [x] **LIB-12**: User can search across all library sources in unified interface
 
 ### Desktop Application
 

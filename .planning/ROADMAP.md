@@ -53,14 +53,15 @@ Plans:
 **Plans:** 6 plans
 
 Plans:
-- [ ] 10-01-PLAN.md — Create cypcb-library crate with models, schema, and error types
-- [ ] 10-02-PLAN.md — KiCad .kicad_mod S-expression parser and .pretty folder importer
-- [ ] 10-03-PLAN.md — FTS5 full-text search engine with BM25 ranking
-- [ ] 10-04-PLAN.md — Custom library source and optional JLCPCB API client
-- [ ] 10-05-PLAN.md — LibraryManager orchestrator with unified search
-- [ ] 10-06-PLAN.md — Metadata, version tracking, footprint preview, and 3D model association
+- [x] 10-01-PLAN.md — Create cypcb-library crate with models, schema, and error types
+- [x] 10-02-PLAN.md — KiCad .kicad_mod S-expression parser and .pretty folder importer
+- [x] 10-03-PLAN.md — FTS5 full-text search engine with BM25 ranking
+- [x] 10-04-PLAN.md — Custom library source and optional JLCPCB API client
+- [x] 10-05-PLAN.md — LibraryManager orchestrator with unified search
+- [x] 10-06-PLAN.md — Metadata, version tracking, footprint preview, and 3D model association
 
-**Status:** Pending
+**Status:** Complete
+**Completed:** 2026-01-29
 
 ## Phase 11: Dark Mode & UI Polish
 
@@ -152,14 +153,14 @@ Plans:
 | Phase | Requirements | Status | Completion |
 |-------|-------------|--------|------------|
 | 9 - Platform Abstraction | 5 | Complete | 100% |
-| 10 - Library Management | 12 | Pending | 0% |
+| 10 - Library Management | 12 | Complete | 100% |
 | 11 - Dark Mode & UI Polish | 9 | Pending | 0% |
 | 12 - Tauri Desktop | 10 | Pending | 0% |
 | 13 - Web Deployment | 9 | Pending | 0% |
 | 14 - Monaco Editor | 10 | Pending | 0% |
 | 15 - Documentation | 9 | Pending | 0% |
 
-**Overall:** 5/64 requirements complete (8%)
+**Overall:** 17/64 requirements complete (27%)
 
 ## Critical Path
 
