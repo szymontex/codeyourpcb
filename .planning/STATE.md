@@ -13,16 +13,16 @@
 ## Current Position
 
 **Phase:** Phase 10 (Library Management Foundation)
-**Plan:** 3 of 6 complete
-**Status:** Plan 10-03 complete - FTS5 search engine implemented
+**Plan:** 4 of 6 complete
+**Status:** Plan 10-04 complete - Custom & JLCPCB sources ready
 
 **Progress:**
 ```
-[=========                                         ] 19%
-v1.1: Phase 9 ✓ → 10 (3/6) → 11 → 12 → 13 → 14 → 15
+[==========                                        ] 20%
+v1.1: Phase 9 ✓ → 10 (4/6) → 11 → 12 → 13 → 14 → 15
 ```
 
-**Requirements Complete:** 12/64 (18.8%)
+**Requirements Complete:** 15/64 (23.4%)
 
 **Requirements Coverage:** 64/64 mapped to phases (100%)
 
@@ -49,13 +49,13 @@ v1.1: Phase 9 ✓ → 10 (3/6) → 11 → 12 → 13 → 14 → 15
 
 **Requirements:**
 - Total v1.1: 64
-- Satisfied: 8
-- In progress: 3
-- Pending: 53
+- Satisfied: 15
+- In progress: 0
+- Pending: 49
 
 **Efficiency:**
-- Plans completed (v1.1): 4
-- Blockers encountered: 1 (pkg-config requirement - resolved with optional feature)
+- Plans completed (v1.1): 7
+- Blockers encountered: 2 (pkg-config resolved, FTS5 corruption fixed)
 - Revisions needed: 0
 
 ## Accumulated Context
@@ -171,6 +171,28 @@ v1.1: Phase 9 ✓ → 10 (3/6) → 11 → 12 → 13 → 14 → 15
 - Enables multi-source library aggregation in future manager
 - Established in 10-02
 
+**FTS5 External Content Tables Don't Support UPDATE (Phase 10):**
+- Using `content=components, content_rowid=rowid` causes SQLITE_CORRUPT_VTAB on UPDATE
+- SQLite FTS5 external content tables track rowids but UPDATE doesn't sync properly
+- Solution: Use standalone FTS5 table with DELETE+INSERT in UPDATE trigger
+- INSERT ... ON CONFLICT ... DO UPDATE doesn't fire UPDATE triggers
+- Must use separate INSERT try/catch UPDATE pattern for trigger compatibility
+- Established in 10-04
+
+**Optional Features for API Integrations (Phase 10):**
+- JLCPCB API requires manual application approval - not all users have access
+- Feature flags allow compiling without optional dependencies
+- rustls-tls preferred over native-tls to avoid system OpenSSL dependency
+- Enables CI builds without pkg-config/libssl-dev requirements
+- Established in 10-04
+
+**Arc<Mutex<Connection>> for Shared Resources (Phase 10):**
+- CustomSource doesn't own SQLite Connection, receives Arc<Mutex<Connection>>
+- Allows sharing single connection across multiple source instances
+- Caller manages connection lifetime and initialization
+- Alternative: each source owns connection, but wasteful for single DB
+- Established in 10-04
+
 ### Active TODOs
 
 - [x] Plan Phase 9: Platform Abstraction Layer (completed)
@@ -186,6 +208,12 @@ v1.1: Phase 9 ✓ → 10 (3/6) → 11 → 12 → 13 → 14 → 15
 - Not available in CI containerized environments
 - **Resolution:** Made rfd optional via `native-dialogs` feature. FileSystem returns NotSupported error without feature. Production builds enable feature when dependencies available.
 - **Impact:** CI can compile and test without system dependencies. Desktop builds need manual dependency installation.
+
+**JLCPCB API Documentation Unknown (Phase 10):**
+- JLCPCB API requires manual application approval, not publicly documented
+- Assumed endpoint: `https://api.jlcpcb.com/components/search` but unverified
+- **Resolution:** Made JLCPCB integration fully optional behind `jlcpcb` feature flag. Users with API access can enable and configure.
+- **Impact:** JLCPCB search will need verification/adjustment once user with API access tests it. Core library functionality works without it.
 
 ### Research Notes
 
@@ -219,25 +247,26 @@ v1.1: Phase 9 ✓ → 10 (3/6) → 11 → 12 → 13 → 14 → 15
 ## Session Continuity
 
 **Where We Are:**
-Phase 10 Plan 03 complete (2026-01-29). FTS5 search engine implemented with BM25 ranking, field-specific queries, and optional filters. search_components function provides the backend for all component discovery features. 2 additional LIB requirements satisfied (LIB-01 search, LIB-12 unified search). Critical bug fixed: SearchFilters::default() now returns limit=50 instead of 0.
+Phase 10 Plan 04 complete (2026-01-29). Custom library management and optional JLCPCB API client implemented. CustomSource provides full CRUD for user-created libraries with category/manufacturer organization. JLCPCBSource behind optional feature flag provides async search of JLCPCB catalog. Critical FTS5 bug fixed: removed content= option to prevent UPDATE corruption. 3 more LIB requirements satisfied (LIB-02, LIB-05, LIB-06).
 
 **What's Next:**
-Continue Phase 10 with Plan 04 (Search Manager), Plan 05 (Library UI), or Plan 06 (Integration). Plan 02 (KiCad Parser) already complete. Plans can run in parallel.
+Continue Phase 10 with Plan 05 (LibraryManager aggregation) or Plan 06 (UI integration). 4 of 6 plans complete. Plans 05-06 can run sequentially to complete Phase 10.
 
 **Context for Next Session:**
 - Library foundation complete: ComponentId, Component, ComponentMetadata models ready (Plan 01)
-- SQLite schema with libraries, components, components_fts tables initialized (Plan 01)
-- FTS5 automatic sync via triggers (no manual index management) (Plan 01)
+- SQLite schema with libraries, components, components_fts tables (Plan 01)
+- FTS5 automatic sync via DELETE+INSERT triggers (UPDATE corruption fixed in Plan 04)
 - CRUD operations: insert_library, insert_component, insert_components_batch, get_component (Plan 01)
-- KiCad .kicad_mod parser implemented with LibrarySource trait (Plan 02)
-- Search engine complete: search_components, search_by_field, rebuild_index, component_count (Plan 03)
+- KiCad .kicad_mod parser with LibrarySource trait (Plan 02)
+- Search engine: search_components, search_by_field, rebuild_index, component_count (Plan 03)
+- CustomSource: create_library, add_component, update_category, delete_library (Plan 04)
+- JLCPCBSource: optional feature, async search_api, Bearer auth (Plan 04)
 - All library code uses parameterized queries (SQL injection prevention)
-- 12+ comprehensive tests verify schema, CRUD, search, KiCad parsing
+- 25+ comprehensive tests verify all functionality (includes jlcpcb feature tests)
 
 **Parallelization Opportunities:**
-Within Phase 10 (after Plans 01-03):
-- Plan 04 (Search Manager) - High-level API wrapping search_components
-- Plan 05 (Library UI) - Component browser and search interface
+Within Phase 10 (after Plans 01-04):
+- Plan 05 (LibraryManager) - Aggregate all sources, unified search, caching
 - Plan 06 (Integration) - Wire library management into main application
 
 Other phases (independent):
@@ -264,12 +293,13 @@ After all feature phases complete:
 | 2026-01-29 | 10-01 | Created cypcb-library crate with data models, SQLite schema, FTS5 search foundation |
 | 2026-01-29 | 10-02 | Implemented KiCad .kicad_mod parser with LibrarySource trait and auto-organize folders |
 | 2026-01-29 | 10-03 | Implemented FTS5 search engine with BM25 ranking and optional filters |
+| 2026-01-29 | 10-04 | CustomSource for user libraries, JLCPCBSource API client (optional), FTS5 UPDATE bug fixed |
 
-**Last session:** 2026-01-29 10:42 UTC
-**Stopped at:** Completed 10-03 execution
+**Last session:** 2026-01-29 10:47 UTC
+**Stopped at:** Completed 10-04 execution
 **Resume file:** None
 
-*Last updated: 2026-01-29 10:42 UTC*
+*Last updated: 2026-01-29 10:47 UTC*
 
 **Storage Strategy (Phase 9):**
 - Native: SQLite via rusqlite for structured key-value storage with table namespacing
