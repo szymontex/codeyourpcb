@@ -25,7 +25,14 @@ v1.1 extends the proven v1.0 web viewer foundation with professional desktop cap
 4. Storage trait abstracts persistence with identical API for SQLite and IndexedDB
 5. Build compiles successfully for both web and desktop targets using conditional features
 
-**Status:** Pending
+**Plans:** 3 plans
+
+Plans:
+- [ ] 09-01-PLAN.md — Create cypcb-platform crate with FileSystem trait and native/web implementations
+- [ ] 09-02-PLAN.md — Dialog wrapper and Storage trait with SQLite/localStorage backends
+- [ ] 09-03-PLAN.md — Menu data model and Platform facade with dual-target verification
+
+**Status:** Planned
 
 ## Phase 10: Library Management Foundation
 
