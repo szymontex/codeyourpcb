@@ -12,6 +12,7 @@ import { render, type RenderState } from './renderer';
 import { setupInteraction, type InteractionState } from './interaction';
 import { createLayerVisibility } from './layers';
 import { createFilePicker, setupDropZone, readFileAsText } from './file-picker';
+import { isDesktop, initDesktop } from './desktop';
 
 // WebSocket server URL for hot reload
 // Dynamic: if accessing via dev1.flightcore.pl, use dev2.flightcore.pl for WS
@@ -729,6 +730,11 @@ async function init(): Promise<void> {
     });
   } catch (err) {
     console.log('[WS] WebSocket not available');
+  }
+
+  // Initialize desktop integration if running in Tauri
+  if (isDesktop()) {
+    await initDesktop();
   }
 }
 
