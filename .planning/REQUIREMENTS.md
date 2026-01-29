@@ -71,15 +71,15 @@ Requirements for v1.1 Foundation & Desktop milestone. Each maps to roadmap phase
 
 ### Dark Mode & UI Polish
 
-- [ ] **UI-01**: Application supports dark mode theme
-- [ ] **UI-02**: Application supports light mode theme
-- [ ] **UI-03**: Application respects OS theme preference (auto dark/light)
-- [ ] **UI-04**: User can manually toggle between dark and light modes
-- [ ] **UI-05**: Theme applies consistently to editor, viewer, dialogs, menus
-- [ ] **UI-06**: Dark mode meets 4.5:1 contrast ratio (WCAG AA)
-- [ ] **UI-07**: Light mode meets 4.5:1 contrast ratio (WCAG AA)
-- [ ] **UI-08**: Monaco editor theme syncs with application theme
-- [ ] **UI-09**: Canvas renderer theme syncs with application theme
+- [x] **UI-01**: Application supports dark mode theme
+- [x] **UI-02**: Application supports light mode theme
+- [x] **UI-03**: Application respects OS theme preference (auto dark/light)
+- [x] **UI-04**: User can manually toggle between dark and light modes
+- [x] **UI-05**: Theme applies consistently to editor, viewer, dialogs, menus
+- [x] **UI-06**: Dark mode meets 4.5:1 contrast ratio (WCAG AA)
+- [x] **UI-07**: Light mode meets 4.5:1 contrast ratio (WCAG AA)
+- [x] **UI-08**: Monaco editor theme syncs with application theme
+- [x] **UI-09**: Canvas renderer theme syncs with application theme
 
 ### Documentation
 
@@ -177,15 +177,15 @@ Which phases cover which requirements. Updated during roadmap creation.
 | LIB-10 | Phase 10 | Pending |
 | LIB-11 | Phase 10 | Pending |
 | LIB-12 | Phase 10 | Pending |
-| UI-01 | Phase 11 | Pending |
-| UI-02 | Phase 11 | Pending |
-| UI-03 | Phase 11 | Pending |
-| UI-04 | Phase 11 | Pending |
-| UI-05 | Phase 11 | Pending |
-| UI-06 | Phase 11 | Pending |
-| UI-07 | Phase 11 | Pending |
-| UI-08 | Phase 11 | Pending |
-| UI-09 | Phase 11 | Pending |
+| UI-01 | Phase 11 | Complete |
+| UI-02 | Phase 11 | Complete |
+| UI-03 | Phase 11 | Complete |
+| UI-04 | Phase 11 | Complete |
+| UI-05 | Phase 11 | Complete |
+| UI-06 | Phase 11 | Complete |
+| UI-07 | Phase 11 | Complete |
+| UI-08 | Phase 11 | Complete |
+| UI-09 | Phase 11 | Complete |
 | DESK-01 | Phase 12 | Pending |
 | DESK-02 | Phase 12 | Pending |
 | DESK-03 | Phase 12 | Pending |

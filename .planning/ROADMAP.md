@@ -81,12 +81,13 @@ Plans:
 **Plans:** 4 plans
 
 Plans:
-- [ ] 11-01-PLAN.md — Theme system foundation: CSS custom properties, ThemeManager, FART prevention
-- [ ] 11-02-PLAN.md — Migrate all UI surfaces to CSS variables and make canvas renderer theme-aware
-- [ ] 11-03-PLAN.md — Theme toggle UI, keyboard shortcut, WCAG AA verification and polish
-- [ ] 11-04-PLAN.md — Monaco editor theme definitions (infrastructure for Phase 14)
+- [x] 11-01-PLAN.md — Theme system foundation: CSS custom properties, ThemeManager, FART prevention
+- [x] 11-02-PLAN.md — Migrate all UI surfaces to CSS variables and make canvas renderer theme-aware
+- [x] 11-03-PLAN.md — Theme toggle UI, keyboard shortcut, WCAG AA verification and polish
+- [x] 11-04-PLAN.md — Monaco editor theme definitions (infrastructure for Phase 14)
 
-**Status:** Planned
+**Status:** Complete
+**Completed:** 2026-01-29
 
 ## Phase 12: Tauri Desktop Foundation
 
@@ -162,13 +163,13 @@ Plans:
 |-------|-------------|--------|------------|
 | 9 - Platform Abstraction | 5 | Complete | 100% |
 | 10 - Library Management | 12 | Complete | 100% |
-| 11 - Dark Mode & UI Polish | 9 | Pending | 0% |
+| 11 - Dark Mode & UI Polish | 9 | Complete | 100% |
 | 12 - Tauri Desktop | 10 | Pending | 0% |
 | 13 - Web Deployment | 9 | Pending | 0% |
 | 14 - Monaco Editor | 10 | Pending | 0% |
 | 15 - Documentation | 9 | Pending | 0% |
 
-**Overall:** 17/64 requirements complete (27%)
+**Overall:** 26/64 requirements complete (41%)
 
 ## Critical Path
 
