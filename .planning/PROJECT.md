@@ -1,5 +1,29 @@
 # CodeYourPCB
 
+## Current State
+
+**Version:** v1.0 (shipped 2026-01-29)
+**Status:** Production-ready for basic PCB design workflows
+**Codebase:** 32,440 lines (30,005 Rust + 2,435 TypeScript)
+
+**What works:**
+- Write .cypcb files → see board in web viewer with hot reload
+- Automatic DRC with visual violation markers
+- Export manufacturing files (Gerber X2, Excellon, BOM, CPL) verified with JLCPCB
+- Autoroute with FreeRouting, import traces, see ratsnest
+- LSP for IDE integration (VS Code, any LSP-compatible editor)
+- KiCad footprint library import
+- Alternative navigation (touchpad pan/zoom for laptops)
+- File picker with drag-and-drop
+
+**Known tech debt:**
+- Phase 3 (Validation) missing formal verification documentation (functionality working)
+- Module/import system deferred to v2
+- Grid snapping deferred (grid display works)
+- Net highlighting deferred
+
+**Next milestone goals:** Desktop app (Tauri), 3D preview, undo/redo, schematic view
+
 ## What This Is
 
 A code-first PCB design tool where you write code and it generates circuit boards. Instead of clicking in a GUI and getting XML as a side effect, you write declarative code that defines components, connections, and constraints — the visual representation is computed from this source of truth. Designed for engineers who want git-friendly collaboration, AI/LLM-assisted editing, and deterministic builds.
@@ -12,40 +36,42 @@ A code-first PCB design tool where you write code and it generates circuit board
 
 ### Validated
 
-(None yet — ship to validate)
+- ✅ Custom DSL parser (Tree-sitter grammar) — v1.0
+- ✅ Board data model (components, nets, layers, spatial indexing) — v1.0
+- ✅ 2D board view renderer (Canvas) with hot reload — v1.0
+- ✅ Component placement (absolute and relative) — v1.0
+- ✅ Net connections with constraints (width, clearance, current) — v1.0
+- ✅ Comprehensive DRC (clearance, trace width, drill size, connectivity) — v1.0
+- ✅ Gerber X2 export (all layers) — v1.0
+- ✅ Excellon drill file export — v1.0
+- ✅ BOM and pick-and-place file generation — v1.0
+- ✅ Autorouter integration (FreeRouting DSN/SES) — v1.0
+- ✅ Trace width calculator (IPC-2221) — v1.0
+- ✅ LSP server for IDE integration (hover, completion, diagnostics, goto) — v1.0
+- ✅ KiCad footprint import (.kicad_mod) — v1.0
+- ✅ Web-based viewer with zoom/pan/selection — v1.0
+- ✅ Touchpad navigation controls — v1.0
+- ✅ File picker with drag-and-drop — v1.0
 
 ### Active
 
-**Phase 1: Foundation**
-- [ ] Custom DSL parser (Tree-sitter grammar)
-- [ ] Board data model (components, nets, layers)
-- [ ] Basic 2D board view renderer (Canvas)
-- [ ] File watching with hot reload
-
-**Phase 2: Core Features**
-- [ ] Component placement (absolute and relative)
-- [ ] Net connections with constraints
-- [ ] Basic DRC (clearance, trace width)
-- [ ] Gerber X2 export
-
-**Phase 3: Intelligence**
-- [ ] Autorouter integration (FreeRouting DSN export/import)
-- [ ] Trace width calculator (IPC-2221)
-- [ ] Impedance calculator (microstrip, stripline)
-- [ ] Electrical-aware DRC (current capacity, crosstalk hints)
-
-**Phase 4: Full Experience**
+**Phase 6: Desktop & Polish (v2.0 target)**
 - [ ] 3D board preview (Three.js)
-- [ ] Schematic view
-- [ ] LSP server for IDE integration
+- [ ] Schematic view generation
+- [ ] Tauri desktop application
+- [ ] Native file dialogs
 - [ ] Undo/redo system
+- [ ] Project templates
 
-**Phase 5: Advanced**
+**Advanced Features (v2.x target)**
 - [ ] Custom autorouter (A*, GPU-accelerated)
 - [ ] ngspice simulation integration
 - [ ] IPC-2581 export
 - [ ] WASM plugin system
-- [ ] Component library management (KiCad footprint import)
+- [ ] Impedance calculator (microstrip, stripline)
+- [ ] Differential pair routing
+- [ ] Length matching
+- [ ] Module/import system for reusable blocks
 
 ### Out of Scope
 
@@ -106,4 +132,4 @@ Current PCB tools (KiCad, Eagle, Altium) are GUI-first. The project file is a bi
 | WASM plugins | Sandboxed, cross-language, portable | — Pending |
 
 ---
-*Last updated: 2026-01-21 after initialization*
+*Last updated: 2026-01-29 after v1.0 milestone completion*
