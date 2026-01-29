@@ -6,7 +6,37 @@ use std::path::PathBuf;
 /// Uses rfd internally, which handles platform differences automatically:
 /// - Desktop: Native OS dialogs (GTK3/Windows/macOS)
 /// - Web: HTML-based dialogs
+///
+/// Note: On native platforms without GUI libraries (headless CI), dialog
+/// methods will return NotSupported errors unless the `desktop` feature is enabled.
 pub struct Dialog;
+
+#[cfg(not(any(feature = "desktop", target_arch = "wasm32")))]
+impl Dialog {
+    /// Show an informational alert dialog.
+    pub async fn alert(_title: &str, _message: &str) -> Result<(), PlatformError> {
+        Err(PlatformError::NotSupported(
+            "Dialog support requires 'desktop' feature or WASM target".to_string(),
+        ))
+    }
+
+    /// Show a confirmation dialog with Yes/No buttons.
+    pub async fn confirm(_title: &str, _message: &str) -> Result<bool, PlatformError> {
+        Err(PlatformError::NotSupported(
+            "Dialog support requires 'desktop' feature or WASM target".to_string(),
+        ))
+    }
+
+    /// Show a folder picker dialog.
+    pub async fn pick_folder() -> Result<Option<PathBuf>, PlatformError> {
+        Err(PlatformError::NotSupported(
+            "Dialog support requires 'desktop' feature or WASM target".to_string(),
+        ))
+    }
+}
+
+#[cfg(any(feature = "desktop", target_arch = "wasm32"))]
+impl Dialog {
 
 impl Dialog {
     /// Show an informational alert dialog.

@@ -22,7 +22,7 @@ rfd = { version = "0.15", default-features = false }
 # Native-specific dependencies
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { version = "1", features = ["fs", "rt"] }
-rfd = { version = "0.15", optional = true }
+rfd = { version = "0.15", default-features = false, features = ["tokio", "xdg-portal"], optional = true }
 
 [build-dependencies]
 cfg_aliases = "0.2"
@@ -31,5 +31,5 @@ cfg_aliases = "0.2"
 default = []
 desktop = ["rfd"]
 web = []
-# For Linux builds with system dependencies available
+# For builds with native file dialog support (requires system dependencies on Linux)
 native-dialogs = ["rfd"]
