@@ -2,8 +2,9 @@
 
 ## Current Status
 
-**Phase:** 7 - Navigation Controls (Complete)
-**Last Activity:** 2026-01-29 - Completed Phase 7 Navigation Controls (2/2 plans)
+**Milestone:** v1.1 "Foundation & Desktop"
+**Phase:** Not started (defining requirements)
+**Last Activity:** 2026-01-29 - Started v1.1 milestone
 
 ## Project Reference
 

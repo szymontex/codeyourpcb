@@ -22,7 +22,20 @@
 - Grid snapping deferred (grid display works)
 - Net highlighting deferred
 
-**Next milestone goals:** Desktop app (Tauri), 3D preview, undo/redo, schematic view
+## Current Milestone: v1.1 "Foundation & Desktop"
+
+**Goal:** Build a solid foundation for library management, project organization, and professional desktop experience with web deployment.
+
+**Target features:**
+- Multi-source component library management (KiCad, JLCPCB, custom libraries)
+- Standardized project structure with intelligent organization
+- Dark mode and polished UI/UX
+- Tauri desktop application (native, installable)
+- Web deployment (browser-based, shareable)
+- Embedded code editor (Monaco integration)
+- Comprehensive user documentation
+
+**Philosophy:** Focus on groundwork that prevents future problems. "Idiot-proof" library handling, sensible defaults, flexible structure.
 
 ## What This Is
 
@@ -55,15 +68,25 @@ A code-first PCB design tool where you write code and it generates circuit board
 
 ### Active
 
-**Phase 6: Desktop & Polish (v2.0 target)**
-- [ ] 3D board preview (Three.js)
-- [ ] Schematic view generation
+**v1.1 Foundation & Desktop**
+- [ ] Multi-source library management (KiCad, JLCPCB, custom)
+- [ ] 3D model handling for components
+- [ ] Standardized project structure (folders, config)
+- [ ] Dark mode theme system
+- [ ] UI polish (responsive, better controls)
 - [ ] Tauri desktop application
-- [ ] Native file dialogs
+- [ ] Native file dialogs and menus
+- [ ] Web deployment infrastructure
+- [ ] Embedded Monaco code editor
+- [ ] Comprehensive documentation
+
+**Deferred to v1.2+**
+- [ ] 3D board preview (Three.js)
 - [ ] Undo/redo system
 - [ ] Project templates
 
-**Advanced Features (v2.x target)**
+**Advanced Features (v2.0+ target)**
+- [ ] Schematic view generation
 - [ ] Custom autorouter (A*, GPU-accelerated)
 - [ ] ngspice simulation integration
 - [ ] IPC-2581 export
@@ -132,4 +155,4 @@ Current PCB tools (KiCad, Eagle, Altium) are GUI-first. The project file is a bi
 | WASM plugins | Sandboxed, cross-language, portable | — Pending |
 
 ---
-*Last updated: 2026-01-29 after v1.0 milestone completion*
+*Last updated: 2026-01-29 after starting v1.1 milestone*
