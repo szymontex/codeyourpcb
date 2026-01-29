@@ -13,13 +13,13 @@
 ## Current Position
 
 **Phase:** Phase 11 (Dark Mode & UI Polish)
-**Plan:** 2 of 3
-**Status:** In progress - theme integration complete
+**Plan:** 4 of 4 complete
+**Status:** Phase complete - theme system, inline styles, toggle UI, Monaco themes ready
 
 **Progress:**
 ```
-[=================                                 ] 33%
-v1.1: Phase 9 ✓ → 10 ✓ → 11 → 12 → 13 → 14 → 15
+[===================                               ] 38%
+v1.1: Phase 9 ✓ → 10 ✓ → 11 ✓ → 12 → 13 → 14 → 15
 ```
 
 **Requirements Complete:** 17/64 (27%)
@@ -43,9 +43,9 @@ v1.1: Phase 9 ✓ → 10 ✓ → 11 → 12 → 13 → 14 → 15
 
 **Phases:**
 - Total planned (v1.1): 7
-- Completed: 2
+- Completed: 3
 - In progress: 0
-- Pending: 5
+- Pending: 4
 
 **Requirements:**
 - Total v1.1: 64
@@ -54,7 +54,7 @@ v1.1: Phase 9 ✓ → 10 ✓ → 11 → 12 → 13 → 14 → 15
 - Pending: 47
 
 **Efficiency:**
-- Plans completed (v1.1): 12
+- Plans completed (v1.1): 13
 - Blockers encountered: 2 (pkg-config resolved, FTS5 corruption fixed)
 - Revisions needed: 0
 
@@ -298,29 +298,32 @@ v1.1: Phase 9 ✓ → 10 ✓ → 11 → 12 → 13 → 14 → 15
 ## Session Continuity
 
 **Where We Are:**
-Phase 11 in progress (2026-01-29). Plans 11-01 and 11-02 complete (with 11-03 completed in parallel). Theme system fully integrated: ThemeManager singleton, CSS custom properties, FART prevention, all UI surfaces themed, canvas rendering theme-aware, theme toggle UI deployed.
+Phase 11 complete (2026-01-29). All 3 plans executed successfully. Dark mode system fully operational: ThemeManager, CSS custom properties, FART prevention, theme toggle UI, WCAG AA verified, smooth transitions. Canvas rendering theme-aware. Ready for Phase 12 (Desktop) or Phase 14 (Monaco).
 
 **What's Next:**
-Phase 11 nearly complete (all 3 plans executed). Ready to move to Phase 12 (Desktop Application) or Phase 13 (Web Deployment). Both phases independent after Phase 11.
+Phase 12 (Desktop Application) - Tauri wrapper, native file dialogs, window management. OR Phase 14 (Monaco Editor) - Embedded editor with theme coordination. Phase 12 and 13 can run in parallel. Phase 14 requires Phase 11 (complete).
 
 **Context for Next Session:**
-- Phase 11 complete: Plans 01, 02, 03 all executed
+- Phase 11 complete: All 3 plans executed (11-01, 11-02, 11-03)
 - Theme foundation: ThemeManager singleton, CSS custom properties, FART prevention (11-01)
-- UI theming: 38+ CSS variables in index.html, all inline styles converted (11-02)
-- Canvas theming: getThemeColors(), theme-aware rendering for background/grid/labels (11-02)
-- PCB colors fixed: copper red/blue, violations red, ratsnest gold unchanged (11-02)
-- Theme toggle: Button in toolbar cycles light → dark → auto (11-03, commit f91f1a8)
-- Theme subscription: Canvas auto-redraws on theme change (11-02)
-- Filter brightness: Hover effects use brightness(0.85) for theme adaptation (11-02)
+- UI theming: 38+ CSS variables, all inline styles converted to var(--*) (11-02)
+- Canvas theming: getThemeColors(), theme-aware background/grid/labels (11-02)
+- PCB colors: Copper red/blue, violations red, ratsnest gold (unchanged) (11-02)
+- Theme toggle: Toolbar button cycles light → dark → auto, icons ☀️/🌙/🔄 (11-03)
+- Keyboard shortcut: Ctrl+Shift+T toggles theme (11-03)
+- Accessibility: aria-label, focus-visible outline, Tab navigation (11-03)
+- WCAG AA: All text/bg pairs ≥4.5:1, success color fixed (#1e7e34) (11-03)
+- Transitions: 150ms smooth, no canvas flash (11-03)
+- Persistence: localStorage via ThemeManager, OS preference detection (11-01)
+- Commits: 11-01 (757f183, 8184d72), 11-02 (4c77e86), 11-03 (f91f1a8, 822074c)
 
 **Parallelization Opportunities:**
-Next phases (all independent after Phase 10):
-- Phase 11 (Dark Mode) - Theme system, CSS custom properties
+Next phases (independent after Phase 11):
 - Phase 12 (Desktop) - Tauri app, native file dialogs, menus
 - Phase 13 (Web) - Static deployment, browser limitations
 
-After Phase 11 completes:
-- Phase 14 (Monaco) requires Phase 11 theme system
+Phase 14 now unblocked:
+- Phase 14 (Monaco) - Requires Phase 11 theme system (complete)
 
 After all feature phases complete:
 - Phase 15 (Documentation) documents everything
@@ -343,13 +346,13 @@ After all feature phases complete:
 | 2026-01-29 | 10-06 | Version tracking, 3D model association, footprint preview extraction |
 | 2026-01-29 | 11-01 | Theme types, ThemeManager singleton, CSS custom properties, FART prevention |
 | 2026-01-29 | 11-02 | HTML inline styles to CSS variables, theme-aware canvas rendering |
-| 2026-01-29 | 11-03 | Theme toggle button in toolbar (parallel execution) |
+| 2026-01-29 | 11-03 | Theme toggle UI with keyboard shortcut, WCAG AA verification |
 
-**Last session:** 2026-01-29 12:10 UTC
-**Stopped at:** Completed 11-02 (Integrate Theme System into Viewer UI)
+**Last session:** 2026-01-29 12:16 UTC
+**Stopped at:** Completed Phase 11 (Dark Mode & UI Polish) - All 3 plans complete
 **Resume file:** None
 
-*Last updated: 2026-01-29 12:10 UTC*
+*Last updated: 2026-01-29 12:16 UTC*
 
 **Storage Strategy (Phase 9):**
 - Native: SQLite via rusqlite for structured key-value storage with table namespacing
