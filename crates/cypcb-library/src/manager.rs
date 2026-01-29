@@ -254,6 +254,37 @@ impl LibraryManager {
     pub fn delete_custom_library(&self, name: &str) -> Result<(), LibraryError> {
         self.custom_source.delete_library(name)
     }
+
+    // ========== Preview Operations ==========
+
+    /// Get footprint preview for a component
+    ///
+    /// Extracts geometry data (pads, outlines, courtyard) from the component's
+    /// stored footprint S-expression data for rendering.
+    ///
+    /// Returns None if component not found or has no footprint_data.
+    pub fn get_footprint_preview(
+        &self,
+        source: &str,
+        name: &str,
+    ) -> Result<Option<crate::preview::FootprintPreview>, LibraryError> {
+        let conn = self.conn.lock().unwrap();
+
+        // Get component
+        let component = schema::get_component(&conn, source, name)?;
+
+        if let Some(component) = component {
+            if let Some(footprint_data) = component.footprint_data {
+                // Extract preview from S-expression
+                let preview = crate::preview::extract_preview(&footprint_data)?;
+                Ok(Some(preview))
+            } else {
+                Ok(None)
+            }
+        } else {
+            Ok(None)
+        }
+    }
 }
 
 #[cfg(test)]
@@ -532,5 +563,58 @@ mod tests {
         assert_eq!(retrieved.category, Some("Passive/Resistors".to_string()));
         // Note: manufacturer update only updates the column, not the metadata_json
         // This is expected behavior based on CustomSource implementation
+    }
+
+    #[test]
+    fn test_footprint_preview() {
+        let manager = LibraryManager::new_in_memory().unwrap();
+
+        // Create library
+        manager.create_custom_library("TestLib").unwrap();
+
+        // Add component with footprint data
+        let footprint_sexpr = r#"(footprint "R_0805_2012Metric"
+  (version 20211014)
+  (generator pcbnew)
+  (layer "F.Cu")
+  (descr "Resistor SMD 0805")
+  (pad "1" smd rect (at -1 0) (size 1 0.95) (layers "F.Cu" "F.Paste" "F.Mask"))
+  (pad "2" smd rect (at 1 0) (size 1 0.95) (layers "F.Cu" "F.Paste" "F.Mask"))
+)"#;
+
+        let component = Component {
+            id: ComponentId::new("custom", "R_0805"),
+            library: "TestLib".to_string(),
+            category: Some("Resistors".to_string()),
+            footprint_data: Some(footprint_sexpr.to_string()),
+            metadata: ComponentMetadata::default(),
+        };
+
+        manager.add_custom_component("TestLib", component).unwrap();
+
+        // Get footprint preview
+        let preview = manager.get_footprint_preview("custom", "R_0805").unwrap();
+        assert!(preview.is_some());
+
+        let preview = preview.unwrap();
+        assert_eq!(preview.name, "R_0805_2012Metric");
+        assert_eq!(preview.description, Some("Resistor SMD 0805".to_string()));
+        assert_eq!(preview.pads.len(), 2);
+        assert_eq!(preview.pads[0].name, "1");
+        assert_eq!(preview.pads[0].x, -1.0);
+
+        // Test missing footprint data
+        let component_no_fp = Component {
+            id: ComponentId::new("custom", "NoFootprint"),
+            library: "TestLib".to_string(),
+            category: None,
+            footprint_data: None,
+            metadata: ComponentMetadata::default(),
+        };
+
+        manager.add_custom_component("TestLib", component_no_fp).unwrap();
+
+        let preview = manager.get_footprint_preview("custom", "NoFootprint").unwrap();
+        assert!(preview.is_none());
     }
 }
