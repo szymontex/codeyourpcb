@@ -16,4 +16,6 @@ pub trait LibrarySource {
 }
 
 pub mod custom;
+#[cfg(feature = "jlcpcb")]
+pub mod jlcpcb;
 pub mod kicad;
