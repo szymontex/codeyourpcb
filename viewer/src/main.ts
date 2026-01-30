@@ -12,6 +12,7 @@ import { render, type RenderState } from './renderer';
 import { setupInteraction, type InteractionState } from './interaction';
 import { createLayerVisibility } from './layers';
 import { createFilePicker, setupDropZone, readFileAsText } from './file-picker';
+import { openFile, saveFile } from './file-access';
 import { isDesktop, initDesktop } from './desktop';
 
 // WebSocket server URL for hot reload
@@ -167,6 +168,9 @@ async function init(): Promise<void> {
   // Routing state
   let isRouting = false;
   let currentFilePath: string | null = null;
+
+  // File handle for save-in-place (File System Access API)
+  let currentFileHandle: FileSystemFileHandle | null = null;
 
   /**
    * Update error badge with violation count
@@ -377,11 +381,74 @@ async function init(): Promise<void> {
     }
   }
 
-  // File picker setup
+  // File picker setup (kept for drag-drop only)
   const filePicker = createFilePicker('.cypcb,.ses', handleFileLoad);
 
-  openBtn.addEventListener('click', () => {
-    filePicker.click();
+  // Open button - use File System Access API on web, keep file picker for desktop
+  openBtn.addEventListener('click', async () => {
+    if (isDesktop()) {
+      // Desktop uses its own file dialog via Tauri IPC
+      filePicker.click();
+    } else {
+      // Web uses File System Access API with fallback
+      const result = await openFile();
+      if (result) {
+        // Store handle for save-in-place
+        currentFileHandle = result.handle;
+        currentFilePath = result.name;
+
+        // Parse the content as if it was a file load
+        const ext = result.name.toLowerCase().split('.').pop();
+
+        if (ext === 'cypcb') {
+          // Load new board
+          const errors = engine.load_source(result.content);
+          if (errors) {
+            console.warn('Parse errors:', errors);
+          }
+
+          // Track loaded source for save operations
+          lastLoadedSource = result.content;
+
+          // Get new snapshot and fit board
+          snapshot = engine.get_snapshot();
+          if (snapshot.board) {
+            viewport = fitBoard(viewport, snapshot.board.width_nm, snapshot.board.height_nm);
+            interactionState.viewport = viewport;
+          }
+
+          // Update error badge
+          if (snapshot.violations) {
+            updateErrorBadge(snapshot.violations);
+          }
+
+          // Show status
+          const errorCount = errors ? errors.split('\n').filter(Boolean).length : 0;
+          statusText.textContent = errorCount > 0
+            ? `Loaded ${result.name} (${errorCount} warnings)`
+            : `Loaded ${result.name}`;
+
+          dirty = true;
+
+        } else if (ext === 'ses') {
+          // Check if board is loaded
+          if (!snapshot?.board) {
+            statusText.textContent = 'Load a .cypcb file first';
+            return;
+          }
+
+          // Load routes
+          engine.load_routes(result.content);
+          snapshot = engine.get_snapshot();
+
+          statusText.textContent = `Loaded routes from ${result.name}`;
+          dirty = true;
+
+        } else {
+          statusText.textContent = `Unknown file type: .${ext}`;
+        }
+      }
+    }
   });
 
   // Drag-drop setup
@@ -693,8 +760,46 @@ async function init(): Promise<void> {
     cancelRouting();
   });
 
+  /**
+   * Handle saving the current file (web only).
+   * Uses File System Access API with handle for save-in-place.
+   */
+  async function handleSaveFile(): Promise<void> {
+    if (!lastLoadedSource) {
+      console.log('[Save] No content to save');
+      statusText.textContent = 'No design loaded';
+      setTimeout(() => {
+        statusText.textContent = usingWasm ? 'Ready (WASM)' : 'Ready (Mock)';
+      }, 2000);
+      return;
+    }
+
+    try {
+      const defaultName = currentFilePath || 'design.cypcb';
+      const newHandle = await saveFile(lastLoadedSource, currentFileHandle, defaultName);
+
+      // Update handle if we got a new one (from save-as)
+      if (newHandle) {
+        currentFileHandle = newHandle;
+      }
+
+      // Show saved status briefly
+      statusText.textContent = 'Saved';
+      setTimeout(() => {
+        statusText.textContent = usingWasm ? 'Ready (WASM)' : 'Ready (Mock)';
+      }, 1500);
+
+    } catch (err) {
+      console.error('[Save] Error saving file:', err);
+      statusText.textContent = `Error saving file: ${err}`;
+      setTimeout(() => {
+        statusText.textContent = usingWasm ? 'Ready (WASM)' : 'Ready (Mock)';
+      }, 3000);
+    }
+  }
+
   // Keyboard shortcuts
-  document.addEventListener('keydown', (e) => {
+  document.addEventListener('keydown', async (e) => {
     // Escape to cancel routing
     if (e.key === 'Escape' && isRouting) {
       cancelRouting();
@@ -703,6 +808,11 @@ async function init(): Promise<void> {
     if (e.ctrlKey && e.shiftKey && e.key === 'T') {
       e.preventDefault();
       themeToggle.click();
+    }
+    // Ctrl+S to save (web only - desktop uses native menu)
+    if (e.ctrlKey && e.key === 's' && !isDesktop()) {
+      e.preventDefault();
+      await handleSaveFile();
     }
   });
 
