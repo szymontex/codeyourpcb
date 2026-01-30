@@ -26,10 +26,29 @@ export GLIBC_TUNABLES=glibc.rtld.optional_static_tls=2048
 # Build the WASM module with the wasm feature (excludes tree-sitter)
 wasm-pack build crates/cypcb-render \
   --target web \
+  --release \
   --out-dir ../../viewer/pkg \
   --out-name cypcb_render \
   --no-default-features \
   --features wasm
+
+# Post-build optimization with wasm-opt (if available)
+# Note: wasm-pack already runs wasm-opt, but we run it again with aggressive settings
+if command -v wasm-opt &> /dev/null; then
+  echo ""
+  echo "Running wasm-opt for additional size optimization..."
+  wasm-opt -O4 --converge \
+    --enable-bulk-memory \
+    --enable-nontrapping-float-to-int \
+    viewer/pkg/cypcb_render_bg.wasm \
+    -o viewer/pkg/cypcb_render_bg.wasm
+  echo "Optimized WASM size:"
+  ls -lh viewer/pkg/cypcb_render_bg.wasm
+else
+  echo ""
+  echo "wasm-opt not found, skipping additional optimization."
+  echo "Install binaryen for smaller builds: cargo install wasm-opt"
+fi
 
 echo ""
 echo "WASM build complete!"

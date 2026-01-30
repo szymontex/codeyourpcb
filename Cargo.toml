@@ -54,3 +54,11 @@ cypcb-library = { path = "crates/cypcb-library" }
 tower-lsp = { package = "tower-lsp-f", version = "0.24" }
 dashmap = "6"
 tokio = { version = "1", features = ["full"] }
+
+# Release profile optimized for WASM size
+[profile.release]
+opt-level = "z"      # Optimize for size
+lto = true           # Link-time optimization
+codegen-units = 1    # Better optimization (slower compile)
+panic = "abort"      # Smaller panic handler
+strip = true         # Strip debug symbols
