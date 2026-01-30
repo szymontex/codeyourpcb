@@ -13,16 +13,16 @@
 ## Current Position
 
 **Phase:** Phase 13 (Web Deployment)
-**Plan:** Not started
-**Status:** Ready to begin
+**Plan:** 2 of 9 (File System Access API)
+**Status:** In progress
 
 **Progress:**
 ```
-[====================================              ] 57%
-v1.1: Phase 9 ✓ → 10 ✓ → 11 ✓ → 12 ✓ → 13 → 14 → 15
+[======================================            ] 59%
+v1.1: Phase 9 ✓ → 10 ✓ → 11 ✓ → 12 ✓ → 13 (2/9) → 14 → 15
 ```
 
-**Requirements Complete:** 36/64 (56%)
+**Requirements Complete:** 38/64 (59%)
 
 **Requirements Coverage:** 64/64 mapped to phases (100%)
 
@@ -290,6 +290,14 @@ v1.1: Phase 9 ✓ → 10 ✓ → 11 ✓ → 12 ✓ → 13 → 14 → 15
 - Alternative (add engine.get_source()) rejected - requires Rust changes, tracking in TS sufficient
 - Established in 12-05
 
+**File System Access API with Progressive Enhancement (Phase 13):**
+- Native File System Access API for Chrome/Edge/Safari with input/download fallback for Firefox
+- FileSystemFileHandle persistence enables save-in-place without showing dialog
+- hasFileSystemAccess() feature detection determines which code path to use
+- Desktop guarded with isDesktop() check - Tauri IPC unchanged
+- Avoid browser-fs-access library dependency - implementation is straightforward (60 lines)
+- Established in 13-02
+
 ### Active TODOs
 
 - [x] Plan Phase 9: Platform Abstraction Layer (completed)
@@ -408,12 +416,13 @@ After all feature phases complete:
 | 2026-01-29 | 12-02 | Native menu bar with File/Edit/View/Help and IPC commands for file open/save |
 | 2026-01-29 | 12-03 | Desktop integration layer with menu event handling and IPC file operations |
 | 2026-01-30 | 12-05 | Desktop menu event handlers wired to viewer engine (open-file, save, viewport, theme, new) |
+| 2026-01-30 | 13-02 | File System Access API wrapper with save-in-place and Firefox/legacy browser fallback |
 
-**Last session:** 2026-01-30 00:11 UTC
-**Stopped at:** Completed Phase 12 Plan 05 - Desktop event handlers gap closure
+**Last session:** 2026-01-30 02:49 UTC
+**Stopped at:** Completed Phase 13 Plan 02 - File System Access API integration
 **Resume file:** None
 
-*Last updated: 2026-01-30 00:11 UTC*
+*Last updated: 2026-01-30 02:49 UTC*
 
 **Storage Strategy (Phase 9):**
 - Native: SQLite via rusqlite for structured key-value storage with table namespacing
