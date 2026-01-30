@@ -13,16 +13,16 @@
 ## Current Position
 
 **Phase:** Phase 14 (Monaco Editor Integration)
-**Plan:** 1 of 3 complete (14-01 Monaco editor setup)
+**Plan:** 2 of 3 complete (14-02 Editor-board sync)
 **Status:** In progress
 
 **Progress:**
 ```
-[==============================================    ] 73%
-v1.1: Phase 9 ✓ → 10 ✓ → 11 ✓ → 12 ✓ → 13 ✓ → 14 (1/3) → 15
+[================================================  ] 76%
+v1.1: Phase 9 ✓ → 10 ✓ → 11 ✓ → 12 ✓ → 13 ✓ → 14 (2/3) → 15
 ```
 
-**Requirements Complete:** 52/64 (81%)
+**Requirements Complete:** 54/64 (84%)
 
 **Requirements Coverage:** 64/64 mapped to phases (100%)
 
@@ -54,7 +54,7 @@ v1.1: Phase 9 ✓ → 10 ✓ → 11 ✓ → 12 ✓ → 13 ✓ → 14 (1/3) → 1
 - Pending: 12
 
 **Efficiency:**
-- Plans completed (v1.1): 21
+- Plans completed (v1.1): 22
 - Blockers encountered: 3 (pkg-config resolved, FTS5 corruption fixed, GTK3 libraries needed)
 - Revisions needed: 0
 
@@ -334,6 +334,21 @@ v1.1: Phase 9 ✓ → 10 ✓ → 11 ✓ → 12 ✓ → 13 ✓ → 14 (1/3) → 1
 - Split layout with 40% editor width when shown
 - Established in 14-01
 
+**Editor as Single Source of Truth (Phase 14):**
+- When editor is visible, editor content is authoritative for save operations
+- All file loading paths populate both engine and editor
+- 300ms debounce for editor-to-board sync balances responsiveness with performance
+- Suppress-sync flag prevents circular updates during programmatic setValue()
+- Save operations (web and desktop) use editor.getValue() when editor is active
+- Established in 14-02
+
+**Draggable Divider Constraints (Phase 14):**
+- 200px minimum editor width ensures usability (line numbers + ~40 chars)
+- 70% maximum ensures canvas has meaningful space (min 30% viewport)
+- Mouse and touch events for desktop and tablet support
+- Monaco layout() recalculation prevents rendering glitches on resize
+- Established in 14-02
+
 ### Active TODOs
 
 - [x] Plan Phase 9: Platform Abstraction Layer (completed)
@@ -394,22 +409,20 @@ v1.1: Phase 9 ✓ → 10 ✓ → 11 ✓ → 12 ✓ → 13 ✓ → 14 (1/3) → 1
 ## Session Continuity
 
 **Where We Are:**
-Phase 13 in progress (2026-01-30). Plans 13-01, 13-02, 13-03 complete - Build optimization, File System Access API, URL sharing with responsive layout.
+Phase 14 in progress (2026-01-30). Plans 14-01, 14-02 complete - Monaco editor setup, editor-board sync with draggable divider.
 
 **What's Next:**
-Continue Phase 13 (Web Deployment) - Remaining plans include browser compatibility testing, PWA implementation, CDN deployment configuration.
+Continue Phase 14 (Monaco Editor Integration) - Plan 14-03 will add LSP bridge for inline diagnostics, auto-completion, and hover.
 
 **Context for Next Session:**
-- Phase 12 complete (5 plans): Tauri desktop app with native menus, file dialogs, menu event handlers
-- Phase 13 Plan 01 complete: Production build optimization (13-01)
-- Vite plugins: vite-plugin-wasm@3.5.0, vite-plugin-top-level-await@1.6.0 installed
-- Vite config: WASM ES module support, rollupOptions with vendor chunking
-- Cargo release profile: opt-level=z, LTO, codegen-units=1, panic=abort, strip=true (workspace-level)
-- wasm-pack config: -O4 with --enable-bulk-memory, --enable-nontrapping-float-to-int in Cargo.toml
-- WASM size: Reduced from 374KB to 264KB (29% reduction, well under 500KB target)
-- Build pipeline: npm run build:web works end-to-end (WASM + TypeScript + Vite)
-- Known limitation: WASM in pkg/ not copied to dist/, deployment needs both directories accessible
-- Commits: 13-01 (3ec158c, af82028)
+- Phase 13 complete (4 plans): Production build optimization, File System Access API, responsive layout, Cloudflare deployment
+- Phase 14 Plans 01-02 complete: Monaco editor with .cypcb syntax highlighting, bidirectional sync
+- Monaco: 970KB gzipped, lazy-loaded on first toggle
+- Editor-board sync: 300ms debounced, suppress-sync flag prevents circular updates
+- Draggable divider: 200px min, 70% max constraints
+- File operations: All paths (open, save, hot reload, desktop events) flow through editor
+- Editor is single source of truth when visible
+- Commits: 14-01 (0442de8, 9d7ff13), 14-02 (42c82a9)
 
 **Parallelization Opportunities:**
 Next phases (independent after Phase 11):
@@ -450,11 +463,11 @@ After all feature phases complete:
 | 2026-01-30 | 13-03 | URL state sharing for collaboration, responsive layout with 48px touch targets |
 | 2026-01-30 | 14-01 | Monaco editor setup with .cypcb Monarch syntax highlighting and toggleable split layout |
 
-**Last session:** 2026-01-30 16:32 UTC
-**Stopped at:** Completed Phase 14 Plan 01 - Monaco editor foundation with split layout
+**Last session:** 2026-01-30 16:38 UTC
+**Stopped at:** Completed Phase 14 Plan 02 - Editor-board sync with draggable divider
 **Resume file:** None
 
-*Last updated: 2026-01-30 16:32 UTC*
+*Last updated: 2026-01-30 16:38 UTC*
 
 **Storage Strategy (Phase 9):**
 - Native: SQLite via rusqlite for structured key-value storage with table namespacing
@@ -473,3 +486,5 @@ After all feature phases complete:
 | 2026-01-30 | 13-02 | File System Access API for open/save with Firefox fallback |
 | 2026-01-30 | 13-03 | Responsive layout and URL state (Share feature deferred) |
 | 2026-01-30 | 13-04 | Cloudflare Pages deployment config with GitHub Actions workflow |
+| 2026-01-30 | 14-01 | Monaco editor setup with .cypcb Monarch syntax highlighting and split layout |
+| 2026-01-30 | 14-02 | Editor-board sync with 300ms debounced live preview and draggable divider |
