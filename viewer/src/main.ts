@@ -161,7 +161,8 @@ async function init(): Promise<void> {
   const routingStatus = document.getElementById('routing-status')!;
   const routingProgress = document.getElementById('routing-progress')!;
   const openBtn = document.getElementById('open-btn') as HTMLButtonElement;
-  const shareBtn = document.getElementById('share-btn') as HTMLButtonElement;
+  // TODO: Share feature disabled pending design decision
+  // const shareBtn = document.getElementById('share-btn') as HTMLButtonElement;
   const themeToggle = document.getElementById('theme-toggle') as HTMLButtonElement;
   const themeIcon = document.getElementById('theme-icon')!
 
