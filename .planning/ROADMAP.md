@@ -157,6 +157,13 @@ Plans:
 4. Editor supports standard code editing features (find/replace, undo/redo, multi-cursor)
 5. Editor and board viewer display side-by-side with live preview on file changes
 
+**Plans:** 3 plans
+
+Plans:
+- [ ] 14-01-PLAN.md — Monaco editor setup with .cypcb Monarch tokenizer and split layout
+- [ ] 14-02-PLAN.md — Wire editor into app lifecycle with editor-board sync and draggable divider
+- [ ] 14-03-PLAN.md — LSP bridge for inline diagnostics, auto-completion, and hover
+
 **Status:** Pending
 
 ## Phase 15: Documentation & Polish
