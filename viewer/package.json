@@ -16,7 +16,8 @@
     "build:desktop": "tauri build"
   },
   "dependencies": {
-    "@tauri-apps/api": "^2.0.0"
+    "@tauri-apps/api": "^2.0.0",
+    "monaco-editor": "^0.55.1"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.0.0",
@@ -25,6 +26,7 @@
     "tsx": "^4.0.0",
     "typescript": "^5.3.3",
     "vite": "^5.0.0",
+    "vite-plugin-monaco-editor": "^1.1.0",
     "vite-plugin-top-level-await": "^1.6.0",
     "vite-plugin-wasm": "^3.5.0",
     "ws": "^8.18.0"

@@ -1,11 +1,18 @@
 import { defineConfig } from 'vite';
 import wasm from 'vite-plugin-wasm';
 import topLevelAwait from 'vite-plugin-top-level-await';
+// @ts-ignore - CommonJS module
+import monacoEditorPluginModule from 'vite-plugin-monaco-editor';
+const monacoEditorPlugin = monacoEditorPluginModule.default || monacoEditorPluginModule;
 
 export default defineConfig({
   plugins: [
     wasm(),
     topLevelAwait(),
+    monacoEditorPlugin({
+      languageWorkers: ['editorWorkerService'],
+      customWorkers: [],
+    }),
   ],
   server: {
     port: 4321,
@@ -29,6 +36,7 @@ export default defineConfig({
       output: {
         manualChunks: {
           vendor: ['./src/wasm.ts'],
+          monaco: ['monaco-editor'],
         },
       },
     },
