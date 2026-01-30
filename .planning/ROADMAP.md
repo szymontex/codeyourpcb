@@ -160,11 +160,12 @@ Plans:
 **Plans:** 3 plans
 
 Plans:
-- [ ] 14-01-PLAN.md — Monaco editor setup with .cypcb Monarch tokenizer and split layout
-- [ ] 14-02-PLAN.md — Wire editor into app lifecycle with editor-board sync and draggable divider
-- [ ] 14-03-PLAN.md — LSP bridge for inline diagnostics, auto-completion, and hover
+- [x] 14-01-PLAN.md — Monaco editor setup with .cypcb Monarch tokenizer and split layout
+- [x] 14-02-PLAN.md — Wire editor into app lifecycle with editor-board sync and draggable divider
+- [x] 14-03-PLAN.md — LSP bridge for inline diagnostics, auto-completion, and hover
 
-**Status:** Pending
+**Status:** Complete
+**Completed:** 2026-01-30
 
 ## Phase 15: Documentation & Polish
 
@@ -192,10 +193,10 @@ Plans:
 | 11 - Dark Mode & UI Polish | 9 | Complete | 100% |
 | 12 - Tauri Desktop | 10 | Complete | 100% |
 | 13 - Web Deployment | 9 | Complete | 100% |
-| 14 - Monaco Editor | 10 | Pending | 0% |
+| 14 - Monaco Editor | 10 | Complete | 100% |
 | 15 - Documentation | 9 | Pending | 0% |
 
-**Overall:** 45/64 requirements complete (70%)
+**Overall:** 55/64 requirements complete (86%)
 
 ## Critical Path
 

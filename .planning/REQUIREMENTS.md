@@ -66,7 +66,7 @@ Requirements for v1.1 Foundation & Desktop milestone. Each maps to roadmap phase
 - [ ] **EDIT-06**: Editor has find/replace functionality
 - [ ] **EDIT-07**: Editor supports undo/redo operations
 - [ ] **EDIT-08**: Editor supports multi-cursor editing
-- [ ] **EDIT-09**: Editor connects to existing tower-lsp server
+- [ ] **EDIT-09**: Editor provides LSP features (diagnostics, completion, hover) via WASM bridge or server connection
 - [ ] **EDIT-10**: Editor and board viewer display side-by-side
 
 ### Dark Mode & UI Polish
@@ -205,16 +205,16 @@ Which phases cover which requirements. Updated during roadmap creation.
 | WEB-07 | Phase 13 | Pending |
 | WEB-08 | Phase 13 | Pending |
 | WEB-09 | Phase 13 | Pending |
-| EDIT-01 | Phase 14 | Pending |
-| EDIT-02 | Phase 14 | Pending |
-| EDIT-03 | Phase 14 | Pending |
-| EDIT-04 | Phase 14 | Pending |
-| EDIT-05 | Phase 14 | Pending |
-| EDIT-06 | Phase 14 | Pending |
-| EDIT-07 | Phase 14 | Pending |
-| EDIT-08 | Phase 14 | Pending |
-| EDIT-09 | Phase 14 | Pending |
-| EDIT-10 | Phase 14 | Pending |
+| EDIT-01 | Phase 14 | Complete |
+| EDIT-02 | Phase 14 | Complete |
+| EDIT-03 | Phase 14 | Complete |
+| EDIT-04 | Phase 14 | Complete |
+| EDIT-05 | Phase 14 | Complete |
+| EDIT-06 | Phase 14 | Complete |
+| EDIT-07 | Phase 14 | Complete |
+| EDIT-08 | Phase 14 | Complete |
+| EDIT-09 | Phase 14 | Complete |
+| EDIT-10 | Phase 14 | Complete |
 | DOC-01 | Phase 15 | Pending |
 | DOC-02 | Phase 15 | Pending |
 | DOC-03 | Phase 15 | Pending |
