@@ -1,8 +1,8 @@
 # Project State: CodeYourPCB
 
-**Last Updated:** 2026-01-29
+**Last Updated:** 2026-01-30
 **Milestone:** v1.1 "Foundation & Desktop"
-**Status:** Phase 10 Complete
+**Status:** Phase 12 Plan 05 Complete
 
 ## Project Reference
 
@@ -13,8 +13,8 @@
 ## Current Position
 
 **Phase:** Phase 12 (Tauri Desktop Foundation)
-**Plan:** 12-03 complete
-**Status:** In progress - Desktop integration layer complete, frontend wired to native menus
+**Plan:** 12-05 complete
+**Status:** In progress - Desktop menu-to-viewer integration complete
 
 **Progress:**
 ```
@@ -282,6 +282,14 @@ v1.1: Phase 9 ✓ → 10 ✓ → 11 ✓ → 12 [▓▓░] → 13 → 14 → 15
 - Single Vite config serves both desktop and web contexts
 - Established in 12-01
 
+**lastLoadedSource Tracking for Save Operations (Phase 12):**
+- Engine lacks get_source() method to retrieve original source after loading
+- Track source content in module-level lastLoadedSource variable in main.ts
+- Set in reload(), handleFileLoad(), and desktop:open-file handler
+- Returned in response to desktop:content-request event for save operations
+- Alternative (add engine.get_source()) rejected - requires Rust changes, tracking in TS sufficient
+- Established in 12-05
+
 ### Active TODOs
 
 - [x] Plan Phase 9: Platform Abstraction Layer (completed)
@@ -399,12 +407,13 @@ After all feature phases complete:
 | 2026-01-29 | 12-01 | Tauri v2 desktop shell scaffolded with maximized window, file association, Vite integration |
 | 2026-01-29 | 12-02 | Native menu bar with File/Edit/View/Help and IPC commands for file open/save |
 | 2026-01-29 | 12-03 | Desktop integration layer with menu event handling and IPC file operations |
+| 2026-01-30 | 12-05 | Desktop menu event handlers wired to viewer engine (open-file, save, viewport, theme, new) |
 
-**Last session:** 2026-01-29 18:14 UTC
-**Stopped at:** Completed Phase 12 Plan 03 - Desktop integration wired to frontend
+**Last session:** 2026-01-30 00:11 UTC
+**Stopped at:** Completed Phase 12 Plan 05 - Desktop event handlers gap closure
 **Resume file:** None
 
-*Last updated: 2026-01-29 18:14 UTC*
+*Last updated: 2026-01-30 00:11 UTC*
 
 **Storage Strategy (Phase 9):**
 - Native: SQLite via rusqlite for structured key-value storage with table namespacing
