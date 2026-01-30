@@ -150,6 +150,22 @@
     #open-btn:hover {
       background: var(--accent-hover);
     }
+    /* Share button */
+    #share-btn {
+      background: var(--accent-primary);
+      color: white;
+      border: none;
+      padding: 4px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    #share-btn:hover {
+      background: var(--accent-hover);
+    }
+    #share-btn.hidden {
+      display: none;
+    }
     /* Route button */
     #route-btn {
       background: var(--success);
@@ -295,6 +311,7 @@
     </button>
     <span id="coords"></span>
     <button id="open-btn">Open</button>
+    <button id="share-btn" class="hidden">Share</button>
     <label id="auto-route-label"><input type="checkbox" id="auto-route"> Auto-route</label>
     <button id="route-btn">Route</button>
     <button id="cancel-route-btn" class="hidden">Cancel</button>

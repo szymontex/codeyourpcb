@@ -14,6 +14,7 @@ import { createLayerVisibility } from './layers';
 import { createFilePicker, setupDropZone, readFileAsText } from './file-picker';
 import { openFile, saveFile } from './file-access';
 import { isDesktop, initDesktop } from './desktop';
+import { encodeViewState, decodeViewState } from './url-state';
 
 // WebSocket server URL for hot reload
 // Dynamic: if accessing via dev1.flightcore.pl, use dev2.flightcore.pl for WS
@@ -160,8 +161,9 @@ async function init(): Promise<void> {
   const routingStatus = document.getElementById('routing-status')!;
   const routingProgress = document.getElementById('routing-progress')!;
   const openBtn = document.getElementById('open-btn') as HTMLButtonElement;
+  const shareBtn = document.getElementById('share-btn') as HTMLButtonElement;
   const themeToggle = document.getElementById('theme-toggle') as HTMLButtonElement;
-  const themeIcon = document.getElementById('theme-icon')!;
+  const themeIcon = document.getElementById('theme-icon')!
 
   const ctx = canvas.getContext('2d')!;
 
@@ -192,6 +194,7 @@ async function init(): Promise<void> {
   let selectedRefdes: string | null = null;
   let dirty = true;
   let lastLoadedSource: string | null = null;
+  let showRatsnest = true;
 
   // Resize handler
   function resize(): void {
@@ -278,6 +281,31 @@ async function init(): Promise<void> {
   });
 
   updateThemeIcon();
+
+  // Apply URL state if present (shared URL)
+  const urlState = decodeViewState();
+  if (urlState) {
+    // Apply viewport state from URL
+    viewport = {
+      ...viewport,
+      centerX: urlState.panX,
+      centerY: urlState.panY,
+      scale: urlState.zoom,
+    };
+
+    // Apply layer visibility from URL
+    const layersFromUrl = urlState.layers;
+    topLayerCb.checked = layersFromUrl.includes('top');
+    bottomLayerCb.checked = layersFromUrl.includes('bottom');
+    ratsnestCb.checked = layersFromUrl.includes('ratsnest');
+    layers = {
+      topCopper: topLayerCb.checked,
+      bottomCopper: bottomLayerCb.checked,
+    };
+    showRatsnest = ratsnestCb.checked;
+
+    console.log('[URL State] Applied shared view state:', urlState);
+  }
 
   // Start with empty state - user will open a file
   snapshot = engine.get_snapshot();
@@ -529,7 +557,6 @@ async function init(): Promise<void> {
 
   // Visibility state
   const showViolations = true;
-  let showRatsnest = true;
 
   // Render loop
   function frame(): void {
@@ -798,6 +825,48 @@ async function init(): Promise<void> {
     }
   }
 
+  /**
+   * Handle sharing the current view state via URL
+   */
+  function handleShareView(): void {
+    // Build view state from current viewport and layers
+    const activeLayers: string[] = [];
+    if (topLayerCb.checked) activeLayers.push('top');
+    if (bottomLayerCb.checked) activeLayers.push('bottom');
+    if (ratsnestCb.checked) activeLayers.push('ratsnest');
+
+    const viewState = {
+      layers: activeLayers,
+      zoom: viewport.scale,
+      panX: viewport.centerX,
+      panY: viewport.centerY,
+    };
+
+    // Generate share URL
+    const queryString = encodeViewState(viewState);
+    const shareUrl = window.location.origin + window.location.pathname + queryString;
+
+    // Copy to clipboard
+    navigator.clipboard.writeText(shareUrl).then(() => {
+      statusText.textContent = 'Share URL copied!';
+      setTimeout(() => {
+        statusText.textContent = usingWasm ? 'Ready (WASM)' : 'Ready (Mock)';
+      }, 2000);
+    }).catch((err) => {
+      console.error('[Share] Failed to copy to clipboard:', err);
+      statusText.textContent = 'Failed to copy share URL';
+      setTimeout(() => {
+        statusText.textContent = usingWasm ? 'Ready (WASM)' : 'Ready (Mock)';
+      }, 2000);
+    });
+  }
+
+  // Share button (web only)
+  if (!isDesktop()) {
+    shareBtn.classList.remove('hidden');
+    shareBtn.addEventListener('click', handleShareView);
+  }
+
   // Keyboard shortcuts
   document.addEventListener('keydown', async (e) => {
     // Escape to cancel routing
@@ -813,6 +882,11 @@ async function init(): Promise<void> {
     if (e.ctrlKey && e.key === 's' && !isDesktop()) {
       e.preventDefault();
       await handleSaveFile();
+    }
+    // Ctrl+Shift+S to share (web only)
+    if (e.ctrlKey && e.shiftKey && e.key === 'S' && !isDesktop()) {
+      e.preventDefault();
+      handleShareView();
     }
   });
 
