@@ -107,13 +107,14 @@ Plans:
 **Plans:** 5 plans
 
 Plans:
-- [ ] 12-01-PLAN.md — Scaffold Tauri v2 project structure with config, workspace integration, and Vite compatibility
-- [ ] 12-02-PLAN.md — Native menu bar from platform MenuBar data model and file open/save IPC commands
-- [ ] 12-03-PLAN.md — Frontend desktop integration module wiring menu events to viewer actions
-- [ ] 12-04-PLAN.md — Installer config, file association, updater plugin, and performance verification
-- [ ] 12-05-PLAN.md — Wire desktop menu events to viewer engine (gap closure)
+- [x] 12-01-PLAN.md — Scaffold Tauri v2 project structure with config, workspace integration, and Vite compatibility
+- [x] 12-02-PLAN.md — Native menu bar from platform MenuBar data model and file open/save IPC commands
+- [x] 12-03-PLAN.md — Frontend desktop integration module wiring menu events to viewer actions
+- [x] 12-04-PLAN.md — Installer config, file association, updater plugin, and performance verification
+- [x] 12-05-PLAN.md — Wire desktop menu events to viewer engine (gap closure)
 
-**Status:** Planned
+**Status:** Complete
+**Completed:** 2026-01-30
 
 ## Phase 13: Web Deployment
 
@@ -173,12 +174,12 @@ Plans:
 | 9 - Platform Abstraction | 5 | Complete | 100% |
 | 10 - Library Management | 12 | Complete | 100% |
 | 11 - Dark Mode & UI Polish | 9 | Complete | 100% |
-| 12 - Tauri Desktop | 10 | Pending | 0% |
+| 12 - Tauri Desktop | 10 | Complete | 100% |
 | 13 - Web Deployment | 9 | Pending | 0% |
 | 14 - Monaco Editor | 10 | Pending | 0% |
 | 15 - Documentation | 9 | Pending | 0% |
 
-**Overall:** 26/64 requirements complete (41%)
+**Overall:** 36/64 requirements complete (56%)
 
 ## Critical Path
 
