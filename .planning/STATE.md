@@ -13,16 +13,16 @@
 ## Current Position
 
 **Phase:** Phase 14 (Monaco Editor Integration)
-**Plan:** Not started
-**Status:** Ready to begin
+**Plan:** 1 of 3 complete (14-01 Monaco editor setup)
+**Status:** In progress
 
 **Progress:**
 ```
-[============================================      ] 70%
-v1.1: Phase 9 ✓ → 10 ✓ → 11 ✓ → 12 ✓ → 13 ✓ → 14 → 15
+[==============================================    ] 73%
+v1.1: Phase 9 ✓ → 10 ✓ → 11 ✓ → 12 ✓ → 13 ✓ → 14 (1/3) → 15
 ```
 
-**Requirements Complete:** 45/64 (70%)
+**Requirements Complete:** 52/64 (81%)
 
 **Requirements Coverage:** 64/64 mapped to phases (100%)
 
@@ -44,17 +44,17 @@ v1.1: Phase 9 ✓ → 10 ✓ → 11 ✓ → 12 ✓ → 13 ✓ → 14 → 15
 **Phases:**
 - Total planned (v1.1): 7
 - Completed: 4
-- In progress: 1 (Phase 13)
+- In progress: 1 (Phase 14)
 - Pending: 2
 
 **Requirements:**
 - Total v1.1: 64
-- Satisfied: 39
-- In progress: 3
-- Pending: 22
+- Satisfied: 52
+- In progress: 0
+- Pending: 12
 
 **Efficiency:**
-- Plans completed (v1.1): 20
+- Plans completed (v1.1): 21
 - Blockers encountered: 3 (pkg-config resolved, FTS5 corruption fixed, GTK3 libraries needed)
 - Revisions needed: 0
 
@@ -313,6 +313,27 @@ v1.1: Phase 9 ✓ → 10 ✓ → 11 ✓ → 12 ✓ → 13 ✓ → 14 → 15
 - Avoid browser-fs-access library dependency - implementation is straightforward (60 lines)
 - Established in 13-02
 
+**CommonJS Module Import Pattern for ESM (Phase 14):**
+- vite-plugin-monaco-editor is CommonJS package with `exports.default`
+- ESM import requires fallback: `const plugin = module.default || module`
+- Use TypeScript `@ts-ignore` for type checking bypass on CommonJS interop
+- Common Node.js ESM/CommonJS compatibility pattern for bundler differences
+- Established in 14-01
+
+**Monaco Editor Lazy Loading (Phase 14):**
+- Monaco editor (970KB gzipped) loaded dynamically on first editor toggle
+- Dynamic imports: monaco-editor, theme integration, language tokenizer
+- No impact on initial page load - editor bundle separate from main app
+- Editor toggle button and Ctrl+E keyboard shortcut trigger lazy load
+- Established in 14-01
+
+**Editor as Hidden Default (Phase 14):**
+- Editor panel starts hidden (display: none), toggleable on demand
+- Better UX for narrow viewports (tablets, phones) where space is limited
+- Canvas fills full viewport when editor hidden (flex: 1)
+- Split layout with 40% editor width when shown
+- Established in 14-01
+
 ### Active TODOs
 
 - [x] Plan Phase 9: Platform Abstraction Layer (completed)
@@ -427,12 +448,13 @@ After all feature phases complete:
 | 2026-01-30 | 12-05 | Desktop menu event handlers wired to viewer engine (open-file, save, viewport, theme, new) |
 | 2026-01-30 | 13-01 | Production build optimization: Vite WASM plugins, Cargo release profile, 29% WASM size reduction |
 | 2026-01-30 | 13-03 | URL state sharing for collaboration, responsive layout with 48px touch targets |
+| 2026-01-30 | 14-01 | Monaco editor setup with .cypcb Monarch syntax highlighting and toggleable split layout |
 
-**Last session:** 2026-01-30 01:07 UTC
-**Stopped at:** Completed Phase 13 Plan 03 - URL sharing and responsive layout
+**Last session:** 2026-01-30 16:32 UTC
+**Stopped at:** Completed Phase 14 Plan 01 - Monaco editor foundation with split layout
 **Resume file:** None
 
-*Last updated: 2026-01-30 01:07 UTC*
+*Last updated: 2026-01-30 16:32 UTC*
 
 **Storage Strategy (Phase 9):**
 - Native: SQLite via rusqlite for structured key-value storage with table namespacing
