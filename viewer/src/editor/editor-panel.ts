@@ -8,6 +8,7 @@
 // Visibility state
 let editorVisible = false;
 let editorInstance: any = null;
+let monacoModule: typeof import('monaco-editor') | null = null;
 
 /**
  * Initialize Monaco editor in the given container
@@ -24,11 +25,18 @@ export async function initEditor(container: HTMLElement): Promise<any> {
   const monaco = await import('monaco-editor');
   const { applyMonacoTheme } = await import('../theme/monaco-theme');
   const { cypcbLanguage, cypcbLanguageConfig } = await import('./cypcb-language');
+  const { registerProviders } = await import('./lsp-bridge');
+
+  // Store monaco module reference for diagnostics
+  monacoModule = monaco;
 
   // Register custom .cypcb language
   monaco.languages.register({ id: 'cypcb', extensions: ['.cypcb'] });
   monaco.languages.setMonarchTokensProvider('cypcb', cypcbLanguage);
   monaco.languages.setLanguageConfiguration('cypcb', cypcbLanguageConfig);
+
+  // Register LSP-like providers (completion, hover)
+  registerProviders(monaco);
 
   // Apply theme (wires to ThemeManager)
   applyMonacoTheme(monaco);
@@ -105,6 +113,15 @@ export function isEditorVisible(): boolean {
  */
 export function getEditorInstance(): any {
   return editorInstance;
+}
+
+/**
+ * Get the Monaco module reference
+ *
+ * @returns Monaco module or null if not initialized
+ */
+export function getMonacoModule(): typeof import('monaco-editor') | null {
+  return monacoModule;
 }
 
 /**

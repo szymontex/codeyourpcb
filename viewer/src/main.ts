@@ -289,7 +289,8 @@ async function init(): Promise<void> {
   let editorInstance: any = null;
   let editorReady = false;
   let suppressSync = false; // Prevent circular updates when setting editor content programmatically
-  const { initEditor, toggleEditorPanel } = await import('./editor/editor-panel');
+  const { initEditor, toggleEditorPanel, getMonacoModule } = await import('./editor/editor-panel');
+  const { updateDiagnostics } = await import('./editor/lsp-bridge');
 
   /**
    * Setup editor-to-board sync with debounce
@@ -321,6 +322,12 @@ async function init(): Promise<void> {
 
         // Update snapshot
         snapshot = engine.get_snapshot();
+
+        // Update inline diagnostics (LSP bridge)
+        const monaco = getMonacoModule();
+        if (monaco && editorInstance) {
+          updateDiagnostics(monaco, editorInstance, errors, snapshot.violations || []);
+        }
 
         // Update error badge
         if (snapshot.violations) {
@@ -447,18 +454,25 @@ async function init(): Promise<void> {
         // Track loaded source for save operations
         lastLoadedSource = content;
 
+        // Get new snapshot and fit board
+        snapshot = engine.get_snapshot();
+
         // Update editor content if initialized
         if (editorReady && editorInstance) {
           suppressSync = true;
           editorInstance.setValue(content);
           suppressSync = false;
+
+          // Update inline diagnostics
+          const monaco = getMonacoModule();
+          if (monaco) {
+            updateDiagnostics(monaco, editorInstance, errors, snapshot.violations || []);
+          }
         }
 
         // Update current file path for routing
         currentFilePath = file.name;
 
-        // Get new snapshot and fit board
-        snapshot = engine.get_snapshot();
         if (snapshot.board) {
           viewport = fitBoard(viewport, snapshot.board.width_nm, snapshot.board.height_nm);
           interactionState.viewport = viewport;
@@ -529,15 +543,22 @@ async function init(): Promise<void> {
           // Track loaded source for save operations
           lastLoadedSource = result.content;
 
+          // Get new snapshot and fit board
+          snapshot = engine.get_snapshot();
+
           // Update editor content if initialized
           if (editorReady && editorInstance) {
             suppressSync = true;
             editorInstance.setValue(result.content);
             suppressSync = false;
+
+            // Update inline diagnostics
+            const monaco = getMonacoModule();
+            if (monaco) {
+              updateDiagnostics(monaco, editorInstance, errors, snapshot.violations || []);
+            }
           }
 
-          // Get new snapshot and fit board
-          snapshot = engine.get_snapshot();
           if (snapshot.board) {
             viewport = fitBoard(viewport, snapshot.board.width_nm, snapshot.board.height_nm);
             interactionState.viewport = viewport;
@@ -690,14 +711,21 @@ async function init(): Promise<void> {
     // Track loaded source for save operations
     lastLoadedSource = content;
 
+    snapshot = engine.get_snapshot();
+
     // Update editor content if initialized
     if (editorReady && editorInstance) {
       suppressSync = true;
       editorInstance.setValue(content);
       suppressSync = false;
+
+      // Update inline diagnostics
+      const monaco = getMonacoModule();
+      if (monaco) {
+        updateDiagnostics(monaco, editorInstance, errors, snapshot.violations || []);
+      }
     }
 
-    snapshot = engine.get_snapshot();
     console.log('[HotReload] Reloaded snapshot:', snapshot);
 
     // Restore viewport (preserved exactly)
@@ -1064,15 +1092,21 @@ async function init(): Promise<void> {
       // Track loaded source for save operations
       lastLoadedSource = content;
 
+      // Update snapshot
+      snapshot = engine.get_snapshot();
+
       // Update editor content if initialized
       if (editorReady && editorInstance) {
         suppressSync = true;
         editorInstance.setValue(content);
         suppressSync = false;
-      }
 
-      // Update snapshot
-      snapshot = engine.get_snapshot();
+        // Update inline diagnostics
+        const monaco = getMonacoModule();
+        if (monaco) {
+          updateDiagnostics(monaco, editorInstance, errors, snapshot.violations || []);
+        }
+      }
 
       // Update error badge
       if (snapshot.violations) {
@@ -1168,6 +1202,12 @@ async function init(): Promise<void> {
         suppressSync = true;
         editorInstance.setValue('');
         suppressSync = false;
+
+        // Clear inline diagnostics
+        const monaco = getMonacoModule();
+        if (monaco) {
+          updateDiagnostics(monaco, editorInstance, null, []);
+        }
       }
 
       // Clear file state
