@@ -287,17 +287,82 @@ async function init(): Promise<void> {
 
   // Monaco editor setup
   let editorInstance: any = null;
+  let editorReady = false;
+  let suppressSync = false; // Prevent circular updates when setting editor content programmatically
   const { initEditor, toggleEditorPanel } = await import('./editor/editor-panel');
+
+  /**
+   * Setup editor-to-board sync with debounce
+   * When editor content changes, parse and update the board viewer
+   */
+  function setupEditorSync(editor: any): void {
+    let debounceTimer: number | null = null;
+
+    editor.onDidChangeModelContent(() => {
+      // Skip sync if content was set programmatically (file load, hot reload)
+      if (suppressSync) {
+        return;
+      }
+
+      // Debounce for 300ms
+      if (debounceTimer !== null) {
+        clearTimeout(debounceTimer);
+      }
+
+      debounceTimer = window.setTimeout(() => {
+        const content = editor.getValue();
+        console.log('[Editor] Content changed, reloading board...');
+
+        // Parse and update board
+        const errors = engine.load_source(content);
+        if (errors) {
+          console.warn('[Editor] Parse errors:', errors);
+        }
+
+        // Update snapshot
+        snapshot = engine.get_snapshot();
+
+        // Update error badge
+        if (snapshot.violations) {
+          updateErrorBadge(snapshot.violations);
+        }
+
+        // Track as loaded source
+        lastLoadedSource = content;
+
+        // Mark as dirty for re-render
+        dirty = true;
+
+        debounceTimer = null;
+      }, 300);
+    });
+
+    console.log('[Editor] Sync wired up with 300ms debounce');
+  }
 
   // Editor toggle button handler
   editorToggleBtn.addEventListener('click', async () => {
     // Lazy-load editor on first toggle
-    if (!editorInstance) {
+    if (!editorReady) {
       console.log('[Editor] Initializing Monaco editor...');
       editorInstance = await initEditor(editorContainer);
+
+      // Set initial content if a file is loaded
+      if (lastLoadedSource) {
+        suppressSync = true;
+        editorInstance.setValue(lastLoadedSource);
+        suppressSync = false;
+      }
+
+      // Wire up editor-to-board sync
+      setupEditorSync(editorInstance);
+
+      editorReady = true;
       console.log('[Editor] Monaco editor ready');
     }
     toggleEditorPanel();
+    // Trigger canvas resize
+    resize();
   });
 
   // Apply URL state if present (shared URL)
@@ -382,6 +447,13 @@ async function init(): Promise<void> {
         // Track loaded source for save operations
         lastLoadedSource = content;
 
+        // Update editor content if initialized
+        if (editorReady && editorInstance) {
+          suppressSync = true;
+          editorInstance.setValue(content);
+          suppressSync = false;
+        }
+
         // Update current file path for routing
         currentFilePath = file.name;
 
@@ -456,6 +528,13 @@ async function init(): Promise<void> {
 
           // Track loaded source for save operations
           lastLoadedSource = result.content;
+
+          // Update editor content if initialized
+          if (editorReady && editorInstance) {
+            suppressSync = true;
+            editorInstance.setValue(result.content);
+            suppressSync = false;
+          }
 
           // Get new snapshot and fit board
           snapshot = engine.get_snapshot();
@@ -610,6 +689,13 @@ async function init(): Promise<void> {
 
     // Track loaded source for save operations
     lastLoadedSource = content;
+
+    // Update editor content if initialized
+    if (editorReady && editorInstance) {
+      suppressSync = true;
+      editorInstance.setValue(content);
+      suppressSync = false;
+    }
 
     snapshot = engine.get_snapshot();
     console.log('[HotReload] Reloaded snapshot:', snapshot);
@@ -811,7 +897,10 @@ async function init(): Promise<void> {
    * Uses File System Access API with handle for save-in-place.
    */
   async function handleSaveFile(): Promise<void> {
-    if (!lastLoadedSource) {
+    // Use editor content if editor is active, otherwise use lastLoadedSource
+    const contentToSave = (editorReady && editorInstance) ? editorInstance.getValue() : lastLoadedSource;
+
+    if (!contentToSave) {
       console.log('[Save] No content to save');
       statusText.textContent = 'No design loaded';
       setTimeout(() => {
@@ -822,7 +911,7 @@ async function init(): Promise<void> {
 
     try {
       const defaultName = currentFilePath || 'design.cypcb';
-      const newHandle = await saveFile(lastLoadedSource, currentFileHandle, defaultName);
+      const newHandle = await saveFile(contentToSave, currentFileHandle, defaultName);
 
       // Update handle if we got a new one (from save-as)
       if (newHandle) {
@@ -975,6 +1064,13 @@ async function init(): Promise<void> {
       // Track loaded source for save operations
       lastLoadedSource = content;
 
+      // Update editor content if initialized
+      if (editorReady && editorInstance) {
+        suppressSync = true;
+        editorInstance.setValue(content);
+        suppressSync = false;
+      }
+
       // Update snapshot
       snapshot = engine.get_snapshot();
 
@@ -1005,9 +1101,12 @@ async function init(): Promise<void> {
     window.addEventListener('desktop:content-request', () => {
       console.log('[Desktop] Content requested for save');
 
+      // Use editor content if editor is active, otherwise use lastLoadedSource
+      const contentToSave = (editorReady && editorInstance) ? editorInstance.getValue() : lastLoadedSource;
+
       // Respond with current source content
       const event = new CustomEvent('desktop:content-response', {
-        detail: { content: lastLoadedSource },
+        detail: { content: contentToSave },
       });
       window.dispatchEvent(event);
     });
@@ -1063,6 +1162,13 @@ async function init(): Promise<void> {
       // Clear the design
       engine.load_source('');
       snapshot = engine.get_snapshot();
+
+      // Clear editor content if initialized
+      if (editorReady && editorInstance) {
+        suppressSync = true;
+        editorInstance.setValue('');
+        suppressSync = false;
+      }
 
       // Clear file state
       currentFilePath = null;
