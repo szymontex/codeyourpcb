@@ -1,7 +1,12 @@
 import { defineConfig } from 'vite';
+import wasm from 'vite-plugin-wasm';
+import topLevelAwait from 'vite-plugin-top-level-await';
 
 export default defineConfig({
-  // Minimal config for TypeScript + WASM support
+  plugins: [
+    wasm(),
+    topLevelAwait(),
+  ],
   server: {
     port: 4321,
     host: process.env.TAURI_DEV_HOST || '0.0.0.0',
@@ -20,6 +25,13 @@ export default defineConfig({
         : 'esnext',
     minify: !process.env.TAURI_ENV_DEBUG ? 'esbuild' : false,
     sourcemap: !!process.env.TAURI_ENV_DEBUG,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['./src/wasm.ts'],
+        },
+      },
+    },
   },
   optimizeDeps: {
     exclude: ['cypcb-render'], // WASM module will be loaded separately

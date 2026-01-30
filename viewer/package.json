@@ -9,6 +9,7 @@
     "dev": "vite",
     "dev:watch": "npx tsx server.ts",
     "build": "npm run build:wasm && tsc && vite build",
+    "build:web": "npm run build:wasm && tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
     "dev:desktop": "tauri dev",
@@ -24,6 +25,8 @@
     "tsx": "^4.0.0",
     "typescript": "^5.3.3",
     "vite": "^5.0.0",
+    "vite-plugin-top-level-await": "^1.6.0",
+    "vite-plugin-wasm": "^3.5.0",
     "ws": "^8.18.0"
   }
 }
