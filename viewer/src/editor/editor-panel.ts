@@ -46,6 +46,10 @@ export async function initEditor(container: HTMLElement): Promise<any> {
   });
 
   editorInstance = editor;
+
+  // Setup draggable divider
+  setupDivider();
+
   return editor;
 }
 
@@ -68,12 +72,12 @@ export function toggleEditorPanel(): void {
   editorVisible = !editorVisible;
 
   if (editorVisible) {
-    // Show editor
+    // Show editor and divider
     editorContainer.style.display = 'block';
     divider.style.display = 'block';
     canvasContainer.style.flex = '1';
   } else {
-    // Hide editor
+    // Hide editor and divider
     editorContainer.style.display = 'none';
     divider.style.display = 'none';
     canvasContainer.style.flex = '1';
@@ -92,4 +96,101 @@ export function toggleEditorPanel(): void {
  */
 export function isEditorVisible(): boolean {
   return editorVisible;
+}
+
+/**
+ * Get the current editor instance
+ *
+ * @returns Monaco editor instance or null if not initialized
+ */
+export function getEditorInstance(): any {
+  return editorInstance;
+}
+
+/**
+ * Setup draggable divider between editor and canvas
+ *
+ * Allows user to resize editor/canvas proportions by dragging the divider.
+ * Enforces minimum width (200px) and maximum width (70% of main content).
+ */
+export function setupDivider(): void {
+  const divider = document.getElementById('divider');
+  const editorContainer = document.getElementById('editor-container');
+  const mainContent = document.getElementById('main-content');
+
+  if (!divider || !editorContainer || !mainContent) {
+    console.error('[Divider] Required elements not found');
+    return;
+  }
+
+  let isDragging = false;
+
+  // Mouse events
+  divider.addEventListener('mousedown', (e: MouseEvent) => {
+    e.preventDefault();
+    isDragging = true;
+    document.body.style.userSelect = 'none';
+  });
+
+  document.addEventListener('mousemove', (e: MouseEvent) => {
+    if (!isDragging) return;
+
+    const mainRect = mainContent.getBoundingClientRect();
+    const newWidth = e.clientX - mainRect.left;
+
+    // Clamp between 200px and 70% of main content width
+    const minWidth = 200;
+    const maxWidth = mainRect.width * 0.7;
+    const clampedWidth = Math.min(Math.max(newWidth, minWidth), maxWidth);
+
+    editorContainer.style.width = clampedWidth + 'px';
+
+    // Trigger Monaco layout recalculation
+    if (editorInstance) {
+      editorInstance.layout();
+    }
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (isDragging) {
+      isDragging = false;
+      document.body.style.userSelect = '';
+    }
+  });
+
+  // Touch events for tablet support
+  divider.addEventListener('touchstart', (e: TouchEvent) => {
+    e.preventDefault();
+    isDragging = true;
+    document.body.style.userSelect = 'none';
+  });
+
+  document.addEventListener('touchmove', (e: TouchEvent) => {
+    if (!isDragging || e.touches.length === 0) return;
+
+    const touch = e.touches[0];
+    const mainRect = mainContent.getBoundingClientRect();
+    const newWidth = touch.clientX - mainRect.left;
+
+    // Clamp between 200px and 70% of main content width
+    const minWidth = 200;
+    const maxWidth = mainRect.width * 0.7;
+    const clampedWidth = Math.min(Math.max(newWidth, minWidth), maxWidth);
+
+    editorContainer.style.width = clampedWidth + 'px';
+
+    // Trigger Monaco layout recalculation
+    if (editorInstance) {
+      editorInstance.layout();
+    }
+  });
+
+  document.addEventListener('touchend', () => {
+    if (isDragging) {
+      isDragging = false;
+      document.body.style.userSelect = '';
+    }
+  });
+
+  console.log('[Divider] Drag handlers set up');
 }
