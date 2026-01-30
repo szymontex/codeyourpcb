@@ -864,8 +864,9 @@ async function init(): Promise<void> {
 
   // Share button (web only)
   if (!isDesktop()) {
-    shareBtn.classList.remove('hidden');
-    shareBtn.addEventListener('click', handleShareView);
+    // TODO: Share feature needs design decision - share full board state or just viewport?
+    // shareBtn.classList.remove('hidden');
+    // shareBtn.addEventListener('click', handleShareView);
   }
 
   // Keyboard shortcuts
