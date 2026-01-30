@@ -187,6 +187,7 @@ async function init(): Promise<void> {
   let layers = createLayerVisibility();
   let selectedRefdes: string | null = null;
   let dirty = true;
+  let lastLoadedSource: string | null = null;
 
   // Resize handler
   function resize(): void {
@@ -326,6 +327,9 @@ async function init(): Promise<void> {
         if (errors) {
           console.warn('Parse errors:', errors);
         }
+
+        // Track loaded source for save operations
+        lastLoadedSource = content;
 
         // Update current file path for routing
         currentFilePath = file.name;
@@ -490,6 +494,9 @@ async function init(): Promise<void> {
     if (errors) {
       console.warn('[HotReload] Parse warnings:', errors);
     }
+
+    // Track loaded source for save operations
+    lastLoadedSource = content;
 
     snapshot = engine.get_snapshot();
     console.log('[HotReload] Reloaded snapshot:', snapshot);
@@ -735,6 +742,121 @@ async function init(): Promise<void> {
   // Initialize desktop integration if running in Tauri
   if (isDesktop()) {
     await initDesktop();
+
+    // Desktop event listeners - handle custom events from desktop.ts
+    window.addEventListener('desktop:open-file', (event: Event) => {
+      const customEvent = event as CustomEvent<{ path: string; content: string }>;
+      const { path, content } = customEvent.detail;
+
+      console.log('[Desktop] Opening file:', path);
+
+      // Load the content into the engine
+      const errors = engine.load_source(content);
+      if (errors) {
+        console.warn('[Desktop] Parse warnings:', errors);
+      }
+
+      // Track loaded source for save operations
+      lastLoadedSource = content;
+
+      // Update snapshot
+      snapshot = engine.get_snapshot();
+
+      // Update error badge
+      if (snapshot.violations) {
+        updateErrorBadge(snapshot.violations);
+      }
+
+      // Fit board in viewport if it exists
+      if (snapshot.board) {
+        viewport = fitBoard(viewport, snapshot.board.width_nm, snapshot.board.height_nm);
+        interactionState.viewport = viewport;
+      }
+
+      // Update current file path for routing
+      currentFilePath = path;
+
+      // Update status with filename
+      const filename = path.split(/[/\\]/).pop() || path;
+      const errorCount = errors ? errors.split('\n').filter(Boolean).length : 0;
+      statusText.textContent = errorCount > 0
+        ? `Loaded ${filename} (${errorCount} warnings)`
+        : `Loaded ${filename}`;
+
+      dirty = true;
+    });
+
+    window.addEventListener('desktop:content-request', () => {
+      console.log('[Desktop] Content requested for save');
+
+      // Respond with current source content
+      const event = new CustomEvent('desktop:content-response', {
+        detail: { content: lastLoadedSource },
+      });
+      window.dispatchEvent(event);
+    });
+
+    window.addEventListener('desktop:viewport', (event: Event) => {
+      const customEvent = event as CustomEvent<{ action: 'zoom-in' | 'zoom-out' | 'fit' }>;
+      const { action } = customEvent.detail;
+
+      console.log('[Desktop] Viewport action:', action);
+
+      switch (action) {
+        case 'zoom-in':
+          viewport = {
+            ...viewport,
+            scale: viewport.scale * 1.5,
+          };
+          interactionState.viewport = viewport;
+          dirty = true;
+          break;
+
+        case 'zoom-out':
+          viewport = {
+            ...viewport,
+            scale: viewport.scale * 0.6667,
+          };
+          interactionState.viewport = viewport;
+          dirty = true;
+          break;
+
+        case 'fit':
+          if (snapshot?.board) {
+            viewport = fitBoard(viewport, snapshot.board.width_nm, snapshot.board.height_nm);
+            interactionState.viewport = viewport;
+            dirty = true;
+          }
+          break;
+      }
+    });
+
+    window.addEventListener('desktop:toggle-theme', () => {
+      console.log('[Desktop] Toggle theme');
+
+      const current = themeManager.getTheme();
+      // Cycle: light → dark → auto → light
+      const next = current === 'light' ? 'dark' : current === 'dark' ? 'auto' : 'light';
+      themeManager.setTheme(next);
+      updateThemeIcon();
+    });
+
+    window.addEventListener('desktop:new-file', () => {
+      console.log('[Desktop] New file');
+
+      // Clear the design
+      engine.load_source('');
+      snapshot = engine.get_snapshot();
+
+      // Clear file state
+      currentFilePath = null;
+      lastLoadedSource = null;
+
+      // Update status
+      statusText.textContent = usingWasm ? 'Ready (WASM) - Open a file' : 'Ready (Mock) - Open a file';
+
+      dirty = true;
+    });
   }
 }
 
