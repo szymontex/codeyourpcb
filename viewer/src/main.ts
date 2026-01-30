@@ -164,7 +164,9 @@ async function init(): Promise<void> {
   // TODO: Share feature disabled pending design decision
   // const shareBtn = document.getElementById('share-btn') as HTMLButtonElement;
   const themeToggle = document.getElementById('theme-toggle') as HTMLButtonElement;
-  const themeIcon = document.getElementById('theme-icon')!
+  const themeIcon = document.getElementById('theme-icon')!;
+  const editorToggleBtn = document.getElementById('editor-toggle') as HTMLButtonElement;
+  const editorContainer = document.getElementById('editor-container')!
 
   const ctx = canvas.getContext('2d')!;
 
@@ -282,6 +284,21 @@ async function init(): Promise<void> {
   });
 
   updateThemeIcon();
+
+  // Monaco editor setup
+  let editorInstance: any = null;
+  const { initEditor, toggleEditorPanel } = await import('./editor/editor-panel');
+
+  // Editor toggle button handler
+  editorToggleBtn.addEventListener('click', async () => {
+    // Lazy-load editor on first toggle
+    if (!editorInstance) {
+      console.log('[Editor] Initializing Monaco editor...');
+      editorInstance = await initEditor(editorContainer);
+      console.log('[Editor] Monaco editor ready');
+    }
+    toggleEditorPanel();
+  });
 
   // Apply URL state if present (shared URL)
   const urlState = decodeViewState();
@@ -875,6 +892,11 @@ async function init(): Promise<void> {
     // Escape to cancel routing
     if (e.key === 'Escape' && isRouting) {
       cancelRouting();
+    }
+    // Ctrl+E to toggle editor
+    if (e.ctrlKey && e.key === 'e') {
+      e.preventDefault();
+      editorToggleBtn.click();
     }
     // Ctrl+Shift+T to toggle theme
     if (e.ctrlKey && e.shiftKey && e.key === 'T') {

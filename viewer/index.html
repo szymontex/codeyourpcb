@@ -40,6 +40,23 @@
       color: var(--text-tertiary);
       margin: 0 -8px;
     }
+    /* Editor toggle button */
+    #editor-toggle {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-primary);
+      padding: 4px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      transition: background-color 0.15s;
+    }
+    #editor-toggle:hover {
+      background: var(--border-primary);
+    }
+    /* Divider between editor and canvas */
+    #divider:hover {
+      background: var(--accent-primary);
+    }
     #canvas-container {
       flex: 1;
       position: relative;
@@ -315,6 +332,8 @@
 </head>
 <body>
   <div id="toolbar">
+    <button id="editor-toggle" title="Toggle Editor (Ctrl+E)">Editor</button>
+    <span class="separator">|</span>
     <span>Layers:</span>
     <label><input type="checkbox" id="layer-top" checked> Top</label>
     <label><input type="checkbox" id="layer-bottom" checked> Bottom</label>
@@ -331,25 +350,31 @@
     <button id="route-btn">Route</button>
     <button id="cancel-route-btn" class="hidden">Cancel</button>
   </div>
-  <div id="canvas-container">
-    <canvas id="pcb-canvas"></canvas>
-    <div id="drop-hint">Drop .cypcb or .ses file</div>
-    <div id="status">
-      <span id="status-text">Loading...</span>
-      <span id="error-badge" class="hidden"><span id="error-count">0</span> errors</span>
+  <div id="main-content" style="display: flex; flex: 1; overflow: hidden;">
+    <div id="editor-container" style="width: 40%; min-width: 200px; display: none;">
+      <!-- Monaco mounts here -->
     </div>
-    <!-- Routing status overlay -->
-    <div id="routing-status" class="hidden">
-      <h3><span class="spinner"></span>Routing...</h3>
-      <div id="routing-progress">Initializing...</div>
-    </div>
-    <!-- Error panel (VS Code style - appears on badge click) -->
-    <div id="error-panel" class="hidden">
-      <div id="error-panel-header">
-        <span>DRC Errors</span>
-        <button id="error-panel-close">&times;</button>
+    <div id="divider" style="width: 4px; cursor: col-resize; background: var(--border-primary); display: none;"></div>
+    <div id="canvas-container" style="flex: 1; position: relative; overflow: hidden;">
+      <canvas id="pcb-canvas"></canvas>
+      <div id="drop-hint">Drop .cypcb or .ses file</div>
+      <div id="status">
+        <span id="status-text">Loading...</span>
+        <span id="error-badge" class="hidden"><span id="error-count">0</span> errors</span>
       </div>
-      <div id="error-list"></div>
+      <!-- Routing status overlay -->
+      <div id="routing-status" class="hidden">
+        <h3><span class="spinner"></span>Routing...</h3>
+        <div id="routing-progress">Initializing...</div>
+      </div>
+      <!-- Error panel (VS Code style - appears on badge click) -->
+      <div id="error-panel" class="hidden">
+        <div id="error-panel-header">
+          <span>DRC Errors</span>
+          <button id="error-panel-close">&times;</button>
+        </div>
+        <div id="error-list"></div>
+      </div>
     </div>
   </div>
   <script type="module" src="/src/main.ts"></script>
