@@ -131,7 +131,15 @@ Plans:
 4. User can share designs via URL with project state loaded from URL parameters
 5. Web deployment uses global CDN with HTTPS serving
 
-**Status:** Pending
+**Plans:** 4 plans
+
+Plans:
+- [ ] 13-01-PLAN.md — Production build pipeline: Vite WASM plugins and binary size optimization
+- [ ] 13-02-PLAN.md — File System Access API for open/save with Firefox fallback
+- [ ] 13-03-PLAN.md — URL state sharing and responsive tablet/desktop layout
+- [ ] 13-04-PLAN.md — Cloudflare Pages deployment config with WASM headers and CSP
+
+**Status:** In Progress
 
 ## Phase 14: Monaco Editor Integration
 
@@ -175,7 +183,7 @@ Plans:
 | 10 - Library Management | 12 | Complete | 100% |
 | 11 - Dark Mode & UI Polish | 9 | Complete | 100% |
 | 12 - Tauri Desktop | 10 | Complete | 100% |
-| 13 - Web Deployment | 9 | Pending | 0% |
+| 13 - Web Deployment | 9 | In Progress | 0% |
 | 14 - Monaco Editor | 10 | Pending | 0% |
 | 15 - Documentation | 9 | Pending | 0% |
 
@@ -195,4 +203,4 @@ The critical path for v1.1 is:
 Phases 10, 11, and 12/13 can be developed in parallel after Phase 9 completes.
 
 ---
-*Last updated: 2026-01-29*
+*Last updated: 2026-01-30*
