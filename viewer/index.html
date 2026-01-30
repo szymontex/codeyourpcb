@@ -296,6 +296,21 @@
     #canvas-container.drag-over #drop-hint {
       opacity: 1;
     }
+
+    /* Responsive: Touch targets for coarse pointer devices (tablets, phones) */
+    @media (pointer: coarse) {
+      #toolbar { padding: 12px 16px; gap: 12px; }
+      button { min-width: 48px; min-height: 48px; }
+      label { min-height: 48px; display: flex; align-items: center; }
+      input[type="checkbox"] { width: 24px; height: 24px; }
+    }
+
+    /* Responsive: Narrow viewports (tablets in portrait) */
+    @media (max-width: 768px) {
+      #toolbar { flex-wrap: wrap; padding: 8px; gap: 8px; }
+      #coords { display: none; }  /* Hide coords on small screens */
+      #auto-route-label { display: none; }  /* Simplify on mobile */
+    }
   </style>
 </head>
 <body>

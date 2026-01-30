@@ -13,16 +13,16 @@
 ## Current Position
 
 **Phase:** Phase 13 (Web Deployment)
-**Plan:** 2 of 9 (File System Access API)
+**Plan:** 1 of 9 complete (Build Optimization)
 **Status:** In progress
 
 **Progress:**
 ```
-[======================================            ] 59%
-v1.1: Phase 9 ✓ → 10 ✓ → 11 ✓ → 12 ✓ → 13 (2/9) → 14 → 15
+[======================================            ] 60%
+v1.1: Phase 9 ✓ → 10 ✓ → 11 ✓ → 12 ✓ → 13 (1/9) → 14 → 15
 ```
 
-**Requirements Complete:** 38/64 (59%)
+**Requirements Complete:** 39/64 (61%)
 
 **Requirements Coverage:** 64/64 mapped to phases (100%)
 
@@ -44,17 +44,17 @@ v1.1: Phase 9 ✓ → 10 ✓ → 11 ✓ → 12 ✓ → 13 (2/9) → 14 → 15
 **Phases:**
 - Total planned (v1.1): 7
 - Completed: 4
-- In progress: 0
-- Pending: 3
+- In progress: 1 (Phase 13)
+- Pending: 2
 
 **Requirements:**
 - Total v1.1: 64
-- Satisfied: 36
-- In progress: 0
-- Pending: 28
+- Satisfied: 39
+- In progress: 3
+- Pending: 22
 
 **Efficiency:**
-- Plans completed (v1.1): 19
+- Plans completed (v1.1): 20
 - Blockers encountered: 3 (pkg-config resolved, FTS5 corruption fixed, GTK3 libraries needed)
 - Revisions needed: 0
 
@@ -290,6 +290,21 @@ v1.1: Phase 9 ✓ → 10 ✓ → 11 ✓ → 12 ✓ → 13 (2/9) → 14 → 15
 - Alternative (add engine.get_source()) rejected - requires Rust changes, tracking in TS sufficient
 - Established in 12-05
 
+**Workspace-Level WASM Optimization (Phase 13):**
+- Cargo release profile at workspace level (not crate-specific) applies to all crates
+- opt-level="z" for maximum size reduction (chosen over "s")
+- LTO, codegen-units=1, panic="abort", strip=true for aggressive optimization
+- WASM binary reduced from 374KB to 264KB (29% reduction)
+- Established in 13-01
+
+**wasm-pack Configuration for Modern WASM Features (Phase 13):**
+- wasm-opt flags configured in Cargo.toml package.metadata to ensure wasm-pack uses them
+- Required flags: --enable-bulk-memory, --enable-nontrapping-float-to-int for Rust 2024 WASM
+- -O4 aggressive optimization with --converge for fixed-point iteration
+- SIMD NOT enabled per research (reduces browser compatibility)
+- Post-build wasm-opt step optional since wasm-pack runs it automatically
+- Established in 13-01
+
 **File System Access API with Progressive Enhancement (Phase 13):**
 - Native File System Access API for Chrome/Edge/Safari with input/download fallback for Firefox
 - FileSystemFileHandle persistence enables save-in-place without showing dialog
@@ -358,28 +373,22 @@ v1.1: Phase 9 ✓ → 10 ✓ → 11 ✓ → 12 ✓ → 13 (2/9) → 14 → 15
 ## Session Continuity
 
 **Where We Are:**
-Phase 12 in progress (2026-01-29). Plan 12-02 complete - Native menus and file dialogs implemented. GTK3 system libraries required for compilation verification.
+Phase 13 in progress (2026-01-30). Plan 13-01 complete - Production build optimization with WASM size reduction.
 
 **What's Next:**
-Continue Phase 12 (Desktop Application) - Frontend menu event handlers (12-03), window management integration (12-04). OR Phase 14 (Monaco Editor) if Phase 12 blocked. Phase 13 (Web Deployment) can run in parallel.
+Continue Phase 13 (Web Deployment) - Browser compatibility testing, responsive UI, CDN deployment configuration.
 
 **Context for Next Session:**
-- Phase 12 Plan 01 complete: Tauri v2 project scaffolded (12-01)
-- Tauri structure: src-tauri/ workspace member with Cargo.toml, tauri.conf.json, capabilities (12-01)
-- Vite integration: TAURI_DEV_HOST, watch ignore, conditional build targets (12-01)
-- Window config: Maximized start, 800x600 minimum, file association for .cypcb (12-01)
-- Plugins: tauri-plugin-dialog, tauri-plugin-fs, tauri-plugin-window-state registered (12-01)
-- Icons: Placeholder PNGs created (32x32, 128x128, 256x256, ico, icns) (12-01)
-- npm packages: @tauri-apps/api@2.9.1, @tauri-apps/cli@2.9.6 installed (12-01)
-- Scripts: dev:desktop, build:desktop added to package.json (12-01)
-- Phase 12 Plan 02 complete: Native menus and file dialogs (12-02)
-- Native menu bar: File/Edit/View/Help with keyboard shortcuts (Ctrl+ → CmdOrCtrl+) (12-02)
-- Menu modules: menu.rs (create_app_menu, build_tauri_menu, handle_menu_event) (12-02)
-- IPC commands: open_file, save_file, save_file_as with .cypcb filter (12-02)
-- Menu event forwarding: "menu-action" events emitted to frontend for handling (12-02)
-- Window management: Quit and fullscreen handled in Rust, minimize/maximize via native titlebar (12-02)
-- GTK3 blocker: Compilation requires system libraries not available in this environment (12-01, 12-02)
-- Commits: 12-01 (d01bd98, 732576a), 12-02 (2318cb0, 81fe39d)
+- Phase 12 complete (5 plans): Tauri desktop app with native menus, file dialogs, menu event handlers
+- Phase 13 Plan 01 complete: Production build optimization (13-01)
+- Vite plugins: vite-plugin-wasm@3.5.0, vite-plugin-top-level-await@1.6.0 installed
+- Vite config: WASM ES module support, rollupOptions with vendor chunking
+- Cargo release profile: opt-level=z, LTO, codegen-units=1, panic=abort, strip=true (workspace-level)
+- wasm-pack config: -O4 with --enable-bulk-memory, --enable-nontrapping-float-to-int in Cargo.toml
+- WASM size: Reduced from 374KB to 264KB (29% reduction, well under 500KB target)
+- Build pipeline: npm run build:web works end-to-end (WASM + TypeScript + Vite)
+- Known limitation: WASM in pkg/ not copied to dist/, deployment needs both directories accessible
+- Commits: 13-01 (3ec158c, af82028)
 
 **Parallelization Opportunities:**
 Next phases (independent after Phase 11):
@@ -416,13 +425,13 @@ After all feature phases complete:
 | 2026-01-29 | 12-02 | Native menu bar with File/Edit/View/Help and IPC commands for file open/save |
 | 2026-01-29 | 12-03 | Desktop integration layer with menu event handling and IPC file operations |
 | 2026-01-30 | 12-05 | Desktop menu event handlers wired to viewer engine (open-file, save, viewport, theme, new) |
-| 2026-01-30 | 13-02 | File System Access API wrapper with save-in-place and Firefox/legacy browser fallback |
+| 2026-01-30 | 13-01 | Production build optimization: Vite WASM plugins, Cargo release profile, 29% WASM size reduction |
 
-**Last session:** 2026-01-30 02:49 UTC
-**Stopped at:** Completed Phase 13 Plan 02 - File System Access API integration
+**Last session:** 2026-01-30 01:04 UTC
+**Stopped at:** Completed Phase 13 Plan 01 - Production build optimization
 **Resume file:** None
 
-*Last updated: 2026-01-30 02:49 UTC*
+*Last updated: 2026-01-30 01:04 UTC*
 
 **Storage Strategy (Phase 9):**
 - Native: SQLite via rusqlite for structured key-value storage with table namespacing
