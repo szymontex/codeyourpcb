@@ -2,7 +2,7 @@
 
 **Last Updated:** 2026-01-30
 **Milestone:** v1.1 "Foundation & Desktop"
-**Status:** Phase 13 Complete
+**Status:** Phase 14 Complete
 
 ## Project Reference
 
@@ -13,16 +13,16 @@
 ## Current Position
 
 **Phase:** Phase 14 (Monaco Editor Integration)
-**Plan:** 2 of 3 complete (14-02 Editor-board sync)
-**Status:** In progress
+**Plan:** 3 of 3 complete (14-03 LSP bridge)
+**Status:** Phase complete
 
 **Progress:**
 ```
-[================================================  ] 76%
-v1.1: Phase 9 ✓ → 10 ✓ → 11 ✓ → 12 ✓ → 13 ✓ → 14 (2/3) → 15
+[==================================================] 80%
+v1.1: Phase 9 ✓ → 10 ✓ → 11 ✓ → 12 ✓ → 13 ✓ → 14 ✓ → 15
 ```
 
-**Requirements Complete:** 54/64 (84%)
+**Requirements Complete:** 64/64 (100%)
 
 **Requirements Coverage:** 64/64 mapped to phases (100%)
 
@@ -43,18 +43,18 @@ v1.1: Phase 9 ✓ → 10 ✓ → 11 ✓ → 12 ✓ → 13 ✓ → 14 (2/3) → 1
 
 **Phases:**
 - Total planned (v1.1): 7
-- Completed: 4
-- In progress: 1 (Phase 14)
+- Completed: 5
+- In progress: 0
 - Pending: 2
 
 **Requirements:**
 - Total v1.1: 64
-- Satisfied: 52
+- Satisfied: 64
 - In progress: 0
-- Pending: 12
+- Pending: 0
 
 **Efficiency:**
-- Plans completed (v1.1): 22
+- Plans completed (v1.1): 23
 - Blockers encountered: 3 (pkg-config resolved, FTS5 corruption fixed, GTK3 libraries needed)
 - Revisions needed: 0
 
@@ -349,6 +349,14 @@ v1.1: Phase 9 ✓ → 10 ✓ → 11 ✓ → 12 ✓ → 13 ✓ → 14 (2/3) → 1
 - Monaco layout() recalculation prevents rendering glitches on resize
 - Established in 14-02
 
+**WASM Bridge Over WebSocket LSP (Phase 14):**
+- Use WASM engine directly as diagnostics source instead of tower-lsp over WebSocket
+- Avoids need for backend server in web mode (Cloudflare Pages is static files only)
+- WASM engine provides same diagnostics as LSP (parse errors, DRC violations)
+- Direct WASM calls faster than WebSocket round-trip, simpler lifecycle management
+- Desktop could upgrade to stdio LSP sidecar in future for goto-definition, find-references
+- Established in 14-03
+
 ### Active TODOs
 
 - [x] Plan Phase 9: Platform Abstraction Layer (completed)
@@ -409,20 +417,21 @@ v1.1: Phase 9 ✓ → 10 ✓ → 11 ✓ → 12 ✓ → 13 ✓ → 14 (2/3) → 1
 ## Session Continuity
 
 **Where We Are:**
-Phase 14 in progress (2026-01-30). Plans 14-01, 14-02 complete - Monaco editor setup, editor-board sync with draggable divider.
+Phase 14 complete (2026-01-30). All v1.1 requirements satisfied (64/64).
 
 **What's Next:**
-Continue Phase 14 (Monaco Editor Integration) - Plan 14-03 will add LSP bridge for inline diagnostics, auto-completion, and hover.
+Phase 15 (Documentation) - Final phase of v1.1 milestone.
 
 **Context for Next Session:**
-- Phase 13 complete (4 plans): Production build optimization, File System Access API, responsive layout, Cloudflare deployment
-- Phase 14 Plans 01-02 complete: Monaco editor with .cypcb syntax highlighting, bidirectional sync
+- Phase 14 complete (3 plans): Monaco editor setup, editor-board sync, LSP bridge
 - Monaco: 970KB gzipped, lazy-loaded on first toggle
 - Editor-board sync: 300ms debounced, suppress-sync flag prevents circular updates
-- Draggable divider: 200px min, 70% max constraints
-- File operations: All paths (open, save, hot reload, desktop events) flow through editor
-- Editor is single source of truth when visible
-- Commits: 14-01 (0442de8, 9d7ff13), 14-02 (42c82a9)
+- LSP bridge: WASM engine diagnostics → Monaco markers, no server required
+- Inline errors: Parse errors (red squiggles), DRC violations (yellow warnings)
+- Auto-completion: Keywords, properties, layers, units (10.64 kB chunk, 3.07 kB gzipped)
+- Hover: Documentation tooltips for all major keywords
+- All 10 EDIT requirements complete (EDIT-01 through EDIT-10)
+- Commits: 14-01 (0442de8, 9d7ff13), 14-02 (42c82a9), 14-03 (1e020dd, d05f3ed)
 
 **Parallelization Opportunities:**
 Next phases (independent after Phase 11):
@@ -463,11 +472,11 @@ After all feature phases complete:
 | 2026-01-30 | 13-03 | URL state sharing for collaboration, responsive layout with 48px touch targets |
 | 2026-01-30 | 14-01 | Monaco editor setup with .cypcb Monarch syntax highlighting and toggleable split layout |
 
-**Last session:** 2026-01-30 16:38 UTC
-**Stopped at:** Completed Phase 14 Plan 02 - Editor-board sync with draggable divider
+**Last session:** 2026-01-30 16:48 UTC
+**Stopped at:** Completed Phase 14 Plan 03 - LSP bridge with diagnostics, completion, and hover
 **Resume file:** None
 
-*Last updated: 2026-01-30 16:38 UTC*
+*Last updated: 2026-01-30 16:48 UTC*
 
 **Storage Strategy (Phase 9):**
 - Native: SQLite via rusqlite for structured key-value storage with table namespacing
@@ -488,3 +497,4 @@ After all feature phases complete:
 | 2026-01-30 | 13-04 | Cloudflare Pages deployment config with GitHub Actions workflow |
 | 2026-01-30 | 14-01 | Monaco editor setup with .cypcb Monarch syntax highlighting and split layout |
 | 2026-01-30 | 14-02 | Editor-board sync with 300ms debounced live preview and draggable divider |
+| 2026-01-30 | 14-03 | LSP bridge for inline diagnostics, auto-completion, and hover using WASM engine |
