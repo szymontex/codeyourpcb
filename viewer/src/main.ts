@@ -284,6 +284,7 @@ async function init(): Promise<void> {
 
   // Apply URL state if present (shared URL)
   const urlState = decodeViewState();
+  let hasUrlState = urlState !== null;
   if (urlState) {
     // Apply viewport state from URL
     viewport = {
@@ -894,6 +895,13 @@ async function init(): Promise<void> {
   try {
     wsConnection = connectWebSocket({
       onReload: (content, file) => {
+        // Skip WebSocket init if URL has state (shared link)
+        if (hasUrlState && !currentFilePath) {
+          console.log('[WS] Skipping init - URL state present');
+          hasUrlState = false; // Only skip first init
+          return;
+        }
+
         // Track current file for routing
         currentFilePath = file;
         reload(content, file);
