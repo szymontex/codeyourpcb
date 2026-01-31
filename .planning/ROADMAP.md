@@ -182,6 +182,13 @@ Plans:
 4. API documentation covers LSP server usage and library file formats
 5. Contributing guide explains development setup and architecture
 
+**Plans:** 3 plans
+
+Plans:
+- [ ] 15-01-PLAN.md — User guide: getting-started, library-management, platform-differences, project-structure
+- [ ] 15-02-PLAN.md — Example walkthroughs, LSP server docs, library format docs
+- [ ] 15-03-PLAN.md — CONTRIBUTING.md and architecture documentation
+
 **Status:** Pending
 
 ## Progress Tracking
