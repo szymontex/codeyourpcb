@@ -83,15 +83,15 @@ Requirements for v1.1 Foundation & Desktop milestone. Each maps to roadmap phase
 
 ### Documentation
 
-- [ ] **DOC-01**: User guide explains how to create .cypcb files
-- [ ] **DOC-02**: User guide explains library management (import, organize, search)
-- [ ] **DOC-03**: User guide explains desktop vs web feature differences
-- [ ] **DOC-04**: User guide explains project structure and file organization
-- [ ] **DOC-05**: User guide includes example projects with comments
-- [ ] **DOC-06**: API documentation covers LSP server usage
-- [ ] **DOC-07**: API documentation covers library file formats
-- [ ] **DOC-08**: Contributing guide explains development setup
-- [ ] **DOC-09**: Contributing guide explains architecture and codebase structure
+- [x] **DOC-01**: User guide explains how to create .cypcb files
+- [x] **DOC-02**: User guide explains library management (import, organize, search)
+- [x] **DOC-03**: User guide explains desktop vs web feature differences
+- [x] **DOC-04**: User guide explains project structure and file organization
+- [x] **DOC-05**: User guide includes example projects with comments
+- [x] **DOC-06**: API documentation covers LSP server usage
+- [x] **DOC-07**: API documentation covers library file formats
+- [x] **DOC-08**: Contributing guide explains development setup
+- [x] **DOC-09**: Contributing guide explains architecture and codebase structure
 
 ## Future Requirements (v1.2+)
 
