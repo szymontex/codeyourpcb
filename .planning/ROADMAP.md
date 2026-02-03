@@ -192,6 +192,29 @@ Plans:
 **Status:** Complete
 **Completed:** 2026-01-31
 
+## Phase 16: Web Deployment Verification & Polish
+
+**Goal:** Verify WASM loads correctly in production and complete Share URL feature
+
+**Dependencies:** Phase 13 (Web Deployment infrastructure)
+
+**Requirements:** WEB-01, WEB-07, WEB-09 (3 gap closures)
+
+**Success Criteria:**
+1. WASM loads successfully in production deployment (not MockPcbEngine fallback)
+2. Board rendering verified working on deployed URL
+3. Share URL feature works (generates shareable links with viewport state)
+4. Deployment completes successfully with configured secrets
+5. Web application loads in <3 seconds on 3G connection
+
+**Plans:** 2 plans
+
+Plans:
+- [ ] 16-01-PLAN.md — Deploy to Cloudflare Pages and verify WASM loading (fix import paths if needed)
+- [ ] 16-02-PLAN.md — Enable Share URL feature and verify deployment secrets
+
+**Status:** Pending
+
 ## Progress Tracking
 
 | Phase | Requirements | Status | Completion |
@@ -203,8 +226,9 @@ Plans:
 | 13 - Web Deployment | 9 | Complete | 100% |
 | 14 - Monaco Editor | 10 | Complete | 100% |
 | 15 - Documentation | 9 | Complete | 100% |
+| 16 - Web Verification & Polish | 3 | Pending | 0% |
 
-**Overall:** 64/64 requirements complete (100%)
+**Overall:** 64/67 requirements complete (95.5%)
 
 ## Critical Path
 
@@ -216,8 +240,9 @@ The critical path for v1.1 is:
 4. Phase 12 OR 13 (Desktop or Web) - Interchangeable, both use abstractions from Phase 9
 5. Phase 14 (Monaco Editor) - Requires theme system and LSP infrastructure
 6. Phase 15 (Documentation) - Final polish after features complete
+7. Phase 16 (Web Verification & Polish) - Gap closure for web deployment issues found in audit
 
 Phases 10, 11, and 12/13 can be developed in parallel after Phase 9 completes.
 
 ---
-*Last updated: 2026-01-31*
+*Last updated: 2026-02-03*
