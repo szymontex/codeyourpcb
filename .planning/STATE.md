@@ -13,16 +13,17 @@
 ## Current Position
 
 **Phase:** Phase 16 (Web Verification & Polish - Gap Closure)
-**Plan:** 0 of 2 complete (16-01 pending)
-**Status:** Planning needed
+**Plan:** 1 of 3 complete (16-01 pending)
+**Status:** In progress
+**Last activity:** 2026-02-03 - Completed 16-02-PLAN.md
 
 **Progress:**
 ```
-[===========================================================>] 95.5%
+[============================================================>] 96.3%
 v1.1: Phase 9 ✓ → 10 ✓ → 11 ✓ → 12 ✓ → 13 ✓ → 14 ✓ → 15 ✓ → 16 ⧗
 ```
 
-**Requirements Complete:** 64/67 (95.5%)
+**Requirements Complete:** 65/67 (97.0%)
 
 **Requirements Coverage:** 67/67 mapped to phases (100%)
 
@@ -358,6 +359,14 @@ v1.1: Phase 9 ✓ → 10 ✓ → 11 ✓ → 12 ✓ → 13 ✓ → 14 ✓ → 15 
 - Desktop could upgrade to stdio LSP sidecar in future for goto-definition, find-references
 - Established in 14-03
 
+**Viewport-Only URL Sharing (Phase 16):**
+- Share viewport state only (layers, zoom, pan), not full board content via URL
+- URLs have practical length limits (~2000 chars), .cypcb files can be megabytes
+- Users share files via git/email/cloud, share URLs for "look at this view" collaboration
+- Matches industry patterns (Google Maps shares location, not map data)
+- Encourages git-based collaboration for proper version control
+- Established in 16-02
+
 ### Active TODOs
 
 - [x] Plan Phase 9: Platform Abstraction Layer (completed)
@@ -467,9 +476,10 @@ Plan and execute Phase 16 to close web deployment gaps (WASM verification, Share
 | 2026-01-31 | 15-03 | Contributing guide and architecture documentation: development setup, 14-crate dependency graph, data flow (924 lines) |
 | 2026-01-31 | audit | Milestone audit complete: 61/64 requirements satisfied, 3 gaps identified (WEB-01 critical, WEB-07 acceptable, WEB-09 low) |
 | 2026-02-03 | 16-00 | Phase 16 created for gap closure: WASM verification, Share URL feature, deployment secrets |
+| 2026-02-03 | 16-02 | Enabled Share URL feature with viewport-only sharing (WEB-07 gap closed) |
 
 **Last session:** 2026-02-03
-**Stopped at:** Phase 16 created, ready for planning
+**Stopped at:** Completed 16-02-PLAN.md
 **Resume file:** None
 
 *Last updated: 2026-02-03*
