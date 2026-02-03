@@ -210,8 +210,8 @@ Plans:
 **Plans:** 2 plans
 
 Plans:
-- [ ] 16-01-PLAN.md — Deploy to Cloudflare Pages and verify WASM loading (fix import paths if needed)
-- [ ] 16-02-PLAN.md — Enable Share URL feature and verify deployment secrets
+- [ ] 16-01-PLAN.md — Build and verify WASM bundling works correctly in production
+- [ ] 16-02-PLAN.md — Enable Share URL feature (viewport-only sharing)
 
 **Status:** Pending
 
