@@ -196,15 +196,15 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DESK-08 | Phase 12 | Complete |
 | DESK-09 | Phase 12 | Complete |
 | DESK-10 | Phase 12 | Complete |
-| WEB-01 | Phase 13 | Pending |
-| WEB-02 | Phase 13 | Pending |
-| WEB-03 | Phase 13 | Pending |
-| WEB-04 | Phase 13 | Pending |
-| WEB-05 | Phase 13 | Pending |
-| WEB-06 | Phase 13 | Pending |
-| WEB-07 | Phase 13 | Pending |
-| WEB-08 | Phase 13 | Pending |
-| WEB-09 | Phase 13 | Pending |
+| WEB-01 | Phase 16 | Pending |
+| WEB-02 | Phase 13 | Complete |
+| WEB-03 | Phase 13 | Complete |
+| WEB-04 | Phase 13 | Complete |
+| WEB-05 | Phase 13 | Complete |
+| WEB-06 | Phase 13 | Complete |
+| WEB-07 | Phase 16 | Pending |
+| WEB-08 | Phase 13 | Complete |
+| WEB-09 | Phase 16 | Pending |
 | EDIT-01 | Phase 14 | Complete |
 | EDIT-02 | Phase 14 | Complete |
 | EDIT-03 | Phase 14 | Complete |
@@ -215,21 +215,21 @@ Which phases cover which requirements. Updated during roadmap creation.
 | EDIT-08 | Phase 14 | Complete |
 | EDIT-09 | Phase 14 | Complete |
 | EDIT-10 | Phase 14 | Complete |
-| DOC-01 | Phase 15 | Pending |
-| DOC-02 | Phase 15 | Pending |
-| DOC-03 | Phase 15 | Pending |
-| DOC-04 | Phase 15 | Pending |
-| DOC-05 | Phase 15 | Pending |
-| DOC-06 | Phase 15 | Pending |
-| DOC-07 | Phase 15 | Pending |
-| DOC-08 | Phase 15 | Pending |
-| DOC-09 | Phase 15 | Pending |
+| DOC-01 | Phase 15 | Complete |
+| DOC-02 | Phase 15 | Complete |
+| DOC-03 | Phase 15 | Complete |
+| DOC-04 | Phase 15 | Complete |
+| DOC-05 | Phase 15 | Complete |
+| DOC-06 | Phase 15 | Complete |
+| DOC-07 | Phase 15 | Complete |
+| DOC-08 | Phase 15 | Complete |
+| DOC-09 | Phase 15 | Complete |
 
 **Coverage:**
-- v1.1 requirements: 64 total
-- Mapped to phases: 64 (100%)
+- v1.1 requirements: 67 total (64 original + 3 gap closures)
+- Mapped to phases: 67 (100%)
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-01-29*
-*Last updated: 2026-01-29 (Phase 9 complete: PLAT-01 through PLAT-05)*
+*Last updated: 2026-02-03 (Phase 16 added for gap closure: WEB-01, WEB-07, WEB-09)*
