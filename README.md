@@ -132,6 +132,14 @@ codeyourpcb/
 
 ---
 
+## Status
+
+This project is **experimental**. The DSL, APIs, and file formats may change between versions. Use at your own risk.
+
+All PRs are welcome — whether it's a bug fix, new feature, or just a typo. Open a PR and we'll figure it out together.
+
+---
+
 ## License
 
 Licensed under either of:
