@@ -19,7 +19,8 @@ net LED_ANODE { R1.2; LED1.A }
 net GND { LED1.K }
 ```
 
-Run once → autorouted board, Gerber export, DRC validation.
+Save the file → board updates instantly. No compile step, no refresh.
+Autorouted, DRC validated, Gerber export ready.
 
 **New here?** → [Syntax reference](docs/SYNTAX.md) · [Getting started](docs/user-guide/getting-started.md) · [Examples](examples/)
 
@@ -42,6 +43,7 @@ CodeYourPCB flips the model: the source file _is_ the design. Text in, board out
 
 | Feature | Status |
 |---------|--------|
+| Live preview — save file, board updates instantly | ✅ |
 | `.cypcb` DSL with Tree-sitter parser | ✅ |
 | Canvas renderer (WebGL via WASM) | ✅ |
 | Design Rule Check (DRC) | ✅ |
