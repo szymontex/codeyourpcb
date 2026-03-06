@@ -1,0 +1,61 @@
+// Najprostszy zasilacz 5V
+// Wejście: 7-12V DC
+// Wyjście: 5V stabilizowane
+version 1
+     
+board simple_psu {
+    size 30mm x 20mm
+    layers 2
+}
+  
+// Złącze wejściowe - 2-pin header
+component J1 connector "PIN-HDR-1x2" {
+    at 5mm, 10mm
+}
+ 
+// Kondensator wejściowy (filtr)
+component C1 capacitor "0805" {
+    value "100nF"
+    at 12mm, 14mm
+}
+
+// Regulator napięcia LDO 5V (SOT-23)
+// np. MCP1700, XC6206, lub podobny
+component U1 ic "SOT-23" {
+    value "LDO-5V"
+    at 18mm, 10mm
+}
+
+// Kondensator wyjściowy (stabilizacja)
+component C2 capacitor "0805" {
+    value "100nF"
+    at 24mm, 14mm
+}
+
+// Złącze wyjściowe - 2-pin header
+component J2 connector "PIN-HDR-1x2" {
+    at 27mm, 10mm
+}
+  
+// Sieć VIN - wejście nieregulowane
+net VIN {
+    J1.1
+    C1.1
+    U1.3  // MCP1700: pin 3 = VIN
+}
+
+// Sieć VOUT - wyjście 5V
+net VOUT {
+    U1.2  // MCP1700: pin 2 = VOUT
+    C2.1
+    J2.1
+}
+
+// Masa wspólna
+net GND {
+    J1.2
+    C1.2
+    U1.1  // MCP1700: pin 1 = GND
+    C2.2
+    J2.2
+}

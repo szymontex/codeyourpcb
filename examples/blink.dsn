@@ -21,6 +21,7 @@
       (width 8)
       (clearance 6)
     )
+    (via via_default)
   )
   (placement
     (component "0805"
@@ -31,21 +32,27 @@
     )
   )
   (library
+    (image "0402"
+      (pin rect_23_19 "1" -19.6850 0.0000)
+      (pin rect_23_19 "2" 19.6850 0.0000)
+    )
     (image "0805"
       (pin rect_39_57 "1" -37.4016 0.0000)
       (pin rect_39_57 "2" 37.4016 0.0000)
     )
-    (image "0402"
-      (pin rect_23_19 "1" -19.6850 0.0000)
-      (pin rect_23_19 "2" 19.6850 0.0000)
+    (padstack rect_23_19
+      (shape (rect F.Cu -11.8110 -9.8425 11.8110 9.8425))
+      (attach off)
     )
     (padstack rect_39_57
       (shape (rect F.Cu -19.6850 -28.5433 19.6850 28.5433))
       (attach off)
     )
-    (padstack rect_23_19
-      (shape (rect F.Cu -11.8110 -9.8425 11.8110 9.8425))
+    (padstack via_default
+      (shape (circle F.Cu 31.4961))
+      (shape (circle B.Cu 31.4961))
       (attach off)
+      (hole round 15.7480)
     )
   )
   (network

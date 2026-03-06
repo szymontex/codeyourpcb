@@ -8,11 +8,23 @@
  * Default watch directory: ../examples
  */
 
-import { readFileSync, existsSync, readdirSync } from 'fs';
-import { resolve, join } from 'path';
+import { readFileSync, existsSync, readdirSync, writeFileSync } from 'fs';
+import { resolve, join, basename, dirname } from 'path';
+import { fileURLToPath } from 'url';
 import { WebSocketServer, WebSocket } from 'ws';
 import * as chokidar from 'chokidar';
 import { spawn } from 'child_process';
+
+// ES module equivalent of __dirname
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// CLI binary path (from cargo build)
+const CLI_PATH = resolve(__dirname, '../target/release/cypcb');
+const CLI_DEBUG_PATH = resolve(__dirname, '../target/debug/cypcb');
+
+// FreeRouting JAR path
+const FREEROUTING_JAR = resolve(__dirname, '../freerouting.jar');
 
 const WS_PORT = 4322;
 const WATCH_DIR = resolve(process.argv[2] || '../examples');
@@ -42,6 +54,16 @@ wss.on('connection', (ws) => {
   ws.on('error', (err) => {
     console.error('[WS] Client error:', err.message);
     clients.delete(ws);
+  });
+
+  // Handle incoming messages from clients
+  ws.on('message', (data) => {
+    try {
+      const message = JSON.parse(data.toString());
+      handleClientMessage(ws, message);
+    } catch (err) {
+      console.error('[WS] Invalid message:', err);
+    }
   });
 
   // Send current file content on connection
@@ -193,3 +215,172 @@ process.on('SIGTERM', shutdown);
 console.log('');
 console.log('Press Ctrl+C to stop');
 console.log('');
+
+/**
+ * Handle messages from WebSocket clients
+ */
+function handleClientMessage(ws: WebSocket, message: any): void {
+  console.log(`[WS] Received message: ${message.type}`);
+
+  switch (message.type) {
+    case 'route':
+      handleRouteRequest(ws, message);
+      break;
+    case 'save':
+      handleSaveRequest(ws, message);
+      break;
+    case 'list-files':
+      handleListFilesRequest(ws);
+      break;
+    default:
+      console.log(`[WS] Unknown message type: ${message.type}`);
+  }
+}
+
+/**
+ * Find CLI binary (release or debug)
+ */
+function findCliBinary(): string | null {
+  if (existsSync(CLI_PATH)) return CLI_PATH;
+  if (existsSync(CLI_DEBUG_PATH)) return CLI_DEBUG_PATH;
+  return null;
+}
+
+/**
+ * Handle routing request - runs cypcb route command
+ */
+function handleRouteRequest(ws: WebSocket, message: { file?: string; content?: string }): void {
+  const cliBinary = findCliBinary();
+  if (!cliBinary) {
+    ws.send(JSON.stringify({
+      type: 'route-error',
+      error: 'CLI binary not found. Run: cargo build --release -p cypcb-cli'
+    }));
+    return;
+  }
+
+  // Determine file path
+  let filePath: string;
+  if (message.file && existsSync(message.file)) {
+    filePath = message.file;
+  } else if (message.content) {
+    // Save content to temp file
+    filePath = join(WATCH_DIR, '_temp_route.cypcb');
+    writeFileSync(filePath, message.content, 'utf-8');
+  } else {
+    ws.send(JSON.stringify({
+      type: 'route-error',
+      error: 'No file path or content provided'
+    }));
+    return;
+  }
+
+  console.log(`[Route] Starting route for: ${filePath}`);
+  ws.send(JSON.stringify({ type: 'route-start', file: filePath }));
+
+  // Run routing command
+  const routeProcess = spawn(cliBinary, ['route', filePath], {
+    cwd: dirname(filePath),
+    env: { ...process.env, FREEROUTING_JAR },
+  });
+
+  let stdout = '';
+  let stderr = '';
+
+  routeProcess.stdout.on('data', (data) => {
+    const text = data.toString();
+    stdout += text;
+    // Forward progress updates to client
+    ws.send(JSON.stringify({ type: 'route-progress', output: text }));
+    console.log(`[Route] ${text.trim()}`);
+  });
+
+  routeProcess.stderr.on('data', (data) => {
+    stderr += data.toString();
+    console.error(`[Route] Error: ${data.toString().trim()}`);
+  });
+
+  routeProcess.on('close', (code) => {
+    console.log(`[Route] Completed with code ${code}`);
+
+    if (code === 0) {
+      // Read .ses file if it was created
+      const sesPath = filePath.replace('.cypcb', '.ses');
+      let sesContent: string | null = null;
+      if (existsSync(sesPath)) {
+        sesContent = readFileSync(sesPath, 'utf-8');
+      }
+
+      // Read .routes file if created
+      const routesPath = filePath.replace('.cypcb', '.routes');
+      let routesContent: string | null = null;
+      if (existsSync(routesPath)) {
+        routesContent = readFileSync(routesPath, 'utf-8');
+      }
+
+      ws.send(JSON.stringify({
+        type: 'route-complete',
+        file: filePath,
+        sesContent,
+        routesContent,
+        output: stdout,
+      }));
+    } else {
+      ws.send(JSON.stringify({
+        type: 'route-error',
+        error: stderr || `Routing failed with code ${code}`,
+        output: stdout,
+      }));
+    }
+  });
+
+  routeProcess.on('error', (err) => {
+    console.error(`[Route] Process error: ${err}`);
+    ws.send(JSON.stringify({
+      type: 'route-error',
+      error: `Failed to start routing: ${err.message}`,
+    }));
+  });
+}
+
+/**
+ * Handle save request - saves content to file
+ */
+function handleSaveRequest(ws: WebSocket, message: { file: string; content: string }): void {
+  if (!message.file || !message.content) {
+    ws.send(JSON.stringify({
+      type: 'save-error',
+      error: 'Missing file path or content',
+    }));
+    return;
+  }
+
+  try {
+    writeFileSync(message.file, message.content, 'utf-8');
+    console.log(`[Save] Saved: ${message.file}`);
+    ws.send(JSON.stringify({
+      type: 'save-complete',
+      file: message.file,
+    }));
+  } catch (err: any) {
+    console.error(`[Save] Error: ${err.message}`);
+    ws.send(JSON.stringify({
+      type: 'save-error',
+      error: err.message,
+    }));
+  }
+}
+
+/**
+ * Handle list files request
+ */
+function handleListFilesRequest(ws: WebSocket): void {
+  const files = getCypcbFiles();
+  ws.send(JSON.stringify({
+    type: 'file-list',
+    files: files.map(f => ({
+      path: f,
+      name: basename(f),
+    })),
+  }));
+}

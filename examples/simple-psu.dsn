@@ -1,0 +1,100 @@
+(pcb "simple_psu"
+  (parser
+    (string_quote ")
+    (space_in_quoted_tokens on)
+    (host_cad "CodeYourPCB")
+    (host_version "0.1.0")
+  )
+  (resolution mil 10)
+  (unit mil)
+  (structure
+    (boundary
+      (rect pcb 0 0 1181.1024 787.4016)
+    )
+    (layer F.Cu
+      (type signal)
+    )
+    (layer B.Cu
+      (type signal)
+    )
+    (rule
+      (width 8)
+      (clearance 6)
+    )
+    (via via_default)
+  )
+  (placement
+    (component "PIN-HDR-1x2"
+      (place "J1" 196.8504 393.7008 front 0.0)
+      (place "J2" 1062.9921 393.7008 front 0.0)
+    )
+    (component "0805"
+      (place "C1" 472.4409 551.1811 front 0.0)
+      (place "C2" 944.8819 551.1811 front 0.0)
+    )
+    (component "SOT-23"
+      (place "U1" 708.6614 393.7008 front 0.0)
+    )
+  )
+  (library
+    (image "0805"
+      (pin rect_39_57 "1" -37.4016 0.0000)
+      (pin rect_39_57 "2" 37.4016 0.0000)
+    )
+    (image "PIN-HDR-1x2"
+      (pin rect_66_66_39 "1" -50.0000 0.0000)
+      (pin round_66_66_39 "2" 50.0000 0.0000)
+    )
+    (image "SOT-23"
+      (pin rect_23_39 "1" -37.4016 -39.3701)
+      (pin rect_23_39 "2" 37.4016 -39.3701)
+      (pin rect_23_39 "3" 0.0000 39.3701)
+    )
+    (padstack rect_39_57
+      (shape (rect F.Cu -19.6850 -28.5433 19.6850 28.5433))
+      (attach off)
+    )
+    (padstack rect_66_66_39
+      (shape (rect F.Cu -33.4646 -33.4646 33.4646 33.4646))
+      (shape (rect B.Cu -33.4646 -33.4646 33.4646 33.4646))
+      (attach off)
+      (hole round 39.3701)
+    )
+    (padstack round_66_66_39
+      (shape (circle F.Cu 66.9291))
+      (shape (circle B.Cu 66.9291))
+      (attach off)
+      (hole round 39.3701)
+    )
+    (padstack rect_23_39
+      (shape (rect F.Cu -11.8110 -19.6850 11.8110 19.6850))
+      (attach off)
+    )
+    (padstack via_default
+      (shape (circle F.Cu 31.4961))
+      (shape (circle B.Cu 31.4961))
+      (attach off)
+      (hole round 15.7480)
+    )
+  )
+  (network
+    (net "VIN"
+      (pins J1-1 C1-1 U1-3)
+    )
+    (net "VOUT"
+      (pins U1-2 C2-1 J2-1)
+    )
+    (net "GND"
+      (pins J1-2 C1-2 U1-1 C2-2 J2-2)
+    )
+    (class default
+ "VIN" "VOUT" "GND"
+      (rule
+        (width 8)
+        (clearance 6)
+      )
+    )
+  )
+  (wiring
+  )
+)

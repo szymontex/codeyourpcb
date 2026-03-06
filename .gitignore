@@ -25,3 +25,15 @@ crates/cypcb-parser/grammar/package-lock.json
 
 # Local cargo config (machine-specific)
 .cargo/config.toml
+
+# Unused FreeRouting versions
+freerouting-1.9.0.jar
+freerouting-2.0.1.jar
+
+# Compiled Rust artifacts (loose files outside /target)
+*.rlib
+*.o
+
+# Runtime artifacts
+logs/
+export-test/

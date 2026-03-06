@@ -4,7 +4,7 @@ board drc_test {
     size 30mm x 30mm
     layers 2
 }
-
+  
 // Two resistors placed too close together (should trigger clearance violation)
 // 0402 pads extend 0.8mm from component center, so at 0.5mm spacing the pads overlap
 component R1 resistor "0402" {

@@ -364,6 +364,19 @@ impl PcbEngine {
             );
         }
 
+        // Build map of component.pin -> net_id from snapshot.nets
+        // This is needed to populate NetConnections for each component (for DRC)
+        let mut pin_to_net: std::collections::HashMap<String, NetId> =
+            std::collections::HashMap::new();
+        for net in &snapshot.nets {
+            // Intern the net name to get a NetId
+            let net_id = self.world.intern_net(&net.name);
+            for conn in &net.connections {
+                let key = format!("{}.{}", conn.component, conn.pin);
+                pin_to_net.insert(key, net_id);
+            }
+        }
+
         // Register footprints from snapshot data (needed for DRC)
         // If snapshot has pads, use those. Otherwise use builtin library.
         // Note: JS parser doesn't populate pads, so we fall back to builtin library.
@@ -380,14 +393,25 @@ impl PcbEngine {
             }
         }
 
-        // Create component entities
+        // Create component entities with proper NetConnections
         for comp in &snapshot.components {
             let refdes = RefDes::new(&comp.refdes);
             let value = Value::new(&comp.value);
             let position = Position(Point::new(Nm(comp.x_nm), Nm(comp.y_nm)));
             let rotation = Rotation(comp.rotation_mdeg);
             let footprint_ref = FootprintRef::new(&comp.footprint);
-            let nets = NetConnections::new();
+
+            // Build NetConnections from pin_to_net map
+            let mut nets = NetConnections::new();
+            // Get pad numbers from footprint library (since JS parser may not have pads)
+            if let Some(fp) = self.footprint_lib.get(&comp.footprint) {
+                for pad in &fp.pads {
+                    let key = format!("{}.{}", comp.refdes, pad.number);
+                    if let Some(&net_id) = pin_to_net.get(&key) {
+                        nets.add(PinConnection::new(&pad.number, net_id));
+                    }
+                }
+            }
 
             self.world.spawn_component(refdes, value, position, rotation, footprint_ref, nets);
         }
@@ -405,9 +429,6 @@ impl PcbEngine {
                     )
                 })
         });
-
-        // Note: Nets are stored in the snapshot for rendering but not
-        // re-created in the world as ECS entities (they're derived data).
     }
 
     /// Create a Footprint from PadInfo data.
