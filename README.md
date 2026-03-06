@@ -21,6 +21,8 @@ net GND { LED1.K }
 
 Run once → autorouted board, Gerber export, DRC validation.
 
+**New here?** → [Syntax reference](docs/SYNTAX.md) · [Getting started](docs/user-guide/getting-started.md) · [Examples](examples/)
+
 ---
 
 ## Why?
