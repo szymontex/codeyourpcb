@@ -24,6 +24,8 @@ Autorouted, DRC validated, Gerber export ready.
 
 **New here?** → [Syntax reference](docs/SYNTAX.md) · [Getting started](docs/user-guide/getting-started.md) · [Examples](examples/)
 
+Use your favorite IDE to edit `.cypcb` files — the board updates live on every save. Or use the built-in web editor.
+
 ---
 
 ## Why?
