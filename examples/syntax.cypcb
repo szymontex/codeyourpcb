@@ -1,0 +1,29 @@
+version 1                                                                 
+                                                                            
+  board test_trace {                                                        
+      size 30mm x 20mm                                                      
+      layers 2                                                              
+  }                                                                         
+                                                                            
+  component R1 resistor "0402" {                                            
+      value "10k"                                                           
+      at 5mm, 10mm                                                          
+  }                                                                         
+                                                                            
+  component C1 capacitor "0402" {                                           
+      value "100nF"                                                         
+      at 20mm, 10mm                                                         
+  }                                                                         
+                                                                            
+  net VCC {                                      
+      R1.1                                       
+      C1.1                                                                  
+  }                                                                         
+                                                                            
+  trace VCC {                                                               
+      from R1.1                                                             
+      to C1.1                                                               
+      layer Top                                                             
+      width 0.3mm                                                           
+      locked                                                                
+  }

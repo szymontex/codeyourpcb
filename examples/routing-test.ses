@@ -1,0 +1,82 @@
+(session "routing-test"
+  (base_design "routing-test")
+  (placement
+    (resolution mil 10)
+    (component 0402
+      (place R1 3937 4724 front 0)
+      (place R2 9843 4724 front 0)
+      (place C1 6693 3150 front 0)
+    )
+  )
+  (was_is
+  )
+  (routes 
+    (resolution mil 10)
+    (parser
+      (host_cad CodeYourPCB)
+      (host_version 0.1.0)
+    )
+    (library_out 
+      (padstack via_default
+        (shape
+          (circle F.Cu 314 0 0)
+        )
+        (shape
+          (circle B.Cu 314 0 0)
+        )
+        (attach off)
+      )
+    )
+    (network_out 
+      (net VCC
+        (wire
+          (path F.Cu 80
+            3740 4724
+            3740 4509
+          )
+        )
+        (wire
+          (path F.Cu 80
+            6496 3150
+            5099 3150
+            3740 4509
+          )
+        )
+      )
+      (net GND
+        (wire
+          (path F.Cu 80
+            9646 4724
+            9646 4509
+          )
+        )
+        (wire
+          (path F.Cu 80
+            6890 3258
+            6890 3365
+          )
+        )
+        (wire
+          (path F.Cu 80
+            6890 3150
+            6890 3258
+          )
+        )
+        (wire
+          (path F.Cu 80
+            6890 3258
+            8395 3258
+            9646 4509
+          )
+        )
+        (wire
+          (path F.Cu 80
+            4134 4724
+            5531 4724
+            6890 3365
+          )
+        )
+      )
+    )
+  )
+)

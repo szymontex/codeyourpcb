@@ -37,8 +37,6 @@ impl Dialog {
 
 #[cfg(any(feature = "desktop", target_arch = "wasm32"))]
 impl Dialog {
-
-impl Dialog {
     /// Show an informational alert dialog.
     ///
     /// # Arguments
@@ -102,40 +100,34 @@ impl Dialog {
     ///
     /// # Platform Notes
     /// - Desktop: Uses native folder picker
-    /// - Web: May not be supported in all browsers. Returns `Err(PlatformError::NotSupported)`
-    ///   if the browser doesn't support folder picking.
+    /// - Web: Not supported. Always returns `Err(PlatformError::NotSupported)`.
+    ///   Web apps should use file pickers or directory handles API directly.
     ///
     /// # Example
     /// ```no_run
     /// use cypcb_platform::Dialog;
     ///
     /// # async fn example() {
+    /// # #[cfg(not(target_arch = "wasm32"))]
     /// if let Some(folder) = Dialog::pick_folder().await.unwrap() {
     ///     println!("Selected: {:?}", folder);
     /// }
     /// # }
     /// ```
     pub async fn pick_folder() -> Result<Option<PathBuf>, PlatformError> {
-        let handle = rfd::AsyncFileDialog::new()
-            .pick_folder()
-            .await;
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let handle = rfd::AsyncFileDialog::new()
+                .pick_folder()
+                .await;
 
-        match handle {
-            Some(h) => Ok(Some(h.path().to_path_buf())),
-            None => {
-                // On WASM, None could mean user cancelled OR browser doesn't support it
-                // We can't distinguish, so treat cancellation as Ok(None)
-                #[cfg(target_arch = "wasm32")]
-                {
-                    // Note: In practice, rfd handles unsupported browsers by showing
-                    // a message. If we get None, it's likely user cancellation.
-                    Ok(None)
-                }
-                #[cfg(not(target_arch = "wasm32"))]
-                {
-                    Ok(None)
-                }
-            }
+            Ok(handle.map(|h| h.path().to_path_buf()))
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            Err(PlatformError::NotSupported(
+                "Folder picking not supported in web browsers".to_string(),
+            ))
         }
     }
 }

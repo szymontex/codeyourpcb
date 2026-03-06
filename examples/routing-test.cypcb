@@ -1,6 +1,6 @@
 // Routing test with numeric pin names
 version 1
-
+   
 board routing_test {
     size 40mm x 25mm
     layers 2
@@ -10,7 +10,7 @@ component R1 resistor "0402" {
     value "10k"
     at 10mm, 12mm
 }
-
+   
 component R2 resistor "0402" {
     value "10k"
     at 25mm, 12mm
