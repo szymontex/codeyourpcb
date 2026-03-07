@@ -18,6 +18,7 @@ net VCC [current 20mA] { R1.1 }
 net LED_ANODE { R1.2; LED1.A }
 net GND { LED1.K }
 ```
+<img width="1280" height="832" alt="image" src="https://github.com/user-attachments/assets/4850db25-1438-46d3-9fd2-98ce9293797e" />
 
 Save the file → board updates instantly. No compile step, no refresh.
 Autorouted, DRC validated, Gerber export ready.
