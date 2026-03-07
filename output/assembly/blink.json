@@ -1,0 +1,28 @@
+{
+  "metadata": {
+    "board_name": "blink",
+    "export_date": "2026-03-06T23:59:44.086002224+00:00",
+    "unique_components": 2,
+    "total_components": 2
+  },
+  "components": [
+    {
+      "designators": [
+        "R1"
+      ],
+      "footprint": "0402",
+      "value": "330",
+      "quantity": 1,
+      "comment": null
+    },
+    {
+      "designators": [
+        "LED1"
+      ],
+      "footprint": "0805",
+      "value": "RED",
+      "quantity": 1,
+      "comment": null
+    }
+  ]
+}
