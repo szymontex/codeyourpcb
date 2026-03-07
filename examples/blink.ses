@@ -1,0 +1,422 @@
+(session blink
+  (base_design blink)
+  (placement
+    (resolution mil 10)
+    (component "PIN-HDR-1x2"
+      (place J1 1969 7874 front 0)
+    )
+    (component "SOIC-8"
+      (place U1 11024 7874 front 0)
+    )
+    (component 0402
+      (place R1 13780 11811 front 0)
+      (place R2 13780 9449 front 0)
+      (place C2 8661 5118 front 0)
+      (place C3 8661 10630 front 0)
+      (place R3 19685 7874 front 0)
+    )
+    (component 1206
+      (place C1 16929 7874 front 0)
+    )
+    (component 0805
+      (place LED1 21654 7874 front 0)
+    )
+  )
+  (was_is
+  )
+  (routes 
+    (resolution mil 10)
+    (parser
+      (host_cad CodeYourPCB)
+      (host_version 0.1.0)
+    )
+    (library_out 
+      (padstack via_default
+        (shape
+          (circle F.Cu 314 0 0)
+        )
+        (shape
+          (circle B.Cu 314 0 0)
+        )
+        (attach off)
+      )
+    )
+    (network_out 
+      (net VCC
+        (wire
+          (path F.Cu 80
+            9501 10415
+            8464 10415
+          )
+        )
+        (wire
+          (path F.Cu 80
+            9517 10415
+            9501 10415
+          )
+        )
+        (wire
+          (path F.Cu 80
+            9501 10415
+            9501 10431
+            8455 11477
+            5072 11477
+            1921 8326
+            1921 7874
+          )
+        )
+        (wire
+          (path F.Cu 80
+            9533 10415
+            9517 10415
+          )
+        )
+        (wire
+          (path F.Cu 80
+            9549 10415
+            9533 10415
+          )
+        )
+        (wire
+          (path F.Cu 80
+            9549 9346
+            9549 10415
+          )
+        )
+        (wire
+          (path F.Cu 80
+            9549 9330
+            9549 9346
+          )
+        )
+        (wire
+          (path F.Cu 80
+            9549 8624
+            9549 9330
+          )
+        )
+        (wire
+          (path F.Cu 80
+            10789 8624
+            9961 8624
+          )
+        )
+        (wire
+          (path F.Cu 80
+            11617 8624
+            10789 8624
+          )
+        )
+        (wire
+          (path F.Cu 80
+            11633 8624
+            11617 8624
+          )
+        )
+        (wire
+          (path F.Cu 80
+            1469 7874
+            1921 7874
+          )
+        )
+        (wire
+          (path F.Cu 80
+            12087 8624
+            11633 8624
+          )
+        )
+        (wire
+          (path F.Cu 80
+            13583 11811
+            13583 11596
+          )
+        )
+        (wire
+          (path F.Cu 80
+            12087 8624
+            12499 8624
+          )
+        )
+        (wire
+          (path F.Cu 80
+            13583 11596
+            12499 10512
+            12499 8624
+          )
+        )
+        (wire
+          (path F.Cu 80
+            8464 10630
+            8464 10415
+          )
+        )
+        (wire
+          (path F.Cu 80
+            9961 8624
+            9549 8624
+          )
+        )
+      )
+      (net GND
+        (wire
+          (path F.Cu 80
+            17598 7874
+            17255 7874
+          )
+        )
+        (wire
+          (path F.Cu 80
+            9961 7124
+            10373 7124
+          )
+        )
+        (wire
+          (path F.Cu 80
+            10373 7124
+            10608 7359
+            16740 7359
+            17255 7874
+          )
+        )
+        (wire
+          (path F.Cu 80
+            9755 7124
+            9961 7124
+          )
+        )
+        (wire
+          (path F.Cu 80
+            9755 7124
+            9549 7124
+          )
+        )
+        (wire
+          (path F.Cu 80
+            9549 7124
+            9549 6024
+            8858 5333
+          )
+        )
+        (wire
+          (path F.Cu 80
+            8858 10630
+            8858 10845
+          )
+        )
+        (wire
+          (path F.Cu 80
+            6317 7874
+            8858 5333
+          )
+        )
+        (wire
+          (path F.Cu 80
+            2469 7874
+            6317 7874
+          )
+        )
+        (wire
+          (path F.Cu 80
+            8858 10845
+            8101 10845
+            6317 9061
+            6317 7874
+          )
+        )
+        (wire
+          (path F.Cu 80
+            8858 5118
+            8858 5333
+          )
+        )
+        (wire
+          (path F.Cu 80
+            17598 7874
+            17941 7874
+          )
+        )
+        (wire
+          (path F.Cu 80
+            22028 7874
+            21714 7874
+          )
+        )
+        (wire
+          (path F.Cu 80
+            21714 7874
+            21714 8188
+            21626 8276
+            18343 8276
+            17941 7874
+          )
+        )
+      )
+      (net DIS
+        (wire
+          (path F.Cu 80
+            12087 8124
+            12499 8124
+          )
+        )
+        (wire
+          (path F.Cu 80
+            13583 9449
+            13583 9234
+          )
+        )
+        (wire
+          (path F.Cu 80
+            13583 9234
+            12499 8150
+            12499 8124
+          )
+        )
+        (wire
+          (path F.Cu 80
+            13583 9449
+            13583 9664
+          )
+        )
+        (wire
+          (path F.Cu 80
+            13583 9664
+            13977 10058
+            13977 11811
+          )
+        )
+      )
+      (net TRG_THR
+        (wire
+          (path F.Cu 80
+            9961 7624
+            12087 7624
+          )
+        )
+        (wire
+          (path F.Cu 80
+            13977 9449
+            13977 9102
+            12499 7624
+          )
+        )
+        (wire
+          (path F.Cu 80
+            12087 7624
+            12499 7624
+          )
+        )
+        (wire
+          (path F.Cu 80
+            13977 9449
+            14342 9449
+            15917 7874
+          )
+        )
+        (wire
+          (path F.Cu 80
+            16260 7874
+            15917 7874
+          )
+        )
+      )
+      (net CV
+        (wire
+          (path F.Cu 80
+            12087 7124
+            11675 7124
+          )
+        )
+        (wire
+          (path F.Cu 80
+            8464 5118
+            8464 4903
+          )
+        )
+        (wire
+          (path F.Cu 80
+            8464 4903
+            9454 4903
+            11675 7124
+          )
+        )
+      )
+      (net OUT
+        (wire
+          (path F.Cu 80
+            19488 7874
+            19253 7874
+          )
+        )
+        (wire
+          (path F.Cu 80
+            19253 7874
+            19253 7883
+            19135 7883
+          )
+        )
+        (wire
+          (path B.Cu 80
+            18693 7883
+            19135 7883
+          )
+        )
+        (wire
+          (path F.Cu 80
+            10492 8229
+            10936 8229
+          )
+        )
+        (wire
+          (path B.Cu 80
+            10492 8229
+            10936 8229
+          )
+        )
+        (wire
+          (path F.Cu 80
+            10936 8229
+            10492 8229
+          )
+        )
+        (wire
+          (path B.Cu 80
+            10936 8229
+            10492 8229
+          )
+        )
+        (wire
+          (path F.Cu 80
+            9961 8124
+            10373 8124
+          )
+        )
+        (wire
+          (path F.Cu 80
+            10936 8229
+            10478 8229
+            10373 8124
+          )
+        )
+        (via via_default 10936 8229
+        )
+        (wire
+          (path B.Cu 80
+            18693 7883
+            11282 7883
+            10936 8229
+          )
+        )
+        (via via_default 19135 7883
+        )
+      )
+      (net LED_ANODE
+        (wire
+          (path F.Cu 80
+            19882 7874
+            21280 7874
+          )
+        )
+      )
+    )
+  )
+)

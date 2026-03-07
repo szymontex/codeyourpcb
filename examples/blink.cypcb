@@ -1,31 +1,111 @@
-// Simple LED blink circuit
+// Complete 555 Timer LED Blink Circuit
+// NE555 in astable mode, ~1.4 Hz blink
+// Supply: 5V via 2-pin header
 version 1
 
 board blink {
-    size 50mm x 30mm
+    size 60mm x 40mm
     layers 2
 }
 
+// --- Power Input ---
+component J1 connector "PIN-HDR-1x2" {
+    value "5V PWR"
+    at 5mm, 20mm
+}
+
+// --- NE555 Timer (SOIC-8) ---
+component U1 ic "SOIC-8" {
+    value "NE555"
+    at 28mm, 20mm
+}
+
+// --- Timing network ---
+// R1 + R2 set frequency: f = 1.44 / ((R1 + 2*R2) * C1) ≈ 1.4 Hz
 component R1 resistor "0402" {
-    value "330"
-    at 19mm, 15mm
+    value "10k"
+    at 35mm, 30mm
+}
+
+component R2 resistor "0402" {
+    value "47k"
+    at 35mm, 24mm
+}
+
+component C1 capacitor "1206" {
+    value "10uF"
+    at 43mm, 20mm
+}
+
+// --- Decoupling / bypass ---
+component C2 capacitor "0402" {
+    value "100nF"
+    at 22mm, 13mm
+}
+
+component C3 capacitor "0402" {
+    value "100nF"
+    at 22mm, 27mm
+}
+
+// --- Output stage ---
+component R3 resistor "0402" {
+    value "470R"
+    at 50mm, 20mm
 }
 
 component LED1 led "0805" {
     value "RED"
-    at 31mm, 15mm
+    at 55mm, 20mm
 }
 
-// Net constraints go in square brackets BEFORE the braces
-net VCC [current 20mA] {
+// --- Nets ---
+
+net VCC {
+    J1.1
+    U1.8
+    U1.4
     R1.1
-}
-
-net LED_ANODE {
-    R1.2
-    LED1.A
+    C3.1
 }
 
 net GND {
+    J1.2
+    U1.1
+    C1.2
+    C2.2
+    C3.2
     LED1.K
+}
+
+// Discharge pin → R1.2 and R2.1
+net DIS {
+    U1.7
+    R1.2
+    R2.1
+}
+
+// Trigger + Threshold tied together (astable) + timing cap top
+net TRG_THR {
+    U1.2
+    U1.6
+    R2.2
+    C1.1
+}
+
+// Control voltage bypass (pin 5)
+net CV {
+    U1.5
+    C2.1
+}
+
+// Output → LED current limiter
+net OUT {
+    U1.3
+    R3.1
+}
+
+net LED_ANODE {
+    R3.2
+    LED1.A
 }
