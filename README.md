@@ -39,6 +39,24 @@ Traditional PCB tools (KiCad, Altium, Eagle) are GUI-first. The project file is 
 
 CodeYourPCB flips the model: the source file _is_ the design. Text in, board out.
 
+## The LLM angle
+
+The core idea: give AI coding assistants like Claude Code, Copilot, or Cursor the ability to **design real PCBs through declarative code** — the same way they write software.
+
+Traditional PCB formats are opaque to LLMs. A KiCad `.kicad_pcb` file is thousands of lines of coordinate soup. No LLM can reason about that meaningfully.
+
+`.cypcb` is different. The semantics are declarative and human-readable:
+
+```
+component U1 ic "SOIC-8" { value "NE555"; at 28mm, 20mm }
+net VCC { U1.8; U1.4; R1.1 }
+net GND  { U1.1; C1.2 }
+```
+
+An LLM can generate this, review it, refactor it, and catch mistakes — just like source code. The autorouter handles the geometry. The LLM handles the intent.
+
+This makes CodeYourPCB a natural interface between AI agents and hardware design.
+
 ---
 
 ## Features
