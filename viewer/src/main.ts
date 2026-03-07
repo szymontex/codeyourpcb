@@ -166,6 +166,7 @@ async function init(): Promise<void> {
   const themeToggle = document.getElementById('theme-toggle') as HTMLButtonElement;
   const themeIcon = document.getElementById('theme-icon')!;
   const editorToggleBtn = document.getElementById('editor-toggle') as HTMLButtonElement;
+  const fitBtn = document.getElementById('fit-btn') as HTMLButtonElement;
   const editorContainer = document.getElementById('editor-container')!
 
   const ctx = canvas.getContext('2d')!;
@@ -346,6 +347,15 @@ async function init(): Promise<void> {
 
     console.log('[Editor] Sync wired up with 300ms debounce');
   }
+
+  // Fit board to viewport button
+  fitBtn.addEventListener('click', () => {
+    if (snapshot?.board) {
+      viewport = fitBoard(viewport, snapshot.board.width_nm, snapshot.board.height_nm);
+      interactionState.viewport = viewport;
+      dirty = true;
+    }
+  });
 
   // Editor toggle button handler
   editorToggleBtn.addEventListener('click', async () => {
@@ -1013,6 +1023,10 @@ async function init(): Promise<void> {
     // Escape to cancel routing
     if (e.key === 'Escape' && isRouting) {
       cancelRouting();
+    }
+    // F to fit board to view
+    if (e.key === 'f' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      fitBtn.click();
     }
     // Ctrl+E to toggle editor
     if ((e.ctrlKey || e.metaKey) && e.key === 'e') {

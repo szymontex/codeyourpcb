@@ -221,6 +221,19 @@
     #cancel-route-btn.hidden {
       display: none;
     }
+    #fit-btn {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-primary);
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 13px;
+      color: var(--text-primary);
+      title: "Fit board to view";
+    }
+    #fit-btn:hover {
+      background: var(--bg-tertiary);
+    }
     /* Coords display - fixed width to prevent layout shift */
     #coords {
       min-width: 160px;
@@ -340,6 +353,7 @@
     <span class="separator">|</span>
     <label><input type="checkbox" id="layer-ratsnest" checked> Ratsnest</label>
     <span class="separator">|</span>
+    <button id="fit-btn" title="Fit board to view (F)">⊡</button>
     <button id="theme-toggle" aria-label="Toggle theme" title="Toggle theme (Light / Dark / Auto)">
       <span id="theme-icon">☀️</span>
     </button>
