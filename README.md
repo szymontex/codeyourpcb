@@ -55,6 +55,7 @@ net GND  { U1.1; C1.2 }
 ```
 
 An LLM can generate this, review it, refactor it, and catch mistakes — just like source code. The autorouter handles the geometry. The LLM handles the intent.
+<img width="1280" height="832" alt="image" src="https://github.com/user-attachments/assets/b78e7740-656b-4d98-85fe-fd1bf44fae1d" />
 
 This makes CodeYourPCB a natural interface between AI agents and hardware design.
 
