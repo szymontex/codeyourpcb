@@ -57,12 +57,17 @@ pub enum SesImportError {
     CoordinateMismatch(String),
 }
 
-/// Convert mils to nanometers.
+/// Convert tenth-mils to nanometers.
 ///
-/// 1 mil = 25,400 nanometers
+/// SES files use `(resolution mil 10)` which means 1 unit = 1/10 mil = 0.1 mil.
+/// 1 tenth-mil = 25,400 / 10 = 2,540 nanometers
+///
+/// FreeRouting reads DSN coordinates (in mils) and outputs SES coordinates
+/// scaled by 10 (in tenth-mils). For example, a pad at 196.85 mils in the DSN
+/// appears as 1969 in the SES file.
 #[inline]
-fn mil_to_nm(mil: f64) -> Nm {
-    Nm((mil * 25_400.0) as i64)
+fn tenth_mil_to_nm(tenth_mil: f64) -> Nm {
+    Nm((tenth_mil * 2_540.0) as i64)
 }
 
 /// Parse a DSN/SES layer name to Layer enum.
@@ -191,7 +196,7 @@ fn parse_wire(section: &str, net_id: NetId) -> Result<Vec<RouteSegment>, SesImpo
         let width: f64 = tokens[1]
             .parse()
             .map_err(|_| SesImportError::ParseError(format!("Invalid width: {}", tokens[1])))?;
-        let width_nm = mil_to_nm(width);
+        let width_nm = tenth_mil_to_nm(width);
 
         // Parse coordinate pairs (remaining tokens)
         let coords: Vec<f64> = tokens[2..]
@@ -204,7 +209,7 @@ fn parse_wire(section: &str, net_id: NetId) -> Result<Vec<RouteSegment>, SesImpo
             .chunks(2)
             .filter_map(|chunk| {
                 if chunk.len() == 2 {
-                    Some(Point::new(mil_to_nm(chunk[0]), mil_to_nm(chunk[1])))
+                    Some(Point::new(tenth_mil_to_nm(chunk[0]), tenth_mil_to_nm(chunk[1])))
                 } else {
                     None
                 }
@@ -254,7 +259,7 @@ fn parse_via(section: &str, net_id: NetId) -> Result<Option<ViaPlacement>, SesIm
 
     match (x_mil, y_mil) {
         (Some(x), Some(y)) => {
-            let position = Point::new(mil_to_nm(x), mil_to_nm(y));
+            let position = Point::new(tenth_mil_to_nm(x), tenth_mil_to_nm(y));
 
             // Default drill size and layers for through-hole via
             // (In a full implementation, we'd look up the padstack definition)
@@ -401,15 +406,19 @@ mod tests {
     }
 
     #[test]
-    fn test_mil_to_nm() {
-        // 1 mil = 25400 nm
-        assert_eq!(mil_to_nm(1.0), Nm(25_400));
-        assert_eq!(mil_to_nm(10.0), Nm(254_000));
+    fn test_tenth_mil_to_nm() {
+        // 1 tenth-mil = 2540 nm  (0.1 mil * 25400 nm/mil)
+        assert_eq!(tenth_mil_to_nm(1.0), Nm(2_540));
+        assert_eq!(tenth_mil_to_nm(10.0), Nm(25_400));
 
-        // Round-trip: 1mm = ~39.37 mils
-        let one_mm = 1_000_000; // 1mm in nm
-        let mils = one_mm as f64 / 25_400.0;
-        assert!((mil_to_nm(mils).0 - one_mm).abs() < 10); // Allow small rounding error
+        // 10 tenth-mils = 1 mil = 25400 nm
+        assert_eq!(tenth_mil_to_nm(10.0), Nm(25_400));
+
+        // Round-trip: 1mm = 1_000_000 nm = ~393.7 tenth-mils
+        // DSN exports mils (nm/25400), FreeRouting outputs SES in tenth-mils (*10)
+        let one_mm_nm = 1_000_000i64;
+        let tenth_mils = (one_mm_nm as f64 / 25_400.0) * 10.0; // ~393.7
+        assert!((tenth_mil_to_nm(tenth_mils).0 - one_mm_nm).abs() < 10);
     }
 
     #[test]
@@ -472,12 +481,15 @@ mod tests {
 
     #[test]
     fn test_parse_minimal_ses() {
+        // Coordinates are in tenth-mils (SES resolution mil 10 = 1 unit = 0.1 mil)
+        // 10000 tenth-mils = 1000 mils = 25.4mm
         let ses = r#"(session "board"
             (routes
+                (resolution mil 10)
                 (network_out
                     (net "VCC"
                         (wire
-                            (path F.Cu 8 1000 2000 1500 2000)
+                            (path F.Cu 80 10000 20000 15000 20000)
                         )
                     )
                 )
@@ -494,20 +506,40 @@ mod tests {
         let route = &result.routes[0];
         assert_eq!(route.net_id, NetId::new(1)); // VCC
         assert_eq!(route.layer, Layer::TopCopper);
-        assert_eq!(route.width, mil_to_nm(8.0));
-        assert_eq!(route.start, Point::new(mil_to_nm(1000.0), mil_to_nm(2000.0)));
-        assert_eq!(route.end, Point::new(mil_to_nm(1500.0), mil_to_nm(2000.0)));
+        // 80 tenth-mils * 2540 = 203_200 nm = 0.2032mm ≈ 8 mils (0.2mm)
+        assert_eq!(route.width, tenth_mil_to_nm(80.0));
+        assert_eq!(route.start, Point::new(tenth_mil_to_nm(10000.0), tenth_mil_to_nm(20000.0)));
+        assert_eq!(route.end, Point::new(tenth_mil_to_nm(15000.0), tenth_mil_to_nm(20000.0)));
+    }
+
+    #[test]
+    fn test_parse_ses_blink_coordinates() {
+        // Regression test: verifies that actual blink.ses coordinates convert correctly.
+        // J1 in DSN is at 196.8504 mils. In SES (resolution mil 10): 196.8504 * 10 = 1969.
+        // J1 pin 1 offset: -50 mils → absolute 146.85 mils → SES: 1469 tenth-mils.
+        // Expected nm: 146.9 mils * 25400 = 3,731,260 nm ≈ 3.73mm.
+        let j1_pin1_tenth_mils = 1469.0_f64;
+        let expected_nm = Nm((146.9 * 25_400.0) as i64);
+        let result_nm = tenth_mil_to_nm(j1_pin1_tenth_mils);
+        // Allow 1000 nm tolerance for rounding
+        assert!((result_nm.0 - expected_nm.0).abs() < 1000,
+            "J1 pin1: got {}nm, expected {}nm", result_nm.0, expected_nm.0);
+
+        // Width: 80 tenth-mils = 8 mils = 203_200 nm (0.2mm trace width)
+        assert_eq!(tenth_mil_to_nm(80.0), Nm(203_200));
     }
 
     #[test]
     fn test_parse_ses_with_via() {
+        // Coordinates in tenth-mils (resolution mil 10)
         let ses = r#"(session "board"
             (routes
+                (resolution mil 10)
                 (network_out
                     (net "VCC"
-                        (wire (path F.Cu 8 0 0 100 0))
-                        (via via1 100 0)
-                        (wire (path B.Cu 8 100 0 200 0))
+                        (wire (path F.Cu 80 0 0 1000 0))
+                        (via via1 1000 0)
+                        (wire (path B.Cu 80 1000 0 2000 0))
                     )
                 )
             )
@@ -522,24 +554,26 @@ mod tests {
 
         let via = &result.vias[0];
         assert_eq!(via.net_id, NetId::new(1)); // VCC
-        assert_eq!(via.position, Point::new(mil_to_nm(100.0), mil_to_nm(0.0)));
+        assert_eq!(via.position, Point::new(tenth_mil_to_nm(1000.0), tenth_mil_to_nm(0.0)));
         assert_eq!(via.start_layer, Layer::TopCopper);
         assert_eq!(via.end_layer, Layer::BottomCopper);
     }
 
     #[test]
     fn test_parse_ses_with_multiple_nets() {
+        // Coordinates in tenth-mils (resolution mil 10)
         let ses = r#"(session "board"
             (routes
+                (resolution mil 10)
                 (network_out
                     (net "VCC"
-                        (wire (path F.Cu 8 0 0 100 0))
+                        (wire (path F.Cu 80 0 0 1000 0))
                     )
                     (net "GND"
-                        (wire (path B.Cu 10 50 50 150 50))
+                        (wire (path B.Cu 100 500 500 1500 500))
                     )
                     (net "SIG"
-                        (wire (path F.Cu 6 0 100 100 100 100 200))
+                        (wire (path F.Cu 60 0 1000 1000 1000 1000 2000))
                     )
                 )
             )
@@ -592,26 +626,32 @@ mod tests {
 
     #[test]
     fn test_coordinate_round_trip() {
-        // Verify that coordinates exported as mils and imported back match
-        // DSN export: nm -> mil (divide by 25400)
-        // SES import: mil -> nm (multiply by 25400)
+        // Verify the full DSN→FreeRouting→SES coordinate round-trip:
+        // 1. DSN export: nm → mils (divide by 25400)
+        // 2. FreeRouting reads mils, outputs SES in tenth-mils (multiply by 10)
+        // 3. SES import: tenth-mils → nm (multiply by 2540)
+        //
+        // Net result: nm → nm with small rounding error
 
-        let original_nm = 1_000_000; // 1mm
-        let as_mils = original_nm as f64 / 25_400.0;
-        let back_to_nm = mil_to_nm(as_mils);
+        let original_nm = 1_000_000i64; // 1mm
+        let as_mils = original_nm as f64 / 25_400.0; // 39.3701 mils (written to DSN)
+        let as_tenth_mils = as_mils * 10.0;           // 393.701 (FreeRouting SES output)
+        let back_to_nm = tenth_mil_to_nm(as_tenth_mils); // 393.701 * 2540 = 999,999.54 nm
 
-        // Should be within 1nm (rounding error)
-        assert!((back_to_nm.0 - original_nm).abs() < 10);
+        // Should be within 10nm (rounding error from the 0.1-mil quantization)
+        assert!((back_to_nm.0 - original_nm).abs() < 10,
+            "Round-trip failed: original {}nm, got {}nm", original_nm, back_to_nm.0);
     }
 
     #[test]
     fn test_wire_with_multiple_points() {
-        // Wire with 4 points = 3 segments
+        // Wire with 4 points = 3 segments, coordinates in tenth-mils
         let ses = r#"(session "board"
             (routes
+                (resolution mil 10)
                 (network_out
                     (net "SIG"
-                        (wire (path F.Cu 8 0 0 100 0 100 100 200 100))
+                        (wire (path F.Cu 80 0 0 1000 0 1000 1000 2000 1000))
                     )
                 )
             )
@@ -624,7 +664,7 @@ mod tests {
 
         // Check segments form a connected path
         assert_eq!(result.routes[0].start, Point::new(Nm(0), Nm(0)));
-        assert_eq!(result.routes[0].end, Point::new(mil_to_nm(100.0), Nm(0)));
+        assert_eq!(result.routes[0].end, Point::new(tenth_mil_to_nm(1000.0), Nm(0)));
         assert_eq!(result.routes[1].start, result.routes[0].end);
         assert_eq!(result.routes[2].start, result.routes[1].end);
     }

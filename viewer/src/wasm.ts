@@ -70,31 +70,61 @@ function parseUnit(value: number, unit: string): number {
  * Get standard pad definitions for common footprints.
  */
 function getFootprintPads(footprint: string): PadInfo[] {
+  // Pad templates must match the Rust footprint library (cypcb-world/src/footprint/).
+  // All coordinates are in nanometers, relative to component origin.
+  // layer_mask: 1 = TopCopper (SMD), 3 = TopCopper|BottomCopper (THT)
   const padTemplates: Record<string, PadInfo[]> = {
+    // 0402 (1005 metric): pad_span=1.0mm, pad=0.6×0.5mm
     '0402': [
       { number: '1', x_nm: -500_000, y_nm: 0, width_nm: 600_000, height_nm: 500_000, shape: 'rect', layer_mask: 1, drill_nm: null },
-      { number: '2', x_nm: 500_000, y_nm: 0, width_nm: 600_000, height_nm: 500_000, shape: 'rect', layer_mask: 1, drill_nm: null },
+      { number: '2', x_nm:  500_000, y_nm: 0, width_nm: 600_000, height_nm: 500_000, shape: 'rect', layer_mask: 1, drill_nm: null },
     ],
+    // 0603 (1608 metric): pad_span=1.6mm, pad=0.9×0.95mm
     '0603': [
-      { number: '1', x_nm: -800_000, y_nm: 0, width_nm: 900_000, height_nm: 800_000, shape: 'rect', layer_mask: 1, drill_nm: null },
-      { number: '2', x_nm: 800_000, y_nm: 0, width_nm: 900_000, height_nm: 800_000, shape: 'rect', layer_mask: 1, drill_nm: null },
+      { number: '1', x_nm: -800_000, y_nm: 0, width_nm: 900_000, height_nm: 950_000, shape: 'rect', layer_mask: 1, drill_nm: null },
+      { number: '2', x_nm:  800_000, y_nm: 0, width_nm: 900_000, height_nm: 950_000, shape: 'rect', layer_mask: 1, drill_nm: null },
     ],
+    // 0805 (2012 metric): pad_span=1.9mm, pad=1.0×1.45mm
     '0805': [
-      { number: '1', x_nm: -950_000, y_nm: 0, width_nm: 1_100_000, height_nm: 1_200_000, shape: 'rect', layer_mask: 1, drill_nm: null },
-      { number: '2', x_nm: 950_000, y_nm: 0, width_nm: 1_100_000, height_nm: 1_200_000, shape: 'rect', layer_mask: 1, drill_nm: null },
+      { number: '1', x_nm: -950_000, y_nm: 0, width_nm: 1_000_000, height_nm: 1_450_000, shape: 'rect', layer_mask: 1, drill_nm: null },
+      { number: '2', x_nm:  950_000, y_nm: 0, width_nm: 1_000_000, height_nm: 1_450_000, shape: 'rect', layer_mask: 1, drill_nm: null },
     ],
-    // DIP-8: 8-pin through-hole, 100mil pitch, 300mil row spacing
-    // Pins 1-4 on left side, 5-8 on right side (standard DIP numbering)
-    // layer_mask: 3 = both top (1) and bottom (2) = through-hole
+    // 1206 (3216 metric): pad_span=3.4mm, pad=1.15×1.8mm
+    '1206': [
+      { number: '1', x_nm: -1_700_000, y_nm: 0, width_nm: 1_150_000, height_nm: 1_800_000, shape: 'rect', layer_mask: 1, drill_nm: null },
+      { number: '2', x_nm:  1_700_000, y_nm: 0, width_nm: 1_150_000, height_nm: 1_800_000, shape: 'rect', layer_mask: 1, drill_nm: null },
+    ],
+    // PIN-HDR-1x2: 100mil (2.54mm) pitch, drill=1.0mm, pad=1.7mm
+    // Pin 1 square (rect), Pin 2 round (circle)
+    'PIN-HDR-1x2': [
+      { number: '1', x_nm: -1_270_000, y_nm: 0, width_nm: 1_700_000, height_nm: 1_700_000, shape: 'rect',   layer_mask: 3, drill_nm: 1_000_000 },
+      { number: '2', x_nm:  1_270_000, y_nm: 0, width_nm: 1_700_000, height_nm: 1_700_000, shape: 'circle', layer_mask: 3, drill_nm: 1_000_000 },
+    ],
+    // SOIC-8: row_span=5.4mm (half=2.7mm), pitch=1.27mm, pad=1.5×0.6mm
+    // Pins 1-4 left side (bottom→top), pins 5-8 right side (bottom→top)
+    'SOIC-8': [
+      { number: '1', x_nm: -2_700_000, y_nm: -1_905_000, width_nm: 1_500_000, height_nm: 600_000, shape: 'rect', layer_mask: 1, drill_nm: null },
+      { number: '2', x_nm: -2_700_000, y_nm:   -635_000, width_nm: 1_500_000, height_nm: 600_000, shape: 'rect', layer_mask: 1, drill_nm: null },
+      { number: '3', x_nm: -2_700_000, y_nm:    635_000, width_nm: 1_500_000, height_nm: 600_000, shape: 'rect', layer_mask: 1, drill_nm: null },
+      { number: '4', x_nm: -2_700_000, y_nm:  1_905_000, width_nm: 1_500_000, height_nm: 600_000, shape: 'rect', layer_mask: 1, drill_nm: null },
+      { number: '5', x_nm:  2_700_000, y_nm: -1_905_000, width_nm: 1_500_000, height_nm: 600_000, shape: 'rect', layer_mask: 1, drill_nm: null },
+      { number: '6', x_nm:  2_700_000, y_nm:   -635_000, width_nm: 1_500_000, height_nm: 600_000, shape: 'rect', layer_mask: 1, drill_nm: null },
+      { number: '7', x_nm:  2_700_000, y_nm:    635_000, width_nm: 1_500_000, height_nm: 600_000, shape: 'rect', layer_mask: 1, drill_nm: null },
+      { number: '8', x_nm:  2_700_000, y_nm:  1_905_000, width_nm: 1_500_000, height_nm: 600_000, shape: 'rect', layer_mask: 1, drill_nm: null },
+    ],
+    // DIP-8: 300mil (7.62mm) row spacing, 100mil (2.54mm) pitch, drill=0.8mm, pad=1.6mm
+    // Pins 1-4 left side (top→bottom): y = +150, +50, -50, -150 mil
+    // Pins 5-8 right side (bottom→top): y = -150, -50, +50, +150 mil
+    // layer_mask: 3 = both top and bottom (through-hole)
     'DIP-8': [
-      { number: '1', x_nm: -3_810_000, y_nm:  1_905_000, width_nm: 1_600_000, height_nm: 1_600_000, shape: 'circle', layer_mask: 3, drill_nm: 800_000 },
-      { number: '2', x_nm: -3_810_000, y_nm:   635_000, width_nm: 1_600_000, height_nm: 1_600_000, shape: 'circle', layer_mask: 3, drill_nm: 800_000 },
-      { number: '3', x_nm: -3_810_000, y_nm:  -635_000, width_nm: 1_600_000, height_nm: 1_600_000, shape: 'circle', layer_mask: 3, drill_nm: 800_000 },
-      { number: '4', x_nm: -3_810_000, y_nm: -1_905_000, width_nm: 1_600_000, height_nm: 1_600_000, shape: 'circle', layer_mask: 3, drill_nm: 800_000 },
-      { number: '5', x_nm:  3_810_000, y_nm: -1_905_000, width_nm: 1_600_000, height_nm: 1_600_000, shape: 'circle', layer_mask: 3, drill_nm: 800_000 },
-      { number: '6', x_nm:  3_810_000, y_nm:  -635_000, width_nm: 1_600_000, height_nm: 1_600_000, shape: 'circle', layer_mask: 3, drill_nm: 800_000 },
-      { number: '7', x_nm:  3_810_000, y_nm:   635_000, width_nm: 1_600_000, height_nm: 1_600_000, shape: 'circle', layer_mask: 3, drill_nm: 800_000 },
-      { number: '8', x_nm:  3_810_000, y_nm:  1_905_000, width_nm: 1_600_000, height_nm: 1_600_000, shape: 'circle', layer_mask: 3, drill_nm: 800_000 },
+      { number: '1', x_nm: -3_810_000, y_nm:  3_810_000, width_nm: 1_600_000, height_nm: 1_600_000, shape: 'oblong', layer_mask: 3, drill_nm: 800_000 },
+      { number: '2', x_nm: -3_810_000, y_nm:  1_270_000, width_nm: 1_600_000, height_nm: 1_600_000, shape: 'oblong', layer_mask: 3, drill_nm: 800_000 },
+      { number: '3', x_nm: -3_810_000, y_nm: -1_270_000, width_nm: 1_600_000, height_nm: 1_600_000, shape: 'oblong', layer_mask: 3, drill_nm: 800_000 },
+      { number: '4', x_nm: -3_810_000, y_nm: -3_810_000, width_nm: 1_600_000, height_nm: 1_600_000, shape: 'oblong', layer_mask: 3, drill_nm: 800_000 },
+      { number: '5', x_nm:  3_810_000, y_nm: -3_810_000, width_nm: 1_600_000, height_nm: 1_600_000, shape: 'oblong', layer_mask: 3, drill_nm: 800_000 },
+      { number: '6', x_nm:  3_810_000, y_nm: -1_270_000, width_nm: 1_600_000, height_nm: 1_600_000, shape: 'oblong', layer_mask: 3, drill_nm: 800_000 },
+      { number: '7', x_nm:  3_810_000, y_nm:  1_270_000, width_nm: 1_600_000, height_nm: 1_600_000, shape: 'oblong', layer_mask: 3, drill_nm: 800_000 },
+      { number: '8', x_nm:  3_810_000, y_nm:  3_810_000, width_nm: 1_600_000, height_nm: 1_600_000, shape: 'oblong', layer_mask: 3, drill_nm: 800_000 },
     ],
   };
 
