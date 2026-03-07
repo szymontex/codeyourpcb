@@ -495,6 +495,28 @@ fn sync_component(
 }
 
 /// Synchronize a net definition to the world.
+/// Normalize logical pin names to physical pin numbers.
+///
+/// Standard electronic components use conventional logical names (A/K for diodes,
+/// +/- for polar caps) but footprints number pads as 1/2. This maps them so the
+/// DSN network section matches the library section.
+fn normalize_pin_name(name: &str) -> String {
+    match name.to_lowercase().as_str() {
+        // Diode / LED: anode=1, cathode=2
+        "a" | "anode" => "1".to_string(),
+        "k" | "ka" | "cathode" => "2".to_string(),
+        // Polar capacitor / power: positive=1, negative=2
+        "+" | "pos" | "positive" | "p" => "1".to_string(),
+        "-" | "neg" | "negative" | "n" => "2".to_string(),
+        // Transistor BJT: base=1, collector=2, emitter=3
+        "b" | "base" => "1".to_string(),
+        "c" | "collector" => "2".to_string(),
+        "e" | "emitter" => "3".to_string(),
+        // Pass through unchanged (already numeric or unknown logical name)
+        _ => name.to_string(),
+    }
+}
+
 fn sync_net(
     net: &NetDef,
     source: &str,
@@ -511,10 +533,10 @@ fn sync_net(
 
         // Look up component entity
         if let Some(&entity) = component_entities.get(comp_name) {
-            // Convert pin ID to string
+            // Convert pin ID to string, normalizing logical names to physical numbers
             let pin_str = match &pin_ref.pin {
                 AstPinId::Number(n) => n.to_string(),
-                AstPinId::Name(s) => s.clone(),
+                AstPinId::Name(s) => normalize_pin_name(s),
             };
 
             // Get or create NetConnections component

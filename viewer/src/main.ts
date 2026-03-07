@@ -1010,22 +1010,22 @@ async function init(): Promise<void> {
       cancelRouting();
     }
     // Ctrl+E to toggle editor
-    if (e.ctrlKey && e.key === 'e') {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'e') {
       e.preventDefault();
       editorToggleBtn.click();
     }
     // Ctrl+Shift+T to toggle theme
-    if (e.ctrlKey && e.shiftKey && e.key === 'T') {
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'T') {
       e.preventDefault();
       themeToggle.click();
     }
     // Ctrl+S to save (web only - desktop uses native menu)
-    if (e.ctrlKey && e.key === 's' && !isDesktop()) {
+    if ((e.ctrlKey || e.metaKey) && e.key === 's' && !isDesktop()) {
       e.preventDefault();
       await handleSaveFile();
     }
     // Ctrl+Shift+S to share (web only)
-    if (e.ctrlKey && e.shiftKey && e.key === 'S' && !isDesktop()) {
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'S' && !isDesktop()) {
       e.preventDefault();
       handleShareView();
     }
