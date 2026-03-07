@@ -728,9 +728,14 @@ async function init(): Promise<void> {
 
     console.log('[HotReload] Reloaded snapshot:', snapshot);
 
-    // Restore viewport (preserved exactly)
-    viewport = savedViewport;
-    interactionState.viewport = savedViewport;
+    // Restore viewport — but fit board on first load (default viewport)
+    const isDefaultViewport = savedViewport.centerX === 0 && savedViewport.centerY === 0;
+    if (isDefaultViewport && snapshot.board) {
+      viewport = fitBoard(savedViewport, snapshot.board.width_nm, snapshot.board.height_nm);
+    } else {
+      viewport = savedViewport;
+    }
+    interactionState.viewport = viewport;
 
     // Restore selection if component still exists
     if (savedSelection && snapshot.components.some(c => c.refdes === savedSelection)) {
