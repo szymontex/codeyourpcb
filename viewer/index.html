@@ -405,7 +405,7 @@
       border: 1px solid var(--border-primary);
       border-radius: 6px;
       box-shadow: 0 4px 16px var(--shadow);
-      z-index: 50;
+      z-index: 160;
       min-width: 180px;
       padding: 4px 0;
       transition: background-color 0.15s ease, border-color 0.15s ease;
@@ -549,6 +549,166 @@
       background: var(--bg-tertiary);
     }
 
+    /* Project Manager overlay */
+    #project-manager {
+      position: fixed;
+      inset: 0;
+      top: 41px; /* below toolbar */
+      background: var(--bg-secondary);
+      z-index: 150;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow-y: auto;
+    }
+    #project-manager.hidden {
+      display: none;
+    }
+    .pm-container {
+      max-width: 720px;
+      width: 100%;
+      padding: 48px 24px;
+    }
+    .pm-header {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+    .pm-header h1 {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin: 0 0 8px 0;
+    }
+    .pm-header p {
+      font-size: 14px;
+      color: var(--text-secondary);
+      margin: 0;
+    }
+    .pm-section {
+      margin-bottom: 32px;
+    }
+    .pm-section h2 {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-tertiary);
+      margin: 0 0 12px 0;
+    }
+    .pm-templates-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 12px;
+    }
+    .pm-template-card {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-primary);
+      border-radius: 8px;
+      padding: 16px;
+      cursor: pointer;
+      transition: border-color 0.15s, box-shadow 0.15s;
+      text-align: center;
+    }
+    .pm-template-card:hover {
+      border-color: var(--accent-primary);
+      box-shadow: 0 2px 8px var(--shadow);
+    }
+    .pm-template-icon {
+      font-size: 28px;
+      margin-bottom: 8px;
+    }
+    .pm-template-card h3 {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin: 0 0 4px 0;
+    }
+    .pm-template-card p {
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin: 0;
+      line-height: 1.4;
+    }
+    /* Recent files */
+    .pm-recent-list {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .pm-recent-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background-color 0.1s;
+    }
+    .pm-recent-item:hover {
+      background: var(--bg-elevated);
+    }
+    .pm-recent-thumb {
+      border-radius: 4px;
+      border: 1px solid var(--border-secondary);
+      object-fit: cover;
+      flex-shrink: 0;
+    }
+    .pm-recent-thumb-placeholder {
+      width: 48px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      border-radius: 4px;
+      border: 1px solid var(--border-secondary);
+      background: var(--bg-elevated);
+      flex-shrink: 0;
+    }
+    .pm-recent-info {
+      flex: 1;
+      min-width: 0;
+    }
+    .pm-recent-name {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-primary);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .pm-recent-date {
+      font-size: 11px;
+      color: var(--text-tertiary);
+    }
+    .pm-recent-empty {
+      font-size: 12px;
+      color: var(--text-tertiary);
+      padding: 8px 12px;
+    }
+    /* Open file button */
+    #pm-open-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--accent-primary);
+      color: white;
+      border: none;
+      padding: 8px 20px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background-color 0.15s;
+    }
+    #pm-open-btn:hover {
+      background: var(--accent-hover);
+    }
+    .pm-actions {
+      text-align: center;
+      margin-top: 24px;
+    }
+
     /* Responsive: Touch targets for coarse pointer devices (tablets, phones) */
     @media (pointer: coarse) {
       #toolbar { padding: 12px 16px; gap: 12px; }
@@ -658,6 +818,47 @@
           <label>Drill</label>
           <input type="color" id="prefs-color-drill" data-pref="layerColors.drill">
         </div>
+      </div>
+    </div>
+  </div>
+  <!-- Project Manager overlay -->
+  <div id="project-manager" class="hidden">
+    <div class="pm-container">
+      <div class="pm-header">
+        <h1>CodeYourPCB</h1>
+        <p>Design PCBs with code — pick a template or open a file to get started</p>
+      </div>
+      <div class="pm-section">
+        <h2>Start from template</h2>
+        <div class="pm-templates-grid">
+          <div class="pm-template-card" data-template="blink">
+            <div class="pm-template-icon">💡</div>
+            <h3>Blink LED</h3>
+            <p>555 timer astable circuit — LED blinks at ~1.4 Hz</p>
+          </div>
+          <div class="pm-template-card" data-template="power-indicator">
+            <div class="pm-template-icon">🔋</div>
+            <h3>Power Indicator</h3>
+            <p>Simple LED power indicator with current-limiting resistor</p>
+          </div>
+          <div class="pm-template-card" data-template="simple-psu">
+            <div class="pm-template-icon">⚡</div>
+            <h3>Simple PSU</h3>
+            <p>5V regulated power supply — 7805 with filter caps</p>
+          </div>
+          <div class="pm-template-card" data-template-blank>
+            <div class="pm-template-icon">📄</div>
+            <h3>Blank Board</h3>
+            <p>Empty 50×50mm board — start from scratch</p>
+          </div>
+        </div>
+      </div>
+      <div class="pm-section">
+        <h2>Recent files</h2>
+        <div id="pm-recent-list" class="pm-recent-list"></div>
+      </div>
+      <div class="pm-actions">
+        <button id="pm-open-btn">📁 Open File</button>
       </div>
     </div>
   </div>

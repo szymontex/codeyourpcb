@@ -66,7 +66,7 @@ This milestone is complete only when all are true:
 - [x] **S04: UI Architecture — Toolbar, View Menu & Settings** `risk:medium` `depends:[S01]`
   > After this: toolbar has only essential tools (select, route, measure, undo/redo, 2D/3D, editor); View menu/panel controls layers, grid, ratsnest, net labels; Preferences panel sets theme (single-click fix), units, grid spacing, layer colors — all settings persist to localStorage
 
-- [ ] **S05: Project Manager & File Handling** `risk:medium` `depends:[S04]`
+- [x] **S05: Project Manager & File Handling** `risk:medium` `depends:[S04]`
   > After this: app opens to project manager showing recent files with thumbnails; user can create new project from template, import existing .cypcb, or open recent; editor changes trigger board view update/reflow
 
 - [ ] **S06: JLCPCB Integration & 3D Models** `risk:medium` `depends:[S02,S04]`

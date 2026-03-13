@@ -1,5 +1,8 @@
 import { test, expect } from '@playwright/test';
 
+/** Minimal board source to dismiss project manager overlay */
+const MINIMAL_BOARD = `version 1\nboard test {\n  size 50mm x 50mm\n  layers 2\n}`;
+
 /**
  * E2E tests for the S04 UI architecture:
  * - Toolbar restructuring (essential buttons only, no layer checkboxes in toolbar)
@@ -16,6 +19,8 @@ test.describe('UI Architecture — Toolbar Structure', () => {
     await page.addInitScript(() => localStorage.removeItem('cypcb-settings'));
     await page.goto('/');
     await expect(page.locator('#status-text')).toContainText('Ready', { timeout: 15_000 });
+    // Dismiss project manager overlay so canvas/view-menu interactions work
+    await page.evaluate((src) => (window as any).__loadBoard(src), MINIMAL_BOARD);
   });
 
   test('essential toolbar buttons are visible', async ({ page }) => {
@@ -45,6 +50,8 @@ test.describe('UI Architecture — View Menu', () => {
     await page.addInitScript(() => localStorage.removeItem('cypcb-settings'));
     await page.goto('/');
     await expect(page.locator('#status-text')).toContainText('Ready', { timeout: 15_000 });
+    // Dismiss project manager overlay so canvas clicks work (e.g. click-outside-to-close)
+    await page.evaluate((src) => (window as any).__loadBoard(src), MINIMAL_BOARD);
   });
 
   test('View menu opens on click and closes on second click', async ({ page }) => {
@@ -124,6 +131,8 @@ test.describe('UI Architecture — Preferences Modal', () => {
     await page.addInitScript(() => localStorage.removeItem('cypcb-settings'));
     await page.goto('/');
     await expect(page.locator('#status-text')).toContainText('Ready', { timeout: 15_000 });
+    // Dismiss project manager overlay so prefs interactions work
+    await page.evaluate((src) => (window as any).__loadBoard(src), MINIMAL_BOARD);
   });
 
   test('Preferences modal opens and closes', async ({ page }) => {
@@ -207,10 +216,13 @@ test.describe('UI Architecture — Persistence', () => {
   test('unit setting persists across reload', async ({ page }) => {
     await page.goto('/');
     await expect(page.locator('#status-text')).toContainText('Ready', { timeout: 15_000 });
+    // Dismiss PM overlay
+    await page.evaluate((src) => (window as any).__loadBoard(src), MINIMAL_BOARD);
     // Clear settings via evaluate (not addInitScript which re-runs on reload)
     await page.evaluate(() => localStorage.removeItem('cypcb-settings'));
     await page.reload();
     await expect(page.locator('#status-text')).toContainText('Ready', { timeout: 15_000 });
+    await page.evaluate((src) => (window as any).__loadBoard(src), MINIMAL_BOARD);
 
     // Open Preferences, switch to mil
     await page.click('#prefs-btn');
@@ -233,9 +245,11 @@ test.describe('UI Architecture — Persistence', () => {
   test('layer color persists across reload', async ({ page }) => {
     await page.goto('/');
     await expect(page.locator('#status-text')).toContainText('Ready', { timeout: 15_000 });
+    await page.evaluate((src) => (window as any).__loadBoard(src), MINIMAL_BOARD);
     await page.evaluate(() => localStorage.removeItem('cypcb-settings'));
     await page.reload();
     await expect(page.locator('#status-text')).toContainText('Ready', { timeout: 15_000 });
+    await page.evaluate((src) => (window as any).__loadBoard(src), MINIMAL_BOARD);
 
     // Change top copper color via Preferences
     await page.click('#prefs-btn');
@@ -257,6 +271,8 @@ test.describe('UI Architecture — Persistence', () => {
     await page.addInitScript(() => localStorage.removeItem('cypcb-settings'));
     await page.goto('/');
     await expect(page.locator('#status-text')).toContainText('Ready', { timeout: 15_000 });
+    // Dismiss PM overlay so View menu interactions with canvas-area work
+    await page.evaluate((src) => (window as any).__loadBoard(src), MINIMAL_BOARD);
 
     // Toggle grid visibility off via View menu
     await page.click('#view-menu-btn');

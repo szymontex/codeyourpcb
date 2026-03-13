@@ -1,9 +1,14 @@
 import { test, expect } from '@playwright/test';
 
+/** Minimal board source to dismiss project manager overlay */
+const MINIMAL_BOARD = `version 1\nboard test {\n  size 50mm x 50mm\n  layers 2\n}`;
+
 test.describe('Undo/Redo Keyboard Shortcuts', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
     await expect(page.locator('#status-text')).toContainText('Ready', { timeout: 15_000 });
+    // Dismiss project manager overlay so canvas is accessible
+    await page.evaluate((src) => (window as any).__loadBoard(src), MINIMAL_BOARD);
   });
 
   test('undo/redo buttons exist and start disabled', async ({ page }) => {

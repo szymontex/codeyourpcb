@@ -22,6 +22,7 @@ import { getSettings, getPreference, setPreference, subscribe as subscribeSettin
 import type { AppSettings, LayerColors } from './settings';
 import { formatDimension, parseUserDimension } from './units';
 import type { DisplayUnit } from './units';
+import { initProjectManager, showProjectManager, hideProjectManager, addRecentFile } from './project-manager';
 
 // WebSocket server URL for hot reload
 // Dynamic: if accessing via dev1.flightcore.pl, use dev2.flightcore.pl for WS
@@ -660,6 +661,8 @@ async function init(): Promise<void> {
       setupEditorSync(editorInstance);
 
       editorReady = true;
+      // Expose editor instance for E2E tests
+      (window as any).__editor = editorInstance;
       console.log('[Editor] Monaco editor ready');
     }
     toggleEditorPanel();
@@ -698,6 +701,79 @@ async function init(): Promise<void> {
   currentFilePath = null;
   statusText.textContent = usingWasm ? 'Ready (WASM) - Open a file' : 'Ready (Mock) - Open a file';
 
+  /**
+   * Build a partial RenderState for thumbnail generation from current config.
+   */
+  function buildRenderStateForThumbnail(): Partial<import('./renderer').RenderState> {
+    return { renderConfig };
+  }
+
+  // --- Project Manager ---
+  initProjectManager({
+    onOpenFile: () => {
+      openBtn.click();
+    },
+    onLoadTemplate: (source, templateName) => {
+      // Clear undo stack
+      undoStack.clear();
+
+      const errors = engine.load_source(source);
+      if (errors) console.warn('[Template] Parse warnings:', errors);
+
+      lastLoadedSource = source;
+      const snap = pullSnapshot();
+
+      // Update editor if initialized
+      if (editorReady && editorInstance) {
+        suppressSync = true;
+        editorInstance.setValue(source);
+        suppressSync = false;
+        const monaco = getMonacoModule();
+        if (monaco) updateDiagnostics(monaco, editorInstance, errors, snap.violations || []);
+      }
+
+      if (snap.board) {
+        viewport = fitBoard(viewport, snap.board.width_nm, snap.board.height_nm);
+        interactionState.viewport = viewport;
+      }
+      if (snap.violations) updateErrorBadge(snap.violations);
+
+      currentFilePath = `${templateName}.cypcb`;
+      statusText.textContent = `Loaded template: ${templateName}`;
+
+      addRecentFile(currentFilePath, snap, buildRenderStateForThumbnail());
+      hideProjectManager();
+      dirty = true;
+    },
+    onNewBlank: (source) => {
+      undoStack.clear();
+      engine.load_source(source);
+      lastLoadedSource = source;
+      const snap = pullSnapshot();
+
+      if (editorReady && editorInstance) {
+        suppressSync = true;
+        editorInstance.setValue(source);
+        suppressSync = false;
+        const monaco = getMonacoModule();
+        if (monaco) updateDiagnostics(monaco, editorInstance, null, snap.violations || []);
+      }
+
+      if (snap.board) {
+        viewport = fitBoard(viewport, snap.board.width_nm, snap.board.height_nm);
+        interactionState.viewport = viewport;
+      }
+
+      currentFilePath = null;
+      statusText.textContent = usingWasm ? 'Ready (WASM)' : 'Ready (Mock)';
+      hideProjectManager();
+      dirty = true;
+    },
+  });
+
+  // Show project manager on startup
+  showProjectManager();
+
   // Expose board loader for E2E tests — loads source, pulls snapshot, fits board
   (window as any).__loadBoard = (source: string) => {
     engine.load_source(source);
@@ -708,6 +784,7 @@ async function init(): Promise<void> {
     // Sync viewport + snapshot to interaction state so click handlers use correct coords
     interactionState.viewport = viewport;
     interactionState.snapshot = snapshot;
+    hideProjectManager();
     dirty = true;
     statusText.textContent = usingWasm ? 'Ready (WASM)' : 'Ready (Mock)';
   };
@@ -920,6 +997,8 @@ async function init(): Promise<void> {
           ? `Loaded ${file.name} (${errorCount} warnings)`
           : `Loaded ${file.name}`;
 
+        hideProjectManager();
+        addRecentFile(file.name, snap, buildRenderStateForThumbnail());
         dirty = true;
 
       } else if (ext === 'ses') {
@@ -1008,6 +1087,8 @@ async function init(): Promise<void> {
             ? `Loaded ${result.name} (${errorCount} warnings)`
             : `Loaded ${result.name}`;
 
+          hideProjectManager();
+          addRecentFile(result.name, snap2, buildRenderStateForThumbnail());
           dirty = true;
 
         } else if (ext === 'ses') {
@@ -1722,6 +1803,8 @@ async function init(): Promise<void> {
         ? `Loaded ${filename} (${errorCount} warnings)`
         : `Loaded ${filename}`;
 
+      hideProjectManager();
+      addRecentFile(filename, desktopSnap, buildRenderStateForThumbnail());
       dirty = true;
     });
 
@@ -1810,6 +1893,7 @@ async function init(): Promise<void> {
       // Update status
       statusText.textContent = usingWasm ? 'Ready (WASM) - Open a file' : 'Ready (Mock) - Open a file';
 
+      showProjectManager();
       dirty = true;
     });
   }

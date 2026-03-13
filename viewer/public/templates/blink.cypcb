@@ -1,0 +1,100 @@
+// Complete 555 Timer LED Blink Circuit
+// NE555 in astable mode, ~1.4 Hz blink
+// Supply: 5V via 2-pin header
+version 1
+
+board blink {
+    size 60mm x 40mm
+    layers 2
+}
+
+component J1 connector "PIN-HDR-1x2" {
+    value "5V PWR"
+    at 5mm, 20mm
+}
+
+component U1 ic "SOIC-8" {
+    value "NE555"
+    at 28mm, 20mm
+}
+
+// Timing: f = 1.44 / ((R1 + 2*R2) * C1) ≈ 1.4 Hz
+component R1 resistor "0402" {
+    value "10k"
+    at 35mm, 30mm
+}
+
+component R2 resistor "0402" {
+    value "47k"
+    at 35mm, 24mm
+}
+
+component C1 capacitor "1206" {
+    value "10uF"
+    at 43mm, 20mm
+}
+
+component C2 capacitor "0402" {
+    value "100nF"
+    at 22mm, 13mm
+}
+
+component C3 capacitor "0402" {
+    value "100nF"
+    at 22mm, 27mm
+}
+
+component R3 resistor "0402" {
+    value "470R"
+    at 50mm, 20mm
+}
+
+component LED1 led "0805" {
+    value "RED"
+    at 55mm, 20mm
+}
+
+net VCC {
+    J1.1
+    U1.8
+    U1.4
+    R1.1
+    C3.1
+}
+
+net GND {
+    J1.2
+    U1.1
+    C1.2
+    C2.2
+    C3.2
+    LED1.K
+}
+
+net DIS {
+    U1.7
+    R1.2
+    R2.1
+}
+
+net TRG_THR {
+    U1.2
+    U1.6
+    R2.2
+    C1.1
+}
+
+net CV {
+    U1.5
+    C2.1
+}
+
+net OUT {
+    U1.3
+    R3.1
+}
+
+net LED_ANODE {
+    R3.2
+    LED1.A
+}

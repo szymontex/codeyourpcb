@@ -14,6 +14,12 @@ import type { DisplayUnit } from './units';
 // Types
 // ---------------------------------------------------------------------------
 
+export interface RecentFileEntry {
+  name: string;
+  timestamp: number;
+  thumbnail: string | null;
+}
+
 export interface LayerColors {
   topCopper: string;
   bottomCopper: string;
@@ -39,6 +45,8 @@ export interface AppSettings {
   netLabelsVisible: boolean;
   /** Layer color overrides */
   layerColors: LayerColors;
+  /** Recently opened files (newest first, max 10) */
+  recentFiles: RecentFileEntry[];
 }
 
 export type SettingsKey = keyof AppSettings;
@@ -71,6 +79,7 @@ export const DEFAULT_SETTINGS: Readonly<AppSettings> = {
     via: '#808080',
     drill: '#FFFFFF',
   },
+  recentFiles: [],
 };
 
 // ---------------------------------------------------------------------------
@@ -102,6 +111,7 @@ function loadFromStorage(): AppSettings {
         ...DEFAULT_SETTINGS.layerColors,
         ...(parsed.layerColors ?? {}),
       },
+      recentFiles: Array.isArray(parsed.recentFiles) ? parsed.recentFiles : [],
     };
   } catch (e) {
     console.warn('[settings] Failed to parse localStorage data, falling back to defaults', e);
@@ -153,6 +163,10 @@ export function getPreference<K extends SettingsKey>(key: K): AppSettings[K] {
   // Deep-copy layerColors to prevent external mutation
   if (key === 'layerColors' && typeof val === 'object') {
     return { ...(val as any) } as AppSettings[K];
+  }
+  // Deep-copy recentFiles array
+  if (key === 'recentFiles' && Array.isArray(val)) {
+    return val.map((e: any) => ({ ...e })) as unknown as AppSettings[K];
   }
   return val;
 }

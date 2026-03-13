@@ -1,9 +1,14 @@
 import { test, expect } from '@playwright/test';
 
+/** Minimal board source to dismiss project manager overlay */
+const MINIMAL_BOARD = `version 1\nboard test {\n  size 50mm x 50mm\n  layers 2\n}`;
+
 test.describe('Reliability — malformed input handling', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
     await expect(page.locator('#status-text')).toContainText('Ready', { timeout: 15_000 });
+    // Dismiss project manager overlay so editor/canvas area is accessible
+    await page.evaluate((src) => (window as any).__loadBoard(src), MINIMAL_BOARD);
   });
 
   test('malformed .cypcb with missing values does not crash', async ({ page }) => {

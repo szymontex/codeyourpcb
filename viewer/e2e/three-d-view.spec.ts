@@ -65,6 +65,9 @@ test.describe('3D View Toggle', () => {
   });
 
   test('pressing 3 key toggles 3D view', async ({ page }) => {
+    // Dismiss project manager overlay so canvas is clickable
+    const MINIMAL_BOARD = `version 1\nboard test {\n  size 50mm x 50mm\n  layers 2\n}`;
+    await page.evaluate((src) => (window as any).__loadBoard(src), MINIMAL_BOARD);
     // Focus body to ensure key works
     await page.click('#pcb-canvas');
     await page.keyboard.press('3');
