@@ -9,6 +9,7 @@ import { loadWasm, isWasmLoaded, type PcbEngine } from './wasm';
 import type { BoardSnapshot, ViolationInfo } from './types';
 import { createViewport, fitBoard, screenToWorld } from './viewport';
 import { render, type RenderState } from './renderer';
+import { createDefaultRenderConfig, buildPadNetMap } from './render-config';
 import { setupInteraction, type InteractionState } from './interaction';
 import { createRoutingState, cancelRoute, flipLayer, type RoutingState } from './routing';
 import { UndoStack, AddTraceCommand, RemoveTraceCommand, RotateComponentCommand, ResizeBoardCommand, installDebugSurface } from './undo';
@@ -210,6 +211,19 @@ async function init(): Promise<void> {
   let labelPosition: { x: number; y: number } | null = null;
   let routingState: RoutingState = createRoutingState();
   let highlightedNet: string | null = null;
+  const renderConfig = createDefaultRenderConfig();
+  let padNetMap = new Map<string, string>();
+
+  /**
+   * Pull fresh snapshot from engine and rebuild derived state (padNetMap).
+   * Returns the snapshot for convenient non-null access at call sites.
+   */
+  function pullSnapshot(): BoardSnapshot {
+    const s = engine.get_snapshot();
+    snapshot = s;
+    padNetMap = s.nets ? buildPadNetMap(s.nets) : new Map();
+    return s;
+  }
 
   // 3D view state
   let is3DActive = false;
@@ -289,6 +303,9 @@ async function init(): Promise<void> {
   }
 
   const usingWasm = isWasmLoaded();
+
+  // Expose engine for E2E / debugging
+  (window as any).__pcbEngine = engine;
 
   // Undo/Redo stack
   const undoStack = new UndoStack();
@@ -374,17 +391,17 @@ async function init(): Promise<void> {
         }
 
         // Update snapshot
-        snapshot = engine.get_snapshot();
+        pullSnapshot();
 
         // Update inline diagnostics (LSP bridge)
         const monaco = getMonacoModule();
         if (monaco && editorInstance) {
-          updateDiagnostics(monaco, editorInstance, errors, snapshot.violations || []);
+          updateDiagnostics(monaco, editorInstance, errors, snapshot!.violations || []);
         }
 
         // Update error badge
-        if (snapshot.violations) {
-          updateErrorBadge(snapshot.violations);
+        if (snapshot!.violations) {
+          updateErrorBadge(snapshot!.violations);
         }
 
         // Track as loaded source
@@ -502,20 +519,31 @@ async function init(): Promise<void> {
   }
 
   // Start with empty state - user will open a file
-  snapshot = engine.get_snapshot();
+  pullSnapshot();
   currentFilePath = null;
   statusText.textContent = usingWasm ? 'Ready (WASM) - Open a file' : 'Ready (Mock) - Open a file';
+
+  // Expose board loader for E2E tests — loads source, pulls snapshot, fits board
+  (window as any).__loadBoard = (source: string) => {
+    engine.load_source(source);
+    const snap = pullSnapshot();
+    if (snap.board) {
+      viewport = fitBoard(viewport, snap.board.width_nm, snap.board.height_nm);
+    }
+    dirty = true;
+    statusText.textContent = usingWasm ? 'Ready (WASM)' : 'Ready (Mock)';
+  };
 
   /**
    * Refresh the board snapshot from the engine and sync to interaction state.
    * Used as callback by undo commands after mutations.
    */
   function refreshSnapshot(): void {
-    snapshot = engine.get_snapshot();
+    pullSnapshot();
     if (interactionState) {
       interactionState.snapshot = snapshot;
     }
-    if (snapshot.violations) {
+    if (snapshot?.violations) {
       updateErrorBadge(snapshot.violations);
     }
     dirty = true;
@@ -592,7 +620,7 @@ async function init(): Promise<void> {
       interactionState.routing = newRouting;
       // Update snapshot after mutations (route complete changes trace list)
       if (newRouting.mode === 'idle' && snapshot) {
-        snapshot = engine.get_snapshot();
+        pullSnapshot();
         interactionState.snapshot = snapshot;
       }
       dirty = true;
@@ -657,7 +685,7 @@ async function init(): Promise<void> {
         lastLoadedSource = content;
 
         // Get new snapshot and fit board
-        snapshot = engine.get_snapshot();
+        const snap = pullSnapshot();
 
         // Update editor content if initialized
         if (editorReady && editorInstance) {
@@ -668,21 +696,21 @@ async function init(): Promise<void> {
           // Update inline diagnostics
           const monaco = getMonacoModule();
           if (monaco) {
-            updateDiagnostics(monaco, editorInstance, errors, snapshot.violations || []);
+            updateDiagnostics(monaco, editorInstance, errors, snap.violations || []);
           }
         }
 
         // Update current file path for routing
         currentFilePath = file.name;
 
-        if (snapshot.board) {
-          viewport = fitBoard(viewport, snapshot.board.width_nm, snapshot.board.height_nm);
+        if (snap.board) {
+          viewport = fitBoard(viewport, snap.board.width_nm, snap.board.height_nm);
           interactionState.viewport = viewport;
         }
 
         // Update error badge
-        if (snapshot.violations) {
-          updateErrorBadge(snapshot.violations);
+        if (snap.violations) {
+          updateErrorBadge(snap.violations);
         }
 
         // Show status
@@ -702,7 +730,7 @@ async function init(): Promise<void> {
 
         // Load routes
         engine.load_routes(content);
-        snapshot = engine.get_snapshot();
+        pullSnapshot();
 
         statusText.textContent = `Loaded routes from ${file.name}`;
         dirty = true;
@@ -748,7 +776,7 @@ async function init(): Promise<void> {
           lastLoadedSource = result.content;
 
           // Get new snapshot and fit board
-          snapshot = engine.get_snapshot();
+          const snap2 = pullSnapshot();
 
           // Update editor content if initialized
           if (editorReady && editorInstance) {
@@ -759,18 +787,18 @@ async function init(): Promise<void> {
             // Update inline diagnostics
             const monaco = getMonacoModule();
             if (monaco) {
-              updateDiagnostics(monaco, editorInstance, errors, snapshot.violations || []);
+              updateDiagnostics(monaco, editorInstance, errors, snap2.violations || []);
             }
           }
 
-          if (snapshot.board) {
-            viewport = fitBoard(viewport, snapshot.board.width_nm, snapshot.board.height_nm);
+          if (snap2.board) {
+            viewport = fitBoard(viewport, snap2.board.width_nm, snap2.board.height_nm);
             interactionState.viewport = viewport;
           }
 
           // Update error badge
-          if (snapshot.violations) {
-            updateErrorBadge(snapshot.violations);
+          if (snap2.violations) {
+            updateErrorBadge(snap2.violations);
           }
 
           // Show status
@@ -790,7 +818,7 @@ async function init(): Promise<void> {
 
           // Load routes
           engine.load_routes(result.content);
-          snapshot = engine.get_snapshot();
+          pullSnapshot();
 
           statusText.textContent = `Loaded routes from ${result.name}`;
           dirty = true;
@@ -920,6 +948,8 @@ async function init(): Promise<void> {
         routing: routingState.mode === 'routing' ? routingState : null,
         highlightedNet,
         activeResizeHandle: interactionState.activeResizeHandle ?? null,
+        renderConfig,
+        padNetMap,
       };
       render(ctx, renderState);
       dirty = false;
@@ -950,7 +980,7 @@ async function init(): Promise<void> {
     // Track loaded source for save operations
     lastLoadedSource = content;
 
-    snapshot = engine.get_snapshot();
+    const reloadSnap = pullSnapshot();
 
     // Update editor content if initialized
     if (editorReady && editorInstance) {
@@ -961,23 +991,23 @@ async function init(): Promise<void> {
       // Update inline diagnostics
       const monaco = getMonacoModule();
       if (monaco) {
-        updateDiagnostics(monaco, editorInstance, errors, snapshot.violations || []);
+        updateDiagnostics(monaco, editorInstance, errors, reloadSnap.violations || []);
       }
     }
 
-    console.log('[HotReload] Reloaded snapshot:', snapshot);
+    console.log('[HotReload] Reloaded snapshot:', reloadSnap);
 
     // Restore viewport — but fit board on first load (default viewport)
     const isDefaultViewport = savedViewport.centerX === 0 && savedViewport.centerY === 0;
-    if (isDefaultViewport && snapshot.board) {
-      viewport = fitBoard(savedViewport, snapshot.board.width_nm, snapshot.board.height_nm);
+    if (isDefaultViewport && reloadSnap.board) {
+      viewport = fitBoard(savedViewport, reloadSnap.board.width_nm, reloadSnap.board.height_nm);
     } else {
       viewport = savedViewport;
     }
     interactionState.viewport = viewport;
 
     // Restore selection if component still exists
-    if (savedSelection && snapshot.components.some(c => c.refdes === savedSelection)) {
+    if (savedSelection && reloadSnap.components.some(c => c.refdes === savedSelection)) {
       selectedRefdes = savedSelection;
     } else {
       selectedRefdes = null;
@@ -988,8 +1018,8 @@ async function init(): Promise<void> {
     statusText.textContent = parseErrorCount > 0 ? `Reloaded (${parseErrorCount} warnings)` : 'Reloaded';
 
     // Update error badge with new violations
-    if (snapshot.violations) {
-      updateErrorBadge(snapshot.violations);
+    if (reloadSnap.violations) {
+      updateErrorBadge(reloadSnap.violations);
     }
 
     // After 1.5s, show normal status
@@ -1095,7 +1125,7 @@ async function init(): Promise<void> {
     if (sesContent) {
       console.log('[Routing] Loading SES routes...');
       engine.load_routes(sesContent);
-      snapshot = engine.get_snapshot();
+      pullSnapshot();
       dirty = true;
       statusText.textContent = `Routing complete (${elapsed}s)`;
     } else {
@@ -1465,7 +1495,7 @@ async function init(): Promise<void> {
       lastLoadedSource = content;
 
       // Update snapshot
-      snapshot = engine.get_snapshot();
+      const desktopSnap = pullSnapshot();
 
       // Update editor content if initialized
       if (editorReady && editorInstance) {
@@ -1476,18 +1506,18 @@ async function init(): Promise<void> {
         // Update inline diagnostics
         const monaco = getMonacoModule();
         if (monaco) {
-          updateDiagnostics(monaco, editorInstance, errors, snapshot.violations || []);
+          updateDiagnostics(monaco, editorInstance, errors, desktopSnap.violations || []);
         }
       }
 
       // Update error badge
-      if (snapshot.violations) {
-        updateErrorBadge(snapshot.violations);
+      if (desktopSnap.violations) {
+        updateErrorBadge(desktopSnap.violations);
       }
 
       // Fit board in viewport if it exists
-      if (snapshot.board) {
-        viewport = fitBoard(viewport, snapshot.board.width_nm, snapshot.board.height_nm);
+      if (desktopSnap.board) {
+        viewport = fitBoard(viewport, desktopSnap.board.width_nm, desktopSnap.board.height_nm);
         interactionState.viewport = viewport;
       }
 
@@ -1567,7 +1597,7 @@ async function init(): Promise<void> {
 
       // Clear the design
       engine.load_source('');
-      snapshot = engine.get_snapshot();
+      pullSnapshot();
 
       // Clear editor content if initialized
       if (editorReady && editorInstance) {
