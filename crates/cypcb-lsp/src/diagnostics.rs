@@ -98,6 +98,24 @@ fn parse_error_to_diagnostic(doc: &DocumentState, error: &ParseError) -> Option<
         ParseError::InvalidLayers { count, span, .. } => {
             (format!("Invalid layer count: {}", count), span)
         }
+        ParseError::InvalidModule { message, span, .. } => {
+            (format!("Invalid module: {}", message), span)
+        }
+        ParseError::InvalidInterface { message, span, .. } => {
+            (format!("Invalid interface: {}", message), span)
+        }
+        ParseError::InvalidImport { message, span, .. } => {
+            (format!("Invalid import: {}", message), span)
+        }
+        ParseError::InvalidAssert { message, span, .. } => {
+            (format!("Invalid assert: {}", message), span)
+        }
+        ParseError::InvalidPhysicalUnit { name, span, .. } => {
+            (format!("Invalid physical unit: '{}'", name), span)
+        }
+        ParseError::InvalidTolerance { message, span, .. } => {
+            (format!("Invalid tolerance: {}", message), span)
+        }
     };
 
     let (start_line, start_col, end_line, end_col) = span_to_positions(doc, span);
@@ -124,6 +142,12 @@ fn error_code(error: &ParseError) -> String {
         ParseError::Missing { .. } => "missing",
         ParseError::InvalidVersion { .. } => "invalid-version",
         ParseError::InvalidLayers { .. } => "invalid-layers",
+        ParseError::InvalidModule { .. } => "invalid-module",
+        ParseError::InvalidInterface { .. } => "invalid-interface",
+        ParseError::InvalidImport { .. } => "invalid-import",
+        ParseError::InvalidAssert { .. } => "invalid-assert",
+        ParseError::InvalidPhysicalUnit { .. } => "invalid-physical-unit",
+        ParseError::InvalidTolerance { .. } => "invalid-tolerance",
     }
     .to_string()
 }

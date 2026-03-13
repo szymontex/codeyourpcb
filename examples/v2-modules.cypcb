@@ -1,0 +1,73 @@
+// v2-modules.cypcb — Module definitions with nested components, pin declarations, and instantiation
+//
+// Demonstrates the v2 module system: encapsulating components, nets, and
+// exposing pins for hierarchical design.
+
+version 1
+
+// A reusable voltage regulator module
+module PowerSupply {
+    component U1 ic "SOT-23" {
+        value "LDO-3V3"
+        at 0mm, 0mm
+    }
+
+    component C_IN capacitor "0402" {
+        value 100nF
+        at -3mm, 0mm
+    }
+
+    component C_OUT capacitor "0402" {
+        value 10uF
+        at 3mm, 0mm
+    }
+
+    // Internal nets
+    net input_rail {
+        U1.1
+        C_IN.1
+    }
+
+    net output_rail {
+        U1.3
+        C_OUT.1
+    }
+
+    net gnd_internal {
+        U1.2
+        C_IN.2
+        C_OUT.2
+    }
+
+    // Exposed pins — the module's external interface
+    pin VIN
+    pin VOUT
+    pin GND
+}
+
+// A simple LED driver module
+module LedDriver {
+    component D1 led "0603" {
+        value "RED"
+        at 0mm, 0mm
+    }
+
+    component R1 resistor "0402" {
+        value 330ohm
+        at 0mm, 3mm
+    }
+
+    net led_anode {
+        R1.2
+        D1.1
+    }
+
+    pin INPUT
+    pin GND
+}
+
+// Top-level board using the modules
+board main_board {
+    size 50mm x 30mm
+    layers 2
+}

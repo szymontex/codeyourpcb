@@ -1,0 +1,95 @@
+// v2-interfaces.cypcb — Interface definitions for typed pin groups
+//
+// Demonstrates declaring standard interfaces (I2C, SPI, Power) that can
+// be used to ensure modules expose the correct pins.
+
+version 1
+
+// Standard I2C interface — 2-wire bidirectional bus
+interface I2C {
+    pin SDA
+    pin SCL
+}
+
+// Standard SPI interface — 4-wire master/slave bus
+interface SPI {
+    pin MOSI
+    pin MISO
+    pin SCK
+    pin CS
+}
+
+// Power interface — supply and ground
+interface Power {
+    pin VCC
+    pin GND
+}
+
+// UART interface — asynchronous serial
+interface UART {
+    pin TX
+    pin RX
+}
+
+// A sensor module exposing I2C and Power interfaces
+module TemperatureSensor {
+    component U1 ic "SOIC-8" {
+        value "TMP102"
+        at 0mm, 0mm
+    }
+
+    component C1 capacitor "0402" {
+        value 100nF
+        at 3mm, 0mm
+    }
+
+    net vdd {
+        U1.1
+        C1.1
+    }
+
+    net gnd_int {
+        U1.4
+        C1.2
+    }
+
+    // I2C pins
+    pin SDA
+    pin SCL
+    // Power pins
+    pin VCC
+    pin GND
+}
+
+// A display module exposing SPI and Power interfaces
+module OledDisplay {
+    component U1 ic "SOIC-8" {
+        value "SSD1306"
+        at 0mm, 0mm
+    }
+
+    component C1 capacitor "0402" {
+        value 10uF
+        at 4mm, 0mm
+    }
+
+    component C2 capacitor "0402" {
+        value 100nF
+        at 4mm, 3mm
+    }
+
+    net vdd {
+        U1.1
+        C1.1
+        C2.1
+    }
+
+    // SPI pins
+    pin MOSI
+    pin MISO
+    pin SCK
+    pin CS
+    // Power pins
+    pin VCC
+    pin GND
+}

@@ -23,6 +23,11 @@ module.exports = grammar({
   // Reserved words for keyword optimization
   word: $ => $.identifier,
 
+  // Resolve ambiguities between overlapping rules
+  conflicts: $ => [
+    [$.dimension, $.assert_operand],
+  ],
+
   rules: {
     // Entry point: optional version followed by definitions
     source_file: $ => seq(
@@ -44,6 +49,10 @@ module.exports = grammar({
       $.footprint_definition,
       $.zone_definition,
       $.trace_definition,
+      $.module_definition,
+      $.interface_definition,
+      $.import_statement,
+      $.assert_statement,
     ),
 
     // board name { properties }
@@ -119,10 +128,10 @@ module.exports = grammar({
       $.net_assignment,
     ),
 
-    // value "330"
+    // value "330" or value 10kohm
     value_property: $ => seq(
       'value',
-      field('value', $.string),
+      field('value', choice($.string, $.physical_value)),
     ),
 
     // at 10mm, 8mm
@@ -392,5 +401,136 @@ module.exports = grammar({
 
     // locked (keyword only, no value)
     trace_locked: $ => 'locked',
+
+    // ========================================================================
+    // DSL v2: Modules, Interfaces, Imports, Asserts, Physical Units
+    // ========================================================================
+
+    // import "path" | import Name from "path" | import Name1, Name2 from "path"
+    import_statement: $ => choice(
+      seq('import', field('path', $.string)),
+      seq('import', field('names', $.import_name_list), 'from', field('path', $.string)),
+    ),
+
+    import_name_list: $ => seq(
+      $.identifier,
+      repeat(seq(',', $.identifier)),
+    ),
+
+    // module Name { definitions... pin declarations... }
+    module_definition: $ => seq(
+      'module',
+      field('name', $.identifier),
+      '{',
+      repeat(choice($._module_body_item)),
+      '}',
+    ),
+
+    _module_body_item: $ => choice(
+      $.component_definition,
+      $.net_definition,
+      $.pin_declaration,
+      $.assert_statement,
+    ),
+
+    // interface Name { pin declarations... }
+    interface_definition: $ => seq(
+      'interface',
+      field('name', $.identifier),
+      '{',
+      repeat($.pin_declaration),
+      '}',
+    ),
+
+    // pin Name
+    pin_declaration: $ => seq(
+      'pin',
+      field('name', $.identifier),
+    ),
+
+    // assert expression
+    assert_statement: $ => seq(
+      'assert',
+      field('expression', $.assert_expression),
+    ),
+
+    assert_expression: $ => choice(
+      $.assert_comparison,
+      $.assert_within,
+    ),
+
+    // expr op expr (e.g., R1.value >= 10kohm)
+    assert_comparison: $ => seq(
+      field('left', $.assert_operand),
+      field('op', $.comparison_operator),
+      field('right', $.assert_operand),
+    ),
+
+    // expr within value +/- tolerance (e.g., R1.value within 10kohm +/- 5%)
+    assert_within: $ => seq(
+      field('left', $.assert_operand),
+      'within',
+      field('target', $.physical_value),
+    ),
+
+    assert_operand: $ => choice(
+      $.qualified_name,
+      $.physical_value,
+      $.dimension,
+      $.number,
+    ),
+
+    // Dotted name: R1.value, board.layers, etc.
+    qualified_name: $ => seq(
+      $.identifier,
+      repeat1(seq('.', $.identifier)),
+    ),
+
+    comparison_operator: $ => choice('==', '!=', '>=', '<=', '>', '<'),
+
+    // Physical value: number + physical_unit + optional tolerance
+    physical_value: $ => seq(
+      field('value', $.number),
+      field('unit', $.physical_unit),
+      optional(field('tolerance', $.tolerance)),
+    ),
+
+    // Tolerance: +/- N% | +/- N unit | to physical_value
+    tolerance: $ => choice(
+      $.tolerance_plus_minus,
+      $.tolerance_range,
+    ),
+
+    // +/- 5% or +/- 0.1V
+    tolerance_plus_minus: $ => seq(
+      '+/-',
+      field('value', $.number),
+      field('kind', choice('%', $.physical_unit)),
+    ),
+
+    // to physical_value (e.g., 100nF to 220nF)
+    tolerance_range: $ => seq(
+      'to',
+      field('upper', seq($.number, $.physical_unit)),
+    ),
+
+    // All electrical unit suffixes
+    physical_unit: $ => choice(
+      // Resistance
+      'ohm', 'kohm', 'Mohm',
+      // Capacitance
+      'pF', 'nF', 'uF', 'mF',
+      // Inductance
+      'nH', 'uH', 'mH', 'H',
+      // Voltage
+      'mV', 'V', 'kV',
+      // Current
+      'uA',
+      // Note: mA and A are already handled by current_unit but also valid as physical units
+      // Frequency
+      'Hz', 'kHz', 'MHz', 'GHz',
+      // Power
+      'mW', 'W',
+    ),
   },
 });

@@ -4,7 +4,8 @@
 //! Enhanced hover includes net connections, calculated trace width, and DRC status.
 
 use cypcb_parser::ast::{
-    BoardDef, ComponentDef, Definition, FootprintDef, NetDef, SourceFile, TraceDef, ZoneDef, ZoneKind,
+    AssertDef, AssertExpression, AssertOperand, BoardDef, ComponentDef, Definition, FootprintDef,
+    ImportDef, InterfaceDef, ModuleDef, NetDef, SourceFile, TraceDef, ZoneDef, ZoneKind,
 };
 use cypcb_world::footprint::FootprintLibrary;
 
@@ -50,6 +51,11 @@ fn hover_for_definition(
         Definition::Board(board) => hover_for_board(doc, board, offset),
         Definition::Zone(zone) => hover_for_zone(doc, zone, offset),
         Definition::Trace(trace) => hover_for_trace(doc, trace, offset),
+        // v2 constructs
+        Definition::Module(module) => hover_for_module(module, offset),
+        Definition::Interface(iface) => hover_for_interface(iface, offset),
+        Definition::Import(import) => hover_for_import(import, offset),
+        Definition::Assert(assert_def) => hover_for_assert(assert_def, offset),
     }
 }
 
@@ -491,6 +497,125 @@ fn hover_for_trace(
     None
 }
 
+fn hover_for_module(module: &ModuleDef, offset: usize) -> Option<HoverInfo> {
+    if offset >= module.span.start && offset < module.span.end {
+        let mut lines = vec![format!("**Module: {}**", module.name.value)];
+
+        let comp_count = module.definitions.iter().filter(|d| matches!(d, Definition::Component(_))).count();
+        let net_count = module.definitions.iter().filter(|d| matches!(d, Definition::Net(_))).count();
+        let assert_count = module.definitions.iter().filter(|d| matches!(d, Definition::Assert(_))).count();
+
+        if comp_count > 0 {
+            lines.push(format!("Components: {}", comp_count));
+        }
+        if net_count > 0 {
+            lines.push(format!("Nets: {}", net_count));
+        }
+        if assert_count > 0 {
+            lines.push(format!("Assertions: {}", assert_count));
+        }
+
+        if !module.pins.is_empty() {
+            lines.push(String::new());
+            lines.push("**Exposed pins:**".to_string());
+            for pin in &module.pins {
+                lines.push(format!("- {}", pin.name.value));
+            }
+        }
+
+        return Some(HoverInfo {
+            content: lines.join("\n"),
+        });
+    }
+    None
+}
+
+fn hover_for_interface(iface: &InterfaceDef, offset: usize) -> Option<HoverInfo> {
+    if offset >= iface.span.start && offset < iface.span.end {
+        let mut lines = vec![format!("**Interface: {}**", iface.name.value)];
+        lines.push(format!("Pins: {}", iface.pins.len()));
+
+        if !iface.pins.is_empty() {
+            lines.push(String::new());
+            lines.push("**Pin declarations:**".to_string());
+            for pin in &iface.pins {
+                lines.push(format!("- {}", pin.name.value));
+            }
+        }
+
+        return Some(HoverInfo {
+            content: lines.join("\n"),
+        });
+    }
+    None
+}
+
+fn hover_for_import(import: &ImportDef, offset: usize) -> Option<HoverInfo> {
+    if offset >= import.span.start && offset < import.span.end {
+        let mut lines = vec!["**Import**".to_string()];
+        lines.push(format!("Path: {}", import.path.value));
+
+        if import.names.is_empty() {
+            lines.push("Imports: all definitions".to_string());
+        } else {
+            let names: Vec<_> = import.names.iter().map(|n| n.value.as_str()).collect();
+            lines.push(format!("Imports: {}", names.join(", ")));
+        }
+
+        return Some(HoverInfo {
+            content: lines.join("\n"),
+        });
+    }
+    None
+}
+
+fn hover_for_assert(assert_def: &AssertDef, offset: usize) -> Option<HoverInfo> {
+    if offset >= assert_def.span.start && offset < assert_def.span.end {
+        let mut lines = vec!["**Assertion**".to_string()];
+
+        match &assert_def.expression {
+            AssertExpression::Comparison { left, op, right, .. } => {
+                let left_str = format_operand(left);
+                let right_str = format_operand(right);
+                lines.push(format!("Constraint: {} {:?} {}", left_str, op, right_str));
+            }
+            AssertExpression::Within { left, target, .. } => {
+                let left_str = format_operand(left);
+                let mut target_str = format!("{}{}", target.value, target.unit);
+                if let Some(tol) = &target.tolerance {
+                    use cypcb_parser::ast::ToleranceKind;
+                    match &tol.kind {
+                        ToleranceKind::Percentage { value } => {
+                            target_str = format!("{} +/- {}%", target_str, value);
+                        }
+                        ToleranceKind::Absolute(abs) => {
+                            target_str = format!("{} +/- {}{}", target_str, abs.value, abs.unit);
+                        }
+                        ToleranceKind::Range(upper) => {
+                            target_str = format!("{} to {}{}", target_str, upper.value, upper.unit);
+                        }
+                    }
+                }
+                lines.push(format!("Constraint: {} within {}", left_str, target_str));
+            }
+        }
+
+        return Some(HoverInfo {
+            content: lines.join("\n"),
+        });
+    }
+    None
+}
+
+fn format_operand(operand: &AssertOperand) -> String {
+    match operand {
+        AssertOperand::QualifiedName { parts, .. } => parts.join("."),
+        AssertOperand::Physical(pv) => format!("{}{}", pv.value, pv.unit),
+        AssertOperand::Dimension(dim) => format!("{}", dim),
+        AssertOperand::Number { value, .. } => format!("{}", value),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -654,5 +779,75 @@ component R1 resistor "0402" {}
     fn test_calculate_trace_width_zero_current() {
         let width = calculate_trace_width(0.0);
         assert!(width.is_none());
+    }
+
+    #[test]
+    fn test_hover_on_module() {
+        let doc = make_doc(r#"
+module PowerSupply {
+    component U1 ic "SOT-23" {
+        value "LDO-3V3"
+    }
+    pin VIN
+    pin VOUT
+    pin GND
+}
+"#);
+
+        let pos = Position { line: 1, character: 7 };
+        let hover = hover_at_position(&doc, &pos);
+        assert!(hover.is_some(), "Should have hover for module");
+
+        let info = hover.unwrap();
+        assert!(info.content.contains("Module: PowerSupply"), "Should show module name");
+        assert!(info.content.contains("Components: 1"), "Should show component count");
+        assert!(info.content.contains("VIN"), "Should show exposed pin");
+        assert!(info.content.contains("VOUT"), "Should show exposed pin");
+    }
+
+    #[test]
+    fn test_hover_on_interface() {
+        let doc = make_doc(r#"
+interface I2C {
+    pin SDA
+    pin SCL
+}
+"#);
+
+        let pos = Position { line: 1, character: 10 };
+        let hover = hover_at_position(&doc, &pos);
+        assert!(hover.is_some(), "Should have hover for interface");
+
+        let info = hover.unwrap();
+        assert!(info.content.contains("Interface: I2C"), "Should show interface name");
+        assert!(info.content.contains("SDA"), "Should show pin");
+        assert!(info.content.contains("SCL"), "Should show pin");
+    }
+
+    #[test]
+    fn test_hover_on_import() {
+        let doc = make_doc(r#"import I2C, SPI from "std/interfaces.cypcb""#);
+
+        let pos = Position { line: 0, character: 7 };
+        let hover = hover_at_position(&doc, &pos);
+        assert!(hover.is_some(), "Should have hover for import");
+
+        let info = hover.unwrap();
+        assert!(info.content.contains("Import"), "Should show import");
+        assert!(info.content.contains("std/interfaces.cypcb"), "Should show path");
+        assert!(info.content.contains("I2C"), "Should show imported name");
+    }
+
+    #[test]
+    fn test_hover_on_assert() {
+        let doc = make_doc(r#"assert R1.value >= 10kohm"#);
+
+        let pos = Position { line: 0, character: 7 };
+        let hover = hover_at_position(&doc, &pos);
+        assert!(hover.is_some(), "Should have hover for assert");
+
+        let info = hover.unwrap();
+        assert!(info.content.contains("Assertion"), "Should show assertion");
+        assert!(info.content.contains("R1.value"), "Should show left operand");
     }
 }

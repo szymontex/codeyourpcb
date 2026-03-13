@@ -1,7 +1,7 @@
 # GSD State
 
 **Active Milestone:** M002 — CodeYourPCB v2.0 — Professional EDA Platform
-**Active Slice:** S05 — DSL v2 — Modules, Units & Constraints
+**Active Slice:** S06 — Competition Feature Parity & UI Polish
 **Phase:** planning
 **Requirements Status:** 0 active · 64 validated · 0 deferred · 0 out of scope
 
@@ -16,4 +16,4 @@
 - None
 
 ## Next Action
-Plan slice S05 (DSL v2 — Modules, Units & Constraints).
+Plan slice S06 (Competition Feature Parity & UI Polish).

@@ -163,6 +163,11 @@ fn find_context_in_definition(def: &Definition, content: &str, offset: usize) ->
         Definition::Footprint(_) => CompletionContext::PropertyKey(PropertyContext::Footprint),
         Definition::Zone(_) => find_context_in_zone(content, offset),
         Definition::Trace(_) => find_context_in_trace(content, offset),
+        // v2 constructs — completion context not yet implemented
+        Definition::Module(_)
+        | Definition::Interface(_)
+        | Definition::Import(_)
+        | Definition::Assert(_) => CompletionContext::TopLevel,
     }
 }
 
@@ -465,6 +470,82 @@ pub fn top_level_completions() -> Vec<CompletionItem> {
         CompletionItem::new("zone", CompletionItemKind::Keyword)
             .with_detail("Copper pour zone")
             .with_insert_text("zone ${1:gnd_pour} {\n    bounds ${2:0}mm, ${3:0}mm to ${4:50}mm, ${5:30}mm\n    net GND\n}", true),
+        // v2 keywords
+        CompletionItem::new("module", CompletionItemKind::Keyword)
+            .with_detail("Module definition (v2)")
+            .with_documentation("Defines a reusable module with components, nets, and exposed pins.\n\nSyntax:\n```\nmodule Name {\n    component ...\n    net ...\n    pin PinName\n}\n```")
+            .with_insert_text("module ${1:Name} {\n    $0\n}", true),
+        CompletionItem::new("interface", CompletionItemKind::Keyword)
+            .with_detail("Interface definition (v2)")
+            .with_documentation("Defines a named set of pins for typed connections between modules.\n\nSyntax:\n```\ninterface Name {\n    pin Pin1\n    pin Pin2\n}\n```")
+            .with_insert_text("interface ${1:Name} {\n    pin ${2:Pin1}\n    pin ${3:Pin2}\n}", true),
+        CompletionItem::new("import", CompletionItemKind::Keyword)
+            .with_detail("Import statement (v2)")
+            .with_documentation("Import definitions from another .cypcb file.\n\nSyntax:\n```\nimport \"path/to/file.cypcb\"\nimport Name from \"path/to/file.cypcb\"\nimport A, B from \"path/to/file.cypcb\"\n```")
+            .with_insert_text("import ${1:Name} from \"${2:path.cypcb}\"", true),
+        CompletionItem::new("assert", CompletionItemKind::Keyword)
+            .with_detail("Constraint assertion (v2)")
+            .with_documentation("Assert a constraint on a component or board property.\n\nSyntax:\n```\nassert R1.value >= 10kohm\nassert R1.value within 10kohm +/- 5%\nassert C1.value within 100nF to 220nF\n```")
+            .with_insert_text("assert ${1:R1.value} ${2|>=,<=,==,within|} ${3:10kohm}", true),
+    ]
+}
+
+/// Generate physical unit completions for value contexts.
+pub fn physical_unit_completions() -> Vec<CompletionItem> {
+    vec![
+        // Resistance
+        CompletionItem::new("ohm", CompletionItemKind::Enum)
+            .with_detail("Ohms (Ω)"),
+        CompletionItem::new("kohm", CompletionItemKind::Enum)
+            .with_detail("Kilohms (kΩ)"),
+        CompletionItem::new("Mohm", CompletionItemKind::Enum)
+            .with_detail("Megohms (MΩ)"),
+        // Capacitance
+        CompletionItem::new("pF", CompletionItemKind::Enum)
+            .with_detail("Picofarads"),
+        CompletionItem::new("nF", CompletionItemKind::Enum)
+            .with_detail("Nanofarads"),
+        CompletionItem::new("uF", CompletionItemKind::Enum)
+            .with_detail("Microfarads"),
+        CompletionItem::new("mF", CompletionItemKind::Enum)
+            .with_detail("Millifarads"),
+        // Inductance
+        CompletionItem::new("nH", CompletionItemKind::Enum)
+            .with_detail("Nanohenries"),
+        CompletionItem::new("uH", CompletionItemKind::Enum)
+            .with_detail("Microhenries"),
+        CompletionItem::new("mH", CompletionItemKind::Enum)
+            .with_detail("Millihenries"),
+        CompletionItem::new("H", CompletionItemKind::Enum)
+            .with_detail("Henries"),
+        // Voltage
+        CompletionItem::new("mV", CompletionItemKind::Enum)
+            .with_detail("Millivolts"),
+        CompletionItem::new("V", CompletionItemKind::Enum)
+            .with_detail("Volts"),
+        CompletionItem::new("kV", CompletionItemKind::Enum)
+            .with_detail("Kilovolts"),
+        // Current
+        CompletionItem::new("uA", CompletionItemKind::Enum)
+            .with_detail("Microamps"),
+        CompletionItem::new("mA", CompletionItemKind::Enum)
+            .with_detail("Milliamps"),
+        CompletionItem::new("A", CompletionItemKind::Enum)
+            .with_detail("Amps"),
+        // Frequency
+        CompletionItem::new("Hz", CompletionItemKind::Enum)
+            .with_detail("Hertz"),
+        CompletionItem::new("kHz", CompletionItemKind::Enum)
+            .with_detail("Kilohertz"),
+        CompletionItem::new("MHz", CompletionItemKind::Enum)
+            .with_detail("Megahertz"),
+        CompletionItem::new("GHz", CompletionItemKind::Enum)
+            .with_detail("Gigahertz"),
+        // Power
+        CompletionItem::new("mW", CompletionItemKind::Enum)
+            .with_detail("Milliwatts"),
+        CompletionItem::new("W", CompletionItemKind::Enum)
+            .with_detail("Watts"),
     ]
 }
 
@@ -588,5 +669,47 @@ component C1 capacitor "0603" {}
         assert!(labels.contains(&"width"));
         assert!(labels.contains(&"clearance"));
         assert!(labels.contains(&"current"));
+    }
+
+    #[test]
+    fn test_top_level_completions_v2_keywords() {
+        let items = top_level_completions();
+
+        let labels: Vec<_> = items.iter().map(|i| i.label.as_str()).collect();
+        assert!(labels.contains(&"module"), "Should have module completion");
+        assert!(labels.contains(&"interface"), "Should have interface completion");
+        assert!(labels.contains(&"import"), "Should have import completion");
+        assert!(labels.contains(&"assert"), "Should have assert completion");
+    }
+
+    #[test]
+    fn test_v2_completions_have_snippets() {
+        let items = top_level_completions();
+
+        let module = items.iter().find(|i| i.label == "module").unwrap();
+        assert!(module.is_snippet, "module should be a snippet");
+        assert!(module.insert_text.as_ref().unwrap().contains("module"));
+
+        let iface = items.iter().find(|i| i.label == "interface").unwrap();
+        assert!(iface.is_snippet, "interface should be a snippet");
+
+        let import = items.iter().find(|i| i.label == "import").unwrap();
+        assert!(import.is_snippet, "import should be a snippet");
+        assert!(import.insert_text.as_ref().unwrap().contains("from"));
+    }
+
+    #[test]
+    fn test_physical_unit_completions() {
+        let items = physical_unit_completions();
+
+        let labels: Vec<_> = items.iter().map(|i| i.label.as_str()).collect();
+        assert!(labels.contains(&"kohm"), "Should have kohm");
+        assert!(labels.contains(&"nF"), "Should have nF");
+        assert!(labels.contains(&"V"), "Should have V");
+        assert!(labels.contains(&"MHz"), "Should have MHz");
+        assert!(labels.contains(&"mA"), "Should have mA");
+        assert!(labels.contains(&"W"), "Should have W");
+        // Verify count matches the 23 PhysicalUnit variants
+        assert_eq!(items.len(), 23, "Should have all 23 physical unit suffixes");
     }
 }

@@ -1,0 +1,78 @@
+// v2-constraints.cypcb — Assert statements with comparisons, tolerances, and physical units
+//
+// Demonstrates constraint assertions: comparisons (>=, <=, ==),
+// tolerance syntax (+/- percentage, +/- absolute, range), and
+// physical unit values on components.
+
+version 1
+
+board constraint_test {
+    size 60mm x 40mm
+    layers 4
+}
+
+// Components with typed physical unit values
+component R1 resistor "0402" {
+    value 10kohm
+    at 10mm, 10mm
+}
+
+component R2 resistor "0603" {
+    value 4.7kohm
+    at 20mm, 10mm
+}
+
+component C1 capacitor "0402" {
+    value 100nF
+    at 10mm, 20mm
+}
+
+component C2 capacitor "0805" {
+    value 10uF
+    at 20mm, 20mm
+}
+
+component U1 ic "SOIC-8" {
+    value "LDO-3V3"
+    at 30mm, 15mm
+}
+
+component L1 inductor "0805" {
+    value 10uH
+    at 40mm, 15mm
+}
+
+// Comparison assertions
+assert R1.value >= 10kohm
+assert board.layers == 4
+
+// Tolerance assertions — percentage tolerance
+assert R1.value within 10kohm +/- 5%
+
+// Tolerance assertions — absolute tolerance
+assert U1.output within 3.3V +/- 0.1V
+
+// Tolerance assertions — range tolerance
+assert C1.value within 100nF to 220nF
+
+// Nets connecting the components
+net VCC {
+    U1.1
+    R1.1
+    C2.1
+}
+
+net GND {
+    U1.4
+    R1.2
+    R2.2
+    C1.2
+    C2.2
+    L1.2
+}
+
+net signal_a {
+    R2.1
+    C1.1
+    U1.3
+}

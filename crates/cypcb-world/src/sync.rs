@@ -378,6 +378,11 @@ pub fn sync_ast_to_world(
             Definition::Footprint(_) => {
                 // Already handled in Phase 0 above
             }
+            // v2 constructs — not yet wired to ECS, parsed and stored in AST only
+            Definition::Module(_)
+            | Definition::Interface(_)
+            | Definition::Import(_)
+            | Definition::Assert(_) => {}
         }
     }
 

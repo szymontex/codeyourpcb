@@ -30,7 +30,7 @@
 //! }
 //! ```
 
-use cypcb_core::Unit;
+use cypcb_core::{PhysicalUnit, Unit};
 use serde::{Deserialize, Serialize};
 
 /// A byte range in the source code.
@@ -116,6 +116,14 @@ pub enum Definition {
     Zone(ZoneDef),
     /// A manual trace definition.
     Trace(TraceDef),
+    /// A module definition (v2).
+    Module(ModuleDef),
+    /// An interface definition (v2).
+    Interface(InterfaceDef),
+    /// An import statement (v2).
+    Import(ImportDef),
+    /// An assert statement (v2).
+    Assert(AssertDef),
 }
 
 impl Definition {
@@ -128,6 +136,10 @@ impl Definition {
             Definition::Footprint(f) => f.span,
             Definition::Zone(z) => z.span,
             Definition::Trace(t) => t.span,
+            Definition::Module(m) => m.span,
+            Definition::Interface(i) => i.span,
+            Definition::Import(i) => i.span,
+            Definition::Assert(a) => a.span,
         }
     }
 }
@@ -717,6 +729,204 @@ pub struct TraceDef {
     pub locked: bool,
     /// Source span.
     pub span: Span,
+}
+
+// ============================================================================
+// DSL v2: Modules, Interfaces, Imports, Asserts, Physical Units
+// ============================================================================
+
+/// An import statement: `import "path"` or `import Name from "path"`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ImportDef {
+    /// Imported names (empty = import all).
+    pub names: Vec<Identifier>,
+    /// Path to the imported file.
+    pub path: StringLit,
+    /// Source span.
+    pub span: Span,
+}
+
+/// A module definition: `module Name { ... }`.
+///
+/// Modules are reusable circuit blocks containing components, nets,
+/// pin declarations, and assertions.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModuleDef {
+    /// Module name.
+    pub name: Identifier,
+    /// Component and net definitions inside the module.
+    pub definitions: Vec<Definition>,
+    /// Exposed pins of the module.
+    pub pins: Vec<PinDeclaration>,
+    /// Source span.
+    pub span: Span,
+}
+
+/// An interface definition: `interface Name { pin ... }`.
+///
+/// Interfaces define a set of named pins that can be connected as a group.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InterfaceDef {
+    /// Interface name.
+    pub name: Identifier,
+    /// Pin declarations.
+    pub pins: Vec<PinDeclaration>,
+    /// Source span.
+    pub span: Span,
+}
+
+/// A pin declaration: `pin Name`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PinDeclaration {
+    /// Pin name.
+    pub name: Identifier,
+    /// Source span.
+    pub span: Span,
+}
+
+/// An assert statement: `assert expression`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AssertDef {
+    /// The assertion expression.
+    pub expression: AssertExpression,
+    /// Source span.
+    pub span: Span,
+}
+
+/// An assertion expression.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum AssertExpression {
+    /// Comparison: `left op right`.
+    Comparison {
+        left: AssertOperand,
+        op: ComparisonOp,
+        right: AssertOperand,
+        span: Span,
+    },
+    /// Within: `left within target`.
+    Within {
+        left: AssertOperand,
+        target: PhysicalValue,
+        span: Span,
+    },
+}
+
+impl AssertExpression {
+    /// Get the span of this expression.
+    pub fn span(&self) -> Span {
+        match self {
+            AssertExpression::Comparison { span, .. } => *span,
+            AssertExpression::Within { span, .. } => *span,
+        }
+    }
+}
+
+/// An operand in an assert expression.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum AssertOperand {
+    /// A qualified name like `R1.value`.
+    QualifiedName {
+        parts: Vec<String>,
+        span: Span,
+    },
+    /// A physical value like `10kohm`.
+    Physical(PhysicalValue),
+    /// A dimension value like `0.3mm`.
+    Dimension(Dimension),
+    /// A bare number.
+    Number {
+        value: f64,
+        span: Span,
+    },
+}
+
+impl AssertOperand {
+    /// Get the span of this operand.
+    pub fn span(&self) -> Span {
+        match self {
+            AssertOperand::QualifiedName { span, .. } => *span,
+            AssertOperand::Physical(pv) => pv.span,
+            AssertOperand::Dimension(d) => d.span,
+            AssertOperand::Number { span, .. } => *span,
+        }
+    }
+}
+
+/// Comparison operators for assert expressions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum ComparisonOp {
+    Eq,
+    Ne,
+    Ge,
+    Le,
+    Gt,
+    Lt,
+}
+
+impl ComparisonOp {
+    /// Parse a comparison operator from a string.
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s {
+            "==" => Some(ComparisonOp::Eq),
+            "!=" => Some(ComparisonOp::Ne),
+            ">=" => Some(ComparisonOp::Ge),
+            "<=" => Some(ComparisonOp::Le),
+            ">" => Some(ComparisonOp::Gt),
+            "<" => Some(ComparisonOp::Lt),
+            _ => None,
+        }
+    }
+}
+
+impl std::fmt::Display for ComparisonOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ComparisonOp::Eq => write!(f, "=="),
+            ComparisonOp::Ne => write!(f, "!="),
+            ComparisonOp::Ge => write!(f, ">="),
+            ComparisonOp::Le => write!(f, "<="),
+            ComparisonOp::Gt => write!(f, ">"),
+            ComparisonOp::Lt => write!(f, "<"),
+        }
+    }
+}
+
+/// A physical value with unit and optional tolerance.
+///
+/// Examples: `10kohm`, `3.3V +/- 5%`, `100nF to 220nF`
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PhysicalValue {
+    /// Numeric value.
+    pub value: f64,
+    /// Typed physical unit (resistance, capacitance, etc.).
+    pub unit: PhysicalUnit,
+    /// Optional tolerance.
+    pub tolerance: Option<Tolerance>,
+    /// Source span.
+    pub span: Span,
+}
+
+/// Tolerance specification for a physical value.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Tolerance {
+    /// The kind of tolerance.
+    pub kind: ToleranceKind,
+    /// Source span.
+    pub span: Span,
+}
+
+/// Kinds of tolerance.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ToleranceKind {
+    /// Percentage tolerance: `+/- 5%`.
+    Percentage { value: f64 },
+    /// Absolute tolerance: `+/- 0.1V`.
+    Absolute(Box<PhysicalValue>),
+    /// Range tolerance: `to 220nF`.
+    Range(Box<PhysicalValue>),
 }
 
 #[cfg(test)]

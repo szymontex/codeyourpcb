@@ -145,6 +145,75 @@ pub enum ParseError {
         #[label("invalid layer count")]
         span: SourceSpan,
     },
+
+    /// An invalid module definition.
+    #[error("Invalid module definition: {message}")]
+    #[diagnostic(code(cypcb::parse::invalid_module))]
+    InvalidModule {
+        message: String,
+        #[source_code]
+        src: String,
+        #[label("here")]
+        span: SourceSpan,
+    },
+
+    /// An invalid interface definition.
+    #[error("Invalid interface definition: {message}")]
+    #[diagnostic(code(cypcb::parse::invalid_interface))]
+    InvalidInterface {
+        message: String,
+        #[source_code]
+        src: String,
+        #[label("here")]
+        span: SourceSpan,
+    },
+
+    /// An invalid import statement.
+    #[error("Invalid import: {message}")]
+    #[diagnostic(code(cypcb::parse::invalid_import))]
+    InvalidImport {
+        message: String,
+        #[source_code]
+        src: String,
+        #[label("here")]
+        span: SourceSpan,
+    },
+
+    /// An invalid assert statement.
+    #[error("Invalid assert: {message}")]
+    #[diagnostic(code(cypcb::parse::invalid_assert))]
+    InvalidAssert {
+        message: String,
+        #[source_code]
+        src: String,
+        #[label("here")]
+        span: SourceSpan,
+    },
+
+    /// An invalid physical unit.
+    #[error("Invalid physical unit: '{name}'")]
+    #[diagnostic(
+        code(cypcb::parse::invalid_physical_unit),
+        help("valid units: ohm, kohm, Mohm, pF, nF, uF, mF, nH, uH, mH, H, mV, V, kV, uA, mA, A, Hz, kHz, MHz, GHz, mW, W")
+    )]
+    InvalidPhysicalUnit {
+        name: String,
+        #[source_code]
+        src: String,
+        #[label("invalid unit")]
+        span: SourceSpan,
+    },
+
+    /// An invalid tolerance specification.
+    #[error("Invalid tolerance: {message}")]
+    #[diagnostic(code(cypcb::parse::invalid_tolerance))]
+    InvalidTolerance {
+        message: String,
+        #[source_code]
+        src: String,
+        #[label("here")]
+        span: SourceSpan,
+    },
 }
 
 impl ParseError {
@@ -215,6 +284,60 @@ impl ParseError {
     pub fn invalid_layers(count: u32, src: impl Into<String>, span: impl Into<SourceSpan>) -> Self {
         ParseError::InvalidLayers {
             count,
+            src: src.into(),
+            span: span.into(),
+        }
+    }
+
+    /// Create an invalid module error.
+    pub fn invalid_module(message: impl Into<String>, src: impl Into<String>, span: impl Into<SourceSpan>) -> Self {
+        ParseError::InvalidModule {
+            message: message.into(),
+            src: src.into(),
+            span: span.into(),
+        }
+    }
+
+    /// Create an invalid interface error.
+    pub fn invalid_interface(message: impl Into<String>, src: impl Into<String>, span: impl Into<SourceSpan>) -> Self {
+        ParseError::InvalidInterface {
+            message: message.into(),
+            src: src.into(),
+            span: span.into(),
+        }
+    }
+
+    /// Create an invalid import error.
+    pub fn invalid_import(message: impl Into<String>, src: impl Into<String>, span: impl Into<SourceSpan>) -> Self {
+        ParseError::InvalidImport {
+            message: message.into(),
+            src: src.into(),
+            span: span.into(),
+        }
+    }
+
+    /// Create an invalid assert error.
+    pub fn invalid_assert(message: impl Into<String>, src: impl Into<String>, span: impl Into<SourceSpan>) -> Self {
+        ParseError::InvalidAssert {
+            message: message.into(),
+            src: src.into(),
+            span: span.into(),
+        }
+    }
+
+    /// Create an invalid physical unit error.
+    pub fn invalid_physical_unit(name: impl Into<String>, src: impl Into<String>, span: impl Into<SourceSpan>) -> Self {
+        ParseError::InvalidPhysicalUnit {
+            name: name.into(),
+            src: src.into(),
+            span: span.into(),
+        }
+    }
+
+    /// Create an invalid tolerance error.
+    pub fn invalid_tolerance(message: impl Into<String>, src: impl Into<String>, span: impl Into<SourceSpan>) -> Self {
+        ParseError::InvalidTolerance {
+            message: message.into(),
             src: src.into(),
             span: span.into(),
         }

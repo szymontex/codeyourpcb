@@ -24,7 +24,9 @@ export const cypcbLanguage: monaco.languages.IMonarchLanguage = {
   keywords: [
     'version', 'board', 'component', 'net', 'footprint', 'trace',
     'zone', 'keepout', 'resistor', 'capacitor', 'ic', 'connector',
-    'diode', 'transistor', 'led', 'crystal', 'inductor', 'generic'
+    'diode', 'transistor', 'led', 'crystal', 'inductor', 'generic',
+    // v2 keywords
+    'module', 'interface', 'import', 'assert', 'within'
   ],
 
   properties: [
@@ -43,8 +45,8 @@ export const cypcbLanguage: monaco.languages.IMonarchLanguage = {
       // Strings
       [/"[^"]*"/, 'string'],
 
-      // Numbers with units
-      [/\d+(\.\d+)?(mm|mil|mA|A|V|k|M|u|n|p|%)/, 'number'],
+      // Numbers with units (physical units + dimensional units)
+      [/\d+(\.\d+)?(mm|mil|kohm|Mohm|ohm|pF|nF|uF|mF|nH|uH|mH|Hz|kHz|MHz|GHz|mV|kV|uA|mA|mW|W|H|V|A|%)/, 'number'],
       [/\d+(\.\d+)?/, 'number'],
 
       // Keywords, properties, and layer names
@@ -59,6 +61,12 @@ export const cypcbLanguage: monaco.languages.IMonarchLanguage = {
 
       // Pin references (R1.1, C2.2, IC1.3, etc.)
       [/[A-Z][A-Z0-9]*\.\d+/, 'variable'],
+
+      // Tolerance operator
+      [/\+\/\-/, 'operator'],
+
+      // Comparison operators
+      [/[><=!]=|[><]/, 'operator'],
 
       // Delimiters and operators
       [/[{}()=,x]/, 'delimiter'],
