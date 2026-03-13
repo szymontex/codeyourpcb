@@ -131,6 +131,8 @@ pub fn run_drc(world: &mut BoardWorld, rules: &DesignRules) -> DrcResult {
         Box::new(rules::MinTraceWidthRule),  // Placeholder - returns empty until traces exist
         Box::new(rules::UnconnectedPinRule),
         Box::new(rules::KeepoutRule),
+        Box::new(rules::EdgeClearanceRule),
+        Box::new(rules::AnnularRingRule),
     ];
 
     // Run each checker

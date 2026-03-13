@@ -1,0 +1,276 @@
+//! Edge clearance rule.
+//!
+//! Validates that all copper features maintain minimum distance from
+//! the board edge. Manufacturing requires this clearance to prevent
+//! copper exposure when the board is routed (cut to shape).
+
+use cypcb_core::{Nm, Point};
+use cypcb_world::BoardWorld;
+use cypcb_world::components::BoardSize;
+
+use crate::presets::DesignRules;
+use crate::violation::DrcViolation;
+use super::DrcRule;
+
+/// Rule that checks minimum copper-to-board-edge clearance.
+///
+/// For each entry in the spatial index, checks that its bounding box is
+/// at least `min_edge_clearance` away from all four board edges. The board
+/// is assumed to be rectangular with origin at (0, 0).
+///
+/// If no board size is defined, this rule silently passes (no violations).
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// use cypcb_drc::rules::{EdgeClearanceRule, DrcRule};
+/// use cypcb_drc::presets::DesignRules;
+/// use cypcb_world::BoardWorld;
+///
+/// let mut world = BoardWorld::new();
+/// world.set_board("test".into(), (Nm::from_mm(50.0), Nm::from_mm(50.0)), 2);
+/// // ... add copper features ...
+///
+/// let rules = DesignRules::jlcpcb_2layer(); // 0.3mm edge clearance
+/// let violations = EdgeClearanceRule.check(&mut world, &rules);
+/// ```
+pub struct EdgeClearanceRule;
+
+impl DrcRule for EdgeClearanceRule {
+    fn name(&self) -> &'static str {
+        "edge-clearance"
+    }
+
+    fn check(&self, world: &mut BoardWorld, rules: &DesignRules) -> Vec<DrcViolation> {
+        let mut violations = Vec::new();
+        let min_edge = rules.min_edge_clearance;
+
+        // Get board size — if no board is defined, skip
+        let board_size = {
+            let entity = match world.board_entity() {
+                Some(e) => e,
+                None => return violations,
+            };
+            match world.ecs().get::<BoardSize>(entity) {
+                Some(bs) => *bs,
+                None => return violations,
+            }
+        };
+
+        // Board edges are at x=0, x=width, y=0, y=height
+        let board_w = board_size.width.0;
+        let board_h = board_size.height.0;
+
+        // Check each spatial entry against the four edges
+        let entries: Vec<_> = world.spatial().iter().cloned().collect();
+
+        for entry in &entries {
+            let min_x = entry.envelope.lower()[0];
+            let min_y = entry.envelope.lower()[1];
+            let max_x = entry.envelope.upper()[0];
+            let max_y = entry.envelope.upper()[1];
+
+            // Distance to each edge (negative means outside board)
+            let dist_left = min_x;          // distance from left edge (x=0)
+            let dist_bottom = min_y;        // distance from bottom edge (y=0)
+            let dist_right = board_w - max_x;  // distance from right edge
+            let dist_top = board_h - max_y;    // distance from top edge
+
+            let min_dist = dist_left.min(dist_bottom).min(dist_right).min(dist_top);
+
+            if min_dist < min_edge.0 {
+                let center = Point::new(
+                    Nm((min_x + max_x) / 2),
+                    Nm((min_y + max_y) / 2),
+                );
+                violations.push(DrcViolation::edge_clearance(
+                    entry.entity,
+                    Nm(min_dist.max(0)), // clamp negative to 0
+                    min_edge,
+                    center,
+                ));
+            }
+        }
+
+        violations
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bevy_ecs::prelude::*;
+    use cypcb_world::SpatialEntry;
+    use crate::ViolationKind;
+
+    fn make_world_with_board_and_entries(
+        board_w_mm: f64,
+        board_h_mm: f64,
+        entries: Vec<SpatialEntry>,
+    ) -> BoardWorld {
+        let mut world = BoardWorld::new();
+        world.set_board(
+            "test".into(),
+            (Nm::from_mm(board_w_mm), Nm::from_mm(board_h_mm)),
+            2,
+        );
+        world.ecs_mut().resource_mut::<cypcb_world::SpatialIndex>().rebuild(entries);
+        world
+    }
+
+    #[test]
+    fn test_no_violation_centered() {
+        // Pad well inside a 50mm board
+        let entries = vec![
+            SpatialEntry::new(
+                Entity::from_raw(0),
+                Point::from_mm(20.0, 20.0),
+                Point::from_mm(21.0, 21.0),
+                0b01,
+            ),
+        ];
+        let mut world = make_world_with_board_and_entries(50.0, 50.0, entries);
+        let rules = DesignRules::jlcpcb_2layer(); // 0.3mm edge clearance
+
+        let violations = EdgeClearanceRule.check(&mut world, &rules);
+        assert!(violations.is_empty(), "Centered pad should pass");
+    }
+
+    #[test]
+    fn test_violation_too_close_to_left_edge() {
+        // Pad 0.1mm from left edge, rule requires 0.3mm
+        let entries = vec![
+            SpatialEntry::new(
+                Entity::from_raw(0),
+                Point::from_mm(0.1, 20.0),
+                Point::from_mm(1.1, 21.0),
+                0b01,
+            ),
+        ];
+        let mut world = make_world_with_board_and_entries(50.0, 50.0, entries);
+        let rules = DesignRules::jlcpcb_2layer();
+
+        let violations = EdgeClearanceRule.check(&mut world, &rules);
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0].kind, ViolationKind::EdgeClearance);
+    }
+
+    #[test]
+    fn test_violation_too_close_to_right_edge() {
+        // Pad 0.1mm from right edge of 50mm board
+        let entries = vec![
+            SpatialEntry::new(
+                Entity::from_raw(0),
+                Point::from_mm(49.0, 20.0),
+                Point::from_mm(49.9, 21.0),
+                0b01,
+            ),
+        ];
+        let mut world = make_world_with_board_and_entries(50.0, 50.0, entries);
+        let rules = DesignRules::jlcpcb_2layer();
+
+        let violations = EdgeClearanceRule.check(&mut world, &rules);
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0].kind, ViolationKind::EdgeClearance);
+    }
+
+    #[test]
+    fn test_violation_too_close_to_top_edge() {
+        let entries = vec![
+            SpatialEntry::new(
+                Entity::from_raw(0),
+                Point::from_mm(20.0, 49.0),
+                Point::from_mm(21.0, 49.9),
+                0b01,
+            ),
+        ];
+        let mut world = make_world_with_board_and_entries(50.0, 50.0, entries);
+        let rules = DesignRules::jlcpcb_2layer();
+
+        let violations = EdgeClearanceRule.check(&mut world, &rules);
+        assert_eq!(violations.len(), 1);
+    }
+
+    #[test]
+    fn test_violation_too_close_to_bottom_edge() {
+        let entries = vec![
+            SpatialEntry::new(
+                Entity::from_raw(0),
+                Point::from_mm(20.0, 0.05),
+                Point::from_mm(21.0, 1.05),
+                0b01,
+            ),
+        ];
+        let mut world = make_world_with_board_and_entries(50.0, 50.0, entries);
+        let rules = DesignRules::jlcpcb_2layer();
+
+        let violations = EdgeClearanceRule.check(&mut world, &rules);
+        assert_eq!(violations.len(), 1);
+    }
+
+    #[test]
+    fn test_no_board_no_violations() {
+        // No board defined — rule should pass silently
+        let mut world = BoardWorld::new();
+        let rules = DesignRules::jlcpcb_2layer();
+        let violations = EdgeClearanceRule.check(&mut world, &rules);
+        assert!(violations.is_empty());
+    }
+
+    #[test]
+    fn test_exactly_at_clearance_passes() {
+        // Pad exactly at min_edge_clearance from left edge (0.3mm)
+        let entries = vec![
+            SpatialEntry::new(
+                Entity::from_raw(0),
+                Point::from_mm(0.3, 20.0),
+                Point::from_mm(1.3, 21.0),
+                0b01,
+            ),
+        ];
+        let mut world = make_world_with_board_and_entries(50.0, 50.0, entries);
+        let rules = DesignRules::jlcpcb_2layer();
+
+        let violations = EdgeClearanceRule.check(&mut world, &rules);
+        assert!(violations.is_empty(), "Exactly at clearance should pass");
+    }
+
+    #[test]
+    fn test_multiple_violations() {
+        // Two pads too close to edges
+        let entries = vec![
+            SpatialEntry::new(
+                Entity::from_raw(0),
+                Point::from_mm(0.1, 20.0),  // too close to left
+                Point::from_mm(1.1, 21.0),
+                0b01,
+            ),
+            SpatialEntry::new(
+                Entity::from_raw(1),
+                Point::from_mm(20.0, 49.9),  // too close to top
+                Point::from_mm(21.0, 50.0),
+                0b01,
+            ),
+            SpatialEntry::new(
+                Entity::from_raw(2),
+                Point::from_mm(20.0, 20.0),  // well inside — OK
+                Point::from_mm(21.0, 21.0),
+                0b01,
+            ),
+        ];
+        let mut world = make_world_with_board_and_entries(50.0, 50.0, entries);
+        let rules = DesignRules::jlcpcb_2layer();
+
+        let violations = EdgeClearanceRule.check(&mut world, &rules);
+        assert_eq!(violations.len(), 2, "Expected 2 violations");
+    }
+
+    #[test]
+    fn test_empty_spatial_index() {
+        let mut world = BoardWorld::new();
+        world.set_board("test".into(), (Nm::from_mm(50.0), Nm::from_mm(50.0)), 2);
+        let rules = DesignRules::default();
+        let violations = EdgeClearanceRule.check(&mut world, &rules);
+        assert!(violations.is_empty());
+    }
+}

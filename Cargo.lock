@@ -1032,6 +1032,7 @@ dependencies = [
  "bevy_ecs",
  "cypcb-core",
  "cypcb-parser",
+ "cypcb-rules",
  "cypcb-world",
  "hashbrown 0.15.5",
  "miette",
@@ -1154,6 +1155,15 @@ dependencies = [
  "cypcb-core",
  "cypcb-world",
  "thiserror 2.0.18",
+]
+
+[[package]]
+name = "cypcb-rules"
+version = "0.1.0"
+dependencies = [
+ "cypcb-core",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

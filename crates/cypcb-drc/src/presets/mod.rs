@@ -9,6 +9,12 @@
 //! - **JLCPCB**: Popular Chinese manufacturer with competitive pricing
 //!   - 2-layer: Standard hobbyist option with 6mil minimum
 //!   - 4-layer: Tighter tolerances available (4mil)
+//!   - Advanced 2-layer: 3.5mil process, micro-drill
+//!   - Advanced 4-layer: Tightest tolerances, controlled impedance
+//!
+//! - **OSHPark**: US-based service with purple boards and ENIG finish
+//!   - 2-layer: 6mil trace/space, 10mil minimum drill
+//!   - 4-layer: 5mil trace/space, controlled impedance available
 //!
 //! - **PCBWay**: Alternative Chinese manufacturer with similar capabilities
 //!
@@ -28,6 +34,7 @@
 //! ```
 
 mod jlcpcb;
+mod oshpark;
 mod pcbway;
 
 use cypcb_core::Nm;
@@ -120,6 +127,14 @@ pub enum Preset {
     Jlcpcb2Layer,
     /// JLCPCB 4-layer board with tighter tolerances.
     Jlcpcb4Layer,
+    /// JLCPCB advanced 2-layer (tighter tolerances, higher cost).
+    JlcpcbAdvanced2Layer,
+    /// JLCPCB advanced 4-layer (tightest tolerances).
+    JlcpcbAdvanced4Layer,
+    /// OSHPark 2-layer (US-based, purple boards, ENIG).
+    OshPark2Layer,
+    /// OSHPark 4-layer (controlled impedance available).
+    OshPark4Layer,
     /// PCBWay standard capabilities.
     PcbwayStandard,
     /// Relaxed rules for prototyping.
@@ -142,6 +157,10 @@ impl Preset {
         match self {
             Preset::Jlcpcb2Layer => DesignRules::jlcpcb_2layer(),
             Preset::Jlcpcb4Layer => DesignRules::jlcpcb_4layer(),
+            Preset::JlcpcbAdvanced2Layer => DesignRules::jlcpcb_advanced_2layer(),
+            Preset::JlcpcbAdvanced4Layer => DesignRules::jlcpcb_advanced_4layer(),
+            Preset::OshPark2Layer => DesignRules::oshpark_2layer(),
+            Preset::OshPark4Layer => DesignRules::oshpark_4layer(),
             Preset::PcbwayStandard => DesignRules::pcbway_standard(),
             Preset::Prototype => DesignRules::prototype(),
         }
@@ -149,11 +168,19 @@ impl Preset {
 
     /// Parse a preset from a string name.
     ///
-    /// Accepts various aliases for convenience:
-    /// - `"jlcpcb"` or `"jlcpcb_2layer"` -> [`Jlcpcb2Layer`](Preset::Jlcpcb2Layer)
-    /// - `"jlcpcb_4layer"` -> [`Jlcpcb4Layer`](Preset::Jlcpcb4Layer)
-    /// - `"pcbway"` or `"pcbway_standard"` -> [`PcbwayStandard`](Preset::PcbwayStandard)
-    /// - `"prototype"` -> [`Prototype`](Preset::Prototype)
+    /// Accepts various aliases for convenience. Names are normalized:
+    /// lowercase, hyphens converted to underscores.
+    ///
+    /// | Input | Preset |
+    /// |-------|--------|
+    /// | `"jlcpcb"`, `"jlcpcb_2layer"` | `Jlcpcb2Layer` |
+    /// | `"jlcpcb_4layer"` | `Jlcpcb4Layer` |
+    /// | `"jlcpcb_advanced"`, `"jlcpcb_advanced_2layer"` | `JlcpcbAdvanced2Layer` |
+    /// | `"jlcpcb_advanced_4layer"` | `JlcpcbAdvanced4Layer` |
+    /// | `"oshpark"`, `"oshpark_2layer"` | `OshPark2Layer` |
+    /// | `"oshpark_4layer"` | `OshPark4Layer` |
+    /// | `"pcbway"`, `"pcbway_standard"` | `PcbwayStandard` |
+    /// | `"prototype"` | `Prototype` |
     ///
     /// # Examples
     ///
@@ -161,14 +188,20 @@ impl Preset {
     /// use cypcb_drc::presets::Preset;
     ///
     /// assert_eq!(Preset::from_name("jlcpcb"), Some(Preset::Jlcpcb2Layer));
-    /// assert_eq!(Preset::from_name("jlcpcb_2layer"), Some(Preset::Jlcpcb2Layer));
-    /// assert_eq!(Preset::from_name("pcbway"), Some(Preset::PcbwayStandard));
+    /// assert_eq!(Preset::from_name("oshpark"), Some(Preset::OshPark2Layer));
+    /// assert_eq!(Preset::from_name("jlcpcb_advanced"), Some(Preset::JlcpcbAdvanced2Layer));
     /// assert_eq!(Preset::from_name("unknown"), None);
     /// ```
     pub fn from_name(name: &str) -> Option<Self> {
-        match name {
+        // Normalize: lowercase, hyphens to underscores
+        let normalized = name.to_lowercase().replace('-', "_");
+        match normalized.as_str() {
             "jlcpcb" | "jlcpcb_2layer" => Some(Preset::Jlcpcb2Layer),
             "jlcpcb_4layer" => Some(Preset::Jlcpcb4Layer),
+            "jlcpcb_advanced" | "jlcpcb_advanced_2layer" => Some(Preset::JlcpcbAdvanced2Layer),
+            "jlcpcb_advanced_4layer" => Some(Preset::JlcpcbAdvanced4Layer),
+            "oshpark" | "oshpark_2layer" => Some(Preset::OshPark2Layer),
+            "oshpark_4layer" => Some(Preset::OshPark4Layer),
             "pcbway" | "pcbway_standard" => Some(Preset::PcbwayStandard),
             "prototype" => Some(Preset::Prototype),
             _ => None,
@@ -191,6 +224,10 @@ impl Preset {
         match self {
             Preset::Jlcpcb2Layer => "jlcpcb_2layer",
             Preset::Jlcpcb4Layer => "jlcpcb_4layer",
+            Preset::JlcpcbAdvanced2Layer => "jlcpcb_advanced_2layer",
+            Preset::JlcpcbAdvanced4Layer => "jlcpcb_advanced_4layer",
+            Preset::OshPark2Layer => "oshpark_2layer",
+            Preset::OshPark4Layer => "oshpark_4layer",
             Preset::PcbwayStandard => "pcbway_standard",
             Preset::Prototype => "prototype",
         }
@@ -206,12 +243,16 @@ impl Preset {
     /// use cypcb_drc::presets::Preset;
     ///
     /// let presets = Preset::all();
-    /// assert_eq!(presets.len(), 4);
+    /// assert_eq!(presets.len(), 8);
     /// ```
     pub fn all() -> &'static [Preset] {
         &[
             Preset::Jlcpcb2Layer,
             Preset::Jlcpcb4Layer,
+            Preset::JlcpcbAdvanced2Layer,
+            Preset::JlcpcbAdvanced4Layer,
+            Preset::OshPark2Layer,
+            Preset::OshPark4Layer,
             Preset::PcbwayStandard,
             Preset::Prototype,
         ]
@@ -270,10 +311,30 @@ mod tests {
         assert_eq!(Preset::from_name("jlcpcb"), Some(Preset::Jlcpcb2Layer));
         assert_eq!(Preset::from_name("jlcpcb_2layer"), Some(Preset::Jlcpcb2Layer));
         assert_eq!(Preset::from_name("jlcpcb_4layer"), Some(Preset::Jlcpcb4Layer));
+        assert_eq!(Preset::from_name("jlcpcb_advanced"), Some(Preset::JlcpcbAdvanced2Layer));
+        assert_eq!(Preset::from_name("jlcpcb_advanced_2layer"), Some(Preset::JlcpcbAdvanced2Layer));
+        assert_eq!(Preset::from_name("jlcpcb_advanced_4layer"), Some(Preset::JlcpcbAdvanced4Layer));
+        assert_eq!(Preset::from_name("oshpark"), Some(Preset::OshPark2Layer));
+        assert_eq!(Preset::from_name("oshpark_2layer"), Some(Preset::OshPark2Layer));
+        assert_eq!(Preset::from_name("oshpark_4layer"), Some(Preset::OshPark4Layer));
         assert_eq!(Preset::from_name("pcbway"), Some(Preset::PcbwayStandard));
         assert_eq!(Preset::from_name("pcbway_standard"), Some(Preset::PcbwayStandard));
         assert_eq!(Preset::from_name("prototype"), Some(Preset::Prototype));
         assert_eq!(Preset::from_name("unknown"), None);
+    }
+
+    #[test]
+    fn test_preset_from_name_case_insensitive() {
+        assert_eq!(Preset::from_name("JLCPCB"), Some(Preset::Jlcpcb2Layer));
+        assert_eq!(Preset::from_name("OshPark"), Some(Preset::OshPark2Layer));
+        assert_eq!(Preset::from_name("OSHPARK_4LAYER"), Some(Preset::OshPark4Layer));
+    }
+
+    #[test]
+    fn test_preset_from_name_hyphen_alias() {
+        assert_eq!(Preset::from_name("oshpark-2layer"), Some(Preset::OshPark2Layer));
+        assert_eq!(Preset::from_name("jlcpcb-advanced"), Some(Preset::JlcpcbAdvanced2Layer));
+        assert_eq!(Preset::from_name("jlcpcb-advanced-4layer"), Some(Preset::JlcpcbAdvanced4Layer));
     }
 
     #[test]
@@ -305,6 +366,10 @@ mod tests {
     fn test_preset_name() {
         assert_eq!(Preset::Jlcpcb2Layer.name(), "jlcpcb_2layer");
         assert_eq!(Preset::Jlcpcb4Layer.name(), "jlcpcb_4layer");
+        assert_eq!(Preset::JlcpcbAdvanced2Layer.name(), "jlcpcb_advanced_2layer");
+        assert_eq!(Preset::JlcpcbAdvanced4Layer.name(), "jlcpcb_advanced_4layer");
+        assert_eq!(Preset::OshPark2Layer.name(), "oshpark_2layer");
+        assert_eq!(Preset::OshPark4Layer.name(), "oshpark_4layer");
         assert_eq!(Preset::PcbwayStandard.name(), "pcbway_standard");
         assert_eq!(Preset::Prototype.name(), "prototype");
     }
@@ -313,14 +378,19 @@ mod tests {
     fn test_preset_display() {
         assert_eq!(format!("{}", Preset::Jlcpcb2Layer), "jlcpcb_2layer");
         assert_eq!(format!("{}", Preset::PcbwayStandard), "pcbway_standard");
+        assert_eq!(format!("{}", Preset::OshPark2Layer), "oshpark_2layer");
     }
 
     #[test]
     fn test_preset_all() {
         let all = Preset::all();
-        assert_eq!(all.len(), 4);
+        assert_eq!(all.len(), 8);
         assert!(all.contains(&Preset::Jlcpcb2Layer));
         assert!(all.contains(&Preset::Jlcpcb4Layer));
+        assert!(all.contains(&Preset::JlcpcbAdvanced2Layer));
+        assert!(all.contains(&Preset::JlcpcbAdvanced4Layer));
+        assert!(all.contains(&Preset::OshPark2Layer));
+        assert!(all.contains(&Preset::OshPark4Layer));
         assert!(all.contains(&Preset::PcbwayStandard));
         assert!(all.contains(&Preset::Prototype));
     }

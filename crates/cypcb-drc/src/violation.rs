@@ -43,6 +43,8 @@ pub enum ViolationKind {
     AnnularRing,
     /// Component placed in a keepout zone.
     KeepoutViolation,
+    /// Copper feature too close to board edge.
+    EdgeClearance,
 }
 
 impl std::fmt::Display for ViolationKind {
@@ -55,6 +57,7 @@ impl std::fmt::Display for ViolationKind {
             ViolationKind::ViaDrill => write!(f, "via-drill"),
             ViolationKind::AnnularRing => write!(f, "annular-ring"),
             ViolationKind::KeepoutViolation => write!(f, "keepout-violation"),
+            ViolationKind::EdgeClearance => write!(f, "edge-clearance"),
         }
     }
 }
@@ -229,6 +232,84 @@ impl DrcViolation {
         }
     }
 
+    /// Create an edge clearance violation.
+    ///
+    /// # Arguments
+    ///
+    /// * `entity` - Entity too close to the board edge
+    /// * `actual` - Actual distance to nearest edge
+    /// * `required` - Required minimum edge clearance
+    /// * `location` - Board location for click-to-zoom
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use bevy_ecs::entity::Entity;
+    /// use cypcb_core::{Nm, Point};
+    /// use cypcb_drc::DrcViolation;
+    ///
+    /// let violation = DrcViolation::edge_clearance(
+    ///     Entity::from_raw(1),
+    ///     Nm::from_mm(0.1),
+    ///     Nm::from_mm(0.3),
+    ///     Point::from_mm(0.5, 10.0),
+    /// );
+    /// assert_eq!(violation.kind, cypcb_drc::ViolationKind::EdgeClearance);
+    /// ```
+    pub fn edge_clearance(entity: Entity, actual: Nm, required: Nm, location: Point) -> Self {
+        DrcViolation {
+            kind: ViolationKind::EdgeClearance,
+            location,
+            entity,
+            other_entity: None,
+            source_span: None,
+            message: format!(
+                "Edge clearance violation: {:.2}mm actual, {:.2}mm required",
+                actual.to_mm(),
+                required.to_mm(),
+            ),
+        }
+    }
+
+    /// Create an annular ring violation.
+    ///
+    /// # Arguments
+    ///
+    /// * `entity` - Entity with insufficient annular ring
+    /// * `actual` - Actual annular ring width
+    /// * `required` - Required minimum annular ring
+    /// * `location` - Board location for click-to-zoom
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use bevy_ecs::entity::Entity;
+    /// use cypcb_core::{Nm, Point};
+    /// use cypcb_drc::DrcViolation;
+    ///
+    /// let violation = DrcViolation::annular_ring(
+    ///     Entity::from_raw(1),
+    ///     Nm::from_mm(0.1),
+    ///     Nm::from_mm(0.15),
+    ///     Point::from_mm(10.0, 20.0),
+    /// );
+    /// assert_eq!(violation.kind, cypcb_drc::ViolationKind::AnnularRing);
+    /// ```
+    pub fn annular_ring(entity: Entity, actual: Nm, required: Nm, location: Point) -> Self {
+        DrcViolation {
+            kind: ViolationKind::AnnularRing,
+            location,
+            entity,
+            other_entity: None,
+            source_span: None,
+            message: format!(
+                "Annular ring violation: {:.3}mm actual, {:.3}mm required",
+                actual.to_mm(),
+                required.to_mm(),
+            ),
+        }
+    }
+
     /// Set the source span for this violation.
     ///
     /// This enables the DSL error display to show the exact source location.
@@ -237,15 +318,23 @@ impl DrcViolation {
         self
     }
 
-    /// Add pad information to a drill size violation message.
+    /// Add pad information to a violation message.
     ///
     /// Updates the message to include component refdes and pad number.
+    /// Works for DrillSize and AnnularRing violations.
     pub fn with_pad_info(mut self, refdes: &str, pad_number: &str) -> Self {
-        if self.kind == ViolationKind::DrillSize {
-            // Parse existing message to get dimensions
-            if let Some(rest) = self.message.strip_prefix("Drill size violation: ") {
-                self.message = format!("Drill size violation at {}.{}: {}", refdes, pad_number, rest);
+        match self.kind {
+            ViolationKind::DrillSize => {
+                if let Some(rest) = self.message.strip_prefix("Drill size violation: ") {
+                    self.message = format!("Drill size violation at {}.{}: {}", refdes, pad_number, rest);
+                }
             }
+            ViolationKind::AnnularRing => {
+                if let Some(rest) = self.message.strip_prefix("Annular ring violation: ") {
+                    self.message = format!("Annular ring violation at {}.{}: {}", refdes, pad_number, rest);
+                }
+            }
+            _ => {}
         }
         self
     }

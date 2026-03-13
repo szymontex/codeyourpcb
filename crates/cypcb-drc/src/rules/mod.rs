@@ -3,9 +3,11 @@
 //! This module defines the [`DrcRule`] trait that all rules implement.
 //! Design rules configuration is defined in the [`presets`](crate::presets) module.
 
+pub mod annular_ring;
 pub mod clearance;
 pub mod connectivity;
 pub mod drill_size;
+pub mod edge_clearance;
 pub mod trace_width;
 
 use cypcb_world::BoardWorld;
@@ -13,9 +15,11 @@ use cypcb_world::BoardWorld;
 use crate::presets::DesignRules;
 use crate::violation::DrcViolation;
 
+pub use annular_ring::AnnularRingRule;
 pub use clearance::ClearanceRule;
 pub use connectivity::UnconnectedPinRule;
 pub use drill_size::MinDrillSizeRule;
+pub use edge_clearance::EdgeClearanceRule;
 pub use trace_width::MinTraceWidthRule;
 
 /// A single DRC rule that can be executed against a board.
@@ -143,6 +147,8 @@ mod tests {
         assert_eq!(MinTraceWidthRule.name(), "min-trace-width");
         assert_eq!(UnconnectedPinRule.name(), "unconnected-pin");
         assert_eq!(KeepoutRule.name(), "keepout");
+        assert_eq!(EdgeClearanceRule.name(), "edge-clearance");
+        assert_eq!(AnnularRingRule.name(), "annular-ring");
     }
 
     #[test]
@@ -156,6 +162,8 @@ mod tests {
         assert!(MinTraceWidthRule.check(&mut world, &rules).is_empty());
         assert!(UnconnectedPinRule.check(&mut world, &rules).is_empty());
         assert!(KeepoutRule.check(&mut world, &rules).is_empty());
+        assert!(EdgeClearanceRule.check(&mut world, &rules).is_empty());
+        assert!(AnnularRingRule.check(&mut world, &rules).is_empty());
     }
 
     #[test]
@@ -167,13 +175,17 @@ mod tests {
             Box::new(MinTraceWidthRule),
             Box::new(UnconnectedPinRule),
             Box::new(KeepoutRule),
+            Box::new(EdgeClearanceRule),
+            Box::new(AnnularRingRule),
         ];
-        assert_eq!(rules.len(), 5);
+        assert_eq!(rules.len(), 7);
         assert_eq!(rules[0].name(), "clearance");
         assert_eq!(rules[1].name(), "min-drill-size");
         assert_eq!(rules[2].name(), "min-trace-width");
         assert_eq!(rules[3].name(), "unconnected-pin");
         assert_eq!(rules[4].name(), "keepout");
+        assert_eq!(rules[5].name(), "edge-clearance");
+        assert_eq!(rules[6].name(), "annular-ring");
     }
 
     #[test]

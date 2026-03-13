@@ -4,8 +4,9 @@
 //! Uses the spatial index for efficient O(log n) candidate selection.
 
 use cypcb_core::{Nm, Point};
-use cypcb_world::{BoardWorld, SpatialEntry};
-use hashbrown::HashSet;
+use cypcb_world::BoardWorld;
+use cypcb_world::components::NetId;
+use hashbrown::{HashMap, HashSet};
 use rstar::AABB;
 
 use crate::presets::DesignRules;
@@ -58,11 +59,20 @@ impl DrcRule for ClearanceRule {
         let mut violations = Vec::new();
         let min_clearance = rules.min_clearance;
 
+        // Build entity -> NetId lookup for same-net exemption.
+        // Entities on the same net (e.g. two pads both on VCC) should not
+        // generate clearance violations — they're intentionally connected.
+        let net_map: HashMap<u32, NetId> = {
+            let ecs = world.ecs_mut();
+            let mut query = ecs.query::<(bevy_ecs::entity::Entity, &NetId)>();
+            query.iter(ecs).map(|(e, n)| (e.index(), *n)).collect()
+        };
+
         // Track checked pairs to avoid A-B and B-A duplicates
         let mut checked_pairs: HashSet<(u32, u32)> = HashSet::new();
 
         // Collect all entries first to avoid borrowing issues
-        let entries: Vec<SpatialEntry> = world.spatial().iter().cloned().collect();
+        let entries: Vec<_> = world.spatial().iter().cloned().collect();
 
         for entry in &entries {
             // Expand bounding box by min_clearance to find candidates
@@ -93,8 +103,16 @@ impl DrcRule for ClearanceRule {
                     continue; // Already checked
                 }
 
-                // TODO: Check if same net (exempt from clearance)
-                // For now, we check all pairs
+                // Same-net exemption: skip clearance check if both entities
+                // belong to the same net (they're electrically connected)
+                if let (Some(net_a), Some(net_b)) = (
+                    net_map.get(&entry.entity.index()),
+                    net_map.get(&candidate.entity.index()),
+                ) {
+                    if net_a == net_b {
+                        continue;
+                    }
+                }
 
                 // Phase 2: Calculate actual distance between AABBs
                 let distance = aabb_distance(&entry.envelope, &candidate.envelope);
@@ -158,6 +176,7 @@ mod tests {
     use bevy_ecs::prelude::*;
     use cypcb_core::Point;
     use cypcb_world::SpatialEntry;
+    use cypcb_world::components::NetId;
 
     use crate::ViolationKind;
 
@@ -327,5 +346,95 @@ mod tests {
         let center = aabb_center(&aabb);
         assert_eq!(center.x, Nm(500));
         assert_eq!(center.y, Nm(1000));
+    }
+
+    #[test]
+    fn test_same_net_exemption() {
+        // Two pads very close together but on the same net — should NOT violate
+        let mut world = BoardWorld::new();
+        let vcc = NetId::new(42);
+
+        // Spawn real entities in the ECS with NetId components
+        let e0 = world.ecs_mut().spawn(vcc).id();
+        let e1 = world.ecs_mut().spawn(vcc).id();
+
+        let entries = vec![
+            SpatialEntry::new(
+                e0,
+                Point::from_mm(0.0, 0.0),
+                Point::from_mm(1.0, 1.0),
+                0b01,
+            ),
+            SpatialEntry::new(
+                e1,
+                Point::from_mm(1.05, 0.0), // 0.05mm gap — would fail 0.15mm clearance
+                Point::from_mm(2.05, 1.0),
+                0b01,
+            ),
+        ];
+
+        world.ecs_mut().resource_mut::<cypcb_world::SpatialIndex>().rebuild(entries);
+
+        let rules = DesignRules::jlcpcb_2layer();
+        let violations = ClearanceRule.check(&mut world, &rules);
+
+        assert!(violations.is_empty(), "Same-net pads should be exempt from clearance check");
+    }
+
+    #[test]
+    fn test_different_net_still_violates() {
+        // Two pads close together on DIFFERENT nets — should violate
+        let mut world = BoardWorld::new();
+
+        // Spawn real entities with different NetIds
+        let e0 = world.ecs_mut().spawn(NetId::new(1)).id();
+        let e1 = world.ecs_mut().spawn(NetId::new(2)).id();
+
+        let entries = vec![
+            SpatialEntry::new(
+                e0,
+                Point::from_mm(0.0, 0.0),
+                Point::from_mm(1.0, 1.0),
+                0b01,
+            ),
+            SpatialEntry::new(
+                e1,
+                Point::from_mm(1.05, 0.0), // 0.05mm gap
+                Point::from_mm(2.05, 1.0),
+                0b01,
+            ),
+        ];
+
+        world.ecs_mut().resource_mut::<cypcb_world::SpatialIndex>().rebuild(entries);
+
+        let rules = DesignRules::jlcpcb_2layer();
+        let violations = ClearanceRule.check(&mut world, &rules);
+
+        assert_eq!(violations.len(), 1, "Different-net pads should still violate");
+    }
+
+    #[test]
+    fn test_no_net_still_violates() {
+        // Entities without NetId component — should still be checked (legacy behavior)
+        let entries = vec![
+            SpatialEntry::new(
+                Entity::from_raw(0),
+                Point::from_mm(0.0, 0.0),
+                Point::from_mm(1.0, 1.0),
+                0b01,
+            ),
+            SpatialEntry::new(
+                Entity::from_raw(1),
+                Point::from_mm(1.05, 0.0),
+                Point::from_mm(2.05, 1.0),
+                0b01,
+            ),
+        ];
+
+        let mut world = make_test_world_with_entries(entries);
+        let rules = DesignRules::jlcpcb_2layer();
+        let violations = ClearanceRule.check(&mut world, &rules);
+
+        assert_eq!(violations.len(), 1, "Entities without nets should still be checked");
     }
 }

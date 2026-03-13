@@ -37,3 +37,35 @@ freerouting-2.0.1.jar
 # Runtime artifacts
 logs/
 export-test/
+
+# Local research/notes (not for commit)
+.planning/research/*-vs-us.md
+TODO.md
+
+# GSD agent workspace
+.gsd/
+
+# ── GSD baseline (auto-generated) ──
+.gsd/activity/
+.gsd/runtime/
+.gsd/worktrees/
+.gsd/auto.lock
+.gsd/metrics.json
+.gsd/STATE.md
+*.code-workspace
+.env.*
+!.env.example
+node_modules/
+.next/
+dist/
+build/
+__pycache__/
+*.pyc
+.venv/
+venv/
+target/
+vendor/
+*.log
+coverage/
+.cache/
+tmp/
