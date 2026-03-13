@@ -1,0 +1,39 @@
+// Routing E2E test fixture
+// 3 components with generous spacing for reliable pad clicks
+// 3 nets connecting them in known topology
+version 1
+
+board routing_test {
+    size 80mm x 60mm
+    layers 2
+}
+
+component R1 resistor "0805" {
+    value "10k"
+    at 20mm, 30mm
+}
+
+component R2 resistor "0805" {
+    value "4.7k"
+    at 50mm, 30mm
+}
+
+component LED1 led "0805" {
+    value "RED"
+    at 50mm, 50mm
+}
+
+net POWER {
+    R1.1
+    R2.1
+}
+
+net SIGNAL {
+    R1.2
+    LED1.A
+}
+
+net GROUND {
+    R2.2
+    LED1.K
+}

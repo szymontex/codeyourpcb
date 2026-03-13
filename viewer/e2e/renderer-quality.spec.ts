@@ -137,10 +137,13 @@ test.describe('Renderer Quality — Professional Visuals', () => {
   test('net highlight activates when clicking a trace', async ({ page }) => {
     await loadBlink(page);
 
-    // Fit board to see all traces
-    await page.click('#pcb-canvas');
+    // Fit board to see all traces (press F on document — no canvas click to avoid hitting a pad)
     await page.keyboard.press('f');
     await page.waitForTimeout(300);
+
+    // Ensure no routing is active (clear any accidental pad hit from prior interactions)
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(100);
 
     // Verify no net is highlighted initially
     const diagBefore = await page.evaluate(() => (window as any).__renderDiag);

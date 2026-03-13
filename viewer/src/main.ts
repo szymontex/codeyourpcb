@@ -11,7 +11,7 @@ import { createViewport, fitBoard, screenToWorld } from './viewport';
 import { render, type RenderState } from './renderer';
 import { createDefaultRenderConfig, buildPadNetMap } from './render-config';
 import { setupInteraction, type InteractionState } from './interaction';
-import { createRoutingState, cancelRoute, flipLayer, type RoutingState } from './routing';
+import { createRoutingState, type RoutingState } from './routing';
 import { UndoStack, AddTraceCommand, RemoveTraceCommand, RotateComponentCommand, ResizeBoardCommand, installDebugSurface } from './undo';
 import { createLayerVisibility } from './layers';
 import { createFilePicker, setupDropZone, readFileAsText } from './file-picker';
@@ -530,6 +530,9 @@ async function init(): Promise<void> {
     if (snap.board) {
       viewport = fitBoard(viewport, snap.board.width_nm, snap.board.height_nm);
     }
+    // Sync viewport + snapshot to interaction state so click handlers use correct coords
+    interactionState.viewport = viewport;
+    interactionState.snapshot = snapshot;
     dirty = true;
     statusText.textContent = usingWasm ? 'Ready (WASM)' : 'Ready (Mock)';
   };
@@ -639,6 +642,16 @@ async function init(): Promise<void> {
       statusText.textContent = `Board resized to ${wMm} × ${hMm} mm`;
       dirty = true;
     },
+    onRouteStart: (netName: string) => {
+      highlightedNet = netName;
+      console.log(`[Net] Highlighted: ${netName}`);
+      dirty = true;
+    },
+    onRouteEnd: () => {
+      highlightedNet = null;
+      console.log('[Net] Cleared (route end)');
+      dirty = true;
+    },
   };
 
   setupInteraction(canvas, interactionState);
@@ -660,6 +673,19 @@ async function init(): Promise<void> {
     get committedSegments() { return routingState.committedSegments.length; },
     get drcViolationCount() { return routingState.drcViolations.length; },
     get previewSegment() { return routingState.previewSegment; },
+    get angleSnapEnabled() { return routingState.angleSnapEnabled; },
+    get magneticSnapEnabled() { return routingState.magneticSnapEnabled; },
+    get snappedToPad() { return routingState.snappedToPad; },
+    get targetPadsCount() { return routingState.targetPads.length; },
+  };
+
+  // Expose viewport for E2E tests — live getter reads current viewport state
+  (window as any).__viewport = {
+    get centerX() { return viewport.centerX; },
+    get centerY() { return viewport.centerY; },
+    get scale() { return viewport.scale; },
+    get width() { return viewport.width; },
+    get height() { return viewport.height; },
   };
 
   /**
@@ -1279,17 +1305,11 @@ async function init(): Promise<void> {
 
   // Keyboard shortcuts
   document.addEventListener('keydown', async (e) => {
-    // Escape: cancel manual routing first, then net highlight, then autorouting
+    // Escape: routing cancel handled in interaction.ts; here handle net highlight + autoroute
     if (e.key === 'Escape') {
-      if (routingState.mode === 'routing') {
-        routingState = cancelRoute(routingState);
-        interactionState.routing = routingState;
-        interactionState.onRoutingChange(routingState);
-        dirty = true;
-        e.preventDefault();
-        return;
-      }
-      // Clear net highlighting
+      // Skip routing cancel — handled by interaction.ts keyboard handler
+      if (routingState.mode === 'routing') return;
+      // Clear net highlighting (from trace selection, not routing)
       if (highlightedNet != null) {
         console.log('[Net] Cleared');
         highlightedNet = null;
@@ -1389,18 +1409,12 @@ async function init(): Promise<void> {
         return;
       }
     }
-    // F: flip layer during routing, or fit board to view when idle
+    // F: fit board to view when idle (routing F handled in interaction.ts)
     if (e.key === 'f' && !e.ctrlKey && !e.metaKey && !e.altKey) {
-      if (routingState.mode === 'routing') {
-        routingState = flipLayer(routingState);
-        interactionState.routing = routingState;
-        interactionState.onRoutingChange(routingState);
-        statusText.textContent = `Layer: ${routingState.currentLayer}`;
-        dirty = true;
-        e.preventDefault();
-      } else {
+      if (routingState.mode !== 'routing') {
         fitBtn.click();
       }
+      // During routing, interaction.ts handles F for flip layer
     }
     // Ctrl+E to toggle editor
     if ((e.ctrlKey || e.metaKey) && e.key === 'e') {

@@ -21,8 +21,9 @@
 - Tauri v2 desktop application (native menus, file dialogs, installer)
 - Web deployment (Cloudflare Pages, File System Access API, URL sharing)
 - 8-stage quality gate: cargo fmt, clippy, cargo test, eslint, vitest, playwright, autorouter benchmark, jscpd
-- 63 Vitest unit tests + 52 Playwright E2E tests (all passing, 1 pre-existing flake in errors.spec.ts)
+- 77 Vitest unit tests + 58 Playwright E2E tests (all passing)
 - Professional 2D renderer with LOD, per-pad net highlighting, component body outlines, pad numbers, net labels, drill marks
+- Routing UX: net-aware target pad highlighting, ratsnest guide, magnetic snap to destination, angle constraint toggle (A key), keyboard handlers (Escape/F/A)
 
 **Known tech debt / deferred items:**
 - DSL v2 constructs are parse-only — no module instantiation, import resolution, or constraint evaluation
@@ -81,9 +82,9 @@
 **Completed:**
 - ✅ S01: Professional 2D renderer (pad numbers, net labels, layer colors, refdes, LOD, per-pad highlighting)
 - ✅ S02: 3D view fix — component bodies, pads, traces, vias render correctly; GLTFLoader pipeline ready for S06
+- ✅ S03: Routing UX — net-aware target highlighting, ratsnest guide, magnetic snap, angle constraint toggle, 6 E2E + 14 unit tests
 
 **Planned:**
-- Routing UX with net-aware guidance, magnetic pads, optional angle constraint
 - UI architecture overhaul (clean toolbar, View menu, preferences panel)
 - Project manager (recent files, templates, import flow)
 - JLCPCB/LCSC integration (component search, 3D model download)

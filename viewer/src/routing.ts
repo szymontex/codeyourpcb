@@ -40,6 +40,16 @@ export interface RoutingState {
   gridSnapEnabled: boolean;
   /** Grid spacing in nm (default 1_270_000 = 1.27mm = 50mil) */
   gridSpacing: number;
+  /** Whether 45°/90° angle snap is active (toggle with A key) */
+  angleSnapEnabled: boolean;
+  /** Whether magnetic snap to destination pads is active */
+  magneticSnapEnabled: boolean;
+  /** Magnetic snap radius in nm (default 1mm) */
+  magneticSnapRadius: number;
+  /** Pad currently snapped to via magnetic snap (null if none in range) */
+  snappedToPad: PadHit | null;
+  /** All pads on the same net as startPad, pre-computed at route start */
+  targetPads: PadHit[];
 }
 
 export interface PadHit {
@@ -70,24 +80,17 @@ export function createRoutingState(): RoutingState {
     traceWidth: 250_000, // 0.25mm default
     gridSnapEnabled: false,
     gridSpacing: 1_270_000, // 1.27mm = 50mil default
+    angleSnapEnabled: false,
+    magneticSnapEnabled: true,
+    magneticSnapRadius: 1_000_000, // 1mm
+    snappedToPad: null,
+    targetPads: [],
   };
 }
 
 // ---------------------------------------------------------------------------
 // Pad hit-testing
 // ---------------------------------------------------------------------------
-
-/**
- * Compute pad center in world coordinates, accounting for component rotation.
- */
-function padWorldPosition(comp: ComponentInfo, pad: PadInfo): [number, number] {
-  const radians = (comp.rotation_mdeg / 1000) * (Math.PI / 180);
-  const cos = Math.cos(radians);
-  const sin = Math.sin(radians);
-  const rx = pad.x_nm * cos - pad.y_nm * sin;
-  const ry = pad.x_nm * sin + pad.y_nm * cos;
-  return [comp.x_nm + rx, comp.y_nm + ry];
-}
 
 /**
  * Find the pad closest to a world-coordinate point, within tolerance.
@@ -206,20 +209,135 @@ export function computeSnappedPoint(
 }
 
 // ---------------------------------------------------------------------------
+// Angle snap toggle
+// ---------------------------------------------------------------------------
+
+/**
+ * Toggle 45°/90° angle constraint on/off.
+ */
+export function toggleAngleSnap(state: RoutingState): RoutingState {
+  const next = !state.angleSnapEnabled;
+  console.log(`[Route] Angle snap: ${next ? 'ON' : 'OFF'}`);
+  return { ...state, angleSnapEnabled: next };
+}
+
+// ---------------------------------------------------------------------------
+// Target pad computation & magnetic snap
+// ---------------------------------------------------------------------------
+
+/**
+ * Compute pad center in world coordinates, accounting for component rotation.
+ * (public version for use by computeTargetPads)
+ */
+export function padWorldPosition(comp: ComponentInfo, pad: PadInfo): [number, number] {
+  const radians = (comp.rotation_mdeg / 1000) * (Math.PI / 180);
+  const cos = Math.cos(radians);
+  const sin = Math.sin(radians);
+  const rx = pad.x_nm * cos - pad.y_nm * sin;
+  const ry = pad.x_nm * sin + pad.y_nm * cos;
+  return [comp.x_nm + rx, comp.y_nm + ry];
+}
+
+/**
+ * Pre-compute all pads on a given net, excluding the start pad.
+ * Called once when routing starts — avoids per-frame scanning.
+ */
+export function computeTargetPads(
+  snapshot: BoardSnapshot | null,
+  netName: string,
+  excludeComp: string,
+  excludePad: string,
+): PadHit[] {
+  if (!snapshot || !netName) return [];
+
+  // Build set of pin refs on the net for fast lookup
+  const pinRefs = new Set<string>();
+  for (const net of snapshot.nets) {
+    if (net.name === netName) {
+      for (const conn of net.connections) {
+        pinRefs.add(`${conn.component}.${conn.pin}`);
+      }
+      break;
+    }
+  }
+
+  const result: PadHit[] = [];
+  for (const comp of snapshot.components) {
+    for (const pad of comp.pads) {
+      const pinRef = `${comp.refdes}.${pad.number}`;
+      if (!pinRefs.has(pinRef)) continue;
+      // Exclude the start pad itself
+      if (comp.refdes === excludeComp && pad.number === excludePad) continue;
+
+      const [wx, wy] = padWorldPosition(comp, pad);
+      result.push({
+        component: comp,
+        pad,
+        worldX: wx,
+        worldY: wy,
+        netName,
+      });
+    }
+  }
+  return result;
+}
+
+/**
+ * Find the nearest target pad within the magnetic snap radius.
+ * Uses dual threshold: world radius OR screen-pixel radius (15px / scale),
+ * whichever is larger. This ensures pads are easy to snap to at any zoom.
+ */
+export function findNearestTargetPad(
+  worldX: number,
+  worldY: number,
+  state: RoutingState,
+  viewportScale: number,
+): PadHit | null {
+  if (!state.magneticSnapEnabled || state.targetPads.length === 0) return null;
+
+  // Dual threshold: world radius OR 15px converted to world coords
+  const screenRadiusWorld = 15 / viewportScale;
+  const effectiveRadius = Math.max(state.magneticSnapRadius, screenRadiusWorld);
+
+  let bestDist = Infinity;
+  let bestPad: PadHit | null = null;
+
+  for (const tp of state.targetPads) {
+    const dx = worldX - tp.worldX;
+    const dy = worldY - tp.worldY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist <= effectiveRadius && dist < bestDist) {
+      bestDist = dist;
+      bestPad = tp;
+    }
+  }
+
+  return bestPad;
+}
+
+// ---------------------------------------------------------------------------
 // State machine transitions
 // ---------------------------------------------------------------------------
 
 /**
  * Start a route from a pad click.
+ * Takes snapshot to pre-compute targetPads for the net.
+ * Returns updated state (caller should set highlightedNet from state.netName).
  */
 export function startRoute(
   state: RoutingState,
   padHit: PadHit,
+  snapshot?: BoardSnapshot | null,
 ): RoutingState {
   // Detect layer from pad's layer mask
   const layer = (padHit.pad.layer_mask & 0x02) ? 'Bottom' : 'Top';
 
-  console.log(`[Route] idle → routing: pad ${padHit.component.refdes}.${padHit.pad.number} net=${padHit.netName} layer=${layer}`);
+  // Pre-compute target pads for magnetic snap
+  const targets = snapshot
+    ? computeTargetPads(snapshot, padHit.netName, padHit.component.refdes, padHit.pad.number)
+    : [];
+
+  console.log(`[Route] idle → routing: pad ${padHit.component.refdes}.${padHit.pad.number} net=${padHit.netName} layer=${layer} targets=${targets.length}`);
 
   return {
     ...state,
@@ -232,17 +350,24 @@ export function startRoute(
     snapAngle: 0,
     netName: padHit.netName,
     drcViolations: [],
+    snappedToPad: null,
+    targetPads: targets,
   };
 }
 
 /**
  * Update the preview segment during mouse move (while routing).
- * When grid snap is enabled, the cursor is snapped to grid first,
- * then angle snap is applied from the anchor to the grid-snapped point.
+ *
+ * Pipeline: grid snap → magnetic snap → angle snap (if enabled & not snapped).
+ * Magnetic snap wins: when cursor is near a target pad, endpoint locks to pad center.
+ * Angle snap is optional (toggle A) and only applies when no magnetic snap is active.
+ *
+ * @param viewportScale  Current viewport scale (px per nm) — needed for screen-px snap threshold
  */
 export function updatePreview(
   state: RoutingState,
   cursorWorld: { x: number; y: number },
+  viewportScale?: number,
 ): RoutingState {
   if (state.mode !== 'routing') return state;
 
@@ -251,18 +376,43 @@ export function updatePreview(
     ? snapToGrid(cursorWorld, state.gridSpacing)
     : cursorWorld;
 
-  // Then apply angle snap
-  const snapped = computeSnappedPoint(state.anchorPoint, gridAdjusted);
+  // Magnetic snap: check if cursor is near a target pad
+  const scale = viewportScale ?? 1;
+  const magneticHit = findNearestTargetPad(gridAdjusted.x, gridAdjusted.y, state, scale);
+
+  let endPoint: { x: number; y: number };
+  let angleDeg: number;
+
+  if (magneticHit) {
+    // Magnetic snap wins — lock to pad center
+    endPoint = { x: magneticHit.worldX, y: magneticHit.worldY };
+    // Compute angle for display only
+    const dx = endPoint.x - state.anchorPoint.x;
+    const dy = endPoint.y - state.anchorPoint.y;
+    angleDeg = Math.round(((Math.atan2(dy, dx) * 180) / Math.PI + 360) % 360);
+  } else if (state.angleSnapEnabled) {
+    // Angle snap (only when enabled and not magnetically snapped)
+    const snapped = computeSnappedPoint(state.anchorPoint, gridAdjusted);
+    endPoint = { x: snapped.x, y: snapped.y };
+    angleDeg = snapped.angleDeg;
+  } else {
+    // Free movement (no angle snap, no magnetic snap)
+    endPoint = gridAdjusted;
+    const dx = endPoint.x - state.anchorPoint.x;
+    const dy = endPoint.y - state.anchorPoint.y;
+    angleDeg = Math.round(((Math.atan2(dy, dx) * 180) / Math.PI + 360) % 360);
+  }
 
   return {
     ...state,
     previewSegment: {
       start_x: state.anchorPoint.x,
       start_y: state.anchorPoint.y,
-      end_x: snapped.x,
-      end_y: snapped.y,
+      end_x: endPoint.x,
+      end_y: endPoint.y,
     },
-    snapAngle: snapped.angleDeg,
+    snapAngle: angleDeg,
+    snappedToPad: magneticHit,
   };
 }
 
@@ -306,6 +456,7 @@ export function completeRoute(
 
   console.log(`[Route] routing → idle: completed ${allSegments.length} segments to ${targetPad.component.refdes}.${targetPad.pad.number}`);
 
+  // Note: caller is responsible for resetting state to idle (clearing snappedToPad, targetPads)
   return {
     segments: allSegments,
     netName: state.netName,
@@ -315,16 +466,26 @@ export function completeRoute(
 }
 
 /**
+ * Reset routing state to idle, preserving user preferences (grid snap, angle snap, magnetic snap).
+ */
+export function resetToIdle(state: RoutingState): RoutingState {
+  return {
+    ...createRoutingState(),
+    gridSnapEnabled: state.gridSnapEnabled,
+    gridSpacing: state.gridSpacing,
+    angleSnapEnabled: state.angleSnapEnabled,
+    magneticSnapEnabled: state.magneticSnapEnabled,
+    magneticSnapRadius: state.magneticSnapRadius,
+  };
+}
+
+/**
  * Cancel the in-progress route.
  */
 export function cancelRoute(state: RoutingState): RoutingState {
   if (state.mode !== 'routing') return state;
   console.log('[Route] routing → idle: cancelled');
-  return {
-    ...createRoutingState(),
-    gridSnapEnabled: state.gridSnapEnabled,
-    gridSpacing: state.gridSpacing,
-  };
+  return resetToIdle(state);
 }
 
 /**

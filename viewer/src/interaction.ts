@@ -16,6 +16,10 @@ import {
   updatePreview,
   addWaypoint,
   completeRoute,
+  cancelRoute,
+  flipLayer,
+  toggleAngleSnap,
+  resetToIdle,
   setDrcViolations,
   createDrcPreviewChecker,
 } from './routing';
@@ -51,6 +55,10 @@ export interface InteractionState {
   onBoardResize?: (oldW: number, oldH: number, newW: number, newH: number) => void;
   /** Currently active resize handle (visual feedback for renderer) */
   activeResizeHandle?: ResizeHandle | null;
+  /** Callback when routing starts — passes net name for highlightedNet */
+  onRouteStart?: (netName: string) => void;
+  /** Callback when routing ends (complete or cancel) — clear highlightedNet */
+  onRouteEnd?: () => void;
 }
 
 /**
@@ -325,12 +333,11 @@ export function setupInteraction(
             }
           }
         }
-        // Reset to idle (preserve grid snap settings)
-        const prevGridSnap = state.routing.gridSnapEnabled;
-        const prevGridSpacing = state.routing.gridSpacing;
-        state.routing = { ...createRoutingState(), gridSnapEnabled: prevGridSnap, gridSpacing: prevGridSpacing };
+        // Reset to idle (preserve user preferences)
+        state.routing = resetToIdle(state.routing);
         if (drcChecker) drcChecker.cancel();
         state.onRoutingChange(state.routing);
+        state.onRouteEnd?.();
         state.dirty = true;
         return;
       }
@@ -347,9 +354,10 @@ export function setupInteraction(
     // Hit-test pads to start routing
     const padHit = hitTestPad(state.snapshot, worldX, worldY, PAD_HIT_TOLERANCE_NM);
     if (padHit && padHit.netName) {
-      state.routing = startRoute(state.routing, padHit);
+      state.routing = startRoute(state.routing, padHit, state.snapshot);
       ensureDrcChecker();
       state.onRoutingChange(state.routing);
+      state.onRouteStart?.(padHit.netName);
       state.dirty = true;
       return;
     }
@@ -389,7 +397,7 @@ export function setupInteraction(
 
       // --- Routing preview update ---
       if (state.routing.mode === 'routing') {
-        state.routing = updatePreview(state.routing, { x: worldX, y: worldY });
+        state.routing = updatePreview(state.routing, { x: worldX, y: worldY }, state.viewport.scale);
         state.onRoutingChange(state.routing);
 
         // Schedule debounced DRC check
@@ -438,6 +446,55 @@ export function setupInteraction(
       state.dirty = true;
     }
   });
+
+  // ---------------------------------------------------------------------------
+  // Keyboard handler for routing mode (Escape, F, A)
+  // ---------------------------------------------------------------------------
+  function isEditorFocused(): boolean {
+    const el = document.activeElement;
+    if (!el) return false;
+    const tag = el.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return true;
+    // Monaco editor uses a textarea with class containing 'monaco'
+    if (el.closest?.('.monaco-editor') != null) return true;
+    return false;
+  }
+
+  function handleKeydown(e: KeyboardEvent): void {
+    // Never intercept when user is typing in an editor or input
+    if (isEditorFocused()) return;
+
+    // Only handle routing-specific keys when actively routing
+    if (state.routing.mode === 'routing') {
+      if (e.key === 'Escape') {
+        state.routing = cancelRoute(state.routing);
+        if (drcChecker) drcChecker.cancel();
+        state.onRoutingChange(state.routing);
+        state.onRouteEnd?.();
+        state.dirty = true;
+        e.preventDefault();
+        return;
+      }
+
+      if (e.key === 'f' || e.key === 'F') {
+        state.routing = flipLayer(state.routing);
+        state.onRoutingChange(state.routing);
+        state.dirty = true;
+        e.preventDefault();
+        return;
+      }
+
+      if (e.key === 'a' || e.key === 'A') {
+        state.routing = toggleAngleSnap(state.routing);
+        state.onRoutingChange(state.routing);
+        state.dirty = true;
+        e.preventDefault();
+        return;
+      }
+    }
+  }
+
+  document.addEventListener('keydown', handleKeydown);
 
   // Prevent context menu on right-click (reserve for future)
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());

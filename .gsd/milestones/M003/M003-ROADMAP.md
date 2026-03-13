@@ -60,7 +60,7 @@ This milestone is complete only when all are true:
 - [x] **S02: 3D View Fix & Component Rendering** `risk:high` `depends:[]`
   > After this: user toggles to 3D and sees the board with copper traces rendered as ribbons, pads as metallic shapes, vias as cylinders, and component bodies with correct dimensions — not an empty green board
 
-- [ ] **S03: Routing UX Upgrade** `risk:high` `depends:[S01]`
+- [x] **S03: Routing UX Upgrade** `risk:high` `depends:[S01]`
   > After this: user clicks a pad to start routing and sees target pads for that net highlighted, ratsnest line guiding to nearest unconnected pad, magnetic snap when approaching destination, with angle constraint as a toggleable option (not forced) — verified by E2E test routing a complete net
 
 - [ ] **S04: UI Architecture — Toolbar, View Menu & Settings** `risk:medium` `depends:[S01]`

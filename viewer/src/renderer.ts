@@ -125,7 +125,7 @@ export function render(ctx: CanvasRenderingContext2D, state: RenderState): void 
   // Draw ratsnest on top of everything (except violations)
   if (showRatsnest && snapshot.ratsnest) {
     for (const line of snapshot.ratsnest) {
-      drawRatsnest(ctx, viewport, line);
+      drawRatsnest(ctx, viewport, line, state.highlightedNet);
     }
   }
 
@@ -555,14 +555,33 @@ function drawVia(ctx: CanvasRenderingContext2D, vp: Viewport, via: ViaInfo, them
 // Ratsnest
 // ---------------------------------------------------------------------------
 
-function drawRatsnest(ctx: CanvasRenderingContext2D, vp: Viewport, line: RatsnestInfo): void {
+function drawRatsnest(
+  ctx: CanvasRenderingContext2D, vp: Viewport, line: RatsnestInfo,
+  highlightedNet: string | null,
+): void {
   const [startX, startY] = worldToScreen(vp, line.start_x, line.start_y);
   const [endX, endY] = worldToScreen(vp, line.end_x, line.end_y);
 
+  const isActiveNet = highlightedNet != null && line.net_name === highlightedNet;
+  const isDimmed = highlightedNet != null && !isActiveNet;
+
   ctx.save();
-  ctx.strokeStyle = LAYER_COLORS.ratsnest;
-  ctx.lineWidth = 1;
-  ctx.setLineDash([5, 3]);
+  if (isActiveNet) {
+    // Brighter, thicker line for the active routing net
+    ctx.strokeStyle = colorWithAlpha(LAYER_COLORS.ratsnest, 1.0);
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 2]);
+  } else if (isDimmed) {
+    // Dim non-matching nets during routing
+    ctx.strokeStyle = colorWithAlpha(LAYER_COLORS.ratsnest, 0.15);
+    ctx.lineWidth = 1;
+    ctx.setLineDash([5, 3]);
+  } else {
+    // Normal
+    ctx.strokeStyle = LAYER_COLORS.ratsnest;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([5, 3]);
+  }
   ctx.beginPath();
   ctx.moveTo(startX, startY);
   ctx.lineTo(endX, endY);
@@ -881,6 +900,34 @@ function drawRoutingPreview(ctx: CanvasRenderingContext2D, vp: Viewport, routing
     ctx.stroke();
   }
 
+  // Magnetic snap indicator: pulsing circle + crosshair at target pad
+  if (routing.snappedToPad) {
+    const [snapX, snapY] = worldToScreen(vp, routing.snappedToPad.worldX, routing.snappedToPad.worldY);
+    const snapRadius = 300_000 * vp.scale; // 0.3mm in screen px
+    const drawRadius = Math.max(snapRadius, 6);
+
+    // Pulsing circle (alpha oscillates via time)
+    const pulse = 0.4 + 0.2 * Math.sin(Date.now() / 200);
+    ctx.beginPath();
+    ctx.arc(snapX, snapY, drawRadius, 0, Math.PI * 2);
+    ctx.fillStyle = colorWithAlpha(color, pulse);
+    ctx.fill();
+    ctx.strokeStyle = colorWithAlpha(color, 0.8);
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Crosshair
+    const crossLen = drawRadius * 1.5;
+    ctx.strokeStyle = colorWithAlpha(color, 0.6);
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(snapX - crossLen, snapY);
+    ctx.lineTo(snapX + crossLen, snapY);
+    ctx.moveTo(snapX, snapY - crossLen);
+    ctx.lineTo(snapX, snapY + crossLen);
+    ctx.stroke();
+  }
+
   const [ax, ay] = worldToScreen(vp, routing.anchorPoint.x, routing.anchorPoint.y);
   ctx.beginPath();
   ctx.arc(ax, ay, 5, 0, Math.PI * 2);
@@ -909,7 +956,10 @@ function drawRoutingPreview(ctx: CanvasRenderingContext2D, vp: Viewport, routing
     ctx.font = '11px system-ui, sans-serif';
     ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
     ctx.textAlign = 'left';
-    ctx.fillText(`${routing.snapAngle}°`, ex + 12, ey - 8);
+
+    // Show angle + snap mode indicator
+    const snapMode = routing.snappedToPad ? '⊕' : routing.angleSnapEnabled ? '∠' : '';
+    ctx.fillText(`${routing.snapAngle}° ${snapMode}`, ex + 12, ey - 8);
 
     let label = routing.currentLayer;
     if (routing.netName) label = `${routing.netName} [${routing.currentLayer}]`;

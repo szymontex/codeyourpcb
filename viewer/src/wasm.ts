@@ -565,6 +565,8 @@ function segmentToSegmentDistance(
 class WasmPcbEngineAdapter implements PcbEngine {
   private wasmEngine: WasmPcbEngine;
   private cachedSnapshot: BoardSnapshot | null = null;
+  /** Auto-increment entity ID for JS-fallback trace/via mutations */
+  private nextEntityId = 100_000;
 
   constructor(wasmEngine: WasmPcbEngine) {
     this.wasmEngine = wasmEngine;
@@ -613,18 +615,50 @@ class WasmPcbEngineAdapter implements PcbEngine {
   }
 
   add_trace(net_name: string, layer: string, width_nm: number, segments: number[]): number {
-    const id = this.wasmEngine.add_trace_json(net_name, layer, BigInt(width_nm), JSON.stringify(segments));
-    // Invalidate cached snapshot so next get_snapshot() picks up the new trace
-    this.cachedSnapshot = null;
+    // Try WASM method first; fall back to JS-side snapshot mutation
+    // when the WASM module doesn't expose add_trace_json
+    if (typeof this.wasmEngine.add_trace_json === 'function') {
+      const id = this.wasmEngine.add_trace_json(net_name, layer, BigInt(width_nm), JSON.stringify(segments));
+      this.cachedSnapshot = null;
+      return id;
+    }
+
+    // JS fallback: mutate cached snapshot directly (same logic as MockPcbEngine)
+    if (!this.cachedSnapshot) return 0xFFFFFFFF;
+    if (segments.length < 4 || segments.length % 4 !== 0) return 0xFFFFFFFF;
+
+    const id = this.nextEntityId++;
+    const traceSegments: TraceSegmentInfo[] = [];
+    for (let i = 0; i < segments.length; i += 4) {
+      traceSegments.push({
+        start_x: segments[i], start_y: segments[i + 1],
+        end_x: segments[i + 2], end_y: segments[i + 3],
+      });
+    }
+    const normalizedLayer = layer === 'TopCopper' ? 'Top' : layer === 'BottomCopper' ? 'Bottom' : layer;
+    this.cachedSnapshot.traces.push({
+      id, segments: traceSegments, width: width_nm,
+      layer: normalizedLayer, net_name, locked: false,
+    });
     return id;
   }
 
   remove_trace(trace_id: number): boolean {
-    const removed = this.wasmEngine.remove_trace(trace_id);
-    if (removed) {
-      this.cachedSnapshot = null;
+    // Try WASM method first; fall back to JS-side snapshot mutation
+    if (typeof this.wasmEngine.remove_trace === 'function') {
+      const removed = this.wasmEngine.remove_trace(trace_id);
+      if (removed) {
+        this.cachedSnapshot = null;
+      }
+      return removed;
     }
-    return removed;
+
+    // JS fallback
+    if (!this.cachedSnapshot) return false;
+    const idx = this.cachedSnapshot.traces.findIndex(t => t.id === trace_id);
+    if (idx === -1) return false;
+    this.cachedSnapshot.traces.splice(idx, 1);
+    return true;
   }
 
   get_trace_at_point(x_nm: number, y_nm: number, tolerance_nm: number): number {
@@ -632,11 +666,17 @@ class WasmPcbEngineAdapter implements PcbEngine {
   }
 
   run_drc_incremental(): number {
-    return this.wasmEngine.run_drc_incremental();
+    if (typeof this.wasmEngine.run_drc_incremental === 'function') {
+      return this.wasmEngine.run_drc_incremental();
+    }
+    return 0; // No-op when WASM doesn't support DRC
   }
 
   trace_count(): number {
-    return this.wasmEngine.trace_count();
+    if (typeof this.wasmEngine.trace_count === 'function') {
+      return this.wasmEngine.trace_count();
+    }
+    return this.cachedSnapshot?.traces?.length ?? 0;
   }
 
   rotate_component(refdes: string, delta_mdeg: number): boolean {
