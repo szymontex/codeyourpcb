@@ -86,7 +86,10 @@ fn chip_footprint(
         // Courtyard: body + 0.25mm clearance per IPC-7351B
         courtyard: Rect::from_center_size(
             Point::ORIGIN,
-            (body_width + Nm::from_mm(0.5), body_height + Nm::from_mm(0.5)),
+            (
+                body_width + Nm::from_mm(0.5),
+                body_height + Nm::from_mm(0.5),
+            ),
         ),
     }
 }
@@ -115,11 +118,11 @@ pub fn chip_0402() -> Footprint {
     chip_footprint(
         "0402",
         "Chip 0402 (1005 metric)",
-        Nm::from_mm(0.6),  // pad width
-        Nm::from_mm(0.5),  // pad height
-        Nm::from_mm(1.0),  // pad span (center-to-center)
-        Nm::from_mm(1.0),  // body width
-        Nm::from_mm(0.5),  // body height
+        Nm::from_mm(0.6), // pad width
+        Nm::from_mm(0.5), // pad height
+        Nm::from_mm(1.0), // pad span (center-to-center)
+        Nm::from_mm(1.0), // body width
+        Nm::from_mm(0.5), // body height
     )
 }
 
@@ -189,11 +192,11 @@ pub fn chip_2512() -> Footprint {
     chip_footprint(
         "2512",
         "Chip 2512 (6332 metric)",
-        Nm::from_mm(1.4),  // pad width
-        Nm::from_mm(3.4),  // pad height
-        Nm::from_mm(6.5),  // pad span
-        Nm::from_mm(6.3),  // body width
-        Nm::from_mm(3.2),  // body height
+        Nm::from_mm(1.4), // pad width
+        Nm::from_mm(3.4), // pad height
+        Nm::from_mm(6.5), // pad span
+        Nm::from_mm(6.3), // body width
+        Nm::from_mm(3.2), // body height
     )
 }
 

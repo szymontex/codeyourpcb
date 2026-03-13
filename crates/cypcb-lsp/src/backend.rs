@@ -12,7 +12,7 @@ use tower_lsp::lsp_types::{
     CompletionOptions, CompletionParams, CompletionResponse, DiagnosticSeverity,
     DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
     DidSaveTextDocumentParams, GotoDefinitionParams, GotoDefinitionResponse, Hover, HoverContents,
-    HoverParams, HoverProviderCapability, InitializedParams, InitializeParams, InitializeResult,
+    HoverParams, HoverProviderCapability, InitializeParams, InitializeResult, InitializedParams,
     InsertTextFormat, MarkedString, NumberOrString, Position, Range, SaveOptions,
     ServerCapabilities, ServerInfo, TextDocumentSyncCapability, TextDocumentSyncKind,
     TextDocumentSyncOptions, TextDocumentSyncSaveOptions, Uri,
@@ -295,9 +295,9 @@ impl LanguageServer for Backend {
                         label: item.label,
                         kind: Some(kind),
                         detail: item.detail,
-                        documentation: item.documentation.map(|d| {
-                            tower_lsp::lsp_types::Documentation::String(d)
-                        }),
+                        documentation: item
+                            .documentation
+                            .map(|d| tower_lsp::lsp_types::Documentation::String(d)),
                         insert_text: item.insert_text,
                         insert_text_format,
                         ..Default::default()

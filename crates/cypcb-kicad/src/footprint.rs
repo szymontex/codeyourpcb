@@ -26,7 +26,10 @@ use std::path::Path;
 use cypcb_core::{Nm, Point, Rect};
 use cypcb_world::components::{Layer as InternalLayer, PadShape as InternalPadShape};
 use cypcb_world::footprint::{Footprint, PadDef};
-use kicad_parse_gen::footprint::{self as kicad_fp, Element, LayerSide, LayerType as KicadLayerType, Module, Pad, PadShape, PadType};
+use kicad_parse_gen::footprint::{
+    self as kicad_fp, Element, LayerSide, LayerType as KicadLayerType, Module, Pad, PadShape,
+    PadType,
+};
 use thiserror::Error;
 
 /// Errors that can occur during KiCad footprint import.
@@ -82,8 +85,8 @@ pub fn import_footprint(path: &Path) -> Result<Footprint, KicadImportError> {
 ///
 /// This is useful for testing or when the content is already in memory.
 pub fn import_footprint_from_str(content: &str) -> Result<Footprint, KicadImportError> {
-    let module: Module = kicad_fp::parse(content)
-        .map_err(|e| KicadImportError::ParseError(format!("{}", e)))?;
+    let module: Module =
+        kicad_fp::parse(content).map_err(|e| KicadImportError::ParseError(format!("{}", e)))?;
 
     convert_module(&module)
 }

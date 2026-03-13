@@ -46,7 +46,7 @@ pub use violation::{DrcViolation, ViolationKind};
 use cypcb_world::BoardWorld;
 
 /// Result of running DRC on a board.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct DrcResult {
     /// List of violations found.
     pub violations: Vec<DrcViolation>,
@@ -81,15 +81,6 @@ impl DrcResult {
     /// ```
     pub fn violation_count(&self) -> usize {
         self.violations.len()
-    }
-}
-
-impl Default for DrcResult {
-    fn default() -> Self {
-        DrcResult {
-            violations: Vec::new(),
-            duration_ms: 0,
-        }
     }
 }
 
@@ -128,7 +119,7 @@ pub fn run_drc(world: &mut BoardWorld, rules: &DesignRules) -> DrcResult {
     let checkers: Vec<Box<dyn DrcRule>> = vec![
         Box::new(rules::ClearanceRule),
         Box::new(rules::MinDrillSizeRule),
-        Box::new(rules::MinTraceWidthRule),  // Placeholder - returns empty until traces exist
+        Box::new(rules::MinTraceWidthRule), // Placeholder - returns empty until traces exist
         Box::new(rules::UnconnectedPinRule),
         Box::new(rules::KeepoutRule),
         Box::new(rules::EdgeClearanceRule),
@@ -164,18 +155,16 @@ mod tests {
 
     #[test]
     fn test_drc_result_with_violations() {
-        use cypcb_core::Point;
         use bevy_ecs::entity::Entity;
+        use cypcb_core::Point;
 
         let result = DrcResult {
-            violations: vec![
-                DrcViolation::unconnected_pin(
-                    Entity::from_raw(1),
-                    "1",
-                    "R1",
-                    Point::ORIGIN,
-                ),
-            ],
+            violations: vec![DrcViolation::unconnected_pin(
+                Entity::from_raw(1),
+                "1",
+                "R1",
+                Point::ORIGIN,
+            )],
             duration_ms: 5,
         };
 

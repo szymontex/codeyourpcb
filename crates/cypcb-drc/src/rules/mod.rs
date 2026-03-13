@@ -93,7 +93,8 @@ impl DrcRule for KeepoutRule {
         let mut violations = Vec::new();
 
         // Collect all keepout zones
-        let zones: Vec<_> = world.zones()
+        let zones: Vec<_> = world
+            .zones()
             .into_iter()
             .filter(|(_, zone)| zone.is_keepout())
             .collect();
@@ -129,10 +130,12 @@ impl DrcRule for KeepoutRule {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cypcb_core::{Point, Rect};
-    use cypcb_world::components::{FootprintRef, NetConnections, Position, RefDes, Rotation, Value, Zone};
-    use cypcb_world::components::zone::ZoneKind;
     use crate::ViolationKind;
+    use cypcb_core::{Point, Rect};
+    use cypcb_world::components::zone::ZoneKind;
+    use cypcb_world::components::{
+        FootprintRef, NetConnections, Position, RefDes, Rotation, Value, Zone,
+    };
 
     #[test]
     fn test_trait_object_safe() {
@@ -195,10 +198,7 @@ mod tests {
 
         // Create a keepout zone
         let zone = Zone {
-            bounds: Rect::new(
-                Point::from_mm(10.0, 10.0),
-                Point::from_mm(20.0, 20.0),
-            ),
+            bounds: Rect::new(Point::from_mm(10.0, 10.0), Point::from_mm(20.0, 20.0)),
             kind: ZoneKind::Keepout,
             layer_mask: 0xFFFFFFFF,
             name: Some("test_zone".to_string()),
@@ -230,10 +230,7 @@ mod tests {
 
         // Create a keepout zone
         let zone = Zone {
-            bounds: Rect::new(
-                Point::from_mm(10.0, 10.0),
-                Point::from_mm(20.0, 20.0),
-            ),
+            bounds: Rect::new(Point::from_mm(10.0, 10.0), Point::from_mm(20.0, 20.0)),
             kind: ZoneKind::Keepout,
             layer_mask: 0xFFFFFFFF,
             name: Some("test_zone".to_string()),
@@ -262,10 +259,7 @@ mod tests {
 
         // Create a copper pour zone (not keepout)
         let zone = Zone {
-            bounds: Rect::new(
-                Point::from_mm(0.0, 0.0),
-                Point::from_mm(50.0, 50.0),
-            ),
+            bounds: Rect::new(Point::from_mm(0.0, 0.0), Point::from_mm(50.0, 50.0)),
             kind: ZoneKind::CopperPour,
             layer_mask: 0xFFFFFFFF,
             name: Some("gnd_pour".to_string()),
@@ -284,7 +278,10 @@ mod tests {
 
         // Run the rule - should not detect violation (copper pour is not keepout)
         let violations = KeepoutRule.check(&mut world, &rules);
-        assert!(violations.is_empty(), "copper pour zones should not trigger keepout violations");
+        assert!(
+            violations.is_empty(),
+            "copper pour zones should not trigger keepout violations"
+        );
     }
 
     #[test]
@@ -294,10 +291,7 @@ mod tests {
 
         // Create a keepout zone
         let zone = Zone {
-            bounds: Rect::new(
-                Point::from_mm(10.0, 10.0),
-                Point::from_mm(20.0, 20.0),
-            ),
+            bounds: Rect::new(Point::from_mm(10.0, 10.0), Point::from_mm(20.0, 20.0)),
             kind: ZoneKind::Keepout,
             layer_mask: 0xFFFFFFFF,
             name: None,
@@ -339,9 +333,7 @@ mod tests {
         assert_eq!(violations.len(), 2, "expected 2 violations (R1 and R3)");
 
         // Verify both violations are for the right components
-        let refdes_list: Vec<_> = violations.iter()
-            .map(|v| v.message.clone())
-            .collect();
+        let refdes_list: Vec<_> = violations.iter().map(|v| v.message.clone()).collect();
         assert!(refdes_list.iter().any(|m| m.contains("R1")));
         assert!(refdes_list.iter().any(|m| m.contains("R3")));
         assert!(!refdes_list.iter().any(|m| m.contains("R2")));

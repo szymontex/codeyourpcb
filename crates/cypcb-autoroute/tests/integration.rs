@@ -11,8 +11,8 @@
 use cypcb_autoroute::grid::RoutingGrid;
 use cypcb_autoroute::{route_board, AutorouteConfig};
 use cypcb_parser::parse;
-use cypcb_router::types::{calculate_metrics, RoutingStatus};
 use cypcb_router::apply_routes;
+use cypcb_router::types::{calculate_metrics, RoutingStatus};
 use cypcb_rules::presets::{PresetRuleSet, RulesPreset};
 use cypcb_world::footprint::FootprintLibrary;
 use cypcb_world::{sync_ast_to_world, BoardWorld, Layer};
@@ -74,8 +74,7 @@ fn grid_from_blink() {
     // At ~63.5µm resolution: ~944 x 629 cells
     let expected_width_mm = 60.0;
     let expected_height_mm = 40.0;
-    let expected_width_cells =
-        (expected_width_mm * 1_000_000.0 / resolution as f64).ceil() as u32;
+    let expected_width_cells = (expected_width_mm * 1_000_000.0 / resolution as f64).ceil() as u32;
     let expected_height_cells =
         (expected_height_mm * 1_000_000.0 / resolution as f64).ceil() as u32;
 
@@ -174,7 +173,14 @@ fn route_blink_board() {
     eprintln!("║ Total length:  {:.1} mm", total_length_mm);
     eprintln!("║ Layer changes: {}", metrics.layer_changes);
     eprintln!("║ Quality score: {:.1}", metrics.quality_score());
-    eprintln!("║ Completion:    {}", if metrics.is_complete() { "100%" } else { "partial" });
+    eprintln!(
+        "║ Completion:    {}",
+        if metrics.is_complete() {
+            "100%"
+        } else {
+            "partial"
+        }
+    );
     eprintln!("╚══════════════════════════════════════════════╝\n");
 
     // ---- Must-have assertions ----
@@ -189,11 +195,7 @@ fn route_blink_board() {
     // 2. All segments have correct width matching JLCPCB min_trace_width
     let jlcpcb_trace_width = cypcb_core::Nm::from_mm(0.127);
     for seg in &result.routes {
-        assert!(
-            seg.width.raw() > 0,
-            "Segment has zero width: {:?}",
-            seg
-        );
+        assert!(seg.width.raw() > 0, "Segment has zero width: {:?}", seg);
         assert_eq!(
             seg.width, jlcpcb_trace_width,
             "Segment width {:?} doesn't match JLCPCB min_trace_width {:?}",
@@ -333,9 +335,7 @@ fn blink_apply_routes_compatibility() {
 
     eprintln!(
         "apply_routes OK: {} trace entities ({} segments), {} vias",
-        trace_count,
-        total_trace_segments,
-        via_entity_count
+        trace_count, total_trace_segments, via_entity_count
     );
 }
 
@@ -365,15 +365,12 @@ fn routed_output_passes_drc() {
     // not yet supported — this test validates that routing doesn't break existing
     // component-level DRC.
     world.rebuild_spatial_index(|name| {
-        library
-            .get(name)
-            .map(|fp| fp.courtyard)
-            .unwrap_or_else(|| {
-                cypcb_core::Rect::from_center_size(
-                    cypcb_core::Point::ORIGIN,
-                    (cypcb_core::Nm::from_mm(1.0), cypcb_core::Nm::from_mm(1.0)),
-                )
-            })
+        library.get(name).map(|fp| fp.courtyard).unwrap_or_else(|| {
+            cypcb_core::Rect::from_center_size(
+                cypcb_core::Point::ORIGIN,
+                (cypcb_core::Nm::from_mm(1.0), cypcb_core::Nm::from_mm(1.0)),
+            )
+        })
     });
 
     // Run DRC on the routed board
@@ -383,7 +380,10 @@ fn routed_output_passes_drc() {
     // Print violations for diagnostics before asserting
     if !drc_result.passed() {
         eprintln!("\n╔══════════════════════════════════════════════╗");
-        eprintln!("║        DRC Violations ({} found)             ║", drc_result.violation_count());
+        eprintln!(
+            "║        DRC Violations ({} found)             ║",
+            drc_result.violation_count()
+        );
         eprintln!("╠══════════════════════════════════════════════╣");
         for v in &drc_result.violations {
             eprintln!("║ {:?}: {}", v.kind, v.message);
@@ -433,7 +433,10 @@ fn benchmark_routing_time() {
             .expect("Grid construction should succeed");
         let elapsed = start.elapsed();
 
-        eprintln!("║ Grid construction (blink, 60x40mm):  {:>8.2}ms          ║", elapsed.as_secs_f64() * 1000.0);
+        eprintln!(
+            "║ Grid construction (blink, 60x40mm):  {:>8.2}ms          ║",
+            elapsed.as_secs_f64() * 1000.0
+        );
     }
 
     // Benchmark 2: Full routing of routing-test.cypcb (3 components, 3 nets)
@@ -444,11 +447,13 @@ fn benchmark_routing_time() {
         let elapsed = start.elapsed();
 
         let metrics = calculate_metrics(&result);
-        eprintln!("║ Route routing-test.cypcb (3 nets):   {:>8.2}ms {:?}  ║",
+        eprintln!(
+            "║ Route routing-test.cypcb (3 nets):   {:>8.2}ms {:?}  ║",
             elapsed.as_secs_f64() * 1000.0,
             result.status
         );
-        eprintln!("║   segments={} vias={} length={:.1}mm                    ║",
+        eprintln!(
+            "║   segments={} vias={} length={:.1}mm                    ║",
             result.routes.len(),
             metrics.via_count,
             metrics.total_length.raw() as f64 / 1_000_000.0
@@ -463,11 +468,13 @@ fn benchmark_routing_time() {
         let elapsed = start.elapsed();
 
         let metrics = calculate_metrics(&result);
-        eprintln!("║ Route blink.cypcb (7 nets):          {:>8.2}ms {:?}  ║",
+        eprintln!(
+            "║ Route blink.cypcb (7 nets):          {:>8.2}ms {:?}  ║",
             elapsed.as_secs_f64() * 1000.0,
             result.status
         );
-        eprintln!("║   segments={} vias={} length={:.1}mm                    ║",
+        eprintln!(
+            "║   segments={} vias={} length={:.1}mm                    ║",
             result.routes.len(),
             metrics.via_count,
             metrics.total_length.raw() as f64 / 1_000_000.0

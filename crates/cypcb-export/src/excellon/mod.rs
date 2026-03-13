@@ -30,5 +30,5 @@
 pub mod tools;
 pub mod writer;
 
-pub use tools::{ToolTable, VIA_DRILL_DEFAULT, THT_DRILL_SMALL, THT_DRILL_LARGE};
+pub use tools::{ToolTable, THT_DRILL_LARGE, THT_DRILL_SMALL, VIA_DRILL_DEFAULT};
 pub use writer::{export_excellon, DrillType};

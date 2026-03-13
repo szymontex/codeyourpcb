@@ -90,8 +90,8 @@ impl CoordinateFormat {
 pub fn nm_to_gerber(nm: i64, format: &CoordinateFormat) -> String {
     // Conversion factor from nanometers to unit
     let nm_per_unit = match format.unit {
-        Unit::Millimeters => 1_000_000i64,  // 1mm = 1,000,000 nm
-        Unit::Inches => 25_400_000i64,       // 1 inch = 25,400,000 nm
+        Unit::Millimeters => 1_000_000i64, // 1mm = 1,000,000 nm
+        Unit::Inches => 25_400_000i64,     // 1 inch = 25,400,000 nm
     };
 
     // Separate sign from magnitude for cleaner arithmetic
@@ -142,10 +142,7 @@ pub fn gerber_format_string(format: &CoordinateFormat) -> String {
     // Y{int}{dec} = Y coordinate format
     format!(
         "%FSLAX{}{}Y{}{}*%",
-        format.integer_places,
-        format.decimal_places,
-        format.integer_places,
-        format.decimal_places
+        format.integer_places, format.decimal_places, format.integer_places, format.decimal_places
     )
 }
 

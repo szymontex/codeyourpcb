@@ -42,13 +42,13 @@ impl DesignRules {
     /// ```
     pub fn jlcpcb_2layer() -> Self {
         DesignRules {
-            min_clearance: Nm::from_mm(0.15),       // 6 mil
-            min_trace_width: Nm::from_mm(0.15),     // 6 mil
-            min_drill_size: Nm::from_mm(0.3),       // 0.3mm mechanical
-            min_via_drill: Nm::from_mm(0.2),        // 0.2mm via
-            min_annular_ring: Nm::from_mm(0.15),    // 6 mil
-            min_silk_width: Nm::from_mm(0.15),      // 6 mil
-            min_edge_clearance: Nm::from_mm(0.3),   // 0.3mm
+            min_clearance: Nm::from_mm(0.15),     // 6 mil
+            min_trace_width: Nm::from_mm(0.15),   // 6 mil
+            min_drill_size: Nm::from_mm(0.3),     // 0.3mm mechanical
+            min_via_drill: Nm::from_mm(0.2),      // 0.2mm via
+            min_annular_ring: Nm::from_mm(0.15),  // 6 mil
+            min_silk_width: Nm::from_mm(0.15),    // 6 mil
+            min_edge_clearance: Nm::from_mm(0.3), // 0.3mm
         }
     }
 
@@ -82,11 +82,11 @@ impl DesignRules {
     /// ```
     pub fn jlcpcb_4layer() -> Self {
         DesignRules {
-            min_clearance: Nm::from_mm(0.1),        // 4 mil
-            min_trace_width: Nm::from_mm(0.1),      // 4 mil
-            min_drill_size: Nm::from_mm(0.2),       // 0.2mm
+            min_clearance: Nm::from_mm(0.1),   // 4 mil
+            min_trace_width: Nm::from_mm(0.1), // 4 mil
+            min_drill_size: Nm::from_mm(0.2),  // 0.2mm
             min_via_drill: Nm::from_mm(0.2),
-            min_annular_ring: Nm::from_mm(0.125),   // 5 mil
+            min_annular_ring: Nm::from_mm(0.125), // 5 mil
             min_silk_width: Nm::from_mm(0.15),
             min_edge_clearance: Nm::from_mm(0.25),
         }

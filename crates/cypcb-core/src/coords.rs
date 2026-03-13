@@ -47,7 +47,9 @@ pub const NM_PER_INCH: i64 = 25_400_000;
 /// let in_mm = distance.to_mm();
 /// assert!((in_mm - 10.5).abs() < 1e-6);
 /// ```
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, Default, PartialOrd, Ord, Serialize, Deserialize,
+)]
 pub struct Nm(pub i64);
 
 impl Nm {
@@ -217,7 +219,10 @@ pub struct Point {
 
 impl Point {
     /// Origin point (0, 0).
-    pub const ORIGIN: Point = Point { x: Nm::ZERO, y: Nm::ZERO };
+    pub const ORIGIN: Point = Point {
+        x: Nm::ZERO,
+        y: Nm::ZERO,
+    };
 
     /// Create a new point from Nm values.
     #[inline]

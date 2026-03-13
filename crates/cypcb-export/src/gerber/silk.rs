@@ -11,13 +11,13 @@
 //! Full text rendering requires vector stroke fonts or bitmap fonts rendered
 //! as polylines, which is deferred to future implementation.
 
-use cypcb_world::{BoardWorld, Layer};
-use cypcb_world::footprint::FootprintLibrary;
-use cypcb_core::Nm;
-use crate::coords::{CoordinateFormat, nm_to_gerber};
 use crate::apertures::{ApertureManager, ApertureShape};
+use crate::coords::{nm_to_gerber, CoordinateFormat};
 use crate::gerber::header::{write_header, GerberFileFunction, Side};
-use cypcb_world::components::{Position, FootprintRef, Rotation};
+use cypcb_core::Nm;
+use cypcb_world::components::{FootprintRef, Position, Rotation};
+use cypcb_world::footprint::FootprintLibrary;
+use cypcb_world::{BoardWorld, Layer};
 
 /// Silkscreen export error types.
 #[derive(Debug, thiserror::Error)]
@@ -104,9 +104,7 @@ pub fn export_silkscreen(
 
     // Get board info for header
     let board_name = world.board_name().unwrap_or("board");
-    let total_layers = world.board_info()
-        .map(|(_, ls)| ls.count)
-        .unwrap_or(2);
+    let total_layers = world.board_info().map(|(_, ls)| ls.count).unwrap_or(2);
 
     // Write header with Legend file function
     output.push_str(&write_header(
@@ -135,15 +133,20 @@ pub fn export_silkscreen(
     };
 
     // Query all components with position and footprint
-    let mut query = world.ecs_mut().query::<(&Position, &FootprintRef, &Rotation)>();
+    let mut query = world
+        .ecs_mut()
+        .query::<(&Position, &FootprintRef, &Rotation)>();
 
     for (position, footprint_ref, rotation) in query.iter(world.ecs()) {
         // Look up footprint in library
-        let footprint = library.get(&footprint_ref.0)
+        let footprint = library
+            .get(&footprint_ref.0)
             .ok_or_else(|| SilkError::FootprintNotFound(footprint_ref.0.clone()))?;
 
         // Check if component has pads on target layer
-        let on_target_side = footprint.pads.iter()
+        let on_target_side = footprint
+            .pads
+            .iter()
             .any(|pad| pad.layers.contains(&target_layer));
 
         if !on_target_side {
@@ -152,12 +155,7 @@ pub fn export_silkscreen(
 
         // Draw designator mark (crosshair at component center)
         if config.show_designator_marks {
-            draw_crosshair(
-                position.0,
-                config.line_width,
-                &mut drawing_commands,
-                format,
-            );
+            draw_crosshair(position.0, config.line_width, &mut drawing_commands, format);
         }
 
         // Draw courtyard outline
@@ -247,9 +245,9 @@ fn draw_courtyard(
     output.push_str(&format!("X{}Y{}D02*\n", x, y));
 
     // Draw to remaining corners
-    for i in 1..corners.len() {
-        let x = nm_to_gerber(corners[i].0, format);
-        let y = nm_to_gerber(corners[i].1, format);
+    for corner in corners.iter().skip(1) {
+        let x = nm_to_gerber(corner.0, format);
+        let y = nm_to_gerber(corner.1, format);
         output.push_str(&format!("X{}Y{}D01*\n", x, y));
     }
 
@@ -260,9 +258,9 @@ fn draw_courtyard(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cypcb_world::{BoardWorld, RefDes, Value, NetConnections, PadShape};
+    use cypcb_core::{Nm, Point, Rect};
     use cypcb_world::footprint::{Footprint, PadDef};
-    use cypcb_core::{Point, Rect, Nm};
+    use cypcb_world::{BoardWorld, NetConnections, PadShape, RefDes, Value};
 
     fn create_test_footprint() -> Footprint {
         // Simple 2-pad footprint
@@ -288,21 +286,19 @@ mod tests {
             name: "TEST_0402".to_string(),
             description: "Test footprint".to_string(),
             pads: vec![pad1, pad2],
-            bounds: Rect::new(
-                Point::from_mm(-1.5, -0.75),
-                Point::from_mm(1.5, 0.75),
-            ),
-            courtyard: Rect::new(
-                Point::from_mm(-2.0, -1.0),
-                Point::from_mm(2.0, 1.0),
-            ),
+            bounds: Rect::new(Point::from_mm(-1.5, -0.75), Point::from_mm(1.5, 0.75)),
+            courtyard: Rect::new(Point::from_mm(-2.0, -1.0), Point::from_mm(2.0, 1.0)),
         }
     }
 
     #[test]
     fn test_export_silkscreen_top() {
         let mut world = BoardWorld::new();
-        world.set_board("test_board".into(), (Nm::from_mm(100.0), Nm::from_mm(80.0)), 2);
+        world.set_board(
+            "test_board".into(),
+            (Nm::from_mm(100.0), Nm::from_mm(80.0)),
+            2,
+        );
 
         // Add a component on top side
         let mut library = FootprintLibrary::new();
@@ -338,7 +334,8 @@ mod tests {
         let format = CoordinateFormat::FORMAT_MM_2_6;
         let config = SilkConfig::default();
 
-        let gerber = export_silkscreen(&mut world, &library, Side::Bottom, &format, &config).unwrap();
+        let gerber =
+            export_silkscreen(&mut world, &library, Side::Bottom, &format, &config).unwrap();
 
         // Check header for bottom side
         assert!(gerber.contains("TF.FileFunction,Legend,Bot"));
@@ -432,13 +429,15 @@ mod tests {
         let config = SilkConfig::default();
 
         // Export top silkscreen - should NOT include bottom-only component
-        let gerber_top = export_silkscreen(&mut world, &library, Side::Top, &format, &config).unwrap();
+        let gerber_top =
+            export_silkscreen(&mut world, &library, Side::Top, &format, &config).unwrap();
         // Check that there are no drawing commands (only header and end)
         let draw_count_top = gerber_top.matches("D01*").count();
         assert_eq!(draw_count_top, 0); // No draw commands for bottom component on top silk
 
         // Export bottom silkscreen - should include bottom component
-        let gerber_bottom = export_silkscreen(&mut world, &library, Side::Bottom, &format, &config).unwrap();
+        let gerber_bottom =
+            export_silkscreen(&mut world, &library, Side::Bottom, &format, &config).unwrap();
         let draw_count_bottom = gerber_bottom.matches("D01*").count();
         assert!(draw_count_bottom > 0); // Has draw commands for bottom component
     }

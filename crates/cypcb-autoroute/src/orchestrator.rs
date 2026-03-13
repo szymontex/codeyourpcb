@@ -53,10 +53,7 @@ struct Connection {
 ///
 /// For each net, collects all pin pads that belong to it by iterating
 /// components and matching pin connections against the footprint library.
-pub fn extract_ratsnest(
-    world: &mut BoardWorld,
-    library: &FootprintLibrary,
-) -> Vec<NetRoute> {
+pub fn extract_ratsnest(world: &mut BoardWorld, library: &FootprintLibrary) -> Vec<NetRoute> {
     let _span = tracing::info_span!("extract_ratsnest").entered();
 
     // Collect component data: (position, rotation_deg, footprint_name, net_connections)
@@ -66,7 +63,12 @@ pub fn extract_ratsnest(
         query
             .iter(ecs)
             .map(|(pos, rot, fp, nets)| {
-                (pos.0, rot.to_degrees(), fp.as_str().to_string(), nets.clone())
+                (
+                    pos.0,
+                    rot.to_degrees(),
+                    fp.as_str().to_string(),
+                    nets.clone(),
+                )
             })
             .collect()
     };
@@ -112,15 +114,12 @@ pub fn extract_ratsnest(
                 }
             }
 
-            net_pads
-                .entry(pin_conn.net)
-                .or_default()
-                .push(PadTarget {
-                    position: abs_pos,
-                    layer_mask,
-                    pad_size: pad_def.size,
-                    pin: pin_conn.pin.clone(),
-                });
+            net_pads.entry(pin_conn.net).or_default().push(PadTarget {
+                position: abs_pos,
+                layer_mask,
+                pad_size: pad_def.size,
+                pin: pin_conn.pin.clone(),
+            });
         }
     }
 
@@ -137,10 +136,7 @@ pub fn extract_ratsnest(
             continue;
         }
 
-        let net_name = world
-            .net_name(net_id)
-            .unwrap_or("unnamed")
-            .to_string();
+        let net_name = world.net_name(net_id).unwrap_or("unnamed").to_string();
 
         tracing::debug!(
             net_id = net_id.id(),
@@ -199,9 +195,26 @@ fn is_power_net(name: &str) -> bool {
     let upper = name.to_uppercase();
     matches!(
         upper.as_str(),
-        "VCC" | "VDD" | "GND" | "VSS" | "5V" | "3V3" | "3.3V" | "12V" | "1V8" | "1.8V"
-            | "+5V" | "+3V3" | "+3.3V" | "+12V" | "+1V8" | "+1.8V"
-            | "VBAT" | "VBUS" | "V+" | "V-"
+        "VCC"
+            | "VDD"
+            | "GND"
+            | "VSS"
+            | "5V"
+            | "3V3"
+            | "3.3V"
+            | "12V"
+            | "1V8"
+            | "1.8V"
+            | "+5V"
+            | "+3V3"
+            | "+3.3V"
+            | "+12V"
+            | "+1V8"
+            | "+1.8V"
+            | "VBAT"
+            | "VBUS"
+            | "V+"
+            | "V-"
     )
 }
 
@@ -328,11 +341,8 @@ pub fn route_all_nets(
         let mut net_paths: Vec<Vec<GridNode>> = Vec::new();
 
         // Compute pad zones for all pads in this net
-        let net_pad_zones: Vec<PadZone> = net
-            .pads
-            .iter()
-            .map(|pad| pad_to_zone(grid, pad))
-            .collect();
+        let net_pad_zones: Vec<PadZone> =
+            net.pads.iter().map(|pad| pad_to_zone(grid, pad)).collect();
 
         for conn in &connections {
             let from_pad = &net.pads[conn.from_idx];
@@ -485,7 +495,14 @@ fn attempt_ripup_reroute(
 
         // Try routing current net
         let cost = RoutingCost::new(rules, current_net_id, config.via_cost_multiplier);
-        if let Some(path) = find_path_with_zones(grid, attempt.start, attempt.end, &cost, attempt.any_end, attempt.pad_zones) {
+        if let Some(path) = find_path_with_zones(
+            grid,
+            attempt.start,
+            attempt.end,
+            &cost,
+            attempt.any_end,
+            attempt.pad_zones,
+        ) {
             // Current net routed. Now re-route victim.
             if let Some(old_paths) = victim_paths {
                 let victim_cost = RoutingCost::new(rules, victim_id, config.via_cost_multiplier);
@@ -504,10 +521,16 @@ fn attempt_ripup_reroute(
                     for conn in &victim_conns {
                         let v_start = pad_to_grid_node(grid, &victim_net.pads[conn.from_idx]);
                         let v_end = pad_to_grid_node(grid, &victim_net.pads[conn.to_idx]);
-                        let v_any_end =
-                            is_multi_layer(victim_net.pads[conn.to_idx].layer_mask);
+                        let v_any_end = is_multi_layer(victim_net.pads[conn.to_idx].layer_mask);
 
-                        match find_path_with_zones(grid, v_start, v_end, &victim_cost, v_any_end, &victim_pad_zones) {
+                        match find_path_with_zones(
+                            grid,
+                            v_start,
+                            v_end,
+                            &victim_cost,
+                            v_any_end,
+                            &victim_pad_zones,
+                        ) {
                             Some(vp) => victim_rerouted.push(vp),
                             None => {
                                 victim_ok = false;
@@ -518,20 +541,14 @@ fn attempt_ripup_reroute(
                 }
 
                 if victim_ok {
-                    tracing::info!(
-                        victim = victim_id,
-                        "Victim net re-routed successfully"
-                    );
+                    tracing::info!(victim = victim_id, "Victim net re-routed successfully");
                     if !victim_rerouted.is_empty() {
                         routed_paths.insert(victim_id, victim_rerouted);
                     }
                     return Some(path);
                 } else {
                     // Re-routing victim failed. Undo: clear current net, restore victim.
-                    tracing::debug!(
-                        victim = victim_id,
-                        "Victim re-route failed, restoring"
-                    );
+                    tracing::debug!(victim = victim_id, "Victim re-route failed, restoring");
                     // Clear what we just routed for current net
                     grid.clear_route(current_net_id);
                     // Remove path cells we added
@@ -558,12 +575,7 @@ fn attempt_ripup_reroute(
             if let Some(old_paths) = victim_paths {
                 for old_path in &old_paths {
                     for node in old_path {
-                        grid.mark_route(
-                            node.0 as u32,
-                            node.1 as u32,
-                            node.2 as usize,
-                            victim_id,
-                        );
+                        grid.mark_route(node.0 as u32, node.1 as u32, node.2 as usize, victim_id);
                     }
                 }
                 routed_paths.insert(victim_id, old_paths);
@@ -643,8 +655,7 @@ fn pad_to_zone(grid: &RoutingGrid, pad: &PadTarget) -> PadZone {
     let (gx, gy) = grid.nm_to_grid(pad.position);
     let pad_radius_nm = pad.pad_size.0.raw().max(pad.pad_size.1.raw()) / 2;
     // Pad radius in grid cells, plus clearance bloat, plus 1 cell margin
-    let pad_radius_cells =
-        ((pad_radius_nm + grid.resolution() - 1) / grid.resolution()) as u16;
+    let pad_radius_cells = ((pad_radius_nm + grid.resolution() - 1) / grid.resolution()) as u16;
     // Add clearance cells (approx same as during grid construction) + margin
     let clearance_cells = 3u16; // Generous but safe
     PadZone {
@@ -717,7 +728,11 @@ mod tests {
             span * 2.0
         }
         fn layer_change_cost(&self, layer: u8) -> f64 {
-            if layer == 0 { 0.1 } else { 0.5 }
+            if layer == 0 {
+                0.1
+            } else {
+                0.5
+            }
         }
         fn clearance_between(&self, _net_a: u32, _net_b: u32) -> Nm {
             self.base.min_clearance
@@ -892,8 +907,16 @@ mod tests {
 
         // Pad zones for net 2 (the current net being routed)
         let net2_pad_zones = vec![
-            PadZone { cx: 15, cy: 0, radius: 2 },
-            PadZone { cx: 15, cy: 19, radius: 2 },
+            PadZone {
+                cx: 15,
+                cy: 0,
+                radius: 2,
+            },
+            PadZone {
+                cx: 15,
+                cy: 19,
+                radius: 2,
+            },
         ];
 
         // Net 2 needs to go from (15, 0) to (15, 19) — crosses net 1

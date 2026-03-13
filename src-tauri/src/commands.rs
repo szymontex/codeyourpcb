@@ -37,15 +37,17 @@ pub async fn open_file(app: tauri::AppHandle) -> Result<Option<FileContent>, Str
 /// Returns Ok on success, or error message on failure.
 #[tauri::command]
 pub async fn save_file(path: String, content: String) -> Result<(), String> {
-    std::fs::write(&path, content)
-        .map_err(|e| format!("Failed to write file: {}", e))
+    std::fs::write(&path, content).map_err(|e| format!("Failed to write file: {}", e))
 }
 
 /// Save content via native save file picker dialog.
 ///
 /// Returns the chosen file path if saved, or None if cancelled.
 #[tauri::command]
-pub async fn save_file_as(app: tauri::AppHandle, content: String) -> Result<Option<String>, String> {
+pub async fn save_file_as(
+    app: tauri::AppHandle,
+    content: String,
+) -> Result<Option<String>, String> {
     let file = app
         .dialog()
         .file()

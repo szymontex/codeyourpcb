@@ -29,9 +29,9 @@ use cypcb_core::{Nm, Point};
 use cypcb_drc::{run_drc, DesignRules, DrcViolation};
 use cypcb_world::footprint::FootprintLibrary;
 use cypcb_world::{
+    components::trace::{Trace, Via},
     BoardWorld, Entity, FootprintRef, Layer, NetConnections, NetId, PadShape, PinConnection,
     Position, RefDes, Rotation, Value,
-    components::trace::{Trace, Via},
 };
 
 // Import sync and parse only in native mode
@@ -161,7 +161,7 @@ impl PcbEngine {
         };
 
         // Segments come as flat array: [x1, y1, x2, y2, x1, y1, x2, y2, ...]
-        if segments_flat.len() < 4 || segments_flat.len() % 4 != 0 {
+        if segments_flat.len() < 4 || !segments_flat.len().is_multiple_of(4) {
             return u32::MAX;
         }
 
@@ -350,8 +350,12 @@ impl PcbEngine {
         }
 
         // Sync AST to world
-        let sync_result =
-            sync_ast_to_world(&parse_result.value, source, &mut self.world, &self.footprint_lib);
+        let sync_result = sync_ast_to_world(
+            &parse_result.value,
+            source,
+            &mut self.world,
+            &self.footprint_lib,
+        );
 
         // Collect sync errors
         for err in &sync_result.errors {
@@ -427,14 +431,12 @@ impl PcbEngine {
     fn rebuild_spatial_index_full(&mut self) {
         let lib = &self.footprint_lib;
         self.world.rebuild_spatial_index_with_traces(|name| {
-            lib.get(name)
-                .map(|fp| fp.courtyard)
-                .unwrap_or_else(|| {
-                    cypcb_core::Rect::from_center_size(
-                        Point::ORIGIN,
-                        (Nm::from_mm(1.0), Nm::from_mm(1.0)),
-                    )
-                })
+            lib.get(name).map(|fp| fp.courtyard).unwrap_or_else(|| {
+                cypcb_core::Rect::from_center_size(
+                    Point::ORIGIN,
+                    (Nm::from_mm(1.0), Nm::from_mm(1.0)),
+                )
+            })
         });
     }
 
@@ -557,12 +559,10 @@ impl PcbEngine {
     fn find_trace_entity(&mut self, trace_id: u32) -> Option<Entity> {
         let ecs = self.world.ecs_mut();
         let mut query = ecs.query::<(Entity, &cypcb_world::components::trace::Trace)>();
-        for (entity, _) in query.iter(ecs) {
-            if entity.index() == trace_id {
-                return Some(entity);
-            }
-        }
-        None
+        query
+            .iter(ecs)
+            .map(|(entity, _)| entity)
+            .find(|&entity| entity.index() == trace_id)
     }
 
     /// Get the number of DRC violations from the last load.
@@ -576,6 +576,7 @@ impl PcbEngine {
     }
 
     /// Populate the world from a BoardSnapshot.
+    #[allow(dead_code)] // Reserved for snapshot-based rendering path
     fn populate_from_snapshot(&mut self, snapshot: &BoardSnapshot) {
         self.world.clear();
         self.violations.clear();
@@ -638,7 +639,8 @@ impl PcbEngine {
                 }
             }
 
-            self.world.spawn_component(refdes, value, position, rotation, footprint_ref, nets);
+            self.world
+                .spawn_component(refdes, value, position, rotation, footprint_ref, nets);
         }
 
         // Rebuild spatial index for DRC queries (includes traces and vias)
@@ -646,7 +648,12 @@ impl PcbEngine {
     }
 
     /// Create a Footprint from PadInfo data.
-    fn footprint_from_pads(&self, name: &str, pads: &[PadInfo]) -> cypcb_world::footprint::Footprint {
+    #[allow(dead_code)] // Reserved for snapshot-based rendering path
+    fn footprint_from_pads(
+        &self,
+        name: &str,
+        pads: &[PadInfo],
+    ) -> cypcb_world::footprint::Footprint {
         use cypcb_world::footprint::{Footprint, PadDef};
 
         let mut pad_defs: Vec<PadDef> = Vec::with_capacity(pads.len());
@@ -695,8 +702,8 @@ impl PcbEngine {
         let mut max_y = i64::MIN;
 
         for pad in &pad_defs {
-            let half_w = pad.size.0.0 / 2;
-            let half_h = pad.size.1.0 / 2;
+            let half_w = pad.size.0 .0 / 2;
+            let half_h = pad.size.1 .0 / 2;
             min_x = min_x.min(pad.position.x.0 - half_w);
             min_y = min_y.min(pad.position.y.0 - half_h);
             max_x = max_x.max(pad.position.x.0 + half_w);
@@ -705,7 +712,10 @@ impl PcbEngine {
 
         use cypcb_core::Rect;
         let bounds = if min_x <= max_x && min_y <= max_y {
-            Rect::new(Point::new(Nm(min_x), Nm(min_y)), Point::new(Nm(max_x), Nm(max_y)))
+            Rect::new(
+                Point::new(Nm(min_x), Nm(min_y)),
+                Point::new(Nm(max_x), Nm(max_y)),
+            )
         } else {
             Rect::new(Point::new(Nm(0), Nm(0)), Point::new(Nm(0), Nm(0)))
         };
@@ -784,16 +794,13 @@ impl PcbEngine {
                         let layer: &Layer = layer;
                         layer_mask |= layer.to_copper_mask();
                     }
-                    let drill_nm: Option<i64> = match pad.drill {
-                        Some(d) => Some(d.0),
-                        None => None,
-                    };
+                    let drill_nm: Option<i64> = pad.drill.map(|d| d.0);
                     pads.push(PadInfo {
                         number: pad.number.clone(),
                         x_nm: pad.position.x.0,
                         y_nm: pad.position.y.0,
-                        width_nm: pad.size.0.0,
-                        height_nm: pad.size.1.0,
+                        width_nm: pad.size.0 .0,
+                        height_nm: pad.size.1 .0,
                         shape: pad_shape_to_string(&pad.shape),
                         layer_mask,
                         drill_nm,
@@ -909,7 +916,10 @@ impl PcbEngine {
         let trace_data: Vec<(u32, Trace)> = {
             let world_ref = self.world.ecs_mut();
             let mut query = world_ref.query::<(Entity, &Trace)>();
-            query.iter(world_ref).map(|(e, t)| (e.index(), t.clone())).collect()
+            query
+                .iter(world_ref)
+                .map(|(e, t)| (e.index(), t.clone()))
+                .collect()
         };
 
         // Now process with net names
@@ -922,18 +932,22 @@ impl PcbEngine {
                 _ => "Top".to_string(),
             };
 
-            let net_name = self.world.net_name(trace.net_id)
+            let net_name = self
+                .world
+                .net_name(trace.net_id)
                 .unwrap_or("(no net)")
                 .to_string();
 
-            let segments: Vec<TraceSegmentInfo> = trace.segments.iter().map(|seg| {
-                TraceSegmentInfo {
+            let segments: Vec<TraceSegmentInfo> = trace
+                .segments
+                .iter()
+                .map(|seg| TraceSegmentInfo {
                     start_x: seg.start.x.0 as f64,
                     start_y: seg.start.y.0 as f64,
                     end_x: seg.end.x.0 as f64,
                     end_y: seg.end.y.0 as f64,
-                }
-            }).collect();
+                })
+                .collect();
 
             traces.push(TraceInfo {
                 id: entity_id,
@@ -954,13 +968,18 @@ impl PcbEngine {
         let via_data: Vec<(u32, Via)> = {
             let world_ref = self.world.ecs_mut();
             let mut query = world_ref.query::<(Entity, &Via)>();
-            query.iter(world_ref).map(|(e, v)| (e.index(), *v)).collect()
+            query
+                .iter(world_ref)
+                .map(|(e, v)| (e.index(), *v))
+                .collect()
         };
 
         // Now process with net names
         let mut vias: Vec<ViaInfo> = Vec::new();
         for (entity_id, via) in via_data {
-            let net_name = self.world.net_name(via.net_id)
+            let net_name = self
+                .world
+                .net_name(via.net_id)
                 .unwrap_or("(no net)")
                 .to_string();
 
@@ -1015,14 +1034,14 @@ impl PcbEngine {
                 if let Some(entity) = self.world.find_by_refdes(&conn.component) {
                     if let Some(pos) = self.world.get::<Position>(entity) {
                         // Get the pad offset from footprint
-                        let footprint_name = self.world.get::<FootprintRef>(entity)
+                        let footprint_name = self
+                            .world
+                            .get::<FootprintRef>(entity)
                             .map(|f| f.as_str().to_string())
                             .unwrap_or_default();
 
                         let pad_offset = self.get_pad_offset(&footprint_name, &conn.pin);
-                        let rotation = self.world.get::<Rotation>(entity)
-                            .map(|r| r.0)
-                            .unwrap_or(0);
+                        let rotation = self.world.get::<Rotation>(entity).map(|r| r.0).unwrap_or(0);
 
                         // Apply rotation to pad offset
                         let radians = (rotation as f64 / 1000.0) * (std::f64::consts::PI / 180.0);
@@ -1130,12 +1149,16 @@ fn parse_layer(layer_str: &str) -> Result<Layer, String> {
         "BottomCopper" | "Bottom" => Ok(Layer::BottomCopper),
         _ if layer_str.starts_with("Inner(") && layer_str.ends_with(")") => {
             let inner = &layer_str[6..layer_str.len() - 1];
-            let num: u8 = inner.parse().map_err(|e| format!("Invalid inner layer: {}", e))?;
+            let num: u8 = inner
+                .parse()
+                .map_err(|e| format!("Invalid inner layer: {}", e))?;
             Ok(Layer::Inner(num))
         }
         _ if layer_str.starts_with("Inner") => {
             let num_str = &layer_str[5..];
-            let num: u8 = num_str.parse().map_err(|e| format!("Invalid inner layer: {}", e))?;
+            let num: u8 = num_str
+                .parse()
+                .map_err(|e| format!("Invalid inner layer: {}", e))?;
             Ok(Layer::Inner(num))
         }
         _ => Err(format!("Unknown layer: {}", layer_str)),
@@ -1254,7 +1277,11 @@ mod tests {
         // With components 0.5mm apart and 0402 footprints (1.5mm courtyard),
         // the courtyards overlap significantly, so clearance should be violated
         let violations = engine.violation_count();
-        assert!(violations > 0, "Expected clearance violations but found {}", violations);
+        assert!(
+            violations > 0,
+            "Expected clearance violations but found {}",
+            violations
+        );
     }
 
     #[test]
@@ -1273,8 +1300,8 @@ mod tests {
                 ComponentInfo {
                     refdes: "R1".to_string(),
                     value: "10k".to_string(),
-                    x_nm: 10_000_000,   // 10mm
-                    y_nm: 15_000_000,   // 15mm
+                    x_nm: 10_000_000, // 10mm
+                    y_nm: 15_000_000, // 15mm
                     rotation_mdeg: 0,
                     footprint: "0402".to_string(),
                     pads: vec![], // Empty - should use builtin library
@@ -1285,8 +1312,8 @@ mod tests {
                 ComponentInfo {
                     refdes: "R2".to_string(),
                     value: "10k".to_string(),
-                    x_nm: 10_500_000,   // 10.5mm (0.5mm from R1)
-                    y_nm: 15_000_000,   // 15mm
+                    x_nm: 10_500_000, // 10.5mm (0.5mm from R1)
+                    y_nm: 15_000_000, // 15mm
                     rotation_mdeg: 0,
                     footprint: "0402".to_string(),
                     pads: vec![], // Empty - should use builtin library
@@ -1308,12 +1335,20 @@ mod tests {
 
         // Check spatial index was built
         let spatial_count = engine.world.spatial().len();
-        assert_eq!(spatial_count, 2, "Spatial index should have 2 entries, found {}", spatial_count);
+        assert_eq!(
+            spatial_count, 2,
+            "Spatial index should have 2 entries, found {}",
+            spatial_count
+        );
 
         // Check for violations
         let violations = engine.violation_count();
-        assert!(violations > 0, "Expected clearance violations but found {} - spatial entries: {}",
-            violations, spatial_count);
+        assert!(
+            violations > 0,
+            "Expected clearance violations but found {} - spatial entries: {}",
+            violations,
+            spatial_count
+        );
     }
 
     // ====================================================================
@@ -1331,9 +1366,7 @@ mod tests {
         );
 
         // Add a horizontal trace: (5mm,5mm) → (20mm,5mm)
-        let segments = [
-            5_000_000i64, 5_000_000, 20_000_000, 5_000_000,
-        ];
+        let segments = [5_000_000i64, 5_000_000, 20_000_000, 5_000_000];
         let id = engine.add_trace("VCC", "Top", 200_000, &segments);
         assert_ne!(id, u32::MAX, "add_trace should return a valid entity id");
         assert_eq!(engine.trace_count(), 1);
@@ -1395,7 +1428,10 @@ mod tests {
         assert_eq!(engine.trace_count(), 1);
 
         let removed = engine.remove_trace(id);
-        assert!(removed, "remove_trace should return true for existing trace");
+        assert!(
+            removed,
+            "remove_trace should return true for existing trace"
+        );
         assert_eq!(engine.trace_count(), 0);
 
         // Snapshot should be empty
@@ -1407,7 +1443,10 @@ mod tests {
     fn test_trace_remove_nonexistent() {
         let mut engine = PcbEngine::new();
         let removed = engine.remove_trace(9999);
-        assert!(!removed, "remove_trace should return false for nonexistent trace");
+        assert!(
+            !removed,
+            "remove_trace should return false for nonexistent trace"
+        );
     }
 
     #[test]
@@ -1527,8 +1566,14 @@ mod tests {
 
         // L-shaped trace: (5mm,5mm)→(15mm,5mm)→(15mm,15mm)
         let segments = [
-            5_000_000i64, 5_000_000, 15_000_000, 5_000_000,  // horizontal
-            15_000_000, 5_000_000, 15_000_000, 15_000_000,    // vertical
+            5_000_000i64,
+            5_000_000,
+            15_000_000,
+            5_000_000, // horizontal
+            15_000_000,
+            5_000_000,
+            15_000_000,
+            15_000_000, // vertical
         ];
         let id = engine.add_trace("SIG", "Top", 200_000, &segments);
         assert_ne!(id, u32::MAX);
@@ -1580,8 +1625,16 @@ mod tests {
         let comp = &snapshot.components[0];
         assert_eq!(comp.refdes, "R1");
         // 0402 footprint should have non-zero body dimensions from bounds
-        assert!(comp.body_width_nm > 0, "body_width_nm should be > 0, got {}", comp.body_width_nm);
-        assert!(comp.body_height_nm > 0, "body_height_nm should be > 0, got {}", comp.body_height_nm);
+        assert!(
+            comp.body_width_nm > 0,
+            "body_width_nm should be > 0, got {}",
+            comp.body_width_nm
+        );
+        assert!(
+            comp.body_height_nm > 0,
+            "body_height_nm should be > 0, got {}",
+            comp.body_height_nm
+        );
         assert!(comp.model_3d.is_none());
     }
 
@@ -1603,7 +1656,11 @@ mod tests {
         let b = Point::from_mm(10.0, 0.0);
         let dist = point_to_segment_distance(p, a, b);
         // Should be ~3mm = 3_000_000 nm
-        assert!((dist - 3_000_000).abs() < 100, "Expected ~3mm, got {} nm", dist);
+        assert!(
+            (dist - 3_000_000).abs() < 100,
+            "Expected ~3mm, got {} nm",
+            dist
+        );
     }
 
     #[test]
@@ -1614,6 +1671,10 @@ mod tests {
         let b = Point::from_mm(10.0, 0.0);
         let dist = point_to_segment_distance(p, a, b);
         // Should be 5mm = 5_000_000 nm
-        assert!((dist - 5_000_000).abs() < 100, "Expected ~5mm, got {} nm", dist);
+        assert!(
+            (dist - 5_000_000).abs() < 100,
+            "Expected ~5mm, got {} nm",
+            dist
+        );
     }
 }

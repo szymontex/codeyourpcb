@@ -306,11 +306,7 @@ impl FreeRoutingRunner {
     }
 
     /// Spawn the FreeRouting process.
-    fn spawn_freerouting(
-        &self,
-        dsn_path: &Path,
-        ses_path: &Path,
-    ) -> Result<Child, RoutingError> {
+    fn spawn_freerouting(&self, dsn_path: &Path, ses_path: &Path) -> Result<Child, RoutingError> {
         let mut cmd = Command::new("java");
 
         // Add Java arguments
@@ -377,9 +373,7 @@ impl FreeRoutingRunner {
         if ses_path.exists() {
             match import_ses(ses_path, net_lookup) {
                 Ok(mut result) => {
-                    result.status = RoutingStatus::Partial {
-                        unrouted_count: 0,
-                    };
+                    result.status = RoutingStatus::Partial { unrouted_count: 0 };
                     Ok(result)
                 }
                 Err(_) => Err(RoutingError::Timeout(self.config.timeout_secs)),
@@ -401,7 +395,8 @@ fn parse_progress(line: &str, elapsed_secs: u64) -> Option<RoutingProgress> {
     // Look for pass number
     let pass = if let Some(idx) = line_lower.find("pass") {
         let rest = &line[idx + 4..];
-        let digits: String = rest.chars()
+        let digits: String = rest
+            .chars()
             .skip_while(|c| !c.is_ascii_digit())
             .take_while(|c| c.is_ascii_digit())
             .collect();
@@ -513,8 +508,14 @@ mod tests {
     #[test]
     fn test_extract_number_before() {
         assert_eq!(extract_number_before("42 routed", "routed"), Some(42));
-        assert_eq!(extract_number_before("has 123 connections routed", "routed"), Some(123));
-        assert_eq!(extract_number_before("no number here routed", "routed"), None);
+        assert_eq!(
+            extract_number_before("has 123 connections routed", "routed"),
+            Some(123)
+        );
+        assert_eq!(
+            extract_number_before("no number here routed", "routed"),
+            None
+        );
         assert_eq!(extract_number_before("no keyword here", "routed"), None);
     }
 

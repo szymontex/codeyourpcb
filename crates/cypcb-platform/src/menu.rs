@@ -1,4 +1,4 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 /// Declarative menu bar structure for cross-platform menu rendering.
 ///
@@ -172,7 +172,9 @@ impl MenuItem {
     /// ```
     pub fn with_shortcut(self, shortcut: impl Into<String>) -> Self {
         match self {
-            Self::Action { id, label, enabled, .. } => Self::Action {
+            Self::Action {
+                id, label, enabled, ..
+            } => Self::Action {
                 id,
                 label,
                 shortcut: Some(shortcut.into()),
@@ -195,7 +197,12 @@ impl MenuItem {
     /// ```
     pub fn disabled(self) -> Self {
         match self {
-            Self::Action { id, label, shortcut, .. } => Self::Action {
+            Self::Action {
+                id,
+                label,
+                shortcut,
+                ..
+            } => Self::Action {
                 id,
                 label,
                 shortcut,

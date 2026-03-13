@@ -9,7 +9,6 @@
  * of truth instead of connecting to tower-lsp over WebSocket.
  */
 
-import type * as monaco from 'monaco-editor';
 import type { ViolationInfo } from '../types';
 
 // ============================================================================

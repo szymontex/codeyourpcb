@@ -112,8 +112,6 @@ impl Unit {
     }
 }
 
-
-
 impl std::fmt::Display for Unit {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.suffix())
@@ -178,22 +176,34 @@ impl Dimension {
 
     /// Create a dimension in millimeters.
     pub const fn mm(value: f64) -> Self {
-        Dimension { value, unit: Unit::Mm }
+        Dimension {
+            value,
+            unit: Unit::Mm,
+        }
     }
 
     /// Create a dimension in mils.
     pub const fn mil(value: f64) -> Self {
-        Dimension { value, unit: Unit::Mil }
+        Dimension {
+            value,
+            unit: Unit::Mil,
+        }
     }
 
     /// Create a dimension in inches.
     pub const fn inch(value: f64) -> Self {
-        Dimension { value, unit: Unit::Inch }
+        Dimension {
+            value,
+            unit: Unit::Inch,
+        }
     }
 
     /// Create a dimension in nanometers.
     pub const fn nm(value: f64) -> Self {
-        Dimension { value, unit: Unit::Nm }
+        Dimension {
+            value,
+            unit: Unit::Nm,
+        }
     }
 
     /// Convert this dimension to nanometers.
@@ -238,7 +248,11 @@ mod tests {
             let original = 10.5;
             let nm = unit.to_nm(original);
             let back = unit.from_nm(nm);
-            assert!((back - original).abs() < 0.001, "Round-trip failed for {:?}", unit);
+            assert!(
+                (back - original).abs() < 0.001,
+                "Round-trip failed for {:?}",
+                unit
+            );
         }
     }
 

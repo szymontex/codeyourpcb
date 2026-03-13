@@ -10,5 +10,7 @@ pub mod sources;
 // Re-export key types for convenience
 pub use error::LibraryError;
 pub use manager::LibraryManager;
-pub use models::{Component, ComponentId, ComponentMetadata, LibraryInfo, SearchFilters, SearchResult};
+pub use models::{
+    Component, ComponentId, ComponentMetadata, LibraryInfo, SearchFilters, SearchResult,
+};
 pub use sources::LibrarySource;

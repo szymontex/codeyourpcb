@@ -211,19 +211,31 @@ impl std::fmt::Display for TraceWidthWarning {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::CurrentTooHigh => {
-                write!(f, "Current >35A: IPC-2221 accuracy degrades, consider experimental validation")
+                write!(
+                    f,
+                    "Current >35A: IPC-2221 accuracy degrades, consider experimental validation"
+                )
             }
             Self::TempRiseTooLow => {
-                write!(f, "Temperature rise <10C: may require impractically wide traces")
+                write!(
+                    f,
+                    "Temperature rise <10C: may require impractically wide traces"
+                )
             }
             Self::TempRiseTooHigh => {
-                write!(f, "Temperature rise >100C: risk of delamination and solder joint damage")
+                write!(
+                    f,
+                    "Temperature rise >100C: risk of delamination and solder joint damage"
+                )
             }
             Self::WidthExceedsMax => {
                 write!(f, "Width >10mm: consider multiple parallel traces for better current distribution")
             }
             Self::CopperWeightNonStandard => {
-                write!(f, "Non-standard copper weight: may have limited fab availability")
+                write!(
+                    f,
+                    "Non-standard copper weight: may have limited fab availability"
+                )
             }
         }
     }
@@ -354,8 +366,8 @@ impl TraceWidthCalculator {
 
         // Calculate cross-sectional area in mils²
         // Formula: A = (I / (k * dT^0.44))^(1/0.725)
-        let area_mils2 = (params.current_amps / (k * params.temp_rise_c.powf(0.44)))
-            .powf(1.0 / 0.725);
+        let area_mils2 =
+            (params.current_amps / (k * params.temp_rise_c.powf(0.44))).powf(1.0 / 0.725);
 
         // Calculate copper thickness in mils
         let thickness_mils = params.copper_oz * MILS_PER_OZ;
@@ -554,7 +566,9 @@ mod tests {
         let result = TraceWidthCalculator::calculate(&params);
 
         assert!(
-            result.warnings.contains(&TraceWidthWarning::TempRiseTooHigh),
+            result
+                .warnings
+                .contains(&TraceWidthWarning::TempRiseTooHigh),
             "Should warn about high temp rise"
         );
     }
@@ -566,7 +580,9 @@ mod tests {
         let result = TraceWidthCalculator::calculate(&params);
 
         assert!(
-            result.warnings.contains(&TraceWidthWarning::WidthExceedsMax),
+            result
+                .warnings
+                .contains(&TraceWidthWarning::WidthExceedsMax),
             "Should warn about excessive width"
         );
     }
@@ -577,7 +593,9 @@ mod tests {
         let result = TraceWidthCalculator::calculate(&params);
 
         assert!(
-            result.warnings.contains(&TraceWidthWarning::CopperWeightNonStandard),
+            result
+                .warnings
+                .contains(&TraceWidthWarning::CopperWeightNonStandard),
             "Should warn about non-standard copper weight"
         );
     }
@@ -589,7 +607,9 @@ mod tests {
             let result = TraceWidthCalculator::calculate(&params);
 
             assert!(
-                !result.warnings.contains(&TraceWidthWarning::CopperWeightNonStandard),
+                !result
+                    .warnings
+                    .contains(&TraceWidthWarning::CopperWeightNonStandard),
                 "Should not warn for standard {}oz copper",
                 copper_oz
             );

@@ -3,14 +3,14 @@
 //! Soldermask layers define where solder mask is ABSENT (openings for pads).
 //! Solderpaste layers define where solder paste should be applied (SMD pads only).
 
-use cypcb_world::{BoardWorld, Layer};
-use cypcb_world::footprint::FootprintLibrary;
-use cypcb_core::{Nm, Point};
-use crate::coords::{CoordinateFormat, nm_to_gerber};
-use crate::apertures::{ApertureManager, ApertureShape, aperture_for_pad};
+use crate::apertures::{aperture_for_pad, ApertureManager, ApertureShape};
+use crate::coords::{nm_to_gerber, CoordinateFormat};
+use crate::gerber::copper::{calculate_pad_position, ExportError};
 use crate::gerber::header::{write_header, GerberFileFunction, Side};
-use cypcb_world::components::{Position, FootprintRef, Rotation};
-use crate::gerber::copper::{ExportError, calculate_pad_position};
+use cypcb_core::Nm;
+use cypcb_world::components::{FootprintRef, Position, Rotation};
+use cypcb_world::footprint::FootprintLibrary;
+use cypcb_world::{BoardWorld, Layer};
 
 /// Configuration for mask and paste layer export.
 ///
@@ -30,8 +30,8 @@ pub struct MaskPasteConfig {
 impl Default for MaskPasteConfig {
     fn default() -> Self {
         Self {
-            mask_expansion: Nm(50_000),  // 0.05mm standard expansion
-            paste_reduction: 0.0,         // No reduction by default
+            mask_expansion: Nm(50_000), // 0.05mm standard expansion
+            paste_reduction: 0.0,       // No reduction by default
         }
     }
 }
@@ -77,7 +77,8 @@ impl MaskPasteConfig {
 /// ```
 /// use cypcb_export::gerber::mask::{export_soldermask, MaskPasteConfig};
 /// use cypcb_export::gerber::header::Side;
-/// use cypcb_world::{BoardWorld, FootprintLibrary};
+/// use cypcb_world::BoardWorld;
+/// use cypcb_world::footprint::FootprintLibrary;
 /// use cypcb_export::coords::CoordinateFormat;
 /// use cypcb_core::Nm;
 ///
@@ -108,12 +109,11 @@ pub fn export_soldermask(
     };
 
     let function = GerberFileFunction::Soldermask(side);
-    let board_name = world.board_info()
-        .and_then(|(_size, _)| Some("board"))
+    let board_name = world
+        .board_info()
+        .map(|(_size, _)| "board")
         .unwrap_or("board");
-    let total_layers = world.board_info()
-        .map(|(_, ls)| ls.count)
-        .unwrap_or(2);
+    let total_layers = world.board_info().map(|(_, ls)| ls.count).unwrap_or(2);
 
     // Write header
     output.push_str(&write_header(&function, board_name, format, total_layers));
@@ -125,7 +125,15 @@ pub fn export_soldermask(
     drawing_commands.push_str("%LPD*%\n");
 
     // Export mask openings (pads with expansion)
-    export_mask_openings(world, library, layer, &mut apertures, &mut drawing_commands, format, config)?;
+    export_mask_openings(
+        world,
+        library,
+        layer,
+        &mut apertures,
+        &mut drawing_commands,
+        format,
+        config,
+    )?;
 
     // Emit aperture definitions
     output.push_str(&apertures.to_definitions(format));
@@ -161,7 +169,8 @@ pub fn export_soldermask(
 /// ```
 /// use cypcb_export::gerber::mask::{export_solderpaste, MaskPasteConfig};
 /// use cypcb_export::gerber::header::Side;
-/// use cypcb_world::{BoardWorld, FootprintLibrary};
+/// use cypcb_world::BoardWorld;
+/// use cypcb_world::footprint::FootprintLibrary;
 /// use cypcb_export::coords::CoordinateFormat;
 /// use cypcb_core::Nm;
 ///
@@ -192,12 +201,11 @@ pub fn export_solderpaste(
     };
 
     let function = GerberFileFunction::Solderpaste(side);
-    let board_name = world.board_info()
-        .and_then(|(_size, _)| Some("board"))
+    let board_name = world
+        .board_info()
+        .map(|(_size, _)| "board")
         .unwrap_or("board");
-    let total_layers = world.board_info()
-        .map(|(_, ls)| ls.count)
-        .unwrap_or(2);
+    let total_layers = world.board_info().map(|(_, ls)| ls.count).unwrap_or(2);
 
     // Write header
     output.push_str(&write_header(&function, board_name, format, total_layers));
@@ -209,7 +217,15 @@ pub fn export_solderpaste(
     drawing_commands.push_str("%LPD*%\n");
 
     // Export paste stencil openings (SMD pads only, with reduction)
-    export_paste_openings(world, library, layer, &mut apertures, &mut drawing_commands, format, config)?;
+    export_paste_openings(
+        world,
+        library,
+        layer,
+        &mut apertures,
+        &mut drawing_commands,
+        format,
+        config,
+    )?;
 
     // Emit aperture definitions
     output.push_str(&apertures.to_definitions(format));
@@ -234,11 +250,14 @@ fn export_mask_openings(
     config: &MaskPasteConfig,
 ) -> Result<(), ExportError> {
     // Query all components with position and footprint
-    let mut query = world.ecs_mut().query::<(&Position, &FootprintRef, &Rotation)>();
+    let mut query = world
+        .ecs_mut()
+        .query::<(&Position, &FootprintRef, &Rotation)>();
 
     for (position, footprint_ref, rotation) in query.iter(world.ecs()) {
         // Look up footprint in library
-        let footprint = library.get(&footprint_ref.0)
+        let footprint = library
+            .get(&footprint_ref.0)
             .ok_or_else(|| ExportError::FootprintNotFound(footprint_ref.0.clone()))?;
 
         // Iterate over pads
@@ -283,11 +302,14 @@ fn export_paste_openings(
     config: &MaskPasteConfig,
 ) -> Result<(), ExportError> {
     // Query all components with position and footprint
-    let mut query = world.ecs_mut().query::<(&Position, &FootprintRef, &Rotation)>();
+    let mut query = world
+        .ecs_mut()
+        .query::<(&Position, &FootprintRef, &Rotation)>();
 
     for (position, footprint_ref, rotation) in query.iter(world.ecs()) {
         // Look up footprint in library
-        let footprint = library.get(&footprint_ref.0)
+        let footprint = library
+            .get(&footprint_ref.0)
             .ok_or_else(|| ExportError::FootprintNotFound(footprint_ref.0.clone()))?;
 
         // Iterate over pads
@@ -340,7 +362,11 @@ fn apply_expansion(shape: ApertureShape, expansion: Nm) -> ApertureShape {
             width: width + (expansion.0 * 2),
             height: height + (expansion.0 * 2),
         },
-        ApertureShape::RoundRect { width, height, corner_ratio } => ApertureShape::RoundRect {
+        ApertureShape::RoundRect {
+            width,
+            height,
+            corner_ratio,
+        } => ApertureShape::RoundRect {
             width: width + (expansion.0 * 2),
             height: height + (expansion.0 * 2),
             corner_ratio,
@@ -369,7 +395,11 @@ fn apply_reduction(shape: ApertureShape, reduction: f64) -> ApertureShape {
             width: ((width as f64) * factor) as i64,
             height: ((height as f64) * factor) as i64,
         },
-        ApertureShape::RoundRect { width, height, corner_ratio } => ApertureShape::RoundRect {
+        ApertureShape::RoundRect {
+            width,
+            height,
+            corner_ratio,
+        } => ApertureShape::RoundRect {
             width: ((width as f64) * factor) as i64,
             height: ((height as f64) * factor) as i64,
             corner_ratio,
@@ -380,10 +410,10 @@ fn apply_reduction(shape: ApertureShape, reduction: f64) -> ApertureShape {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cypcb_world::{RefDes, Value, NetConnections};
-    use cypcb_world::footprint::{Footprint, PadDef};
+    use cypcb_core::{Point, Rect};
     use cypcb_world::components::PadShape;
-    use cypcb_core::Rect;
+    use cypcb_world::footprint::{Footprint, PadDef};
+    use cypcb_world::{NetConnections, RefDes, Value};
 
     #[test]
     fn test_export_empty_soldermask() {
@@ -533,23 +563,29 @@ mod tests {
         };
         let expanded = apply_expansion(shape, Nm(50_000)); // +0.05mm on each side
 
-        assert_eq!(expanded, ApertureShape::Circle {
-            diameter: 1_100_000, // 1.1mm
-        });
+        assert_eq!(
+            expanded,
+            ApertureShape::Circle {
+                diameter: 1_100_000, // 1.1mm
+            }
+        );
     }
 
     #[test]
     fn test_apply_reduction() {
         let shape = ApertureShape::Rectangle {
-            width: 1_000_000,  // 1mm
-            height: 500_000,   // 0.5mm
+            width: 1_000_000, // 1mm
+            height: 500_000,  // 0.5mm
         };
         let reduced = apply_reduction(shape, 0.1); // 10% reduction = 90% of original
 
-        assert_eq!(reduced, ApertureShape::Rectangle {
-            width: 900_000,  // 0.9mm
-            height: 450_000, // 0.45mm
-        });
+        assert_eq!(
+            reduced,
+            ApertureShape::Rectangle {
+                width: 900_000,  // 0.9mm
+                height: 450_000, // 0.45mm
+            }
+        );
     }
 
     #[test]

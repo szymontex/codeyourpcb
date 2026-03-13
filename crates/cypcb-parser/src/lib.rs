@@ -72,6 +72,10 @@
 //! ```
 
 pub mod ast;
+// thiserror/miette derive macros consume enum variant fields via #[error],
+// #[source_code], and #[label] attributes, but rustc's unused_assignments lint
+// can't see through the macro expansion and false-positives on every field.
+#[allow(unused_assignments)]
 pub mod errors;
 
 // Tree-sitter parser module only available with the feature
@@ -149,7 +153,9 @@ mod tests {
 
     fn parse(source: &str) -> tree_sitter::Tree {
         let mut parser = Parser::new();
-        parser.set_language(&language()).expect("Failed to set language");
+        parser
+            .set_language(&language())
+            .expect("Failed to set language");
         parser.parse(source, None).expect("Failed to parse")
     }
 

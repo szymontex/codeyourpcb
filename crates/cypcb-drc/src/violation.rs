@@ -326,12 +326,18 @@ impl DrcViolation {
         match self.kind {
             ViolationKind::DrillSize => {
                 if let Some(rest) = self.message.strip_prefix("Drill size violation: ") {
-                    self.message = format!("Drill size violation at {}.{}: {}", refdes, pad_number, rest);
+                    self.message = format!(
+                        "Drill size violation at {}.{}: {}",
+                        refdes, pad_number, rest
+                    );
                 }
             }
             ViolationKind::AnnularRing => {
                 if let Some(rest) = self.message.strip_prefix("Annular ring violation: ") {
-                    self.message = format!("Annular ring violation at {}.{}: {}", refdes, pad_number, rest);
+                    self.message = format!(
+                        "Annular ring violation at {}.{}: {}",
+                        refdes, pad_number, rest
+                    );
                 }
             }
             _ => {}
@@ -348,7 +354,10 @@ mod tests {
     fn test_violation_kind_display() {
         assert_eq!(format!("{}", ViolationKind::Clearance), "clearance");
         assert_eq!(format!("{}", ViolationKind::DrillSize), "drill-size");
-        assert_eq!(format!("{}", ViolationKind::UnconnectedPin), "unconnected-pin");
+        assert_eq!(
+            format!("{}", ViolationKind::UnconnectedPin),
+            "unconnected-pin"
+        );
     }
 
     #[test]
@@ -382,24 +391,15 @@ mod tests {
 
     #[test]
     fn test_unconnected_pin_violation() {
-        let v = DrcViolation::unconnected_pin(
-            Entity::from_raw(1),
-            "1",
-            "R1",
-            Point::ORIGIN,
-        );
+        let v = DrcViolation::unconnected_pin(Entity::from_raw(1), "1", "R1", Point::ORIGIN);
         assert_eq!(v.kind, ViolationKind::UnconnectedPin);
         assert!(v.message.contains("R1.1"));
     }
 
     #[test]
     fn test_with_source_span() {
-        let v = DrcViolation::unconnected_pin(
-            Entity::from_raw(1),
-            "1",
-            "R1",
-            Point::ORIGIN,
-        ).with_source_span(Span::new(10, 20));
+        let v = DrcViolation::unconnected_pin(Entity::from_raw(1), "1", "R1", Point::ORIGIN)
+            .with_source_span(Span::new(10, 20));
 
         assert!(v.source_span.is_some());
         assert_eq!(v.source_span.unwrap().start, 10);
@@ -437,6 +437,9 @@ mod tests {
 
     #[test]
     fn test_violation_kind_display_keepout() {
-        assert_eq!(format!("{}", ViolationKind::KeepoutViolation), "keepout-violation");
+        assert_eq!(
+            format!("{}", ViolationKind::KeepoutViolation),
+            "keepout-violation"
+        );
     }
 }

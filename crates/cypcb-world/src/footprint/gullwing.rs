@@ -78,6 +78,7 @@ fn smd_layers() -> Vec<Layer> {
 /// # Panics
 ///
 /// Panics if `pin_count` is not even.
+#[allow(clippy::too_many_arguments)] // Hardware footprint params are naturally numerous; a config struct would obscure the API
 pub fn gullwing_footprint(
     name: &str,
     description: &str,
@@ -89,7 +90,7 @@ pub fn gullwing_footprint(
     body_size: (Nm, Nm),
 ) -> Footprint {
     assert!(
-        pin_count % 2 == 0,
+        pin_count.is_multiple_of(2),
         "Pin count must be even for dual-row package"
     );
 
@@ -290,14 +291,8 @@ pub fn sot23() -> Footprint {
                 layers,
             },
         ],
-        bounds: Rect::from_center_size(
-            Point::ORIGIN,
-            (Nm::from_mm(3.0), Nm::from_mm(2.5)),
-        ),
-        courtyard: Rect::from_center_size(
-            Point::ORIGIN,
-            (Nm::from_mm(3.5), Nm::from_mm(3.0)),
-        ),
+        bounds: Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(3.0), Nm::from_mm(2.5))),
+        courtyard: Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(3.5), Nm::from_mm(3.0))),
     }
 }
 
@@ -388,14 +383,8 @@ pub fn sot23_5() -> Footprint {
                 layers,
             },
         ],
-        bounds: Rect::from_center_size(
-            Point::ORIGIN,
-            (Nm::from_mm(3.0), Nm::from_mm(3.0)),
-        ),
-        courtyard: Rect::from_center_size(
-            Point::ORIGIN,
-            (Nm::from_mm(3.5), Nm::from_mm(3.5)),
-        ),
+        bounds: Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(3.0), Nm::from_mm(3.0))),
+        courtyard: Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(3.5), Nm::from_mm(3.5))),
     }
 }
 

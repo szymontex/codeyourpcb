@@ -4,11 +4,10 @@
 //! other pick-and-place services. Follows standard column naming conventions.
 
 use crate::cpl::{CplConfig, CplEntry};
-use cypcb_world::BoardWorld;
-use cypcb_world::components::{RefDes, Position, Rotation, FootprintRef};
+use cypcb_world::components::{FootprintRef, Position, RefDes, Rotation};
 use cypcb_world::footprint::FootprintLibrary;
+use cypcb_world::BoardWorld;
 use cypcb_world::Layer;
-use cypcb_core::Nm;
 use serde::Serialize;
 
 /// CSV row format matching JLCPCB CPL requirements.
@@ -98,11 +97,14 @@ pub fn export_cpl(
     let mut entries = Vec::new();
 
     // Query all components
-    let mut query = world.ecs_mut().query::<(&RefDes, &Position, &Rotation, &FootprintRef)>();
+    let mut query = world
+        .ecs_mut()
+        .query::<(&RefDes, &Position, &Rotation, &FootprintRef)>();
 
     for (refdes, position, rotation, footprint_ref) in query.iter(world.ecs()) {
         // Get footprint to determine layer
-        let footprint = library.get(&footprint_ref.0)
+        let footprint = library
+            .get(&footprint_ref.0)
             .ok_or_else(|| format!("Footprint not found: {}", footprint_ref.0))?;
 
         // Determine layer from first pad
@@ -173,7 +175,9 @@ pub fn export_cpl(
 /// Extracts prefix and number separately so that "R1", "R2", "R10" sorts
 /// correctly (not as "R1", "R10", "R2" which lexical sort would give).
 fn natural_sort_key(refdes: &str) -> (String, u32) {
-    let end = refdes.find(|c: char| c.is_ascii_digit()).unwrap_or(refdes.len());
+    let end = refdes
+        .find(|c: char| c.is_ascii_digit())
+        .unwrap_or(refdes.len());
     let prefix = refdes[..end].to_string();
     let number = refdes[end..].parse::<u32>().unwrap_or(0);
     (prefix, number)
@@ -182,7 +186,7 @@ fn natural_sort_key(refdes: &str) -> (String, u32) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cypcb_world::{Value, NetConnections};
+    use cypcb_world::{NetConnections, Value};
 
     #[test]
     fn test_export_cpl_empty() {

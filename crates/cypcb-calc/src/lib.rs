@@ -19,4 +19,6 @@
 
 pub mod trace_width;
 
-pub use trace_width::{TraceWidthCalculator, TraceWidthParams, TraceWidthResult, TraceWidthWarning};
+pub use trace_width::{
+    TraceWidthCalculator, TraceWidthParams, TraceWidthResult, TraceWidthWarning,
+};

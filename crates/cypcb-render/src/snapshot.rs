@@ -378,7 +378,7 @@ mod tests {
             id: 0,
             x: 5_000_000.0,
             y: 10_000_000.0,
-            drill: 300_000.0,       // 0.3mm
+            drill: 300_000.0,          // 0.3mm
             outer_diameter: 600_000.0, // 0.6mm
             net_name: "GND".to_string(),
         };

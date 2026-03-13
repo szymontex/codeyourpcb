@@ -4,9 +4,9 @@
 //! Uses the spatial index for efficient O(log n) candidate selection.
 
 use cypcb_core::{Nm, Point};
-use cypcb_world::BoardWorld;
-use cypcb_world::components::NetId;
 use cypcb_world::components::trace::Trace;
+use cypcb_world::components::NetId;
+use cypcb_world::BoardWorld;
 use hashbrown::{HashMap, HashSet};
 use rstar::AABB;
 
@@ -80,9 +80,7 @@ impl DrcRule for ClearanceRule {
                     let segs: Vec<([i64; 2], [i64; 2])> = t
                         .segments
                         .iter()
-                        .map(|s| {
-                            ([s.start.x.0, s.start.y.0], [s.end.x.0, s.end.y.0])
-                        })
+                        .map(|s| ([s.start.x.0, s.start.y.0], [s.end.x.0, s.end.y.0]))
                         .collect();
                     (
                         e.index(),
@@ -242,12 +240,7 @@ struct TraceData {
 /// Algorithm derived from minimizing |P1 + s·D1 - P3 - t·D2|² subject
 /// to s,t ∈ [0,1]. The unconstrained critical point is found first, then
 /// clamped with recomputation to handle boundary cases.
-pub fn segment_distance(
-    p1: [i64; 2],
-    p2: [i64; 2],
-    p3: [i64; 2],
-    p4: [i64; 2],
-) -> i64 {
+pub fn segment_distance(p1: [i64; 2], p2: [i64; 2], p3: [i64; 2], p4: [i64; 2]) -> i64 {
     // Direction vectors
     let d1 = [p2[0] - p1[0], p2[1] - p1[1]];
     let d2 = [p4[0] - p3[0], p4[1] - p3[1]];
@@ -339,6 +332,7 @@ fn point_distance(a: [i64; 2], b: [i64; 2]) -> i64 {
 }
 
 /// Minimum distance from a point to a line segment.
+#[allow(dead_code)] // Kept for future DRC rules (e.g., pad-to-trace clearance)
 fn point_to_segment_distance(p: [i64; 2], s1: [i64; 2], s2: [i64; 2]) -> i64 {
     segment_distance(p, p, s1, s2)
 }
@@ -401,17 +395,20 @@ mod tests {
     use super::*;
     use bevy_ecs::prelude::*;
     use cypcb_core::{Nm, Point};
-    use cypcb_world::SpatialEntry;
+    use cypcb_world::components::trace::{Trace, TraceSegment, TraceSource};
     use cypcb_world::components::NetId;
-    use cypcb_world::components::trace::{Trace, TraceSegment, TraceSource, Via};
     use cypcb_world::Layer;
+    use cypcb_world::SpatialEntry;
 
     use crate::ViolationKind;
 
     fn make_test_world_with_entries(entries: Vec<SpatialEntry>) -> BoardWorld {
         let mut world = BoardWorld::new();
         // Access the ECS world to directly populate the spatial index
-        world.ecs_mut().resource_mut::<cypcb_world::SpatialIndex>().rebuild(entries);
+        world
+            .ecs_mut()
+            .resource_mut::<cypcb_world::SpatialIndex>()
+            .rebuild(entries);
         world
     }
 
@@ -587,12 +584,7 @@ mod tests {
         let e1 = world.ecs_mut().spawn(vcc).id();
 
         let entries = vec![
-            SpatialEntry::new(
-                e0,
-                Point::from_mm(0.0, 0.0),
-                Point::from_mm(1.0, 1.0),
-                0b01,
-            ),
+            SpatialEntry::new(e0, Point::from_mm(0.0, 0.0), Point::from_mm(1.0, 1.0), 0b01),
             SpatialEntry::new(
                 e1,
                 Point::from_mm(1.05, 0.0), // 0.05mm gap — would fail 0.15mm clearance
@@ -601,12 +593,18 @@ mod tests {
             ),
         ];
 
-        world.ecs_mut().resource_mut::<cypcb_world::SpatialIndex>().rebuild(entries);
+        world
+            .ecs_mut()
+            .resource_mut::<cypcb_world::SpatialIndex>()
+            .rebuild(entries);
 
         let rules = DesignRules::jlcpcb_2layer();
         let violations = ClearanceRule.check(&mut world, &rules);
 
-        assert!(violations.is_empty(), "Same-net pads should be exempt from clearance check");
+        assert!(
+            violations.is_empty(),
+            "Same-net pads should be exempt from clearance check"
+        );
     }
 
     #[test]
@@ -619,12 +617,7 @@ mod tests {
         let e1 = world.ecs_mut().spawn(NetId::new(2)).id();
 
         let entries = vec![
-            SpatialEntry::new(
-                e0,
-                Point::from_mm(0.0, 0.0),
-                Point::from_mm(1.0, 1.0),
-                0b01,
-            ),
+            SpatialEntry::new(e0, Point::from_mm(0.0, 0.0), Point::from_mm(1.0, 1.0), 0b01),
             SpatialEntry::new(
                 e1,
                 Point::from_mm(1.05, 0.0), // 0.05mm gap
@@ -633,12 +626,19 @@ mod tests {
             ),
         ];
 
-        world.ecs_mut().resource_mut::<cypcb_world::SpatialIndex>().rebuild(entries);
+        world
+            .ecs_mut()
+            .resource_mut::<cypcb_world::SpatialIndex>()
+            .rebuild(entries);
 
         let rules = DesignRules::jlcpcb_2layer();
         let violations = ClearanceRule.check(&mut world, &rules);
 
-        assert_eq!(violations.len(), 1, "Different-net pads should still violate");
+        assert_eq!(
+            violations.len(),
+            1,
+            "Different-net pads should still violate"
+        );
     }
 
     #[test]
@@ -663,7 +663,11 @@ mod tests {
         let rules = DesignRules::jlcpcb_2layer();
         let violations = ClearanceRule.check(&mut world, &rules);
 
-        assert_eq!(violations.len(), 1, "Entities without nets should still be checked");
+        assert_eq!(
+            violations.len(),
+            1,
+            "Entities without nets should still be checked"
+        );
     }
 
     // ========================================================================
@@ -701,12 +705,7 @@ mod tests {
         // Two segments where the closest points are endpoints
         // Seg1: (0,0) → (1mm, 0)
         // Seg2: (2mm, 0) → (3mm, 0)  — gap is 1mm between endpoints
-        let d = segment_distance(
-            [0, 0],
-            [1_000_000, 0],
-            [2_000_000, 0],
-            [3_000_000, 0],
-        );
+        let d = segment_distance([0, 0], [1_000_000, 0], [2_000_000, 0], [3_000_000, 0]);
         assert_eq!(d, 1_000_000, "Collinear with 1mm gap");
     }
 
@@ -720,12 +719,7 @@ mod tests {
     #[test]
     fn test_segment_distance_touching() {
         // Two segments sharing an endpoint
-        let d = segment_distance(
-            [0, 0],
-            [1_000_000, 0],
-            [1_000_000, 0],
-            [2_000_000, 0],
-        );
+        let d = segment_distance([0, 0], [1_000_000, 0], [1_000_000, 0], [2_000_000, 0]);
         assert_eq!(d, 0, "Touching at endpoint");
     }
 
@@ -794,12 +788,15 @@ mod tests {
             // Trace AABB (expanded by half width = 0.1mm)
             SpatialEntry::new(
                 trace_entity,
-                Point::from_mm(-0.1, 1.0),   // 1.1 - 0.1
-                Point::from_mm(1.1, 1.2),    // 1.1 + 0.1
+                Point::from_mm(-0.1, 1.0), // 1.1 - 0.1
+                Point::from_mm(1.1, 1.2),  // 1.1 + 0.1
                 Layer::TopCopper.to_copper_mask(),
             ),
         ];
-        world.ecs_mut().resource_mut::<cypcb_world::SpatialIndex>().rebuild(entries);
+        world
+            .ecs_mut()
+            .resource_mut::<cypcb_world::SpatialIndex>()
+            .rebuild(entries);
 
         let rules = DesignRules::jlcpcb_2layer();
         let violations = ClearanceRule.check(&mut world, &rules);
@@ -844,12 +841,18 @@ mod tests {
                 Layer::TopCopper.to_copper_mask(),
             ),
         ];
-        world.ecs_mut().resource_mut::<cypcb_world::SpatialIndex>().rebuild(entries);
+        world
+            .ecs_mut()
+            .resource_mut::<cypcb_world::SpatialIndex>()
+            .rebuild(entries);
 
         let rules = DesignRules::jlcpcb_2layer();
         let violations = ClearanceRule.check(&mut world, &rules);
 
-        assert!(violations.is_empty(), "Trace 2mm from pad should not violate");
+        assert!(
+            violations.is_empty(),
+            "Trace 2mm from pad should not violate"
+        );
     }
 
     // ========================================================================
@@ -892,10 +895,27 @@ mod tests {
 
         let hw = 100_000; // half width 0.1mm
         let entries = vec![
-            SpatialEntry::from_raw(e1, -hw, -hw, 10_000_000 + hw, hw, Layer::TopCopper.to_copper_mask()),
-            SpatialEntry::from_raw(e2, -hw, 200_000 - hw, 10_000_000 + hw, 200_000 + hw, Layer::TopCopper.to_copper_mask()),
+            SpatialEntry::from_raw(
+                e1,
+                -hw,
+                -hw,
+                10_000_000 + hw,
+                hw,
+                Layer::TopCopper.to_copper_mask(),
+            ),
+            SpatialEntry::from_raw(
+                e2,
+                -hw,
+                200_000 - hw,
+                10_000_000 + hw,
+                200_000 + hw,
+                Layer::TopCopper.to_copper_mask(),
+            ),
         ];
-        world.ecs_mut().resource_mut::<cypcb_world::SpatialIndex>().rebuild(entries);
+        world
+            .ecs_mut()
+            .resource_mut::<cypcb_world::SpatialIndex>()
+            .rebuild(entries);
 
         let rules = DesignRules::jlcpcb_2layer();
         let violations = ClearanceRule.check(&mut world, &rules);
@@ -939,10 +959,27 @@ mod tests {
 
         let hw = 100_000;
         let entries = vec![
-            SpatialEntry::from_raw(e1, -hw, -hw, 10_000_000 + hw, hw, Layer::TopCopper.to_copper_mask()),
-            SpatialEntry::from_raw(e2, -hw, 5_000_000 - hw, 10_000_000 + hw, 5_000_000 + hw, Layer::TopCopper.to_copper_mask()),
+            SpatialEntry::from_raw(
+                e1,
+                -hw,
+                -hw,
+                10_000_000 + hw,
+                hw,
+                Layer::TopCopper.to_copper_mask(),
+            ),
+            SpatialEntry::from_raw(
+                e2,
+                -hw,
+                5_000_000 - hw,
+                10_000_000 + hw,
+                5_000_000 + hw,
+                Layer::TopCopper.to_copper_mask(),
+            ),
         ];
-        world.ecs_mut().resource_mut::<cypcb_world::SpatialIndex>().rebuild(entries);
+        world
+            .ecs_mut()
+            .resource_mut::<cypcb_world::SpatialIndex>()
+            .rebuild(entries);
 
         let rules = DesignRules::jlcpcb_2layer();
         let violations = ClearanceRule.check(&mut world, &rules);

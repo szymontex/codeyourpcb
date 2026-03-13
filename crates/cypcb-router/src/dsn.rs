@@ -113,9 +113,7 @@ pub fn export_dsn(
     output: &mut impl Write,
 ) -> Result<(), DsnExportError> {
     // Verify board exists
-    let (board_size, layer_stack) = world
-        .board_info()
-        .ok_or(DsnExportError::MissingBoard)?;
+    let (board_size, layer_stack) = world.board_info().ok_or(DsnExportError::MissingBoard)?;
 
     let board_name = world.board_name().unwrap_or("board");
 
@@ -169,7 +167,11 @@ fn write_structure(
     let height_mil = nm_to_mil(board_size.height.0);
 
     writeln!(output, "    (boundary")?;
-    writeln!(output, "      (rect pcb 0 0 {:.4} {:.4})", width_mil, height_mil)?;
+    writeln!(
+        output,
+        "      (rect pcb 0 0 {:.4} {:.4})",
+        width_mil, height_mil
+    )?;
     writeln!(output, "    )")?;
 
     // Layer definitions
@@ -194,7 +196,7 @@ fn write_structure(
 
     // Default design rules
     writeln!(output, "    (rule")?;
-    writeln!(output, "      (width 8)")?;     // 8 mil (0.2mm) default trace
+    writeln!(output, "      (width 8)")?; // 8 mil (0.2mm) default trace
     writeln!(output, "      (clearance 6)")?; // 6 mil (0.15mm) default clearance
     writeln!(output, "    )")?;
 
@@ -354,8 +356,8 @@ fn format_padstack_name(pad: &cypcb_world::footprint::PadDef) -> String {
         cypcb_world::PadShape::Oblong => "oval",
     };
 
-    let width_mil = nm_to_mil(pad.size.0.0) as i32;
-    let height_mil = nm_to_mil(pad.size.1.0) as i32;
+    let width_mil = nm_to_mil(pad.size.0 .0) as i32;
+    let height_mil = nm_to_mil(pad.size.1 .0) as i32;
 
     if let Some(drill) = pad.drill {
         let drill_mil = nm_to_mil(drill.0) as i32;
@@ -371,8 +373,8 @@ fn write_padstack(
     pad: &cypcb_world::footprint::PadDef,
 ) -> Result<(), DsnExportError> {
     let padstack_name = format_padstack_name(pad);
-    let width_mil = nm_to_mil(pad.size.0.0);
-    let height_mil = nm_to_mil(pad.size.1.0);
+    let width_mil = nm_to_mil(pad.size.0 .0);
+    let height_mil = nm_to_mil(pad.size.1 .0);
 
     writeln!(output, "    (padstack {}", padstack_name)?;
 
@@ -469,7 +471,7 @@ fn write_network(world: &mut BoardWorld, output: &mut impl Write) -> Result<(), 
     }
     writeln!(output)?;
     writeln!(output, "      (rule")?;
-    writeln!(output, "        (width 8)")?;     // 8 mil default
+    writeln!(output, "        (width 8)")?; // 8 mil default
     writeln!(output, "        (clearance 6)")?; // 6 mil default
     writeln!(output, "      )")?;
     writeln!(output, "    )")?;
@@ -564,7 +566,11 @@ mod tests {
     #[test]
     fn test_export_empty_board() {
         let mut world = BoardWorld::new();
-        world.set_board("TestBoard".to_string(), (Nm::from_mm(50.0), Nm::from_mm(30.0)), 2);
+        world.set_board(
+            "TestBoard".to_string(),
+            (Nm::from_mm(50.0), Nm::from_mm(30.0)),
+            2,
+        );
 
         let library = FootprintLibrary::new();
         let mut output = Vec::new();
@@ -601,7 +607,11 @@ mod tests {
         use cypcb_world::*;
 
         let mut world = BoardWorld::new();
-        world.set_board("TestBoard".to_string(), (Nm::from_mm(50.0), Nm::from_mm(30.0)), 2);
+        world.set_board(
+            "TestBoard".to_string(),
+            (Nm::from_mm(50.0), Nm::from_mm(30.0)),
+            2,
+        );
 
         // Add a component
         let vcc = world.intern_net("VCC");
@@ -645,7 +655,11 @@ mod tests {
         use cypcb_world::*;
 
         let mut world = BoardWorld::new();
-        world.set_board("TestBoard".to_string(), (Nm::from_mm(50.0), Nm::from_mm(30.0)), 2);
+        world.set_board(
+            "TestBoard".to_string(),
+            (Nm::from_mm(50.0), Nm::from_mm(30.0)),
+            2,
+        );
 
         let vcc = world.intern_net("VCC");
 
@@ -684,7 +698,11 @@ mod tests {
         use cypcb_world::*;
 
         let mut world = BoardWorld::new();
-        world.set_board("TestBoard".to_string(), (Nm::from_mm(50.0), Nm::from_mm(30.0)), 2);
+        world.set_board(
+            "TestBoard".to_string(),
+            (Nm::from_mm(50.0), Nm::from_mm(30.0)),
+            2,
+        );
 
         let vcc = world.intern_net("VCC");
 

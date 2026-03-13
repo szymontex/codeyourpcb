@@ -31,12 +31,12 @@
 //! ```
 
 use crate::ast::{
-    AssertDef, AssertExpression, AssertOperand, BoardDef, ComparisonOp, ComponentDef, ComponentKind,
-    CurrentUnit, CurrentValue, Definition, Dimension, FootprintDef, Identifier, ImportDef,
-    InterfaceDef, LayerType, ModuleDef, NetAssignment, NetConstraints, NetDef, PadDef, PadShape,
-    PhysicalValue, PinDeclaration, PinId, PinRef, PositionExpr, RotationExpr, SizeProperty,
-    SourceFile, Span, StackupDef, StackupLayer, StringLit, Tolerance, ToleranceKind, TraceDef,
-    ZoneDef, ZoneKind,
+    AssertDef, AssertExpression, AssertOperand, BoardDef, ComparisonOp, ComponentDef,
+    ComponentKind, CurrentUnit, CurrentValue, Definition, Dimension, FootprintDef, Identifier,
+    ImportDef, InterfaceDef, LayerType, ModuleDef, NetAssignment, NetConstraints, NetDef, PadDef,
+    PadShape, PhysicalValue, PinDeclaration, PinId, PinRef, PositionExpr, RotationExpr,
+    SizeProperty, SourceFile, Span, StackupDef, StackupLayer, StringLit, Tolerance, ToleranceKind,
+    TraceDef, ZoneDef, ZoneKind,
 };
 use crate::errors::{ParseError, ParseResult};
 use crate::node_kinds;
@@ -161,7 +161,8 @@ impl CypcbParser {
                     }
                 }
                 "assert_statement" => {
-                    if let Some(assert_def) = self.convert_assert_statement(source, &child, errors) {
+                    if let Some(assert_def) = self.convert_assert_statement(source, &child, errors)
+                    {
                         definitions.push(Definition::Assert(assert_def));
                     }
                 }
@@ -182,7 +183,10 @@ impl CypcbParser {
             let span = span_of(node);
             let text = node_text(source, node);
             errors.push(ParseError::syntax(
-                format!("unexpected token: '{}'", text.chars().take(20).collect::<String>()),
+                format!(
+                    "unexpected token: '{}'",
+                    text.chars().take(20).collect::<String>()
+                ),
                 source.to_string(),
                 span.to_miette(),
             ));
@@ -196,7 +200,12 @@ impl CypcbParser {
     }
 
     /// Convert a version statement node.
-    fn convert_version(&self, source: &str, node: &Node, errors: &mut Vec<ParseError>) -> Option<u32> {
+    fn convert_version(
+        &self,
+        source: &str,
+        node: &Node,
+        errors: &mut Vec<ParseError>,
+    ) -> Option<u32> {
         let number_node = get_child_by_field(node, "number")?;
         let text = node_text(source, &number_node);
         match text.parse::<u32>() {
@@ -222,7 +231,12 @@ impl CypcbParser {
     }
 
     /// Convert a board definition node.
-    fn convert_board(&self, source: &str, node: &Node, errors: &mut Vec<ParseError>) -> Option<BoardDef> {
+    fn convert_board(
+        &self,
+        source: &str,
+        node: &Node,
+        errors: &mut Vec<ParseError>,
+    ) -> Option<BoardDef> {
         let name_node = get_child_by_field(node, "name")?;
         let name = Identifier::new(node_text(source, &name_node), span_of(&name_node));
 
@@ -267,7 +281,12 @@ impl CypcbParser {
     }
 
     /// Convert a size property node.
-    fn convert_size(&self, source: &str, node: &Node, errors: &mut Vec<ParseError>) -> Option<SizeProperty> {
+    fn convert_size(
+        &self,
+        source: &str,
+        node: &Node,
+        errors: &mut Vec<ParseError>,
+    ) -> Option<SizeProperty> {
         let width_node = get_child_by_field(node, "width")?;
         let height_node = get_child_by_field(node, "height")?;
 
@@ -282,13 +301,18 @@ impl CypcbParser {
     }
 
     /// Convert a layers property node.
-    fn convert_layers(&self, source: &str, node: &Node, errors: &mut Vec<ParseError>) -> Option<u8> {
+    fn convert_layers(
+        &self,
+        source: &str,
+        node: &Node,
+        errors: &mut Vec<ParseError>,
+    ) -> Option<u8> {
         let count_node = get_child_by_field(node, "count")?;
         let text = node_text(source, &count_node);
         match text.parse::<u32>() {
             Ok(count) => {
                 // Validate layer count (must be even, 2-32)
-                if count < 2 || count > 32 || count % 2 != 0 {
+                if !(2..=32).contains(&count) || count % 2 != 0 {
                     errors.push(ParseError::invalid_layers(
                         count,
                         source.to_string(),
@@ -309,7 +333,12 @@ impl CypcbParser {
     }
 
     /// Convert a stackup property node.
-    fn convert_stackup(&self, source: &str, node: &Node, errors: &mut Vec<ParseError>) -> Option<StackupDef> {
+    fn convert_stackup(
+        &self,
+        source: &str,
+        node: &Node,
+        errors: &mut Vec<ParseError>,
+    ) -> Option<StackupDef> {
         let mut layers = Vec::new();
 
         let mut cursor = node.walk();
@@ -328,7 +357,12 @@ impl CypcbParser {
     }
 
     /// Convert a stackup layer node.
-    fn convert_stackup_layer(&self, source: &str, node: &Node, errors: &mut Vec<ParseError>) -> Option<StackupLayer> {
+    fn convert_stackup_layer(
+        &self,
+        source: &str,
+        node: &Node,
+        errors: &mut Vec<ParseError>,
+    ) -> Option<StackupLayer> {
         let type_node = get_child_by_field(node, "layer_type")?;
         let type_text = node_text(source, &type_node);
 
@@ -355,7 +389,12 @@ impl CypcbParser {
     }
 
     /// Convert a component definition node.
-    fn convert_component(&self, source: &str, node: &Node, errors: &mut Vec<ParseError>) -> Option<ComponentDef> {
+    fn convert_component(
+        &self,
+        source: &str,
+        node: &Node,
+        errors: &mut Vec<ParseError>,
+    ) -> Option<ComponentDef> {
         let refdes_node = get_child_by_field(node, "refdes")?;
         let type_node = get_child_by_field(node, "type")?;
         let footprint_node = get_child_by_field(node, "footprint")?;
@@ -425,7 +464,12 @@ impl CypcbParser {
     }
 
     /// Convert a position property node.
-    fn convert_position(&self, source: &str, node: &Node, errors: &mut Vec<ParseError>) -> Option<PositionExpr> {
+    fn convert_position(
+        &self,
+        source: &str,
+        node: &Node,
+        errors: &mut Vec<ParseError>,
+    ) -> Option<PositionExpr> {
         let x_node = get_child_by_field(node, "x")?;
         let y_node = get_child_by_field(node, "y")?;
 
@@ -440,7 +484,12 @@ impl CypcbParser {
     }
 
     /// Convert a rotation property node.
-    fn convert_rotation(&self, source: &str, node: &Node, errors: &mut Vec<ParseError>) -> Option<RotationExpr> {
+    fn convert_rotation(
+        &self,
+        source: &str,
+        node: &Node,
+        errors: &mut Vec<ParseError>,
+    ) -> Option<RotationExpr> {
         let angle_node = get_child_by_field(node, "angle")?;
         let text = node_text(source, &angle_node);
 
@@ -463,7 +512,12 @@ impl CypcbParser {
     }
 
     /// Convert a net assignment node.
-    fn convert_net_assignment(&self, source: &str, node: &Node, errors: &mut Vec<ParseError>) -> Option<NetAssignment> {
+    fn convert_net_assignment(
+        &self,
+        source: &str,
+        node: &Node,
+        _errors: &mut Vec<ParseError>,
+    ) -> Option<NetAssignment> {
         let pin_node = get_child_by_field(node, "pin")?;
         let net_node = get_child_by_field(node, "net")?;
 
@@ -478,7 +532,12 @@ impl CypcbParser {
     }
 
     /// Convert a net definition node.
-    fn convert_net(&self, source: &str, node: &Node, errors: &mut Vec<ParseError>) -> Option<NetDef> {
+    fn convert_net(
+        &self,
+        source: &str,
+        node: &Node,
+        errors: &mut Vec<ParseError>,
+    ) -> Option<NetDef> {
         let name_node = get_child_by_field(node, "name")?;
         let name = Identifier::new(node_text(source, &name_node), span_of(&name_node));
 
@@ -512,7 +571,12 @@ impl CypcbParser {
     }
 
     /// Convert a net constraints block.
-    fn convert_net_constraints(&self, source: &str, node: &Node, errors: &mut Vec<ParseError>) -> Option<NetConstraints> {
+    fn convert_net_constraints(
+        &self,
+        source: &str,
+        node: &Node,
+        errors: &mut Vec<ParseError>,
+    ) -> Option<NetConstraints> {
         let mut width = None;
         let mut clearance = None;
         let mut current = None;
@@ -557,7 +621,12 @@ impl CypcbParser {
     }
 
     /// Convert a current value node (e.g., "500mA" or "2A").
-    fn convert_current_value(&self, source: &str, node: &Node, errors: &mut Vec<ParseError>) -> Option<CurrentValue> {
+    fn convert_current_value(
+        &self,
+        source: &str,
+        node: &Node,
+        errors: &mut Vec<ParseError>,
+    ) -> Option<CurrentValue> {
         let amount_node = get_child_by_field(node, "amount")?;
         let text = node_text(source, &amount_node);
 
@@ -592,7 +661,12 @@ impl CypcbParser {
     }
 
     /// Convert a pin reference list.
-    fn convert_pin_ref_list(&self, source: &str, node: &Node, errors: &mut Vec<ParseError>) -> Vec<PinRef> {
+    fn convert_pin_ref_list(
+        &self,
+        source: &str,
+        node: &Node,
+        errors: &mut Vec<ParseError>,
+    ) -> Vec<PinRef> {
         let mut refs = Vec::new();
 
         let mut cursor = node.walk();
@@ -608,11 +682,17 @@ impl CypcbParser {
     }
 
     /// Convert a pin reference node.
-    fn convert_pin_ref(&self, source: &str, node: &Node, _errors: &mut Vec<ParseError>) -> Option<PinRef> {
+    fn convert_pin_ref(
+        &self,
+        source: &str,
+        node: &Node,
+        _errors: &mut Vec<ParseError>,
+    ) -> Option<PinRef> {
         let component_node = get_child_by_field(node, "component")?;
         let pin_node = get_child_by_field(node, "pin")?;
 
-        let component = Identifier::new(node_text(source, &component_node), span_of(&component_node));
+        let component =
+            Identifier::new(node_text(source, &component_node), span_of(&component_node));
         let pin = self.convert_pin_identifier(source, &pin_node);
 
         Some(PinRef {
@@ -634,7 +714,12 @@ impl CypcbParser {
     }
 
     /// Convert a dimension node.
-    fn convert_dimension(&self, source: &str, node: &Node, errors: &mut Vec<ParseError>) -> Option<Dimension> {
+    fn convert_dimension(
+        &self,
+        source: &str,
+        node: &Node,
+        errors: &mut Vec<ParseError>,
+    ) -> Option<Dimension> {
         // Check for negative sign
         let is_negative = get_child_by_field(node, "sign").is_some();
 
@@ -816,7 +901,12 @@ impl CypcbParser {
     }
 
     /// Convert a zone definition node.
-    fn convert_zone(&self, source: &str, node: &Node, errors: &mut Vec<ParseError>) -> Option<ZoneDef> {
+    fn convert_zone(
+        &self,
+        source: &str,
+        node: &Node,
+        errors: &mut Vec<ParseError>,
+    ) -> Option<ZoneDef> {
         let kind_node = get_child_by_field(node, "kind")?;
         let kind_text = node_text(source, &kind_node);
         let kind = ZoneKind::from_str(kind_text)?;
@@ -848,7 +938,9 @@ impl CypcbParser {
                         let max_y = get_child_by_field(&prop, "max_y")
                             .and_then(|n| self.convert_dimension(source, &n, errors));
 
-                        if let (Some(x1), Some(y1), Some(x2), Some(y2)) = (min_x, min_y, max_x, max_y) {
+                        if let (Some(x1), Some(y1), Some(x2), Some(y2)) =
+                            (min_x, min_y, max_x, max_y)
+                        {
                             bounds = Some((x1, y1, x2, y2));
                         }
                     }
@@ -965,7 +1057,7 @@ impl CypcbParser {
         &self,
         source: &str,
         node: &Node,
-        errors: &mut Vec<ParseError>,
+        _errors: &mut Vec<ParseError>,
     ) -> Option<ImportDef> {
         let path_node = get_child_by_field(node, "path")?;
         let path = self.convert_string_literal(source, &path_node);
@@ -975,10 +1067,7 @@ impl CypcbParser {
             let mut cursor = names_node.walk();
             for child in names_node.children(&mut cursor) {
                 if child.kind() == "identifier" {
-                    names.push(Identifier::new(
-                        node_text(source, &child),
-                        span_of(&child),
-                    ));
+                    names.push(Identifier::new(node_text(source, &child), span_of(&child)));
                 }
             }
         }
@@ -1022,7 +1111,8 @@ impl CypcbParser {
                     }
                 }
                 "assert_statement" => {
-                    if let Some(assert_def) = self.convert_assert_statement(source, &child, errors) {
+                    if let Some(assert_def) = self.convert_assert_statement(source, &child, errors)
+                    {
                         definitions.push(Definition::Assert(assert_def));
                     }
                 }
@@ -1473,7 +1563,10 @@ component R1 resistor "0402" {
             assert_eq!(comp.refdes.value, "R1");
             assert_eq!(comp.kind, ComponentKind::Resistor);
             assert_eq!(comp.footprint.value, "0402");
-            assert_eq!(comp.value.as_ref().map(|v| &v.value), Some(&"10k".to_string()));
+            assert_eq!(
+                comp.value.as_ref().map(|v| &v.value),
+                Some(&"10k".to_string())
+            );
 
             let pos = comp.position.as_ref().expect("position should be present");
             assert!((pos.x.value - 10.0).abs() < 0.001);
@@ -1537,10 +1630,16 @@ net POWER [width 0.5mm clearance 0.3mm] {
         let ast = result.value;
         if let Definition::Net(net) = &ast.definitions[0] {
             assert_eq!(net.name.value, "POWER");
-            let constraints = net.constraints.as_ref().expect("constraints should be present");
+            let constraints = net
+                .constraints
+                .as_ref()
+                .expect("constraints should be present");
             let width = constraints.width.as_ref().expect("width should be present");
             assert!((width.value - 0.5).abs() < 0.001);
-            let clearance = constraints.clearance.as_ref().expect("clearance should be present");
+            let clearance = constraints
+                .clearance
+                .as_ref()
+                .expect("clearance should be present");
             assert!((clearance.value - 0.3).abs() < 0.001);
         } else {
             panic!("expected net definition");
@@ -1560,7 +1659,11 @@ component R1 resistor { }
 
         // The component is missing the required footprint string
         // Tree-sitter will mark this as an error
-        assert!(result.has_errors(), "expected errors: got AST: {:?}", result.value);
+        assert!(
+            result.has_errors(),
+            "expected errors: got AST: {:?}",
+            result.value
+        );
     }
 
     #[test]
@@ -1589,7 +1692,10 @@ component X1 badtype "0402" {
         let result = parse(source);
 
         // Should have a syntax error because "badtype" isn't a valid component_type
-        assert!(result.has_errors(), "expected syntax error for unknown type");
+        assert!(
+            result.has_errors(),
+            "expected syntax error for unknown type"
+        );
     }
 
     #[test]
@@ -1642,7 +1748,11 @@ net LED_SIGNAL {
         // Verify JSON serialization
         let json = serde_json::to_string_pretty(&ast).expect("should serialize");
         println!("JSON output:\n{}", json);
-        assert!(json.contains("\"version\": 1") || json.contains("\"version\":1"), "expected version:1 in {}", json);
+        assert!(
+            json.contains("\"version\": 1") || json.contains("\"version\":1"),
+            "expected version:1 in {}",
+            json
+        );
         assert!(json.contains("blink"), "expected blink in {}", json);
     }
 
@@ -1704,15 +1814,20 @@ component R1 resistor "0402" {
     #[test]
     fn test_all_component_types() {
         let types = [
-            "resistor", "capacitor", "inductor", "ic", "led",
-            "connector", "diode", "transistor", "crystal", "generic"
+            "resistor",
+            "capacitor",
+            "inductor",
+            "ic",
+            "led",
+            "connector",
+            "diode",
+            "transistor",
+            "crystal",
+            "generic",
         ];
 
         for comp_type in types {
-            let source = format!(
-                r#"component X1 {} "fp" {{ at 0mm, 0mm }}"#,
-                comp_type
-            );
+            let source = format!(r#"component X1 {} "fp" {{ at 0mm, 0mm }}"#, comp_type);
             let result = parse(&source);
             assert!(
                 result.is_ok(),
@@ -1845,7 +1960,10 @@ keepout antenna_clearance {
 
         if let Definition::Zone(zone) = &ast.definitions[0] {
             assert_eq!(zone.kind, crate::ast::ZoneKind::Keepout);
-            assert_eq!(zone.name.as_ref().map(|n| &n.value), Some(&"antenna_clearance".to_string()));
+            assert_eq!(
+                zone.name.as_ref().map(|n| &n.value),
+                Some(&"antenna_clearance".to_string())
+            );
             assert!((zone.bounds.0.value - 10.0).abs() < 0.001); // min_x
             assert!((zone.bounds.1.value - 10.0).abs() < 0.001); // min_y
             assert!((zone.bounds.2.value - 20.0).abs() < 0.001); // max_x
@@ -1874,9 +1992,15 @@ zone gnd_pour {
 
         if let Definition::Zone(zone) = &ast.definitions[0] {
             assert_eq!(zone.kind, crate::ast::ZoneKind::CopperPour);
-            assert_eq!(zone.name.as_ref().map(|n| &n.value), Some(&"gnd_pour".to_string()));
+            assert_eq!(
+                zone.name.as_ref().map(|n| &n.value),
+                Some(&"gnd_pour".to_string())
+            );
             assert_eq!(zone.layer.as_deref(), Some("bottom"));
-            assert_eq!(zone.net.as_ref().map(|n| &n.value), Some(&"GND".to_string()));
+            assert_eq!(
+                zone.net.as_ref().map(|n| &n.value),
+                Some(&"GND".to_string())
+            );
         } else {
             panic!("expected zone definition");
         }
@@ -2029,18 +2153,27 @@ net POWER [width 0.5mm clearance 0.3mm current 500mA] {
 
         if let Definition::Net(net) = &result.value.definitions[0] {
             assert_eq!(net.name.value, "POWER");
-            let constraints = net.constraints.as_ref().expect("constraints should be present");
+            let constraints = net
+                .constraints
+                .as_ref()
+                .expect("constraints should be present");
 
             // Check width
             let width = constraints.width.as_ref().expect("width should be present");
             assert!((width.value - 0.5).abs() < 0.001);
 
             // Check clearance
-            let clearance = constraints.clearance.as_ref().expect("clearance should be present");
+            let clearance = constraints
+                .clearance
+                .as_ref()
+                .expect("clearance should be present");
             assert!((clearance.value - 0.3).abs() < 0.001);
 
             // Check current
-            let current = constraints.current.as_ref().expect("current should be present");
+            let current = constraints
+                .current
+                .as_ref()
+                .expect("current should be present");
             assert!((current.value - 500.0).abs() < 0.001);
             assert_eq!(current.unit, crate::ast::CurrentUnit::Milliamps);
             assert!((current.to_milliamps() - 500.0).abs() < 0.001);
@@ -2060,8 +2193,14 @@ net HIGH_POWER [current 2A] {
         assert!(result.is_ok(), "errors: {:?}", result.errors);
 
         if let Definition::Net(net) = &result.value.definitions[0] {
-            let constraints = net.constraints.as_ref().expect("constraints should be present");
-            let current = constraints.current.as_ref().expect("current should be present");
+            let constraints = net
+                .constraints
+                .as_ref()
+                .expect("constraints should be present");
+            let current = constraints
+                .current
+                .as_ref()
+                .expect("current should be present");
             assert!((current.value - 2.0).abs() < 0.001);
             assert_eq!(current.unit, crate::ast::CurrentUnit::Amps);
             assert!((current.to_amps() - 2.0).abs() < 0.001);
@@ -2231,7 +2370,10 @@ trace NET1 {
             assert!(imp.names.is_empty(), "bare import should have no names");
             assert_eq!(imp.path.value, "std/interfaces.cypcb");
         } else {
-            panic!("expected import definition, got {:?}", result.value.definitions[0]);
+            panic!(
+                "expected import definition, got {:?}",
+                result.value.definitions[0]
+            );
         }
     }
 
@@ -2355,7 +2497,10 @@ interface Power {
         assert!(result.is_ok(), "errors: {:?}", result.errors);
 
         if let Definition::Assert(assert_def) = &result.value.definitions[0] {
-            if let AssertExpression::Comparison { left, op, right, .. } = &assert_def.expression {
+            if let AssertExpression::Comparison {
+                left, op, right, ..
+            } = &assert_def.expression
+            {
                 assert_eq!(*op, ComparisonOp::Ge);
                 if let AssertOperand::QualifiedName { parts, .. } = left {
                     assert_eq!(parts, &["R1", "value"]);
@@ -2383,7 +2528,10 @@ interface Power {
         assert!(result.is_ok(), "errors: {:?}", result.errors);
 
         if let Definition::Assert(assert_def) = &result.value.definitions[0] {
-            if let AssertExpression::Comparison { left, op, right, .. } = &assert_def.expression {
+            if let AssertExpression::Comparison {
+                left, op, right, ..
+            } = &assert_def.expression
+            {
                 assert_eq!(*op, ComparisonOp::Eq);
                 if let AssertOperand::QualifiedName { parts, .. } = left {
                     assert_eq!(parts, &["board", "layers"]);
@@ -2494,7 +2642,11 @@ interface Power {
                 // but component convert_component currently reads string or physical_value)
                 // Since we extended value_property to accept physical_value, the tree-sitter
                 // node is physical_value which our component converter must handle
-                assert!(comp.value.is_some() || true, "component should parse for unit {}", unit);
+                assert!(
+                    comp.value.is_some() || true,
+                    "component should parse for unit {}",
+                    unit
+                );
             }
         }
     }
@@ -2643,8 +2795,12 @@ assert R1.value within 10kohm +/- 5%
     fn test_parse_all_comparison_operators() {
         let ops = &["==", "!=", ">=", "<=", ">", "<"];
         let expected = &[
-            ComparisonOp::Eq, ComparisonOp::Ne, ComparisonOp::Ge,
-            ComparisonOp::Le, ComparisonOp::Gt, ComparisonOp::Lt,
+            ComparisonOp::Eq,
+            ComparisonOp::Ne,
+            ComparisonOp::Ge,
+            ComparisonOp::Le,
+            ComparisonOp::Gt,
+            ComparisonOp::Lt,
         ];
 
         for (op_str, expected_op) in ops.iter().zip(expected.iter()) {
@@ -2708,15 +2864,24 @@ assert R1.value within 10kohm +/- 5%
     #[test]
     fn test_v2_modules_example() {
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .parent().unwrap().parent().unwrap()
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
             .join("examples/v2-modules.cypcb");
         let source = std::fs::read_to_string(&path).expect("v2-modules.cypcb should exist");
         let result = parse(&source);
-        assert!(result.is_ok(), "v2-modules.cypcb errors: {:?}", result.errors);
+        assert!(
+            result.is_ok(),
+            "v2-modules.cypcb errors: {:?}",
+            result.errors
+        );
 
         let ast = &result.value;
         // Should contain: 2 modules + 1 board
-        let modules: Vec<_> = ast.definitions.iter()
+        let modules: Vec<_> = ast
+            .definitions
+            .iter()
             .filter(|d| matches!(d, Definition::Module(_)))
             .collect();
         assert_eq!(modules.len(), 2, "expected 2 modules");
@@ -2735,19 +2900,34 @@ assert R1.value within 10kohm +/- 5%
     #[test]
     fn test_v2_interfaces_example() {
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .parent().unwrap().parent().unwrap()
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
             .join("examples/v2-interfaces.cypcb");
         let source = std::fs::read_to_string(&path).expect("v2-interfaces.cypcb should exist");
         let result = parse(&source);
-        assert!(result.is_ok(), "v2-interfaces.cypcb errors: {:?}", result.errors);
+        assert!(
+            result.is_ok(),
+            "v2-interfaces.cypcb errors: {:?}",
+            result.errors
+        );
 
         let ast = &result.value;
-        let interfaces: Vec<_> = ast.definitions.iter()
+        let interfaces: Vec<_> = ast
+            .definitions
+            .iter()
             .filter(|d| matches!(d, Definition::Interface(_)))
             .collect();
-        assert_eq!(interfaces.len(), 4, "expected 4 interfaces (I2C, SPI, Power, UART)");
+        assert_eq!(
+            interfaces.len(),
+            4,
+            "expected 4 interfaces (I2C, SPI, Power, UART)"
+        );
 
-        let modules: Vec<_> = ast.definitions.iter()
+        let modules: Vec<_> = ast
+            .definitions
+            .iter()
             .filter(|d| matches!(d, Definition::Module(_)))
             .collect();
         assert_eq!(modules.len(), 2, "expected 2 modules");
@@ -2756,20 +2936,35 @@ assert R1.value within 10kohm +/- 5%
     #[test]
     fn test_v2_constraints_example() {
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .parent().unwrap().parent().unwrap()
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
             .join("examples/v2-constraints.cypcb");
         let source = std::fs::read_to_string(&path).expect("v2-constraints.cypcb should exist");
         let result = parse(&source);
-        assert!(result.is_ok(), "v2-constraints.cypcb errors: {:?}", result.errors);
+        assert!(
+            result.is_ok(),
+            "v2-constraints.cypcb errors: {:?}",
+            result.errors
+        );
 
         let ast = &result.value;
-        let asserts: Vec<_> = ast.definitions.iter()
+        let asserts: Vec<_> = ast
+            .definitions
+            .iter()
             .filter(|d| matches!(d, Definition::Assert(_)))
             .collect();
-        assert!(asserts.len() >= 5, "expected at least 5 assert statements, found {}", asserts.len());
+        assert!(
+            asserts.len() >= 5,
+            "expected at least 5 assert statements, found {}",
+            asserts.len()
+        );
 
         // Verify physical value components parsed
-        let comps: Vec<_> = ast.definitions.iter()
+        let comps: Vec<_> = ast
+            .definitions
+            .iter()
             .filter(|d| matches!(d, Definition::Component(_)))
             .collect();
         assert_eq!(comps.len(), 6, "expected 6 components");

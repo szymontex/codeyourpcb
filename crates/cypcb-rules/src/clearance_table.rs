@@ -166,10 +166,7 @@ mod tests {
         // 0-15V: 0.1mm
         assert_eq!(voltage_clearance(0.0, CoatingType::Bare), Nm::from_mm(0.1));
         assert_eq!(voltage_clearance(5.0, CoatingType::Bare), Nm::from_mm(0.1));
-        assert_eq!(
-            voltage_clearance(15.0, CoatingType::Bare),
-            Nm::from_mm(0.1)
-        );
+        assert_eq!(voltage_clearance(15.0, CoatingType::Bare), Nm::from_mm(0.1));
     }
 
     #[test]
@@ -184,19 +181,13 @@ mod tests {
     #[test]
     fn test_30v_bare() {
         // 16-30V: still 0.1mm bare
-        assert_eq!(
-            voltage_clearance(25.0, CoatingType::Bare),
-            Nm::from_mm(0.1)
-        );
+        assert_eq!(voltage_clearance(25.0, CoatingType::Bare), Nm::from_mm(0.1));
     }
 
     #[test]
     fn test_50v_bare() {
         // 31-50V: 0.6mm bare
-        assert_eq!(
-            voltage_clearance(50.0, CoatingType::Bare),
-            Nm::from_mm(0.6)
-        );
+        assert_eq!(voltage_clearance(50.0, CoatingType::Bare), Nm::from_mm(0.6));
     }
 
     #[test]

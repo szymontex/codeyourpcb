@@ -146,17 +146,24 @@ pub struct Stackup {
 impl Stackup {
     /// Count the number of copper layers (Signal + Plane).
     pub fn copper_layer_count(&self) -> usize {
-        self.layers.iter().filter(|l| l.layer_type.is_copper()).count()
+        self.layers
+            .iter()
+            .filter(|l| l.layer_type.is_copper())
+            .count()
     }
 
     /// Get all copper layer entries.
     pub fn copper_layers(&self) -> Vec<&LayerStackEntry> {
-        self.layers.iter().filter(|l| l.layer_type.is_copper()).collect()
+        self.layers
+            .iter()
+            .filter(|l| l.layer_type.is_copper())
+            .collect()
     }
 
     /// Get the total copper thickness.
     pub fn total_copper_thickness(&self) -> Nm {
-        Nm(self.layers
+        Nm(self
+            .layers
             .iter()
             .filter(|l| l.layer_type.is_copper())
             .map(|l| l.thickness.raw())
@@ -169,7 +176,7 @@ impl Stackup {
     /// Layers: Silkscreen / Mask / Top Cu / Core / Bottom Cu / Mask / Silkscreen
     pub fn two_layer_1oz() -> Self {
         let cu_thickness = Nm::from_mm(0.035); // 1oz copper ≈ 35µm
-        let core_thickness = Nm::from_mm(1.5);  // FR-4 core
+        let core_thickness = Nm::from_mm(1.5); // FR-4 core
         let mask_thickness = Nm::from_mm(0.01);
         let silk_thickness = Nm::from_mm(0.005);
 
@@ -197,10 +204,10 @@ impl Stackup {
     /// Signal / GND Plane / Power Plane / Signal.
     /// Total thickness: ~1.6mm.
     pub fn four_layer_standard() -> Self {
-        let outer_cu = Nm::from_mm(0.035);  // 1oz
-        let inner_cu = Nm::from_mm(0.035);  // 1oz inner
-        let prepreg = Nm::from_mm(0.2);     // prepreg between outer and plane
-        let core = Nm::from_mm(1.0);         // core between planes
+        let outer_cu = Nm::from_mm(0.035); // 1oz
+        let inner_cu = Nm::from_mm(0.035); // 1oz inner
+        let prepreg = Nm::from_mm(0.2); // prepreg between outer and plane
+        let core = Nm::from_mm(1.0); // core between planes
         let mask_thickness = Nm::from_mm(0.01);
         let silk_thickness = Nm::from_mm(0.005);
 
@@ -296,21 +303,30 @@ mod tests {
         let s = Stackup::two_layer_1oz();
         let mm = s.total_thickness.to_mm();
         // Should be approximately 1.6mm
-        assert!(mm > 1.4 && mm < 1.8, "2-layer thickness {mm}mm not in 1.4-1.8 range");
+        assert!(
+            mm > 1.4 && mm < 1.8,
+            "2-layer thickness {mm}mm not in 1.4-1.8 range"
+        );
     }
 
     #[test]
     fn test_four_layer_total_thickness_reasonable() {
         let s = Stackup::four_layer_standard();
         let mm = s.total_thickness.to_mm();
-        assert!(mm > 1.3 && mm < 1.9, "4-layer thickness {mm}mm not in 1.3-1.9 range");
+        assert!(
+            mm > 1.3 && mm < 1.9,
+            "4-layer thickness {mm}mm not in 1.3-1.9 range"
+        );
     }
 
     #[test]
     fn test_six_layer_total_thickness_reasonable() {
         let s = Stackup::six_layer_standard();
         let mm = s.total_thickness.to_mm();
-        assert!(mm > 1.0 && mm < 2.0, "6-layer thickness {mm}mm not in 1.0-2.0 range");
+        assert!(
+            mm > 1.0 && mm < 2.0,
+            "6-layer thickness {mm}mm not in 1.0-2.0 range"
+        );
     }
 
     #[test]

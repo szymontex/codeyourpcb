@@ -21,9 +21,9 @@
 
 use cypcb_world::BoardWorld;
 
+use super::DrcRule;
 use crate::presets::DesignRules;
 use crate::violation::DrcViolation;
-use super::DrcRule;
 
 /// Rule that checks all traces meet minimum width.
 ///
@@ -88,7 +88,10 @@ mod tests {
         let mut world = BoardWorld::new();
         let rules = DesignRules::default();
         let violations = MinTraceWidthRule.check(&mut world, &rules);
-        assert!(violations.is_empty(), "Placeholder should return no violations");
+        assert!(
+            violations.is_empty(),
+            "Placeholder should return no violations"
+        );
     }
 
     #[test]

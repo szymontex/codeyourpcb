@@ -1,5 +1,5 @@
 use crate::error::LibraryError;
-use crate::models::{Component, ComponentId, LibraryInfo, SearchFilters, SearchResult};
+use crate::models::{Component, LibraryInfo, SearchFilters, SearchResult};
 use crate::schema;
 use crate::search;
 use crate::sources::custom::CustomSource;
@@ -164,7 +164,11 @@ impl LibraryManager {
     ///
     /// # Returns
     /// Vector of SearchResult ordered by relevance (best matches first)
-    pub fn search(&self, query: &str, filters: &SearchFilters) -> Result<Vec<SearchResult>, LibraryError> {
+    pub fn search(
+        &self,
+        query: &str,
+        filters: &SearchFilters,
+    ) -> Result<Vec<SearchResult>, LibraryError> {
         let conn = self.conn.lock().unwrap();
         search::search_components(&conn, query, filters)
     }
@@ -175,7 +179,12 @@ impl LibraryManager {
     /// * `field` - Field name (source, name, category, description, manufacturer, mpn, value, package)
     /// * `value` - Search value
     /// * `limit` - Maximum number of results
-    pub fn search_by_field(&self, field: &str, value: &str, limit: usize) -> Result<Vec<SearchResult>, LibraryError> {
+    pub fn search_by_field(
+        &self,
+        field: &str,
+        value: &str,
+        limit: usize,
+    ) -> Result<Vec<SearchResult>, LibraryError> {
         let conn = self.conn.lock().unwrap();
         search::search_by_field(&conn, field, value, limit)
     }
@@ -217,7 +226,11 @@ impl LibraryManager {
     // ========== Component Access ==========
 
     /// Get a specific component by source and name
-    pub fn get_component(&self, source: &str, name: &str) -> Result<Option<Component>, LibraryError> {
+    pub fn get_component(
+        &self,
+        source: &str,
+        name: &str,
+    ) -> Result<Option<Component>, LibraryError> {
         let conn = self.conn.lock().unwrap();
         schema::get_component(&conn, source, name)
     }
@@ -231,7 +244,11 @@ impl LibraryManager {
     // ========== Custom Library Operations ==========
 
     /// Add a component to a custom library
-    pub fn add_custom_component(&self, library: &str, component: Component) -> Result<(), LibraryError> {
+    pub fn add_custom_component(
+        &self,
+        library: &str,
+        component: Component,
+    ) -> Result<(), LibraryError> {
         self.custom_source.add_component(library, component)
     }
 
@@ -241,13 +258,22 @@ impl LibraryManager {
     }
 
     /// Update component category for organization
-    pub fn update_custom_component_category(&self, name: &str, category: &str) -> Result<(), LibraryError> {
+    pub fn update_custom_component_category(
+        &self,
+        name: &str,
+        category: &str,
+    ) -> Result<(), LibraryError> {
         self.custom_source.update_component_category(name, category)
     }
 
     /// Update component manufacturer
-    pub fn update_custom_component_manufacturer(&self, name: &str, manufacturer: &str) -> Result<(), LibraryError> {
-        self.custom_source.update_component_manufacturer(name, manufacturer)
+    pub fn update_custom_component_manufacturer(
+        &self,
+        name: &str,
+        manufacturer: &str,
+    ) -> Result<(), LibraryError> {
+        self.custom_source
+            .update_component_manufacturer(name, manufacturer)
     }
 
     /// Delete a custom library and all its components
@@ -290,7 +316,7 @@ impl LibraryManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{ComponentMetadata, SearchFilters};
+    use crate::models::{ComponentId, ComponentMetadata, SearchFilters};
 
     #[test]
     fn test_manager_initialization() {
@@ -406,7 +432,9 @@ mod tests {
                 ..Default::default()
             },
         };
-        manager.add_custom_component("CustomLib", custom_comp).unwrap();
+        manager
+            .add_custom_component("CustomLib", custom_comp)
+            .unwrap();
 
         // Manually add a "kicad" component for testing
         let kicad_comp = Component {
@@ -553,10 +581,14 @@ mod tests {
         manager.add_custom_component("TestLib", component).unwrap();
 
         // Update category
-        manager.update_custom_component_category("R_Test", "Passive/Resistors").unwrap();
+        manager
+            .update_custom_component_category("R_Test", "Passive/Resistors")
+            .unwrap();
 
         // Update manufacturer
-        manager.update_custom_component_manufacturer("R_Test", "NewMfg").unwrap();
+        manager
+            .update_custom_component_manufacturer("R_Test", "NewMfg")
+            .unwrap();
 
         // Verify updates
         let retrieved = manager.get_component("custom", "R_Test").unwrap().unwrap();
@@ -612,9 +644,13 @@ mod tests {
             metadata: ComponentMetadata::default(),
         };
 
-        manager.add_custom_component("TestLib", component_no_fp).unwrap();
+        manager
+            .add_custom_component("TestLib", component_no_fp)
+            .unwrap();
 
-        let preview = manager.get_footprint_preview("custom", "NoFootprint").unwrap();
+        let preview = manager
+            .get_footprint_preview("custom", "NoFootprint")
+            .unwrap();
         assert!(preview.is_none());
     }
 }

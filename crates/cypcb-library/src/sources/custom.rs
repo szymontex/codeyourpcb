@@ -54,11 +54,7 @@ impl CustomSource {
     }
 
     /// Add a component to a custom library
-    pub fn add_component(
-        &self,
-        library: &str,
-        component: Component,
-    ) -> Result<(), LibraryError> {
+    pub fn add_component(&self, library: &str, component: Component) -> Result<(), LibraryError> {
         let conn = self.conn.lock().unwrap();
 
         // Validate library exists and is a custom library

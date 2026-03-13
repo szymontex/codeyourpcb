@@ -153,10 +153,7 @@ mod tests {
     use cypcb_core::Point;
 
     fn make_bounds() -> Rect {
-        Rect::new(
-            Point::from_mm(10.0, 10.0),
-            Point::from_mm(20.0, 20.0),
-        )
+        Rect::new(Point::from_mm(10.0, 10.0), Point::from_mm(20.0, 20.0))
     }
 
     #[test]
@@ -177,8 +174,7 @@ mod tests {
 
     #[test]
     fn test_with_name() {
-        let zone = Zone::keepout(make_bounds(), 0b11)
-            .with_name("antenna_clearance");
+        let zone = Zone::keepout(make_bounds(), 0b11).with_name("antenna_clearance");
         assert_eq!(zone.name.as_deref(), Some("antenna_clearance"));
     }
 

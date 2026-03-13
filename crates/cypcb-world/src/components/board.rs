@@ -126,7 +126,12 @@ impl Default for BoardSize {
 
 impl std::fmt::Display for BoardSize {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:.2}mm x {:.2}mm", self.width.to_mm(), self.height.to_mm())
+        write!(
+            f,
+            "{:.2}mm x {:.2}mm",
+            self.width.to_mm(),
+            self.height.to_mm()
+        )
     }
 }
 
@@ -176,7 +181,7 @@ impl LayerStack {
     #[inline]
     pub fn new(count: u8) -> Self {
         assert!(
-            count >= Self::MIN_LAYERS && count <= Self::MAX_LAYERS,
+            (Self::MIN_LAYERS..=Self::MAX_LAYERS).contains(&count),
             "Layer count must be 2-32, got {}",
             count
         );
@@ -194,7 +199,7 @@ impl LayerStack {
     /// Try to create a layer stack, returning None if invalid.
     #[inline]
     pub fn try_new(count: u8) -> Option<Self> {
-        if count >= Self::MIN_LAYERS && count <= Self::MAX_LAYERS {
+        if (Self::MIN_LAYERS..=Self::MAX_LAYERS).contains(&count) {
             Some(LayerStack { count })
         } else {
             None

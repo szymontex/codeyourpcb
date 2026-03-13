@@ -387,10 +387,7 @@ mod tests {
 
     #[test]
     fn test_from_name_aliases_ipc() {
-        assert_eq!(
-            RulesPreset::from_name("ipc1"),
-            Some(RulesPreset::IpcClass1)
-        );
+        assert_eq!(RulesPreset::from_name("ipc1"), Some(RulesPreset::IpcClass1));
         assert_eq!(
             RulesPreset::from_name("ipc_class_2"),
             Some(RulesPreset::IpcClass2)

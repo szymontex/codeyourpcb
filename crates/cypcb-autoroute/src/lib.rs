@@ -125,8 +125,7 @@ pub fn route_board(
 
     for net in &ratsnest {
         if let Some(paths) = loop_result.routed_paths.get(&net.net_id.id()) {
-            let (segs, vias) =
-                postprocess::paths_to_output(&grid, net.net_id, paths, rules);
+            let (segs, vias) = postprocess::paths_to_output(&grid, net.net_id, paths, rules);
             all_segments.extend(segs);
             all_vias.extend(vias);
         }

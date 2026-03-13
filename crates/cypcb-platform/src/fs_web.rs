@@ -86,9 +86,8 @@ impl FileSystem for WebFileSystem {
 
     async fn read_string(&self, handle: &Self::Handle) -> Result<String, PlatformError> {
         let bytes = self.read(handle).await?;
-        String::from_utf8(bytes).map_err(|e| {
-            PlatformError::Web(format!("File is not valid UTF-8: {}", e))
-        })
+        String::from_utf8(bytes)
+            .map_err(|e| PlatformError::Web(format!("File is not valid UTF-8: {}", e)))
     }
 
     async fn write(&self, handle: &Self::Handle, data: &[u8]) -> Result<(), PlatformError> {

@@ -4,9 +4,9 @@
 //! like board name, export date, and total component counts.
 
 use crate::bom::{group_components, BomEntry};
+use chrono::Utc;
 use cypcb_world::BoardWorld;
 use serde::{Deserialize, Serialize};
-use chrono::Utc;
 
 /// Complete BOM document with metadata.
 ///
@@ -94,7 +94,7 @@ pub fn export_bom_json(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cypcb_world::{RefDes, Value, Position, Rotation, FootprintRef, NetConnections};
+    use cypcb_world::{FootprintRef, NetConnections, Position, RefDes, Rotation, Value};
 
     #[test]
     fn test_export_bom_json_empty() {
@@ -213,7 +213,7 @@ mod tests {
         // Should contain ISO 8601 timestamp
         assert!(json.contains("export_date"));
         assert!(json.contains("T")); // ISO format separator
-        // RFC3339 can use either "Z" or "+00:00" for UTC
+                                     // RFC3339 can use either "Z" or "+00:00" for UTC
         assert!(json.contains("Z") || json.contains("+00:00"));
     }
 

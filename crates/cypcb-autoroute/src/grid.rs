@@ -158,8 +158,7 @@ impl RoutingGrid {
 
         // Get min_clearance for bloating
         let min_clearance = rules.constraints_for_net(0).min_clearance;
-        let clearance_cells =
-            ((min_clearance.raw() + resolution_nm - 1) / resolution_nm) as u32;
+        let clearance_cells = ((min_clearance.raw() + resolution_nm - 1) / resolution_nm) as u32;
 
         // Mark pads as obstacles
         grid.populate_pads(world, library, clearance_cells);
@@ -266,11 +265,7 @@ impl RoutingGrid {
         let traces: Vec<Trace> = {
             let ecs = world.ecs_mut();
             let mut query = ecs.query::<&Trace>();
-            query
-                .iter(ecs)
-                .filter(|t| t.locked)
-                .cloned()
-                .collect()
+            query.iter(ecs).filter(|t| t.locked).cloned().collect()
         };
 
         for trace in &traces {
@@ -370,13 +365,19 @@ impl RoutingGrid {
     /// Convert a nanometer position to grid coordinates.
     #[inline]
     pub fn nm_to_grid(&self, pos: Point) -> (u32, u32) {
-        (self.nm_to_grid_x(pos.x.raw()), self.nm_to_grid_y(pos.y.raw()))
+        (
+            self.nm_to_grid_x(pos.x.raw()),
+            self.nm_to_grid_y(pos.y.raw()),
+        )
     }
 
     /// Convert grid coordinates to a nanometer position (center of cell).
     #[inline]
     pub fn grid_to_nm(&self, gx: u32, gy: u32) -> Point {
-        Point::new(Nm::new(self.grid_to_nm_x(gx)), Nm::new(self.grid_to_nm_y(gy)))
+        Point::new(
+            Nm::new(self.grid_to_nm_x(gx)),
+            Nm::new(self.grid_to_nm_y(gy)),
+        )
     }
 
     // ========================================================================
@@ -580,7 +581,12 @@ fn rotate_point(p: Point, degrees: f64) -> Point {
 
 /// Create a minimal grid for unit testing (no board needed).
 #[cfg(test)]
-pub(crate) fn make_test_grid(width: u32, height: u32, resolution_nm: i64, layers: u8) -> RoutingGrid {
+pub(crate) fn make_test_grid(
+    width: u32,
+    height: u32,
+    resolution_nm: i64,
+    layers: u8,
+) -> RoutingGrid {
     let cell_count = (width as usize) * (height as usize);
     RoutingGrid {
         width,
@@ -643,8 +649,16 @@ mod tests {
         let err_x = (back.x.raw() - original.x.raw()).abs();
         let err_y = (back.y.raw() - original.y.raw()).abs();
 
-        assert!(err_x <= grid.resolution, "X round-trip error {err_x} > {}", grid.resolution);
-        assert!(err_y <= grid.resolution, "Y round-trip error {err_y} > {}", grid.resolution);
+        assert!(
+            err_x <= grid.resolution,
+            "X round-trip error {err_x} > {}",
+            grid.resolution
+        );
+        assert!(
+            err_y <= grid.resolution,
+            "Y round-trip error {err_y} > {}",
+            grid.resolution
+        );
     }
 
     #[test]

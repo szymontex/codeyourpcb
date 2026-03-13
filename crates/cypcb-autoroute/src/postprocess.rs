@@ -234,7 +234,11 @@ mod tests {
             span * 2.0
         }
         fn layer_change_cost(&self, layer: u8) -> f64 {
-            if layer == 0 { 0.1 } else { 0.5 }
+            if layer == 0 {
+                0.1
+            } else {
+                0.5
+            }
         }
         fn clearance_between(&self, _net_a: u32, _net_b: u32) -> Nm {
             self.base.min_clearance

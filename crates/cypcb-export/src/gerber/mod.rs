@@ -12,15 +12,15 @@
 //! - [`outline`] - Board outline/profile export
 //! - [`silk`] - Silkscreen layer export
 
-pub mod header;
 pub mod copper;
+pub mod header;
 pub mod mask;
 pub mod outline;
 pub mod silk;
 
 // Re-export key types for convenience
-pub use header::{write_header, GerberFileFunction, CopperSide, Side};
 pub use copper::export_copper_layer;
+pub use header::{write_header, CopperSide, GerberFileFunction, Side};
 pub use mask::{export_soldermask, export_solderpaste, MaskPasteConfig};
 pub use outline::export_outline;
 pub use silk::{export_silkscreen, SilkConfig};

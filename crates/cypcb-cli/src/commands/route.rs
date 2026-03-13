@@ -108,7 +108,11 @@ impl RouteCommand {
         if self.dry_run {
             eprintln!("\nDry run complete. DSN file ready for manual routing.");
             eprintln!("To route manually:");
-            eprintln!("  java -jar freerouting.jar -de {} -do {}", dsn_path.display(), ses_path.display());
+            eprintln!(
+                "  java -jar freerouting.jar -de {} -do {}",
+                dsn_path.display(),
+                ses_path.display()
+            );
             return Ok(());
         }
 
@@ -156,14 +160,20 @@ impl RouteCommand {
                 eprintln!("Routing cancelled by user.");
                 // Try to save partial results if SES exists
                 if ses_path.exists() {
-                    eprintln!("Partial results may be available in: {}", ses_path.display());
+                    eprintln!(
+                        "Partial results may be available in: {}",
+                        ses_path.display()
+                    );
                 }
                 return Ok(());
             }
             Err(RoutingError::Timeout(secs)) => {
                 eprintln!("Routing timed out after {} seconds.", secs);
                 if ses_path.exists() {
-                    eprintln!("Partial results may be available in: {}", ses_path.display());
+                    eprintln!(
+                        "Partial results may be available in: {}",
+                        ses_path.display()
+                    );
                 }
                 return Err(miette::miette!("Routing timed out"));
             }

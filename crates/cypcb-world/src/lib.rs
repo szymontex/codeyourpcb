@@ -98,29 +98,29 @@ pub mod world;
 
 // Re-export all component types at crate root for convenience
 pub use components::{
+    // Trace components
+    trace::{Trace, TraceSegment, TraceSource, Via},
     // Board components
     Board,
     BoardSize,
+    // Metadata components
+    ComponentKind,
+    // Physical components
+    FootprintRef,
+    Layer,
     LayerStack,
     // Electrical components
     NetConnections,
     NetId,
-    PinConnection,
-    RefDes,
-    Value,
-    // Metadata components
-    ComponentKind,
-    SourceSpan,
-    // Physical components
-    FootprintRef,
-    Layer,
     Pad,
     PadShape,
+    PinConnection,
     // Position components
     Position,
+    RefDes,
     Rotation,
-    // Trace components
-    trace::{Trace, TraceSegment, TraceSource, Via},
+    SourceSpan,
+    Value,
 };
 
 // Re-export registry and spatial types

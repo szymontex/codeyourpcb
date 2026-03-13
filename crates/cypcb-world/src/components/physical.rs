@@ -61,7 +61,10 @@ impl Layer {
     /// Check if this is a copper layer.
     #[inline]
     pub fn is_copper(&self) -> bool {
-        matches!(self, Layer::TopCopper | Layer::BottomCopper | Layer::Inner(_))
+        matches!(
+            self,
+            Layer::TopCopper | Layer::BottomCopper | Layer::Inner(_)
+        )
     }
 
     /// Check if this is a silkscreen layer.
@@ -180,9 +183,10 @@ impl From<&str> for FootprintRef {
 /// Pad shape for SMD and through-hole pads.
 ///
 /// These are the basic pad shapes supported for PCB design.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub enum PadShape {
     /// Circular pad.
+    #[default]
     Circle,
     /// Rectangular pad.
     Rect,
@@ -204,12 +208,6 @@ impl PadShape {
         PadShape::RoundRect {
             corner_ratio: corner_ratio.min(50),
         }
-    }
-}
-
-impl Default for PadShape {
-    fn default() -> Self {
-        PadShape::Circle
     }
 }
 

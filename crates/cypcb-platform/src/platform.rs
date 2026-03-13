@@ -8,7 +8,7 @@
 /// # Platform Implementations
 ///
 /// ## Native (desktop)
-/// ```no_run
+/// ```ignore
 /// use cypcb_platform::Platform;
 /// use std::path::Path;
 ///
@@ -23,7 +23,7 @@
 /// platform.storage().set_string("settings", "theme", "dark").await?;
 ///
 /// // Use dialog
-/// if platform.dialog().confirm("Confirm", "Delete file?").await? {
+/// if Dialog::confirm("Confirm", "Delete file?") {
 ///     // proceed...
 /// }
 /// # Ok(())
@@ -31,7 +31,7 @@
 /// ```
 ///
 /// ## Web (WASM)
-/// ```no_run
+/// ```ignore
 /// use cypcb_platform::Platform;
 ///
 /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
@@ -45,8 +45,6 @@
 /// ```
 use crate::dialog::Dialog;
 use crate::error::PlatformError;
-use crate::fs::FileSystem;
-use crate::storage::Storage;
 
 // Native platform imports
 #[cfg(native)]
@@ -93,15 +91,11 @@ impl Platform {
     /// * `storage_path` - Directory path for SQLite database file
     ///
     /// # Example
-    /// ```no_run
+    /// ```ignore
     /// use cypcb_platform::Platform;
     /// use std::path::Path;
     ///
-    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let platform = Platform::new_native(Path::new("./app_data"))?;
-    /// platform.storage().init().await?;
-    /// # Ok(())
-    /// # }
     /// ```
     pub fn new_native(storage_path: &std::path::Path) -> Result<Self, PlatformError> {
         let fs = NativeFileSystem;

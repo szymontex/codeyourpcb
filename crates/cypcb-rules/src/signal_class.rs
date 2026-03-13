@@ -57,9 +57,9 @@ impl SignalClass {
     pub fn default_constraints(self) -> SignalClassConstraints {
         match self {
             SignalClass::Digital => SignalClassConstraints {
-                min_trace_width: Nm::from_mm(0.15),      // 6 mil — comfortable digital
-                min_clearance: Nm::from_mm(0.15),         // 6 mil
-                preferred_layers: Vec::new(),              // any copper layer
+                min_trace_width: Nm::from_mm(0.15), // 6 mil — comfortable digital
+                min_clearance: Nm::from_mm(0.15),   // 6 mil
+                preferred_layers: Vec::new(),       // any copper layer
                 require_impedance_control: false,
                 require_length_matching: false,
                 require_diff_pair: false,
@@ -67,18 +67,18 @@ impl SignalClass {
                 guard_trace_clearance: None,
             },
             SignalClass::HighSpeed => SignalClassConstraints {
-                min_trace_width: Nm::from_mm(0.127),      // 5 mil — controlled impedance
-                min_clearance: Nm::from_mm(0.2),           // 8 mil — extra clearance
-                preferred_layers: vec![0, 2],              // outer + inner-1
+                min_trace_width: Nm::from_mm(0.127), // 5 mil — controlled impedance
+                min_clearance: Nm::from_mm(0.2),     // 8 mil — extra clearance
+                preferred_layers: vec![0, 2],        // outer + inner-1
                 require_impedance_control: true,
                 require_length_matching: true,
                 require_diff_pair: false,
-                max_stub_length: Some(Nm::from_mm(0.5)),   // short stubs only
+                max_stub_length: Some(Nm::from_mm(0.5)), // short stubs only
                 guard_trace_clearance: None,
             },
             SignalClass::Analog => SignalClassConstraints {
-                min_trace_width: Nm::from_mm(0.2),        // 8 mil — low noise
-                min_clearance: Nm::from_mm(0.3),           // 12 mil — isolation
+                min_trace_width: Nm::from_mm(0.2), // 8 mil — low noise
+                min_clearance: Nm::from_mm(0.3),   // 12 mil — isolation
                 preferred_layers: Vec::new(),
                 require_impedance_control: false,
                 require_length_matching: false,
@@ -87,8 +87,8 @@ impl SignalClass {
                 guard_trace_clearance: Some(Nm::from_mm(0.5)), // guard traces
             },
             SignalClass::Power => SignalClassConstraints {
-                min_trace_width: Nm::from_mm(0.5),        // 20 mil — current capacity
-                min_clearance: Nm::from_mm(0.2),           // 8 mil
+                min_trace_width: Nm::from_mm(0.5), // 20 mil — current capacity
+                min_clearance: Nm::from_mm(0.2),   // 8 mil
                 preferred_layers: Vec::new(),
                 require_impedance_control: false,
                 require_length_matching: false,
@@ -97,9 +97,9 @@ impl SignalClass {
                 guard_trace_clearance: None,
             },
             SignalClass::Differential => SignalClassConstraints {
-                min_trace_width: Nm::from_mm(0.127),      // 5 mil — impedance controlled
-                min_clearance: Nm::from_mm(0.2),           // 8 mil
-                preferred_layers: vec![0],                  // outer layer preferred
+                min_trace_width: Nm::from_mm(0.127), // 5 mil — impedance controlled
+                min_clearance: Nm::from_mm(0.2),     // 8 mil
+                preferred_layers: vec![0],           // outer layer preferred
                 require_impedance_control: true,
                 require_length_matching: true,
                 require_diff_pair: true,
@@ -150,7 +150,10 @@ mod tests {
         // Ensure default_constraints() works for every variant
         for class in SignalClass::ALL {
             let c = class.default_constraints();
-            assert!(c.min_trace_width.raw() > 0, "{class:?} has zero trace width");
+            assert!(
+                c.min_trace_width.raw() > 0,
+                "{class:?} has zero trace width"
+            );
             assert!(c.min_clearance.raw() > 0, "{class:?} has zero clearance");
         }
     }

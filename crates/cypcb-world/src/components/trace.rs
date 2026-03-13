@@ -445,10 +445,7 @@ mod tests {
 
     #[test]
     fn test_trace_segment_creation() {
-        let seg = TraceSegment::new(
-            Point::from_mm(0.0, 0.0),
-            Point::from_mm(10.0, 5.0),
-        );
+        let seg = TraceSegment::new(Point::from_mm(0.0, 0.0), Point::from_mm(10.0, 5.0));
 
         assert_eq!(seg.start, Point::from_mm(0.0, 0.0));
         assert_eq!(seg.end, Point::from_mm(10.0, 5.0));
@@ -456,20 +453,14 @@ mod tests {
 
     #[test]
     fn test_trace_segment_length_horizontal() {
-        let seg = TraceSegment::new(
-            Point::from_mm(0.0, 0.0),
-            Point::from_mm(10.0, 0.0),
-        );
+        let seg = TraceSegment::new(Point::from_mm(0.0, 0.0), Point::from_mm(10.0, 0.0));
 
         assert_eq!(seg.length(), Nm::from_mm(10.0));
     }
 
     #[test]
     fn test_trace_segment_length_vertical() {
-        let seg = TraceSegment::new(
-            Point::from_mm(0.0, 0.0),
-            Point::from_mm(0.0, 5.0),
-        );
+        let seg = TraceSegment::new(Point::from_mm(0.0, 0.0), Point::from_mm(0.0, 5.0));
 
         assert_eq!(seg.length(), Nm::from_mm(5.0));
     }
@@ -477,20 +468,14 @@ mod tests {
     #[test]
     fn test_trace_segment_length_diagonal() {
         // 3-4-5 triangle: diagonal should be 5mm
-        let seg = TraceSegment::new(
-            Point::from_mm(0.0, 0.0),
-            Point::from_mm(3.0, 4.0),
-        );
+        let seg = TraceSegment::new(Point::from_mm(0.0, 0.0), Point::from_mm(3.0, 4.0));
 
         assert_eq!(seg.length(), Nm::from_mm(5.0));
     }
 
     #[test]
     fn test_trace_segment_midpoint() {
-        let seg = TraceSegment::new(
-            Point::from_mm(0.0, 0.0),
-            Point::from_mm(10.0, 10.0),
-        );
+        let seg = TraceSegment::new(Point::from_mm(0.0, 0.0), Point::from_mm(10.0, 10.0));
 
         assert_eq!(seg.midpoint(), Point::from_mm(5.0, 5.0));
     }

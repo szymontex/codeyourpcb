@@ -39,11 +39,7 @@ pub fn hover_at_position(doc: &DocumentState, position: &Position) -> Option<Hov
     None
 }
 
-fn hover_for_definition(
-    doc: &DocumentState,
-    def: &Definition,
-    offset: usize,
-) -> Option<HoverInfo> {
+fn hover_for_definition(doc: &DocumentState, def: &Definition, offset: usize) -> Option<HoverInfo> {
     match def {
         Definition::Component(comp) => hover_for_component(doc, comp, offset),
         Definition::Net(net) => hover_for_net(doc, net, offset),
@@ -147,7 +143,9 @@ fn make_component_hover_enhanced(doc: &DocumentState, comp: &ComponentDef) -> Ho
 
     // Include inline net assignments from component definition
     if !comp.net_assignments.is_empty() {
-        let has_connections = doc.ast.as_ref()
+        let has_connections = doc
+            .ast
+            .as_ref()
             .map(|ast| !find_component_net_connections(Some(ast), &comp.refdes.value).is_empty())
             .unwrap_or(false);
 
@@ -198,7 +196,8 @@ fn find_component_net_connections(ast: Option<&SourceFile>, refdes: &str) -> Vec
 
 /// Count DRC violations related to a component.
 fn count_component_violations(doc: &DocumentState, refdes: &str) -> usize {
-    doc.drc_violations.iter()
+    doc.drc_violations
+        .iter()
         .filter(|v| v.message.contains(refdes))
         .count()
 }
@@ -246,16 +245,14 @@ fn make_footprint_hover(footprint_name: &str) -> HoverInfo {
                 let height_mm: f64 = pad.size.1.to_mm();
                 lines.push(format!(
                     "- {}: {} {:.2}mm x {:.2}mm{}",
-                    pad.number,
-                    shape_str,
-                    width_mm,
-                    height_mm,
-                    drill_str
+                    pad.number, shape_str, width_mm, height_mm, drill_str
                 ));
             }
         }
 
-        HoverInfo { content: lines.join("\n") }
+        HoverInfo {
+            content: lines.join("\n"),
+        }
     } else {
         HoverInfo {
             content: format!("**Footprint: {}** (unknown)\n\nNot in built-in library. May be a custom footprint defined in this file.", footprint_name),
@@ -263,11 +260,7 @@ fn make_footprint_hover(footprint_name: &str) -> HoverInfo {
     }
 }
 
-fn hover_for_net(
-    _doc: &DocumentState,
-    net: &NetDef,
-    offset: usize,
-) -> Option<HoverInfo> {
+fn hover_for_net(_doc: &DocumentState, net: &NetDef, offset: usize) -> Option<HoverInfo> {
     if offset >= net.name.span.start && offset < net.name.span.end {
         return Some(make_net_hover(net));
     }
@@ -319,7 +312,10 @@ fn make_net_hover(net: &NetDef) -> HoverInfo {
             // Calculate recommended trace width based on IPC-2221
             let amps: f64 = current.to_amps();
             if let Some(calc_width) = calculate_trace_width(amps) {
-                lines.push(format!("- IPC-2221 width: {:.2}mm (external, 10C rise)", calc_width));
+                lines.push(format!(
+                    "- IPC-2221 width: {:.2}mm (external, 10C rise)",
+                    calc_width
+                ));
 
                 // Warning if specified width is less than calculated
                 if let Some(specified) = &constraints.width {
@@ -395,11 +391,7 @@ fn hover_for_footprint_def(
     None
 }
 
-fn hover_for_board(
-    _doc: &DocumentState,
-    board: &BoardDef,
-    offset: usize,
-) -> Option<HoverInfo> {
+fn hover_for_board(_doc: &DocumentState, board: &BoardDef, offset: usize) -> Option<HoverInfo> {
     if offset >= board.span.start && offset < board.span.end {
         let mut lines = vec![format!("**Board: {}**", board.name.value)];
 
@@ -419,11 +411,7 @@ fn hover_for_board(
     None
 }
 
-fn hover_for_zone(
-    _doc: &DocumentState,
-    zone: &ZoneDef,
-    offset: usize,
-) -> Option<HoverInfo> {
+fn hover_for_zone(_doc: &DocumentState, zone: &ZoneDef, offset: usize) -> Option<HoverInfo> {
     if offset >= zone.span.start && offset < zone.span.end {
         let kind_str = match zone.kind {
             ZoneKind::Keepout => "Keepout",
@@ -457,11 +445,7 @@ fn hover_for_zone(
     None
 }
 
-fn hover_for_trace(
-    _doc: &DocumentState,
-    trace: &TraceDef,
-    offset: usize,
-) -> Option<HoverInfo> {
+fn hover_for_trace(_doc: &DocumentState, trace: &TraceDef, offset: usize) -> Option<HoverInfo> {
     if offset >= trace.span.start && offset < trace.span.end {
         let mut lines = vec![format!("**Trace: {}**", trace.net.value)];
 
@@ -501,9 +485,21 @@ fn hover_for_module(module: &ModuleDef, offset: usize) -> Option<HoverInfo> {
     if offset >= module.span.start && offset < module.span.end {
         let mut lines = vec![format!("**Module: {}**", module.name.value)];
 
-        let comp_count = module.definitions.iter().filter(|d| matches!(d, Definition::Component(_))).count();
-        let net_count = module.definitions.iter().filter(|d| matches!(d, Definition::Net(_))).count();
-        let assert_count = module.definitions.iter().filter(|d| matches!(d, Definition::Assert(_))).count();
+        let comp_count = module
+            .definitions
+            .iter()
+            .filter(|d| matches!(d, Definition::Component(_)))
+            .count();
+        let net_count = module
+            .definitions
+            .iter()
+            .filter(|d| matches!(d, Definition::Net(_)))
+            .count();
+        let assert_count = module
+            .definitions
+            .iter()
+            .filter(|d| matches!(d, Definition::Assert(_)))
+            .count();
 
         if comp_count > 0 {
             lines.push(format!("Components: {}", comp_count));
@@ -574,7 +570,9 @@ fn hover_for_assert(assert_def: &AssertDef, offset: usize) -> Option<HoverInfo> 
         let mut lines = vec!["**Assertion**".to_string()];
 
         match &assert_def.expression {
-            AssertExpression::Comparison { left, op, right, .. } => {
+            AssertExpression::Comparison {
+                left, op, right, ..
+            } => {
                 let left_str = format_operand(left);
                 let right_str = format_operand(right);
                 lines.push(format!("Constraint: {} {:?} {}", left_str, op, right_str));
@@ -644,7 +642,10 @@ component R1 resistor "0402" {
 "#,
         );
 
-        let pos = Position { line: 1, character: 10 };
+        let pos = Position {
+            line: 1,
+            character: 10,
+        };
         let hover = hover_at_position(&doc, &pos);
         assert!(hover.is_some());
 
@@ -665,7 +666,10 @@ net VCC {
 "#,
         );
 
-        let pos = Position { line: 1, character: 4 };
+        let pos = Position {
+            line: 1,
+            character: 4,
+        };
         let hover = hover_at_position(&doc, &pos);
         assert!(hover.is_some());
 
@@ -679,7 +683,10 @@ net VCC {
     fn test_hover_on_whitespace() {
         let doc = make_doc("   \n\n   ");
 
-        let pos = Position { line: 0, character: 0 };
+        let pos = Position {
+            line: 0,
+            character: 0,
+        };
         let hover = hover_at_position(&doc, &pos);
         assert!(hover.is_none());
     }
@@ -697,12 +704,18 @@ net GND { R1.2 }
 "#,
         );
 
-        let pos = Position { line: 1, character: 10 };
+        let pos = Position {
+            line: 1,
+            character: 10,
+        };
         let hover = hover_at_position(&doc, &pos);
         assert!(hover.is_some());
 
         let info = hover.unwrap();
-        assert!(info.content.contains("Net connections"), "Should show net connections");
+        assert!(
+            info.content.contains("Net connections"),
+            "Should show net connections"
+        );
         assert!(info.content.contains("VCC"), "Should show VCC connection");
         assert!(info.content.contains("GND"), "Should show GND connection");
     }
@@ -718,7 +731,10 @@ component R1 resistor "0402" {
 "#,
         );
 
-        let pos = Position { line: 2, character: 10 };
+        let pos = Position {
+            line: 2,
+            character: 10,
+        };
         let hover = hover_at_position(&doc, &pos);
         assert!(hover.is_some());
 
@@ -737,13 +753,19 @@ net VCC [current 2A] {
 "#,
         );
 
-        let pos = Position { line: 1, character: 4 };
+        let pos = Position {
+            line: 1,
+            character: 4,
+        };
         let hover = hover_at_position(&doc, &pos);
         assert!(hover.is_some());
 
         let info = hover.unwrap();
         assert!(info.content.contains("Current: 2A"), "Should show current");
-        assert!(info.content.contains("IPC-2221"), "Should show IPC-2221 calculated width");
+        assert!(
+            info.content.contains("IPC-2221"),
+            "Should show IPC-2221 calculated width"
+        );
     }
 
     #[test]
@@ -755,12 +777,18 @@ component R1 resistor "0402" {}
         );
 
         // Hover on the footprint string
-        let pos = Position { line: 1, character: 24 };
+        let pos = Position {
+            line: 1,
+            character: 24,
+        };
         let hover = hover_at_position(&doc, &pos);
         assert!(hover.is_some());
 
         let info = hover.unwrap();
-        assert!(info.content.contains("Footprint: 0402"), "Should show footprint name");
+        assert!(
+            info.content.contains("Footprint: 0402"),
+            "Should show footprint name"
+        );
         assert!(info.content.contains("Courtyard"), "Should show courtyard");
         assert!(info.content.contains("Pads"), "Should show pad count");
     }
@@ -772,7 +800,11 @@ component R1 resistor "0402" {}
         assert!(width.is_some());
         let w = width.unwrap();
         // 1A should give roughly 0.3-0.5mm for external, 10C rise
-        assert!(w > 0.2 && w < 1.0, "Width {} should be reasonable for 1A", w);
+        assert!(
+            w > 0.2 && w < 1.0,
+            "Width {} should be reasonable for 1A",
+            w
+        );
     }
 
     #[test]
@@ -783,7 +815,8 @@ component R1 resistor "0402" {}
 
     #[test]
     fn test_hover_on_module() {
-        let doc = make_doc(r#"
+        let doc = make_doc(
+            r#"
 module PowerSupply {
     component U1 ic "SOT-23" {
         value "LDO-3V3"
@@ -792,34 +825,52 @@ module PowerSupply {
     pin VOUT
     pin GND
 }
-"#);
+"#,
+        );
 
-        let pos = Position { line: 1, character: 7 };
+        let pos = Position {
+            line: 1,
+            character: 7,
+        };
         let hover = hover_at_position(&doc, &pos);
         assert!(hover.is_some(), "Should have hover for module");
 
         let info = hover.unwrap();
-        assert!(info.content.contains("Module: PowerSupply"), "Should show module name");
-        assert!(info.content.contains("Components: 1"), "Should show component count");
+        assert!(
+            info.content.contains("Module: PowerSupply"),
+            "Should show module name"
+        );
+        assert!(
+            info.content.contains("Components: 1"),
+            "Should show component count"
+        );
         assert!(info.content.contains("VIN"), "Should show exposed pin");
         assert!(info.content.contains("VOUT"), "Should show exposed pin");
     }
 
     #[test]
     fn test_hover_on_interface() {
-        let doc = make_doc(r#"
+        let doc = make_doc(
+            r#"
 interface I2C {
     pin SDA
     pin SCL
 }
-"#);
+"#,
+        );
 
-        let pos = Position { line: 1, character: 10 };
+        let pos = Position {
+            line: 1,
+            character: 10,
+        };
         let hover = hover_at_position(&doc, &pos);
         assert!(hover.is_some(), "Should have hover for interface");
 
         let info = hover.unwrap();
-        assert!(info.content.contains("Interface: I2C"), "Should show interface name");
+        assert!(
+            info.content.contains("Interface: I2C"),
+            "Should show interface name"
+        );
         assert!(info.content.contains("SDA"), "Should show pin");
         assert!(info.content.contains("SCL"), "Should show pin");
     }
@@ -828,13 +879,19 @@ interface I2C {
     fn test_hover_on_import() {
         let doc = make_doc(r#"import I2C, SPI from "std/interfaces.cypcb""#);
 
-        let pos = Position { line: 0, character: 7 };
+        let pos = Position {
+            line: 0,
+            character: 7,
+        };
         let hover = hover_at_position(&doc, &pos);
         assert!(hover.is_some(), "Should have hover for import");
 
         let info = hover.unwrap();
         assert!(info.content.contains("Import"), "Should show import");
-        assert!(info.content.contains("std/interfaces.cypcb"), "Should show path");
+        assert!(
+            info.content.contains("std/interfaces.cypcb"),
+            "Should show path"
+        );
         assert!(info.content.contains("I2C"), "Should show imported name");
     }
 
@@ -842,12 +899,18 @@ interface I2C {
     fn test_hover_on_assert() {
         let doc = make_doc(r#"assert R1.value >= 10kohm"#);
 
-        let pos = Position { line: 0, character: 7 };
+        let pos = Position {
+            line: 0,
+            character: 7,
+        };
         let hover = hover_at_position(&doc, &pos);
         assert!(hover.is_some(), "Should have hover for assert");
 
         let info = hover.unwrap();
         assert!(info.content.contains("Assertion"), "Should show assertion");
-        assert!(info.content.contains("R1.value"), "Should show left operand");
+        assert!(
+            info.content.contains("R1.value"),
+            "Should show left operand"
+        );
     }
 }

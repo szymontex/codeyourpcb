@@ -8,8 +8,8 @@ use cypcb_router::export_dsn;
 use cypcb_world::components::trace::{Trace, TraceSegment, TraceSource};
 use cypcb_world::footprint::FootprintLibrary;
 use cypcb_world::{
-    BoardWorld, FootprintRef, Layer, NetConnections, PinConnection, Position, RefDes,
-    Rotation, Value,
+    BoardWorld, FootprintRef, Layer, NetConnections, PinConnection, Position, RefDes, Rotation,
+    Value,
 };
 
 /// Create a test board with 3 components and 2 nets.
@@ -107,7 +107,10 @@ fn test_full_board_export() {
         "DSN should have resolution"
     );
     assert!(dsn.contains("(unit mil)"), "DSN should have unit");
-    assert!(dsn.contains("(structure"), "DSN should have structure section");
+    assert!(
+        dsn.contains("(structure"),
+        "DSN should have structure section"
+    );
     assert!(
         dsn.contains("(placement"),
         "DSN should have placement section"
@@ -127,7 +130,10 @@ fn test_board_boundary_in_dsn() {
 
     // Verify boundary (50mm x 30mm = ~1969 x 1181 mils)
     assert!(dsn.contains("(boundary"), "DSN should have boundary");
-    assert!(dsn.contains("(rect pcb 0 0"), "Boundary should start at origin");
+    assert!(
+        dsn.contains("(rect pcb 0 0"),
+        "Boundary should start at origin"
+    );
 
     // 50mm = 50000000nm / 25400 = ~1968.5 mils
     // 30mm = 30000000nm / 25400 = ~1181.1 mils
@@ -200,7 +206,10 @@ fn test_padstack_definitions_in_dsn() {
     let dsn = String::from_utf8(output).unwrap();
 
     // Padstack definitions should exist in library section
-    assert!(dsn.contains("(padstack"), "DSN should have padstack definitions");
+    assert!(
+        dsn.contains("(padstack"),
+        "DSN should have padstack definitions"
+    );
 
     // Shape definitions for pads
     assert!(dsn.contains("(shape"), "Padstacks should have shapes");
@@ -215,7 +224,10 @@ fn test_layer_definitions_in_dsn() {
     let dsn = String::from_utf8(output).unwrap();
 
     // 2-layer board should have F.Cu and B.Cu
-    assert!(dsn.contains("(layer F.Cu"), "DSN should have top copper layer");
+    assert!(
+        dsn.contains("(layer F.Cu"),
+        "DSN should have top copper layer"
+    );
     assert!(
         dsn.contains("(layer B.Cu"),
         "DSN should have bottom copper layer"
@@ -249,7 +261,10 @@ fn test_net_class_in_dsn() {
     let dsn = String::from_utf8(output).unwrap();
 
     // Net class should group all nets
-    assert!(dsn.contains("(class default"), "DSN should have default net class");
+    assert!(
+        dsn.contains("(class default"),
+        "DSN should have default net class"
+    );
 }
 
 #[test]
@@ -279,10 +294,19 @@ fn test_locked_trace_export() {
     let dsn = String::from_utf8(output).unwrap();
 
     // Locked trace should appear in wiring section
-    assert!(dsn.contains("(wire"), "Locked trace should be exported as wire");
+    assert!(
+        dsn.contains("(wire"),
+        "Locked trace should be exported as wire"
+    );
     assert!(dsn.contains("(path F.Cu"), "Wire should be on F.Cu layer");
-    assert!(dsn.contains("(type fix)"), "Locked wire should be marked as fixed");
-    assert!(dsn.contains("(net \"VCC\")"), "Wire should reference VCC net");
+    assert!(
+        dsn.contains("(type fix)"),
+        "Locked wire should be marked as fixed"
+    );
+    assert!(
+        dsn.contains("(net \"VCC\")"),
+        "Wire should reference VCC net"
+    );
 }
 
 #[test]

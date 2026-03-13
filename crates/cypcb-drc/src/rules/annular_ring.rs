@@ -8,13 +8,13 @@
 //! effective pad diameter (worst-case check).
 
 use cypcb_core::{Nm, Point};
-use cypcb_world::BoardWorld;
 use cypcb_world::components::{FootprintRef, Position, RefDes};
 use cypcb_world::footprint::FootprintLibrary;
+use cypcb_world::BoardWorld;
 
+use super::DrcRule;
 use crate::presets::DesignRules;
 use crate::violation::DrcViolation;
-use super::DrcRule;
 
 /// Rule that checks annular ring width around drill holes.
 ///
@@ -50,12 +50,8 @@ impl DrcRule for AnnularRingRule {
         // Collect components first to avoid borrow issues with ECS
         let components: Vec<_> = {
             let ecs = world.ecs_mut();
-            let mut query = ecs.query::<(
-                bevy_ecs::entity::Entity,
-                &RefDes,
-                &FootprintRef,
-                &Position,
-            )>();
+            let mut query =
+                ecs.query::<(bevy_ecs::entity::Entity, &RefDes, &FootprintRef, &Position)>();
             query
                 .iter(ecs)
                 .map(|(e, r, f, p)| (e, r.clone(), f.clone(), *p))
@@ -99,8 +95,8 @@ impl DrcRule for AnnularRingRule {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cypcb_world::components::{NetConnections, Rotation, Value};
     use crate::ViolationKind;
+    use cypcb_world::components::{NetConnections, Rotation, Value};
 
     #[test]
     fn test_rule_name() {
@@ -123,7 +119,10 @@ mod tests {
 
         let rules = DesignRules::jlcpcb_2layer(); // 0.15mm min annular ring
         let violations = AnnularRingRule.check(&mut world, &rules);
-        assert!(violations.is_empty(), "DIP-8 should pass standard annular ring check");
+        assert!(
+            violations.is_empty(),
+            "DIP-8 should pass standard annular ring check"
+        );
     }
 
     #[test]
@@ -171,7 +170,10 @@ mod tests {
         };
 
         let violations = AnnularRingRule.check(&mut world, &rules);
-        assert!(violations.is_empty(), "SMD pads should not trigger annular ring violations");
+        assert!(
+            violations.is_empty(),
+            "SMD pads should not trigger annular ring violations"
+        );
     }
 
     #[test]
@@ -220,7 +222,13 @@ mod tests {
         let violations = AnnularRingRule.check(&mut world, &rules);
         assert!(!violations.is_empty());
         // Message should contain actual and required dimensions
-        assert!(violations[0].message.contains("0.400"), "Should show actual ring width (0.4mm)");
-        assert!(violations[0].message.contains("0.500"), "Should show required ring width (0.5mm)");
+        assert!(
+            violations[0].message.contains("0.400"),
+            "Should show actual ring width (0.4mm)"
+        );
+        assert!(
+            violations[0].message.contains("0.500"),
+            "Should show required ring width (0.5mm)"
+        );
     }
 }

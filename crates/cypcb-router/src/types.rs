@@ -361,11 +361,8 @@ mod tests {
 
     #[test]
     fn test_via_placement() {
-        let via = ViaPlacement::through_hole(
-            NetId::new(1),
-            Point::from_mm(5.0, 5.0),
-            Nm::from_mm(0.3),
-        );
+        let via =
+            ViaPlacement::through_hole(NetId::new(1), Point::from_mm(5.0, 5.0), Nm::from_mm(0.3));
 
         assert_eq!(via.net_id, NetId::new(1));
         assert_eq!(via.position, Point::from_mm(5.0, 5.0));

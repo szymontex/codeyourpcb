@@ -83,15 +83,11 @@ fn parse_error_to_diagnostic(doc: &DocumentState, error: &ParseError) -> Option<
         ParseError::UnknownLayerType { name, span, .. } => {
             (format!("Unknown layer type: '{}'", name), span)
         }
-        ParseError::UnknownUnit { name, span, .. } => {
-            (format!("Unknown unit: '{}'", name), span)
-        }
+        ParseError::UnknownUnit { name, span, .. } => (format!("Unknown unit: '{}'", name), span),
         ParseError::InvalidNumber { text, span, .. } => {
             (format!("Invalid number: '{}'", text), span)
         }
-        ParseError::Missing { expected, span, .. } => {
-            (format!("Missing {}", expected), span)
-        }
+        ParseError::Missing { expected, span, .. } => (format!("Missing {}", expected), span),
         ParseError::InvalidVersion { message, span, .. } => {
             (format!("Invalid version: {}", message), span)
         }

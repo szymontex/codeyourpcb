@@ -3,13 +3,13 @@
 //! Validates that all component pins have net connections, catching
 //! incomplete designs before manufacturing.
 
-use cypcb_world::BoardWorld;
 use cypcb_world::components::{FootprintRef, NetConnections, Position, RefDes};
 use cypcb_world::footprint::FootprintLibrary;
+use cypcb_world::BoardWorld;
 
+use super::DrcRule;
 use crate::presets::DesignRules;
 use crate::violation::DrcViolation;
-use super::DrcRule;
 
 /// Rule that checks all component pins have net connections.
 ///
@@ -90,8 +90,8 @@ impl DrcRule for UnconnectedPinRule {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cypcb_core::Nm;
-    use cypcb_world::components::{NetId, PinConnection, Rotation, Value};
+
+    use cypcb_world::components::{PinConnection, Rotation, Value};
 
     #[test]
     fn test_rule_name() {
@@ -121,7 +121,10 @@ mod tests {
 
         assert_eq!(violations.len(), 1, "Should detect 1 unconnected pin");
         assert_eq!(violations[0].kind, crate::ViolationKind::UnconnectedPin);
-        assert!(violations[0].message.contains("R1.2"), "Should report pin 2");
+        assert!(
+            violations[0].message.contains("R1.2"),
+            "Should report pin 2"
+        );
     }
 
     #[test]
@@ -147,7 +150,10 @@ mod tests {
         let rules = DesignRules::default();
         let violations = UnconnectedPinRule.check(&mut world, &rules);
 
-        assert!(violations.is_empty(), "Fully connected component should pass");
+        assert!(
+            violations.is_empty(),
+            "Fully connected component should pass"
+        );
     }
 
     #[test]
@@ -191,7 +197,10 @@ mod tests {
 
         let rules = DesignRules::default();
         let violations = UnconnectedPinRule.check(&mut world, &rules);
-        assert!(violations.is_empty(), "Unknown footprints should be skipped");
+        assert!(
+            violations.is_empty(),
+            "Unknown footprints should be skipped"
+        );
     }
 
     #[test]

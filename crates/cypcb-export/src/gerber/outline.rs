@@ -3,11 +3,11 @@
 //! Exports the board outline as a closed polygon defining the physical board
 //! dimensions for routing/cutting. Uses the Profile file function per X2 spec.
 
-use cypcb_world::BoardWorld;
-use cypcb_core::Nm;
-use crate::coords::{CoordinateFormat, nm_to_gerber};
 use crate::apertures::{ApertureManager, ApertureShape};
+use crate::coords::{nm_to_gerber, CoordinateFormat};
 use crate::gerber::header::{write_header, GerberFileFunction};
+use cypcb_core::Nm;
+use cypcb_world::BoardWorld;
 
 /// Board outline export error types.
 #[derive(Debug, thiserror::Error)]
@@ -60,8 +60,7 @@ pub fn export_outline(
     let mut apertures = ApertureManager::new();
 
     // Get board dimensions
-    let (board_size, layer_stack) = world.board_info()
-        .ok_or(OutlineError::NoBoardSize)?;
+    let (board_size, layer_stack) = world.board_info().ok_or(OutlineError::NoBoardSize)?;
 
     let board_name = world.board_name().unwrap_or("board");
 
@@ -88,22 +87,22 @@ pub fn export_outline(
     // Draw closed polygon
     // Corner coordinates (origin at bottom-left)
     let corners = [
-        (Nm::ZERO, Nm::ZERO),           // Bottom-left (0, 0)
-        (board_size.width, Nm::ZERO),   // Bottom-right (w, 0)
+        (Nm::ZERO, Nm::ZERO),                  // Bottom-left (0, 0)
+        (board_size.width, Nm::ZERO),          // Bottom-right (w, 0)
         (board_size.width, board_size.height), // Top-right (w, h)
-        (Nm::ZERO, board_size.height),  // Top-left (0, h)
-        (Nm::ZERO, Nm::ZERO),           // Back to bottom-left (close path)
+        (Nm::ZERO, board_size.height),         // Top-left (0, h)
+        (Nm::ZERO, Nm::ZERO),                  // Back to bottom-left (close path)
     ];
 
     // Move to first corner (D02)
-    let x = nm_to_gerber(corners[0].0.0, format);
-    let y = nm_to_gerber(corners[0].1.0, format);
+    let x = nm_to_gerber(corners[0].0 .0, format);
+    let y = nm_to_gerber(corners[0].1 .0, format);
     drawing_commands.push_str(&format!("X{}Y{}D02*\n", x, y));
 
     // Draw to remaining corners (D01)
-    for i in 1..corners.len() {
-        let x = nm_to_gerber(corners[i].0.0, format);
-        let y = nm_to_gerber(corners[i].1.0, format);
+    for corner in corners.iter().skip(1) {
+        let x = nm_to_gerber(corner.0 .0, format);
+        let y = nm_to_gerber(corner.1 .0, format);
         drawing_commands.push_str(&format!("X{}Y{}D01*\n", x, y));
     }
 
@@ -122,8 +121,8 @@ pub fn export_outline(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cypcb_world::BoardWorld;
     use cypcb_core::Nm;
+    use cypcb_world::BoardWorld;
 
     #[test]
     fn test_export_outline_rectangular() {
@@ -149,11 +148,7 @@ mod tests {
     #[test]
     fn test_export_outline_closed_polygon() {
         let mut world = BoardWorld::new();
-        world.set_board(
-            "test".into(),
-            (Nm::from_mm(50.0), Nm::from_mm(40.0)),
-            2,
-        );
+        world.set_board("test".into(), (Nm::from_mm(50.0), Nm::from_mm(40.0)), 2);
 
         let format = CoordinateFormat::FORMAT_MM_2_6;
         let gerber = export_outline(&world, &format).unwrap();

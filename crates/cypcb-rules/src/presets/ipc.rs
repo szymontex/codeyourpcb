@@ -27,46 +27,46 @@ use crate::stackup::{LayerStackEntry, Stackup};
 pub fn class1() -> DesignConstraints {
     DesignConstraints {
         // Basic geometry — relaxed
-        min_clearance: Nm::from_mm(0.2),               // 8 mil
-        min_trace_width: Nm::from_mm(0.2),             // 8 mil
-        min_drill_size: Nm::from_mm(0.3),              // 0.3mm
-        min_via_drill: Nm::from_mm(0.3),               // 0.3mm
-        min_annular_ring: Nm::from_mm(0.15),           // 6 mil (IPC Class 1 minimum)
-        min_silk_width: Nm::from_mm(0.2),              // 8 mil
-        min_edge_clearance: Nm::from_mm(0.25),         // 10 mil
+        min_clearance: Nm::from_mm(0.2),       // 8 mil
+        min_trace_width: Nm::from_mm(0.2),     // 8 mil
+        min_drill_size: Nm::from_mm(0.3),      // 0.3mm
+        min_via_drill: Nm::from_mm(0.3),       // 0.3mm
+        min_annular_ring: Nm::from_mm(0.15),   // 6 mil (IPC Class 1 minimum)
+        min_silk_width: Nm::from_mm(0.2),      // 8 mil
+        min_edge_clearance: Nm::from_mm(0.25), // 10 mil
 
         // Advanced geometry
-        min_via_annular_ring: Nm::from_mm(0.127),      // 5 mil
-        max_drill_aspect_ratio: 800,                    // 8:1
-        min_solder_mask_bridge: Nm::from_mm(0.1),      // 4 mil
-        min_paste_clearance: Nm::from_mm(0.15),        // 6 mil
-        solder_mask_expansion: Nm::from_mm(0.075),     // 0.075mm
-        min_pad_size: Nm::from_mm(0.6),                // 24 mil
-        min_slot_clearance: Nm::from_mm(0.3),          // 12 mil
+        min_via_annular_ring: Nm::from_mm(0.127),  // 5 mil
+        max_drill_aspect_ratio: 800,               // 8:1
+        min_solder_mask_bridge: Nm::from_mm(0.1),  // 4 mil
+        min_paste_clearance: Nm::from_mm(0.15),    // 6 mil
+        solder_mask_expansion: Nm::from_mm(0.075), // 0.075mm
+        min_pad_size: Nm::from_mm(0.6),            // 24 mil
+        min_slot_clearance: Nm::from_mm(0.3),      // 12 mil
 
         // Signal integrity — not critical for Class 1
         default_impedance_ohms_x100: 5000,
-        diff_pair_gap: Nm::from_mm(0.2),               // 8 mil
-        diff_pair_tolerance: Nm::from_mm(0.1),         // 100µm (relaxed)
-        max_stub_length: Nm::from_mm(5.0),             // effectively no limit
-        length_match_tolerance: Nm::from_mm(5.0),      // effectively no limit
-        max_vias_per_high_speed_net: 10,                // relaxed
+        diff_pair_gap: Nm::from_mm(0.2),          // 8 mil
+        diff_pair_tolerance: Nm::from_mm(0.1),    // 100µm (relaxed)
+        max_stub_length: Nm::from_mm(5.0),        // effectively no limit
+        length_match_tolerance: Nm::from_mm(5.0), // effectively no limit
+        max_vias_per_high_speed_net: 10,          // relaxed
 
         // Thermal
         max_current_per_width_x100: 100_000,
-        thermal_relief_gap: Nm::from_mm(0.3),          // 12 mil
-        thermal_relief_spoke_width: Nm::from_mm(0.3),  // 12 mil
-        min_copper_pour_clearance: Nm::from_mm(0.3),   // 12 mil
+        thermal_relief_gap: Nm::from_mm(0.3),         // 12 mil
+        thermal_relief_spoke_width: Nm::from_mm(0.3), // 12 mil
+        min_copper_pour_clearance: Nm::from_mm(0.3),  // 12 mil
         thermal_relief_spokes: 4,
 
         // Manufacturing
-        copper_weight_oz_x10: 10,                       // 1.0 oz
+        copper_weight_oz_x10: 10, // 1.0 oz
         board_thickness: Nm::from_mm(1.6),
-        min_hole_to_hole: Nm::from_mm(0.6),            // relaxed
+        min_hole_to_hole: Nm::from_mm(0.6), // relaxed
         min_hole_to_edge: Nm::from_mm(0.4),
         blind_vias_allowed: false,
         buried_vias_allowed: false,
-        min_acid_trap: Nm::from_mm(0.2),               // 8 mil
+        min_acid_trap: Nm::from_mm(0.2), // 8 mil
         max_copper_layers: 6,
         castellated_holes_allowed: false,
     }
@@ -87,34 +87,34 @@ pub fn class1_stackup() -> Stackup {
 pub fn class2() -> DesignConstraints {
     DesignConstraints {
         // Basic geometry — moderate
-        min_clearance: Nm::from_mm(0.15),              // 6 mil
-        min_trace_width: Nm::from_mm(0.15),            // 6 mil
-        min_drill_size: Nm::from_mm(0.25),             // 0.25mm
-        min_via_drill: Nm::from_mm(0.25),              // 0.25mm
-        min_annular_ring: Nm::from_mm(0.127),          // 5 mil (IPC Class 2 minimum)
-        min_silk_width: Nm::from_mm(0.15),             // 6 mil
-        min_edge_clearance: Nm::from_mm(0.25),         // 10 mil
+        min_clearance: Nm::from_mm(0.15),      // 6 mil
+        min_trace_width: Nm::from_mm(0.15),    // 6 mil
+        min_drill_size: Nm::from_mm(0.25),     // 0.25mm
+        min_via_drill: Nm::from_mm(0.25),      // 0.25mm
+        min_annular_ring: Nm::from_mm(0.127),  // 5 mil (IPC Class 2 minimum)
+        min_silk_width: Nm::from_mm(0.15),     // 6 mil
+        min_edge_clearance: Nm::from_mm(0.25), // 10 mil
 
         // Advanced geometry
-        min_via_annular_ring: Nm::from_mm(0.127),      // 5 mil
-        max_drill_aspect_ratio: 1000,                   // 10:1
-        min_solder_mask_bridge: Nm::from_mm(0.1),      // 4 mil
-        min_paste_clearance: Nm::from_mm(0.127),       // 5 mil
-        solder_mask_expansion: Nm::from_mm(0.05),      // 0.05mm
-        min_pad_size: Nm::from_mm(0.5),                // 20 mil
-        min_slot_clearance: Nm::from_mm(0.25),         // 10 mil
+        min_via_annular_ring: Nm::from_mm(0.127), // 5 mil
+        max_drill_aspect_ratio: 1000,             // 10:1
+        min_solder_mask_bridge: Nm::from_mm(0.1), // 4 mil
+        min_paste_clearance: Nm::from_mm(0.127),  // 5 mil
+        solder_mask_expansion: Nm::from_mm(0.05), // 0.05mm
+        min_pad_size: Nm::from_mm(0.5),           // 20 mil
+        min_slot_clearance: Nm::from_mm(0.25),    // 10 mil
 
         // Signal integrity
         default_impedance_ohms_x100: 5000,
-        diff_pair_gap: Nm::from_mm(0.15),              // 6 mil
-        diff_pair_tolerance: Nm::from_mm(0.05),        // 50µm
-        max_stub_length: Nm::from_mm(1.0),             // 1mm
-        length_match_tolerance: Nm::from_mm(1.0),      // 1mm
+        diff_pair_gap: Nm::from_mm(0.15),         // 6 mil
+        diff_pair_tolerance: Nm::from_mm(0.05),   // 50µm
+        max_stub_length: Nm::from_mm(1.0),        // 1mm
+        length_match_tolerance: Nm::from_mm(1.0), // 1mm
         max_vias_per_high_speed_net: 6,
 
         // Thermal
         max_current_per_width_x100: 100_000,
-        thermal_relief_gap: Nm::from_mm(0.254),        // 10 mil
+        thermal_relief_gap: Nm::from_mm(0.254), // 10 mil
         thermal_relief_spoke_width: Nm::from_mm(0.254), // 10 mil
         min_copper_pour_clearance: Nm::from_mm(0.254), // 10 mil
         thermal_relief_spokes: 4,
@@ -126,7 +126,7 @@ pub fn class2() -> DesignConstraints {
         min_hole_to_edge: Nm::from_mm(0.3),
         blind_vias_allowed: false,
         buried_vias_allowed: false,
-        min_acid_trap: Nm::from_mm(0.15),              // 6 mil
+        min_acid_trap: Nm::from_mm(0.15), // 6 mil
         max_copper_layers: 8,
         castellated_holes_allowed: false,
     }
@@ -147,46 +147,46 @@ pub fn class2_stackup() -> Stackup {
 pub fn class3() -> DesignConstraints {
     DesignConstraints {
         // Basic geometry — tight
-        min_clearance: Nm::from_mm(0.1),               // 4 mil
-        min_trace_width: Nm::from_mm(0.1),             // 4 mil
-        min_drill_size: Nm::from_mm(0.2),              // 0.2mm
-        min_via_drill: Nm::from_mm(0.2),               // 0.2mm
-        min_annular_ring: Nm::from_mm(0.127),          // 5 mil (IPC Class 3 stricter)
-        min_silk_width: Nm::from_mm(0.127),            // 5 mil
-        min_edge_clearance: Nm::from_mm(0.5),          // 20 mil (wider for reliability)
+        min_clearance: Nm::from_mm(0.1),      // 4 mil
+        min_trace_width: Nm::from_mm(0.1),    // 4 mil
+        min_drill_size: Nm::from_mm(0.2),     // 0.2mm
+        min_via_drill: Nm::from_mm(0.2),      // 0.2mm
+        min_annular_ring: Nm::from_mm(0.127), // 5 mil (IPC Class 3 stricter)
+        min_silk_width: Nm::from_mm(0.127),   // 5 mil
+        min_edge_clearance: Nm::from_mm(0.5), // 20 mil (wider for reliability)
 
         // Advanced geometry
-        min_via_annular_ring: Nm::from_mm(0.127),      // 5 mil
-        max_drill_aspect_ratio: 1200,                   // 12:1 (more reliable plating)
-        min_solder_mask_bridge: Nm::from_mm(0.075),    // 3 mil
-        min_paste_clearance: Nm::from_mm(0.1),         // 4 mil
-        solder_mask_expansion: Nm::from_mm(0.05),      // 0.05mm
-        min_pad_size: Nm::from_mm(0.45),               // 18 mil
-        min_slot_clearance: Nm::from_mm(0.25),         // 10 mil
+        min_via_annular_ring: Nm::from_mm(0.127),   // 5 mil
+        max_drill_aspect_ratio: 1200,               // 12:1 (more reliable plating)
+        min_solder_mask_bridge: Nm::from_mm(0.075), // 3 mil
+        min_paste_clearance: Nm::from_mm(0.1),      // 4 mil
+        solder_mask_expansion: Nm::from_mm(0.05),   // 0.05mm
+        min_pad_size: Nm::from_mm(0.45),            // 18 mil
+        min_slot_clearance: Nm::from_mm(0.25),      // 10 mil
 
         // Signal integrity — controlled
         default_impedance_ohms_x100: 5000,
-        diff_pair_gap: Nm::from_mm(0.1),               // 4 mil
-        diff_pair_tolerance: Nm::from_mm(0.02),        // 20µm (tight)
-        max_stub_length: Nm::from_mm(0.25),            // 0.25mm (strict)
-        length_match_tolerance: Nm::from_mm(0.127),    // 5 mil (strict)
-        max_vias_per_high_speed_net: 2,                 // minimize vias
+        diff_pair_gap: Nm::from_mm(0.1),            // 4 mil
+        diff_pair_tolerance: Nm::from_mm(0.02),     // 20µm (tight)
+        max_stub_length: Nm::from_mm(0.25),         // 0.25mm (strict)
+        length_match_tolerance: Nm::from_mm(0.127), // 5 mil (strict)
+        max_vias_per_high_speed_net: 2,             // minimize vias
 
         // Thermal
         max_current_per_width_x100: 100_000,
-        thermal_relief_gap: Nm::from_mm(0.2),          // 8 mil
-        thermal_relief_spoke_width: Nm::from_mm(0.3),  // 12 mil (wider for reliability)
-        min_copper_pour_clearance: Nm::from_mm(0.2),   // 8 mil
+        thermal_relief_gap: Nm::from_mm(0.2),         // 8 mil
+        thermal_relief_spoke_width: Nm::from_mm(0.3), // 12 mil (wider for reliability)
+        min_copper_pour_clearance: Nm::from_mm(0.2),  // 8 mil
         thermal_relief_spokes: 4,
 
         // Manufacturing — strict
         copper_weight_oz_x10: 10,
         board_thickness: Nm::from_mm(1.6),
         min_hole_to_hole: Nm::from_mm(0.5),
-        min_hole_to_edge: Nm::from_mm(0.5),            // wider for reliability
-        blind_vias_allowed: false,                      // through-hole only for reliability
+        min_hole_to_edge: Nm::from_mm(0.5), // wider for reliability
+        blind_vias_allowed: false,          // through-hole only for reliability
         buried_vias_allowed: false,
-        min_acid_trap: Nm::from_mm(0.1),               // 4 mil
+        min_acid_trap: Nm::from_mm(0.1), // 4 mil
         max_copper_layers: 12,
         castellated_holes_allowed: false,
     }
@@ -278,16 +278,9 @@ mod tests {
             ("Class 2", class2_stackup()),
             ("Class 3", class3_stackup()),
         ] {
-            assert_eq!(
-                stackup.copper_layer_count(),
-                2,
-                "{name} should be 2-layer"
-            );
+            assert_eq!(stackup.copper_layer_count(), 2, "{name} should be 2-layer");
             let mm = stackup.total_thickness.to_mm();
-            assert!(
-                mm > 1.4 && mm < 1.8,
-                "{name} thickness {mm}mm out of range"
-            );
+            assert!(mm > 1.4 && mm < 1.8, "{name} thickness {mm}mm out of range");
         }
     }
 }

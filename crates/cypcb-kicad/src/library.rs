@@ -114,14 +114,9 @@ pub fn scan_library(path: &Path) -> Result<Vec<LibraryEntry>, std::io::Error> {
             }
 
             // Find the .pretty parent directory for library name
-            let library = find_pretty_parent(file_path)
-                .unwrap_or_else(|| default_library.clone());
+            let library = find_pretty_parent(file_path).unwrap_or_else(|| default_library.clone());
 
-            entries.push(LibraryEntry::new(
-                name,
-                file_path.to_path_buf(),
-                library,
-            ));
+            entries.push(LibraryEntry::new(name, file_path.to_path_buf(), library));
         }
     }
 
@@ -189,7 +184,12 @@ fn find_pretty_parent(path: &Path) -> Option<String> {
         if let Some(name) = ancestor.file_name() {
             if let Some(name_str) = name.to_str() {
                 if name_str.ends_with(".pretty") {
-                    return Some(name_str.strip_suffix(".pretty").unwrap_or(name_str).to_string());
+                    return Some(
+                        name_str
+                            .strip_suffix(".pretty")
+                            .unwrap_or(name_str)
+                            .to_string(),
+                    );
                 }
             }
         }
@@ -210,10 +210,7 @@ pub fn find_by_name<'a>(entries: &'a [LibraryEntry], pattern: &str) -> Vec<&'a L
 
 /// Find all footprint entries from a specific library.
 pub fn find_by_library<'a>(entries: &'a [LibraryEntry], library: &str) -> Vec<&'a LibraryEntry> {
-    entries
-        .iter()
-        .filter(|e| e.library == library)
-        .collect()
+    entries.iter().filter(|e| e.library == library).collect()
 }
 
 #[cfg(test)]
@@ -268,11 +265,7 @@ mod tests {
     #[test]
     fn test_library_name_extraction() {
         let temp_dir = tempfile::tempdir().unwrap();
-        let lib_path = create_test_library(
-            temp_dir.path(),
-            "Package_SO",
-            &["SOIC-8"],
-        );
+        let lib_path = create_test_library(temp_dir.path(), "Package_SO", &["SOIC-8"]);
 
         let entries = scan_library(&lib_path).unwrap();
         assert_eq!(entries.len(), 1);
@@ -323,9 +316,21 @@ mod tests {
     #[test]
     fn test_find_by_name() {
         let entries = vec![
-            LibraryEntry::new("R_0402".into(), PathBuf::from("/a/R_0402.kicad_mod"), "Resistor_SMD".into()),
-            LibraryEntry::new("R_0603".into(), PathBuf::from("/a/R_0603.kicad_mod"), "Resistor_SMD".into()),
-            LibraryEntry::new("SOIC-8".into(), PathBuf::from("/b/SOIC-8.kicad_mod"), "Package_SO".into()),
+            LibraryEntry::new(
+                "R_0402".into(),
+                PathBuf::from("/a/R_0402.kicad_mod"),
+                "Resistor_SMD".into(),
+            ),
+            LibraryEntry::new(
+                "R_0603".into(),
+                PathBuf::from("/a/R_0603.kicad_mod"),
+                "Resistor_SMD".into(),
+            ),
+            LibraryEntry::new(
+                "SOIC-8".into(),
+                PathBuf::from("/b/SOIC-8.kicad_mod"),
+                "Package_SO".into(),
+            ),
         ];
 
         let resistors = find_by_name(&entries, "r_0");
@@ -339,9 +344,21 @@ mod tests {
     #[test]
     fn test_find_by_library() {
         let entries = vec![
-            LibraryEntry::new("R_0402".into(), PathBuf::from("/a/R_0402.kicad_mod"), "Resistor_SMD".into()),
-            LibraryEntry::new("R_0603".into(), PathBuf::from("/a/R_0603.kicad_mod"), "Resistor_SMD".into()),
-            LibraryEntry::new("SOIC-8".into(), PathBuf::from("/b/SOIC-8.kicad_mod"), "Package_SO".into()),
+            LibraryEntry::new(
+                "R_0402".into(),
+                PathBuf::from("/a/R_0402.kicad_mod"),
+                "Resistor_SMD".into(),
+            ),
+            LibraryEntry::new(
+                "R_0603".into(),
+                PathBuf::from("/a/R_0603.kicad_mod"),
+                "Resistor_SMD".into(),
+            ),
+            LibraryEntry::new(
+                "SOIC-8".into(),
+                PathBuf::from("/b/SOIC-8.kicad_mod"),
+                "Package_SO".into(),
+            ),
         ];
 
         let resistors = find_by_library(&entries, "Resistor_SMD");

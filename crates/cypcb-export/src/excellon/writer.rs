@@ -5,12 +5,12 @@
 use std::collections::HashMap;
 
 use cypcb_core::{Nm, Point};
-use cypcb_world::BoardWorld;
-use cypcb_world::footprint::FootprintLibrary;
-use cypcb_world::components::{Position, FootprintRef, Rotation};
 use cypcb_world::components::trace::Via;
+use cypcb_world::components::{FootprintRef, Position, Rotation};
+use cypcb_world::footprint::FootprintLibrary;
+use cypcb_world::BoardWorld;
 
-use crate::coords::{CoordinateFormat, nm_to_gerber};
+use crate::coords::{nm_to_gerber, CoordinateFormat};
 use crate::gerber::copper::ExportError;
 
 use super::tools::ToolTable;
@@ -57,7 +57,8 @@ struct DrillHit {
 /// ```no_run
 /// use cypcb_export::excellon::{export_excellon, DrillType};
 /// use cypcb_export::coords::CoordinateFormat;
-/// use cypcb_world::{BoardWorld, FootprintLibrary};
+/// use cypcb_world::BoardWorld;
+/// use cypcb_world::footprint::FootprintLibrary;
 ///
 /// let mut world = BoardWorld::new();
 /// let library = FootprintLibrary::new();
@@ -83,7 +84,10 @@ pub fn export_excellon(
 
     // Filter by drill type if requested
     let hits: Vec<&DrillHit> = if let Some(filter_type) = drill_type_filter {
-        all_hits.iter().filter(|h| h.drill_type == filter_type).collect()
+        all_hits
+            .iter()
+            .filter(|h| h.drill_type == filter_type)
+            .collect()
     } else {
         all_hits.iter().collect()
     };
@@ -117,7 +121,7 @@ pub fn export_excellon(
 
     // Write tool definitions
     output.push_str(&tool_table.to_header(format));
-    output.push_str("\n");
+    output.push('\n');
 
     output.push_str("%\n"); // End of header
 
@@ -166,11 +170,14 @@ fn collect_drill_hits(
     let mut hits = Vec::new();
 
     // Collect from component pads (through-hole)
-    let mut query = world.ecs_mut().query::<(&Position, &FootprintRef, &Rotation)>();
+    let mut query = world
+        .ecs_mut()
+        .query::<(&Position, &FootprintRef, &Rotation)>();
 
     for (position, footprint_ref, rotation) in query.iter(world.ecs()) {
         // Look up footprint in library
-        let footprint = library.get(&footprint_ref.0)
+        let footprint = library
+            .get(&footprint_ref.0)
             .ok_or_else(|| ExportError::FootprintNotFound(footprint_ref.0.clone()))?;
 
         // Iterate over pads with drill holes
@@ -204,7 +211,11 @@ fn collect_drill_hits(
 /// Group drill hits by tool number.
 ///
 /// Returns a Vec of (tool_number, hits) sorted by tool number.
-fn group_hits_by_tool<'a>(hits: &'a [DrillHit], tool_table: &mut ToolTable) -> Vec<(u8, Vec<&'a DrillHit>)> {
+#[allow(dead_code)] // Needed once multi-tool Excellon output is implemented
+fn group_hits_by_tool<'a>(
+    hits: &'a [DrillHit],
+    tool_table: &mut ToolTable,
+) -> Vec<(u8, Vec<&'a DrillHit>)> {
     let mut grouped: HashMap<u8, Vec<&'a DrillHit>> = HashMap::new();
 
     for hit in hits {
@@ -222,7 +233,10 @@ fn group_hits_by_tool<'a>(hits: &'a [DrillHit], tool_table: &mut ToolTable) -> V
 /// Group drill hit references by tool number.
 ///
 /// This variant takes references to DrillHits (used when filtering).
-fn group_hits_by_tool_refs<'a>(hits: &[&'a DrillHit], tool_table: &mut ToolTable) -> Vec<(u8, Vec<&'a DrillHit>)> {
+fn group_hits_by_tool_refs<'a>(
+    hits: &[&'a DrillHit],
+    tool_table: &mut ToolTable,
+) -> Vec<(u8, Vec<&'a DrillHit>)> {
     let mut grouped: HashMap<u8, Vec<&'a DrillHit>> = HashMap::new();
 
     for hit in hits {
@@ -247,7 +261,11 @@ fn group_hits_by_tool_refs<'a>(hits: &[&'a DrillHit], tool_table: &mut ToolTable
 /// * `component_pos` - Component center position
 /// * `pad_offset` - Pad position relative to component center
 /// * `rotation_millideg` - Component rotation in millidegrees (0-359999)
-pub(crate) fn calculate_pad_position(component_pos: Point, pad_offset: Point, rotation_millideg: i32) -> Point {
+pub(crate) fn calculate_pad_position(
+    component_pos: Point,
+    pad_offset: Point,
+    rotation_millideg: i32,
+) -> Point {
     if rotation_millideg == 0 {
         // No rotation: simple addition
         Point::new(
@@ -275,8 +293,8 @@ pub(crate) fn calculate_pad_position(component_pos: Point, pad_offset: Point, ro
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cypcb_world::BoardWorld;
     use cypcb_world::footprint::FootprintLibrary;
+    use cypcb_world::BoardWorld;
 
     #[test]
     fn test_export_empty_board() {
@@ -413,7 +431,8 @@ mod tests {
         let library = FootprintLibrary::new();
         let format = CoordinateFormat::FORMAT_MM_2_6;
 
-        let result = export_excellon(&mut world, &library, &format, Some(DrillType::Plated)).unwrap();
+        let result =
+            export_excellon(&mut world, &library, &format, Some(DrillType::Plated)).unwrap();
 
         assert!(result.contains("M48"));
         // Empty case says "No plated drill holes"
@@ -427,7 +446,8 @@ mod tests {
         let library = FootprintLibrary::new();
         let format = CoordinateFormat::FORMAT_MM_2_6;
 
-        let result = export_excellon(&mut world, &library, &format, Some(DrillType::NonPlated)).unwrap();
+        let result =
+            export_excellon(&mut world, &library, &format, Some(DrillType::NonPlated)).unwrap();
 
         assert!(result.contains("M48"));
         // Empty case says "No non-plated drill holes"

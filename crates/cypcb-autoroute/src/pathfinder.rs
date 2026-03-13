@@ -181,9 +181,7 @@ pub fn find_path_with_zones(
     };
 
     // Heuristic function (must return u64 matching cost scale)
-    let heuristic = |node: &GridNode| -> u64 {
-        float_to_int_cost(cost.heuristic(*node, end))
-    };
+    let heuristic = |node: &GridNode| -> u64 { float_to_int_cost(cost.heuristic(*node, end)) };
 
     // Run A*
     let result = astar(&start, successors, heuristic, success);
@@ -193,11 +191,7 @@ pub fn find_path_with_zones(
             let path_len = path.len();
             let via_count = path.windows(2).filter(|w| w[0].2 != w[1].2).count();
 
-            tracing::debug!(
-                path_length = path_len,
-                via_count,
-                "Path found"
-            );
+            tracing::debug!(path_length = path_len, via_count, "Path found");
 
             // Mark all path cells as occupied on the grid
             for node in &path {
@@ -318,7 +312,12 @@ mod tests {
         for w in path.windows(2) {
             let dx = (w[0].0 as i32 - w[1].0 as i32).abs();
             let dy = (w[0].1 as i32 - w[1].1 as i32).abs();
-            assert!(dx <= 1 && dy <= 1, "Non-adjacent move: {:?} -> {:?}", w[0], w[1]);
+            assert!(
+                dx <= 1 && dy <= 1,
+                "Non-adjacent move: {:?} -> {:?}",
+                w[0],
+                w[1]
+            );
         }
     }
 

@@ -242,6 +242,7 @@ impl ComponentKind {
     /// assert_eq!(ComponentKind::from_str("IC"), Some(ComponentKind::IC));
     /// assert_eq!(ComponentKind::from_str("unknown"), None);
     /// ```
+    #[allow(clippy::should_implement_trait)] // Returns Option, not Result — different semantics than FromStr
     pub fn from_str(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "resistor" => Some(ComponentKind::Resistor),
@@ -309,9 +310,18 @@ mod tests {
 
     #[test]
     fn test_component_kind_from_str() {
-        assert_eq!(ComponentKind::from_str("resistor"), Some(ComponentKind::Resistor));
-        assert_eq!(ComponentKind::from_str("RESISTOR"), Some(ComponentKind::Resistor));
-        assert_eq!(ComponentKind::from_str("cap"), Some(ComponentKind::Capacitor));
+        assert_eq!(
+            ComponentKind::from_str("resistor"),
+            Some(ComponentKind::Resistor)
+        );
+        assert_eq!(
+            ComponentKind::from_str("RESISTOR"),
+            Some(ComponentKind::Resistor)
+        );
+        assert_eq!(
+            ComponentKind::from_str("cap"),
+            Some(ComponentKind::Capacitor)
+        );
         assert_eq!(ComponentKind::from_str("IC"), Some(ComponentKind::IC));
         assert_eq!(ComponentKind::from_str("unknown"), None);
     }

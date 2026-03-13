@@ -444,14 +444,8 @@ mod tests {
 
     #[test]
     fn test_rect_from_points_normalizes() {
-        let r1 = Rect::from_points(
-            Point::from_mm(10.0, 20.0),
-            Point::from_mm(0.0, 0.0),
-        );
-        let r2 = Rect::from_points(
-            Point::from_mm(0.0, 0.0),
-            Point::from_mm(10.0, 20.0),
-        );
+        let r1 = Rect::from_points(Point::from_mm(10.0, 20.0), Point::from_mm(0.0, 0.0));
+        let r2 = Rect::from_points(Point::from_mm(0.0, 0.0), Point::from_mm(10.0, 20.0));
 
         assert_eq!(r1.min, r2.min);
         assert_eq!(r1.max, r2.max);
@@ -459,10 +453,7 @@ mod tests {
 
     #[test]
     fn test_rect_dimensions() {
-        let rect = Rect::from_points(
-            Point::from_mm(5.0, 10.0),
-            Point::from_mm(25.0, 40.0),
-        );
+        let rect = Rect::from_points(Point::from_mm(5.0, 10.0), Point::from_mm(25.0, 40.0));
 
         assert_eq!(rect.width(), Nm::from_mm(20.0));
         assert_eq!(rect.height(), Nm::from_mm(30.0));
@@ -470,20 +461,14 @@ mod tests {
 
     #[test]
     fn test_rect_center() {
-        let rect = Rect::from_points(
-            Point::from_mm(0.0, 0.0),
-            Point::from_mm(10.0, 20.0),
-        );
+        let rect = Rect::from_points(Point::from_mm(0.0, 0.0), Point::from_mm(10.0, 20.0));
 
         assert_eq!(rect.center(), Point::from_mm(5.0, 10.0));
     }
 
     #[test]
     fn test_rect_contains() {
-        let rect = Rect::from_points(
-            Point::from_mm(0.0, 0.0),
-            Point::from_mm(10.0, 10.0),
-        );
+        let rect = Rect::from_points(Point::from_mm(0.0, 0.0), Point::from_mm(10.0, 10.0));
 
         // Inside
         assert!(rect.contains(Point::from_mm(5.0, 5.0)));
@@ -502,44 +487,26 @@ mod tests {
 
     #[test]
     fn test_rect_intersects() {
-        let r1 = Rect::from_points(
-            Point::from_mm(0.0, 0.0),
-            Point::from_mm(10.0, 10.0),
-        );
+        let r1 = Rect::from_points(Point::from_mm(0.0, 0.0), Point::from_mm(10.0, 10.0));
 
         // Overlapping
-        let r2 = Rect::from_points(
-            Point::from_mm(5.0, 5.0),
-            Point::from_mm(15.0, 15.0),
-        );
+        let r2 = Rect::from_points(Point::from_mm(5.0, 5.0), Point::from_mm(15.0, 15.0));
         assert!(r1.intersects(&r2));
         assert!(r2.intersects(&r1));
 
         // Touching edge
-        let r3 = Rect::from_points(
-            Point::from_mm(10.0, 0.0),
-            Point::from_mm(20.0, 10.0),
-        );
+        let r3 = Rect::from_points(Point::from_mm(10.0, 0.0), Point::from_mm(20.0, 10.0));
         assert!(r1.intersects(&r3));
 
         // Completely separate
-        let r4 = Rect::from_points(
-            Point::from_mm(20.0, 20.0),
-            Point::from_mm(30.0, 30.0),
-        );
+        let r4 = Rect::from_points(Point::from_mm(20.0, 20.0), Point::from_mm(30.0, 30.0));
         assert!(!r1.intersects(&r4));
     }
 
     #[test]
     fn test_rect_intersection() {
-        let r1 = Rect::from_points(
-            Point::from_mm(0.0, 0.0),
-            Point::from_mm(10.0, 10.0),
-        );
-        let r2 = Rect::from_points(
-            Point::from_mm(5.0, 5.0),
-            Point::from_mm(15.0, 15.0),
-        );
+        let r1 = Rect::from_points(Point::from_mm(0.0, 0.0), Point::from_mm(10.0, 10.0));
+        let r2 = Rect::from_points(Point::from_mm(5.0, 5.0), Point::from_mm(15.0, 15.0));
 
         let intersection = r1.intersection(&r2).unwrap();
         assert_eq!(intersection.min, Point::from_mm(5.0, 5.0));
@@ -548,28 +515,16 @@ mod tests {
 
     #[test]
     fn test_rect_intersection_none() {
-        let r1 = Rect::from_points(
-            Point::from_mm(0.0, 0.0),
-            Point::from_mm(10.0, 10.0),
-        );
-        let r2 = Rect::from_points(
-            Point::from_mm(20.0, 20.0),
-            Point::from_mm(30.0, 30.0),
-        );
+        let r1 = Rect::from_points(Point::from_mm(0.0, 0.0), Point::from_mm(10.0, 10.0));
+        let r2 = Rect::from_points(Point::from_mm(20.0, 20.0), Point::from_mm(30.0, 30.0));
 
         assert!(r1.intersection(&r2).is_none());
     }
 
     #[test]
     fn test_rect_union() {
-        let r1 = Rect::from_points(
-            Point::from_mm(0.0, 0.0),
-            Point::from_mm(10.0, 10.0),
-        );
-        let r2 = Rect::from_points(
-            Point::from_mm(5.0, 5.0),
-            Point::from_mm(20.0, 15.0),
-        );
+        let r1 = Rect::from_points(Point::from_mm(0.0, 0.0), Point::from_mm(10.0, 10.0));
+        let r2 = Rect::from_points(Point::from_mm(5.0, 5.0), Point::from_mm(20.0, 15.0));
 
         let union = r1.union(&r2);
         assert_eq!(union.min, Point::from_mm(0.0, 0.0));
@@ -578,10 +533,7 @@ mod tests {
 
     #[test]
     fn test_rect_expand() {
-        let rect = Rect::from_points(
-            Point::from_mm(5.0, 5.0),
-            Point::from_mm(10.0, 10.0),
-        );
+        let rect = Rect::from_points(Point::from_mm(5.0, 5.0), Point::from_mm(10.0, 10.0));
         let expanded = rect.expand(Nm::from_mm(2.0));
 
         assert_eq!(expanded.min, Point::from_mm(3.0, 3.0));
@@ -590,18 +542,9 @@ mod tests {
 
     #[test]
     fn test_rect_contains_rect() {
-        let outer = Rect::from_points(
-            Point::from_mm(0.0, 0.0),
-            Point::from_mm(20.0, 20.0),
-        );
-        let inner = Rect::from_points(
-            Point::from_mm(5.0, 5.0),
-            Point::from_mm(15.0, 15.0),
-        );
-        let partial = Rect::from_points(
-            Point::from_mm(15.0, 15.0),
-            Point::from_mm(25.0, 25.0),
-        );
+        let outer = Rect::from_points(Point::from_mm(0.0, 0.0), Point::from_mm(20.0, 20.0));
+        let inner = Rect::from_points(Point::from_mm(5.0, 5.0), Point::from_mm(15.0, 15.0));
+        let partial = Rect::from_points(Point::from_mm(15.0, 15.0), Point::from_mm(25.0, 25.0));
 
         assert!(outer.contains_rect(&inner));
         assert!(!inner.contains_rect(&outer));
@@ -610,10 +553,7 @@ mod tests {
 
     #[test]
     fn test_rect_area() {
-        let rect = Rect::from_points(
-            Point::from_mm(0.0, 0.0),
-            Point::from_mm(10.0, 5.0),
-        );
+        let rect = Rect::from_points(Point::from_mm(0.0, 0.0), Point::from_mm(10.0, 5.0));
         // 10mm * 5mm = 50 mm^2 = 50 * 10^12 nm^2
         assert_eq!(rect.area(), 50_000_000_000_000i128);
     }

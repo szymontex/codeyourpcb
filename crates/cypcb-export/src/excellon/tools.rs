@@ -6,10 +6,9 @@ use std::collections::HashMap;
 
 use cypcb_core::Nm;
 
-use crate::coords::{CoordinateFormat, nm_to_gerber};
+use crate::coords::{nm_to_gerber, CoordinateFormat};
 
 /// Common drill sizes as constants.
-
 /// Default via drill diameter (0.3mm).
 pub const VIA_DRILL_DEFAULT: Nm = Nm(300_000);
 

@@ -3,14 +3,14 @@
 //! Exports copper layers (Top, Bottom, Inner) with pads, traces, and vias.
 //! Uses flash commands (D03) for pads and vias, draw commands (D01) for traces.
 
-use cypcb_world::{BoardWorld, Layer};
-use cypcb_world::footprint::FootprintLibrary;
-use cypcb_core::{Nm, Point, Rect};
-use crate::coords::{CoordinateFormat, nm_to_gerber};
-use crate::apertures::{ApertureManager, ApertureShape, aperture_for_pad};
-use crate::gerber::header::{write_header, GerberFileFunction, CopperSide};
-use cypcb_world::components::{Position, FootprintRef, Rotation};
+use crate::apertures::{aperture_for_pad, ApertureManager, ApertureShape};
+use crate::coords::{nm_to_gerber, CoordinateFormat};
+use crate::gerber::header::{write_header, CopperSide, GerberFileFunction};
+use cypcb_core::{Nm, Point};
 use cypcb_world::components::trace::{Trace, Via};
+use cypcb_world::components::{FootprintRef, Position, Rotation};
+use cypcb_world::footprint::FootprintLibrary;
+use cypcb_world::{BoardWorld, Layer};
 
 /// Export error types.
 #[derive(Debug, thiserror::Error)]
@@ -70,9 +70,7 @@ pub fn export_copper_layer(
         Layer::TopCopper => (CopperSide::Top, Some(1)),
         Layer::BottomCopper => {
             // Get total layers from board
-            let total_layers = world.board_info()
-                .map(|(_, ls)| ls.count)
-                .unwrap_or(2);
+            let total_layers = world.board_info().map(|(_, ls)| ls.count).unwrap_or(2);
             (CopperSide::Bottom, Some(total_layers))
         }
         Layer::Inner(n) => (CopperSide::Inner(n), Some(n + 1)), // L2 for first inner
@@ -80,12 +78,11 @@ pub fn export_copper_layer(
     };
 
     let function = GerberFileFunction::Copper(copper_side, layer_num);
-    let board_name = world.board_info()
-        .and_then(|(_size, _)| Some("board"))
+    let board_name = world
+        .board_info()
+        .map(|(_size, _)| "board")
         .unwrap_or("board");
-    let total_layers = world.board_info()
-        .map(|(_, ls)| ls.count)
-        .unwrap_or(2);
+    let total_layers = world.board_info().map(|(_, ls)| ls.count).unwrap_or(2);
 
     // Write header
     output.push_str(&write_header(&function, board_name, format, total_layers));
@@ -94,7 +91,14 @@ pub fn export_copper_layer(
     let mut drawing_commands = String::new();
 
     // Export pads
-    export_pads(world, library, layer, &mut apertures, &mut drawing_commands, format)?;
+    export_pads(
+        world,
+        library,
+        layer,
+        &mut apertures,
+        &mut drawing_commands,
+        format,
+    )?;
 
     // Export traces
     export_traces(world, layer, &mut apertures, &mut drawing_commands, format);
@@ -124,11 +128,14 @@ fn export_pads(
     format: &CoordinateFormat,
 ) -> Result<(), ExportError> {
     // Query all components with position and footprint
-    let mut query = world.ecs_mut().query::<(&Position, &FootprintRef, &Rotation)>();
+    let mut query = world
+        .ecs_mut()
+        .query::<(&Position, &FootprintRef, &Rotation)>();
 
     for (position, footprint_ref, rotation) in query.iter(world.ecs()) {
         // Look up footprint in library
-        let footprint = library.get(&footprint_ref.0)
+        let footprint = library
+            .get(&footprint_ref.0)
             .ok_or_else(|| ExportError::FootprintNotFound(footprint_ref.0.clone()))?;
 
         // Iterate over pads
@@ -241,7 +248,11 @@ fn export_vias(
 /// Calculate absolute pad position accounting for component rotation.
 ///
 /// Rotates the pad offset around the component origin, then adds component position.
-pub(crate) fn calculate_pad_position(component_pos: Point, pad_offset: Point, rotation_millideg: i32) -> Point {
+pub(crate) fn calculate_pad_position(
+    component_pos: Point,
+    pad_offset: Point,
+    rotation_millideg: i32,
+) -> Point {
     if rotation_millideg == 0 {
         // No rotation, simple addition
         return Point::new(
@@ -288,11 +299,12 @@ fn via_spans_layer(via: &Via, layer: Layer) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cypcb_world::{RefDes, Value, NetConnections};
-    use cypcb_world::footprint::{Footprint, PadDef};
-    use cypcb_world::components::PadShape;
+    use cypcb_core::{Point, Rect};
     use cypcb_world::components::trace::TraceSegment;
+    use cypcb_world::components::PadShape;
+    use cypcb_world::footprint::{Footprint, PadDef};
     use cypcb_world::NetId;
+    use cypcb_world::{NetConnections, RefDes, Value};
 
     #[test]
     fn test_export_empty_layer() {
@@ -322,13 +334,13 @@ mod tests {
             bounds: Rect::new(Point::ORIGIN, Point::ORIGIN),
             courtyard: Rect::new(Point::ORIGIN, Point::ORIGIN),
             pads: vec![PadDef {
-            number: "1".into(),
-            shape: PadShape::Circle,
-            position: Point::ORIGIN,
-            size: (Nm::from_mm(1.0), Nm::from_mm(1.0)),
-            drill: None,
-            layers: vec![Layer::TopCopper],
-        }],
+                number: "1".into(),
+                shape: PadShape::Circle,
+                position: Point::ORIGIN,
+                size: (Nm::from_mm(1.0), Nm::from_mm(1.0)),
+                drill: None,
+                layers: vec![Layer::TopCopper],
+            }],
         };
         library.register(footprint);
 

@@ -107,7 +107,10 @@ fn test_check_invalid_file_fails() {
         .output()
         .expect("Failed to execute cypcb check");
 
-    assert!(!output.status.success(), "Check should fail for invalid file");
+    assert!(
+        !output.status.success(),
+        "Check should fail for invalid file"
+    );
     let stderr = String::from_utf8_lossy(&output.stderr);
     // Should contain error information
     assert!(stderr.contains("cypcb::parse"));

@@ -24,11 +24,7 @@
 //! }
 //! ```
 
-use notify_debouncer_full::{
-    new_debouncer,
-    notify::RecursiveMode,
-    DebounceEventResult,
-};
+use notify_debouncer_full::{new_debouncer, notify::RecursiveMode, DebounceEventResult};
 use std::path::Path;
 use std::sync::mpsc::{channel, Receiver};
 use std::time::Duration;
@@ -180,6 +176,9 @@ mod tests {
         let _ = fs::remove_file(&test_file);
         let _ = fs::remove_dir(&temp);
 
-        assert!(event.is_none(), "Should not receive events for non-.cypcb files");
+        assert!(
+            event.is_none(),
+            "Should not receive events for non-.cypcb files"
+        );
     }
 }

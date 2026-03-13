@@ -63,7 +63,14 @@ impl SpatialEntry {
     }
 
     /// Create an entry from raw coordinates.
-    pub fn from_raw(entity: Entity, min_x: i64, min_y: i64, max_x: i64, max_y: i64, layer_mask: u32) -> Self {
+    pub fn from_raw(
+        entity: Entity,
+        min_x: i64,
+        min_y: i64,
+        max_x: i64,
+        max_y: i64,
+        layer_mask: u32,
+    ) -> Self {
         SpatialEntry {
             entity,
             envelope: AABB::from_corners([min_x, min_y], [max_x, max_y]),
@@ -143,9 +150,7 @@ impl SpatialIndex {
     /// Create an empty spatial index.
     #[inline]
     pub fn new() -> Self {
-        SpatialIndex {
-            tree: RTree::new(),
-        }
+        SpatialIndex { tree: RTree::new() }
     }
 
     /// Query all entities whose bounding boxes intersect the given region.
@@ -182,7 +187,11 @@ impl SpatialIndex {
     /// Query all entries (with full metadata) in a region.
     ///
     /// Use this when you need layer information or bounding boxes.
-    pub fn query_region_entries(&self, min: Point, max: Point) -> impl Iterator<Item = &SpatialEntry> {
+    pub fn query_region_entries(
+        &self,
+        min: Point,
+        max: Point,
+    ) -> impl Iterator<Item = &SpatialEntry> {
         let envelope = AABB::from_corners([min.x.0, min.y.0], [max.x.0, max.y.0]);
         self.tree.locate_in_envelope_intersecting(&envelope)
     }
@@ -376,21 +385,13 @@ mod tests {
 
         // Query top layer only
         let found: Vec<_> = index
-            .query_region_on_layers(
-                Point::from_mm(0.0, 0.0),
-                Point::from_mm(10.0, 10.0),
-                0b01,
-            )
+            .query_region_on_layers(Point::from_mm(0.0, 0.0), Point::from_mm(10.0, 10.0), 0b01)
             .collect();
         assert_eq!(found.len(), 2); // Entries 0 and 2
 
         // Query bottom layer only
         let found: Vec<_> = index
-            .query_region_on_layers(
-                Point::from_mm(0.0, 0.0),
-                Point::from_mm(10.0, 10.0),
-                0b10,
-            )
+            .query_region_on_layers(Point::from_mm(0.0, 0.0), Point::from_mm(10.0, 10.0), 0b10)
             .collect();
         assert_eq!(found.len(), 2); // Entries 1 and 2
     }

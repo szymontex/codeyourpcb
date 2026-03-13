@@ -180,7 +180,10 @@ mod tests {
         let cost = RoutingCost::new(&rules, 0, 1.0);
         let cardinal = cost.neighbor_cost((5, 5, 0), (6, 5, 0));
         let via = cost.neighbor_cost((5, 5, 0), (5, 5, 1));
-        assert!(via > cardinal, "Via cost {via} should exceed cardinal {cardinal}");
+        assert!(
+            via > cardinal,
+            "Via cost {via} should exceed cardinal {cardinal}"
+        );
     }
 
     #[test]

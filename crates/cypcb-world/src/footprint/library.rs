@@ -351,8 +351,8 @@ mod tests {
         assert!(fp.get_pad("32").is_some());
 
         // Check pins at each side boundary
-        assert!(fp.get_pad("8").is_some());  // End of bottom side
-        assert!(fp.get_pad("9").is_some());  // Start of right side
+        assert!(fp.get_pad("8").is_some()); // End of bottom side
+        assert!(fp.get_pad("9").is_some()); // Start of right side
         assert!(fp.get_pad("16").is_some()); // End of right side
         assert!(fp.get_pad("17").is_some()); // Start of top side
         assert!(fp.get_pad("24").is_some()); // End of top side

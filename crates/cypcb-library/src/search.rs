@@ -80,20 +80,20 @@ pub fn search_components(
     let mut stmt = conn.prepare(&sql)?;
 
     // Convert to refs for rusqlite params
-    let param_refs: Vec<&dyn rusqlite::ToSql> = params
-        .iter()
-        .map(|s| s as &dyn rusqlite::ToSql)
-        .collect();
+    let param_refs: Vec<&dyn rusqlite::ToSql> =
+        params.iter().map(|s| s as &dyn rusqlite::ToSql).collect();
 
     let results = stmt
         .query_map(param_refs.as_slice(), |row| {
             let metadata_json: String = row.get(12)?;
-            let metadata: ComponentMetadata = serde_json::from_str(&metadata_json)
-                .map_err(|e| rusqlite::Error::FromSqlConversionFailure(
-                    12,
-                    rusqlite::types::Type::Text,
-                    Box::new(e),
-                ))?;
+            let metadata: ComponentMetadata =
+                serde_json::from_str(&metadata_json).map_err(|e| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        12,
+                        rusqlite::types::Type::Text,
+                        Box::new(e),
+                    )
+                })?;
 
             let component = Component {
                 id: ComponentId {
@@ -170,7 +170,10 @@ pub fn search_by_field(
 /// Useful after bulk operations or if the index becomes corrupted.
 /// This operation can take time on large databases.
 pub fn rebuild_index(conn: &Connection) -> Result<(), LibraryError> {
-    conn.execute("INSERT INTO components_fts(components_fts) VALUES('rebuild')", [])?;
+    conn.execute(
+        "INSERT INTO components_fts(components_fts) VALUES('rebuild')",
+        [],
+    )?;
     Ok(())
 }
 

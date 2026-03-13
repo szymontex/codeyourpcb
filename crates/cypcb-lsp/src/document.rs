@@ -113,7 +113,10 @@ impl DocumentState {
             current_offset += ch.len_utf8();
         }
 
-        Position { line, character: col }
+        Position {
+            line,
+            character: col,
+        }
     }
 
     /// Convert a Position to a byte offset.
@@ -199,16 +202,28 @@ mod tests {
     fn test_position_to_offset_simple() {
         let doc = DocumentState::new("test://file".into(), "hello\nworld".into(), 1);
 
-        let offset = doc.position_to_offset(&Position { line: 0, character: 0 });
+        let offset = doc.position_to_offset(&Position {
+            line: 0,
+            character: 0,
+        });
         assert_eq!(offset, Some(0));
 
-        let offset = doc.position_to_offset(&Position { line: 0, character: 3 });
+        let offset = doc.position_to_offset(&Position {
+            line: 0,
+            character: 3,
+        });
         assert_eq!(offset, Some(3));
 
-        let offset = doc.position_to_offset(&Position { line: 1, character: 0 });
+        let offset = doc.position_to_offset(&Position {
+            line: 1,
+            character: 0,
+        });
         assert_eq!(offset, Some(6));
 
-        let offset = doc.position_to_offset(&Position { line: 1, character: 3 });
+        let offset = doc.position_to_offset(&Position {
+            line: 1,
+            character: 3,
+        });
         assert_eq!(offset, Some(9));
     }
 }

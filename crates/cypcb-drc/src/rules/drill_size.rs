@@ -3,13 +3,13 @@
 //! Validates that all through-hole pads have drill holes meeting the minimum size
 //! specified by the manufacturer's design rules.
 
-use cypcb_world::BoardWorld;
 use cypcb_world::components::{FootprintRef, Position, RefDes};
 use cypcb_world::footprint::FootprintLibrary;
+use cypcb_world::BoardWorld;
 
+use super::DrcRule;
 use crate::presets::DesignRules;
 use crate::violation::DrcViolation;
-use super::DrcRule;
 
 /// Rule that checks all drill holes meet minimum size.
 ///
@@ -45,7 +45,8 @@ impl DrcRule for MinDrillSizeRule {
         // Collect components first to avoid borrow issues
         let components: Vec<_> = {
             let ecs = world.ecs_mut();
-            let mut query = ecs.query::<(bevy_ecs::entity::Entity, &RefDes, &FootprintRef, &Position)>();
+            let mut query =
+                ecs.query::<(bevy_ecs::entity::Entity, &RefDes, &FootprintRef, &Position)>();
             query
                 .iter(ecs)
                 .map(|(e, r, f, p)| (e, r.clone(), f.clone(), *p))
@@ -67,12 +68,10 @@ impl DrcRule for MinDrillSizeRule {
                             cypcb_core::Nm(position.0.x.0 + pad.position.x.0),
                             cypcb_core::Nm(position.0.y.0 + pad.position.y.0),
                         );
-                        violations.push(DrcViolation::drill_size(
-                            entity,
-                            drill,
-                            min_drill,
-                            pad_location,
-                        ).with_pad_info(&refdes.as_str(), &pad.number));
+                        violations.push(
+                            DrcViolation::drill_size(entity, drill, min_drill, pad_location)
+                                .with_pad_info(refdes.as_str(), &pad.number),
+                        );
                     }
                 }
             }
@@ -85,8 +84,8 @@ impl DrcRule for MinDrillSizeRule {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cypcb_core::{Nm, Point};
-    use cypcb_world::components::{Rotation, Value, NetConnections};
+    use cypcb_core::Nm;
+    use cypcb_world::components::{NetConnections, Rotation, Value};
 
     #[test]
     fn test_rule_name() {
@@ -160,7 +159,10 @@ mod tests {
         };
 
         let violations = MinDrillSizeRule.check(&mut world, &rules);
-        assert!(violations.is_empty(), "SMD pads should not trigger drill violations");
+        assert!(
+            violations.is_empty(),
+            "SMD pads should not trigger drill violations"
+        );
     }
 
     #[test]
@@ -185,7 +187,10 @@ mod tests {
 
         let rules = DesignRules::default();
         let violations = MinDrillSizeRule.check(&mut world, &rules);
-        assert!(violations.is_empty(), "Unknown footprints should be skipped");
+        assert!(
+            violations.is_empty(),
+            "Unknown footprints should be skipped"
+        );
     }
 
     #[test]

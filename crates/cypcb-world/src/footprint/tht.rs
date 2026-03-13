@@ -74,10 +74,7 @@ pub fn axial_300mil() -> Footprint {
                 layers: tht_layers(),
             },
         ],
-        bounds: Rect::from_center_size(
-            Point::ORIGIN,
-            (lead_spacing + pad_size, Nm::from_mm(2.5)),
-        ),
+        bounds: Rect::from_center_size(Point::ORIGIN, (lead_spacing + pad_size, Nm::from_mm(2.5))),
         courtyard: Rect::from_center_size(
             Point::ORIGIN,
             (lead_spacing + pad_size + Nm::from_mm(0.5), Nm::from_mm(3.5)),
@@ -159,7 +156,10 @@ pub fn dip8() -> Footprint {
         bounds: Rect::from_center_size(Point::ORIGIN, (body_width, body_height)),
         courtyard: Rect::from_center_size(
             Point::ORIGIN,
-            (body_width + Nm::from_mm(0.5), body_height + Nm::from_mm(0.5)),
+            (
+                body_width + Nm::from_mm(0.5),
+                body_height + Nm::from_mm(0.5),
+            ),
         ),
     }
 }
@@ -199,10 +199,7 @@ pub fn pin_header_1x2() -> Footprint {
                 layers: tht_layers(),
             },
         ],
-        bounds: Rect::from_center_size(
-            Point::ORIGIN,
-            (pin_pitch + pad_size, Nm::from_mm(2.54)),
-        ),
+        bounds: Rect::from_center_size(Point::ORIGIN, (pin_pitch + pad_size, Nm::from_mm(2.54))),
         courtyard: Rect::from_center_size(
             Point::ORIGIN,
             (pin_pitch + pad_size + Nm::from_mm(0.5), Nm::from_mm(3.5)),

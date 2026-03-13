@@ -184,9 +184,8 @@ pub fn get_step_model_path(
     source: &str,
     component_name: &str,
 ) -> Result<Option<String>, LibraryError> {
-    let mut stmt = conn.prepare(
-        "SELECT step_model_path FROM components WHERE source = ?1 AND name = ?2",
-    )?;
+    let mut stmt =
+        conn.prepare("SELECT step_model_path FROM components WHERE source = ?1 AND name = ?2")?;
 
     let mut rows = stmt.query(params![source, component_name])?;
 
@@ -203,9 +202,8 @@ pub fn get_component_metadata(
     source: &str,
     name: &str,
 ) -> Result<Option<ComponentMetadata>, LibraryError> {
-    let mut stmt = conn.prepare(
-        "SELECT metadata_json FROM components WHERE source = ?1 AND name = ?2",
-    )?;
+    let mut stmt =
+        conn.prepare("SELECT metadata_json FROM components WHERE source = ?1 AND name = ?2")?;
 
     let mut rows = stmt.query(params![source, name])?;
 
@@ -230,8 +228,8 @@ mod tests {
         let conn = Connection::open_in_memory().unwrap();
         initialize_schema(&conn).unwrap();
 
-        let version = track_version(&conn, "kicad", "Resistors", 42, Some("Initial import"))
-            .unwrap();
+        let version =
+            track_version(&conn, "kicad", "Resistors", 42, Some("Initial import")).unwrap();
 
         assert_eq!(version.source, "kicad");
         assert_eq!(version.library_name, "Resistors");

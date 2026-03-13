@@ -90,7 +90,10 @@ impl RefDes {
     /// assert_eq!(RefDes::new("U100").prefix(), "U");
     /// ```
     pub fn prefix(&self) -> &str {
-        let end = self.0.find(|c: char| c.is_ascii_digit()).unwrap_or(self.0.len());
+        let end = self
+            .0
+            .find(|c: char| c.is_ascii_digit())
+            .unwrap_or(self.0.len());
         &self.0[..end]
     }
 
@@ -258,7 +261,10 @@ impl NetConnections {
 
     /// Get the net for a specific pin.
     pub fn pin_net(&self, pin: &str) -> Option<NetId> {
-        self.connections.iter().find(|c| c.pin == pin).map(|c| c.net)
+        self.connections
+            .iter()
+            .find(|c| c.pin == pin)
+            .map(|c| c.net)
     }
 
     /// Get all pins connected to a specific net.

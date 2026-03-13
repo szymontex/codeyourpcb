@@ -16,21 +16,21 @@
 //! assert_eq!(gerber_str, "1.000000");
 //! ```
 
-pub mod coords;
 pub mod apertures;
-pub mod gerber;
-pub mod excellon;
 pub mod bom;
+pub mod coords;
 pub mod cpl;
-pub mod presets;
+pub mod excellon;
+pub mod gerber;
 pub mod job;
+pub mod presets;
 
 // Re-export commonly used types
-pub use coords::{CoordinateFormat, Unit, nm_to_gerber, gerber_format_string};
-pub use apertures::{ApertureManager, ApertureShape, aperture_for_pad};
-pub use gerber::{write_header, GerberFileFunction, export_copper_layer};
-pub use excellon::{ToolTable, export_excellon, DrillType};
-pub use bom::{BomEntry, group_components};
-pub use cpl::{CplEntry, CplConfig};
-pub use presets::{ExportPreset, FileNaming, ExportLayers};
-pub use job::{ExportJob, ExportResult, ExportedFile, ExportError, run_export};
+pub use apertures::{aperture_for_pad, ApertureManager, ApertureShape};
+pub use bom::{group_components, BomEntry};
+pub use coords::{gerber_format_string, nm_to_gerber, CoordinateFormat, Unit};
+pub use cpl::{CplConfig, CplEntry};
+pub use excellon::{export_excellon, DrillType, ToolTable};
+pub use gerber::{export_copper_layer, write_header, GerberFileFunction};
+pub use job::{run_export, ExportError, ExportJob, ExportResult, ExportedFile};
+pub use presets::{ExportLayers, ExportPreset, FileNaming};

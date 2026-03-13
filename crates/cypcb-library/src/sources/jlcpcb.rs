@@ -63,9 +63,7 @@ impl JLCPCBSource {
             ])
             .send()
             .await
-            .map_err(|e| {
-                LibraryError::ApiError(format!("JLCPCB API request failed: {}", e))
-            })?;
+            .map_err(|e| LibraryError::ApiError(format!("JLCPCB API request failed: {}", e)))?;
 
         // Check for HTTP errors
         if !response.status().is_success() {
@@ -166,7 +164,7 @@ impl JLCPCBComponent {
             id: ComponentId::new("jlcpcb", &self.component_code),
             library: "JLCPCB Parts Catalog".to_string(),
             category: self.designator.clone(), // Use designator as category (R, C, U, etc.)
-            footprint_data: None,               // JLCPCB API doesn't provide footprint data
+            footprint_data: None,              // JLCPCB API doesn't provide footprint data
             metadata: ComponentMetadata {
                 description: self.describe.or(Some(self.component_name.clone())),
                 datasheet_url: None, // Not provided by API

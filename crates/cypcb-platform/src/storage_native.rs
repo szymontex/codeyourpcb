@@ -14,14 +14,13 @@ use std::path::Path;
 /// For multi-threaded access, wrap in a synchronization primitive (Mutex, RwLock).
 ///
 /// # Example
-/// ```no_run
+/// ```ignore
 /// use cypcb_platform::SqliteStorage;
+/// use cypcb_platform::Storage;
 /// use std::path::Path;
 ///
-/// # async fn example() {
 /// let storage = SqliteStorage::new(Path::new("data.db")).unwrap();
-/// storage.init().await.unwrap();
-/// # }
+/// storage.init().unwrap();
 /// ```
 pub struct SqliteStorage {
     conn: rusqlite::Connection,

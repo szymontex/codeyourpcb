@@ -9,9 +9,9 @@ pub mod json;
 pub use csv::export_bom_csv;
 pub use json::export_bom_json;
 
-use serde::{Deserialize, Serialize};
+use cypcb_world::components::{FootprintRef, RefDes, Value};
 use cypcb_world::BoardWorld;
-use cypcb_world::components::{RefDes, Value, FootprintRef};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// A single line in the Bill of Materials.
@@ -101,7 +101,7 @@ pub fn group_components(world: &mut BoardWorld) -> Vec<BomEntry> {
 
     for (refdes, value, footprint) in query.iter(world.ecs()) {
         let key = (value.0.clone(), footprint.0.clone());
-        groups.entry(key).or_insert_with(Vec::new).push(refdes.0.clone());
+        groups.entry(key).or_default().push(refdes.0.clone());
     }
 
     // Convert groups to BOM entries
@@ -109,7 +109,7 @@ pub fn group_components(world: &mut BoardWorld) -> Vec<BomEntry> {
         .into_iter()
         .map(|((value, footprint), mut designators)| {
             // Sort designators for consistent output
-            designators.sort_by(|a, b| natural_sort_key(a).cmp(&natural_sort_key(b)));
+            designators.sort_by_key(|a| natural_sort_key(a));
 
             let quantity = designators.len() as u32;
 
@@ -125,7 +125,8 @@ pub fn group_components(world: &mut BoardWorld) -> Vec<BomEntry> {
 
     // Sort by footprint, then value for consistent output
     bom.sort_by(|a, b| {
-        a.footprint.cmp(&b.footprint)
+        a.footprint
+            .cmp(&b.footprint)
             .then_with(|| a.value.cmp(&b.value))
     });
 
@@ -139,7 +140,9 @@ pub fn group_components(world: &mut BoardWorld) -> Vec<BomEntry> {
 ///
 /// Returns (prefix, number) tuple for comparison.
 fn natural_sort_key(refdes: &str) -> (String, u32) {
-    let end = refdes.find(|c: char| c.is_ascii_digit()).unwrap_or(refdes.len());
+    let end = refdes
+        .find(|c: char| c.is_ascii_digit())
+        .unwrap_or(refdes.len());
     let prefix = refdes[..end].to_string();
     let number = refdes[end..].parse::<u32>().unwrap_or(0);
     (prefix, number)
@@ -148,7 +151,7 @@ fn natural_sort_key(refdes: &str) -> (String, u32) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cypcb_world::{Position, Rotation, NetConnections};
+    use cypcb_world::{NetConnections, Position, Rotation};
 
     #[test]
     fn test_natural_sort_key() {

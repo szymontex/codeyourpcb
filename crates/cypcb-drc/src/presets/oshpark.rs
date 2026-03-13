@@ -39,13 +39,13 @@ impl DesignRules {
     /// ```
     pub fn oshpark_2layer() -> Self {
         DesignRules {
-            min_clearance: Nm::from_mm(0.15),        // 6 mil
-            min_trace_width: Nm::from_mm(0.15),      // 6 mil
-            min_drill_size: Nm::from_mm(0.254),      // 10 mil
-            min_via_drill: Nm::from_mm(0.254),       // 10 mil
-            min_annular_ring: Nm::from_mm(0.127),    // 5 mil
-            min_silk_width: Nm::from_mm(0.127),      // 5 mil
-            min_edge_clearance: Nm::from_mm(0.381),  // 15 mil
+            min_clearance: Nm::from_mm(0.15),       // 6 mil
+            min_trace_width: Nm::from_mm(0.15),     // 6 mil
+            min_drill_size: Nm::from_mm(0.254),     // 10 mil
+            min_via_drill: Nm::from_mm(0.254),      // 10 mil
+            min_annular_ring: Nm::from_mm(0.127),   // 5 mil
+            min_silk_width: Nm::from_mm(0.127),     // 5 mil
+            min_edge_clearance: Nm::from_mm(0.381), // 15 mil
         }
     }
 
@@ -77,13 +77,13 @@ impl DesignRules {
     /// ```
     pub fn oshpark_4layer() -> Self {
         DesignRules {
-            min_clearance: Nm::from_mm(0.127),       // 5 mil
-            min_trace_width: Nm::from_mm(0.127),     // 5 mil
-            min_drill_size: Nm::from_mm(0.254),      // 10 mil
-            min_via_drill: Nm::from_mm(0.254),       // 10 mil
-            min_annular_ring: Nm::from_mm(0.1),      // 4 mil
-            min_silk_width: Nm::from_mm(0.127),      // 5 mil
-            min_edge_clearance: Nm::from_mm(0.381),  // 15 mil
+            min_clearance: Nm::from_mm(0.127),      // 5 mil
+            min_trace_width: Nm::from_mm(0.127),    // 5 mil
+            min_drill_size: Nm::from_mm(0.254),     // 10 mil
+            min_via_drill: Nm::from_mm(0.254),      // 10 mil
+            min_annular_ring: Nm::from_mm(0.1),     // 4 mil
+            min_silk_width: Nm::from_mm(0.127),     // 5 mil
+            min_edge_clearance: Nm::from_mm(0.381), // 15 mil
         }
     }
 
@@ -115,13 +115,13 @@ impl DesignRules {
     /// ```
     pub fn jlcpcb_advanced_2layer() -> Self {
         DesignRules {
-            min_clearance: Nm::from_mm(0.09),        // 3.5 mil
-            min_trace_width: Nm::from_mm(0.09),      // 3.5 mil
-            min_drill_size: Nm::from_mm(0.15),       // 0.15mm
-            min_via_drill: Nm::from_mm(0.15),        // 0.15mm micro via
-            min_annular_ring: Nm::from_mm(0.1),      // 4 mil
-            min_silk_width: Nm::from_mm(0.1),        // 0.1mm
-            min_edge_clearance: Nm::from_mm(0.2),    // 0.2mm
+            min_clearance: Nm::from_mm(0.09),     // 3.5 mil
+            min_trace_width: Nm::from_mm(0.09),   // 3.5 mil
+            min_drill_size: Nm::from_mm(0.15),    // 0.15mm
+            min_via_drill: Nm::from_mm(0.15),     // 0.15mm micro via
+            min_annular_ring: Nm::from_mm(0.1),   // 4 mil
+            min_silk_width: Nm::from_mm(0.1),     // 0.1mm
+            min_edge_clearance: Nm::from_mm(0.2), // 0.2mm
         }
     }
 
@@ -152,13 +152,13 @@ impl DesignRules {
     /// ```
     pub fn jlcpcb_advanced_4layer() -> Self {
         DesignRules {
-            min_clearance: Nm::from_mm(0.09),        // 3.5 mil
-            min_trace_width: Nm::from_mm(0.09),      // 3.5 mil
-            min_drill_size: Nm::from_mm(0.15),       // 0.15mm
-            min_via_drill: Nm::from_mm(0.15),        // 0.15mm
-            min_annular_ring: Nm::from_mm(0.1),      // 4 mil
-            min_silk_width: Nm::from_mm(0.1),        // 0.1mm
-            min_edge_clearance: Nm::from_mm(0.2),    // 0.2mm
+            min_clearance: Nm::from_mm(0.09),     // 3.5 mil
+            min_trace_width: Nm::from_mm(0.09),   // 3.5 mil
+            min_drill_size: Nm::from_mm(0.15),    // 0.15mm
+            min_via_drill: Nm::from_mm(0.15),     // 0.15mm
+            min_annular_ring: Nm::from_mm(0.1),   // 4 mil
+            min_silk_width: Nm::from_mm(0.1),     // 0.1mm
+            min_edge_clearance: Nm::from_mm(0.2), // 0.2mm
         }
     }
 }

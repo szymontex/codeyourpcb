@@ -104,7 +104,7 @@ pub fn export_bom_csv(world: &mut BoardWorld) -> Result<String, Box<dyn std::err
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cypcb_world::{RefDes, Value, Position, Rotation, FootprintRef, NetConnections};
+    use cypcb_world::{FootprintRef, NetConnections, Position, RefDes, Rotation, Value};
 
     #[test]
     fn test_export_bom_csv_empty() {

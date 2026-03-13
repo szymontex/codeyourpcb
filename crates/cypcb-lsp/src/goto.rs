@@ -65,8 +65,12 @@ pub fn goto_definition(doc: &DocumentState, position: &Position) -> Option<Locat
                 for assign in &comp.net_assignments {
                     if offset >= assign.net.span.start && offset < assign.net.span.end {
                         // Navigate to net definition
-                        return find_definition_location(ast, &assign.net.value, DefinitionKind::Net)
-                            .map(|span| Location::from_span(doc, &span));
+                        return find_definition_location(
+                            ast,
+                            &assign.net.value,
+                            DefinitionKind::Net,
+                        )
+                        .map(|span| Location::from_span(doc, &span));
                     }
                 }
 
@@ -74,8 +78,12 @@ pub fn goto_definition(doc: &DocumentState, position: &Position) -> Option<Locat
                 let fp_span = &comp.footprint.span;
                 // Check if we're in the footprint string content (not just the span)
                 if offset >= fp_span.start && offset < fp_span.end {
-                    return find_definition_location(ast, &comp.footprint.value, DefinitionKind::Footprint)
-                        .map(|span| Location::from_span(doc, &span));
+                    return find_definition_location(
+                        ast,
+                        &comp.footprint.value,
+                        DefinitionKind::Footprint,
+                    )
+                    .map(|span| Location::from_span(doc, &span));
                 }
             }
             Definition::Net(net) => {
@@ -140,7 +148,11 @@ fn find_component_location(ast: &SourceFile, refdes: &str) -> Option<Span> {
 }
 
 /// Find the location of a definition by name and kind.
-pub fn find_definition_location(ast: &SourceFile, name: &str, kind: DefinitionKind) -> Option<Span> {
+pub fn find_definition_location(
+    ast: &SourceFile,
+    name: &str,
+    kind: DefinitionKind,
+) -> Option<Span> {
     for def in &ast.definitions {
         match (def, kind) {
             (Definition::Component(comp), DefinitionKind::Component) => {
@@ -176,7 +188,8 @@ mod tests {
 
     #[test]
     fn test_goto_component_from_pin_ref() {
-        let doc = make_doc(r#"
+        let doc = make_doc(
+            r#"
 component R1 resistor "0402" {
     at 10mm, 10mm
 }
@@ -186,11 +199,15 @@ net VCC {
     R1.1
     C1.1
 }
-"#);
+"#,
+        );
 
         // Position on "R1" in the pin reference R1.1
         // Net VCC starts at around line 7, pin refs are on line 8 and 9
-        let pos = Position { line: 7, character: 4 };
+        let pos = Position {
+            line: 7,
+            character: 4,
+        };
         let loc = goto_definition(&doc, &pos);
 
         assert!(loc.is_some(), "Expected to find R1 component definition");
@@ -201,7 +218,8 @@ net VCC {
 
     #[test]
     fn test_goto_net_from_assignment() {
-        let doc = make_doc(r#"
+        let doc = make_doc(
+            r#"
 net VCC {
     R1.1
 }
@@ -209,10 +227,14 @@ net VCC {
 component R1 resistor "0402" {
     pin.1 = VCC
 }
-"#);
+"#,
+        );
 
         // Position on "VCC" in the assignment
-        let pos = Position { line: 6, character: 12 };
+        let pos = Position {
+            line: 6,
+            character: 12,
+        };
         let loc = goto_definition(&doc, &pos);
 
         assert!(loc.is_some(), "Expected to find VCC net definition");
@@ -223,17 +245,22 @@ component R1 resistor "0402" {
 
     #[test]
     fn test_goto_custom_footprint() {
-        let doc = make_doc(r#"
+        let doc = make_doc(
+            r#"
 footprint MY_FP {
     pad 1 rect at 0mm, 0mm size 1mm x 0.5mm
 }
 
 component R1 resistor "MY_FP" {}
-"#);
+"#,
+        );
 
         // Position inside the footprint string "MY_FP"
         // Component is on line 5, footprint string is around character 24
-        let pos = Position { line: 5, character: 25 };
+        let pos = Position {
+            line: 5,
+            character: 25,
+        };
         let loc = goto_definition(&doc, &pos);
 
         assert!(loc.is_some(), "Expected to find MY_FP footprint definition");
@@ -244,21 +271,30 @@ component R1 resistor "MY_FP" {}
 
     #[test]
     fn test_goto_builtin_footprint_returns_none() {
-        let doc = make_doc(r#"
+        let doc = make_doc(
+            r#"
 component R1 resistor "0402" {}
-"#);
+"#,
+        );
 
         // Position inside the footprint string "0402"
-        let pos = Position { line: 1, character: 24 };
+        let pos = Position {
+            line: 1,
+            character: 24,
+        };
         let loc = goto_definition(&doc, &pos);
 
         // Built-in footprints have no definition location
-        assert!(loc.is_none(), "Built-in footprints should not have definition location");
+        assert!(
+            loc.is_none(),
+            "Built-in footprints should not have definition location"
+        );
     }
 
     #[test]
     fn test_goto_component_from_trace() {
-        let doc = make_doc(r#"
+        let doc = make_doc(
+            r#"
 component R1 resistor "0402" {}
 component C1 capacitor "0603" {}
 
@@ -266,10 +302,14 @@ trace VCC {
     from R1.1
     to C1.1
 }
-"#);
+"#,
+        );
 
         // Position on "R1" in "from R1.1"
-        let pos = Position { line: 5, character: 9 };
+        let pos = Position {
+            line: 5,
+            character: 9,
+        };
         let loc = goto_definition(&doc, &pos);
 
         assert!(loc.is_some(), "Expected to find R1 component from trace");
@@ -280,16 +320,21 @@ trace VCC {
 
     #[test]
     fn test_goto_net_from_trace() {
-        let doc = make_doc(r#"
+        let doc = make_doc(
+            r#"
 net VCC { R1.1 }
 
 trace VCC {
     from R1.1
 }
-"#);
+"#,
+        );
 
         // Position on "VCC" net name in trace definition
-        let pos = Position { line: 3, character: 6 };
+        let pos = Position {
+            line: 3,
+            character: 6,
+        };
         let loc = goto_definition(&doc, &pos);
 
         assert!(loc.is_some(), "Expected to find VCC net from trace");
@@ -300,10 +345,12 @@ trace VCC {
 
     #[test]
     fn test_find_definition_location_component() {
-        let doc = make_doc(r#"
+        let doc = make_doc(
+            r#"
 component R1 resistor "0402" {}
 component C1 capacitor "0603" {}
-"#);
+"#,
+        );
 
         let ast = doc.ast.as_ref().unwrap();
         let span = find_definition_location(ast, "C1", DefinitionKind::Component);
@@ -312,10 +359,12 @@ component C1 capacitor "0603" {}
 
     #[test]
     fn test_find_definition_location_net() {
-        let doc = make_doc(r#"
+        let doc = make_doc(
+            r#"
 net VCC { R1.1 }
 net GND { R1.2 }
-"#);
+"#,
+        );
 
         let ast = doc.ast.as_ref().unwrap();
         let span = find_definition_location(ast, "GND", DefinitionKind::Net);

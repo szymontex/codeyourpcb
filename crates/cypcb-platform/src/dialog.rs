@@ -117,9 +117,7 @@ impl Dialog {
     pub async fn pick_folder() -> Result<Option<PathBuf>, PlatformError> {
         #[cfg(not(target_arch = "wasm32"))]
         {
-            let handle = rfd::AsyncFileDialog::new()
-                .pick_folder()
-                .await;
+            let handle = rfd::AsyncFileDialog::new().pick_folder().await;
 
             Ok(handle.map(|h| h.path().to_path_buf()))
         }

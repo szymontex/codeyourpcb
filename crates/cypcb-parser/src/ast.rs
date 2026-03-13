@@ -208,6 +208,7 @@ pub enum LayerType {
 
 impl LayerType {
     /// Parse a layer type from a string.
+    #[allow(clippy::should_implement_trait)] // Returns Option, not Result — different semantics than FromStr
     pub fn from_str(s: &str) -> Option<Self> {
         match s {
             "copper" => Some(LayerType::Copper),
@@ -269,6 +270,7 @@ pub enum ComponentKind {
 
 impl ComponentKind {
     /// Parse a component kind from a string.
+    #[allow(clippy::should_implement_trait)] // Returns Option, not Result — different semantics than FromStr
     pub fn from_str(s: &str) -> Option<Self> {
         match s {
             "resistor" => Some(ComponentKind::Resistor),
@@ -411,6 +413,7 @@ pub enum CurrentUnit {
 
 impl CurrentUnit {
     /// Parse a current unit from a string.
+    #[allow(clippy::should_implement_trait)] // Returns Option, not Result — different semantics than FromStr
     pub fn from_str(s: &str) -> Option<Self> {
         match s {
             "mA" => Some(CurrentUnit::Milliamps),
@@ -571,6 +574,7 @@ pub enum PadShape {
 
 impl PadShape {
     /// Parse a pad shape from a string.
+    #[allow(clippy::should_implement_trait)] // Returns Option, not Result — different semantics than FromStr
     pub fn from_str(s: &str) -> Option<Self> {
         match s {
             "rect" => Some(PadShape::Rect),
@@ -648,6 +652,7 @@ pub enum ZoneKind {
 
 impl ZoneKind {
     /// Parse a zone kind from a string.
+    #[allow(clippy::should_implement_trait)] // Returns Option, not Result — different semantics than FromStr
     pub fn from_str(s: &str) -> Option<Self> {
         match s {
             "keepout" => Some(ZoneKind::Keepout),
@@ -827,19 +832,13 @@ impl AssertExpression {
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum AssertOperand {
     /// A qualified name like `R1.value`.
-    QualifiedName {
-        parts: Vec<String>,
-        span: Span,
-    },
+    QualifiedName { parts: Vec<String>, span: Span },
     /// A physical value like `10kohm`.
     Physical(PhysicalValue),
     /// A dimension value like `0.3mm`.
     Dimension(Dimension),
     /// A bare number.
-    Number {
-        value: f64,
-        span: Span,
-    },
+    Number { value: f64, span: Span },
 }
 
 impl AssertOperand {
@@ -867,6 +866,7 @@ pub enum ComparisonOp {
 
 impl ComparisonOp {
     /// Parse a comparison operator from a string.
+    #[allow(clippy::should_implement_trait)] // Returns Option, not Result — different semantics than FromStr
     pub fn from_str(s: &str) -> Option<Self> {
         match s {
             "==" => Some(ComparisonOp::Eq),
@@ -953,7 +953,10 @@ mod tests {
 
     #[test]
     fn test_component_kind_parse() {
-        assert_eq!(ComponentKind::from_str("resistor"), Some(ComponentKind::Resistor));
+        assert_eq!(
+            ComponentKind::from_str("resistor"),
+            Some(ComponentKind::Resistor)
+        );
         assert_eq!(ComponentKind::from_str("ic"), Some(ComponentKind::Ic));
         assert_eq!(ComponentKind::from_str("unknown"), None);
     }

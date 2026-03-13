@@ -54,8 +54,7 @@ use cypcb_parser::ast::{
 use crate::components::{
     trace::{Trace, TraceSegment, TraceSource},
     ComponentKind, FootprintRef, Layer, NetConnections, PadShape as EcsPadShape, PinConnection,
-    Position, RefDes, Rotation, SourceSpan as EcsSourceSpan, Value, Zone,
-    ZoneKind as EcsZoneKind,
+    Position, RefDes, Rotation, SourceSpan as EcsSourceSpan, Value, Zone, ZoneKind as EcsZoneKind,
 };
 use crate::footprint::{Footprint, FootprintLibrary, PadDef as FootprintPadDef};
 use crate::world::BoardWorld;
@@ -146,7 +145,12 @@ impl fmt::Display for SyncError {
             SyncError::UnknownComponent { component, .. } => {
                 write!(f, "unknown component: '{}'", component)
             }
-            SyncError::InvalidTracePin { net, component, pin, .. } => {
+            SyncError::InvalidTracePin {
+                net,
+                component,
+                pin,
+                ..
+            } => {
                 write!(f, "trace '{}': invalid pin {}.{}", net, component, pin)
             }
             SyncError::MissingNet { net, .. } => {
@@ -164,24 +168,12 @@ impl std::error::Error for SyncError {}
 impl Diagnostic for SyncError {
     fn code<'a>(&'a self) -> Option<Box<dyn fmt::Display + 'a>> {
         match self {
-            SyncError::UnknownFootprint { .. } => {
-                Some(Box::new("cypcb::sync::unknown_footprint"))
-            }
-            SyncError::DuplicateRefDes { .. } => {
-                Some(Box::new("cypcb::sync::duplicate_refdes"))
-            }
-            SyncError::UnknownComponent { .. } => {
-                Some(Box::new("cypcb::sync::unknown_component"))
-            }
-            SyncError::InvalidTracePin { .. } => {
-                Some(Box::new("cypcb::sync::invalid_trace_pin"))
-            }
-            SyncError::MissingNet { .. } => {
-                Some(Box::new("cypcb::sync::missing_net"))
-            }
-            SyncError::UnknownLayer { .. } => {
-                Some(Box::new("cypcb::sync::unknown_layer"))
-            }
+            SyncError::UnknownFootprint { .. } => Some(Box::new("cypcb::sync::unknown_footprint")),
+            SyncError::DuplicateRefDes { .. } => Some(Box::new("cypcb::sync::duplicate_refdes")),
+            SyncError::UnknownComponent { .. } => Some(Box::new("cypcb::sync::unknown_component")),
+            SyncError::InvalidTracePin { .. } => Some(Box::new("cypcb::sync::invalid_trace_pin")),
+            SyncError::MissingNet { .. } => Some(Box::new("cypcb::sync::missing_net")),
+            SyncError::UnknownLayer { .. } => Some(Box::new("cypcb::sync::unknown_layer")),
         }
     }
 
@@ -222,36 +214,35 @@ impl Diagnostic for SyncError {
     fn labels(&self) -> Option<Box<dyn Iterator<Item = LabeledSpan> + '_>> {
         match self {
             SyncError::UnknownFootprint { span, .. } => {
-                Some(Box::new(std::iter::once(
-                    LabeledSpan::new_with_span(Some("footprint not found in library".to_string()), *span)
-                )))
+                Some(Box::new(std::iter::once(LabeledSpan::new_with_span(
+                    Some("footprint not found in library".to_string()),
+                    *span,
+                ))))
             }
-            SyncError::DuplicateRefDes { first, duplicate, .. } => {
-                Some(Box::new(vec![
+            SyncError::DuplicateRefDes {
+                first, duplicate, ..
+            } => Some(Box::new(
+                vec![
                     LabeledSpan::new_with_span(Some("first defined here".to_string()), *first),
-                    LabeledSpan::new_with_span(Some("duplicate definition".to_string()), *duplicate),
-                ].into_iter()))
-            }
-            SyncError::UnknownComponent { span, .. } => {
-                Some(Box::new(std::iter::once(
-                    LabeledSpan::new_with_span(Some("component not defined".to_string()), *span)
-                )))
-            }
-            SyncError::InvalidTracePin { span, .. } => {
-                Some(Box::new(std::iter::once(
-                    LabeledSpan::new_with_span(Some("invalid pin reference".to_string()), *span)
-                )))
-            }
-            SyncError::MissingNet { span, .. } => {
-                Some(Box::new(std::iter::once(
-                    LabeledSpan::new_with_span(Some("net not defined".to_string()), *span)
-                )))
-            }
-            SyncError::UnknownLayer { span, .. } => {
-                Some(Box::new(std::iter::once(
-                    LabeledSpan::new_with_span(Some("unknown layer".to_string()), *span)
-                )))
-            }
+                    LabeledSpan::new_with_span(
+                        Some("duplicate definition".to_string()),
+                        *duplicate,
+                    ),
+                ]
+                .into_iter(),
+            )),
+            SyncError::UnknownComponent { span, .. } => Some(Box::new(std::iter::once(
+                LabeledSpan::new_with_span(Some("component not defined".to_string()), *span),
+            ))),
+            SyncError::InvalidTracePin { span, .. } => Some(Box::new(std::iter::once(
+                LabeledSpan::new_with_span(Some("invalid pin reference".to_string()), *span),
+            ))),
+            SyncError::MissingNet { span, .. } => Some(Box::new(std::iter::once(
+                LabeledSpan::new_with_span(Some("net not defined".to_string()), *span),
+            ))),
+            SyncError::UnknownLayer { span, .. } => Some(Box::new(std::iter::once(
+                LabeledSpan::new_with_span(Some("unknown layer".to_string()), *span),
+            ))),
         }
     }
 }
@@ -388,12 +379,10 @@ pub fn sync_ast_to_world(
 
     // Rebuild spatial index after all entities are added (including traces/vias)
     world.rebuild_spatial_index_with_traces(|name| {
-        lib.get(name)
-            .map(|fp| fp.courtyard)
-            .unwrap_or_else(|| {
-                // Default 1mm x 1mm bounds for unknown footprints
-                Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(1.0), Nm::from_mm(1.0)))
-            })
+        lib.get(name).map(|fp| fp.courtyard).unwrap_or_else(|| {
+            // Default 1mm x 1mm bounds for unknown footprints
+            Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(1.0), Nm::from_mm(1.0)))
+        })
     });
 
     result
@@ -580,10 +569,10 @@ fn sync_zone(zone_def: &ZoneDef, world: &mut BoardWorld, _result: &mut SyncResul
 
     // Parse layer to layer mask
     let layer_mask = match zone_def.layer.as_deref() {
-        Some("top") => 0b01,      // Layer 0 (top copper)
-        Some("bottom") => 0b10,   // Layer 1 (bottom copper)
+        Some("top") => 0b01,              // Layer 0 (top copper)
+        Some("bottom") => 0b10,           // Layer 1 (bottom copper)
         Some("all") | None => 0xFFFFFFFF, // All layers
-        Some(_) => 0xFFFFFFFF,    // Unknown layer defaults to all
+        Some(_) => 0xFFFFFFFF,            // Unknown layer defaults to all
     };
 
     // Create zone component
@@ -657,19 +646,27 @@ fn sync_trace(
 
     // Get positions for from/to pins (if specified)
     let from_position = if let Some(ref pin_ref) = trace_def.from {
-        match get_pin_position(world, component_entities, pin_ref, source, result, &trace_def.net.value) {
-            Some(pos) => Some(pos),
-            None => None, // Error already recorded
-        }
+        get_pin_position(
+            world,
+            component_entities,
+            pin_ref,
+            source,
+            result,
+            &trace_def.net.value,
+        )
     } else {
         None
     };
 
     let to_position = if let Some(ref pin_ref) = trace_def.to {
-        match get_pin_position(world, component_entities, pin_ref, source, result, &trace_def.net.value) {
-            Some(pos) => Some(pos),
-            None => None, // Error already recorded
-        }
+        get_pin_position(
+            world,
+            component_entities,
+            pin_ref,
+            source,
+            result,
+            &trace_def.net.value,
+        )
     } else {
         None
     };
@@ -899,7 +896,11 @@ board test {
 }
 "#;
         let parse_result = parse(source);
-        assert!(parse_result.is_ok(), "parse errors: {:?}", parse_result.errors);
+        assert!(
+            parse_result.is_ok(),
+            "parse errors: {:?}",
+            parse_result.errors
+        );
 
         let mut world = BoardWorld::new();
         let lib = FootprintLibrary::new();
@@ -930,7 +931,11 @@ component R1 resistor "0402" {
 }
 "#;
         let parse_result = parse(source);
-        assert!(parse_result.is_ok(), "parse errors: {:?}", parse_result.errors);
+        assert!(
+            parse_result.is_ok(),
+            "parse errors: {:?}",
+            parse_result.errors
+        );
 
         let mut world = BoardWorld::new();
         let lib = FootprintLibrary::new();
@@ -971,7 +976,11 @@ net VCC {
 }
 "#;
         let parse_result = parse(source);
-        assert!(parse_result.is_ok(), "parse errors: {:?}", parse_result.errors);
+        assert!(
+            parse_result.is_ok(),
+            "parse errors: {:?}",
+            parse_result.errors
+        );
 
         let mut world = BoardWorld::new();
         let lib = FootprintLibrary::new();
@@ -1015,7 +1024,10 @@ component R1 resistor "UNKNOWN_FOOTPRINT" {
 
         assert!(result.has_errors());
         assert_eq!(result.errors.len(), 1);
-        assert!(matches!(result.errors[0], SyncError::UnknownFootprint { .. }));
+        assert!(matches!(
+            result.errors[0],
+            SyncError::UnknownFootprint { .. }
+        ));
 
         // Component should still be created
         assert_eq!(world.component_count(), 1);
@@ -1039,7 +1051,10 @@ component R1 resistor "0402" { at 20mm, 20mm }
 
         assert!(result.has_errors());
         assert_eq!(result.errors.len(), 1);
-        assert!(matches!(result.errors[0], SyncError::DuplicateRefDes { .. }));
+        assert!(matches!(
+            result.errors[0],
+            SyncError::DuplicateRefDes { .. }
+        ));
 
         // Both components are created (error doesn't stop sync)
         assert_eq!(world.component_count(), 2);
@@ -1066,7 +1081,10 @@ net VCC {
 
         assert!(result.has_errors());
         assert_eq!(result.errors.len(), 1);
-        assert!(matches!(result.errors[0], SyncError::UnknownComponent { .. }));
+        assert!(matches!(
+            result.errors[0],
+            SyncError::UnknownComponent { .. }
+        ));
     }
 
     #[test]
@@ -1080,7 +1098,11 @@ net ANODE {
 }
 "#;
         let parse_result = parse(source);
-        assert!(parse_result.is_ok(), "parse errors: {:?}", parse_result.errors);
+        assert!(
+            parse_result.is_ok(),
+            "parse errors: {:?}",
+            parse_result.errors
+        );
 
         let mut world = BoardWorld::new();
         let lib = FootprintLibrary::new();
@@ -1092,7 +1114,8 @@ net ANODE {
         let led = world.find_by_refdes("LED1").unwrap();
         let conns = world.get::<NetConnections>(led).unwrap();
         let anode_net = world.get_net("ANODE").unwrap();
-        assert_eq!(conns.pin_net("anode"), Some(anode_net));
+        // "anode" is normalized to pin "1" by normalize_pin_name during sync
+        assert_eq!(conns.pin_net("1"), Some(anode_net));
     }
 
     #[test]
@@ -1135,7 +1158,11 @@ net LED_SIGNAL {
 }
 "#;
         let parse_result = parse(source);
-        assert!(parse_result.is_ok(), "parse errors: {:?}", parse_result.errors);
+        assert!(
+            parse_result.is_ok(),
+            "parse errors: {:?}",
+            parse_result.errors
+        );
 
         let mut world = BoardWorld::new();
         let lib = FootprintLibrary::new();
@@ -1222,7 +1249,9 @@ component R1 resistor "0402" { at 10mm, 10mm }
         assert!(result.is_ok());
 
         let r1 = world.find_by_refdes("R1").unwrap();
-        let span = world.get::<EcsSourceSpan>(r1).expect("should have source span");
+        let span = world
+            .get::<EcsSourceSpan>(r1)
+            .expect("should have source span");
         assert!(span.start_byte > 0); // Not at start of file
         assert!(span.end_byte > span.start_byte);
     }
@@ -1238,7 +1267,11 @@ keepout antenna_area {
 }
 "#;
         let parse_result = parse(source);
-        assert!(parse_result.is_ok(), "parse errors: {:?}", parse_result.errors);
+        assert!(
+            parse_result.is_ok(),
+            "parse errors: {:?}",
+            parse_result.errors
+        );
 
         let mut world = BoardWorld::new();
         let lib = FootprintLibrary::new();
@@ -1274,7 +1307,11 @@ zone gnd_pour {
 }
 "#;
         let parse_result = parse(source);
-        assert!(parse_result.is_ok(), "parse errors: {:?}", parse_result.errors);
+        assert!(
+            parse_result.is_ok(),
+            "parse errors: {:?}",
+            parse_result.errors
+        );
 
         let mut world = BoardWorld::new();
         let lib = FootprintLibrary::new();
@@ -1305,7 +1342,11 @@ keepout restricted {
 }
 "#;
         let parse_result = parse(source);
-        assert!(parse_result.is_ok(), "parse errors: {:?}", parse_result.errors);
+        assert!(
+            parse_result.is_ok(),
+            "parse errors: {:?}",
+            parse_result.errors
+        );
 
         let mut world = BoardWorld::new();
         let lib = FootprintLibrary::new();
@@ -1338,7 +1379,11 @@ component R1 resistor "CUSTOM_2PIN" {
 }
 "#;
         let parse_result = parse(source);
-        assert!(parse_result.is_ok(), "parse errors: {:?}", parse_result.errors);
+        assert!(
+            parse_result.is_ok(),
+            "parse errors: {:?}",
+            parse_result.errors
+        );
 
         let mut world = BoardWorld::new();
         let lib = FootprintLibrary::new();
@@ -1382,7 +1427,11 @@ component U1 ic "MY_DIP8" {
 }
 "#;
         let parse_result = parse(source);
-        assert!(parse_result.is_ok(), "parse errors: {:?}", parse_result.errors);
+        assert!(
+            parse_result.is_ok(),
+            "parse errors: {:?}",
+            parse_result.errors
+        );
 
         let mut world = BoardWorld::new();
         let lib = FootprintLibrary::new();
@@ -1416,7 +1465,11 @@ trace VCC {
 }
 "#;
         let parse_result = parse(source);
-        assert!(parse_result.is_ok(), "parse errors: {:?}", parse_result.errors);
+        assert!(
+            parse_result.is_ok(),
+            "parse errors: {:?}",
+            parse_result.errors
+        );
 
         let mut world = BoardWorld::new();
         let lib = FootprintLibrary::new();
@@ -1462,7 +1515,11 @@ trace SIG {
 }
 "#;
         let parse_result = parse(source);
-        assert!(parse_result.is_ok(), "parse errors: {:?}", parse_result.errors);
+        assert!(
+            parse_result.is_ok(),
+            "parse errors: {:?}",
+            parse_result.errors
+        );
 
         let mut world = BoardWorld::new();
         let lib = FootprintLibrary::new();
@@ -1497,7 +1554,11 @@ trace VCC {
 }
 "#;
         let parse_result = parse(source);
-        assert!(parse_result.is_ok(), "parse errors: {:?}", parse_result.errors);
+        assert!(
+            parse_result.is_ok(),
+            "parse errors: {:?}",
+            parse_result.errors
+        );
 
         let mut world = BoardWorld::new();
         let lib = FootprintLibrary::new();
@@ -1527,7 +1588,11 @@ trace UNDEFINED_NET {
 }
 "#;
         let parse_result = parse(source);
-        assert!(parse_result.is_ok(), "parse errors: {:?}", parse_result.errors);
+        assert!(
+            parse_result.is_ok(),
+            "parse errors: {:?}",
+            parse_result.errors
+        );
 
         let mut world = BoardWorld::new();
         let lib = FootprintLibrary::new();
@@ -1554,7 +1619,11 @@ trace VCC {
 }
 "#;
         let parse_result = parse(source);
-        assert!(parse_result.is_ok(), "parse errors: {:?}", parse_result.errors);
+        assert!(
+            parse_result.is_ok(),
+            "parse errors: {:?}",
+            parse_result.errors
+        );
 
         let mut world = BoardWorld::new();
         let lib = FootprintLibrary::new();
@@ -1562,6 +1631,9 @@ trace VCC {
         let result = sync_ast_to_world(&parse_result.value, source, &mut world, &lib);
 
         assert!(result.has_errors());
-        assert!(matches!(result.errors[0], SyncError::InvalidTracePin { .. }));
+        assert!(matches!(
+            result.errors[0],
+            SyncError::InvalidTracePin { .. }
+        ));
     }
 }

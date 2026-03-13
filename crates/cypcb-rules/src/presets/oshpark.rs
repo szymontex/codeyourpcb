@@ -25,46 +25,46 @@ use crate::stackup::{LayerStackEntry, Stackup};
 pub fn two_layer() -> DesignConstraints {
     DesignConstraints {
         // Basic geometry
-        min_clearance: Nm::from_mm(0.15),              // 6 mil
-        min_trace_width: Nm::from_mm(0.15),            // 6 mil
-        min_drill_size: Nm::from_mm(0.254),            // 10 mil
-        min_via_drill: Nm::from_mm(0.254),             // 10 mil
-        min_annular_ring: Nm::from_mm(0.127),          // 5 mil
-        min_silk_width: Nm::from_mm(0.127),            // 5 mil
-        min_edge_clearance: Nm::from_mm(0.381),        // 15 mil
+        min_clearance: Nm::from_mm(0.15),       // 6 mil
+        min_trace_width: Nm::from_mm(0.15),     // 6 mil
+        min_drill_size: Nm::from_mm(0.254),     // 10 mil
+        min_via_drill: Nm::from_mm(0.254),      // 10 mil
+        min_annular_ring: Nm::from_mm(0.127),   // 5 mil
+        min_silk_width: Nm::from_mm(0.127),     // 5 mil
+        min_edge_clearance: Nm::from_mm(0.381), // 15 mil
 
         // Advanced geometry
-        min_via_annular_ring: Nm::from_mm(0.127),      // 5 mil
-        max_drill_aspect_ratio: 800,                    // 8:1
-        min_solder_mask_bridge: Nm::from_mm(0.1),      // 4 mil
-        min_paste_clearance: Nm::from_mm(0.127),       // 5 mil
-        solder_mask_expansion: Nm::from_mm(0.05),      // 0.05mm
-        min_pad_size: Nm::from_mm(0.508),              // 20 mil
-        min_slot_clearance: Nm::from_mm(0.381),        // 15 mil
+        min_via_annular_ring: Nm::from_mm(0.127), // 5 mil
+        max_drill_aspect_ratio: 800,              // 8:1
+        min_solder_mask_bridge: Nm::from_mm(0.1), // 4 mil
+        min_paste_clearance: Nm::from_mm(0.127),  // 5 mil
+        solder_mask_expansion: Nm::from_mm(0.05), // 0.05mm
+        min_pad_size: Nm::from_mm(0.508),         // 20 mil
+        min_slot_clearance: Nm::from_mm(0.381),   // 15 mil
 
         // Signal integrity — basic (no controlled impedance on 2L)
         default_impedance_ohms_x100: 5000,
-        diff_pair_gap: Nm::from_mm(0.15),              // 6 mil
-        diff_pair_tolerance: Nm::from_mm(0.05),        // 50µm
-        max_stub_length: Nm::from_mm(2.0),             // relaxed
-        length_match_tolerance: Nm::from_mm(1.0),      // relaxed
+        diff_pair_gap: Nm::from_mm(0.15),         // 6 mil
+        diff_pair_tolerance: Nm::from_mm(0.05),   // 50µm
+        max_stub_length: Nm::from_mm(2.0),        // relaxed
+        length_match_tolerance: Nm::from_mm(1.0), // relaxed
         max_vias_per_high_speed_net: 6,
 
         // Thermal
         max_current_per_width_x100: 100_000,
-        thermal_relief_gap: Nm::from_mm(0.254),        // 10 mil
+        thermal_relief_gap: Nm::from_mm(0.254), // 10 mil
         thermal_relief_spoke_width: Nm::from_mm(0.254), // 10 mil
         min_copper_pour_clearance: Nm::from_mm(0.254), // 10 mil
         thermal_relief_spokes: 4,
 
         // Manufacturing
-        copper_weight_oz_x10: 10,                       // 1.0 oz
-        board_thickness: Nm::from_mm(1.6),             // 63 mil (1.6mm)
-        min_hole_to_hole: Nm::from_mm(0.635),          // 25 mil
-        min_hole_to_edge: Nm::from_mm(0.381),          // 15 mil
+        copper_weight_oz_x10: 10,             // 1.0 oz
+        board_thickness: Nm::from_mm(1.6),    // 63 mil (1.6mm)
+        min_hole_to_hole: Nm::from_mm(0.635), // 25 mil
+        min_hole_to_edge: Nm::from_mm(0.381), // 15 mil
         blind_vias_allowed: false,
         buried_vias_allowed: false,
-        min_acid_trap: Nm::from_mm(0.15),              // 6 mil
+        min_acid_trap: Nm::from_mm(0.15), // 6 mil
         max_copper_layers: 2,
         castellated_holes_allowed: false,
     }
@@ -75,8 +75,8 @@ pub fn two_layer() -> DesignConstraints {
 /// Source: <https://docs.oshpark.com/services/>
 /// 1oz copper, FR-408 dielectric (lower loss than standard FR-4).
 pub fn two_layer_stackup() -> Stackup {
-    let cu = Nm::from_mm(0.035);     // 1oz
-    let core = Nm::from_mm(1.5);      // FR-408 core
+    let cu = Nm::from_mm(0.035); // 1oz
+    let core = Nm::from_mm(1.5); // FR-408 core
     let mask = Nm::from_mm(0.01);
     let silk = Nm::from_mm(0.005);
 
@@ -84,7 +84,7 @@ pub fn two_layer_stackup() -> Stackup {
         LayerStackEntry::silkscreen("Top Silkscreen", silk),
         LayerStackEntry::solder_mask("Top Solder Mask (Purple)", mask),
         LayerStackEntry::signal("Top Copper", cu, 10),
-        LayerStackEntry::dielectric("Core", core, "FR-408", 3700),  // FR-408 εr ≈ 3.7
+        LayerStackEntry::dielectric("Core", core, "FR-408", 3700), // FR-408 εr ≈ 3.7
         LayerStackEntry::signal("Bottom Copper", cu, 10),
         LayerStackEntry::solder_mask("Bottom Solder Mask (Purple)", mask),
         LayerStackEntry::silkscreen("Bottom Silkscreen", silk),
@@ -110,27 +110,27 @@ pub fn two_layer_stackup() -> Stackup {
 pub fn four_layer() -> DesignConstraints {
     DesignConstraints {
         // Basic geometry — tighter than 2L
-        min_clearance: Nm::from_mm(0.127),             // 5 mil
-        min_trace_width: Nm::from_mm(0.127),           // 5 mil
-        min_drill_size: Nm::from_mm(0.254),            // 10 mil
-        min_via_drill: Nm::from_mm(0.254),             // 10 mil
-        min_annular_ring: Nm::from_mm(0.1),            // 4 mil
-        min_silk_width: Nm::from_mm(0.127),            // 5 mil
-        min_edge_clearance: Nm::from_mm(0.381),        // 15 mil
+        min_clearance: Nm::from_mm(0.127),      // 5 mil
+        min_trace_width: Nm::from_mm(0.127),    // 5 mil
+        min_drill_size: Nm::from_mm(0.254),     // 10 mil
+        min_via_drill: Nm::from_mm(0.254),      // 10 mil
+        min_annular_ring: Nm::from_mm(0.1),     // 4 mil
+        min_silk_width: Nm::from_mm(0.127),     // 5 mil
+        min_edge_clearance: Nm::from_mm(0.381), // 15 mil
 
         // Advanced geometry
-        min_via_annular_ring: Nm::from_mm(0.1),        // 4 mil
-        max_drill_aspect_ratio: 1000,                   // 10:1
-        min_solder_mask_bridge: Nm::from_mm(0.1),      // 4 mil
-        min_paste_clearance: Nm::from_mm(0.127),       // 5 mil
+        min_via_annular_ring: Nm::from_mm(0.1),   // 4 mil
+        max_drill_aspect_ratio: 1000,             // 10:1
+        min_solder_mask_bridge: Nm::from_mm(0.1), // 4 mil
+        min_paste_clearance: Nm::from_mm(0.127),  // 5 mil
         solder_mask_expansion: Nm::from_mm(0.05),
-        min_pad_size: Nm::from_mm(0.45),               // 18 mil
-        min_slot_clearance: Nm::from_mm(0.381),        // 15 mil
+        min_pad_size: Nm::from_mm(0.45),        // 18 mil
+        min_slot_clearance: Nm::from_mm(0.381), // 15 mil
 
         // Signal integrity — controlled impedance available
         default_impedance_ohms_x100: 5000,
-        diff_pair_gap: Nm::from_mm(0.127),             // 5 mil
-        diff_pair_tolerance: Nm::from_mm(0.025),       // 25µm
+        diff_pair_gap: Nm::from_mm(0.127),       // 5 mil
+        diff_pair_tolerance: Nm::from_mm(0.025), // 25µm
         max_stub_length: Nm::from_mm(0.5),
         length_match_tolerance: Nm::from_mm(0.5),
         max_vias_per_high_speed_net: 4,
@@ -143,13 +143,13 @@ pub fn four_layer() -> DesignConstraints {
         thermal_relief_spokes: 4,
 
         // Manufacturing
-        copper_weight_oz_x10: 10,                       // 1.0 oz outer
+        copper_weight_oz_x10: 10, // 1.0 oz outer
         board_thickness: Nm::from_mm(1.6),
-        min_hole_to_hole: Nm::from_mm(0.508),          // 20 mil
-        min_hole_to_edge: Nm::from_mm(0.381),          // 15 mil
+        min_hole_to_hole: Nm::from_mm(0.508), // 20 mil
+        min_hole_to_edge: Nm::from_mm(0.381), // 15 mil
         blind_vias_allowed: false,
         buried_vias_allowed: false,
-        min_acid_trap: Nm::from_mm(0.127),             // 5 mil
+        min_acid_trap: Nm::from_mm(0.127), // 5 mil
         max_copper_layers: 4,
         castellated_holes_allowed: false,
     }
@@ -160,8 +160,8 @@ pub fn four_layer() -> DesignConstraints {
 /// Source: <https://docs.oshpark.com/services/>
 /// Signal / GND / Power / Signal — 1oz outer, 0.5oz inner, FR-408 dielectric.
 pub fn four_layer_stackup() -> Stackup {
-    let outer_cu = Nm::from_mm(0.035);  // 1oz
-    let inner_cu = Nm::from_mm(0.018);  // 0.5oz
+    let outer_cu = Nm::from_mm(0.035); // 1oz
+    let inner_cu = Nm::from_mm(0.018); // 0.5oz
     let prepreg = Nm::from_mm(0.2);
     let core = Nm::from_mm(1.065);
     let mask = Nm::from_mm(0.01);

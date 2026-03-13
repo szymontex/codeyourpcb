@@ -2,12 +2,12 @@
 #[cfg(all(feature = "desktop", feature = "web"))]
 compile_error!("Features 'desktop' and 'web' cannot be enabled simultaneously");
 
+pub mod dialog;
 pub mod error;
 pub mod fs;
-pub mod dialog;
-pub mod storage;
 pub mod menu;
 pub mod platform;
+pub mod storage;
 
 // Conditional compilation for filesystem implementation
 #[cfg_attr(wasm, path = "fs_web.rs")]
@@ -20,11 +20,11 @@ mod fs_impl;
 mod storage_impl;
 
 // Re-exports
+pub use dialog::Dialog;
 pub use error::PlatformError;
 pub use fs::{FileHandle, FileSystem};
 pub use fs_impl::*;
-pub use dialog::Dialog;
+pub use menu::{Menu, MenuBar, MenuItem};
+pub use platform::Platform;
 pub use storage::Storage;
 pub use storage_impl::*;
-pub use menu::{MenuBar, Menu, MenuItem};
-pub use platform::Platform;

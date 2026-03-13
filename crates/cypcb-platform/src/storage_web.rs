@@ -36,11 +36,12 @@ impl WebStorageImpl {
             PlatformError::Web("No window object (not running in browser)".to_string())
         })?;
 
-        let storage = window.local_storage()
+        let storage = window
+            .local_storage()
             .map_err(|e| PlatformError::Web(format!("Failed to access localStorage: {:?}", e)))?
             .ok_or_else(|| {
                 PlatformError::NotSupported(
-                    "localStorage not available (private browsing?)".to_string()
+                    "localStorage not available (private browsing?)".to_string(),
                 )
             })?;
 
@@ -104,12 +105,10 @@ impl Storage for WebStorageImpl {
             ))
         })?;
 
-        self.storage
-            .set_item(&prefixed, &value_str)
-            .map_err(|e| {
-                // Common error: QuotaExceededError when localStorage full (~5MB)
-                PlatformError::Storage(format!("Failed to set item in localStorage: {:?}", e))
-            })?;
+        self.storage.set_item(&prefixed, &value_str).map_err(|e| {
+            // Common error: QuotaExceededError when localStorage full (~5MB)
+            PlatformError::Storage(format!("Failed to set item in localStorage: {:?}", e))
+        })?;
 
         Ok(())
     }
@@ -117,11 +116,9 @@ impl Storage for WebStorageImpl {
     async fn set_string(&self, table: &str, key: &str, value: &str) -> Result<(), PlatformError> {
         let prefixed = Self::prefixed_key(table, key);
 
-        self.storage
-            .set_item(&prefixed, value)
-            .map_err(|e| {
-                PlatformError::Storage(format!("Failed to set item in localStorage: {:?}", e))
-            })?;
+        self.storage.set_item(&prefixed, value).map_err(|e| {
+            PlatformError::Storage(format!("Failed to set item in localStorage: {:?}", e))
+        })?;
 
         Ok(())
     }
@@ -141,10 +138,9 @@ impl Storage for WebStorageImpl {
         let mut keys = Vec::new();
 
         // Iterate through all localStorage keys
-        let length = self
-            .storage
-            .length()
-            .map_err(|e| PlatformError::Web(format!("Failed to get localStorage length: {:?}", e)))?;
+        let length = self.storage.length().map_err(|e| {
+            PlatformError::Web(format!("Failed to get localStorage length: {:?}", e))
+        })?;
 
         for i in 0..length {
             if let Ok(Some(full_key)) = self.storage.key(i) {

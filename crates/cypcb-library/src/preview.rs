@@ -144,22 +144,19 @@ fn extract_pads(value: &lexpr::Value) -> Vec<PadInfo> {
     let mut pads = Vec::new();
 
     fn search_pads(value: &Value, pads: &mut Vec<PadInfo>) {
-        match value {
-            Value::Cons(cons) => {
-                // Check if this is a pad element
-                if let Value::Symbol(sym) = cons.car() {
-                    if sym.as_ref() == "pad" {
-                        if let Some(pad) = parse_pad(cons) {
-                            pads.push(pad);
-                        }
+        if let Value::Cons(cons) = value {
+            // Check if this is a pad element
+            if let Value::Symbol(sym) = cons.car() {
+                if sym.as_ref() == "pad" {
+                    if let Some(pad) = parse_pad(cons) {
+                        pads.push(pad);
                     }
                 }
-
-                // Continue searching recursively
-                search_pads(cons.car(), pads);
-                search_pads(cons.cdr(), pads);
             }
-            _ => {}
+
+            // Continue searching recursively
+            search_pads(cons.car(), pads);
+            search_pads(cons.cdr(), pads);
         }
     }
 
@@ -306,10 +303,8 @@ fn parse_number(value: &lexpr::Value) -> Option<f64> {
         Value::Number(num) => {
             if let Some(i) = num.as_i64() {
                 Some(i as f64)
-            } else if let Some(f) = num.as_f64() {
-                Some(f)
             } else {
-                None
+                num.as_f64()
             }
         }
         _ => None,
@@ -323,23 +318,20 @@ fn extract_outlines(value: &lexpr::Value) -> Vec<OutlineSegment> {
     let mut outlines = Vec::new();
 
     fn search_lines(value: &Value, outlines: &mut Vec<OutlineSegment>) {
-        match value {
-            Value::Cons(cons) => {
-                if let Value::Symbol(sym) = cons.car() {
-                    if sym.as_ref() == "fp_line" {
-                        if let Some(line) = parse_fp_line(cons) {
-                            // Only include silkscreen and fab layers
-                            if line.layer == "F.SilkS" || line.layer == "F.Fab" {
-                                outlines.push(line);
-                            }
+        if let Value::Cons(cons) = value {
+            if let Value::Symbol(sym) = cons.car() {
+                if sym.as_ref() == "fp_line" {
+                    if let Some(line) = parse_fp_line(cons) {
+                        // Only include silkscreen and fab layers
+                        if line.layer == "F.SilkS" || line.layer == "F.Fab" {
+                            outlines.push(line);
                         }
                     }
                 }
-
-                search_lines(cons.car(), outlines);
-                search_lines(cons.cdr(), outlines);
             }
-            _ => {}
+
+            search_lines(cons.car(), outlines);
+            search_lines(cons.cdr(), outlines);
         }
     }
 
@@ -457,30 +449,34 @@ fn extract_courtyard(value: &lexpr::Value) -> Option<BoundingBox> {
         max_y: &mut f64,
         found: &mut bool,
     ) {
-        match value {
-            Value::Cons(cons) => {
-                if let Value::Symbol(sym) = cons.car() {
-                    if sym.as_ref() == "fp_line" {
-                        if let Some(line) = parse_fp_line(cons) {
-                            if line.layer == "F.CrtYd" {
-                                *found = true;
-                                *min_x = min_x.min(line.start_x).min(line.end_x);
-                                *min_y = min_y.min(line.start_y).min(line.end_y);
-                                *max_x = max_x.max(line.start_x).max(line.end_x);
-                                *max_y = max_y.max(line.start_y).max(line.end_y);
-                            }
+        if let Value::Cons(cons) = value {
+            if let Value::Symbol(sym) = cons.car() {
+                if sym.as_ref() == "fp_line" {
+                    if let Some(line) = parse_fp_line(cons) {
+                        if line.layer == "F.CrtYd" {
+                            *found = true;
+                            *min_x = min_x.min(line.start_x).min(line.end_x);
+                            *min_y = min_y.min(line.start_y).min(line.end_y);
+                            *max_x = max_x.max(line.start_x).max(line.end_x);
+                            *max_y = max_y.max(line.start_y).max(line.end_y);
                         }
                     }
                 }
-
-                search_courtyard(cons.car(), min_x, min_y, max_x, max_y, found);
-                search_courtyard(cons.cdr(), min_x, min_y, max_x, max_y, found);
             }
-            _ => {}
+
+            search_courtyard(cons.car(), min_x, min_y, max_x, max_y, found);
+            search_courtyard(cons.cdr(), min_x, min_y, max_x, max_y, found);
         }
     }
 
-    search_courtyard(value, &mut min_x, &mut min_y, &mut max_x, &mut max_y, &mut found_courtyard);
+    search_courtyard(
+        value,
+        &mut min_x,
+        &mut min_y,
+        &mut max_x,
+        &mut max_y,
+        &mut found_courtyard,
+    );
 
     if found_courtyard {
         Some(BoundingBox {

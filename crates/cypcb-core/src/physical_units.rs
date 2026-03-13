@@ -364,51 +364,102 @@ mod tests {
     #[test]
     fn test_from_str_resistance() {
         assert_eq!("ohm".parse::<PhysicalUnit>().unwrap(), PhysicalUnit::Ohm);
-        assert_eq!("kohm".parse::<PhysicalUnit>().unwrap(), PhysicalUnit::KiloOhm);
-        assert_eq!("Mohm".parse::<PhysicalUnit>().unwrap(), PhysicalUnit::MegaOhm);
+        assert_eq!(
+            "kohm".parse::<PhysicalUnit>().unwrap(),
+            PhysicalUnit::KiloOhm
+        );
+        assert_eq!(
+            "Mohm".parse::<PhysicalUnit>().unwrap(),
+            PhysicalUnit::MegaOhm
+        );
     }
 
     #[test]
     fn test_from_str_capacitance() {
-        assert_eq!("pF".parse::<PhysicalUnit>().unwrap(), PhysicalUnit::PicoFarad);
-        assert_eq!("nF".parse::<PhysicalUnit>().unwrap(), PhysicalUnit::NanoFarad);
-        assert_eq!("uF".parse::<PhysicalUnit>().unwrap(), PhysicalUnit::MicroFarad);
-        assert_eq!("mF".parse::<PhysicalUnit>().unwrap(), PhysicalUnit::MilliFarad);
+        assert_eq!(
+            "pF".parse::<PhysicalUnit>().unwrap(),
+            PhysicalUnit::PicoFarad
+        );
+        assert_eq!(
+            "nF".parse::<PhysicalUnit>().unwrap(),
+            PhysicalUnit::NanoFarad
+        );
+        assert_eq!(
+            "uF".parse::<PhysicalUnit>().unwrap(),
+            PhysicalUnit::MicroFarad
+        );
+        assert_eq!(
+            "mF".parse::<PhysicalUnit>().unwrap(),
+            PhysicalUnit::MilliFarad
+        );
     }
 
     #[test]
     fn test_from_str_inductance() {
-        assert_eq!("nH".parse::<PhysicalUnit>().unwrap(), PhysicalUnit::NanoHenry);
-        assert_eq!("uH".parse::<PhysicalUnit>().unwrap(), PhysicalUnit::MicroHenry);
-        assert_eq!("mH".parse::<PhysicalUnit>().unwrap(), PhysicalUnit::MilliHenry);
+        assert_eq!(
+            "nH".parse::<PhysicalUnit>().unwrap(),
+            PhysicalUnit::NanoHenry
+        );
+        assert_eq!(
+            "uH".parse::<PhysicalUnit>().unwrap(),
+            PhysicalUnit::MicroHenry
+        );
+        assert_eq!(
+            "mH".parse::<PhysicalUnit>().unwrap(),
+            PhysicalUnit::MilliHenry
+        );
         assert_eq!("H".parse::<PhysicalUnit>().unwrap(), PhysicalUnit::Henry);
     }
 
     #[test]
     fn test_from_str_voltage() {
-        assert_eq!("mV".parse::<PhysicalUnit>().unwrap(), PhysicalUnit::MilliVolt);
+        assert_eq!(
+            "mV".parse::<PhysicalUnit>().unwrap(),
+            PhysicalUnit::MilliVolt
+        );
         assert_eq!("V".parse::<PhysicalUnit>().unwrap(), PhysicalUnit::Volt);
-        assert_eq!("kV".parse::<PhysicalUnit>().unwrap(), PhysicalUnit::KiloVolt);
+        assert_eq!(
+            "kV".parse::<PhysicalUnit>().unwrap(),
+            PhysicalUnit::KiloVolt
+        );
     }
 
     #[test]
     fn test_from_str_current() {
-        assert_eq!("uA".parse::<PhysicalUnit>().unwrap(), PhysicalUnit::MicroAmp);
-        assert_eq!("mA".parse::<PhysicalUnit>().unwrap(), PhysicalUnit::MilliAmp);
+        assert_eq!(
+            "uA".parse::<PhysicalUnit>().unwrap(),
+            PhysicalUnit::MicroAmp
+        );
+        assert_eq!(
+            "mA".parse::<PhysicalUnit>().unwrap(),
+            PhysicalUnit::MilliAmp
+        );
         assert_eq!("A".parse::<PhysicalUnit>().unwrap(), PhysicalUnit::Amp);
     }
 
     #[test]
     fn test_from_str_frequency() {
         assert_eq!("Hz".parse::<PhysicalUnit>().unwrap(), PhysicalUnit::Hertz);
-        assert_eq!("kHz".parse::<PhysicalUnit>().unwrap(), PhysicalUnit::KiloHertz);
-        assert_eq!("MHz".parse::<PhysicalUnit>().unwrap(), PhysicalUnit::MegaHertz);
-        assert_eq!("GHz".parse::<PhysicalUnit>().unwrap(), PhysicalUnit::GigaHertz);
+        assert_eq!(
+            "kHz".parse::<PhysicalUnit>().unwrap(),
+            PhysicalUnit::KiloHertz
+        );
+        assert_eq!(
+            "MHz".parse::<PhysicalUnit>().unwrap(),
+            PhysicalUnit::MegaHertz
+        );
+        assert_eq!(
+            "GHz".parse::<PhysicalUnit>().unwrap(),
+            PhysicalUnit::GigaHertz
+        );
     }
 
     #[test]
     fn test_from_str_power() {
-        assert_eq!("mW".parse::<PhysicalUnit>().unwrap(), PhysicalUnit::MilliWatt);
+        assert_eq!(
+            "mW".parse::<PhysicalUnit>().unwrap(),
+            PhysicalUnit::MilliWatt
+        );
         assert_eq!("W".parse::<PhysicalUnit>().unwrap(), PhysicalUnit::Watt);
     }
 
@@ -425,20 +476,50 @@ mod tests {
     #[test]
     fn test_quantity() {
         assert_eq!(PhysicalUnit::Ohm.quantity(), PhysicalQuantity::Resistance);
-        assert_eq!(PhysicalUnit::KiloOhm.quantity(), PhysicalQuantity::Resistance);
-        assert_eq!(PhysicalUnit::MegaOhm.quantity(), PhysicalQuantity::Resistance);
+        assert_eq!(
+            PhysicalUnit::KiloOhm.quantity(),
+            PhysicalQuantity::Resistance
+        );
+        assert_eq!(
+            PhysicalUnit::MegaOhm.quantity(),
+            PhysicalQuantity::Resistance
+        );
 
-        assert_eq!(PhysicalUnit::PicoFarad.quantity(), PhysicalQuantity::Capacitance);
-        assert_eq!(PhysicalUnit::NanoFarad.quantity(), PhysicalQuantity::Capacitance);
-        assert_eq!(PhysicalUnit::MicroFarad.quantity(), PhysicalQuantity::Capacitance);
-        assert_eq!(PhysicalUnit::MilliFarad.quantity(), PhysicalQuantity::Capacitance);
+        assert_eq!(
+            PhysicalUnit::PicoFarad.quantity(),
+            PhysicalQuantity::Capacitance
+        );
+        assert_eq!(
+            PhysicalUnit::NanoFarad.quantity(),
+            PhysicalQuantity::Capacitance
+        );
+        assert_eq!(
+            PhysicalUnit::MicroFarad.quantity(),
+            PhysicalQuantity::Capacitance
+        );
+        assert_eq!(
+            PhysicalUnit::MilliFarad.quantity(),
+            PhysicalQuantity::Capacitance
+        );
 
-        assert_eq!(PhysicalUnit::NanoHenry.quantity(), PhysicalQuantity::Inductance);
-        assert_eq!(PhysicalUnit::MicroHenry.quantity(), PhysicalQuantity::Inductance);
-        assert_eq!(PhysicalUnit::MilliHenry.quantity(), PhysicalQuantity::Inductance);
+        assert_eq!(
+            PhysicalUnit::NanoHenry.quantity(),
+            PhysicalQuantity::Inductance
+        );
+        assert_eq!(
+            PhysicalUnit::MicroHenry.quantity(),
+            PhysicalQuantity::Inductance
+        );
+        assert_eq!(
+            PhysicalUnit::MilliHenry.quantity(),
+            PhysicalQuantity::Inductance
+        );
         assert_eq!(PhysicalUnit::Henry.quantity(), PhysicalQuantity::Inductance);
 
-        assert_eq!(PhysicalUnit::MilliVolt.quantity(), PhysicalQuantity::Voltage);
+        assert_eq!(
+            PhysicalUnit::MilliVolt.quantity(),
+            PhysicalQuantity::Voltage
+        );
         assert_eq!(PhysicalUnit::Volt.quantity(), PhysicalQuantity::Voltage);
         assert_eq!(PhysicalUnit::KiloVolt.quantity(), PhysicalQuantity::Voltage);
 
@@ -447,9 +528,18 @@ mod tests {
         assert_eq!(PhysicalUnit::Amp.quantity(), PhysicalQuantity::Current);
 
         assert_eq!(PhysicalUnit::Hertz.quantity(), PhysicalQuantity::Frequency);
-        assert_eq!(PhysicalUnit::KiloHertz.quantity(), PhysicalQuantity::Frequency);
-        assert_eq!(PhysicalUnit::MegaHertz.quantity(), PhysicalQuantity::Frequency);
-        assert_eq!(PhysicalUnit::GigaHertz.quantity(), PhysicalQuantity::Frequency);
+        assert_eq!(
+            PhysicalUnit::KiloHertz.quantity(),
+            PhysicalQuantity::Frequency
+        );
+        assert_eq!(
+            PhysicalUnit::MegaHertz.quantity(),
+            PhysicalQuantity::Frequency
+        );
+        assert_eq!(
+            PhysicalUnit::GigaHertz.quantity(),
+            PhysicalQuantity::Frequency
+        );
 
         assert_eq!(PhysicalUnit::MilliWatt.quantity(), PhysicalQuantity::Power);
         assert_eq!(PhysicalUnit::Watt.quantity(), PhysicalQuantity::Power);

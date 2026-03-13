@@ -33,9 +33,9 @@
 //! assert!(lib.get("DIP-8").is_some());
 //! ```
 
+pub mod gullwing;
 mod library;
 mod smd;
 mod tht;
-pub mod gullwing;
 
 pub use library::{Footprint, FootprintLibrary, PadDef};

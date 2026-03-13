@@ -72,10 +72,7 @@ pub enum ParseError {
 
     /// An unknown unit was specified for a dimension.
     #[error("Unknown unit: '{name}'")]
-    #[diagnostic(
-        code(cypcb::parse::unknown_unit),
-        help("valid units: mm, mil, in, nm")
-    )]
+    #[diagnostic(code(cypcb::parse::unknown_unit), help("valid units: mm, mil, in, nm"))]
     UnknownUnit {
         /// The unknown unit name.
         name: String,
@@ -218,7 +215,11 @@ pub enum ParseError {
 
 impl ParseError {
     /// Create a syntax error.
-    pub fn syntax(message: impl Into<String>, src: impl Into<String>, span: impl Into<SourceSpan>) -> Self {
+    pub fn syntax(
+        message: impl Into<String>,
+        src: impl Into<String>,
+        span: impl Into<SourceSpan>,
+    ) -> Self {
         ParseError::Syntax {
             message: message.into(),
             src: src.into(),
@@ -227,7 +228,11 @@ impl ParseError {
     }
 
     /// Create an unknown component error.
-    pub fn unknown_component(name: impl Into<String>, src: impl Into<String>, span: impl Into<SourceSpan>) -> Self {
+    pub fn unknown_component(
+        name: impl Into<String>,
+        src: impl Into<String>,
+        span: impl Into<SourceSpan>,
+    ) -> Self {
         ParseError::UnknownComponent {
             name: name.into(),
             src: src.into(),
@@ -236,7 +241,11 @@ impl ParseError {
     }
 
     /// Create an unknown layer type error.
-    pub fn unknown_layer_type(name: impl Into<String>, src: impl Into<String>, span: impl Into<SourceSpan>) -> Self {
+    pub fn unknown_layer_type(
+        name: impl Into<String>,
+        src: impl Into<String>,
+        span: impl Into<SourceSpan>,
+    ) -> Self {
         ParseError::UnknownLayerType {
             name: name.into(),
             src: src.into(),
@@ -245,7 +254,11 @@ impl ParseError {
     }
 
     /// Create an unknown unit error.
-    pub fn unknown_unit(name: impl Into<String>, src: impl Into<String>, span: impl Into<SourceSpan>) -> Self {
+    pub fn unknown_unit(
+        name: impl Into<String>,
+        src: impl Into<String>,
+        span: impl Into<SourceSpan>,
+    ) -> Self {
         ParseError::UnknownUnit {
             name: name.into(),
             src: src.into(),
@@ -254,7 +267,11 @@ impl ParseError {
     }
 
     /// Create an invalid number error.
-    pub fn invalid_number(text: impl Into<String>, src: impl Into<String>, span: impl Into<SourceSpan>) -> Self {
+    pub fn invalid_number(
+        text: impl Into<String>,
+        src: impl Into<String>,
+        span: impl Into<SourceSpan>,
+    ) -> Self {
         ParseError::InvalidNumber {
             text: text.into(),
             src: src.into(),
@@ -263,7 +280,11 @@ impl ParseError {
     }
 
     /// Create a missing element error.
-    pub fn missing(expected: impl Into<String>, src: impl Into<String>, span: impl Into<SourceSpan>) -> Self {
+    pub fn missing(
+        expected: impl Into<String>,
+        src: impl Into<String>,
+        span: impl Into<SourceSpan>,
+    ) -> Self {
         ParseError::Missing {
             expected: expected.into(),
             src: src.into(),
@@ -272,7 +293,11 @@ impl ParseError {
     }
 
     /// Create an invalid version error.
-    pub fn invalid_version(message: impl Into<String>, src: impl Into<String>, span: impl Into<SourceSpan>) -> Self {
+    pub fn invalid_version(
+        message: impl Into<String>,
+        src: impl Into<String>,
+        span: impl Into<SourceSpan>,
+    ) -> Self {
         ParseError::InvalidVersion {
             message: message.into(),
             src: src.into(),
@@ -290,7 +315,11 @@ impl ParseError {
     }
 
     /// Create an invalid module error.
-    pub fn invalid_module(message: impl Into<String>, src: impl Into<String>, span: impl Into<SourceSpan>) -> Self {
+    pub fn invalid_module(
+        message: impl Into<String>,
+        src: impl Into<String>,
+        span: impl Into<SourceSpan>,
+    ) -> Self {
         ParseError::InvalidModule {
             message: message.into(),
             src: src.into(),
@@ -299,7 +328,11 @@ impl ParseError {
     }
 
     /// Create an invalid interface error.
-    pub fn invalid_interface(message: impl Into<String>, src: impl Into<String>, span: impl Into<SourceSpan>) -> Self {
+    pub fn invalid_interface(
+        message: impl Into<String>,
+        src: impl Into<String>,
+        span: impl Into<SourceSpan>,
+    ) -> Self {
         ParseError::InvalidInterface {
             message: message.into(),
             src: src.into(),
@@ -308,7 +341,11 @@ impl ParseError {
     }
 
     /// Create an invalid import error.
-    pub fn invalid_import(message: impl Into<String>, src: impl Into<String>, span: impl Into<SourceSpan>) -> Self {
+    pub fn invalid_import(
+        message: impl Into<String>,
+        src: impl Into<String>,
+        span: impl Into<SourceSpan>,
+    ) -> Self {
         ParseError::InvalidImport {
             message: message.into(),
             src: src.into(),
@@ -317,7 +354,11 @@ impl ParseError {
     }
 
     /// Create an invalid assert error.
-    pub fn invalid_assert(message: impl Into<String>, src: impl Into<String>, span: impl Into<SourceSpan>) -> Self {
+    pub fn invalid_assert(
+        message: impl Into<String>,
+        src: impl Into<String>,
+        span: impl Into<SourceSpan>,
+    ) -> Self {
         ParseError::InvalidAssert {
             message: message.into(),
             src: src.into(),
@@ -326,7 +367,11 @@ impl ParseError {
     }
 
     /// Create an invalid physical unit error.
-    pub fn invalid_physical_unit(name: impl Into<String>, src: impl Into<String>, span: impl Into<SourceSpan>) -> Self {
+    pub fn invalid_physical_unit(
+        name: impl Into<String>,
+        src: impl Into<String>,
+        span: impl Into<SourceSpan>,
+    ) -> Self {
         ParseError::InvalidPhysicalUnit {
             name: name.into(),
             src: src.into(),
@@ -335,7 +380,11 @@ impl ParseError {
     }
 
     /// Create an invalid tolerance error.
-    pub fn invalid_tolerance(message: impl Into<String>, src: impl Into<String>, span: impl Into<SourceSpan>) -> Self {
+    pub fn invalid_tolerance(
+        message: impl Into<String>,
+        src: impl Into<String>,
+        span: impl Into<SourceSpan>,
+    ) -> Self {
         ParseError::InvalidTolerance {
             message: message.into(),
             src: src.into(),

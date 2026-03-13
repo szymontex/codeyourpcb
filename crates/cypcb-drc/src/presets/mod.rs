@@ -309,16 +309,40 @@ mod tests {
     #[test]
     fn test_preset_from_name() {
         assert_eq!(Preset::from_name("jlcpcb"), Some(Preset::Jlcpcb2Layer));
-        assert_eq!(Preset::from_name("jlcpcb_2layer"), Some(Preset::Jlcpcb2Layer));
-        assert_eq!(Preset::from_name("jlcpcb_4layer"), Some(Preset::Jlcpcb4Layer));
-        assert_eq!(Preset::from_name("jlcpcb_advanced"), Some(Preset::JlcpcbAdvanced2Layer));
-        assert_eq!(Preset::from_name("jlcpcb_advanced_2layer"), Some(Preset::JlcpcbAdvanced2Layer));
-        assert_eq!(Preset::from_name("jlcpcb_advanced_4layer"), Some(Preset::JlcpcbAdvanced4Layer));
+        assert_eq!(
+            Preset::from_name("jlcpcb_2layer"),
+            Some(Preset::Jlcpcb2Layer)
+        );
+        assert_eq!(
+            Preset::from_name("jlcpcb_4layer"),
+            Some(Preset::Jlcpcb4Layer)
+        );
+        assert_eq!(
+            Preset::from_name("jlcpcb_advanced"),
+            Some(Preset::JlcpcbAdvanced2Layer)
+        );
+        assert_eq!(
+            Preset::from_name("jlcpcb_advanced_2layer"),
+            Some(Preset::JlcpcbAdvanced2Layer)
+        );
+        assert_eq!(
+            Preset::from_name("jlcpcb_advanced_4layer"),
+            Some(Preset::JlcpcbAdvanced4Layer)
+        );
         assert_eq!(Preset::from_name("oshpark"), Some(Preset::OshPark2Layer));
-        assert_eq!(Preset::from_name("oshpark_2layer"), Some(Preset::OshPark2Layer));
-        assert_eq!(Preset::from_name("oshpark_4layer"), Some(Preset::OshPark4Layer));
+        assert_eq!(
+            Preset::from_name("oshpark_2layer"),
+            Some(Preset::OshPark2Layer)
+        );
+        assert_eq!(
+            Preset::from_name("oshpark_4layer"),
+            Some(Preset::OshPark4Layer)
+        );
         assert_eq!(Preset::from_name("pcbway"), Some(Preset::PcbwayStandard));
-        assert_eq!(Preset::from_name("pcbway_standard"), Some(Preset::PcbwayStandard));
+        assert_eq!(
+            Preset::from_name("pcbway_standard"),
+            Some(Preset::PcbwayStandard)
+        );
         assert_eq!(Preset::from_name("prototype"), Some(Preset::Prototype));
         assert_eq!(Preset::from_name("unknown"), None);
     }
@@ -327,14 +351,26 @@ mod tests {
     fn test_preset_from_name_case_insensitive() {
         assert_eq!(Preset::from_name("JLCPCB"), Some(Preset::Jlcpcb2Layer));
         assert_eq!(Preset::from_name("OshPark"), Some(Preset::OshPark2Layer));
-        assert_eq!(Preset::from_name("OSHPARK_4LAYER"), Some(Preset::OshPark4Layer));
+        assert_eq!(
+            Preset::from_name("OSHPARK_4LAYER"),
+            Some(Preset::OshPark4Layer)
+        );
     }
 
     #[test]
     fn test_preset_from_name_hyphen_alias() {
-        assert_eq!(Preset::from_name("oshpark-2layer"), Some(Preset::OshPark2Layer));
-        assert_eq!(Preset::from_name("jlcpcb-advanced"), Some(Preset::JlcpcbAdvanced2Layer));
-        assert_eq!(Preset::from_name("jlcpcb-advanced-4layer"), Some(Preset::JlcpcbAdvanced4Layer));
+        assert_eq!(
+            Preset::from_name("oshpark-2layer"),
+            Some(Preset::OshPark2Layer)
+        );
+        assert_eq!(
+            Preset::from_name("jlcpcb-advanced"),
+            Some(Preset::JlcpcbAdvanced2Layer)
+        );
+        assert_eq!(
+            Preset::from_name("jlcpcb-advanced-4layer"),
+            Some(Preset::JlcpcbAdvanced4Layer)
+        );
     }
 
     #[test]
@@ -366,8 +402,14 @@ mod tests {
     fn test_preset_name() {
         assert_eq!(Preset::Jlcpcb2Layer.name(), "jlcpcb_2layer");
         assert_eq!(Preset::Jlcpcb4Layer.name(), "jlcpcb_4layer");
-        assert_eq!(Preset::JlcpcbAdvanced2Layer.name(), "jlcpcb_advanced_2layer");
-        assert_eq!(Preset::JlcpcbAdvanced4Layer.name(), "jlcpcb_advanced_4layer");
+        assert_eq!(
+            Preset::JlcpcbAdvanced2Layer.name(),
+            "jlcpcb_advanced_2layer"
+        );
+        assert_eq!(
+            Preset::JlcpcbAdvanced4Layer.name(),
+            "jlcpcb_advanced_4layer"
+        );
         assert_eq!(Preset::OshPark2Layer.name(), "oshpark_2layer");
         assert_eq!(Preset::OshPark4Layer.name(), "oshpark_4layer");
         assert_eq!(Preset::PcbwayStandard.name(), "pcbway_standard");

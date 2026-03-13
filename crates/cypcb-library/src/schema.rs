@@ -171,7 +171,8 @@ pub fn insert_component(conn: &Connection, component: &Component) -> Result<(), 
     match insert_result {
         Ok(_) => Ok(()),
         Err(rusqlite::Error::SqliteFailure(err, _))
-            if err.code == rusqlite::ErrorCode::ConstraintViolation => {
+            if err.code == rusqlite::ErrorCode::ConstraintViolation =>
+        {
             // Component exists, update it
             conn.execute(
                 "UPDATE components SET
@@ -247,7 +248,8 @@ pub fn insert_components_batch(
         match insert_result {
             Ok(_) => {}
             Err(rusqlite::Error::SqliteFailure(err, _))
-                if err.code == rusqlite::ErrorCode::ConstraintViolation => {
+                if err.code == rusqlite::ErrorCode::ConstraintViolation =>
+            {
                 // Component exists, update it
                 tx.execute(
                     "UPDATE components SET
@@ -405,10 +407,7 @@ mod tests {
         assert_eq!(retrieved.id.name, "R_0805");
         assert_eq!(retrieved.library, "TestLib");
         assert_eq!(retrieved.category, Some("Resistors".to_string()));
-        assert_eq!(
-            retrieved.metadata.value,
-            Some("10k".to_string())
-        );
+        assert_eq!(retrieved.metadata.value, Some("10k".to_string()));
     }
 
     #[test]
@@ -525,7 +524,9 @@ mod tests {
 
         // Query FTS5 to verify trigger synced the data
         let mut stmt = conn
-            .prepare("SELECT source, name FROM components_fts WHERE components_fts MATCH 'resistor'")
+            .prepare(
+                "SELECT source, name FROM components_fts WHERE components_fts MATCH 'resistor'",
+            )
             .unwrap();
 
         let results: Vec<String> = stmt
@@ -579,6 +580,9 @@ mod tests {
         // Try to retrieve
         let retrieved = get_component(&conn, "test", "R_0805").unwrap();
         assert!(retrieved.is_some());
-        assert_eq!(retrieved.unwrap().category, Some("Passive/Resistors".to_string()));
+        assert_eq!(
+            retrieved.unwrap().category,
+            Some("Passive/Resistors".to_string())
+        );
     }
 }

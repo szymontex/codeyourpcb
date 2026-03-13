@@ -35,7 +35,6 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DesignConstraints {
     // ── Basic geometry ──────────────────────────────────────────────
-
     /// Minimum clearance between copper features on the same layer.
     pub min_clearance: Nm,
     /// Minimum trace (track) width.
@@ -52,7 +51,6 @@ pub struct DesignConstraints {
     pub min_edge_clearance: Nm,
 
     // ── Advanced geometry ───────────────────────────────────────────
-
     /// Minimum annular ring around vias (may differ from pad annular ring).
     pub min_via_annular_ring: Nm,
     /// Maximum drill aspect ratio (depth:diameter). Stored as ratio × 100
@@ -70,7 +68,6 @@ pub struct DesignConstraints {
     pub min_slot_clearance: Nm,
 
     // ── Signal integrity ────────────────────────────────────────────
-
     /// Default target impedance (ohms × 100 for integer precision, e.g. 5000 = 50.00 Ω).
     pub default_impedance_ohms_x100: u32,
     /// Differential pair gap (space between traces).
@@ -85,7 +82,6 @@ pub struct DesignConstraints {
     pub max_vias_per_high_speed_net: u32,
 
     // ── Thermal ─────────────────────────────────────────────────────
-
     /// Maximum current per unit width (mA per mm × 100, e.g. 100_000 = 1000.00 mA/mm).
     /// Based on IPC-2152 for 10°C rise, 1oz copper, outer layer.
     pub max_current_per_width_x100: u32,
@@ -99,7 +95,6 @@ pub struct DesignConstraints {
     pub thermal_relief_spokes: u8,
 
     // ── Manufacturing ───────────────────────────────────────────────
-
     /// Copper weight in oz/ft² × 10 (e.g. 10 = 1.0 oz).
     pub copper_weight_oz_x10: u32,
     /// Total board thickness.
@@ -134,46 +129,46 @@ impl Default for DesignConstraints {
     fn default() -> Self {
         Self {
             // Basic geometry
-            min_clearance: Nm::from_mm(0.127),            // 5 mil
-            min_trace_width: Nm::from_mm(0.127),           // 5 mil
-            min_drill_size: Nm::from_mm(0.3),              // 0.3mm min drill
-            min_via_drill: Nm::from_mm(0.3),               // 0.3mm min via drill
-            min_annular_ring: Nm::from_mm(0.127),          // 5 mil
-            min_silk_width: Nm::from_mm(0.15),             // 0.15mm silk
-            min_edge_clearance: Nm::from_mm(0.3),          // 0.3mm to edge
+            min_clearance: Nm::from_mm(0.127),    // 5 mil
+            min_trace_width: Nm::from_mm(0.127),  // 5 mil
+            min_drill_size: Nm::from_mm(0.3),     // 0.3mm min drill
+            min_via_drill: Nm::from_mm(0.3),      // 0.3mm min via drill
+            min_annular_ring: Nm::from_mm(0.127), // 5 mil
+            min_silk_width: Nm::from_mm(0.15),    // 0.15mm silk
+            min_edge_clearance: Nm::from_mm(0.3), // 0.3mm to edge
 
             // Advanced geometry
-            min_via_annular_ring: Nm::from_mm(0.127),      // 5 mil
-            max_drill_aspect_ratio: 800,                    // 8:1
-            min_solder_mask_bridge: Nm::from_mm(0.1),      // 0.1mm
-            min_paste_clearance: Nm::from_mm(0.127),       // 5 mil
-            solder_mask_expansion: Nm::from_mm(0.05),      // 0.05mm typical
-            min_pad_size: Nm::from_mm(0.5),                // 0.5mm min pad
-            min_slot_clearance: Nm::from_mm(0.3),          // 0.3mm
+            min_via_annular_ring: Nm::from_mm(0.127), // 5 mil
+            max_drill_aspect_ratio: 800,              // 8:1
+            min_solder_mask_bridge: Nm::from_mm(0.1), // 0.1mm
+            min_paste_clearance: Nm::from_mm(0.127),  // 5 mil
+            solder_mask_expansion: Nm::from_mm(0.05), // 0.05mm typical
+            min_pad_size: Nm::from_mm(0.5),           // 0.5mm min pad
+            min_slot_clearance: Nm::from_mm(0.3),     // 0.3mm
 
             // Signal integrity
-            default_impedance_ohms_x100: 5000,              // 50.00 Ω
-            diff_pair_gap: Nm::from_mm(0.127),             // 5 mil
-            diff_pair_tolerance: Nm::from_mm(0.025),       // 25µm
-            max_stub_length: Nm::from_mm(1.0),             // 1mm
-            length_match_tolerance: Nm::from_mm(0.5),      // 0.5mm
+            default_impedance_ohms_x100: 5000,        // 50.00 Ω
+            diff_pair_gap: Nm::from_mm(0.127),        // 5 mil
+            diff_pair_tolerance: Nm::from_mm(0.025),  // 25µm
+            max_stub_length: Nm::from_mm(1.0),        // 1mm
+            length_match_tolerance: Nm::from_mm(0.5), // 0.5mm
             max_vias_per_high_speed_net: 4,
 
             // Thermal
-            max_current_per_width_x100: 100_000,            // 1000 mA/mm
-            thermal_relief_gap: Nm::from_mm(0.254),        // 10 mil
+            max_current_per_width_x100: 100_000,    // 1000 mA/mm
+            thermal_relief_gap: Nm::from_mm(0.254), // 10 mil
             thermal_relief_spoke_width: Nm::from_mm(0.254), // 10 mil
             min_copper_pour_clearance: Nm::from_mm(0.254), // 10 mil
             thermal_relief_spokes: 4,
 
             // Manufacturing
-            copper_weight_oz_x10: 10,                       // 1.0 oz
-            board_thickness: Nm::from_mm(1.6),             // 1.6mm standard
-            min_hole_to_hole: Nm::from_mm(0.5),            // 0.5mm
-            min_hole_to_edge: Nm::from_mm(0.3),            // 0.3mm
+            copper_weight_oz_x10: 10,           // 1.0 oz
+            board_thickness: Nm::from_mm(1.6),  // 1.6mm standard
+            min_hole_to_hole: Nm::from_mm(0.5), // 0.5mm
+            min_hole_to_edge: Nm::from_mm(0.3), // 0.3mm
             blind_vias_allowed: false,
             buried_vias_allowed: false,
-            min_acid_trap: Nm::from_mm(0.127),             // 5 mil
+            min_acid_trap: Nm::from_mm(0.127), // 5 mil
             max_copper_layers: 2,
             castellated_holes_allowed: false,
         }

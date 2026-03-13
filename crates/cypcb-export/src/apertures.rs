@@ -4,11 +4,11 @@
 //! Each unique pad shape gets a D-code (D10, D11, etc.) that is defined
 //! once in the aperture section and reused throughout the file.
 
-use std::collections::HashMap;
-use serde::{Deserialize, Serialize};
-use cypcb_world::footprint::PadDef;
+use crate::coords::{nm_to_gerber, CoordinateFormat};
 use cypcb_world::components::PadShape as WorldPadShape;
-use crate::coords::{CoordinateFormat, nm_to_gerber};
+use cypcb_world::footprint::PadDef;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 /// Aperture shape for Gerber D-code definition.
 ///
@@ -213,9 +213,7 @@ pub fn aperture_for_pad(pad: &PadDef) -> ApertureShape {
     let (width, height) = pad.size;
 
     match pad.shape {
-        WorldPadShape::Circle => ApertureShape::Circle {
-            diameter: width.0,
-        },
+        WorldPadShape::Circle => ApertureShape::Circle { diameter: width.0 },
         WorldPadShape::Rect => ApertureShape::Rectangle {
             width: width.0,
             height: height.0,
@@ -236,8 +234,8 @@ pub fn aperture_for_pad(pad: &PadDef) -> ApertureShape {
 mod tests {
     use super::*;
     use cypcb_core::Nm;
-    use cypcb_world::components::Layer;
     use cypcb_core::Point;
+    use cypcb_world::components::Layer;
 
     #[test]
     fn test_aperture_manager_new() {

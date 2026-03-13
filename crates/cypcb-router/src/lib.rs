@@ -59,7 +59,9 @@ use cypcb_world::{BoardWorld, Entity};
 pub use dsn::{export_dsn, DsnExportError};
 pub use freerouting::{FreeRoutingRunner, RoutingConfig, RoutingError, RoutingProgress};
 pub use ses::{import_ses, import_ses_from_str, SesImportError};
-pub use types::{calculate_metrics, RouteSegment, RoutingMetrics, RoutingResult, RoutingStatus, ViaPlacement};
+pub use types::{
+    calculate_metrics, RouteSegment, RoutingMetrics, RoutingResult, RoutingStatus, ViaPlacement,
+};
 
 /// Apply routing results to a BoardWorld.
 ///
@@ -126,10 +128,10 @@ pub fn apply_routes(world: &mut BoardWorld, result: &RoutingResult) {
     for segment in &result.routes {
         let key = (segment.net_id, segment.layer);
 
-        traces_by_key.entry(key).or_default().push(TraceSegment::new(
-            segment.start,
-            segment.end,
-        ));
+        traces_by_key
+            .entry(key)
+            .or_default()
+            .push(TraceSegment::new(segment.start, segment.end));
 
         trace_widths.entry(key).or_insert(segment.width);
     }
@@ -192,7 +194,7 @@ pub fn preserve_locked_traces(world: &mut BoardWorld) -> Vec<Entity> {
 mod tests {
     use super::*;
     use cypcb_core::{Nm, Point};
-    use cypcb_world::{Layer, NetId};
+    use cypcb_world::Layer;
 
     #[test]
     fn test_apply_routes_empty_world() {
@@ -212,15 +214,13 @@ mod tests {
         let mut world = BoardWorld::new();
         let vcc = world.intern_net("VCC");
 
-        let routes = vec![
-            RouteSegment::new(
-                vcc,
-                Layer::TopCopper,
-                Nm::from_mm(0.2),
-                Point::from_mm(0.0, 0.0),
-                Point::from_mm(10.0, 0.0),
-            ),
-        ];
+        let routes = vec![RouteSegment::new(
+            vcc,
+            Layer::TopCopper,
+            Nm::from_mm(0.2),
+            Point::from_mm(0.0, 0.0),
+            Point::from_mm(10.0, 0.0),
+        )];
 
         let result = RoutingResult::complete(routes, Vec::new());
         apply_routes(&mut world, &result);

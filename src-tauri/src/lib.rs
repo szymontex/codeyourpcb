@@ -1,5 +1,5 @@
-mod menu;
 pub mod commands;
+mod menu;
 
 pub fn run() {
     tauri::Builder::default()
@@ -24,10 +24,13 @@ pub fn run() {
             for arg in args.iter().skip(1) {
                 if arg.ends_with(".cypcb") {
                     if let Ok(content) = std::fs::read_to_string(arg) {
-                        let _ = app.emit("file-opened", serde_json::json!({
-                            "path": arg,
-                            "content": content
-                        }));
+                        let _ = app.emit(
+                            "file-opened",
+                            serde_json::json!({
+                                "path": arg,
+                                "content": content
+                            }),
+                        );
                     }
                 }
             }

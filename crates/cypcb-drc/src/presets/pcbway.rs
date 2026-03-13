@@ -42,12 +42,12 @@ impl DesignRules {
     /// ```
     pub fn pcbway_standard() -> Self {
         DesignRules {
-            min_clearance: Nm::from_mm(0.15),       // 6 mil recommended
+            min_clearance: Nm::from_mm(0.15), // 6 mil recommended
             min_trace_width: Nm::from_mm(0.15),
-            min_drill_size: Nm::from_mm(0.2),       // Mechanical
+            min_drill_size: Nm::from_mm(0.2), // Mechanical
             min_via_drill: Nm::from_mm(0.2),
             min_annular_ring: Nm::from_mm(0.15),
-            min_silk_width: Nm::from_mm(0.22),      // 8.66 mil - wider than JLCPCB
+            min_silk_width: Nm::from_mm(0.22), // 8.66 mil - wider than JLCPCB
             min_edge_clearance: Nm::from_mm(0.3),
         }
     }
@@ -82,8 +82,8 @@ impl DesignRules {
     /// ```
     pub fn prototype() -> Self {
         DesignRules {
-            min_clearance: Nm::from_mm(0.2),        // 8 mil
-            min_trace_width: Nm::from_mm(0.25),     // 10 mil
+            min_clearance: Nm::from_mm(0.2),    // 8 mil
+            min_trace_width: Nm::from_mm(0.25), // 10 mil
             min_drill_size: Nm::from_mm(0.4),
             min_via_drill: Nm::from_mm(0.3),
             min_annular_ring: Nm::from_mm(0.2),

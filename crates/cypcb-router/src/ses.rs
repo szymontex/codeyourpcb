@@ -119,12 +119,10 @@ pub fn import_ses_from_str(
     let mut vias = Vec::new();
 
     // Find the routes section
-    let routes_section = find_section(content, "routes")
-        .ok_or(SesImportError::NoRoutesFound)?;
+    let routes_section = find_section(content, "routes").ok_or(SesImportError::NoRoutesFound)?;
 
     // Find network_out within routes
-    let network_out = find_section(routes_section, "network_out")
-        .unwrap_or(routes_section); // Some SES files have routes directly
+    let network_out = find_section(routes_section, "network_out").unwrap_or(routes_section); // Some SES files have routes directly
 
     // Parse each net's routing
     let net_sections = find_all_sections(network_out, "net");
@@ -138,10 +136,7 @@ pub fn import_ses_from_str(
         let net_name = extract_first_string(net_section)
             .ok_or_else(|| SesImportError::ParseError("Missing net name".into()))?;
 
-        let net_id = net_lookup
-            .get(&net_name)
-            .copied()
-            .unwrap_or(NetId::new(0)); // Default if not found
+        let net_id = net_lookup.get(&net_name).copied().unwrap_or(NetId::new(0)); // Default if not found
 
         // Parse wires in this net
         let wire_sections = find_all_sections(net_section, "wire");
@@ -183,9 +178,10 @@ fn parse_wire(section: &str, net_id: NetId) -> Result<Vec<RouteSegment>, SesImpo
         let tokens: Vec<&str> = tokenize_path(path_section);
 
         if tokens.len() < 5 {
-            return Err(SesImportError::ParseError(
-                format!("Invalid path: not enough tokens (got {})", tokens.len()),
-            ));
+            return Err(SesImportError::ParseError(format!(
+                "Invalid path: not enough tokens (got {})",
+                tokens.len()
+            )));
         }
 
         // Parse layer name (first token)
@@ -199,17 +195,17 @@ fn parse_wire(section: &str, net_id: NetId) -> Result<Vec<RouteSegment>, SesImpo
         let width_nm = tenth_mil_to_nm(width);
 
         // Parse coordinate pairs (remaining tokens)
-        let coords: Vec<f64> = tokens[2..]
-            .iter()
-            .filter_map(|s| s.parse().ok())
-            .collect();
+        let coords: Vec<f64> = tokens[2..].iter().filter_map(|s| s.parse().ok()).collect();
 
         // Convert to points
         let points: Vec<Point> = coords
             .chunks(2)
             .filter_map(|chunk| {
                 if chunk.len() == 2 {
-                    Some(Point::new(tenth_mil_to_nm(chunk[0]), tenth_mil_to_nm(chunk[1])))
+                    Some(Point::new(
+                        tenth_mil_to_nm(chunk[0]),
+                        tenth_mil_to_nm(chunk[1]),
+                    ))
                 } else {
                     None
                 }
@@ -219,11 +215,7 @@ fn parse_wire(section: &str, net_id: NetId) -> Result<Vec<RouteSegment>, SesImpo
         // Create segments from consecutive point pairs
         for window in points.windows(2) {
             segments.push(RouteSegment::new(
-                net_id,
-                layer,
-                width_nm,
-                window[0],
-                window[1],
+                net_id, layer, width_nm, window[0], window[1],
             ));
         }
     }
@@ -314,7 +306,11 @@ fn find_all_sections<'a>(content: &'a str, name: &str) -> Vec<&'a str> {
         let after_pattern = abs_start + pattern.len();
         if after_pattern < content.len() {
             let next_char = content[after_pattern..].chars().next().unwrap_or(' ');
-            if !next_char.is_whitespace() && next_char != '"' && next_char != '(' && next_char != ')' {
+            if !next_char.is_whitespace()
+                && next_char != '"'
+                && next_char != '('
+                && next_char != ')'
+            {
                 // This is a partial match (e.g., "network_out" when searching for "net")
                 search_start = abs_start + 1;
                 continue;
@@ -508,8 +504,14 @@ mod tests {
         assert_eq!(route.layer, Layer::TopCopper);
         // 80 tenth-mils * 2540 = 203_200 nm = 0.2032mm ≈ 8 mils (0.2mm)
         assert_eq!(route.width, tenth_mil_to_nm(80.0));
-        assert_eq!(route.start, Point::new(tenth_mil_to_nm(10000.0), tenth_mil_to_nm(20000.0)));
-        assert_eq!(route.end, Point::new(tenth_mil_to_nm(15000.0), tenth_mil_to_nm(20000.0)));
+        assert_eq!(
+            route.start,
+            Point::new(tenth_mil_to_nm(10000.0), tenth_mil_to_nm(20000.0))
+        );
+        assert_eq!(
+            route.end,
+            Point::new(tenth_mil_to_nm(15000.0), tenth_mil_to_nm(20000.0))
+        );
     }
 
     #[test]
@@ -522,8 +524,12 @@ mod tests {
         let expected_nm = Nm((146.9 * 25_400.0) as i64);
         let result_nm = tenth_mil_to_nm(j1_pin1_tenth_mils);
         // Allow 1000 nm tolerance for rounding
-        assert!((result_nm.0 - expected_nm.0).abs() < 1000,
-            "J1 pin1: got {}nm, expected {}nm", result_nm.0, expected_nm.0);
+        assert!(
+            (result_nm.0 - expected_nm.0).abs() < 1000,
+            "J1 pin1: got {}nm, expected {}nm",
+            result_nm.0,
+            expected_nm.0
+        );
 
         // Width: 80 tenth-mils = 8 mils = 203_200 nm (0.2mm trace width)
         assert_eq!(tenth_mil_to_nm(80.0), Nm(203_200));
@@ -554,7 +560,10 @@ mod tests {
 
         let via = &result.vias[0];
         assert_eq!(via.net_id, NetId::new(1)); // VCC
-        assert_eq!(via.position, Point::new(tenth_mil_to_nm(1000.0), tenth_mil_to_nm(0.0)));
+        assert_eq!(
+            via.position,
+            Point::new(tenth_mil_to_nm(1000.0), tenth_mil_to_nm(0.0))
+        );
         assert_eq!(via.start_layer, Layer::TopCopper);
         assert_eq!(via.end_layer, Layer::BottomCopper);
     }
@@ -587,9 +596,21 @@ mod tests {
         assert_eq!(result.routes.len(), 4);
 
         // Verify different nets
-        let vcc_routes: Vec<_> = result.routes.iter().filter(|r| r.net_id == NetId::new(1)).collect();
-        let gnd_routes: Vec<_> = result.routes.iter().filter(|r| r.net_id == NetId::new(2)).collect();
-        let sig_routes: Vec<_> = result.routes.iter().filter(|r| r.net_id == NetId::new(3)).collect();
+        let vcc_routes: Vec<_> = result
+            .routes
+            .iter()
+            .filter(|r| r.net_id == NetId::new(1))
+            .collect();
+        let gnd_routes: Vec<_> = result
+            .routes
+            .iter()
+            .filter(|r| r.net_id == NetId::new(2))
+            .collect();
+        let sig_routes: Vec<_> = result
+            .routes
+            .iter()
+            .filter(|r| r.net_id == NetId::new(3))
+            .collect();
 
         assert_eq!(vcc_routes.len(), 1);
         assert_eq!(gnd_routes.len(), 1);
@@ -635,12 +656,16 @@ mod tests {
 
         let original_nm = 1_000_000i64; // 1mm
         let as_mils = original_nm as f64 / 25_400.0; // 39.3701 mils (written to DSN)
-        let as_tenth_mils = as_mils * 10.0;           // 393.701 (FreeRouting SES output)
+        let as_tenth_mils = as_mils * 10.0; // 393.701 (FreeRouting SES output)
         let back_to_nm = tenth_mil_to_nm(as_tenth_mils); // 393.701 * 2540 = 999,999.54 nm
 
         // Should be within 10nm (rounding error from the 0.1-mil quantization)
-        assert!((back_to_nm.0 - original_nm).abs() < 10,
-            "Round-trip failed: original {}nm, got {}nm", original_nm, back_to_nm.0);
+        assert!(
+            (back_to_nm.0 - original_nm).abs() < 10,
+            "Round-trip failed: original {}nm, got {}nm",
+            original_nm,
+            back_to_nm.0
+        );
     }
 
     #[test]
@@ -664,7 +689,10 @@ mod tests {
 
         // Check segments form a connected path
         assert_eq!(result.routes[0].start, Point::new(Nm(0), Nm(0)));
-        assert_eq!(result.routes[0].end, Point::new(tenth_mil_to_nm(1000.0), Nm(0)));
+        assert_eq!(
+            result.routes[0].end,
+            Point::new(tenth_mil_to_nm(1000.0), Nm(0))
+        );
         assert_eq!(result.routes[1].start, result.routes[0].end);
         assert_eq!(result.routes[2].start, result.routes[1].end);
     }

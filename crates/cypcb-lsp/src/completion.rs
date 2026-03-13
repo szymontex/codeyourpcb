@@ -117,7 +117,11 @@ pub enum PropertyContext {
 }
 
 /// Find the completion context at the given offset.
-pub fn find_completion_context(ast: &SourceFile, content: &str, offset: usize) -> CompletionContext {
+pub fn find_completion_context(
+    ast: &SourceFile,
+    content: &str,
+    offset: usize,
+) -> CompletionContext {
     // First check if we're at the start of the file or in whitespace at top level
     if ast.definitions.is_empty() {
         return CompletionContext::TopLevel;
@@ -171,7 +175,11 @@ fn find_context_in_definition(def: &Definition, content: &str, offset: usize) ->
     }
 }
 
-fn find_context_in_component(comp: &ComponentDef, content: &str, offset: usize) -> CompletionContext {
+fn find_context_in_component(
+    comp: &ComponentDef,
+    content: &str,
+    offset: usize,
+) -> CompletionContext {
     // Check if we're inside the footprint string
     let fp_span = &comp.footprint.span;
     if offset >= fp_span.start && offset <= fp_span.end {
@@ -279,11 +287,7 @@ pub fn footprint_completions() -> Vec<CompletionItem> {
             "SMD"
         };
 
-        let detail = format!(
-            "{} {}-pin",
-            pad_type,
-            fp.pads.len()
-        );
+        let detail = format!("{} {}-pin", pad_type, fp.pads.len());
 
         let doc = format!(
             "Size: {:.2}mm x {:.2}mm\nCourtyard: {:.2}mm x {:.2}mm",
@@ -296,7 +300,7 @@ pub fn footprint_completions() -> Vec<CompletionItem> {
         items.push(
             CompletionItem::new(name, CompletionItemKind::Class)
                 .with_detail(detail)
-                .with_documentation(doc)
+                .with_documentation(doc),
         );
     }
 
@@ -316,7 +320,7 @@ pub fn net_completions(ast: &SourceFile) -> Vec<CompletionItem> {
 
             items.push(
                 CompletionItem::new(&net.name.value, CompletionItemKind::Variable)
-                    .with_detail(detail)
+                    .with_detail(detail),
             );
         }
     }
@@ -335,7 +339,7 @@ pub fn component_completions(ast: &SourceFile) -> Vec<CompletionItem> {
 
             items.push(
                 CompletionItem::new(&comp.refdes.value, CompletionItemKind::Variable)
-                    .with_detail(detail)
+                    .with_detail(detail),
             );
         }
     }
@@ -387,7 +391,10 @@ pub fn property_completions(context: &PropertyContext) -> Vec<CompletionItem> {
                 .with_insert_text("description \"$1\"", true),
             CompletionItem::new("pad", CompletionItemKind::Property)
                 .with_detail("Pad definition")
-                .with_insert_text("pad ${1:1} rect at ${2:0}mm, ${3:0}mm size ${4:1}mm x ${5:0.5}mm", true),
+                .with_insert_text(
+                    "pad ${1:1} rect at ${2:0}mm, ${3:0}mm size ${4:1}mm x ${5:0.5}mm",
+                    true,
+                ),
             CompletionItem::new("courtyard", CompletionItemKind::Property)
                 .with_detail("Courtyard dimensions")
                 .with_insert_text("courtyard ${1:2}mm x ${2:1}mm", true),
@@ -402,8 +409,7 @@ pub fn property_completions(context: &PropertyContext) -> Vec<CompletionItem> {
             CompletionItem::new("via", CompletionItemKind::Property)
                 .with_detail("Via waypoint")
                 .with_insert_text("via ${1:5}mm, ${2:5}mm", true),
-            CompletionItem::new("layer", CompletionItemKind::Property)
-                .with_detail("Copper layer"),
+            CompletionItem::new("layer", CompletionItemKind::Property).with_detail("Copper layer"),
             CompletionItem::new("width", CompletionItemKind::Property)
                 .with_detail("Trace width")
                 .with_insert_text("width ${1:0.25}mm", true),
@@ -426,20 +432,13 @@ pub fn property_completions(context: &PropertyContext) -> Vec<CompletionItem> {
 /// Generate layer name completions.
 pub fn layer_completions() -> Vec<CompletionItem> {
     vec![
-        CompletionItem::new("Top", CompletionItemKind::Enum)
-            .with_detail("Top copper layer"),
-        CompletionItem::new("Bottom", CompletionItemKind::Enum)
-            .with_detail("Bottom copper layer"),
-        CompletionItem::new("Inner1", CompletionItemKind::Enum)
-            .with_detail("Inner copper layer 1"),
-        CompletionItem::new("Inner2", CompletionItemKind::Enum)
-            .with_detail("Inner copper layer 2"),
-        CompletionItem::new("Inner3", CompletionItemKind::Enum)
-            .with_detail("Inner copper layer 3"),
-        CompletionItem::new("Inner4", CompletionItemKind::Enum)
-            .with_detail("Inner copper layer 4"),
-        CompletionItem::new("all", CompletionItemKind::Enum)
-            .with_detail("All layers"),
+        CompletionItem::new("Top", CompletionItemKind::Enum).with_detail("Top copper layer"),
+        CompletionItem::new("Bottom", CompletionItemKind::Enum).with_detail("Bottom copper layer"),
+        CompletionItem::new("Inner1", CompletionItemKind::Enum).with_detail("Inner copper layer 1"),
+        CompletionItem::new("Inner2", CompletionItemKind::Enum).with_detail("Inner copper layer 2"),
+        CompletionItem::new("Inner3", CompletionItemKind::Enum).with_detail("Inner copper layer 3"),
+        CompletionItem::new("Inner4", CompletionItemKind::Enum).with_detail("Inner copper layer 4"),
+        CompletionItem::new("all", CompletionItemKind::Enum).with_detail("All layers"),
     ]
 }
 
@@ -494,58 +493,35 @@ pub fn top_level_completions() -> Vec<CompletionItem> {
 pub fn physical_unit_completions() -> Vec<CompletionItem> {
     vec![
         // Resistance
-        CompletionItem::new("ohm", CompletionItemKind::Enum)
-            .with_detail("Ohms (Ω)"),
-        CompletionItem::new("kohm", CompletionItemKind::Enum)
-            .with_detail("Kilohms (kΩ)"),
-        CompletionItem::new("Mohm", CompletionItemKind::Enum)
-            .with_detail("Megohms (MΩ)"),
+        CompletionItem::new("ohm", CompletionItemKind::Enum).with_detail("Ohms (Ω)"),
+        CompletionItem::new("kohm", CompletionItemKind::Enum).with_detail("Kilohms (kΩ)"),
+        CompletionItem::new("Mohm", CompletionItemKind::Enum).with_detail("Megohms (MΩ)"),
         // Capacitance
-        CompletionItem::new("pF", CompletionItemKind::Enum)
-            .with_detail("Picofarads"),
-        CompletionItem::new("nF", CompletionItemKind::Enum)
-            .with_detail("Nanofarads"),
-        CompletionItem::new("uF", CompletionItemKind::Enum)
-            .with_detail("Microfarads"),
-        CompletionItem::new("mF", CompletionItemKind::Enum)
-            .with_detail("Millifarads"),
+        CompletionItem::new("pF", CompletionItemKind::Enum).with_detail("Picofarads"),
+        CompletionItem::new("nF", CompletionItemKind::Enum).with_detail("Nanofarads"),
+        CompletionItem::new("uF", CompletionItemKind::Enum).with_detail("Microfarads"),
+        CompletionItem::new("mF", CompletionItemKind::Enum).with_detail("Millifarads"),
         // Inductance
-        CompletionItem::new("nH", CompletionItemKind::Enum)
-            .with_detail("Nanohenries"),
-        CompletionItem::new("uH", CompletionItemKind::Enum)
-            .with_detail("Microhenries"),
-        CompletionItem::new("mH", CompletionItemKind::Enum)
-            .with_detail("Millihenries"),
-        CompletionItem::new("H", CompletionItemKind::Enum)
-            .with_detail("Henries"),
+        CompletionItem::new("nH", CompletionItemKind::Enum).with_detail("Nanohenries"),
+        CompletionItem::new("uH", CompletionItemKind::Enum).with_detail("Microhenries"),
+        CompletionItem::new("mH", CompletionItemKind::Enum).with_detail("Millihenries"),
+        CompletionItem::new("H", CompletionItemKind::Enum).with_detail("Henries"),
         // Voltage
-        CompletionItem::new("mV", CompletionItemKind::Enum)
-            .with_detail("Millivolts"),
-        CompletionItem::new("V", CompletionItemKind::Enum)
-            .with_detail("Volts"),
-        CompletionItem::new("kV", CompletionItemKind::Enum)
-            .with_detail("Kilovolts"),
+        CompletionItem::new("mV", CompletionItemKind::Enum).with_detail("Millivolts"),
+        CompletionItem::new("V", CompletionItemKind::Enum).with_detail("Volts"),
+        CompletionItem::new("kV", CompletionItemKind::Enum).with_detail("Kilovolts"),
         // Current
-        CompletionItem::new("uA", CompletionItemKind::Enum)
-            .with_detail("Microamps"),
-        CompletionItem::new("mA", CompletionItemKind::Enum)
-            .with_detail("Milliamps"),
-        CompletionItem::new("A", CompletionItemKind::Enum)
-            .with_detail("Amps"),
+        CompletionItem::new("uA", CompletionItemKind::Enum).with_detail("Microamps"),
+        CompletionItem::new("mA", CompletionItemKind::Enum).with_detail("Milliamps"),
+        CompletionItem::new("A", CompletionItemKind::Enum).with_detail("Amps"),
         // Frequency
-        CompletionItem::new("Hz", CompletionItemKind::Enum)
-            .with_detail("Hertz"),
-        CompletionItem::new("kHz", CompletionItemKind::Enum)
-            .with_detail("Kilohertz"),
-        CompletionItem::new("MHz", CompletionItemKind::Enum)
-            .with_detail("Megahertz"),
-        CompletionItem::new("GHz", CompletionItemKind::Enum)
-            .with_detail("Gigahertz"),
+        CompletionItem::new("Hz", CompletionItemKind::Enum).with_detail("Hertz"),
+        CompletionItem::new("kHz", CompletionItemKind::Enum).with_detail("Kilohertz"),
+        CompletionItem::new("MHz", CompletionItemKind::Enum).with_detail("Megahertz"),
+        CompletionItem::new("GHz", CompletionItemKind::Enum).with_detail("Gigahertz"),
         // Power
-        CompletionItem::new("mW", CompletionItemKind::Enum)
-            .with_detail("Milliwatts"),
-        CompletionItem::new("W", CompletionItemKind::Enum)
-            .with_detail("Watts"),
+        CompletionItem::new("mW", CompletionItemKind::Enum).with_detail("Milliwatts"),
+        CompletionItem::new("W", CompletionItemKind::Enum).with_detail("Watts"),
     ]
 }
 
@@ -578,20 +554,28 @@ mod tests {
         let doc = make_doc(r#"component R1 resistor "" {}"#);
 
         // Position inside the empty quotes (offset 23 is between the quotes)
-        let pos = Position { line: 0, character: 23 };
+        let pos = Position {
+            line: 0,
+            character: 23,
+        };
         let items = completion_at_position(&doc, &pos);
 
         // Should get footprint completions
         let has_footprints = items.iter().any(|i| i.kind == CompletionItemKind::Class);
-        assert!(has_footprints, "Expected footprint completions inside string");
+        assert!(
+            has_footprints,
+            "Expected footprint completions inside string"
+        );
     }
 
     #[test]
     fn test_net_completions() {
-        let doc = make_doc(r#"
+        let doc = make_doc(
+            r#"
 net VCC { R1.1 }
 net GND { R1.2, C1.1 }
-"#);
+"#,
+        );
 
         let ast = doc.ast.as_ref().unwrap();
         let items = net_completions(ast);
@@ -604,10 +588,12 @@ net GND { R1.2, C1.1 }
 
     #[test]
     fn test_component_completions() {
-        let doc = make_doc(r#"
+        let doc = make_doc(
+            r#"
 component R1 resistor "0402" {}
 component C1 capacitor "0603" {}
-"#);
+"#,
+        );
 
         let ast = doc.ast.as_ref().unwrap();
         let items = component_completions(ast);
@@ -633,12 +619,18 @@ component C1 capacitor "0603" {}
     fn test_completion_at_document_start() {
         let doc = make_doc("");
 
-        let pos = Position { line: 0, character: 0 };
+        let pos = Position {
+            line: 0,
+            character: 0,
+        };
         let items = completion_at_position(&doc, &pos);
 
         // Should get top-level completions
         let has_keywords = items.iter().any(|i| i.kind == CompletionItemKind::Keyword);
-        assert!(has_keywords, "Expected keyword completions at empty document");
+        assert!(
+            has_keywords,
+            "Expected keyword completions at empty document"
+        );
     }
 
     #[test]
@@ -677,7 +669,10 @@ component C1 capacitor "0603" {}
 
         let labels: Vec<_> = items.iter().map(|i| i.label.as_str()).collect();
         assert!(labels.contains(&"module"), "Should have module completion");
-        assert!(labels.contains(&"interface"), "Should have interface completion");
+        assert!(
+            labels.contains(&"interface"),
+            "Should have interface completion"
+        );
         assert!(labels.contains(&"import"), "Should have import completion");
         assert!(labels.contains(&"assert"), "Should have assert completion");
     }

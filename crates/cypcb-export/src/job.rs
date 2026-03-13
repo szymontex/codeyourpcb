@@ -32,15 +32,18 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-use cypcb_world::components::{Board, BoardSize, Layer};
+use cypcb_world::components::Layer;
 use cypcb_world::footprint::FootprintLibrary;
 use cypcb_world::BoardWorld;
 
-use crate::presets::ExportPreset;
-use crate::gerber::{export_copper_layer, export_soldermask, export_solderpaste, export_silkscreen, export_outline, MaskPasteConfig, SilkConfig, Side};
-use crate::excellon::{export_excellon, DrillType};
 use crate::bom::{export_bom_csv, export_bom_json};
-use crate::cpl::{export_cpl, CplConfig};
+use crate::cpl::export_cpl;
+use crate::excellon::{export_excellon, DrillType};
+use crate::gerber::{
+    export_copper_layer, export_outline, export_silkscreen, export_soldermask, export_solderpaste,
+    MaskPasteConfig, Side, SilkConfig,
+};
+use crate::presets::ExportPreset;
 
 /// Export job configuration.
 #[derive(Debug, Clone)]
@@ -134,8 +137,13 @@ pub fn run_export(
     if job.preset.layers.top_copper {
         let filename = format!("{}{}", job.board_name, job.preset.file_naming.top_copper);
         let path = gerber_dir.join(&filename);
-        let content = export_copper_layer(world, library, Layer::TopCopper, &job.preset.coordinate_format)
-            .map_err(|e| ExportError::Export(format!("{:?}", e)))?;
+        let content = export_copper_layer(
+            world,
+            library,
+            Layer::TopCopper,
+            &job.preset.coordinate_format,
+        )
+        .map_err(|e| ExportError::Export(format!("{:?}", e)))?;
         let file = write_export_file(&path, &content, "Top Copper")?;
         files.push(file);
     }
@@ -143,8 +151,13 @@ pub fn run_export(
     if job.preset.layers.bottom_copper {
         let filename = format!("{}{}", job.board_name, job.preset.file_naming.bottom_copper);
         let path = gerber_dir.join(&filename);
-        let content = export_copper_layer(world, library, Layer::BottomCopper, &job.preset.coordinate_format)
-            .map_err(|e| ExportError::Export(format!("{:?}", e)))?;
+        let content = export_copper_layer(
+            world,
+            library,
+            Layer::BottomCopper,
+            &job.preset.coordinate_format,
+        )
+        .map_err(|e| ExportError::Export(format!("{:?}", e)))?;
         let file = write_export_file(&path, &content, "Bottom Copper")?;
         files.push(file);
     }
@@ -153,8 +166,14 @@ pub fn run_export(
         let filename = format!("{}{}", job.board_name, job.preset.file_naming.top_mask);
         let path = gerber_dir.join(&filename);
         let config = MaskPasteConfig::default();
-        let content = export_soldermask(world, library, Side::Top, &job.preset.coordinate_format, &config)
-            .map_err(|e| ExportError::Export(format!("{:?}", e)))?;
+        let content = export_soldermask(
+            world,
+            library,
+            Side::Top,
+            &job.preset.coordinate_format,
+            &config,
+        )
+        .map_err(|e| ExportError::Export(format!("{:?}", e)))?;
         let file = write_export_file(&path, &content, "Top Soldermask")?;
         files.push(file);
     }
@@ -163,8 +182,14 @@ pub fn run_export(
         let filename = format!("{}{}", job.board_name, job.preset.file_naming.bottom_mask);
         let path = gerber_dir.join(&filename);
         let config = MaskPasteConfig::default();
-        let content = export_soldermask(world, library, Side::Bottom, &job.preset.coordinate_format, &config)
-            .map_err(|e| ExportError::Export(format!("{:?}", e)))?;
+        let content = export_soldermask(
+            world,
+            library,
+            Side::Bottom,
+            &job.preset.coordinate_format,
+            &config,
+        )
+        .map_err(|e| ExportError::Export(format!("{:?}", e)))?;
         let file = write_export_file(&path, &content, "Bottom Soldermask")?;
         files.push(file);
     }
@@ -173,8 +198,14 @@ pub fn run_export(
         let filename = format!("{}{}", job.board_name, job.preset.file_naming.top_paste);
         let path = gerber_dir.join(&filename);
         let config = MaskPasteConfig::default();
-        let content = export_solderpaste(world, library, Side::Top, &job.preset.coordinate_format, &config)
-            .map_err(|e| ExportError::Export(format!("{:?}", e)))?;
+        let content = export_solderpaste(
+            world,
+            library,
+            Side::Top,
+            &job.preset.coordinate_format,
+            &config,
+        )
+        .map_err(|e| ExportError::Export(format!("{:?}", e)))?;
         let file = write_export_file(&path, &content, "Top Solderpaste")?;
         files.push(file);
     }
@@ -183,8 +214,14 @@ pub fn run_export(
         let filename = format!("{}{}", job.board_name, job.preset.file_naming.bottom_paste);
         let path = gerber_dir.join(&filename);
         let config = MaskPasteConfig::default();
-        let content = export_solderpaste(world, library, Side::Bottom, &job.preset.coordinate_format, &config)
-            .map_err(|e| ExportError::Export(format!("{:?}", e)))?;
+        let content = export_solderpaste(
+            world,
+            library,
+            Side::Bottom,
+            &job.preset.coordinate_format,
+            &config,
+        )
+        .map_err(|e| ExportError::Export(format!("{:?}", e)))?;
         let file = write_export_file(&path, &content, "Bottom Solderpaste")?;
         files.push(file);
     }
@@ -193,8 +230,14 @@ pub fn run_export(
         let filename = format!("{}{}", job.board_name, job.preset.file_naming.top_silk);
         let path = gerber_dir.join(&filename);
         let config = SilkConfig::default();
-        let content = export_silkscreen(world, library, Side::Top, &job.preset.coordinate_format, &config)
-            .map_err(|e| ExportError::Export(format!("{:?}", e)))?;
+        let content = export_silkscreen(
+            world,
+            library,
+            Side::Top,
+            &job.preset.coordinate_format,
+            &config,
+        )
+        .map_err(|e| ExportError::Export(format!("{:?}", e)))?;
         let file = write_export_file(&path, &content, "Top Silkscreen")?;
         files.push(file);
     }
@@ -203,8 +246,14 @@ pub fn run_export(
         let filename = format!("{}{}", job.board_name, job.preset.file_naming.bottom_silk);
         let path = gerber_dir.join(&filename);
         let config = SilkConfig::default();
-        let content = export_silkscreen(world, library, Side::Bottom, &job.preset.coordinate_format, &config)
-            .map_err(|e| ExportError::Export(format!("{:?}", e)))?;
+        let content = export_silkscreen(
+            world,
+            library,
+            Side::Bottom,
+            &job.preset.coordinate_format,
+            &config,
+        )
+        .map_err(|e| ExportError::Export(format!("{:?}", e)))?;
         let file = write_export_file(&path, &content, "Bottom Silkscreen")?;
         files.push(file);
     }
@@ -222,8 +271,13 @@ pub fn run_export(
     if job.preset.layers.drill {
         let filename = format!("{}{}", job.board_name, job.preset.file_naming.drill_pth);
         let path = drill_dir.join(&filename);
-        let content = export_excellon(world, library, &job.preset.coordinate_format, Some(DrillType::Plated))
-            .map_err(|e| ExportError::Export(format!("{:?}", e)))?;
+        let content = export_excellon(
+            world,
+            library,
+            &job.preset.coordinate_format,
+            Some(DrillType::Plated),
+        )
+        .map_err(|e| ExportError::Export(format!("{:?}", e)))?;
         let file = write_export_file(&path, &content, "Drill PTH")?;
         files.push(file);
     }
@@ -233,8 +287,7 @@ pub fn run_export(
         // BOM CSV
         let filename = format!("{}{}", job.board_name, job.preset.file_naming.bom);
         let path = assembly_dir.join(&filename);
-        let content = export_bom_csv(world)
-            .map_err(|e| ExportError::Export(format!("{:?}", e)))?;
+        let content = export_bom_csv(world).map_err(|e| ExportError::Export(format!("{:?}", e)))?;
         let file = write_export_file(&path, &content, "BOM CSV")?;
         files.push(file);
 
@@ -286,9 +339,8 @@ fn write_export_file(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cypcb_core::Nm;
-    use cypcb_world::components::*;
     use crate::presets::from_name;
+    use cypcb_core::Nm;
 
     fn setup_minimal_board() -> (BoardWorld, FootprintLibrary) {
         let mut world = BoardWorld::new();
@@ -323,7 +375,7 @@ mod tests {
         let (mut world, library) = setup_minimal_board();
         let preset = from_name("jlcpcb").unwrap();
 
-        let temp_dir = std::env::temp_dir().join(format!("cypcb-test-{}", std::process::id()));
+        let temp_dir = std::env::temp_dir().join(format!("cypcb-test-dirs-{}", std::process::id()));
 
         let job = ExportJob {
             source_path: PathBuf::from("test.cypcb"),
@@ -347,7 +399,8 @@ mod tests {
         let (mut world, library) = setup_minimal_board();
         let preset = from_name("jlcpcb").unwrap();
 
-        let temp_dir = std::env::temp_dir().join(format!("cypcb-test-{}", std::process::id()));
+        let temp_dir =
+            std::env::temp_dir().join(format!("cypcb-test-files-{}", std::process::id()));
 
         let job = ExportJob {
             source_path: PathBuf::from("test.cypcb"),
@@ -374,7 +427,8 @@ mod tests {
         let (mut world, library) = setup_minimal_board();
         let preset = from_name("jlcpcb").unwrap();
 
-        let temp_dir = std::env::temp_dir().join(format!("cypcb-test-{}", std::process::id()));
+        let temp_dir =
+            std::env::temp_dir().join(format!("cypcb-test-duration-{}", std::process::id()));
 
         let job = ExportJob {
             source_path: PathBuf::from("test.cypcb"),

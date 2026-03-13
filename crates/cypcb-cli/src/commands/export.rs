@@ -7,12 +7,12 @@ use std::path::PathBuf;
 use clap::Args;
 use miette::{IntoDiagnostic, Result, WrapErr};
 
+use cypcb_export::presets::from_name;
+use cypcb_export::{run_export, ExportJob};
 use cypcb_parser::CypcbParser;
 use cypcb_world::footprint::FootprintLibrary;
 use cypcb_world::sync_ast_to_world;
 use cypcb_world::BoardWorld;
-use cypcb_export::presets::from_name;
-use cypcb_export::{ExportJob, run_export};
 
 /// Export a .cypcb file to manufacturing files.
 #[derive(Args)]
@@ -75,13 +75,12 @@ impl ExportCommand {
         }
 
         // Look up preset
-        let mut preset = from_name(&self.preset)
-            .ok_or_else(|| {
-                miette::miette!(
-                    "Unknown preset '{}'. Available presets: jlcpcb, pcbway",
-                    self.preset
-                )
-            })?;
+        let mut preset = from_name(&self.preset).ok_or_else(|| {
+            miette::miette!(
+                "Unknown preset '{}'. Available presets: jlcpcb, pcbway",
+                self.preset
+            )
+        })?;
 
         if self.no_assembly {
             preset.assembly = false;
@@ -111,34 +110,64 @@ impl ExportCommand {
             eprintln!();
 
             if preset.layers.top_copper {
-                eprintln!("  output/gerber/{}{}", board_name, preset.file_naming.top_copper);
+                eprintln!(
+                    "  output/gerber/{}{}",
+                    board_name, preset.file_naming.top_copper
+                );
             }
             if preset.layers.bottom_copper {
-                eprintln!("  output/gerber/{}{}", board_name, preset.file_naming.bottom_copper);
+                eprintln!(
+                    "  output/gerber/{}{}",
+                    board_name, preset.file_naming.bottom_copper
+                );
             }
             if preset.layers.top_mask {
-                eprintln!("  output/gerber/{}{}", board_name, preset.file_naming.top_mask);
+                eprintln!(
+                    "  output/gerber/{}{}",
+                    board_name, preset.file_naming.top_mask
+                );
             }
             if preset.layers.bottom_mask {
-                eprintln!("  output/gerber/{}{}", board_name, preset.file_naming.bottom_mask);
+                eprintln!(
+                    "  output/gerber/{}{}",
+                    board_name, preset.file_naming.bottom_mask
+                );
             }
             if preset.layers.top_silk {
-                eprintln!("  output/gerber/{}{}", board_name, preset.file_naming.top_silk);
+                eprintln!(
+                    "  output/gerber/{}{}",
+                    board_name, preset.file_naming.top_silk
+                );
             }
             if preset.layers.bottom_silk {
-                eprintln!("  output/gerber/{}{}", board_name, preset.file_naming.bottom_silk);
+                eprintln!(
+                    "  output/gerber/{}{}",
+                    board_name, preset.file_naming.bottom_silk
+                );
             }
             if preset.layers.top_paste {
-                eprintln!("  output/gerber/{}{}", board_name, preset.file_naming.top_paste);
+                eprintln!(
+                    "  output/gerber/{}{}",
+                    board_name, preset.file_naming.top_paste
+                );
             }
             if preset.layers.bottom_paste {
-                eprintln!("  output/gerber/{}{}", board_name, preset.file_naming.bottom_paste);
+                eprintln!(
+                    "  output/gerber/{}{}",
+                    board_name, preset.file_naming.bottom_paste
+                );
             }
             if preset.layers.outline {
-                eprintln!("  output/gerber/{}{}", board_name, preset.file_naming.outline);
+                eprintln!(
+                    "  output/gerber/{}{}",
+                    board_name, preset.file_naming.outline
+                );
             }
             if preset.layers.drill {
-                eprintln!("  output/drill/{}{}", board_name, preset.file_naming.drill_pth);
+                eprintln!(
+                    "  output/drill/{}{}",
+                    board_name, preset.file_naming.drill_pth
+                );
             }
             if preset.assembly {
                 eprintln!("  output/assembly/{}{}", board_name, preset.file_naming.bom);

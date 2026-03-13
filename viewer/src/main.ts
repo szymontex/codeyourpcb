@@ -166,7 +166,6 @@ async function init(): Promise<void> {
   const routingStatus = document.getElementById('routing-status')!;
   const routingProgress = document.getElementById('routing-progress')!;
   const openBtn = document.getElementById('open-btn') as HTMLButtonElement;
-  // @ts-ignore - Used conditionally in web-only block (line 1001-1002)
   const shareBtn = document.getElementById('share-btn') as HTMLButtonElement;
   const themeToggle = document.getElementById('theme-toggle') as HTMLButtonElement;
   const themeIcon = document.getElementById('theme-icon')!;
@@ -205,7 +204,7 @@ async function init(): Promise<void> {
   let dirty = true;
   let lastLoadedSource: string | null = null;
   let showRatsnest = true;
-  let colorByNet = true;
+  const colorByNet = true;
   let selectedTraceId: number | null = null;
   let hoveredTraceId: number | null = null;
   let labelPosition: { x: number; y: number } | null = null;
@@ -810,24 +809,38 @@ async function init(): Promise<void> {
    * Populate the error list with current violations
    */
   function populateErrorList(): void {
+    // Clear existing content safely
+    errorList.textContent = '';
+
     if (!snapshot?.violations) {
-      errorList.innerHTML = '<div class="error-item">No errors</div>';
+      const noErrors = document.createElement('div');
+      noErrors.className = 'error-item';
+      noErrors.textContent = 'No errors';
+      errorList.appendChild(noErrors);
       return;
     }
 
-    errorList.innerHTML = snapshot.violations.map((v, i) => `
-      <div class="error-item" data-index="${i}">
-        <span class="error-kind">[${v.kind}]</span>
-        <span class="error-message">${v.message}</span>
-      </div>
-    `).join('');
+    // Build DOM nodes programmatically — never insert user-controlled text as HTML
+    snapshot.violations.forEach((v, i) => {
+      const item = document.createElement('div');
+      item.className = 'error-item';
+      item.dataset.index = String(i);
 
-    // Add click handlers for zoom-to-location
-    errorList.querySelectorAll('.error-item').forEach(el => {
-      el.addEventListener('click', () => {
-        const idx = parseInt(el.getAttribute('data-index')!, 10);
-        const violation = snapshot!.violations[idx];
-        zoomToLocation(violation.x_nm, violation.y_nm);
+      const kind = document.createElement('span');
+      kind.className = 'error-kind';
+      kind.textContent = `[${v.kind}]`;
+
+      const message = document.createElement('span');
+      message.className = 'error-message';
+      message.textContent = v.message;
+
+      item.appendChild(kind);
+      item.appendChild(message);
+      errorList.appendChild(item);
+
+      // Click handler for zoom-to-location
+      item.addEventListener('click', () => {
+        zoomToLocation(v.x_nm, v.y_nm);
       });
     });
   }
@@ -1427,7 +1440,7 @@ async function init(): Promise<void> {
         handleRouteError(error);
       },
     });
-  } catch (err) {
+  } catch (_err) {
     console.log('[WS] WebSocket not available');
   }
 
