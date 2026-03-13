@@ -149,11 +149,10 @@ export function setupDivider(): void {
     document.body.style.userSelect = 'none';
   });
 
-  document.addEventListener('mousemove', (e: MouseEvent) => {
-    if (!isDragging) return;
-
+  /** Shared resize logic for both mouse and touch drag */
+  const applyResize = (clientX: number) => {
     const mainRect = mainContent.getBoundingClientRect();
-    const newWidth = e.clientX - mainRect.left;
+    const newWidth = clientX - mainRect.left;
 
     // Clamp between 200px and 70% of main content width
     const minWidth = 200;
@@ -166,14 +165,21 @@ export function setupDivider(): void {
     if (editorInstance) {
       editorInstance.layout();
     }
-  });
+  };
 
-  document.addEventListener('mouseup', () => {
+  const stopDrag = () => {
     if (isDragging) {
       isDragging = false;
       document.body.style.userSelect = '';
     }
+  };
+
+  document.addEventListener('mousemove', (e: MouseEvent) => {
+    if (!isDragging) return;
+    applyResize(e.clientX);
   });
+
+  document.addEventListener('mouseup', stopDrag);
 
   // Touch events for tablet support
   divider.addEventListener('touchstart', (e: TouchEvent) => {
@@ -184,30 +190,10 @@ export function setupDivider(): void {
 
   document.addEventListener('touchmove', (e: TouchEvent) => {
     if (!isDragging || e.touches.length === 0) return;
-
-    const touch = e.touches[0];
-    const mainRect = mainContent.getBoundingClientRect();
-    const newWidth = touch.clientX - mainRect.left;
-
-    // Clamp between 200px and 70% of main content width
-    const minWidth = 200;
-    const maxWidth = mainRect.width * 0.7;
-    const clampedWidth = Math.min(Math.max(newWidth, minWidth), maxWidth);
-
-    editorContainer.style.width = clampedWidth + 'px';
-
-    // Trigger Monaco layout recalculation
-    if (editorInstance) {
-      editorInstance.layout();
-    }
+    applyResize(e.touches[0].clientX);
   });
 
-  document.addEventListener('touchend', () => {
-    if (isDragging) {
-      isDragging = false;
-      document.body.style.userSelect = '';
-    }
-  });
+  document.addEventListener('touchend', stopDrag);
 
   console.log('[Divider] Drag handlers set up');
 }

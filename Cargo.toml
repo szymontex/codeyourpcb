@@ -64,3 +64,11 @@ lto = true           # Link-time optimization
 codegen-units = 1    # Better optimization (slower compile)
 panic = "abort"      # Smaller panic handler
 strip = true         # Strip debug symbols
+
+# Per-crate overrides: autorouter needs speed, not size.
+# cypcb-autoroute is not in the WASM bundle, so this doesn't affect WASM size.
+[profile.release.package.cypcb-autoroute]
+opt-level = 3        # Optimize for speed
+
+[profile.release.package.pathfinding]
+opt-level = 3        # A* hot path — speed matters

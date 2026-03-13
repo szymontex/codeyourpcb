@@ -16,6 +16,7 @@
  */
 
 import type { BoardSnapshot, ComponentInfo, PadInfo, NetInfo, PinRef, BoardInfo, TraceSegmentInfo, ViolationInfo } from './types';
+import { pointToSegmentDistance } from './geometry';
 
 /**
  * Interface for the PCB rendering engine exposed from Rust/WASM
@@ -457,33 +458,60 @@ export function parseSesFile(sesContent: string): { traces: BoardSnapshot['trace
 }
 
 // ============================================================================
-// Geometry utilities (used by MockPcbEngine hit-testing and DRC)
+// Shared route-loading helpers
 // ============================================================================
 
 /**
- * Shortest distance from point (px,py) to line segment (ax,ay)-(bx,by).
+ * Apply parsed routes to a snapshot: replace traces/vias and regenerate
+ * star-topology ratsnest for unrouted nets. Used by both WasmPcbEngineAdapter
+ * and MockPcbEngine to avoid duplicating the ratsnest logic.
  */
-function pointToSegmentDistance(
-  px: number, py: number,
-  ax: number, ay: number,
-  bx: number, by: number,
-): number {
-  const dx = bx - ax;
-  const dy = by - ay;
-  const lenSq = dx * dx + dy * dy;
-  if (lenSq === 0) {
-    const ex = px - ax;
-    const ey = py - ay;
-    return Math.sqrt(ex * ex + ey * ey);
+function applyRoutesToSnapshot(
+  snapshot: BoardSnapshot,
+  sesContent: string,
+): void {
+  const { traces, vias } = parseSesFile(sesContent);
+
+  snapshot.traces = traces;
+  snapshot.vias = vias;
+
+  // Regenerate ratsnest only for unrouted nets
+  snapshot.ratsnest = [];
+  for (const net of snapshot.nets) {
+    if (net.connections.length < 2) continue;
+
+    const hasTraces = traces.some(t => t.net_name === net.name);
+    if (hasTraces) continue;
+
+    const positions: { x: number; y: number }[] = [];
+    for (const conn of net.connections) {
+      const comp = snapshot.components.find(c => c.refdes === conn.component);
+      if (comp) {
+        const pad = comp.pads.find(p => p.number === conn.pin);
+        positions.push({
+          x: comp.x_nm + (pad?.x_nm ?? 0),
+          y: comp.y_nm + (pad?.y_nm ?? 0),
+        });
+      }
+    }
+
+    if (positions.length >= 2) {
+      for (let i = 1; i < positions.length; i++) {
+        snapshot.ratsnest.push({
+          start_x: positions[0].x,
+          start_y: positions[0].y,
+          end_x: positions[i].x,
+          end_y: positions[i].y,
+          net_name: net.name,
+        });
+      }
+    }
   }
-  let t = ((px - ax) * dx + (py - ay) * dy) / lenSq;
-  t = Math.max(0, Math.min(1, t));
-  const cx = ax + t * dx;
-  const cy = ay + t * dy;
-  const ex = px - cx;
-  const ey = py - cy;
-  return Math.sqrt(ex * ex + ey * ey);
 }
+
+// ============================================================================
+// Geometry utilities (used by MockPcbEngine hit-testing and DRC)
+// ============================================================================
 
 /**
  * Approximate minimum distance between two line segments.
@@ -538,63 +566,7 @@ class WasmPcbEngineAdapter implements PcbEngine {
 
   load_routes(sesContent: string): void {
     if (!this.cachedSnapshot) return;
-
-    // Parse .ses file and extract routes
-    const { traces, vias } = parseSesFile(sesContent);
-
-    // Replace traces and vias in cached snapshot
-    this.cachedSnapshot.traces = traces;
-    this.cachedSnapshot.vias = vias;
-
-    // Build set of routed connections (net + pin)
-    const routedPins = new Set<string>();
-    for (const trace of traces) {
-      if (trace.net_name) {
-        // For each net, we consider all pins in that net as "connected" if there are traces
-        const net = this.cachedSnapshot.nets.find(n => n.name === trace.net_name);
-        if (net) {
-          for (const conn of net.connections) {
-            routedPins.add(`${conn.component}.${conn.pin}`);
-          }
-        }
-      }
-    }
-
-    // Regenerate ratsnest only for unrouted connections
-    this.cachedSnapshot.ratsnest = [];
-    for (const net of this.cachedSnapshot.nets) {
-      if (net.connections.length < 2) continue;
-
-      // Check if this net has any traces
-      const hasTraces = traces.some(t => t.net_name === net.name);
-      if (hasTraces) continue; // Skip routed nets
-
-      // Get pin positions for unrouted net
-      const positions: { x: number; y: number }[] = [];
-      for (const conn of net.connections) {
-        const comp = this.cachedSnapshot.components.find(c => c.refdes === conn.component);
-        if (comp) {
-          const pad = comp.pads.find(p => p.number === conn.pin);
-          positions.push({
-            x: comp.x_nm + (pad?.x_nm ?? 0),
-            y: comp.y_nm + (pad?.y_nm ?? 0),
-          });
-        }
-      }
-
-      // Create star-topology ratsnest
-      if (positions.length >= 2) {
-        for (let i = 1; i < positions.length; i++) {
-          this.cachedSnapshot.ratsnest.push({
-            start_x: positions[0].x,
-            start_y: positions[0].y,
-            end_x: positions[i].x,
-            end_y: positions[i].y,
-            net_name: net.name,
-          });
-        }
-      }
-    }
+    applyRoutesToSnapshot(this.cachedSnapshot, sesContent);
   }
 
   get_snapshot(): BoardSnapshot {
@@ -686,48 +658,7 @@ class MockPcbEngine implements PcbEngine {
   }
 
   load_routes(sesContent: string): void {
-    // Parse .ses file and extract routes
-    const { traces, vias } = parseSesFile(sesContent);
-
-    // Replace traces and vias
-    this.snapshot.traces = traces;
-    this.snapshot.vias = vias;
-
-    // Regenerate ratsnest only for unrouted nets
-    this.snapshot.ratsnest = [];
-    for (const net of this.snapshot.nets) {
-      if (net.connections.length < 2) continue;
-
-      // Skip nets that have traces
-      const hasTraces = traces.some(t => t.net_name === net.name);
-      if (hasTraces) continue;
-
-      // Get pin positions for unrouted net
-      const positions: { x: number; y: number }[] = [];
-      for (const conn of net.connections) {
-        const comp = this.snapshot.components.find(c => c.refdes === conn.component);
-        if (comp) {
-          const pad = comp.pads.find(p => p.number === conn.pin);
-          positions.push({
-            x: comp.x_nm + (pad?.x_nm ?? 0),
-            y: comp.y_nm + (pad?.y_nm ?? 0),
-          });
-        }
-      }
-
-      // Create star-topology ratsnest
-      if (positions.length >= 2) {
-        for (let i = 1; i < positions.length; i++) {
-          this.snapshot.ratsnest.push({
-            start_x: positions[0].x,
-            start_y: positions[0].y,
-            end_x: positions[i].x,
-            end_y: positions[i].y,
-            net_name: net.name,
-          });
-        }
-      }
-    }
+    applyRoutesToSnapshot(this.snapshot, sesContent);
   }
 
   get_snapshot(): BoardSnapshot {

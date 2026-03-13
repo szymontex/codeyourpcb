@@ -50,6 +50,32 @@ function hexToColor(hex: string): THREE.Color {
   return new THREE.Color(hex);
 }
 
+/**
+ * Create a merged copper mesh from a flat positions array and add it to a group.
+ * Used for both traces and pads on each layer to avoid duplicating the
+ * BufferGeometry + MeshStandardMaterial construction.
+ */
+function addCopperMesh(
+  positions: number[],
+  colorHex: string,
+  name: string,
+  group: THREE.Group,
+): void {
+  if (positions.length === 0) return;
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geo.computeVertexNormals();
+  const mat = new THREE.MeshStandardMaterial({
+    color: hexToColor(colorHex),
+    metalness: 0.6,
+    roughness: 0.3,
+    side: THREE.DoubleSide,
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.name = name;
+  group.add(mesh);
+}
+
 export class Renderer3D {
   private renderer: THREE.WebGLRenderer | null = null;
   private scene: THREE.Scene | null = null;
@@ -380,37 +406,9 @@ export class Renderer3D {
       }
     }
 
-    // Create top copper trace mesh
-    if (topPositions.length > 0) {
-      const geo = new THREE.BufferGeometry();
-      geo.setAttribute('position', new THREE.Float32BufferAttribute(topPositions, 3));
-      geo.computeVertexNormals();
-      const mat = new THREE.MeshStandardMaterial({
-        color: hexToColor(LAYER_COLORS.top_copper),
-        metalness: 0.6,
-        roughness: 0.3,
-        side: THREE.DoubleSide,
-      });
-      const mesh = new THREE.Mesh(geo, mat);
-      mesh.name = 'traces-top';
-      topGroup.add(mesh);
-    }
-
-    // Create bottom copper trace mesh
-    if (bottomPositions.length > 0) {
-      const geo = new THREE.BufferGeometry();
-      geo.setAttribute('position', new THREE.Float32BufferAttribute(bottomPositions, 3));
-      geo.computeVertexNormals();
-      const mat = new THREE.MeshStandardMaterial({
-        color: hexToColor(LAYER_COLORS.bottom_copper),
-        metalness: 0.6,
-        roughness: 0.3,
-        side: THREE.DoubleSide,
-      });
-      const mesh = new THREE.Mesh(geo, mat);
-      mesh.name = 'traces-bottom';
-      bottomGroup.add(mesh);
-    }
+    // Create copper trace meshes per layer
+    addCopperMesh(topPositions, LAYER_COLORS.top_copper, 'traces-top', topGroup);
+    addCopperMesh(bottomPositions, LAYER_COLORS.bottom_copper, 'traces-bottom', bottomGroup);
 
     if (topSegCount > 0) console.log(`[3D] Built ${topSegCount} trace segments on layer Top`);
     else console.log('[3D] Warning: 0 traces on layer Top');
@@ -471,36 +469,9 @@ export class Renderer3D {
       }
     }
 
-    // Create pad meshes
-    if (topPositions.length > 0) {
-      const geo = new THREE.BufferGeometry();
-      geo.setAttribute('position', new THREE.Float32BufferAttribute(topPositions, 3));
-      geo.computeVertexNormals();
-      const mat = new THREE.MeshStandardMaterial({
-        color: hexToColor(LAYER_COLORS.top_copper),
-        metalness: 0.6,
-        roughness: 0.3,
-        side: THREE.DoubleSide,
-      });
-      const mesh = new THREE.Mesh(geo, mat);
-      mesh.name = 'pads-top';
-      topGroup.add(mesh);
-    }
-
-    if (bottomPositions.length > 0) {
-      const geo = new THREE.BufferGeometry();
-      geo.setAttribute('position', new THREE.Float32BufferAttribute(bottomPositions, 3));
-      geo.computeVertexNormals();
-      const mat = new THREE.MeshStandardMaterial({
-        color: hexToColor(LAYER_COLORS.bottom_copper),
-        metalness: 0.6,
-        roughness: 0.3,
-        side: THREE.DoubleSide,
-      });
-      const mesh = new THREE.Mesh(geo, mat);
-      mesh.name = 'pads-bottom';
-      bottomGroup.add(mesh);
-    }
+    // Create pad meshes per layer
+    addCopperMesh(topPositions, LAYER_COLORS.top_copper, 'pads-top', topGroup);
+    addCopperMesh(bottomPositions, LAYER_COLORS.bottom_copper, 'pads-bottom', bottomGroup);
 
     console.log(`[3D] Built ${padCount} pads`);
   }

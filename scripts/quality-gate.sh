@@ -14,7 +14,7 @@ echo "=== Quality Gate ==="
 echo ""
 
 # Stage 1: Rust formatting
-echo "[1/6] cargo fmt --check"
+echo "[1/8] cargo fmt --check"
 if cargo fmt --check 2>&1; then
   pass "cargo-fmt"
 else
@@ -23,7 +23,7 @@ fi
 echo ""
 
 # Stage 2: Clippy (strict, excluding desktop crates)
-echo "[2/6] cargo clippy"
+echo "[2/8] cargo clippy"
 if cargo clippy --workspace --exclude cypcb-cli --exclude cypcb-desktop -- -D warnings 2>&1; then
   pass "cargo-clippy"
 else
@@ -32,7 +32,7 @@ fi
 echo ""
 
 # Stage 3: Rust tests
-echo "[3/6] cargo test"
+echo "[3/8] cargo test"
 if cargo test --workspace --exclude cypcb-cli --exclude cypcb-desktop 2>&1; then
   pass "cargo-test"
 else
@@ -41,7 +41,7 @@ fi
 echo ""
 
 # Stage 4: ESLint
-echo "[4/6] eslint"
+echo "[4/8] eslint"
 if (cd viewer && npx eslint src/) 2>&1; then
   pass "eslint"
 else
@@ -50,7 +50,7 @@ fi
 echo ""
 
 # Stage 5: Vitest
-echo "[5/6] vitest"
+echo "[5/8] vitest"
 if (cd viewer && npx vitest run) 2>&1; then
   pass "vitest"
 else
@@ -59,11 +59,29 @@ fi
 echo ""
 
 # Stage 6: Playwright E2E
-echo "[6/6] playwright"
+echo "[6/8] playwright"
 if (cd viewer && npx playwright test) 2>&1; then
   pass "playwright"
 else
   fail "playwright"
+fi
+echo ""
+
+# Stage 7: Autorouter performance benchmark
+echo "[7/8] autorouter benchmark"
+if cargo test --release -p cypcb-autoroute -- benchmark_500 --ignored 2>&1; then
+  pass "autorouter-benchmark"
+else
+  fail "autorouter-benchmark"
+fi
+echo ""
+
+# Stage 8: Code duplication check
+echo "[8/8] jscpd"
+if (cd viewer && npx jscpd --exitCode 1) 2>&1; then
+  pass "jscpd"
+else
+  fail "jscpd"
 fi
 echo ""
 

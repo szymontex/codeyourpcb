@@ -1,0 +1,7 @@
+{
+  "threshold": 0,
+  "minLines": 10,
+  "reporters": ["console"],
+  "path": ["src/"],
+  "ignore": ["**/*.test.ts", "**/__tests__/**"]
+}

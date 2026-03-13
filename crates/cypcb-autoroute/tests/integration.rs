@@ -7,6 +7,7 @@
 //! - `blink_apply_routes_compatibility`: validates output contract with apply_routes()
 //! - `routed_output_passes_drc`: DRC integration — zero violations after routing blink.cypcb
 //! - `benchmark_routing_time`: performance baselines for S08 comparison (gated behind `#[ignore]`)
+//! - `benchmark_500_component`: 500-component synthetic board benchmark (<30s target)
 
 use cypcb_autoroute::grid::RoutingGrid;
 use cypcb_autoroute::{route_board, AutorouteConfig};
@@ -484,4 +485,208 @@ fn benchmark_routing_time() {
     eprintln!("╠══════════════════════════════════════════════════════════╣");
     eprintln!("║ Baselines recorded for S08 optimization comparison.     ║");
     eprintln!("╚══════════════════════════════════════════════════════════╝\n");
+}
+
+// ============================================================================
+// Synthetic board generator
+// ============================================================================
+
+/// Generate a synthetic board with the given number of components for benchmarking.
+///
+/// Strategy:
+/// - Components are placed in a grid layout on a proportionally-sized board
+/// - Each component uses the "0805" footprint (2-pad SMD)
+/// - Nets connect adjacent pairs (horizontal neighbors) for realistic connectivity
+/// - Board dimensions scale with sqrt(component_count) to maintain reasonable density
+///
+/// Returns (BoardWorld, FootprintLibrary, net_count).
+fn generate_synthetic_board(component_count: usize) -> (BoardWorld, FootprintLibrary, usize) {
+    use cypcb_core::Nm;
+    use cypcb_world::{
+        FootprintRef, NetConnections, NetId, PinConnection, Position, RefDes, Rotation, Value,
+    };
+
+    let library = FootprintLibrary::new();
+    let mut world = BoardWorld::new();
+
+    // Grid layout: roughly square arrangement
+    let cols = (component_count as f64).sqrt().ceil() as usize;
+    let rows = (component_count + cols - 1) / cols;
+
+    // Component spacing: 3mm pitch (0805 is ~2x1.25mm, so 3mm gives clearance)
+    let pitch_mm = 3.0;
+    // Board size: grid dimensions + margin
+    let margin_mm = 5.0;
+    let board_width_mm = (cols as f64) * pitch_mm + 2.0 * margin_mm;
+    let board_height_mm = (rows as f64) * pitch_mm + 2.0 * margin_mm;
+
+    world.set_board(
+        "SyntheticBenchmark".to_string(),
+        (Nm::from_mm(board_width_mm), Nm::from_mm(board_height_mm)),
+        2,
+    );
+
+    // Place components in a grid and connect horizontal neighbors
+    let mut net_id_counter: u32 = 0;
+    let mut placed = 0;
+
+    for row in 0..rows {
+        for col in 0..cols {
+            if placed >= component_count {
+                break;
+            }
+
+            let x_mm = margin_mm + (col as f64) * pitch_mm + pitch_mm / 2.0;
+            let y_mm = margin_mm + (row as f64) * pitch_mm + pitch_mm / 2.0;
+
+            // Build net connections for this component's 2 pads
+            let mut nets = NetConnections::new();
+
+            // Pad "1" connects to the net shared with the left neighbor (or a new net)
+            // Pad "2" connects to the net shared with the right neighbor (or a new net)
+            if col > 0 {
+                // Share net with left neighbor's pad "2"
+                // The left neighbor's pad "2" net_id is (net_id_counter - 1) since we
+                // assigned it in the previous iteration.
+                let shared_net = NetId(net_id_counter - 1);
+                nets.add(PinConnection::new("1", shared_net));
+                world.intern_net(&format!("N{}", shared_net.0));
+            } else {
+                // First in row: pad 1 gets a new net (will be unconnected unless
+                // we wrap around, which we don't — some nets will be single-pad)
+                let net = NetId(net_id_counter);
+                nets.add(PinConnection::new("1", net));
+                world.intern_net(&format!("N{}", net.0));
+                net_id_counter += 1;
+            }
+
+            // Pad "2" always gets a new net (right-side connection point)
+            let right_net = NetId(net_id_counter);
+            nets.add(PinConnection::new("2", right_net));
+            world.intern_net(&format!("N{}", right_net.0));
+            net_id_counter += 1;
+
+            let refdes = format!("R{}", placed + 1);
+            world.spawn_component(
+                RefDes::new(&refdes),
+                Value::new("100R"),
+                Position::from_mm(x_mm, y_mm),
+                Rotation::ZERO,
+                FootprintRef::new("0805"),
+                nets,
+            );
+
+            placed += 1;
+        }
+    }
+
+    // Count nets that have >=2 pads (routable nets)
+    // With our scheme: each horizontal pair shares a net via pad1-pad2 connections.
+    // Nets shared between neighbors are the ones that matter.
+    // Total unique nets = net_id_counter, but many are single-pad (unroutable).
+    // The router's ratsnest extraction handles this — it only routes nets with >=2 pads.
+    let total_nets = net_id_counter as usize;
+
+    eprintln!(
+        "Synthetic board: {}x{}mm, {} components in {}x{} grid, {} total nets",
+        board_width_mm as u32, board_height_mm as u32, placed, cols, rows, total_nets,
+    );
+
+    (world, library, total_nets)
+}
+
+/// 500-component benchmark — target: <30s in release mode.
+///
+/// Run with: `cargo test --release -p cypcb-autoroute -- benchmark_500 --ignored --nocapture`
+#[test]
+#[ignore]
+#[cfg(not(target_arch = "wasm32"))]
+fn benchmark_500_component() {
+    use std::time::Instant;
+
+    let rules = test_rules();
+    let config = AutorouteConfig::default();
+
+    let (mut world, library, total_nets) = generate_synthetic_board(500);
+
+    // Get board dimensions for reporting
+    let (board_size, _) = world.board_info().expect("board should exist");
+    let board_w_mm = board_size.width.to_mm();
+    let board_h_mm = board_size.height.to_mm();
+
+    // Compute expected grid dimensions for reporting
+    let resolution = config.resolve_adaptive_grid_resolution(
+        &rules,
+        board_size.width.raw(),
+        board_size.height.raw(),
+    );
+    let grid_w = (board_size.width.raw() + resolution - 1) / resolution;
+    let grid_h = (board_size.height.raw() + resolution - 1) / resolution;
+
+    eprintln!("\n╔══════════════════════════════════════════════════════════════╗");
+    eprintln!("║          500-Component Benchmark                            ║");
+    eprintln!("╠══════════════════════════════════════════════════════════════╣");
+    eprintln!("║ Components:     500                                         ║");
+    eprintln!("║ Total nets:     {:<44}║", total_nets);
+    eprintln!(
+        "║ Board:          {:.0}x{:.0}mm{:>40}║",
+        board_w_mm, board_h_mm, ""
+    );
+    eprintln!(
+        "║ Grid:           {}x{} @ {:.0}µm{:>33}║",
+        grid_w,
+        grid_h,
+        resolution as f64 / 1_000.0,
+        ""
+    );
+
+    let start = Instant::now();
+    let result = route_board(&mut world, &library, &rules, &config);
+    let elapsed = start.elapsed();
+
+    let metrics = calculate_metrics(&result);
+    let elapsed_secs = elapsed.as_secs_f64();
+
+    eprintln!("║ Status:         {:?}{:>40}║", result.status, "");
+    eprintln!("║ Time:           {:.2}s{:>44}║", elapsed_secs, "");
+    eprintln!("║ Segments:       {:<44}║", result.routes.len());
+    eprintln!("║ Vias:           {:<44}║", metrics.via_count);
+    eprintln!(
+        "║ Length:         {:.1}mm{:>42}║",
+        metrics.total_length.raw() as f64 / 1_000_000.0,
+        ""
+    );
+
+    // Calculate routing completion rate
+    let routed_nets = match result.status {
+        RoutingStatus::Complete => total_nets,
+        RoutingStatus::Partial { unrouted_count, .. } => total_nets.saturating_sub(unrouted_count),
+        RoutingStatus::Failed { .. } => 0,
+    };
+    let completion_pct = if total_nets > 0 {
+        (routed_nets as f64 / total_nets as f64) * 100.0
+    } else {
+        100.0
+    };
+
+    eprintln!(
+        "║ Completion:     {:.1}% ({}/{}){:>33}║",
+        completion_pct, routed_nets, total_nets, ""
+    );
+    eprintln!("╚══════════════════════════════════════════════════════════════╝\n");
+
+    // Primary assertion: <30s
+    assert!(
+        elapsed_secs < 30.0,
+        "500-component routing took {:.2}s, exceeds 30s target",
+        elapsed_secs
+    );
+
+    // Secondary assertion: at least 90% of routable nets completed
+    // (some may fail on a synthetic board with tight spacing)
+    assert!(
+        completion_pct >= 90.0,
+        "Routing completion {:.1}% is below 90% threshold",
+        completion_pct
+    );
 }

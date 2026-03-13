@@ -214,26 +214,7 @@ export function drawResizeHandles(
   themeColors: ReturnType<typeof getThemeColors>,
   activeHandle: ResizeHandle | null,
 ): void {
-  const [x0, y0] = worldToScreen(vp, 0, 0);        // bottom-left in screen
-  const [x1, y1] = worldToScreen(vp, width, height); // top-right in screen
-  // screen coords: x0 < x1, y1 < y0 (Y flipped)
-  const left = x0;
-  const right = x1;
-  const top = y1;
-  const bottom = y0;
-  const midX = (left + right) / 2;
-  const midY = (top + bottom) / 2;
-
-  const handles: { id: ResizeHandle; cx: number; cy: number }[] = [
-    { id: 'nw', cx: left,  cy: top },
-    { id: 'n',  cx: midX,  cy: top },
-    { id: 'ne', cx: right, cy: top },
-    { id: 'w',  cx: left,  cy: midY },
-    { id: 'e',  cx: right, cy: midY },
-    { id: 'sw', cx: left,  cy: bottom },
-    { id: 's',  cx: midX,  cy: bottom },
-    { id: 'se', cx: right, cy: bottom },
-  ];
+  const handles = computeHandlePositions(vp, 0, 0, width, height);
 
   const hs = HANDLE_SIZE;
   for (const h of handles) {
@@ -247,17 +228,17 @@ export function drawResizeHandles(
 }
 
 /**
- * Hit-test resize handles. Returns handle id or null.
+ * Compute screen-space positions for the 8 resize handles around a board rectangle.
  */
-export function hitTestResizeHandle(
+function computeHandlePositions(
   vp: Viewport,
-  boardWidth: number,
-  boardHeight: number,
-  screenX: number,
-  screenY: number,
-): ResizeHandle | null {
-  const [x0, y0] = worldToScreen(vp, 0, 0);
-  const [x1, y1] = worldToScreen(vp, boardWidth, boardHeight);
+  originX: number,
+  originY: number,
+  width: number,
+  height: number,
+): { id: ResizeHandle; cx: number; cy: number }[] {
+  const [x0, y0] = worldToScreen(vp, originX, originY);
+  const [x1, y1] = worldToScreen(vp, width, height);
   const left = x0;
   const right = x1;
   const top = y1;
@@ -265,7 +246,7 @@ export function hitTestResizeHandle(
   const midX = (left + right) / 2;
   const midY = (top + bottom) / 2;
 
-  const handles: { id: ResizeHandle; cx: number; cy: number }[] = [
+  return [
     { id: 'nw', cx: left,  cy: top },
     { id: 'n',  cx: midX,  cy: top },
     { id: 'ne', cx: right, cy: top },
@@ -275,6 +256,19 @@ export function hitTestResizeHandle(
     { id: 's',  cx: midX,  cy: bottom },
     { id: 'se', cx: right, cy: bottom },
   ];
+}
+
+/**
+ * Hit-test resize handles. Returns handle id or null.
+ */
+export function hitTestResizeHandle(
+  vp: Viewport,
+  boardWidth: number,
+  boardHeight: number,
+  screenX: number,
+  screenY: number,
+): ResizeHandle | null {
+  const handles = computeHandlePositions(vp, 0, 0, boardWidth, boardHeight);
 
   const tolerance = HANDLE_SIZE + 4; // generous hit region
   for (const h of handles) {

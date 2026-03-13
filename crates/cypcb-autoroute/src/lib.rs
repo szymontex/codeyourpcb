@@ -71,6 +71,43 @@ impl AutorouteConfig {
             (clearance.raw() / 2).max(10_000) // floor at 10µm
         })
     }
+
+    /// Resolve grid resolution with adaptive scaling for large boards.
+    ///
+    /// For boards larger than 80mm in either dimension, the base resolution
+    /// is doubled (coarser grid), reducing cell count by 4x and cutting
+    /// A* search space proportionally. Quality remains acceptable because
+    /// larger boards have proportionally wider trace spacing.
+    pub fn resolve_adaptive_grid_resolution(
+        &self,
+        rules: &dyn RoutingRuleSet,
+        board_width_nm: i64,
+        board_height_nm: i64,
+    ) -> i64 {
+        let base = self.resolve_grid_resolution(rules);
+        let threshold_nm: i64 = 80_000_000; // 80mm
+
+        if board_width_nm > threshold_nm || board_height_nm > threshold_nm {
+            // Scale factor: 2x for boards up to 200mm, 3x for larger
+            let max_dim = board_width_nm.max(board_height_nm);
+            let scale = if max_dim > 200_000_000 { 3 } else { 2 };
+            let adapted = base * scale;
+            tracing::info!(
+                base_resolution_um = base as f64 / 1_000.0,
+                adapted_resolution_um = adapted as f64 / 1_000.0,
+                scale,
+                board_mm = format!(
+                    "{:.0}x{:.0}",
+                    board_width_nm as f64 / 1_000_000.0,
+                    board_height_nm as f64 / 1_000_000.0
+                ),
+                "Adaptive grid: coarsening for large board"
+            );
+            adapted
+        } else {
+            base
+        }
+    }
 }
 
 /// Route all unrouted nets on the board.
@@ -98,7 +135,16 @@ pub fn route_board(
 ) -> RoutingResult {
     let _span = tracing::info_span!("route_board").entered();
 
-    let resolution = config.resolve_grid_resolution(rules);
+    // Use adaptive resolution — coarser grid for larger boards
+    let resolution = if let Some((board_size, _)) = world.board_info() {
+        config.resolve_adaptive_grid_resolution(
+            rules,
+            board_size.width.raw(),
+            board_size.height.raw(),
+        )
+    } else {
+        config.resolve_grid_resolution(rules)
+    };
 
     // Build grid
     let mut grid = match grid::RoutingGrid::from_board(world, library, rules, resolution) {
