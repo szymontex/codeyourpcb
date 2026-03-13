@@ -10,6 +10,7 @@ import type { BoardSnapshot, ViolationInfo } from './types';
 import { createViewport, fitBoard, screenToWorld } from './viewport';
 import { render, type RenderState } from './renderer';
 import { setupInteraction, type InteractionState } from './interaction';
+import { createRoutingState, cancelRoute, flipLayer, type RoutingState } from './routing';
 import { createLayerVisibility } from './layers';
 import { createFilePicker, setupDropZone, readFileAsText } from './file-picker';
 import { openFile, saveFile } from './file-access';
@@ -199,6 +200,11 @@ async function init(): Promise<void> {
   let dirty = true;
   let lastLoadedSource: string | null = null;
   let showRatsnest = true;
+  let colorByNet = true;
+  let selectedTraceId: number | null = null;
+  let hoveredTraceId: number | null = null;
+  let labelPosition: { x: number; y: number } | null = null;
+  let routingState: RoutingState = createRoutingState();
 
   // Resize handler
   function resize(): void {
@@ -420,6 +426,9 @@ async function init(): Promise<void> {
     lastX: 0,
     lastY: 0,
     dirty: false,
+    snapshot,
+    selectedTraceId: null,
+    hoveredTraceId: null,
     onSelect: (x_nm, y_nm) => {
       // Query engine for component at point
       const hits = engine.query_point(Math.round(x_nm), Math.round(y_nm));
@@ -441,9 +450,63 @@ async function init(): Promise<void> {
       viewport = vp;
       interactionState.viewport = vp;
     },
+    onTraceSelect: (traceId, screenX, screenY) => {
+      selectedTraceId = traceId;
+      if (traceId != null) {
+        // Convert client coords to canvas-relative for label positioning
+        const rect = canvas.getBoundingClientRect();
+        labelPosition = { x: screenX - rect.left, y: screenY - rect.top };
+        // Show trace info in status bar
+        const trace = snapshot?.traces?.find(t => t.id === traceId);
+        if (trace) {
+          const widthMm = (trace.width / 1_000_000).toFixed(2);
+          statusText.textContent = `Trace: ${trace.net_name} (${widthMm}mm, ${trace.layer})`;
+        }
+      } else {
+        labelPosition = null;
+        selectedRefdes = null;
+        statusText.textContent = usingWasm ? 'Ready (WASM)' : 'Ready (Mock)';
+      }
+      dirty = true;
+    },
+    onTraceHover: (traceId) => {
+      hoveredTraceId = traceId;
+      dirty = true;
+    },
+    routing: routingState,
+    engine,
+    onRoutingChange: (newRouting: RoutingState) => {
+      routingState = newRouting;
+      interactionState.routing = newRouting;
+      // Update snapshot after mutations (route complete changes trace list)
+      if (newRouting.mode === 'idle' && snapshot) {
+        snapshot = engine.get_snapshot();
+        interactionState.snapshot = snapshot;
+      }
+      dirty = true;
+    },
   };
 
   setupInteraction(canvas, interactionState);
+
+  // Expose debug render state for programmatic inspection
+  (window as any).__renderState = {
+    get selectedTraceId() { return selectedTraceId; },
+    get hoveredTraceId() { return hoveredTraceId; },
+    get colorByNet() { return colorByNet; },
+  };
+
+  // Expose routing state debug surface
+  (window as any).__routingState = {
+    get mode() { return routingState.mode; },
+    get anchorPoint() { return routingState.anchorPoint; },
+    get snapAngle() { return routingState.snapAngle; },
+    get netName() { return routingState.netName; },
+    get currentLayer() { return routingState.currentLayer; },
+    get committedSegments() { return routingState.committedSegments.length; },
+    get drcViolationCount() { return routingState.drcViolations.length; },
+    get previewSegment() { return routingState.previewSegment; },
+  };
 
   /**
    * Handle loading a file (.cypcb or .ses) from file picker or drag-drop
@@ -666,18 +729,22 @@ async function init(): Promise<void> {
     errorPanel.classList.add('hidden');
   });
 
-  // Coordinate display on mouse move
+  // Coordinate display on mouse move + update label position for selected trace
   canvas.addEventListener('mousemove', (e) => {
     const rect = canvas.getBoundingClientRect();
-    const [worldX, worldY] = screenToWorld(
-      viewport,
-      e.clientX - rect.left,
-      e.clientY - rect.top
-    );
+    const sx = e.clientX - rect.left;
+    const sy = e.clientY - rect.top;
+    const [worldX, worldY] = screenToWorld(viewport, sx, sy);
     // Convert to mm for display
     const xMm = (worldX / 1_000_000).toFixed(2);
     const yMm = (worldY / 1_000_000).toFixed(2);
     coordsEl.textContent = `(${xMm}, ${yMm}) mm`;
+
+    // Track label position when a trace is selected
+    if (selectedTraceId != null) {
+      labelPosition = { x: sx, y: sy };
+      dirty = true;
+    }
   });
 
   canvas.addEventListener('mouseleave', () => {
@@ -690,6 +757,9 @@ async function init(): Promise<void> {
   // Render loop
   function frame(): void {
     if (dirty || interactionState.dirty) {
+      // Keep interaction state snapshot in sync
+      interactionState.snapshot = snapshot;
+
       const renderState: RenderState = {
         snapshot,
         viewport,
@@ -697,6 +767,11 @@ async function init(): Promise<void> {
         selectedRefdes,
         showViolations,
         showRatsnest,
+        colorByNet,
+        selectedTraceId,
+        hoveredTraceId,
+        labelPosition,
+        routing: routingState.mode === 'routing' ? routingState : null,
       };
       render(ctx, renderState);
       dirty = false;
@@ -784,9 +859,9 @@ async function init(): Promise<void> {
   // ========================================================================
 
   /**
-   * Routing state for UI updates
+   * Autorouter progress state for UI updates
    */
-  interface RoutingState {
+  interface AutorouteUiState {
     isRouting: boolean;
     pass: number;
     routed: number;
@@ -795,9 +870,9 @@ async function init(): Promise<void> {
   }
 
   /**
-   * Update UI to reflect routing state
+   * Update UI to reflect autorouter state
    */
-  function updateRoutingUI(state: RoutingState): void {
+  function updateRoutingUI(state: AutorouteUiState): void {
     if (state.isRouting) {
       routeBtn.disabled = true;
       routeBtn.classList.add('routing');
@@ -1020,13 +1095,57 @@ async function init(): Promise<void> {
 
   // Keyboard shortcuts
   document.addEventListener('keydown', async (e) => {
-    // Escape to cancel routing
-    if (e.key === 'Escape' && isRouting) {
-      cancelRouting();
+    // Escape: cancel manual routing first, then autorouting
+    if (e.key === 'Escape') {
+      if (routingState.mode === 'routing') {
+        routingState = cancelRoute(routingState);
+        interactionState.routing = routingState;
+        interactionState.onRoutingChange(routingState);
+        dirty = true;
+        e.preventDefault();
+        return;
+      }
+      if (isRouting) {
+        cancelRouting();
+        return;
+      }
     }
-    // F to fit board to view
+
+    // Delete: remove selected trace
+    if ((e.key === 'Delete' || e.key === 'Backspace') && routingState.mode === 'idle') {
+      if (selectedTraceId != null) {
+        const removed = engine.remove_trace(selectedTraceId);
+        if (removed) {
+          console.log(`[Route] Deleted trace id=${selectedTraceId}`);
+          engine.run_drc_incremental();
+          snapshot = engine.get_snapshot();
+          interactionState.snapshot = snapshot;
+          selectedTraceId = null;
+          interactionState.selectedTraceId = null;
+          interactionState.onTraceSelect(null, 0, 0);
+          labelPosition = null;
+          statusText.textContent = 'Trace deleted';
+          setTimeout(() => {
+            statusText.textContent = usingWasm ? 'Ready (WASM)' : 'Ready (Mock)';
+          }, 1500);
+        }
+        dirty = true;
+        e.preventDefault();
+        return;
+      }
+    }
+    // F: flip layer during routing, or fit board to view when idle
     if (e.key === 'f' && !e.ctrlKey && !e.metaKey && !e.altKey) {
-      fitBtn.click();
+      if (routingState.mode === 'routing') {
+        routingState = flipLayer(routingState);
+        interactionState.routing = routingState;
+        interactionState.onRoutingChange(routingState);
+        statusText.textContent = `Layer: ${routingState.currentLayer}`;
+        dirty = true;
+        e.preventDefault();
+      } else {
+        fitBtn.click();
+      }
     }
     // Ctrl+E to toggle editor
     if ((e.ctrlKey || e.metaKey) && e.key === 'e') {

@@ -399,6 +399,82 @@ impl BoardWorld {
         self.world.resource_mut::<SpatialIndex>().rebuild(entries);
     }
 
+    /// Rebuild the spatial index from current components, traces, and vias.
+    ///
+    /// Extends [`rebuild_spatial_index`](Self::rebuild_spatial_index) by also indexing:
+    /// - **Trace segments**: Each segment gets an AABB expanded by half the trace width.
+    /// - **Vias**: Indexed as circular AABBs using `outer_diameter / 2` as the radius.
+    ///
+    /// Layer masks are derived from `Layer::to_copper_mask()`.
+    ///
+    /// # Arguments
+    ///
+    /// * `footprint_bounds` - Function to get bounds for a footprint name (for components).
+    pub fn rebuild_spatial_index_with_traces<F>(&mut self, footprint_bounds: F)
+    where
+        F: Fn(&str) -> Rect,
+    {
+        let mut entries = Vec::new();
+
+        // Index components (same as rebuild_spatial_index)
+        {
+            let mut query = self.world.query::<(Entity, &Position, &FootprintRef)>();
+            for (entity, position, footprint) in query.iter(&self.world) {
+                let bounds = footprint_bounds(footprint.as_str());
+                let pos = position.0;
+                let min = Point::new(
+                    Nm(pos.x.0 + bounds.min.x.0),
+                    Nm(pos.y.0 + bounds.min.y.0),
+                );
+                let max = Point::new(
+                    Nm(pos.x.0 + bounds.max.x.0),
+                    Nm(pos.y.0 + bounds.max.y.0),
+                );
+                let layer_mask = 0xFFFFFFFF;
+                entries.push(SpatialEntry::new(entity, min, max, layer_mask));
+            }
+        }
+
+        // Index trace segments
+        {
+            let mut query = self.world.query::<(Entity, &crate::components::trace::Trace)>();
+            for (entity, trace) in query.iter(&self.world) {
+                let half_width = trace.width.0 / 2;
+                let layer_mask = trace.layer.to_copper_mask();
+                for seg in &trace.segments {
+                    let min_x = seg.start.x.0.min(seg.end.x.0) - half_width;
+                    let min_y = seg.start.y.0.min(seg.end.y.0) - half_width;
+                    let max_x = seg.start.x.0.max(seg.end.x.0) + half_width;
+                    let max_y = seg.start.y.0.max(seg.end.y.0) + half_width;
+                    entries.push(SpatialEntry::from_raw(
+                        entity, min_x, min_y, max_x, max_y, layer_mask,
+                    ));
+                }
+            }
+        }
+
+        // Index vias
+        {
+            let mut query = self.world.query::<(Entity, &crate::components::trace::Via)>();
+            for (entity, via) in query.iter(&self.world) {
+                let radius = via.outer_diameter.0 / 2;
+                let cx = via.position.x.0;
+                let cy = via.position.y.0;
+                // Via spans from start_layer to end_layer — use both masks
+                let layer_mask = via.start_layer.to_copper_mask()
+                    | via.end_layer.to_copper_mask();
+                entries.push(SpatialEntry::from_raw(
+                    entity,
+                    cx - radius, cy - radius,
+                    cx + radius, cy + radius,
+                    layer_mask,
+                ));
+            }
+        }
+
+        self.world.resource_mut::<SpatialIndex>().rebuild(entries);
+    }
+
     /// Query entities in a rectangular region.
     ///
     /// Returns all entities whose bounding boxes intersect the given bounds.
@@ -766,5 +842,142 @@ mod tests {
 
         let components = world.components();
         assert_eq!(components.len(), 2);
+    }
+
+    #[test]
+    fn test_spatial_index_with_traces() {
+        use crate::components::trace::{Trace, TraceSegment, TraceSource};
+
+        let mut world = BoardWorld::new();
+
+        // Spawn a trace entity on top layer
+        let trace = Trace {
+            segments: vec![TraceSegment::new(
+                Point::from_mm(0.0, 0.0),
+                Point::from_mm(10.0, 0.0),
+            )],
+            width: Nm::from_mm(0.2),
+            layer: Layer::TopCopper,
+            net_id: NetId::new(0),
+            locked: false,
+            source: TraceSource::Manual,
+        };
+        let trace_entity = world.spawn_entity(trace);
+
+        // Rebuild spatial index with traces
+        world.rebuild_spatial_index_with_traces(|_| {
+            Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(1.0), Nm::from_mm(1.0)))
+        });
+
+        // Spatial index should have the trace entry
+        assert_eq!(world.spatial().len(), 1, "Spatial index should have 1 trace entry");
+
+        // Query at trace center should return the trace entity
+        let found = world.query_point(Point::from_mm(5.0, 0.0));
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0], trace_entity);
+
+        // Query off to the side should find nothing
+        let found = world.query_point(Point::from_mm(50.0, 50.0));
+        assert!(found.is_empty());
+    }
+
+    #[test]
+    fn test_spatial_index_with_vias() {
+        use crate::components::trace::Via;
+
+        let mut world = BoardWorld::new();
+
+        // Spawn a via entity
+        let via = Via::new(Point::from_mm(5.0, 5.0), NetId::new(0));
+        let via_entity = world.spawn_entity(via);
+
+        world.rebuild_spatial_index_with_traces(|_| {
+            Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(1.0), Nm::from_mm(1.0)))
+        });
+
+        assert_eq!(world.spatial().len(), 1, "Spatial index should have 1 via entry");
+
+        // Query at via center
+        let found = world.query_point(Point::from_mm(5.0, 5.0));
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0], via_entity);
+    }
+
+    #[test]
+    fn test_spatial_index_traces_and_components() {
+        use crate::components::trace::{Trace, TraceSegment, TraceSource};
+
+        let mut world = BoardWorld::new();
+
+        // Spawn a component
+        world.spawn_component(
+            RefDes::new("R1"),
+            Value::new("10k"),
+            Position::from_mm(10.0, 10.0),
+            Rotation::ZERO,
+            FootprintRef::new("0402"),
+            NetConnections::new(),
+        );
+
+        // Spawn a trace
+        let trace = Trace {
+            segments: vec![TraceSegment::new(
+                Point::from_mm(0.0, 0.0),
+                Point::from_mm(10.0, 0.0),
+            )],
+            width: Nm::from_mm(0.2),
+            layer: Layer::TopCopper,
+            net_id: NetId::new(0),
+            locked: false,
+            source: TraceSource::Manual,
+        };
+        world.spawn_entity(trace);
+
+        world.rebuild_spatial_index_with_traces(|_| {
+            Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(1.0), Nm::from_mm(1.0)))
+        });
+
+        // Should have 2 entries: 1 component + 1 trace segment
+        assert_eq!(world.spatial().len(), 2, "Should have component + trace in spatial index");
+    }
+
+    #[test]
+    fn test_spatial_index_trace_layer_mask() {
+        use crate::components::trace::{Trace, TraceSegment, TraceSource};
+
+        let mut world = BoardWorld::new();
+
+        // Spawn trace on bottom layer
+        let trace = Trace {
+            segments: vec![TraceSegment::new(
+                Point::from_mm(0.0, 0.0),
+                Point::from_mm(10.0, 0.0),
+            )],
+            width: Nm::from_mm(0.2),
+            layer: Layer::BottomCopper,
+            net_id: NetId::new(0),
+            locked: false,
+            source: TraceSource::Manual,
+        };
+        world.spawn_entity(trace);
+
+        world.rebuild_spatial_index_with_traces(|_| {
+            Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(1.0), Nm::from_mm(1.0)))
+        });
+
+        // Query on top layer should find nothing
+        let found = world.query_region_on_layers(
+            Rect::from_points(Point::from_mm(-1.0, -1.0), Point::from_mm(11.0, 1.0)),
+            Layer::TopCopper.to_copper_mask(),
+        );
+        assert!(found.is_empty(), "Bottom trace should not appear in top layer query");
+
+        // Query on bottom layer should find it
+        let found = world.query_region_on_layers(
+            Rect::from_points(Point::from_mm(-1.0, -1.0), Point::from_mm(11.0, 1.0)),
+            Layer::BottomCopper.to_copper_mask(),
+        );
+        assert_eq!(found.len(), 1, "Bottom trace should appear in bottom layer query");
     }
 }

@@ -381,8 +381,8 @@ pub fn sync_ast_to_world(
         }
     }
 
-    // Rebuild spatial index after all entities are added
-    world.rebuild_spatial_index(|name| {
+    // Rebuild spatial index after all entities are added (including traces/vias)
+    world.rebuild_spatial_index_with_traces(|name| {
         lib.get(name)
             .map(|fp| fp.courtyard)
             .unwrap_or_else(|| {

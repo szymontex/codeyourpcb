@@ -111,6 +111,70 @@ export function isThroughHole(layerMask: number): boolean {
   return isTopLayer(layerMask) && isBottomLayer(layerMask);
 }
 
+// Well-known net name color overrides
+const NET_COLOR_OVERRIDES: Record<string, string> = {
+  'VCC': 'hsl(0, 80%, 50%)',       // Red
+  'VDD': 'hsl(0, 80%, 50%)',       // Red
+  '+5V': 'hsl(0, 80%, 50%)',       // Red
+  '+3V3': 'hsl(30, 90%, 50%)',     // Orange
+  '3V3': 'hsl(30, 90%, 50%)',      // Orange
+  '+3.3V': 'hsl(30, 90%, 50%)',    // Orange
+  'GND': 'hsl(220, 70%, 35%)',     // Dark blue
+  'AGND': 'hsl(220, 70%, 35%)',    // Dark blue
+  'DGND': 'hsl(220, 70%, 35%)',    // Dark blue
+};
+
+/**
+ * Generate a deterministic color for a net name.
+ * Hashes the name to a hue (0-360), uses fixed saturation and lightness.
+ * Common power/ground nets get recognizable overrides.
+ */
+export function netColor(netName: string): string {
+  // Check overrides first (case-insensitive)
+  const upper = netName.toUpperCase();
+  if (NET_COLOR_OVERRIDES[upper]) {
+    return NET_COLOR_OVERRIDES[upper];
+  }
+
+  // Simple string hash → hue
+  let hash = 0;
+  for (let i = 0; i < netName.length; i++) {
+    hash = ((hash << 5) - hash + netName.charCodeAt(i)) | 0;
+  }
+  // Map to 0-360 hue, avoid red/blue zone used by overrides
+  const hue = ((hash % 360) + 360) % 360;
+  return `hsl(${hue}, 70%, 50%)`;
+}
+
+/**
+ * Brighten a color for selection highlight.
+ * Works with both HSL strings and hex colors.
+ */
+export function brightenColor(color: string, amount: number = 15): string {
+  const hslMatch = color.match(/hsl\((\d+),\s*(\d+)%,\s*(\d+)%\)/);
+  if (hslMatch) {
+    const h = parseInt(hslMatch[1]);
+    const s = parseInt(hslMatch[2]);
+    const l = Math.min(85, parseInt(hslMatch[3]) + amount);
+    return `hsl(${h}, ${s}%, ${l}%)`;
+  }
+  // Hex fallback — lighten by mixing with white
+  return color;
+}
+
+/**
+ * Convert a color to an RGBA string with given alpha.
+ * Works with HSL strings.
+ */
+export function colorWithAlpha(color: string, alpha: number): string {
+  const hslMatch = color.match(/hsl\((\d+),\s*(\d+)%,\s*(\d+)%\)/);
+  if (hslMatch) {
+    return `hsla(${hslMatch[1]}, ${hslMatch[2]}%, ${hslMatch[3]}%, ${alpha})`;
+  }
+  // Hex fallback — use canvas helper not available here, just return as-is
+  return color;
+}
+
 /**
  * Get color for a trace based on its layer name and visibility settings
  * Returns null if the layer is not visible

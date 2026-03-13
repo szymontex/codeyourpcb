@@ -175,6 +175,8 @@ pub struct TraceSegmentInfo {
 /// Used by the JavaScript renderer to draw routed connections.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TraceInfo {
+    /// Entity index for selection/hit-testing. Maps back to the ECS entity.
+    pub id: u32,
     /// The polyline path as a vector of segments.
     pub segments: Vec<TraceSegmentInfo>,
     /// Trace width in nanometers.
@@ -192,6 +194,8 @@ pub struct TraceInfo {
 /// Represents a plated through-hole connecting copper layers.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ViaInfo {
+    /// Entity index for selection/hit-testing. Maps back to the ECS entity.
+    pub id: u32,
     /// Center X coordinate in nanometers.
     pub x: f64,
     /// Center Y coordinate in nanometers.
@@ -327,6 +331,7 @@ mod tests {
     #[test]
     fn test_trace_info_serializes() {
         let trace = TraceInfo {
+            id: 0,
             segments: vec![
                 TraceSegmentInfo {
                     start_x: 0.0,
@@ -358,6 +363,7 @@ mod tests {
     #[test]
     fn test_via_info_serializes() {
         let via = ViaInfo {
+            id: 0,
             x: 5_000_000.0,
             y: 10_000_000.0,
             drill: 300_000.0,       // 0.3mm
@@ -404,6 +410,7 @@ mod tests {
             nets: vec![],
             violations: vec![],
             traces: vec![TraceInfo {
+                id: 1,
                 segments: vec![TraceSegmentInfo {
                     start_x: 5_000_000.0,
                     start_y: 5_000_000.0,
@@ -416,6 +423,7 @@ mod tests {
                 locked: false,
             }],
             vias: vec![ViaInfo {
+                id: 2,
                 x: 25_000_000.0,
                 y: 5_000_000.0,
                 drill: 300_000.0,

@@ -5,8 +5,9 @@
 
 import type { BoardSnapshot, ComponentInfo, PadInfo, ViolationInfo, TraceInfo, ViaInfo, RatsnestInfo } from './types';
 import type { Viewport } from './viewport';
+import type { RoutingState } from './routing';
 import { worldToScreen, screenToWorld } from './viewport';
-import { LAYER_COLORS, getPadColor, getTraceColor, getThemeColors, type LayerVisibility } from './layers';
+import { LAYER_COLORS, getPadColor, getTraceColor, getThemeColors, netColor, brightenColor, colorWithAlpha, type LayerVisibility } from './layers';
 
 export interface RenderState {
   snapshot: BoardSnapshot | null;
@@ -15,6 +16,13 @@ export interface RenderState {
   selectedRefdes: string | null;
   showViolations: boolean;
   showRatsnest: boolean;
+  colorByNet: boolean;
+  selectedTraceId: number | null;
+  hoveredTraceId: number | null;
+  /** Screen position for the net label tooltip (set by interaction layer) */
+  labelPosition: { x: number; y: number } | null;
+  /** Active routing state (null when not routing) */
+  routing: RoutingState | null;
 }
 
 /**
@@ -43,22 +51,23 @@ export function render(ctx: CanvasRenderingContext2D, state: RenderState): void 
 
   // Draw traces by layer (bottom first, then top)
   if (snapshot.traces) {
+    const { colorByNet, selectedTraceId, hoveredTraceId } = state;
     // Bottom traces first
     for (const trace of snapshot.traces) {
       if (trace.layer === 'Bottom' && layers.bottomCopper) {
-        drawTrace(ctx, viewport, trace, layers);
+        drawTrace(ctx, viewport, trace, layers, colorByNet, selectedTraceId, hoveredTraceId);
       }
     }
     // Top traces on top
     for (const trace of snapshot.traces) {
       if (trace.layer === 'Top' && layers.topCopper) {
-        drawTrace(ctx, viewport, trace, layers);
+        drawTrace(ctx, viewport, trace, layers, colorByNet, selectedTraceId, hoveredTraceId);
       }
     }
     // Inner layers
     for (const trace of snapshot.traces) {
       if (trace.layer !== 'Top' && trace.layer !== 'Bottom') {
-        drawTrace(ctx, viewport, trace, layers);
+        drawTrace(ctx, viewport, trace, layers, colorByNet, selectedTraceId, hoveredTraceId);
       }
     }
   }
@@ -90,6 +99,19 @@ export function render(ctx: CanvasRenderingContext2D, state: RenderState): void 
   if (showViolations && snapshot.violations) {
     for (const violation of snapshot.violations) {
       drawViolation(ctx, viewport, violation);
+    }
+  }
+
+  // Draw routing preview (dashed trace + DRC markers)
+  if (state.routing && state.routing.mode === 'routing') {
+    drawRoutingPreview(ctx, viewport, state.routing);
+  }
+
+  // Draw net label for selected trace
+  if (state.selectedTraceId != null && state.labelPosition && snapshot.traces) {
+    const selectedTrace = snapshot.traces.find(t => t.id === state.selectedTraceId);
+    if (selectedTrace) {
+      drawNetLabel(ctx, state.labelPosition.x, state.labelPosition.y, selectedTrace);
     }
   }
 }
@@ -189,64 +211,135 @@ function drawViolation(
 }
 
 /**
+ * Build the polyline path for a trace (reused by main stroke, glow, and locked overlay)
+ */
+function tracePolyline(
+  ctx: CanvasRenderingContext2D,
+  vp: Viewport,
+  trace: TraceInfo
+): void {
+  ctx.beginPath();
+  const firstSeg = trace.segments[0];
+  const [startX, startY] = worldToScreen(vp, firstSeg.start_x, firstSeg.start_y);
+  ctx.moveTo(startX, startY);
+  for (const seg of trace.segments) {
+    const [endX, endY] = worldToScreen(vp, seg.end_x, seg.end_y);
+    ctx.lineTo(endX, endY);
+  }
+}
+
+/**
  * Draw a copper trace
- * Renders as a thick polyline with rounded ends
+ * Renders as a thick polyline with rounded ends.
+ * Supports per-net coloring, selection highlight (glow + wider stroke),
+ * and hover highlight (lighter overlay).
  */
 function drawTrace(
   ctx: CanvasRenderingContext2D,
   vp: Viewport,
   trace: TraceInfo,
-  layers: LayerVisibility
+  layers: LayerVisibility,
+  colorByNet: boolean,
+  selectedTraceId: number | null,
+  hoveredTraceId: number | null,
 ): void {
   if (trace.segments.length === 0) return;
 
-  // Get color based on layer
-  const color = getTraceColor(trace.layer, layers);
+  // Determine base color — net color or layer color
+  let color: string | null;
+  if (colorByNet && trace.net_name) {
+    // Still check layer visibility
+    const layerVisible = getTraceColor(trace.layer, layers) !== null;
+    if (!layerVisible) return;
+    color = netColor(trace.net_name);
+  } else {
+    color = getTraceColor(trace.layer, layers);
+  }
   if (!color) return;
 
+  const isSelected = trace.id === selectedTraceId;
+  const isHovered = trace.id === hoveredTraceId && !isSelected;
+
   // Calculate line width in screen pixels
-  const lineWidth = trace.width * vp.scale;
+  const baseLineWidth = trace.width * vp.scale;
+  if (baseLineWidth < 0.5) return;
 
-  // Don't render if too thin to see
-  if (lineWidth < 0.5) return;
-
-  ctx.strokeStyle = color;
-  ctx.lineWidth = lineWidth;
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
 
-  // Draw the polyline
-  ctx.beginPath();
-  const firstSeg = trace.segments[0];
-  const [startX, startY] = worldToScreen(vp, firstSeg.start_x, firstSeg.start_y);
-  ctx.moveTo(startX, startY);
-
-  for (const seg of trace.segments) {
-    const [endX, endY] = worldToScreen(vp, seg.end_x, seg.end_y);
-    ctx.lineTo(endX, endY);
+  // Selection glow — wider semi-transparent stroke behind
+  if (isSelected) {
+    const glowColor = colorWithAlpha(brightenColor(color, 25), 0.35);
+    ctx.strokeStyle = glowColor;
+    ctx.lineWidth = baseLineWidth * 2.5;
+    tracePolyline(ctx, vp, trace);
+    ctx.stroke();
   }
 
+  // Main trace stroke
+  const drawColor = isSelected ? brightenColor(color, 20) : color;
+  const lineWidth = isSelected ? baseLineWidth * 1.5 : baseLineWidth;
+
+  ctx.strokeStyle = drawColor;
+  ctx.lineWidth = lineWidth;
+  tracePolyline(ctx, vp, trace);
   ctx.stroke();
 
-  // Draw locked indicator (subtle dashed overlay) if trace is locked
-  if (trace.locked && lineWidth > 2) {
+  // Hover overlay — lighter semi-transparent stroke on top
+  if (isHovered) {
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+    ctx.lineWidth = baseLineWidth;
+    tracePolyline(ctx, vp, trace);
+    ctx.stroke();
+  }
+
+  // Locked indicator (subtle dashed overlay)
+  if (trace.locked && baseLineWidth > 2) {
     ctx.save();
     ctx.setLineDash([5, 5]);
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
-    ctx.lineWidth = Math.max(1, lineWidth * 0.3);
-
-    ctx.beginPath();
-    const [lockStartX, lockStartY] = worldToScreen(vp, firstSeg.start_x, firstSeg.start_y);
-    ctx.moveTo(lockStartX, lockStartY);
-
-    for (const seg of trace.segments) {
-      const [endX, endY] = worldToScreen(vp, seg.end_x, seg.end_y);
-      ctx.lineTo(endX, endY);
-    }
-
+    ctx.lineWidth = Math.max(1, baseLineWidth * 0.3);
+    tracePolyline(ctx, vp, trace);
     ctx.stroke();
     ctx.restore();
   }
+}
+
+/**
+ * Draw a net name + width label near the cursor for the selected trace.
+ * Semi-transparent badge style.
+ */
+function drawNetLabel(
+  ctx: CanvasRenderingContext2D,
+  screenX: number,
+  screenY: number,
+  trace: TraceInfo
+): void {
+  const widthMm = (trace.width / 1_000_000).toFixed(2);
+  const label = `${trace.net_name} — ${widthMm}mm`;
+
+  ctx.font = '12px system-ui, sans-serif';
+  const metrics = ctx.measureText(label);
+  const padX = 8;
+  const boxW = metrics.width + padX * 2;
+  const boxH = 20;
+  const offsetX = 15;
+  const offsetY = -25;
+
+  const x = screenX + offsetX;
+  const y = screenY + offsetY;
+
+  // Background
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+  ctx.beginPath();
+  ctx.roundRect(x, y, boxW, boxH, 4);
+  ctx.fill();
+
+  // Text
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(label, x + padX, y + boxH / 2);
 }
 
 /**
@@ -445,6 +538,104 @@ function drawOblong(ctx: CanvasRenderingContext2D, x: number, y: number, w: numb
 }
 
 /**
+ * Draw the routing preview — committed segments (solid) + preview segment (dashed).
+ * Also draws DRC violation markers from the live preview check.
+ */
+function drawRoutingPreview(
+  ctx: CanvasRenderingContext2D,
+  vp: Viewport,
+  routing: RoutingState,
+): void {
+  const color = routing.netName ? netColor(routing.netName) : '#00FF00';
+  const lineWidth = routing.traceWidth * vp.scale;
+  const drawWidth = Math.max(lineWidth, 2); // minimum 2px visibility
+
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  // Draw committed segments (solid but semi-transparent)
+  if (routing.committedSegments.length > 0) {
+    ctx.strokeStyle = colorWithAlpha(color, 0.7);
+    ctx.lineWidth = drawWidth;
+    ctx.beginPath();
+    const first = routing.committedSegments[0];
+    const [sx, sy] = worldToScreen(vp, first.start_x, first.start_y);
+    ctx.moveTo(sx, sy);
+    for (const seg of routing.committedSegments) {
+      const [ex, ey] = worldToScreen(vp, seg.end_x, seg.end_y);
+      ctx.lineTo(ex, ey);
+    }
+    ctx.stroke();
+  }
+
+  // Draw preview segment (dashed)
+  if (routing.previewSegment) {
+    const seg = routing.previewSegment;
+    const [sx, sy] = worldToScreen(vp, seg.start_x, seg.start_y);
+    const [ex, ey] = worldToScreen(vp, seg.end_x, seg.end_y);
+
+    ctx.save();
+    ctx.setLineDash([8, 4]);
+    ctx.strokeStyle = colorWithAlpha(color, 0.8);
+    ctx.lineWidth = drawWidth;
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    ctx.lineTo(ex, ey);
+    ctx.stroke();
+    ctx.restore();
+
+    // Draw endpoint marker (small circle at cursor)
+    ctx.beginPath();
+    ctx.arc(ex, ey, Math.max(4, drawWidth * 0.6), 0, Math.PI * 2);
+    ctx.fillStyle = colorWithAlpha(color, 0.5);
+    ctx.fill();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  }
+
+  // Draw anchor point marker
+  const [ax, ay] = worldToScreen(vp, routing.anchorPoint.x, routing.anchorPoint.y);
+  ctx.beginPath();
+  ctx.arc(ax, ay, 5, 0, Math.PI * 2);
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fill();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Draw DRC violations from preview
+  for (const v of routing.drcViolations) {
+    const [vx, vy] = worldToScreen(vp, v.x_nm, v.y_nm);
+    // Pulsing red ring
+    ctx.beginPath();
+    ctx.arc(vx, vy, 12, 0, Math.PI * 2);
+    ctx.strokeStyle = '#FF0000';
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(vx, vy, 8, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255, 0, 0, 0.25)';
+    ctx.fill();
+  }
+
+  // Draw snap angle indicator text near cursor
+  if (routing.previewSegment) {
+    const seg = routing.previewSegment;
+    const [ex, ey] = worldToScreen(vp, seg.end_x, seg.end_y);
+    ctx.font = '11px system-ui, sans-serif';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+    ctx.textAlign = 'left';
+    ctx.fillText(`${routing.snapAngle}°`, ex + 12, ey - 8);
+
+    // Show net name + layer indicator
+    let label = routing.currentLayer;
+    if (routing.netName) label = `${routing.netName} [${routing.currentLayer}]`;
+    ctx.fillText(label, ex + 12, ey + 6);
+  }
+}
+
+/**
  * Create an initial render state
  */
 export function createRenderState(viewport: Viewport, layers: LayerVisibility): RenderState {
@@ -455,6 +646,11 @@ export function createRenderState(viewport: Viewport, layers: LayerVisibility): 
     selectedRefdes: null,
     showViolations: true,
     showRatsnest: true,
+    colorByNet: true,
+    selectedTraceId: null,
+    hoveredTraceId: null,
+    labelPosition: null,
+    routing: null,
   };
 }
 

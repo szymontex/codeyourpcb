@@ -80,6 +80,8 @@ export interface TraceSegmentInfo {
  * Trace information for rendering
  */
 export interface TraceInfo {
+  /** Entity index for selection/hit-testing */
+  id: number;
   segments: TraceSegmentInfo[];
   width: number;
   layer: string;
@@ -91,6 +93,8 @@ export interface TraceInfo {
  * Via information for rendering
  */
 export interface ViaInfo {
+  /** Entity index for selection/hit-testing */
+  id: number;
   x: number;
   y: number;
   drill: number;

@@ -15,7 +15,7 @@
  * by parsing in JavaScript and calling load_snapshot() on the WASM engine.
  */
 
-import type { BoardSnapshot, ComponentInfo, PadInfo, NetInfo, PinRef, BoardInfo } from './types';
+import type { BoardSnapshot, ComponentInfo, PadInfo, NetInfo, PinRef, BoardInfo, TraceSegmentInfo, ViolationInfo } from './types';
 
 /**
  * Interface for the PCB rendering engine exposed from Rust/WASM
@@ -29,6 +29,44 @@ export interface PcbEngine {
   get_snapshot(): BoardSnapshot;
   /** Query what's at a specific point (in nanometers), returns list of entity descriptions */
   query_point(x_nm: number, y_nm: number): string[];
+
+  // -- Trace mutation API (T03) --
+
+  /**
+   * Add a trace to the board.
+   * @param net_name Net this trace belongs to
+   * @param layer "Top" | "Bottom" | "Inner0" etc.
+   * @param width_nm Trace width in nanometers
+   * @param segments Flat coordinate array [x1,y1,x2,y2, x3,y3,x4,y4, ...] (4 values per segment, in nm)
+   * @returns Entity index (u32), or 0xFFFFFFFF on error
+   */
+  add_trace(net_name: string, layer: string, width_nm: number, segments: number[]): number;
+
+  /**
+   * Remove a trace by entity index.
+   * @returns true if found and removed
+   */
+  remove_trace(trace_id: number): boolean;
+
+  /**
+   * Find a trace entity at a given point with tolerance.
+   * @param x_nm X coordinate in nanometers
+   * @param y_nm Y coordinate in nanometers
+   * @param tolerance_nm Search radius in nanometers
+   * @returns Entity index, or 0xFFFFFFFF if none found
+   */
+  get_trace_at_point(x_nm: number, y_nm: number, tolerance_nm: number): number;
+
+  /**
+   * Run DRC and return the number of violations.
+   */
+  run_drc_incremental(): number;
+
+  /**
+   * Get the number of trace entities.
+   */
+  trace_count(): number;
+
   /** Free the engine (for WASM memory management) */
   free?(): void;
 }
@@ -40,6 +78,12 @@ interface WasmPcbEngine {
   load_snapshot(snapshot: BoardSnapshot): string;
   get_snapshot(): BoardSnapshot;
   query_point(x_nm: bigint, y_nm: bigint): string[];
+  add_trace_json(net_name: string, layer_str: string, width_nm: bigint, segments_json: string): number;
+  remove_trace(trace_id: number): boolean;
+  get_trace_at_point(x_nm: bigint, y_nm: bigint, tolerance_nm: bigint): number;
+  run_drc_incremental(): number;
+  trace_count(): number;
+  get_violations_json(): string;
   free(): void;
 }
 
@@ -365,6 +409,7 @@ export function parseSesFile(sesContent: string): { traces: BoardSnapshot['trace
 
       if (segments.length > 0) {
         traces.push({
+          id: traces.length,
           segments,
           width,
           layer,
@@ -379,6 +424,7 @@ export function parseSesFile(sesContent: string): { traces: BoardSnapshot['trace
     let viaMatch;
     while ((viaMatch = viaRegex.exec(netContent)) !== null) {
       vias.push({
+        id: vias.length,
         x: parseInt(viaMatch[1], 10) * resolution,
         y: parseInt(viaMatch[2], 10) * resolution,
         drill: 300_000,
@@ -390,6 +436,51 @@ export function parseSesFile(sesContent: string): { traces: BoardSnapshot['trace
 
   console.log('[SES Parser] Parsed', traces.length, 'traces,', vias.length, 'vias');
   return { traces, vias };
+}
+
+// ============================================================================
+// Geometry utilities (used by MockPcbEngine hit-testing and DRC)
+// ============================================================================
+
+/**
+ * Shortest distance from point (px,py) to line segment (ax,ay)-(bx,by).
+ */
+function pointToSegmentDistance(
+  px: number, py: number,
+  ax: number, ay: number,
+  bx: number, by: number,
+): number {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const lenSq = dx * dx + dy * dy;
+  if (lenSq === 0) {
+    const ex = px - ax;
+    const ey = py - ay;
+    return Math.sqrt(ex * ex + ey * ey);
+  }
+  let t = ((px - ax) * dx + (py - ay) * dy) / lenSq;
+  t = Math.max(0, Math.min(1, t));
+  const cx = ax + t * dx;
+  const cy = ay + t * dy;
+  const ex = px - cx;
+  const ey = py - cy;
+  return Math.sqrt(ex * ex + ey * ey);
+}
+
+/**
+ * Approximate minimum distance between two line segments.
+ * Tests endpoints of each segment against the other segment.
+ */
+function segmentToSegmentDistance(
+  s1: TraceSegmentInfo,
+  s2: TraceSegmentInfo,
+): number {
+  // Sample several points: endpoints + midpoints, take minimum
+  const d1 = pointToSegmentDistance(s1.start_x, s1.start_y, s2.start_x, s2.start_y, s2.end_x, s2.end_y);
+  const d2 = pointToSegmentDistance(s1.end_x, s1.end_y, s2.start_x, s2.start_y, s2.end_x, s2.end_y);
+  const d3 = pointToSegmentDistance(s2.start_x, s2.start_y, s1.start_x, s1.start_y, s1.end_x, s1.end_y);
+  const d4 = pointToSegmentDistance(s2.end_x, s2.end_y, s1.start_x, s1.start_y, s1.end_x, s1.end_y);
+  return Math.min(d1, d2, d3, d4);
 }
 
 // ============================================================================
@@ -509,6 +600,33 @@ class WasmPcbEngineAdapter implements PcbEngine {
     return this.wasmEngine.query_point(BigInt(x_nm), BigInt(y_nm));
   }
 
+  add_trace(net_name: string, layer: string, width_nm: number, segments: number[]): number {
+    const id = this.wasmEngine.add_trace_json(net_name, layer, BigInt(width_nm), JSON.stringify(segments));
+    // Invalidate cached snapshot so next get_snapshot() picks up the new trace
+    this.cachedSnapshot = null;
+    return id;
+  }
+
+  remove_trace(trace_id: number): boolean {
+    const removed = this.wasmEngine.remove_trace(trace_id);
+    if (removed) {
+      this.cachedSnapshot = null;
+    }
+    return removed;
+  }
+
+  get_trace_at_point(x_nm: number, y_nm: number, tolerance_nm: number): number {
+    return this.wasmEngine.get_trace_at_point(BigInt(x_nm), BigInt(y_nm), BigInt(tolerance_nm));
+  }
+
+  run_drc_incremental(): number {
+    return this.wasmEngine.run_drc_incremental();
+  }
+
+  trace_count(): number {
+    return this.wasmEngine.trace_count();
+  }
+
   free(): void {
     this.wasmEngine.free();
   }
@@ -524,6 +642,8 @@ class WasmPcbEngineAdapter implements PcbEngine {
  */
 class MockPcbEngine implements PcbEngine {
   private snapshot: BoardSnapshot = { board: null, components: [], nets: [], violations: [], traces: [], vias: [], ratsnest: [] };
+  /** Next mock entity ID counter */
+  private nextEntityId = 1000;
 
   load_source(source: string): string {
     const { snapshot, errors } = parseSource(source);
@@ -598,6 +718,117 @@ class MockPcbEngine implements PcbEngine {
 
     return result;
   }
+
+  // -- Trace mutation API (MockPcbEngine) --
+
+  add_trace(net_name: string, layer: string, width_nm: number, segments: number[]): number {
+    // Validate inputs
+    if (segments.length < 4 || segments.length % 4 !== 0) {
+      return 0xFFFFFFFF;
+    }
+    const validLayers = ['Top', 'TopCopper', 'Bottom', 'BottomCopper'];
+    const isInner = /^Inner\d+$/.test(layer);
+    if (!validLayers.includes(layer) && !isInner) {
+      return 0xFFFFFFFF;
+    }
+
+    const id = this.nextEntityId++;
+    const traceSegments: TraceSegmentInfo[] = [];
+    for (let i = 0; i < segments.length; i += 4) {
+      traceSegments.push({
+        start_x: segments[i],
+        start_y: segments[i + 1],
+        end_x: segments[i + 2],
+        end_y: segments[i + 3],
+      });
+    }
+
+    // Normalize layer name
+    const normalizedLayer = layer === 'TopCopper' ? 'Top' : layer === 'BottomCopper' ? 'Bottom' : layer;
+
+    this.snapshot.traces.push({
+      id,
+      segments: traceSegments,
+      width: width_nm,
+      layer: normalizedLayer,
+      net_name,
+      locked: false,
+    });
+
+    console.log(`[MockEngine] add_trace: net=${net_name} layer=${normalizedLayer} id=${id} segs=${traceSegments.length}`);
+    return id;
+  }
+
+  remove_trace(trace_id: number): boolean {
+    const idx = this.snapshot.traces.findIndex(t => t.id === trace_id);
+    if (idx === -1) return false;
+    this.snapshot.traces.splice(idx, 1);
+    console.log(`[MockEngine] remove_trace: id=${trace_id}`);
+    return true;
+  }
+
+  get_trace_at_point(x_nm: number, y_nm: number, tolerance_nm: number): number {
+    let bestId = 0xFFFFFFFF;
+    let bestDist = Infinity;
+
+    for (const trace of this.snapshot.traces) {
+      const halfWidth = trace.width / 2;
+      for (const seg of trace.segments) {
+        const dist = pointToSegmentDistance(
+          x_nm, y_nm,
+          seg.start_x, seg.start_y,
+          seg.end_x, seg.end_y,
+        );
+        if (dist <= halfWidth + tolerance_nm && dist < bestDist) {
+          bestDist = dist;
+          bestId = trace.id;
+        }
+      }
+    }
+
+    return bestId;
+  }
+
+  run_drc_incremental(): number {
+    // Mock: simple clearance check between traces
+    // Real DRC is in Rust — this just provides a realistic interface
+    const violations: ViolationInfo[] = [];
+    const MIN_CLEARANCE = 150_000; // 0.15mm in nm
+
+    for (let i = 0; i < this.snapshot.traces.length; i++) {
+      for (let j = i + 1; j < this.snapshot.traces.length; j++) {
+        const t1 = this.snapshot.traces[i];
+        const t2 = this.snapshot.traces[j];
+        if (t1.net_name === t2.net_name) continue; // Same net is fine
+        if (t1.layer !== t2.layer) continue; // Different layers don't interact
+
+        for (const s1 of t1.segments) {
+          for (const s2 of t2.segments) {
+            const dist = segmentToSegmentDistance(s1, s2);
+            const required = t1.width / 2 + t2.width / 2 + MIN_CLEARANCE;
+            if (dist < required) {
+              const mx = (s1.start_x + s1.end_x + s2.start_x + s2.end_x) / 4;
+              const my = (s1.start_y + s1.end_y + s2.start_y + s2.end_y) / 4;
+              violations.push({
+                kind: 'clearance',
+                x_nm: mx,
+                y_nm: my,
+                message: `Clearance violation between ${t1.net_name} and ${t2.net_name}: ${(dist / 1_000_000).toFixed(2)}mm < ${(required / 1_000_000).toFixed(2)}mm required`,
+              });
+            }
+          }
+        }
+      }
+    }
+
+    this.snapshot.violations = violations;
+    console.log(`[MockEngine] run_drc_incremental: ${violations.length} violations`);
+    return violations.length;
+  }
+
+  trace_count(): number {
+    return this.snapshot.traces.length;
+  }
 }
 
 // ============================================================================
@@ -623,7 +854,7 @@ export async function loadWasm(): Promise<PcbEngine> {
     wasmModule = wasm;
 
     // Wrap the WASM engine with our adapter that provides load_source()
-    const rawEngine = new wasm.PcbEngine() as WasmPcbEngine;
+    const rawEngine = new wasm.PcbEngine() as unknown as WasmPcbEngine;
     engineInstance = new WasmPcbEngineAdapter(rawEngine);
     console.log('WASM module loaded successfully');
     return engineInstance;

@@ -131,6 +131,182 @@ impl PcbEngine {
 
         refdes_list
     }
+
+    // ========================================================================
+    // Trace Mutation API
+    // ========================================================================
+
+    /// Add a trace to the board.
+    ///
+    /// Creates a Manual Trace entity with the given parameters,
+    /// updates the spatial index, and returns the entity index.
+    ///
+    /// `segments_json` is a JSON array of `[x1, y1, x2, y2, ...]` coordinate
+    /// pairs in nanometers (flat array, 4 values per segment).
+    ///
+    /// Returns the entity index (u32) on success, or u32::MAX on error.
+    pub fn add_trace(
+        &mut self,
+        net_name: &str,
+        layer_str: &str,
+        width_nm: i64,
+        segments_flat: &[i64],
+    ) -> u32 {
+        use cypcb_world::components::trace::{Trace as TraceComp, TraceSegment, TraceSource};
+
+        // Parse layer
+        let layer = match parse_layer(layer_str) {
+            Ok(l) => l,
+            Err(_) => return u32::MAX,
+        };
+
+        // Segments come as flat array: [x1, y1, x2, y2, x1, y1, x2, y2, ...]
+        if segments_flat.len() < 4 || segments_flat.len() % 4 != 0 {
+            return u32::MAX;
+        }
+
+        let mut segments = Vec::with_capacity(segments_flat.len() / 4);
+        for chunk in segments_flat.chunks_exact(4) {
+            segments.push(TraceSegment::new(
+                Point::new(Nm(chunk[0]), Nm(chunk[1])),
+                Point::new(Nm(chunk[2]), Nm(chunk[3])),
+            ));
+        }
+
+        // Intern the net name
+        let net_id = self.world.intern_net(net_name);
+
+        let trace = TraceComp {
+            segments,
+            width: Nm(width_nm),
+            layer,
+            net_id,
+            locked: false,
+            source: TraceSource::Manual,
+        };
+
+        let entity = self.world.spawn_entity(trace);
+
+        // Rebuild spatial index to include the new trace
+        self.rebuild_spatial_index_full();
+
+        entity.index()
+    }
+
+    /// Add a trace from a JSON segments string (WASM-friendly).
+    ///
+    /// `segments_json` is a JSON array of flat coordinates:
+    /// `[x1, y1, x2, y2, x3, y3, x4, y4, ...]` (4 values per segment).
+    ///
+    /// Returns the entity index (u32) on success, or u32::MAX on error.
+    #[cfg(target_arch = "wasm32")]
+    pub fn add_trace_json(
+        &mut self,
+        net_name: &str,
+        layer_str: &str,
+        width_nm: i64,
+        segments_json: &str,
+    ) -> u32 {
+        let coords: Vec<i64> = match serde_json::from_str(segments_json) {
+            Ok(v) => v,
+            Err(_) => return u32::MAX,
+        };
+        self.add_trace(net_name, layer_str, width_nm, &coords)
+    }
+
+    /// Remove a trace by entity index.
+    ///
+    /// Returns `true` if the trace was found and removed, `false` otherwise.
+    pub fn remove_trace(&mut self, trace_id: u32) -> bool {
+        // Find the actual entity with this index among trace entities
+        let entity_to_remove = self.find_trace_entity(trace_id);
+
+        if let Some(entity) = entity_to_remove {
+            self.world.ecs_mut().despawn(entity);
+            self.rebuild_spatial_index_full();
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Query for a trace entity at a given point with tolerance.
+    ///
+    /// Returns the trace entity index if found, or u32::MAX if not.
+    /// Tolerance is in nanometers — the point is expanded into a
+    /// query rectangle of `2*tolerance` side length.
+    pub fn get_trace_at_point(&mut self, x_nm: i64, y_nm: i64, tolerance_nm: i64) -> u32 {
+        use cypcb_core::Rect;
+        use cypcb_world::components::trace::Trace as TraceComp;
+
+        let query_rect = Rect::new(
+            Point::new(Nm(x_nm - tolerance_nm), Nm(y_nm - tolerance_nm)),
+            Point::new(Nm(x_nm + tolerance_nm), Nm(y_nm + tolerance_nm)),
+        );
+
+        let candidates = self.world.query_region(query_rect);
+        let query_point = Point::new(Nm(x_nm), Nm(y_nm));
+
+        // Find the closest trace among candidates
+        let mut best_entity: Option<u32> = None;
+        let mut best_dist: i64 = i64::MAX;
+
+        for entity in candidates {
+            let trace_opt: Option<&TraceComp> = self.world.get::<TraceComp>(entity);
+            if let Some(trace) = trace_opt {
+                // Check point-to-segment distance for each segment
+                let half_width = trace.width.0 / 2;
+                for seg in &trace.segments {
+                    let dist = point_to_segment_distance(query_point, seg.start, seg.end);
+                    // If within the copper width, it's a hit
+                    if dist <= half_width + tolerance_nm && dist < best_dist {
+                        best_dist = dist;
+                        best_entity = Some(entity.index());
+                    }
+                }
+            }
+        }
+
+        best_entity.unwrap_or(u32::MAX)
+    }
+
+    /// Run DRC and return violation count.
+    ///
+    /// This runs a full DRC check (incremental optimization deferred)
+    /// and updates the internal violation list.
+    pub fn run_drc_incremental(&mut self) -> usize {
+        self.run_drc_internal();
+        self.violations.len()
+    }
+
+    /// Get the number of trace entities in the world.
+    pub fn trace_count(&mut self) -> usize {
+        let ecs = self.world.ecs_mut();
+        let mut query = ecs.query::<&cypcb_world::components::trace::Trace>();
+        query.iter(ecs).count()
+    }
+
+    /// Get DRC violations as JSON string (WASM-friendly).
+    #[cfg(target_arch = "wasm32")]
+    pub fn get_violations_json(&self) -> String {
+        let violations: Vec<ViolationInfo> = self
+            .violations
+            .iter()
+            .map(ViolationInfo::from_drc)
+            .collect();
+        serde_json::to_string(&violations).unwrap_or_else(|_| "[]".to_string())
+    }
+
+    /// Get DRC violations as JSON string (native).
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn get_violations_json(&self) -> String {
+        let violations: Vec<ViolationInfo> = self
+            .violations
+            .iter()
+            .map(ViolationInfo::from_drc)
+            .collect();
+        serde_json::to_string(&violations).unwrap_or_else(|_| "[]".to_string())
+    }
 }
 
 // Internal methods (not exposed to WASM)
@@ -222,11 +398,29 @@ impl PcbEngine {
             // Skip other lines (version, metrics, etc.)
         }
 
+        // Rebuild spatial index to include newly loaded traces/vias
+        self.rebuild_spatial_index_full();
+
         if errors.is_empty() {
             String::new()
         } else {
             errors.join("\n")
         }
+    }
+
+    /// Rebuild the spatial index including components, traces, and vias.
+    fn rebuild_spatial_index_full(&mut self) {
+        let lib = &self.footprint_lib;
+        self.world.rebuild_spatial_index_with_traces(|name| {
+            lib.get(name)
+                .map(|fp| fp.courtyard)
+                .unwrap_or_else(|| {
+                    cypcb_core::Rect::from_center_size(
+                        Point::ORIGIN,
+                        (Nm::from_mm(1.0), Nm::from_mm(1.0)),
+                    )
+                })
+        });
     }
 
     /// Clear autorouted traces and vias from the world.
@@ -340,6 +534,22 @@ impl PcbEngine {
         Ok(())
     }
 
+    /// Find a trace entity by its index.
+    ///
+    /// Searches all trace entities and returns the one whose entity index
+    /// matches the given id. This is needed because `Entity::from_raw(id)`
+    /// may not match the actual generation of the entity.
+    fn find_trace_entity(&mut self, trace_id: u32) -> Option<Entity> {
+        let ecs = self.world.ecs_mut();
+        let mut query = ecs.query::<(Entity, &cypcb_world::components::trace::Trace)>();
+        for (entity, _) in query.iter(ecs) {
+            if entity.index() == trace_id {
+                return Some(entity);
+            }
+        }
+        None
+    }
+
     /// Get the number of DRC violations from the last load.
     pub fn violation_count(&self) -> usize {
         self.violations.len()
@@ -416,19 +626,8 @@ impl PcbEngine {
             self.world.spawn_component(refdes, value, position, rotation, footprint_ref, nets);
         }
 
-        // Rebuild spatial index for DRC queries
-        let lib = &self.footprint_lib;
-        self.world.rebuild_spatial_index(|name| {
-            lib.get(name)
-                .map(|fp| fp.courtyard)
-                .unwrap_or_else(|| {
-                    // Default 1mm x 1mm bounds for unknown footprints
-                    cypcb_core::Rect::from_center_size(
-                        Point::ORIGIN,
-                        (Nm::from_mm(1.0), Nm::from_mm(1.0)),
-                    )
-                })
-        });
+        // Rebuild spatial index for DRC queries (includes traces and vias)
+        self.rebuild_spatial_index_full();
     }
 
     /// Create a Footprint from PadInfo data.
@@ -664,16 +863,16 @@ impl PcbEngine {
 
     /// Collect all traces from the world.
     fn collect_traces(&mut self) -> Vec<TraceInfo> {
-        // First, collect trace data (cloning to avoid borrow issues)
-        let trace_data: Vec<Trace> = {
+        // Collect trace data with entity IDs (cloning to avoid borrow issues)
+        let trace_data: Vec<(u32, Trace)> = {
             let world_ref = self.world.ecs_mut();
-            let mut query = world_ref.query::<&Trace>();
-            query.iter(world_ref).cloned().collect()
+            let mut query = world_ref.query::<(Entity, &Trace)>();
+            query.iter(world_ref).map(|(e, t)| (e.index(), t.clone())).collect()
         };
 
         // Now process with net names
         let mut traces: Vec<TraceInfo> = Vec::new();
-        for trace in trace_data {
+        for (entity_id, trace) in trace_data {
             let layer_name = match trace.layer {
                 Layer::TopCopper => "Top".to_string(),
                 Layer::BottomCopper => "Bottom".to_string(),
@@ -695,6 +894,7 @@ impl PcbEngine {
             }).collect();
 
             traces.push(TraceInfo {
+                id: entity_id,
                 segments,
                 width: trace.width.0 as f64,
                 layer: layer_name,
@@ -708,21 +908,22 @@ impl PcbEngine {
 
     /// Collect all vias from the world.
     fn collect_vias(&mut self) -> Vec<ViaInfo> {
-        // First, collect via data (copying to avoid borrow issues)
-        let via_data: Vec<Via> = {
+        // Collect via data with entity IDs (copying to avoid borrow issues)
+        let via_data: Vec<(u32, Via)> = {
             let world_ref = self.world.ecs_mut();
-            let mut query = world_ref.query::<&Via>();
-            query.iter(world_ref).copied().collect()
+            let mut query = world_ref.query::<(Entity, &Via)>();
+            query.iter(world_ref).map(|(e, v)| (e.index(), *v)).collect()
         };
 
         // Now process with net names
         let mut vias: Vec<ViaInfo> = Vec::new();
-        for via in via_data {
+        for (entity_id, via) in via_data {
             let net_name = self.world.net_name(via.net_id)
                 .unwrap_or("(no net)")
                 .to_string();
 
             vias.push(ViaInfo {
+                id: entity_id,
                 x: via.position.x.0 as f64,
                 y: via.position.y.0 as f64,
                 drill: via.drill.0 as f64,
@@ -833,6 +1034,41 @@ impl Default for PcbEngine {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// Compute the shortest distance from a point to a line segment.
+///
+/// Returns the perpendicular distance if the projection falls on the segment,
+/// otherwise the distance to the nearest endpoint.
+fn point_to_segment_distance(p: Point, a: Point, b: Point) -> i64 {
+    let dx = b.x.0 - a.x.0;
+    let dy = b.y.0 - a.y.0;
+    let len_sq = (dx as i128) * (dx as i128) + (dy as i128) * (dy as i128);
+
+    if len_sq == 0 {
+        // Degenerate segment (a == b), distance to point
+        let ex = (p.x.0 - a.x.0) as i128;
+        let ey = (p.y.0 - a.y.0) as i128;
+        return ((ex * ex + ey * ey) as f64).sqrt() as i64;
+    }
+
+    // Project p onto line ab, compute parameter t
+    let apx = (p.x.0 - a.x.0) as i128;
+    let apy = (p.y.0 - a.y.0) as i128;
+    let dot = apx * (dx as i128) + apy * (dy as i128);
+
+    // Clamp t to [0, 1]
+    let t = (dot as f64) / (len_sq as f64);
+    let t = t.clamp(0.0, 1.0);
+
+    // Closest point on segment
+    let cx = a.x.0 as f64 + t * dx as f64;
+    let cy = a.y.0 as f64 + t * dy as f64;
+
+    let ex = p.x.0 as f64 - cx;
+    let ey = p.y.0 as f64 - cy;
+
+    (ex * ex + ey * ey).sqrt() as i64
 }
 
 /// Convert PadShape enum to string for JS serialization.
@@ -1030,5 +1266,282 @@ mod tests {
         let violations = engine.violation_count();
         assert!(violations > 0, "Expected clearance violations but found {} - spatial entries: {}",
             violations, spatial_count);
+    }
+
+    // ====================================================================
+    // Trace Mutation API tests
+    // ====================================================================
+
+    #[test]
+    fn test_trace_add_returns_valid_id() {
+        let mut engine = PcbEngine::new();
+        engine.load_source(
+            r#"
+            version 1
+            board test { size 50mm x 30mm layers 2 }
+            "#,
+        );
+
+        // Add a horizontal trace: (5mm,5mm) → (20mm,5mm)
+        let segments = [
+            5_000_000i64, 5_000_000, 20_000_000, 5_000_000,
+        ];
+        let id = engine.add_trace("VCC", "Top", 200_000, &segments);
+        assert_ne!(id, u32::MAX, "add_trace should return a valid entity id");
+        assert_eq!(engine.trace_count(), 1);
+    }
+
+    #[test]
+    fn test_trace_add_multiple() {
+        let mut engine = PcbEngine::new();
+        engine.load_source(
+            r#"
+            version 1
+            board test { size 50mm x 30mm layers 2 }
+            "#,
+        );
+
+        let seg1 = [5_000_000i64, 5_000_000, 20_000_000, 5_000_000];
+        let seg2 = [5_000_000i64, 10_000_000, 20_000_000, 10_000_000];
+        let id1 = engine.add_trace("VCC", "Top", 200_000, &seg1);
+        let id2 = engine.add_trace("GND", "Bottom", 250_000, &seg2);
+
+        assert_ne!(id1, id2);
+        assert_eq!(engine.trace_count(), 2);
+    }
+
+    #[test]
+    fn test_trace_add_appears_in_snapshot() {
+        let mut engine = PcbEngine::new();
+        engine.load_source(
+            r#"
+            version 1
+            board test { size 50mm x 30mm layers 2 }
+            "#,
+        );
+
+        let segments = [5_000_000i64, 5_000_000, 20_000_000, 5_000_000];
+        let id = engine.add_trace("VCC", "Top", 200_000, &segments);
+
+        let snapshot = engine.build_snapshot();
+        assert_eq!(snapshot.traces.len(), 1);
+        assert_eq!(snapshot.traces[0].id, id);
+        assert_eq!(snapshot.traces[0].net_name, "VCC");
+        assert_eq!(snapshot.traces[0].layer, "Top");
+        assert_eq!(snapshot.traces[0].width, 200_000.0);
+        assert!(!snapshot.traces[0].locked);
+    }
+
+    #[test]
+    fn test_trace_remove() {
+        let mut engine = PcbEngine::new();
+        engine.load_source(
+            r#"
+            version 1
+            board test { size 50mm x 30mm layers 2 }
+            "#,
+        );
+
+        let segments = [5_000_000i64, 5_000_000, 20_000_000, 5_000_000];
+        let id = engine.add_trace("VCC", "Top", 200_000, &segments);
+        assert_eq!(engine.trace_count(), 1);
+
+        let removed = engine.remove_trace(id);
+        assert!(removed, "remove_trace should return true for existing trace");
+        assert_eq!(engine.trace_count(), 0);
+
+        // Snapshot should be empty
+        let snapshot = engine.build_snapshot();
+        assert!(snapshot.traces.is_empty());
+    }
+
+    #[test]
+    fn test_trace_remove_nonexistent() {
+        let mut engine = PcbEngine::new();
+        let removed = engine.remove_trace(9999);
+        assert!(!removed, "remove_trace should return false for nonexistent trace");
+    }
+
+    #[test]
+    fn test_trace_get_at_point_hit() {
+        let mut engine = PcbEngine::new();
+        engine.load_source(
+            r#"
+            version 1
+            board test { size 50mm x 30mm layers 2 }
+            "#,
+        );
+
+        // Horizontal trace from (5mm,10mm) to (25mm,10mm), 0.2mm wide
+        let segments = [5_000_000i64, 10_000_000, 25_000_000, 10_000_000];
+        let id = engine.add_trace("SIG", "Top", 200_000, &segments);
+
+        // Query right on the trace centerline
+        let found = engine.get_trace_at_point(15_000_000, 10_000_000, 100_000);
+        assert_eq!(found, id, "Should find the trace at its centerline");
+    }
+
+    #[test]
+    fn test_trace_get_at_point_near() {
+        let mut engine = PcbEngine::new();
+        engine.load_source(
+            r#"
+            version 1
+            board test { size 50mm x 30mm layers 2 }
+            "#,
+        );
+
+        // Horizontal trace at y=10mm, 0.2mm wide (so copper extends 0.1mm above/below)
+        let segments = [5_000_000i64, 10_000_000, 25_000_000, 10_000_000];
+        let id = engine.add_trace("SIG", "Top", 200_000, &segments);
+
+        // Query 0.05mm above centerline — within copper width
+        let found = engine.get_trace_at_point(15_000_000, 10_050_000, 10_000);
+        assert_eq!(found, id, "Should find trace slightly off-center");
+    }
+
+    #[test]
+    fn test_trace_get_at_point_miss() {
+        let mut engine = PcbEngine::new();
+        engine.load_source(
+            r#"
+            version 1
+            board test { size 50mm x 30mm layers 2 }
+            "#,
+        );
+
+        let segments = [5_000_000i64, 10_000_000, 25_000_000, 10_000_000];
+        engine.add_trace("SIG", "Top", 200_000, &segments);
+
+        // Query 2mm above trace — outside copper + tolerance
+        let found = engine.get_trace_at_point(15_000_000, 12_000_000, 100_000);
+        assert_eq!(found, u32::MAX, "Should not find trace 2mm away");
+    }
+
+    #[test]
+    fn test_trace_add_remove_add_cycle() {
+        let mut engine = PcbEngine::new();
+        engine.load_source(
+            r#"
+            version 1
+            board test { size 50mm x 30mm layers 2 }
+            "#,
+        );
+
+        // Add → remove → add again
+        let seg = [5_000_000i64, 5_000_000, 20_000_000, 5_000_000];
+        let id1 = engine.add_trace("VCC", "Top", 200_000, &seg);
+        assert_eq!(engine.trace_count(), 1);
+
+        engine.remove_trace(id1);
+        assert_eq!(engine.trace_count(), 0);
+
+        let seg2 = [10_000_000i64, 10_000_000, 30_000_000, 10_000_000];
+        let id2 = engine.add_trace("GND", "Bottom", 250_000, &seg2);
+        assert_eq!(engine.trace_count(), 1);
+        assert_ne!(id2, u32::MAX);
+
+        // The new trace should be queryable
+        let found = engine.get_trace_at_point(20_000_000, 10_000_000, 100_000);
+        assert_eq!(found, id2);
+    }
+
+    #[test]
+    fn test_trace_add_bad_segments() {
+        let mut engine = PcbEngine::new();
+
+        // Too few coordinates
+        let id = engine.add_trace("VCC", "Top", 200_000, &[1, 2, 3]);
+        assert_eq!(id, u32::MAX, "Should reject segments with < 4 coords");
+
+        // Empty
+        let id = engine.add_trace("VCC", "Top", 200_000, &[]);
+        assert_eq!(id, u32::MAX, "Should reject empty segments");
+    }
+
+    #[test]
+    fn test_trace_add_bad_layer() {
+        let mut engine = PcbEngine::new();
+        let seg = [0i64, 0, 10_000_000, 0];
+        let id = engine.add_trace("VCC", "InvalidLayer", 200_000, &seg);
+        assert_eq!(id, u32::MAX, "Should reject invalid layer name");
+    }
+
+    #[test]
+    fn test_trace_multi_segment() {
+        let mut engine = PcbEngine::new();
+        engine.load_source(
+            r#"
+            version 1
+            board test { size 50mm x 30mm layers 2 }
+            "#,
+        );
+
+        // L-shaped trace: (5mm,5mm)→(15mm,5mm)→(15mm,15mm)
+        let segments = [
+            5_000_000i64, 5_000_000, 15_000_000, 5_000_000,  // horizontal
+            15_000_000, 5_000_000, 15_000_000, 15_000_000,    // vertical
+        ];
+        let id = engine.add_trace("SIG", "Top", 200_000, &segments);
+        assert_ne!(id, u32::MAX);
+
+        let snapshot = engine.build_snapshot();
+        assert_eq!(snapshot.traces.len(), 1);
+        assert_eq!(snapshot.traces[0].segments.len(), 2);
+
+        // Hit-test on horizontal segment
+        let h = engine.get_trace_at_point(10_000_000, 5_000_000, 100_000);
+        assert_eq!(h, id);
+
+        // Hit-test on vertical segment
+        let v = engine.get_trace_at_point(15_000_000, 10_000_000, 100_000);
+        assert_eq!(v, id);
+    }
+
+    #[test]
+    fn test_run_drc_incremental() {
+        let mut engine = PcbEngine::new();
+        engine.load_source(
+            r#"
+            version 1
+            board test { size 50mm x 30mm layers 2 }
+            "#,
+        );
+
+        let count = engine.run_drc_incremental();
+        // Empty board should have no violations
+        assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn test_point_to_segment_distance_on_segment() {
+        // Point directly on segment midpoint
+        let p = Point::from_mm(5.0, 0.0);
+        let a = Point::from_mm(0.0, 0.0);
+        let b = Point::from_mm(10.0, 0.0);
+        let dist = point_to_segment_distance(p, a, b);
+        assert_eq!(dist, 0, "Point on segment should have distance 0");
+    }
+
+    #[test]
+    fn test_point_to_segment_distance_perpendicular() {
+        // Point 3mm above segment midpoint
+        let p = Point::from_mm(5.0, 3.0);
+        let a = Point::from_mm(0.0, 0.0);
+        let b = Point::from_mm(10.0, 0.0);
+        let dist = point_to_segment_distance(p, a, b);
+        // Should be ~3mm = 3_000_000 nm
+        assert!((dist - 3_000_000).abs() < 100, "Expected ~3mm, got {} nm", dist);
+    }
+
+    #[test]
+    fn test_point_to_segment_distance_endpoint() {
+        // Point beyond segment end
+        let p = Point::from_mm(15.0, 0.0);
+        let a = Point::from_mm(0.0, 0.0);
+        let b = Point::from_mm(10.0, 0.0);
+        let dist = point_to_segment_distance(p, a, b);
+        // Should be 5mm = 5_000_000 nm
+        assert!((dist - 5_000_000).abs() < 100, "Expected ~5mm, got {} nm", dist);
     }
 }
