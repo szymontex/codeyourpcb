@@ -17,10 +17,12 @@
   },
   "dependencies": {
     "@tauri-apps/api": "^2.0.0",
-    "monaco-editor": "^0.55.1"
+    "monaco-editor": "^0.55.1",
+    "three": "^0.183.2"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.0.0",
+    "@types/three": "^0.183.1",
     "@types/ws": "^8.5.0",
     "chokidar": "^3.6.0",
     "tsx": "^4.0.0",

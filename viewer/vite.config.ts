@@ -37,6 +37,7 @@ export default defineConfig({
         manualChunks: {
           vendor: ['./src/wasm.ts'],
           monaco: ['monaco-editor'],
+          three: ['three'],
         },
       },
     },

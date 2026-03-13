@@ -108,6 +108,12 @@ pub struct ComponentInfo {
     pub footprint: String,
     /// Pad definitions from the footprint.
     pub pads: Vec<PadInfo>,
+    /// Component body width in nanometers (from footprint bounds).
+    pub body_width_nm: i64,
+    /// Component body height in nanometers (from footprint bounds).
+    pub body_height_nm: i64,
+    /// Optional path/key to a GLB 3D model file (for future use).
+    pub model_3d: Option<String>,
 }
 
 /// Pad information for rendering.
@@ -268,6 +274,9 @@ mod tests {
                         drill_nm: None,
                     },
                 ],
+                body_width_nm: 1_000_000,
+                body_height_nm: 500_000,
+                model_3d: None,
             }],
             nets: vec![NetInfo {
                 name: "VCC".to_string(),
@@ -292,6 +301,9 @@ mod tests {
         assert!(json.contains("\"traces\":[]"));
         assert!(json.contains("\"vias\":[]"));
         assert!(json.contains("\"ratsnest\":[]"));
+        assert!(json.contains("\"body_width_nm\":1000000"));
+        assert!(json.contains("\"body_height_nm\":500000"));
+        assert!(json.contains("\"model_3d\":null"));
     }
 
     #[test]

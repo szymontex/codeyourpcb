@@ -42,6 +42,12 @@ export interface ComponentInfo {
   rotation_mdeg: number;
   footprint: string;
   pads: PadInfo[];
+  /** Component body width in nanometers (from footprint bounds). */
+  body_width_nm: number;
+  /** Component body height in nanometers (from footprint bounds). */
+  body_height_nm: number;
+  /** Optional path/key to a GLB 3D model file (null until populated). */
+  model_3d: string | null;
 }
 
 export interface PadInfo {

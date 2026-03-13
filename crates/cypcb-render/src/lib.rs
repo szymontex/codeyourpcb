@@ -754,9 +754,15 @@ impl PcbEngine {
                 None => String::new(),
             };
 
-            // Get pad info from footprint library
+            // Get pad info and body dimensions from footprint library
             let mut pads: Vec<PadInfo> = Vec::new();
+            let mut body_width_nm: i64 = 0;
+            let mut body_height_nm: i64 = 0;
             if let Some(fp) = self.footprint_lib.get(&footprint_name) {
+                // Body dimensions from footprint bounds
+                body_width_nm = fp.bounds.width().0;
+                body_height_nm = fp.bounds.height().0;
+
                 for pad in &fp.pads {
                     let mut layer_mask: u32 = 0;
                     for layer in &pad.layers {
@@ -780,6 +786,24 @@ impl PcbEngine {
                 }
             }
 
+            // Fallback: compute body dimensions from pad bounding box if bounds are zero
+            if body_width_nm == 0 && body_height_nm == 0 && !pads.is_empty() {
+                let mut min_x = i64::MAX;
+                let mut min_y = i64::MAX;
+                let mut max_x = i64::MIN;
+                let mut max_y = i64::MIN;
+                for pad in &pads {
+                    let hw = pad.width_nm / 2;
+                    let hh = pad.height_nm / 2;
+                    min_x = min_x.min(pad.x_nm - hw);
+                    min_y = min_y.min(pad.y_nm - hh);
+                    max_x = max_x.max(pad.x_nm + hw);
+                    max_y = max_y.max(pad.y_nm + hh);
+                }
+                body_width_nm = max_x - min_x;
+                body_height_nm = max_y - min_y;
+            }
+
             let refdes_str: String = refdes.as_str().to_string();
             components.push(ComponentInfo {
                 refdes: refdes_str,
@@ -789,6 +813,9 @@ impl PcbEngine {
                 rotation_mdeg: rotation,
                 footprint: footprint_name,
                 pads,
+                body_width_nm,
+                body_height_nm,
+                model_3d: None,
             });
         }
 
@@ -1236,6 +1263,9 @@ mod tests {
                     rotation_mdeg: 0,
                     footprint: "0402".to_string(),
                     pads: vec![], // Empty - should use builtin library
+                    body_width_nm: 0,
+                    body_height_nm: 0,
+                    model_3d: None,
                 },
                 ComponentInfo {
                     refdes: "R2".to_string(),
@@ -1245,6 +1275,9 @@ mod tests {
                     rotation_mdeg: 0,
                     footprint: "0402".to_string(),
                     pads: vec![], // Empty - should use builtin library
+                    body_width_nm: 0,
+                    body_height_nm: 0,
+                    model_3d: None,
                 },
             ],
             nets: vec![],
@@ -1511,6 +1544,30 @@ mod tests {
         let count = engine.run_drc_incremental();
         // Empty board should have no violations
         assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn test_component_body_dimensions_from_footprint() {
+        let mut engine = PcbEngine::new();
+        engine.load_source(
+            r#"
+            version 1
+            board test { size 50mm x 30mm layers 2 }
+            component R1 resistor "0402" {
+                value "10k"
+                at 10mm, 10mm
+            }
+            "#,
+        );
+
+        let snapshot = engine.build_snapshot();
+        assert_eq!(snapshot.components.len(), 1);
+        let comp = &snapshot.components[0];
+        assert_eq!(comp.refdes, "R1");
+        // 0402 footprint should have non-zero body dimensions from bounds
+        assert!(comp.body_width_nm > 0, "body_width_nm should be > 0, got {}", comp.body_width_nm);
+        assert!(comp.body_height_nm > 0, "body_height_nm should be > 0, got {}", comp.body_height_nm);
+        assert!(comp.model_3d.is_none());
     }
 
     #[test]

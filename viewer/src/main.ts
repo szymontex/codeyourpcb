@@ -168,6 +168,7 @@ async function init(): Promise<void> {
   const themeIcon = document.getElementById('theme-icon')!;
   const editorToggleBtn = document.getElementById('editor-toggle') as HTMLButtonElement;
   const fitBtn = document.getElementById('fit-btn') as HTMLButtonElement;
+  const view3dBtn = document.getElementById('view-3d-btn') as HTMLButtonElement;
   const editorContainer = document.getElementById('editor-container')!
 
   const ctx = canvas.getContext('2d')!;
@@ -206,6 +207,10 @@ async function init(): Promise<void> {
   let labelPosition: { x: number; y: number } | null = null;
   let routingState: RoutingState = createRoutingState();
 
+  // 3D view state
+  let is3DActive = false;
+  let renderer3d: import('./renderer3d').Renderer3D | null = null;
+
   // Resize handler
   function resize(): void {
     canvas.width = container.clientWidth;
@@ -220,13 +225,16 @@ async function init(): Promise<void> {
   resize();
   window.addEventListener('resize', resize);
 
-  // Layer checkbox handlers
+  // Layer checkbox handlers — update both 2D and 3D views
   topLayerCb.addEventListener('change', () => {
     layers = {
       ...layers,
       topCopper: topLayerCb.checked,
     };
     dirty = true;
+    if (is3DActive && renderer3d) {
+      renderer3d.updateLayerVisibility(layers);
+    }
   });
   bottomLayerCb.addEventListener('change', () => {
     layers = {
@@ -234,6 +242,9 @@ async function init(): Promise<void> {
       bottomCopper: bottomLayerCb.checked,
     };
     dirty = true;
+    if (is3DActive && renderer3d) {
+      renderer3d.updateLayerVisibility(layers);
+    }
   });
   ratsnestCb.addEventListener('change', () => {
     showRatsnest = ratsnestCb.checked;
@@ -253,9 +264,14 @@ async function init(): Promise<void> {
 
   const usingWasm = isWasmLoaded();
 
-  // Subscribe to theme changes to trigger canvas re-render
+  // Subscribe to theme changes to trigger canvas re-render + 3D background sync
   themeManager.subscribe(() => {
     dirty = true;
+    if (is3DActive && renderer3d) {
+      const style = getComputedStyle(document.documentElement);
+      const bgColor = style.getPropertyValue('--bg-canvas').trim() || '#1a1a2e';
+      renderer3d.setBackground(bgColor);
+    }
   });
 
   // Theme toggle
@@ -360,6 +376,47 @@ async function init(): Promise<void> {
       viewport = fitBoard(viewport, snapshot.board.width_nm, snapshot.board.height_nm);
       interactionState.viewport = viewport;
       dirty = true;
+    }
+  });
+
+  // 3D view toggle
+  view3dBtn.addEventListener('click', async () => {
+    if (!is3DActive) {
+      // Switch to 3D
+      if (!renderer3d) {
+        try {
+          const { Renderer3D } = await import('./renderer3d');
+          renderer3d = new Renderer3D();
+          renderer3d.init(container);
+        } catch (e) {
+          console.error('[3D] WebGL not available', e);
+          statusText.textContent = 'WebGL not available';
+          return;
+        }
+      }
+
+      // Hide 2D canvas, show 3D
+      canvas.style.display = 'none';
+      is3DActive = true;
+      view3dBtn.classList.add('active');
+
+      // Update board in 3D
+      if (snapshot) {
+        renderer3d.updateBoard(snapshot, layers);
+      }
+    } else {
+      // Switch back to 2D
+      is3DActive = false;
+      view3dBtn.classList.remove('active');
+
+      // Show 2D canvas, dispose 3D
+      canvas.style.display = '';
+      if (renderer3d) {
+        renderer3d.dispose();
+        renderer3d = null;
+      }
+
+      dirty = true; // Force 2D re-render
     }
   });
 
@@ -756,7 +813,8 @@ async function init(): Promise<void> {
 
   // Render loop
   function frame(): void {
-    if (dirty || interactionState.dirty) {
+    // Skip 2D rendering when 3D mode is active
+    if (!is3DActive && (dirty || interactionState.dirty)) {
       // Keep interaction state snapshot in sync
       interactionState.snapshot = snapshot;
 
@@ -1166,6 +1224,16 @@ async function init(): Promise<void> {
     if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'S' && !isDesktop()) {
       e.preventDefault();
       handleShareView();
+    }
+    // '3' key toggles 3D view (skip if typing in editor/input)
+    if (e.key === '3' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      const tag = (e.target as HTMLElement)?.tagName;
+      const isEditorFocused = tag === 'INPUT' || tag === 'TEXTAREA' ||
+        (e.target as HTMLElement)?.closest('.monaco-editor') != null;
+      if (!isEditorFocused) {
+        e.preventDefault();
+        view3dBtn.click();
+      }
     }
   });
 

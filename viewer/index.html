@@ -234,6 +234,30 @@
     #fit-btn:hover {
       background: var(--bg-tertiary);
     }
+    #view-3d-btn {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-primary);
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-primary);
+      transition: background-color 0.15s;
+    }
+    #view-3d-btn:hover {
+      background: var(--bg-tertiary);
+    }
+    #view-3d-btn.active {
+      background: var(--accent-primary);
+      color: white;
+      border-color: var(--accent-primary);
+    }
+    #three-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
     /* Coords display - fixed width to prevent layout shift */
     #coords {
       min-width: 160px;
@@ -354,6 +378,7 @@
     <label><input type="checkbox" id="layer-ratsnest" checked> Ratsnest</label>
     <span class="separator">|</span>
     <button id="fit-btn" title="Fit board to view (F)">⊡</button>
+    <button id="view-3d-btn" title="Toggle 3D view">3D</button>
     <button id="theme-toggle" aria-label="Toggle theme" title="Toggle theme (Light / Dark / Auto)">
       <span id="theme-icon">☀️</span>
     </button>
