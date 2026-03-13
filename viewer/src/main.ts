@@ -23,6 +23,8 @@ import type { AppSettings, LayerColors } from './settings';
 import { formatDimension, parseUserDimension } from './units';
 import type { DisplayUnit } from './units';
 import { initProjectManager, showProjectManager, hideProjectManager, addRecentFile } from './project-manager';
+import { initSearchPanel, showSearchPanel, hideSearchPanel, toggleSearchPanel, isSearchPanelVisible } from './jlcpcb-panel';
+import { fetch3DModel } from './jlcpcb';
 
 // WebSocket server URL for hot reload
 // Dynamic: if accessing via dev1.flightcore.pl, use dev2.flightcore.pl for WS
@@ -424,7 +426,10 @@ async function init(): Promise<void> {
     prefsOverlay.classList.add('hidden');
   }
 
-  prefsBtn.addEventListener('click', openPrefsModal);
+  prefsBtn.addEventListener('click', () => {
+    hideSearchPanel();
+    openPrefsModal();
+  });
   prefsClose.addEventListener('click', closePrefsModal);
   prefsOverlay.addEventListener('click', (e) => {
     if (e.target === prefsOverlay) closePrefsModal();
@@ -773,6 +778,34 @@ async function init(): Promise<void> {
 
   // Show project manager on startup
   showProjectManager();
+
+  // --- JLCPCB Search Panel ---
+  const jlcpcbSearchBtn = document.getElementById('jlcpcb-search-btn') as HTMLButtonElement;
+  initSearchPanel({
+    onComponentSelect: async (component) => {
+      const lcscStr = `C${component.lcsc}`;
+      console.log(`[JLCPCB] Selected: ${lcscStr} (${component.mfr})`);
+
+      if (is3DActive && renderer3d) {
+        console.log(`[JLCPCB] Fetching 3D model for ${lcscStr}...`);
+        const objText = await fetch3DModel(component.lcsc);
+        if (objText) {
+          renderer3d.loadComponentFromOBJ(objText, lcscStr);
+          console.log(`[3D] OBJ loaded for ${lcscStr}`);
+        } else {
+          console.log(`[JLCPCB] No 3D model available for ${lcscStr}`);
+        }
+      }
+    },
+  });
+
+  jlcpcbSearchBtn.addEventListener('click', () => {
+    // Close project manager if open to avoid stacking
+    if (!document.getElementById('project-manager')?.classList.contains('hidden')) {
+      hideProjectManager();
+    }
+    toggleSearchPanel();
+  });
 
   // Expose board loader for E2E tests — loads source, pulls snapshot, fits board
   (window as any).__loadBoard = (source: string) => {
@@ -1563,8 +1596,14 @@ async function init(): Promise<void> {
 
   // Keyboard shortcuts
   document.addEventListener('keydown', async (e) => {
-    // Escape: routing cancel handled in interaction.ts; here handle net highlight + autoroute
+    // Escape: close search panel first, then handle other escape actions
     if (e.key === 'Escape') {
+      // Close search panel if open
+      if (isSearchPanelVisible()) {
+        hideSearchPanel();
+        e.preventDefault();
+        return;
+      }
       // Skip routing cancel — handled by interaction.ts keyboard handler
       if (routingState.mode === 'routing') return;
       // Clear net highlighting (from trace selection, not routing)
@@ -1678,6 +1717,15 @@ async function init(): Promise<void> {
     if ((e.ctrlKey || e.metaKey) && e.key === 'e') {
       e.preventDefault();
       editorToggleBtn.click();
+    }
+    // Ctrl+J to toggle JLCPCB search panel
+    if ((e.ctrlKey || e.metaKey) && e.key === 'j') {
+      e.preventDefault();
+      // Close project manager if open
+      if (!document.getElementById('project-manager')?.classList.contains('hidden')) {
+        hideProjectManager();
+      }
+      toggleSearchPanel();
     }
     // Ctrl+Shift+T to toggle theme
     if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'T') {
@@ -1893,6 +1941,7 @@ async function init(): Promise<void> {
       // Update status
       statusText.textContent = usingWasm ? 'Ready (WASM) - Open a file' : 'Ready (Mock) - Open a file';
 
+      hideSearchPanel();
       showProjectManager();
       dirty = true;
     });

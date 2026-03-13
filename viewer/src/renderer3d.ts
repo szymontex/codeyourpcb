@@ -16,6 +16,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { BoardSnapshot, TraceInfo, ViaInfo, ComponentInfo } from './types';
 import { LAYER_COLORS, LAYER_MASK, type LayerVisibility } from './layers';
+import { parseEasyEdaOBJ } from './easyeda-obj-parser';
 
 /** Component body height for SMD parts in mm */
 const SMD_HEIGHT_MM = 1.2;
@@ -104,6 +105,9 @@ export class Renderer3D {
 
   /** Loaded GLTF models: refdes → Group */
   private loadedModels: Map<string, THREE.Group> = new Map();
+
+  /** Count of OBJ models loaded (subset of loadedModels) */
+  private _objModelCount = 0;
 
   /**
    * Initialize the 3D renderer inside the given container element.
@@ -424,6 +428,118 @@ export class Renderer3D {
         console.error(`[3D] GLB load failed for ${refdes}: ${error}`);
       },
     );
+  }
+
+  /**
+   * Load a 3D model from EasyEDA OBJ text, replacing the placeholder box mesh.
+   * Parses the non-standard OBJ format, builds BufferGeometry per material group,
+   * and adds the resulting Group to the scene at the placeholder's position/rotation.
+   * Errors are logged to console — callers don't need to handle failures.
+   */
+  loadComponentFromOBJ(objText: string, refdes: string): void {
+    if (!this.boardGroup) {
+      console.error(`[3D] OBJ load failed for ${refdes}: no board group`);
+      return;
+    }
+
+    const meshName = `component-${refdes}`;
+    let placeholder: THREE.Object3D | null = null;
+    this.boardGroup.traverse((obj) => {
+      if (obj.name === meshName) placeholder = obj;
+    });
+
+    if (!placeholder) {
+      console.error(`[3D] OBJ load failed for ${refdes}: placeholder mesh "${meshName}" not found`);
+      return;
+    }
+
+    let groups;
+    try {
+      groups = parseEasyEdaOBJ(objText);
+    } catch (error) {
+      console.error(`[3D] OBJ parse failed: ${error}`);
+      return;
+    }
+
+    if (groups.length === 0) {
+      console.error(`[3D] OBJ parse failed: no geometry groups for ${refdes}`);
+      return;
+    }
+
+    const model = new THREE.Group();
+    model.name = `model-${refdes}`;
+
+    for (const group of groups) {
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(group.positions, 3));
+      geo.setAttribute('normal', new THREE.BufferAttribute(group.normals, 3));
+
+      const mat = new THREE.MeshStandardMaterial({
+        color: new THREE.Color(group.materialColor.r, group.materialColor.g, group.materialColor.b),
+        metalness: 0.3,
+        roughness: 0.5,
+        side: THREE.DoubleSide,
+        transparent: group.opacity < 1.0,
+        opacity: group.opacity,
+      });
+
+      const mesh = new THREE.Mesh(geo, mat);
+      model.add(mesh);
+    }
+
+    // Copy transform from placeholder
+    const pos = (placeholder as THREE.Mesh).position.clone();
+    const rot = (placeholder as THREE.Mesh).rotation.clone();
+    model.position.copy(pos);
+    model.rotation.copy(rot);
+
+    // Dispose and remove placeholder
+    const ph = placeholder as THREE.Object3D;
+    if (ph instanceof THREE.Mesh) {
+      ph.geometry?.dispose();
+      if (ph.material) {
+        if (Array.isArray(ph.material)) {
+          ph.material.forEach((m: THREE.Material) => m.dispose());
+        } else {
+          (ph.material as THREE.Material).dispose();
+        }
+      }
+    }
+    if (ph.parent) {
+      ph.parent.remove(ph);
+    }
+
+    // Dispose previous model for same refdes if reloading
+    const prev = this.loadedModels.get(refdes);
+    if (prev) {
+      prev.traverse((obj) => {
+        if (obj instanceof THREE.Mesh) {
+          obj.geometry?.dispose();
+          if (obj.material) {
+            if (Array.isArray(obj.material)) {
+              obj.material.forEach(m => m.dispose());
+            } else {
+              (obj.material as THREE.Material).dispose();
+            }
+          }
+        }
+      });
+      prev.parent?.remove(prev);
+      this._objModelCount--;
+    }
+
+    // Add to top layer group
+    this.boardGroup.traverse((obj) => {
+      if (obj.name === 'layer-top') {
+        obj.add(model);
+      }
+    });
+
+    this.loadedModels.set(refdes, model);
+    this._objModelCount++;
+
+    console.log(`[3D] OBJ loaded for ${refdes}`);
+    this.updateDebugSurface();
   }
 
   // -- Copper geometry builders --
@@ -956,6 +1072,7 @@ export class Renderer3D {
     this._traceSegmentCount = 0;
     this._padCount = 0;
     this._viaCount = 0;
+    this._objModelCount = 0;
   }
 
   private getMeshCount(): number {
@@ -987,6 +1104,7 @@ export class Renderer3D {
       get traceSegmentCount() { return self._traceSegmentCount; },
       get padCount() { return self._padCount; },
       get viaCount() { return self._viaCount; },
+      get objModelCount() { return self._objModelCount; },
     };
   }
 }

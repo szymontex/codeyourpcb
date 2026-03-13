@@ -709,6 +709,174 @@
       margin-top: 24px;
     }
 
+    /* JLCPCB Search Panel */
+    #jlcpcb-search-panel {
+      position: fixed;
+      right: 0;
+      top: 41px;
+      width: 360px;
+      height: calc(100% - 41px);
+      background: var(--bg-elevated);
+      border-left: 1px solid var(--border-primary);
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+      box-shadow: -2px 0 8px var(--shadow);
+      transition: background-color 0.15s ease, border-color 0.15s ease;
+    }
+    #jlcpcb-search-panel.hidden {
+      display: none;
+    }
+    #jlcpcb-search-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border-primary);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+    #jlcpcb-search-close {
+      background: none;
+      border: none;
+      font-size: 20px;
+      cursor: pointer;
+      color: var(--text-secondary);
+      line-height: 1;
+      padding: 2px 4px;
+    }
+    #jlcpcb-search-close:hover {
+      color: var(--text-primary);
+    }
+    #jlcpcb-search-input-wrap {
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border-secondary);
+    }
+    #jlcpcb-search-input {
+      width: 100%;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-primary);
+      border-radius: 4px;
+      padding: 6px 8px;
+      font-size: 13px;
+      color: var(--text-primary);
+      outline: none;
+    }
+    #jlcpcb-search-input:focus {
+      border-color: var(--accent-primary);
+    }
+    #jlcpcb-search-status {
+      padding: 12px;
+      font-size: 12px;
+      color: var(--text-secondary);
+      text-align: center;
+    }
+    #jlcpcb-search-status.hidden {
+      display: none;
+    }
+    #jlcpcb-search-status.error {
+      color: var(--error);
+    }
+    #jlcpcb-search-results {
+      flex: 1;
+      overflow-y: auto;
+    }
+    .jlcpcb-result {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border-secondary);
+      cursor: pointer;
+      transition: background-color 0.1s;
+    }
+    .jlcpcb-result:hover {
+      background: var(--bg-secondary);
+    }
+    .jlcpcb-result-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 4px;
+    }
+    .jlcpcb-result-lcsc {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--accent-primary);
+    }
+    .jlcpcb-result-package {
+      font-size: 11px;
+      color: var(--text-tertiary);
+      background: var(--bg-secondary);
+      padding: 1px 6px;
+      border-radius: 3px;
+    }
+    .jlcpcb-result-mfr {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-bottom: 2px;
+    }
+    .jlcpcb-result-attrs {
+      font-size: 11px;
+      color: var(--text-tertiary);
+      margin-bottom: 4px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .jlcpcb-result-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+    .jlcpcb-result-price {
+      font-weight: 500;
+    }
+    .jlcpcb-result-stock {
+      color: var(--text-tertiary);
+    }
+    .jlcpcb-result-datasheet {
+      color: var(--accent-primary);
+      text-decoration: none;
+      font-size: 11px;
+    }
+    .jlcpcb-result-datasheet:hover {
+      text-decoration: underline;
+    }
+    .jlcpcb-spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid var(--border-secondary);
+      border-top: 2px solid var(--accent-primary);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-right: 6px;
+      vertical-align: middle;
+    }
+    #jlcpcb-search-btn {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-primary);
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      line-height: 1;
+      color: var(--text-primary);
+      transition: background-color 0.15s;
+    }
+    #jlcpcb-search-btn:hover {
+      background: var(--bg-tertiary);
+    }
+    #jlcpcb-search-btn.active {
+      background: var(--accent-primary);
+      color: white;
+      border-color: var(--accent-primary);
+    }
+    @media (max-width: 768px) {
+      #jlcpcb-search-panel { width: 100%; }
+    }
+
     /* Responsive: Touch targets for coarse pointer devices (tablets, phones) */
     @media (pointer: coarse) {
       #toolbar { padding: 12px 16px; gap: 12px; }
@@ -756,6 +924,7 @@
       <span id="theme-icon">☀️</span>
     </button>
     <button id="prefs-btn" title="Preferences">⚙</button>
+    <button id="jlcpcb-search-btn" title="Search JLCPCB parts (Ctrl+J)">🔍</button>
     <span id="coords"></span>
     <button id="open-btn">Open</button>
     <button id="share-btn" class="hidden">Share</button>
@@ -861,6 +1030,18 @@
         <button id="pm-open-btn">📁 Open File</button>
       </div>
     </div>
+  </div>
+  <!-- JLCPCB Search Panel (right-side overlay) -->
+  <div id="jlcpcb-search-panel" class="hidden">
+    <div id="jlcpcb-search-header">
+      <span>JLCPCB Parts Search</span>
+      <button id="jlcpcb-search-close">&times;</button>
+    </div>
+    <div id="jlcpcb-search-input-wrap">
+      <input type="text" id="jlcpcb-search-input" placeholder="Search JLCPCB parts..." autocomplete="off" spellcheck="false">
+    </div>
+    <div id="jlcpcb-search-status" class="hidden"></div>
+    <div id="jlcpcb-search-results"></div>
   </div>
   <div id="main-content" style="display: flex; flex: 1; overflow: hidden;">
     <div id="editor-container" style="width: 40%; min-width: 200px; display: none;">

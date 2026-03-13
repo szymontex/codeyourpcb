@@ -11,7 +11,7 @@
 - DSL v2: modules, typed interfaces (I2C, SPI, Power), physical units (23 variants), constraint assertions
 - Custom A*-based autorouter (500-component board in 0.05s, multi-layer, constraint-aware)
 - Manual trace editing with click-drag routing, angle snapping, and live DRC feedback
-- 3D board viewer (Three.js) with procedural component bodies, orbit/zoom/pan, layer visibility — renders real geometry (components, pads, traces, vias) with GLTFLoader pipeline ready for S06 models
+- 3D board viewer (Three.js) with procedural component bodies, orbit/zoom/pan, layer visibility — renders real geometry (components, pads, traces, vias) with EasyEDA OBJ model loading pipeline
 - Grid snap, command-pattern undo/redo, net highlighting, component rotation, board outline resize
 - Automatic DRC with visual violation markers
 - Export manufacturing files (Gerber X2, Excellon, BOM, CPL) verified with JLCPCB
@@ -21,7 +21,7 @@
 - Tauri v2 desktop application (native menus, file dialogs, installer)
 - Web deployment (Cloudflare Pages, File System Access API, URL sharing)
 - 8-stage quality gate: cargo fmt, clippy, cargo test, eslint, vitest, playwright, autorouter benchmark, jscpd
-- 109 Vitest unit tests + 87 Playwright E2E tests (all passing)
+- 127 Vitest unit tests + 93 Playwright E2E tests (all passing)
 - Professional 2D renderer with LOD, per-pad net highlighting, component body outlines, pad numbers, net labels, drill marks
 - Routing UX: net-aware target pad highlighting, ratsnest guide, magnetic snap to destination, angle constraint toggle (A key), keyboard handlers (Escape/F/A)
 - Clean toolbar with essential tools only; View dropdown for layer/grid/ratsnest/net-labels; Preferences modal for theme/units/grid/colors
@@ -30,12 +30,12 @@
 
 **Known tech debt / deferred items:**
 - DSL v2 constructs are parse-only — no module instantiation, import resolution, or constraint evaluation
-- 3D viewer uses procedural component bodies — JLCPCB GLB model loading fully plumbed (loadComponentModel API ready), not yet populated with real models
+- 3D viewer uses procedural component bodies by default — EasyEDA OBJ model loading available via JLCPCB search panel (CORS-limited from localhost)
 - Desktop crates excluded from quality gates (require system deps unavailable in CI)
 - Board outline editing is rectangle-only (polygon editing deferred)
 - Copper fill zones not rendered (no Zone type in ECS data model)
 - Silkscreen uses rectangular body outlines (real KiCad silkscreen has complex curves/text)
-- Library management is weakest competitive area (no supplier API integration)
+- Library management still needs depth (JLCPCB search exists but no "add to library" flow)
 - Pre-existing E2E flake in errors.spec.ts:102 ("Ready" vs "Reloaded" status race)
 - ThemeManager has separate 'theme' localStorage key from settings 'cypcb-settings' key (by design for FART prevention)
 
@@ -90,9 +90,9 @@
 - ✅ S04: UI architecture — clean toolbar, View dropdown, Preferences modal, unit system (mm/mil/µm), settings persistence
 
 - ✅ S05: Project manager — startup overlay with 3 templates + blank board, recent files with thumbnails, full lifecycle wiring, editor→board reflow, 14 E2E tests
+- ✅ S06: JLCPCB integration — component search via jlcsearch API, EasyEDA OBJ 3D model pipeline, search panel UI with metadata display, 6 E2E tests with route interception
 
 **Planned:**
-- JLCPCB/LCSC integration (component search, 3D model download)
 - All UI bugs fixed, E2E coverage extended, quality gate passing
 
 ## What This Is
@@ -146,8 +146,8 @@ A code-first PCB design tool where you write code and it generates circuit board
 
 - ✅ Project templates — 3 bundled templates + blank scaffold, PM overlay on startup (M003/S05)
 - [ ] DSL v2 semantic evaluation (module instantiation, import resolution, constraint enforcement)
-- [ ] JLCPCB 3D GLB model loading
-- [ ] Supplier API integration (LCSC/Mouser) for library management
+- [ ] JLCPCB 3D model loading from production (CORS-limited from localhost, pipeline built)
+- [ ] Supplier API integration depth (JLCPCB search built, LCSC/Mouser not yet)
 
 ### Future (v3.0+)
 
@@ -198,4 +198,4 @@ Current PCB tools (KiCad, Eagle, Altium) are GUI-first. The project file is a bi
 - **Compatibility:** Export to industry standard formats (Gerber, Excellon, BOM, CPL)
 
 ---
-*Last updated: 2026-03-13 after completing M003/S05*
+*Last updated: 2026-03-14 after completing M003/S06*

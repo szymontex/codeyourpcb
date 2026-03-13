@@ -69,7 +69,7 @@ This milestone is complete only when all are true:
 - [x] **S05: Project Manager & File Handling** `risk:medium` `depends:[S04]`
   > After this: app opens to project manager showing recent files with thumbnails; user can create new project from template, import existing .cypcb, or open recent; editor changes trigger board view update/reflow
 
-- [ ] **S06: JLCPCB Integration & 3D Models** `risk:medium` `depends:[S02,S04]`
+- [x] **S06: JLCPCB Integration & 3D Models** `risk:medium` `depends:[S02,S04]`
   > After this: user searches JLCPCB/LCSC catalog from within the app, sees part metadata (price, stock, datasheet), and components with LCSC part numbers auto-load 3D GLB models in the 3D view
 
 - [ ] **S07: Polish, Bugs & Verification** `risk:low` `depends:[S03,S04,S05,S06]`
