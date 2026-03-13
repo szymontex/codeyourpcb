@@ -21,9 +21,12 @@
 - Tauri v2 desktop application (native menus, file dialogs, installer)
 - Web deployment (Cloudflare Pages, File System Access API, URL sharing)
 - 8-stage quality gate: cargo fmt, clippy, cargo test, eslint, vitest, playwright, autorouter benchmark, jscpd
-- 77 Vitest unit tests + 58 Playwright E2E tests (all passing)
+- 109 Vitest unit tests + 73 Playwright E2E tests (all passing)
 - Professional 2D renderer with LOD, per-pad net highlighting, component body outlines, pad numbers, net labels, drill marks
 - Routing UX: net-aware target pad highlighting, ratsnest guide, magnetic snap to destination, angle constraint toggle (A key), keyboard handlers (Escape/F/A)
+- Clean toolbar with essential tools only; View dropdown for layer/grid/ratsnest/net-labels; Preferences modal for theme/units/grid/colors
+- Unit system (mm/mil/µm) with formatDimension/parseUserDimension wired to all display sites
+- Settings persistence (localStorage) with typed get/set/subscribe API
 
 **Known tech debt / deferred items:**
 - DSL v2 constructs are parse-only — no module instantiation, import resolution, or constraint evaluation
@@ -34,6 +37,7 @@
 - Silkscreen uses rectangular body outlines (real KiCad silkscreen has complex curves/text)
 - Library management is weakest competitive area (no supplier API integration)
 - Pre-existing E2E flake in errors.spec.ts:102 ("Ready" vs "Reloaded" status race)
+- ThemeManager has separate 'theme' localStorage key from settings 'cypcb-settings' key (by design for FART prevention)
 
 ## Completed Milestone: v1.0 + v1.1 "Full Stack PCB Design Tool" ✅
 
@@ -83,13 +87,12 @@
 - ✅ S01: Professional 2D renderer (pad numbers, net labels, layer colors, refdes, LOD, per-pad highlighting)
 - ✅ S02: 3D view fix — component bodies, pads, traces, vias render correctly; GLTFLoader pipeline ready for S06
 - ✅ S03: Routing UX — net-aware target highlighting, ratsnest guide, magnetic snap, angle constraint toggle, 6 E2E + 14 unit tests
+- ✅ S04: UI architecture — clean toolbar, View dropdown, Preferences modal, unit system (mm/mil/µm), settings persistence
 
 **Planned:**
-- UI architecture overhaul (clean toolbar, View menu, preferences panel)
 - Project manager (recent files, templates, import flow)
 - JLCPCB/LCSC integration (component search, 3D model download)
-- Unit system (mm/mils/µm switching)
-- All UI bugs fixed
+- All UI bugs fixed, E2E coverage extended, quality gate passing
 
 ## What This Is
 
@@ -194,4 +197,4 @@ Current PCB tools (KiCad, Eagle, Altium) are GUI-first. The project file is a bi
 - **Compatibility:** Export to industry standard formats (Gerber, Excellon, BOM, CPL)
 
 ---
-*Last updated: 2026-03-13 after completing v2.0 milestone*
+*Last updated: 2026-03-13 after completing M003/S04*

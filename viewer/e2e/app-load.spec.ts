@@ -35,12 +35,14 @@ test.describe('App Load & WASM Initialization', () => {
     await page.goto('/');
     await expect(page.locator('#status-text')).toContainText('Ready', { timeout: 15_000 });
     await expect(page.locator('#editor-toggle')).toBeVisible();
-    await expect(page.locator('#layer-top')).toBeVisible();
-    await expect(page.locator('#layer-bottom')).toBeVisible();
     await expect(page.locator('#fit-btn')).toBeVisible();
+    await expect(page.locator('#view-menu-btn')).toBeVisible();
     await expect(page.locator('#view-3d-btn')).toBeVisible();
     await expect(page.locator('#theme-toggle')).toBeVisible();
+    await expect(page.locator('#prefs-btn')).toBeVisible();
     await expect(page.locator('#open-btn')).toBeVisible();
+    // Layer checkboxes are inside View dropdown, not directly in toolbar
+    await expect(page.locator('#view-menu-dropdown')).toHaveClass(/hidden/);
   });
 
   test('baseline screenshot of initial state', async ({ page }) => {

@@ -18,6 +18,10 @@ import { createFilePicker, setupDropZone, readFileAsText } from './file-picker';
 import { openFile, saveFile } from './file-access';
 import { isDesktop, initDesktop } from './desktop';
 import { encodeViewState, decodeViewState } from './url-state';
+import { getSettings, getPreference, setPreference, subscribe as subscribeSettings } from './settings';
+import type { AppSettings, LayerColors } from './settings';
+import { formatDimension, parseUserDimension } from './units';
+import type { DisplayUnit } from './units';
 
 // WebSocket server URL for hot reload
 // Dynamic: if accessing via dev1.flightcore.pl, use dev2.flightcore.pl for WS
@@ -158,7 +162,13 @@ async function init(): Promise<void> {
   const topLayerCb = document.getElementById('layer-top') as HTMLInputElement;
   const bottomLayerCb = document.getElementById('layer-bottom') as HTMLInputElement;
   const ratsnestCb = document.getElementById('layer-ratsnest') as HTMLInputElement;
-  const gridSnapCb = document.getElementById('grid-snap') as HTMLInputElement;
+  const gridVisibleCb = document.getElementById('view-grid-visible') as HTMLInputElement;
+  const netLabelsCb = document.getElementById('view-net-labels') as HTMLInputElement;
+  const viewMenuBtn = document.getElementById('view-menu-btn') as HTMLButtonElement;
+  const viewMenuDropdown = document.getElementById('view-menu-dropdown')!;
+  const prefsBtn = document.getElementById('prefs-btn') as HTMLButtonElement;
+  const prefsOverlay = document.getElementById('prefs-overlay')!;
+  const prefsClose = document.getElementById('prefs-close') as HTMLButtonElement;
   const undoBtn = document.getElementById('undo-btn') as HTMLButtonElement;
   const redoBtn = document.getElementById('redo-btn') as HTMLButtonElement;
   const routeBtn = document.getElementById('route-btn') as HTMLButtonElement;
@@ -204,7 +214,9 @@ async function init(): Promise<void> {
   let selectedRefdes: string | null = null;
   let dirty = true;
   let lastLoadedSource: string | null = null;
-  let showRatsnest = true;
+  let showRatsnest = getPreference('ratsnestVisible');
+  let gridVisible = getPreference('gridVisible');
+  let showNetLabels = getPreference('netLabelsVisible');
   const colorByNet = true;
   let selectedTraceId: number | null = null;
   let hoveredTraceId: number | null = null;
@@ -243,22 +255,36 @@ async function init(): Promise<void> {
   resize();
   window.addEventListener('resize', resize);
 
+  // --- View menu ---
+  viewMenuBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    viewMenuDropdown.classList.toggle('hidden');
+  });
+
+  // Close View dropdown on click outside or Escape
+  document.addEventListener('click', (e) => {
+    if (!viewMenuDropdown.classList.contains('hidden') &&
+        !viewMenuDropdown.contains(e.target as Node) &&
+        e.target !== viewMenuBtn) {
+      viewMenuDropdown.classList.add('hidden');
+    }
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !viewMenuDropdown.classList.contains('hidden')) {
+      viewMenuDropdown.classList.add('hidden');
+    }
+  });
+
   // Layer checkbox handlers — update both 2D and 3D views
   topLayerCb.addEventListener('change', () => {
-    layers = {
-      ...layers,
-      topCopper: topLayerCb.checked,
-    };
+    layers = { ...layers, topCopper: topLayerCb.checked };
     dirty = true;
     if (is3DActive && renderer3d) {
       renderer3d.updateLayerVisibility(layers);
     }
   });
   bottomLayerCb.addEventListener('change', () => {
-    layers = {
-      ...layers,
-      bottomCopper: bottomLayerCb.checked,
-    };
+    layers = { ...layers, bottomCopper: bottomLayerCb.checked };
     dirty = true;
     if (is3DActive && renderer3d) {
       renderer3d.updateLayerVisibility(layers);
@@ -266,16 +292,24 @@ async function init(): Promise<void> {
   });
   ratsnestCb.addEventListener('change', () => {
     showRatsnest = ratsnestCb.checked;
+    setPreference('ratsnestVisible', ratsnestCb.checked);
+    dirty = true;
+  });
+  gridVisibleCb.addEventListener('change', () => {
+    gridVisible = gridVisibleCb.checked;
+    setPreference('gridVisible', gridVisibleCb.checked);
+    dirty = true;
+  });
+  netLabelsCb.addEventListener('change', () => {
+    showNetLabels = netLabelsCb.checked;
+    setPreference('netLabelsVisible', netLabelsCb.checked);
     dirty = true;
   });
 
-  // Grid snap toggle
-  gridSnapCb.addEventListener('change', () => {
-    routingState = { ...routingState, gridSnapEnabled: gridSnapCb.checked };
-    interactionState.routing = routingState;
-    console.log(`[Grid] Snap ${gridSnapCb.checked ? 'enabled' : 'disabled'} (spacing: ${routingState.gridSpacing / 1e6}mm)`);
-    dirty = true;
-  });
+  // Initialize View menu checkboxes from settings
+  gridVisibleCb.checked = gridVisible;
+  netLabelsCb.checked = showNetLabels;
+  ratsnestCb.checked = getPreference('ratsnestVisible');
 
   // Undo/Redo toolbar buttons
   undoBtn.addEventListener('click', () => {
@@ -354,6 +388,147 @@ async function init(): Promise<void> {
   });
 
   updateThemeIcon();
+
+  // --- Preferences modal ---
+  function openPrefsModal(): void {
+    // Populate all inputs from current settings
+    const settings = getSettings();
+
+    // Theme button label
+    const prefsThemeBtn = document.getElementById('prefs-theme-btn') as HTMLButtonElement;
+    const currentTheme = themeManager.getTheme();
+    prefsThemeBtn.textContent = currentTheme === 'light' ? '☀️ Light' : currentTheme === 'dark' ? '🌙 Dark' : '🔄 Auto';
+
+    // Units select
+    const unitsSelect = document.getElementById('prefs-units') as HTMLSelectElement;
+    unitsSelect.value = settings.units;
+
+    // Grid spacing inputs — format using current units
+    const gridVisualInput = document.getElementById('prefs-grid-visual') as HTMLInputElement;
+    const gridSnapInput = document.getElementById('prefs-grid-snap') as HTMLInputElement;
+    gridVisualInput.value = formatDimension(settings.gridVisualSpacing, settings.units);
+    gridSnapInput.value = formatDimension(settings.gridSnapSpacing, settings.units);
+
+    // Color pickers
+    (document.getElementById('prefs-color-top') as HTMLInputElement).value = settings.layerColors.topCopper;
+    (document.getElementById('prefs-color-bottom') as HTMLInputElement).value = settings.layerColors.bottomCopper;
+    (document.getElementById('prefs-color-silk') as HTMLInputElement).value = settings.layerColors.silkscreen;
+    (document.getElementById('prefs-color-via') as HTMLInputElement).value = settings.layerColors.via;
+    (document.getElementById('prefs-color-drill') as HTMLInputElement).value = settings.layerColors.drill;
+
+    prefsOverlay.classList.remove('hidden');
+  }
+
+  function closePrefsModal(): void {
+    prefsOverlay.classList.add('hidden');
+  }
+
+  prefsBtn.addEventListener('click', openPrefsModal);
+  prefsClose.addEventListener('click', closePrefsModal);
+  prefsOverlay.addEventListener('click', (e) => {
+    if (e.target === prefsOverlay) closePrefsModal();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !prefsOverlay.classList.contains('hidden')) {
+      closePrefsModal();
+    }
+  });
+
+  // Theme cycle in prefs
+  document.getElementById('prefs-theme-btn')!.addEventListener('click', () => {
+    const current = themeManager.getTheme();
+    const next = current === 'light' ? 'dark' : current === 'dark' ? 'auto' : 'light';
+    themeManager.setTheme(next);
+    setPreference('theme', next);
+    updateThemeIcon();
+    const btn = document.getElementById('prefs-theme-btn') as HTMLButtonElement;
+    btn.textContent = next === 'light' ? '☀️ Light' : next === 'dark' ? '🌙 Dark' : '🔄 Auto';
+  });
+
+  // Units select in prefs
+  document.getElementById('prefs-units')!.addEventListener('change', (e) => {
+    const unit = (e.target as HTMLSelectElement).value as DisplayUnit;
+    setPreference('units', unit);
+    // Re-format grid spacing inputs with new unit
+    const settings = getSettings();
+    (document.getElementById('prefs-grid-visual') as HTMLInputElement).value =
+      formatDimension(settings.gridVisualSpacing, unit);
+    (document.getElementById('prefs-grid-snap') as HTMLInputElement).value =
+      formatDimension(settings.gridSnapSpacing, unit);
+    dirty = true;
+  });
+
+  // Grid spacing inputs in prefs — parse on change
+  document.getElementById('prefs-grid-visual')!.addEventListener('change', (e) => {
+    const nm = parseUserDimension((e.target as HTMLInputElement).value);
+    if (nm != null && nm > 0) {
+      setPreference('gridVisualSpacing', nm);
+      dirty = true;
+    } else {
+      console.warn('[prefs] Invalid grid visual spacing, reverting');
+      (e.target as HTMLInputElement).value = formatDimension(getPreference('gridVisualSpacing'), getPreference('units'));
+    }
+  });
+  document.getElementById('prefs-grid-snap')!.addEventListener('change', (e) => {
+    const nm = parseUserDimension((e.target as HTMLInputElement).value);
+    if (nm != null && nm > 0) {
+      setPreference('gridSnapSpacing', nm);
+      // Update routing state grid spacing
+      routingState = { ...routingState, gridSpacing: nm };
+      interactionState.routing = routingState;
+      dirty = true;
+    } else {
+      console.warn('[prefs] Invalid grid snap spacing, reverting');
+      (e.target as HTMLInputElement).value = formatDimension(getPreference('gridSnapSpacing'), getPreference('units'));
+    }
+  });
+
+  // Color pickers in prefs — map data-pref to layerColors keys
+  const colorInputMap: [string, keyof LayerColors][] = [
+    ['prefs-color-top', 'topCopper'],
+    ['prefs-color-bottom', 'bottomCopper'],
+    ['prefs-color-silk', 'silkscreen'],
+    ['prefs-color-via', 'via'],
+    ['prefs-color-drill', 'drill'],
+  ];
+  for (const [elId, colorKey] of colorInputMap) {
+    document.getElementById(elId)!.addEventListener('input', (e) => {
+      const hex = (e.target as HTMLInputElement).value;
+      if (/^#[0-9a-f]{6}$/i.test(hex)) {
+        const colors = getPreference('layerColors');
+        colors[colorKey] = hex;
+        setPreference('layerColors', colors);
+        // Propagate to renderConfig
+        renderConfig.layerColors[colorKey] = hex;
+        dirty = true;
+      } else {
+        console.warn(`[prefs] Invalid color value for ${colorKey}: ${hex}`);
+      }
+    });
+  }
+
+  // Subscribe to settings changes — sync renderConfig and trigger re-render
+  subscribeSettings((settings: AppSettings) => {
+    // Sync layer colors to renderConfig
+    renderConfig.layerColors.topCopper = settings.layerColors.topCopper;
+    renderConfig.layerColors.bottomCopper = settings.layerColors.bottomCopper;
+    renderConfig.layerColors.silkscreen = settings.layerColors.silkscreen;
+    renderConfig.layerColors.via = settings.layerColors.via;
+    renderConfig.layerColors.drill = settings.layerColors.drill;
+
+    // Sync grid visibility and net labels
+    gridVisible = settings.gridVisible;
+    showNetLabels = settings.netLabelsVisible;
+    showRatsnest = settings.ratsnestVisible;
+
+    // Update routing grid spacing
+    if (routingState.gridSpacing !== settings.gridSnapSpacing) {
+      routingState = { ...routingState, gridSpacing: settings.gridSnapSpacing };
+      interactionState.routing = routingState;
+    }
+
+    dirty = true;
+  });
 
   // Monaco editor setup
   let editorInstance: any = null;
@@ -934,10 +1109,9 @@ async function init(): Promise<void> {
     const sx = e.clientX - rect.left;
     const sy = e.clientY - rect.top;
     const [worldX, worldY] = screenToWorld(viewport, sx, sy);
-    // Convert to mm for display
-    const xMm = (worldX / 1_000_000).toFixed(2);
-    const yMm = (worldY / 1_000_000).toFixed(2);
-    coordsEl.textContent = `(${xMm}, ${yMm}) mm`;
+    // Format with user's preferred unit
+    const unit = getPreference('units');
+    coordsEl.textContent = `(${formatDimension(worldX, unit)}, ${formatDimension(worldY, unit)})`;
 
     // Track label position when a trace is selected
     if (selectedTraceId != null) {
@@ -976,6 +1150,9 @@ async function init(): Promise<void> {
         activeResizeHandle: interactionState.activeResizeHandle ?? null,
         renderConfig,
         padNetMap,
+        gridVisible,
+        gridVisualSpacing: getPreference('gridVisualSpacing'),
+        showNetLabels,
       };
       render(ctx, renderState);
       dirty = false;

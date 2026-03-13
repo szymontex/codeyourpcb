@@ -216,12 +216,14 @@ test.describe('Renderer Quality — Professional Visuals', () => {
     await page.waitForTimeout(300);
     await zoomCanvas(page, 15, -200);
 
-    // Force a re-render by toggling a layer
+    // Force a re-render by toggling a layer (open View menu first)
+    await page.click('#view-menu-btn');
     const topCb = page.locator('#layer-top');
     await topCb.uncheck();
     await page.waitForTimeout(100);
     await topCb.check();
     await page.waitForTimeout(200);
+    await page.click('#view-menu-btn'); // close menu
 
     const diag = await page.evaluate(() => (window as any).__renderDiag);
     // 32ms = 2× headroom over 16ms budget for headless rendering overhead

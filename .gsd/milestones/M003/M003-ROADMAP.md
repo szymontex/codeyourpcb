@@ -63,7 +63,7 @@ This milestone is complete only when all are true:
 - [x] **S03: Routing UX Upgrade** `risk:high` `depends:[S01]`
   > After this: user clicks a pad to start routing and sees target pads for that net highlighted, ratsnest line guiding to nearest unconnected pad, magnetic snap when approaching destination, with angle constraint as a toggleable option (not forced) — verified by E2E test routing a complete net
 
-- [ ] **S04: UI Architecture — Toolbar, View Menu & Settings** `risk:medium` `depends:[S01]`
+- [x] **S04: UI Architecture — Toolbar, View Menu & Settings** `risk:medium` `depends:[S01]`
   > After this: toolbar has only essential tools (select, route, measure, undo/redo, 2D/3D, editor); View menu/panel controls layers, grid, ratsnest, net labels; Preferences panel sets theme (single-click fix), units, grid spacing, layer colors — all settings persist to localStorage
 
 - [ ] **S05: Project Manager & File Handling** `risk:medium` `depends:[S04]`

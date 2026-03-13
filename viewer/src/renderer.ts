@@ -11,6 +11,8 @@ import type { RenderConfig } from './render-config';
 import { LodTier, getLodTier, createDefaultRenderConfig } from './render-config';
 import { worldToScreen, screenToWorld } from './viewport';
 import { LAYER_COLORS, getPadColor, getTraceColor, getThemeColors, netColor, brightenColor, colorWithAlpha, type LayerVisibility } from './layers';
+import { formatDimension } from './units';
+import { getPreference } from './settings';
 
 export interface RenderState {
   snapshot: BoardSnapshot | null;
@@ -34,6 +36,12 @@ export interface RenderState {
   renderConfig?: RenderConfig;
   /** Pad-to-net lookup: "refdes.pin" → net name */
   padNetMap?: Map<string, string>;
+  /** Whether the visual grid overlay is drawn (separate from routing grid snap) */
+  gridVisible?: boolean;
+  /** Visual grid spacing in nanometers */
+  gridVisualSpacing?: number;
+  /** Whether net labels on traces are shown */
+  showNetLabels?: boolean;
 }
 
 /** Diagnostic surface exposed on window for E2E and debugging */
@@ -73,8 +81,12 @@ export function render(ctx: CanvasRenderingContext2D, state: RenderState): void 
     return;
   }
 
-  // Draw grid (behind everything)
-  drawGrid(ctx, viewport, themeColors);
+  // Draw grid (behind everything) — uses gridVisible and gridVisualSpacing from settings
+  const gridVisible = state.gridVisible ?? true;
+  const gridVisualSpacing = state.gridVisualSpacing ?? 1_000_000;
+  if (gridVisible) {
+    drawGrid(ctx, viewport, themeColors, gridVisualSpacing);
+  }
 
   // Draw board outline
   drawBoardOutline(ctx, viewport, snapshot.board.width_nm, snapshot.board.height_nm, themeColors);
@@ -153,8 +165,9 @@ export function render(ctx: CanvasRenderingContext2D, state: RenderState): void 
     }
   }
 
-  // Net labels on traces (LOD ≥ Close)
-  if (lodTier >= LodTier.Close && snapshot.traces) {
+  // Net labels on traces (LOD ≥ Close, if enabled)
+  const showNetLabels = state.showNetLabels ?? true;
+  if (showNetLabels && lodTier >= LodTier.Close && snapshot.traces) {
     drawTraceNetLabels(ctx, viewport, snapshot.traces, layers, config);
   }
 
@@ -207,8 +220,7 @@ function drawEmptyState(ctx: CanvasRenderingContext2D, viewport: Viewport, theme
 // Grid
 // ---------------------------------------------------------------------------
 
-function drawGrid(ctx: CanvasRenderingContext2D, vp: Viewport, themeColors: ReturnType<typeof getThemeColors>): void {
-  const gridSpacing = 1_000_000; // 1mm
+function drawGrid(ctx: CanvasRenderingContext2D, vp: Viewport, themeColors: ReturnType<typeof getThemeColors>, gridSpacing = 1_000_000): void {
   const screenSpacing = gridSpacing * vp.scale;
   if (screenSpacing < 10) return;
 
@@ -504,8 +516,9 @@ function drawTraceNetLabels(
 // ---------------------------------------------------------------------------
 
 function drawNetLabel(ctx: CanvasRenderingContext2D, screenX: number, screenY: number, trace: TraceInfo): void {
-  const widthMm = (trace.width / 1_000_000).toFixed(2);
-  const label = `${trace.net_name} — ${widthMm}mm`;
+  const unit = getPreference('units');
+  const widthStr = formatDimension(trace.width, unit);
+  const label = `${trace.net_name} — ${widthStr}`;
 
   ctx.font = '12px system-ui, sans-serif';
   const metrics = ctx.measureText(label);

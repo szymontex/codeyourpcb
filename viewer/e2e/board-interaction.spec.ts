@@ -6,7 +6,17 @@ test.describe('Board Interaction — Layer Visibility', () => {
     await expect(page.locator('#status-text')).toContainText('Ready', { timeout: 15_000 });
   });
 
+  /** Helper: open the View dropdown if it's currently hidden */
+  async function openViewMenu(page: import('@playwright/test').Page) {
+    const dropdown = page.locator('#view-menu-dropdown');
+    if (await dropdown.evaluate((el) => el.classList.contains('hidden'))) {
+      await page.click('#view-menu-btn');
+      await expect(dropdown).not.toHaveClass(/hidden/);
+    }
+  }
+
   test('top layer checkbox toggles off and on', async ({ page }) => {
+    await openViewMenu(page);
     const topCb = page.locator('#layer-top');
     // Starts checked
     await expect(topCb).toBeChecked();
@@ -21,6 +31,7 @@ test.describe('Board Interaction — Layer Visibility', () => {
   });
 
   test('bottom layer checkbox toggles off and on', async ({ page }) => {
+    await openViewMenu(page);
     const bottomCb = page.locator('#layer-bottom');
     await expect(bottomCb).toBeChecked();
 
@@ -32,6 +43,7 @@ test.describe('Board Interaction — Layer Visibility', () => {
   });
 
   test('layer state persists across toggles', async ({ page }) => {
+    await openViewMenu(page);
     const topCb = page.locator('#layer-top');
     const bottomCb = page.locator('#layer-bottom');
 
@@ -61,6 +73,7 @@ test.describe('Board Interaction — Layer Visibility', () => {
   });
 
   test('ratsnest checkbox toggles', async ({ page }) => {
+    await openViewMenu(page);
     const ratsnestCb = page.locator('#layer-ratsnest');
     await expect(ratsnestCb).toBeChecked();
 

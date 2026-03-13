@@ -246,10 +246,21 @@
       cursor: pointer;
       font-size: 13px;
       color: var(--text-primary);
-      title: "Fit board to view";
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
     #fit-btn:hover {
       background: var(--bg-tertiary);
+    }
+    #fit-btn svg {
+      width: 16px;
+      height: 16px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
     }
     #view-3d-btn {
       background: var(--bg-secondary);
@@ -368,6 +379,176 @@
       opacity: 1;
     }
 
+    /* View menu button and dropdown */
+    #view-menu-btn {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-primary);
+      padding: 4px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      color: var(--text-primary);
+      transition: background-color 0.15s;
+    }
+    #view-menu-btn:hover {
+      background: var(--bg-tertiary);
+    }
+    .toolbar-anchor {
+      position: relative;
+    }
+    #view-menu-dropdown {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      margin-top: 4px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-primary);
+      border-radius: 6px;
+      box-shadow: 0 4px 16px var(--shadow);
+      z-index: 50;
+      min-width: 180px;
+      padding: 4px 0;
+      transition: background-color 0.15s ease, border-color 0.15s ease;
+    }
+    #view-menu-dropdown.hidden {
+      display: none;
+    }
+    #view-menu-dropdown label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: background-color 0.1s;
+    }
+    #view-menu-dropdown label:hover {
+      background: var(--bg-secondary);
+    }
+    #view-menu-dropdown input[type="checkbox"] {
+      width: 14px;
+      height: 14px;
+      cursor: pointer;
+    }
+    /* Preferences button */
+    #prefs-btn {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-primary);
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      line-height: 1;
+      color: var(--text-primary);
+      transition: background-color 0.15s;
+    }
+    #prefs-btn:hover {
+      background: var(--bg-tertiary);
+    }
+    /* Preferences modal */
+    #prefs-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 200;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #prefs-overlay.hidden {
+      display: none;
+    }
+    #prefs-modal {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-primary);
+      border-radius: 8px;
+      box-shadow: 0 8px 32px var(--shadow);
+      width: 360px;
+      max-height: 80vh;
+      overflow-y: auto;
+      transition: background-color 0.15s ease, border-color 0.15s ease;
+    }
+    #prefs-modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border-primary);
+    }
+    #prefs-modal-header h2 {
+      font-size: 14px;
+      font-weight: 600;
+      margin: 0;
+    }
+    #prefs-close {
+      background: none;
+      border: none;
+      font-size: 20px;
+      cursor: pointer;
+      color: var(--text-secondary);
+      line-height: 1;
+      padding: 2px 4px;
+    }
+    #prefs-close:hover {
+      color: var(--text-primary);
+    }
+    .prefs-section {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border-secondary);
+    }
+    .prefs-section:last-child {
+      border-bottom: none;
+    }
+    .prefs-section h3 {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-tertiary);
+      margin: 0 0 8px 0;
+    }
+    .prefs-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 4px 0;
+      font-size: 12px;
+    }
+    .prefs-row label {
+      color: var(--text-primary);
+    }
+    .prefs-row select,
+    .prefs-row input[type="text"] {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-primary);
+      border-radius: 4px;
+      padding: 3px 6px;
+      font-size: 12px;
+      color: var(--text-primary);
+      width: 100px;
+    }
+    .prefs-row input[type="color"] {
+      width: 32px;
+      height: 24px;
+      border: 1px solid var(--border-primary);
+      border-radius: 4px;
+      padding: 1px;
+      cursor: pointer;
+      background: var(--bg-secondary);
+    }
+    .prefs-row button {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-primary);
+      padding: 3px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      color: var(--text-primary);
+    }
+    .prefs-row button:hover {
+      background: var(--bg-tertiary);
+    }
+
     /* Responsive: Touch targets for coarse pointer devices (tablets, phones) */
     @media (pointer: coarse) {
       #toolbar { padding: 12px 16px; gap: 12px; }
@@ -388,27 +569,97 @@
   <div id="toolbar">
     <button id="editor-toggle" title="Toggle Editor (Ctrl+E)">Editor</button>
     <span class="separator">|</span>
-    <span>Layers:</span>
-    <label><input type="checkbox" id="layer-top" checked> Top</label>
-    <label><input type="checkbox" id="layer-bottom" checked> Bottom</label>
-    <span class="separator">|</span>
-    <label><input type="checkbox" id="layer-ratsnest" checked> Ratsnest</label>
-    <span class="separator">|</span>
-    <label title="Snap cursor to grid when routing"><input type="checkbox" id="grid-snap"> Grid</label>
     <button id="undo-btn" title="Undo last action (Ctrl+Z)" disabled>↩</button>
     <button id="redo-btn" title="Redo last undone action (Ctrl+Shift+Z)" disabled>↪</button>
+    <button id="fit-btn" title="Fit board to view (F)">
+      <svg viewBox="0 0 16 16" aria-hidden="true">
+        <rect x="2" y="2" width="12" height="12" rx="1.5" />
+        <line x1="8" y1="0" x2="8" y2="4" />
+        <line x1="8" y1="12" x2="8" y2="16" />
+        <line x1="0" y1="8" x2="4" y2="8" />
+        <line x1="12" y1="8" x2="16" y2="8" />
+      </svg>
+    </button>
     <span class="separator">|</span>
-    <button id="fit-btn" title="Fit board to view (F)">⊡</button>
+    <span class="toolbar-anchor">
+      <button id="view-menu-btn" title="View options">View</button>
+      <div id="view-menu-dropdown" class="hidden">
+        <label><input type="checkbox" id="layer-top" checked> Top layer</label>
+        <label><input type="checkbox" id="layer-bottom" checked> Bottom layer</label>
+        <label><input type="checkbox" id="layer-ratsnest" checked> Ratsnest</label>
+        <label><input type="checkbox" id="view-grid-visible" checked> Grid visible</label>
+        <label><input type="checkbox" id="view-net-labels" checked> Net labels</label>
+      </div>
+    </span>
     <button id="view-3d-btn" title="Toggle 3D view">3D</button>
     <button id="theme-toggle" aria-label="Toggle theme" title="Toggle theme (Light / Dark / Auto)">
       <span id="theme-icon">☀️</span>
     </button>
+    <button id="prefs-btn" title="Preferences">⚙</button>
     <span id="coords"></span>
     <button id="open-btn">Open</button>
     <button id="share-btn" class="hidden">Share</button>
     <label id="auto-route-label"><input type="checkbox" id="auto-route"> Auto-route</label>
     <button id="route-btn">Route</button>
     <button id="cancel-route-btn" class="hidden">Cancel</button>
+  </div>
+  <!-- Preferences modal -->
+  <div id="prefs-overlay" class="hidden">
+    <div id="prefs-modal">
+      <div id="prefs-modal-header">
+        <h2>Preferences</h2>
+        <button id="prefs-close">&times;</button>
+      </div>
+      <div class="prefs-section">
+        <h3>Display</h3>
+        <div class="prefs-row">
+          <label>Theme</label>
+          <button id="prefs-theme-btn" data-pref="theme">Light</button>
+        </div>
+        <div class="prefs-row">
+          <label>Units</label>
+          <select id="prefs-units" data-pref="units">
+            <option value="mm">mm</option>
+            <option value="mil">mil</option>
+            <option value="µm">µm</option>
+          </select>
+        </div>
+      </div>
+      <div class="prefs-section">
+        <h3>Grid</h3>
+        <div class="prefs-row">
+          <label>Visual spacing</label>
+          <input type="text" id="prefs-grid-visual" data-pref="gridVisualSpacing" placeholder="1mm">
+        </div>
+        <div class="prefs-row">
+          <label>Snap spacing</label>
+          <input type="text" id="prefs-grid-snap" data-pref="gridSnapSpacing" placeholder="50mil">
+        </div>
+      </div>
+      <div class="prefs-section">
+        <h3>Layer Colors</h3>
+        <div class="prefs-row">
+          <label>Top copper</label>
+          <input type="color" id="prefs-color-top" data-pref="layerColors.topCopper">
+        </div>
+        <div class="prefs-row">
+          <label>Bottom copper</label>
+          <input type="color" id="prefs-color-bottom" data-pref="layerColors.bottomCopper">
+        </div>
+        <div class="prefs-row">
+          <label>Silkscreen</label>
+          <input type="color" id="prefs-color-silk" data-pref="layerColors.silkscreen">
+        </div>
+        <div class="prefs-row">
+          <label>Via</label>
+          <input type="color" id="prefs-color-via" data-pref="layerColors.via">
+        </div>
+        <div class="prefs-row">
+          <label>Drill</label>
+          <input type="color" id="prefs-color-drill" data-pref="layerColors.drill">
+        </div>
+      </div>
+    </div>
   </div>
   <div id="main-content" style="display: flex; flex: 1; overflow: hidden;">
     <div id="editor-container" style="width: 40%; min-width: 200px; display: none;">
