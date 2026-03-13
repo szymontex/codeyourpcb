@@ -1,7 +1,7 @@
 # GSD State
 
 **Active Milestone:** M002 — CodeYourPCB v2.0 — Professional EDA Platform
-**Active Slice:** S02 — Custom Autorouter Core
+**Active Slice:** S03 — Renderer Upgrade & Manual Trace Editing
 **Phase:** planning
 **Requirements Status:** 0 active · 64 validated · 0 deferred · 0 out of scope
 
@@ -16,4 +16,4 @@
 - None
 
 ## Next Action
-Plan slice S02 (Custom Autorouter Core).
+Plan slice S03 (Renderer Upgrade & Manual Trace Editing).

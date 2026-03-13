@@ -979,6 +979,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "cypcb-autoroute"
+version = "0.1.0"
+dependencies = [
+ "bevy_ecs",
+ "cypcb-core",
+ "cypcb-drc",
+ "cypcb-parser",
+ "cypcb-router",
+ "cypcb-rules",
+ "cypcb-world",
+ "getrandom 0.2.17",
+ "getrandom 0.3.4",
+ "pathfinding",
+ "tracing",
+]
+
+[[package]]
 name = "cypcb-calc"
 version = "0.1.0"
 dependencies = [
@@ -1234,6 +1251,18 @@ dependencies = [
  "lock_api",
  "once_cell",
  "parking_lot_core",
+]
+
+[[package]]
+name = "deprecate-until"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9d0795c0c5b2cab72b80d75b5cb08bde679e616c67e954669a2476668319ac3a"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "semver",
+ "syn 2.0.114",
 ]
 
 [[package]]
@@ -2522,6 +2551,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "integer-sqrt"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "276ec31bcb4a9ee45f58bec6f9ec700ae4cf4f4f8f2fa7e06cb406bd5ffdd770"
+dependencies = [
+ "num-traits",
+]
+
+[[package]]
 name = "ipnet"
 version = "2.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3482,6 +3520,20 @@ dependencies = [
  "redox_syscall 0.5.18",
  "smallvec",
  "windows-link 0.2.1",
+]
+
+[[package]]
+name = "pathfinding"
+version = "4.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "835ad2773f8587ad2d90a0f7f0022ca743dfd5a6a24ea25062f3519c38d2fcfa"
+dependencies = [
+ "deprecate-until",
+ "indexmap 2.13.0",
+ "integer-sqrt",
+ "num-traits",
+ "rustc-hash",
+ "thiserror 2.0.18",
 ]
 
 [[package]]

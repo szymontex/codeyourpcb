@@ -22,10 +22,11 @@ use thiserror::Error;
 /// let nm = unit.to_nm(10.0);
 /// assert_eq!(nm.0, 10_000_000);
 /// ```
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Unit {
     /// Millimeters (1 mm = 1,000,000 nm)
+    #[default]
     Mm,
     /// Mils / thousandths of an inch (1 mil = 25,400 nm)
     Mil,
@@ -111,11 +112,7 @@ impl Unit {
     }
 }
 
-impl Default for Unit {
-    fn default() -> Self {
-        Unit::Mm
-    }
-}
+
 
 impl std::fmt::Display for Unit {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
