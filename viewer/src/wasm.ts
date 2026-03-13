@@ -243,6 +243,25 @@ function parseSource(source: string): { snapshot: BoardSnapshot; errors: string[
     // Parse component definition
     const compMatch = line.match(/^component\s+(\w+)\s+(\w+)\s+"([^"]+)"\s*{?$/);
     if (compMatch) {
+      const pads = getFootprintPads(compMatch[3]);
+
+      // Compute body dimensions from pad bounding box
+      let bodyWidthNm = 0;
+      let bodyHeightNm = 0;
+      if (pads.length > 0) {
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        for (const pad of pads) {
+          const hw = pad.width_nm / 2;
+          const hh = pad.height_nm / 2;
+          minX = Math.min(minX, pad.x_nm - hw);
+          minY = Math.min(minY, pad.y_nm - hh);
+          maxX = Math.max(maxX, pad.x_nm + hw);
+          maxY = Math.max(maxY, pad.y_nm + hh);
+        }
+        bodyWidthNm = maxX - minX;
+        bodyHeightNm = maxY - minY;
+      }
+
       currentComponent = {
         refdes: compMatch[1],
         value: '',
@@ -250,7 +269,10 @@ function parseSource(source: string): { snapshot: BoardSnapshot; errors: string[
         y_nm: 0,
         rotation_mdeg: 0,
         footprint: compMatch[3],
-        pads: getFootprintPads(compMatch[3]),
+        pads,
+        body_width_nm: bodyWidthNm,
+        body_height_nm: bodyHeightNm,
+        model_3d: null,
       };
       inComponent = true;
       braceDepth += openBraces;

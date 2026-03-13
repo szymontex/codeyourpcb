@@ -1,7 +1,7 @@
 # GSD State
 
 **Active Milestone:** M003 — From Prototype to Tool — Professional Board View & UX
-**Active Slice:** S02 — 3D View Fix & Component Rendering
+**Active Slice:** S03 — Routing UX Upgrade
 **Phase:** planning
 **Requirements Status:** 0 active · 64 validated · 0 deferred · 0 out of scope
 
@@ -17,4 +17,4 @@
 - None
 
 ## Next Action
-Plan slice S02 (3D View Fix & Component Rendering).
+Plan slice S03 (Routing UX Upgrade).

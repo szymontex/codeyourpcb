@@ -57,7 +57,7 @@ This milestone is complete only when all are true:
 - [x] **S01: Professional 2D Board Renderer** `risk:high` `depends:[]`
   > After this: user sees blink.cypcb with KiCad-quality visuals — pad shapes with pin numbers, net labels on traces, readable refdes text, per-layer colors (red top, blue bottom, yellow silkscreen), copper fill areas, drill hole marks, zoom-dependent detail levels
 
-- [ ] **S02: 3D View Fix & Component Rendering** `risk:high` `depends:[]`
+- [x] **S02: 3D View Fix & Component Rendering** `risk:high` `depends:[]`
   > After this: user toggles to 3D and sees the board with copper traces rendered as ribbons, pads as metallic shapes, vias as cylinders, and component bodies with correct dimensions — not an empty green board
 
 - [ ] **S03: Routing UX Upgrade** `risk:high` `depends:[S01]`

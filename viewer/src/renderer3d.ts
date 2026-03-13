@@ -13,6 +13,7 @@
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { BoardSnapshot, TraceInfo, ViaInfo, ComponentInfo } from './types';
 import { LAYER_COLORS, LAYER_MASK, type LayerVisibility } from './layers';
 
@@ -94,6 +95,15 @@ export class Renderer3D {
   private frameCount = 0;
   private currentFps = 0;
   private fpsLogTimer = 0;
+
+  /** Geometry counts for debug surface */
+  private _componentCount = 0;
+  private _traceSegmentCount = 0;
+  private _padCount = 0;
+  private _viaCount = 0;
+
+  /** Loaded GLTF models: refdes → Group */
+  private loadedModels: Map<string, THREE.Group> = new Map();
 
   /**
    * Initialize the 3D renderer inside the given container element.
@@ -347,6 +357,75 @@ export class Renderer3D {
     return this.active;
   }
 
+  /**
+   * Load a GLB 3D model for a component, replacing its placeholder box mesh.
+   * Finds the placeholder by name `component-${refdes}`, copies its transform,
+   * removes it, and adds the loaded GLTF scene at the same position/rotation.
+   * Errors are logged to console — callers don't need to handle failures.
+   */
+  loadComponentModel(url: string, refdes: string): void {
+    if (!this.boardGroup) {
+      console.error(`[3D] GLB load failed for ${refdes}: no board group`);
+      return;
+    }
+
+    const meshName = `component-${refdes}`;
+    let placeholder: THREE.Object3D | null = null;
+    this.boardGroup.traverse((obj) => {
+      if (obj.name === meshName) placeholder = obj;
+    });
+
+    if (!placeholder) {
+      console.error(`[3D] GLB load failed for ${refdes}: placeholder mesh "${meshName}" not found`);
+      return;
+    }
+
+    const loader = new GLTFLoader();
+    const boardGroup = this.boardGroup;
+    const loadedModels = this.loadedModels;
+    const pos = (placeholder as THREE.Mesh).position.clone();
+    const rot = (placeholder as THREE.Mesh).rotation.clone();
+
+    loader.load(
+      url,
+      (gltf) => {
+        const model = gltf.scene;
+        model.position.copy(pos);
+        model.rotation.copy(rot);
+        model.name = `model-${refdes}`;
+
+        // Remove the placeholder box
+        if (placeholder && placeholder.parent) {
+          if (placeholder instanceof THREE.Mesh) {
+            placeholder.geometry?.dispose();
+            if (placeholder.material) {
+              if (Array.isArray(placeholder.material)) {
+                placeholder.material.forEach(m => m.dispose());
+              } else {
+                (placeholder.material as THREE.Material).dispose();
+              }
+            }
+          }
+          placeholder.parent.remove(placeholder);
+        }
+
+        // Add loaded model to the same parent (topGroup)
+        boardGroup.traverse((obj) => {
+          if (obj.name === 'layer-top') {
+            obj.add(model);
+          }
+        });
+
+        loadedModels.set(refdes, model);
+        console.log(`[3D] GLB loaded for ${refdes}: ${url}`);
+      },
+      undefined,
+      (error) => {
+        console.error(`[3D] GLB load failed for ${refdes}: ${error}`);
+      },
+    );
+  }
+
   // -- Copper geometry builders --
 
   /**
@@ -410,6 +489,8 @@ export class Renderer3D {
     addCopperMesh(topPositions, LAYER_COLORS.top_copper, 'traces-top', topGroup);
     addCopperMesh(bottomPositions, LAYER_COLORS.bottom_copper, 'traces-bottom', bottomGroup);
 
+    this._traceSegmentCount = topSegCount + bottomSegCount;
+
     if (topSegCount > 0) console.log(`[3D] Built ${topSegCount} trace segments on layer Top`);
     else console.log('[3D] Warning: 0 traces on layer Top');
     if (bottomSegCount > 0) console.log(`[3D] Built ${bottomSegCount} trace segments on layer Bottom`);
@@ -472,6 +553,8 @@ export class Renderer3D {
     // Create pad meshes per layer
     addCopperMesh(topPositions, LAYER_COLORS.top_copper, 'pads-top', topGroup);
     addCopperMesh(bottomPositions, LAYER_COLORS.bottom_copper, 'pads-bottom', bottomGroup);
+
+    this._padCount = padCount;
 
     console.log(`[3D] Built ${padCount} pads`);
   }
@@ -633,6 +716,8 @@ export class Renderer3D {
     viaGroup.add(instancedMesh);
     viaGroup.add(drillInstancedMesh);
 
+    this._viaCount = vias.length;
+
     console.log(`[3D] Built ${vias.length} vias (instanced)`);
   }
 
@@ -662,7 +747,8 @@ export class Renderer3D {
       let bodyH = comp.body_height_nm * NM_TO_MM;
 
       // Fallback: compute bounding box from pads if body dimensions missing
-      if (bodyW <= 0 || bodyH <= 0) {
+      // NaN-safe: !(x > 0) catches NaN, undefined, 0, and negative
+      if (!(bodyW > 0) || !(bodyH > 0)) {
         if (comp.pads.length > 0) {
           let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
           for (const pad of comp.pads) {
@@ -721,6 +807,8 @@ export class Renderer3D {
       label.scale.set(labelScale, labelScale * 0.5, 1);
       topGroup.add(label);
     }
+
+    this._componentCount = smdCount + thtCount;
 
     console.log(`[3D] Built ${smdCount + thtCount} component bodies (${smdCount} SMD, ${thtCount} THT)`);
   }
@@ -819,6 +907,28 @@ export class Renderer3D {
   private clearBoardGroup(): void {
     if (!this.boardGroup) return;
 
+    // Dispose loaded GLTF model scene graphs (nested children with separate materials)
+    for (const [_refdes, model] of this.loadedModels) {
+      model.traverse((obj) => {
+        if (obj instanceof THREE.Mesh) {
+          obj.geometry?.dispose();
+          if (obj.material) {
+            if (Array.isArray(obj.material)) {
+              obj.material.forEach(m => {
+                if (m.map) m.map.dispose();
+                m.dispose();
+              });
+            } else {
+              const mat = obj.material as THREE.MeshStandardMaterial;
+              if (mat.map) mat.map.dispose();
+              mat.dispose();
+            }
+          }
+        }
+      });
+    }
+    this.loadedModels.clear();
+
     this.boardGroup.traverse((obj) => {
       if (obj instanceof THREE.InstancedMesh || obj instanceof THREE.Mesh) {
         obj.geometry?.dispose();
@@ -840,6 +950,12 @@ export class Renderer3D {
     while (this.boardGroup.children.length > 0) {
       this.boardGroup.remove(this.boardGroup.children[0]);
     }
+
+    // Reset geometry counts
+    this._componentCount = 0;
+    this._traceSegmentCount = 0;
+    this._padCount = 0;
+    this._viaCount = 0;
   }
 
   private getMeshCount(): number {
@@ -867,6 +983,10 @@ export class Renderer3D {
       get meshCount() { return self.getMeshCount(); },
       get drawCalls() { return self.getDrawCallCount(); },
       get fps() { return self.currentFps; },
+      get componentCount() { return self._componentCount; },
+      get traceSegmentCount() { return self._traceSegmentCount; },
+      get padCount() { return self._padCount; },
+      get viaCount() { return self._viaCount; },
     };
   }
 }

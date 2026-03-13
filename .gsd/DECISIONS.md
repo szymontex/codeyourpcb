@@ -89,3 +89,8 @@
 - "Renderer diagnostic surface (window.__renderDiag) for E2E testability — exposes LOD tier, pad-net map size, frame time, text count. Avoids fragile pixel comparison in headless tests."
 - "Exposed window.__loadBoard(source) in main.ts for E2E board loading — calls load_source + pullSnapshot + fitBoard in one go, avoiding test-side coupling to internal render loop"
 - "Added highlightedNet to RenderDiag interface — E2E verifies net highlighting through diagnostic surface, not fragile DOM inspection or pixel sampling"
+- "JS parser body dimensions computed from pad bounding box at parse time — avoids cross-boundary Rust change, consistent with 2D renderer's existing pad-bbox fallback approach"
+- "NaN guard uses !(x > 0) pattern instead of x <= 0 — catches NaN, undefined, 0, and negative in one expression. JavaScript-specific defensive pattern for numeric fields from Partial<T> casts"
+- "GLTFLoader imported inside lazy-loaded renderer3d.ts module — keeps Three.js out of main bundle per existing lazy-load decision"
+- "3D geometry counts (componentCount, traceSegmentCount, padCount, viaCount) exposed on __renderer3d debug surface — enables E2E verification without fragile pixel comparison, extends existing diagnostic pattern from S01's __renderDiag"
+- "loadComponentModel replaces placeholder box mesh in-place — finds mesh by name convention (component-{refdes}), copies transform, swaps geometry. Loaded GLTF scenes tracked in Map for disposal."

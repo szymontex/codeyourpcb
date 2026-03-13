@@ -11,7 +11,7 @@
 - DSL v2: modules, typed interfaces (I2C, SPI, Power), physical units (23 variants), constraint assertions
 - Custom A*-based autorouter (500-component board in 0.05s, multi-layer, constraint-aware)
 - Manual trace editing with click-drag routing, angle snapping, and live DRC feedback
-- 3D board viewer (Three.js) with procedural component bodies, orbit/zoom/pan, layer visibility
+- 3D board viewer (Three.js) with procedural component bodies, orbit/zoom/pan, layer visibility — renders real geometry (components, pads, traces, vias) with GLTFLoader pipeline ready for S06 models
 - Grid snap, command-pattern undo/redo, net highlighting, component rotation, board outline resize
 - Automatic DRC with visual violation markers
 - Export manufacturing files (Gerber X2, Excellon, BOM, CPL) verified with JLCPCB
@@ -21,12 +21,12 @@
 - Tauri v2 desktop application (native menus, file dialogs, installer)
 - Web deployment (Cloudflare Pages, File System Access API, URL sharing)
 - 8-stage quality gate: cargo fmt, clippy, cargo test, eslint, vitest, playwright, autorouter benchmark, jscpd
-- 63 Vitest unit tests + 49 Playwright E2E tests (48 passing, 1 pre-existing flake)
+- 63 Vitest unit tests + 52 Playwright E2E tests (all passing, 1 pre-existing flake in errors.spec.ts)
 - Professional 2D renderer with LOD, per-pad net highlighting, component body outlines, pad numbers, net labels, drill marks
 
 **Known tech debt / deferred items:**
 - DSL v2 constructs are parse-only — no module instantiation, import resolution, or constraint evaluation
-- 3D viewer uses procedural component bodies — JLCPCB GLB model loading plumbed but not populated
+- 3D viewer uses procedural component bodies — JLCPCB GLB model loading fully plumbed (loadComponentModel API ready), not yet populated with real models
 - Desktop crates excluded from quality gates (require system deps unavailable in CI)
 - Board outline editing is rectangle-only (polygon editing deferred)
 - Copper fill zones not rendered (no Zone type in ECS data model)
@@ -80,9 +80,9 @@
 
 **Completed:**
 - ✅ S01: Professional 2D renderer (pad numbers, net labels, layer colors, refdes, LOD, per-pad highlighting)
+- ✅ S02: 3D view fix — component bodies, pads, traces, vias render correctly; GLTFLoader pipeline ready for S06
 
 **Planned:**
-- 3D view fix + component/trace rendering
 - Routing UX with net-aware guidance, magnetic pads, optional angle constraint
 - UI architecture overhaul (clean toolbar, View menu, preferences panel)
 - Project manager (recent files, templates, import flow)
