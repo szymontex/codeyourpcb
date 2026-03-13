@@ -1,7 +1,7 @@
 # GSD State
 
 **Active Milestone:** M002 — CodeYourPCB v2.0 — Professional EDA Platform
-**Active Slice:** S06 — Competition Feature Parity & UI Polish
+**Active Slice:** S07 — E2E Test Suite & Quality Gates
 **Phase:** planning
 **Requirements Status:** 0 active · 64 validated · 0 deferred · 0 out of scope
 
@@ -16,4 +16,4 @@
 - None
 
 ## Next Action
-Plan slice S06 (Competition Feature Parity & UI Polish).
+Plan slice S07 (E2E Test Suite & Quality Gates).

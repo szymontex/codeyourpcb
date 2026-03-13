@@ -23,6 +23,10 @@ export interface RenderState {
   labelPosition: { x: number; y: number } | null;
   /** Active routing state (null when not routing) */
   routing: RoutingState | null;
+  /** Net name to highlight (all traces/pads on this net glow, others dim) */
+  highlightedNet: string | null;
+  /** Currently dragged resize handle (for visual feedback) */
+  activeResizeHandle?: ResizeHandle | null;
 }
 
 /**
@@ -49,25 +53,30 @@ export function render(ctx: CanvasRenderingContext2D, state: RenderState): void 
   // Draw board outline
   drawBoardOutline(ctx, viewport, snapshot.board.width_nm, snapshot.board.height_nm, themeColors);
 
+  // Draw resize handles when not routing
+  if (!state.routing || state.routing.mode !== 'routing') {
+    drawResizeHandles(ctx, viewport, snapshot.board.width_nm, snapshot.board.height_nm, themeColors, state.activeResizeHandle ?? null);
+  }
+
   // Draw traces by layer (bottom first, then top)
   if (snapshot.traces) {
-    const { colorByNet, selectedTraceId, hoveredTraceId } = state;
+    const { colorByNet, selectedTraceId, hoveredTraceId, highlightedNet } = state;
     // Bottom traces first
     for (const trace of snapshot.traces) {
       if (trace.layer === 'Bottom' && layers.bottomCopper) {
-        drawTrace(ctx, viewport, trace, layers, colorByNet, selectedTraceId, hoveredTraceId);
+        drawTrace(ctx, viewport, trace, layers, colorByNet, selectedTraceId, hoveredTraceId, highlightedNet);
       }
     }
     // Top traces on top
     for (const trace of snapshot.traces) {
       if (trace.layer === 'Top' && layers.topCopper) {
-        drawTrace(ctx, viewport, trace, layers, colorByNet, selectedTraceId, hoveredTraceId);
+        drawTrace(ctx, viewport, trace, layers, colorByNet, selectedTraceId, hoveredTraceId, highlightedNet);
       }
     }
     // Inner layers
     for (const trace of snapshot.traces) {
       if (trace.layer !== 'Top' && trace.layer !== 'Bottom') {
-        drawTrace(ctx, viewport, trace, layers, colorByNet, selectedTraceId, hoveredTraceId);
+        drawTrace(ctx, viewport, trace, layers, colorByNet, selectedTraceId, hoveredTraceId, highlightedNet);
       }
     }
   }
@@ -75,7 +84,7 @@ export function render(ctx: CanvasRenderingContext2D, state: RenderState): void 
   // Draw components (pads and labels)
   for (const comp of snapshot.components) {
     const isSelected = comp.refdes === selectedRefdes;
-    drawComponent(ctx, viewport, comp, layers, isSelected, themeColors);
+    drawComponent(ctx, viewport, comp, layers, isSelected, themeColors, state.highlightedNet);
   }
 
   // Draw vias on top of traces but below ratsnest
@@ -181,6 +190,113 @@ function drawBoardOutline(ctx: CanvasRenderingContext2D, vp: Viewport, width: nu
   ctx.strokeRect(x0, y1, x1 - x0, y0 - y1);
 }
 
+// ---------------------------------------------------------------------------
+// Board resize handles
+// ---------------------------------------------------------------------------
+
+/** Handle identifiers: 4 corners + 4 edges */
+export type ResizeHandle =
+  | 'nw' | 'n' | 'ne'
+  | 'w'  |       'e'
+  | 'sw' | 's' | 'se';
+
+const HANDLE_SIZE = 8; // screen pixels, half-width
+
+/**
+ * Draw 8 resize handles on the board outline edges.
+ * Call AFTER drawBoardOutline so handles are on top.
+ */
+export function drawResizeHandles(
+  ctx: CanvasRenderingContext2D,
+  vp: Viewport,
+  width: number,
+  height: number,
+  themeColors: ReturnType<typeof getThemeColors>,
+  activeHandle: ResizeHandle | null,
+): void {
+  const [x0, y0] = worldToScreen(vp, 0, 0);        // bottom-left in screen
+  const [x1, y1] = worldToScreen(vp, width, height); // top-right in screen
+  // screen coords: x0 < x1, y1 < y0 (Y flipped)
+  const left = x0;
+  const right = x1;
+  const top = y1;
+  const bottom = y0;
+  const midX = (left + right) / 2;
+  const midY = (top + bottom) / 2;
+
+  const handles: { id: ResizeHandle; cx: number; cy: number }[] = [
+    { id: 'nw', cx: left,  cy: top },
+    { id: 'n',  cx: midX,  cy: top },
+    { id: 'ne', cx: right, cy: top },
+    { id: 'w',  cx: left,  cy: midY },
+    { id: 'e',  cx: right, cy: midY },
+    { id: 'sw', cx: left,  cy: bottom },
+    { id: 's',  cx: midX,  cy: bottom },
+    { id: 'se', cx: right, cy: bottom },
+  ];
+
+  const hs = HANDLE_SIZE;
+  for (const h of handles) {
+    const isActive = h.id === activeHandle;
+    ctx.fillStyle = isActive ? '#FF6600' : themeColors.board_outline;
+    ctx.strokeStyle = themeColors.background;
+    ctx.lineWidth = 1;
+    ctx.fillRect(h.cx - hs, h.cy - hs, hs * 2, hs * 2);
+    ctx.strokeRect(h.cx - hs, h.cy - hs, hs * 2, hs * 2);
+  }
+}
+
+/**
+ * Hit-test resize handles. Returns handle id or null.
+ */
+export function hitTestResizeHandle(
+  vp: Viewport,
+  boardWidth: number,
+  boardHeight: number,
+  screenX: number,
+  screenY: number,
+): ResizeHandle | null {
+  const [x0, y0] = worldToScreen(vp, 0, 0);
+  const [x1, y1] = worldToScreen(vp, boardWidth, boardHeight);
+  const left = x0;
+  const right = x1;
+  const top = y1;
+  const bottom = y0;
+  const midX = (left + right) / 2;
+  const midY = (top + bottom) / 2;
+
+  const handles: { id: ResizeHandle; cx: number; cy: number }[] = [
+    { id: 'nw', cx: left,  cy: top },
+    { id: 'n',  cx: midX,  cy: top },
+    { id: 'ne', cx: right, cy: top },
+    { id: 'w',  cx: left,  cy: midY },
+    { id: 'e',  cx: right, cy: midY },
+    { id: 'sw', cx: left,  cy: bottom },
+    { id: 's',  cx: midX,  cy: bottom },
+    { id: 'se', cx: right, cy: bottom },
+  ];
+
+  const tolerance = HANDLE_SIZE + 4; // generous hit region
+  for (const h of handles) {
+    if (Math.abs(screenX - h.cx) <= tolerance && Math.abs(screenY - h.cy) <= tolerance) {
+      return h.id;
+    }
+  }
+  return null;
+}
+
+/**
+ * Get the CSS cursor for a resize handle direction.
+ */
+export function resizeHandleCursor(handle: ResizeHandle): string {
+  switch (handle) {
+    case 'n': case 's': return 'ns-resize';
+    case 'e': case 'w': return 'ew-resize';
+    case 'nw': case 'se': return 'nwse-resize';
+    case 'ne': case 'sw': return 'nesw-resize';
+  }
+}
+
 /**
  * Draw a violation marker (red circle/ring) at the violation location
  * KiCad-style marker with outer ring and inner highlight
@@ -242,8 +358,13 @@ function drawTrace(
   colorByNet: boolean,
   selectedTraceId: number | null,
   hoveredTraceId: number | null,
+  highlightedNet: string | null,
 ): void {
   if (trace.segments.length === 0) return;
+
+  // Net highlighting: dim traces not on the highlighted net
+  const isHighlightedNet = highlightedNet != null && trace.net_name === highlightedNet;
+  const isDimmed = highlightedNet != null && !isHighlightedNet;
 
   // Determine base color — net color or layer color
   let color: string | null;
@@ -256,6 +377,11 @@ function drawTrace(
     color = getTraceColor(trace.layer, layers);
   }
   if (!color) return;
+
+  // Apply dimming for net highlight mode
+  if (isDimmed) {
+    color = colorWithAlpha(color, 0.15);
+  }
 
   const isSelected = trace.id === selectedTraceId;
   const isHovered = trace.id === hoveredTraceId && !isSelected;
@@ -276,9 +402,18 @@ function drawTrace(
     ctx.stroke();
   }
 
+  // Net highlight glow — wider semi-transparent stroke behind (similar to selection but for net)
+  if (isHighlightedNet && !isSelected) {
+    const glowColor = colorWithAlpha(brightenColor(color, 20), 0.3);
+    ctx.strokeStyle = glowColor;
+    ctx.lineWidth = baseLineWidth * 2.0;
+    tracePolyline(ctx, vp, trace);
+    ctx.stroke();
+  }
+
   // Main trace stroke
-  const drawColor = isSelected ? brightenColor(color, 20) : color;
-  const lineWidth = isSelected ? baseLineWidth * 1.5 : baseLineWidth;
+  const drawColor = isSelected ? brightenColor(color, 20) : isHighlightedNet ? brightenColor(color, 15) : color;
+  const lineWidth = isSelected ? baseLineWidth * 1.5 : isHighlightedNet ? baseLineWidth * 1.2 : baseLineWidth;
 
   ctx.strokeStyle = drawColor;
   ctx.lineWidth = lineWidth;
@@ -408,11 +543,12 @@ function drawComponent(
   comp: ComponentInfo,
   layers: LayerVisibility,
   isSelected: boolean,
-  themeColors: ReturnType<typeof getThemeColors>
+  themeColors: ReturnType<typeof getThemeColors>,
+  highlightedNet: string | null,
 ): void {
   // Draw pads
   for (const pad of comp.pads) {
-    drawPad(ctx, vp, comp.x_nm, comp.y_nm, comp.rotation_mdeg, pad, layers, isSelected, themeColors);
+    drawPad(ctx, vp, comp.x_nm, comp.y_nm, comp.rotation_mdeg, pad, layers, isSelected, themeColors, highlightedNet);
   }
 
   // Draw refdes label if zoomed in enough
@@ -437,10 +573,16 @@ function drawPad(
   pad: PadInfo,
   layers: LayerVisibility,
   isSelected: boolean,
-  themeColors: ReturnType<typeof getThemeColors>
+  themeColors: ReturnType<typeof getThemeColors>,
+  highlightedNet: string | null,
 ): void {
-  const color = getPadColor(pad.layer_mask, layers);
+  let color = getPadColor(pad.layer_mask, layers);
   if (!color) return; // Layer not visible
+
+  // Dim pads when a net is highlighted (pads don't carry net info, so dim all)
+  if (highlightedNet != null) {
+    color = colorWithAlpha(color, 0.15);
+  }
 
   // Calculate pad position in world coords
   // Apply component rotation to pad position
@@ -651,6 +793,7 @@ export function createRenderState(viewport: Viewport, layers: LayerVisibility): 
     hoveredTraceId: null,
     labelPosition: null,
     routing: null,
+    highlightedNet: null,
   };
 }
 
@@ -691,5 +834,15 @@ export function updateSelection(state: RenderState, refdes: string | null): Rend
   return {
     ...state,
     selectedRefdes: refdes,
+  };
+}
+
+/**
+ * Update highlighted net (for net-level selection)
+ */
+export function updateHighlightedNet(state: RenderState, net: string | null): RenderState {
+  return {
+    ...state,
+    highlightedNet: net,
   };
 }

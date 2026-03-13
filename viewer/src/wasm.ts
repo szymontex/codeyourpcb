@@ -67,6 +67,22 @@ export interface PcbEngine {
    */
   trace_count(): number;
 
+  /**
+   * Rotate a component by delta millidegrees.
+   * @param refdes Reference designator (e.g. "R1")
+   * @param delta_mdeg Rotation delta in millidegrees (90° = 90000)
+   * @returns true if component found and rotated, false otherwise
+   */
+  rotate_component(refdes: string, delta_mdeg: number): boolean;
+
+  /**
+   * Set the board outline size.
+   * @param width_nm Board width in nanometers
+   * @param height_nm Board height in nanometers
+   * @returns true if board exists and was resized, false otherwise
+   */
+  set_board_size(width_nm: number, height_nm: number): boolean;
+
   /** Free the engine (for WASM memory management) */
   free?(): void;
 }
@@ -84,6 +100,8 @@ interface WasmPcbEngine {
   run_drc_incremental(): number;
   trace_count(): number;
   get_violations_json(): string;
+  rotate_component(refdes: string, delta_mdeg: number): boolean;
+  set_board_size(width_nm: bigint, height_nm: bigint): boolean;
   free(): void;
 }
 
@@ -627,6 +645,22 @@ class WasmPcbEngineAdapter implements PcbEngine {
     return this.wasmEngine.trace_count();
   }
 
+  rotate_component(refdes: string, delta_mdeg: number): boolean {
+    const result = this.wasmEngine.rotate_component(refdes, delta_mdeg);
+    if (result) {
+      this.cachedSnapshot = null;
+    }
+    return result;
+  }
+
+  set_board_size(width_nm: number, height_nm: number): boolean {
+    const result = this.wasmEngine.set_board_size(BigInt(width_nm), BigInt(height_nm));
+    if (result) {
+      this.cachedSnapshot = null;
+    }
+    return result;
+  }
+
   free(): void {
     this.wasmEngine.free();
   }
@@ -828,6 +862,29 @@ class MockPcbEngine implements PcbEngine {
 
   trace_count(): number {
     return this.snapshot.traces.length;
+  }
+
+  rotate_component(refdes: string, delta_mdeg: number): boolean {
+    const comp = this.snapshot.components.find(c => c.refdes === refdes);
+    if (!comp) {
+      console.warn(`[MockEngine] rotate_component: ${refdes} not found`);
+      return false;
+    }
+    // Normalize to [0, 360000)
+    comp.rotation_mdeg = ((comp.rotation_mdeg + delta_mdeg) % 360_000 + 360_000) % 360_000;
+    console.log(`[MockEngine] rotate_component: ${refdes} → ${comp.rotation_mdeg / 1000}°`);
+    return true;
+  }
+
+  set_board_size(width_nm: number, height_nm: number): boolean {
+    if (!this.snapshot.board) {
+      console.warn('[MockEngine] set_board_size: no board');
+      return false;
+    }
+    this.snapshot.board.width_nm = width_nm;
+    this.snapshot.board.height_nm = height_nm;
+    console.log(`[MockEngine] set_board_size: ${width_nm / 1e6}mm x ${height_nm / 1e6}mm`);
+    return true;
   }
 }
 

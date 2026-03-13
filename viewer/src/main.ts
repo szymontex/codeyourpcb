@@ -11,6 +11,7 @@ import { createViewport, fitBoard, screenToWorld } from './viewport';
 import { render, type RenderState } from './renderer';
 import { setupInteraction, type InteractionState } from './interaction';
 import { createRoutingState, cancelRoute, flipLayer, type RoutingState } from './routing';
+import { UndoStack, AddTraceCommand, RemoveTraceCommand, RotateComponentCommand, ResizeBoardCommand, installDebugSurface } from './undo';
 import { createLayerVisibility } from './layers';
 import { createFilePicker, setupDropZone, readFileAsText } from './file-picker';
 import { openFile, saveFile } from './file-access';
@@ -156,6 +157,9 @@ async function init(): Promise<void> {
   const topLayerCb = document.getElementById('layer-top') as HTMLInputElement;
   const bottomLayerCb = document.getElementById('layer-bottom') as HTMLInputElement;
   const ratsnestCb = document.getElementById('layer-ratsnest') as HTMLInputElement;
+  const gridSnapCb = document.getElementById('grid-snap') as HTMLInputElement;
+  const undoBtn = document.getElementById('undo-btn') as HTMLButtonElement;
+  const redoBtn = document.getElementById('redo-btn') as HTMLButtonElement;
   const routeBtn = document.getElementById('route-btn') as HTMLButtonElement;
   const cancelRouteBtn = document.getElementById('cancel-route-btn') as HTMLButtonElement;
   const autoRouteCb = document.getElementById('auto-route') as HTMLInputElement;
@@ -206,6 +210,7 @@ async function init(): Promise<void> {
   let hoveredTraceId: number | null = null;
   let labelPosition: { x: number; y: number } | null = null;
   let routingState: RoutingState = createRoutingState();
+  let highlightedNet: string | null = null;
 
   // 3D view state
   let is3DActive = false;
@@ -251,6 +256,28 @@ async function init(): Promise<void> {
     dirty = true;
   });
 
+  // Grid snap toggle
+  gridSnapCb.addEventListener('change', () => {
+    routingState = { ...routingState, gridSnapEnabled: gridSnapCb.checked };
+    interactionState.routing = routingState;
+    console.log(`[Grid] Snap ${gridSnapCb.checked ? 'enabled' : 'disabled'} (spacing: ${routingState.gridSpacing / 1e6}mm)`);
+    dirty = true;
+  });
+
+  // Undo/Redo toolbar buttons
+  undoBtn.addEventListener('click', () => {
+    undoStack.undo();
+    selectedTraceId = null;
+    labelPosition = null;
+    dirty = true;
+  });
+  redoBtn.addEventListener('click', () => {
+    undoStack.redo();
+    selectedTraceId = null;
+    labelPosition = null;
+    dirty = true;
+  });
+
   // Load WASM
   statusText.textContent = 'Loading WASM...';
   let engine: PcbEngine;
@@ -263,6 +290,10 @@ async function init(): Promise<void> {
   }
 
   const usingWasm = isWasmLoaded();
+
+  // Undo/Redo stack
+  const undoStack = new UndoStack();
+  installDebugSurface(undoStack);
 
   // Subscribe to theme changes to trigger canvas re-render + 3D background sync
   themeManager.subscribe(() => {
@@ -476,6 +507,21 @@ async function init(): Promise<void> {
   currentFilePath = null;
   statusText.textContent = usingWasm ? 'Ready (WASM) - Open a file' : 'Ready (Mock) - Open a file';
 
+  /**
+   * Refresh the board snapshot from the engine and sync to interaction state.
+   * Used as callback by undo commands after mutations.
+   */
+  function refreshSnapshot(): void {
+    snapshot = engine.get_snapshot();
+    if (interactionState) {
+      interactionState.snapshot = snapshot;
+    }
+    if (snapshot.violations) {
+      updateErrorBadge(snapshot.violations);
+    }
+    dirty = true;
+  }
+
   // Interaction setup (must be defined before handleFileLoad which uses it)
   const interactionState: InteractionState = {
     viewport,
@@ -513,15 +559,25 @@ async function init(): Promise<void> {
         // Convert client coords to canvas-relative for label positioning
         const rect = canvas.getBoundingClientRect();
         labelPosition = { x: screenX - rect.left, y: screenY - rect.top };
-        // Show trace info in status bar
+        // Show trace info in status bar and highlight net
         const trace = snapshot?.traces?.find(t => t.id === traceId);
         if (trace) {
           const widthMm = (trace.width / 1_000_000).toFixed(2);
           statusText.textContent = `Trace: ${trace.net_name} (${widthMm}mm, ${trace.layer})`;
+          // Highlight entire net
+          if (trace.net_name && trace.net_name !== highlightedNet) {
+            highlightedNet = trace.net_name;
+            console.log(`[Net] Highlighted: ${highlightedNet}`);
+          }
         }
       } else {
         labelPosition = null;
         selectedRefdes = null;
+        // Clear net highlighting
+        if (highlightedNet != null) {
+          console.log('[Net] Cleared');
+          highlightedNet = null;
+        }
         statusText.textContent = usingWasm ? 'Ready (WASM)' : 'Ready (Mock)';
       }
       dirty = true;
@@ -540,6 +596,20 @@ async function init(): Promise<void> {
         snapshot = engine.get_snapshot();
         interactionState.snapshot = snapshot;
       }
+      dirty = true;
+    },
+    onTraceAdd: (netName: string, layer: string, width: number, segments: number[]) => {
+      const cmd = new AddTraceCommand(engine, { netName, layer, width, segments }, refreshSnapshot);
+      undoStack.push(cmd);
+      dirty = true;
+    },
+    onBoardResize: (oldW: number, oldH: number, newW: number, newH: number) => {
+      const cmd = new ResizeBoardCommand(engine, oldW, oldH, newW, newH, refreshSnapshot);
+      undoStack.push(cmd);
+      const wMm = (newW / 1e6).toFixed(1);
+      const hMm = (newH / 1e6).toFixed(1);
+      console.log(`[Resize] Board → ${wMm}×${hMm}mm`);
+      statusText.textContent = `Board resized to ${wMm} × ${hMm} mm`;
       dirty = true;
     },
   };
@@ -569,6 +639,9 @@ async function init(): Promise<void> {
    * Handle loading a file (.cypcb or .ses) from file picker or drag-drop
    */
   async function handleFileLoad(file: File): Promise<void> {
+    // Clear undo stack on new file load
+    undoStack.clear();
+
     const ext = file.name.toLowerCase().split('.').pop();
 
     try {
@@ -656,6 +729,8 @@ async function init(): Promise<void> {
       // Web uses File System Access API with fallback
       const result = await openFile();
       if (result) {
+        // Clear undo stack on new file load
+        undoStack.clear();
         // Store handle for save-in-place
         currentFileHandle = result.handle;
         currentFilePath = result.name;
@@ -830,17 +905,25 @@ async function init(): Promise<void> {
         hoveredTraceId,
         labelPosition,
         routing: routingState.mode === 'routing' ? routingState : null,
+        highlightedNet,
+        activeResizeHandle: interactionState.activeResizeHandle ?? null,
       };
       render(ctx, renderState);
       dirty = false;
       interactionState.dirty = false;
     }
+    // Update undo/redo button states (cheap boolean checks, no DOM thrash when unchanged)
+    undoBtn.disabled = !undoStack.canUndo;
+    redoBtn.disabled = !undoStack.canRedo;
     requestAnimationFrame(frame);
   }
   frame();
 
   // Hot reload handler - preserves viewport and selection
   function reload(content: string, _file: string): void {
+    // Clear undo stack — old trace IDs are invalid after reload
+    undoStack.clear();
+
     // Save current state
     const savedViewport = { ...viewport };
     const savedSelection = selectedRefdes;
@@ -1153,12 +1236,23 @@ async function init(): Promise<void> {
 
   // Keyboard shortcuts
   document.addEventListener('keydown', async (e) => {
-    // Escape: cancel manual routing first, then autorouting
+    // Escape: cancel manual routing first, then net highlight, then autorouting
     if (e.key === 'Escape') {
       if (routingState.mode === 'routing') {
         routingState = cancelRoute(routingState);
         interactionState.routing = routingState;
         interactionState.onRoutingChange(routingState);
+        dirty = true;
+        e.preventDefault();
+        return;
+      }
+      // Clear net highlighting
+      if (highlightedNet != null) {
+        console.log('[Net] Cleared');
+        highlightedNet = null;
+        selectedTraceId = null;
+        interactionState.selectedTraceId = null;
+        labelPosition = null;
         dirty = true;
         e.preventDefault();
         return;
@@ -1169,24 +1263,84 @@ async function init(): Promise<void> {
       }
     }
 
-    // Delete: remove selected trace
+    // Ctrl+Z: undo, Ctrl+Shift+Z / Ctrl+Y: redo
+    if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+      // Skip if typing in editor/input
+      const tag = (e.target as HTMLElement)?.tagName;
+      const isEditorFocused = tag === 'INPUT' || tag === 'TEXTAREA' ||
+        (e.target as HTMLElement)?.closest('.monaco-editor') != null;
+      if (!isEditorFocused) {
+        e.preventDefault();
+        undoStack.undo();
+        // Deselect any trace since IDs may have changed
+        selectedTraceId = null;
+        interactionState.selectedTraceId = null;
+        labelPosition = null;
+        dirty = true;
+      }
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && ((e.key === 'z' && e.shiftKey) || e.key === 'Z' || e.key === 'y')) {
+      const tag = (e.target as HTMLElement)?.tagName;
+      const isEditorFocused = tag === 'INPUT' || tag === 'TEXTAREA' ||
+        (e.target as HTMLElement)?.closest('.monaco-editor') != null;
+      if (!isEditorFocused) {
+        e.preventDefault();
+        undoStack.redo();
+        selectedTraceId = null;
+        interactionState.selectedTraceId = null;
+        labelPosition = null;
+        dirty = true;
+      }
+      return;
+    }
+
+    // R: rotate selected component 90° CW; Shift+R: 90° CCW
+    if ((e.key === 'r' || e.key === 'R') && !e.ctrlKey && !e.metaKey && !e.altKey && routingState.mode === 'idle') {
+      const tag = (e.target as HTMLElement)?.tagName;
+      const isEditorFocused = tag === 'INPUT' || tag === 'TEXTAREA' ||
+        (e.target as HTMLElement)?.closest('.monaco-editor') != null;
+      if (!isEditorFocused && selectedRefdes != null) {
+        e.preventDefault();
+        const delta = e.shiftKey ? -90_000 : 90_000;
+        const cmd = new RotateComponentCommand(engine, selectedRefdes, delta, refreshSnapshot);
+        undoStack.push(cmd);
+        const sign = delta > 0 ? '+' : '';
+        console.log(`[Rotate] ${selectedRefdes} ${sign}${delta / 1000}°`);
+        statusText.textContent = `Rotated ${selectedRefdes} ${sign}${delta / 1000}°`;
+        dirty = true;
+      }
+    }
+
+    // Delete: remove selected trace (through undo stack)
     if ((e.key === 'Delete' || e.key === 'Backspace') && routingState.mode === 'idle') {
       if (selectedTraceId != null) {
-        const removed = engine.remove_trace(selectedTraceId);
-        if (removed) {
-          console.log(`[Route] Deleted trace id=${selectedTraceId}`);
-          engine.run_drc_incremental();
-          snapshot = engine.get_snapshot();
-          interactionState.snapshot = snapshot;
-          selectedTraceId = null;
-          interactionState.selectedTraceId = null;
-          interactionState.onTraceSelect(null, 0, 0);
-          labelPosition = null;
-          statusText.textContent = 'Trace deleted';
-          setTimeout(() => {
-            statusText.textContent = usingWasm ? 'Ready (WASM)' : 'Ready (Mock)';
-          }, 1500);
+        // Capture trace data for undo before removing
+        const trace = snapshot?.traces?.find(t => t.id === selectedTraceId);
+        if (trace) {
+          const segments: number[] = [];
+          for (const seg of trace.segments) {
+            segments.push(
+              Math.round(seg.start_x), Math.round(seg.start_y),
+              Math.round(seg.end_x), Math.round(seg.end_y),
+            );
+          }
+          const cmd = new RemoveTraceCommand(
+            engine,
+            selectedTraceId,
+            { netName: trace.net_name, layer: trace.layer, width: trace.width, segments },
+            refreshSnapshot,
+          );
+          undoStack.push(cmd);
         }
+        selectedTraceId = null;
+        interactionState.selectedTraceId = null;
+        interactionState.onTraceSelect(null, 0, 0);
+        labelPosition = null;
+        statusText.textContent = 'Trace deleted';
+        setTimeout(() => {
+          statusText.textContent = usingWasm ? 'Ready (WASM)' : 'Ready (Mock)';
+        }, 1500);
         dirty = true;
         e.preventDefault();
         return;

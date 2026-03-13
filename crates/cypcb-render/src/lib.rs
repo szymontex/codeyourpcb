@@ -279,6 +279,21 @@ impl PcbEngine {
         self.violations.len()
     }
 
+    /// Rotate a component by delta millidegrees.
+    ///
+    /// Finds the component by reference designator and applies the rotation.
+    /// Returns `true` on success, `false` if the component was not found.
+    pub fn rotate_component(&mut self, refdes: &str, delta_mdeg: i32) -> bool {
+        self.world.rotate_component(refdes, delta_mdeg)
+    }
+
+    /// Set the board outline size in nanometers.
+    ///
+    /// Returns `true` on success, `false` if no board entity exists.
+    pub fn set_board_size(&mut self, width_nm: i64, height_nm: i64) -> bool {
+        self.world.set_board_size(Nm(width_nm), Nm(height_nm))
+    }
+
     /// Get the number of trace entities in the world.
     pub fn trace_count(&mut self) -> usize {
         let ecs = self.world.ecs_mut();

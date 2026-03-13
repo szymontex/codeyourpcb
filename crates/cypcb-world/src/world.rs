@@ -615,6 +615,78 @@ impl BoardWorld {
     }
 
     // ========================================================================
+    // Mutation API
+    // ========================================================================
+
+    /// Rotate a component by delta millidegrees.
+    ///
+    /// Finds the component by reference designator, adds `delta_mdeg` to its
+    /// current rotation, and normalizes to [0, 360000). Returns `false` if
+    /// the component is not found.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use cypcb_world::{BoardWorld, RefDes, Value, Position, Rotation, FootprintRef, NetConnections};
+    ///
+    /// let mut world = BoardWorld::new();
+    /// world.spawn_component(
+    ///     RefDes::new("R1"),
+    ///     Value::new("10k"),
+    ///     Position::from_mm(10.0, 20.0),
+    ///     Rotation::ZERO,
+    ///     FootprintRef::new("0402"),
+    ///     NetConnections::new(),
+    /// );
+    ///
+    /// assert!(world.rotate_component("R1", 90_000));
+    /// ```
+    pub fn rotate_component(&mut self, refdes: &str, delta_mdeg: i32) -> bool {
+        let entity = match self.find_by_refdes(refdes) {
+            Some(e) => e,
+            None => return false,
+        };
+        match self.get_mut::<Rotation>(entity) {
+            Some(mut rot) => {
+                rot.0 = (rot.0 + delta_mdeg).rem_euclid(360_000);
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Set the board size.
+    ///
+    /// Updates the board entity's [`BoardSize`] component with the given
+    /// dimensions in nanometers. Returns `false` if no board entity exists.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use cypcb_world::BoardWorld;
+    /// use cypcb_core::Nm;
+    ///
+    /// let mut world = BoardWorld::new();
+    /// world.set_board("Test".to_string(), (Nm::from_mm(50.0), Nm::from_mm(30.0)), 2);
+    ///
+    /// assert!(world.set_board_size(Nm(100_000_000), Nm(80_000_000)));
+    /// ```
+    pub fn set_board_size(&mut self, width_nm: Nm, height_nm: Nm) -> bool {
+        let entity = match self.board_entity {
+            Some(e) => e,
+            None => return false,
+        };
+        match self.get_mut::<BoardSize>(entity) {
+            Some(mut size) => {
+                size.width = width_nm;
+                size.height = height_nm;
+                true
+            }
+            None => false,
+        }
+    }
+
+    // ========================================================================
     // Direct ECS Access
     // ========================================================================
 
@@ -842,6 +914,54 @@ mod tests {
 
         let components = world.components();
         assert_eq!(components.len(), 2);
+    }
+
+    #[test]
+    fn test_rotate_component() {
+        let mut world = BoardWorld::new();
+        world.spawn_component(
+            RefDes::new("R1"),
+            Value::new("10k"),
+            Position::from_mm(10.0, 20.0),
+            Rotation::ZERO,
+            FootprintRef::new("0402"),
+            NetConnections::new(),
+        );
+
+        // Rotate 90°
+        assert!(world.rotate_component("R1", 90_000));
+        let entity = world.find_by_refdes("R1").unwrap();
+        assert_eq!(world.get::<Rotation>(entity).unwrap().0, 90_000);
+
+        // Rotate another 180° → 270°
+        assert!(world.rotate_component("R1", 180_000));
+        assert_eq!(world.get::<Rotation>(entity).unwrap().0, 270_000);
+
+        // Rotate 180° more → wraps to 90°
+        assert!(world.rotate_component("R1", 180_000));
+        assert_eq!(world.get::<Rotation>(entity).unwrap().0, 90_000);
+
+        // Negative rotation: -180° → 270°
+        assert!(world.rotate_component("R1", -180_000));
+        assert_eq!(world.get::<Rotation>(entity).unwrap().0, 270_000);
+
+        // Non-existent component returns false
+        assert!(!world.rotate_component("R99", 90_000));
+    }
+
+    #[test]
+    fn test_set_board_size() {
+        let mut world = BoardWorld::new();
+        // No board → false
+        assert!(!world.set_board_size(Nm(100_000_000), Nm(80_000_000)));
+
+        // Set board, then resize
+        world.set_board("Test".to_string(), (Nm::from_mm(50.0), Nm::from_mm(30.0)), 2);
+        assert!(world.set_board_size(Nm(100_000_000), Nm(80_000_000)));
+
+        let (size, _) = world.board_info().unwrap();
+        assert_eq!(size.width.0, 100_000_000);
+        assert_eq!(size.height.0, 80_000_000);
     }
 
     #[test]

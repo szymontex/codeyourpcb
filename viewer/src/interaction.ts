@@ -19,6 +19,7 @@ import {
   setDrcViolations,
   createDrcPreviewChecker,
 } from './routing';
+import { hitTestResizeHandle, resizeHandleCursor, type ResizeHandle } from './renderer';
 
 export interface InteractionState {
   viewport: Viewport;
@@ -44,6 +45,12 @@ export interface InteractionState {
   engine: PcbEngine | null;
   /** Callback when routing state changes (for re-render) */
   onRoutingChange: (routing: RoutingState) => void;
+  /** Callback when a trace is added via routing (for undo stack integration) */
+  onTraceAdd?: (netName: string, layer: string, width: number, segments: number[]) => void;
+  /** Callback when board is resized via drag handles (for undo stack integration) */
+  onBoardResize?: (oldW: number, oldH: number, newW: number, newH: number) => void;
+  /** Currently active resize handle (visual feedback for renderer) */
+  activeResizeHandle?: ResizeHandle | null;
 }
 
 /**
@@ -61,6 +68,17 @@ export function setupInteraction(
 ): void {
   // Pointer cache for multi-touch pan detection
   const pointerCache: Array<{ pointerId: number; clientX: number; clientY: number }> = [];
+
+  // Resize handle drag state
+  let resizeDrag: {
+    handle: ResizeHandle;
+    startScreenX: number;
+    startScreenY: number;
+    origWidth: number;
+    origHeight: number;
+  } | null = null;
+
+  const MIN_BOARD_SIZE = 5_000_000; // 5mm minimum in nm
 
   // Wheel zoom (zoom to cursor position)
   canvas.addEventListener('wheel', (e) => {
@@ -121,7 +139,30 @@ export function setupInteraction(
   canvas.addEventListener('pointerleave', removePointer);
 
   // Middle-click pan OR Ctrl+left-click pan (for laptops without middle button)
+  // Also: left-click on resize handle starts board resize drag
   canvas.addEventListener('mousedown', (e) => {
+    // Resize handle drag (left-click, not during routing)
+    if (e.button === 0 && !e.ctrlKey && state.routing.mode !== 'routing' && state.snapshot?.board) {
+      const rect = canvas.getBoundingClientRect();
+      const sx = e.clientX - rect.left;
+      const sy = e.clientY - rect.top;
+      const handle = hitTestResizeHandle(state.viewport, state.snapshot.board.width_nm, state.snapshot.board.height_nm, sx, sy);
+      if (handle) {
+        resizeDrag = {
+          handle,
+          startScreenX: e.clientX,
+          startScreenY: e.clientY,
+          origWidth: state.snapshot.board.width_nm,
+          origHeight: state.snapshot.board.height_nm,
+        };
+        state.activeResizeHandle = handle;
+        state.dirty = true;
+        canvas.style.cursor = resizeHandleCursor(handle);
+        e.preventDefault();
+        return; // Don't fall through to pan
+      }
+    }
+
     if (e.button === 1 || (e.button === 0 && e.ctrlKey)) {
       state.isPanning = true;
       state.lastX = e.clientX;
@@ -132,6 +173,49 @@ export function setupInteraction(
   });
 
   canvas.addEventListener('mousemove', (e) => {
+    // Resize handle drag
+    if (resizeDrag && state.snapshot?.board) {
+      const dxScreen = e.clientX - resizeDrag.startScreenX;
+      const dyScreen = e.clientY - resizeDrag.startScreenY;
+      // Convert screen delta to world delta (Y is inverted)
+      const dxWorld = dxScreen / state.viewport.scale;
+      const dyWorld = -dyScreen / state.viewport.scale; // invert for world coords
+
+      let newW = resizeDrag.origWidth;
+      let newH = resizeDrag.origHeight;
+      const h = resizeDrag.handle;
+
+      // East handles: width increases with rightward drag
+      if (h === 'e' || h === 'ne' || h === 'se') {
+        newW = resizeDrag.origWidth + dxWorld;
+      }
+      // West handles: width increases with leftward drag
+      if (h === 'w' || h === 'nw' || h === 'sw') {
+        newW = resizeDrag.origWidth - dxWorld;
+      }
+      // North handles: height increases with upward drag (negative screen dy → positive world dy)
+      if (h === 'n' || h === 'nw' || h === 'ne') {
+        newH = resizeDrag.origHeight + dyWorld;
+      }
+      // South handles: height increases with downward drag
+      if (h === 's' || h === 'sw' || h === 'se') {
+        newH = resizeDrag.origHeight - dyWorld;
+      }
+
+      // Clamp to minimum
+      newW = Math.max(MIN_BOARD_SIZE, Math.round(newW));
+      newH = Math.max(MIN_BOARD_SIZE, Math.round(newH));
+
+      // Live-preview: update board size via engine directly (will push undo on mouseup)
+      if (state.engine) {
+        state.engine.set_board_size(newW, newH);
+        // Update snapshot for re-render
+        state.snapshot = state.engine.get_snapshot();
+      }
+      state.dirty = true;
+      return;
+    }
+
     if (state.isPanning) {
       const dx = e.clientX - state.lastX;
       const dy = e.clientY - state.lastY;
@@ -144,6 +228,25 @@ export function setupInteraction(
   });
 
   canvas.addEventListener('mouseup', () => {
+    // Finish resize drag — push undo command with original → final dimensions
+    if (resizeDrag && state.snapshot?.board) {
+      const finalW = state.snapshot.board.width_nm;
+      const finalH = state.snapshot.board.height_nm;
+      // Only push undo if dimensions actually changed
+      if (finalW !== resizeDrag.origWidth || finalH !== resizeDrag.origHeight) {
+        // Revert to original so the undo command's execute() applies the change
+        if (state.engine) {
+          state.engine.set_board_size(resizeDrag.origWidth, resizeDrag.origHeight);
+        }
+        if (state.onBoardResize) {
+          state.onBoardResize(resizeDrag.origWidth, resizeDrag.origHeight, finalW, finalH);
+        }
+      }
+      resizeDrag = null;
+      state.activeResizeHandle = null;
+      canvas.style.cursor = 'default';
+      state.dirty = true;
+    }
     if (state.isPanning) {
       state.isPanning = false;
       canvas.style.cursor = 'default';
@@ -151,6 +254,16 @@ export function setupInteraction(
   });
 
   canvas.addEventListener('mouseleave', () => {
+    // Cancel resize on leave — revert to original
+    if (resizeDrag) {
+      if (state.engine) {
+        state.engine.set_board_size(resizeDrag.origWidth, resizeDrag.origHeight);
+        state.snapshot = state.engine.get_snapshot();
+      }
+      resizeDrag = null;
+      state.activeResizeHandle = null;
+      state.dirty = true;
+    }
     if (state.isPanning) {
       state.isPanning = false;
       canvas.style.cursor = 'default';
@@ -198,17 +311,24 @@ export function setupInteraction(
           for (const s of result.segments) {
             flat.push(Math.round(s.start_x), Math.round(s.start_y), Math.round(s.end_x), Math.round(s.end_y));
           }
-          const traceId = state.engine.add_trace(result.netName, result.layer, result.width, flat);
-          if (traceId !== 0xFFFFFFFF) {
-            console.log(`[Route] Trace added: id=${traceId} net=${result.netName}`);
-            // Run DRC after adding
-            state.engine.run_drc_incremental();
+          if (state.onTraceAdd) {
+            // Route through undo stack
+            state.onTraceAdd(result.netName, result.layer, result.width, flat);
           } else {
-            console.warn('[Route] Failed to add trace');
+            // Fallback: direct engine call
+            const traceId = state.engine.add_trace(result.netName, result.layer, result.width, flat);
+            if (traceId !== 0xFFFFFFFF) {
+              console.log(`[Route] Trace added: id=${traceId} net=${result.netName}`);
+              state.engine.run_drc_incremental();
+            } else {
+              console.warn('[Route] Failed to add trace');
+            }
           }
         }
-        // Reset to idle
-        state.routing = createRoutingState();
+        // Reset to idle (preserve grid snap settings)
+        const prevGridSnap = state.routing.gridSnapEnabled;
+        const prevGridSpacing = state.routing.gridSpacing;
+        state.routing = { ...createRoutingState(), gridSnapEnabled: prevGridSnap, gridSpacing: prevGridSpacing };
         if (drcChecker) drcChecker.cancel();
         state.onRoutingChange(state.routing);
         state.dirty = true;
@@ -254,10 +374,10 @@ export function setupInteraction(
     state.onSelect(worldX, worldY);
   });
 
-  // Hover tracking for traces + routing preview (rAF-guarded)
+  // Hover tracking for traces + routing preview + resize handles (rAF-guarded)
   let hoverRafPending = false;
   canvas.addEventListener('mousemove', (e) => {
-    if (state.isPanning || hoverRafPending) return;
+    if (state.isPanning || resizeDrag || hoverRafPending) return;
 
     hoverRafPending = true;
     requestAnimationFrame(() => {
@@ -279,6 +399,21 @@ export function setupInteraction(
         state.dirty = true;
         canvas.style.cursor = 'crosshair';
         return;
+      }
+
+      // --- Resize handle hover cursor ---
+      if (state.snapshot?.board) {
+        const handle = hitTestResizeHandle(state.viewport, state.snapshot.board.width_nm, state.snapshot.board.height_nm, screenX, screenY);
+        if (handle) {
+          canvas.style.cursor = resizeHandleCursor(handle);
+          // Still update trace hover to clear if needed
+          if (state.hoveredTraceId != null) {
+            state.hoveredTraceId = null;
+            state.onTraceHover(null);
+            state.dirty = true;
+          }
+          return;
+        }
       }
 
       // --- Normal hover for traces ---

@@ -36,6 +36,10 @@ export interface RoutingState {
   drcViolations: ViolationInfo[];
   /** Trace width in nm (default 250_000 = 0.25mm) */
   traceWidth: number;
+  /** Whether grid snap is active */
+  gridSnapEnabled: boolean;
+  /** Grid spacing in nm (default 1_270_000 = 1.27mm = 50mil) */
+  gridSpacing: number;
 }
 
 export interface PadHit {
@@ -64,6 +68,8 @@ export function createRoutingState(): RoutingState {
     netName: '',
     drcViolations: [],
     traceWidth: 250_000, // 0.25mm default
+    gridSnapEnabled: false,
+    gridSpacing: 1_270_000, // 1.27mm = 50mil default
   };
 }
 
@@ -131,6 +137,24 @@ export function hitTestPad(
   }
 
   return bestHit;
+}
+
+// ---------------------------------------------------------------------------
+// Grid snapping
+// ---------------------------------------------------------------------------
+
+/**
+ * Snap a point to the nearest grid intersection.
+ * Grid origin is (0, 0). Spacing is in nm.
+ */
+export function snapToGrid(
+  point: { x: number; y: number },
+  spacing: number,
+): { x: number; y: number } {
+  return {
+    x: Math.round(point.x / spacing) * spacing,
+    y: Math.round(point.y / spacing) * spacing,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -213,6 +237,8 @@ export function startRoute(
 
 /**
  * Update the preview segment during mouse move (while routing).
+ * When grid snap is enabled, the cursor is snapped to grid first,
+ * then angle snap is applied from the anchor to the grid-snapped point.
  */
 export function updatePreview(
   state: RoutingState,
@@ -220,7 +246,13 @@ export function updatePreview(
 ): RoutingState {
   if (state.mode !== 'routing') return state;
 
-  const snapped = computeSnappedPoint(state.anchorPoint, cursorWorld);
+  // Apply grid snap first if enabled
+  const gridAdjusted = state.gridSnapEnabled
+    ? snapToGrid(cursorWorld, state.gridSpacing)
+    : cursorWorld;
+
+  // Then apply angle snap
+  const snapped = computeSnappedPoint(state.anchorPoint, gridAdjusted);
 
   return {
     ...state,
@@ -288,7 +320,11 @@ export function completeRoute(
 export function cancelRoute(state: RoutingState): RoutingState {
   if (state.mode !== 'routing') return state;
   console.log('[Route] routing → idle: cancelled');
-  return createRoutingState();
+  return {
+    ...createRoutingState(),
+    gridSnapEnabled: state.gridSnapEnabled,
+    gridSpacing: state.gridSpacing,
+  };
 }
 
 /**
