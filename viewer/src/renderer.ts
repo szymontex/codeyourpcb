@@ -42,6 +42,24 @@ export interface RenderState {
   gridVisualSpacing?: number;
   /** Whether net labels on traces are shown */
   showNetLabels?: boolean;
+  /** Variant preview data: route segments and vias to draw as ghost overlay */
+  variantPreview?: VariantPreviewData | null;
+}
+
+/** Data for rendering a ghost variant preview overlay */
+export interface VariantPreviewData {
+  routes: Array<{
+    net_name: string;
+    layer: string;
+    width: number;
+    segments: Array<{ start: [number, number]; end: [number, number] }>;
+  }>;
+  vias: Array<{
+    x: number;
+    y: number;
+    drill: number;
+    net_name: string;
+  }>;
 }
 
 /** Diagnostic surface exposed on window for E2E and debugging */
@@ -97,7 +115,11 @@ export function render(ctx: CanvasRenderingContext2D, state: RenderState): void 
   }
 
   // Draw traces by layer (bottom first, then top)
+  // When variant preview is active, dim existing traces to 0.3 alpha
+  const traceAlpha = state.variantPreview ? 0.3 : 1.0;
   if (snapshot.traces) {
+    ctx.save();
+    ctx.globalAlpha = traceAlpha;
     const { colorByNet, selectedTraceId, hoveredTraceId, highlightedNet } = state;
     // Bottom traces first
     for (const trace of snapshot.traces) {
@@ -117,6 +139,7 @@ export function render(ctx: CanvasRenderingContext2D, state: RenderState): void 
         drawTrace(ctx, viewport, trace, layers, colorByNet, selectedTraceId, hoveredTraceId, highlightedNet);
       }
     }
+    ctx.restore();
   }
 
   // Draw components (pads, body outlines, drill marks)
@@ -174,6 +197,11 @@ export function render(ctx: CanvasRenderingContext2D, state: RenderState): void 
   // Draw routing preview (dashed trace + DRC markers)
   if (state.routing && state.routing.mode === 'routing') {
     drawRoutingPreview(ctx, viewport, state.routing);
+  }
+
+  // Draw variant ghost preview overlay when hovering a non-active variant
+  if (state.variantPreview) {
+    drawVariantPreview(ctx, viewport, state.variantPreview);
   }
 
   // Draw net label for selected trace
@@ -861,6 +889,53 @@ function drawRoundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: n
 function drawOblong(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number): void {
   const r = Math.min(w, h) / 2;
   drawRoundRect(ctx, x, y, w, h, r);
+}
+
+// ---------------------------------------------------------------------------
+// Variant ghost preview
+// ---------------------------------------------------------------------------
+
+/**
+ * Draw a ghost overlay of a variant's routes and vias.
+ * Renders in cyan at 0.4 alpha to distinguish from active routes.
+ */
+function drawVariantPreview(ctx: CanvasRenderingContext2D, vp: Viewport, preview: VariantPreviewData): void {
+  const GHOST_COLOR = 'rgba(0, 200, 255, 0.4)';
+  const VIA_COLOR = 'rgba(0, 200, 255, 0.5)';
+
+  ctx.save();
+
+  // Draw route segments
+  ctx.strokeStyle = GHOST_COLOR;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  for (const route of preview.routes) {
+    const widthPx = Math.max(1, route.width * vp.scale);
+    ctx.lineWidth = widthPx;
+
+    for (const seg of route.segments) {
+      const [sx, sy] = worldToScreen(vp, seg.start[0], seg.start[1]);
+      const [ex, ey] = worldToScreen(vp, seg.end[0], seg.end[1]);
+      ctx.beginPath();
+      ctx.moveTo(sx, sy);
+      ctx.lineTo(ex, ey);
+      ctx.stroke();
+    }
+  }
+
+  // Draw vias
+  for (const via of preview.vias) {
+    const [vx, vy] = worldToScreen(vp, via.x, via.y);
+    const radiusPx = Math.max(2, (via.drill / 2) * vp.scale);
+
+    ctx.beginPath();
+    ctx.arc(vx, vy, radiusPx, 0, Math.PI * 2);
+    ctx.fillStyle = VIA_COLOR;
+    ctx.fill();
+  }
+
+  ctx.restore();
 }
 
 // ---------------------------------------------------------------------------

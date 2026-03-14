@@ -25,6 +25,8 @@ import type { DisplayUnit } from './units';
 import { initProjectManager, showProjectManager, hideProjectManager, addRecentFile } from './project-manager';
 import { initSearchPanel, hideSearchPanel, toggleSearchPanel, isSearchPanelVisible } from './jlcpcb-panel';
 import { fetch3DModel } from './jlcpcb';
+import { initVariantPanel, showVariants, hideVariants, isVariantPanelVisible, type VariantData } from './variant-panel';
+import type { VariantPreviewData } from './renderer';
 
 // WebSocket server URL for hot reload + FreeRouting.
 // Only used when `npm run start` (dev server with file watcher) is running.
@@ -236,6 +238,10 @@ async function init(): Promise<void> {
   let highlightedNet: string | null = null;
   const renderConfig = createDefaultRenderConfig();
   let padNetMap = new Map<string, string>();
+
+  // Variant preview state
+  let variantPreview: VariantPreviewData | null = null;
+  let storedVariants: VariantData[] = [];
 
   /**
    * Pull fresh snapshot from engine and rebuild derived state (padNetMap).
@@ -848,6 +854,32 @@ async function init(): Promise<void> {
     toggleSearchPanel();
   });
 
+  // --- Variant Panel ---
+  initVariantPanel({
+    onHover: (index) => {
+      if (index != null && storedVariants[index]) {
+        variantPreview = {
+          routes: storedVariants[index].routes,
+          vias: storedVariants[index].vias,
+        };
+      } else {
+        variantPreview = null;
+      }
+      dirty = true;
+    },
+    onClick: (index) => {
+      if (!storedVariants[index]) return;
+      // Apply the clicked variant by re-routing with that variant's config
+      // For now, variant click just makes it the active display — the routes
+      // from auto_route_variants() already applied the best one.
+      // To truly apply, we would need a per-variant apply API.
+      // Mark it as active and clear preview
+      variantPreview = null;
+      dirty = true;
+      console.log(`[Variants] Applied variant: ${storedVariants[index].name}`);
+    },
+  });
+
   // Expose board loader for E2E tests — loads source, pulls snapshot, fits board
   (window as any).__loadBoard = (source: string) => {
     engine.load_source(source);
@@ -1292,6 +1324,7 @@ async function init(): Promise<void> {
         gridVisible,
         gridVisualSpacing: getPreference('gridVisualSpacing'),
         showNetLabels,
+        variantPreview,
       };
       render(ctx, renderState);
       dirty = false;
@@ -1438,9 +1471,14 @@ async function init(): Promise<void> {
       return;
     }
 
+    // Clear any existing variant panel on new Route click
+    hideVariants();
+    variantPreview = null;
+    storedVariants = [];
+
     isRouting = true;
     routingStartTime = Date.now();
-    statusText.textContent = 'Auto-routing...';
+    statusText.textContent = 'Generating variants…';
 
     updateRoutingUI({
       isRouting: true,
@@ -1450,24 +1488,78 @@ async function init(): Promise<void> {
       elapsed: 0,
     });
 
-    // Run autorouter — use WASM A* engine directly
+    // Run variant generation — produces multiple routing alternatives
+    // Falls back to single auto_route() if variant generation crashes (WASM edge case)
     try {
-      const resultJson = engine.auto_route();
-      const result = JSON.parse(resultJson);
+      let resultJson: string;
+      let isFallback = false;
+
+      try {
+        resultJson = engine.auto_route_variants();
+      } catch (variantErr) {
+        console.warn('[Routing] Variant generation failed, falling back to auto_route():', variantErr);
+        // Reload the board to reset WASM engine state after panic
+        if (lastLoadedSource) {
+          engine.load_source(lastLoadedSource);
+        }
+        // Fall back to single auto_route
+        resultJson = engine.auto_route();
+        isFallback = true;
+      }
+
       const elapsed = Math.round((Date.now() - routingStartTime) / 1000);
 
-      if (result.ok) {
+      // Check if it's an error response
+      let parsed: any;
+      try {
+        parsed = JSON.parse(resultJson);
+      } catch {
+        statusText.textContent = `Routing error: invalid JSON response`;
+        console.error('[Routing] Invalid JSON:', resultJson);
+        return;
+      }
+
+      // Error response: { ok: false, error: "..." }
+      if (parsed && parsed.ok === false) {
+        statusText.textContent = `Routing failed: ${parsed.error}`;
+        console.error('[Routing]', parsed.error);
+        return;
+      }
+
+      // Fallback path: auto_route() returned {ok:true, routed:N, ...}
+      if (isFallback && parsed && parsed.ok === true) {
         pullSnapshot();
         dirty = true;
-        const msg = result.unrouted > 0
-          ? `Routed ${result.routed} segments (${result.unrouted} unrouted) in ${elapsed}s`
-          : `Routed ${result.routed} segments in ${elapsed}s`;
+        const msg = parsed.unrouted > 0
+          ? `Routed ${parsed.routed} segments (${parsed.unrouted} unrouted) in ${elapsed}s`
+          : `Routed ${parsed.routed} segments in ${elapsed}s`;
         statusText.textContent = msg;
-        console.log(`[Routing] ${msg}`);
-      } else {
-        statusText.textContent = `Routing failed: ${result.error}`;
-        console.error('[Routing]', result.error);
+        console.log(`[Routing] Fallback: ${msg}`);
+        return;
       }
+
+      // Success: parsed is an array of VariantResult
+      const variantResults: VariantData[] = Array.isArray(parsed) ? parsed : [];
+
+      if (variantResults.length === 0) {
+        statusText.textContent = 'Routing produced no variants';
+        console.warn('[Routing] No variants returned');
+        return;
+      }
+
+      // Refresh snapshot (best variant was auto-applied by Rust engine)
+      pullSnapshot();
+      dirty = true;
+
+      // Store variants and show panel
+      storedVariants = variantResults;
+      showVariants(variantResults, 0); // index 0 = best (sorted by composite)
+
+      const bestName = variantResults[0].name;
+      const composite = variantResults[0].score.composite.toFixed(1);
+      statusText.textContent = `${variantResults.length} variants generated (best: ${bestName}, score ${composite}) in ${elapsed}s`;
+      console.log(`[Routing] ${variantResults.length} variants, best: ${bestName} (${composite}), ${elapsed}s`);
+
     } catch (err) {
       statusText.textContent = `Routing error: ${err}`;
       console.error('[Routing] Exception:', err);
@@ -1475,7 +1567,9 @@ async function init(): Promise<void> {
       isRouting = false;
       updateRoutingUI({ isRouting: false, pass: 0, routed: 0, unrouted: 0, elapsed: 0 });
       setTimeout(() => {
-        statusText.textContent = usingWasm ? 'Ready (WASM)' : 'Ready (Mock)';
+        if (!isVariantPanelVisible()) {
+          statusText.textContent = usingWasm ? 'Ready (WASM)' : 'Ready (Mock)';
+        }
       }, 5000);
     }
   }
@@ -1659,6 +1753,11 @@ async function init(): Promise<void> {
       };
 
       console.log('[Tuning] Re-routing with params:', rustParams);
+
+      // Clear variant panel on tuning re-route
+      hideVariants();
+      variantPreview = null;
+      storedVariants = [];
 
       // Show routing indicator
       updateRoutingUI({

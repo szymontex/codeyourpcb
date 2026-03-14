@@ -97,6 +97,13 @@ export interface PcbEngine {
    */
   auto_route_with_params(params: string): string;
 
+  /**
+   * Generate multiple routing variants with different strategies/configs.
+   * Returns JSON array of VariantResult objects, sorted by composite score (best first).
+   * On error, returns {"ok":false,"error":"..."}.
+   */
+  auto_route_variants(): string;
+
   /** Free the engine (for WASM memory management) */
   free?(): void;
 }
@@ -118,6 +125,7 @@ interface WasmPcbEngine {
   set_board_size(width_nm: bigint, height_nm: bigint): boolean;
   auto_route(): string;
   auto_route_with_params(params_json: string): string;
+  auto_route_variants(): string;
   free(): void;
 }
 
@@ -734,6 +742,12 @@ class WasmPcbEngineAdapter implements PcbEngine {
     return result;
   }
 
+  auto_route_variants(): string {
+    const result = this.wasmEngine.auto_route_variants();
+    this.cachedSnapshot = null; // Invalidate cache — routes changed
+    return result;
+  }
+
   free(): void {
     this.wasmEngine.free();
   }
@@ -916,6 +930,11 @@ class MockPcbEngine implements PcbEngine {
   auto_route_with_params(_params: string): string {
     console.warn('[MockEngine] auto_route_with_params not available in mock mode');
     return '{"ok":false,"error":"Autorouter not available in mock mode"}';
+  }
+
+  auto_route_variants(): string {
+    console.warn('[MockEngine] auto_route_variants not available in mock mode');
+    return '{"ok":false,"error":"Variant generation not available in mock mode"}';
   }
 }
 

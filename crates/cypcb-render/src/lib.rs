@@ -65,6 +65,7 @@ impl PcbEngine {
     /// Create a new PcbEngine instance.
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen(constructor))]
     pub fn new() -> PcbEngine {
+        console_error_panic_hook::set_once();
         PcbEngine {
             world: BoardWorld::new(),
             footprint_lib: FootprintLibrary::new(),
@@ -434,6 +435,56 @@ impl PcbEngine {
             self.run_drc_internal();
             format!(r#"{{"ok":true,"routed":{},"unrouted":{}}}"#, routed, unrouted)
         }
+    }
+
+    /// Generate multiple routing variants with different strategies/configs,
+    /// rank them by composite score, and auto-apply the best.
+    ///
+    /// Returns a JSON array of variant results:
+    /// `[{ "name": "...", "score": { ... }, "routes": [...], "vias": [...] }]`
+    ///
+    /// The best variant (lowest composite score) is auto-applied to the world.
+    /// On error, returns `{"ok":false,"error":"..."}`.
+    pub fn auto_route_variants(&mut self) -> String {
+        use cypcb_autoroute::variant::{default_variant_configs, generate_variants};
+        use cypcb_drc::DesignRules;
+        use cypcb_rules::presets::{PresetRuleSet, RulesPreset};
+
+        // Clear existing autorouted traces first
+        self.clear_autorouted_traces();
+
+        let preset = match RulesPreset::from_name("jlcpcb") {
+            Some(p) => p,
+            None => {
+                return r#"{"ok":false,"error":"jlcpcb preset not found"}"#.to_string();
+            }
+        };
+        let rules = PresetRuleSet::new(preset);
+        let design_rules = DesignRules::default();
+        let configs = default_variant_configs();
+
+        let results = generate_variants(
+            &mut self.world,
+            &self.footprint_lib,
+            &rules,
+            &design_rules,
+            &configs,
+        );
+
+        if results.is_empty() {
+            return r#"{"ok":false,"error":"All variants failed"}"#.to_string();
+        }
+
+        // Rebuild spatial index and run DRC after best variant is applied
+        self.rebuild_spatial_index_full();
+        self.run_drc_internal();
+
+        serde_json::to_string(&results).unwrap_or_else(|e| {
+            format!(
+                r#"{{"ok":false,"error":"Serialization failed: {}"}}"#,
+                e.to_string().replace('"', r#"\""#)
+            )
+        })
     }
 }
 

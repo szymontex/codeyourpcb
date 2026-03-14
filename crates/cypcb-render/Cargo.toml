@@ -36,6 +36,7 @@ serde_json = { workspace = true }
 # WASM support
 wasm-bindgen = { workspace = true }
 serde-wasm-bindgen = { workspace = true }
+console_error_panic_hook = "0.1"
 
 # Fix for getrandom WASM compilation (required by bevy_ecs -> ahash and uuid)
 [target.'cfg(target_arch = "wasm32")'.dependencies]

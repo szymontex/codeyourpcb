@@ -33,6 +33,7 @@ pub mod postprocess;
 pub mod scoring;
 pub mod smoother;
 pub mod strategy;
+pub mod variant;
 pub mod via_optimizer;
 
 use cypcb_router::types::RoutingResult;

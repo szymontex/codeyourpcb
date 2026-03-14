@@ -127,25 +127,25 @@ This file is the explicit capability and coverage contract for the project.
 
 ### R112 — Routing Variant Generation
 - Class: core-capability
-- Status: active
+- Status: validated
 - Description: Generate 2-4 routing variants per board using different strategies/parameter sets. Each variant is a complete routed result with its score.
 - Why it matters: "musimy obsługiwać wariantowość, musimy wiedzieć dlaczego dany routing jest lepszy od drugiego"
 - Source: user
 - Primary owning slice: M004/S06
 - Supporting slices: M004/S02, M004/S03
-- Validation: unmapped
-- Notes: Variants run in parallel (web workers or sequential with different configs). Limited by total time budget.
+- Validation: 4 variants generated sequentially (PathFinder default/low-via/high-density + ImprovedAStar default), ranked by composite score. 5 unit + 5 integration tests + 7 E2E tests prove full pipeline — M004/S06
+- Notes: Variants run sequentially (BoardWorld not Clone). Limited by total time budget (~1s WASM for simple boards).
 
 ### R113 — Auto-Apply Best Variant with Hover Preview
 - Class: primary-user-loop
-- Status: active
+- Status: validated
 - Description: Route button auto-applies the highest-scored variant. Score panel shows all variants with metrics. Hovering an alternative variant previews it on canvas without applying.
 - Why it matters: "2 ale user może hoverować na inne rezultaty i je zobaczy na ekranie" — user picks with visual feedback
 - Source: user
 - Primary owning slice: M004/S06
 - Supporting slices: none
-- Validation: unmapped
-- Notes: Canvas must support overlaying preview routes (different color/opacity) without mutating board state.
+- Validation: Route button calls auto_route_variants(), best variant auto-applied, panel shows ranked results with scores, hover renders cyan ghost overlay at 0.4 alpha with active traces dimmed. 7 E2E tests verify panel lifecycle, hover preview, click selection, and debug surface. — M004/S06
+- Notes: Canvas supports overlaying preview routes (different color/opacity) without mutating board state. Click-to-apply is display-only (doesn't re-route with clicked config).
 
 ### R114 — Benchmark Validation Against KiCad Reference Designs
 - Class: quality-attribute
@@ -254,8 +254,8 @@ This file is the explicit capability and coverage contract for the project.
 | R109 | core-capability | validated | M004/S04 | none | 3-pass smoother + per-move DRC, 17 unit + 1 integration test (M004/S04) |
 | R110 | differentiator | validated | M004/S05 | none | AutorouteParams, WASM entry point, tuning panel, 8+4+7 tests (M004/S05) |
 | R111 | differentiator | validated | M004/S05 | M004/S03 | 300ms debounced re-route, params→score difference proven (M004/S05) |
-| R112 | core-capability | active | M004/S06 | M004/S02, M004/S03 | unmapped |
-| R113 | primary-user-loop | active | M004/S06 | none | unmapped |
+| R112 | core-capability | validated | M004/S06 | M004/S02, M004/S03 | 4 variants, 5 unit + 5 integration + 7 E2E tests (M004/S06) |
+| R113 | primary-user-loop | validated | M004/S06 | none | auto-apply best + hover ghost preview + 7 E2E tests (M004/S06) |
 | R114 | quality-attribute | active | M004/S07 | M004/S01, M004/S02 | unmapped |
 | R115 | quality-attribute | active | M004/S07 | none | unmapped |
 | R116 | quality-attribute | active | M004/S07 | M004/S03 | unmapped |
@@ -267,7 +267,7 @@ This file is the explicit capability and coverage contract for the project.
 
 ## Coverage Summary
 
-- Active requirements: 7
+- Active requirements: 5
 - Mapped to slices: 14
-- Validated: 9
+- Validated: 11
 - Unmapped active requirements: 0

@@ -4,9 +4,10 @@
 
 use cypcb_core::{Nm, Point};
 use cypcb_world::{Layer, NetId};
+use serde::Serialize;
 
 /// Status of the routing operation.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub enum RoutingStatus {
     /// All nets successfully routed.
     Complete,
@@ -38,7 +39,7 @@ impl RoutingStatus {
 ///
 /// Represents a wire segment from the autorouter output.
 /// Multiple segments form a complete trace path.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct RouteSegment {
     /// The net this segment belongs to.
     pub net_id: NetId,
@@ -83,7 +84,7 @@ impl RouteSegment {
 /// A via placement from the autorouter.
 ///
 /// Vias connect traces between different copper layers.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ViaPlacement {
     /// The net this via belongs to.
     pub net_id: NetId,
@@ -130,7 +131,7 @@ impl ViaPlacement {
 /// Result of an autorouting operation.
 ///
 /// Contains the routing status and all generated routes and vias.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct RoutingResult {
     /// Status of the routing operation.
     pub status: RoutingStatus,

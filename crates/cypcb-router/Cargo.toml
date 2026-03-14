@@ -10,4 +10,5 @@ repository.workspace = true
 bevy_ecs = { workspace = true }
 cypcb-core = { path = "../cypcb-core" }
 cypcb-world = { path = "../cypcb-world", default-features = false }
+serde = { workspace = true }
 thiserror = { workspace = true }

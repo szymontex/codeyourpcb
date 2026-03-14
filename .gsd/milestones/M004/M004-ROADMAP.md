@@ -70,7 +70,7 @@ This milestone is complete only when all are true:
 - [x] **S05: Realtime Tuning Parameters** `risk:medium` `depends:[S03,S04]`
   > After this: User adjusts density/via-preference/roundness sliders, board re-routes within ~1s. Visible on canvas. Parameters stored in settings.
 
-- [ ] **S06: Variant Generation & Preview UI** `risk:low` `depends:[S03,S04]`
+- [x] **S06: Variant Generation & Preview UI** `risk:low` `depends:[S03,S04]`
   > After this: Route button generates 2-4 variants with different strategies/configs. Score panel shows rankings. Hovering an alternative shows preview overlay on canvas. Auto-applies best.
 
 - [ ] **S07: Benchmark Validation & Strategy Selection** `risk:medium` `depends:[S01,S02,S03,S04,S05,S06]`
