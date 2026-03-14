@@ -29,6 +29,13 @@ export interface LayerColors {
   drill: string;
 }
 
+export interface AutorouteParams {
+  viaCost: number;
+  layerPreference: number;
+  roundness: number;
+  density: number;
+}
+
 export interface AppSettings {
   /** Theme preference: light, dark, or auto (follow OS) */
   theme: 'light' | 'dark' | 'auto';
@@ -46,6 +53,8 @@ export interface AppSettings {
   netLabelsVisible: boolean;
   /** Layer color overrides */
   layerColors: LayerColors;
+  /** Autorouter tuning parameters */
+  autorouteParams: AutorouteParams;
   /** Recently opened files (newest first, max 10) */
   recentFiles: RecentFileEntry[];
 }
@@ -80,6 +89,12 @@ export const DEFAULT_SETTINGS: Readonly<AppSettings> = {
     via: '#808080',
     drill: '#FFFFFF',
   },
+  autorouteParams: {
+    viaCost: 1.0,
+    layerPreference: 0.0,
+    roundness: 0.5,
+    density: 1.0,
+  },
   recentFiles: [],
 };
 
@@ -96,12 +111,12 @@ const STORAGE_KEY = 'cypcb-settings';
 function loadFromStorage(): AppSettings {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { ...DEFAULT_SETTINGS, layerColors: { ...DEFAULT_SETTINGS.layerColors } };
+    if (!raw) return { ...DEFAULT_SETTINGS, layerColors: { ...DEFAULT_SETTINGS.layerColors }, autorouteParams: { ...DEFAULT_SETTINGS.autorouteParams } };
 
     const parsed = JSON.parse(raw);
     if (typeof parsed !== 'object' || parsed === null) {
       console.warn('[settings] Invalid localStorage data, falling back to defaults');
-      return { ...DEFAULT_SETTINGS, layerColors: { ...DEFAULT_SETTINGS.layerColors } };
+      return { ...DEFAULT_SETTINGS, layerColors: { ...DEFAULT_SETTINGS.layerColors }, autorouteParams: { ...DEFAULT_SETTINGS.autorouteParams } };
     }
 
     // Merge parsed values over defaults so missing keys get filled in
@@ -112,11 +127,15 @@ function loadFromStorage(): AppSettings {
         ...DEFAULT_SETTINGS.layerColors,
         ...(parsed.layerColors ?? {}),
       },
+      autorouteParams: {
+        ...DEFAULT_SETTINGS.autorouteParams,
+        ...(parsed.autorouteParams ?? {}),
+      },
       recentFiles: Array.isArray(parsed.recentFiles) ? parsed.recentFiles : [],
     };
   } catch (e) {
     console.warn('[settings] Failed to parse localStorage data, falling back to defaults', e);
-    return { ...DEFAULT_SETTINGS, layerColors: { ...DEFAULT_SETTINGS.layerColors } };
+    return { ...DEFAULT_SETTINGS, layerColors: { ...DEFAULT_SETTINGS.layerColors }, autorouteParams: { ...DEFAULT_SETTINGS.autorouteParams } };
   }
 }
 
@@ -153,6 +172,7 @@ export function getSettings(): AppSettings {
   return {
     ...current,
     layerColors: { ...current.layerColors },
+    autorouteParams: { ...current.autorouteParams },
   };
 }
 
@@ -163,6 +183,10 @@ export function getPreference<K extends SettingsKey>(key: K): AppSettings[K] {
   const val = current[key];
   // Deep-copy layerColors to prevent external mutation
   if (key === 'layerColors' && typeof val === 'object') {
+    return { ...(val as any) } as AppSettings[K];
+  }
+  // Deep-copy autorouteParams to prevent external mutation
+  if (key === 'autorouteParams' && typeof val === 'object') {
     return { ...(val as any) } as AppSettings[K];
   }
   // Deep-copy recentFiles array
@@ -178,6 +202,9 @@ export function getPreference<K extends SettingsKey>(key: K): AppSettings[K] {
 export function setPreference<K extends SettingsKey>(key: K, value: AppSettings[K]): void {
   // Deep-copy layerColors on write
   if (key === 'layerColors' && typeof value === 'object') {
+    current[key] = { ...(value as any) } as AppSettings[K];
+  // Deep-copy autorouteParams on write
+  } else if (key === 'autorouteParams' && typeof value === 'object') {
     current[key] = { ...(value as any) } as AppSettings[K];
   } else {
     current[key] = value;
@@ -202,7 +229,7 @@ export function subscribe(listener: SettingsListener): () => void {
  * Reset all settings to defaults (useful for testing).
  */
 export function resetSettings(): void {
-  current = { ...DEFAULT_SETTINGS, layerColors: { ...DEFAULT_SETTINGS.layerColors } };
+  current = { ...DEFAULT_SETTINGS, layerColors: { ...DEFAULT_SETTINGS.layerColors }, autorouteParams: { ...DEFAULT_SETTINGS.autorouteParams } };
   saveToStorage(current);
   exposeDebugSurface();
   notifyListeners();

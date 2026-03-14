@@ -364,6 +364,77 @@ impl PcbEngine {
             format!(r#"{{"ok":true,"routed":{},"unrouted":{}}}"#, routed, unrouted)
         }
     }
+
+    /// Run the autorouter with user-specified tuning parameters.
+    ///
+    /// `params_json` is a JSON string with fields:
+    /// - `via_cost`: f64 (0.1–10.0, default 1.0) — higher = fewer vias
+    /// - `layer_preference`: f64 (-1.0–1.0, default 0.0) — layer bias
+    /// - `roundness`: f64 (0.0–1.0, default 0.5) — chamfer aggressiveness
+    /// - `density`: f64 (0.5–2.0, default 1.0) — grid density multiplier
+    ///
+    /// Missing fields use defaults. Values are clamped to valid ranges.
+    ///
+    /// Returns a JSON status string: `{"ok":true,"routed":N,"unrouted":N}` on success,
+    /// or `{"ok":false,"error":"..."}` on failure.
+    pub fn auto_route_with_params(&mut self, params_json: String) -> String {
+        use cypcb_autoroute::{route_board, AutorouteConfig, AutorouteParams};
+        use cypcb_router::apply_routes;
+        use cypcb_rules::presets::{PresetRuleSet, RulesPreset};
+
+        // Deserialize params
+        let params: AutorouteParams = match serde_json::from_str(&params_json) {
+            Ok(p) => {
+                let clamped = AutorouteParams::clamped(&p);
+                tracing::info!(
+                    via_cost = clamped.via_cost,
+                    layer_preference = clamped.layer_preference,
+                    roundness = clamped.roundness,
+                    density = clamped.density,
+                    "auto_route_with_params: received params"
+                );
+                clamped
+            }
+            Err(e) => {
+                return format!(
+                    r#"{{"ok":false,"error":"Invalid params JSON: {}"}}"#,
+                    e.to_string().replace('"', r#"\""#)
+                );
+            }
+        };
+
+        // Clear existing autorouted traces first
+        self.clear_autorouted_traces();
+
+        let preset = RulesPreset::from_name("jlcpcb")
+            .expect("jlcpcb preset must exist");
+        let rules = PresetRuleSet::new(preset);
+        let config = AutorouteConfig {
+            params,
+            ..AutorouteConfig::default()
+        };
+
+        let result = route_board(&mut self.world, &self.footprint_lib, &rules, &config);
+
+        let routed = result.route_count();
+
+        if result.status.is_failed() {
+            let reason = match &result.status {
+                cypcb_router::RoutingStatus::Failed { reason } => reason.clone(),
+                _ => "Unknown routing error".into(),
+            };
+            format!(r#"{{"ok":false,"error":"{}"}}"#, reason.replace('"', r#"\""#))
+        } else {
+            let unrouted = match &result.status {
+                cypcb_router::RoutingStatus::Partial { unrouted_count } => *unrouted_count,
+                _ => 0,
+            };
+            apply_routes(&mut self.world, &result);
+            self.rebuild_spatial_index_full();
+            self.run_drc_internal();
+            format!(r#"{{"ok":true,"routed":{},"unrouted":{}}}"#, routed, unrouted)
+        }
+    }
 }
 
 // Internal methods (not exposed to WASM)

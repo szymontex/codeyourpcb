@@ -105,24 +105,24 @@ This file is the explicit capability and coverage contract for the project.
 
 ### R110 — Realtime Tuning Parameters
 - Class: differentiator
-- Status: active
+- Status: validated
 - Description: User-facing sliders for: trace density/spacing preference, via cost (fewer vs more vias), corner rounding amount, layer preference (top-heavy vs balanced)
 - Why it matters: User wants autorouter to be "calkiem realtime" with interactive parameter control, not fire-and-forget
 - Source: user
 - Primary owning slice: M004/S05
 - Supporting slices: none
-- Validation: unmapped
+- Validation: AutorouteParams struct with 4 fields (via_cost, layer_preference, roundness, density), WASM auto_route_with_params() entry point, collapsible tuning panel with 4 sliders, 300ms debounced re-routing, 8 unit + 4 integration + 7 E2E tests — M004/S05
 - Notes: Parameters feed into routing cost function. Changing a slider triggers re-route.
 
 ### R111 — Reactive Re-Routing on Parameter Change
 - Class: differentiator
-- Status: active
+- Status: validated
 - Description: When user adjusts a tuning slider, the board re-routes within ~1 second for typical boards (Blink-level: <100ms, STM32-level: <1s)
 - Why it matters: "powinien reagować jednak realtime" — interactive tuning loses value if re-routing takes 10+ seconds
 - Source: user
 - Primary owning slice: M004/S05
 - Supporting slices: M004/S03
-- Validation: unmapped
+- Validation: Slider input events debounced at 300ms, trigger auto_route_with_params() → pullSnapshot() → canvas update. Integration test proves different params produce different scores. WASM compiles and routes. Timing budget validated in S07 benchmark. — M004/S05
 - Notes: May require: faster algorithm, incremental re-routing (only affected nets), or WASM worker thread. Performance budget is real constraint on engine design.
 
 ### R112 — Routing Variant Generation
@@ -252,8 +252,8 @@ This file is the explicit capability and coverage contract for the project.
 | R107 | quality-attribute | active | M004/S03 | M004/S04, M004/S07 | DRC 50→5 (partial, M004/S03), non-regression proven (M004/S04) |
 | R108 | quality-attribute | validated | M004/S04 | none | smoothness=1.000, is_valid_angle() enforcement, 22 unit tests (M004/S04) |
 | R109 | core-capability | validated | M004/S04 | none | 3-pass smoother + per-move DRC, 17 unit + 1 integration test (M004/S04) |
-| R110 | differentiator | active | M004/S05 | none | unmapped |
-| R111 | differentiator | active | M004/S05 | M004/S03 | unmapped |
+| R110 | differentiator | validated | M004/S05 | none | AutorouteParams, WASM entry point, tuning panel, 8+4+7 tests (M004/S05) |
+| R111 | differentiator | validated | M004/S05 | M004/S03 | 300ms debounced re-route, params→score difference proven (M004/S05) |
 | R112 | core-capability | active | M004/S06 | M004/S02, M004/S03 | unmapped |
 | R113 | primary-user-loop | active | M004/S06 | none | unmapped |
 | R114 | quality-attribute | active | M004/S07 | M004/S01, M004/S02 | unmapped |
@@ -267,7 +267,7 @@ This file is the explicit capability and coverage contract for the project.
 
 ## Coverage Summary
 
-- Active requirements: 9
+- Active requirements: 7
 - Mapped to slices: 14
-- Validated: 7
+- Validated: 9
 - Unmapped active requirements: 0

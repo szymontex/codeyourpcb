@@ -118,7 +118,7 @@ impl RoutingStrategy for ImprovedAStarStrategy {
         for net_id in &net_ids {
             let net_segs: Vec<_> = all_segments.iter().filter(|s| s.net_id == *net_id).cloned().collect();
             let other_segs: Vec<_> = all_segments.iter().filter(|s| s.net_id != *net_id).cloned().collect();
-            let smoothed = smooth_routes(&net_segs, &other_segs, min_clearance);
+            let smoothed = smooth_routes(&net_segs, &other_segs, min_clearance, config.params.roundness);
             smoothed_segments.extend(smoothed);
         }
         all_segments = smoothed_segments;
@@ -303,7 +303,7 @@ fn route_all_nets_improved(
             let end = pad_to_grid_node(grid, to_pad);
             let any_end = is_multi_layer(to_pad.layer_mask);
 
-            let cost = RoutingCost::new(rules, net_id, config.via_cost_multiplier);
+            let cost = RoutingCost::new(rules, net_id, config.via_cost_multiplier, config.params.layer_preference);
 
             // Try direct routing first
             match find_path_with_zones(grid, start, end, &cost, any_end, &net_pad_zones) {
@@ -451,7 +451,7 @@ fn attempt_multi_victim_ripup(
             grid.clear_route(victim_id);
 
             // Try routing current net
-            let cost = RoutingCost::new(rules, current_net_id, config.via_cost_multiplier);
+            let cost = RoutingCost::new(rules, current_net_id, config.via_cost_multiplier, config.params.layer_preference);
             if let Some(path) =
                 find_path_with_zones(grid, start, end, &cost, any_end, pad_zones)
             {
@@ -505,7 +505,7 @@ fn reroute_victim(
         None => return false,
     };
 
-    let victim_cost = RoutingCost::new(rules, victim_id, config.via_cost_multiplier);
+    let victim_cost = RoutingCost::new(rules, victim_id, config.via_cost_multiplier, config.params.layer_preference);
     let victim_pad_zones: Vec<PadZone> = victim_net
         .pads
         .iter()
@@ -746,7 +746,7 @@ mod tests {
         };
 
         // Route net 1 horizontally through y=10 on layer 0
-        let cost1 = RoutingCost::new(&rules, 1, 1.0);
+        let cost1 = RoutingCost::new(&rules, 1, 1.0, 0.0);
         let path1 = find_path(&mut grid, (0, 10, 0), (29, 10, 0), &cost1, false);
         assert!(path1.is_some(), "Net 1 should route on empty grid");
 

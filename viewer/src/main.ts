@@ -19,7 +19,7 @@ import { openFile, saveFile } from './file-access';
 import { isDesktop, initDesktop } from './desktop';
 import { encodeViewState, decodeViewState } from './url-state';
 import { getSettings, getPreference, setPreference, subscribe as subscribeSettings } from './settings';
-import type { AppSettings, LayerColors } from './settings';
+import type { AppSettings, LayerColors, AutorouteParams } from './settings';
 import { formatDimension, parseUserDimension } from './units';
 import type { DisplayUnit } from './units';
 import { initProjectManager, showProjectManager, hideProjectManager, addRecentFile } from './project-manager';
@@ -1559,6 +1559,155 @@ async function init(): Promise<void> {
   cancelRouteBtn.addEventListener('click', () => {
     cancelRouting();
   });
+
+  // ========================================================================
+  // Tuning Panel
+  // ========================================================================
+
+  const tuningToggle = document.getElementById('tuning-toggle') as HTMLButtonElement;
+  const tuningPanel = document.getElementById('tuning-panel')!;
+  const tuneViaCost = document.getElementById('tune-via-cost') as HTMLInputElement;
+  const tuneLayerPref = document.getElementById('tune-layer-pref') as HTMLInputElement;
+  const tuneRoundness = document.getElementById('tune-roundness') as HTMLInputElement;
+  const tuneDensity = document.getElementById('tune-density') as HTMLInputElement;
+  const tuneViaCostVal = document.getElementById('tune-via-cost-val')!;
+  const tuneLayerPrefVal = document.getElementById('tune-layer-pref-val')!;
+  const tuneRoundnessVal = document.getElementById('tune-roundness-val')!;
+  const tuneDensityVal = document.getElementById('tune-density-val')!;
+
+  // Initialize sliders from persisted settings
+  const savedParams = getPreference('autorouteParams');
+  tuneViaCost.value = String(savedParams.viaCost);
+  tuneViaCostVal.textContent = savedParams.viaCost.toFixed(1);
+  tuneLayerPref.value = String(savedParams.layerPreference);
+  tuneLayerPrefVal.textContent = savedParams.layerPreference.toFixed(1);
+  tuneRoundness.value = String(savedParams.roundness);
+  tuneRoundnessVal.textContent = savedParams.roundness.toFixed(2);
+  tuneDensity.value = String(savedParams.density);
+  tuneDensityVal.textContent = savedParams.density.toFixed(1);
+
+  // Toggle panel visibility
+  tuningToggle.addEventListener('click', (e) => {
+    e.stopPropagation();
+    tuningPanel.classList.toggle('hidden');
+    console.log(`[Tuning] Panel ${tuningPanel.classList.contains('hidden') ? 'hidden' : 'visible'}`);
+    updateTuningDebugSurface();
+  });
+
+  // Close tuning panel on click outside
+  document.addEventListener('click', (e) => {
+    if (!tuningPanel.classList.contains('hidden') &&
+        !tuningPanel.contains(e.target as Node) &&
+        e.target !== tuningToggle) {
+      tuningPanel.classList.add('hidden');
+      updateTuningDebugSurface();
+    }
+  });
+
+  // Debounce timer for re-routing
+  let tuningDebounceTimer: number | null = null;
+
+  /**
+   * Read current slider values as AutorouteParams
+   */
+  function readTuningSliders(): AutorouteParams {
+    return {
+      viaCost: parseFloat(tuneViaCost.value),
+      layerPreference: parseFloat(tuneLayerPref.value),
+      roundness: parseFloat(tuneRoundness.value),
+      density: parseFloat(tuneDensity.value),
+    };
+  }
+
+  /**
+   * Handle slider input: update display, persist, and trigger debounced re-route
+   */
+  function onTuningSliderInput(): void {
+    const params = readTuningSliders();
+
+    // Update value displays
+    tuneViaCostVal.textContent = params.viaCost.toFixed(1);
+    tuneLayerPrefVal.textContent = params.layerPreference.toFixed(1);
+    tuneRoundnessVal.textContent = params.roundness.toFixed(2);
+    tuneDensityVal.textContent = params.density.toFixed(1);
+
+    // Persist to settings
+    setPreference('autorouteParams', params);
+
+    // Update debug surface
+    updateTuningDebugSurface();
+
+    // Debounce re-routing at 300ms
+    if (tuningDebounceTimer !== null) {
+      clearTimeout(tuningDebounceTimer);
+    }
+
+    tuningDebounceTimer = window.setTimeout(() => {
+      tuningDebounceTimer = null;
+
+      if (!snapshot?.board) {
+        console.log('[Tuning] No board loaded, skipping re-route');
+        return;
+      }
+
+      // Build Rust-side params JSON (snake_case field names)
+      const rustParams = {
+        via_cost: params.viaCost,
+        layer_preference: params.layerPreference,
+        roundness: params.roundness,
+        density: params.density,
+      };
+
+      console.log('[Tuning] Re-routing with params:', rustParams);
+
+      // Show routing indicator
+      updateRoutingUI({
+        isRouting: true,
+        pass: 0,
+        routed: 0,
+        unrouted: 0,
+        elapsed: 0,
+      });
+
+      try {
+        const resultJson = engine.auto_route_with_params(JSON.stringify(rustParams));
+        const result = JSON.parse(resultJson);
+
+        if (result.ok) {
+          pullSnapshot();
+          dirty = true;
+          console.log(`[Tuning] Re-routed: ${result.routed} routed, ${result.unrouted} unrouted`);
+        } else {
+          console.warn('[Tuning] Route failed:', result.error);
+          statusText.textContent = `Tuning route failed: ${result.error}`;
+        }
+      } catch (err) {
+        console.warn('[Tuning] Route error:', err);
+        statusText.textContent = `Tuning route error: ${err}`;
+      } finally {
+        updateRoutingUI({ isRouting: false, pass: 0, routed: 0, unrouted: 0, elapsed: 0 });
+      }
+    }, 300);
+  }
+
+  // Wire all sliders
+  tuneViaCost.addEventListener('input', onTuningSliderInput);
+  tuneLayerPref.addEventListener('input', onTuningSliderInput);
+  tuneRoundness.addEventListener('input', onTuningSliderInput);
+  tuneDensity.addEventListener('input', onTuningSliderInput);
+
+  /**
+   * Update the __tuningPanel debug surface
+   */
+  function updateTuningDebugSurface(): void {
+    (window as any).__tuningPanel = {
+      visible: !tuningPanel.classList.contains('hidden'),
+      params: readTuningSliders(),
+    };
+  }
+
+  // Initialize debug surface
+  updateTuningDebugSurface();
 
   /**
    * Handle saving the current file (web only).

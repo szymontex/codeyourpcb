@@ -90,6 +90,13 @@ export interface PcbEngine {
    */
   auto_route(): string;
 
+  /**
+   * Run the autorouter with custom tuning parameters.
+   * @param params JSON string: {"via_cost":N,"layer_preference":N,"roundness":N,"density":N}
+   * Returns JSON: {"ok":true,"routed":N,"unrouted":N} or {"ok":false,"error":"..."}
+   */
+  auto_route_with_params(params: string): string;
+
   /** Free the engine (for WASM memory management) */
   free?(): void;
 }
@@ -110,6 +117,7 @@ interface WasmPcbEngine {
   rotate_component(refdes: string, delta_mdeg: number): boolean;
   set_board_size(width_nm: bigint, height_nm: bigint): boolean;
   auto_route(): string;
+  auto_route_with_params(params_json: string): string;
   free(): void;
 }
 
@@ -720,6 +728,12 @@ class WasmPcbEngineAdapter implements PcbEngine {
     return result;
   }
 
+  auto_route_with_params(params: string): string {
+    const result = this.wasmEngine.auto_route_with_params(params);
+    this.cachedSnapshot = null; // Invalidate cache — routes changed
+    return result;
+  }
+
   free(): void {
     this.wasmEngine.free();
   }
@@ -896,6 +910,11 @@ class MockPcbEngine implements PcbEngine {
 
   auto_route(): string {
     console.warn('[MockEngine] auto_route not available in mock mode');
+    return '{"ok":false,"error":"Autorouter not available in mock mode"}';
+  }
+
+  auto_route_with_params(_params: string): string {
+    console.warn('[MockEngine] auto_route_with_params not available in mock mode');
     return '{"ok":false,"error":"Autorouter not available in mock mode"}';
   }
 }

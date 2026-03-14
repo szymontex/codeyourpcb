@@ -25,11 +25,13 @@ pub struct RoutingCost<'a> {
     min_via_cost: f64,
     /// Config-driven multiplier for via cost.
     via_cost_multiplier: f64,
+    /// Layer preference bias: -1.0=bottom-heavy, 0.0=balanced, 1.0=top-heavy.
+    layer_preference: f64,
 }
 
 impl<'a> RoutingCost<'a> {
     /// Create a new cost calculator for routing a specific net.
-    pub fn new(rules: &'a dyn RoutingRuleSet, net_id: u32, via_cost_multiplier: f64) -> Self {
+    pub fn new(rules: &'a dyn RoutingRuleSet, net_id: u32, via_cost_multiplier: f64, layer_preference: f64) -> Self {
         // Precompute the minimum via cost for admissible heuristic.
         // Sample a few common layer pairs.
         let mut min_via = f64::MAX;
@@ -52,6 +54,7 @@ impl<'a> RoutingCost<'a> {
             net_id,
             min_via_cost: min_via * via_cost_multiplier,
             via_cost_multiplier,
+            layer_preference,
         }
     }
 
@@ -79,9 +82,18 @@ impl<'a> RoutingCost<'a> {
             1.0
         };
 
-        // Add a small layer-preference bias on the destination layer
-        // Scale it down so it doesn't dominate movement cost
-        cost += self.rules.layer_change_cost(to.2) * 0.1;
+        // Add a layer-preference bias on the destination layer.
+        // When layer_preference > 0 (top-heavy), top layer (0) cost is reduced,
+        // bottom layer cost is increased. When < 0 (bottom-heavy), reversed.
+        let layer_bias = if self.layer_preference.abs() < f64::EPSILON {
+            // Balanced: use the old fixed bias
+            self.rules.layer_change_cost(to.2) * 0.1
+        } else {
+            // Asymmetric: layer 0 = top, others = bottom
+            let direction = if to.2 == 0 { -1.0 } else { 1.0 };
+            self.rules.layer_change_cost(to.2) * 0.1 * (1.0 + self.layer_preference * direction)
+        };
+        cost += layer_bias;
 
         cost
     }
@@ -156,7 +168,7 @@ mod tests {
     #[test]
     fn cardinal_move_costs_one() {
         let rules = TestRules::new();
-        let cost = RoutingCost::new(&rules, 0, 1.0);
+        let cost = RoutingCost::new(&rules, 0, 1.0, 0.0);
         let from: GridNode = (5, 5, 0);
         let to: GridNode = (6, 5, 0);
         let c = cost.neighbor_cost(from, to);
@@ -167,7 +179,7 @@ mod tests {
     #[test]
     fn diagonal_move_costs_sqrt2() {
         let rules = TestRules::new();
-        let cost = RoutingCost::new(&rules, 0, 1.0);
+        let cost = RoutingCost::new(&rules, 0, 1.0, 0.0);
         let from: GridNode = (5, 5, 0);
         let to: GridNode = (6, 6, 0);
         let c = cost.neighbor_cost(from, to);
@@ -177,7 +189,7 @@ mod tests {
     #[test]
     fn via_transition_costs_more_than_movement() {
         let rules = TestRules::new();
-        let cost = RoutingCost::new(&rules, 0, 1.0);
+        let cost = RoutingCost::new(&rules, 0, 1.0, 0.0);
         let cardinal = cost.neighbor_cost((5, 5, 0), (6, 5, 0));
         let via = cost.neighbor_cost((5, 5, 0), (5, 5, 1));
         assert!(
@@ -189,7 +201,7 @@ mod tests {
     #[test]
     fn heuristic_is_admissible_straight_line() {
         let rules = TestRules::new();
-        let cost = RoutingCost::new(&rules, 0, 1.0);
+        let cost = RoutingCost::new(&rules, 0, 1.0, 0.0);
         // Straight 10-cell path on same layer
         let h = cost.heuristic((0, 0, 0), (10, 0, 0));
         // Heuristic should be <= actual path cost (10 cardinal moves = 10.0)
@@ -199,7 +211,7 @@ mod tests {
     #[test]
     fn heuristic_diagonal_path() {
         let rules = TestRules::new();
-        let cost = RoutingCost::new(&rules, 0, 1.0);
+        let cost = RoutingCost::new(&rules, 0, 1.0, 0.0);
         // Diagonal 5-cell path
         let h = cost.heuristic((0, 0, 0), (5, 5, 0));
         // Pure diagonal: 5 * √2 ≈ 7.07
@@ -213,7 +225,7 @@ mod tests {
     #[test]
     fn heuristic_includes_layer_cost() {
         let rules = TestRules::new();
-        let cost = RoutingCost::new(&rules, 0, 1.0);
+        let cost = RoutingCost::new(&rules, 0, 1.0, 0.0);
         let same_layer = cost.heuristic((0, 0, 0), (5, 0, 0));
         let diff_layer = cost.heuristic((0, 0, 0), (5, 0, 1));
         assert!(
@@ -225,7 +237,7 @@ mod tests {
     #[test]
     fn straight_path_cheaper_than_zigzag() {
         let rules = TestRules::new();
-        let cost = RoutingCost::new(&rules, 0, 1.0);
+        let cost = RoutingCost::new(&rules, 0, 1.0, 0.0);
 
         // Straight path: (0,0) -> (1,0) -> (2,0) -> (3,0) -> (4,0)
         let straight_cost: f64 = [(0u16, 0u16), (1, 0), (2, 0), (3, 0)]

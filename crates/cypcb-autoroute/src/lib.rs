@@ -39,8 +39,62 @@ use cypcb_router::types::RoutingResult;
 use cypcb_rules::RoutingRuleSet;
 use cypcb_world::footprint::FootprintLibrary;
 use cypcb_world::BoardWorld;
+use serde::{Deserialize, Serialize};
 
 use strategy::StrategyKind;
+
+/// User-facing tuning parameters for the autorouter.
+///
+/// These are the subset of routing settings exposed as sliders in the UI.
+/// All fields have sane defaults and can be independently adjusted.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct AutorouteParams {
+    /// Via cost multiplier (0.1–10.0, default 1.0). Higher = fewer vias.
+    #[serde(default = "default_via_cost")]
+    pub via_cost: f64,
+
+    /// Layer preference (-1.0–1.0, default 0.0).
+    /// -1.0 = bottom-heavy, 0.0 = balanced, 1.0 = top-heavy.
+    #[serde(default)]
+    pub layer_preference: f64,
+
+    /// Chamfer roundness (0.0–1.0, default 0.5).
+    /// 0.0 = no chamfering, 1.0 = maximum chamfer.
+    #[serde(default = "default_roundness")]
+    pub roundness: f64,
+
+    /// Grid density multiplier (0.5–2.0, default 1.0).
+    /// Higher = finer grid = more precise but slower routing.
+    #[serde(default = "default_density")]
+    pub density: f64,
+}
+
+fn default_via_cost() -> f64 { 1.0 }
+fn default_roundness() -> f64 { 0.5 }
+fn default_density() -> f64 { 1.0 }
+
+impl Default for AutorouteParams {
+    fn default() -> Self {
+        Self {
+            via_cost: 1.0,
+            layer_preference: 0.0,
+            roundness: 0.5,
+            density: 1.0,
+        }
+    }
+}
+
+impl AutorouteParams {
+    /// Return a copy with all fields clamped to their valid ranges.
+    pub fn clamped(&self) -> Self {
+        Self {
+            via_cost: self.via_cost.clamp(0.1, 10.0),
+            layer_preference: self.layer_preference.clamp(-1.0, 1.0),
+            roundness: self.roundness.clamp(0.0, 1.0),
+            density: self.density.clamp(0.5, 2.0),
+        }
+    }
+}
 
 /// Configuration for the autorouter.
 #[derive(Debug, Clone)]
@@ -61,6 +115,9 @@ pub struct AutorouteConfig {
 
     /// Which routing strategy to use. Defaults to `StrategyKind::PathFinder`.
     pub strategy: StrategyKind,
+
+    /// User-facing tuning parameters.
+    pub params: AutorouteParams,
 }
 
 impl Default for AutorouteConfig {
@@ -71,6 +128,7 @@ impl Default for AutorouteConfig {
             via_cost_multiplier: 1.0,
             prefer_top_layer: true,
             strategy: StrategyKind::default(),
+            params: AutorouteParams::default(),
         }
     }
 }
@@ -91,6 +149,10 @@ impl AutorouteConfig {
     /// is doubled (coarser grid), reducing cell count by 4x and cutting
     /// A* search space proportionally. Quality remains acceptable because
     /// larger boards have proportionally wider trace spacing.
+    ///
+    /// The `params.density` multiplier is applied as the final step:
+    /// density > 1.0 → finer grid (smaller resolution), density < 1.0 → coarser.
+    /// Resolution is clamped so it never goes below 10µm.
     pub fn resolve_adaptive_grid_resolution(
         &self,
         rules: &dyn RoutingRuleSet,
@@ -100,7 +162,7 @@ impl AutorouteConfig {
         let base = self.resolve_grid_resolution(rules);
         let threshold_nm: i64 = 80_000_000; // 80mm
 
-        if board_width_nm > threshold_nm || board_height_nm > threshold_nm {
+        let adapted = if board_width_nm > threshold_nm || board_height_nm > threshold_nm {
             // Scale factor: 2x for boards up to 200mm, 3x for larger
             let max_dim = board_width_nm.max(board_height_nm);
             let scale = if max_dim > 200_000_000 { 3 } else { 2 };
@@ -119,7 +181,14 @@ impl AutorouteConfig {
             adapted
         } else {
             base
-        }
+        };
+
+        // Apply density multiplier: higher density = finer grid = smaller resolution
+        let density = self.params.density.clamp(0.5, 2.0);
+        let density_adjusted = (adapted as f64 / density).round() as i64;
+
+        // Floor at 10µm to prevent astronomically large grids
+        density_adjusted.max(10_000)
     }
 }
 
@@ -150,16 +219,153 @@ pub fn route_board(
 ) -> RoutingResult {
     let _span = tracing::info_span!("route_board").entered();
 
-    let strategy: Box<dyn strategy::RoutingStrategy> = match config.strategy {
+    // Apply params.via_cost to via_cost_multiplier if params differ from default
+    let mut effective_config = config.clone();
+    let clamped = config.params.clamped();
+    effective_config.via_cost_multiplier = clamped.via_cost;
+    effective_config.params = clamped;
+
+    let strategy: Box<dyn strategy::RoutingStrategy> = match effective_config.strategy {
         StrategyKind::ImprovedAStar => {
-            tracing::info!(strategy = %config.strategy, "Dispatching to ImprovedAStarStrategy");
+            tracing::info!(strategy = %effective_config.strategy, "Dispatching to ImprovedAStarStrategy");
             Box::new(astar_improved::ImprovedAStarStrategy)
         }
         StrategyKind::PathFinder => {
-            tracing::info!(strategy = %config.strategy, "Dispatching to PathFinderStrategy");
+            tracing::info!(strategy = %effective_config.strategy, "Dispatching to PathFinderStrategy");
             Box::new(pathfinder_v2::PathFinderStrategy)
         }
     };
 
-    strategy.route(world, library, rules, config)
+    strategy.route(world, library, rules, &effective_config)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn params_default_values() {
+        let params = AutorouteParams::default();
+        assert_eq!(params.via_cost, 1.0);
+        assert_eq!(params.layer_preference, 0.0);
+        assert_eq!(params.roundness, 0.5);
+        assert_eq!(params.density, 1.0);
+    }
+
+    #[test]
+    fn params_clamped() {
+        let params = AutorouteParams {
+            via_cost: 100.0,
+            layer_preference: -5.0,
+            roundness: 2.0,
+            density: 0.0,
+        };
+        let clamped = params.clamped();
+        assert_eq!(clamped.via_cost, 10.0);
+        assert_eq!(clamped.layer_preference, -1.0);
+        assert_eq!(clamped.roundness, 1.0);
+        assert_eq!(clamped.density, 0.5);
+
+        // Also check lower bounds
+        let params2 = AutorouteParams {
+            via_cost: -1.0,
+            layer_preference: 0.5,
+            roundness: -0.5,
+            density: 3.0,
+        };
+        let clamped2 = params2.clamped();
+        assert_eq!(clamped2.via_cost, 0.1);
+        assert_eq!(clamped2.layer_preference, 0.5);
+        assert_eq!(clamped2.roundness, 0.0);
+        assert_eq!(clamped2.density, 2.0);
+    }
+
+    #[test]
+    fn params_serde_roundtrip() {
+        let params = AutorouteParams {
+            via_cost: 3.5,
+            layer_preference: -0.7,
+            roundness: 0.8,
+            density: 1.5,
+        };
+        let json = serde_json::to_string(&params).unwrap();
+        let deserialized: AutorouteParams = serde_json::from_str(&json).unwrap();
+        assert_eq!(params, deserialized);
+    }
+
+    #[test]
+    fn params_from_json_partial() {
+        // Only via_cost specified; other fields should use defaults
+        let json = r#"{"via_cost": 5.0}"#;
+        let params: AutorouteParams = serde_json::from_str(json).unwrap();
+        assert_eq!(params.via_cost, 5.0);
+        assert_eq!(params.layer_preference, 0.0);
+        assert_eq!(params.roundness, 0.5);
+        assert_eq!(params.density, 1.0);
+    }
+
+    #[test]
+    fn params_from_json_empty() {
+        // Empty JSON object should give all defaults
+        let json = "{}";
+        let params: AutorouteParams = serde_json::from_str(json).unwrap();
+        assert_eq!(params, AutorouteParams::default());
+    }
+
+    #[test]
+    fn params_from_json_invalid() {
+        // Malformed JSON should fail to parse
+        let json = "not json at all";
+        let result: Result<AutorouteParams, _> = serde_json::from_str(json);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn config_default_has_default_params() {
+        let config = AutorouteConfig::default();
+        assert_eq!(config.params, AutorouteParams::default());
+    }
+
+    #[test]
+    fn density_affects_grid_resolution() {
+        use cypcb_core::Nm;
+        use cypcb_rules::{DesignConstraints, RoutingRuleSet};
+        use cypcb_rules::signal_class::{SignalClass, SignalClassConstraints};
+
+        struct TestRules;
+        impl RoutingRuleSet for TestRules {
+            fn constraints_for_net(&self, _: u32) -> &DesignConstraints {
+                // Use a static to satisfy the lifetime
+                static CONSTRAINTS: std::sync::OnceLock<DesignConstraints> = std::sync::OnceLock::new();
+                CONSTRAINTS.get_or_init(DesignConstraints::default)
+            }
+            fn constraints_for_class(&self, c: SignalClass) -> SignalClassConstraints {
+                c.default_constraints()
+            }
+            fn via_cost(&self, _: u8, _: u8) -> f64 { 2.0 }
+            fn layer_change_cost(&self, _: u8) -> f64 { 0.1 }
+            fn clearance_between(&self, _: u32, _: u32) -> Nm {
+                Nm(127_000) // 0.127mm
+            }
+        }
+
+        let rules = TestRules;
+        let mut config = AutorouteConfig::default();
+
+        // Default density = 1.0
+        config.params.density = 1.0;
+        let res_default = config.resolve_adaptive_grid_resolution(&rules, 50_000_000, 30_000_000);
+
+        // Higher density = finer grid = smaller resolution
+        config.params.density = 2.0;
+        let res_dense = config.resolve_adaptive_grid_resolution(&rules, 50_000_000, 30_000_000);
+
+        // Lower density = coarser grid = larger resolution
+        config.params.density = 0.5;
+        let res_coarse = config.resolve_adaptive_grid_resolution(&rules, 50_000_000, 30_000_000);
+
+        assert!(res_dense < res_default, "density=2.0 should produce finer grid (smaller resolution) than default");
+        assert!(res_coarse > res_default, "density=0.5 should produce coarser grid (larger resolution) than default");
+        assert!(res_dense >= 10_000, "resolution should never go below 10µm");
+    }
 }

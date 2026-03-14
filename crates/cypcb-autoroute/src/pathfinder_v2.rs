@@ -124,7 +124,7 @@ impl RoutingStrategy for PathFinderStrategy {
         for net_id in &net_ids {
             let net_segs: Vec<_> = all_segments.iter().filter(|s| s.net_id == *net_id).cloned().collect();
             let other_segs: Vec<_> = all_segments.iter().filter(|s| s.net_id != *net_id).cloned().collect();
-            let smoothed = smooth_routes(&net_segs, &other_segs, min_clearance);
+            let smoothed = smooth_routes(&net_segs, &other_segs, min_clearance, config.params.roundness);
             smoothed_segments.extend(smoothed);
         }
         all_segments = smoothed_segments;
@@ -283,6 +283,7 @@ fn pathfinder_loop(
                     rules,
                     net_id,
                     config.via_cost_multiplier,
+                    config.params.layer_preference,
                     any_end,
                     net_pad_zones,
                     &congestion_map,
@@ -390,6 +391,7 @@ fn find_path_congestion_augmented(
     rules: &dyn RoutingRuleSet,
     net_id: u32,
     via_cost_multiplier: f64,
+    layer_preference: f64,
     any_end_layer: bool,
     pad_zones: &[PadZone],
     congestion_map: &CongestionMap,
@@ -409,7 +411,7 @@ fn find_path_congestion_augmented(
         return None;
     }
 
-    let cost_fn = RoutingCost::new(rules, net_id, via_cost_multiplier);
+    let cost_fn = RoutingCost::new(rules, net_id, via_cost_multiplier, layer_preference);
 
     let success = |node: &GridNode| -> bool {
         node.0 == end.0 && node.1 == end.1 && (any_end_layer || node.2 == end.2)
@@ -604,6 +606,7 @@ mod tests {
             &rules,
             1,
             1.0,
+            0.0,
             false,
             &[],
             &congestion,

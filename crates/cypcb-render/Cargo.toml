@@ -26,6 +26,9 @@ cypcb-autoroute = { path = "../cypcb-autoroute" }
 cypcb-router = { path = "../cypcb-router" }
 cypcb-rules = { path = "../cypcb-rules" }
 
+# Logging
+tracing = { workspace = true }
+
 # Serialization
 serde = { workspace = true }
 serde_json = { workspace = true }

@@ -67,7 +67,7 @@ This milestone is complete only when all are true:
 - [x] **S04: Trace Smoother & Via Optimizer** `risk:medium` `depends:[S03]`
   > After this: Raw grid paths post-processed into clean 45°/90° traces. Before/after screenshots show dramatic improvement. DRC still passes after smoothing.
 
-- [ ] **S05: Realtime Tuning Parameters** `risk:medium` `depends:[S03,S04]`
+- [x] **S05: Realtime Tuning Parameters** `risk:medium` `depends:[S03,S04]`
   > After this: User adjusts density/via-preference/roundness sliders, board re-routes within ~1s. Visible on canvas. Parameters stored in settings.
 
 - [ ] **S06: Variant Generation & Preview UI** `risk:low` `depends:[S03,S04]`
