@@ -78,7 +78,7 @@ This file is the explicit capability and coverage contract for the project.
 - Source: user
 - Primary owning slice: M004/S03
 - Supporting slices: M004/S04, M004/S07
-- Validation: DRC reduced from baseline 50 to 5 on led_blink (PathFinder). S04 smoother proven not to increase violations (non-regression). Not yet zero — remaining 5 are grid artifacts. Target zero in S07.
+- Validation: DRC reduced from baseline 50 to 5 on led_blink (PathFinder). S04 smoother proven not to increase violations (non-regression). S07 regression gate asserts DRC ≤ 5. Not yet zero — remaining 5 are grid artifacts.
 - Notes: DRC check runs automatically after routing. If violations found, routing result is rejected.
 
 ### R108 — Clean 45°/90° Trace Geometry
@@ -149,35 +149,35 @@ This file is the explicit capability and coverage contract for the project.
 
 ### R114 — Benchmark Validation Against KiCad Reference Designs
 - Class: quality-attribute
-- Status: active
+- Status: validated
 - Description: Automated benchmark: strip routes from KiCad fixtures, re-route with our engine, compare scores (our routing vs original human routing)
 - Why it matters: "pobierasz jakieś designy PCB z sieci, patrzysz, otwierasz, i Tobie powinno wyjść coś podobnego" — empirical quality proof
 - Source: user
 - Primary owning slice: M004/S07
 - Supporting slices: M004/S01, M004/S02
-- Validation: unmapped
+- Validation: benchmark_regression CI gate (non-ignored) asserts composite ≤ 5501, DRC ≤ 5, smoothness ≥ 0.95. benchmark_full_matrix (ignored) compares 3 fixtures × 2 strategies with JSON report — M004/S07
 - Notes: Goal is not to beat human routing (unrealistic for V1) but to approach it. Track score gap as regression metric.
 
 ### R115 — Visual Comparison of Routed Boards
 - Class: quality-attribute
-- Status: active
+- Status: validated
 - Description: Generate screenshots of autorouter output and reference designs for visual comparison. Store as benchmark artifacts.
 - Why it matters: "nawet obrazki możesz sobie po obrazkach porównywać" — metrics don't capture everything, visual diff catches layout quality issues
 - Source: user
 - Primary owning slice: M004/S07
 - Supporting slices: none
-- Validation: unmapped
+- Validation: Playwright E2E captures 6 screenshots (full-page + canvas per fixture) to test-results/benchmark/ for human inspection — M004/S07
 - Notes: Uses existing 2D renderer. Full renderer upgrade is M005.
 
 ### R116 — Empirical Strategy Selection
 - Class: quality-attribute
-- Status: active
+- Status: validated
 - Description: Based on benchmark results across all fixtures, determine which routing strategy wins overall and make it the default
 - Why it matters: "nie wiem mordo, weź wszystkie opcje, porównuj ze sobą" — let data decide, not assumptions
 - Source: user
 - Primary owning slice: M004/S07
 - Supporting slices: M004/S03
-- Validation: unmapped
+- Validation: benchmark_full_matrix proves PathFinder composite (5001) beats ImprovedAStar (15544) on led_blink by 3×. PathFinder confirmed as default strategy — M004/S07
 - Notes: Winner may vary by board complexity. Could result in automatic strategy selection heuristic.
 
 ## Deferred
@@ -244,7 +244,7 @@ This file is the explicit capability and coverage contract for the project.
 | ID | Class | Status | Primary owner | Supporting | Proof |
 |---|---|---|---|---|---|
 | R101 | core-capability | validated | M004/S01 | none | 39 tests + CLI + ratsnest compat (M004/S01) |
-| R102 | quality-attribute | active | M004/S01 | M004/S07 | partial: 3 synthetic fixtures parse (M004/S01) |
+| R102 | quality-attribute | active | M004/S01 | M004/S07 | partial: 3 synthetic fixtures parse (M004/S01), benchmark_regression + full_matrix run automated comparisons (M004/S07). Still synthetic, not downloaded real projects. |
 | R103 | core-capability | validated | M004/S02 | M004/S06, M004/S07 | 31 tests (27 unit + 4 integration), CLI JSON output, baseline scores (M004/S02) |
 | R104 | core-capability | validated | M004/S03 | M004/S07 | 2 strategies + comparison test, PathFinder wins 3× (M004/S03) |
 | R105 | core-capability | validated | M004/S03 | none | PathFinder converges on test grids, 11 unit tests + benchmark (M004/S03) |
@@ -256,9 +256,9 @@ This file is the explicit capability and coverage contract for the project.
 | R111 | differentiator | validated | M004/S05 | M004/S03 | 300ms debounced re-route, params→score difference proven (M004/S05) |
 | R112 | core-capability | validated | M004/S06 | M004/S02, M004/S03 | 4 variants, 5 unit + 5 integration + 7 E2E tests (M004/S06) |
 | R113 | primary-user-loop | validated | M004/S06 | none | auto-apply best + hover ghost preview + 7 E2E tests (M004/S06) |
-| R114 | quality-attribute | active | M004/S07 | M004/S01, M004/S02 | unmapped |
-| R115 | quality-attribute | active | M004/S07 | none | unmapped |
-| R116 | quality-attribute | active | M004/S07 | M004/S03 | unmapped |
+| R114 | quality-attribute | validated | M004/S07 | M004/S01, M004/S02 | benchmark_regression CI gate + benchmark_full_matrix comparison (M004/S07) |
+| R115 | quality-attribute | validated | M004/S07 | none | 6 Playwright screenshots to test-results/benchmark/ (M004/S07) |
+| R116 | quality-attribute | validated | M004/S07 | M004/S03 | PathFinder 5001 vs ImprovedAStar 15544 on led_blink (M004/S07) |
 | R120 | quality-attribute | deferred | M005 | none | unmapped |
 | R121 | core-capability | deferred | future | none | unmapped |
 | R122 | core-capability | deferred | future | none | unmapped |
@@ -267,7 +267,7 @@ This file is the explicit capability and coverage contract for the project.
 
 ## Coverage Summary
 
-- Active requirements: 5
+- Active requirements: 2
 - Mapped to slices: 14
-- Validated: 11
+- Validated: 14
 - Unmapped active requirements: 0

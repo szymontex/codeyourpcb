@@ -1,0 +1,313 @@
+//! Benchmark validation integration tests.
+//!
+//! Two test functions:
+//! - `benchmark_regression` — fast CI gate (non-ignored): routes led_blink with PathFinder,
+//!   asserts score thresholds (composite ≤ 5501, DRC ≤ 5, smoothness ≥ 0.95).
+//! - `benchmark_full_matrix` — comprehensive comparison (`#[ignore]`): routes all 3 fixtures
+//!   × 2 strategies, prints comparison table, emits JSON report, confirms PathFinder default.
+
+use std::path::Path;
+
+use serde::Serialize;
+
+use cypcb_autoroute::astar_improved::ImprovedAStarStrategy;
+use cypcb_autoroute::pathfinder_v2::PathFinderStrategy;
+use cypcb_autoroute::scoring::{score_board, RoutingScore, ScoreWeights};
+use cypcb_autoroute::strategy::RoutingStrategy;
+use cypcb_autoroute::AutorouteConfig;
+use cypcb_drc::DesignRules;
+use cypcb_kicad::{parse_kicad_pcb, BENCHMARKS};
+use cypcb_router::apply_routes;
+use cypcb_rules::presets::{PresetRuleSet, RulesPreset};
+
+// ============================================================================
+// Helpers
+// ============================================================================
+
+/// Resolve a benchmark fixture path relative to workspace root.
+fn fixture_path(filename: &str) -> std::path::PathBuf {
+    let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    manifest_dir
+        .join("../..")
+        .join("tests/fixtures/benchmark")
+        .join(filename)
+}
+
+/// Build JLCPCB 2-layer routing rules.
+fn test_rules() -> PresetRuleSet {
+    let preset = RulesPreset::from_name("jlcpcb").unwrap();
+    PresetRuleSet::new(preset)
+}
+
+/// Route a board with a given strategy and return (RoutingScore, route_count).
+///
+/// Always calls `rebuild_spatial_index_with_traces()` before scoring
+/// and uses `DesignRules::jlcpcb_2layer()` for DRC.
+fn route_and_score(
+    strategy: &dyn RoutingStrategy,
+    fixture: &str,
+) -> (RoutingScore, usize) {
+    let parsed = parse_kicad_pcb(&fixture_path(fixture))
+        .unwrap_or_else(|e| panic!("Failed to parse {}: {:?}", fixture, e));
+    let mut world = parsed.world;
+    let library = parsed.library;
+    let rules = test_rules();
+    let config = AutorouteConfig::default();
+
+    let result = strategy.route(&mut world, &library, &rules, &config);
+    let route_count = result.route_count();
+
+    apply_routes(&mut world, &result);
+
+    // Rebuild spatial index for accurate scoring
+    world.rebuild_spatial_index_with_traces(|_| {
+        cypcb_core::Rect::from_center_size(
+            cypcb_core::Point::ORIGIN,
+            (
+                cypcb_core::Nm::from_mm(1.0),
+                cypcb_core::Nm::from_mm(1.0),
+            ),
+        )
+    });
+
+    let drc_rules = DesignRules::jlcpcb_2layer();
+    let score = score_board(&mut world, &drc_rules, &ScoreWeights::default());
+
+    (score, route_count)
+}
+
+// ============================================================================
+// BenchmarkResult (serializable for JSON output)
+// ============================================================================
+
+#[derive(Debug, Clone, Serialize)]
+struct BenchmarkResult {
+    fixture: String,
+    strategy: String,
+    composite: f64,
+    drc_violations: u32,
+    smoothness: f64,
+    via_count: u32,
+    total_length_mm: f64,
+    route_count: usize,
+}
+
+impl BenchmarkResult {
+    fn from_score(fixture: &str, strategy: &str, score: &RoutingScore, route_count: usize) -> Self {
+        Self {
+            fixture: fixture.to_string(),
+            strategy: strategy.to_string(),
+            composite: score.composite,
+            drc_violations: score.drc_violations,
+            smoothness: score.smoothness,
+            via_count: score.via_count,
+            total_length_mm: score.total_length.0 as f64 / 1_000_000.0,
+            route_count,
+        }
+    }
+}
+
+// ============================================================================
+// Table printing
+// ============================================================================
+
+fn print_table_header() {
+    eprintln!("╔═══════════════════╦════════════════╦══════════╦══════════╦══════════╦══════════╦══════════════╗");
+    eprintln!("║ Strategy          ║ Fixture        ║Composite ║ DRC Viol ║Smoothness║ Vias     ║ Length (mm)  ║");
+    eprintln!("╠═══════════════════╬════════════════╬══════════╬══════════╬══════════╬══════════╬══════════════╣");
+}
+
+fn print_table_row(r: &BenchmarkResult) {
+    eprintln!(
+        "║ {:<17} ║ {:<14} ║ {:>8.1} ║ {:>8} ║ {:>8.3} ║ {:>8} ║ {:>12.2} ║",
+        r.strategy,
+        r.fixture,
+        r.composite,
+        r.drc_violations,
+        r.smoothness,
+        r.via_count,
+        r.total_length_mm,
+    );
+}
+
+fn print_table_separator() {
+    eprintln!("╠═══════════════════╬════════════════╬══════════╬══════════╬══════════╬══════════╬══════════════╣");
+}
+
+fn print_table_footer() {
+    eprintln!("╚═══════════════════╩════════════════╩══════════╩══════════╩══════════╩══════════╩══════════════╝");
+}
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+/// Fast CI regression gate: routes led_blink with PathFinder and asserts
+/// score thresholds. Non-ignored so it runs in `cargo test --workspace`.
+#[test]
+fn benchmark_regression() {
+    let pathfinder = PathFinderStrategy;
+    let (score, route_count) = route_and_score(&pathfinder, "led_blink.kicad_pcb");
+
+    // Print score table
+    eprintln!();
+    let result = BenchmarkResult::from_score("led_blink", "PathFinder", &score, route_count);
+    print_table_header();
+    print_table_row(&result);
+    print_table_footer();
+    eprintln!();
+
+    // --- Regression assertions with diagnostic messages ---
+
+    assert!(
+        route_count > 0,
+        "FAIL benchmark_regression: route_count = 0, expected > 0"
+    );
+    eprintln!(
+        "  ✓ route_count: got {}, threshold > 0",
+        route_count
+    );
+
+    assert!(
+        score.composite <= 5501.0,
+        "FAIL benchmark_regression: composite got {:.1}, threshold ≤ 5501.0 (baseline 5001 × 1.1)",
+        score.composite
+    );
+    eprintln!(
+        "  ✓ composite: got {:.1}, threshold ≤ 5501.0",
+        score.composite
+    );
+
+    assert!(
+        score.drc_violations <= 5,
+        "FAIL benchmark_regression: drc_violations got {}, threshold ≤ 5",
+        score.drc_violations
+    );
+    eprintln!(
+        "  ✓ drc_violations: got {}, threshold ≤ 5",
+        score.drc_violations
+    );
+
+    assert!(
+        score.smoothness >= 0.95,
+        "FAIL benchmark_regression: smoothness got {:.3}, threshold ≥ 0.95",
+        score.smoothness
+    );
+    eprintln!(
+        "  ✓ smoothness: got {:.3}, threshold ≥ 0.95",
+        score.smoothness
+    );
+
+    eprintln!();
+    eprintln!("═══ benchmark_regression PASSED ═══");
+    eprintln!(
+        "  composite={:.1}  drc={}  smoothness={:.3}  vias={}  length={:.2}mm  routes={}",
+        score.composite,
+        score.drc_violations,
+        score.smoothness,
+        score.via_count,
+        result.total_length_mm,
+        route_count,
+    );
+}
+
+/// Comprehensive benchmark: all 3 fixtures × 2 strategies.
+/// Produces comparison table + JSON report. Confirms PathFinder as default.
+#[test]
+#[ignore = "slow: full matrix routes all fixtures with both strategies"]
+fn benchmark_full_matrix() {
+    let strategies: Vec<Box<dyn RoutingStrategy>> = vec![
+        Box::new(PathFinderStrategy),
+        Box::new(ImprovedAStarStrategy),
+    ];
+
+    let mut results: Vec<BenchmarkResult> = Vec::new();
+
+    for benchmark in BENCHMARKS {
+        let fixture_label = benchmark
+            .filename
+            .strip_suffix(".kicad_pcb")
+            .unwrap_or(benchmark.filename);
+
+        for strategy in &strategies {
+            eprintln!(
+                "  [{}] routing {} ...",
+                strategy.name(),
+                fixture_label
+            );
+
+            let (score, route_count) = route_and_score(strategy.as_ref(), benchmark.filename);
+
+            let br = BenchmarkResult::from_score(
+                fixture_label,
+                strategy.name(),
+                &score,
+                route_count,
+            );
+            results.push(br);
+        }
+    }
+
+    // --- Print aggregate comparison table ---
+    eprintln!();
+    eprintln!("═══ Full Benchmark Matrix ═══");
+    eprintln!();
+    print_table_header();
+
+    let mut first_fixture = true;
+    let mut prev_fixture = String::new();
+    for r in &results {
+        if r.fixture != prev_fixture {
+            if !first_fixture {
+                print_table_separator();
+            }
+            first_fixture = false;
+            prev_fixture = r.fixture.clone();
+        }
+        print_table_row(r);
+    }
+    print_table_footer();
+    eprintln!();
+
+    // --- Emit JSON report ---
+    let json = serde_json::to_string(&results).expect("Failed to serialize benchmark results");
+    eprintln!("BENCHMARK_JSON: {}", json);
+    eprintln!();
+
+    // --- Assert PathFinder ≤ ImprovedAStar on led_blink ---
+    let pf_led = results
+        .iter()
+        .find(|r| r.fixture == "led_blink" && r.strategy == "PathFinder")
+        .expect("PathFinder led_blink result missing");
+    let astar_led = results
+        .iter()
+        .find(|r| r.fixture == "led_blink" && r.strategy == "ImprovedAStar")
+        .expect("ImprovedAStar led_blink result missing");
+
+    assert!(
+        pf_led.composite <= astar_led.composite,
+        "FAIL benchmark_full_matrix: PathFinder composite ({:.1}) > ImprovedAStar ({:.1}) on led_blink. \
+         PathFinder should be ≤ ImprovedAStar for empirical strategy selection.",
+        pf_led.composite,
+        astar_led.composite,
+    );
+    eprintln!(
+        "✓ Strategy selection: PathFinder ({:.1}) ≤ ImprovedAStar ({:.1}) on led_blink",
+        pf_led.composite,
+        astar_led.composite,
+    );
+
+    // --- Assert route_count > 0 for all results ---
+    for r in &results {
+        assert!(
+            r.route_count > 0,
+            "FAIL benchmark_full_matrix: {} × {} produced 0 routes",
+            r.fixture,
+            r.strategy,
+        );
+    }
+
+    eprintln!();
+    eprintln!("═══ Default strategy: PathFinder (empirically validated) ═══");
+    eprintln!();
+}

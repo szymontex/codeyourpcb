@@ -73,7 +73,7 @@ This milestone is complete only when all are true:
 - [x] **S06: Variant Generation & Preview UI** `risk:low` `depends:[S03,S04]`
   > After this: Route button generates 2-4 variants with different strategies/configs. Score panel shows rankings. Hovering an alternative shows preview overlay on canvas. Auto-applies best.
 
-- [ ] **S07: Benchmark Validation & Strategy Selection** `risk:medium` `depends:[S01,S02,S03,S04,S05,S06]`
+- [x] **S07: Benchmark Validation & Strategy Selection** `risk:medium` `depends:[S01,S02,S03,S04,S05,S06]`
   > After this: Automated benchmark suite runs all strategies on all fixtures, produces comparison report (scores + screenshots). Default strategy selected by data. Regression test ensures future changes don't degrade routing quality.
 
 ## Boundary Map

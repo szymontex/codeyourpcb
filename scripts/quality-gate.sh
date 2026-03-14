@@ -67,12 +67,17 @@ else
 fi
 echo ""
 
-# Stage 7: Autorouter performance benchmark
+# Stage 7: Autorouter benchmark — regression gate + performance benchmark
 echo "[7/8] autorouter benchmark"
-if cargo test --release -p cypcb-autoroute -- benchmark_500 --ignored 2>&1; then
-  pass "autorouter-benchmark"
+if cargo test --release -p cypcb-autoroute -- benchmark_regression 2>&1; then
+  pass "benchmark-regression"
 else
-  fail "autorouter-benchmark"
+  fail "benchmark-regression"
+fi
+if cargo test --release -p cypcb-autoroute -- benchmark_500 --ignored 2>&1; then
+  pass "benchmark-500"
+else
+  fail "benchmark-500"
 fi
 echo ""
 
