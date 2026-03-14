@@ -1,8 +1,8 @@
 # GSD State
 
 **Active Milestone:** M003 — From Prototype to Tool — Professional Board View & UX
-**Active Slice:** S06 — JLCPCB Integration & 3D Models
-**Phase:** planned
+**Active Slice:** S07 — Polish, Bugs & Verification
+**Phase:** executing
 **Requirements Status:** 0 active · 64 validated · 0 deferred · 0 out of scope
 
 ## Milestone Registry
@@ -11,13 +11,10 @@
 - 🔄 **M003:** From Prototype to Tool — Professional Board View & UX
 
 ## Recent Decisions
-- jlcsearch for component search (no auth, CORS-enabled)
-- Custom OBJ parser for EasyEDA non-standard format
-- Search panel as right-side overlay (z-index 100)
-- 3D model fetch only on component click (not on search)
+- None recorded
 
 ## Blockers
 - None
 
 ## Next Action
-Execute T01: JLCPCB search client, EasyEDA 3D pipeline, and OBJ parser.
+Execute T01 of S07 — fix ESLint unused import, extract wasm.ts shared helper, improve JLCPCB error handling.

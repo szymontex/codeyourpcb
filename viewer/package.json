@@ -1,6 +1,6 @@
 {
   "name": "cypcb-viewer",
-  "version": "0.1.0",
+  "version": "0.1.0-beta",
   "description": "CodeYourPCB viewer frontend",
   "type": "module",
   "scripts": {

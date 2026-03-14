@@ -3,7 +3,7 @@ members = ["crates/*", "src-tauri"]
 resolver = "2"
 
 [workspace.package]
-version = "0.1.0"
+version = "0.1.0-beta"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/codeyourpcb/codeyourpcb"

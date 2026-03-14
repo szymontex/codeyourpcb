@@ -980,7 +980,7 @@ dependencies = [
 
 [[package]]
 name = "cypcb-autoroute"
-version = "0.1.0"
+version = "0.1.0-beta"
 dependencies = [
  "bevy_ecs",
  "cypcb-core",
@@ -1005,7 +1005,7 @@ dependencies = [
 
 [[package]]
 name = "cypcb-cli"
-version = "0.1.0"
+version = "0.1.0-beta"
 dependencies = [
  "clap",
  "cypcb-core",
@@ -1021,7 +1021,7 @@ dependencies = [
 
 [[package]]
 name = "cypcb-core"
-version = "0.1.0"
+version = "0.1.0-beta"
 dependencies = [
  "serde",
  "thiserror 2.0.18",
@@ -1029,7 +1029,7 @@ dependencies = [
 
 [[package]]
 name = "cypcb-desktop"
-version = "0.1.0"
+version = "0.1.0-beta"
 dependencies = [
  "cypcb-platform",
  "serde",
@@ -1044,7 +1044,7 @@ dependencies = [
 
 [[package]]
 name = "cypcb-drc"
-version = "0.1.0"
+version = "0.1.0-beta"
 dependencies = [
  "bevy_ecs",
  "cypcb-core",
@@ -1060,7 +1060,7 @@ dependencies = [
 
 [[package]]
 name = "cypcb-export"
-version = "0.1.0"
+version = "0.1.0-beta"
 dependencies = [
  "bevy_ecs",
  "chrono",
@@ -1075,7 +1075,7 @@ dependencies = [
 
 [[package]]
 name = "cypcb-kicad"
-version = "0.1.0"
+version = "0.1.0-beta"
 dependencies = [
  "cypcb-core",
  "cypcb-world",
@@ -1087,7 +1087,7 @@ dependencies = [
 
 [[package]]
 name = "cypcb-library"
-version = "0.1.0"
+version = "0.1.0-beta"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1101,7 +1101,7 @@ dependencies = [
 
 [[package]]
 name = "cypcb-lsp"
-version = "0.1.0"
+version = "0.1.0-beta"
 dependencies = [
  "async-trait",
  "cypcb-core",
@@ -1119,7 +1119,7 @@ dependencies = [
 
 [[package]]
 name = "cypcb-parser"
-version = "0.1.0"
+version = "0.1.0-beta"
 dependencies = [
  "cc",
  "cypcb-core",
@@ -1132,7 +1132,7 @@ dependencies = [
 
 [[package]]
 name = "cypcb-platform"
-version = "0.1.0"
+version = "0.1.0-beta"
 dependencies = [
  "async-trait",
  "cfg-if",
@@ -1150,7 +1150,7 @@ dependencies = [
 
 [[package]]
 name = "cypcb-render"
-version = "0.1.0"
+version = "0.1.0-beta"
 dependencies = [
  "cypcb-core",
  "cypcb-drc",
@@ -1176,7 +1176,7 @@ dependencies = [
 
 [[package]]
 name = "cypcb-rules"
-version = "0.1.0"
+version = "0.1.0-beta"
 dependencies = [
  "cypcb-core",
  "serde",
@@ -1185,7 +1185,7 @@ dependencies = [
 
 [[package]]
 name = "cypcb-watcher"
-version = "0.1.0"
+version = "0.1.0-beta"
 dependencies = [
  "notify",
  "notify-debouncer-full",
@@ -1193,7 +1193,7 @@ dependencies = [
 
 [[package]]
 name = "cypcb-world"
-version = "0.1.0"
+version = "0.1.0-beta"
 dependencies = [
  "bevy_ecs",
  "cypcb-core",

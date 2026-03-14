@@ -562,6 +562,25 @@ function segmentToSegmentDistance(
  * This adapter parses the source, then calls load_snapshot() on the WASM engine.
  * Query operations use the WASM engine's spatial index for efficiency.
  */
+/**
+ * Build TraceSegmentInfo[] from a flat coordinate array and normalize layer name.
+ * Shared between WasmPcbEngineAdapter and MockPcbEngine to eliminate duplication.
+ */
+function buildTraceSegments(
+  segments: number[],
+  layer: string,
+): { traceSegments: TraceSegmentInfo[]; normalizedLayer: string } {
+  const traceSegments: TraceSegmentInfo[] = [];
+  for (let i = 0; i < segments.length; i += 4) {
+    traceSegments.push({
+      start_x: segments[i], start_y: segments[i + 1],
+      end_x: segments[i + 2], end_y: segments[i + 3],
+    });
+  }
+  const normalizedLayer = layer === 'TopCopper' ? 'Top' : layer === 'BottomCopper' ? 'Bottom' : layer;
+  return { traceSegments, normalizedLayer };
+}
+
 class WasmPcbEngineAdapter implements PcbEngine {
   private wasmEngine: WasmPcbEngine;
   private cachedSnapshot: BoardSnapshot | null = null;
@@ -628,14 +647,7 @@ class WasmPcbEngineAdapter implements PcbEngine {
     if (segments.length < 4 || segments.length % 4 !== 0) return 0xFFFFFFFF;
 
     const id = this.nextEntityId++;
-    const traceSegments: TraceSegmentInfo[] = [];
-    for (let i = 0; i < segments.length; i += 4) {
-      traceSegments.push({
-        start_x: segments[i], start_y: segments[i + 1],
-        end_x: segments[i + 2], end_y: segments[i + 3],
-      });
-    }
-    const normalizedLayer = layer === 'TopCopper' ? 'Top' : layer === 'BottomCopper' ? 'Bottom' : layer;
+    const { traceSegments, normalizedLayer } = buildTraceSegments(segments, layer);
     this.cachedSnapshot.traces.push({
       id, segments: traceSegments, width: width_nm,
       layer: normalizedLayer, net_name, locked: false,
@@ -760,18 +772,7 @@ class MockPcbEngine implements PcbEngine {
     }
 
     const id = this.nextEntityId++;
-    const traceSegments: TraceSegmentInfo[] = [];
-    for (let i = 0; i < segments.length; i += 4) {
-      traceSegments.push({
-        start_x: segments[i],
-        start_y: segments[i + 1],
-        end_x: segments[i + 2],
-        end_y: segments[i + 3],
-      });
-    }
-
-    // Normalize layer name
-    const normalizedLayer = layer === 'TopCopper' ? 'Top' : layer === 'BottomCopper' ? 'Bottom' : layer;
+    const { traceSegments, normalizedLayer } = buildTraceSegments(segments, layer);
 
     this.snapshot.traces.push({
       id,

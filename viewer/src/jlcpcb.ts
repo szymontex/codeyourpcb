@@ -28,6 +28,14 @@ export interface JLCPCBComponent {
   datasheetUrl: string;
 }
 
+/** Thrown when the JLCPCB search API returns a non-ok HTTP status. */
+export class JLCPCBSearchError extends Error {
+  constructor(public readonly status: number, query: string) {
+    super(`HTTP ${status} for "${query}"`);
+    this.name = 'JLCPCBSearchError';
+  }
+}
+
 const JLCSEARCH_BASE = 'https://jlcsearch.tscircuit.com';
 const EASYEDA_API_BASE = 'https://easyeda.com';
 const EASYEDA_MODULES_BASE = 'https://modules.easyeda.com';
@@ -35,7 +43,8 @@ const EASYEDA_MODULES_BASE = 'https://modules.easyeda.com';
 /**
  * Search JLCPCB/LCSC components via tscircuit jlcsearch API.
  * Returns typed results with parsed metadata from the `extra` JSON string.
- * Returns empty array on error — never throws.
+ * Throws JLCPCBSearchError on HTTP errors (4xx/5xx).
+ * Returns empty array on network-level failures (DNS, timeout, CORS).
  */
 export async function searchComponents(
   query: string,
@@ -52,7 +61,7 @@ export async function searchComponents(
 
     if (!response.ok) {
       console.error(`[JLCPCB] Search error: HTTP ${response.status} for "${query}"`);
-      return [];
+      throw new JLCPCBSearchError(response.status, query);
     }
 
     const data = await response.json();
@@ -64,6 +73,8 @@ export async function searchComponents(
 
     return components.map((raw: any) => parseSearchResult(raw));
   } catch (error) {
+    // Re-throw HTTP errors — only swallow network-level failures
+    if (error instanceof JLCPCBSearchError) throw error;
     console.error(`[JLCPCB] Search error: ${error}`);
     return [];
   }

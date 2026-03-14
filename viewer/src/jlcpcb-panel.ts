@@ -7,7 +7,7 @@
  * Debug surface: `window.__jlcpcbSearch` exposes lastQuery, resultCount, lastError for E2E.
  */
 
-import { searchComponents, type JLCPCBComponent } from './jlcpcb';
+import { searchComponents, JLCPCBSearchError, type JLCPCBComponent } from './jlcpcb';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -159,7 +159,10 @@ async function executeSearch(query: string): Promise<void> {
     lastError = msg;
     resultCount = 0;
     console.error(`[JLCPCB] Search error: ${msg}`);
-    showStatus(`Search failed: ${msg}`, true);
+    const userMsg = error instanceof JLCPCBSearchError
+      ? `Search failed — server returned ${error.status}`
+      : `Search failed — check connection`;
+    showStatus(userMsg, true);
   }
 
   exposeDebugSurface();

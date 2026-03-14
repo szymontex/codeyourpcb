@@ -23,7 +23,7 @@ import type { AppSettings, LayerColors } from './settings';
 import { formatDimension, parseUserDimension } from './units';
 import type { DisplayUnit } from './units';
 import { initProjectManager, showProjectManager, hideProjectManager, addRecentFile } from './project-manager';
-import { initSearchPanel, showSearchPanel, hideSearchPanel, toggleSearchPanel, isSearchPanelVisible } from './jlcpcb-panel';
+import { initSearchPanel, hideSearchPanel, toggleSearchPanel, isSearchPanelVisible } from './jlcpcb-panel';
 import { fetch3DModel } from './jlcpcb';
 
 // WebSocket server URL for hot reload

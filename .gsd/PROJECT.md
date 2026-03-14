@@ -2,8 +2,8 @@
 
 ## Current State
 
-**Version:** v0.x beta (M002 infrastructure complete 2026-03-13)
-**Status:** Engine and infrastructure built; user-facing quality is prototype-grade — 2D view is basic, 3D view broken, routing UX minimal, UI cluttered
+**Version:** 0.1.0-beta (M003 complete 2026-03-13)
+**Status:** Professional-grade user-facing quality — 2D renderer with pad numbers/net labels/layer colors, working 3D view, routing UX with magnetic snap, clean UI with preferences, project manager, JLCPCB search
 **Codebase:** ~39,300 lines (Rust + TypeScript)
 
 **What works:**
@@ -21,7 +21,7 @@
 - Tauri v2 desktop application (native menus, file dialogs, installer)
 - Web deployment (Cloudflare Pages, File System Access API, URL sharing)
 - 8-stage quality gate: cargo fmt, clippy, cargo test, eslint, vitest, playwright, autorouter benchmark, jscpd
-- 127 Vitest unit tests + 93 Playwright E2E tests (all passing)
+- 127 Vitest unit tests + 94 Playwright E2E tests (all passing)
 - Professional 2D renderer with LOD, per-pad net highlighting, component body outlines, pad numbers, net labels, drill marks
 - Routing UX: net-aware target pad highlighting, ratsnest guide, magnetic snap to destination, angle constraint toggle (A key), keyboard handlers (Escape/F/A)
 - Clean toolbar with essential tools only; View dropdown for layer/grid/ratsnest/net-labels; Preferences modal for theme/units/grid/colors
@@ -36,7 +36,7 @@
 - Copper fill zones not rendered (no Zone type in ECS data model)
 - Silkscreen uses rectangular body outlines (real KiCad silkscreen has complex curves/text)
 - Library management still needs depth (JLCPCB search exists but no "add to library" flow)
-- Pre-existing E2E flake in errors.spec.ts:102 ("Ready" vs "Reloaded" status race)
+- Pre-existing E2E flake in errors.spec.ts:102 ("Ready" vs "Reloaded" status race) — stable in current runs
 - ThemeManager has separate 'theme' localStorage key from settings 'cypcb-settings' key (by design for FART prevention)
 
 ## Completed Milestone: v1.0 + v1.1 "Full Stack PCB Design Tool" ✅
@@ -71,29 +71,18 @@
 - ✅ E2E test suite: 41 tests, 8-stage quality gate
 - ✅ Performance: autorouter 0.05s/500 components, web load 105ms
 
-**Known gaps (driving M003):**
-- 2D board view is toylike — no pad numbers, net labels, proper layer colors
-- 3D view shows empty green board — pipeline broken
-- Routing UX forces angles, no net-aware guidance
-- UI cluttered, no preferences, no project manager
-- No JLCPCB integration, no 3D model import
-- Theme double-click bug, grid toggle broken, fit icon unreadable
-
-## Next Milestone: M003 "From Prototype to Tool" 🔄
+## Completed Milestone: M003 "From Prototype to Tool" ✅
 
 **Goal:** Every user-facing surface upgraded from prototype to professional quality.
 
-**Completed:**
+**Delivered:**
 - ✅ S01: Professional 2D renderer (pad numbers, net labels, layer colors, refdes, LOD, per-pad highlighting)
-- ✅ S02: 3D view fix — component bodies, pads, traces, vias render correctly; GLTFLoader pipeline ready for S06
-- ✅ S03: Routing UX — net-aware target highlighting, ratsnest guide, magnetic snap, angle constraint toggle, 6 E2E + 14 unit tests
+- ✅ S02: 3D view fix — component bodies, pads, traces, vias render correctly; GLTFLoader pipeline ready
+- ✅ S03: Routing UX — net-aware target highlighting, ratsnest guide, magnetic snap, angle constraint toggle
 - ✅ S04: UI architecture — clean toolbar, View dropdown, Preferences modal, unit system (mm/mil/µm), settings persistence
-
-- ✅ S05: Project manager — startup overlay with 3 templates + blank board, recent files with thumbnails, full lifecycle wiring, editor→board reflow, 14 E2E tests
-- ✅ S06: JLCPCB integration — component search via jlcsearch API, EasyEDA OBJ 3D model pipeline, search panel UI with metadata display, 6 E2E tests with route interception
-
-**Planned:**
-- All UI bugs fixed, E2E coverage extended, quality gate passing
+- ✅ S05: Project manager — startup overlay with 3 templates + blank board, recent files with thumbnails, editor→board reflow
+- ✅ S06: JLCPCB integration — component search via jlcsearch API, EasyEDA OBJ 3D model pipeline, search panel UI
+- ✅ S07: Polish & verification — quality gate clean, version 0.1.0-beta, JLCPCB error handling, 94 E2E tests
 
 ## What This Is
 

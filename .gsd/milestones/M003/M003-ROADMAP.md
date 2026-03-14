@@ -72,7 +72,7 @@ This milestone is complete only when all are true:
 - [x] **S06: JLCPCB Integration & 3D Models** `risk:medium` `depends:[S02,S04]`
   > After this: user searches JLCPCB/LCSC catalog from within the app, sees part metadata (price, stock, datasheet), and components with LCSC part numbers auto-load 3D GLB models in the 3D view
 
-- [ ] **S07: Polish, Bugs & Verification** `risk:low` `depends:[S03,S04,S05,S06]`
+- [x] **S07: Polish, Bugs & Verification** `risk:low` `depends:[S03,S04,S05,S06]`
   > After this: all UI bugs from feedback list verified fixed, E2E tests cover new features (renderer output, 3D visibility, routing flow, preferences, project manager), quality gate extended and passing, version naming corrected to beta
 
 ## Boundary Map

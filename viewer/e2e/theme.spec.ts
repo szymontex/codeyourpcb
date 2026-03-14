@@ -57,6 +57,31 @@ test.describe('Theme Toggle & Persistence', () => {
     expect(stored2).not.toBe(stored); // Should have advanced in the cycle
   });
 
+  test('Preferences modal theme button cycles theme with single click', async ({ page }) => {
+    // Open Preferences modal
+    await page.click('#prefs-btn');
+    await expect(page.locator('#prefs-overlay')).not.toHaveClass(/hidden/, { timeout: 3_000 });
+
+    const btn = page.locator('#prefs-theme-btn');
+    const initialLabel = await btn.textContent();
+
+    // Single-click the preferences theme button — verifies M002 bug fix
+    // (the bug required double-click; single click must cycle the theme)
+    await btn.click();
+
+    // Button label must change on every click (light→dark→auto→light cycle)
+    const afterLabel = await btn.textContent();
+    expect(afterLabel).not.toBe(initialLabel);
+
+    // data-theme is still a valid resolved value
+    const dataTheme = await page.getAttribute('html', 'data-theme');
+    expect(['light', 'dark']).toContain(dataTheme);
+
+    // Dismiss preferences modal
+    await page.click('#prefs-close');
+    await expect(page.locator('#prefs-overlay')).toHaveClass(/hidden/, { timeout: 3_000 });
+  });
+
   test('theme icon reflects current state', async ({ page }) => {
     const icon = page.locator('#theme-icon');
     const text = await icon.textContent();

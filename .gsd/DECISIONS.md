@@ -125,3 +125,5 @@
 - "3D model fetch triggered only on component click, not on search — prevents hammering EasyEDA API with requests for every search result"
 - "Search panel is a right-side overlay (z-index 100) not a modal — user can see the board while browsing components. Below PM (150) and prefs (200)"
 - "loadComponentFromOBJ added alongside loadComponentModel — parallel method for OBJ text input, same placeholder-replacement pattern and loadedModels tracking"
+- "JLCPCBSearchError class exported for instanceof-check — network-level failures (fetch throws) return [] silently, but HTTP errors (4xx/5xx) throw JLCPCBSearchError so the panel can show distinct error states"
+- "Prefs-theme E2E test asserts button label change, not data-theme attribute — theme cycle light→dark→auto→light means auto resolves to same data-theme as light in headless Chromium, making attribute comparison unreliable"
