@@ -1,584 +1,273 @@
 # Requirements
 
-## Validated
-
-### DESK-01 — User can open files via native OS file dialog
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-User can open files via native OS file dialog
-
-### DESK-02 — User can save files via native OS file dialog
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-User can save files via native OS file dialog
-
-### DESK-03 — Application has native menu bar (File/Edit/View/Help)
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-Application has native menu bar (File/Edit/View/Help)
-
-### DESK-04 — User can minimize, maximize, fullscreen application window
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-User can minimize, maximize, fullscreen application window
-
-### DESK-05 — User can use keyboard shortcuts (Ctrl+S, Ctrl+O, Ctrl+Z, etc.)
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-User can use keyboard shortcuts (Ctrl+S, Ctrl+O, Ctrl+Z, etc.)
-
-### DESK-06 — Application installs via platform-specific installer (MSI/DMG/AppImage)
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-Application installs via platform-specific installer (MSI/DMG/AppImage)
-
-### DESK-07 — Application can check for and install updates
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-Application can check for and install updates
-
-### DESK-08 — Desktop bundle size is <10MB (vs Electron 100MB+)
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-Desktop bundle size is <10MB (vs Electron 100MB+)
-
-### DESK-09 — Desktop memory footprint is <50MB idle (vs Electron 200MB+)
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-Desktop memory footprint is <50MB idle (vs Electron 200MB+)
-
-### DESK-10 — Desktop application starts in <1 second
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-Desktop application starts in <1 second
-
-### WEB-01 — Web application loads in <3 seconds on 3G connection
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-Web application loads in <3 seconds on 3G connection
-
-### WEB-02 — Web application is responsive (works on tablet and desktop)
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-Web application is responsive (works on tablet and desktop)
-
-### WEB-03 — Web application is served over HTTPS
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-Web application is served over HTTPS
-
-### WEB-04 — Web application works in Chrome, Firefox, Safari, Edge
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-Web application works in Chrome, Firefox, Safari, Edge
-
-### WEB-05 — User can open local files via File System Access API
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-User can open local files via File System Access API
-
-### WEB-06 — User can save local files via File System Access API
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-User can save local files via File System Access API
-
-### WEB-07 — User can share designs via URL
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-User can share designs via URL
-
-### WEB-08 — Shared URLs load project state from URL parameters
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-Shared URLs load project state from URL parameters
-
-### WEB-09 — Web deployment uses global CDN (Cloudflare Pages/Vercel)
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-Web deployment uses global CDN (Cloudflare Pages/Vercel)
-
-### EDIT-01 — Editor provides syntax highlighting for .cypcb files
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-Editor provides syntax highlighting for .cypcb files
-
-### EDIT-02 — Editor provides auto-completion via LSP integration
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-Editor provides auto-completion via LSP integration
-
-### EDIT-03 — Editor highlights syntax and semantic errors inline
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-Editor highlights syntax and semantic errors inline
-
-### EDIT-04 — Editor displays line numbers
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-Editor displays line numbers
-
-### EDIT-05 — Editor supports code folding for blocks
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-Editor supports code folding for blocks
-
-### EDIT-06 — Editor has find/replace functionality
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-Editor has find/replace functionality
-
-### EDIT-07 — Editor supports undo/redo operations
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-Editor supports undo/redo operations
-
-### EDIT-08 — Editor supports multi-cursor editing
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-Editor supports multi-cursor editing
-
-### EDIT-09 — Editor provides LSP features (diagnostics, completion, hover) via WASM bridge or server connection
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-Editor provides LSP features (diagnostics, completion, hover) via WASM bridge or server connection
-
-### EDIT-10 — Editor and board viewer display side-by-side
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-Editor and board viewer display side-by-side
-
-
-### PLAT-01 — Build-time conditional compilation separates web and desktop implementations
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-Build-time conditional compilation separates web and desktop implementations
-
-### PLAT-02 — FileSystem trait abstracts file operations (native FS vs File System Access API)
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-FileSystem trait abstracts file operations (native FS vs File System Access API)
-
-### PLAT-03 — Dialog trait abstracts file dialogs (Tauri vs browser)
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-Dialog trait abstracts file dialogs (Tauri vs browser)
-
-### PLAT-04 — Menu trait abstracts application menus (Tauri vs HTML)
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-Menu trait abstracts application menus (Tauri vs HTML)
-
-### PLAT-05 — Storage trait abstracts persistence (SQLite vs IndexedDB)
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-Storage trait abstracts persistence (SQLite vs IndexedDB)
-
-### LIB-01 — User can search component libraries by name, MPN, value, category
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-User can search component libraries by name, MPN, value, category
-
-### LIB-02 — User can organize libraries by manufacturer, function, custom categories
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-User can organize libraries by manufacturer, function, custom categories
-
-### LIB-03 — User can associate 3D STEP models with components
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-User can associate 3D STEP models with components
-
-### LIB-04 — User can import libraries from KiCad (.kicad_mod, .pretty folders)
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-User can import libraries from KiCad (.kicad_mod, .pretty folders)
-
-### LIB-05 — User can import libraries from JLCPCB (API integration)
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-User can import libraries from JLCPCB (API integration)
-
-### LIB-06 — User can create custom component libraries
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-User can create custom component libraries
-
-### LIB-07 — User can track library versions and rollback changes
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-User can track library versions and rollback changes
-
-### LIB-08 — User can preview footprints before adding to board
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-User can preview footprints before adding to board
-
-### LIB-09 — User can view component metadata (datasheet links, specs, lifecycle)
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-User can view component metadata (datasheet links, specs, lifecycle)
-
-### LIB-10 — User can configure library search paths
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-User can configure library search paths
-
-### LIB-11 — System auto-organizes dropped library folders ("idiot-proof")
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-System auto-organizes dropped library folders ("idiot-proof")
-
-### LIB-12 — User can search across all library sources in unified interface
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-User can search across all library sources in unified interface
-
-### UI-01 — Application supports dark mode theme
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-Application supports dark mode theme
-
-### UI-02 — Application supports light mode theme
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-Application supports light mode theme
-
-### UI-03 — Application respects OS theme preference (auto dark/light)
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-Application respects OS theme preference (auto dark/light)
-
-### UI-04 — User can manually toggle between dark and light modes
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-User can manually toggle between dark and light modes
-
-### UI-05 — Theme applies consistently to editor, viewer, dialogs, menus
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-Theme applies consistently to editor, viewer, dialogs, menus
-
-### UI-06 — Dark mode meets 4.5:1 contrast ratio (WCAG AA)
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-Dark mode meets 4.5:1 contrast ratio (WCAG AA)
-
-### UI-07 — Light mode meets 4.5:1 contrast ratio (WCAG AA)
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-Light mode meets 4.5:1 contrast ratio (WCAG AA)
-
-### UI-08 — Monaco editor theme syncs with application theme
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-Monaco editor theme syncs with application theme
-
-### UI-09 — Canvas renderer theme syncs with application theme
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-Canvas renderer theme syncs with application theme
-
-### DOC-01 — User guide explains how to create .cypcb files
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-User guide explains how to create .cypcb files
-
-### DOC-02 — User guide explains library management (import, organize, search)
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-User guide explains library management (import, organize, search)
-
-### DOC-03 — User guide explains desktop vs web feature differences
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-User guide explains desktop vs web feature differences
-
-### DOC-04 — User guide explains project structure and file organization
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-User guide explains project structure and file organization
-
-### DOC-05 — User guide includes example projects with comments
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-User guide includes example projects with comments
-
-### DOC-06 — API documentation covers LSP server usage
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-API documentation covers LSP server usage
-
-### DOC-07 — API documentation covers library file formats
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-API documentation covers library file formats
-
-### DOC-08 — Contributing guide explains development setup
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-Contributing guide explains development setup
-
-### DOC-09 — Contributing guide explains architecture and codebase structure
-
-- Status: validated
-- Class: core-capability
-- Source: inferred
-- Primary Slice: none yet
-
-Contributing guide explains architecture and codebase structure
+This file is the explicit capability and coverage contract for the project.
+
+## Active
+
+### R101 — KiCad .kicad_pcb Board Parser
+- Class: core-capability
+- Status: active
+- Description: Parse KiCad 6/7/8 .kicad_pcb files (S-expression format) into BoardWorld — extract board outline, footprints, pads, nets, existing traces, vias, and zones
+- Why it matters: Ground truth for benchmarking requires real PCB designs; KiCad is the standard open-source format
+- Source: user
+- Primary owning slice: M004/S01
+- Supporting slices: none
+- Validation: unmapped
+- Notes: Only need placement+netlist extraction (not full KiCad fidelity). Dimensions in mm, our model uses nm.
+
+### R102 — Benchmark Suite from Real KiCad Projects
+- Class: quality-attribute
+- Status: active
+- Description: At least 3 open-source KiCad PCB projects (simple LED blink, medium STM32 breakout, complex multi-IC) downloaded, parsed, and usable as automated benchmark fixtures
+- Why it matters: Empirical validation — autorouter quality measured against human-routed reference designs, not theoretical metrics
+- Source: user
+- Primary owning slice: M004/S01
+- Supporting slices: M004/S07
+- Validation: unmapped
+- Notes: Store reference routing for comparison. Fixtures include original .kicad_pcb + extracted placement-only version for re-routing.
+
+### R103 — Routing Quality Scoring System
+- Class: core-capability
+- Status: active
+- Description: Score any routed board on: total trace length, via count, DRC violation count, trace smoothness (bend angle distribution), crossing count, layer utilization balance
+- Why it matters: Without quantitative scoring, "better" routing is subjective. Scoring enables variant ranking and regression detection.
+- Source: user
+- Primary owning slice: M004/S02
+- Supporting slices: M004/S06, M004/S07
+- Validation: unmapped
+- Notes: Score must be a single composite number (weighted sum) plus individual metric breakdown. Lower = better.
+
+### R104 — Multi-Strategy Routing Engine
+- Class: core-capability
+- Status: active
+- Description: Implement multiple routing strategies (at minimum: PathFinder negotiated congestion, improved A* with better heuristics) and run them on the same board for comparison
+- Why it matters: User said "weź wszystkie opcje, porównuj ze sobą, zobacz z którą masz największy sukces" — empirical, not theoretical selection
+- Source: user
+- Primary owning slice: M004/S03
+- Supporting slices: M004/S07
+- Validation: unmapped
+- Notes: Winner determined by benchmark scores, not upfront assumption.
+
+### R105 — Negotiated Congestion with Rip-up/Reroute
+- Class: core-capability
+- Status: active
+- Description: PathFinder-style routing: initial greedy routing of all nets, iterative congestion cost increase on overused resources, rip-up and reroute until convergence
+- Why it matters: Industry-proven approach (KiCad, FreeRouting, FPGA tools). Current A* does sequential routing without global optimization.
+- Source: research
+- Primary owning slice: M004/S03
+- Supporting slices: none
+- Validation: unmapped
+- Notes: Key difference from current A*: all nets route simultaneously with shared resource negotiation, not one-at-a-time.
+
+### R106 — Proper Via Placement Strategy
+- Class: core-capability
+- Status: active
+- Description: Autorouter strategically places vias for layer transitions — considers via cost, prefers fewer vias, places them at natural transition points, respects via-to-via clearance
+- Why it matters: Current router has via support in code but produces poor/no via placement in practice. User complained "nie ogarnia co lepije górą dołem, nie ma via"
+- Source: user
+- Primary owning slice: M004/S03
+- Supporting slices: none
+- Validation: unmapped
+- Notes: Via placement must respect DRC rules (drill size, annular ring, clearance to traces/pads).
+
+### R107 — Zero DRC Violations in Autorouter Output
+- Class: quality-attribute
+- Status: active
+- Description: Every route produced by autorouter must pass DRC — no trace crossings, no clearance violations, no short circuits, no unconnected nets (unless explicitly partial)
+- Why it matters: User's #1 complaint: "przecina ścieżki". A router that violates DRC is worse than no router.
+- Source: user
+- Primary owning slice: M004/S03
+- Supporting slices: M004/S04, M004/S07
+- Validation: unmapped
+- Notes: DRC check runs automatically after routing. If violations found, routing result is rejected.
+
+### R108 — Clean 45°/90° Trace Geometry
+- Class: quality-attribute
+- Status: active
+- Description: All autorouted traces use only 0°, 45°, 90°, 135° angles. No arbitrary angles, no zig-zag staircase patterns, no sharp bends
+- Why it matters: "Ostre krawędzie, nienaturalne" — professional PCB traces follow 45°/90° convention for signal integrity and aesthetics
+- Source: user
+- Primary owning slice: M004/S04
+- Supporting slices: none
+- Validation: unmapped
+- Notes: Grid-based routing naturally produces staircase patterns; post-processing must convert to clean angled traces.
+
+### R109 — Trace Smoothing Post-Processor
+- Class: core-capability
+- Status: active
+- Description: Post-processing pipeline that takes raw grid-path output and produces clean traces: merge collinear segments, simplify corners to 45° bends, remove unnecessary detours, minimize total length
+- Why it matters: Even a good routing algorithm produces grid-aligned paths. Smoothing is what makes them look professional.
+- Source: inferred
+- Primary owning slice: M004/S04
+- Supporting slices: none
+- Validation: unmapped
+- Notes: Must preserve DRC compliance after smoothing — no introducing violations during optimization.
+
+### R110 — Realtime Tuning Parameters
+- Class: differentiator
+- Status: active
+- Description: User-facing sliders for: trace density/spacing preference, via cost (fewer vs more vias), corner rounding amount, layer preference (top-heavy vs balanced)
+- Why it matters: User wants autorouter to be "calkiem realtime" with interactive parameter control, not fire-and-forget
+- Source: user
+- Primary owning slice: M004/S05
+- Supporting slices: none
+- Validation: unmapped
+- Notes: Parameters feed into routing cost function. Changing a slider triggers re-route.
+
+### R111 — Reactive Re-Routing on Parameter Change
+- Class: differentiator
+- Status: active
+- Description: When user adjusts a tuning slider, the board re-routes within ~1 second for typical boards (Blink-level: <100ms, STM32-level: <1s)
+- Why it matters: "powinien reagować jednak realtime" — interactive tuning loses value if re-routing takes 10+ seconds
+- Source: user
+- Primary owning slice: M004/S05
+- Supporting slices: M004/S03
+- Validation: unmapped
+- Notes: May require: faster algorithm, incremental re-routing (only affected nets), or WASM worker thread. Performance budget is real constraint on engine design.
+
+### R112 — Routing Variant Generation
+- Class: core-capability
+- Status: active
+- Description: Generate 2-4 routing variants per board using different strategies/parameter sets. Each variant is a complete routed result with its score.
+- Why it matters: "musimy obsługiwać wariantowość, musimy wiedzieć dlaczego dany routing jest lepszy od drugiego"
+- Source: user
+- Primary owning slice: M004/S06
+- Supporting slices: M004/S02, M004/S03
+- Validation: unmapped
+- Notes: Variants run in parallel (web workers or sequential with different configs). Limited by total time budget.
+
+### R113 — Auto-Apply Best Variant with Hover Preview
+- Class: primary-user-loop
+- Status: active
+- Description: Route button auto-applies the highest-scored variant. Score panel shows all variants with metrics. Hovering an alternative variant previews it on canvas without applying.
+- Why it matters: "2 ale user może hoverować na inne rezultaty i je zobaczy na ekranie" — user picks with visual feedback
+- Source: user
+- Primary owning slice: M004/S06
+- Supporting slices: none
+- Validation: unmapped
+- Notes: Canvas must support overlaying preview routes (different color/opacity) without mutating board state.
+
+### R114 — Benchmark Validation Against KiCad Reference Designs
+- Class: quality-attribute
+- Status: active
+- Description: Automated benchmark: strip routes from KiCad fixtures, re-route with our engine, compare scores (our routing vs original human routing)
+- Why it matters: "pobierasz jakieś designy PCB z sieci, patrzysz, otwierasz, i Tobie powinno wyjść coś podobnego" — empirical quality proof
+- Source: user
+- Primary owning slice: M004/S07
+- Supporting slices: M004/S01, M004/S02
+- Validation: unmapped
+- Notes: Goal is not to beat human routing (unrealistic for V1) but to approach it. Track score gap as regression metric.
+
+### R115 — Visual Comparison of Routed Boards
+- Class: quality-attribute
+- Status: active
+- Description: Generate screenshots of autorouter output and reference designs for visual comparison. Store as benchmark artifacts.
+- Why it matters: "nawet obrazki możesz sobie po obrazkach porównywać" — metrics don't capture everything, visual diff catches layout quality issues
+- Source: user
+- Primary owning slice: M004/S07
+- Supporting slices: none
+- Validation: unmapped
+- Notes: Uses existing 2D renderer. Full renderer upgrade is M005.
+
+### R116 — Empirical Strategy Selection
+- Class: quality-attribute
+- Status: active
+- Description: Based on benchmark results across all fixtures, determine which routing strategy wins overall and make it the default
+- Why it matters: "nie wiem mordo, weź wszystkie opcje, porównuj ze sobą" — let data decide, not assumptions
+- Source: user
+- Primary owning slice: M004/S07
+- Supporting slices: M004/S03
+- Validation: unmapped
+- Notes: Winner may vary by board complexity. Could result in automatic strategy selection heuristic.
 
 ## Deferred
 
+### R120 — PCB Renderer Upgrade to KiCad/Atopile Visual Standard
+- Class: quality-attribute
+- Status: deferred
+- Description: Upgrade 2D renderer to match KiCad/Atopile visual quality — proper copper fills, realistic pad shapes, via rings, solder mask, silkscreen
+- Why it matters: "nasz obecny widok PCB odbiega od standardu" — visual comparison and professional appearance
+- Source: user
+- Primary owning slice: M005 (separate milestone)
+- Supporting slices: none
+- Validation: unmapped
+- Notes: User explicitly chose M005 for this. M004 uses current renderer for visual comparison.
+
+### R121 — Differential Pair Routing
+- Class: core-capability
+- Status: deferred
+- Description: Route differential signal pairs with controlled spacing and length matching
+- Why it matters: Required for USB, HDMI, and other high-speed interfaces
+- Source: inferred
+- Primary owning slice: future
+- Supporting slices: none
+- Validation: unmapped
+- Notes: Requires routing engine architecture that supports paired routing constraints.
+
+### R122 — Length Matching for High-Speed Signals
+- Class: core-capability
+- Status: deferred
+- Description: Automatically match trace lengths for bus signals (DDR, SPI clock/data) using serpentine routing
+- Why it matters: Timing-critical signals need matched propagation delay
+- Source: inferred
+- Primary owning slice: future
+- Supporting slices: none
+- Validation: unmapped
+- Notes: Depends on net classification (signal class) from DSL constraints.
+
 ## Out of Scope
+
+### R130 — Topological (Rubberband) Routing as Standalone Engine
+- Class: constraint
+- Status: out-of-scope
+- Description: Full topological router like Topola (rubberband geometry, any-angle routing, exact geometry kernel)
+- Why it matters: Prevents scope creep — topological routing is a fundamentally different architecture requiring custom geometry kernel
+- Source: research
+- Primary owning slice: none
+- Supporting slices: none
+- Validation: n/a
+- Notes: Topological ideas may inform the smoother (S04) but full implementation is years of work.
+
+### R131 — AI/ML-Based Routing Optimization
+- Class: constraint
+- Status: out-of-scope
+- Description: Machine learning models trained on PCB routing data for placement or routing optimization
+- Why it matters: Prevents scope creep — ML routing is research-stage, not production-ready
+- Source: research
+- Primary owning slice: none
+- Supporting slices: none
+- Validation: n/a
+- Notes: Focus on proven algorithmic approaches (PathFinder, A*) with empirical tuning.
+
+## Traceability
+
+| ID | Class | Status | Primary owner | Supporting | Proof |
+|---|---|---|---|---|---|
+| R101 | core-capability | active | M004/S01 | none | unmapped |
+| R102 | quality-attribute | active | M004/S01 | M004/S07 | unmapped |
+| R103 | core-capability | active | M004/S02 | M004/S06, M004/S07 | unmapped |
+| R104 | core-capability | active | M004/S03 | M004/S07 | unmapped |
+| R105 | core-capability | active | M004/S03 | none | unmapped |
+| R106 | core-capability | active | M004/S03 | none | unmapped |
+| R107 | quality-attribute | active | M004/S03 | M004/S04, M004/S07 | unmapped |
+| R108 | quality-attribute | active | M004/S04 | none | unmapped |
+| R109 | core-capability | active | M004/S04 | none | unmapped |
+| R110 | differentiator | active | M004/S05 | none | unmapped |
+| R111 | differentiator | active | M004/S05 | M004/S03 | unmapped |
+| R112 | core-capability | active | M004/S06 | M004/S02, M004/S03 | unmapped |
+| R113 | primary-user-loop | active | M004/S06 | none | unmapped |
+| R114 | quality-attribute | active | M004/S07 | M004/S01, M004/S02 | unmapped |
+| R115 | quality-attribute | active | M004/S07 | none | unmapped |
+| R116 | quality-attribute | active | M004/S07 | M004/S03 | unmapped |
+| R120 | quality-attribute | deferred | M005 | none | unmapped |
+| R121 | core-capability | deferred | future | none | unmapped |
+| R122 | core-capability | deferred | future | none | unmapped |
+| R130 | constraint | out-of-scope | none | none | n/a |
+| R131 | constraint | out-of-scope | none | none | n/a |
+
+## Coverage Summary
+
+- Active requirements: 16
+- Mapped to slices: 16
+- Validated: 0
+- Unmapped active requirements: 0

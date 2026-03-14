@@ -28,6 +28,8 @@
 - Unit system (mm/mil/µm) with formatDimension/parseUserDimension wired to all display sites
 - Settings persistence (localStorage) with typed get/set/subscribe API
 
+**Active milestone:** M004 — Production-Grade Autorouter (replacing prototype A* with empirically-validated multi-strategy engine)
+
 **Known tech debt / deferred items:**
 - DSL v2 constructs are parse-only — no module instantiation, import resolution, or constraint evaluation
 - 3D viewer uses procedural component bodies by default — EasyEDA OBJ model loading available via JLCPCB search panel (CORS-limited from localhost)
@@ -83,6 +85,14 @@
 - ✅ S05: Project manager — startup overlay with 3 templates + blank board, recent files with thumbnails, editor→board reflow
 - ✅ S06: JLCPCB integration — component search via jlcsearch API, EasyEDA OBJ 3D model pipeline, search panel UI
 - ✅ S07: Polish & verification — quality gate clean, version 0.1.0-beta, JLCPCB error handling, 94 E2E tests
+
+## Milestone Sequence
+
+- [x] M001: CodeYourPCB v1.0 + v1.1 — Full stack PCB design tool
+- [x] M002: Infrastructure & Engine — Autorouter, 3D, DSL v2, test suite
+- [x] M003: From Prototype to Tool — Professional board view & UX
+- [ ] M004: Production-Grade Autorouter — Multi-strategy, scored, realtime-tunable
+- [ ] M005: PCB Renderer Upgrade — KiCad/Atopile visual standard
 
 ## What This Is
 

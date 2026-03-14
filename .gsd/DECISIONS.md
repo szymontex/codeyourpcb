@@ -127,3 +127,14 @@
 - "loadComponentFromOBJ added alongside loadComponentModel — parallel method for OBJ text input, same placeholder-replacement pattern and loadedModels tracking"
 - "JLCPCBSearchError class exported for instanceof-check — network-level failures (fetch throws) return [] silently, but HTTP errors (4xx/5xx) throw JLCPCBSearchError so the panel can show distinct error states"
 - "Prefs-theme E2E test asserts button label change, not data-theme attribute — theme cycle light→dark→auto→light means auto resolves to same data-theme as light in headless Chromium, making attribute comparison unreliable"
+
+## M004 Decisions
+
+| # | When | Scope | Decision | Choice | Rationale | Revisable? |
+|---|------|-------|----------|--------|-----------|------------|
+| D-M004-001 | M004 | arch | Routing approach | Multi-strategy empirical (PathFinder + improved A*) | User: "weź wszystkie opcje, porównuj ze sobą". Let data decide, not assumptions. | Yes — if one strategy dominates, drop others |
+| D-M004-002 | M004 | arch | Benchmark source | KiCad open-source .kicad_pcb projects | Real human-routed designs as ground truth. Automated parse+compare pipeline. | No |
+| D-M004-003 | M004 | pattern | Variant UX | Auto-apply best, hover preview alternatives | User: "2 ale user może hoverować na inne rezultaty". Not a picker, a preview. | Yes — if users want explicit selection |
+| D-M004-004 | M004 | scope | Renderer upgrade | Separate milestone (M005) | User explicitly chose to split. M004 uses current renderer for screenshots. | No |
+| D-M004-005 | M004 | quality | DRC + aesthetics equally critical | Zero tolerance for both | User: "oba równie ważne". No crossing traces AND no ugly traces. | No |
+| D-M004-006 | M004 | arch | Realtime tuning | Sliders → reactive re-routing <1s | User: "powinien reagować realtime". Constrains engine to fast execution or incremental approach. | Yes — if complex boards need >1s, show progress |
