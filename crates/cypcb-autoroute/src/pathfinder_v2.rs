@@ -32,7 +32,9 @@ use crate::orchestrator::{
 };
 use crate::pathfinder::{GridNode, PadZone};
 use crate::postprocess;
+use crate::smoother::smooth_routes;
 use crate::strategy::RoutingStrategy;
+use crate::via_optimizer::optimize_vias;
 use crate::AutorouteConfig;
 
 /// Maximum number of PathFinder iterations before declaring non-convergence.
@@ -104,6 +106,42 @@ impl RoutingStrategy for PathFinderStrategy {
                 all_vias.extend(vias);
             }
         }
+
+        // Smooth traces and optimize vias
+        let min_clearance = rules.constraints_for_net(0).min_clearance;
+        let pre_smooth_segments = all_segments.len();
+        let pre_smooth_vias = all_vias.len();
+
+        // Group segments by net_id, smooth each net with other-net context
+        let net_ids: Vec<cypcb_world::NetId> = {
+            let mut ids: Vec<_> = all_segments.iter().map(|s| s.net_id).collect();
+            ids.sort_by_key(|n| n.id());
+            ids.dedup();
+            ids
+        };
+
+        let mut smoothed_segments = Vec::new();
+        for net_id in &net_ids {
+            let net_segs: Vec<_> = all_segments.iter().filter(|s| s.net_id == *net_id).cloned().collect();
+            let other_segs: Vec<_> = all_segments.iter().filter(|s| s.net_id != *net_id).cloned().collect();
+            let smoothed = smooth_routes(&net_segs, &other_segs, min_clearance);
+            smoothed_segments.extend(smoothed);
+        }
+        all_segments = smoothed_segments;
+
+        let (optimized_segments, optimized_vias) =
+            optimize_vias(all_segments, all_vias, &[], min_clearance);
+        all_segments = optimized_segments;
+        all_vias = optimized_vias;
+
+        tracing::info!(
+            pre_smooth_segments,
+            post_smooth_segments = all_segments.len(),
+            pre_smooth_vias,
+            post_smooth_vias = all_vias.len(),
+            routing_strategy = self.name(),
+            "Post-routing smoothing complete"
+        );
 
         if loop_result.unrouted.is_empty() {
             tracing::info!(

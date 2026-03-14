@@ -64,7 +64,7 @@ This milestone is complete only when all are true:
 - [x] **S03: PathFinder Routing Engine** `risk:high` `depends:[S01,S02]`
   > After this: Negotiated congestion router routes all benchmark boards. Scores compared to prototype A* — PathFinder wins or we know why. Via placement is strategic. DRC violations = 0.
 
-- [ ] **S04: Trace Smoother & Via Optimizer** `risk:medium` `depends:[S03]`
+- [x] **S04: Trace Smoother & Via Optimizer** `risk:medium` `depends:[S03]`
   > After this: Raw grid paths post-processed into clean 45°/90° traces. Before/after screenshots show dramatic improvement. DRC still passes after smoothing.
 
 - [ ] **S05: Realtime Tuning Parameters** `risk:medium` `depends:[S03,S04]`

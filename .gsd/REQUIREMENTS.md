@@ -78,30 +78,30 @@ This file is the explicit capability and coverage contract for the project.
 - Source: user
 - Primary owning slice: M004/S03
 - Supporting slices: M004/S04, M004/S07
-- Validation: DRC reduced from baseline 50 to 5 on led_blink (PathFinder). Not yet zero — remaining violations likely grid artifacts. Progress tracked: S03 (partial), S04/S07 (target zero).
+- Validation: DRC reduced from baseline 50 to 5 on led_blink (PathFinder). S04 smoother proven not to increase violations (non-regression). Not yet zero — remaining 5 are grid artifacts. Target zero in S07.
 - Notes: DRC check runs automatically after routing. If violations found, routing result is rejected.
 
 ### R108 — Clean 45°/90° Trace Geometry
 - Class: quality-attribute
-- Status: active
+- Status: validated
 - Description: All autorouted traces use only 0°, 45°, 90°, 135° angles. No arbitrary angles, no zig-zag staircase patterns, no sharp bends
 - Why it matters: "Ostre krawędzie, nienaturalne" — professional PCB traces follow 45°/90° convention for signal integrity and aesthetics
 - Source: user
 - Primary owning slice: M004/S04
 - Supporting slices: none
-- Validation: unmapped
-- Notes: Grid-based routing naturally produces staircase patterns; post-processing must convert to clean angled traces.
+- Validation: smoothness=1.000 on led_blink integration test (all bends at 45° multiples), is_valid_angle() enforces exact integer angle patterns on every output segment, 22 unit tests covering staircase collapse, chamfering, merge, angle enforcement — M004/S04
+- Notes: Grid-based routing naturally produces staircase patterns; 3-pass smoother converts to clean angled traces.
 
 ### R109 — Trace Smoothing Post-Processor
 - Class: core-capability
-- Status: active
+- Status: validated
 - Description: Post-processing pipeline that takes raw grid-path output and produces clean traces: merge collinear segments, simplify corners to 45° bends, remove unnecessary detours, minimize total length
 - Why it matters: Even a good routing algorithm produces grid-aligned paths. Smoothing is what makes them look professional.
 - Source: inferred
 - Primary owning slice: M004/S04
 - Supporting slices: none
-- Validation: unmapped
-- Notes: Must preserve DRC compliance after smoothing — no introducing violations during optimization.
+- Validation: 3-pass smoother (staircase collapse, corner chamfer, collinear merge) with per-move DRC safety via segment_distance(), integrated into both PathFinder and ImprovedAStar strategies. 17 unit tests + integration test proving smoothness improvement and DRC non-regression on led_blink — M004/S04
+- Notes: Preserves DRC compliance after smoothing — per-move clearance checks reject any move that would introduce violations.
 
 ### R110 — Realtime Tuning Parameters
 - Class: differentiator
@@ -249,9 +249,9 @@ This file is the explicit capability and coverage contract for the project.
 | R104 | core-capability | validated | M004/S03 | M004/S07 | 2 strategies + comparison test, PathFinder wins 3× (M004/S03) |
 | R105 | core-capability | validated | M004/S03 | none | PathFinder converges on test grids, 11 unit tests + benchmark (M004/S03) |
 | R106 | core-capability | validated | M004/S03 | none | PathFinder 0 vias vs ImprovedAStar 2 on led_blink (M004/S03) |
-| R107 | quality-attribute | active | M004/S03 | M004/S04, M004/S07 | DRC 50→5 (partial, M004/S03) |
-| R108 | quality-attribute | active | M004/S04 | none | unmapped |
-| R109 | core-capability | active | M004/S04 | none | unmapped |
+| R107 | quality-attribute | active | M004/S03 | M004/S04, M004/S07 | DRC 50→5 (partial, M004/S03), non-regression proven (M004/S04) |
+| R108 | quality-attribute | validated | M004/S04 | none | smoothness=1.000, is_valid_angle() enforcement, 22 unit tests (M004/S04) |
+| R109 | core-capability | validated | M004/S04 | none | 3-pass smoother + per-move DRC, 17 unit + 1 integration test (M004/S04) |
 | R110 | differentiator | active | M004/S05 | none | unmapped |
 | R111 | differentiator | active | M004/S05 | M004/S03 | unmapped |
 | R112 | core-capability | active | M004/S06 | M004/S02, M004/S03 | unmapped |
@@ -267,7 +267,7 @@ This file is the explicit capability and coverage contract for the project.
 
 ## Coverage Summary
 
-- Active requirements: 11
+- Active requirements: 9
 - Mapped to slices: 14
-- Validated: 5
+- Validated: 7
 - Unmapped active requirements: 0

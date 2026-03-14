@@ -28,7 +28,7 @@
 - Unit system (mm/mil/µm) with formatDimension/parseUserDimension wired to all display sites
 - Settings persistence (localStorage) with typed get/set/subscribe API
 
-**Active milestone:** M004 — Production-Grade Autorouter (S01 ✅, S02 ✅, S03 ✅, S04-S07 remaining)
+**Active milestone:** M004 — Production-Grade Autorouter (S01 ✅, S02 ✅, S03 ✅, S04 ✅, S05-S07 remaining)
 
 **Known tech debt / deferred items:**
 - DSL v2 constructs are parse-only — no module instantiation, import resolution, or constraint evaluation
@@ -91,7 +91,7 @@
 - [x] M001: CodeYourPCB v1.0 + v1.1 — Full stack PCB design tool
 - [x] M002: Infrastructure & Engine — Autorouter, 3D, DSL v2, test suite
 - [x] M003: From Prototype to Tool — Professional board view & UX
-- [ ] M004: Production-Grade Autorouter — Multi-strategy, scored, realtime-tunable (S01 ✅, S02 ✅, S03 ✅)
+- [ ] M004: Production-Grade Autorouter — Multi-strategy, scored, realtime-tunable (S01 ✅, S02 ✅, S03 ✅, S04 ✅)
 - [ ] M005: PCB Renderer Upgrade — KiCad/Atopile visual standard
 
 ## What This Is
@@ -197,4 +197,4 @@ Current PCB tools (KiCad, Eagle, Altium) are GUI-first. The project file is a bi
 - **Compatibility:** Export to industry standard formats (Gerber, Excellon, BOM, CPL)
 
 ---
-*Last updated: 2026-03-14 after completing M004/S03*
+*Last updated: 2026-03-14 after completing M004/S04*
