@@ -18,6 +18,7 @@ export interface RecentFileEntry {
   name: string;
   timestamp: number;
   thumbnail: string | null;
+  source: string | null;
 }
 
 export interface LayerColors {

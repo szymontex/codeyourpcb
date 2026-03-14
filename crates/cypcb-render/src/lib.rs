@@ -322,6 +322,48 @@ impl PcbEngine {
             .collect();
         serde_json::to_string(&violations).unwrap_or_else(|_| "[]".to_string())
     }
+
+    /// Run the built-in A* autorouter on the current board.
+    ///
+    /// Clears existing autorouted traces, routes all unrouted nets,
+    /// applies the results, and rebuilds the spatial index.
+    ///
+    /// Returns a JSON status string: `{"ok":true,"routed":N,"unrouted":N}` on success,
+    /// or `{"ok":false,"error":"..."}` on failure.
+    pub fn auto_route(&mut self) -> String {
+        use cypcb_autoroute::{route_board, AutorouteConfig};
+        use cypcb_router::apply_routes;
+        use cypcb_rules::presets::{PresetRuleSet, RulesPreset};
+
+        // Clear existing autorouted traces first
+        self.clear_autorouted_traces();
+
+        let preset = RulesPreset::from_name("jlcpcb")
+            .expect("jlcpcb preset must exist");
+        let rules = PresetRuleSet::new(preset);
+        let config = AutorouteConfig::default();
+
+        let result = route_board(&mut self.world, &self.footprint_lib, &rules, &config);
+
+        let routed = result.route_count();
+
+        if result.status.is_failed() {
+            let reason = match &result.status {
+                cypcb_router::RoutingStatus::Failed { reason } => reason.clone(),
+                _ => "Unknown routing error".into(),
+            };
+            format!(r#"{{"ok":false,"error":"{}"}}"#, reason.replace('"', r#"\""#))
+        } else {
+            let unrouted = match &result.status {
+                cypcb_router::RoutingStatus::Partial { unrouted_count } => *unrouted_count,
+                _ => 0,
+            };
+            apply_routes(&mut self.world, &result);
+            self.rebuild_spatial_index_full();
+            self.run_drc_internal();
+            format!(r#"{{"ok":true,"routed":{},"unrouted":{}}}"#, routed, unrouted)
+        }
+    }
 }
 
 // Internal methods (not exposed to WASM)

@@ -84,6 +84,12 @@ export interface PcbEngine {
    */
   set_board_size(width_nm: number, height_nm: number): boolean;
 
+  /**
+   * Run the built-in A* autorouter.
+   * Returns JSON: {"ok":true,"routed":N,"unrouted":N} or {"ok":false,"error":"..."}
+   */
+  auto_route(): string;
+
   /** Free the engine (for WASM memory management) */
   free?(): void;
 }
@@ -103,6 +109,7 @@ interface WasmPcbEngine {
   get_violations_json(): string;
   rotate_component(refdes: string, delta_mdeg: number): boolean;
   set_board_size(width_nm: bigint, height_nm: bigint): boolean;
+  auto_route(): string;
   free(): void;
 }
 
@@ -707,6 +714,12 @@ class WasmPcbEngineAdapter implements PcbEngine {
     return result;
   }
 
+  auto_route(): string {
+    const result = this.wasmEngine.auto_route();
+    this.cachedSnapshot = null; // Invalidate cache — routes changed
+    return result;
+  }
+
   free(): void {
     this.wasmEngine.free();
   }
@@ -879,6 +892,11 @@ class MockPcbEngine implements PcbEngine {
     this.snapshot.board.height_nm = height_nm;
     console.log(`[MockEngine] set_board_size: ${width_nm / 1e6}mm x ${height_nm / 1e6}mm`);
     return true;
+  }
+
+  auto_route(): string {
+    console.warn('[MockEngine] auto_route not available in mock mode');
+    return '{"ok":false,"error":"Autorouter not available in mock mode"}';
   }
 }
 

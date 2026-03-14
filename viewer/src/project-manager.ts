@@ -66,6 +66,7 @@ export interface ProjectManagerCallbacks {
   onOpenFile: () => void;
   onLoadTemplate: (source: string, name: string) => void;
   onNewBlank: (source: string) => void;
+  onLoadRecent: (source: string, name: string) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -160,6 +161,7 @@ export function addRecentFile(
   name: string,
   snapshot?: BoardSnapshot | null,
   renderState?: Partial<RenderState> | null,
+  source?: string | null,
 ): void {
   const recentFiles = getPreference('recentFiles');
 
@@ -179,6 +181,7 @@ export function addRecentFile(
     name,
     timestamp: Date.now(),
     thumbnail,
+    source: source ?? null,
   };
 
   filtered.unshift(entry);
@@ -287,10 +290,11 @@ function populateRecentFiles(): void {
     const item = document.createElement('div');
     item.className = 'pm-recent-item';
     item.addEventListener('click', () => {
-      // Recent files just show info — we can't reopen them without File System Access
-      // handles (which don't persist across sessions). For now, show the name.
-      // In a real implementation with a backend, this would re-open the file.
-      console.log(`[ProjectManager] Recent file clicked: ${entry.name}`);
+      if (entry.source && callbacks) {
+        callbacks.onLoadRecent(entry.source, entry.name);
+      } else {
+        console.log(`[ProjectManager] Recent file has no stored source: ${entry.name}`);
+      }
     });
 
     if (entry.thumbnail) {

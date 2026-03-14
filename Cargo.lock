@@ -1152,9 +1152,12 @@ dependencies = [
 name = "cypcb-render"
 version = "0.1.0-beta"
 dependencies = [
+ "cypcb-autoroute",
  "cypcb-core",
  "cypcb-drc",
  "cypcb-parser",
+ "cypcb-router",
+ "cypcb-rules",
  "cypcb-world",
  "getrandom 0.2.17",
  "getrandom 0.3.4",

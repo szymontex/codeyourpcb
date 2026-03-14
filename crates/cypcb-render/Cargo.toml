@@ -22,6 +22,9 @@ cypcb-core = { workspace = true }
 cypcb-parser = { workspace = true, default-features = false }
 cypcb-world = { workspace = true, default-features = false }
 cypcb-drc = { path = "../cypcb-drc" }
+cypcb-autoroute = { path = "../cypcb-autoroute" }
+cypcb-router = { path = "../cypcb-router" }
+cypcb-rules = { path = "../cypcb-rules" }
 
 # Serialization
 serde = { workspace = true }

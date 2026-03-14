@@ -26,15 +26,13 @@ import { initProjectManager, showProjectManager, hideProjectManager, addRecentFi
 import { initSearchPanel, hideSearchPanel, toggleSearchPanel, isSearchPanelVisible } from './jlcpcb-panel';
 import { fetch3DModel } from './jlcpcb';
 
-// WebSocket server URL for hot reload
-// Dynamic: if accessing via dev1.flightcore.pl, use dev2.flightcore.pl for WS
+// WebSocket server URL for hot reload + FreeRouting.
+// Only used when `npm run start` (dev server with file watcher) is running.
 function getWsUrl(): string {
+  const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
   const host = window.location.hostname;
-  if (host === 'dev1.flightcore.pl') {
-    return 'wss://dev2.flightcore.pl';
-  }
-  // Local development
-  return 'ws://localhost:4322';
+  const port = 4322;
+  return `${proto}://${host}:${port}`;
 }
 const WS_URL = getWsUrl();
 
@@ -81,19 +79,26 @@ interface WsCallbacks {
 function connectWebSocket(callbacks: WsCallbacks): WsConnection {
   let ws: WebSocket | null = null;
   let connected = false;
+  let retries = 0;
+  const MAX_RETRIES = 2; // Try 3 times total (initial + 2 retries), then give up silently
 
   function connect(): void {
-    ws = new WebSocket(WS_URL);
+    try {
+      ws = new WebSocket(WS_URL);
+    } catch {
+      // WebSocket constructor can throw on invalid URLs
+      return;
+    }
 
     ws.onopen = () => {
-      console.log('[WS] Connected');
+      console.log('[WS] Connected to dev server');
       connected = true;
+      retries = 0;
     };
 
     ws.onmessage = (event) => {
       try {
         const msg: WsMessage = JSON.parse(event.data);
-        console.log(`[WS] Received: ${msg.type}`);
 
         switch (msg.type) {
           case 'init':
@@ -121,9 +126,12 @@ function connectWebSocket(callbacks: WsCallbacks): WsConnection {
     };
 
     ws.onclose = () => {
-      console.log('[WS] Disconnected, reconnecting in 2s...');
       connected = false;
-      setTimeout(connect, 2000);
+      if (retries < MAX_RETRIES) {
+        retries++;
+        setTimeout(connect, 2000);
+      }
+      // After MAX_RETRIES, stop silently — dev server not running is normal for `npx vite`
     };
 
     ws.onerror = () => {
@@ -379,8 +387,12 @@ async function init(): Promise<void> {
 
   themeToggle.addEventListener('click', () => {
     const current = themeManager.getTheme();
-    // Cycle: light → dark → auto → light
-    const next = current === 'light' ? 'dark' : current === 'dark' ? 'auto' : 'light';
+    // Simple toggle: if currently dark (or auto resolving dark), switch to light; otherwise dark
+    // Auto is only settable from Preferences panel
+    const resolved = current === 'auto'
+      ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+      : current;
+    const next = resolved === 'dark' ? 'light' : 'dark';
     themeManager.setTheme(next);
     updateThemeIcon();
   });
@@ -716,7 +728,7 @@ async function init(): Promise<void> {
   // --- Project Manager ---
   initProjectManager({
     onOpenFile: () => {
-      openBtn.click();
+      handleWebFileOpen();
     },
     onLoadTemplate: (source, templateName) => {
       // Clear undo stack
@@ -746,7 +758,36 @@ async function init(): Promise<void> {
       currentFilePath = `${templateName}.cypcb`;
       statusText.textContent = `Loaded template: ${templateName}`;
 
-      addRecentFile(currentFilePath, snap, buildRenderStateForThumbnail());
+      addRecentFile(currentFilePath, snap, buildRenderStateForThumbnail(), source);
+      hideProjectManager();
+      dirty = true;
+    },
+    onLoadRecent: (source, name) => {
+      undoStack.clear();
+
+      const errors = engine.load_source(source);
+      if (errors) console.warn('[Recent] Parse warnings:', errors);
+
+      lastLoadedSource = source;
+      const snap = pullSnapshot();
+
+      if (editorReady && editorInstance) {
+        suppressSync = true;
+        editorInstance.setValue(source);
+        suppressSync = false;
+        const monaco = getMonacoModule();
+        if (monaco) updateDiagnostics(monaco, editorInstance, errors, snap.violations || []);
+      }
+
+      if (snap.board) {
+        viewport = fitBoard(viewport, snap.board.width_nm, snap.board.height_nm);
+        interactionState.viewport = viewport;
+      }
+      if (snap.violations) updateErrorBadge(snap.violations);
+
+      currentFilePath = name;
+      statusText.textContent = `Loaded: ${name}`;
+
       hideProjectManager();
       dirty = true;
     },
@@ -1031,7 +1072,7 @@ async function init(): Promise<void> {
           : `Loaded ${file.name}`;
 
         hideProjectManager();
-        addRecentFile(file.name, snap, buildRenderStateForThumbnail());
+        addRecentFile(file.name, snap, buildRenderStateForThumbnail(), content);
         dirty = true;
 
       } else if (ext === 'ses') {
@@ -1060,90 +1101,74 @@ async function init(): Promise<void> {
   // File picker setup (kept for drag-drop only)
   const filePicker = createFilePicker('.cypcb,.ses', handleFileLoad);
 
-  // Open button - use File System Access API on web, keep file picker for desktop
+  // Open button - show project manager (which has file picker + templates + recent)
   openBtn.addEventListener('click', async () => {
     if (isDesktop()) {
       // Desktop uses its own file dialog via Tauri IPC
       filePicker.click();
-    } else {
-      // Web uses File System Access API with fallback
-      const result = await openFile();
-      if (result) {
-        // Clear undo stack on new file load
-        undoStack.clear();
-        // Store handle for save-in-place
-        currentFileHandle = result.handle;
-        currentFilePath = result.name;
-
-        // Parse the content as if it was a file load
-        const ext = result.name.toLowerCase().split('.').pop();
-
-        if (ext === 'cypcb') {
-          // Load new board
-          const errors = engine.load_source(result.content);
-          if (errors) {
-            console.warn('Parse errors:', errors);
-          }
-
-          // Track loaded source for save operations
-          lastLoadedSource = result.content;
-
-          // Get new snapshot and fit board
-          const snap2 = pullSnapshot();
-
-          // Update editor content if initialized
-          if (editorReady && editorInstance) {
-            suppressSync = true;
-            editorInstance.setValue(result.content);
-            suppressSync = false;
-
-            // Update inline diagnostics
-            const monaco = getMonacoModule();
-            if (monaco) {
-              updateDiagnostics(monaco, editorInstance, errors, snap2.violations || []);
-            }
-          }
-
-          if (snap2.board) {
-            viewport = fitBoard(viewport, snap2.board.width_nm, snap2.board.height_nm);
-            interactionState.viewport = viewport;
-          }
-
-          // Update error badge
-          if (snap2.violations) {
-            updateErrorBadge(snap2.violations);
-          }
-
-          // Show status
-          const errorCount = errors ? errors.split('\n').filter(Boolean).length : 0;
-          statusText.textContent = errorCount > 0
-            ? `Loaded ${result.name} (${errorCount} warnings)`
-            : `Loaded ${result.name}`;
-
-          hideProjectManager();
-          addRecentFile(result.name, snap2, buildRenderStateForThumbnail());
-          dirty = true;
-
-        } else if (ext === 'ses') {
-          // Check if board is loaded
-          if (!snapshot?.board) {
-            statusText.textContent = 'Load a .cypcb file first';
-            return;
-          }
-
-          // Load routes
-          engine.load_routes(result.content);
-          pullSnapshot();
-
-          statusText.textContent = `Loaded routes from ${result.name}`;
-          dirty = true;
-
-        } else {
-          statusText.textContent = `Unknown file type: .${ext}`;
-        }
-      }
+      return;
     }
+
+    showProjectManager();
   });
+
+  // File picker handler for File System Access API (called from PM's Open File button)
+  async function handleWebFileOpen(): Promise<void> {
+    const result = await openFile();
+    if (!result) return;
+
+    // Clear undo stack on new file load
+    undoStack.clear();
+    // Store handle for save-in-place
+    currentFileHandle = result.handle;
+    currentFilePath = result.name;
+
+    const ext = result.name.toLowerCase().split('.').pop();
+
+    if (ext === 'cypcb') {
+      const errors = engine.load_source(result.content);
+      if (errors) console.warn('Parse errors:', errors);
+
+      lastLoadedSource = result.content;
+      const snap2 = pullSnapshot();
+
+      if (editorReady && editorInstance) {
+        suppressSync = true;
+        editorInstance.setValue(result.content);
+        suppressSync = false;
+        const monaco = getMonacoModule();
+        if (monaco) updateDiagnostics(monaco, editorInstance, errors, snap2.violations || []);
+      }
+
+      if (snap2.board) {
+        viewport = fitBoard(viewport, snap2.board.width_nm, snap2.board.height_nm);
+        interactionState.viewport = viewport;
+      }
+      if (snap2.violations) updateErrorBadge(snap2.violations);
+
+      const errorCount = errors ? errors.split('\n').filter(Boolean).length : 0;
+      statusText.textContent = errorCount > 0
+        ? `Loaded ${result.name} (${errorCount} warnings)`
+        : `Loaded ${result.name}`;
+
+      hideProjectManager();
+      addRecentFile(result.name, snap2, buildRenderStateForThumbnail(), result.content);
+      dirty = true;
+
+    } else if (ext === 'ses') {
+      if (!snapshot?.board) {
+        statusText.textContent = 'Load a .cypcb file first';
+        return;
+      }
+      engine.load_routes(result.content);
+      pullSnapshot();
+      statusText.textContent = `Loaded routes from ${result.name}`;
+      dirty = true;
+
+    } else {
+      statusText.textContent = `Unknown file type: .${ext}`;
+    }
+  }
 
   // Drag-drop setup
   setupDropZone(container, handleFileLoad);
@@ -1390,8 +1415,8 @@ async function init(): Promise<void> {
     }
   }
 
-  // WebSocket connection (initialized later)
-  let wsConnection: WsConnection | null = null;
+  // wsConnection used to be stored for routing — now routing uses WASM directly.
+  // Hot-reload WS is still connected below but the reference isn't needed.
   let routingStartTime = 0;
 
   /**
@@ -1399,19 +1424,23 @@ async function init(): Promise<void> {
    * The server runs the CLI route command and streams progress.
    */
   async function triggerRouting(): Promise<void> {
-    if (isRouting || !currentFilePath) {
-      console.log('[Routing] Cannot start routing: already routing or no file loaded');
+    if (isRouting) {
+      console.log('[Routing] Already routing');
       return;
     }
 
-    if (!wsConnection || !wsConnection.isConnected()) {
-      console.log('[Routing] WebSocket not connected, cannot route');
-      statusText.textContent = 'Error: Not connected to dev server';
+    if (!snapshot?.board) {
+      console.log('[Routing] No board loaded');
+      statusText.textContent = 'Load a board first';
+      setTimeout(() => {
+        statusText.textContent = usingWasm ? 'Ready (WASM)' : 'Ready (Mock)';
+      }, 2000);
       return;
     }
 
     isRouting = true;
     routingStartTime = Date.now();
+    statusText.textContent = 'Auto-routing...';
 
     updateRoutingUI({
       isRouting: true,
@@ -1421,14 +1450,34 @@ async function init(): Promise<void> {
       elapsed: 0,
     });
 
-    console.log('[Routing] Starting routing for:', currentFilePath);
-    statusText.textContent = 'Routing...';
+    // Run autorouter — use WASM A* engine directly
+    try {
+      const resultJson = engine.auto_route();
+      const result = JSON.parse(resultJson);
+      const elapsed = Math.round((Date.now() - routingStartTime) / 1000);
 
-    // Send route request to dev server
-    wsConnection.send({
-      type: 'route',
-      file: currentFilePath,
-    });
+      if (result.ok) {
+        pullSnapshot();
+        dirty = true;
+        const msg = result.unrouted > 0
+          ? `Routed ${result.routed} segments (${result.unrouted} unrouted) in ${elapsed}s`
+          : `Routed ${result.routed} segments in ${elapsed}s`;
+        statusText.textContent = msg;
+        console.log(`[Routing] ${msg}`);
+      } else {
+        statusText.textContent = `Routing failed: ${result.error}`;
+        console.error('[Routing]', result.error);
+      }
+    } catch (err) {
+      statusText.textContent = `Routing error: ${err}`;
+      console.error('[Routing] Exception:', err);
+    } finally {
+      isRouting = false;
+      updateRoutingUI({ isRouting: false, pass: 0, routed: 0, unrouted: 0, elapsed: 0 });
+      setTimeout(() => {
+        statusText.textContent = usingWasm ? 'Ready (WASM)' : 'Ready (Mock)';
+      }, 5000);
+    }
   }
 
   /**
@@ -1756,7 +1805,7 @@ async function init(): Promise<void> {
 
   // Connect WebSocket for hot reload and routing
   try {
-    wsConnection = connectWebSocket({
+    connectWebSocket({
       onReload: (content, file) => {
         // Skip WebSocket init if URL has state (shared link)
         if (hasUrlState && !currentFilePath) {
@@ -1852,7 +1901,7 @@ async function init(): Promise<void> {
         : `Loaded ${filename}`;
 
       hideProjectManager();
-      addRecentFile(filename, desktopSnap, buildRenderStateForThumbnail());
+      addRecentFile(filename, desktopSnap, buildRenderStateForThumbnail(), content);
       dirty = true;
     });
 
