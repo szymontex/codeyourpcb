@@ -22,7 +22,12 @@ getrandom_02 = { package = "getrandom", version = "0.2", features = ["js"] }
 getrandom_03 = { package = "getrandom", version = "0.3", features = ["wasm_js"] }
 
 [dev-dependencies]
+cypcb-core = { workspace = true }
+cypcb-drc = { path = "../cypcb-drc" }
+cypcb-kicad = { path = "../cypcb-kicad" }
 cypcb-parser = { workspace = true }
+cypcb-router = { path = "../cypcb-router" }
 cypcb-rules = { path = "../cypcb-rules" }
 cypcb-world = { path = "../cypcb-world" }
 serde_json = { workspace = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }

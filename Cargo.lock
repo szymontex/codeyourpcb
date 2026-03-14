@@ -985,6 +985,7 @@ dependencies = [
  "bevy_ecs",
  "cypcb-core",
  "cypcb-drc",
+ "cypcb-kicad",
  "cypcb-parser",
  "cypcb-router",
  "cypcb-rules",
@@ -995,6 +996,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

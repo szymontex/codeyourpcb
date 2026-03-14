@@ -39,35 +39,35 @@ This file is the explicit capability and coverage contract for the project.
 
 ### R104 — Multi-Strategy Routing Engine
 - Class: core-capability
-- Status: active
+- Status: validated
 - Description: Implement multiple routing strategies (at minimum: PathFinder negotiated congestion, improved A* with better heuristics) and run them on the same board for comparison
 - Why it matters: User said "weź wszystkie opcje, porównuj ze sobą, zobacz z którą masz największy sukces" — empirical, not theoretical selection
 - Source: user
 - Primary owning slice: M004/S03
 - Supporting slices: M004/S07
-- Validation: unmapped
+- Validation: RoutingStrategy trait with 2 implementations (PathFinder, ImprovedAStar), strategy_comparison integration test proves PathFinder wins 3× on led_blink (composite 5001 vs 15544), 88 unit tests + WASM compilation — M004/S03
 - Notes: Winner determined by benchmark scores, not upfront assumption.
 
 ### R105 — Negotiated Congestion with Rip-up/Reroute
 - Class: core-capability
-- Status: active
+- Status: validated
 - Description: PathFinder-style routing: initial greedy routing of all nets, iterative congestion cost increase on overused resources, rip-up and reroute until convergence
 - Why it matters: Industry-proven approach (KiCad, FreeRouting, FPGA tools). Current A* does sequential routing without global optimization.
 - Source: research
 - Primary owning slice: M004/S03
 - Supporting slices: none
-- Validation: unmapped
+- Validation: PathFinderStrategy converges on crossing-net test grids in <15 iterations, CongestionMap with present/history cost tracking, VPR partial-reroute optimization, 11 unit tests + benchmark comparison — M004/S03
 - Notes: Key difference from current A*: all nets route simultaneously with shared resource negotiation, not one-at-a-time.
 
 ### R106 — Proper Via Placement Strategy
 - Class: core-capability
-- Status: active
+- Status: validated
 - Description: Autorouter strategically places vias for layer transitions — considers via cost, prefers fewer vias, places them at natural transition points, respects via-to-via clearance
 - Why it matters: Current router has via support in code but produces poor/no via placement in practice. User complained "nie ogarnia co lepije górą dołem, nie ma via"
 - Source: user
 - Primary owning slice: M004/S03
 - Supporting slices: none
-- Validation: unmapped
+- Validation: PathFinder produces 0 vias on led_blink (vs ImprovedAStar's 2), congestion-driven layer transitions avoid gratuitous via placement — M004/S03
 - Notes: Via placement must respect DRC rules (drill size, annular ring, clearance to traces/pads).
 
 ### R107 — Zero DRC Violations in Autorouter Output
@@ -78,7 +78,7 @@ This file is the explicit capability and coverage contract for the project.
 - Source: user
 - Primary owning slice: M004/S03
 - Supporting slices: M004/S04, M004/S07
-- Validation: unmapped
+- Validation: DRC reduced from baseline 50 to 5 on led_blink (PathFinder). Not yet zero — remaining violations likely grid artifacts. Progress tracked: S03 (partial), S04/S07 (target zero).
 - Notes: DRC check runs automatically after routing. If violations found, routing result is rejected.
 
 ### R108 — Clean 45°/90° Trace Geometry
@@ -246,10 +246,10 @@ This file is the explicit capability and coverage contract for the project.
 | R101 | core-capability | validated | M004/S01 | none | 39 tests + CLI + ratsnest compat (M004/S01) |
 | R102 | quality-attribute | active | M004/S01 | M004/S07 | partial: 3 synthetic fixtures parse (M004/S01) |
 | R103 | core-capability | validated | M004/S02 | M004/S06, M004/S07 | 31 tests (27 unit + 4 integration), CLI JSON output, baseline scores (M004/S02) |
-| R104 | core-capability | active | M004/S03 | M004/S07 | unmapped |
-| R105 | core-capability | active | M004/S03 | none | unmapped |
-| R106 | core-capability | active | M004/S03 | none | unmapped |
-| R107 | quality-attribute | active | M004/S03 | M004/S04, M004/S07 | unmapped |
+| R104 | core-capability | validated | M004/S03 | M004/S07 | 2 strategies + comparison test, PathFinder wins 3× (M004/S03) |
+| R105 | core-capability | validated | M004/S03 | none | PathFinder converges on test grids, 11 unit tests + benchmark (M004/S03) |
+| R106 | core-capability | validated | M004/S03 | none | PathFinder 0 vias vs ImprovedAStar 2 on led_blink (M004/S03) |
+| R107 | quality-attribute | active | M004/S03 | M004/S04, M004/S07 | DRC 50→5 (partial, M004/S03) |
 | R108 | quality-attribute | active | M004/S04 | none | unmapped |
 | R109 | core-capability | active | M004/S04 | none | unmapped |
 | R110 | differentiator | active | M004/S05 | none | unmapped |
@@ -267,7 +267,7 @@ This file is the explicit capability and coverage contract for the project.
 
 ## Coverage Summary
 
-- Active requirements: 14
+- Active requirements: 11
 - Mapped to slices: 14
-- Validated: 2
+- Validated: 5
 - Unmapped active requirements: 0

@@ -44,9 +44,9 @@ pub struct NetRoute {
 
 /// A point-to-point connection within a net (one edge of the spanning tree).
 #[derive(Debug, Clone)]
-struct Connection {
-    from_idx: usize,
-    to_idx: usize,
+pub struct Connection {
+    pub from_idx: usize,
+    pub to_idx: usize,
 }
 
 /// Extract the ratsnest from a board world.
@@ -243,7 +243,7 @@ fn manhattan_span(pads: &[PadTarget]) -> i64 {
 /// Build a minimum spanning tree of pad positions using greedy nearest-neighbor.
 ///
 /// Returns ordered connections (edges) between pad indices.
-fn build_spanning_tree(pads: &[PadTarget]) -> Vec<Connection> {
+pub fn build_spanning_tree(pads: &[PadTarget]) -> Vec<Connection> {
     if pads.len() < 2 {
         return Vec::new();
     }
@@ -640,7 +640,7 @@ fn find_blocking_net(grid: &RoutingGrid, start: GridNode, end: GridNode) -> Opti
 }
 
 /// Convert a PadTarget to the best GridNode for routing.
-fn pad_to_grid_node(grid: &RoutingGrid, pad: &PadTarget) -> GridNode {
+pub fn pad_to_grid_node(grid: &RoutingGrid, pad: &PadTarget) -> GridNode {
     let (gx, gy) = grid.nm_to_grid(pad.position);
     // Pick the preferred layer from the layer mask
     let layer = preferred_layer(pad.layer_mask);
@@ -651,7 +651,7 @@ fn pad_to_grid_node(grid: &RoutingGrid, pad: &PadTarget) -> GridNode {
 ///
 /// The zone radius covers the pad's physical extent plus one cell of margin,
 /// so that routes can enter and exit the pad even though it's marked as an obstacle.
-fn pad_to_zone(grid: &RoutingGrid, pad: &PadTarget) -> PadZone {
+pub fn pad_to_zone(grid: &RoutingGrid, pad: &PadTarget) -> PadZone {
     let (gx, gy) = grid.nm_to_grid(pad.position);
     let pad_radius_nm = pad.pad_size.0.raw().max(pad.pad_size.1.raw()) / 2;
     // Pad radius in grid cells, plus clearance bloat, plus 1 cell margin
@@ -677,7 +677,7 @@ fn preferred_layer(layer_mask: u32) -> u8 {
 }
 
 /// Check if a layer mask covers multiple copper layers (through-hole pad).
-fn is_multi_layer(layer_mask: u32) -> bool {
+pub fn is_multi_layer(layer_mask: u32) -> bool {
     layer_mask.count_ones() > 1
 }
 

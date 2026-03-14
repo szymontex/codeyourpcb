@@ -262,6 +262,12 @@ pub fn parse_kicad_pcb_str(content: &str) -> Result<KicadPcbParseResult, KicadPc
 
     // 4. Extract board outline from Edge.Cuts
     let board_bounds = extract_board_outline(elements);
+    // Board origin in KiCad coordinates — component positions are absolute,
+    // so we translate them relative to the board's top-left corner.
+    let board_origin = board_bounds
+        .as_ref()
+        .map(|b| (b.min.x.0 as f64 / 1_000_000.0, b.min.y.0 as f64 / 1_000_000.0))
+        .unwrap_or((0.0, 0.0));
     if let Some(ref bounds) = board_bounds {
         let width = Nm(bounds.max.x.0 - bounds.min.x.0);
         let height = Nm(bounds.max.y.0 - bounds.min.y.0);
@@ -281,6 +287,7 @@ pub fn parse_kicad_pcb_str(content: &str) -> Result<KicadPcbParseResult, KicadPc
                         &mut world,
                         &mut library,
                         &kicad_net_map,
+                        board_origin,
                     )?;
                     component_count += 1;
                 }
@@ -525,6 +532,7 @@ fn parse_footprint(
     world: &mut BoardWorld,
     library: &mut FootprintLibrary,
     kicad_net_map: &HashMap<i64, NetId>,
+    board_origin_mm: (f64, f64),
 ) -> Result<(), KicadPcbError> {
     // First element is the library link name (e.g., "Resistor_SMD:R_0402")
     let lib_link = if !elements.is_empty() {
@@ -640,8 +648,9 @@ fn parse_footprint(
         }
     }
 
-    // Convert position mm → nm
-    let position = Position::from_mm(pos_x, pos_y);
+    // Convert position mm → nm, translating from absolute KiCad coords
+    // to board-relative coords (origin at board's top-left corner)
+    let position = Position::from_mm(pos_x - board_origin_mm.0, pos_y - board_origin_mm.1);
     // Convert angle degrees → millidegrees
     let rotation = Rotation((angle * 1000.0).round() as i32);
 

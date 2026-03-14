@@ -31,5 +31,5 @@ pub use footprint::{import_footprint, import_footprint_from_str, KicadImportErro
 pub use library::{find_by_library, find_by_name, scan_libraries, scan_library, LibraryEntry};
 pub use pcb_parser::{
     parse_kicad_pcb, parse_kicad_pcb_str, BenchmarkComplexity, KicadBenchmark, KicadPcbError,
-    KicadPcbMetadata, KicadPcbParseResult,
+    KicadPcbMetadata, KicadPcbParseResult, BENCHMARKS,
 };

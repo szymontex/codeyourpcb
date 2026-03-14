@@ -61,7 +61,7 @@ This milestone is complete only when all are true:
 - [x] **S02: Routing Quality Score System** `risk:medium` `depends:[]`
   > After this: Any routed board gets a composite quality score (trace length, via count, DRC violations, smoothness, crossings, layer balance). CLI `score` command works. Existing prototype A* output has a baseline score on all fixtures.
 
-- [ ] **S03: PathFinder Routing Engine** `risk:high` `depends:[S01,S02]`
+- [x] **S03: PathFinder Routing Engine** `risk:high` `depends:[S01,S02]`
   > After this: Negotiated congestion router routes all benchmark boards. Scores compared to prototype A* — PathFinder wins or we know why. Via placement is strategic. DRC violations = 0.
 
 - [ ] **S04: Trace Smoother & Via Optimizer** `risk:medium` `depends:[S03]`

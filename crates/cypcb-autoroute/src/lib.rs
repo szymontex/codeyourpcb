@@ -22,17 +22,23 @@
 //! let result = route_board(&world, &library, &rules, &config);
 //! ```
 
+pub mod astar_improved;
+pub mod congestion;
 pub mod cost;
 pub mod grid;
 pub mod orchestrator;
 pub mod pathfinder;
+pub mod pathfinder_v2;
 pub mod postprocess;
 pub mod scoring;
+pub mod strategy;
 
 use cypcb_router::types::RoutingResult;
 use cypcb_rules::RoutingRuleSet;
 use cypcb_world::footprint::FootprintLibrary;
 use cypcb_world::BoardWorld;
+
+use strategy::StrategyKind;
 
 /// Configuration for the autorouter.
 #[derive(Debug, Clone)]
@@ -50,6 +56,9 @@ pub struct AutorouteConfig {
 
     /// Whether to prefer routing on the top layer when possible.
     pub prefer_top_layer: bool,
+
+    /// Which routing strategy to use. Defaults to `StrategyKind::PathFinder`.
+    pub strategy: StrategyKind,
 }
 
 impl Default for AutorouteConfig {
@@ -59,6 +68,7 @@ impl Default for AutorouteConfig {
             max_ripup_iterations: 10,
             via_cost_multiplier: 1.0,
             prefer_top_layer: true,
+            strategy: StrategyKind::default(),
         }
     }
 }
@@ -113,9 +123,11 @@ impl AutorouteConfig {
 
 /// Route all unrouted nets on the board.
 ///
-/// This is the main entry point for the autorouter. It builds a routing grid
-/// from the board world and design rules, then attempts to route each net
-/// using A* pathfinding with rip-up-and-retry.
+/// This is the main entry point for the autorouter. It dispatches to the
+/// routing strategy selected in `config.strategy`:
+///
+/// - `StrategyKind::ImprovedAStar` — congestion-aware A* with multi-victim rip-up
+/// - `StrategyKind::PathFinder` — VPR-style negotiated congestion router
 ///
 /// # Arguments
 ///
@@ -136,60 +148,16 @@ pub fn route_board(
 ) -> RoutingResult {
     let _span = tracing::info_span!("route_board").entered();
 
-    // Use adaptive resolution — coarser grid for larger boards
-    let resolution = if let Some((board_size, _)) = world.board_info() {
-        config.resolve_adaptive_grid_resolution(
-            rules,
-            board_size.width.raw(),
-            board_size.height.raw(),
-        )
-    } else {
-        config.resolve_grid_resolution(rules)
-    };
-
-    // Build grid
-    let mut grid = match grid::RoutingGrid::from_board(world, library, rules, resolution) {
-        Some(g) => g,
-        None => return RoutingResult::failed("Failed to build routing grid (no board entity?)"),
-    };
-
-    // Extract ratsnest
-    let ratsnest = orchestrator::extract_ratsnest(world, library);
-    if ratsnest.is_empty() {
-        tracing::info!("No nets to route");
-        return RoutingResult::complete(Vec::new(), Vec::new());
-    }
-
-    // Order nets by priority
-    let order = orchestrator::order_nets(&ratsnest);
-
-    // Route all nets
-    let loop_result = orchestrator::route_all_nets(&mut grid, &ratsnest, &order, rules, config);
-
-    // Convert grid paths to segments and vias via post-processing
-    let mut all_segments = Vec::new();
-    let mut all_vias = Vec::new();
-
-    for net in &ratsnest {
-        if let Some(paths) = loop_result.routed_paths.get(&net.net_id.id()) {
-            let (segs, vias) = postprocess::paths_to_output(&grid, net.net_id, paths, rules);
-            all_segments.extend(segs);
-            all_vias.extend(vias);
+    let strategy: Box<dyn strategy::RoutingStrategy> = match config.strategy {
+        StrategyKind::ImprovedAStar => {
+            tracing::info!(strategy = %config.strategy, "Dispatching to ImprovedAStarStrategy");
+            Box::new(astar_improved::ImprovedAStarStrategy)
         }
-    }
+        StrategyKind::PathFinder => {
+            tracing::info!(strategy = %config.strategy, "Dispatching to PathFinderStrategy");
+            Box::new(pathfinder_v2::PathFinderStrategy)
+        }
+    };
 
-    if loop_result.unrouted.is_empty() {
-        tracing::info!(
-            segments = all_segments.len(),
-            vias = all_vias.len(),
-            "All nets routed successfully"
-        );
-        RoutingResult::complete(all_segments, all_vias)
-    } else {
-        tracing::warn!(
-            unrouted = loop_result.unrouted.len(),
-            "Some nets could not be routed"
-        );
-        RoutingResult::partial(all_segments, all_vias, loop_result.unrouted.len())
-    }
+    strategy.route(world, library, rules, config)
 }

@@ -580,8 +580,7 @@ fn rotate_point(p: Point, degrees: f64) -> Point {
 }
 
 /// Create a minimal grid for unit testing (no board needed).
-#[cfg(test)]
-pub(crate) fn make_test_grid(
+pub fn make_test_grid(
     width: u32,
     height: u32,
     resolution_nm: i64,
