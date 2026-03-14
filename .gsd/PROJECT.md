@@ -173,7 +173,7 @@ Current PCB tools (KiCad, Eagle, Altium) are GUI-first. The project file is a bi
 
 **Competitive Position (as of v2.0):**
 - Strongest areas: standalone platform (no KiCad dependency), built-in autorouter, web+desktop, collaboration-friendly
-- Weakest area: library management (no supplier API integration — #1 adoption blocker per feature matrix)
+- Weakest area: library management depth (JLCPCB search exists but no "add to library" flow — still #1 adoption blocker per feature matrix)
 - Feature matrix covers 9 EDA tools (atopile, KiCad, Altium, Allegro, OrCAD, EAGLE, EasyEDA, Flux.ai, diodeinc/pcb) across 11 categories
 
 ## Constraints
@@ -187,4 +187,4 @@ Current PCB tools (KiCad, Eagle, Altium) are GUI-first. The project file is a bi
 - **Compatibility:** Export to industry standard formats (Gerber, Excellon, BOM, CPL)
 
 ---
-*Last updated: 2026-03-14 after completing M003/S06*
+*Last updated: 2026-03-14 after completing M003*
