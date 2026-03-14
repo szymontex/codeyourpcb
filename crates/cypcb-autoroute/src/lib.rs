@@ -27,6 +27,7 @@ pub mod grid;
 pub mod orchestrator;
 pub mod pathfinder;
 pub mod postprocess;
+pub mod scoring;
 
 use cypcb_router::types::RoutingResult;
 use cypcb_rules::RoutingRuleSet;

@@ -10,8 +10,10 @@ cypcb-core = { workspace = true }
 cypcb-world = { path = "../cypcb-world", default-features = false }
 cypcb-rules = { path = "../cypcb-rules" }
 cypcb-router = { path = "../cypcb-router" }
+cypcb-drc = { path = "../cypcb-drc" }
 bevy_ecs = { workspace = true }
 pathfinding = "4"
+serde = { workspace = true }
 tracing = { workspace = true }
 
 # Fix for getrandom WASM compilation (required by bevy_ecs -> ahash)
@@ -21,6 +23,6 @@ getrandom_03 = { package = "getrandom", version = "0.3", features = ["wasm_js"] 
 
 [dev-dependencies]
 cypcb-parser = { workspace = true }
-cypcb-drc = { path = "../cypcb-drc" }
 cypcb-rules = { path = "../cypcb-rules" }
 cypcb-world = { path = "../cypcb-world" }
+serde_json = { workspace = true }

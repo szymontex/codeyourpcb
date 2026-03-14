@@ -28,14 +28,14 @@ This file is the explicit capability and coverage contract for the project.
 
 ### R103 — Routing Quality Scoring System
 - Class: core-capability
-- Status: active
+- Status: validated
 - Description: Score any routed board on: total trace length, via count, DRC violation count, trace smoothness (bend angle distribution), crossing count, layer utilization balance
 - Why it matters: Without quantitative scoring, "better" routing is subjective. Scoring enables variant ranking and regression detection.
 - Source: user
 - Primary owning slice: M004/S02
 - Supporting slices: M004/S06, M004/S07
-- Validation: unmapped
-- Notes: Score must be a single composite number (weighted sum) plus individual metric breakdown. Lower = better.
+- Validation: 31 tests (27 unit + 4 integration), 7-metric RoutingScore with composite formula, CLI JSON output, baseline scores for blink.cypcb and routing-test.cypcb — M004/S02
+- Notes: Score must be a single composite number (weighted sum) plus individual metric breakdown. Lower = better. score_board() takes ScoreWeights parameter for configurability.
 
 ### R104 — Multi-Strategy Routing Engine
 - Class: core-capability
@@ -245,7 +245,7 @@ This file is the explicit capability and coverage contract for the project.
 |---|---|---|---|---|---|
 | R101 | core-capability | validated | M004/S01 | none | 39 tests + CLI + ratsnest compat (M004/S01) |
 | R102 | quality-attribute | active | M004/S01 | M004/S07 | partial: 3 synthetic fixtures parse (M004/S01) |
-| R103 | core-capability | active | M004/S02 | M004/S06, M004/S07 | unmapped |
+| R103 | core-capability | validated | M004/S02 | M004/S06, M004/S07 | 31 tests (27 unit + 4 integration), CLI JSON output, baseline scores (M004/S02) |
 | R104 | core-capability | active | M004/S03 | M004/S07 | unmapped |
 | R105 | core-capability | active | M004/S03 | none | unmapped |
 | R106 | core-capability | active | M004/S03 | none | unmapped |
@@ -267,7 +267,7 @@ This file is the explicit capability and coverage contract for the project.
 
 ## Coverage Summary
 
-- Active requirements: 15
-- Mapped to slices: 15
-- Validated: 1
+- Active requirements: 14
+- Mapped to slices: 14
+- Validated: 2
 - Unmapped active requirements: 0

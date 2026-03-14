@@ -15,6 +15,9 @@ cypcb-kicad = { path = "../cypcb-kicad" }
 cypcb-parser = { path = "../cypcb-parser" }
 cypcb-world = { path = "../cypcb-world" }
 cypcb-router = { path = "../cypcb-router" }
+cypcb-autoroute = { path = "../cypcb-autoroute" }
+cypcb-drc = { path = "../cypcb-drc" }
+cypcb-rules = { path = "../cypcb-rules" }
 cypcb-export = { path = "../cypcb-export" }
 clap = { workspace = true }
 serde = { workspace = true }

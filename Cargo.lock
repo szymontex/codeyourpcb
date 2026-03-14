@@ -992,6 +992,8 @@ dependencies = [
  "getrandom 0.2.17",
  "getrandom 0.3.4",
  "pathfinding",
+ "serde",
+ "serde_json",
  "tracing",
 ]
 
@@ -1008,11 +1010,14 @@ name = "cypcb-cli"
 version = "0.1.0-beta"
 dependencies = [
  "clap",
+ "cypcb-autoroute",
  "cypcb-core",
+ "cypcb-drc",
  "cypcb-export",
  "cypcb-kicad",
  "cypcb-parser",
  "cypcb-router",
+ "cypcb-rules",
  "cypcb-world",
  "miette",
  "serde",

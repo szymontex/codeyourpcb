@@ -58,7 +58,7 @@ This milestone is complete only when all are true:
 - [x] **S01: KiCad PCB Parser & Benchmark Fixtures** `risk:high` `depends:[]`
   > After this: 3+ real .kicad_pcb files parse into BoardWorld with correct components, pads, nets, and board outline. CLI command `parse-kicad` produces valid .cypcb-compatible data. Benchmark fixture files exist with reference routing scores.
 
-- [ ] **S02: Routing Quality Score System** `risk:medium` `depends:[]`
+- [x] **S02: Routing Quality Score System** `risk:medium` `depends:[]`
   > After this: Any routed board gets a composite quality score (trace length, via count, DRC violations, smoothness, crossings, layer balance). CLI `score` command works. Existing prototype A* output has a baseline score on all fixtures.
 
 - [ ] **S03: PathFinder Routing Engine** `risk:high` `depends:[S01,S02]`
