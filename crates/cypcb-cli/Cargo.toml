@@ -11,6 +11,7 @@ path = "src/main.rs"
 
 [dependencies]
 cypcb-core = { path = "../cypcb-core" }
+cypcb-kicad = { path = "../cypcb-kicad" }
 cypcb-parser = { path = "../cypcb-parser" }
 cypcb-world = { path = "../cypcb-world" }
 cypcb-router = { path = "../cypcb-router" }

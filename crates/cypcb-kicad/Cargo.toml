@@ -8,9 +8,13 @@ description = "KiCad file format import for CodeYourPCB"
 [dependencies]
 cypcb-core = { path = "../cypcb-core" }
 cypcb-world = { path = "../cypcb-world", default-features = false }
+cypcb-router = { path = "../cypcb-router" }
+serde = { workspace = true }
 kicad_parse_gen = "0.7"
+symbolic_expressions = "0.4"
 thiserror.workspace = true
 walkdir = "2"
 
 [dev-dependencies]
+cypcb-autoroute = { path = "../cypcb-autoroute" }
 tempfile = "3"

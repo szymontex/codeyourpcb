@@ -1,0 +1,1100 @@
+//! KiCad .kicad_pcb S-expression parser.
+//!
+//! Parses KiCad 6/7/8 PCB files into [`BoardWorld`] with footprints, pads, nets,
+//! board outline, and reference routing. Uses `symbolic_expressions` for S-expression
+//! tokenization, then walks the tree to extract structured data.
+//!
+//! # Supported KiCad Versions
+//!
+//! - KiCad 6 (`version 20211014`): uses `module` keyword for footprints
+//! - KiCad 7 (`version 20221018`): uses `footprint` keyword
+//! - KiCad 8 (`version 20240108`): uses `footprint` keyword
+//!
+//! # Example
+//!
+//! ```rust,ignore
+//! use cypcb_kicad::pcb_parser::parse_kicad_pcb;
+//! use std::path::Path;
+//!
+//! let result = parse_kicad_pcb(Path::new("board.kicad_pcb"))?;
+//! println!("Components: {}", result.metadata.component_count);
+//! println!("Nets: {}", result.metadata.net_count);
+//! ```
+
+use std::collections::HashMap;
+use std::fs;
+use std::path::Path;
+
+use cypcb_core::{Nm, Point, Rect};
+use cypcb_router::types::{RouteSegment, RoutingResult, RoutingStatus, ViaPlacement};
+use cypcb_world::components::{Layer, PadShape};
+use cypcb_world::footprint::{Footprint, FootprintLibrary, PadDef};
+use cypcb_world::{
+    BoardWorld, FootprintRef, NetConnections, NetId, PinConnection, Position, RefDes, Rotation,
+    Value,
+};
+use symbolic_expressions::Sexp;
+use thiserror::Error;
+
+// ---------------------------------------------------------------------------
+// Error types
+// ---------------------------------------------------------------------------
+
+/// Errors that can occur during KiCad PCB parsing.
+#[derive(Error, Debug)]
+pub enum KicadPcbError {
+    /// File I/O error.
+    #[error("I/O error: {0}")]
+    IoError(#[from] std::io::Error),
+
+    /// S-expression parse error.
+    #[error("S-expression parse error: {0}")]
+    SexprParseError(String),
+
+    /// Required field missing from the PCB file.
+    #[error("Missing field '{field}' in {context}")]
+    MissingField {
+        /// The missing field name.
+        field: String,
+        /// Where the field was expected.
+        context: String,
+    },
+
+    /// Unsupported KiCad file version.
+    #[error("Unsupported KiCad version {version} (supported: 20171130–20250101)")]
+    UnsupportedVersion {
+        /// The version number found.
+        version: i64,
+    },
+
+    /// Invalid data in the PCB file.
+    #[error("Invalid data: {0}")]
+    InvalidData(String),
+}
+
+// ---------------------------------------------------------------------------
+// Result types
+// ---------------------------------------------------------------------------
+
+/// Metadata extracted from a parsed KiCad PCB file.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct KicadPcbMetadata {
+    /// KiCad file format version number.
+    pub version: i64,
+    /// Number of components (footprints) found.
+    pub component_count: usize,
+    /// Number of nets (excluding net 0 "").
+    pub net_count: usize,
+    /// Number of trace segments found.
+    pub trace_segment_count: usize,
+    /// Number of vias found.
+    pub via_count: usize,
+    /// Board size in mm as (width, height).
+    pub board_size_mm: (f64, f64),
+    /// Number of copper layers.
+    pub layer_count: u8,
+}
+
+/// Complete result of parsing a KiCad PCB file.
+pub struct KicadPcbParseResult {
+    /// Populated board world with components, nets, and board outline.
+    pub world: BoardWorld,
+    /// Footprint library with pad geometry for all footprints found.
+    pub library: FootprintLibrary,
+    /// Reference routing extracted from existing traces and vias (if any).
+    pub reference_routes: Option<RoutingResult>,
+    /// Parse metadata for inspection.
+    pub metadata: KicadPcbMetadata,
+}
+
+/// Complexity tier for benchmark classification.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BenchmarkComplexity {
+    /// Simple board: <10 components.
+    Simple,
+    /// Medium board: 10-50 components.
+    Medium,
+    /// Complex board: 50+ components.
+    Complex,
+}
+
+/// Descriptor for a benchmark KiCad PCB file.
+#[derive(Debug, Clone)]
+pub struct KicadBenchmark {
+    /// File path relative to the test fixtures directory.
+    pub filename: &'static str,
+    /// Human-readable description.
+    pub description: &'static str,
+    /// Expected complexity tier.
+    pub complexity: BenchmarkComplexity,
+    /// Expected component count (approximate).
+    pub expected_component_count: usize,
+    /// Expected net count (approximate).
+    pub expected_net_count: usize,
+}
+
+/// Static benchmark fixture descriptors.
+///
+/// Each entry describes one `.kicad_pcb` file in `tests/fixtures/benchmark/`
+/// with expected metadata for validation. Component and net counts should match
+/// actual parse results within ±20% tolerance for medium/complex boards.
+pub const BENCHMARKS: &[KicadBenchmark] = &[
+    KicadBenchmark {
+        filename: "led_blink.kicad_pcb",
+        description: "Simple LED blink circuit — 7 components, 2-layer, 40×30mm",
+        complexity: BenchmarkComplexity::Simple,
+        expected_component_count: 7,
+        expected_net_count: 7,
+    },
+    KicadBenchmark {
+        filename: "stm32_breakout.kicad_pcb",
+        description: "STM32F103C8T6 breakout with USB, SWD, GPIO headers — 29 components, 2-layer, 75×65mm",
+        complexity: BenchmarkComplexity::Medium,
+        expected_component_count: 29,
+        expected_net_count: 40,
+    },
+    KicadBenchmark {
+        filename: "multi_ic.kicad_pcb",
+        description: "STM32F407 + Ethernet PHY + SPI Flash + CAN — 52 components, 4-layer, 100×80mm",
+        complexity: BenchmarkComplexity::Complex,
+        expected_component_count: 52,
+        expected_net_count: 94,
+    },
+];
+
+/// Return all benchmark descriptors with file paths resolved relative to the
+/// workspace root (`tests/fixtures/benchmark/`).
+///
+/// This is useful for test code that needs absolute or workspace-relative paths
+/// to the benchmark `.kicad_pcb` files.
+pub fn get_benchmarks() -> Vec<(KicadBenchmark, std::path::PathBuf)> {
+    BENCHMARKS
+        .iter()
+        .map(|b| {
+            let path = std::path::PathBuf::from("tests/fixtures/benchmark").join(b.filename);
+            (b.clone(), path)
+        })
+        .collect()
+}
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
+/// Parse a KiCad `.kicad_pcb` file from disk.
+///
+/// Reads the file and delegates to [`parse_kicad_pcb_str`].
+///
+/// # Errors
+///
+/// Returns [`KicadPcbError::IoError`] if the file cannot be read,
+/// or any other variant if parsing fails.
+pub fn parse_kicad_pcb(path: &Path) -> Result<KicadPcbParseResult, KicadPcbError> {
+    let content = fs::read_to_string(path)?;
+    parse_kicad_pcb_str(&content)
+}
+
+/// Parse a KiCad PCB from a string.
+///
+/// This is the core parser. It:
+/// 1. Tokenizes the S-expression via `symbolic_expressions::parser::parse_str()`
+/// 2. Validates the KiCad version (6/7/8 range)
+/// 3. Extracts nets, board outline, footprints with pads, traces, and vias
+/// 4. Populates a [`BoardWorld`] and [`FootprintLibrary`]
+/// 5. Returns a [`KicadPcbParseResult`] with metadata
+///
+/// # Errors
+///
+/// Returns a [`KicadPcbError`] variant describing the failure.
+pub fn parse_kicad_pcb_str(content: &str) -> Result<KicadPcbParseResult, KicadPcbError> {
+    // Parse S-expression tree
+    let sexp = symbolic_expressions::parser::parse_str(content)
+        .map_err(|e| KicadPcbError::SexprParseError(format!("{}", e)))?;
+
+    let root_list = sexp
+        .list()
+        .map_err(|e| KicadPcbError::SexprParseError(format!("Root is not a list: {}", e)))?;
+
+    // Verify root element is "kicad_pcb"
+    if root_list.is_empty() {
+        return Err(KicadPcbError::SexprParseError(
+            "Empty root element".to_string(),
+        ));
+    }
+    let root_name = get_string(&root_list[0]).unwrap_or_default();
+    if root_name != "kicad_pcb" {
+        return Err(KicadPcbError::SexprParseError(format!(
+            "Expected 'kicad_pcb' root, got '{}'",
+            root_name
+        )));
+    }
+
+    let elements = &root_list[1..];
+
+    // 1. Extract version
+    let version = extract_version(elements)?;
+
+    // 2. Extract nets — build KiCad net number → name mapping
+    let mut world = BoardWorld::new();
+    let mut kicad_net_map: HashMap<i64, NetId> = HashMap::new();
+    let mut net_count = 0usize;
+
+    for elem in elements {
+        if let Some(name) = list_name(elem) {
+            if name == "net" {
+                if let Ok(list) = elem.list() {
+                    if list.len() >= 3 {
+                        let net_num = get_i64(&list[1]).unwrap_or(0);
+                        let net_name = get_string(&list[2]).unwrap_or_default();
+                        if net_num != 0 && !net_name.is_empty() {
+                            let net_id = world.intern_net(&net_name);
+                            kicad_net_map.insert(net_num, net_id);
+                            net_count += 1;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 3. Extract copper layer count
+    let layer_count = extract_layer_count(elements);
+
+    // 4. Extract board outline from Edge.Cuts
+    let board_bounds = extract_board_outline(elements);
+    if let Some(ref bounds) = board_bounds {
+        let width = Nm(bounds.max.x.0 - bounds.min.x.0);
+        let height = Nm(bounds.max.y.0 - bounds.min.y.0);
+        world.set_board("KiCad PCB".to_string(), (width, height), layer_count);
+    }
+
+    // 5. Extract footprints (handles both `footprint` and `module` keywords)
+    let mut library = FootprintLibrary::new();
+    let mut component_count = 0usize;
+
+    for elem in elements {
+        if let Some(name) = list_name(elem) {
+            if name == "footprint" || name == "module" {
+                if let Ok(list) = elem.list() {
+                    parse_footprint(
+                        &list[1..],
+                        &mut world,
+                        &mut library,
+                        &kicad_net_map,
+                    )?;
+                    component_count += 1;
+                }
+            }
+        }
+    }
+
+    // 6. Extract trace segments
+    let mut route_segments: Vec<RouteSegment> = Vec::new();
+    for elem in elements {
+        if let Some(name) = list_name(elem) {
+            if name == "segment" {
+                if let Some(seg) = parse_segment(elem, &kicad_net_map) {
+                    route_segments.push(seg);
+                }
+            }
+        }
+    }
+
+    // 7. Extract vias
+    let mut via_placements: Vec<ViaPlacement> = Vec::new();
+    for elem in elements {
+        if let Some(name) = list_name(elem) {
+            if name == "via" {
+                if let Some(via) = parse_via(elem, &kicad_net_map) {
+                    via_placements.push(via);
+                }
+            }
+        }
+    }
+
+    // Build reference routes
+    let trace_segment_count = route_segments.len();
+    let via_count_val = via_placements.len();
+    let reference_routes = if route_segments.is_empty() && via_placements.is_empty() {
+        None
+    } else {
+        Some(RoutingResult {
+            status: RoutingStatus::Complete,
+            routes: route_segments,
+            vias: via_placements,
+        })
+    };
+
+    // Build metadata
+    let board_size_mm = if let Some(ref bounds) = board_bounds {
+        let w = (bounds.max.x.0 - bounds.min.x.0) as f64 / 1_000_000.0;
+        let h = (bounds.max.y.0 - bounds.min.y.0) as f64 / 1_000_000.0;
+        (w, h)
+    } else {
+        (0.0, 0.0)
+    };
+
+    let metadata = KicadPcbMetadata {
+        version,
+        component_count,
+        net_count,
+        trace_segment_count,
+        via_count: via_count_val,
+        board_size_mm,
+        layer_count,
+    };
+
+    Ok(KicadPcbParseResult {
+        world,
+        library,
+        reference_routes,
+        metadata,
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Internal: version extraction
+// ---------------------------------------------------------------------------
+
+/// Supported KiCad version range.
+const MIN_VERSION: i64 = 20171130; // KiCad 5
+const MAX_VERSION: i64 = 20250101; // Future KiCad 9
+
+fn extract_version(elements: &[Sexp]) -> Result<i64, KicadPcbError> {
+    for elem in elements {
+        if let Some(name) = list_name(elem) {
+            if name == "version" {
+                if let Ok(list) = elem.list() {
+                    if list.len() >= 2 {
+                        let v = get_i64(&list[1]).ok_or_else(|| KicadPcbError::MissingField {
+                            field: "version number".to_string(),
+                            context: "kicad_pcb".to_string(),
+                        })?;
+                        if !(MIN_VERSION..=MAX_VERSION).contains(&v) {
+                            return Err(KicadPcbError::UnsupportedVersion { version: v });
+                        }
+                        return Ok(v);
+                    }
+                }
+            }
+        }
+    }
+    Err(KicadPcbError::MissingField {
+        field: "version".to_string(),
+        context: "kicad_pcb".to_string(),
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Internal: layer count extraction
+// ---------------------------------------------------------------------------
+
+fn extract_layer_count(elements: &[Sexp]) -> u8 {
+    let mut copper_count = 0u8;
+    for elem in elements {
+        if let Some(name) = list_name(elem) {
+            if name == "layers" {
+                if let Ok(list) = elem.list() {
+                    for layer_def in &list[1..] {
+                        if let Ok(sub) = layer_def.list() {
+                            // (N "name" type)
+                            if sub.len() >= 3 {
+                                let layer_type = get_string(&sub[2]).unwrap_or_default();
+                                if layer_type == "signal" || layer_type == "power" {
+                                    copper_count += 1;
+                                }
+                            }
+                        }
+                    }
+                }
+                break;
+            }
+        }
+    }
+    if copper_count < 2 {
+        2 // Default to 2-layer
+    } else {
+        copper_count
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Internal: board outline extraction
+// ---------------------------------------------------------------------------
+
+fn extract_board_outline(elements: &[Sexp]) -> Option<Rect> {
+    let mut min_x = f64::MAX;
+    let mut min_y = f64::MAX;
+    let mut max_x = f64::MIN;
+    let mut max_y = f64::MIN;
+    let mut found = false;
+
+    for elem in elements {
+        if let Some(name) = list_name(elem) {
+            match name.as_str() {
+                "gr_line" => {
+                    if is_on_edge_cuts(elem) {
+                        if let (Some(start), Some(end)) =
+                            (find_xy_child(elem, "start"), find_xy_child(elem, "end"))
+                        {
+                            update_bounds(start.0, start.1, &mut min_x, &mut min_y, &mut max_x, &mut max_y);
+                            update_bounds(end.0, end.1, &mut min_x, &mut min_y, &mut max_x, &mut max_y);
+                            found = true;
+                        }
+                    }
+                }
+                "gr_rect" => {
+                    if is_on_edge_cuts(elem) {
+                        if let (Some(start), Some(end)) =
+                            (find_xy_child(elem, "start"), find_xy_child(elem, "end"))
+                        {
+                            update_bounds(start.0, start.1, &mut min_x, &mut min_y, &mut max_x, &mut max_y);
+                            update_bounds(end.0, end.1, &mut min_x, &mut min_y, &mut max_x, &mut max_y);
+                            found = true;
+                        }
+                    }
+                }
+                "gr_poly" => {
+                    if is_on_edge_cuts(elem) {
+                        if let Ok(list) = elem.list() {
+                            for child in list {
+                                if list_name(child).as_deref() == Some("pts") {
+                                    if let Ok(pts_list) = child.list() {
+                                        for pt in &pts_list[1..] {
+                                            if list_name(pt).as_deref() == Some("xy") {
+                                                if let Ok(pt_list) = pt.list() {
+                                                    if pt_list.len() >= 3 {
+                                                        if let (Some(x), Some(y)) = (get_f64(&pt_list[1]), get_f64(&pt_list[2])) {
+                                                            update_bounds(x, y, &mut min_x, &mut min_y, &mut max_x, &mut max_y);
+                                                            found = true;
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    if found {
+        Some(Rect::from_points(
+            Point::from_mm(min_x, min_y),
+            Point::from_mm(max_x, max_y),
+        ))
+    } else {
+        None
+    }
+}
+
+fn is_on_edge_cuts(sexp: &Sexp) -> bool {
+    if let Ok(list) = sexp.list() {
+        for child in list {
+            if list_name(child).as_deref() == Some("layer") {
+                if let Ok(sub) = child.list() {
+                    if sub.len() >= 2 {
+                        let layer_name = get_string(&sub[1]).unwrap_or_default();
+                        return layer_name == "Edge.Cuts";
+                    }
+                }
+            }
+        }
+    }
+    false
+}
+
+fn update_bounds(x: f64, y: f64, min_x: &mut f64, min_y: &mut f64, max_x: &mut f64, max_y: &mut f64) {
+    if x < *min_x { *min_x = x; }
+    if y < *min_y { *min_y = y; }
+    if x > *max_x { *max_x = x; }
+    if y > *max_y { *max_y = y; }
+}
+
+// ---------------------------------------------------------------------------
+// Internal: footprint parsing
+// ---------------------------------------------------------------------------
+
+fn parse_footprint(
+    elements: &[Sexp],
+    world: &mut BoardWorld,
+    library: &mut FootprintLibrary,
+    kicad_net_map: &HashMap<i64, NetId>,
+) -> Result<(), KicadPcbError> {
+    // First element is the library link name (e.g., "Resistor_SMD:R_0402")
+    let lib_link = if !elements.is_empty() {
+        get_string(&elements[0]).unwrap_or_default()
+    } else {
+        String::new()
+    };
+
+    // Extract a short name from the lib_link for the footprint ref
+    let fp_name = lib_link
+        .rsplit(':')
+        .next()
+        .unwrap_or(&lib_link)
+        .to_string();
+
+    // Parse position: (at X Y [angle])
+    let mut pos_x = 0.0f64;
+    let mut pos_y = 0.0f64;
+    let mut angle = 0.0f64;
+    let mut refdes_str = String::new();
+    let mut value_str = String::new();
+    let mut pads: Vec<ParsedPad> = Vec::new();
+
+    let children = if elements.is_empty() {
+        &[][..]
+    } else {
+        &elements[1..]
+    };
+
+    for child in children {
+        if let Some(name) = list_name(child) {
+            match name.as_str() {
+                "at" => {
+                    if let Ok(list) = child.list() {
+                        if list.len() >= 3 {
+                            pos_x = get_f64(&list[1]).unwrap_or(0.0);
+                            pos_y = get_f64(&list[2]).unwrap_or(0.0);
+                        }
+                        if list.len() >= 4 {
+                            angle = get_f64(&list[3]).unwrap_or(0.0);
+                        }
+                    }
+                }
+                "fp_text" | "property" => {
+                    // KiCad 7/8 uses (property "Reference" "R1" ...) 
+                    // KiCad 5/6 uses (fp_text reference "R1" ...)
+                    if let Ok(list) = child.list() {
+                        if list.len() >= 3 {
+                            let text_type = get_string(&list[1]).unwrap_or_default();
+                            let text_value = get_string(&list[2]).unwrap_or_default();
+                            match text_type.to_lowercase().as_str() {
+                                "reference" => refdes_str = text_value,
+                                "value" => value_str = text_value,
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+                "pad" => {
+                    if let Ok(list) = child.list() {
+                        if let Some(pad) = parse_pad(&list[1..], kicad_net_map) {
+                            pads.push(pad);
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    // Use a unique fp_name based on lib_link to avoid collisions
+    let library_key = if lib_link.is_empty() {
+        fp_name.clone()
+    } else {
+        lib_link.clone()
+    };
+
+    // Register footprint in library if not already present
+    if !library.contains(&library_key) {
+        let pad_defs: Vec<PadDef> = pads
+            .iter()
+            .map(|p| PadDef {
+                number: p.number.clone(),
+                shape: p.shape,
+                position: p.local_position,
+                size: p.size,
+                drill: p.drill,
+                layers: p.layers.clone(),
+            })
+            .collect();
+
+        let bounds = calculate_pad_bounds(&pad_defs);
+        let margin = Nm::from_mm(0.5);
+        let courtyard = Rect::from_points(
+            Point::new(bounds.min.x - margin, bounds.min.y - margin),
+            Point::new(bounds.max.x + margin, bounds.max.y + margin),
+        );
+
+        library.register(Footprint {
+            name: library_key.clone(),
+            description: String::new(),
+            pads: pad_defs,
+            bounds,
+            courtyard,
+        });
+    }
+
+    // Build net connections
+    let mut net_connections = NetConnections::with_capacity(pads.len());
+    for pad in &pads {
+        if let Some(net_id) = pad.net_id {
+            net_connections.add(PinConnection::new(pad.number.clone(), net_id));
+        }
+    }
+
+    // Convert position mm → nm
+    let position = Position::from_mm(pos_x, pos_y);
+    // Convert angle degrees → millidegrees
+    let rotation = Rotation((angle * 1000.0).round() as i32);
+
+    // Use refdes if available, otherwise generate one
+    let refdes = if refdes_str.is_empty() {
+        RefDes::new("??")
+    } else {
+        RefDes::new(refdes_str)
+    };
+
+    world.spawn_component(
+        refdes,
+        Value::new(value_str),
+        position,
+        rotation,
+        FootprintRef::new(library_key),
+        net_connections,
+    );
+
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Internal: pad parsing
+// ---------------------------------------------------------------------------
+
+struct ParsedPad {
+    number: String,
+    shape: PadShape,
+    local_position: Point,
+    size: (Nm, Nm),
+    drill: Option<Nm>,
+    layers: Vec<Layer>,
+    net_id: Option<NetId>,
+}
+
+fn parse_pad(elements: &[Sexp], kicad_net_map: &HashMap<i64, NetId>) -> Option<ParsedPad> {
+    // (pad "1" smd|thru_hole rect|circle|oval (at X Y) (size W H) (drill D) (layers ...) (net N "name"))
+    // elements[0] = pad number
+    // elements[1] = pad type (smd, thru_hole, np_thru_hole, connect)
+    // elements[2] = pad shape (rect, circle, oval, roundrect, custom)
+    // remaining = property lists
+
+    if elements.len() < 3 {
+        return None;
+    }
+
+    let number = get_string(&elements[0]).unwrap_or_default();
+    let pad_type_str = get_string(&elements[1]).unwrap_or_default();
+    let shape_str = get_string(&elements[2]).unwrap_or_default();
+
+    let shape = match shape_str.as_str() {
+        "rect" => PadShape::Rect,
+        "circle" => PadShape::Circle,
+        "oval" => PadShape::Oblong,
+        "roundrect" => PadShape::round_rect(25), // Default corner ratio
+        _ => PadShape::Rect, // Fallback
+    };
+
+    let is_through_hole = pad_type_str == "thru_hole" || pad_type_str == "np_thru_hole";
+
+    let mut local_pos = Point::ORIGIN;
+    let mut size = (Nm::from_mm(1.0), Nm::from_mm(1.0));
+    let mut drill: Option<Nm> = None;
+    let mut layers: Vec<Layer> = Vec::new();
+    let mut net_id: Option<NetId> = None;
+
+    for prop in &elements[3..] {
+        if let Some(name) = list_name(prop) {
+            match name.as_str() {
+                "at" => {
+                    if let Ok(list) = prop.list() {
+                        if list.len() >= 3 {
+                            let x = get_f64(&list[1]).unwrap_or(0.0);
+                            let y = get_f64(&list[2]).unwrap_or(0.0);
+                            local_pos = Point::from_mm(x, y);
+                        }
+                    }
+                }
+                "size" => {
+                    if let Ok(list) = prop.list() {
+                        if list.len() >= 3 {
+                            let w = get_f64(&list[1]).unwrap_or(1.0);
+                            let h = get_f64(&list[2]).unwrap_or(1.0);
+                            size = (Nm::from_mm(w), Nm::from_mm(h));
+                        }
+                    }
+                }
+                "drill" => {
+                    if let Ok(list) = prop.list() {
+                        if list.len() >= 2 {
+                            let d = get_f64(&list[1]).unwrap_or(0.0);
+                            if d > 0.0 {
+                                drill = Some(Nm::from_mm(d));
+                            }
+                        }
+                    }
+                }
+                "layers" => {
+                    if let Ok(list) = prop.list() {
+                        for layer_sexp in &list[1..] {
+                            let layer_name = get_string(layer_sexp).unwrap_or_default();
+                            parse_layer_names(&layer_name, &mut layers);
+                        }
+                    }
+                }
+                "net" => {
+                    if let Ok(list) = prop.list() {
+                        if list.len() >= 2 {
+                            let kicad_net_num = get_i64(&list[1]).unwrap_or(0);
+                            if kicad_net_num > 0 {
+                                net_id = kicad_net_map.get(&kicad_net_num).copied();
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    // If no layers parsed, use defaults based on pad type
+    if layers.is_empty() {
+        if is_through_hole {
+            layers.push(Layer::TopCopper);
+            layers.push(Layer::BottomCopper);
+        } else {
+            layers.push(Layer::TopCopper);
+            layers.push(Layer::TopPaste);
+            layers.push(Layer::TopMask);
+        }
+    }
+
+    // For through-hole pads, ensure drill is set
+    if is_through_hole && drill.is_none() {
+        drill = Some(Nm::from_mm(0.8)); // Default drill size
+    }
+
+    Some(ParsedPad {
+        number,
+        shape,
+        local_position: local_pos,
+        size,
+        drill,
+        layers,
+        net_id,
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Internal: segment parsing
+// ---------------------------------------------------------------------------
+
+fn parse_segment(sexp: &Sexp, kicad_net_map: &HashMap<i64, NetId>) -> Option<RouteSegment> {
+    let list = sexp.list().ok()?;
+
+    let mut start: Option<Point> = None;
+    let mut end: Option<Point> = None;
+    let mut width = Nm::from_mm(0.25); // Default trace width
+    let mut layer = Layer::TopCopper;
+    let mut net_id = NetId::new(0);
+
+    for child in &list[1..] {
+        if let Some(name) = list_name(child) {
+            match name.as_str() {
+                "start" => {
+                    if let Ok(sub) = child.list() {
+                        if sub.len() >= 3 {
+                            let x = get_f64(&sub[1]).unwrap_or(0.0);
+                            let y = get_f64(&sub[2]).unwrap_or(0.0);
+                            start = Some(Point::from_mm(x, y));
+                        }
+                    }
+                }
+                "end" => {
+                    if let Ok(sub) = child.list() {
+                        if sub.len() >= 3 {
+                            let x = get_f64(&sub[1]).unwrap_or(0.0);
+                            let y = get_f64(&sub[2]).unwrap_or(0.0);
+                            end = Some(Point::from_mm(x, y));
+                        }
+                    }
+                }
+                "width" => {
+                    if let Ok(sub) = child.list() {
+                        if sub.len() >= 2 {
+                            let w = get_f64(&sub[1]).unwrap_or(0.25);
+                            width = Nm::from_mm(w);
+                        }
+                    }
+                }
+                "layer" => {
+                    if let Ok(sub) = child.list() {
+                        if sub.len() >= 2 {
+                            let l = get_string(&sub[1]).unwrap_or_default();
+                            layer = parse_layer_name(&l).unwrap_or(Layer::TopCopper);
+                        }
+                    }
+                }
+                "net" => {
+                    if let Ok(sub) = child.list() {
+                        if sub.len() >= 2 {
+                            let kicad_num = get_i64(&sub[1]).unwrap_or(0);
+                            if let Some(&id) = kicad_net_map.get(&kicad_num) {
+                                net_id = id;
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    match (start, end) {
+        (Some(s), Some(e)) => Some(RouteSegment::new(net_id, layer, width, s, e)),
+        _ => None,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Internal: via parsing
+// ---------------------------------------------------------------------------
+
+fn parse_via(sexp: &Sexp, kicad_net_map: &HashMap<i64, NetId>) -> Option<ViaPlacement> {
+    let list = sexp.list().ok()?;
+
+    let mut position: Option<Point> = None;
+    let mut drill = Nm::from_mm(0.3); // Default drill
+    let mut start_layer = Layer::TopCopper;
+    let mut end_layer = Layer::BottomCopper;
+    let mut net_id = NetId::new(0);
+
+    for child in &list[1..] {
+        if let Some(name) = list_name(child) {
+            match name.as_str() {
+                "at" => {
+                    if let Ok(sub) = child.list() {
+                        if sub.len() >= 3 {
+                            let x = get_f64(&sub[1]).unwrap_or(0.0);
+                            let y = get_f64(&sub[2]).unwrap_or(0.0);
+                            position = Some(Point::from_mm(x, y));
+                        }
+                    }
+                }
+                "drill" => {
+                    if let Ok(sub) = child.list() {
+                        if sub.len() >= 2 {
+                            let d = get_f64(&sub[1]).unwrap_or(0.3);
+                            drill = Nm::from_mm(d);
+                        }
+                    }
+                }
+                "layers" => {
+                    if let Ok(sub) = child.list() {
+                        if sub.len() >= 3 {
+                            let l1 = get_string(&sub[1]).unwrap_or_default();
+                            let l2 = get_string(&sub[2]).unwrap_or_default();
+                            start_layer = parse_layer_name(&l1).unwrap_or(Layer::TopCopper);
+                            end_layer = parse_layer_name(&l2).unwrap_or(Layer::BottomCopper);
+                        }
+                    }
+                }
+                "net" => {
+                    if let Ok(sub) = child.list() {
+                        if sub.len() >= 2 {
+                            let kicad_num = get_i64(&sub[1]).unwrap_or(0);
+                            if let Some(&id) = kicad_net_map.get(&kicad_num) {
+                                net_id = id;
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    position.map(|pos| ViaPlacement::new(net_id, pos, drill, start_layer, end_layer))
+}
+
+// ---------------------------------------------------------------------------
+// Internal: layer name parsing
+// ---------------------------------------------------------------------------
+
+/// Parse a KiCad layer name string to an internal [`Layer`].
+///
+/// KiCad uses string layer names like "F.Cu", "B.Cu", "In1.Cu", "Edge.Cuts".
+/// This function maps them to the internal [`Layer`] enum.
+pub fn parse_layer_name(name: &str) -> Option<Layer> {
+    match name {
+        "F.Cu" => Some(Layer::TopCopper),
+        "B.Cu" => Some(Layer::BottomCopper),
+        "F.SilkS" | "F.Silkscreen" => Some(Layer::TopSilk),
+        "B.SilkS" | "B.Silkscreen" => Some(Layer::BottomSilk),
+        "F.Mask" => Some(Layer::TopMask),
+        "B.Mask" => Some(Layer::BottomMask),
+        "F.Paste" => Some(Layer::TopPaste),
+        "B.Paste" => Some(Layer::BottomPaste),
+        "Edge.Cuts" => Some(Layer::Outline),
+        _ => {
+            // Handle inner copper layers: In1.Cu, In2.Cu, ...
+            if let Some(rest) = name.strip_prefix("In") {
+                if let Some(num_str) = rest.strip_suffix(".Cu") {
+                    if let Ok(n) = num_str.parse::<u8>() {
+                        return Some(Layer::Inner(n));
+                    }
+                }
+            }
+            None
+        }
+    }
+}
+
+/// Parse a KiCad layer name, handling wildcards like "*.Cu" and "*.Mask".
+/// Appends matching layers to the `layers` vec.
+fn parse_layer_names(name: &str, layers: &mut Vec<Layer>) {
+    match name {
+        "*.Cu" => {
+            layers.push(Layer::TopCopper);
+            layers.push(Layer::BottomCopper);
+        }
+        "*.Mask" => {
+            layers.push(Layer::TopMask);
+            layers.push(Layer::BottomMask);
+        }
+        "*.Paste" => {
+            layers.push(Layer::TopPaste);
+            layers.push(Layer::BottomPaste);
+        }
+        "*.SilkS" | "*.Silkscreen" => {
+            layers.push(Layer::TopSilk);
+            layers.push(Layer::BottomSilk);
+        }
+        _ => {
+            if let Some(layer) = parse_layer_name(name) {
+                layers.push(layer);
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// S-expression tree helpers
+// ---------------------------------------------------------------------------
+
+/// Get the name of a list S-expression (first element as string).
+fn list_name(sexp: &Sexp) -> Option<String> {
+    if let Ok(list) = sexp.list() {
+        if !list.is_empty() {
+            return get_string(&list[0]);
+        }
+    }
+    None
+}
+
+/// Extract a string from a Sexp.
+fn get_string(sexp: &Sexp) -> Option<String> {
+    sexp.string().ok().cloned()
+}
+
+/// Extract an f64 from a Sexp string.
+fn get_f64(sexp: &Sexp) -> Option<f64> {
+    sexp.string().ok().and_then(|s| s.parse::<f64>().ok())
+}
+
+/// Extract an i64 from a Sexp string.
+fn get_i64(sexp: &Sexp) -> Option<i64> {
+    sexp.string().ok().and_then(|s| s.parse::<i64>().ok())
+}
+
+/// Find a child list with name `child_name` that contains (name X Y).
+fn find_xy_child(sexp: &Sexp, child_name: &str) -> Option<(f64, f64)> {
+    if let Ok(list) = sexp.list() {
+        for child in list {
+            if list_name(child).as_deref() == Some(child_name) {
+                if let Ok(sub) = child.list() {
+                    if sub.len() >= 3 {
+                        let x = get_f64(&sub[1])?;
+                        let y = get_f64(&sub[2])?;
+                        return Some((x, y));
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Calculate bounding box from pad definitions.
+fn calculate_pad_bounds(pads: &[PadDef]) -> Rect {
+    if pads.is_empty() {
+        return Rect::default();
+    }
+
+    let mut min_x = i64::MAX;
+    let mut min_y = i64::MAX;
+    let mut max_x = i64::MIN;
+    let mut max_y = i64::MIN;
+
+    for pad in pads {
+        let half_w = pad.size.0 .0 / 2;
+        let half_h = pad.size.1 .0 / 2;
+
+        min_x = min_x.min(pad.position.x.0 - half_w);
+        min_y = min_y.min(pad.position.y.0 - half_h);
+        max_x = max_x.max(pad.position.x.0 + half_w);
+        max_y = max_y.max(pad.position.y.0 + half_h);
+    }
+
+    Rect::from_points(
+        Point::new(Nm(min_x), Nm(min_y)),
+        Point::new(Nm(max_x), Nm(max_y)),
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_layer_name() {
+        assert_eq!(parse_layer_name("F.Cu"), Some(Layer::TopCopper));
+        assert_eq!(parse_layer_name("B.Cu"), Some(Layer::BottomCopper));
+        assert_eq!(parse_layer_name("In1.Cu"), Some(Layer::Inner(1)));
+        assert_eq!(parse_layer_name("In2.Cu"), Some(Layer::Inner(2)));
+        assert_eq!(parse_layer_name("F.SilkS"), Some(Layer::TopSilk));
+        assert_eq!(parse_layer_name("B.SilkS"), Some(Layer::BottomSilk));
+        assert_eq!(parse_layer_name("F.Mask"), Some(Layer::TopMask));
+        assert_eq!(parse_layer_name("Edge.Cuts"), Some(Layer::Outline));
+        assert_eq!(parse_layer_name("Unknown"), None);
+    }
+
+    #[test]
+    fn test_empty_input_returns_error() {
+        let result = parse_kicad_pcb_str("");
+        match result {
+            Err(KicadPcbError::SexprParseError(_)) => {} // Expected
+            Err(other) => panic!("Expected SexprParseError, got {:?}", other),
+            Ok(_) => panic!("Expected error for empty input"),
+        }
+    }
+
+    #[test]
+    fn test_unsupported_version_returns_error() {
+        let input = r#"(kicad_pcb (version 1))"#;
+        let result = parse_kicad_pcb_str(input);
+        match result {
+            Err(KicadPcbError::UnsupportedVersion { version }) => {
+                assert_eq!(version, 1);
+            }
+            Err(other) => panic!("Expected UnsupportedVersion, got {:?}", other),
+            Ok(_) => panic!("Expected error for unsupported version"),
+        }
+    }
+}

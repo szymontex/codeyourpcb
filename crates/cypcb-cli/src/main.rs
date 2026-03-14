@@ -47,6 +47,8 @@ enum Commands {
     Route(commands::RouteCommand),
     /// Export a .cypcb file to manufacturing files
     Export(commands::ExportCommand),
+    /// Parse a KiCad .kicad_pcb file and output metadata as JSON
+    ParseKicad(commands::ParseKicadCommand),
 }
 
 fn main() -> Result<()> {
@@ -57,5 +59,6 @@ fn main() -> Result<()> {
         Commands::Check(cmd) => cmd.run(),
         Commands::Route(cmd) => cmd.run(),
         Commands::Export(cmd) => cmd.run(),
+        Commands::ParseKicad(cmd) => cmd.run(),
     }
 }

@@ -6,14 +6,14 @@ This file is the explicit capability and coverage contract for the project.
 
 ### R101 — KiCad .kicad_pcb Board Parser
 - Class: core-capability
-- Status: active
+- Status: validated
 - Description: Parse KiCad 6/7/8 .kicad_pcb files (S-expression format) into BoardWorld — extract board outline, footprints, pads, nets, existing traces, vias, and zones
 - Why it matters: Ground truth for benchmarking requires real PCB designs; KiCad is the standard open-source format
 - Source: user
 - Primary owning slice: M004/S01
 - Supporting slices: none
-- Validation: unmapped
-- Notes: Only need placement+netlist extraction (not full KiCad fidelity). Dimensions in mm, our model uses nm.
+- Validation: 39 tests (unit + integration), CLI JSON output on 3 fixtures, ratsnest compatibility proof — M004/S01
+- Notes: Only need placement+netlist extraction (not full KiCad fidelity). Dimensions in mm, our model uses nm. Zones not yet extracted (no Zone type in ECS). Board outline is bounding-box only.
 
 ### R102 — Benchmark Suite from Real KiCad Projects
 - Class: quality-attribute
@@ -23,8 +23,8 @@ This file is the explicit capability and coverage contract for the project.
 - Source: user
 - Primary owning slice: M004/S01
 - Supporting slices: M004/S07
-- Validation: unmapped
-- Notes: Store reference routing for comparison. Fixtures include original .kicad_pcb + extracted placement-only version for re-routing.
+- Validation: 3 synthetic fixtures parse with correct metadata, BENCHMARKS const + get_benchmarks() accessor, 5 integration tests — M004/S01 (partial: synthetic, not downloaded real projects)
+- Notes: Fixtures are synthetic KiCad 8 files (license-clean, controlled). Real project fixtures may be added later. Store reference routing for comparison.
 
 ### R103 — Routing Quality Scoring System
 - Class: core-capability
@@ -243,8 +243,8 @@ This file is the explicit capability and coverage contract for the project.
 
 | ID | Class | Status | Primary owner | Supporting | Proof |
 |---|---|---|---|---|---|
-| R101 | core-capability | active | M004/S01 | none | unmapped |
-| R102 | quality-attribute | active | M004/S01 | M004/S07 | unmapped |
+| R101 | core-capability | validated | M004/S01 | none | 39 tests + CLI + ratsnest compat (M004/S01) |
+| R102 | quality-attribute | active | M004/S01 | M004/S07 | partial: 3 synthetic fixtures parse (M004/S01) |
 | R103 | core-capability | active | M004/S02 | M004/S06, M004/S07 | unmapped |
 | R104 | core-capability | active | M004/S03 | M004/S07 | unmapped |
 | R105 | core-capability | active | M004/S03 | none | unmapped |
@@ -267,7 +267,7 @@ This file is the explicit capability and coverage contract for the project.
 
 ## Coverage Summary
 
-- Active requirements: 16
-- Mapped to slices: 16
-- Validated: 0
+- Active requirements: 15
+- Mapped to slices: 15
+- Validated: 1
 - Unmapped active requirements: 0

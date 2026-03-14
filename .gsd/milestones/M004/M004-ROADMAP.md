@@ -55,7 +55,7 @@ This milestone is complete only when all are true:
 
 ## Slices
 
-- [ ] **S01: KiCad PCB Parser & Benchmark Fixtures** `risk:high` `depends:[]`
+- [x] **S01: KiCad PCB Parser & Benchmark Fixtures** `risk:high` `depends:[]`
   > After this: 3+ real .kicad_pcb files parse into BoardWorld with correct components, pads, nets, and board outline. CLI command `parse-kicad` produces valid .cypcb-compatible data. Benchmark fixture files exist with reference routing scores.
 
 - [ ] **S02: Routing Quality Score System** `risk:medium` `depends:[]`

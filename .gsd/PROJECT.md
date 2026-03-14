@@ -28,7 +28,7 @@
 - Unit system (mm/mil/µm) with formatDimension/parseUserDimension wired to all display sites
 - Settings persistence (localStorage) with typed get/set/subscribe API
 
-**Active milestone:** M004 — Production-Grade Autorouter (replacing prototype A* with empirically-validated multi-strategy engine)
+**Active milestone:** M004 — Production-Grade Autorouter (S01 complete, S02-S07 remaining)
 
 **Known tech debt / deferred items:**
 - DSL v2 constructs are parse-only — no module instantiation, import resolution, or constraint evaluation

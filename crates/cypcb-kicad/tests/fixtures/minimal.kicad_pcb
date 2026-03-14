@@ -1,0 +1,47 @@
+(kicad_pcb (version 20240108) (generator "hand-written-test")
+
+  (general
+    (thickness 1.6)
+  )
+
+  (layers
+    (0 "F.Cu" signal)
+    (31 "B.Cu" signal)
+    (32 "B.Adhes" user)
+    (33 "F.Adhes" user)
+    (34 "B.Paste" user)
+    (35 "F.Paste" user)
+    (36 "B.SilkS" user)
+    (37 "F.SilkS" user)
+    (38 "B.Mask" user)
+    (39 "F.Mask" user)
+    (44 "Edge.Cuts" user)
+  )
+
+  (net 0 "")
+  (net 1 "VCC")
+  (net 2 "GND")
+
+  (gr_rect (start 0 0) (end 30 20) (layer "Edge.Cuts") (width 0.05))
+
+  (footprint "Resistor_SMD:R_0402"
+    (at 10 8)
+    (property "Reference" "R1")
+    (property "Value" "10k")
+    (pad "1" smd rect (at -0.5 0) (size 0.6 0.5) (layers "F.Cu" "F.Paste" "F.Mask") (net 1 "VCC"))
+    (pad "2" smd rect (at 0.5 0) (size 0.6 0.5) (layers "F.Cu" "F.Paste" "F.Mask") (net 2 "GND"))
+  )
+
+  (footprint "LED_THT:LED_D3.0mm"
+    (at 20 12 90)
+    (property "Reference" "LED1")
+    (property "Value" "Red")
+    (pad "1" thru_hole circle (at 0 -1.27) (size 1.8 1.8) (drill 0.9) (layers "*.Cu" "*.Mask") (net 1 "VCC"))
+    (pad "2" thru_hole circle (at 0 1.27) (size 1.8 1.8) (drill 0.9) (layers "*.Cu" "*.Mask") (net 2 "GND"))
+  )
+
+  (segment (start 10.5 8) (end 20 8) (width 0.25) (layer "F.Cu") (net 1))
+
+  (via (at 20 8) (size 0.8) (drill 0.4) (layers "F.Cu" "B.Cu") (net 1))
+
+)
