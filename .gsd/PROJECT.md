@@ -2,14 +2,20 @@
 
 ## Current State
 
-**Version:** 0.1.0-beta (M003 complete 2026-03-13)
-**Status:** Professional-grade user-facing quality — 2D renderer with pad numbers/net labels/layer colors, working 3D view, routing UX with magnetic snap, clean UI with preferences, project manager, JLCPCB search
-**Codebase:** ~39,300 lines (Rust + TypeScript)
+**Version:** 0.2.0-beta (M004 complete 2026-03-14)
+**Status:** Production-grade autorouter with multi-strategy routing, quality scoring, realtime tuning, and variant preview — on top of professional 2D/3D renderer, routing UX, and full tool stack
+**Codebase:** ~44,000 lines (Rust + TypeScript)
 
 **What works:**
 - Write .cypcb files → see board in 2D and 3D viewers with hot reload
 - DSL v2: modules, typed interfaces (I2C, SPI, Power), physical units (23 variants), constraint assertions
-- Custom A*-based autorouter (500-component board in 0.05s, multi-layer, constraint-aware)
+- **Production-grade autorouter** — PathFinder negotiated congestion + ImprovedAStar, multi-strategy with empirical selection. PathFinder beats A* 3× on composite score.
+- **Routing quality scoring** — 7-metric RoutingScore (trace length, via count, DRC violations, smoothness, crossings, layer balance, composite). CLI `cypcb score` command.
+- **Trace smoother** — 3-pass post-processor (staircase collapse, corner chamfer, collinear merge) producing clean 45°/90° geometry (smoothness=1.000)
+- **Realtime tuning** — 4 sliders (Via Cost, Layer Preference, Roundness, Density) trigger debounced WASM re-routing. Parameters persist in settings.
+- **Variant generation** — Route button generates 3-4 variants with different strategies/params, auto-applies best, hover preview shows alternatives as ghost overlay on canvas
+- **KiCad .kicad_pcb parser** — parses KiCad 5-8 format into BoardWorld. 3 benchmark fixtures. CLI `cypcb parse-kicad` command.
+- **Automated benchmark suite** — CI regression gate (composite ≤ 5501, DRC ≤ 5, smoothness ≥ 0.95), full matrix comparison, screenshot artifacts
 - Manual trace editing with click-drag routing, angle snapping, and live DRC feedback
 - 3D board viewer (Three.js) with procedural component bodies, orbit/zoom/pan, layer visibility — renders real geometry (components, pads, traces, vias) with EasyEDA OBJ model loading pipeline
 - Grid snap, command-pattern undo/redo, net highlighting, component rotation, board outline resize
@@ -21,14 +27,14 @@
 - Tauri v2 desktop application (native menus, file dialogs, installer)
 - Web deployment (Cloudflare Pages, File System Access API, URL sharing)
 - 8-stage quality gate: cargo fmt, clippy, cargo test, eslint, vitest, playwright, autorouter benchmark, jscpd
-- 127 Vitest unit tests + 94 Playwright E2E tests (all passing)
+- 127 Vitest unit tests + 108 Playwright E2E tests (all passing)
 - Professional 2D renderer with LOD, per-pad net highlighting, component body outlines, pad numbers, net labels, drill marks
 - Routing UX: net-aware target pad highlighting, ratsnest guide, magnetic snap to destination, angle constraint toggle (A key), keyboard handlers (Escape/F/A)
 - Clean toolbar with essential tools only; View dropdown for layer/grid/ratsnest/net-labels; Preferences modal for theme/units/grid/colors
 - Unit system (mm/mil/µm) with formatDimension/parseUserDimension wired to all display sites
 - Settings persistence (localStorage) with typed get/set/subscribe API
 
-**Active milestone:** M004 — Production-Grade Autorouter (S01 ✅, S02 ✅, S03 ✅, S04 ✅, S05 ✅, S06 ✅, S07 ✅) — **COMPLETE**
+**Next milestone:** M005 — PCB Renderer Upgrade (KiCad/Atopile visual standard)
 
 **Known tech debt / deferred items:**
 - DSL v2 constructs are parse-only — no module instantiation, import resolution, or constraint evaluation
@@ -40,6 +46,9 @@
 - Library management still needs depth (JLCPCB search exists but no "add to library" flow)
 - Pre-existing E2E flake in errors.spec.ts:102 ("Ready" vs "Reloaded" status race) — stable in current runs
 - ThemeManager has separate 'theme' localStorage key from settings 'cypcb-settings' key (by design for FART prevention)
+- DRC violations at 5 (not zero) on led_blink benchmark — grid-boundary artifacts, not crossing traces (90% reduction from baseline 50)
+- Benchmark fixtures are synthetic (not real downloaded KiCad projects) — functionally equivalent but lack real-world edge case coverage
+- Variant click-to-apply is display-only (doesn't re-route with clicked config) — hover preview works correctly
 
 ## Completed Milestone: v1.0 + v1.1 "Full Stack PCB Design Tool" ✅
 
@@ -86,12 +95,25 @@
 - ✅ S06: JLCPCB integration — component search via jlcsearch API, EasyEDA OBJ 3D model pipeline, search panel UI
 - ✅ S07: Polish & verification — quality gate clean, version 0.1.0-beta, JLCPCB error handling, 94 E2E tests
 
+## Completed Milestone: M004 "Production-Grade Autorouter" ✅
+
+**Goal:** Replace prototype A* autorouter with production-grade, empirically-validated routing engine.
+
+**Delivered:**
+- ✅ S01: KiCad .kicad_pcb parser (KiCad 5-8), 3 benchmark fixtures, CLI parse-kicad command, ratsnest compatibility
+- ✅ S02: 7-metric routing quality scoring system (RoutingScore), CLI score command, baseline scores established
+- ✅ S03: PathFinder negotiated congestion router beating ImprovedAStar 3× (composite 5001 vs 15544), RoutingStrategy trait
+- ✅ S04: 3-pass trace smoother (smoothness=1.000), via optimizer, DRC non-regression proven
+- ✅ S05: Realtime tuning — 4 sliders with 300ms debounced WASM re-routing, AutorouteParams struct
+- ✅ S06: Variant generation — 3-4 variants per route, ranked score panel, hover ghost preview on canvas
+- ✅ S07: Automated benchmark suite — CI regression gate, strategy comparison, screenshot artifacts
+
 ## Milestone Sequence
 
 - [x] M001: CodeYourPCB v1.0 + v1.1 — Full stack PCB design tool
 - [x] M002: Infrastructure & Engine — Autorouter, 3D, DSL v2, test suite
 - [x] M003: From Prototype to Tool — Professional board view & UX
-- [x] M004: Production-Grade Autorouter — Multi-strategy, scored, realtime-tunable (all 7 slices complete)
+- [x] M004: Production-Grade Autorouter — Multi-strategy routing, quality scoring, realtime tuning, variant preview, benchmark validation
 - [ ] M005: PCB Renderer Upgrade — KiCad/Atopile visual standard
 
 ## What This Is
@@ -140,6 +162,20 @@ A code-first PCB design tool where you write code and it generates circuit board
 - ✅ Board outline resize — v2.0
 - ✅ E2E test suite and quality gates — v2.0
 - ✅ Performance benchmarks (autorouter, web load, 3D FPS) — v2.0
+- ✅ KiCad .kicad_pcb board parser (KiCad 5-8) — M004
+- ✅ Routing quality scoring system (7 metrics + composite) — M004
+- ✅ Multi-strategy routing engine (PathFinder + ImprovedAStar) — M004
+- ✅ Negotiated congestion with rip-up/reroute — M004
+- ✅ Strategic via placement — M004
+- ✅ Clean 45°/90° trace geometry (smoothness=1.000) — M004
+- ✅ Trace smoothing post-processor (3-pass) — M004
+- ✅ Realtime tuning parameters (4 sliders, debounced re-routing) — M004
+- ✅ Reactive re-routing on parameter change — M004
+- ✅ Routing variant generation (3-4 variants) — M004
+- ✅ Auto-apply best variant with hover preview — M004
+- ✅ Benchmark validation with CI regression gate — M004
+- ✅ Visual comparison via screenshot artifacts — M004
+- ✅ Empirical strategy selection (PathFinder confirmed) — M004
 
 ### Deferred
 
@@ -181,8 +217,8 @@ Current PCB tools (KiCad, Eagle, Altium) are GUI-first. The project file is a bi
 - Teams wanting proper version control on hardware designs
 - Anyone wanting to leverage LLMs for PCB design assistance
 
-**Competitive Position (as of v2.0):**
-- Strongest areas: standalone platform (no KiCad dependency), built-in autorouter, web+desktop, collaboration-friendly
+**Competitive Position (as of M004):**
+- Strongest areas: standalone platform (no KiCad dependency), **production-grade autorouter with multi-strategy competition and quality scoring**, web+desktop, collaboration-friendly
 - Weakest area: library management depth (JLCPCB search exists but no "add to library" flow — still #1 adoption blocker per feature matrix)
 - Feature matrix covers 9 EDA tools (atopile, KiCad, Altium, Allegro, OrCAD, EAGLE, EasyEDA, Flux.ai, diodeinc/pcb) across 11 categories
 
@@ -197,4 +233,4 @@ Current PCB tools (KiCad, Eagle, Altium) are GUI-first. The project file is a bi
 - **Compatibility:** Export to industry standard formats (Gerber, Excellon, BOM, CPL)
 
 ---
-*Last updated: 2026-03-14 after completing M004/S07 (M004 complete)*
+*Last updated: 2026-03-14 after completing M004 (Production-Grade Autorouter — all 7 slices, 14 requirements validated)*
