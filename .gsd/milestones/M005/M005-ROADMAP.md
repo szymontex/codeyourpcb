@@ -5,40 +5,38 @@
 ## Success Criteria
 
 - Route button never freezes the browser — main thread stays responsive during routing
-- Spinner/progress overlay visible while routing executes in background
-- Cancel button terminates routing mid-execution
-- Blink LED template routes 25/25 connections (0 unrouted, 0 ratsnest remaining)
+- Spinner/progress overlay visible and cancel button clickable while routing executes in background
+- Blink LED template routes all connections (0 unrouted, 0 ratsnest remaining)
 - Variant generation works via Web Worker with score panel and hover preview
-- E2E tests verify UI responsiveness and routing quality in CI
+- E2E tests in CI verify UI responsiveness during routing and routing result quality
 
 ## Key Risks / Unknowns
 
-- WASM initialization inside Web Worker — wasm-bindgen init() pattern must work in worker context
-- PathFinder convergence failure on Blink LED — 5 nets unrouted, root cause unknown
-- Cancel mechanism — WASM is synchronous, only option is worker.terminate()
+- WASM initialization inside Web Worker — wasm-bindgen `--target web` init() must work in worker context with Vite bundling
+- PathFinder convergence on multi-pad nets — 5/25 connections unrouted on Blink LED, root cause unknown (grid resolution? spanning tree? pad mapping?)
 
 ## Proof Strategy
 
-- WASM-in-Worker init → retire in S01 by proving WASM loads and routes inside Worker
-- PathFinder convergence → retire in S02 by proving 0 unrouted on Blink LED natively and in WASM
-- E2E responsiveness → retire in S03 by proving Playwright can interact with UI during routing
+- WASM-in-Worker → retire in S01 by shipping working Route button that routes via Worker with visible spinner and cancel
+- PathFinder convergence → retire in S02 by proving 0 unrouted on Blink LED in `cargo test --release`
 
 ## Verification Classes
 
-- Contract verification: unit tests for worker message protocol, PathFinder convergence tests
-- Integration verification: WASM routing via Worker produces correct result displayed in UI
-- Operational verification: browser responsiveness during routing (no page unresponsive dialogs)
-- UAT / human verification: visual confirmation of routed board quality
+- Contract verification: cargo tests for PathFinder convergence, Vitest for worker message protocol
+- Integration verification: Route button → Worker → WASM → snapshot back → canvas renders traces
+- Operational verification: browser responsiveness during routing (Playwright interacts with UI during route)
+- UAT / human verification: visual confirmation of routed Blink LED board
 
 ## Milestone Definition of Done
 
 This milestone is complete only when all are true:
 
-- Web Worker routing integrated — Route button, tuning sliders, and variant generation all route via Worker
-- Blink LED routes fully (0 unrouted) both natively and via WASM
-- E2E tests pass in CI verifying responsiveness and quality
-- Cancel button works (terminates worker, resets UI)
-- Variant panel functional with score ranking and hover preview via Worker
+- Route button routes via Web Worker — browser never freezes
+- Cancel button terminates routing immediately
+- Blink LED routes 0 unrouted natively and via WASM Worker
+- Variant panel shows ranked results via Worker, hover preview works
+- E2E tests pass in CI catching both responsiveness and quality regressions
+- Tuning sliders re-route via Worker
 
 ## Requirement Coverage
 
@@ -50,27 +48,27 @@ This milestone is complete only when all are true:
 ## Slices
 
 - [ ] **S01: Web Worker WASM Routing** `risk:high` `depends:[]`
-  > After this: Route button sends routing to background worker, browser stays responsive, spinner visible, result appears without freeze. Cancel terminates worker.
+  > After this: User clicks Route → spinner overlay visible, browser responsive, cancel button works, routed board appears when done. All proven in browser via Vite dev server.
 
 - [ ] **S02: Routing Quality — 0 Unrouted on Blink LED** `risk:medium` `depends:[]`
-  > After this: Blink LED template routes 25/25 connections natively (cargo test proves 0 unrouted). PathFinder convergence fixed.
+  > After this: `cargo test` proves PathFinder routes all 25 connections on Blink LED with 0 unrouted. WASM routing via Worker also produces 0 unrouted on Blink LED (verified in browser).
 
 - [ ] **S03: E2E Regression Tests** `risk:low` `depends:[S01,S02]`
-  > After this: CI pipeline has E2E tests that catch UI freeze regressions and routing quality regressions. Green pipeline.
+  > After this: CI has Playwright tests that assert UI is responsive during routing and result has 0 unrouted. Pipeline green.
 
-- [ ] **S04: Variant Generation via Worker** `risk:low` `depends:[S01]`
-  > After this: Route button generates 3+ variants via Worker, score panel shows ranked results, hover preview renders alternatives.
+- [ ] **S04: Variant Generation & Tuning via Worker** `risk:low` `depends:[S01]`
+  > After this: Route button generates 3+ variants via Worker, score panel shows ranked results, hover preview renders alternatives. Tuning sliders re-route via Worker.
 
 ## Boundary Map
 
 ### S01 → S03
 
 Produces:
-- `viewer/src/routing-worker.ts` — Web Worker script that loads WASM, accepts route/cancel messages, posts results
-- `triggerRouting()` refactored to postMessage pattern — returns immediately, result via onmessage callback
-- Cancel mechanism via worker.terminate() + fresh worker spawn
-- Routing overlay visible during Worker execution (setTimeout yield not needed — Worker is non-blocking)
-- `window.__routingWorker` debug surface for E2E: `{ active: bool, lastResult: string }`
+- `viewer/src/routing-worker.ts` — Web Worker that loads WASM, accepts `{type:'route', source}` messages, posts `{type:'route-result', snapshot, routeResult}` back
+- `triggerRouting()` refactored: shows overlay, posts to worker, handles result via `worker.onmessage`, calls `pullSnapshot()` with worker's snapshot
+- Cancel: `worker.terminate()` + spawn fresh worker, UI reset to pre-route state
+- `window.__routingWorker` debug surface: `{ active: boolean, lastResult: string | null }`
+- Routing overlay/spinner visible for full duration (main thread free to paint)
 
 Consumes:
 - nothing (first slice)
@@ -78,9 +76,9 @@ Consumes:
 ### S01 → S04
 
 Produces:
-- Worker message protocol: `{ type: 'route' | 'route-variants' | 'route-with-params', source: string, params?: string }`
-- Worker response protocol: `{ type: 'result' | 'variant-result' | 'error', data: string }`
-- Worker lifecycle: spawn, ready detection, terminate, respawn
+- Worker message protocol supporting `{type:'route-variants', source}` and `{type:'route-with-params', source, params}`
+- Worker response protocol: `{type:'variant-result', variants}` and `{type:'route-result', snapshot, routeResult}`
+- Worker lifecycle: `spawnWorker()`, `terminateWorker()`, ready detection via `{type:'ready'}` message from worker after WASM init
 
 Consumes:
 - nothing (first slice)
@@ -88,33 +86,33 @@ Consumes:
 ### S02 → S03
 
 Produces:
-- PathFinder convergence fix — 0 unrouted on Blink LED in `cargo test`
-- Regression test: `test_blink_zero_unrouted` in cypcb-autoroute
+- PathFinder fix — 0 unrouted on Blink LED in `cargo test -p cypcb-autoroute --release`
+- New test: `test_blink_led_zero_unrouted` asserting `unrouted == 0`
+- WASM binary rebuilt with the fix
 
 Consumes:
-- nothing (parallel slice)
+- nothing (parallel to S01)
 
 ### S03
 
 Produces:
-- `viewer/e2e/autoroute-worker.spec.ts` — E2E test: load board, click Route, verify UI responsive + result quality
-- Tests assert: overlay visible during routing, cancel works, 0 unrouted on simple board
+- `viewer/e2e/autoroute-worker.spec.ts` — tests: overlay visible during routing, cancel works, 0 unrouted result
+- CI catches: UI freeze regression (overlay not visible = fail), quality regression (unrouted > 0 = fail)
 
 Consumes from S01:
-- Worker-based routing flow (triggerRouting via postMessage)
+- Worker-based routing (non-blocking triggerRouting)
 - Debug surface `window.__routingWorker`
 
 Consumes from S02:
-- 0 unrouted guarantee on Blink LED
+- 0 unrouted guarantee (PathFinder fix in WASM binary)
 
 ### S04
 
 Produces:
-- Variant generation via Worker (`auto_route_variants` message type)
-- Score panel populated from Worker results
-- Hover preview functional
-- Tuning sliders route via Worker
+- Variant generation via Worker: `auto_route_variants()` in worker, results posted back
+- Score panel populated from worker variant results
+- Hover preview functional (ghost overlay)
+- Tuning sliders send `route-with-params` to Worker
 
 Consumes from S01:
-- Worker message protocol and lifecycle
-- `triggerRouting()` postMessage pattern
+- Worker message protocol, lifecycle, `triggerRouting()` pattern
