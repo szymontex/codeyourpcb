@@ -71,11 +71,6 @@ pub fn default_variant_configs() -> Vec<VariantConfig> {
             },
         },
         VariantConfig {
-            name: "ImprovedAStar Default".to_string(),
-            strategy: StrategyKind::ImprovedAStar,
-            params: AutorouteParams::default(),
-        },
-        VariantConfig {
             name: "PathFinder High-Density".to_string(),
             strategy: StrategyKind::PathFinder,
             params: AutorouteParams {
@@ -84,6 +79,18 @@ pub fn default_variant_configs() -> Vec<VariantConfig> {
             },
         },
     ]
+}
+
+/// Full variant configs including ImprovedAStar — for native benchmarks only.
+/// ImprovedAStar is too slow for WASM (blocks main thread for 20s+ on simple boards).
+pub fn all_variant_configs() -> Vec<VariantConfig> {
+    let mut configs = default_variant_configs();
+    configs.push(VariantConfig {
+        name: "ImprovedAStar Default".to_string(),
+        strategy: StrategyKind::ImprovedAStar,
+        params: AutorouteParams::default(),
+    });
+    configs
 }
 
 /// Generate multiple routing variants sequentially on a single `&mut BoardWorld`.
@@ -268,13 +275,19 @@ mod tests {
     use super::*;
 
     #[test]
-    fn default_variant_configs_returns_4() {
+    fn default_variant_configs_returns_3() {
         let configs = default_variant_configs();
-        assert_eq!(configs.len(), 4);
+        assert_eq!(configs.len(), 3);
         assert_eq!(configs[0].name, "PathFinder Default");
         assert_eq!(configs[1].name, "PathFinder Low-Via");
-        assert_eq!(configs[2].name, "ImprovedAStar Default");
-        assert_eq!(configs[3].name, "PathFinder High-Density");
+        assert_eq!(configs[2].name, "PathFinder High-Density");
+    }
+
+    #[test]
+    fn all_variant_configs_includes_improved_astar() {
+        let configs = all_variant_configs();
+        assert_eq!(configs.len(), 4);
+        assert!(configs.iter().any(|c| c.strategy == StrategyKind::ImprovedAStar));
     }
 
     #[test]
@@ -282,8 +295,7 @@ mod tests {
         let configs = default_variant_configs();
         assert_eq!(configs[0].strategy, StrategyKind::PathFinder);
         assert_eq!(configs[1].strategy, StrategyKind::PathFinder);
-        assert_eq!(configs[2].strategy, StrategyKind::ImprovedAStar);
-        assert_eq!(configs[3].strategy, StrategyKind::PathFinder);
+        assert_eq!(configs[2].strategy, StrategyKind::PathFinder);
     }
 
     #[test]
@@ -292,7 +304,7 @@ mod tests {
         // PathFinder Low-Via has via_cost=5.0
         assert_eq!(configs[1].params.via_cost, 5.0);
         // PathFinder High-Density has density=1.5
-        assert_eq!(configs[3].params.density, 1.5);
+        assert_eq!(configs[2].params.density, 1.5);
     }
 
     #[test]

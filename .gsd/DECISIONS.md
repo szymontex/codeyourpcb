@@ -170,3 +170,11 @@
 | D-M004-036 | S06 | observability | console_error_panic_hook added for WASM diagnostics | console_error_panic_hook::set_once() in PcbEngine::new() | WASM panics show only "unreachable" without this hook. With it, full Rust panic message + stack trace appears in browser console. Essential for debugging WASM issues. | No |
 | D-M004-037 | S07 | quality | Regression gate uses ±10% composite threshold, not exact match | `composite ≤ baseline × 1.1` (5501) instead of `composite == 5001` | Floating-point variation across platforms and minor algorithm changes would make exact-match tests flaky. 10% margin absorbs normal variation while still catching real regressions. | Yes — tighten if scores stabilize |
 | D-M004-038 | S07 | scope | Benchmark screenshots are artifacts for human review, not pixel-diffed | Playwright captures PNGs to `test-results/benchmark/`, no pixel comparison assertions | D-M004 DECISIONS note "headless WebGL rendering varies" — pixel comparison would be flaky. Screenshots serve R115 (visual comparison) via human inspection. | No |
+
+## M005 Decisions
+
+| # | When | Scope | Decision | Choice | Rationale | Revisable? |
+|---|------|-------|----------|--------|-----------|------------|
+| D-M005-001 | M005 | arch | WASM routing execution | Web Worker (off main thread) | Synchronous WASM on main thread freezes browser 60-160s. Worker is standard solution. | No |
+| D-M005-002 | M005 | arch | Cancel mechanism | worker.terminate() + respawn | WASM has no cooperative preemption. Terminate is the only reliable cancel. | Yes — if SharedArrayBuffer becomes available |
+| D-M005-003 | M005 | scope | R120 renderer upgrade | Deferred to future milestone | M005 repurposed for critical WASM fix. Renderer is separate work. | No |

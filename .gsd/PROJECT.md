@@ -34,7 +34,7 @@
 - Unit system (mm/mil/µm) with formatDimension/parseUserDimension wired to all display sites
 - Settings persistence (localStorage) with typed get/set/subscribe API
 
-**Next milestone:** M005 — PCB Renderer Upgrade (KiCad/Atopile visual standard)
+**Next milestone:** M005 — WASM Routing Off Main Thread (Web Worker, quality fix, E2E tests)
 
 **Known tech debt / deferred items:**
 - DSL v2 constructs are parse-only — no module instantiation, import resolution, or constraint evaluation
@@ -114,7 +114,7 @@
 - [x] M002: Infrastructure & Engine — Autorouter, 3D, DSL v2, test suite
 - [x] M003: From Prototype to Tool — Professional board view & UX
 - [x] M004: Production-Grade Autorouter — Multi-strategy routing, quality scoring, realtime tuning, variant preview, benchmark validation
-- [ ] M005: PCB Renderer Upgrade — KiCad/Atopile visual standard
+- [ ] M005: WASM Routing Off Main Thread — Web Worker, routing quality fix, E2E regression tests
 
 ## What This Is
 

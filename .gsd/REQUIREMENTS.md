@@ -180,6 +180,83 @@ This file is the explicit capability and coverage contract for the project.
 - Validation: benchmark_full_matrix proves PathFinder composite (5001) beats ImprovedAStar (15544) on led_blink by 3×. PathFinder confirmed as default strategy — M004/S07
 - Notes: Winner may vary by board complexity. Could result in automatic strategy selection heuristic.
 
+### R201 — Web Worker Routing — Main Thread Never Blocked
+- Class: core-capability
+- Status: active
+- Description: All WASM autorouting (single route, variants, tuning re-route) executes in a Web Worker. Main thread never calls synchronous WASM routing functions.
+- Why it matters: User says "zacina totalnie przeglądarkę" — synchronous WASM on main thread freezes UI for 60-160+ seconds. Unusable.
+- Source: user
+- Primary owning slice: M005/S01
+- Supporting slices: M005/S04
+- Validation: unmapped
+- Notes: Cancel via worker.terminate() + respawn. No SharedArrayBuffer (requires COOP/COEP headers).
+
+### R202 — Routing Progress Visible During Execution
+- Class: primary-user-loop
+- Status: active
+- Description: User sees a spinner/overlay immediately when routing starts and it remains visible throughout. Browser stays responsive — user can scroll, click cancel, interact with toolbar.
+- Why it matters: "żadnego okienka, żadnego progressbaru, po prostu freeze" — zero feedback is unacceptable UX
+- Source: user
+- Primary owning slice: M005/S01
+- Supporting slices: none
+- Validation: unmapped
+- Notes: With Web Worker, main thread is free to paint — spinner just works. No setTimeout hack needed.
+
+### R203 — Cancel Routing Mid-Execution
+- Class: primary-user-loop
+- Status: active
+- Description: Cancel button visible during routing, clicking it terminates the routing immediately and resets UI to pre-route state.
+- Why it matters: User cannot wait minutes for routing to finish on complex boards. Must have escape hatch.
+- Source: user
+- Primary owning slice: M005/S01
+- Supporting slices: none
+- Validation: unmapped
+- Notes: worker.terminate() is the only reliable cancellation — WASM has no cooperative preemption.
+
+### R204 — 0 Unrouted on Blink LED
+- Class: quality-attribute
+- Status: active
+- Description: PathFinder routes all 25 connections (8 nets) on the Blink LED template board with 0 unrouted. Proven by cargo test and by WASM result in browser.
+- Why it matters: User sees "jedno niechlujne połączenie i reszta to ray tracers na żółto" — 5/25 unrouted on simplest board means router is broken.
+- Source: user
+- Primary owning slice: M005/S02
+- Supporting slices: M005/S03
+- Validation: unmapped
+- Notes: Root cause suspected: PathFinder convergence failure on multi-pad nets (VCC has 5 pads, GND has 6).
+
+### R205 — E2E Test: UI Responsive During Routing
+- Class: quality-attribute
+- Status: active
+- Description: Playwright E2E test loads a board, clicks Route, and proves the browser did NOT freeze — overlay is visible, cancel button is clickable, page title is readable.
+- Why it matters: CI tests pass green while browser freezes — "żadne z Twoich internal sposobów pomiarów nie daje CI znać że to nie działa"
+- Source: user
+- Primary owning slice: M005/S03
+- Supporting slices: none
+- Validation: unmapped
+- Notes: Test must interact with UI DURING routing execution (not after). This only works with Web Worker.
+
+### R206 — E2E Test: Routing Result Quality
+- Class: quality-attribute
+- Status: active
+- Description: E2E test asserts routing result has 0 unrouted connections on a simple test board.
+- Why it matters: Catches routing quality regressions that unit tests miss (different environment, WASM vs native).
+- Source: user
+- Primary owning slice: M005/S03
+- Supporting slices: none
+- Validation: unmapped
+- Notes: Uses __routingWorker or status text to assert result quality.
+
+### R207 — Variant Generation via Web Worker
+- Class: core-capability
+- Status: active
+- Description: Route button generates 3+ routing variants via Web Worker. Score panel shows ranked results. Hover preview renders alternatives.
+- Why it matters: Variant generation was the M004 differentiator but broke in browser due to main-thread freeze. Must work via Worker.
+- Source: inferred
+- Primary owning slice: M005/S04
+- Supporting slices: none
+- Validation: unmapped
+- Notes: Builds on S01 Worker infrastructure. auto_route_variants() called inside worker.
+
 ## Deferred
 
 ### R120 — PCB Renderer Upgrade to KiCad/Atopile Visual Standard
@@ -188,10 +265,10 @@ This file is the explicit capability and coverage contract for the project.
 - Description: Upgrade 2D renderer to match KiCad/Atopile visual quality — proper copper fills, realistic pad shapes, via rings, solder mask, silkscreen
 - Why it matters: "nasz obecny widok PCB odbiega od standardu" — visual comparison and professional appearance
 - Source: user
-- Primary owning slice: M005 (separate milestone)
+- Primary owning slice: future (separate milestone)
 - Supporting slices: none
 - Validation: unmapped
-- Notes: User explicitly chose M005 for this. M004 uses current renderer for visual comparison.
+- Notes: Originally planned as M005, pushed to future milestone. M005 is now WASM routing fix.
 
 ### R121 — Differential Pair Routing
 - Class: core-capability
@@ -259,15 +336,22 @@ This file is the explicit capability and coverage contract for the project.
 | R114 | quality-attribute | validated | M004/S07 | M004/S01, M004/S02 | benchmark_regression CI gate + benchmark_full_matrix comparison (M004/S07) |
 | R115 | quality-attribute | validated | M004/S07 | none | 6 Playwright screenshots to test-results/benchmark/ (M004/S07) |
 | R116 | quality-attribute | validated | M004/S07 | M004/S03 | PathFinder 5001 vs ImprovedAStar 15544 on led_blink (M004/S07) |
-| R120 | quality-attribute | deferred | M005 | none | unmapped |
+| R120 | quality-attribute | deferred | future | none | unmapped |
 | R121 | core-capability | deferred | future | none | unmapped |
 | R122 | core-capability | deferred | future | none | unmapped |
 | R130 | constraint | out-of-scope | none | none | n/a |
 | R131 | constraint | out-of-scope | none | none | n/a |
+| R201 | core-capability | active | M005/S01 | M005/S04 | unmapped |
+| R202 | primary-user-loop | active | M005/S01 | none | unmapped |
+| R203 | primary-user-loop | active | M005/S01 | none | unmapped |
+| R204 | quality-attribute | active | M005/S02 | M005/S03 | unmapped |
+| R205 | quality-attribute | active | M005/S03 | none | unmapped |
+| R206 | quality-attribute | active | M005/S03 | none | unmapped |
+| R207 | core-capability | active | M005/S04 | none | unmapped |
 
 ## Coverage Summary
 
-- Active requirements: 2
-- Mapped to slices: 14
+- Active requirements: 9
+- Mapped to slices: 21
 - Validated: 14
 - Unmapped active requirements: 0

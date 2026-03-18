@@ -1438,7 +1438,7 @@ async function init(): Promise<void> {
       routeBtn.textContent = 'Routing...';
       cancelRouteBtn.classList.remove('hidden');
       routingStatus.classList.remove('hidden');
-      routingProgress.textContent = `Pass ${state.pass}: ${state.routed} routed, ${state.unrouted} unrouted (${state.elapsed}s)`;
+      routingProgress.textContent = 'This may take a moment — the browser will be unresponsive while routing.';
     } else {
       routeBtn.disabled = false;
       routeBtn.classList.remove('routing');
@@ -1478,7 +1478,7 @@ async function init(): Promise<void> {
 
     isRouting = true;
     routingStartTime = Date.now();
-    statusText.textContent = 'Generating variants…';
+    statusText.textContent = 'Routing…';
 
     updateRoutingUI({
       isRouting: true,
@@ -1488,23 +1488,26 @@ async function init(): Promise<void> {
       elapsed: 0,
     });
 
-    // Run variant generation — produces multiple routing alternatives
-    // Falls back to single auto_route() if variant generation crashes (WASM edge case)
+    // Yield to browser so it can paint the "Routing..." overlay before
+    // the synchronous WASM call blocks the main thread.
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    // Use single auto_route() — much faster than variant generation in WASM.
+    // Variant generation is available but too slow for interactive use in browser.
     try {
       let resultJson: string;
-      let isFallback = false;
 
       try {
-        resultJson = engine.auto_route_variants();
-      } catch (variantErr) {
-        console.warn('[Routing] Variant generation failed, falling back to auto_route():', variantErr);
+        resultJson = engine.auto_route();
+        (window as any).__lastRouteResult = resultJson;
+      } catch (routeErr) {
+        console.warn('[Routing] auto_route() failed:', routeErr);
         // Reload the board to reset WASM engine state after panic
         if (lastLoadedSource) {
           engine.load_source(lastLoadedSource);
         }
-        // Fall back to single auto_route
-        resultJson = engine.auto_route();
-        isFallback = true;
+        statusText.textContent = `Routing failed: ${routeErr}`;
+        return;
       }
 
       const elapsed = Math.round((Date.now() - routingStartTime) / 1000);
@@ -1526,39 +1529,20 @@ async function init(): Promise<void> {
         return;
       }
 
-      // Fallback path: auto_route() returned {ok:true, routed:N, ...}
-      if (isFallback && parsed && parsed.ok === true) {
+      // Success: auto_route() returned {ok:true, routed:N, unrouted:N}
+      if (parsed && parsed.ok === true) {
         pullSnapshot();
         dirty = true;
         const msg = parsed.unrouted > 0
           ? `Routed ${parsed.routed} segments (${parsed.unrouted} unrouted) in ${elapsed}s`
           : `Routed ${parsed.routed} segments in ${elapsed}s`;
         statusText.textContent = msg;
-        console.log(`[Routing] Fallback: ${msg}`);
+        console.log(`[Routing] ${msg}`);
         return;
       }
 
-      // Success: parsed is an array of VariantResult
-      const variantResults: VariantData[] = Array.isArray(parsed) ? parsed : [];
-
-      if (variantResults.length === 0) {
-        statusText.textContent = 'Routing produced no variants';
-        console.warn('[Routing] No variants returned');
-        return;
-      }
-
-      // Refresh snapshot (best variant was auto-applied by Rust engine)
-      pullSnapshot();
-      dirty = true;
-
-      // Store variants and show panel
-      storedVariants = variantResults;
-      showVariants(variantResults, 0); // index 0 = best (sorted by composite)
-
-      const bestName = variantResults[0].name;
-      const composite = variantResults[0].score.composite.toFixed(1);
-      statusText.textContent = `${variantResults.length} variants generated (best: ${bestName}, score ${composite}) in ${elapsed}s`;
-      console.log(`[Routing] ${variantResults.length} variants, best: ${bestName} (${composite}), ${elapsed}s`);
+      statusText.textContent = 'Routing produced unexpected result';
+      console.warn('[Routing] Unexpected response:', parsed);
 
     } catch (err) {
       statusText.textContent = `Routing error: ${err}`;
