@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "taskId": "T04",
+  "unitId": "M005/S01/T04",
+  "timestamp": 1773858280510,
+  "passed": false,
+  "discoverySource": "task-plan",
+  "checks": [
+    {
+      "command": "Start Vite dev server, load a board, adjust tuning slider — board re-routes via worker without freezing. Status text updates with result.",
+      "exitCode": 127,
+      "durationMs": 3,
+      "verdict": "fail"
+    }
+  ],
+  "retryAttempt": 1,
+  "maxRetries": 2
+}

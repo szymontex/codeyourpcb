@@ -47,7 +47,7 @@ This milestone is complete only when all are true:
 
 ## Slices
 
-- [ ] **S01: Web Worker WASM Routing** `risk:high` `depends:[]`
+- [x] **S01: Web Worker WASM Routing** `risk:high` `depends:[]`
   > After this: User clicks Route → spinner overlay visible, browser responsive, cancel button works, routed board appears when done. All proven in browser via Vite dev server.
 
 - [ ] **S02: Routing Quality — 0 Unrouted on Blink LED** `risk:medium` `depends:[]`
