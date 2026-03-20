@@ -70,11 +70,11 @@ export interface RenderConfig {
 export function createDefaultRenderConfig(): RenderConfig {
   return {
     layerColors: {
-      topCopper: '#C83434',
-      bottomCopper: '#3434C8',
-      silkscreen: '#C8C800',
-      via: '#808080',
-      drill: '#FFFFFF',
+      topCopper: '#C41E1E',
+      bottomCopper: '#1E1EC4',
+      silkscreen: '#F0F0F0',
+      via: '#C8C800',
+      drill: '#1A1A1A',
     },
 
     fontConfig: {

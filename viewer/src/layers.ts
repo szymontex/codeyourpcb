@@ -3,17 +3,24 @@
  * KiCad-style colors for familiar PCB visualization
  */
 
-// PCB electrical layer colors (fixed, not theme-dependent)
+// PCB electrical layer colors — KiCad-inspired professional palette
 export const LAYER_COLORS = {
-  top_copper: '#C83434',       // Red
-  bottom_copper: '#3434C8',    // Blue
-  top_silk: '#C8C8C8',         // Light gray
-  bottom_silk: '#808080',      // Gray
-  drill: '#FFFFFF',            // White (on dark) or black (on light)
+  top_copper: '#C41E1E',       // Brighter red (visible under solder mask)
+  bottom_copper: '#1E1EC4',    // Brighter blue (visible under solder mask)
+  top_silk: '#F0F0F0',         // Near-white silkscreen
+  bottom_silk: '#A0A0A0',     // Medium gray
+  drill: '#1A1A1A',            // Near-black drill holes
   violation: '#FF0000',        // Red for DRC errors
   violation_ring: '#FF0000',   // Ring outline for violation markers
-  via: '#808080',              // Gray for vias (between top/bottom)
-  ratsnest: '#FFD700',         // Gold/Yellow for unrouted connections
+  via: '#C8C800',              // Yellow-ish via annular ring (KiCad style)
+  via_hole: '#1A1A1A',         // Dark hole center
+  ratsnest: '#99CCFF',         // Light blue ratsnest (KiCad style)
+  solder_mask_top: 'rgba(0, 70, 0, 0.45)',     // Green solder mask overlay (slightly less opaque)
+  solder_mask_bottom: 'rgba(0, 55, 0, 0.45)',  // Slightly darker for bottom
+  pad_copper: '#B49E6A',       // Gold/brass pad copper (exposed)
+  pad_th: '#B49E6A',           // Through-hole pad ring
+  board_substrate: '#332B18',  // FR4 substrate tan/brown
+  courtyard: '#C8C8C880',     // Faint courtyard outline
 } as const;
 
 /**
@@ -72,19 +79,19 @@ export function getPadColor(layerMask: number, visibility: LayerVisibility): str
   if ((layerMask & LAYER_MASK.TOP_COPPER) && (layerMask & LAYER_MASK.BOTTOM_COPPER)) {
     // Show if either layer visible
     if (visibility.topCopper || visibility.bottomCopper) {
-      return '#C8C8C8'; // Gray for through-hole
+      return LAYER_COLORS.pad_th; // Gold/brass for through-hole
     }
     return null;
   }
 
   // Top-only SMD
   if (layerMask & LAYER_MASK.TOP_COPPER) {
-    return visibility.topCopper ? LAYER_COLORS.top_copper : null;
+    return visibility.topCopper ? LAYER_COLORS.pad_copper : null;
   }
 
   // Bottom-only SMD
   if (layerMask & LAYER_MASK.BOTTOM_COPPER) {
-    return visibility.bottomCopper ? LAYER_COLORS.bottom_copper : null;
+    return visibility.bottomCopper ? LAYER_COLORS.pad_copper : null;
   }
 
   return null;
@@ -188,7 +195,7 @@ export function getTraceColor(layer: string, visibility: LayerVisibility): strin
     default:
       // Inner layers - show if any copper layer is visible
       if (visibility.topCopper || visibility.bottomCopper) {
-        return '#34C834'; // Green for inner layers
+        return '#2E8B2E'; // Forest green for inner layers
       }
       return null;
   }

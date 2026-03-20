@@ -109,8 +109,9 @@ export function render(ctx: CanvasRenderingContext2D, state: RenderState): void 
   // Draw board outline
   drawBoardOutline(ctx, viewport, snapshot.board.width_nm, snapshot.board.height_nm, themeColors);
 
-  // Draw resize handles when not routing
-  if (!state.routing || state.routing.mode !== 'routing') {
+  // Draw resize handles only when hovering near board edge (not by default)
+  // They clutter the professional PCB view
+  if (state.activeResizeHandle) {
     drawResizeHandles(ctx, viewport, snapshot.board.width_nm, snapshot.board.height_nm, themeColors, state.activeResizeHandle ?? null);
   }
 
@@ -142,13 +143,19 @@ export function render(ctx: CanvasRenderingContext2D, state: RenderState): void 
     ctx.restore();
   }
 
-  // Draw components (pads, body outlines, drill marks)
+  // ---- SOLDER MASK OVERLAY ----
+  // Draw semi-transparent green solder mask over the board area.
+  // Solder mask goes on top of copper traces but before pad/via redraw.
+  drawSolderMask(ctx, viewport, snapshot, layers);
+
+  // Draw components (pads, body outlines, drill marks) — ON TOP of solder mask
+  // Pads are "exposed copper" visible through solder mask openings
   for (const comp of snapshot.components) {
     const isSelected = comp.refdes === selectedRefdes;
     drawComponent(ctx, viewport, comp, layers, isSelected, themeColors, state.highlightedNet, config, lodTier, padNetMap);
   }
 
-  // Draw vias on top of traces but below ratsnest
+  // Draw vias on top of solder mask (exposed annular rings)
   if (snapshot.vias) {
     for (const via of snapshot.vias) {
       if (layers.topCopper || layers.bottomCopper) {
@@ -254,27 +261,22 @@ function drawGrid(ctx: CanvasRenderingContext2D, vp: Viewport, themeColors: Retu
   const screenSpacing = gridSpacing * vp.scale;
   if (screenSpacing < 10) return;
 
-  ctx.strokeStyle = themeColors.grid;
-  ctx.lineWidth = 1;
-
   const [minX, maxY] = screenToWorld(vp, 0, 0);
   const [maxX, minY] = screenToWorld(vp, vp.width, vp.height);
 
   const startX = Math.floor(minX / gridSpacing) * gridSpacing;
   const startY = Math.floor(minY / gridSpacing) * gridSpacing;
 
-  ctx.beginPath();
+  // Use dots instead of lines for a professional look
+  const dotRadius = screenSpacing > 40 ? 1.5 : 1;
+  ctx.fillStyle = themeColors.grid;
+
   for (let x = startX; x <= maxX; x += gridSpacing) {
-    const [sx] = worldToScreen(vp, x, 0);
-    ctx.moveTo(sx, 0);
-    ctx.lineTo(sx, vp.height);
+    for (let y = startY; y <= maxY; y += gridSpacing) {
+      const [sx, sy] = worldToScreen(vp, x, y);
+      ctx.fillRect(sx - dotRadius, sy - dotRadius, dotRadius * 2, dotRadius * 2);
+    }
   }
-  for (let y = startY; y <= maxY; y += gridSpacing) {
-    const [, sy] = worldToScreen(vp, 0, y);
-    ctx.moveTo(0, sy);
-    ctx.lineTo(vp.width, sy);
-  }
-  ctx.stroke();
 }
 
 // ---------------------------------------------------------------------------
@@ -284,9 +286,17 @@ function drawGrid(ctx: CanvasRenderingContext2D, vp: Viewport, themeColors: Retu
 function drawBoardOutline(ctx: CanvasRenderingContext2D, vp: Viewport, width: number, height: number, themeColors: ReturnType<typeof getThemeColors>): void {
   const [x0, y0] = worldToScreen(vp, 0, 0);
   const [x1, y1] = worldToScreen(vp, width, height);
+  const w = x1 - x0;
+  const h = y0 - y1;
+
+  // Board substrate fill (FR4 tan/brown)
+  ctx.fillStyle = LAYER_COLORS.board_substrate;
+  ctx.fillRect(x0, y1, w, h);
+
+  // Board edge outline — thin yellow line
   ctx.strokeStyle = themeColors.board_outline;
-  ctx.lineWidth = 2;
-  ctx.strokeRect(x0, y1, x1 - x0, y0 - y1);
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(x0, y1, w, h);
 }
 
 export type ResizeHandle =
@@ -581,16 +591,27 @@ function drawVia(ctx: CanvasRenderingContext2D, vp: Viewport, via: ViaInfo, them
   const drillRadius = (via.drill * vp.scale) / 2;
   if (outerRadius < 1) return;
 
+  // Annular ring (copper pad around drill)
   ctx.beginPath();
   ctx.arc(sx, sy, outerRadius, 0, Math.PI * 2);
   ctx.fillStyle = LAYER_COLORS.via;
   ctx.fill();
 
+  // Drill hole (dark center)
   if (drillRadius > 0.5) {
     ctx.beginPath();
     ctx.arc(sx, sy, drillRadius, 0, Math.PI * 2);
-    ctx.fillStyle = themeColors.background;
+    ctx.fillStyle = LAYER_COLORS.via_hole;
     ctx.fill();
+
+    // Plating ring (thin bright ring between drill and copper)
+    if (outerRadius - drillRadius > 1.5) {
+      ctx.beginPath();
+      ctx.arc(sx, sy, drillRadius + 0.5, 0, Math.PI * 2);
+      ctx.strokeStyle = '#A0A060';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
   }
 }
 
@@ -846,21 +867,18 @@ function drawPad(
   if (pad.drill_nm) {
     const drillRadius = pad.drill_nm * vp.scale / 2;
     if (drillRadius > 0.5) {
-      ctx.fillStyle = themeColors.background;
+      // Dark drill hole
+      ctx.fillStyle = LAYER_COLORS.drill;
       ctx.beginPath();
       ctx.arc(0, 0, drillRadius, 0, Math.PI * 2);
       ctx.fill();
 
-      // Drill crosshair (LOD ≥ Medium) — drawn inside the drill hole
-      if (lodTier >= LodTier.Medium && drillRadius > 2) {
-        const crossLen = drillRadius * 0.7;
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+      // Plating ring
+      if (drillRadius > 2) {
+        ctx.strokeStyle = '#8A7A50';
         ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.moveTo(-crossLen, 0);
-        ctx.lineTo(crossLen, 0);
-        ctx.moveTo(0, -crossLen);
-        ctx.lineTo(0, crossLen);
+        ctx.arc(0, 0, drillRadius + 0.5, 0, Math.PI * 2);
         ctx.stroke();
       }
     }
@@ -891,6 +909,42 @@ function drawRoundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: n
 function drawOblong(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number): void {
   const r = Math.min(w, h) / 2;
   drawRoundRect(ctx, x, y, w, h, r);
+}
+
+// ---------------------------------------------------------------------------
+// Solder mask overlay — the green layer that makes it look like a real PCB
+// ---------------------------------------------------------------------------
+
+/**
+ * Draw solder mask as a semi-transparent green overlay on the board area.
+ * Pads and vias are drawn ON TOP of the mask (they represent exposed copper).
+ * Traces under the mask get the characteristic "covered" look.
+ */
+function drawSolderMask(
+  ctx: CanvasRenderingContext2D, vp: Viewport,
+  snapshot: BoardSnapshot, layers: LayerVisibility,
+): void {
+  if (!snapshot.board) return;
+
+  const [x0, y0] = worldToScreen(vp, 0, 0);
+  const [x1, y1] = worldToScreen(vp, snapshot.board.width_nm, snapshot.board.height_nm);
+  const boardLeft = x0;
+  const boardTop = y1;
+  const boardW = x1 - x0;
+  const boardH = y0 - y1;
+
+  ctx.save();
+
+  // Clip to board area
+  ctx.beginPath();
+  ctx.rect(boardLeft, boardTop, boardW, boardH);
+  ctx.clip();
+
+  // Draw the green solder mask fill
+  ctx.fillStyle = LAYER_COLORS.solder_mask_top;
+  ctx.fillRect(boardLeft, boardTop, boardW, boardH);
+
+  ctx.restore();
 }
 
 // ---------------------------------------------------------------------------

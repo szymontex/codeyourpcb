@@ -5,7 +5,7 @@
 
 use cypcb_core::{Nm, Point};
 use cypcb_world::components::trace::Trace;
-use cypcb_world::components::NetId;
+use cypcb_world::components::{NetConnections, NetId};
 use cypcb_world::BoardWorld;
 use hashbrown::{HashMap, HashSet};
 use rstar::AABB;
@@ -69,6 +69,23 @@ impl DrcRule for ClearanceRule {
             query.iter(ecs).map(|(e, n)| (e.index(), *n)).collect()
         };
 
+        // Build entity -> NetConnections lookup for components.
+        // Components (footprints) don't have a single NetId — they have
+        // NetConnections mapping each pin to a net. A trace touching a
+        // component's pad should be exempt if the trace's net matches
+        // any of the component's pin nets.
+        let net_connections_map: HashMap<u32, Vec<NetId>> = {
+            let ecs = world.ecs_mut();
+            let mut query = ecs.query::<(bevy_ecs::entity::Entity, &NetConnections)>();
+            query
+                .iter(ecs)
+                .map(|(e, nc)| {
+                    let nets: Vec<NetId> = nc.iter().map(|pc| pc.net).collect();
+                    (e.index(), nets)
+                })
+                .collect()
+        };
+
         // Pre-collect trace data for refined segment distance checking.
         // Each trace entity maps to (half_width, segments) for exact distance.
         let trace_map: HashMap<u32, TraceData> = {
@@ -129,14 +146,40 @@ impl DrcRule for ClearanceRule {
                 }
 
                 // Same-net exemption: skip clearance check if both entities
-                // belong to the same net (they're electrically connected)
-                if let (Some(net_a), Some(net_b)) = (
-                    net_map.get(&entry.entity.index()),
-                    net_map.get(&candidate.entity.index()),
-                ) {
-                    if net_a == net_b {
-                        continue;
-                    }
+                // belong to the same net (they're electrically connected).
+                //
+                // Three cases:
+                //  1. Both have NetId → direct comparison (trace-trace, trace-via)
+                //  2. One has NetId, the other has NetConnections → the trace/via
+                //     net must appear in the component's pin connections
+                //     (trace touching its own component's pad)
+                //  3. Both have NetConnections → share at least one common net
+                //     (two components with connected pads adjacent)
+                let a_idx = entry.entity.index();
+                let b_idx = candidate.entity.index();
+                let net_a = net_map.get(&a_idx);
+                let net_b = net_map.get(&b_idx);
+                let nc_a = net_connections_map.get(&a_idx);
+                let nc_b = net_connections_map.get(&b_idx);
+
+                let same_net = match (net_a, net_b) {
+                    // Case 1: both have a single NetId
+                    (Some(na), Some(nb)) => na == nb,
+                    // Case 2a: A has NetId, B is a component
+                    (Some(na), None) => nc_b.map_or(false, |nets| nets.contains(na)),
+                    // Case 2b: B has NetId, A is a component
+                    (None, Some(nb)) => nc_a.map_or(false, |nets| nets.contains(nb)),
+                    // Case 3: both are components — share a common net
+                    (None, None) => match (nc_a, nc_b) {
+                        (Some(nets_a), Some(nets_b)) => {
+                            nets_a.iter().any(|n| nets_b.contains(n))
+                        }
+                        _ => false,
+                    },
+                };
+
+                if same_net {
+                    continue;
                 }
 
                 // Phase 2: Calculate actual distance.
@@ -985,5 +1028,121 @@ mod tests {
         let violations = ClearanceRule.check(&mut world, &rules);
 
         assert!(violations.is_empty(), "Traces 5mm apart should not violate");
+    }
+
+    // ========================================================================
+    // Trace-to-component (NetConnections) same-net exemption tests
+    // ========================================================================
+
+    #[test]
+    fn test_trace_touching_own_component_pad_no_violation() {
+        // A trace on net VCC touching a component that has a pin on VCC.
+        // This is the normal case: a routed trace connects to a pad.
+        // Should NOT generate a clearance violation.
+        let mut world = BoardWorld::new();
+        let vcc = NetId::new(1);
+
+        // Component entity with NetConnections (has a pin on VCC)
+        let mut net_conns = cypcb_world::NetConnections::new();
+        net_conns.add(cypcb_world::PinConnection::new("1", vcc));
+        net_conns.add(cypcb_world::PinConnection::new("2", NetId::new(2))); // GND
+        let comp_entity = world.ecs_mut().spawn(net_conns).id();
+
+        // Trace entity on VCC net, touching the component's AABB
+        let trace = Trace {
+            segments: vec![TraceSegment::new(
+                Point::from_mm(1.0, 0.5),
+                Point::from_mm(5.0, 0.5),
+            )],
+            width: Nm::from_mm(0.2),
+            layer: Layer::TopCopper,
+            net_id: vcc,
+            locked: false,
+            source: TraceSource::Autorouted,
+        };
+        let trace_entity = world.ecs_mut().spawn((trace, vcc)).id();
+
+        // Component AABB: (0,0) to (1mm, 1mm), trace starts at x=1mm (touching)
+        let entries = vec![
+            SpatialEntry::new(
+                comp_entity,
+                Point::from_mm(0.0, 0.0),
+                Point::from_mm(1.0, 1.0),
+                Layer::TopCopper.to_copper_mask(),
+            ),
+            SpatialEntry::new(
+                trace_entity,
+                Point::from_mm(0.9, 0.4),  // trace AABB (with half-width)
+                Point::from_mm(5.1, 0.6),
+                Layer::TopCopper.to_copper_mask(),
+            ),
+        ];
+        world
+            .ecs_mut()
+            .resource_mut::<cypcb_world::SpatialIndex>()
+            .rebuild(entries);
+
+        let rules = DesignRules::jlcpcb_2layer();
+        let violations = ClearanceRule.check(&mut world, &rules);
+
+        assert!(
+            violations.is_empty(),
+            "Trace on VCC touching component with VCC pin should NOT violate clearance"
+        );
+    }
+
+    #[test]
+    fn test_trace_near_component_different_net_still_violates() {
+        // A trace on net SIG too close to a component that has NO pin on SIG.
+        // Should still generate a violation.
+        let mut world = BoardWorld::new();
+
+        let mut net_conns = cypcb_world::NetConnections::new();
+        net_conns.add(cypcb_world::PinConnection::new("1", NetId::new(1))); // VCC
+        net_conns.add(cypcb_world::PinConnection::new("2", NetId::new(2))); // GND
+        let comp_entity = world.ecs_mut().spawn(net_conns).id();
+
+        // Trace on net 3 (SIG) — not connected to this component
+        let sig_net = NetId::new(3);
+        let trace = Trace {
+            segments: vec![TraceSegment::new(
+                Point::from_mm(1.0, 0.5),
+                Point::from_mm(5.0, 0.5),
+            )],
+            width: Nm::from_mm(0.2),
+            layer: Layer::TopCopper,
+            net_id: sig_net,
+            locked: false,
+            source: TraceSource::Autorouted,
+        };
+        let trace_entity = world.ecs_mut().spawn((trace, sig_net)).id();
+
+        let entries = vec![
+            SpatialEntry::new(
+                comp_entity,
+                Point::from_mm(0.0, 0.0),
+                Point::from_mm(1.0, 1.0),
+                Layer::TopCopper.to_copper_mask(),
+            ),
+            SpatialEntry::new(
+                trace_entity,
+                Point::from_mm(0.9, 0.4),
+                Point::from_mm(5.1, 0.6),
+                Layer::TopCopper.to_copper_mask(),
+            ),
+        ];
+        world
+            .ecs_mut()
+            .resource_mut::<cypcb_world::SpatialIndex>()
+            .rebuild(entries);
+
+        let rules = DesignRules::jlcpcb_2layer();
+        let violations = ClearanceRule.check(&mut world, &rules);
+
+        assert_eq!(
+            violations.len(),
+            1,
+            "Trace on unrelated net near component should still violate"
+        );
     }
 }
