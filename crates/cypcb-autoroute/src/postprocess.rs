@@ -183,16 +183,27 @@ pub fn paths_to_output(
         let simplified = simplify_path(path);
         let (segs, vias) = convert_to_route_segments(&simplified, grid, net_id, rules);
         all_segments.extend(segs);
-        all_vias.extend(vias);
+
+        // Filter out vias at pad positions — THT pads already connect layers,
+        // so a via on a pad is redundant and visually confusing.
+        for via in vias {
+            let grid_pos = grid.nm_to_grid(via.position);
+            let is_on_pad = grid.cell(grid_pos.0, grid_pos.1, 0) & super::grid::CELL_PAD != 0
+                || grid.cell(grid_pos.0, grid_pos.1, 1) & super::grid::CELL_PAD != 0;
+            if !is_on_pad {
+                all_vias.push(via);
+            }
+        }
     }
 
+    let filtered_count = raw_steps; // for logging
     tracing::info!(
         net_id = net_id.id(),
-        raw_steps,
+        raw_steps = filtered_count,
         segments = all_segments.len(),
         vias = all_vias.len(),
         "post-processing: {} raw steps -> {} segments, {} vias",
-        raw_steps,
+        filtered_count,
         all_segments.len(),
         all_vias.len()
     );
