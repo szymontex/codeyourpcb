@@ -1012,41 +1012,61 @@ async function init(): Promise<void> {
       e.preventDefault();
       editorDropTarget.classList.remove('drop-hover');
 
-      // Try structured data first, fallback to plain text
+      // Try structured component data first
       const cypcbData = e.dataTransfer?.getData('application/x-cypcb-component');
-      let snippet: string | null = null;
 
       if (cypcbData) {
         try {
           const parsed = JSON.parse(cypcbData);
-          snippet = parsed.snippet;
-        } catch { /* use plain text fallback */ }
+          // Re-build snippet with current refdes state (drag data may be stale)
+          if (parsed.lcsc) {
+            // Find matching component from last search results or build minimal
+            const { searchComponents, parseSearchResult } = await import('./jlcpcb');
+            // Use the data embedded in drag payload
+            const fakeComp: import('./jlcpcb').JLCPCBComponent = {
+              lcsc: parsed.lcsc,
+              mfr: parsed.mfr ?? '',
+              package: parsed.package ?? '',
+              isBasic: false,
+              stock: 0,
+              price: 0,
+              manufacturer: '',
+              attributes: {},
+              datasheetUrl: '',
+              imageUrl: '',
+              imageUrlLarge: '',
+              description: '',
+            };
+            // Route through the same insert logic as the Insert button
+            await insertComponentSnippet(fakeComp);
+            return;
+          }
+        } catch { /* fall through */ }
       }
 
-      if (!snippet) {
-        snippet = e.dataTransfer?.getData('text/plain') ?? null;
-      }
-
-      if (snippet) {
-        // Auto-init editor if needed
+      // Fallback: plain text snippet — insert via smart placement
+      const snippet = e.dataTransfer?.getData('text/plain') ?? null;
+      if (snippet && snippet.includes('component ')) {
         await ensureEditorReady();
         if (!editorInstance) return;
 
         const model = editorInstance.getModel();
         if (!model) return;
 
-        const lineCount = model.getLineCount();
-        const lastCol = model.getLineMaxColumn(lineCount);
+        const prefixMatch = snippet.match(/component\s+([A-Za-z]+)\d/);
+        const refPrefix = prefixMatch ? prefixMatch[1] : '';
+        const insertLine = findComponentInsertLine(model, refPrefix);
+
         editorInstance.executeEdits('jlcpcb-drop', [{
           range: {
-            startLineNumber: lineCount,
-            startColumn: lastCol,
-            endLineNumber: lineCount,
-            endColumn: lastCol,
+            startLineNumber: insertLine,
+            startColumn: model.getLineMaxColumn(insertLine),
+            endLineNumber: insertLine,
+            endColumn: model.getLineMaxColumn(insertLine),
           },
-          text: '\n\n' + snippet + '\n',
+          text: '\n' + snippet + '\n',
         }]);
-        editorInstance.revealLineInCenter(lineCount + 2);
+        editorInstance.revealLineInCenter(insertLine + 2);
         console.log('[JLCPCB] Component dropped into editor');
       }
     });
