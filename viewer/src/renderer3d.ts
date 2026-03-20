@@ -1020,6 +1020,11 @@ export class Renderer3D {
     this.renderer.setSize(w, h);
   }
 
+  /** Public resize — call when the container dimensions change (e.g. editor toggle). */
+  resize(): void {
+    this.onResize();
+  }
+
   private clearBoardGroup(): void {
     if (!this.boardGroup) return;
 

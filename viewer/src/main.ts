@@ -703,8 +703,8 @@ async function init(): Promise<void> {
     if (snapshot?.board) {
       viewport = fitBoard(viewport, snapshot.board.width_nm, snapshot.board.height_nm);
     }
-    if (is3DActive && renderer3d && snapshot) {
-      renderer3d.updateBoard(snapshot, layers);
+    if (is3DActive && renderer3d) {
+      renderer3d.resize();
     }
     dirty = true;
   });
