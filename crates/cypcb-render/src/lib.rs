@@ -440,6 +440,33 @@ impl PcbEngine {
     /// Generate multiple routing variants with different strategies/configs,
     /// rank them by composite score, and auto-apply the best.
     ///
+    /// Run routing with debug output — returns JSON with intermediate pipeline stages.
+    pub fn auto_route_debug(&mut self, params_json: String) -> String {
+        use cypcb_autoroute::debug_route::route_with_debug;
+        use cypcb_autoroute::AutorouteConfig;
+        use cypcb_rules::presets::{PresetRuleSet, RulesPreset};
+
+        let params: cypcb_autoroute::AutorouteParams = serde_json::from_str(&params_json)
+            .unwrap_or_default();
+
+        let preset = RulesPreset::from_name("jlcpcb").expect("jlcpcb preset");
+        let rules = PresetRuleSet::new(preset);
+        let mut config = AutorouteConfig::default();
+        config.params = params.clamped();
+        config.via_cost_multiplier = config.params.via_cost;
+
+        let debug_output = route_with_debug(
+            &mut self.world,
+            &self.footprint_lib,
+            &rules,
+            &config,
+        );
+
+        serde_json::to_string(&debug_output).unwrap_or_else(|e| {
+            format!(r#"{{"ok":false,"error":"serialize: {}"}}"#, e)
+        })
+    }
+
     /// Returns a JSON array of variant results:
     /// `[{ "name": "...", "score": { ... }, "routes": [...], "vias": [...] }]`
     ///

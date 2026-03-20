@@ -25,6 +25,7 @@
 pub mod astar_improved;
 pub mod congestion;
 pub mod cost;
+pub mod debug_route;
 pub mod grid;
 pub mod orchestrator;
 pub mod pathfinder;

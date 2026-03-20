@@ -38,7 +38,7 @@ use crate::via_optimizer::optimize_vias;
 use crate::AutorouteConfig;
 
 /// Maximum number of PathFinder iterations before declaring non-convergence.
-const MAX_PATHFINDER_ITERATIONS: u32 = 50;
+pub const MAX_PATHFINDER_ITERATIONS: u32 = 50;
 
 /// PathFinder negotiated congestion routing strategy.
 ///
@@ -167,15 +167,15 @@ impl RoutingStrategy for PathFinderStrategy {
 }
 
 /// Result of the PathFinder iteration loop.
-struct PathFinderLoopResult {
+pub struct PathFinderLoopResult {
     /// Per-net routed grid paths.
-    routed_paths: HashMap<u32, Vec<Vec<GridNode>>>,
+    pub routed_paths: HashMap<u32, Vec<Vec<GridNode>>>,
     /// Net IDs that could not be routed after all iterations.
-    unrouted: Vec<u32>,
+    pub unrouted: Vec<u32>,
     /// Number of iterations run.
-    iterations: u32,
+    pub iterations: u32,
     /// Whether the algorithm converged (zero overused cells).
-    converged: bool,
+    pub converged: bool,
 }
 
 /// Run the PathFinder negotiated congestion iteration loop.
@@ -185,7 +185,7 @@ struct PathFinderLoopResult {
 /// 2. Iteration 1: route all nets.
 /// 3. Subsequent iterations: only re-route nets through overused cells.
 /// 4. After each iteration: update history, check convergence.
-fn pathfinder_loop(
+pub fn pathfinder_loop(
     grid: &mut RoutingGrid,
     ratsnest: &[NetRoute],
     order: &[usize],

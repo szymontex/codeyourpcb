@@ -104,6 +104,9 @@ export interface PcbEngine {
    */
   auto_route_variants(): string;
 
+  /** Run routing with debug output — returns JSON with pipeline stages */
+  auto_route_debug(params: string): string;
+
   /** Free the engine (for WASM memory management) */
   free?(): void;
 }
@@ -126,6 +129,7 @@ interface WasmPcbEngine {
   auto_route(): string;
   auto_route_with_params(params_json: string): string;
   auto_route_variants(): string;
+  auto_route_debug(params_json: string): string;
   free(): void;
 }
 
@@ -771,6 +775,10 @@ class WasmPcbEngineAdapter implements PcbEngine {
     return result;
   }
 
+  auto_route_debug(params: string): string {
+    return this.wasmEngine.auto_route_debug(params);
+  }
+
   free(): void {
     this.wasmEngine.free();
   }
@@ -958,6 +966,10 @@ class MockPcbEngine implements PcbEngine {
   auto_route_variants(): string {
     console.warn('[MockEngine] auto_route_variants not available in mock mode');
     return '{"ok":false,"error":"Variant generation not available in mock mode"}';
+  }
+
+  auto_route_debug(_params: string): string {
+    return '{"ok":false,"error":"Debug routing not available in mock mode"}';
   }
 }
 

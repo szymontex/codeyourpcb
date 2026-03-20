@@ -226,6 +226,8 @@ async function init(): Promise<void> {
   let layers = createLayerVisibility();
   let selectedRefdes: string | null = null;
   let dirty = true;
+  let debugOverlayStage: number = -1;
+  let debugData: any = null;
   let lastLoadedSource: string | null = null;
   let showRatsnest = getPreference('ratsnestVisible');
   let gridVisible = getPreference('gridVisible');
@@ -1055,6 +1057,9 @@ async function init(): Promise<void> {
     statusText.textContent = usingWasm ? 'Ready (WASM)' : 'Ready (Mock)';
   };
 
+  // Expose debug routing for console: __debugRoute()
+  (window as any).__debugRoute = () => triggerDebugRouting();
+
   /**
    * Refresh the board snapshot from the engine and sync to interaction state.
    * Used as callback by undo commands after mutations.
@@ -1487,6 +1492,12 @@ async function init(): Promise<void> {
         variantPreview,
       };
       render(ctx, renderState);
+
+      // Debug routing overlay — draw selected stage segments
+      if (debugOverlayStage >= 0 && debugData?.stages?.[debugOverlayStage]) {
+        renderDebugStage(ctx, viewport, debugData.stages[debugOverlayStage]);
+      }
+
       dirty = false;
       interactionState.dirty = false;
     }
@@ -1495,6 +1506,46 @@ async function init(): Promise<void> {
     redoBtn.disabled = !undoStack.canRedo;
     requestAnimationFrame(frame);
   }
+  /**
+   * Render debug routing stage overlay on the canvas.
+   * Draws segments as colored lines, vias as small circles.
+   */
+  function renderDebugStage(ctx: CanvasRenderingContext2D, vp: any, stage: any): void {
+    const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F'];
+
+    ctx.save();
+    ctx.lineWidth = 2;
+    ctx.globalAlpha = 0.85;
+
+    for (const seg of stage.segments) {
+      const sx = (seg.start_x - vp.centerX) * vp.scale + vp.width / 2;
+      const sy = (seg.start_y - vp.centerY) * vp.scale + vp.height / 2;
+      const ex = (seg.end_x - vp.centerX) * vp.scale + vp.width / 2;
+      const ey = (seg.end_y - vp.centerY) * vp.scale + vp.height / 2;
+
+      const colorIdx = seg.net_id % colors.length;
+      ctx.strokeStyle = colors[colorIdx];
+      ctx.lineWidth = Math.max(1, seg.width * vp.scale * 0.5);
+
+      ctx.beginPath();
+      ctx.moveTo(sx, sy);
+      ctx.lineTo(ex, ey);
+      ctx.stroke();
+    }
+
+    // Draw vias
+    ctx.fillStyle = 'rgba(255, 200, 0, 0.8)';
+    for (const via of stage.vias) {
+      const vx = (via.x - vp.centerX) * vp.scale + vp.width / 2;
+      const vy = (via.y - vp.centerY) * vp.scale + vp.height / 2;
+      ctx.beginPath();
+      ctx.arc(vx, vy, 4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.restore();
+  }
+
   frame();
 
   // Hot reload handler - preserves viewport and selection
@@ -1789,17 +1840,111 @@ async function init(): Promise<void> {
    * Cancel the current routing operation
    */
   function cancelRouting(): void {
-    if (isRouting) {
-      console.log('[Routing] Cancelling routing...');
-      // Note: Server-side cancellation not implemented yet
-      // For now, just update UI
-      isRouting = false;
-      updateRoutingUI({ isRouting: false, pass: 0, routed: 0, unrouted: 0, elapsed: 0 });
-      statusText.textContent = 'Routing cancelled';
+    // Cancel is only meaningful for async routing (future Web Worker implementation)
+    console.log('[Routing] Cancel requested');
+    isRouting = false;
+    updateRoutingUI({ isRouting: false, pass: 0, routed: 0, unrouted: 0, elapsed: 0 });
+  }
+
+  /**
+   * Run routing in debug mode — captures each pipeline stage and renders them
+   * as toggleable overlays. Shift+click Route to activate.
+   */
+  async function triggerDebugRouting(): Promise<void> {
+    if (!snapshot?.board) {
+      statusText.textContent = 'Load a board first';
+      return;
+    }
+
+    statusText.textContent = 'Debug routing…';
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    try {
+      const params = getPreference('autorouteParams');
+      const rustParams = {
+        via_cost: params.viaCost,
+        layer_preference: params.layerPreference,
+        roundness: params.roundness,
+        density: params.density,
+      };
+
+      const resultJson = engine.auto_route_debug(JSON.stringify(rustParams));
+      const debug = JSON.parse(resultJson);
+
+      if (debug.ok === false) {
+        statusText.textContent = `Debug route failed: ${debug.error}`;
+        return;
+      }
+
+      // Store globally for inspection
+      (window as any).__routeDebug = debug;
+
+      // Show debug panel
+      showRouteDebugPanel(debug);
+
+      statusText.textContent = `Debug: ${debug.stages.length} stages, grid ${debug.grid_width}×${debug.grid_height}, ${debug.unrouted_count} unrouted, ${debug.iterations} iterations${debug.converged ? ' ✓' : ' ✗'}`;
+    } catch (err) {
+      statusText.textContent = `Debug route error: ${err}`;
+      console.error('[DebugRoute]', err);
     }
   }
 
-  // Route button click handler
+  /**
+   * Show debug routing panel with stage toggles.
+   * Each stage can be toggled on/off — selected stage's segments render as overlay.
+   */
+  function showRouteDebugPanel(debug: any): void {
+    debugData = debug;
+
+    // Remove old panel if exists
+    let panel = document.getElementById('route-debug-panel');
+    if (panel) panel.remove();
+
+    panel = document.createElement('div');
+    panel.id = 'route-debug-panel';
+    panel.innerHTML = `
+      <div class="rdp-header">
+        <span>Route Debug</span>
+        <button id="rdp-close">&times;</button>
+      </div>
+      <div class="rdp-info">
+        Grid: ${debug.grid_width}×${debug.grid_height} (${(debug.grid_resolution_nm / 1000).toFixed(0)}µm)
+        · Nets: ${debug.net_count} · Unrouted: ${debug.unrouted_count}
+        · Iterations: ${debug.iterations}${debug.converged ? ' ✓' : ' ✗'}
+      </div>
+      <div class="rdp-stages"></div>
+    `;
+    document.body.appendChild(panel);
+
+    const stagesEl = panel.querySelector('.rdp-stages')!;
+    debug.stages.forEach((stage: any, i: number) => {
+      const btn = document.createElement('button');
+      btn.className = 'rdp-stage-btn';
+      btn.textContent = `${stage.name} (${stage.stats.segment_count} segs, ${stage.stats.via_count} vias)`;
+      btn.addEventListener('click', () => {
+        // Toggle stage overlay
+        if (debugOverlayStage === i) {
+          debugOverlayStage = -1;
+          btn.classList.remove('active');
+        } else {
+          debugOverlayStage = i;
+          stagesEl.querySelectorAll('.rdp-stage-btn').forEach((b: any) => b.classList.remove('active'));
+          btn.classList.add('active');
+        }
+        dirty = true;
+      });
+      stagesEl.appendChild(btn);
+    });
+
+    document.getElementById('rdp-close')!.addEventListener('click', () => {
+      debugOverlayStage = -1;
+      debugData = null;
+      panel!.remove();
+      dirty = true;
+    });
+  }
+
+  // Route button: normal routing
   routeBtn.addEventListener('click', () => {
     triggerRouting();
   });

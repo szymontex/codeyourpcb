@@ -45,6 +45,10 @@ export class PcbEngine {
      * Generate multiple routing variants with different strategies/configs,
      * rank them by composite score, and auto-apply the best.
      *
+     * Run routing with debug output — returns JSON with intermediate pipeline stages.
+     */
+    auto_route_debug(params_json: string): string;
+    /**
      * Returns a JSON array of variant results:
      * `[{ "name": "...", "score": { ... }, "routes": [...], "vias": [...] }]`
      *
@@ -144,6 +148,7 @@ export interface InitOutput {
     readonly pcbengine_add_trace: (a: number, b: number, c: number, d: number, e: number, f: bigint, g: number, h: number) => number;
     readonly pcbengine_add_trace_json: (a: number, b: number, c: number, d: number, e: number, f: bigint, g: number, h: number) => number;
     readonly pcbengine_auto_route: (a: number, b: number) => void;
+    readonly pcbengine_auto_route_debug: (a: number, b: number, c: number, d: number) => void;
     readonly pcbengine_auto_route_variants: (a: number, b: number) => void;
     readonly pcbengine_auto_route_with_params: (a: number, b: number, c: number, d: number) => void;
     readonly pcbengine_get_snapshot: (a: number) => number;

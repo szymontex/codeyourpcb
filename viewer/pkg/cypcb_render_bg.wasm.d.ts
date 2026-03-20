@@ -5,6 +5,7 @@ export const __wbg_pcbengine_free: (a: number, b: number) => void;
 export const pcbengine_add_trace: (a: number, b: number, c: number, d: number, e: number, f: bigint, g: number, h: number) => number;
 export const pcbengine_add_trace_json: (a: number, b: number, c: number, d: number, e: number, f: bigint, g: number, h: number) => number;
 export const pcbengine_auto_route: (a: number, b: number) => void;
+export const pcbengine_auto_route_debug: (a: number, b: number, c: number, d: number) => void;
 export const pcbengine_auto_route_variants: (a: number, b: number) => void;
 export const pcbengine_auto_route_with_params: (a: number, b: number, c: number, d: number) => void;
 export const pcbengine_get_snapshot: (a: number) => number;
