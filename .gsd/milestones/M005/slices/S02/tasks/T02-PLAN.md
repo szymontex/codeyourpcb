@@ -96,6 +96,13 @@ Add the S02→S03 boundary artifact: an explicit `test_blink_led_zero_unrouted` 
 - `crates/cypcb-autoroute/src/pathfinder_v2.rs` — already fixed by T01 (ghost cell bug removed)
 - `viewer/build-wasm.sh` — WASM build script
 
+## Observability Impact
+
+- **New signal:** `test_blink_led_zero_unrouted` prints a diagnostic block with Status, Segments, Vias, Length, and Unrouted count to stderr on every run. Run with `--nocapture` to see it.
+- **Inspection:** `cargo test --release -p cypcb-autoroute -- test_blink_led_zero_unrouted --nocapture` — grep for `Unrouted:` to check routing health.
+- **Failure state:** If routing regresses, the test fails with `assert_eq!(metrics.unrouted_nets, 0, ...)` showing the exact unrouted count. Status mismatch is also caught explicitly.
+- **WASM artifact:** `viewer/pkg/cypcb_render_bg.wasm` timestamp indicates when the last WASM build occurred — downstream slices can verify freshness with `ls -la`.
+
 ## Expected Output
 
 - `crates/cypcb-autoroute/tests/integration.rs` — new `test_blink_led_zero_unrouted` test added

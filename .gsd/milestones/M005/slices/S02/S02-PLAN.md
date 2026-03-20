@@ -39,7 +39,7 @@
   - Verify: `cargo test --release -p cypcb-autoroute -- route_blink_board --nocapture`
   - Done when: `route_blink_board` test passes with `RoutingStatus::Complete` (all 7 nets routed, 0 unrouted)
 
-- [ ] **T02: Add zero-unrouted proof test and rebuild WASM** `est:30m`
+- [x] **T02: Add zero-unrouted proof test and rebuild WASM** `est:30m`
   - Why: The S02→S03 boundary artifact — an explicit test asserting `unrouted == 0` with detailed metrics. Plus WASM rebuild so the fix is available in browser for S03 E2E tests.
   - Files: `crates/cypcb-autoroute/tests/integration.rs`, `viewer/pkg/cypcb_render_bg.wasm`
   - Do: Add `test_blink_led_zero_unrouted` test to `integration.rs` asserting: `unrouted_count == 0` (from RoutingStatus), `routes.len() > 0`, `via_count < 20`, timing < 60s. Run full autoroute test suite for regression check. Then rebuild WASM via `viewer/build-wasm.sh`.

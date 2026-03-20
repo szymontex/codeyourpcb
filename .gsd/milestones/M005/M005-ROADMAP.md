@@ -50,13 +50,13 @@ This milestone is complete only when all are true:
 - [x] **S01: Web Worker WASM Routing** `risk:high` `depends:[]`
   > After this: User clicks Route → spinner overlay visible, browser responsive, cancel button works, routed board appears when done. All proven in browser via Vite dev server.
 
-- [ ] **S02: Routing Quality — 0 Unrouted on Blink LED** `risk:medium` `depends:[]`
+- [x] **S02: Routing Quality — 0 Unrouted on Blink LED** `risk:medium` `depends:[]`
   > After this: `cargo test` proves PathFinder routes all 25 connections on Blink LED with 0 unrouted. WASM routing via Worker also produces 0 unrouted on Blink LED (verified in browser).
 
-- [ ] **S03: E2E Regression Tests** `risk:low` `depends:[S01,S02]`
+- [x] **S03: E2E Regression Tests** `risk:low` `depends:[S01,S02]`
   > After this: CI has Playwright tests that assert UI is responsive during routing and result has 0 unrouted. Pipeline green.
 
-- [ ] **S04: Variant Generation & Tuning via Worker** `risk:low` `depends:[S01]`
+- [x] **S04: Variant Generation & Tuning via Worker** `risk:low` `depends:[S01]`
   > After this: Route button generates 3+ variants via Worker, score panel shows ranked results, hover preview renders alternatives. Tuning sliders re-route via Worker.
 
 ## Boundary Map

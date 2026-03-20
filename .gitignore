@@ -1,5 +1,7 @@
 # Rust build artifacts
 /target
+*.rlib
+*.o
 
 # Editor files
 *.swp
@@ -7,6 +9,7 @@
 *~
 .idea/
 .vscode/
+*.code-workspace
 
 # OS files
 .DS_Store
@@ -14,65 +17,60 @@ Thumbs.db
 
 # Generated Tree-sitter parser files
 crates/cypcb-parser/grammar/src/
-
-# Node.js dependencies (tree-sitter-cli)
 crates/cypcb-parser/grammar/node_modules/
 crates/cypcb-parser/grammar/package-lock.json
 
 # Environment files
 .env
-.env.local
+.env.*
+!.env.example
 
 # Local cargo config (machine-specific)
 .cargo/config.toml
 
-# Unused FreeRouting versions
-freerouting-1.9.0.jar
-freerouting-2.0.1.jar
+# FreeRouting JARs (download separately)
+freerouting*.jar
 
-# Compiled Rust artifacts (loose files outside /target)
-*.rlib
-*.o
-
-# Runtime artifacts
+# Runtime / generated artifacts
 logs/
+output/
 export-test/
+.bg-shell/
+.artifacts/
 
-# Local research/notes (not for commit)
-.planning/research/*-vs-us.md
+# Legacy planning (migrated to .gsd/)
+.planning/
+
+# Local research/notes
 TODO.md
 
-# GSD agent workspace
+# Node.js
+node_modules/
+.next/
+dist/
+build/
 
-# ── GSD baseline (auto-generated) ──
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Misc
+*.log
+coverage/
+.cache/
+tmp/
+vendor/
+
+# ── GSD agent workspace ──
 .gsd/activity/
 .gsd/runtime/
 .gsd/worktrees/
 .gsd/auto.lock
 .gsd/metrics.json
 .gsd/STATE.md
-*.code-workspace
-.env.*
-!.env.example
-node_modules/
-.next/
-dist/
-build/
-__pycache__/
-*.pyc
-.venv/
-venv/
-target/
-vendor/
-*.log
-coverage/
-.cache/
-tmp/
-
-# ── GSD baseline (auto-generated) ──
 .gsd/completed-units.json
-
-# ── GSD baseline (auto-generated) ──
 .gsd/forensics/
 .gsd/parallel/
 .gsd/gsd.db
