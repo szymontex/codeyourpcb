@@ -188,14 +188,7 @@ function renderResults(results: JLCPCBComponent[]): void {
     // Make row draggable
     row.draggable = true;
     row.addEventListener('dragstart', (e) => {
-      const snippet = buildComponentSnippet(comp);
-      e.dataTransfer?.setData('text/plain', snippet);
-      e.dataTransfer?.setData('application/x-cypcb-component', JSON.stringify({
-        lcsc: comp.lcsc,
-        mfr: comp.mfr,
-        package: comp.package,
-        snippet,
-      }));
+      e.dataTransfer?.setData('application/x-cypcb-component', JSON.stringify(comp));
       if (e.dataTransfer) e.dataTransfer.effectAllowed = 'copy';
       row.classList.add('dragging');
     });
