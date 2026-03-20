@@ -138,7 +138,7 @@ impl BoardWorld {
     /// ```
     pub fn set_board(&mut self, name: String, size: (Nm, Nm), layers: u8) -> Entity {
         let board_size = BoardSize::new(size.0, size.1);
-        let layer_stack = LayerStack::new(layers);
+        let layer_stack = LayerStack::new_clamped(layers);
         let name_component = crate::components::metadata::Name(name);
 
         if let Some(entity) = self.board_entity {

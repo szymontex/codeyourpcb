@@ -1,0 +1,21 @@
+{
+  "name": "cypcb-render",
+  "type": "module",
+  "description": "WASM rendering bridge for CodeYourPCB",
+  "version": "0.1.0-beta",
+  "license": "MIT OR Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/codeyourpcb/codeyourpcb"
+  },
+  "files": [
+    "cypcb_render_bg.wasm",
+    "cypcb_render.js",
+    "cypcb_render.d.ts"
+  ],
+  "main": "cypcb_render.js",
+  "types": "cypcb_render.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}

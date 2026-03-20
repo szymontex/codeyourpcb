@@ -1,0 +1,25 @@
+/* tslint:disable */
+/* eslint-disable */
+export const memory: WebAssembly.Memory;
+export const __wbg_pcbengine_free: (a: number, b: number) => void;
+export const pcbengine_add_trace: (a: number, b: number, c: number, d: number, e: number, f: bigint, g: number, h: number) => number;
+export const pcbengine_add_trace_json: (a: number, b: number, c: number, d: number, e: number, f: bigint, g: number, h: number) => number;
+export const pcbengine_auto_route: (a: number, b: number) => void;
+export const pcbengine_auto_route_variants: (a: number, b: number) => void;
+export const pcbengine_auto_route_with_params: (a: number, b: number, c: number, d: number) => void;
+export const pcbengine_get_snapshot: (a: number) => number;
+export const pcbengine_get_trace_at_point: (a: number, b: bigint, c: bigint, d: bigint) => number;
+export const pcbengine_get_violations_json: (a: number, b: number) => void;
+export const pcbengine_load_snapshot: (a: number, b: number, c: number) => void;
+export const pcbengine_new: () => number;
+export const pcbengine_query_point: (a: number, b: number, c: bigint, d: bigint) => void;
+export const pcbengine_remove_trace: (a: number, b: number) => number;
+export const pcbengine_rotate_component: (a: number, b: number, c: number, d: number) => number;
+export const pcbengine_run_drc_incremental: (a: number) => number;
+export const pcbengine_set_board_size: (a: number, b: bigint, c: bigint) => number;
+export const pcbengine_trace_count: (a: number) => number;
+export const __wbindgen_export: (a: number, b: number) => number;
+export const __wbindgen_export2: (a: number, b: number, c: number, d: number) => number;
+export const __wbindgen_export3: (a: number) => void;
+export const __wbindgen_export4: (a: number, b: number, c: number) => void;
+export const __wbindgen_add_to_stack_pointer: (a: number) => number;
