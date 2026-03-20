@@ -698,8 +698,15 @@ async function init(): Promise<void> {
   editorToggleBtn.addEventListener('click', async () => {
     await ensureEditorReady();
     toggleEditorPanel();
-    // Trigger canvas resize
+    // Trigger canvas resize + refit board to new dimensions
     resize();
+    if (snapshot?.board) {
+      viewport = fitBoard(viewport, snapshot.board.width_nm, snapshot.board.height_nm);
+    }
+    if (is3DActive && renderer3d && snapshot) {
+      renderer3d.updateBoard(snapshot, layers);
+    }
+    dirty = true;
   });
 
   // Apply URL state if present (shared URL)
@@ -962,6 +969,10 @@ async function init(): Promise<void> {
     if (!isEditorVisible()) {
       toggleEditorPanel();
       resize();
+      if (snapshot?.board) {
+        viewport = fitBoard(viewport, snapshot.board.width_nm, snapshot.board.height_nm);
+      }
+      dirty = true;
     }
 
     if (!editorInstance) {
