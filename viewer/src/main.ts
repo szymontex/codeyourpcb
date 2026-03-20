@@ -1493,9 +1493,9 @@ async function init(): Promise<void> {
       };
       render(ctx, renderState);
 
-      // Debug routing overlay — draw selected stage segments
-      if (debugOverlayStage >= 0 && debugData?.stages?.[debugOverlayStage]) {
-        renderDebugStage(ctx, viewport, debugData.stages[debugOverlayStage]);
+      // Debug routing overlay — draw selected net or all nets
+      if (debugOverlayStage !== -1 && debugData?._activeStage) {
+        renderDebugStage(ctx, viewport, debugData._activeStage);
       }
 
       dirty = false;
@@ -1895,14 +1895,34 @@ async function init(): Promise<void> {
    */
   function showRouteDebugPanel(debug: any): void {
     debugData = debug;
+    debugOverlayStage = -1;
 
     // Remove old panel if exists
     let panel = document.getElementById('route-debug-panel');
     if (panel) panel.remove();
 
+    // Get final stage segments (last stage = after all processing)
+    const finalStage = debug.stages[debug.stages.length - 1];
+    if (!finalStage) return;
+
+    // Group segments by net_id
+    const netMap = new Map<number, { segments: any[]; vias: any[] }>();
+    for (const seg of finalStage.segments) {
+      if (!netMap.has(seg.net_id)) netMap.set(seg.net_id, { segments: [], vias: [] });
+      netMap.get(seg.net_id)!.segments.push(seg);
+    }
+    for (const via of finalStage.vias) {
+      if (!netMap.has(via.net_id)) netMap.set(via.net_id, { segments: [], vias: [] });
+      netMap.get(via.net_id)!.vias.push(via);
+    }
+
+    const netIds = Array.from(netMap.keys()).sort((a, b) => a - b);
+    const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F'];
+
     panel = document.createElement('div');
     panel.id = 'route-debug-panel';
-    panel.innerHTML = `
+
+    let infoHtml = `
       <div class="rdp-header">
         <span>Route Debug</span>
         <button id="rdp-close">&times;</button>
@@ -1910,30 +1930,65 @@ async function init(): Promise<void> {
       <div class="rdp-info">
         Grid: ${debug.grid_width}×${debug.grid_height} (${(debug.grid_resolution_nm / 1000).toFixed(0)}µm)
         · Nets: ${debug.net_count} · Unrouted: ${debug.unrouted_count}
-        · Iterations: ${debug.iterations}${debug.converged ? ' ✓' : ' ✗'}
+        · Iters: ${debug.iterations}${debug.converged ? ' ✓' : ' ✗'}
+        · Stages: ${debug.stages.map((s: any) => s.stats.segment_count).join('→')} segs
       </div>
-      <div class="rdp-stages"></div>
+      <div class="rdp-stages">
+        <button class="rdp-stage-btn" data-net="all">All nets (${finalStage.segments.length} segs)</button>
     `;
+
+    for (const netId of netIds) {
+      const data = netMap.get(netId)!;
+      const color = colors[netId % colors.length];
+      infoHtml += `<button class="rdp-stage-btn" data-net="${netId}" style="border-left: 4px solid ${color}">
+        Net ${netId} — ${data.segments.length} segs, ${data.vias.length} vias
+      </button>`;
+    }
+    infoHtml += '</div>';
+
+    panel.innerHTML = infoHtml;
     document.body.appendChild(panel);
 
+    // Build per-net stages for overlay rendering
+    const allNetStage = finalStage;
+    const perNetStages = new Map<number, any>();
+    for (const netId of netIds) {
+      const data = netMap.get(netId)!;
+      perNetStages.set(netId, {
+        name: `Net ${netId}`,
+        segments: data.segments,
+        vias: data.vias,
+        stats: { segment_count: data.segments.length, via_count: data.vias.length },
+      });
+    }
+
+    // Wire buttons
     const stagesEl = panel.querySelector('.rdp-stages')!;
-    debug.stages.forEach((stage: any, i: number) => {
-      const btn = document.createElement('button');
-      btn.className = 'rdp-stage-btn';
-      btn.textContent = `${stage.name} (${stage.stats.segment_count} segs, ${stage.stats.via_count} vias)`;
+    stagesEl.querySelectorAll('.rdp-stage-btn').forEach((btn: any) => {
       btn.addEventListener('click', () => {
-        // Toggle stage overlay
-        if (debugOverlayStage === i) {
-          debugOverlayStage = -1;
-          btn.classList.remove('active');
+        const netVal = btn.dataset.net;
+        stagesEl.querySelectorAll('.rdp-stage-btn').forEach((b: any) => b.classList.remove('active'));
+
+        if (netVal === 'all') {
+          if (debugOverlayStage === -2) {
+            debugOverlayStage = -1; // toggle off
+          } else {
+            debugOverlayStage = -2; // special: show all
+            debugData._activeStage = allNetStage;
+            btn.classList.add('active');
+          }
         } else {
-          debugOverlayStage = i;
-          stagesEl.querySelectorAll('.rdp-stage-btn').forEach((b: any) => b.classList.remove('active'));
-          btn.classList.add('active');
+          const netId = parseInt(netVal);
+          if (debugOverlayStage === netId) {
+            debugOverlayStage = -1; // toggle off
+          } else {
+            debugOverlayStage = netId;
+            debugData._activeStage = perNetStages.get(netId);
+            btn.classList.add('active');
+          }
         }
         dirty = true;
       });
-      stagesEl.appendChild(btn);
     });
 
     document.getElementById('rdp-close')!.addEventListener('click', () => {
