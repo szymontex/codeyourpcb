@@ -1657,13 +1657,19 @@ async function init(): Promise<void> {
     // the synchronous WASM call blocks the main thread.
     await new Promise(resolve => setTimeout(resolve, 50));
 
-    // Use single auto_route() — much faster than variant generation in WASM.
-    // Variant generation is available but too slow for interactive use in browser.
+    // Route with current tuning parameters from sliders
     try {
       let resultJson: string;
 
       try {
-        resultJson = engine.auto_route();
+        const params = getPreference('autorouteParams');
+        const rustParams = {
+          via_cost: params.viaCost,
+          layer_preference: params.layerPreference,
+          roundness: params.roundness,
+          density: params.density,
+        };
+        resultJson = engine.auto_route_with_params(JSON.stringify(rustParams));
         (window as any).__lastRouteResult = resultJson;
       } catch (routeErr) {
         console.warn('[Routing] auto_route() failed:', routeErr);
@@ -1880,61 +1886,16 @@ async function init(): Promise<void> {
     // Update debug surface
     updateTuningDebugSurface();
 
-    // Debounce re-routing at 300ms
+    // Debounce parameter persistence (no auto re-route — it freezes the browser)
     if (tuningDebounceTimer !== null) {
       clearTimeout(tuningDebounceTimer);
     }
 
     tuningDebounceTimer = window.setTimeout(() => {
       tuningDebounceTimer = null;
-
-      if (!snapshot?.board) {
-        console.log('[Tuning] No board loaded, skipping re-route');
-        return;
-      }
-
-      // Build Rust-side params JSON (snake_case field names)
-      const rustParams = {
-        via_cost: params.viaCost,
-        layer_preference: params.layerPreference,
-        roundness: params.roundness,
-        density: params.density,
-      };
-
-      console.log('[Tuning] Re-routing with params:', rustParams);
-
-      // Clear variant panel on tuning re-route
-      hideVariants();
-      variantPreview = null;
-      storedVariants = [];
-
-      // Show routing indicator
-      updateRoutingUI({
-        isRouting: true,
-        pass: 0,
-        routed: 0,
-        unrouted: 0,
-        elapsed: 0,
-      });
-
-      try {
-        const resultJson = engine.auto_route_with_params(JSON.stringify(rustParams));
-        const result = JSON.parse(resultJson);
-
-        if (result.ok) {
-          pullSnapshot();
-          dirty = true;
-          console.log(`[Tuning] Re-routed: ${result.routed} routed, ${result.unrouted} unrouted`);
-        } else {
-          console.warn('[Tuning] Route failed:', result.error);
-          statusText.textContent = `Tuning route failed: ${result.error}`;
-        }
-      } catch (err) {
-        console.warn('[Tuning] Route error:', err);
-        statusText.textContent = `Tuning route error: ${err}`;
-      } finally {
-        updateRoutingUI({ isRouting: false, pass: 0, routed: 0, unrouted: 0, elapsed: 0 });
-      }
+      // Parameters are already persisted above in setPreference.
+      // User can click Route to apply the new params.
+      console.log('[Tuning] Params updated — click Route to apply');
     }, 300);
   }
 
