@@ -26,6 +26,12 @@ export interface JLCPCBComponent {
   attributes: Record<string, string>;
   /** Datasheet PDF URL (from extra field) */
   datasheetUrl: string;
+  /** Component image URL — 224x224 thumbnail (from extra.images) */
+  imageUrl: string;
+  /** Large component image URL — 900x900 for preview (from extra.images) */
+  imageUrlLarge: string;
+  /** Full description (from extra.description) */
+  description: string;
 }
 
 /** Thrown when the JLCPCB search API returns a non-ok HTTP status. */
@@ -41,43 +47,77 @@ const EASYEDA_API_BASE = 'https://easyeda.com';
 const EASYEDA_MODULES_BASE = 'https://modules.easyeda.com';
 
 /**
+ * Proxy an LCSC image URL through wsrv.nl to bypass hot-link protection.
+ * LCSC's CDN (assets.lcsc.com) returns 403 for cross-origin image requests
+ * from browsers. The wsrv.nl service is an open-source image proxy that
+ * fetches server-side, avoiding the referer/origin block.
+ */
+export function proxyImageUrl(url: string, large = false): string {
+  if (!url) return '';
+  // Only proxy assets.lcsc.com URLs
+  if (url.includes('assets.lcsc.com')) {
+    const size = large ? 300 : 48;
+    return `https://wsrv.nl/?url=${encodeURIComponent(url)}&w=${size}&h=${size}&fit=cover&output=webp`;
+  }
+  return url;
+}
+
+/**
  * Search JLCPCB/LCSC components via tscircuit jlcsearch API.
  * Returns typed results with parsed metadata from the `extra` JSON string.
  * Throws JLCPCBSearchError on HTTP errors (4xx/5xx).
  * Returns empty array on network-level failures (DNS, timeout, CORS).
+ * Retries once on 502/503 with a short delay.
  */
 export async function searchComponents(
   query: string,
   limit = 20,
 ): Promise<JLCPCBComponent[]> {
-  try {
-    const params = new URLSearchParams({
-      q: query,
-      limit: String(limit),
-      full: 'true',
-    });
-    const url = `${JLCSEARCH_BASE}/api/search?${params}`;
-    const response = await fetch(url);
+  const params = new URLSearchParams({
+    q: query,
+    limit: String(limit),
+    full: 'true',
+  });
+  const url = `${JLCSEARCH_BASE}/api/search?${params}`;
 
-    if (!response.ok) {
-      console.error(`[JLCPCB] Search error: HTTP ${response.status} for "${query}"`);
-      throw new JLCPCBSearchError(response.status, query);
-    }
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const response = await fetch(url);
 
-    const data = await response.json();
-    const components = data?.components;
+      // Retry on 502/503 — server may be temporarily overloaded
+      if ((response.status === 502 || response.status === 503) && attempt === 0) {
+        console.warn(`[JLCPCB] Search got ${response.status}, retrying in 1s...`);
+        await new Promise((r) => setTimeout(r, 1000));
+        continue;
+      }
 
-    if (!Array.isArray(components)) {
+      if (!response.ok) {
+        console.error(`[JLCPCB] Search error: HTTP ${response.status} for "${query}"`);
+        throw new JLCPCBSearchError(response.status, query);
+      }
+
+      const data = await response.json();
+      const components = data?.components;
+
+      if (!Array.isArray(components)) {
+        return [];
+      }
+
+      return components.map((raw: any) => parseSearchResult(raw));
+    } catch (error) {
+      if (error instanceof JLCPCBSearchError) throw error;
+      // On network error, retry once
+      if (attempt === 0) {
+        console.warn(`[JLCPCB] Search network error, retrying in 1s...`);
+        await new Promise((r) => setTimeout(r, 1000));
+        continue;
+      }
+      console.error(`[JLCPCB] Search error: ${error}`);
       return [];
     }
-
-    return components.map((raw: any) => parseSearchResult(raw));
-  } catch (error) {
-    // Re-throw HTTP errors — only swallow network-level failures
-    if (error instanceof JLCPCBSearchError) throw error;
-    console.error(`[JLCPCB] Search error: ${error}`);
-    return [];
   }
+
+  return [];
 }
 
 /**
@@ -130,6 +170,9 @@ export function parseSearchResult(raw: any): JLCPCBComponent {
   let manufacturer = '';
   let attributes: Record<string, string> = {};
   let datasheetUrl = '';
+  let imageUrl = '';
+  let imageUrlLarge = '';
+  let description = '';
 
   if (raw.extra && typeof raw.extra === 'string') {
     try {
@@ -139,6 +182,14 @@ export function parseSearchResult(raw: any): JLCPCBComponent {
         attributes = extra.attributes;
       }
       datasheetUrl = extra?.datasheet?.pdf ?? '';
+      description = extra?.description ?? '';
+
+      // Extract image URLs: 224x224 for thumbnail, 900x900 for hover preview
+      if (Array.isArray(extra?.images) && extra.images.length > 0) {
+        const first = extra.images[0];
+        imageUrl = first?.['224x224'] ?? first?.['96x96'] ?? '';
+        imageUrlLarge = first?.['900x900'] ?? first?.['224x224'] ?? '';
+      }
     } catch {
       // Malformed extra JSON — use defaults
     }
@@ -150,11 +201,37 @@ export function parseSearchResult(raw: any): JLCPCBComponent {
     package: raw.package ?? '',
     isBasic: raw.is_basic ?? false,
     stock: typeof raw.stock === 'number' ? raw.stock : 0,
-    price: typeof raw.price === 'number' ? raw.price : 0,
+    price: parsePrice(raw.price),
     manufacturer,
     attributes,
     datasheetUrl,
+    imageUrl,
+    imageUrlLarge,
+    description,
   };
+}
+
+/**
+ * Parse price from jlcsearch API response.
+ * The `price` field can be:
+ * - a number (direct price)
+ * - a JSON string containing an array of quantity tiers [{qFrom, qTo, price}]
+ * Returns the lowest-tier unit price, or 0 if unparseable.
+ */
+function parsePrice(raw: any): number {
+  if (typeof raw === 'number') return raw;
+  if (typeof raw === 'string') {
+    try {
+      const tiers = JSON.parse(raw);
+      if (Array.isArray(tiers) && tiers.length > 0) {
+        // Return the first tier (smallest quantity) price
+        return typeof tiers[0].price === 'number' ? tiers[0].price : 0;
+      }
+    } catch {
+      // Not valid JSON
+    }
+  }
+  return 0;
 }
 
 /**

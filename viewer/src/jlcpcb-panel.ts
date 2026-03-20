@@ -7,7 +7,7 @@
  * Debug surface: `window.__jlcpcbSearch` exposes lastQuery, resultCount, lastError for E2E.
  */
 
-import { searchComponents, JLCPCBSearchError, type JLCPCBComponent } from './jlcpcb';
+import { searchComponents, JLCPCBSearchError, proxyImageUrl, type JLCPCBComponent } from './jlcpcb';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -16,6 +16,8 @@ import { searchComponents, JLCPCBSearchError, type JLCPCBComponent } from './jlc
 export interface JLCPCBPanelCallbacks {
   /** Called when user clicks a search result */
   onComponentSelect: (component: JLCPCBComponent) => void;
+  /** Called when user wants to insert component snippet into the editor */
+  onInsertToEditor?: (component: JLCPCBComponent) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -176,11 +178,46 @@ function renderResults(results: JLCPCBComponent[]): void {
   if (!resultsContainer) return;
   resultsContainer.textContent = '';
 
+  // Phase 1: Render all results immediately — no images yet
+  const imageSlots: { wrap: HTMLElement; comp: JLCPCBComponent }[] = [];
+
   for (const comp of results) {
     const row = document.createElement('div');
     row.className = 'jlcpcb-result';
 
-    // Header: LCSC# + package
+    // Make row draggable
+    row.draggable = true;
+    row.addEventListener('dragstart', (e) => {
+      const snippet = buildComponentSnippet(comp);
+      e.dataTransfer?.setData('text/plain', snippet);
+      e.dataTransfer?.setData('application/x-cypcb-component', JSON.stringify({
+        lcsc: comp.lcsc,
+        mfr: comp.mfr,
+        package: comp.package,
+        snippet,
+      }));
+      if (e.dataTransfer) e.dataTransfer.effectAllowed = 'copy';
+      row.classList.add('dragging');
+    });
+    row.addEventListener('dragend', () => row.classList.remove('dragging'));
+
+    // Top section: image slot + info
+    const topRow = document.createElement('div');
+    topRow.className = 'jlcpcb-result-top';
+
+    // Reserve image slot only if component has an imageUrl
+    if (comp.imageUrl) {
+      const imgWrap = document.createElement('div');
+      imgWrap.className = 'jlcpcb-result-img-wrap';
+      imgWrap.style.display = 'none'; // hidden until thumbnail loads
+      topRow.appendChild(imgWrap);
+      imageSlots.push({ wrap: imgWrap, comp });
+    }
+
+    const infoCol = document.createElement('div');
+    infoCol.className = 'jlcpcb-result-info';
+
+    // Header: LCSC# + badge + package
     const header = document.createElement('div');
     header.className = 'jlcpcb-result-header';
 
@@ -189,13 +226,20 @@ function renderResults(results: JLCPCBComponent[]): void {
     lcscEl.textContent = `C${comp.lcsc}`;
     header.appendChild(lcscEl);
 
+    if (comp.isBasic) {
+      const basicBadge = document.createElement('span');
+      basicBadge.className = 'jlcpcb-result-basic';
+      basicBadge.textContent = 'Basic';
+      header.appendChild(basicBadge);
+    }
+
     if (comp.package) {
       const pkgEl = document.createElement('span');
       pkgEl.className = 'jlcpcb-result-package';
       pkgEl.textContent = comp.package;
       header.appendChild(pkgEl);
     }
-    row.appendChild(header);
+    infoCol.appendChild(header);
 
     // Manufacturer + MPN
     if (comp.mfr || comp.manufacturer) {
@@ -205,10 +249,19 @@ function renderResults(results: JLCPCBComponent[]): void {
       if (comp.manufacturer) parts.push(comp.manufacturer);
       if (comp.mfr) parts.push(comp.mfr);
       mfrEl.textContent = parts.join(' · ');
-      row.appendChild(mfrEl);
+      infoCol.appendChild(mfrEl);
     }
 
-    // Attributes summary (resistance, capacitance, etc.)
+    // Description
+    if (comp.description) {
+      const descEl = document.createElement('div');
+      descEl.className = 'jlcpcb-result-desc';
+      descEl.textContent = comp.description;
+      descEl.title = comp.description;
+      infoCol.appendChild(descEl);
+    }
+
+    // Attributes summary
     const attrKeys = Object.keys(comp.attributes);
     if (attrKeys.length > 0) {
       const attrsEl = document.createElement('div');
@@ -218,22 +271,28 @@ function renderResults(results: JLCPCBComponent[]): void {
         .map((k) => `${k}: ${comp.attributes[k]}`)
         .join(' · ');
       attrsEl.textContent = attrText;
-      row.appendChild(attrsEl);
+      infoCol.appendChild(attrsEl);
     }
 
-    // Footer: price, stock, datasheet
+    topRow.appendChild(infoCol);
+    row.appendChild(topRow);
+
+    // Footer: price, stock, actions
     const footer = document.createElement('div');
     footer.className = 'jlcpcb-result-footer';
+
+    const metaWrap = document.createElement('div');
+    metaWrap.className = 'jlcpcb-result-meta';
 
     const priceEl = document.createElement('span');
     priceEl.className = 'jlcpcb-result-price';
     priceEl.textContent = `$${comp.price.toFixed(4)}`;
-    footer.appendChild(priceEl);
+    metaWrap.appendChild(priceEl);
 
     const stockEl = document.createElement('span');
     stockEl.className = 'jlcpcb-result-stock';
     stockEl.textContent = `Stock: ${comp.stock.toLocaleString()}`;
-    footer.appendChild(stockEl);
+    metaWrap.appendChild(stockEl);
 
     if (comp.datasheetUrl) {
       const dsLink = document.createElement('a');
@@ -242,25 +301,95 @@ function renderResults(results: JLCPCBComponent[]): void {
       dsLink.target = '_blank';
       dsLink.rel = 'noopener noreferrer';
       dsLink.textContent = 'Datasheet';
-      // Prevent click from bubbling to the row handler
       dsLink.addEventListener('click', (e) => e.stopPropagation());
-      footer.appendChild(dsLink);
+      metaWrap.appendChild(dsLink);
     }
+
+    footer.appendChild(metaWrap);
+
+    // Insert to editor button
+    const insertBtn = document.createElement('button');
+    insertBtn.className = 'jlcpcb-result-insert';
+    insertBtn.textContent = '⎘ Insert';
+    insertBtn.title = 'Insert component snippet into editor (or drag & drop)';
+    insertBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      callbacks?.onInsertToEditor?.(comp);
+    });
+    footer.appendChild(insertBtn);
 
     row.appendChild(footer);
 
-    // Click handler — select component
+    // Click handler — select component (3D model, etc.)
     row.addEventListener('click', () => {
       callbacks?.onComponentSelect(comp);
     });
 
     resultsContainer.appendChild(row);
   }
+
+  // Phase 2: Load thumbnails lazily after results are rendered
+  if (imageSlots.length > 0) {
+    loadThumbnailsLazy(imageSlots);
+  }
+}
+
+/** Batch size for lazy thumbnail loading */
+const THUMB_BATCH_SIZE = 5;
+
+/**
+ * Load thumbnails in small batches so results appear instantly,
+ * then images pop in progressively. Each loaded image reveals its wrapper;
+ * failed loads leave the wrapper hidden (no placeholder).
+ */
+function loadThumbnailsLazy(
+  slots: { wrap: HTMLElement; comp: JLCPCBComponent }[],
+): void {
+  let index = 0;
+
+  function loadBatch(): void {
+    const batch = slots.slice(index, index + THUMB_BATCH_SIZE);
+    if (batch.length === 0) return;
+    index += THUMB_BATCH_SIZE;
+
+    for (const { wrap, comp } of batch) {
+      const img = document.createElement('img');
+      img.className = 'jlcpcb-result-img';
+      img.referrerPolicy = 'no-referrer';
+      img.alt = `C${comp.lcsc}`;
+      img.onload = () => {
+        wrap.style.display = '';
+        // Wire hover preview only after thumbnail loaded
+        const largeUrl = comp.imageUrlLarge || comp.imageUrl;
+        wrap.addEventListener('mouseenter', () => {
+          showImagePreview(proxyImageUrl(largeUrl, true), wrap);
+        });
+        wrap.addEventListener('mouseleave', () => {
+          hideImagePreview();
+        });
+      };
+      img.onerror = () => {
+        // Failed — leave wrapper hidden, no placeholder
+        wrap.remove();
+      };
+      wrap.appendChild(img);
+      img.src = proxyImageUrl(comp.imageUrl);
+    }
+
+    // Schedule next batch after a short delay
+    if (index < slots.length) {
+      setTimeout(loadBatch, 100);
+    }
+  }
+
+  // Start first batch on next frame so DOM renders first
+  requestAnimationFrame(() => loadBatch());
 }
 
 function clearResults(): void {
   if (resultsContainer) resultsContainer.textContent = '';
   hideStatus();
+  hideImagePreview();
   resultCount = 0;
   lastQuery = '';
   lastError = null;
@@ -282,6 +411,156 @@ function hideStatus(): void {
   if (!statusEl) return;
   statusEl.classList.add('hidden');
   statusEl.classList.remove('error');
+}
+
+// ---------------------------------------------------------------------------
+// Image preview popup
+// ---------------------------------------------------------------------------
+
+let previewEl: HTMLElement | null = null;
+let previewImg: HTMLImageElement | null = null;
+
+function showImagePreview(src: string, anchor: HTMLElement): void {
+  if (!previewEl) {
+    previewEl = document.createElement('div');
+    previewEl.className = 'jlcpcb-img-preview';
+    previewImg = document.createElement('img');
+    previewImg.referrerPolicy = 'no-referrer';
+    previewEl.appendChild(previewImg);
+    document.body.appendChild(previewEl);
+  }
+
+  previewImg!.src = src;
+
+  // Position: to the left of the panel, aligned with the thumbnail
+  const rect = anchor.getBoundingClientRect();
+  const panelEl = document.getElementById('jlcpcb-search-panel');
+  const panelLeft = panelEl ? panelEl.getBoundingClientRect().left : rect.left;
+
+  // Place preview to the left of the panel
+  const previewSize = 300;
+  let left = panelLeft - previewSize - 8;
+  let top = rect.top - (previewSize / 2) + (rect.height / 2);
+
+  // Clamp to viewport
+  if (left < 4) left = 4;
+  if (top < 4) top = 4;
+  if (top + previewSize > window.innerHeight - 4) {
+    top = window.innerHeight - previewSize - 4;
+  }
+
+  previewEl.style.left = left + 'px';
+  previewEl.style.top = top + 'px';
+  previewEl.classList.add('visible');
+}
+
+function hideImagePreview(): void {
+  if (previewEl) {
+    previewEl.classList.remove('visible');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Component snippet builder
+// ---------------------------------------------------------------------------
+
+/**
+ * Build a .cypcb component snippet from JLCPCB search result.
+ * Infers component type from package/attributes, uses LCSC# as reference.
+ * When existingRefDes is provided, auto-numbers the new component
+ * (e.g. if R1, R2 exist → generates R3).
+ */
+export function buildComponentSnippet(
+  comp: JLCPCBComponent,
+  existingRefDes: string[] = [],
+): string {
+  const lcscStr = `C${comp.lcsc}`;
+  const prefix = inferRefDesPrefix(comp);
+  const refDes = nextRefDes(prefix, existingRefDes);
+  const compType = inferComponentType(comp);
+  const pkg = comp.package || 'unknown';
+
+  const lines: string[] = [];
+  lines.push(`// ${comp.manufacturer ? comp.manufacturer + ' ' : ''}${comp.mfr} (LCSC: ${lcscStr})`);
+  if (comp.description) {
+    lines.push(`// ${comp.description}`);
+  }
+  lines.push(`component ${refDes} ${compType} "${pkg}" {`);
+
+  // Add value from primary attribute
+  const value = inferValue(comp);
+  if (value) {
+    lines.push(`    value "${value}"`);
+  }
+
+  lines.push(`    // lcsc "${lcscStr}"`);
+  lines.push(`    at 10mm, 10mm`);
+  lines.push(`}`);
+
+  return lines.join('\n');
+}
+
+/** Infer a reference designator prefix (R, C, U, etc.) from component data */
+function inferRefDesPrefix(comp: JLCPCBComponent): string {
+  const attrs = comp.attributes;
+  const mfr = (comp.mfr + ' ' + comp.manufacturer).toLowerCase();
+  const desc = comp.description.toLowerCase();
+
+  if (attrs['Capacitance'] || desc.includes('capacitor')) return 'C';
+  if (attrs['Resistance'] || desc.includes('resistor')) return 'R';
+  if (attrs['Inductance'] || desc.includes('inductor')) return 'L';
+  if (desc.includes('led') || desc.includes('diode')) return 'D';
+  if (desc.includes('transistor') || desc.includes('mosfet')) return 'Q';
+  if (desc.includes('connector') || desc.includes('header') || desc.includes('socket')) return 'J';
+  if (desc.includes('crystal') || desc.includes('oscillator')) return 'Y';
+  if (desc.includes('fuse')) return 'F';
+  if (mfr.includes('stm32') || mfr.includes('esp32') || desc.includes('mcu') || desc.includes('microcontroller')) return 'U';
+  if (desc.includes('regulator') || desc.includes('converter')) return 'U';
+  return 'U';
+}
+
+/**
+ * Generate the next available refdes for a given prefix.
+ * Scans existingRefDes for the highest number with that prefix and increments.
+ * e.g. prefix='R', existing=['R1','R2','C1'] → 'R3'
+ */
+function nextRefDes(prefix: string, existing: string[]): string {
+  let maxNum = 0;
+  const re = new RegExp(`^${prefix}(\\d+)$`);
+  for (const ref of existing) {
+    const m = ref.match(re);
+    if (m) {
+      const n = parseInt(m[1], 10);
+      if (n > maxNum) maxNum = n;
+    }
+  }
+  return `${prefix}${maxNum + 1}`;
+}
+
+/** Infer component type keyword for .cypcb syntax */
+function inferComponentType(comp: JLCPCBComponent): string {
+  const attrs = comp.attributes;
+  const desc = comp.description.toLowerCase();
+
+  if (attrs['Capacitance'] || desc.includes('capacitor')) return 'capacitor';
+  if (attrs['Resistance'] || desc.includes('resistor')) return 'resistor';
+  if (attrs['Inductance'] || desc.includes('inductor')) return 'inductor';
+  if (desc.includes('led')) return 'led';
+  if (desc.includes('diode')) return 'diode';
+  if (desc.includes('connector') || desc.includes('header') || desc.includes('socket')) return 'connector';
+  if (desc.includes('crystal') || desc.includes('oscillator')) return 'crystal';
+  return 'ic';
+}
+
+/** Extract a meaningful value string from component attributes */
+function inferValue(comp: JLCPCBComponent): string {
+  const attrs = comp.attributes;
+  if (attrs['Capacitance']) return attrs['Capacitance'];
+  if (attrs['Resistance']) return attrs['Resistance'];
+  if (attrs['Inductance']) return attrs['Inductance'];
+  if (attrs['Voltage Rated']) return attrs['Voltage Rated'];
+  if (comp.mfr) return comp.mfr;
+  return '';
 }
 
 // ---------------------------------------------------------------------------

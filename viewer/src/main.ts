@@ -23,7 +23,7 @@ import type { AppSettings, LayerColors, AutorouteParams } from './settings';
 import { formatDimension, parseUserDimension } from './units';
 import type { DisplayUnit } from './units';
 import { initProjectManager, showProjectManager, hideProjectManager, addRecentFile } from './project-manager';
-import { initSearchPanel, hideSearchPanel, toggleSearchPanel, isSearchPanelVisible } from './jlcpcb-panel';
+import { initSearchPanel, hideSearchPanel, toggleSearchPanel, isSearchPanelVisible, buildComponentSnippet } from './jlcpcb-panel';
 import { fetch3DModel } from './jlcpcb';
 import { initVariantPanel, showVariants, hideVariants, isVariantPanelVisible, type VariantData } from './variant-panel';
 import type { VariantPreviewData } from './renderer';
@@ -558,7 +558,7 @@ async function init(): Promise<void> {
   let editorInstance: any = null;
   let editorReady = false;
   let suppressSync = false; // Prevent circular updates when setting editor content programmatically
-  const { initEditor, toggleEditorPanel, getMonacoModule } = await import('./editor/editor-panel');
+  const { initEditor, toggleEditorPanel, isEditorVisible, getMonacoModule } = await import('./editor/editor-panel');
   const { updateDiagnostics } = await import('./editor/lsp-bridge');
 
   /**
@@ -667,27 +667,31 @@ async function init(): Promise<void> {
   });
 
   // Editor toggle button handler
-  editorToggleBtn.addEventListener('click', async () => {
-    // Lazy-load editor on first toggle
+  /**
+   * Ensure the Monaco editor is initialized and visible.
+   * Lazy-loads on first call. Returns when the editor is ready.
+   */
+  async function ensureEditorReady(): Promise<void> {
     if (!editorReady) {
       console.log('[Editor] Initializing Monaco editor...');
       editorInstance = await initEditor(editorContainer);
 
-      // Set initial content if a file is loaded
       if (lastLoadedSource) {
         suppressSync = true;
         editorInstance.setValue(lastLoadedSource);
         suppressSync = false;
       }
 
-      // Wire up editor-to-board sync
       setupEditorSync(editorInstance);
 
       editorReady = true;
-      // Expose editor instance for E2E tests
       (window as any).__editor = editorInstance;
       console.log('[Editor] Monaco editor ready');
     }
+  }
+
+  editorToggleBtn.addEventListener('click', async () => {
+    await ensureEditorReady();
     toggleEditorPanel();
     // Trigger canvas resize
     resize();
@@ -844,6 +848,9 @@ async function init(): Promise<void> {
         }
       }
     },
+    onInsertToEditor: (component) => {
+      insertComponentSnippet(component);
+    },
   });
 
   jlcpcbSearchBtn.addEventListener('click', () => {
@@ -879,6 +886,171 @@ async function init(): Promise<void> {
       console.log(`[Variants] Applied variant: ${storedVariants[index].name}`);
     },
   });
+
+  /**
+   * Find the best insertion line for a new component with the given refdes prefix.
+   * Groups components by type: a new resistor (R) goes after the last R block,
+   * a new capacitor (C) after the last C block, etc.
+   * Falls back to: last component of same prefix → last component overall → before nets → EOF.
+   */
+  function findComponentInsertLine(model: any, refPrefix: string): number {
+    const lineCount = model.getLineCount();
+    const upperPrefix = refPrefix.toUpperCase();
+
+    // Collect end-line of each component block by tracking brace depth
+    const blocks: { prefix: string; endLine: number }[] = [];
+    let firstNetLine = 0;
+    let depth = 0;
+    let currentPrefix = '';
+    let inBlock = false;
+
+    for (let i = 1; i <= lineCount; i++) {
+      const line = model.getLineContent(i).trim();
+
+      // Detect component start only at top level
+      if (!inBlock && depth === 0 && /^component\s+/.test(line)) {
+        inBlock = true;
+        const m = line.match(/^component\s+([A-Za-z]+)\d/);
+        currentPrefix = m ? m[1].toUpperCase() : '';
+      }
+
+      // Count braces
+      for (const ch of line) {
+        if (ch === '{') depth++;
+        else if (ch === '}') depth--;
+      }
+      if (depth < 0) depth = 0; // safety clamp
+
+      // Component block closed when depth returns to 0
+      if (inBlock && depth === 0) {
+        blocks.push({ prefix: currentPrefix, endLine: i });
+        inBlock = false;
+      }
+
+      if (!firstNetLine && /^net\s+/.test(line)) {
+        firstNetLine = i;
+      }
+    }
+
+    // Find last block with matching prefix
+    let lastSame = 0;
+    let lastAny = 0;
+    for (const b of blocks) {
+      lastAny = b.endLine;
+      if (b.prefix === upperPrefix) lastSame = b.endLine;
+    }
+
+    if (lastSame > 0) return lastSame;
+    if (lastAny > 0) return lastAny;
+    if (firstNetLine > 0) return firstNetLine - 1;
+    return lineCount;
+  }
+
+  // --- Insert component snippet into editor ---
+  async function insertComponentSnippet(component: import('./jlcpcb').JLCPCBComponent): Promise<void> {
+    // Collect existing refdes from current board snapshot
+    const existingRefDes = snapshot?.components?.map((c) => c.refdes) ?? [];
+    const snippet = buildComponentSnippet(component, existingRefDes);
+
+    // Auto-open editor if not ready
+    await ensureEditorReady();
+    if (!isEditorVisible()) {
+      toggleEditorPanel();
+      resize();
+    }
+
+    if (!editorInstance) {
+      console.warn('[JLCPCB] Editor failed to initialize');
+      return;
+    }
+
+    const model = editorInstance.getModel();
+    if (!model) return;
+
+    // Extract refdes prefix from snippet (e.g. "component R3 ..." → "R")
+    const prefixMatch = snippet.match(/component\s+([A-Za-z]+)\d/);
+    const refPrefix = prefixMatch ? prefixMatch[1] : '';
+
+    // Find the best insertion point: after the last component of same type,
+    // grouping R with R, C with C, etc.
+    const insertLine = findComponentInsertLine(model, refPrefix);
+    const textToInsert = '\n' + snippet + '\n';
+
+    editorInstance.executeEdits('jlcpcb-insert', [{
+      range: {
+        startLineNumber: insertLine,
+        startColumn: model.getLineMaxColumn(insertLine),
+        endLineNumber: insertLine,
+        endColumn: model.getLineMaxColumn(insertLine),
+      },
+      text: textToInsert,
+    }]);
+
+    // Scroll to the inserted component (insertLine + 1 is where the new block starts)
+    editorInstance.revealLineInCenter(insertLine + 2);
+    console.log(`[JLCPCB] Inserted snippet for C${component.lcsc}`);
+  }
+
+  // --- Drag & drop onto editor container ---
+  const editorDropTarget = document.getElementById('editor-container');
+  if (editorDropTarget) {
+    editorDropTarget.addEventListener('dragover', (e) => {
+      // Accept drops with cypcb component data or plain text
+      if (e.dataTransfer?.types.includes('application/x-cypcb-component') ||
+          e.dataTransfer?.types.includes('text/plain')) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+        editorDropTarget.classList.add('drop-hover');
+      }
+    });
+
+    editorDropTarget.addEventListener('dragleave', () => {
+      editorDropTarget.classList.remove('drop-hover');
+    });
+
+    editorDropTarget.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      editorDropTarget.classList.remove('drop-hover');
+
+      // Try structured data first, fallback to plain text
+      const cypcbData = e.dataTransfer?.getData('application/x-cypcb-component');
+      let snippet: string | null = null;
+
+      if (cypcbData) {
+        try {
+          const parsed = JSON.parse(cypcbData);
+          snippet = parsed.snippet;
+        } catch { /* use plain text fallback */ }
+      }
+
+      if (!snippet) {
+        snippet = e.dataTransfer?.getData('text/plain') ?? null;
+      }
+
+      if (snippet) {
+        // Auto-init editor if needed
+        await ensureEditorReady();
+        if (!editorInstance) return;
+
+        const model = editorInstance.getModel();
+        if (!model) return;
+
+        const lineCount = model.getLineCount();
+        const lastCol = model.getLineMaxColumn(lineCount);
+        editorInstance.executeEdits('jlcpcb-drop', [{
+          range: {
+            startLineNumber: lineCount,
+            startColumn: lastCol,
+            endLineNumber: lineCount,
+            endColumn: lastCol,
+          },
+          text: '\n\n' + snippet + '\n',
+        }]);
+        editorInstance.revealLineInCenter(lineCount + 2);
+        console.log('[JLCPCB] Component dropped into editor');
+      }
+    });
+  }
 
   // Expose board loader for E2E tests — loads source, pulls snapshot, fits board
   (window as any).__loadBoard = (source: string) => {
