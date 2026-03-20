@@ -164,12 +164,14 @@ export function render(ctx: CanvasRenderingContext2D, state: RenderState): void 
     }
   }
 
-  // Draw violations on top of everything
-  if (showViolations && snapshot.violations) {
-    for (const violation of snapshot.violations) {
-      drawViolation(ctx, viewport, violation);
-    }
-  }
+  // Draw violations on top of everything (disabled — DRC circles clutter the view
+  // and post-routing violations are currently false positives from spatial index
+  // mismatch between JS-side traces and WASM world state)
+  // if (showViolations && snapshot.violations) {
+  //   for (const violation of snapshot.violations) {
+  //     drawViolation(ctx, viewport, violation);
+  //   }
+  // }
 
   // ---- TEXT PASS (after all shapes, for readability) ----
 
@@ -1025,18 +1027,19 @@ function drawRoutingPreview(ctx: CanvasRenderingContext2D, vp: Viewport, routing
   ctx.lineWidth = 2;
   ctx.stroke();
 
-  for (const v of routing.drcViolations) {
-    const [vx, vy] = worldToScreen(vp, v.x_nm, v.y_nm);
-    ctx.beginPath();
-    ctx.arc(vx, vy, 12, 0, Math.PI * 2);
-    ctx.strokeStyle = '#FF0000';
-    ctx.lineWidth = 2.5;
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(vx, vy, 8, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(255, 0, 0, 0.25)';
-    ctx.fill();
-  }
+  // DRC violation circles during routing preview (disabled — see above)
+  // for (const v of routing.drcViolations) {
+  //   const [vx, vy] = worldToScreen(vp, v.x_nm, v.y_nm);
+  //   ctx.beginPath();
+  //   ctx.arc(vx, vy, 12, 0, Math.PI * 2);
+  //   ctx.strokeStyle = '#FF0000';
+  //   ctx.lineWidth = 2.5;
+  //   ctx.stroke();
+  //   ctx.beginPath();
+  //   ctx.arc(vx, vy, 8, 0, Math.PI * 2);
+  //   ctx.fillStyle = 'rgba(255, 0, 0, 0.25)';
+  //   ctx.fill();
+  // }
 
   if (routing.previewSegment) {
     const seg = routing.previewSegment;
