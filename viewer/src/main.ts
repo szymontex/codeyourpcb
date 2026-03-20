@@ -592,6 +592,11 @@ async function init(): Promise<void> {
         // Update snapshot
         pullSnapshot();
 
+        // Update 3D view if active
+        if (is3DActive && renderer3d && snapshot) {
+          renderer3d.updateBoard(snapshot, layers);
+        }
+
         // Update inline diagnostics (LSP bridge)
         const monaco = getMonacoModule();
         if (monaco && editorInstance) {
@@ -1555,6 +1560,11 @@ async function init(): Promise<void> {
 
     // Trigger re-render
     dirty = true;
+
+    // Update 3D view if active
+    if (is3DActive && renderer3d && snapshot) {
+      renderer3d.updateBoard(snapshot, layers);
+    }
   }
 
   // ========================================================================
