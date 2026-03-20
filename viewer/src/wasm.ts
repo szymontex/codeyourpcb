@@ -186,6 +186,12 @@ function getFootprintPads(footprint: string): PadInfo[] {
       { number: '1', x_nm: -1_270_000, y_nm: 0, width_nm: 1_700_000, height_nm: 1_700_000, shape: 'rect',   layer_mask: 3, drill_nm: 1_000_000 },
       { number: '2', x_nm:  1_270_000, y_nm: 0, width_nm: 1_700_000, height_nm: 1_700_000, shape: 'circle', layer_mask: 3, drill_nm: 1_000_000 },
     ],
+    // SOT-23: 3-pin transistor/regulator, pad=0.6×1.0mm
+    'SOT-23': [
+      { number: '1', x_nm: -950_000, y_nm: -1_000_000, width_nm: 600_000, height_nm: 1_000_000, shape: 'rect', layer_mask: 1, drill_nm: null },
+      { number: '2', x_nm:  950_000, y_nm: -1_000_000, width_nm: 600_000, height_nm: 1_000_000, shape: 'rect', layer_mask: 1, drill_nm: null },
+      { number: '3', x_nm:        0, y_nm:  1_000_000, width_nm: 600_000, height_nm: 1_000_000, shape: 'rect', layer_mask: 1, drill_nm: null },
+    ],
     // SOIC-8: row_span=5.4mm (half=2.7mm), pitch=1.27mm, pad=1.5×0.6mm
     // Pins 1-4 left side (bottom→top), pins 5-8 right side (bottom→top)
     'SOIC-8': [
@@ -214,13 +220,30 @@ function getFootprintPads(footprint: string): PadInfo[] {
     ],
   };
 
-  return padTemplates[footprint] || padTemplates['0402'];
+  return padTemplates[footprint] || [];
 }
 
 /**
  * Parse .cypcb source code into a BoardSnapshot.
  * This is the JavaScript parser used when tree-sitter is not available (WASM mode).
  */
+/**
+ * Normalize logical pin names to physical pad numbers.
+ * Mirrors the Rust normalize_pin_name() in sync.rs.
+ */
+function normalizePinName(name: string): string {
+  switch (name.toLowerCase()) {
+    case 'a': case 'anode': return '1';
+    case 'k': case 'ka': case 'cathode': return '2';
+    case '+': case 'pos': case 'positive': case 'p': return '1';
+    case '-': case 'neg': case 'negative': case 'n': return '2';
+    case 'b': case 'base': return '1';
+    case 'c': case 'collector': return '2';
+    case 'e': case 'emitter': return '3';
+    default: return name;
+  }
+}
+
 function parseSource(source: string): { snapshot: BoardSnapshot; errors: string[] } {
   const errors: string[] = [];
   const lines = source.split('\n');
@@ -302,8 +325,8 @@ function parseSource(source: string): { snapshot: BoardSnapshot; errors: string[
       continue;
     }
 
-    // Parse net definition
-    const netMatch = line.match(/^net\s+(\w+)\s*{?$/);
+    // Parse net definition (with optional constraints in square brackets)
+    const netMatch = line.match(/^net\s+(\w+)\s*(?:\[.*?\])?\s*{?$/);
     if (netMatch) {
       currentNet = { name: netMatch[1], pins: [] };
       inNet = true;
@@ -340,9 +363,9 @@ function parseSource(source: string): { snapshot: BoardSnapshot; errors: string[
       }
     }
 
-    // Parse net pins
+    // Parse net pins (strip inline comments)
     if (inNet && currentNet) {
-      const pinMatch = line.match(/^(\w+)\.(\w+)$/);
+      const pinMatch = line.match(/^(\w+)\.(\w+)/);
       if (pinMatch) {
         currentNet.pins.push(`${pinMatch[1]}.${pinMatch[2]}`);
       }
@@ -366,7 +389,7 @@ function parseSource(source: string): { snapshot: BoardSnapshot; errors: string[
         if (inNet && currentNet) {
           const connections: PinRef[] = currentNet.pins.map(pin => {
             const [component, pinNum] = pin.split('.');
-            return { component, pin: pinNum };
+            return { component, pin: normalizePinName(pinNum) };
           });
           nets.set(currentNet.name, {
             name: currentNet.name,
