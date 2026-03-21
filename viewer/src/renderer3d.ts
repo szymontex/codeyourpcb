@@ -16,6 +16,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { BoardSnapshot, TraceInfo, ViaInfo, ComponentInfo } from './types';
 import { LAYER_COLORS, LAYER_MASK, type LayerVisibility } from './layers';
+import { fetch3DModelByUuid } from './jlcpcb';
 import { parseEasyEdaOBJ } from './easyeda-obj-parser';
 
 /** Component body height for SMD parts in mm */
@@ -848,8 +849,6 @@ export class Renderer3D {
    * Non-blocking — each model loads asynchronously.
    */
   private autoLoad3DModels(components: ComponentInfo[]): void {
-    const EASYEDA_MODULES_BASE = 'https://modules.easyeda.com';
-
     for (const comp of components) {
       if (!comp.model_3d) continue;
 
@@ -858,17 +857,9 @@ export class Renderer3D {
 
       const uuid = comp.model_3d;
       const refdes = comp.refdes;
-      const objUrl = `${EASYEDA_MODULES_BASE}/3dmodel/${uuid}`;
 
-      // Fire and forget — each model loads independently
-      fetch(objUrl)
-        .then(resp => {
-          if (!resp.ok) {
-            console.warn(`[3D] Auto-load failed for ${refdes}: HTTP ${resp.status}`);
-            return null;
-          }
-          return resp.text();
-        })
+      // Use proxy-aware fetch from jlcpcb module (handles CORS)
+      fetch3DModelByUuid(uuid)
         .then(objText => {
           if (objText) {
             this.loadComponentFromOBJ(objText, refdes);

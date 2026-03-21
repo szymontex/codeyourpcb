@@ -31,20 +31,30 @@ pub struct DrcViolation {
 pub enum ViolationKind {
     /// Clearance between two copper features is too small.
     Clearance,
-    /// Trace width is below minimum (placeholder for future).
+    /// Trace width is below minimum.
     TraceWidth,
     /// Drill hole size is below minimum.
     DrillSize,
     /// Pin has no net connection.
     UnconnectedPin,
-    /// Via drill is below minimum (placeholder for future).
+    /// Via drill is below minimum.
     ViaDrill,
-    /// Annular ring is below minimum (placeholder for future).
+    /// Via outer diameter is below minimum.
+    ViaDiameter,
+    /// Annular ring is below minimum.
     AnnularRing,
     /// Component placed in a keepout zone.
     KeepoutViolation,
     /// Copper feature too close to board edge.
     EdgeClearance,
+    /// Drill holes too close together (edge-to-edge).
+    HoleToHole,
+    /// Solder mask bridge between pads too narrow.
+    SolderMaskBridge,
+    /// Silkscreen overlaps copper pad.
+    SilkClearance,
+    /// Component courtyards overlap.
+    CourtyardClearance,
 }
 
 impl std::fmt::Display for ViolationKind {
@@ -55,9 +65,14 @@ impl std::fmt::Display for ViolationKind {
             ViolationKind::DrillSize => write!(f, "drill-size"),
             ViolationKind::UnconnectedPin => write!(f, "unconnected-pin"),
             ViolationKind::ViaDrill => write!(f, "via-drill"),
+            ViolationKind::ViaDiameter => write!(f, "via-diameter"),
             ViolationKind::AnnularRing => write!(f, "annular-ring"),
             ViolationKind::KeepoutViolation => write!(f, "keepout-violation"),
             ViolationKind::EdgeClearance => write!(f, "edge-clearance"),
+            ViolationKind::HoleToHole => write!(f, "hole-to-hole"),
+            ViolationKind::SolderMaskBridge => write!(f, "solder-mask-bridge"),
+            ViolationKind::SilkClearance => write!(f, "silk-clearance"),
+            ViolationKind::CourtyardClearance => write!(f, "courtyard-clearance"),
         }
     }
 }
@@ -306,6 +321,81 @@ impl DrcViolation {
                 "Annular ring violation: {:.3}mm actual, {:.3}mm required",
                 actual.to_mm(),
                 required.to_mm(),
+            ),
+        }
+    }
+
+    /// Create a hole-to-hole clearance violation.
+    pub fn hole_to_hole(entity: Entity, other: Entity, actual: Nm, required: Nm, location: Point) -> Self {
+        DrcViolation {
+            kind: ViolationKind::HoleToHole,
+            location,
+            entity,
+            other_entity: Some(other),
+            source_span: None,
+            message: format!(
+                "Hole-to-hole violation: {:.2}mm actual, {:.2}mm required",
+                actual.to_mm(), required.to_mm(),
+            ),
+        }
+    }
+
+    /// Create a via diameter violation.
+    pub fn via_diameter(entity: Entity, actual: Nm, required: Nm, location: Point) -> Self {
+        DrcViolation {
+            kind: ViolationKind::ViaDiameter,
+            location,
+            entity,
+            other_entity: None,
+            source_span: None,
+            message: format!(
+                "Via diameter violation: {:.2}mm actual, {:.2}mm required",
+                actual.to_mm(), required.to_mm(),
+            ),
+        }
+    }
+
+    /// Create a solder mask bridge violation.
+    pub fn solder_mask_bridge(entity: Entity, other: Entity, actual: Nm, required: Nm, location: Point) -> Self {
+        DrcViolation {
+            kind: ViolationKind::SolderMaskBridge,
+            location,
+            entity,
+            other_entity: Some(other),
+            source_span: None,
+            message: format!(
+                "Solder mask bridge violation: {:.2}mm actual, {:.2}mm required",
+                actual.to_mm(), required.to_mm(),
+            ),
+        }
+    }
+
+    /// Create a silkscreen clearance violation.
+    pub fn silk_clearance(entity: Entity, actual: Nm, required: Nm, location: Point) -> Self {
+        DrcViolation {
+            kind: ViolationKind::SilkClearance,
+            location,
+            entity,
+            other_entity: None,
+            source_span: None,
+            message: format!(
+                "Silk-to-pad clearance violation: {:.2}mm actual, {:.2}mm required",
+                actual.to_mm(), required.to_mm(),
+            ),
+        }
+    }
+
+    /// Create a courtyard clearance violation.
+    pub fn courtyard_clearance(entity: Entity, other: Entity, actual: Nm, required: Nm, location: Point) -> Self {
+        DrcViolation {
+            kind: ViolationKind::CourtyardClearance,
+            location,
+            entity,
+            other_entity: Some(other),
+            source_span: None,
+            message: format!(
+                "Courtyard overlap: {:.2}mm actual, {:.2}mm required",
+                actual.to_mm(), required.to_mm(),
             ),
         }
     }

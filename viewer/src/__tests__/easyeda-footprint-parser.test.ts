@@ -152,4 +152,48 @@ describe('parseEasyEDAFootprint', () => {
     expect(fp!.pads[0].x_nm).toBe(2_540_000);
     expect(fp!.pads[0].y_nm).toBe(0);
   });
+
+  it('parses v6 standalone PADs using head origin', () => {
+    // EasyEDA v6 format: PADs are top-level shapes, origin in head.x/head.y
+    // This matches real API response for C17414 (0805 resistor)
+    const compData = {
+      result: {
+        packageDetail: {
+          dataStr: {
+            head: {
+              docType: '4',
+              x: 4000,
+              y: 3000,
+            },
+            shape: [
+              'SOLIDREGION~100~~M 3996 3002 L 3996 2997~solid~gge100',
+              'PAD~RECT~4003.937~3000~4.4588~5.4213~1~~2~0~4001 3002 4001 2997 4006 2997 4006 3002~0~gge1002~0~~Y~0',
+              'PAD~RECT~3996.063~3000~4.4588~5.4213~1~~1~0~3998 3002 3998 2997 3993 2997 3993 3002~0~gge1004~0~~Y~0',
+              'SVGNODE~{"gId":"g1","attrs":{"c_etype":"outline3D","uuid":"c7acac53bcbc44d68fbab8f60a747688"}}',
+            ],
+          },
+        },
+      },
+    };
+
+    const fp = parseEasyEDAFootprint(compData);
+    expect(fp).not.toBeNull();
+    expect(fp!.pads).toHaveLength(2);
+
+    // Pad 1 (number='1'): X = (3996.063 - 4000) * 254000 = -1,000,002 nm ≈ -1mm
+    const pad1 = fp!.pads.find(p => p.number === '1')!;
+    expect(pad1).toBeDefined();
+    expect(pad1.x_nm).toBeCloseTo(-1_000_000, -4);
+    expect(pad1.y_nm).toBe(0);
+    expect(pad1.shape).toBe('rect');
+    expect(pad1.layer_mask).toBe(1); // SMD top
+
+    // Pad 2 (number='2'): X = (4003.937 - 4000) * 254000 = +999,998 nm ≈ +1mm
+    const pad2 = fp!.pads.find(p => p.number === '2')!;
+    expect(pad2).toBeDefined();
+    expect(pad2.x_nm).toBeCloseTo(1_000_000, -4);
+
+    // 3D model UUID
+    expect(fp!.modelUuid).toBe('c7acac53bcbc44d68fbab8f60a747688');
+  });
 });

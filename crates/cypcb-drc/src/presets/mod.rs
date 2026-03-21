@@ -51,9 +51,14 @@ use cypcb_core::Nm;
 /// - `min_trace_width`: Minimum width of copper traces
 /// - `min_drill_size`: Minimum mechanical drill hole diameter
 /// - `min_via_drill`: Minimum via drill hole diameter
+/// - `min_via_diameter`: Minimum via outer diameter (annulus)
 /// - `min_annular_ring`: Minimum width of copper ring around drill holes
 /// - `min_silk_width`: Minimum silkscreen line width
 /// - `min_edge_clearance`: Minimum distance from copper to board edge
+/// - `min_hole_to_hole`: Minimum distance between drill holes (edge-to-edge)
+/// - `min_solder_mask_bridge`: Minimum solder mask web between pads
+/// - `min_silk_clearance`: Minimum silkscreen to copper clearance
+/// - `min_courtyard_clearance`: Minimum courtyard clearance between components
 ///
 /// # Examples
 ///
@@ -71,9 +76,14 @@ use cypcb_core::Nm;
 ///     min_trace_width: Nm::from_mm(0.25),
 ///     min_drill_size: Nm::from_mm(0.4),
 ///     min_via_drill: Nm::from_mm(0.3),
+///     min_via_diameter: Nm::from_mm(0.6),
 ///     min_annular_ring: Nm::from_mm(0.2),
 ///     min_silk_width: Nm::from_mm(0.2),
 ///     min_edge_clearance: Nm::from_mm(0.5),
+///     min_hole_to_hole: Nm::from_mm(0.5),
+///     min_solder_mask_bridge: Nm::from_mm(0.1),
+///     min_silk_clearance: Nm::from_mm(0.15),
+///     min_courtyard_clearance: Nm::from_mm(0.25),
 /// };
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -86,12 +96,22 @@ pub struct DesignRules {
     pub min_drill_size: Nm,
     /// Minimum via drill size.
     pub min_via_drill: Nm,
+    /// Minimum via outer diameter (copper annulus).
+    pub min_via_diameter: Nm,
     /// Minimum annular ring width.
     pub min_annular_ring: Nm,
     /// Minimum silkscreen line width.
     pub min_silk_width: Nm,
     /// Minimum copper to board edge clearance.
     pub min_edge_clearance: Nm,
+    /// Minimum distance between drill holes (edge-to-edge).
+    pub min_hole_to_hole: Nm,
+    /// Minimum solder mask bridge between pads.
+    pub min_solder_mask_bridge: Nm,
+    /// Minimum silkscreen to copper pad clearance.
+    pub min_silk_clearance: Nm,
+    /// Minimum courtyard clearance between components.
+    pub min_courtyard_clearance: Nm,
 }
 
 impl Default for DesignRules {

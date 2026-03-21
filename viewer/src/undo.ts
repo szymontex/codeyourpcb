@@ -292,6 +292,63 @@ export class ResizeBoardCommand implements BoardCommand {
 }
 
 // ---------------------------------------------------------------------------
+// Edit trace command (segment/corner drag)
+// ---------------------------------------------------------------------------
+
+/**
+ * Command: edit a trace's geometry (drag segment or corner).
+ *
+ * Implemented as remove-old + add-new. On undo, removes the new trace
+ * and re-adds the old one.
+ */
+export class EditTraceCommand implements BoardCommand {
+  description: string;
+  private newTraceId: number = 0xFFFFFFFF;
+
+  constructor(
+    private engine: PcbEngine,
+    private oldTraceId: number,
+    private oldArgs: AddTraceArgs,
+    private newArgs: AddTraceArgs,
+    private refreshSnapshot: () => void,
+  ) {
+    this.description = `Edit trace: ${oldArgs.netName} (id=${oldTraceId})`;
+  }
+
+  execute(): void {
+    this.engine.remove_trace(this.oldTraceId);
+    this.newTraceId = this.engine.add_trace(
+      this.newArgs.netName,
+      this.newArgs.layer,
+      this.newArgs.width,
+      this.newArgs.segments,
+    );
+    if (this.newTraceId === 0xFFFFFFFF) {
+      console.warn(`[Undo] EditTraceCommand: add_trace failed for net=${this.newArgs.netName}`);
+    }
+    this.engine.run_drc_incremental();
+    this.refreshSnapshot();
+  }
+
+  undo(): void {
+    if (this.newTraceId !== 0xFFFFFFFF) {
+      this.engine.remove_trace(this.newTraceId);
+    }
+    this.oldTraceId = this.engine.add_trace(
+      this.oldArgs.netName,
+      this.oldArgs.layer,
+      this.oldArgs.width,
+      this.oldArgs.segments,
+    );
+    if (this.oldTraceId === 0xFFFFFFFF) {
+      console.warn(`[Undo] EditTraceCommand.undo: re-add failed for net=${this.oldArgs.netName}`);
+    }
+    this.engine.run_drc_incremental();
+    this.refreshSnapshot();
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Debug surface
 // ---------------------------------------------------------------------------
 

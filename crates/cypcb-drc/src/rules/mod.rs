@@ -6,9 +6,14 @@
 pub mod annular_ring;
 pub mod clearance;
 pub mod connectivity;
+pub mod courtyard_clearance;
 pub mod drill_size;
 pub mod edge_clearance;
+pub mod hole_to_hole;
+pub mod silk_clearance;
+pub mod solder_mask_bridge;
 pub mod trace_width;
+pub mod via_diameter;
 
 use cypcb_world::BoardWorld;
 
@@ -18,9 +23,14 @@ use crate::violation::DrcViolation;
 pub use annular_ring::AnnularRingRule;
 pub use clearance::ClearanceRule;
 pub use connectivity::UnconnectedPinRule;
+pub use courtyard_clearance::CourtyardClearanceRule;
 pub use drill_size::MinDrillSizeRule;
 pub use edge_clearance::EdgeClearanceRule;
+pub use hole_to_hole::HoleToHoleRule;
+pub use silk_clearance::SilkClearanceRule;
+pub use solder_mask_bridge::SolderMaskBridgeRule;
 pub use trace_width::MinTraceWidthRule;
+pub use via_diameter::ViaDiameterRule;
 
 /// A single DRC rule that can be executed against a board.
 ///
@@ -152,6 +162,11 @@ mod tests {
         assert_eq!(KeepoutRule.name(), "keepout");
         assert_eq!(EdgeClearanceRule.name(), "edge-clearance");
         assert_eq!(AnnularRingRule.name(), "annular-ring");
+        assert_eq!(HoleToHoleRule.name(), "hole-to-hole");
+        assert_eq!(ViaDiameterRule.name(), "via-diameter");
+        assert_eq!(CourtyardClearanceRule.name(), "courtyard-clearance");
+        assert_eq!(SolderMaskBridgeRule.name(), "solder-mask-bridge");
+        assert_eq!(SilkClearanceRule.name(), "silk-clearance");
     }
 
     #[test]
@@ -167,6 +182,11 @@ mod tests {
         assert!(KeepoutRule.check(&mut world, &rules).is_empty());
         assert!(EdgeClearanceRule.check(&mut world, &rules).is_empty());
         assert!(AnnularRingRule.check(&mut world, &rules).is_empty());
+        assert!(HoleToHoleRule.check(&mut world, &rules).is_empty());
+        assert!(ViaDiameterRule.check(&mut world, &rules).is_empty());
+        assert!(CourtyardClearanceRule.check(&mut world, &rules).is_empty());
+        assert!(SolderMaskBridgeRule.check(&mut world, &rules).is_empty());
+        assert!(SilkClearanceRule.check(&mut world, &rules).is_empty());
     }
 
     #[test]
@@ -180,15 +200,13 @@ mod tests {
             Box::new(KeepoutRule),
             Box::new(EdgeClearanceRule),
             Box::new(AnnularRingRule),
+            Box::new(HoleToHoleRule),
+            Box::new(ViaDiameterRule),
+            Box::new(CourtyardClearanceRule),
+            Box::new(SolderMaskBridgeRule),
+            Box::new(SilkClearanceRule),
         ];
-        assert_eq!(rules.len(), 7);
-        assert_eq!(rules[0].name(), "clearance");
-        assert_eq!(rules[1].name(), "min-drill-size");
-        assert_eq!(rules[2].name(), "min-trace-width");
-        assert_eq!(rules[3].name(), "unconnected-pin");
-        assert_eq!(rules[4].name(), "keepout");
-        assert_eq!(rules[5].name(), "edge-clearance");
-        assert_eq!(rules[6].name(), "annular-ring");
+        assert_eq!(rules.len(), 12);
     }
 
     #[test]

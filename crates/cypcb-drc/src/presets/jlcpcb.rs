@@ -42,13 +42,18 @@ impl DesignRules {
     /// ```
     pub fn jlcpcb_2layer() -> Self {
         DesignRules {
-            min_clearance: Nm::from_mm(0.15),     // 6 mil
-            min_trace_width: Nm::from_mm(0.15),   // 6 mil
-            min_drill_size: Nm::from_mm(0.3),     // 0.3mm mechanical
-            min_via_drill: Nm::from_mm(0.2),      // 0.2mm via
-            min_annular_ring: Nm::from_mm(0.15),  // 6 mil
-            min_silk_width: Nm::from_mm(0.15),    // 6 mil
-            min_edge_clearance: Nm::from_mm(0.3), // 0.3mm
+            min_clearance: Nm::from_mm(0.15),          // 6 mil
+            min_trace_width: Nm::from_mm(0.15),        // 6 mil
+            min_drill_size: Nm::from_mm(0.3),          // 0.3mm mechanical
+            min_via_drill: Nm::from_mm(0.2),           // 0.2mm via
+            min_via_diameter: Nm::from_mm(0.45),       // 0.45mm outer (0.2 drill + 2*0.125 ring)
+            min_annular_ring: Nm::from_mm(0.15),       // 6 mil
+            min_silk_width: Nm::from_mm(0.15),         // 6 mil
+            min_edge_clearance: Nm::from_mm(0.3),      // 0.3mm
+            min_hole_to_hole: Nm::from_mm(0.5),        // 0.5mm edge-to-edge
+            min_solder_mask_bridge: Nm::from_mm(0.1),  // 0.1mm solder mask web
+            min_silk_clearance: Nm::from_mm(0.15),     // 0.15mm silk to pad
+            min_courtyard_clearance: Nm::from_mm(0.25),// 0.25mm between courtyards
         }
     }
 
@@ -82,13 +87,18 @@ impl DesignRules {
     /// ```
     pub fn jlcpcb_4layer() -> Self {
         DesignRules {
-            min_clearance: Nm::from_mm(0.1),   // 4 mil
-            min_trace_width: Nm::from_mm(0.1), // 4 mil
-            min_drill_size: Nm::from_mm(0.2),  // 0.2mm
+            min_clearance: Nm::from_mm(0.1),           // 4 mil
+            min_trace_width: Nm::from_mm(0.1),         // 4 mil
+            min_drill_size: Nm::from_mm(0.2),          // 0.2mm
             min_via_drill: Nm::from_mm(0.2),
-            min_annular_ring: Nm::from_mm(0.125), // 5 mil
+            min_via_diameter: Nm::from_mm(0.45),       // 0.45mm
+            min_annular_ring: Nm::from_mm(0.125),      // 5 mil
             min_silk_width: Nm::from_mm(0.15),
             min_edge_clearance: Nm::from_mm(0.25),
+            min_hole_to_hole: Nm::from_mm(0.5),
+            min_solder_mask_bridge: Nm::from_mm(0.1),
+            min_silk_clearance: Nm::from_mm(0.15),
+            min_courtyard_clearance: Nm::from_mm(0.25),
         }
     }
 }

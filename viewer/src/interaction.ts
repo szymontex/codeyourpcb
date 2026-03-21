@@ -4,11 +4,13 @@
  */
 
 import type { Viewport } from './viewport';
-import type { BoardSnapshot } from './types';
+import type { BoardSnapshot, TraceSegmentInfo } from './types';
 import type { PcbEngine } from './wasm';
 import type { RoutingState } from './routing';
 import { zoomAtPoint, pan, screenToWorld } from './viewport';
 import { hitTestTrace } from './hit-test';
+import { hitTestTraceSegment, dragSegment, dragCorner, tracesInRect, componentsInRect, type TraceSegmentHit } from './trace-edit';
+import type { Vec2 } from './direction45';
 import {
   createRoutingState,
   hitTestPad,
@@ -61,6 +63,34 @@ export interface InteractionState {
   onRouteStart?: (netName: string) => void;
   /** Callback when routing ends (complete or cancel) — clear highlightedNet */
   onRouteEnd?: () => void;
+  /** Callback when a trace is edited via drag (segment/corner move, for undo stack) */
+  onTraceEdit?: (oldTraceId: number, netName: string, layer: string, width: number, oldSegments: number[], newSegments: number[]) => void;
+  /** Callback when rectangle selection completes */
+  onRectSelect?: (traceIds: number[], componentRefdes: string[]) => void;
+  /** Current drag-editing state for rendering preview */
+  dragEdit: DragEditState | null;
+  /** Current rectangle selection state for rendering */
+  rectSelect: RectSelectState | null;
+}
+
+/** State for trace segment/corner drag editing */
+export interface DragEditState {
+  /** The original hit result */
+  hit: TraceSegmentHit;
+  /** Original segments (before drag) */
+  originalSegments: TraceSegmentInfo[];
+  /** Preview segments (during drag, updated on mousemove) */
+  previewSegments: TraceSegmentInfo[] | null;
+  /** Whether dragging a corner (vs segment) */
+  isCornerDrag: boolean;
+}
+
+/** State for rectangle selection */
+export interface RectSelectState {
+  /** Start point in world coordinates */
+  startWorld: Vec2;
+  /** Current point in world coordinates */
+  currentWorld: Vec2;
 }
 
 /**
@@ -87,6 +117,27 @@ export function setupInteraction(
     origWidth: number;
     origHeight: number;
   } | null = null;
+
+  // Trace drag edit state (segment or corner drag)
+  let traceDrag: {
+    hit: TraceSegmentHit;
+    originalSegments: TraceSegmentInfo[];
+    isCornerDrag: boolean;
+    startWorldX: number;
+    startWorldY: number;
+    moved: boolean; // true once mouse moves beyond dead zone
+  } | null = null;
+
+  // Rectangle selection state
+  let rectDrag: {
+    startWorldX: number;
+    startWorldY: number;
+    startScreenX: number;
+    startScreenY: number;
+    active: boolean; // true once mouse moves beyond dead zone
+  } | null = null;
+
+  const DRAG_DEAD_ZONE_PX = 4; // pixels before drag activates
 
   const MIN_BOARD_SIZE = 5_000_000; // 5mm minimum in nm
 
@@ -150,6 +201,8 @@ export function setupInteraction(
 
   // Middle-click pan OR Ctrl+left-click pan (for laptops without middle button)
   // Also: left-click on resize handle starts board resize drag
+  //        left-click on trace segment/corner starts trace drag
+  //        left-click on empty space starts rectangle selection
   canvas.addEventListener('mousedown', (e) => {
     // Resize handle drag (left-click, not during routing)
     if (e.button === 0 && !e.ctrlKey && state.routing.mode !== 'routing' && state.snapshot?.board) {
@@ -170,6 +223,41 @@ export function setupInteraction(
         canvas.style.cursor = resizeHandleCursor(handle);
         e.preventDefault();
         return; // Don't fall through to pan
+      }
+
+      // Trace segment/corner drag detection
+      {
+        const [worldX, worldY] = screenToWorld(state.viewport, sx, sy);
+        const toleranceNm = 5 / state.viewport.scale;
+        const segHit = hitTestTraceSegment(state.snapshot, worldX, worldY, toleranceNm);
+
+        if (segHit && !segHit.trace.locked) {
+          // Start potential trace drag (confirmed after dead zone)
+          traceDrag = {
+            hit: segHit,
+            originalSegments: [...segHit.trace.segments],
+            isCornerDrag: segHit.nearCorner,
+            startWorldX: worldX,
+            startWorldY: worldY,
+            moved: false,
+          };
+          e.preventDefault();
+          return;
+        }
+
+        // No trace/resize hit — check if we're on a pad (route start) or component
+        const padHit = hitTestPad(state.snapshot, worldX, worldY, 500_000);
+        if (!padHit) {
+          // Empty space: start potential rectangle selection
+          rectDrag = {
+            startWorldX: worldX,
+            startWorldY: worldY,
+            startScreenX: e.clientX,
+            startScreenY: e.clientY,
+            active: false,
+          };
+          // Don't preventDefault — let click handler work if no drag happens
+        }
       }
     }
 
@@ -226,6 +314,65 @@ export function setupInteraction(
       return;
     }
 
+    // Trace segment/corner drag
+    if (traceDrag) {
+      const rect = canvas.getBoundingClientRect();
+      const sx = e.clientX - rect.left;
+      const sy = e.clientY - rect.top;
+
+      // Check dead zone
+      if (!traceDrag.moved) {
+        const [worldX, worldY] = screenToWorld(state.viewport, sx, sy);
+        const worldDist = Math.hypot(worldX - traceDrag.startWorldX, worldY - traceDrag.startWorldY);
+        const screenDist = worldDist * state.viewport.scale;
+        if (screenDist < DRAG_DEAD_ZONE_PX) return;
+        traceDrag.moved = true;
+        canvas.style.cursor = 'move';
+      }
+
+      const [worldX, worldY] = screenToWorld(state.viewport, sx, sy);
+      const newPos: Vec2 = { x: worldX, y: worldY };
+
+      let previewSegs: TraceSegmentInfo[] | null;
+      if (traceDrag.isCornerDrag && traceDrag.hit.cornerIndex !== undefined) {
+        previewSegs = dragCorner(traceDrag.originalSegments, traceDrag.hit.cornerIndex, newPos);
+      } else {
+        previewSegs = dragSegment(traceDrag.originalSegments, traceDrag.hit.segmentIndex, newPos);
+      }
+
+      state.dragEdit = {
+        hit: traceDrag.hit,
+        originalSegments: traceDrag.originalSegments,
+        previewSegments: previewSegs,
+        isCornerDrag: traceDrag.isCornerDrag,
+      };
+      state.dirty = true;
+      return;
+    }
+
+    // Rectangle selection drag
+    if (rectDrag) {
+      const rect = canvas.getBoundingClientRect();
+      const sx = e.clientX - rect.left;
+      const sy = e.clientY - rect.top;
+
+      // Check dead zone
+      if (!rectDrag.active) {
+        const screenDist = Math.hypot(e.clientX - rectDrag.startScreenX, e.clientY - rectDrag.startScreenY);
+        if (screenDist < DRAG_DEAD_ZONE_PX) return;
+        rectDrag.active = true;
+        canvas.style.cursor = 'crosshair';
+      }
+
+      const [worldX, worldY] = screenToWorld(state.viewport, sx, sy);
+      state.rectSelect = {
+        startWorld: { x: rectDrag.startWorldX, y: rectDrag.startWorldY },
+        currentWorld: { x: worldX, y: worldY },
+      };
+      state.dirty = true;
+      return;
+    }
+
     if (state.isPanning) {
       const dx = e.clientX - state.lastX;
       const dy = e.clientY - state.lastY;
@@ -238,6 +385,11 @@ export function setupInteraction(
   });
 
   canvas.addEventListener('mouseup', () => {
+    // Set suppress flag before clearing drag state
+    if (traceDrag?.moved || rectDrag?.active) {
+      suppressNextClick = true;
+    }
+
     // Finish resize drag — push undo command with original → final dimensions
     if (resizeDrag && state.snapshot?.board) {
       const finalW = state.snapshot.board.width_nm;
@@ -257,6 +409,61 @@ export function setupInteraction(
       canvas.style.cursor = 'default';
       state.dirty = true;
     }
+
+    // Finish trace drag — commit via undo stack
+    if (traceDrag) {
+      if (traceDrag.moved && state.dragEdit?.previewSegments) {
+        const hit = traceDrag.hit;
+        const oldSegs = traceDrag.originalSegments;
+        const newSegs = state.dragEdit.previewSegments;
+
+        // Build flat segment arrays for undo command
+        const oldFlat: number[] = [];
+        for (const s of oldSegs) {
+          oldFlat.push(Math.round(s.start_x), Math.round(s.start_y), Math.round(s.end_x), Math.round(s.end_y));
+        }
+        const newFlat: number[] = [];
+        for (const s of newSegs) {
+          newFlat.push(Math.round(s.start_x), Math.round(s.start_y), Math.round(s.end_x), Math.round(s.end_y));
+        }
+
+        if (state.onTraceEdit) {
+          state.onTraceEdit(
+            hit.traceId,
+            hit.trace.net_name,
+            hit.trace.layer,
+            hit.trace.width,
+            oldFlat,
+            newFlat,
+          );
+        }
+
+        console.log(`[TraceDrag] Committed ${traceDrag.isCornerDrag ? 'corner' : 'segment'} drag on trace ${hit.traceId}`);
+      }
+      traceDrag = null;
+      state.dragEdit = null;
+      canvas.style.cursor = 'default';
+      state.dirty = true;
+    }
+
+    // Finish rectangle selection
+    if (rectDrag) {
+      if (rectDrag.active && state.rectSelect) {
+        const { startWorld, currentWorld } = state.rectSelect;
+        const traceIds = tracesInRect(state.snapshot, startWorld.x, startWorld.y, currentWorld.x, currentWorld.y);
+        const compIds = componentsInRect(state.snapshot, startWorld.x, startWorld.y, currentWorld.x, currentWorld.y);
+
+        if (state.onRectSelect && (traceIds.length > 0 || compIds.length > 0)) {
+          state.onRectSelect(traceIds, compIds);
+        }
+        console.log(`[RectSelect] ${traceIds.length} traces, ${compIds.length} components`);
+      }
+      rectDrag = null;
+      state.rectSelect = null;
+      canvas.style.cursor = 'default';
+      state.dirty = true;
+    }
+
     if (state.isPanning) {
       state.isPanning = false;
       canvas.style.cursor = 'default';
@@ -272,6 +479,18 @@ export function setupInteraction(
       }
       resizeDrag = null;
       state.activeResizeHandle = null;
+      state.dirty = true;
+    }
+    // Cancel trace drag on leave
+    if (traceDrag) {
+      traceDrag = null;
+      state.dragEdit = null;
+      state.dirty = true;
+    }
+    // Cancel rect selection on leave
+    if (rectDrag) {
+      rectDrag = null;
+      state.rectSelect = null;
       state.dirty = true;
     }
     if (state.isPanning) {
@@ -298,9 +517,18 @@ export function setupInteraction(
   // Pad hit tolerance — generous for easy targeting (1mm in nm, plus pixel tolerance)
   const PAD_HIT_TOLERANCE_NM = 500_000; // 0.5mm extra
 
+  // Track if a drag just completed (to suppress the click event that follows mouseup)
+  let suppressNextClick = false;
+
   // Left-click selection (but not if Ctrl held - that's pan)
   canvas.addEventListener('click', (e) => {
     if (e.button !== 0 || e.ctrlKey) return; // Left click only, no Ctrl
+
+    // Suppress click if it followed a drag operation
+    if (suppressNextClick) {
+      suppressNextClick = false;
+      return;
+    }
 
     const rect = canvas.getBoundingClientRect();
     const screenX = e.clientX - rect.left;
@@ -544,5 +772,7 @@ export function createInteractionState(
     routing: createRoutingState(),
     engine: null,
     onRoutingChange: () => {},
+    dragEdit: null,
+    rectSelect: null,
   };
 }

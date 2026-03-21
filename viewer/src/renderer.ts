@@ -7,6 +7,7 @@
 import type { BoardSnapshot, ComponentInfo, PadInfo, ViolationInfo, TraceInfo, ViaInfo, RatsnestInfo } from './types';
 import type { Viewport } from './viewport';
 import type { RoutingState } from './routing';
+import type { DragEditState, RectSelectState } from './interaction';
 import type { RenderConfig } from './render-config';
 import { LodTier, getLodTier, createDefaultRenderConfig } from './render-config';
 import { worldToScreen, screenToWorld } from './viewport';
@@ -44,6 +45,10 @@ export interface RenderState {
   showNetLabels?: boolean;
   /** Variant preview data: route segments and vias to draw as ghost overlay */
   variantPreview?: VariantPreviewData | null;
+  /** Active drag-edit state (segment/corner drag preview) */
+  dragEdit?: DragEditState | null;
+  /** Active rectangle selection state */
+  rectSelect?: RectSelectState | null;
 }
 
 /** Data for rendering a ghost variant preview overlay */
@@ -206,6 +211,16 @@ export function render(ctx: CanvasRenderingContext2D, state: RenderState): void 
   // Draw routing preview (dashed trace + DRC markers)
   if (state.routing && state.routing.mode === 'routing') {
     drawRoutingPreview(ctx, viewport, state.routing);
+  }
+
+  // Draw drag-edit preview (trace segment/corner being dragged)
+  if (state.dragEdit?.previewSegments) {
+    drawDragEditPreview(ctx, viewport, state.dragEdit);
+  }
+
+  // Draw rectangle selection overlay
+  if (state.rectSelect) {
+    drawRectSelection(ctx, viewport, state.rectSelect);
   }
 
   // Draw variant ghost preview overlay when hovering a non-active variant
@@ -1015,6 +1030,111 @@ function drawVariantPreview(ctx: CanvasRenderingContext2D, vp: Viewport, preview
     ctx.fillStyle = VIA_COLOR;
     ctx.fill();
   }
+
+  ctx.restore();
+}
+
+// ---------------------------------------------------------------------------
+// Routing preview
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Drag edit preview (segment/corner being dragged)
+// ---------------------------------------------------------------------------
+
+function drawDragEditPreview(
+  ctx: CanvasRenderingContext2D, vp: Viewport, dragEdit: DragEditState,
+): void {
+  if (!dragEdit.previewSegments || dragEdit.previewSegments.length === 0) return;
+
+  const trace = dragEdit.hit.trace;
+  const color = netColor(trace.net_name || 'default');
+  const trackWidth = trace.width * vp.scale;
+  const drawWidth = Math.max(trackWidth, 2);
+
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  // Draw original trace dimmed
+  ctx.globalAlpha = 0.25;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = drawWidth;
+  ctx.beginPath();
+  if (trace.segments.length > 0) {
+    const [sx, sy] = worldToScreen(vp, trace.segments[0].start_x, trace.segments[0].start_y);
+    ctx.moveTo(sx, sy);
+    for (const seg of trace.segments) {
+      const [ex, ey] = worldToScreen(vp, seg.end_x, seg.end_y);
+      ctx.lineTo(ex, ey);
+    }
+  }
+  ctx.stroke();
+
+  // Draw preview segments bright
+  ctx.globalAlpha = 0.85;
+  ctx.setLineDash([6, 3]);
+  ctx.strokeStyle = brightenColor(color, 20);
+  ctx.lineWidth = drawWidth;
+  ctx.beginPath();
+  const previewSegs = dragEdit.previewSegments;
+  if (previewSegs.length > 0) {
+    const [sx, sy] = worldToScreen(vp, previewSegs[0].start_x, previewSegs[0].start_y);
+    ctx.moveTo(sx, sy);
+    for (const seg of previewSegs) {
+      const [ex, ey] = worldToScreen(vp, seg.end_x, seg.end_y);
+      ctx.lineTo(ex, ey);
+    }
+  }
+  ctx.stroke();
+
+  // Draw corner dots on preview
+  ctx.setLineDash([]);
+  ctx.globalAlpha = 1.0;
+  for (const seg of previewSegs) {
+    const [sx, sy] = worldToScreen(vp, seg.start_x, seg.start_y);
+    ctx.beginPath();
+    ctx.arc(sx, sy, 3, 0, Math.PI * 2);
+    ctx.fillStyle = colorWithAlpha(color, 0.7);
+    ctx.fill();
+  }
+  if (previewSegs.length > 0) {
+    const last = previewSegs[previewSegs.length - 1];
+    const [ex, ey] = worldToScreen(vp, last.end_x, last.end_y);
+    ctx.beginPath();
+    ctx.arc(ex, ey, 3, 0, Math.PI * 2);
+    ctx.fillStyle = colorWithAlpha(color, 0.7);
+    ctx.fill();
+  }
+
+  ctx.restore();
+}
+
+// ---------------------------------------------------------------------------
+// Rectangle selection overlay
+// ---------------------------------------------------------------------------
+
+function drawRectSelection(
+  ctx: CanvasRenderingContext2D, vp: Viewport, rectSelect: RectSelectState,
+): void {
+  const [sx1, sy1] = worldToScreen(vp, rectSelect.startWorld.x, rectSelect.startWorld.y);
+  const [sx2, sy2] = worldToScreen(vp, rectSelect.currentWorld.x, rectSelect.currentWorld.y);
+  const x = Math.min(sx1, sx2);
+  const y = Math.min(sy1, sy2);
+  const w = Math.abs(sx2 - sx1);
+  const h = Math.abs(sy2 - sy1);
+
+  ctx.save();
+
+  // Semi-transparent fill
+  ctx.fillStyle = 'rgba(100, 180, 255, 0.12)';
+  ctx.fillRect(x, y, w, h);
+
+  // Dashed border
+  ctx.setLineDash([5, 3]);
+  ctx.strokeStyle = 'rgba(100, 180, 255, 0.6)';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(x, y, w, h);
 
   ctx.restore();
 }

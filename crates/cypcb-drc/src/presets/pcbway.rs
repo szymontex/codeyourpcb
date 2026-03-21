@@ -42,13 +42,18 @@ impl DesignRules {
     /// ```
     pub fn pcbway_standard() -> Self {
         DesignRules {
-            min_clearance: Nm::from_mm(0.15), // 6 mil recommended
+            min_clearance: Nm::from_mm(0.15),          // 6 mil recommended
             min_trace_width: Nm::from_mm(0.15),
-            min_drill_size: Nm::from_mm(0.2), // Mechanical
+            min_drill_size: Nm::from_mm(0.2),          // Mechanical
             min_via_drill: Nm::from_mm(0.2),
+            min_via_diameter: Nm::from_mm(0.5),        // 0.5mm
             min_annular_ring: Nm::from_mm(0.15),
-            min_silk_width: Nm::from_mm(0.22), // 8.66 mil - wider than JLCPCB
+            min_silk_width: Nm::from_mm(0.22),         // 8.66 mil - wider than JLCPCB
             min_edge_clearance: Nm::from_mm(0.3),
+            min_hole_to_hole: Nm::from_mm(0.5),
+            min_solder_mask_bridge: Nm::from_mm(0.1),
+            min_silk_clearance: Nm::from_mm(0.15),
+            min_courtyard_clearance: Nm::from_mm(0.25),
         }
     }
 
@@ -82,13 +87,18 @@ impl DesignRules {
     /// ```
     pub fn prototype() -> Self {
         DesignRules {
-            min_clearance: Nm::from_mm(0.2),    // 8 mil
-            min_trace_width: Nm::from_mm(0.25), // 10 mil
+            min_clearance: Nm::from_mm(0.2),           // 8 mil
+            min_trace_width: Nm::from_mm(0.25),        // 10 mil
             min_drill_size: Nm::from_mm(0.4),
             min_via_drill: Nm::from_mm(0.3),
+            min_via_diameter: Nm::from_mm(0.8),        // Large for hand soldering
             min_annular_ring: Nm::from_mm(0.2),
             min_silk_width: Nm::from_mm(0.2),
             min_edge_clearance: Nm::from_mm(0.5),
+            min_hole_to_hole: Nm::from_mm(0.6),
+            min_solder_mask_bridge: Nm::from_mm(0.15),
+            min_silk_clearance: Nm::from_mm(0.2),
+            min_courtyard_clearance: Nm::from_mm(0.5),
         }
     }
 }

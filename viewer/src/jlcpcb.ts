@@ -174,6 +174,26 @@ export async function fetch3DModel(lcscId: number): Promise<string | null> {
   }
 }
 
+/**
+ * Fetch a 3D model OBJ text by its EasyEDA UUID.
+ * Uses the same proxy-aware URL as fetch3DModel.
+ * Returns null on any error — never throws.
+ */
+export async function fetch3DModelByUuid(uuid: string): Promise<string | null> {
+  try {
+    const objUrl = `${EASYEDA_MODULES_BASE}/3dmodel/${uuid}`;
+    const objResponse = await fetch(objUrl);
+    if (!objResponse.ok) {
+      console.error(`[JLCPCB] 3D fetch error: HTTP ${objResponse.status} for OBJ ${uuid}`);
+      return null;
+    }
+    return await objResponse.text();
+  } catch (error) {
+    console.error(`[JLCPCB] 3D fetch error: ${error}`);
+    return null;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // EasyEDA component data cache (shared between footprint and 3D pipelines)
 // ---------------------------------------------------------------------------

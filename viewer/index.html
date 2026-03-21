@@ -663,6 +663,105 @@
       font-size: 12px;
       color: var(--text-primary);
     }
+    /* Help modal */
+    #help-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 200;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #help-overlay.hidden {
+      display: none;
+    }
+    #help-modal {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-primary);
+      border-radius: 8px;
+      box-shadow: 0 8px 32px var(--shadow);
+      width: 440px;
+      max-height: 80vh;
+      overflow-y: auto;
+      transition: background-color 0.15s ease, border-color 0.15s ease;
+    }
+    #help-modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border-primary);
+    }
+    #help-modal-header h2 {
+      font-size: 14px;
+      font-weight: 600;
+      margin: 0;
+    }
+    #help-close {
+      background: none;
+      border: none;
+      font-size: 20px;
+      cursor: pointer;
+      color: var(--text-secondary);
+      line-height: 1;
+      padding: 2px 4px;
+    }
+    #help-close:hover {
+      color: var(--text-primary);
+    }
+    .help-section {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border-secondary);
+    }
+    .help-section:last-child {
+      border-bottom: none;
+    }
+    .help-section h3 {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-tertiary);
+      margin: 0 0 8px 0;
+    }
+    .help-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 3px 0;
+      font-size: 12px;
+    }
+    .help-row .help-desc {
+      color: var(--text-primary);
+    }
+    .help-row kbd {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-primary);
+      border-radius: 3px;
+      padding: 1px 6px;
+      font-family: system-ui, sans-serif;
+      font-size: 11px;
+      color: var(--text-secondary);
+      min-width: 24px;
+      text-align: center;
+      white-space: nowrap;
+    }
+    #help-btn {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-primary);
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      transition: background-color 0.15s;
+    }
+    #help-btn:hover {
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+    }
     .prefs-row button:hover {
       background: var(--bg-tertiary);
     }
@@ -1209,6 +1308,7 @@
       <span id="theme-icon">☀️</span>
     </button>
     <button id="prefs-btn" title="Preferences">⚙</button>
+    <button id="help-btn" title="Keyboard shortcuts (?)">?</button>
     <button id="jlcpcb-search-btn" title="Search JLCPCB parts (Ctrl+J)">🔍</button>
     <span id="coords"></span>
     <button id="open-btn">Open</button>
@@ -1297,6 +1397,52 @@
           <label>Drill</label>
           <input type="color" id="prefs-color-drill" data-pref="layerColors.drill">
         </div>
+      </div>
+    </div>
+  </div>
+  <!-- Help / Keyboard shortcuts modal -->
+  <div id="help-overlay" class="hidden">
+    <div id="help-modal">
+      <div id="help-modal-header">
+        <h2>Keyboard Shortcuts</h2>
+        <button id="help-close">&times;</button>
+      </div>
+      <div class="help-section">
+        <h3>General</h3>
+        <div class="help-row"><span class="help-desc">Undo</span><kbd>Ctrl+Z</kbd></div>
+        <div class="help-row"><span class="help-desc">Redo</span><kbd>Ctrl+Shift+Z</kbd></div>
+        <div class="help-row"><span class="help-desc">Fit board to view</span><kbd>F</kbd></div>
+        <div class="help-row"><span class="help-desc">Toggle editor</span><kbd>Ctrl+E</kbd></div>
+        <div class="help-row"><span class="help-desc">Toggle 3D view</span><kbd>3</kbd></div>
+        <div class="help-row"><span class="help-desc">Toggle theme</span><kbd>Ctrl+Shift+T</kbd></div>
+        <div class="help-row"><span class="help-desc">Save file</span><kbd>Ctrl+S</kbd></div>
+        <div class="help-row"><span class="help-desc">Share view</span><kbd>Ctrl+Shift+S</kbd></div>
+        <div class="help-row"><span class="help-desc">JLCPCB parts search</span><kbd>Ctrl+J</kbd></div>
+        <div class="help-row"><span class="help-desc">Show shortcuts</span><kbd>?</kbd></div>
+      </div>
+      <div class="help-section">
+        <h3>Selection &amp; Editing</h3>
+        <div class="help-row"><span class="help-desc">Rotate component CW</span><kbd>R</kbd></div>
+        <div class="help-row"><span class="help-desc">Rotate component CCW</span><kbd>Shift+R</kbd></div>
+        <div class="help-row"><span class="help-desc">Delete selected trace</span><kbd>Delete</kbd></div>
+        <div class="help-row"><span class="help-desc">Clear selection / close panel</span><kbd>Esc</kbd></div>
+        <div class="help-row"><span class="help-desc">Drag trace segment</span><kbd>Click+drag segment</kbd></div>
+        <div class="help-row"><span class="help-desc">Drag trace corner</span><kbd>Click+drag vertex</kbd></div>
+        <div class="help-row"><span class="help-desc">Rectangle select</span><kbd>Click+drag empty space</kbd></div>
+      </div>
+      <div class="help-section">
+        <h3>Interactive Routing</h3>
+        <div class="help-row"><span class="help-desc">Flip layer</span><kbd>F</kbd></div>
+        <div class="help-row"><span class="help-desc">Toggle angle snap</span><kbd>A</kbd></div>
+        <div class="help-row"><span class="help-desc">Flip posture</span><kbd>/</kbd></div>
+        <div class="help-row"><span class="help-desc">Toggle corner mode (45°/90°)</span><kbd>Q</kbd></div>
+        <div class="help-row"><span class="help-desc">Cancel route</span><kbd>Esc</kbd></div>
+      </div>
+      <div class="help-section">
+        <h3>Navigation</h3>
+        <div class="help-row"><span class="help-desc">Zoom</span><kbd>Scroll wheel</kbd></div>
+        <div class="help-row"><span class="help-desc">Pan</span><kbd>Middle-click drag</kbd></div>
+        <div class="help-row"><span class="help-desc">Pan (alternative)</span><kbd>Ctrl+Left drag</kbd></div>
       </div>
     </div>
   </div>

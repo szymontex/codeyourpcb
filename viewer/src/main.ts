@@ -12,7 +12,7 @@ import { render, type RenderState } from './renderer';
 import { createDefaultRenderConfig, buildPadNetMap } from './render-config';
 import { setupInteraction, type InteractionState } from './interaction';
 import { createRoutingState, type RoutingState } from './routing';
-import { UndoStack, AddTraceCommand, RemoveTraceCommand, RotateComponentCommand, ResizeBoardCommand, installDebugSurface } from './undo';
+import { UndoStack, AddTraceCommand, RemoveTraceCommand, RotateComponentCommand, ResizeBoardCommand, EditTraceCommand, installDebugSurface } from './undo';
 import { createLayerVisibility } from './layers';
 import { createFilePicker, setupDropZone, readFileAsText } from './file-picker';
 import { openFile, saveFile } from './file-access';
@@ -183,6 +183,9 @@ async function init(): Promise<void> {
   const prefsBtn = document.getElementById('prefs-btn') as HTMLButtonElement;
   const prefsOverlay = document.getElementById('prefs-overlay')!;
   const prefsClose = document.getElementById('prefs-close') as HTMLButtonElement;
+  const helpBtn = document.getElementById('help-btn') as HTMLButtonElement;
+  const helpOverlay = document.getElementById('help-overlay')!;
+  const helpClose = document.getElementById('help-close') as HTMLButtonElement;
   const undoBtn = document.getElementById('undo-btn') as HTMLButtonElement;
   const redoBtn = document.getElementById('redo-btn') as HTMLButtonElement;
   const routeBtn = document.getElementById('route-btn') as HTMLButtonElement;
@@ -458,6 +461,25 @@ async function init(): Promise<void> {
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !prefsOverlay.classList.contains('hidden')) {
       closePrefsModal();
+    }
+  });
+
+  // --- Help modal ---
+  function openHelpModal(): void {
+    helpOverlay.classList.remove('hidden');
+  }
+  function closeHelpModal(): void {
+    helpOverlay.classList.add('hidden');
+  }
+  helpBtn.addEventListener('click', openHelpModal);
+  helpClose.addEventListener('click', closeHelpModal);
+  helpOverlay.addEventListener('click', (e) => {
+    if (e.target === helpOverlay) closeHelpModal();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !helpOverlay.classList.contains('hidden')) {
+      closeHelpModal();
+      e.preventDefault();
     }
   });
 
@@ -1209,6 +1231,35 @@ async function init(): Promise<void> {
       console.log('[Net] Cleared (route end)');
       dirty = true;
     },
+    onTraceEdit: (oldTraceId: number, netName: string, layer: string, width: number, oldSegments: number[], newSegments: number[]) => {
+      const cmd = new EditTraceCommand(
+        engine,
+        oldTraceId,
+        { netName, layer, width, segments: oldSegments },
+        { netName, layer, width, segments: newSegments },
+        refreshSnapshot,
+      );
+      undoStack.push(cmd);
+      dirty = true;
+    },
+    onRectSelect: (traceIds: number[], componentRefdes: string[]) => {
+      // For now, select the first trace or component in the rectangle
+      if (traceIds.length > 0) {
+        selectedTraceId = traceIds[0];
+        interactionState.selectedTraceId = traceIds[0];
+        const trace = snapshot?.traces?.find(t => t.id === traceIds[0]);
+        if (trace) {
+          highlightedNet = trace.net_name || null;
+          statusText.textContent = `Selected ${traceIds.length} trace(s)${componentRefdes.length > 0 ? `, ${componentRefdes.length} component(s)` : ''}`;
+        }
+      } else if (componentRefdes.length > 0) {
+        selectedRefdes = componentRefdes[0];
+        statusText.textContent = `Selected ${componentRefdes.length} component(s)`;
+      }
+      dirty = true;
+    },
+    dragEdit: null,
+    rectSelect: null,
   };
 
   setupInteraction(canvas, interactionState);
@@ -1524,6 +1575,8 @@ async function init(): Promise<void> {
         gridVisualSpacing: getPreference('gridVisualSpacing'),
         showNetLabels,
         variantPreview,
+        dragEdit: interactionState.dragEdit,
+        rectSelect: interactionState.rectSelect,
       };
       render(ctx, renderState);
 
@@ -2391,6 +2444,16 @@ async function init(): Promise<void> {
       if (!isEditorFocused) {
         e.preventDefault();
         view3dBtn.click();
+      }
+    }
+    // '?' key opens help modal (skip if typing in editor/input)
+    if (e.key === '?' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      const tag = (e.target as HTMLElement)?.tagName;
+      const isEditorFocused = tag === 'INPUT' || tag === 'TEXTAREA' ||
+        (e.target as HTMLElement)?.closest('.monaco-editor') != null;
+      if (!isEditorFocused) {
+        e.preventDefault();
+        openHelpModal();
       }
     }
   });

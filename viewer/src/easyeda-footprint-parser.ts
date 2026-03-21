@@ -49,15 +49,21 @@ export function parseEasyEDAFootprint(compData: any): EasyEDAFootprint | null {
       const shapes = item?.packageDetail?.dataStr?.shape;
       if (!Array.isArray(shapes)) continue;
 
+      // Extract origin from head (used for standalone PADs not wrapped in LIB)
+      const head = item?.packageDetail?.dataStr?.head;
+      const headOriginX = parseFloat(head?.x) || 0;
+      const headOriginY = parseFloat(head?.y) || 0;
+
       let modelUuid: string | null = null;
       const allPads: PadInfo[] = [];
-      let originX = 0;
-      let originY = 0;
+      let originX = headOriginX;
+      let originY = headOriginY;
+      let hasLIB = false;
 
       for (const shape of shapes) {
         if (typeof shape !== 'string') continue;
 
-        // Check for 3D model UUID
+        // Check for 3D model UUID in SVGNODE entries
         if (shape.includes('outline3D') || shape.includes('3D')) {
           const uuidMatch = shape.match(/"uuid"\s*:\s*"([a-f0-9]{32})"/i);
           if (uuidMatch) {
@@ -65,7 +71,7 @@ export function parseEasyEDAFootprint(compData: any): EasyEDAFootprint | null {
           }
         }
 
-        // Parse LIB blocks (footprint containers)
+        // Parse LIB blocks (footprint containers — older format)
         // Format: LIB~X~Y~package`NAME`...#@$PAD~...#@$PAD~...
         if (shape.startsWith('LIB~')) {
           const { pads, ox, oy } = parseLIBBlock(shape);
@@ -73,13 +79,15 @@ export function parseEasyEDAFootprint(compData: any): EasyEDAFootprint | null {
             allPads.push(...pads);
             originX = ox;
             originY = oy;
+            hasLIB = true;
           }
           continue;
         }
 
-        // Standalone PAD entries (outside LIB blocks)
+        // Standalone PAD entries (v6 format — no LIB wrapper)
+        // Origin comes from head.x, head.y
         if (shape.startsWith('PAD~')) {
-          const pad = parsePADShape(shape, 0, 0);
+          const pad = parsePADShape(shape, hasLIB ? 0 : headOriginX, hasLIB ? 0 : headOriginY);
           if (pad) allPads.push(pad);
         }
       }
