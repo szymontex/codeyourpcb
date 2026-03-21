@@ -110,142 +110,48 @@ export function dragSegment(
 ): TraceSegmentInfo[] | null {
   if (!segments.length || segIndex < 0 || segIndex >= segments.length) return null;
 
-  // Build mutable point array
-  let pts = traceVertices({ segments } as TraceInfo);
-  if (pts.length < 2) return null;
-  const origIndex = segIndex;
-  let index = segIndex;
+  const pts = traceVertices({ segments } as TraceInfo);
+  if (pts.length < 3) return null; // need at least prev or next segment
 
-  // KiCad: ensure prev/next exist by inserting zero-length guard segments
-  if (index === 0) {
-    pts = [{ ...pts[0] }, ...pts]; // insert duplicate at start
-    index++;
+  // The dragged segment is pts[segIndex] → pts[segIndex+1]
+  // We find where a line through newPos (in the dragged segment's direction)
+  // intersects the LINES of the adjacent segments.
+  // This slides the junction points along the adjacent segments.
+
+  const A = pts[segIndex];     // start of dragged
+  const B = pts[segIndex + 1]; // end of dragged
+  const dragDx = B.x - A.x;
+  const dragDy = B.y - A.y;
+  if (Math.abs(dragDx) < 1 && Math.abs(dragDy) < 1) return null;
+
+  const result = pts.map(p => ({ ...p }));
+
+  // Line through newPos in drag direction
+  const mDir: Vec2 = { x: dragDx, y: dragDy };
+
+  // Adjust start junction (pts[segIndex])
+  if (segIndex > 0) {
+    // Previous segment: pts[segIndex-1] → pts[segIndex]
+    const P = pts[segIndex - 1];
+    const prevDir: Vec2 = { x: A.x - P.x, y: A.y - P.y };
+    // Intersect line(P, prevDir) with line(newPos, mDir)
+    const ip = lli(P, prevDir, newPos, mDir);
+    if (ip) result[segIndex] = ip;
   }
-  if (index === pts.length - 2) { // last segment
-    pts = [...pts, { ...pts[pts.length - 1] }]; // insert duplicate at end
+  // else: first segment, start point is pad — don't move it
+
+  // Adjust end junction (pts[segIndex+1])
+  if (segIndex + 2 < pts.length) {
+    // Next segment: pts[segIndex+1] → pts[segIndex+2]
+    const N = pts[segIndex + 2];
+    const nextDir: Vec2 = { x: B.x - N.x, y: B.y - N.y };
+    // Intersect line(N, nextDir) with line(newPos, mDir)
+    const ip = lli(N, nextDir, newPos, mDir);
+    if (ip) result[segIndex + 1] = ip;
   }
+  // else: last segment, end point is pad — don't move it
 
-  // Now: pts[index]→pts[index+1] = dragged segment
-  //      pts[index-1]→pts[index] = s_prev
-  //      pts[index+1]→pts[index+2] = s_next
-  const dragDir = dirFromSeg(pts[index], pts[index + 1]);
-  if (dragDir === Dir45.UNDEFINED) return null;
-
-  let dirPrev = dirFromSeg(pts[index - 1], pts[index]);
-  let dirNext = dirFromSeg(pts[index + 1], pts[index + 2]);
-
-  // KiCad: if prev/next colinear with drag, insert another zero-length and force perpendicular
-  if (dirPrev === dragDir) {
-    pts.splice(index, 0, { ...pts[index] });
-    index++;
-    dirPrev = leftDir(dragDir);
-  } else if (dirPrev === Dir45.UNDEFINED) {
-    dirPrev = leftDir(dragDir);
-  }
-  if (dirNext === dragDir) {
-    pts.splice(index + 2, 0, { ...pts[index + 1] });
-    dirNext = rightDir(dragDir);
-  } else if (dirNext === Dir45.UNDEFINED) {
-    dirNext = rightDir(dragDir);
-  }
-
-  // Re-read after mutations
-  const prevA = pts[index - 1];          // fixed start of prev segment
-  const dragA = pts[index];              // start of dragged
-  const dragB = pts[index + 1];          // end of dragged
-  const nextB = pts[index + 2];          // fixed end of next segment
-
-  // Build guide lines (KiCad logic exactly)
-  type Guide = { origin: Vec2; dir: Vec2 };
-  const guidesA: Guide[] = [];
-  const guidesB: Guide[] = [];
-
-  if (origIndex === 0) {
-    guidesA.push({ origin: dragA, dir: dv(rightDir(dragDir)) });
-    guidesA.push({ origin: dragA, dir: dv(leftDir(dragDir)) });
-  } else {
-    const ang = angleBetween(dirPrev, dragDir);
-    if (ang === AngleType.ANG_OBTUSE || ang === AngleType.ANG_HALF_FULL) {
-      guidesA.push({ origin: prevA, dir: dv(leftDir(dragDir)) });
-      guidesA.push({ origin: prevA, dir: dv(rightDir(dragDir)) });
-    } else {
-      guidesA.push({ origin: dragA, dir: dv(dirPrev) });
-      guidesA.push({ origin: dragA, dir: dv(dirPrev) }); // same for both
-    }
-  }
-
-  if (origIndex === segments.length - 1) {
-    guidesB.push({ origin: dragB, dir: dv(rightDir(dragDir)) });
-    guidesB.push({ origin: dragB, dir: dv(leftDir(dragDir)) });
-  } else {
-    const ang = angleBetween(dirNext, dragDir);
-    if (ang === AngleType.ANG_OBTUSE || ang === AngleType.ANG_HALF_FULL) {
-      guidesB.push({ origin: nextB, dir: dv(leftDir(dragDir)) });
-      guidesB.push({ origin: nextB, dir: dv(rightDir(dragDir)) });
-    } else {
-      guidesB.push({ origin: dragB, dir: dv(dirNext) });
-      guidesB.push({ origin: dragB, dir: dv(dirNext) });
-    }
-  }
-
-  // s_current: line through target in drag direction
-  const dragDV = dv(dragDir);
-  let bestLen = Infinity;
-  let best: Vec2[] | null = null;
-
-  for (let i = 0; i < 2; i++) {
-    for (let j = 0; j < 2; j++) {
-      const ip1 = lli(newPos, dragDV, guidesA[i].origin, guidesA[i].dir);
-      const ip2 = lli(newPos, dragDV, guidesB[j].origin, guidesB[j].dir);
-      if (!ip1 || !ip2) continue;
-
-      // KiCad: s1=prevA→ip1, s2=ip1→ip2, s3=ip2→nextB
-      // Try segment intersections to reduce to 3-point path
-      let np: Vec2[];
-
-      const si1 = ssi(prevA, ip1, dragB, nextB); // s1 ∩ s_next
-      const si2 = ssi(ip2, nextB, prevA, dragA); // s3 ∩ s_prev
-      const si3 = ssi(prevA, ip1, ip2, nextB);   // s1 ∩ s3
-
-      if (si1) {
-        np = [prevA, si1, nextB];
-      } else if (si2) {
-        np = [prevA, si2, nextB];
-      } else if (si3) {
-        np = [prevA, si3, nextB];
-      } else {
-        np = [prevA, ip1, ip2, nextB];
-      }
-
-      let len = 0;
-      for (let k = 0; k < np.length - 1; k++) len += Math.hypot(np[k+1].x-np[k].x, np[k+1].y-np[k].y);
-      if (len < bestLen) { bestLen = len; best = np; }
-    }
-  }
-
-  if (!best) return null;
-
-  // Replace: KiCad does m_line.Replace(aIndex, aIndex+1, best) then Simplify
-  // aIndex and aIndex+1 are the two points of the original dragged segment
-  // In our pts array (after insertions), the original segment is at [index, index+1]
-  // But we need to map back to the ORIGINAL point array to replace correctly
-
-  // Simpler: rebuild entire path using original points + best result
-  const origPts = traceVertices({ segments } as TraceInfo);
-
-  if (origIndex === 0) {
-    // Replace first 2 points
-    const r = [...best, ...origPts.slice(2)];
-    return v2s(r);
-  } else if (origIndex === segments.length - 1) {
-    // Replace last 2 points
-    const r = [...origPts.slice(0, origPts.length - 2), ...best];
-    return v2s(r);
-  } else {
-    // Replace points at origIndex and origIndex+1
-    const r = [...origPts.slice(0, origIndex), ...best, ...origPts.slice(origIndex + 2)];
-    return v2s(r);
-  }
+  return v2s(result);
 }
 
 // ---------------------------------------------------------------------------
