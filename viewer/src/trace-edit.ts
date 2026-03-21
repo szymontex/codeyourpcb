@@ -1,10 +1,5 @@
 /**
- * Trace segment/corner editing — KiCad-style drag operations.
- *
- * dragSegment: shifts a segment parallel to itself, adjacent segments
- * stretch/shrink to meet. Simple perpendicular offset + line intersection.
- *
- * dragCorner: moves a vertex, rebuilds adjacent segments via BuildInitialTrace.
+ * Trace segment/corner editing — faithful port of KiCad's pns_line.cpp
  */
 
 import type { BoardSnapshot, TraceInfo, TraceSegmentInfo } from './types';
@@ -12,7 +7,7 @@ import { pointToSegmentDistance } from './geometry';
 import {
   type Vec2, Dir45,
   dirFromSeg, isDiagonal, buildInitialTrace,
-  angleBetween, AngleType,
+  leftDir, rightDir, angleBetween, AngleType,
 } from './direction45';
 
 // ---------------------------------------------------------------------------
@@ -28,22 +23,15 @@ export interface TraceSegmentHit {
 }
 
 export function hitTestTraceSegment(
-  snapshot: BoardSnapshot | null,
-  worldX: number, worldY: number,
-  toleranceNm: number,
+  snapshot: BoardSnapshot | null, worldX: number, worldY: number, toleranceNm: number,
 ): TraceSegmentHit | null {
-  if (!snapshot?.traces || snapshot.traces.length === 0) return null;
-
+  if (!snapshot?.traces) return null;
   let bestDist = Infinity;
   let bestHit: TraceSegmentHit | null = null;
-
   for (const trace of snapshot.traces) {
     const hw = Number(trace.width) / 2;
-    const hitR = toleranceNm + hw;
-    const cornerR = Math.max(Number(trace.width), toleranceNm);
     const verts = traceVertices(trace);
-
-    // Corners first (priority)
+    const cornerR = Math.max(Number(trace.width), toleranceNm);
     for (let vi = 0; vi < verts.length; vi++) {
       const d = Math.hypot(worldX - verts[vi].x, worldY - verts[vi].y);
       if (d <= cornerR && d < bestDist) {
@@ -51,11 +39,10 @@ export function hitTestTraceSegment(
         bestHit = { traceId: trace.id, trace, segmentIndex: Math.min(vi, trace.segments.length - 1), nearCorner: true, cornerIndex: vi };
       }
     }
-
     for (let i = 0; i < trace.segments.length; i++) {
       const seg = trace.segments[i];
       const d = pointToSegmentDistance(worldX, worldY, Number(seg.start_x), Number(seg.start_y), Number(seg.end_x), Number(seg.end_y));
-      if (d <= hitR && d < bestDist) {
+      if (d <= toleranceNm + hw && d < bestDist) {
         const sd = Math.hypot(worldX - Number(seg.start_x), worldY - Number(seg.start_y));
         const ed = Math.hypot(worldX - Number(seg.end_x), worldY - Number(seg.end_y));
         if (Math.min(sd, ed) <= cornerR) continue;
@@ -68,137 +55,197 @@ export function hitTestTraceSegment(
 }
 
 export function traceVertices(trace: TraceInfo): Vec2[] {
-  if (trace.segments.length === 0) return [];
+  if (!trace.segments.length) return [];
   const pts: Vec2[] = [{ x: Number(trace.segments[0].start_x), y: Number(trace.segments[0].start_y) }];
-  for (const seg of trace.segments) pts.push({ x: Number(seg.end_x), y: Number(seg.end_y) });
+  for (const s of trace.segments) pts.push({ x: Number(s.end_x), y: Number(s.end_y) });
   return pts;
 }
 
-function verticesToSegments(pts: Vec2[]): TraceSegmentInfo[] {
-  const segs: TraceSegmentInfo[] = [];
+function v2s(pts: Vec2[]): TraceSegmentInfo[] {
+  const r: TraceSegmentInfo[] = [];
   for (let i = 0; i < pts.length - 1; i++) {
     const a = pts[i], b = pts[i + 1];
     if (Math.abs(a.x - b.x) < 1 && Math.abs(a.y - b.y) < 1) continue;
-    segs.push({ start_x: Math.round(a.x), start_y: Math.round(a.y), end_x: Math.round(b.x), end_y: Math.round(b.y) });
+    r.push({ start_x: Math.round(a.x), start_y: Math.round(a.y), end_x: Math.round(b.x), end_y: Math.round(b.y) });
   }
-  return segs;
+  return r;
 }
 
 // ---------------------------------------------------------------------------
-// Line-line intersection (infinite lines)
+// Direction vector (45° unit vectors)
 // ---------------------------------------------------------------------------
+const DIR_VECS: Vec2[] = [
+  {x:0,y:1},{x:1,y:1},{x:1,y:0},{x:1,y:-1},
+  {x:0,y:-1},{x:-1,y:-1},{x:-1,y:0},{x:-1,y:1},
+];
+function dv(d: Dir45): Vec2 { return d >= 0 && d < 8 ? DIR_VECS[d] : {x:0,y:0}; }
 
-/** Intersect line through p1 in direction d1 with line through p2 in direction d2. */
-function lineIsect(p1: Vec2, d1: Vec2, p2: Vec2, d2: Vec2): Vec2 | null {
+/** Infinite line intersection: (p1 + t*d1) ∩ (p2 + u*d2) */
+function lli(p1: Vec2, d1: Vec2, p2: Vec2, d2: Vec2): Vec2 | null {
   const cross = d1.x * d2.y - d1.y * d2.x;
   if (Math.abs(cross) < 0.001) return null;
   const t = ((p2.x - p1.x) * d2.y - (p2.y - p1.y) * d2.x) / cross;
   return { x: p1.x + t * d1.x, y: p1.y + t * d1.y };
 }
 
+/** Finite segment intersection: A→B ∩ C→D */
+function ssi(a: Vec2, b: Vec2, c: Vec2, d: Vec2): Vec2 | null {
+  const d1x = b.x-a.x, d1y = b.y-a.y, d2x = d.x-c.x, d2y = d.y-c.y;
+  const cross = d1x*d2y - d1y*d2x;
+  if (Math.abs(cross) < 0.001) return null;
+  const t = ((c.x-a.x)*d2y - (c.y-a.y)*d2x) / cross;
+  const u = ((c.x-a.x)*d1y - (c.y-a.y)*d1x) / cross;
+  if (t < -0.001 || t > 1.001 || u < -0.001 || u > 1.001) return null;
+  return { x: a.x+t*d1x, y: a.y+t*d1y };
+}
+
 // ---------------------------------------------------------------------------
-// dragSegment — simple perpendicular shift
+// dragSegment45 — 1:1 port of KiCad LINE::dragSegment45
 // ---------------------------------------------------------------------------
 
-/**
- * Drag a trace segment — KiCad dragSegment45.
- *
- * KiCad behavior: draws a line through `newPos` in the direction of the
- * dragged segment. Intersects this line with "guide lines" extending from
- * the fixed endpoints of adjacent segments. The intersection points become
- * the new junction points, effectively sliding the break-points along
- * the adjacent segments.
- *
- * For a trace like: A──────B╲C
- * Dragging the diagonal B→C means:
- * - guideA is a line from A in direction of A→B (horizontal)
- * - guideB is a line from C in direction of C→(next point) or drag_dir perpendicular
- * - s_current is a line through mouse position in direction of B→C (the diagonal)
- * - ip1 = s_current ∩ guideA → new B position (slides along horizontal)
- * - ip2 = s_current ∩ guideB → new C position
- * Result: A → ip1 → ip2 → D (endpoints A and D stay fixed)
- */
 export function dragSegment(
   segments: TraceSegmentInfo[],
   segIndex: number,
   newPos: Vec2,
 ): TraceSegmentInfo[] | null {
-  if (segments.length === 0 || segIndex < 0 || segIndex >= segments.length) return null;
+  if (!segments.length || segIndex < 0 || segIndex >= segments.length) return null;
 
-  const pts = traceVertices({ segments } as TraceInfo);
+  // Build mutable point array
+  let pts = traceVertices({ segments } as TraceInfo);
   if (pts.length < 2) return null;
+  const origIndex = segIndex;
+  let index = segIndex;
 
-  const idx = segIndex;
-  const dragA = pts[idx];
-  const dragB = pts[idx + 1];
+  // KiCad: ensure prev/next exist by inserting zero-length guard segments
+  if (index === 0) {
+    pts = [{ ...pts[0] }, ...pts]; // insert duplicate at start
+    index++;
+  }
+  if (index === pts.length - 2) { // last segment
+    pts = [...pts, { ...pts[pts.length - 1] }]; // insert duplicate at end
+  }
 
-  const ddx = dragB.x - dragA.x;
-  const ddy = dragB.y - dragA.y;
-  if (Math.abs(ddx) < 1 && Math.abs(ddy) < 1) return null;
+  // Now: pts[index]→pts[index+1] = dragged segment
+  //      pts[index-1]→pts[index] = s_prev
+  //      pts[index+1]→pts[index+2] = s_next
+  const dragDir = dirFromSeg(pts[index], pts[index + 1]);
+  if (dragDir === Dir45.UNDEFINED) return null;
 
-  // drag_dir vector (direction of the dragged segment)
-  const dragDirV: Vec2 = { x: ddx, y: ddy };
+  let dirPrev = dirFromSeg(pts[index - 1], pts[index]);
+  let dirNext = dirFromSeg(pts[index + 1], pts[index + 2]);
 
-  // s_current: line through newPos in drag direction
-  // guideA: line from the FIXED point before the dragged segment, in the direction of the previous segment
-  // guideB: line from the FIXED point after the dragged segment, in the direction of the next segment
+  // KiCad: if prev/next colinear with drag, insert another zero-length and force perpendicular
+  if (dirPrev === dragDir) {
+    pts.splice(index, 0, { ...pts[index] });
+    index++;
+    dirPrev = leftDir(dragDir);
+  } else if (dirPrev === Dir45.UNDEFINED) {
+    dirPrev = leftDir(dragDir);
+  }
+  if (dirNext === dragDir) {
+    pts.splice(index + 2, 0, { ...pts[index + 1] });
+    dirNext = rightDir(dragDir);
+  } else if (dirNext === Dir45.UNDEFINED) {
+    dirNext = rightDir(dragDir);
+  }
 
-  let fixedA: Vec2; // anchor point for guide A (won't move)
-  let guideDirA: Vec2; // direction of guide A
+  // Re-read after mutations
+  const prevA = pts[index - 1];          // fixed start of prev segment
+  const dragA = pts[index];              // start of dragged
+  const dragB = pts[index + 1];          // end of dragged
+  const nextB = pts[index + 2];          // fixed end of next segment
 
-  if (idx > 0) {
-    fixedA = pts[idx - 1];
-    guideDirA = { x: dragA.x - fixedA.x, y: dragA.y - fixedA.y };
+  // Build guide lines (KiCad logic exactly)
+  type Guide = { origin: Vec2; dir: Vec2 };
+  const guidesA: Guide[] = [];
+  const guidesB: Guide[] = [];
+
+  if (origIndex === 0) {
+    guidesA.push({ origin: dragA, dir: dv(rightDir(dragDir)) });
+    guidesA.push({ origin: dragA, dir: dv(leftDir(dragDir)) });
   } else {
-    // First segment: pad endpoint is LOCKED. ip1 = pad position always.
-    fixedA = { ...dragA }; // pad
-    guideDirA = { x: 0, y: 0 }; // won't be used
+    const ang = angleBetween(dirPrev, dragDir);
+    if (ang === AngleType.ANG_OBTUSE || ang === AngleType.ANG_HALF_FULL) {
+      guidesA.push({ origin: prevA, dir: dv(leftDir(dragDir)) });
+      guidesA.push({ origin: prevA, dir: dv(rightDir(dragDir)) });
+    } else {
+      guidesA.push({ origin: dragA, dir: dv(dirPrev) });
+      guidesA.push({ origin: dragA, dir: dv(dirPrev) }); // same for both
+    }
   }
 
-  let fixedB: Vec2;
-  let guideDirB: Vec2;
-
-  if (idx + 2 < pts.length) {
-    fixedB = pts[idx + 2];
-    guideDirB = { x: dragB.x - fixedB.x, y: dragB.y - fixedB.y };
+  if (origIndex === segments.length - 1) {
+    guidesB.push({ origin: dragB, dir: dv(rightDir(dragDir)) });
+    guidesB.push({ origin: dragB, dir: dv(leftDir(dragDir)) });
   } else {
-    // Last segment: pad endpoint is LOCKED. ip2 = pad position always.
-    fixedB = { ...dragB }; // pad
-    guideDirB = { x: 0, y: 0 }; // won't be used
+    const ang = angleBetween(dirNext, dragDir);
+    if (ang === AngleType.ANG_OBTUSE || ang === AngleType.ANG_HALF_FULL) {
+      guidesB.push({ origin: nextB, dir: dv(leftDir(dragDir)) });
+      guidesB.push({ origin: nextB, dir: dv(rightDir(dragDir)) });
+    } else {
+      guidesB.push({ origin: dragB, dir: dv(dirNext) });
+      guidesB.push({ origin: dragB, dir: dv(dirNext) });
+    }
   }
 
-  // Intersect s_current with guides
-  // For first/last segment: the pad endpoint is locked (no intersection needed)
-  const ip1 = (idx > 0)
-    ? lineIsect(newPos, dragDirV, fixedA, guideDirA)
-    : fixedA;
-  const ip2 = (idx + 2 < pts.length)
-    ? lineIsect(newPos, dragDirV, fixedB, guideDirB)
-    : fixedB;
+  // s_current: line through target in drag direction
+  const dragDV = dv(dragDir);
+  let bestLen = Infinity;
+  let best: Vec2[] | null = null;
 
-  if (!ip1 || !ip2) return null;
+  for (let i = 0; i < 2; i++) {
+    for (let j = 0; j < 2; j++) {
+      const ip1 = lli(newPos, dragDV, guidesA[i].origin, guidesA[i].dir);
+      const ip2 = lli(newPos, dragDV, guidesB[j].origin, guidesB[j].dir);
+      if (!ip1 || !ip2) continue;
 
-  // Build result based on which segment was dragged
-  if (idx === 0 && idx === segments.length - 1) {
-    // Only one segment in trace (both ends are pads) — can't drag meaningfully
-    return null;
+      // KiCad: s1=prevA→ip1, s2=ip1→ip2, s3=ip2→nextB
+      // Try segment intersections to reduce to 3-point path
+      let np: Vec2[];
+
+      const si1 = ssi(prevA, ip1, dragB, nextB); // s1 ∩ s_next
+      const si2 = ssi(ip2, nextB, prevA, dragA); // s3 ∩ s_prev
+      const si3 = ssi(prevA, ip1, ip2, nextB);   // s1 ∩ s3
+
+      if (si1) {
+        np = [prevA, si1, nextB];
+      } else if (si2) {
+        np = [prevA, si2, nextB];
+      } else if (si3) {
+        np = [prevA, si3, nextB];
+      } else {
+        np = [prevA, ip1, ip2, nextB];
+      }
+
+      let len = 0;
+      for (let k = 0; k < np.length - 1; k++) len += Math.hypot(np[k+1].x-np[k].x, np[k+1].y-np[k].y);
+      if (len < bestLen) { bestLen = len; best = np; }
+    }
   }
 
-  if (idx === 0) {
-    // First segment: pad(locked)=ip1=fixedA, ip2 slides on next segment
-    const r = [fixedA, ip2, ...pts.slice(idx + 2)];
-    return verticesToSegments(r);
-  }
+  if (!best) return null;
 
-  if (idx === segments.length - 1) {
-    // Last segment: ip1 slides on prev segment, pad(locked)=ip2=fixedB
-    const r = [...pts.slice(0, idx), ip1, fixedB];
-    return verticesToSegments(r);
-  }
+  // Replace: KiCad does m_line.Replace(aIndex, aIndex+1, best) then Simplify
+  // aIndex and aIndex+1 are the two points of the original dragged segment
+  // In our pts array (after insertions), the original segment is at [index, index+1]
+  // But we need to map back to the ORIGINAL point array to replace correctly
 
-  // Middle segment: both junctions slide
-  const r = [...pts.slice(0, idx - 1), fixedA, ip1, ip2, fixedB, ...pts.slice(idx + 3)];
-  return verticesToSegments(r);
+  // Simpler: rebuild entire path using original points + best result
+  const origPts = traceVertices({ segments } as TraceInfo);
+
+  if (origIndex === 0) {
+    // Replace first 2 points
+    const r = [...best, ...origPts.slice(2)];
+    return v2s(r);
+  } else if (origIndex === segments.length - 1) {
+    // Replace last 2 points
+    const r = [...origPts.slice(0, origPts.length - 2), ...best];
+    return v2s(r);
+  } else {
+    // Replace points at origIndex and origIndex+1
+    const r = [...origPts.slice(0, origIndex), ...best, ...origPts.slice(origIndex + 2)];
+    return v2s(r);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -206,95 +253,67 @@ export function dragSegment(
 // ---------------------------------------------------------------------------
 
 function dragCornerInternal(pts: Vec2[], target: Vec2): TraceSegmentInfo[] | null {
-  if (pts.length === 0) return null;
-  if (pts.length === 1) return verticesToSegments(buildInitialTrace(pts[0], target, Dir45.UNDEFINED));
+  if (!pts.length) return null;
+  if (pts.length === 1) return v2s(buildInitialTrace(pts[0], target, Dir45.UNDEFINED));
   if (pts.length === 2) {
-    const dir = dirFromSeg(pts[1], pts[0]);
-    return verticesToSegments(buildInitialTrace(pts[0], target, Dir45.UNDEFINED, isDiagonal(dir)));
+    const d = dirFromSeg(pts[1], pts[0]);
+    return v2s(buildInitialTrace(pts[0], target, Dir45.UNDEFINED, isDiagonal(d)));
   }
-
-  // Walk backward, try to splice a BuildInitialTrace from each vertex
   for (let i = pts.length - 2; i >= 0; i--) {
     const segDir = dirFromSeg(pts[i], pts[i + 1]);
-    const startPt = pts[i];
-
     for (let j = 0; j < 2; j++) {
-      const path = buildInitialTrace(startPt, target, Dir45.UNDEFINED, j === 1);
+      const path = buildInitialTrace(pts[i], target, Dir45.UNDEFINED, j === 1);
       if (path.length < 2) continue;
-      const firstDir = dirFromSeg(path[0], path[1]);
-      if (firstDir === segDir) {
-        return [...verticesToSegments(pts.slice(0, i + 1)), ...verticesToSegments(path)];
+      if (dirFromSeg(path[0], path[1]) === segDir) {
+        return [...v2s(pts.slice(0, i + 1)), ...v2s(path)];
       }
     }
-
-    const prevDir = i > 0 ? dirFromSeg(pts[i - 1], pts[i]) : Dir45.UNDEFINED;
+    const pd = i > 0 ? dirFromSeg(pts[i-1], pts[i]) : Dir45.UNDEFINED;
     for (let j = 0; j < 2; j++) {
-      const path = buildInitialTrace(startPt, target, Dir45.UNDEFINED, j === 1);
+      const path = buildInitialTrace(pts[i], target, Dir45.UNDEFINED, j === 1);
       if (path.length < 2) continue;
-      const firstDir = dirFromSeg(path[0], path[1]);
-      if (prevDir !== Dir45.UNDEFINED) {
-        const ang = angleBetween(firstDir, prevDir);
-        if (ang === AngleType.ANG_OBTUSE || ang === AngleType.ANG_STRAIGHT) {
-          return [...verticesToSegments(pts.slice(0, i + 1)), ...verticesToSegments(path)];
+      const fd = dirFromSeg(path[0], path[1]);
+      if (pd !== Dir45.UNDEFINED) {
+        const a = angleBetween(fd, pd);
+        if (a === AngleType.ANG_OBTUSE || a === AngleType.ANG_STRAIGHT) {
+          return [...v2s(pts.slice(0, i + 1)), ...v2s(path)];
         }
       }
     }
   }
-
-  const lastDir = dirFromSeg(pts[pts.length - 2], pts[pts.length - 1]);
-  return verticesToSegments(buildInitialTrace(pts[0], target, Dir45.UNDEFINED, isDiagonal(lastDir)));
+  return v2s(buildInitialTrace(pts[0], target, Dir45.UNDEFINED, isDiagonal(dirFromSeg(pts[pts.length-2], pts[pts.length-1]))));
 }
 
-export function dragCorner(
-  segments: TraceSegmentInfo[],
-  cornerIndex: number,
-  newPos: Vec2,
-): TraceSegmentInfo[] | null {
-  if (segments.length === 0) return null;
+export function dragCorner(segments: TraceSegmentInfo[], cornerIndex: number, newPos: Vec2): TraceSegmentInfo[] | null {
+  if (!segments.length) return null;
   const pts = traceVertices({ segments } as TraceInfo);
   if (cornerIndex < 0 || cornerIndex >= pts.length) return null;
-
   if (cornerIndex === 0) return dragCornerInternal(pts, newPos);
-
   if (cornerIndex === pts.length - 1) {
-    const rev = [...pts].reverse();
-    const result = dragCornerInternal(rev, newPos);
-    if (!result) return null;
-    return result.map(s => ({ start_x: s.end_x, start_y: s.end_y, end_x: s.start_x, end_y: s.start_y })).reverse();
+    const r = dragCornerInternal([...pts].reverse(), newPos);
+    return r ? r.map(s => ({ start_x: s.end_x, start_y: s.end_y, end_x: s.start_x, end_y: s.start_y })).reverse() : null;
   }
-
-  // Middle: split and reroute both halves
-  const leftResult = dragCornerInternal(pts.slice(0, cornerIndex + 1), newPos);
-  const rightRev = [...pts.slice(cornerIndex)].reverse();
-  const rightResult = dragCornerInternal(rightRev, newPos);
-
-  if (!leftResult || !rightResult) {
-    const newPts = [...pts];
-    newPts[cornerIndex] = { x: Math.round(newPos.x), y: Math.round(newPos.y) };
-    return verticesToSegments(newPts);
-  }
-
-  return [...leftResult, ...rightResult.map(s => ({ start_x: s.end_x, start_y: s.end_y, end_x: s.start_x, end_y: s.start_y })).reverse()];
+  const lr = dragCornerInternal(pts.slice(0, cornerIndex + 1), newPos);
+  const rr = dragCornerInternal([...pts.slice(cornerIndex)].reverse(), newPos);
+  if (!lr || !rr) { const p = [...pts]; p[cornerIndex] = {x:Math.round(newPos.x),y:Math.round(newPos.y)}; return v2s(p); }
+  return [...lr, ...rr.map(s => ({start_x:s.end_x,start_y:s.end_y,end_x:s.start_x,end_y:s.start_y})).reverse()];
 }
 
 // ---------------------------------------------------------------------------
 // Rectangle selection
 // ---------------------------------------------------------------------------
 
-export function tracesInRect(snapshot: BoardSnapshot | null, x1: number, y1: number, x2: number, y2: number): number[] {
-  if (!snapshot?.traces) return [];
-  const minX = Math.min(x1, x2), maxX = Math.max(x1, x2), minY = Math.min(y1, y2), maxY = Math.max(y1, y2);
-  return snapshot.traces.filter(t => t.segments.length > 0 && t.segments.every(s => {
-    const sx = Number(s.start_x), sy = Number(s.start_y), ex = Number(s.end_x), ey = Number(s.end_y);
-    return sx >= minX && sx <= maxX && sy >= minY && sy <= maxY && ex >= minX && ex <= maxX && ey >= minY && ey <= maxY;
+export function tracesInRect(snap: BoardSnapshot|null, x1: number, y1: number, x2: number, y2: number): number[] {
+  if (!snap?.traces) return [];
+  const [mnX,mxX,mnY,mxY] = [Math.min(x1,x2),Math.max(x1,x2),Math.min(y1,y2),Math.max(y1,y2)];
+  return snap.traces.filter(t => t.segments.length > 0 && t.segments.every(s => {
+    const [sx,sy,ex,ey] = [Number(s.start_x),Number(s.start_y),Number(s.end_x),Number(s.end_y)];
+    return sx>=mnX&&sx<=mxX&&sy>=mnY&&sy<=mxY&&ex>=mnX&&ex<=mxX&&ey>=mnY&&ey<=mxY;
   })).map(t => t.id);
 }
 
-export function componentsInRect(snapshot: BoardSnapshot | null, x1: number, y1: number, x2: number, y2: number): string[] {
-  if (!snapshot?.components) return [];
-  const minX = Math.min(x1, x2), maxX = Math.max(x1, x2), minY = Math.min(y1, y2), maxY = Math.max(y1, y2);
-  return snapshot.components.filter(c => {
-    const cx = Number(c.x_nm), cy = Number(c.y_nm);
-    return cx >= minX && cx <= maxX && cy >= minY && cy <= maxY;
-  }).map(c => c.refdes);
+export function componentsInRect(snap: BoardSnapshot|null, x1: number, y1: number, x2: number, y2: number): string[] {
+  if (!snap?.components) return [];
+  const [mnX,mxX,mnY,mxY] = [Math.min(x1,x2),Math.max(x1,x2),Math.min(y1,y2),Math.max(y1,y2)];
+  return snap.components.filter(c => { const [cx,cy]=[Number(c.x_nm),Number(c.y_nm)]; return cx>=mnX&&cx<=mxX&&cy>=mnY&&cy<=mxY; }).map(c => c.refdes);
 }
