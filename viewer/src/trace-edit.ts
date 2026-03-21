@@ -240,6 +240,15 @@ export function dragSegment(
           const d = dirFromSeg(c[k], c[k + 1]);
           const sl = Math.hypot(c[k+1].x - c[k].x, c[k+1].y - c[k].y);
           if (sl > 100 && d === Dir45.UNDEFINED) { valid = false; break; }
+          // Check angle between consecutive segments — reject acute angles
+          if (k > 0) {
+            const prevD = dirFromSeg(c[k - 1], c[k]);
+            const currD = d;
+            if (prevD !== Dir45.UNDEFINED && currD !== Dir45.UNDEFINED) {
+              const ang = angleBetween(prevD, currD);
+              if (ang === AngleType.ANG_ACUTE) { valid = false; break; }
+            }
+          }
           len += sl;
         }
         if (valid && len < bestLen) { bestLen = len; bestResult = c; }
