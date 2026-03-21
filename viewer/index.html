@@ -30,29 +30,138 @@
     #toolbar {
       background: var(--bg-elevated);
       border-bottom: 1px solid var(--border-primary);
-      padding: 8px 16px;
+      padding: 0 12px;
+      height: 40px;
       display: flex;
-      gap: 16px;
       align-items: center;
+      gap: 0;
       transition: background-color 0.15s ease, border-color 0.15s ease;
+      font-size: 12px;
     }
-    #toolbar .separator {
-      color: var(--text-tertiary);
-      margin: 0 -8px;
+    /* Toolbar zones */
+    .tb-zone {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      height: 100%;
     }
-    /* Editor toggle button */
-    #editor-toggle {
-      background: var(--bg-secondary);
-      border: 1px solid var(--border-primary);
-      padding: 4px 12px;
+    .tb-zone + .tb-zone {
+      border-left: 1px solid var(--border-secondary);
+      margin-left: 6px;
+      padding-left: 6px;
+    }
+    .tb-spacer {
+      flex: 1;
+      min-width: 8px;
+    }
+    /* Shared toolbar button base */
+    .tb-btn {
+      background: none;
+      border: 1px solid transparent;
+      padding: 4px 6px;
       border-radius: 4px;
       cursor: pointer;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 28px;
+      min-width: 28px;
+      transition: background-color 0.12s, color 0.12s, border-color 0.12s;
+      position: relative;
+    }
+    .tb-btn:hover {
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+    }
+    .tb-btn:active {
+      background: var(--bg-tertiary);
+    }
+    .tb-btn.active {
+      background: var(--accent-primary);
+      color: white;
+      border-color: var(--accent-primary);
+    }
+    .tb-btn:disabled {
+      opacity: 0.35;
+      cursor: default;
+      pointer-events: none;
+    }
+    .tb-btn svg {
+      width: 16px;
+      height: 16px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 1.75;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      flex-shrink: 0;
+    }
+    /* Text buttons with label */
+    .tb-btn-label {
+      padding: 4px 10px;
       font-size: 12px;
-      transition: background-color 0.15s;
+      font-weight: 500;
+      gap: 5px;
     }
-    #editor-toggle:hover {
-      background: var(--border-primary);
+    /* Primary action button (Route) */
+    .tb-btn-primary {
+      background: var(--success);
+      color: white;
+      border-color: var(--success);
+      font-weight: 600;
+      padding: 4px 14px;
     }
+    .tb-btn-primary:hover {
+      filter: brightness(0.9);
+      color: white;
+    }
+    .tb-btn-primary.routing {
+      background: var(--warning);
+      border-color: var(--warning);
+      color: var(--bg-primary);
+    }
+    /* Danger button (Cancel) */
+    .tb-btn-danger {
+      background: var(--error);
+      color: white;
+      border-color: var(--error);
+      font-weight: 500;
+      padding: 4px 10px;
+    }
+    .tb-btn-danger:hover {
+      filter: brightness(0.9);
+      color: white;
+    }
+    .tb-btn-danger.hidden {
+      display: none;
+    }
+    /* Coords readout */
+    #coords {
+      font-size: 11px;
+      font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+      color: var(--text-tertiary);
+      min-width: 140px;
+      text-align: right;
+      padding: 0 4px;
+      letter-spacing: -0.02em;
+    }
+    /* Auto-route toggle - compact */
+    #auto-route-label {
+      font-size: 11px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    #auto-route-label input {
+      width: 13px;
+      height: 13px;
+      cursor: pointer;
+    }
+    /* Editor toggle inherits .tb-btn-label */
     /* Divider between editor and canvas */
     #divider:hover {
       background: var(--accent-primary);
@@ -156,102 +265,31 @@
     }
     /* Open button */
     #open-btn {
-      background: var(--accent-primary);
-      color: white;
-      border: none;
-      padding: 4px 12px;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 12px;
-    }
-    #open-btn:hover {
-      background: var(--accent-hover);
+      font-weight: 500;
     }
     /* Share button */
-    #share-btn {
-      background: var(--accent-primary);
-      color: white;
-      border: none;
-      padding: 4px 12px;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 12px;
-    }
-    #share-btn:hover {
-      background: var(--accent-hover);
-    }
     #share-btn.hidden {
       display: none;
     }
     /* Route button */
     #route-btn {
-      background: var(--success);
-      color: white;
-      border: none;
-      padding: 4px 12px;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 12px;
-      margin-left: auto;
-    }
-    #route-btn:hover {
-      filter: brightness(0.85);
+      margin-left: 0;
     }
     #route-btn:disabled {
-      background: var(--text-tertiary);
+      opacity: 0.35;
       cursor: not-allowed;
     }
     #route-btn.routing {
       background: var(--warning);
+      border-color: var(--warning);
       color: var(--bg-primary);
     }
     /* Cancel button */
-    #cancel-route-btn {
-      background: var(--error);
-      color: white;
-      border: none;
-      padding: 4px 12px;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 12px;
-    }
-    #cancel-route-btn:hover {
-      filter: brightness(0.85);
-    }
     #cancel-route-btn.hidden {
       display: none;
     }
     #undo-btn, #redo-btn {
-      background: var(--bg-secondary);
-      border: 1px solid var(--border-primary);
-      padding: 4px 8px;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 13px;
-      color: var(--text-primary);
-      transition: background-color 0.15s;
-    }
-    #undo-btn:hover:not(:disabled), #redo-btn:hover:not(:disabled) {
-      background: var(--bg-tertiary);
-    }
-    #undo-btn:disabled, #redo-btn:disabled {
-      opacity: 0.4;
-      cursor: default;
-    }
-    #fit-btn {
-      background: var(--bg-secondary);
-      border: 1px solid var(--border-primary);
-      padding: 4px 8px;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 13px;
-      color: var(--text-primary);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    #fit-btn:hover {
-      background: var(--bg-tertiary);
+      /* inherits .tb-btn */
     }
     #fit-btn svg {
       width: 16px;
@@ -263,23 +301,9 @@
       stroke-linejoin: round;
     }
     #view-3d-btn {
-      background: var(--bg-secondary);
-      border: 1px solid var(--border-primary);
-      padding: 4px 8px;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--text-primary);
-      transition: background-color 0.15s;
-    }
-    #view-3d-btn:hover {
-      background: var(--bg-tertiary);
-    }
-    #view-3d-btn.active {
-      background: var(--accent-primary);
-      color: white;
-      border-color: var(--accent-primary);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
     }
     #three-canvas {
       position: absolute;
@@ -295,21 +319,8 @@
     }
     /* Theme toggle button */
     #theme-toggle {
-      background: var(--bg-secondary);
-      border: 1px solid var(--border-primary);
-      padding: 4px 8px;
-      border-radius: 4px;
-      cursor: pointer;
       font-size: 14px;
       line-height: 1;
-      transition: background-color 0.15s;
-    }
-    #theme-toggle:hover {
-      background: var(--border-primary);
-    }
-    #theme-toggle:focus-visible {
-      outline: 2px solid var(--accent-primary);
-      outline-offset: 2px;
     }
     /* Auto-route toggle */
     #auto-route-label {
@@ -455,21 +466,10 @@
     }
 
     /* View menu button and dropdown */
-    #view-menu-btn {
-      background: var(--bg-secondary);
-      border: 1px solid var(--border-primary);
-      padding: 4px 12px;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 12px;
-      color: var(--text-primary);
-      transition: background-color 0.15s;
-    }
-    #view-menu-btn:hover {
-      background: var(--bg-tertiary);
-    }
     .toolbar-anchor {
       position: relative;
+      display: flex;
+      align-items: center;
     }
     #view-menu-dropdown {
       position: absolute;
@@ -547,21 +547,6 @@
       font-size: 11px;
       font-family: monospace;
       color: var(--text-primary);
-    }
-    /* Preferences button */
-    #prefs-btn {
-      background: var(--bg-secondary);
-      border: 1px solid var(--border-primary);
-      padding: 4px 8px;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 14px;
-      line-height: 1;
-      color: var(--text-primary);
-      transition: background-color 0.15s;
-    }
-    #prefs-btn:hover {
-      background: var(--bg-tertiary);
     }
     /* Preferences modal */
     #prefs-overlay {
@@ -748,19 +733,8 @@
       white-space: nowrap;
     }
     #help-btn {
-      background: var(--bg-secondary);
-      border: 1px solid var(--border-primary);
-      padding: 4px 8px;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--text-secondary);
-      transition: background-color 0.15s;
-    }
-    #help-btn:hover {
-      background: var(--bg-tertiary);
-      color: var(--text-primary);
+      font-weight: 700;
+      font-size: 13px;
     }
     .prefs-row button:hover {
       background: var(--bg-tertiary);
@@ -770,7 +744,7 @@
     #project-manager {
       position: fixed;
       inset: 0;
-      top: 41px; /* below toolbar */
+      top: 40px; /* below toolbar */
       background: var(--bg-secondary);
       z-index: 150;
       display: flex;
@@ -930,9 +904,9 @@
     #jlcpcb-search-panel {
       position: fixed;
       right: 0;
-      top: 41px;
+      top: 40px;
       width: 360px;
-      height: calc(100% - 41px);
+      height: calc(100% - 40px);
       background: var(--bg-elevated);
       border-left: 1px solid var(--border-primary);
       z-index: 100;
@@ -1263,84 +1237,134 @@
 
     /* Responsive: Touch targets for coarse pointer devices (tablets, phones) */
     @media (pointer: coarse) {
-      #toolbar { padding: 12px 16px; gap: 12px; }
-      button { min-width: 48px; min-height: 48px; }
-      label { min-height: 48px; display: flex; align-items: center; }
-      input[type="checkbox"] { width: 24px; height: 24px; }
+      #toolbar { padding: 0 12px; height: 48px; }
+      .tb-btn { min-width: 40px; min-height: 40px; height: 40px; }
+      label { min-height: 40px; display: flex; align-items: center; }
+      input[type="checkbox"] { width: 20px; height: 20px; }
     }
 
     /* Responsive: Narrow viewports (tablets in portrait) */
     @media (max-width: 768px) {
-      #toolbar { flex-wrap: wrap; padding: 8px; gap: 8px; }
-      #coords { display: none; }  /* Hide coords on small screens */
-      #auto-route-label { display: none; }  /* Simplify on mobile */
+      #toolbar { padding: 0 8px; }
+      #coords { display: none; }
+      #auto-route-label { display: none; }
+      .tb-zone + .tb-zone { margin-left: 4px; padding-left: 4px; }
     }
   </style>
 </head>
 <body>
   <div id="toolbar">
-    <button id="editor-toggle" title="Toggle Editor (Ctrl+E)">Editor</button>
-    <span class="separator">|</span>
-    <button id="undo-btn" title="Undo last action (Ctrl+Z)" disabled>↩</button>
-    <button id="redo-btn" title="Redo last undone action (Ctrl+Shift+Z)" disabled>↪</button>
-    <button id="fit-btn" title="Fit board to view (F)">
-      <svg viewBox="0 0 16 16" aria-hidden="true">
-        <rect x="2" y="2" width="12" height="12" rx="1.5" />
-        <line x1="8" y1="0" x2="8" y2="4" />
-        <line x1="8" y1="12" x2="8" y2="16" />
-        <line x1="0" y1="8" x2="4" y2="8" />
-        <line x1="12" y1="8" x2="16" y2="8" />
-      </svg>
-    </button>
-    <span class="separator">|</span>
-    <span class="toolbar-anchor">
-      <button id="view-menu-btn" title="View options">View</button>
-      <div id="view-menu-dropdown" class="hidden">
-        <label><input type="checkbox" id="layer-top" checked> Top layer</label>
-        <label><input type="checkbox" id="layer-bottom" checked> Bottom layer</label>
-        <label><input type="checkbox" id="layer-ratsnest" checked> Ratsnest</label>
-        <label><input type="checkbox" id="view-grid-visible" checked> Grid visible</label>
-        <label><input type="checkbox" id="view-net-labels" checked> Net labels</label>
-      </div>
-    </span>
-    <button id="view-3d-btn" title="Toggle 3D view">3D</button>
-    <button id="theme-toggle" aria-label="Toggle theme" title="Toggle theme (Light / Dark / Auto)">
-      <span id="theme-icon">☀️</span>
-    </button>
-    <button id="prefs-btn" title="Preferences">⚙</button>
-    <button id="help-btn" title="Keyboard shortcuts (?)">?</button>
-    <button id="jlcpcb-search-btn" title="Search JLCPCB parts (Ctrl+J)">🔍</button>
+    <!-- Zone 1: File operations -->
+    <div class="tb-zone">
+      <button id="open-btn" class="tb-btn tb-btn-label" title="Open file">
+        <svg viewBox="0 0 16 16"><path d="M2 13V4.5a1 1 0 0 1 1-1h3.586a1 1 0 0 1 .707.293L8.5 5H13a1 1 0 0 1 1 1v1"/><path d="M2 13l1.5-5.5a1 1 0 0 1 .965-.735h10.07a1 1 0 0 1 .965 1.265L14 13H2z"/></svg>
+        Open
+      </button>
+      <button id="share-btn" class="tb-btn tb-btn-label hidden" title="Share view (Ctrl+Shift+S)">
+        <svg viewBox="0 0 16 16"><circle cx="12" cy="3" r="2"/><circle cx="4" cy="8" r="2"/><circle cx="12" cy="13" r="2"/><line x1="5.7" y1="7" x2="10.3" y2="4"/><line x1="5.7" y1="9" x2="10.3" y2="12"/></svg>
+        Share
+      </button>
+    </div>
+
+    <!-- Zone 2: Edit -->
+    <div class="tb-zone">
+      <button id="undo-btn" class="tb-btn" title="Undo (Ctrl+Z)" disabled>
+        <svg viewBox="0 0 16 16"><polyline points="4 7 1 4 4 1"/><path d="M1 4h9a4 4 0 0 1 0 8H8"/></svg>
+      </button>
+      <button id="redo-btn" class="tb-btn" title="Redo (Ctrl+Shift+Z)" disabled>
+        <svg viewBox="0 0 16 16"><polyline points="12 7 15 4 12 1"/><path d="M15 4H6a4 4 0 0 0 0 8h2"/></svg>
+      </button>
+    </div>
+
+    <!-- Zone 3: View controls -->
+    <div class="tb-zone">
+      <button id="editor-toggle" class="tb-btn tb-btn-label" title="Toggle Editor (Ctrl+E)">
+        <svg viewBox="0 0 16 16"><polyline points="5 2 1 8 5 14"/><polyline points="11 2 15 8 11 14"/></svg>
+        Editor
+      </button>
+      <button id="fit-btn" class="tb-btn" title="Fit board to view (F)">
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <rect x="2" y="2" width="12" height="12" rx="1.5" />
+          <line x1="8" y1="0" x2="8" y2="4" />
+          <line x1="8" y1="12" x2="8" y2="16" />
+          <line x1="0" y1="8" x2="4" y2="8" />
+          <line x1="12" y1="8" x2="16" y2="8" />
+        </svg>
+      </button>
+      <span class="toolbar-anchor">
+        <button id="view-menu-btn" class="tb-btn tb-btn-label" title="View options">
+          <svg viewBox="0 0 16 16"><path d="M1 8s3-6 7-6 7 6 7 6-3 6-7 6S1 8 1 8z"/><circle cx="8" cy="8" r="2.5"/></svg>
+          View
+        </button>
+        <div id="view-menu-dropdown" class="hidden">
+          <label><input type="checkbox" id="layer-top" checked> Top layer</label>
+          <label><input type="checkbox" id="layer-bottom" checked> Bottom layer</label>
+          <label><input type="checkbox" id="layer-ratsnest" checked> Ratsnest</label>
+          <label><input type="checkbox" id="view-grid-visible" checked> Grid visible</label>
+          <label><input type="checkbox" id="view-net-labels" checked> Net labels</label>
+        </div>
+      </span>
+      <button id="view-3d-btn" class="tb-btn" title="Toggle 3D view (3)">3D</button>
+    </div>
+
+    <!-- Zone 4: Routing -->
+    <div class="tb-zone">
+      <button id="route-btn" class="tb-btn tb-btn-primary tb-btn-label">
+        <svg viewBox="0 0 16 16"><path d="M2 14V8a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v6"/><circle cx="2" cy="14" r="1.5" fill="currentColor" stroke="none"/><circle cx="14" cy="14" r="1.5" fill="currentColor" stroke="none"/></svg>
+        Route
+      </button>
+      <button id="cancel-route-btn" class="tb-btn tb-btn-danger tb-btn-label hidden">Cancel</button>
+      <label id="auto-route-label"><input type="checkbox" id="auto-route"> Auto</label>
+      <span class="toolbar-anchor">
+        <button id="tuning-toggle" class="tb-btn" title="Tuning parameters">
+          <svg viewBox="0 0 16 16"><line x1="2" y1="4" x2="14" y2="4"/><line x1="2" y1="8" x2="14" y2="8"/><line x1="2" y1="12" x2="14" y2="12"/><circle cx="5" cy="4" r="1.5" fill="var(--bg-elevated)"/><circle cx="10" cy="8" r="1.5" fill="var(--bg-elevated)"/><circle cx="7" cy="12" r="1.5" fill="var(--bg-elevated)"/></svg>
+        </button>
+        <div id="tuning-panel" class="hidden">
+          <div class="tune-row">
+            <label for="tune-via-cost">Via Cost</label>
+            <input type="range" id="tune-via-cost" min="0.1" max="10" step="0.1" value="1.0">
+            <span class="tune-value" id="tune-via-cost-val">1.0</span>
+          </div>
+          <div class="tune-row">
+            <label for="tune-layer-pref">Layer Pref</label>
+            <input type="range" id="tune-layer-pref" min="-1" max="1" step="0.1" value="0">
+            <span class="tune-value" id="tune-layer-pref-val">0.0</span>
+          </div>
+          <div class="tune-row">
+            <label for="tune-roundness">Roundness</label>
+            <input type="range" id="tune-roundness" min="0" max="1" step="0.05" value="0.5">
+            <span class="tune-value" id="tune-roundness-val">0.5</span>
+          </div>
+          <div class="tune-row">
+            <label for="tune-density">Density</label>
+            <input type="range" id="tune-density" min="0.5" max="2" step="0.1" value="1.0">
+            <span class="tune-value" id="tune-density-val">1.0</span>
+          </div>
+        </div>
+      </span>
+    </div>
+
+    <!-- Spacer pushes right zone to the end -->
+    <div class="tb-spacer"></div>
+
+    <!-- Zone 5: Status -->
     <span id="coords"></span>
-    <button id="open-btn">Open</button>
-    <button id="share-btn" class="hidden">Share</button>
-    <label id="auto-route-label"><input type="checkbox" id="auto-route"> Auto-route</label>
-    <button id="route-btn">Route</button>
-    <button id="cancel-route-btn" class="hidden">Cancel</button>
-    <span class="toolbar-anchor">
-      <button id="tuning-toggle" title="Tuning parameters">⚡</button>
-      <div id="tuning-panel" class="hidden">
-        <div class="tune-row">
-          <label for="tune-via-cost">Via Cost</label>
-          <input type="range" id="tune-via-cost" min="0.1" max="10" step="0.1" value="1.0">
-          <span class="tune-value" id="tune-via-cost-val">1.0</span>
-        </div>
-        <div class="tune-row">
-          <label for="tune-layer-pref">Layer Pref</label>
-          <input type="range" id="tune-layer-pref" min="-1" max="1" step="0.1" value="0">
-          <span class="tune-value" id="tune-layer-pref-val">0.0</span>
-        </div>
-        <div class="tune-row">
-          <label for="tune-roundness">Roundness</label>
-          <input type="range" id="tune-roundness" min="0" max="1" step="0.05" value="0.5">
-          <span class="tune-value" id="tune-roundness-val">0.5</span>
-        </div>
-        <div class="tune-row">
-          <label for="tune-density">Density</label>
-          <input type="range" id="tune-density" min="0.5" max="2" step="0.1" value="1.0">
-          <span class="tune-value" id="tune-density-val">1.0</span>
-        </div>
-      </div>
-    </span>
+
+    <!-- Zone 6: Utility (far right) -->
+    <div class="tb-zone">
+      <button id="jlcpcb-search-btn" class="tb-btn" title="Search JLCPCB parts (Ctrl+J)">
+        <svg viewBox="0 0 16 16"><circle cx="6.5" cy="6.5" r="4.5"/><line x1="10" y1="10" x2="15" y2="15"/></svg>
+      </button>
+      <button id="theme-toggle" class="tb-btn" aria-label="Toggle theme" title="Toggle theme (Ctrl+Shift+T)">
+        <span id="theme-icon">☀️</span>
+      </button>
+      <button id="prefs-btn" class="tb-btn" title="Preferences">
+        <svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.5"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M2.9 2.9l1.4 1.4M11.7 11.7l1.4 1.4M13.1 2.9l-1.4 1.4M4.3 11.7l-1.4 1.4"/></svg>
+      </button>
+      <button id="help-btn" class="tb-btn" title="Keyboard shortcuts (?)">
+        <svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="7"/><path d="M5.5 6a2.5 2.5 0 0 1 5 0c0 1.5-2.5 1.5-2.5 3"/><circle cx="8" cy="12" r="0.5" fill="currentColor" stroke="none"/></svg>
+      </button>
+    </div>
   </div>
   <!-- Preferences modal -->
   <div id="prefs-overlay" class="hidden">

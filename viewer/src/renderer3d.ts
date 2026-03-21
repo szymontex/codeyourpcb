@@ -440,7 +440,7 @@ export class Renderer3D {
    * and adds the resulting Group to the scene at the placeholder's position/rotation.
    * Errors are logged to console — callers don't need to handle failures.
    */
-  loadComponentFromOBJ(objText: string, refdes: string): void {
+  loadComponentFromOBJ(objText: string, refdes: string, offsetX = 0, offsetY = 0): void {
     if (!this.boardGroup) {
       console.error(`[3D] OBJ load failed for ${refdes}: no board group`);
       return;
@@ -491,10 +491,22 @@ export class Renderer3D {
       model.add(mesh);
     }
 
-    // Copy transform from placeholder
+    // Copy transform from placeholder — XY position and Z rotation.
+    // OBJ models from EasyEDA have Z=0 at the board surface (bottom of component),
+    // so we set Z to board thickness instead of copying the placeholder's Z
+    // (which is centroid-offset for the box geometry).
+    // The offset (from EasyEDA c_origin) accounts for the difference between
+    // the footprint center and the 3D model center (e.g. ESP32 antenna extends
+    // beyond the pad area).
     const pos = (placeholder as THREE.Mesh).position.clone();
     const rot = (placeholder as THREE.Mesh).rotation.clone();
-    model.position.copy(pos);
+    // Apply rotation to the offset so it aligns correctly when component is rotated
+    const radians = rot.z;
+    const cosR = Math.cos(radians);
+    const sinR = Math.sin(radians);
+    const rotOffX = offsetX * cosR - offsetY * sinR;
+    const rotOffY = offsetX * sinR + offsetY * cosR;
+    model.position.set(pos.x + rotOffX, pos.y + rotOffY, BOARD_THICKNESS_MM);
     model.rotation.copy(rot);
 
     // Dispose and remove placeholder
@@ -857,12 +869,14 @@ export class Renderer3D {
 
       const uuid = comp.model_3d;
       const refdes = comp.refdes;
+      const offsetX = comp.model_3d_offset_x ?? 0;
+      const offsetY = comp.model_3d_offset_y ?? 0;
 
       // Use proxy-aware fetch from jlcpcb module (handles CORS)
       fetch3DModelByUuid(uuid)
         .then(objText => {
           if (objText) {
-            this.loadComponentFromOBJ(objText, refdes);
+            this.loadComponentFromOBJ(objText, refdes, offsetX, offsetY);
           }
         })
         .catch(err => {

@@ -64,6 +64,10 @@ export interface RoutingState {
   currentDirection: Dir45;
   /** Corner mode: 45° mitered (default) or 90° */
   cornerMode: CornerMode;
+  /** Obstacles detected on the preview path (pads/traces of other nets) */
+  obstacles: ObstacleInfo[];
+  /** Whether the current preview path has collisions */
+  hasCollision: boolean;
 }
 
 export interface PadHit {
@@ -105,6 +109,8 @@ export function createRoutingState(): RoutingState {
     previewPath: [],
     currentDirection: Dir45.UNDEFINED,
     cornerMode: CornerMode.MITERED_45,
+    obstacles: [],
+    hasCollision: false,
   };
 }
 
@@ -421,6 +427,8 @@ export function updatePreview(
   state: RoutingState,
   cursorWorld: { x: number; y: number },
   viewportScale?: number,
+  snapshot?: BoardSnapshot | null,
+  padNetMap?: Map<string, string>,
 ): RoutingState {
   if (state.mode !== 'routing') return state;
 
@@ -482,6 +490,22 @@ export function updatePreview(
   const dy = endPoint.y - anchor.y;
   const angleDeg = Math.round(((Math.atan2(dy, dx) * 180) / Math.PI + 360) % 360);
 
+  // Check for collisions with pads/traces of other nets
+  const fullPath = [
+    ...state.committedSegments.flatMap(s => [
+      { x: s.start_x, y: s.start_y },
+    ]),
+    ...previewPath,
+  ];
+  const obstacles = checkRouteObstacles(
+    fullPath.length >= 2 ? fullPath : previewPath,
+    snapshot ?? null,
+    state.netName,
+    150_000, // 0.15mm clearance
+    state.traceWidth,
+    padNetMap,
+  );
+
   return {
     ...state,
     previewSegment: previewSegment,
@@ -489,6 +513,8 @@ export function updatePreview(
     snapAngle: angleDeg,
     snappedToPad: magneticHit,
     currentDirection: direction,
+    obstacles,
+    hasCollision: obstacles.length > 0,
   };
 }
 
@@ -623,6 +649,205 @@ export function flipLayer(state: RoutingState): RoutingState {
  */
 export function setDrcViolations(state: RoutingState, violations: ViolationInfo[]): RoutingState {
   return { ...state, drcViolations: violations };
+}
+
+// ---------------------------------------------------------------------------
+// Obstacle detection — KiCad MarkObstacles mode (simplified)
+// ---------------------------------------------------------------------------
+
+export interface ObstacleInfo {
+  /** Type of obstacle */
+  type: 'pad' | 'trace' | 'via';
+  /** World position of collision */
+  x: number;
+  y: number;
+  /** Net name of the obstacle (empty if none) */
+  netName: string;
+  /** Component refdes (for pad obstacles) */
+  refdes?: string;
+  /** Pad number (for pad obstacles) */
+  padNumber?: string;
+}
+
+/**
+ * Check if a line segment intersects a rectangle (pad bounding box).
+ * Uses Liang-Barsky algorithm for segment-rect intersection.
+ */
+function segmentIntersectsRect(
+  sx: number, sy: number, ex: number, ey: number,
+  rx: number, ry: number, rw: number, rh: number,
+): boolean {
+  const dx = ex - sx;
+  const dy = ey - sy;
+
+  const p = [-dx, dx, -dy, dy];
+  const q = [sx - rx, rx + rw - sx, sy - ry, ry + rh - sy];
+
+  let tMin = 0;
+  let tMax = 1;
+
+  for (let i = 0; i < 4; i++) {
+    if (Math.abs(p[i]) < 1e-10) {
+      if (q[i] < 0) return false;
+    } else {
+      const t = q[i] / p[i];
+      if (p[i] < 0) {
+        tMin = Math.max(tMin, t);
+      } else {
+        tMax = Math.min(tMax, t);
+      }
+      if (tMin > tMax) return false;
+    }
+  }
+
+  return true;
+}
+
+/**
+ * Check if a line segment comes within clearance of a circular obstacle.
+ * Used for round pads and vias.
+ */
+function segmentNearCircle(
+  sx: number, sy: number, ex: number, ey: number,
+  cx: number, cy: number, radius: number,
+): boolean {
+  // Point-to-segment distance
+  const dx = ex - sx;
+  const dy = ey - sy;
+  const lenSq = dx * dx + dy * dy;
+
+  if (lenSq < 1) {
+    // Zero-length segment — point-to-point distance
+    const d = Math.hypot(cx - sx, cy - sy);
+    return d <= radius;
+  }
+
+  let t = ((cx - sx) * dx + (cy - sy) * dy) / lenSq;
+  t = Math.max(0, Math.min(1, t));
+
+  const nearX = sx + t * dx;
+  const nearY = sy + t * dy;
+  const dist = Math.hypot(cx - nearX, cy - nearY);
+  return dist <= radius;
+}
+
+/**
+ * Check the preview path for collisions with pads of OTHER nets.
+ * Returns list of obstacles found.
+ *
+ * KiCad equivalent: NODE::CheckColliding + NearestObstacle
+ *
+ * @param path     Preview path points (from BuildInitialTrace)
+ * @param snapshot Board snapshot with all components
+ * @param netName  Net being routed (pads on this net are exempt)
+ * @param clearanceNm  Minimum clearance to maintain (default 150μm = 6mil)
+ * @param traceWidth  Width of the trace being routed (nm)
+ */
+export function checkRouteObstacles(
+  path: Vec2[],
+  snapshot: BoardSnapshot | null,
+  netName: string,
+  clearanceNm: number = 150_000,
+  traceWidth: number = 250_000,
+  padNetMap?: Map<string, string>,
+): ObstacleInfo[] {
+  if (!snapshot || path.length < 2) return [];
+
+  const obstacles: ObstacleInfo[] = [];
+  const halfTrace = traceWidth / 2;
+  const exclusionRadius = clearanceNm + halfTrace;
+
+  for (const comp of snapshot.components) {
+    const radians = (comp.rotation_mdeg / 1000) * (Math.PI / 180);
+    const cos = Math.cos(radians);
+    const sin = Math.sin(radians);
+
+    for (const pad of comp.pads) {
+      // Check which net this pad is on
+      const padKey = `${comp.refdes}.${pad.number}`;
+      const padNet = padNetMap?.get(padKey) ?? '';
+
+      // Skip pads on the same net — they're our targets, not obstacles
+      if (padNet === netName) continue;
+      // Skip pads with no net — unconnected pads
+      if (!padNet) continue;
+
+      // Compute pad world position
+      const rx = pad.x_nm * cos - pad.y_nm * sin;
+      const ry = pad.x_nm * sin + pad.y_nm * cos;
+      const padX = comp.x_nm + rx;
+      const padY = comp.y_nm + ry;
+
+      // Pad bounding box with clearance
+      const padW = pad.width_nm + exclusionRadius * 2;
+      const padH = pad.height_nm + exclusionRadius * 2;
+
+      // Check each segment of the path
+      for (let i = 0; i < path.length - 1; i++) {
+        const a = path[i];
+        const b = path[i + 1];
+
+        let hit = false;
+
+        if (pad.shape === 'circle') {
+          const padRadius = pad.width_nm / 2 + exclusionRadius;
+          hit = segmentNearCircle(a.x, a.y, b.x, b.y, padX, padY, padRadius);
+        } else {
+          // Rectangle-based check
+          hit = segmentIntersectsRect(
+            a.x, a.y, b.x, b.y,
+            padX - padW / 2, padY - padH / 2, padW, padH,
+          );
+        }
+
+        if (hit) {
+          obstacles.push({
+            type: 'pad',
+            x: padX,
+            y: padY,
+            netName: padNet,
+            refdes: comp.refdes,
+            padNumber: pad.number,
+          });
+          break; // One obstacle per pad is enough
+        }
+      }
+    }
+  }
+
+  // Check existing traces of other nets
+  if (snapshot.traces) {
+    for (const trace of snapshot.traces) {
+      if (trace.net_name === netName) continue;
+      if (!trace.net_name) continue;
+
+      for (const seg of trace.segments) {
+        for (let i = 0; i < path.length - 1; i++) {
+          const a = path[i];
+          const b = path[i + 1];
+
+          // Check if trace segments are within clearance
+          // Simplified: check if any endpoint of our path segment is near the trace segment
+          const traceClearance = clearanceNm + halfTrace + trace.width / 2;
+          if (
+            segmentNearCircle(seg.start_x, seg.start_y, seg.end_x, seg.end_y,
+              (a.x + b.x) / 2, (a.y + b.y) / 2, traceClearance)
+          ) {
+            obstacles.push({
+              type: 'trace',
+              x: (seg.start_x + seg.end_x) / 2,
+              y: (seg.start_y + seg.end_y) / 2,
+              netName: trace.net_name,
+            });
+            break;
+          }
+        }
+        if (obstacles.some(o => o.type === 'trace' && o.netName === trace.net_name)) break;
+      }
+    }
+  }
+
+  return obstacles;
 }
 
 // ---------------------------------------------------------------------------

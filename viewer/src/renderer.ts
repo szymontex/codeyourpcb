@@ -1144,7 +1144,9 @@ function drawRectSelection(
 // ---------------------------------------------------------------------------
 
 function drawRoutingPreview(ctx: CanvasRenderingContext2D, vp: Viewport, routing: RoutingState): void {
-  const color = routing.netName ? netColor(routing.netName) : '#00FF00';
+  const baseColor = routing.netName ? netColor(routing.netName) : '#00FF00';
+  // KiCad behavior: preview turns red when colliding with obstacles
+  const color = routing.hasCollision ? '#FF4444' : baseColor;
   const lineWidth = routing.traceWidth * vp.scale;
   const drawWidth = Math.max(lineWidth, 2);
 
@@ -1241,6 +1243,30 @@ function drawRoutingPreview(ctx: CanvasRenderingContext2D, vp: Viewport, routing
   ctx.strokeStyle = color;
   ctx.lineWidth = 2;
   ctx.stroke();
+
+  // Draw obstacle markers (red X at collision points)
+  if (routing.obstacles && routing.obstacles.length > 0) {
+    for (const obs of routing.obstacles) {
+      const [ox, oy] = worldToScreen(vp, obs.x, obs.y);
+      const markerSize = 8;
+
+      ctx.strokeStyle = '#FF0000';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(ox - markerSize, oy - markerSize);
+      ctx.lineTo(ox + markerSize, oy + markerSize);
+      ctx.moveTo(ox + markerSize, oy - markerSize);
+      ctx.lineTo(ox - markerSize, oy + markerSize);
+      ctx.stroke();
+
+      // Red circle around obstacle
+      ctx.beginPath();
+      ctx.arc(ox, oy, markerSize + 4, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(255, 0, 0, 0.5)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
+  }
 
   // Status text at cursor
   if (routing.previewPath && routing.previewPath.length >= 2) {

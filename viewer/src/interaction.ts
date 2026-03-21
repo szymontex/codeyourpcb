@@ -39,6 +39,8 @@ export interface InteractionState {
   onViewportChange: (vp: Viewport) => void;
   /** Current board snapshot for hit-testing */
   snapshot: BoardSnapshot | null;
+  /** Pad-to-net map for collision detection */
+  padNetMap?: Map<string, string>;
   /** Currently selected trace entity ID */
   selectedTraceId: number | null;
   /** Currently hovered trace entity ID */
@@ -541,35 +543,42 @@ export function setupInteraction(
       const padHit = hitTestPad(state.snapshot, worldX, worldY, PAD_HIT_TOLERANCE_NM);
 
       if (padHit) {
-        // Complete the route
-        const result = completeRoute(state.routing, padHit);
-        if (result && state.engine) {
-          // Build flat segment array
-          const flat: number[] = [];
-          for (const s of result.segments) {
-            flat.push(Math.round(s.start_x), Math.round(s.start_y), Math.round(s.end_x), Math.round(s.end_y));
-          }
-          if (state.onTraceAdd) {
-            // Route through undo stack
-            state.onTraceAdd(result.netName, result.layer, result.width, flat);
-          } else {
-            // Fallback: direct engine call
-            const traceId = state.engine.add_trace(result.netName, result.layer, result.width, flat);
-            if (traceId !== 0xFFFFFFFF) {
-              console.log(`[Route] Trace added: id=${traceId} net=${result.netName}`);
-              state.engine.run_drc_incremental();
+        // KiCad behavior: only allow completing route on a pad of the SAME net
+        if (padHit.netName && padHit.netName === state.routing.netName) {
+          // Complete the route — pad is on the same net
+          const result = completeRoute(state.routing, padHit);
+          if (result && state.engine) {
+            // Build flat segment array
+            const flat: number[] = [];
+            for (const s of result.segments) {
+              flat.push(Math.round(s.start_x), Math.round(s.start_y), Math.round(s.end_x), Math.round(s.end_y));
+            }
+            if (state.onTraceAdd) {
+              // Route through undo stack
+              state.onTraceAdd(result.netName, result.layer, result.width, flat);
             } else {
-              console.warn('[Route] Failed to add trace');
+              // Fallback: direct engine call
+              const traceId = state.engine.add_trace(result.netName, result.layer, result.width, flat);
+              if (traceId !== 0xFFFFFFFF) {
+                console.log(`[Route] Trace added: id=${traceId} net=${result.netName}`);
+                state.engine.run_drc_incremental();
+              } else {
+                console.warn('[Route] Failed to add trace');
+              }
             }
           }
+          // Reset to idle (preserve user preferences)
+          state.routing = resetToIdle(state.routing);
+          if (drcChecker) drcChecker.cancel();
+          state.onRoutingChange(state.routing);
+          state.onRouteEnd?.();
+          state.dirty = true;
+          return;
+        } else {
+          // Clicked a pad on a DIFFERENT net — ignore (KiCad beeps here)
+          console.log(`[Route] Cannot connect to pad ${padHit.component.refdes}.${padHit.pad.number} — different net (${padHit.netName} vs ${state.routing.netName})`);
+          return;
         }
-        // Reset to idle (preserve user preferences)
-        state.routing = resetToIdle(state.routing);
-        if (drcChecker) drcChecker.cancel();
-        state.onRoutingChange(state.routing);
-        state.onRouteEnd?.();
-        state.dirty = true;
-        return;
       }
 
       // No pad hit — add waypoint
@@ -627,7 +636,7 @@ export function setupInteraction(
 
       // --- Routing preview update ---
       if (state.routing.mode === 'routing') {
-        state.routing = updatePreview(state.routing, { x: worldX, y: worldY }, state.viewport.scale);
+        state.routing = updatePreview(state.routing, { x: worldX, y: worldY }, state.viewport.scale, state.snapshot, state.padNetMap);
         state.onRoutingChange(state.routing);
 
         // Schedule debounced DRC check

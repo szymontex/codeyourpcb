@@ -60,24 +60,32 @@ export function getRegisteredFootprints(): string[] {
 }
 
 /**
- * Registry mapping LCSC part numbers to 3D model UUIDs.
+ * Registry mapping package names to 3D model UUIDs and placement offsets.
  * Populated during footprint fetch. Used by the parser to set model_3d on components.
  */
-const model3dRegistry = new Map<string, string>();
+const model3dRegistry = new Map<string, { uuid: string; offsetX: number; offsetY: number }>();
 
 /**
- * Register a 3D model UUID for an LCSC part / package name.
+ * Register a 3D model UUID and placement offset for a package name.
  */
-export function register3DModel(packageName: string, uuid: string): void {
-  model3dRegistry.set(packageName, uuid);
-  console.log(`[3D] Registered model for ${packageName}: ${uuid}`);
+export function register3DModel(packageName: string, uuid: string, offsetX = 0, offsetY = 0): void {
+  model3dRegistry.set(packageName, { uuid, offsetX, offsetY });
+  console.log(`[3D] Registered model for ${packageName}: ${uuid} (offset: ${offsetX.toFixed(2)}, ${offsetY.toFixed(2)} mm)`);
 }
 
 /**
  * Get a registered 3D model UUID for a package name.
  */
 export function get3DModelUuid(packageName: string): string | null {
-  return model3dRegistry.get(packageName) ?? null;
+  return model3dRegistry.get(packageName)?.uuid ?? null;
+}
+
+/**
+ * Get the 3D model placement offset for a package name (in mm).
+ */
+export function get3DModelOffset(packageName: string): { x: number; y: number } | null {
+  const entry = model3dRegistry.get(packageName);
+  return entry ? { x: entry.offsetX, y: entry.offsetY } : null;
 }
 
 /**
@@ -391,6 +399,8 @@ function parseSource(source: string): { snapshot: BoardSnapshot; errors: string[
         body_width_nm: bodyWidthNm,
         body_height_nm: bodyHeightNm,
         model_3d: get3DModelUuid(compMatch[3]),
+        model_3d_offset_x: get3DModelOffset(compMatch[3])?.x,
+        model_3d_offset_y: get3DModelOffset(compMatch[3])?.y,
       };
       inComponent = true;
       braceDepth += openBraces;

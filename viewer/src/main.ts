@@ -883,7 +883,7 @@ async function init(): Promise<void> {
         if (footprint) {
           registerDynamicFootprint(pkg, footprint.pads);
           if (footprint.modelUuid) {
-            register3DModel(pkg, footprint.modelUuid);
+            register3DModel(pkg, footprint.modelUuid, footprint.model3dOffsetX, footprint.model3dOffsetY);
           }
         }
       } catch (e) {
@@ -1010,7 +1010,7 @@ async function init(): Promise<void> {
       if (footprint) {
         registerDynamicFootprint(pkg, footprint.pads);
         if (footprint.modelUuid) {
-          register3DModel(pkg, footprint.modelUuid);
+          register3DModel(pkg, footprint.modelUuid, footprint.model3dOffsetX, footprint.model3dOffsetY);
         }
       }
     } catch (e) {
@@ -1108,6 +1108,7 @@ async function init(): Promise<void> {
     // Sync viewport + snapshot to interaction state so click handlers use correct coords
     interactionState.viewport = viewport;
     interactionState.snapshot = snapshot;
+    interactionState.padNetMap = padNetMap;
     hideProjectManager();
     dirty = true;
     statusText.textContent = usingWasm ? 'Ready (WASM)' : 'Ready (Mock)';
@@ -1124,6 +1125,7 @@ async function init(): Promise<void> {
     pullSnapshot();
     if (interactionState) {
       interactionState.snapshot = snapshot;
+    interactionState.padNetMap = padNetMap;
     }
     if (snapshot?.violations) {
       updateErrorBadge(snapshot.violations);
@@ -1204,6 +1206,7 @@ async function init(): Promise<void> {
       if (newRouting.mode === 'idle' && snapshot) {
         pullSnapshot();
         interactionState.snapshot = snapshot;
+    interactionState.padNetMap = padNetMap;
       }
       dirty = true;
     },
@@ -1554,6 +1557,7 @@ async function init(): Promise<void> {
     if (!is3DActive && (dirty || interactionState.dirty)) {
       // Keep interaction state snapshot in sync
       interactionState.snapshot = snapshot;
+    interactionState.padNetMap = padNetMap;
 
       const renderState: RenderState = {
         snapshot,
