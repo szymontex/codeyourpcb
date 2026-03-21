@@ -216,7 +216,33 @@ export function dodgeObstacles(
 
   let path = originalPath;
   const start = path[0];
-  const end = path[path.length - 1];
+  let end = path[path.length - 1];
+
+  // If end point is INSIDE an obstacle rect, snap it to nearest edge.
+  // This happens when cursor hovers directly over a foreign pad.
+  for (const r of rects) {
+    if (end.x > r.left && end.x < r.right && end.y > r.top && end.y < r.bottom) {
+      // Find nearest edge
+      const dLeft = end.x - r.left;
+      const dRight = r.right - end.x;
+      const dTop = end.y - r.top;
+      const dBottom = r.bottom - end.y;
+      const minD = Math.min(dLeft, dRight, dTop, dBottom);
+      const m = 50_000; // 0.05mm extra push
+
+      if (minD === dLeft)        end = { x: r.left - m,   y: end.y };
+      else if (minD === dRight)  end = { x: r.right + m,  y: end.y };
+      else if (minD === dTop)    end = { x: end.x,        y: r.top - m };
+      else                       end = { x: end.x,        y: r.bottom + m };
+
+      // Rebuild path with snapped endpoint
+      path = buildInitialTrace(start, end, Dir45.UNDEFINED);
+      break;
+    }
+  }
+
+  // Also check if start is inside a rect (shouldn't happen but guard)
+  // ... skip, start is always on our own pad
 
   for (let pass = 0; pass < 8; pass++) {
     // Find first colliding rect

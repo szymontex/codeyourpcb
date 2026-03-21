@@ -708,8 +708,7 @@ function drawComponent(
   // Silkscreen: prefer real silk shapes from EasyEDA, fall back to body outline
   if (lodTier >= LodTier.Medium) {
     if (comp.silk && comp.silk.length > 0) {
-      // Silk shapes rendering (placeholder — not yet implemented)
-      // if (comp.silk?.length) drawSilkShapes(ctx, vp, comp, config);
+      drawSilkShapes(ctx, vp, comp, config);
     } else if (comp.body_width_nm > 0 && comp.body_height_nm > 0) {
       drawBodyOutline(ctx, vp, comp, config);
     }
