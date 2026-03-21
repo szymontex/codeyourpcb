@@ -6,10 +6,19 @@
 import type { Viewport } from './viewport';
 import type { BoardSnapshot, TraceSegmentInfo } from './types';
 import type { PcbEngine } from './wasm';
-import type { RoutingState } from './routing';
+import type { RoutingState, PadHit } from './routing';
 import { checkRouteObstacles } from './routing';
 import { zoomAtPoint, pan, screenToWorld } from './viewport';
 import { hitTestTrace } from './hit-test';
+
+/** Nearest point on segment AB to point P */
+function nearestPointOnSeg(px: number, py: number, ax: number, ay: number, bx: number, by: number): Vec2 {
+  const dx = bx - ax, dy = by - ay;
+  const lenSq = dx * dx + dy * dy;
+  if (lenSq < 1) return { x: ax, y: ay };
+  const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / lenSq));
+  return { x: ax + t * dx, y: ay + t * dy };
+}
 import { hitTestTraceSegment, dragSegment, dragCorner, tracesInRect, componentsInRect, type TraceSegmentHit } from './trace-edit';
 import type { Vec2 } from './direction45';
 import {
@@ -27,6 +36,7 @@ import {
   resetToIdle,
   setDrcViolations,
   createDrcPreviewChecker,
+  computeTargetPads,
 } from './routing';
 import { hitTestResizeHandle, resizeHandleCursor, type ResizeHandle } from './renderer';
 
@@ -605,7 +615,45 @@ export function setupInteraction(
         }
       }
 
-      // No pad hit — add waypoint (only if no collision)
+      // No pad hit — check if we clicked on an existing trace of the SAME net (T-junction)
+      if (!state.routing.hasCollision) {
+        const traceHit = hitTestTrace(state.snapshot, state.viewport, screenX, screenY);
+        if (traceHit && traceHit.trace.net_name === state.routing.netName) {
+          // Snap to nearest point on the trace segment
+          const seg = traceHit.trace.segments[traceHit.segmentIndex];
+          const snapPt = nearestPointOnSeg(worldX, worldY, Number(seg.start_x), Number(seg.start_y), Number(seg.end_x), Number(seg.end_y));
+
+          // Complete route to this point (create a synthetic target)
+          const syntheticTarget: PadHit = {
+            component: { refdes: '__trace__', value: '', x_nm: snapPt.x, y_nm: snapPt.y, rotation_mdeg: 0, footprint: '', pads: [], body_width_nm: 0, body_height_nm: 0, model_3d: null, silk: [] },
+            pad: { number: '0', x_nm: 0, y_nm: 0, width_nm: 100000, height_nm: 100000, shape: 'rect', layer_mask: 1, drill_nm: 0 },
+            worldX: snapPt.x,
+            worldY: snapPt.y,
+            netName: state.routing.netName,
+          };
+
+          const result = completeRoute(state.routing, syntheticTarget);
+          if (result && state.engine) {
+            const flat: number[] = [];
+            for (const s of result.segments) {
+              flat.push(Math.round(s.start_x), Math.round(s.start_y), Math.round(s.end_x), Math.round(s.end_y));
+            }
+            if (state.onTraceAdd) {
+              state.onTraceAdd(result.netName, result.layer, result.width, flat);
+            }
+          }
+
+          state.routing = resetToIdle(state.routing);
+          if (drcChecker) drcChecker.cancel();
+          state.onRoutingChange(state.routing);
+          state.onRouteEnd?.();
+          console.log(`[Route] Completed to trace ${traceHit.trace.id} (T-junction)`);
+          state.dirty = true;
+          return;
+        }
+      }
+
+      // No pad or trace hit — add waypoint (only if no collision)
       if (state.routing.hasCollision) {
         // KiCad behavior: cannot place waypoint when path has DRC violations
         console.log('[Route] Cannot place waypoint — path collides with obstacle');
@@ -635,12 +683,47 @@ export function setupInteraction(
       return;
     }
 
-    // Try trace hit-test
+    // Try trace hit-test — start routing from existing trace on same net
     const hit = hitTestTrace(state.snapshot, state.viewport, screenX, screenY);
+    if (hit && hit.trace.net_name) {
+      // Click on existing trace — start routing FROM this point on the trace
+      // Snap to nearest point on the trace segment
+      const seg = hit.trace.segments[hit.segmentIndex];
+      const snapPt = nearestPointOnSeg(worldX, worldY, Number(seg.start_x), Number(seg.start_y), Number(seg.end_x), Number(seg.end_y));
+
+      // Create a synthetic PadHit-like start from the trace point
+      state.routing = {
+        ...createRoutingState(),
+        mode: 'routing' as const,
+        currentLayer: hit.trace.layer || 'Top',
+        anchorPoint: { x: snapPt.x, y: snapPt.y },
+        netName: hit.trace.net_name,
+        traceWidth: Number(hit.trace.width) || 250_000,
+        angleSnapEnabled: state.routing.angleSnapEnabled,
+        gridSnapEnabled: state.routing.gridSnapEnabled,
+        gridSpacing: state.routing.gridSpacing,
+        magneticSnapEnabled: state.routing.magneticSnapEnabled,
+        magneticSnapRadius: state.routing.magneticSnapRadius,
+        cornerMode: state.routing.cornerMode,
+        clearanceNm: state.routing.clearanceNm,
+      };
+      // Compute target pads for magnetic snap
+      if (state.snapshot) {
+        const targets = computeTargetPads(state.snapshot, hit.trace.net_name, '', '');
+        state.routing.targetPads = targets;
+      }
+      ensureDrcChecker();
+      state.onRoutingChange(state.routing);
+      state.onRouteStart?.(hit.trace.net_name);
+      console.log(`[Route] Started from trace ${hit.trace.id} net=${hit.trace.net_name} at (${(snapPt.x/1e6).toFixed(2)}, ${(snapPt.y/1e6).toFixed(2)})`);
+      state.dirty = true;
+      return;
+    }
+
+    // If hit but no net — just select
     if (hit) {
       state.selectedTraceId = hit.trace.id;
       state.onTraceSelect(hit.trace.id, e.clientX, e.clientY);
-      console.log('[Trace] Selected:', hit.trace.net_name, 'id:', hit.trace.id, 'seg:', hit.segmentIndex);
       state.dirty = true;
       return;
     }
