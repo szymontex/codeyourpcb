@@ -767,6 +767,39 @@ export interface ObstacleInfo {
  * Check if a line segment intersects a rectangle (pad bounding box).
  * Uses Liang-Barsky algorithm for segment-rect intersection.
  */
+/**
+ * Minimum distance between two line segments AB and CD.
+ */
+function segSegDist(
+  ax: number, ay: number, bx: number, by: number,
+  cx: number, cy: number, dx: number, dy: number,
+): number {
+  // Check if segments intersect (distance = 0)
+  const d1x = bx-ax, d1y = by-ay, d2x = dx-cx, d2y = dy-cy;
+  const cross = d1x*d2y - d1y*d2x;
+  if (Math.abs(cross) > 0.001) {
+    const t = ((cx-ax)*d2y - (cy-ay)*d2x) / cross;
+    const u = ((cx-ax)*d1y - (cy-ay)*d1x) / cross;
+    if (t >= 0 && t <= 1 && u >= 0 && u <= 1) return 0;
+  }
+  // No intersection — min distance is min of point-to-segment distances
+  return Math.min(
+    ptSegDist(ax, ay, cx, cy, dx, dy),
+    ptSegDist(bx, by, cx, cy, dx, dy),
+    ptSegDist(cx, cy, ax, ay, bx, by),
+    ptSegDist(dx, dy, ax, ay, bx, by),
+  );
+}
+
+/** Distance from point P to segment AB. */
+function ptSegDist(px: number, py: number, ax: number, ay: number, bx: number, by: number): number {
+  const dx = bx-ax, dy = by-ay;
+  const lenSq = dx*dx + dy*dy;
+  if (lenSq < 1) return Math.hypot(px-ax, py-ay);
+  const t = Math.max(0, Math.min(1, ((px-ax)*dx + (py-ay)*dy) / lenSq));
+  return Math.hypot(px - (ax+t*dx), py - (ay+t*dy));
+}
+
 function segmentIntersectsRect(
   sx: number, sy: number, ex: number, ey: number,
   rx: number, ry: number, rw: number, rh: number,
@@ -916,19 +949,21 @@ export function checkRouteObstacles(
       if (trace.net_name === netName) continue;
       if (!trace.net_name) continue;
 
+      const traceHW = Number(trace.width) / 2;
+
       for (const seg of trace.segments) {
+        const sx0 = Number(seg.start_x), sy0 = Number(seg.start_y);
+        const sx1 = Number(seg.end_x), sy1 = Number(seg.end_y);
+
         for (let i = 0; i < path.length - 1; i++) {
           const a = path[i];
           const b = path[i + 1];
 
-          // Check if trace segments are within clearance (Number() guards BigInt from WASM)
-          const traceClearance = Number(clearanceNm) + halfTrace + Number(trace.width) / 2;
-          const sx0 = Number(seg.start_x), sy0 = Number(seg.start_y);
-          const sx1 = Number(seg.end_x), sy1 = Number(seg.end_y);
-          if (
-            segmentNearCircle(sx0, sy0, sx1, sy1,
-              (a.x + b.x) / 2, (a.y + b.y) / 2, traceClearance)
-          ) {
+          // Segment-to-segment minimum distance
+          const dist = segSegDist(a.x, a.y, b.x, b.y, sx0, sy0, sx1, sy1);
+          const minAllowed = Number(clearanceNm) + halfTrace + traceHW;
+
+          if (dist < minAllowed) {
             obstacles.push({
               type: 'trace',
               x: (sx0 + sx1) / 2,
