@@ -1385,7 +1385,7 @@ async function init(): Promise<void> {
       if (!trace || !trace.segments.length) return;
 
       const { optimizeTrace } = await import('./trace-optimize');
-      const optimized = optimizeTrace(trace.segments);
+      const optimized = optimizeTrace(trace.segments, snapshot, trace.net_name || '', 150_000, Number(trace.width), padNetMap);
 
       if (optimized.length < trace.segments.length) {
         // Build flat arrays for undo command

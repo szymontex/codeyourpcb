@@ -10,9 +10,10 @@
  *   sections with shorter 2-segment alternatives
  */
 
-import type { TraceSegmentInfo } from './types';
+import type { TraceSegmentInfo, BoardSnapshot } from './types';
 import { type Vec2, Dir45, dirFromSeg, buildInitialTrace } from './direction45';
 import { traceVertices } from './trace-edit';
+import { checkRouteObstacles } from './routing';
 
 /**
  * Simplify a trace by removing redundant vertices.
@@ -68,13 +69,27 @@ export function simplifyTrace(segments: TraceSegmentInfo[]): TraceSegmentInfo[] 
  * Preserves first and last point (pad connections).
  * Maintains 45° constraint via BuildInitialTrace.
  */
-export function optimizeTrace(segments: TraceSegmentInfo[]): TraceSegmentInfo[] {
+export function optimizeTrace(
+  segments: TraceSegmentInfo[],
+  snapshot?: BoardSnapshot | null,
+  netName?: string,
+  clearance?: number,
+  traceWidth?: number,
+  padNetMap?: Map<string, string>,
+): TraceSegmentInfo[] {
   let pts = traceVertices({ segments, id: 0, width: 0, layer: '', net_name: '', locked: false } as any);
   if (pts.length <= 3) return simplifyTrace(segments);
 
   // First simplify
   pts = ptsFromSegs(simplifyTrace(segments));
   if (pts.length <= 3) return ptsToSegs(pts);
+
+  /** Check if a candidate point array creates collisions */
+  function hasCollision(candidatePts: Vec2[]): boolean {
+    if (!snapshot || !netName) return false;
+    const obstacles = checkRouteObstacles(candidatePts, snapshot, netName, clearance ?? 150_000, traceWidth ?? 250_000, padNetMap);
+    return obstacles.length > 0;
+  }
 
   let improved = true;
   let iterations = 0;
@@ -98,6 +113,9 @@ export function optimizeTrace(segments: TraceSegmentInfo[]): TraceSegmentInfo[] 
         const newLen = pathLen(direct);
 
         if (newLen <= oldLen * 1.01) { // allow 1% tolerance
+          // Check collision before accepting
+          const candidate = [...pts.slice(0, i + 1), ...pts.slice(i + 2)];
+          if (hasCollision(candidate)) continue;
           // Replace: remove middle point
           pts.splice(i + 1, 1);
           improved = true;
@@ -115,6 +133,9 @@ export function optimizeTrace(segments: TraceSegmentInfo[]): TraceSegmentInfo[] 
           const newLen = pathLen(direct2);
 
           if (newLen <= oldLen * 1.01) {
+            // Check collision before accepting
+            const candidate = [...pts.slice(0, i + 1), ...direct2.slice(1, -1), ...pts.slice(i + 3)];
+            if (hasCollision(candidate)) continue;
             // Replace A, B, C, D with direct path
             pts.splice(i + 1, 2, ...direct2.slice(1, -1));
             improved = true;
