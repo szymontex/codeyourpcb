@@ -1388,7 +1388,7 @@ async function init(): Promise<void> {
       const optimized = optimizeTrace(trace.segments, snapshot, trace.net_name || '', 150_000, Number(trace.width), padNetMap);
 
       if (optimized.length < trace.segments.length) {
-        // Build flat arrays for undo command
+        // Segments were reduced
         const oldFlat: number[] = [];
         for (const s of trace.segments) oldFlat.push(Math.round(Number(s.start_x)), Math.round(Number(s.start_y)), Math.round(Number(s.end_x)), Math.round(Number(s.end_y)));
         const newFlat: number[] = [];
@@ -1401,7 +1401,8 @@ async function init(): Promise<void> {
         undoStack.push(cmd);
         statusText.textContent = `Optimized: ${trace.segments.length} → ${optimized.length} segments`;
       } else {
-        statusText.textContent = 'Trace already optimal';
+        statusText.textContent = `Already optimal (${trace.segments.length} segments)`;
+        console.log('[Optimize] No reduction found. Try simplify-only.');
       }
       dirty = true;
     },
