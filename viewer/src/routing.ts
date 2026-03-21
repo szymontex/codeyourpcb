@@ -624,13 +624,22 @@ export function completeRoute(
 ): { segments: TraceSegmentInfo[]; netName: string; layer: string; width: number } | null {
   if (state.mode !== 'routing') return null;
 
+  // Use the current preview path — it already has dodge applied.
+  // Just ensure it ends at the target pad position.
   const target: Vec2 = { x: targetPad.worldX, y: targetPad.worldY };
-  const anchor: Vec2 = state.anchorPoint;
+  let finalPath: Vec2[];
 
-  // Build final path from anchor to target pad
-  const finalPath = state.angleSnapEnabled
-    ? buildInitialTrace(anchor, target, state.currentDirection, undefined, state.cornerMode)
-    : [{ ...anchor }, { ...target }];
+  if (state.previewPath && state.previewPath.length >= 2) {
+    // Use the dodged preview path, but replace last point with exact pad center
+    finalPath = [...state.previewPath];
+    finalPath[finalPath.length - 1] = { ...target };
+  } else {
+    // Fallback: build fresh path (shouldn't happen normally)
+    const anchor: Vec2 = state.anchorPoint;
+    finalPath = state.angleSnapEnabled
+      ? buildInitialTrace(anchor, target, state.currentDirection, undefined, state.cornerMode)
+      : [{ ...anchor }, { ...target }];
+  }
 
   // Convert path to segments
   const finalSegments: TraceSegmentInfo[] = [];
