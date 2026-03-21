@@ -1,0 +1,88 @@
+// 3D Model Alignment Test Board
+// Components placed at board corners and edges to verify
+// that 3D models align with footprint pads.
+// Use JLCPCB search to insert real components, then check 3D view.
+version 1
+
+board alignment_test {
+    size 50mm x 40mm
+    layers 2
+}
+
+// Corner placement — pad edge touches board corner
+// 0805 body is ~2.0mm x 1.25mm, pads span ~1.9mm from center
+component R1 resistor "0805" {
+    value "10k"
+    at 2mm, 2mm
+}
+
+// Top-right corner
+component R2 resistor "0805" {
+    value "4.7k"
+    at 48mm, 38mm
+}
+
+// Bottom-right corner, rotated 90°
+component C1 capacitor "0805" {
+    value "100nF"
+    at 48mm, 2mm rotate 90
+}
+
+// Left edge, centered vertically
+component R3 resistor "1206" {
+    value "1k"
+    at 2mm, 20mm
+}
+
+// Center — large IC footprint for JLCPCB test
+// Replace this with a JLCPCB component (e.g. ESP32 or STM32)
+component U1 ic "SOIC-8" {
+    value "NE555"
+    at 25mm, 20mm
+}
+
+// Top edge
+component C2 capacitor "0402" {
+    value "10nF"
+    at 25mm, 38mm
+}
+
+// Bottom edge
+component LED1 led "0805" {
+    value "GREEN"
+    at 25mm, 2mm
+}
+
+// Through-hole near corner
+component J1 connector "PIN-HDR-1x2" {
+    value "CONN"
+    at 6mm, 35mm
+}
+
+// Simple nets to show ratsnest
+net VCC {
+    R1.1
+    R3.1
+    U1.8
+    J1.1
+}
+
+net GND {
+    C1.2
+    C2.2
+    LED1.2
+    U1.1
+    J1.2
+}
+
+net SIG {
+    R1.2
+    U1.3
+    R2.1
+}
+
+net OUT {
+    R2.2
+    LED1.1
+    R3.2
+}

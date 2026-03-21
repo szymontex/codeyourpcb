@@ -545,7 +545,12 @@ export function setupInteraction(
       if (padHit) {
         // KiCad behavior: only allow completing route on a pad of the SAME net
         if (padHit.netName && padHit.netName === state.routing.netName) {
-          // Complete the route — pad is on the same net
+          // KiCad behavior: block route completion if path has DRC violations
+          if (state.routing.hasCollision) {
+            console.log('[Route] Cannot complete route — path collides with obstacle');
+            return;
+          }
+          // Complete the route — pad is on the same net, no collisions
           const result = completeRoute(state.routing, padHit);
           if (result && state.engine) {
             // Build flat segment array
@@ -581,7 +586,12 @@ export function setupInteraction(
         }
       }
 
-      // No pad hit — add waypoint
+      // No pad hit — add waypoint (only if no collision)
+      if (state.routing.hasCollision) {
+        // KiCad behavior: cannot place waypoint when path has DRC violations
+        console.log('[Route] Cannot place waypoint — path collides with obstacle');
+        return;
+      }
       state.routing = addWaypoint(state.routing);
       state.onRoutingChange(state.routing);
       state.dirty = true;
