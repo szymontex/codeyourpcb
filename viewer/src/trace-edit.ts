@@ -147,63 +147,56 @@ export function dragSegment(
   let guideDirA: Vec2; // direction of guide A
 
   if (idx > 0) {
-    // There's a prev segment: guide from prevStart in direction of prev segment
     fixedA = pts[idx - 1];
     guideDirA = { x: dragA.x - fixedA.x, y: dragA.y - fixedA.y };
   } else {
-    // First segment: pad is locked. Guide perpendicular to drag.
-    fixedA = { ...dragA };
-    guideDirA = { x: -ddy, y: ddx }; // perpendicular
+    // First segment: pad endpoint is LOCKED. ip1 = pad position always.
+    fixedA = { ...dragA }; // pad
+    guideDirA = { x: 0, y: 0 }; // won't be used
   }
 
   let fixedB: Vec2;
   let guideDirB: Vec2;
 
   if (idx + 2 < pts.length) {
-    // There's a next segment: guide from nextEnd in direction of next segment
     fixedB = pts[idx + 2];
     guideDirB = { x: dragB.x - fixedB.x, y: dragB.y - fixedB.y };
   } else {
-    // Last segment: pad is locked. Guide perpendicular to drag.
-    fixedB = { ...dragB };
-    guideDirB = { x: -ddy, y: ddx }; // perpendicular
+    // Last segment: pad endpoint is LOCKED. ip2 = pad position always.
+    fixedB = { ...dragB }; // pad
+    guideDirB = { x: 0, y: 0 }; // won't be used
   }
 
-  // Intersect s_current (line through newPos in dragDir) with guides
-  const ip1 = lineIsect(newPos, dragDirV, fixedA, guideDirA);
-  const ip2 = lineIsect(newPos, dragDirV, fixedB, guideDirB);
+  // Intersect s_current with guides
+  // For first/last segment: the pad endpoint is locked (no intersection needed)
+  const ip1 = (idx > 0)
+    ? lineIsect(newPos, dragDirV, fixedA, guideDirA)
+    : fixedA;
+  const ip2 = (idx + 2 < pts.length)
+    ? lineIsect(newPos, dragDirV, fixedB, guideDirB)
+    : fixedB;
 
   if (!ip1 || !ip2) return null;
 
-  // Build result: replace dragged segment section with fixedA → ip1 → ip2 → fixedB
-  const before = pts.slice(0, Math.max(0, idx - 1));
-  const after = pts.slice(Math.min(pts.length, idx + 3));
-
-  // Include fixedA only if it's not already in 'before'
-  const newPts: Vec2[] = [];
-  if (idx > 1) {
-    newPts.push(...before);
-  }
-  newPts.push(fixedA, ip1, ip2, fixedB);
-  if (after.length > 0) {
-    newPts.push(...after);
+  // Build result based on which segment was dragged
+  if (idx === 0 && idx === segments.length - 1) {
+    // Only one segment in trace (both ends are pads) — can't drag meaningfully
+    return null;
   }
 
-  // Handle edge cases for first/last segments
   if (idx === 0) {
-    // First segment dragged: result is dragA(locked) → ip2 → fixedB → ...rest
-    // ip1 is on the perpendicular from dragA, don't need it
-    const r = [pts[0], ip2, ...pts.slice(idx + 2)];
+    // First segment: pad(locked)=ip1=fixedA, ip2 slides on next segment
+    const r = [fixedA, ip2, ...pts.slice(idx + 2)];
     return verticesToSegments(r);
   }
 
   if (idx === segments.length - 1) {
-    // Last segment: result is ...rest → fixedA → ip1 → dragB(locked)
-    const r = [...pts.slice(0, idx), ip1, pts[pts.length - 1]];
+    // Last segment: ip1 slides on prev segment, pad(locked)=ip2=fixedB
+    const r = [...pts.slice(0, idx), ip1, fixedB];
     return verticesToSegments(r);
   }
 
-  // Middle segment: fixedA → ip1 → ip2 → fixedB
+  // Middle segment: both junctions slide
   const r = [...pts.slice(0, idx - 1), fixedA, ip1, ip2, fixedB, ...pts.slice(idx + 3)];
   return verticesToSegments(r);
 }
