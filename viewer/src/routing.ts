@@ -19,19 +19,16 @@ import {
 } from './direction45';
 import { dodgeObstacles } from './dodge';
 
-/** Recursively convert BigInt→Number in any object. */
+/** Recursively convert BigInt→Number in any object. Uses JSON round-trip
+ *  which handles WASM proxy objects and prototype getters. */
 function deepSanitize(obj: any): any {
-  if (obj === null || obj === undefined) return obj;
-  if (typeof obj === 'bigint') return Number(obj);
-  if (Array.isArray(obj)) return obj.map(deepSanitize);
-  if (typeof obj === 'object') {
-    const out: any = {};
-    for (const k of Object.keys(obj)) {
-      out[k] = deepSanitize(obj[k]);
-    }
-    return out;
+  try {
+    return JSON.parse(JSON.stringify(obj, (_key, value) =>
+      typeof value === 'bigint' ? Number(value) : value
+    ));
+  } catch {
+    return obj;
   }
-  return obj;
 }
 
 // ---------------------------------------------------------------------------

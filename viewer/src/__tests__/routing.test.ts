@@ -43,6 +43,7 @@ function makeComp(refdes: string, x: number, y: number, pads: PadInfo[]): Compon
     body_width_nm: 1_000_000,
     body_height_nm: 1_000_000,
     model_3d: null,
+    silk: [],
   };
 }
 

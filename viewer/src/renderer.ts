@@ -741,6 +741,66 @@ function drawBodyOutline(
 }
 
 // ---------------------------------------------------------------------------
+// Real silkscreen shapes from EasyEDA footprint data
+// ---------------------------------------------------------------------------
+
+function drawSilkShapes(
+  ctx: CanvasRenderingContext2D, vp: Viewport,
+  comp: ComponentInfo, config: RenderConfig,
+): void {
+  const radians = (comp.rotation_mdeg / 1000) * (Math.PI / 180);
+  const cosR = Math.cos(radians);
+  const sinR = Math.sin(radians);
+
+  ctx.save();
+  ctx.strokeStyle = config.layerColors.silkscreen;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  for (const shape of comp.silk) {
+    // Transform shape coordinates: rotate by component rotation, then translate to world
+    const toScreen = (relX: number, relY: number): [number, number] => {
+      const rx = relX * cosR - relY * sinR;
+      const ry = relX * sinR + relY * cosR;
+      return worldToScreen(vp, comp.x_nm + rx, comp.y_nm + ry);
+    };
+
+    // Line width: use shape width scaled to screen, with minimum 1px
+    const lineW = Math.max(1, shape.width * vp.scale);
+    ctx.lineWidth = lineW;
+
+    if (shape.type === 'segment') {
+      const [sx1, sy1] = toScreen(shape.x1, shape.y1);
+      const [sx2, sy2] = toScreen(shape.x2, shape.y2);
+      ctx.beginPath();
+      ctx.moveTo(sx1, sy1);
+      ctx.lineTo(sx2, sy2);
+      ctx.stroke();
+    } else if (shape.type === 'circle') {
+      const [scx, scy] = toScreen(shape.cx, shape.cy);
+      const sr = Math.abs(shape.radius * vp.scale);
+      if (sr > 0.5) {
+        ctx.beginPath();
+        ctx.arc(scx, scy, sr, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    } else if (shape.type === 'arc') {
+      const [scx, scy] = toScreen(shape.cx, shape.cy);
+      const sr = Math.abs(shape.radius * vp.scale);
+      if (sr > 0.5) {
+        ctx.beginPath();
+        // Canvas arc uses clockwise, but our Y is flipped in worldToScreen
+        // so we negate angles and swap direction
+        ctx.arc(scx, scy, sr, -shape.startAngle - radians, -shape.endAngle - radians, true);
+        ctx.stroke();
+      }
+    }
+  }
+
+  ctx.restore();
+}
+
+// ---------------------------------------------------------------------------
 // Refdes text (text pass, LOD ≥ Medium)
 // ---------------------------------------------------------------------------
 

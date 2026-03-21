@@ -23,17 +23,13 @@ import { pointToSegmentDistance } from './geometry';
  * WASM (Rust i64) returns BigInt which can't be mixed with Number in JS arithmetic.
  */
 function deepBigIntToNumber(obj: any): any {
-  if (obj === null || obj === undefined) return obj;
-  if (typeof obj === 'bigint') return Number(obj);
-  if (Array.isArray(obj)) return obj.map(deepBigIntToNumber);
-  if (typeof obj === 'object') {
-    const result: any = {};
-    for (const key of Object.keys(obj)) {
-      result[key] = deepBigIntToNumber(obj[key]);
-    }
-    return result;
+  try {
+    return JSON.parse(JSON.stringify(obj, (_key, value) =>
+      typeof value === 'bigint' ? Number(value) : value
+    ));
+  } catch {
+    return obj;
   }
-  return obj;
 }
 
 /** Sanitize a WASM-returned snapshot, converting all BigInt values to Number. */

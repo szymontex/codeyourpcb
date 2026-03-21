@@ -245,6 +245,9 @@ export class Renderer3D {
     // Build component bodies (on top layer group for now — all top-side)
     this.buildComponents(snapshot.components || [], topGroup);
 
+    // Build silkscreen outlines from EasyEDA footprint data
+    this.buildSilkscreen(snapshot.components || [], topGroup, bottomGroup);
+
     // Auto-load 3D models for components that have model_3d UUID
     this.autoLoad3DModels(snapshot.components || []);
 
@@ -878,6 +881,157 @@ export class Renderer3D {
         .catch(err => {
           console.warn(`[3D] Auto-load error for ${refdes}:`, err);
         });
+    }
+  }
+
+  /**
+   * Build colored box meshes for each component.
+  /**
+   * Build silkscreen geometry from EasyEDA footprint silk shapes.
+   * Silk lines rendered as flat quads slightly above the board surface.
+   */
+  private buildSilkscreen(components: ComponentInfo[], topGroup: THREE.Group, bottomGroup: THREE.Group): void {
+    const Z_TOP_SILK = BOARD_THICKNESS_MM + 0.02; // slightly above copper
+    const Z_BOTTOM_SILK = -0.02;
+    const topPositions: number[] = [];
+    const bottomPositions: number[] = [];
+    let shapeCount = 0;
+
+    for (const comp of components) {
+      if (!comp.silk || comp.silk.length === 0) continue;
+
+      const compX = comp.x_nm * NM_TO_MM;
+      const compY = comp.y_nm * NM_TO_MM;
+      const radians = (comp.rotation_mdeg / 1000) * (Math.PI / 180);
+      const cosR = Math.cos(radians);
+      const sinR = Math.sin(radians);
+
+      for (const shape of comp.silk) {
+        const isTop = shape.layer === 'top';
+        const z = isTop ? Z_TOP_SILK : Z_BOTTOM_SILK;
+        const positions = isTop ? topPositions : bottomPositions;
+        const w = Math.max(shape.width * NM_TO_MM, 0.1) / 2; // half-width, min 0.1mm
+
+        if (shape.type === 'segment') {
+          const x1r = shape.x1 * NM_TO_MM;
+          const y1r = shape.y1 * NM_TO_MM;
+          const x2r = shape.x2 * NM_TO_MM;
+          const y2r = shape.y2 * NM_TO_MM;
+
+          // Rotate by component rotation
+          const wx1 = compX + x1r * cosR - y1r * sinR;
+          const wy1 = compY + x1r * sinR + y1r * cosR;
+          const wx2 = compX + x2r * cosR - y2r * sinR;
+          const wy2 = compY + x2r * sinR + y2r * cosR;
+
+          // Build quad (two triangles) perpendicular to line direction
+          const dx = wx2 - wx1;
+          const dy = wy2 - wy1;
+          const len = Math.sqrt(dx * dx + dy * dy);
+          if (len < 0.001) continue;
+
+          const nx = -dy / len * w;
+          const ny = dx / len * w;
+
+          // Triangle 1
+          positions.push(wx1 + nx, wy1 + ny, z);
+          positions.push(wx1 - nx, wy1 - ny, z);
+          positions.push(wx2 + nx, wy2 + ny, z);
+          // Triangle 2
+          positions.push(wx2 + nx, wy2 + ny, z);
+          positions.push(wx1 - nx, wy1 - ny, z);
+          positions.push(wx2 - nx, wy2 - ny, z);
+
+          shapeCount++;
+        } else if (shape.type === 'circle') {
+          // Approximate circle with line segments
+          const cx = compX + (shape.cx * NM_TO_MM * cosR - shape.cy * NM_TO_MM * sinR);
+          const cy = compY + (shape.cx * NM_TO_MM * sinR + shape.cy * NM_TO_MM * cosR);
+          const r = shape.radius * NM_TO_MM;
+          const segs = Math.max(16, Math.round(r * 8));
+
+          for (let i = 0; i < segs; i++) {
+            const a1 = (i / segs) * Math.PI * 2;
+            const a2 = ((i + 1) / segs) * Math.PI * 2;
+            const x1 = cx + Math.cos(a1) * r;
+            const y1 = cy + Math.sin(a1) * r;
+            const x2 = cx + Math.cos(a2) * r;
+            const y2 = cy + Math.sin(a2) * r;
+
+            const ddx = x2 - x1;
+            const ddy = y2 - y1;
+            const dlen = Math.sqrt(ddx * ddx + ddy * ddy);
+            if (dlen < 0.001) continue;
+            const nnx = -ddy / dlen * w;
+            const nny = ddx / dlen * w;
+
+            positions.push(x1 + nnx, y1 + nny, z);
+            positions.push(x1 - nnx, y1 - nny, z);
+            positions.push(x2 + nnx, y2 + nny, z);
+            positions.push(x2 + nnx, y2 + nny, z);
+            positions.push(x1 - nnx, y1 - nny, z);
+            positions.push(x2 - nnx, y2 - nny, z);
+          }
+          shapeCount++;
+        } else if (shape.type === 'arc') {
+          const cx = compX + (shape.cx * NM_TO_MM * cosR - shape.cy * NM_TO_MM * sinR);
+          const cy = compY + (shape.cx * NM_TO_MM * sinR + shape.cy * NM_TO_MM * cosR);
+          const r = shape.radius * NM_TO_MM;
+          const segs = Math.max(8, Math.round(r * 4));
+
+          let startA = shape.startAngle + radians;
+          let endA = shape.endAngle + radians;
+          const totalAngle = endA - startA;
+
+          for (let i = 0; i < segs; i++) {
+            const a1 = startA + (i / segs) * totalAngle;
+            const a2 = startA + ((i + 1) / segs) * totalAngle;
+            const x1 = cx + Math.cos(a1) * r;
+            const y1 = cy + Math.sin(a1) * r;
+            const x2 = cx + Math.cos(a2) * r;
+            const y2 = cy + Math.sin(a2) * r;
+
+            const ddx = x2 - x1;
+            const ddy = y2 - y1;
+            const dlen = Math.sqrt(ddx * ddx + ddy * ddy);
+            if (dlen < 0.001) continue;
+            const nnx = -ddy / dlen * w;
+            const nny = ddx / dlen * w;
+
+            positions.push(x1 + nnx, y1 + nny, z);
+            positions.push(x1 - nnx, y1 - nny, z);
+            positions.push(x2 + nnx, y2 + nny, z);
+            positions.push(x2 + nnx, y2 + nny, z);
+            positions.push(x1 - nnx, y1 - nny, z);
+            positions.push(x2 - nnx, y2 - nny, z);
+          }
+          shapeCount++;
+        }
+      }
+    }
+
+    // Create silk meshes
+    const silkMat = new THREE.MeshBasicMaterial({ color: 0xf0f0f0, side: THREE.DoubleSide });
+
+    if (topPositions.length > 0) {
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(topPositions, 3));
+      geo.computeVertexNormals();
+      const mesh = new THREE.Mesh(geo, silkMat);
+      mesh.name = 'silk-top';
+      topGroup.add(mesh);
+    }
+    if (bottomPositions.length > 0) {
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(bottomPositions, 3));
+      geo.computeVertexNormals();
+      const mesh = new THREE.Mesh(geo, silkMat.clone());
+      mesh.name = 'silk-bottom';
+      bottomGroup.add(mesh);
+    }
+
+    if (shapeCount > 0) {
+      console.log(`[3D] Built ${shapeCount} silkscreen shapes`);
     }
   }
 
