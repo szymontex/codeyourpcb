@@ -711,14 +711,7 @@ async function init(): Promise<void> {
 
         // Auto-fetch LCSC footprints if any new lcsc attributes found
         autoFetchLcscFootprints(content).then((fetched) => {
-          if (fetched) {
-            engine.load_source(content);
-            pullSnapshot();
-            forceRender2D();
-            if (is3DActive && renderer3d && snapshot) {
-              renderer3d.updateBoard(snapshot, layers);
-            }
-          }
+          if (fetched) reloadAfterLcscFetch(content);
         });
 
         debounceTimer = null;
@@ -856,6 +849,22 @@ async function init(): Promise<void> {
     return { renderConfig };
   }
 
+  /**
+   * Re-parse + re-render after LCSC footprint fetch, updating the thumbnail.
+   */
+  function reloadAfterLcscFetch(source: string): void {
+    engine.load_source(source);
+    const updatedSnap = pullSnapshot();
+    forceRender2D();
+    // Re-generate thumbnail now that footprints are loaded
+    if (currentFilePath) {
+      addRecentFile(currentFilePath, updatedSnap, buildRenderStateForThumbnail(), source);
+    }
+    if (is3DActive && renderer3d && snapshot) {
+      renderer3d.updateBoard(snapshot, layers);
+    }
+  }
+
   // WS connection reference — assigned later, used by project manager callbacks
   let wsConnection: WsConnection | null = null;
 
@@ -898,14 +907,7 @@ async function init(): Promise<void> {
 
       // Auto-fetch LCSC footprints (async — re-parses after fetch)
       autoFetchLcscFootprints(source).then((fetched) => {
-        if (fetched) {
-          engine.load_source(source);
-          pullSnapshot();
-          forceRender2D();
-          if (is3DActive && renderer3d && snapshot) {
-            renderer3d.updateBoard(snapshot, layers);
-          }
-        }
+        if (fetched) reloadAfterLcscFetch(source);
       });
     },
     onLoadRecent: (source, name) => {
@@ -939,14 +941,7 @@ async function init(): Promise<void> {
 
       // Auto-fetch LCSC footprints (async — re-parses after fetch)
       autoFetchLcscFootprints(source).then((fetched) => {
-        if (fetched) {
-          engine.load_source(source);
-          pullSnapshot();
-          forceRender2D();
-          if (is3DActive && renderer3d && snapshot) {
-            renderer3d.updateBoard(snapshot, layers);
-          }
-        }
+        if (fetched) reloadAfterLcscFetch(source);
       });
     },
     onNewBlank: (source) => {

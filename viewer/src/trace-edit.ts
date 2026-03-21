@@ -111,45 +111,41 @@ export function dragSegment(
   if (!segments.length || segIndex < 0 || segIndex >= segments.length) return null;
 
   const pts = traceVertices({ segments } as TraceInfo);
-  if (pts.length < 3) return null; // need at least prev or next segment
+  if (pts.length < 3) return null;
 
-  // The dragged segment is pts[segIndex] → pts[segIndex+1]
-  // We find where a line through newPos (in the dragged segment's direction)
-  // intersects the LINES of the adjacent segments.
-  // This slides the junction points along the adjacent segments.
+  // If dragged segment is first or last (one end is a pad with no adjacent segment),
+  // convert to a corner drag on the junction point instead.
+  // This gives KiCad behavior: skos shortens/lengthens without changing angle.
+  if (segIndex === 0) {
+    // First segment: drag corner at pts[1] (junction with next segment)
+    return dragCorner(segments, 1, newPos);
+  }
+  if (segIndex === segments.length - 1) {
+    // Last segment: drag corner at pts[segIndex] (junction with prev segment)
+    return dragCorner(segments, segIndex, newPos);
+  }
 
-  const A = pts[segIndex];     // start of dragged
-  const B = pts[segIndex + 1]; // end of dragged
+  // Middle segment: slide junctions along adjacent segment lines
+  const A = pts[segIndex];
+  const B = pts[segIndex + 1];
   const dragDx = B.x - A.x;
   const dragDy = B.y - A.y;
   if (Math.abs(dragDx) < 1 && Math.abs(dragDy) < 1) return null;
 
   const result = pts.map(p => ({ ...p }));
-
-  // Line through newPos in drag direction
   const mDir: Vec2 = { x: dragDx, y: dragDy };
 
-  // Adjust start junction (pts[segIndex])
-  if (segIndex > 0) {
-    // Previous segment: pts[segIndex-1] → pts[segIndex]
-    const P = pts[segIndex - 1];
-    const prevDir: Vec2 = { x: A.x - P.x, y: A.y - P.y };
-    // Intersect line(P, prevDir) with line(newPos, mDir)
-    const ip = lli(P, prevDir, newPos, mDir);
-    if (ip) result[segIndex] = ip;
-  }
-  // else: first segment, start point is pad — don't move it
+  // Slide start junction along prev segment line
+  const P = pts[segIndex - 1];
+  const prevDir: Vec2 = { x: A.x - P.x, y: A.y - P.y };
+  const ip1 = lli(P, prevDir, newPos, mDir);
+  if (ip1) result[segIndex] = ip1;
 
-  // Adjust end junction (pts[segIndex+1])
-  if (segIndex + 2 < pts.length) {
-    // Next segment: pts[segIndex+1] → pts[segIndex+2]
-    const N = pts[segIndex + 2];
-    const nextDir: Vec2 = { x: B.x - N.x, y: B.y - N.y };
-    // Intersect line(N, nextDir) with line(newPos, mDir)
-    const ip = lli(N, nextDir, newPos, mDir);
-    if (ip) result[segIndex + 1] = ip;
-  }
-  // else: last segment, end point is pad — don't move it
+  // Slide end junction along next segment line
+  const N = pts[segIndex + 2];
+  const nextDir: Vec2 = { x: B.x - N.x, y: B.y - N.y };
+  const ip2 = lli(N, nextDir, newPos, mDir);
+  if (ip2) result[segIndex + 1] = ip2;
 
   return v2s(result);
 }
