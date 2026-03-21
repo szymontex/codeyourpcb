@@ -19,6 +19,21 @@ import {
 } from './direction45';
 import { dodgeObstacles } from './dodge';
 
+/** Recursively convert BigInt→Number in any object. */
+function deepSanitize(obj: any): any {
+  if (obj === null || obj === undefined) return obj;
+  if (typeof obj === 'bigint') return Number(obj);
+  if (Array.isArray(obj)) return obj.map(deepSanitize);
+  if (typeof obj === 'object') {
+    const out: any = {};
+    for (const k of Object.keys(obj)) {
+      out[k] = deepSanitize(obj[k]);
+    }
+    return out;
+  }
+  return obj;
+}
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -438,6 +453,13 @@ export function updatePreview(
 ): RoutingState {
   if (state.mode !== 'routing') return state;
 
+  // Force-sanitize all snapshot numeric values (WASM returns BigInt for i64)
+  if (snapshot) {
+    try {
+      snapshot = deepSanitize(snapshot) as BoardSnapshot;
+    } catch (_) { /* ignore */ }
+  }
+
   // Apply grid snap first if enabled
   const gridAdjusted = state.gridSnapEnabled
     ? snapToGrid(cursorWorld, state.gridSpacing)
@@ -782,8 +804,8 @@ export function checkRouteObstacles(
   if (!snapshot || path.length < 2) return [];
 
   const obstacles: ObstacleInfo[] = [];
-  const halfTrace = traceWidth / 2;
-  const exclusionRadius = clearanceNm + halfTrace;
+  const halfTrace = Number(traceWidth) / 2;
+  const exclusionRadius = Number(clearanceNm) + halfTrace;
 
   for (const comp of snapshot.components) {
     const radians = (Number(comp.rotation_mdeg) / 1000) * (Math.PI / 180);
@@ -819,7 +841,7 @@ export function checkRouteObstacles(
         let hit = false;
 
         if (pad.shape === 'circle') {
-          const padRadius = Number(pad.width_nm) / 2 + exclusionRadius;
+          const padRadius = Number(pad.width_nm) / 2 + Number(exclusionRadius);
           hit = segmentNearCircle(a.x, a.y, b.x, b.y, padX, padY, padRadius);
         } else {
           // Rectangle-based check
@@ -856,7 +878,7 @@ export function checkRouteObstacles(
           const b = path[i + 1];
 
           // Check if trace segments are within clearance (Number() guards BigInt from WASM)
-          const traceClearance = clearanceNm + halfTrace + Number(trace.width) / 2;
+          const traceClearance = Number(clearanceNm) + halfTrace + Number(trace.width) / 2;
           const sx0 = Number(seg.start_x), sy0 = Number(seg.start_y);
           const sx1 = Number(seg.end_x), sy1 = Number(seg.end_y);
           if (

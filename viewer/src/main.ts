@@ -292,7 +292,7 @@ async function init(): Promise<void> {
       try {
         const fp = await fetchComponentFootprint(lcscId);
         if (fp) {
-          registerDynamicFootprint(pkg, fp.pads);
+          registerDynamicFootprint(pkg, fp.pads, fp.silk);
           if (fp.modelUuid) {
             register3DModel(pkg, fp.modelUuid);
           }
@@ -965,7 +965,7 @@ async function init(): Promise<void> {
       try {
         const footprint = await fetchComponentFootprint(component.lcsc);
         if (footprint) {
-          registerDynamicFootprint(pkg, footprint.pads);
+          registerDynamicFootprint(pkg, footprint.pads, footprint.silk);
           if (footprint.modelUuid) {
             register3DModel(pkg, footprint.modelUuid);
           }
@@ -1092,7 +1092,7 @@ async function init(): Promise<void> {
     try {
       const footprint = await fetchComponentFootprint(component.lcsc);
       if (footprint) {
-        registerDynamicFootprint(pkg, footprint.pads);
+        registerDynamicFootprint(pkg, footprint.pads, footprint.silk);
         if (footprint.modelUuid) {
           register3DModel(pkg, footprint.modelUuid);
         }

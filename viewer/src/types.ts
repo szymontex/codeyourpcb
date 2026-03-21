@@ -48,7 +48,18 @@ export interface ComponentInfo {
   body_height_nm: number;
   /** Optional path/key to a GLB 3D model file (null until populated). */
   model_3d: string | null;
+  /** Silkscreen shapes (outlines, markers, text) relative to component origin */
+  silk: SilkShape[];
 }
+
+/**
+ * A silkscreen drawing primitive, relative to component origin.
+ * Coordinates in nanometers.
+ */
+export type SilkShape =
+  | { type: 'segment'; x1: number; y1: number; x2: number; y2: number; width: number; layer: 'top' | 'bottom' }
+  | { type: 'circle'; cx: number; cy: number; radius: number; width: number; layer: 'top' | 'bottom' }
+  | { type: 'arc'; cx: number; cy: number; radius: number; startAngle: number; endAngle: number; width: number; layer: 'top' | 'bottom' };
 
 export interface PadInfo {
   number: string;

@@ -4,7 +4,7 @@
  * component body outlines, pad pin numbers, net labels, and drill marks.
  */
 
-import type { BoardSnapshot, ComponentInfo, PadInfo, ViolationInfo, TraceInfo, ViaInfo, RatsnestInfo } from './types';
+import type { BoardSnapshot, ComponentInfo, PadInfo, ViolationInfo, TraceInfo, ViaInfo, RatsnestInfo, SilkShape } from './types';
 import type { Viewport } from './viewport';
 import type { RoutingState } from './routing';
 import type { DragEditState, RectSelectState } from './interaction';
@@ -705,9 +705,14 @@ function drawComponent(
     drawPad(ctx, vp, comp.x_nm, comp.y_nm, comp.rotation_mdeg, pad, layers, isSelected, themeColors, highlightedNet, comp.refdes, padNetMap, lodTier);
   }
 
-  // Component body outline (LOD ≥ Medium, non-zero body dimensions)
-  if (lodTier >= LodTier.Medium && comp.body_width_nm > 0 && comp.body_height_nm > 0) {
-    drawBodyOutline(ctx, vp, comp, config);
+  // Silkscreen: prefer real silk shapes from EasyEDA, fall back to body outline
+  if (lodTier >= LodTier.Medium) {
+    if (comp.silk && comp.silk.length > 0) {
+      // Silk shapes rendering (placeholder — not yet implemented)
+      // if (comp.silk?.length) drawSilkShapes(ctx, vp, comp, config);
+    } else if (comp.body_width_nm > 0 && comp.body_height_nm > 0) {
+      drawBodyOutline(ctx, vp, comp, config);
+    }
   }
 }
 

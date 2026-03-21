@@ -1,17 +1,17 @@
 /**
  * EasyEDA Footprint Parser
  *
- * Parses PAD shapes from EasyEDA component API responses into PadInfo[].
+ * Parses PAD and silkscreen shapes from EasyEDA component API responses.
  * EasyEDA Standard uses tilde-delimited shape strings with `#@$` separating
  * shapes within a footprint (LIB block).
  *
  * Unit system: 1 EasyEDA unit = 10 mil = 0.254 mm = 254,000 nm
- * Layer mapping: 1=TopCopper, 2=BottomCopper, 11=MultiLayer (THT)
+ * Layer mapping: 1=TopCopper, 2=BottomCopper, 3=TopSilk, 4=BottomSilk, 11=MultiLayer (THT)
  *
  * Reference: https://docs.easyeda.com/en/DocumentFormat/EasyEDA-Format-Standard/
  */
 
-import type { PadInfo } from './types';
+import type { PadInfo, SilkShape } from './types';
 
 /** EasyEDA unit → nanometers (1 unit = 10 mil = 254,000 nm) */
 const EEDA_TO_NM = 254_000;
@@ -22,6 +22,8 @@ const EEDA_TO_NM = 254_000;
 export interface EasyEDAFootprint {
   /** Pad definitions converted to PadInfo format */
   pads: PadInfo[];
+  /** Silkscreen shapes (outlines, markers) */
+  silk: SilkShape[];
   /** 3D model UUID (null if no 3D model) */
   modelUuid: string | null;
   /** Footprint origin X in nm (from LIB header) */
@@ -56,6 +58,7 @@ export function parseEasyEDAFootprint(compData: any): EasyEDAFootprint | null {
 
       let modelUuid: string | null = null;
       const allPads: PadInfo[] = [];
+      const allSilk: SilkShape[] = [];
       let originX = headOriginX;
       let originY = headOriginY;
       let hasLIB = false;
@@ -72,28 +75,44 @@ export function parseEasyEDAFootprint(compData: any): EasyEDAFootprint | null {
         }
 
         // Parse LIB blocks (footprint containers — older format)
-        // Format: LIB~X~Y~package`NAME`...#@$PAD~...#@$PAD~...
         if (shape.startsWith('LIB~')) {
-          const { pads, ox, oy } = parseLIBBlock(shape);
+          const { pads, silk, ox, oy } = parseLIBBlock(shape);
           if (pads.length > 0) {
             allPads.push(...pads);
             originX = ox;
             originY = oy;
             hasLIB = true;
           }
+          allSilk.push(...silk);
           continue;
         }
 
+        const ox = hasLIB ? 0 : headOriginX;
+        const oy = hasLIB ? 0 : headOriginY;
+
         // Standalone PAD entries (v6 format — no LIB wrapper)
-        // Origin comes from head.x, head.y
         if (shape.startsWith('PAD~')) {
-          const pad = parsePADShape(shape, hasLIB ? 0 : headOriginX, hasLIB ? 0 : headOriginY);
+          const pad = parsePADShape(shape, ox, oy);
           if (pad) allPads.push(pad);
+        }
+
+        // Silkscreen shapes: TRACK on layer 3/4, CIRCLE on layer 3/4, ARC on layer 3/4
+        if (shape.startsWith('TRACK~')) {
+          const silk = parseSilkTRACK(shape, ox, oy);
+          allSilk.push(...silk);
+        }
+        if (shape.startsWith('CIRCLE~')) {
+          const silk = parseSilkCIRCLE(shape, ox, oy);
+          if (silk) allSilk.push(silk);
+        }
+        if (shape.startsWith('ARC~')) {
+          const silk = parseSilkARC(shape, ox, oy);
+          if (silk) allSilk.push(silk);
         }
       }
 
       if (allPads.length > 0) {
-        return { pads: allPads, modelUuid, originX, originY };
+        return { pads: allPads, silk: allSilk, modelUuid, originX, originY };
       }
     }
 
@@ -109,28 +128,37 @@ export function parseEasyEDAFootprint(compData: any): EasyEDAFootprint | null {
  * LIB format: LIB~X~Y~package`NAME`...~...~gId~...
  * Sub-shapes: #@$PAD~SHAPE~X~Y~W~H~LAYER~NET~NUM~HOLER~...~GID
  */
-function parseLIBBlock(libStr: string): { pads: PadInfo[]; ox: number; oy: number } {
+function parseLIBBlock(libStr: string): { pads: PadInfo[]; silk: SilkShape[]; ox: number; oy: number } {
   const pads: PadInfo[] = [];
+  const silk: SilkShape[] = [];
 
-  // Split on #@$ to get sub-shapes
   const parts = libStr.split('#@$');
-  const header = parts[0]; // LIB~X~Y~...
+  const header = parts[0];
 
-  // Extract origin from LIB header
   const headerFields = header.split('~');
   const ox = parseFloat(headerFields[1]) || 0;
   const oy = parseFloat(headerFields[2]) || 0;
 
-  // Parse each sub-shape
   for (let i = 1; i < parts.length; i++) {
     const subShape = parts[i];
     if (subShape.startsWith('PAD~')) {
       const pad = parsePADShape(subShape, ox, oy);
       if (pad) pads.push(pad);
     }
+    if (subShape.startsWith('TRACK~')) {
+      silk.push(...parseSilkTRACK(subShape, ox, oy));
+    }
+    if (subShape.startsWith('CIRCLE~')) {
+      const s = parseSilkCIRCLE(subShape, ox, oy);
+      if (s) silk.push(s);
+    }
+    if (subShape.startsWith('ARC~')) {
+      const s = parseSilkARC(subShape, ox, oy);
+      if (s) silk.push(s);
+    }
   }
 
-  return { pads, ox, oy };
+  return { pads, silk, ox, oy };
 }
 
 /**
@@ -217,4 +245,168 @@ function parsePADShape(padStr: string, originX: number, originY: number): PadInf
     layer_mask: layerMask,
     drill_nm: drillNm ? Math.round(drillNm) : null,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Silkscreen shape parsers
+// ---------------------------------------------------------------------------
+
+/** Map EasyEDA layer ID to silk layer. Returns null if not a silk layer. */
+function silkLayer(layerId: string): 'top' | 'bottom' | null {
+  if (layerId === '3') return 'top';
+  if (layerId === '4') return 'bottom';
+  return null;
+}
+
+/**
+ * Parse TRACK on silk layer into line segments.
+ * Format: TRACK~WIDTH~LAYER~NET~x1 y1 x2 y2 ...~GID~LOCKED
+ */
+function parseSilkTRACK(trackStr: string, ox: number, oy: number): SilkShape[] {
+  const fields = trackStr.split('~');
+  if (fields.length < 5) return [];
+
+  const layer = silkLayer(fields[2]);
+  if (!layer) return [];
+
+  const width = parseFloat(fields[1]) * EEDA_TO_NM;
+  const coords = fields[4].trim().split(/\s+/).map(Number);
+  const segments: SilkShape[] = [];
+
+  for (let i = 0; i < coords.length - 2; i += 2) {
+    const x1 = (coords[i] - ox) * EEDA_TO_NM;
+    const y1 = (coords[i + 1] - oy) * EEDA_TO_NM;
+    const x2 = (coords[i + 2] - ox) * EEDA_TO_NM;
+    const y2 = (coords[i + 3] - oy) * EEDA_TO_NM;
+
+    if (!isNaN(x1) && !isNaN(y1) && !isNaN(x2) && !isNaN(y2)) {
+      segments.push({
+        type: 'segment',
+        x1: Math.round(x1), y1: Math.round(y1),
+        x2: Math.round(x2), y2: Math.round(y2),
+        width: Math.round(width),
+        layer,
+      });
+    }
+  }
+
+  return segments;
+}
+
+/**
+ * Parse CIRCLE on silk layer.
+ * Format: CIRCLE~CX~CY~RADIUS~WIDTH~LAYER~GID~LOCKED~~
+ */
+function parseSilkCIRCLE(circleStr: string, ox: number, oy: number): SilkShape | null {
+  const fields = circleStr.split('~');
+  if (fields.length < 6) return null;
+
+  // CIRCLE fields: [0]=CIRCLE [1]=cx [2]=cy [3]=radius [4]=width [5]=layer
+  const layer = silkLayer(fields[5]);
+  if (!layer) return null;
+
+  const cx = (parseFloat(fields[1]) - ox) * EEDA_TO_NM;
+  const cy = (parseFloat(fields[2]) - oy) * EEDA_TO_NM;
+  const radius = parseFloat(fields[3]) * EEDA_TO_NM;
+  const width = parseFloat(fields[4]) * EEDA_TO_NM;
+
+  if (isNaN(cx) || isNaN(cy) || isNaN(radius)) return null;
+
+  return {
+    type: 'circle',
+    cx: Math.round(cx), cy: Math.round(cy),
+    radius: Math.round(radius),
+    width: Math.round(width),
+    layer,
+  };
+}
+
+/**
+ * Parse ARC on silk layer.
+ * Format: ARC~WIDTH~LAYER~NET~M sx sy A rx ry 0 farFlag cwFlag ex ey~...~GID
+ * SVG arc path notation.
+ */
+function parseSilkARC(arcStr: string, ox: number, oy: number): SilkShape | null {
+  const fields = arcStr.split('~');
+  if (fields.length < 5) return null;
+
+  const layer = silkLayer(fields[2]);
+  if (!layer) return null;
+
+  const width = parseFloat(fields[1]) * EEDA_TO_NM;
+  const pathData = fields[4];
+
+  // Parse SVG arc: M sx sy A rx ry rotation largeArcFlag sweepFlag ex ey
+  const mMatch = pathData.match(/M\s*([-\d.]+)\s+([-\d.]+)/);
+  const aMatch = pathData.match(/A\s*([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)\s+(\d)\s+(\d)\s+([-\d.]+)\s+([-\d.]+)/);
+  if (!mMatch || !aMatch) return null;
+
+  const sx = (parseFloat(mMatch[1]) - ox) * EEDA_TO_NM;
+  const sy = (parseFloat(mMatch[2]) - oy) * EEDA_TO_NM;
+  const rx = parseFloat(aMatch[1]) * EEDA_TO_NM;
+  const ry = parseFloat(aMatch[2]) * EEDA_TO_NM;
+  const largeArc = aMatch[4] === '1';
+  const sweep = aMatch[5] === '1';
+  const ex = (parseFloat(aMatch[6]) - ox) * EEDA_TO_NM;
+  const ey = (parseFloat(aMatch[7]) - oy) * EEDA_TO_NM;
+
+  // Convert SVG arc to center + angles for canvas rendering
+  const arc = svgArcToCenter(sx, sy, rx, ry, largeArc, sweep, ex, ey);
+  if (!arc) return null;
+
+  return {
+    type: 'arc',
+    cx: Math.round(arc.cx),
+    cy: Math.round(arc.cy),
+    radius: Math.round((rx + ry) / 2), // average for elliptical arcs
+    startAngle: arc.startAngle,
+    endAngle: arc.endAngle,
+    width: Math.round(width),
+    layer,
+  };
+}
+
+/**
+ * Convert SVG arc parameters to center-point arc (for Canvas arc()).
+ * Based on the SVG spec's conversion algorithm.
+ */
+function svgArcToCenter(
+  x1: number, y1: number, rx: number, ry: number,
+  largeArc: boolean, sweep: boolean,
+  x2: number, y2: number,
+): { cx: number; cy: number; startAngle: number; endAngle: number } | null {
+  const dx = (x1 - x2) / 2;
+  const dy = (y1 - y2) / 2;
+
+  // Use average radius for simplicity (circular approximation)
+  const r = (Math.abs(rx) + Math.abs(ry)) / 2;
+  if (r < 1) return null; // degenerate
+
+  const mx = (x1 + x2) / 2;
+  const my = (y1 + y2) / 2;
+  const d = Math.sqrt(dx * dx + dy * dy);
+
+  if (d > 2 * r) {
+    // Points too far apart — just use midpoint
+    return { cx: mx, cy: my, startAngle: 0, endAngle: Math.PI * 2 };
+  }
+
+  const h = Math.sqrt(Math.max(0, r * r - d * d));
+
+  // Choose center side based on largeArc and sweep flags
+  const sign = (largeArc !== sweep) ? 1 : -1;
+  const cx = mx + sign * h * dy / d;
+  const cy = my - sign * h * dx / d;
+
+  const startAngle = Math.atan2(y1 - cy, x1 - cx);
+  let endAngle = Math.atan2(y2 - cy, x2 - cx);
+
+  // Ensure correct sweep direction
+  if (sweep) {
+    if (endAngle < startAngle) endAngle += Math.PI * 2;
+  } else {
+    if (endAngle > startAngle) endAngle -= Math.PI * 2;
+  }
+
+  return { cx, cy, startAngle, endAngle };
 }

@@ -15,7 +15,7 @@
  * by parsing in JavaScript and calling load_snapshot() on the WASM engine.
  */
 
-import type { BoardSnapshot, ComponentInfo, PadInfo, NetInfo, PinRef, BoardInfo, TraceSegmentInfo, ViolationInfo } from './types';
+import type { BoardSnapshot, ComponentInfo, PadInfo, NetInfo, PinRef, BoardInfo, TraceSegmentInfo, ViolationInfo, SilkShape } from './types';
 import { pointToSegmentDistance } from './geometry';
 
 /**
@@ -54,18 +54,14 @@ function sanitizeSnapshot(snap: any): BoardSnapshot {
  * footprint from EasyEDA and registers it here before the editor re-parses.
  * The parser's getFootprintPads() checks this registry first.
  */
-const dynamicFootprintRegistry = new Map<string, PadInfo[]>();
+const dynamicFootprintRegistry = new Map<string, { pads: PadInfo[]; silk: SilkShape[] }>();
 
 /**
  * Register a dynamic footprint for use by the parser.
- * Call this after fetching footprint data from EasyEDA API.
- *
- * @param packageName The package/footprint name as it will appear in .cypcb source
- * @param pads Pad definitions in PadInfo format (nm, relative to origin)
  */
-export function registerDynamicFootprint(packageName: string, pads: PadInfo[]): void {
-  dynamicFootprintRegistry.set(packageName, pads);
-  console.log(`[Footprint] Registered dynamic footprint: ${packageName} (${pads.length} pads)`);
+export function registerDynamicFootprint(packageName: string, pads: PadInfo[], silk: SilkShape[] = []): void {
+  dynamicFootprintRegistry.set(packageName, { pads, silk });
+  console.log(`[Footprint] Registered: ${packageName} (${pads.length} pads, ${silk.length} silk)`);
 }
 
 /**
@@ -253,7 +249,7 @@ function parseUnit(value: number, unit: string): number {
 function getFootprintPads(footprint: string): PadInfo[] {
   // Check dynamic registry first (populated by JLCPCB component inserts)
   const dynamic = dynamicFootprintRegistry.get(footprint);
-  if (dynamic) return dynamic;
+  if (dynamic) return dynamic.pads;
 
   // Hardcoded templates for common packages (matches Rust footprint library)
   // All coordinates are in nanometers, relative to component origin.
@@ -320,6 +316,11 @@ function getFootprintPads(footprint: string): PadInfo[] {
   };
 
   return padTemplates[footprint] || [];
+}
+
+/** Get silkscreen shapes for a footprint from the dynamic registry. */
+function getFootprintSilk(footprint: string): SilkShape[] {
+  return dynamicFootprintRegistry.get(footprint)?.silk ?? [];
 }
 
 /**
@@ -418,6 +419,7 @@ function parseSource(source: string): { snapshot: BoardSnapshot; errors: string[
         body_width_nm: bodyWidthNm,
         body_height_nm: bodyHeightNm,
         model_3d: get3DModelUuid(compMatch[3]),
+        silk: getFootprintSilk(compMatch[3]),
       };
       inComponent = true;
       braceDepth += openBraces;
