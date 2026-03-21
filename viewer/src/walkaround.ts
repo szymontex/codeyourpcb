@@ -69,6 +69,13 @@ export function computeObstacleHull(
   clearance: number,
   traceWidth: number,
 ): Vec2[] {
+  // Ensure all values are plain numbers (WASM may pass BigInt)
+  padX = Number(padX);
+  padY = Number(padY);
+  padW = Number(padW);
+  padH = Number(padH);
+  clearance = Number(clearance);
+  traceWidth = Number(traceWidth);
   const cl = clearance + Math.ceil(traceWidth / 2);
 
   // For circles/ovals: use chamfer to approximate the round shape
@@ -477,11 +484,10 @@ export function buildObstacleHulls(
 
       const [px, py] = padWorldPosition(comp, pad);
 
-      // For rotated components, we need to account for pad rotation
-      // For simplicity, use the larger dimension for both axes when rotated
-      let effW = pad.width_nm;
-      let effH = pad.height_nm;
-      if (Math.abs(comp.rotation_mdeg % 180000) > 100) {
+      // Cast to Number — WASM may return BigInt for i64 fields
+      let effW = Number(pad.width_nm);
+      let effH = Number(pad.height_nm);
+      if (Math.abs(Number(comp.rotation_mdeg) % 180000) > 100) {
         // Non-axis-aligned rotation: use bounding circle
         const diag = Math.sqrt(effW * effW + effH * effH);
         effW = diag;

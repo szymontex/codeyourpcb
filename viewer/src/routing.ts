@@ -151,7 +151,7 @@ export function hitTestPad(
       const dist = Math.sqrt(dx * dx + dy * dy);
 
       // Tolerance is the explicit radius PLUS half the pad diagonal
-      const padRadius = Math.sqrt(pad.width_nm * pad.width_nm + pad.height_nm * pad.height_nm) / 2;
+      const padRadius = Math.sqrt(Number(pad.width_nm) * Number(pad.width_nm) + Number(pad.height_nm) * Number(pad.height_nm)) / 2;
       if (dist <= padRadius + toleranceNm && dist < bestDist) {
         bestDist = dist;
 
@@ -283,12 +283,13 @@ export function toggleCornerMode(state: RoutingState): RoutingState {
  * (public version for use by computeTargetPads)
  */
 export function padWorldPosition(comp: ComponentInfo, pad: PadInfo): [number, number] {
-  const radians = (comp.rotation_mdeg / 1000) * (Math.PI / 180);
+  const radians = (Number(comp.rotation_mdeg) / 1000) * (Math.PI / 180);
   const cos = Math.cos(radians);
   const sin = Math.sin(radians);
-  const rx = pad.x_nm * cos - pad.y_nm * sin;
-  const ry = pad.x_nm * sin + pad.y_nm * cos;
-  return [comp.x_nm + rx, comp.y_nm + ry];
+  const px = Number(pad.x_nm), py = Number(pad.y_nm);
+  const rx = px * cos - py * sin;
+  const ry = px * sin + py * cos;
+  return [Number(comp.x_nm) + rx, Number(comp.y_nm) + ry];
 }
 
 /**
@@ -798,7 +799,7 @@ export function checkRouteObstacles(
   const exclusionRadius = clearanceNm + halfTrace;
 
   for (const comp of snapshot.components) {
-    const radians = (comp.rotation_mdeg / 1000) * (Math.PI / 180);
+    const radians = (Number(comp.rotation_mdeg) / 1000) * (Math.PI / 180);
     const cos = Math.cos(radians);
     const sin = Math.sin(radians);
 
@@ -812,15 +813,16 @@ export function checkRouteObstacles(
       // Skip pads with no net — unconnected pads
       if (!padNet) continue;
 
-      // Compute pad world position
-      const rx = pad.x_nm * cos - pad.y_nm * sin;
-      const ry = pad.x_nm * sin + pad.y_nm * cos;
-      const padX = comp.x_nm + rx;
-      const padY = comp.y_nm + ry;
+      // Compute pad world position — Number() guards BigInt from WASM
+      const pxn = Number(pad.x_nm), pyn = Number(pad.y_nm);
+      const rx = pxn * cos - pyn * sin;
+      const ry = pxn * sin + pyn * cos;
+      const padX = Number(comp.x_nm) + rx;
+      const padY = Number(comp.y_nm) + ry;
 
       // Pad bounding box with clearance
-      const padW = pad.width_nm + exclusionRadius * 2;
-      const padH = pad.height_nm + exclusionRadius * 2;
+      const padW = Number(pad.width_nm) + exclusionRadius * 2;
+      const padH = Number(pad.height_nm) + exclusionRadius * 2;
 
       // Check each segment of the path
       for (let i = 0; i < path.length - 1; i++) {
@@ -830,7 +832,7 @@ export function checkRouteObstacles(
         let hit = false;
 
         if (pad.shape === 'circle') {
-          const padRadius = pad.width_nm / 2 + exclusionRadius;
+          const padRadius = Number(pad.width_nm) / 2 + exclusionRadius;
           hit = segmentNearCircle(a.x, a.y, b.x, b.y, padX, padY, padRadius);
         } else {
           // Rectangle-based check

@@ -294,7 +294,7 @@ async function init(): Promise<void> {
         if (fp) {
           registerDynamicFootprint(pkg, fp.pads);
           if (fp.modelUuid) {
-            register3DModel(pkg, fp.modelUuid, fp.model3dOffsetX, fp.model3dOffsetY);
+            register3DModel(pkg, fp.modelUuid);
           }
           fetched++;
         }
@@ -967,7 +967,7 @@ async function init(): Promise<void> {
         if (footprint) {
           registerDynamicFootprint(pkg, footprint.pads);
           if (footprint.modelUuid) {
-            register3DModel(pkg, footprint.modelUuid, footprint.model3dOffsetX, footprint.model3dOffsetY);
+            register3DModel(pkg, footprint.modelUuid);
           }
         }
       } catch (e) {
@@ -1094,7 +1094,7 @@ async function init(): Promise<void> {
       if (footprint) {
         registerDynamicFootprint(pkg, footprint.pads);
         if (footprint.modelUuid) {
-          register3DModel(pkg, footprint.modelUuid, footprint.model3dOffsetX, footprint.model3dOffsetY);
+          register3DModel(pkg, footprint.modelUuid);
         }
       }
     } catch (e) {

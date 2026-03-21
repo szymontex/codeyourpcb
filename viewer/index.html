@@ -1317,9 +1317,12 @@
 </head>
 <body>
   <div id="toolbar">
-    <!-- File -->
+    <!-- File & Editor -->
     <button id="open-btn" class="tb-btn" title="Open / Projects (Ctrl+O)">
       <svg viewBox="0 0 16 16"><path d="M2 13V4.5a1 1 0 0 1 1-1h3.586a1 1 0 0 1 .707.293L8.5 5H13a1 1 0 0 1 1 1v1"/><path d="M2 13l1.5-5.5a1 1 0 0 1 .965-.735h10.07a1 1 0 0 1 .965 1.265L14 13H2z"/></svg>
+    </button>
+    <button id="editor-toggle" class="tb-btn" title="Toggle Editor (Ctrl+E)">
+      <svg viewBox="0 0 16 16"><polyline points="5 2 1 8 5 14"/><polyline points="11 2 15 8 11 14"/></svg>
     </button>
 
     <!-- Edit -->
@@ -1410,7 +1413,6 @@
     </button>
   </div>
   <!-- Hidden functional elements (accessible via keyboard shortcuts, not on toolbar) -->
-  <button id="editor-toggle" class="hidden" aria-hidden="true"></button>
   <button id="jlcpcb-search-btn" class="hidden" aria-hidden="true"></button>
   <button id="theme-toggle" class="hidden" aria-hidden="true"><span id="theme-icon"></span></button>
   <button id="help-btn" class="hidden" aria-hidden="true"></button>

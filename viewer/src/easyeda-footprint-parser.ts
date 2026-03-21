@@ -28,10 +28,6 @@ export interface EasyEDAFootprint {
   originX: number;
   /** Footprint origin Y in nm (from LIB header) */
   originY: number;
-  /** 3D model offset from footprint center, in mm (X) */
-  model3dOffsetX: number;
-  /** 3D model offset from footprint center, in mm (Y) */
-  model3dOffsetY: number;
 }
 
 /**
@@ -59,8 +55,6 @@ export function parseEasyEDAFootprint(compData: any): EasyEDAFootprint | null {
       const headOriginY = parseFloat(head?.y) || 0;
 
       let modelUuid: string | null = null;
-      let model3dOriginX = 0;
-      let model3dOriginY = 0;
       const allPads: PadInfo[] = [];
       let originX = headOriginX;
       let originY = headOriginY;
@@ -69,20 +63,11 @@ export function parseEasyEDAFootprint(compData: any): EasyEDAFootprint | null {
       for (const shape of shapes) {
         if (typeof shape !== 'string') continue;
 
-        // Check for 3D model UUID and origin in SVGNODE entries
+        // Check for 3D model UUID in SVGNODE entries
         if (shape.includes('outline3D') || shape.includes('3D')) {
           const uuidMatch = shape.match(/"uuid"\s*:\s*"([a-f0-9]{32})"/i);
           if (uuidMatch) {
             modelUuid = uuidMatch[1];
-          }
-          // Extract c_origin — the 3D model's placement point in EasyEDA coordinates
-          const originMatch = shape.match(/"c_origin"\s*:\s*"([^"]+)"/);
-          if (originMatch) {
-            const [ox, oy] = originMatch[1].split(',').map(Number);
-            if (!isNaN(ox) && !isNaN(oy)) {
-              model3dOriginX = ox;
-              model3dOriginY = oy;
-            }
           }
         }
 
@@ -108,20 +93,7 @@ export function parseEasyEDAFootprint(compData: any): EasyEDAFootprint | null {
       }
 
       if (allPads.length > 0) {
-        // Compute 3D model offset from footprint center, in mm.
-        // Following KiCad's approach: offset = -(c_origin - headOrigin) * scale
-        // The negation is needed because c_origin specifies where the footprint
-        // center maps to in the 3D model's space, so the model needs to shift
-        // in the opposite direction.
-        // 1 EasyEDA unit = 10 mil = 0.254 mm
-        let model3dOffsetX = 0;
-        let model3dOffsetY = 0;
-        if (model3dOriginX !== 0 || model3dOriginY !== 0) {
-          model3dOffsetX = -(model3dOriginX - headOriginX) * 0.254;
-          model3dOffsetY = -(model3dOriginY - headOriginY) * 0.254;
-        }
-
-        return { pads: allPads, modelUuid, originX, originY, model3dOffsetX, model3dOffsetY };
+        return { pads: allPads, modelUuid, originX, originY };
       }
     }
 

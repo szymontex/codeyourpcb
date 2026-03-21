@@ -48,10 +48,6 @@ export interface ComponentInfo {
   body_height_nm: number;
   /** Optional path/key to a GLB 3D model file (null until populated). */
   model_3d: string | null;
-  /** 3D model X offset from component center, in mm (from EasyEDA c_origin) */
-  model_3d_offset_x?: number;
-  /** 3D model Y offset from component center, in mm (from EasyEDA c_origin) */
-  model_3d_offset_y?: number;
 }
 
 export interface PadInfo {
