@@ -270,20 +270,24 @@ async function init(): Promise<void> {
    */
   async function autoFetchLcscFootprints(source: string): Promise<boolean> {
     // Find all component blocks with lcsc attributes
-    // Pattern: component REFDES TYPE "PACKAGE" { ... lcsc "CNNNN" ... }
     const compRegex = /component\s+\w+\s+\w+\s+"([^"]+)"\s*\{[^}]*lcsc\s+"C(\d+)"[^}]*\}/g;
     const toFetch: { pkg: string; lcscId: number }[] = [];
+    let hasAnyLcsc = false;
 
     let match;
     while ((match = compRegex.exec(source)) !== null) {
       const pkg = match[1];
       const lcscId = parseInt(match[2], 10);
+      hasAnyLcsc = true;
       if (!hasDynamicFootprint(pkg) && !isNaN(lcscId)) {
         toFetch.push({ pkg, lcscId });
       }
     }
 
-    if (toFetch.length === 0) return false;
+    if (!hasAnyLcsc) return false;
+
+    // If everything is already cached, still signal re-parse needed
+    if (toFetch.length === 0) return true;
 
     console.log(`[LCSC] Auto-fetching ${toFetch.length} footprint(s)...`);
     let fetched = 0;
@@ -874,6 +878,9 @@ async function init(): Promise<void> {
           // Re-parse with real footprints now registered
           engine.load_source(source);
           pullSnapshot();
+          // Debug: verify silk is in snapshot
+          const totalSilk = snapshot?.components?.reduce((n, c) => n + (c.silk?.length || 0), 0) || 0;
+          console.log(`[LCSC] Re-parsed: ${snapshot?.components?.length} components, ${totalSilk} silk shapes`);
           dirty = true;
           if (is3DActive && renderer3d && snapshot) {
             renderer3d.updateBoard(snapshot, layers);
