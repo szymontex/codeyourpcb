@@ -150,8 +150,13 @@ export function setupInteraction(
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
-    // Zoom in on scroll up, out on scroll down
-    const factor = e.deltaY < 0 ? 1.15 : 0.87;
+    // Scale zoom intensity by deltaY magnitude.
+    // Touchpads send small deltas (±2–10), mice send large (±100).
+    // Clamp to avoid extreme jumps. Matches Three.js OrbitControls feel.
+    const delta = Math.max(-150, Math.min(150, e.deltaY));
+    const zoomSpeed = 0.001;
+    const factor = Math.pow(0.95, delta * zoomSpeed * 10);
+
     state.viewport = zoomAtPoint(state.viewport, x, y, factor);
     state.dirty = true;
     state.onViewportChange(state.viewport);

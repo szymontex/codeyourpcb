@@ -22,7 +22,7 @@ import { getSettings, getPreference, setPreference, subscribe as subscribeSettin
 import type { AppSettings, LayerColors, AutorouteParams } from './settings';
 import { formatDimension, parseUserDimension } from './units';
 import type { DisplayUnit } from './units';
-import { initProjectManager, showProjectManager, hideProjectManager, addRecentFile } from './project-manager';
+import { initProjectManager, showProjectManager, hideProjectManager, addRecentFile, updateProjectFiles } from './project-manager';
 import { initSearchPanel, hideSearchPanel, toggleSearchPanel, isSearchPanelVisible, buildComponentSnippet } from './jlcpcb-panel';
 import { fetch3DModel, fetchComponentFootprint } from './jlcpcb';
 import { registerDynamicFootprint, register3DModel, hasDynamicFootprint } from './wasm';
@@ -54,6 +54,7 @@ interface WsMessage {
   pass?: number;
   routed?: number;
   unrouted?: number;
+  files?: Array<{ path: string; name: string }>;
 }
 
 /**
@@ -69,10 +70,12 @@ interface WsConnection {
  */
 interface WsCallbacks {
   onReload: (content: string, file: string) => void;
+  onConnect?: () => void;
   onRouteStart?: () => void;
   onRouteProgress?: (output: string) => void;
   onRouteComplete?: (sesContent: string | null, routesContent: string | null) => void;
   onRouteError?: (error: string) => void;
+  onFileList?: (files: Array<{ path: string; name: string }>) => void;
 }
 
 /**
@@ -97,6 +100,7 @@ function connectWebSocket(callbacks: WsCallbacks): WsConnection {
       console.log('[WS] Connected to dev server');
       connected = true;
       retries = 0;
+      callbacks.onConnect?.();
     };
 
     ws.onmessage = (event) => {
@@ -121,6 +125,9 @@ function connectWebSocket(callbacks: WsCallbacks): WsConnection {
             break;
           case 'route-error':
             callbacks.onRouteError?.(msg.error || 'Unknown routing error');
+            break;
+          case 'file-list':
+            callbacks.onFileList?.(msg.files || []);
             break;
         }
       } catch (err) {
@@ -328,6 +335,11 @@ async function init(): Promise<void> {
   }
   resize();
   window.addEventListener('resize', resize);
+
+  // Also watch container size changes (e.g. when editor panel opens/closes)
+  if (typeof ResizeObserver !== 'undefined') {
+    new ResizeObserver(() => resize()).observe(container);
+  }
 
   // --- View menu ---
   viewMenuBtn.addEventListener('click', (e) => {
@@ -695,7 +707,7 @@ async function init(): Promise<void> {
           if (fetched) {
             engine.load_source(content);
             pullSnapshot();
-            dirty = true;
+            forceRender2D();
             if (is3DActive && renderer3d && snapshot) {
               renderer3d.updateBoard(snapshot, layers);
             }
@@ -835,6 +847,9 @@ async function init(): Promise<void> {
     return { renderConfig };
   }
 
+  // WS connection reference — assigned later, used by project manager callbacks
+  let wsConnection: WsConnection | null = null;
+
   // --- Project Manager ---
   initProjectManager({
     onOpenFile: () => {
@@ -875,13 +890,9 @@ async function init(): Promise<void> {
       // Auto-fetch LCSC footprints (async — re-parses after fetch)
       autoFetchLcscFootprints(source).then((fetched) => {
         if (fetched) {
-          // Re-parse with real footprints now registered
           engine.load_source(source);
           pullSnapshot();
-          // Debug: verify silk is in snapshot
-          const totalSilk = snapshot?.components?.reduce((n, c) => n + (c.silk?.length || 0), 0) || 0;
-          console.log(`[LCSC] Re-parsed: ${snapshot?.components?.length} components, ${totalSilk} silk shapes`);
-          dirty = true;
+          forceRender2D();
           if (is3DActive && renderer3d && snapshot) {
             renderer3d.updateBoard(snapshot, layers);
           }
@@ -922,7 +933,7 @@ async function init(): Promise<void> {
         if (fetched) {
           engine.load_source(source);
           pullSnapshot();
-          dirty = true;
+          forceRender2D();
           if (is3DActive && renderer3d && snapshot) {
             renderer3d.updateBoard(snapshot, layers);
           }
@@ -952,6 +963,13 @@ async function init(): Promise<void> {
       statusText.textContent = usingWasm ? 'Ready (WASM)' : 'Ready (Mock)';
       hideProjectManager();
       dirty = true;
+    },
+    onRequestFileList: () => {
+      wsConnection?.send({ type: 'list-files' });
+    },
+    onOpenProjectFile: (_path, _name) => {
+      // Request the file from the WS server — it will come as a reload
+      wsConnection?.send({ type: 'open-file', file: _path });
     },
   });
 
@@ -1780,6 +1798,13 @@ async function init(): Promise<void> {
   // Visibility state
   const showViolations = true;
 
+  /** Force an immediate 2D canvas re-render with current state. */
+  function forceRender2D(): void {
+    if (is3DActive) return;
+    dirty = true;
+    interactionState.dirty = true;
+  }
+
   // Render loop
   function frame(): void {
     // Skip 2D rendering when 3D mode is active
@@ -1987,8 +2012,7 @@ async function init(): Promise<void> {
     }
   }
 
-  // wsConnection used to be stored for routing — now routing uses WASM directly.
-  // Hot-reload WS is still connected below but the reference isn't needed.
+  // Hot-reload WS reference — kept for list-files requests from project manager.
   let routingStartTime = 0;
 
   /**
@@ -2652,7 +2676,11 @@ async function init(): Promise<void> {
 
   // Connect WebSocket for hot reload and routing
   try {
-    connectWebSocket({
+    wsConnection = connectWebSocket({
+      onConnect: () => {
+        // Request workspace file list for project manager
+        wsConnection?.send({ type: 'list-files' });
+      },
       onReload: (content, file) => {
         // Skip WebSocket init if URL has state (shared link)
         if (hasUrlState && !currentFilePath) {
@@ -2664,6 +2692,9 @@ async function init(): Promise<void> {
         // Track current file for routing
         currentFilePath = file;
         reload(content, file);
+
+        // Hide project manager when a file is loaded
+        hideProjectManager();
 
         // Auto-route if enabled
         if (autoRouteCb.checked && !isRouting) {
@@ -2684,6 +2715,9 @@ async function init(): Promise<void> {
       },
       onRouteError: (error) => {
         handleRouteError(error);
+      },
+      onFileList: (files) => {
+        updateProjectFiles(files);
       },
     });
   } catch (_err) {

@@ -232,6 +232,9 @@ function handleClientMessage(ws: WebSocket, message: any): void {
     case 'list-files':
       handleListFilesRequest(ws);
       break;
+    case 'open-file':
+      handleOpenFileRequest(ws, message);
+      break;
     default:
       console.log(`[WS] Unknown message type: ${message.type}`);
   }
@@ -383,4 +386,33 @@ function handleListFilesRequest(ws: WebSocket): void {
       name: basename(f),
     })),
   }));
+}
+
+/**
+ * Handle open file request — read a specific .cypcb and send as reload
+ */
+function handleOpenFileRequest(ws: WebSocket, message: { file?: string }): void {
+  if (!message.file) {
+    ws.send(JSON.stringify({ type: 'route-error', error: 'No file specified' }));
+    return;
+  }
+
+  const filePath = message.file;
+  if (!existsSync(filePath)) {
+    ws.send(JSON.stringify({ type: 'route-error', error: `File not found: ${filePath}` }));
+    return;
+  }
+
+  try {
+    const content = readFileSync(filePath, 'utf-8');
+    ws.send(JSON.stringify({
+      type: 'reload',
+      file: filePath,
+      content,
+      timestamp: Date.now(),
+    }));
+    console.log(`[Open] Sent file: ${basename(filePath)}`);
+  } catch (err: any) {
+    console.error(`[Open] Error reading file: ${err.message}`);
+  }
 }

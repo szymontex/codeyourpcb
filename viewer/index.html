@@ -944,6 +944,40 @@
       color: var(--text-tertiary);
       padding: 8px 12px;
     }
+    /* Project files list */
+    .pm-project-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 8px;
+    }
+    .pm-project-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background-color 0.1s;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-primary);
+    }
+    .pm-project-item:hover {
+      border-color: var(--accent-primary);
+      box-shadow: 0 1px 4px var(--shadow);
+    }
+    .pm-project-icon {
+      font-size: 16px;
+      color: var(--accent-primary);
+      flex-shrink: 0;
+    }
+    .pm-project-name {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-primary);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
     /* Open file button */
     #pm-open-btn {
       display: inline-flex;
@@ -1557,12 +1591,16 @@
           </div>
         </div>
       </div>
+      <div class="pm-section" id="pm-projects-section" style="display:none">
+        <h2>Projects</h2>
+        <div id="pm-project-list" class="pm-project-list"></div>
+      </div>
       <div class="pm-section">
         <h2>Recent files</h2>
         <div id="pm-recent-list" class="pm-recent-list"></div>
       </div>
       <div class="pm-actions">
-        <button id="pm-open-btn">📁 Open File</button>
+        <button id="pm-open-btn">📁 Import File</button>
       </div>
     </div>
   </div>

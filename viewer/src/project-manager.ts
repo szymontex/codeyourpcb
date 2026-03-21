@@ -73,6 +73,8 @@ export interface ProjectManagerCallbacks {
   onLoadTemplate: (source: string, name: string) => void;
   onNewBlank: (source: string) => void;
   onLoadRecent: (source: string, name: string) => void;
+  onRequestFileList: () => void;
+  onOpenProjectFile: (path: string, name: string) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -81,6 +83,8 @@ export interface ProjectManagerCallbacks {
 
 let overlay: HTMLElement | null = null;
 let recentListEl: HTMLElement | null = null;
+let projectListEl: HTMLElement | null = null;
+let projectSectionEl: HTMLElement | null = null;
 let callbacks: ProjectManagerCallbacks | null = null;
 let visible = false;
 
@@ -97,6 +101,8 @@ export function initProjectManager(cb: ProjectManagerCallbacks): void {
 
   overlay = document.getElementById('project-manager');
   recentListEl = document.getElementById('pm-recent-list');
+  projectListEl = document.getElementById('pm-project-list');
+  projectSectionEl = document.getElementById('pm-projects-section');
 
   if (!overlay) {
     console.warn('[ProjectManager] #project-manager element not found');
@@ -140,6 +146,10 @@ export function showProjectManager(): void {
   populateRecentFiles();
   overlay.classList.remove('hidden');
   visible = true;
+
+  // Request workspace file list from dev server
+  callbacks?.onRequestFileList();
+
   exposeDebugSurface();
 }
 
@@ -256,6 +266,43 @@ export function generateThumbnail(
   render(ctx, state);
 
   return offscreen.toDataURL('image/png');
+}
+
+/**
+ * Update the workspace project file list (called when server responds).
+ */
+export function updateProjectFiles(files: Array<{ path: string; name: string }>): void {
+  if (!projectListEl || !projectSectionEl) return;
+
+  projectListEl.textContent = '';
+
+  if (files.length === 0) {
+    // Hide the section entirely when no workspace files
+    projectSectionEl.style.display = 'none';
+    return;
+  }
+
+  projectSectionEl.style.display = '';
+
+  files.forEach((file) => {
+    const item = document.createElement('div');
+    item.className = 'pm-project-item';
+    item.addEventListener('click', () => {
+      callbacks?.onOpenProjectFile(file.path, file.name);
+    });
+
+    const icon = document.createElement('div');
+    icon.className = 'pm-project-icon';
+    icon.textContent = '⬡';
+    item.appendChild(icon);
+
+    const nameEl = document.createElement('div');
+    nameEl.className = 'pm-project-name';
+    nameEl.textContent = file.name.replace(/\.cypcb$/, '');
+    item.appendChild(nameEl);
+
+    projectListEl!.appendChild(item);
+  });
 }
 
 // ---------------------------------------------------------------------------

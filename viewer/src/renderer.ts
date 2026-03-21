@@ -705,13 +705,12 @@ function drawComponent(
     drawPad(ctx, vp, comp.x_nm, comp.y_nm, comp.rotation_mdeg, pad, layers, isSelected, themeColors, highlightedNet, comp.refdes, padNetMap, lodTier);
   }
 
-  // Silkscreen: prefer real silk shapes from EasyEDA, fall back to body outline
-  if (lodTier >= LodTier.Medium) {
-    if (comp.silk && comp.silk.length > 0) {
-      drawSilkShapes(ctx, vp, comp, config);
-    } else if (comp.body_width_nm > 0 && comp.body_height_nm > 0) {
-      drawBodyOutline(ctx, vp, comp, config);
-    }
+  // Silkscreen: draw real silk shapes or body outline fallback.
+  // Silk is visible at all zoom levels (unlike refdes text which needs Medium LOD).
+  if (comp.silk && comp.silk.length > 0) {
+    drawSilkShapes(ctx, vp, comp, config);
+  } else if (lodTier >= LodTier.Medium && comp.body_width_nm > 0 && comp.body_height_nm > 0) {
+    drawBodyOutline(ctx, vp, comp, config);
   }
 }
 
@@ -747,25 +746,25 @@ function drawSilkShapes(
   ctx: CanvasRenderingContext2D, vp: Viewport,
   comp: ComponentInfo, config: RenderConfig,
 ): void {
+  if (!comp.silk || comp.silk.length === 0) return;
+
   const radians = (comp.rotation_mdeg / 1000) * (Math.PI / 180);
   const cosR = Math.cos(radians);
   const sinR = Math.sin(radians);
 
   ctx.save();
-  ctx.strokeStyle = config.layerColors.silkscreen;
+  ctx.strokeStyle = '#FFFFFF';
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
 
   for (const shape of comp.silk) {
-    // Transform shape coordinates: rotate by component rotation, then translate to world
     const toScreen = (relX: number, relY: number): [number, number] => {
       const rx = relX * cosR - relY * sinR;
       const ry = relX * sinR + relY * cosR;
       return worldToScreen(vp, comp.x_nm + rx, comp.y_nm + ry);
     };
 
-    // Line width: use shape width scaled to screen, with minimum 1px
-    const lineW = Math.max(1, shape.width * vp.scale);
+    const lineW = Math.max(1.5, shape.width * vp.scale);
     ctx.lineWidth = lineW;
 
     if (shape.type === 'segment') {
@@ -788,8 +787,6 @@ function drawSilkShapes(
       const sr = Math.abs(shape.radius * vp.scale);
       if (sr > 0.5) {
         ctx.beginPath();
-        // Canvas arc uses clockwise, but our Y is flipped in worldToScreen
-        // so we negate angles and swap direction
         ctx.arc(scx, scy, sr, -shape.startAngle - radians, -shape.endAngle - radians, true);
         ctx.stroke();
       }
