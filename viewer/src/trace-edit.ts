@@ -143,7 +143,7 @@ export function dragSegment(
 
   let idx = segIndex;
 
-  // Guard: ensure prev and next exist (KiCad inserts zero-length segments)
+  // Guard: ensure prev and next exist
   if (idx === 0) {
     pts = [{ ...pts[0] }, ...pts];
     idx++;
@@ -152,105 +152,110 @@ export function dragSegment(
     pts = [...pts, { ...pts[pts.length - 1] }];
   }
 
-  // pts[idx-1] → pts[idx] is s_prev
-  // pts[idx] → pts[idx+1] is dragged
-  // pts[idx+1] → pts[idx+2] is s_next
-
-  const dragDir = dirFromSeg(pts[idx], pts[idx + 1]);
+  let dragA = pts[idx];
+  let dragB = pts[idx + 1];
+  const dragDir = dirFromSeg(dragA, dragB);
   if (dragDir === Dir45.UNDEFINED) return null;
   const dragV = dirVec(dragDir);
 
+  let dirPrev = dirFromSeg(pts[idx - 1], dragA);
+  let dirNext = dirFromSeg(dragB, pts[idx + 2]);
+
+  // KiCad: colinear prev/next → insert zero-length segment, use perpendicular
+  if (dirPrev === dragDir) {
+    pts.splice(idx, 0, { ...pts[idx] });
+    idx++;
+    dirPrev = leftDir(dragDir);
+  } else if (dirPrev === Dir45.UNDEFINED) {
+    dirPrev = leftDir(dragDir);
+  }
+
+  if (dirNext === dragDir) {
+    pts.splice(idx + 2, 0, { ...pts[idx + 1] });
+    dirNext = rightDir(dragDir);
+  } else if (dirNext === Dir45.UNDEFINED) {
+    dirNext = rightDir(dragDir);
+  }
+
+  // Re-read after insertions
   const prevA = pts[idx - 1];
+  dragA = pts[idx];
+  dragB = pts[idx + 1];
   const nextB = pts[idx + 2];
 
-  let dirPrev = dirFromSeg(prevA, pts[idx]);
-  let dirNext = dirFromSeg(pts[idx + 1], nextB);
+  // Guide lines — KiCad: normal = from dragged endpoint in prev/next dir
+  //                       obtuse = from prev.A/next.B in perpendicular dirs
+  const prevAng = angleBetween(dirPrev, dragDir);
+  const nextAng = angleBetween(dirNext, dragDir);
 
-  // KiCad: if prev/next direction matches drag direction, force perpendicular
-  if (dirPrev === dragDir) { dirPrev = leftDir(dragDir); }
-  else if (dirPrev === Dir45.UNDEFINED) { dirPrev = leftDir(dragDir); }
+  const gAs: Array<{o: Vec2; d: Vec2}> = [];
+  const gBs: Array<{o: Vec2; d: Vec2}> = [];
 
-  if (dirNext === dragDir) { dirNext = rightDir(dragDir); }
-  else if (dirNext === Dir45.UNDEFINED) { dirNext = rightDir(dragDir); }
+  if (prevAng === AngleType.ANG_OBTUSE || prevAng === AngleType.ANG_HALF_FULL) {
+    gAs.push({ o: prevA, d: dirVec(leftDir(dragDir)) });
+    gAs.push({ o: prevA, d: dirVec(rightDir(dragDir)) });
+  } else {
+    gAs.push({ o: dragA, d: dirVec(dirPrev) });
+  }
 
-  // KiCad: if angle is obtuse/half-full, use both left/right as candidates
-  const prevAngle = angleBetween(dirPrev, dragDir);
-  const nextAngle = angleBetween(dirNext, dragDir);
-
-  const guidesA: Dir45[] = (prevAngle === AngleType.ANG_OBTUSE || prevAngle === AngleType.ANG_HALF_FULL)
-    ? [leftDir(dragDir), rightDir(dragDir)]
-    : [dirPrev];
-
-  const guidesB: Dir45[] = (nextAngle === AngleType.ANG_OBTUSE || nextAngle === AngleType.ANG_HALF_FULL)
-    ? [leftDir(dragDir), rightDir(dragDir)]
-    : [dirNext];
-
-  // Line through newPos in drag direction
-  const sCurrentP = newPos;
-  const sCurrentD = dragV;
+  if (nextAng === AngleType.ANG_OBTUSE || nextAng === AngleType.ANG_HALF_FULL) {
+    gBs.push({ o: nextB, d: dirVec(leftDir(dragDir)) });
+    gBs.push({ o: nextB, d: dirVec(rightDir(dragDir)) });
+  } else {
+    gBs.push({ o: dragB, d: dirVec(dirNext) });
+  }
 
   let bestLen = Infinity;
   let bestResult: Vec2[] | null = null;
 
-  for (const gA of guidesA) {
-    for (const gB of guidesB) {
-      const ip1 = lineIsect(sCurrentP, sCurrentD, prevA, dirVec(gA));
-      const ip2 = lineIsect(sCurrentP, sCurrentD, nextB, dirVec(gB));
+  for (const ga of gAs) {
+    for (const gb of gBs) {
+      const ip1 = lineIsect(newPos, dragV, ga.o, ga.d);
+      const ip2 = lineIsect(newPos, dragV, gb.o, gb.d);
       if (!ip1 || !ip2) continue;
 
-      // Build candidate paths and pick shortest
       const candidates: Vec2[][] = [];
 
-      // Full 3-segment: prevA → ip1 → ip2 → nextB
+      // s1 ∩ s_next
+      const d1 = { x: ip1.x - prevA.x, y: ip1.y - prevA.y };
+      const ipSN = lineIsect(prevA, d1, nextB, dirVec(dirNext));
+      if (ipSN) candidates.push([prevA, ipSN, nextB]);
+
+      // s3 ∩ s_prev
+      const d3 = { x: ip2.x - nextB.x, y: ip2.y - nextB.y };
+      const ipSP = lineIsect(nextB, d3, prevA, dirVec(dirPrev));
+      if (ipSP) candidates.push([prevA, ipSP, nextB]);
+
+      // s1 ∩ s3
+      const ip13 = lineIsect(prevA, d1, nextB, d3);
+      if (ip13) candidates.push([prevA, ip13, nextB]);
+
+      // Full 4-point
       candidates.push([prevA, ip1, ip2, nextB]);
 
-      // Try s1 intersects with s_next line
-      const ipSn = lineIsect(prevA, dirVec(gA), nextB, dirVec(gB));
-      if (ipSn) {
-        candidates.push([prevA, ipSn, nextB]);
-      }
-
-      for (const cand of candidates) {
-        // Validate: all segments must be H/V/45°
+      for (const c of candidates) {
         let valid = true;
         let len = 0;
-        for (let k = 0; k < cand.length - 1; k++) {
-          const d = dirFromSeg(cand[k], cand[k + 1]);
-          const segLen = Math.hypot(cand[k+1].x - cand[k].x, cand[k+1].y - cand[k].y);
-          if (segLen > 100 && d === Dir45.UNDEFINED) { valid = false; break; }
-          len += segLen;
+        for (let k = 0; k < c.length - 1; k++) {
+          const d = dirFromSeg(c[k], c[k + 1]);
+          const sl = Math.hypot(c[k+1].x - c[k].x, c[k+1].y - c[k].y);
+          if (sl > 100 && d === Dir45.UNDEFINED) { valid = false; break; }
+          len += sl;
         }
-        if (!valid) continue;
-
-        // Must actually pass through (or near) newPos
-        // Check distance from newPos to nearest segment of candidate
-        let minDist = Infinity;
-        for (let k = 0; k < cand.length - 1; k++) {
-          const d = pointToSegmentDistance(newPos.x, newPos.y, cand[k].x, cand[k].y, cand[k+1].x, cand[k+1].y);
-          minDist = Math.min(minDist, d);
-        }
-        // Allow some tolerance (half trace width worth)
-        if (minDist > 500_000) continue; // way too far
-
-        if (len < bestLen) {
-          bestLen = len;
-          bestResult = cand;
-        }
+        if (valid && len < bestLen) { bestLen = len; bestResult = c; }
       }
     }
   }
 
   if (!bestResult) {
-    // Fallback: perpendicular offset
     const perpV = { x: -dragV.y, y: dragV.x };
-    const offset = (newPos.x - pts[idx].x) * perpV.x + (newPos.y - pts[idx].y) * perpV.y;
-    const result = [...pts];
-    result[idx] = { x: pts[idx].x + offset * perpV.x, y: pts[idx].y + offset * perpV.y };
-    result[idx + 1] = { x: pts[idx+1].x + offset * perpV.x, y: pts[idx+1].y + offset * perpV.y };
-    return verticesToSegments(result);
+    const offset = (newPos.x - dragA.x) * perpV.x + (newPos.y - dragA.y) * perpV.y;
+    const r = [...pts];
+    r[idx] = { x: dragA.x + offset * perpV.x, y: dragA.y + offset * perpV.y };
+    r[idx + 1] = { x: dragB.x + offset * perpV.x, y: dragB.y + offset * perpV.y };
+    return verticesToSegments(r);
   }
 
-  // Replace prev+dragged+next with the new path
   const result = [...pts.slice(0, idx - 1), ...bestResult, ...pts.slice(idx + 3)];
   return verticesToSegments(result);
 }

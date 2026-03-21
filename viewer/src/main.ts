@@ -322,6 +322,9 @@ async function init(): Promise<void> {
   let is3DActive = false;
   let renderer3d: import('./renderer3d').Renderer3D | null = null;
 
+  // Flag to track if interactionState is initialized (const in TDZ can't be typeof-checked)
+  let interactionReady = false;
+
   // Resize handler
   function resize(): void {
     canvas.width = container.clientWidth;
@@ -332,7 +335,7 @@ async function init(): Promise<void> {
       height: canvas.height,
     };
     // Sync to interaction state if it exists (not yet initialized on first call)
-    if (typeof interactionState !== 'undefined' && interactionState) {
+    if (interactionReady) {
       interactionState.viewport = viewport;
     }
     dirty = true;
@@ -1381,6 +1384,7 @@ async function init(): Promise<void> {
   };
 
   setupInteraction(canvas, interactionState);
+  interactionReady = true;
 
   // Expose debug render state for programmatic inspection
   (window as any).__renderState = {

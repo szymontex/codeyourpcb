@@ -887,62 +887,70 @@
       margin: 0;
       line-height: 1.4;
     }
-    /* Recent files */
+    /* Recent files / Your projects */
     .pm-recent-list {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 12px;
     }
     .pm-recent-item {
       display: flex;
+      flex-direction: column;
       align-items: center;
-      gap: 12px;
-      padding: 8px 12px;
-      border-radius: 6px;
+      padding: 12px;
+      border-radius: 8px;
       cursor: pointer;
-      transition: background-color 0.1s;
+      transition: border-color 0.15s, box-shadow 0.15s;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-primary);
+      text-align: center;
     }
     .pm-recent-item:hover {
-      background: var(--bg-elevated);
+      border-color: var(--accent-primary);
+      box-shadow: 0 2px 8px var(--shadow);
     }
     .pm-recent-thumb {
       border-radius: 4px;
       border: 1px solid var(--border-secondary);
       object-fit: cover;
-      flex-shrink: 0;
+      width: 120px;
+      height: 90px;
+      margin-bottom: 8px;
     }
     .pm-recent-thumb-placeholder {
-      width: 48px;
-      height: 36px;
+      width: 120px;
+      height: 90px;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 20px;
+      font-size: 28px;
       border-radius: 4px;
       border: 1px solid var(--border-secondary);
-      background: var(--bg-elevated);
-      flex-shrink: 0;
+      background: var(--bg-secondary);
+      margin-bottom: 8px;
     }
     .pm-recent-info {
-      flex: 1;
       min-width: 0;
+      width: 100%;
     }
     .pm-recent-name {
-      font-size: 13px;
-      font-weight: 500;
+      font-size: 12px;
+      font-weight: 600;
       color: var(--text-primary);
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
     .pm-recent-date {
-      font-size: 11px;
+      font-size: 10px;
       color: var(--text-tertiary);
+      margin-top: 2px;
     }
     .pm-recent-empty {
       font-size: 12px;
       color: var(--text-tertiary);
       padding: 8px 12px;
+      grid-column: 1 / -1;
     }
     /* Project files list */
     .pm-project-list {
@@ -1592,11 +1600,11 @@
         </div>
       </div>
       <div class="pm-section" id="pm-projects-section" style="display:none">
-        <h2>Projects</h2>
+        <h2>Workspace</h2>
         <div id="pm-project-list" class="pm-project-list"></div>
       </div>
-      <div class="pm-section">
-        <h2>Recent files</h2>
+      <div class="pm-section" id="pm-recent-section">
+        <h2>Your projects</h2>
         <div id="pm-recent-list" class="pm-recent-list"></div>
       </div>
       <div class="pm-actions">

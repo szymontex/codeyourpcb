@@ -327,17 +327,18 @@ function populateRecentFiles(): void {
   if (!recentListEl) return;
 
   const recentFiles = getPreference('recentFiles');
+  const sectionEl = document.getElementById('pm-recent-section');
 
   // Clear existing content
   recentListEl.textContent = '';
 
   if (recentFiles.length === 0) {
-    const empty = document.createElement('div');
-    empty.className = 'pm-recent-empty';
-    empty.textContent = 'No recent files';
-    recentListEl.appendChild(empty);
+    // Hide the entire section when empty
+    if (sectionEl) sectionEl.style.display = 'none';
     return;
   }
+
+  if (sectionEl) sectionEl.style.display = '';
 
   recentFiles.forEach((entry) => {
     const item = document.createElement('div');
@@ -355,8 +356,8 @@ function populateRecentFiles(): void {
       thumb.className = 'pm-recent-thumb';
       thumb.src = entry.thumbnail;
       thumb.alt = entry.name;
-      thumb.width = 48;
-      thumb.height = 36;
+      thumb.width = 120;
+      thumb.height = 90;
       item.appendChild(thumb);
     } else {
       const placeholder = document.createElement('div');
@@ -370,7 +371,7 @@ function populateRecentFiles(): void {
 
     const nameEl = document.createElement('div');
     nameEl.className = 'pm-recent-name';
-    nameEl.textContent = entry.name;
+    nameEl.textContent = entry.name.replace(/\.cypcb$/, '');
     info.appendChild(nameEl);
 
     const dateEl = document.createElement('div');
