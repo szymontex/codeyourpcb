@@ -14,9 +14,10 @@ import type { ComponentInfo, PadInfo, TraceSegmentInfo, ViolationInfo, BoardSnap
 import type { PcbEngine } from './wasm';
 import {
   type Vec2, Dir45, CornerMode,
-  dirFromSeg, isDiagonal, buildInitialTrace,
+  dirFromSeg, buildInitialTrace,
   MouseTrailTracer,
 } from './direction45';
+import { buildObstacleHulls, walkaroundPath } from './walkaround';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -474,17 +475,6 @@ export function updatePreview(
     previewPath = [{ ...anchor }, { ...endPoint }];
   }
 
-  // Convert path to legacy previewSegment (last segment for backward compat)
-  const lastIdx = previewPath.length - 1;
-  const previewSegment: TraceSegmentInfo | null = previewPath.length >= 2
-    ? {
-        start_x: previewPath[lastIdx - 1].x,
-        start_y: previewPath[lastIdx - 1].y,
-        end_x: previewPath[lastIdx].x,
-        end_y: previewPath[lastIdx].y,
-      }
-    : null;
-
   // Compute angle for display
   const dx = endPoint.x - anchor.x;
   const dy = endPoint.y - anchor.y;
@@ -506,15 +496,49 @@ export function updatePreview(
     padNetMap,
   );
 
+  // Walkaround: if collisions detected, try to route around obstacles
+  let finalPath = previewPath;
+  let hasCollision = obstacles.length > 0;
+
+  if (hasCollision && snapshot) {
+    const clearance = 150_000; // 0.15mm
+    const hulls = buildObstacleHulls(snapshot, state.netName, clearance, state.traceWidth, padNetMap);
+
+    if (hulls.length > 0) {
+      const walkedPath = walkaroundPath(previewPath, hulls);
+
+      if (walkedPath && walkedPath.length >= 2) {
+        // Walkaround succeeded — use the new path and recheck for collisions
+        finalPath = walkedPath;
+        const remainingObstacles = checkRouteObstacles(
+          walkedPath, snapshot, state.netName, clearance, state.traceWidth, padNetMap,
+        );
+        hasCollision = remainingObstacles.length > 0;
+      }
+      // If walkaround returned null (stuck), keep original path in red
+    }
+  }
+
+  // Recompute legacy previewSegment from final path
+  const finalLastIdx = finalPath.length - 1;
+  const finalPreviewSegment: TraceSegmentInfo | null = finalPath.length >= 2
+    ? {
+        start_x: finalPath[finalLastIdx - 1].x,
+        start_y: finalPath[finalLastIdx - 1].y,
+        end_x: finalPath[finalLastIdx].x,
+        end_y: finalPath[finalLastIdx].y,
+      }
+    : null;
+
   return {
     ...state,
-    previewSegment: previewSegment,
-    previewPath,
+    previewSegment: finalPreviewSegment,
+    previewPath: finalPath,
     snapAngle: angleDeg,
     snappedToPad: magneticHit,
     currentDirection: direction,
     obstacles,
-    hasCollision: obstacles.length > 0,
+    hasCollision,
   };
 }
 

@@ -17,7 +17,7 @@ import { createLayerVisibility } from './layers';
 import { createFilePicker, setupDropZone, readFileAsText } from './file-picker';
 import { openFile, saveFile } from './file-access';
 import { isDesktop, initDesktop } from './desktop';
-import { encodeViewState, decodeViewState } from './url-state';
+import { decodeViewState } from './url-state';
 import { getSettings, getPreference, setPreference, subscribe as subscribeSettings } from './settings';
 import type { AppSettings, LayerColors, AutorouteParams } from './settings';
 import { formatDimension, parseUserDimension } from './units';
@@ -194,7 +194,6 @@ async function init(): Promise<void> {
   const routingStatus = document.getElementById('routing-status')!;
   const routingProgress = document.getElementById('routing-progress')!;
   const openBtn = document.getElementById('open-btn') as HTMLButtonElement;
-  const shareBtn = document.getElementById('share-btn') as HTMLButtonElement;
   const themeToggle = document.getElementById('theme-toggle') as HTMLButtonElement;
   const themeIcon = document.getElementById('theme-icon')!;
   const editorToggleBtn = document.getElementById('editor-toggle') as HTMLButtonElement;
@@ -2250,48 +2249,6 @@ async function init(): Promise<void> {
     }
   }
 
-  /**
-   * Handle sharing the current view state via URL
-   */
-  function handleShareView(): void {
-    // Build view state from current viewport and layers
-    const activeLayers: string[] = [];
-    if (topLayerCb.checked) activeLayers.push('top');
-    if (bottomLayerCb.checked) activeLayers.push('bottom');
-    if (ratsnestCb.checked) activeLayers.push('ratsnest');
-
-    const viewState = {
-      layers: activeLayers,
-      zoom: viewport.scale,
-      panX: viewport.centerX,
-      panY: viewport.centerY,
-    };
-
-    // Generate share URL
-    const queryString = encodeViewState(viewState);
-    const shareUrl = window.location.origin + window.location.pathname + queryString;
-
-    // Copy to clipboard
-    navigator.clipboard.writeText(shareUrl).then(() => {
-      statusText.textContent = 'Share URL copied!';
-      setTimeout(() => {
-        statusText.textContent = usingWasm ? 'Ready (WASM)' : 'Ready (Mock)';
-      }, 2000);
-    }).catch((err) => {
-      console.error('[Share] Failed to copy to clipboard:', err);
-      statusText.textContent = 'Failed to copy share URL';
-      setTimeout(() => {
-        statusText.textContent = usingWasm ? 'Ready (WASM)' : 'Ready (Mock)';
-      }, 2000);
-    });
-  }
-
-  // Share button (web only)
-  if (!isDesktop()) {
-    shareBtn.classList.remove('hidden');
-    shareBtn.addEventListener('click', handleShareView);
-  }
-
   // Keyboard shortcuts
   document.addEventListener('keydown', async (e) => {
     // Escape: close search panel first, then handle other escape actions
@@ -2434,11 +2391,6 @@ async function init(): Promise<void> {
     if ((e.ctrlKey || e.metaKey) && e.key === 's' && !isDesktop()) {
       e.preventDefault();
       await handleSaveFile();
-    }
-    // Ctrl+Shift+S to share (web only)
-    if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'S' && !isDesktop()) {
-      e.preventDefault();
-      handleShareView();
     }
     // '3' key toggles 3D view (skip if typing in editor/input)
     if (e.key === '3' && !e.ctrlKey && !e.metaKey && !e.altKey) {
