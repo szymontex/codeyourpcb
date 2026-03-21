@@ -58,5 +58,6 @@ export default defineConfig({
   },
   optimizeDeps: {
     exclude: ['cypcb-render'], // WASM module will be loaded separately
+    include: ['monaco-editor'], // Pre-bundle Monaco for dynamic import
   },
 });

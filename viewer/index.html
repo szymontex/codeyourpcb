@@ -890,7 +890,7 @@
     /* Recent files / Your projects */
     .pm-recent-list {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
       gap: 12px;
     }
     .pm-recent-item {
@@ -913,13 +913,13 @@
       border-radius: 4px;
       border: 1px solid var(--border-secondary);
       object-fit: cover;
-      width: 120px;
-      height: 90px;
+      width: 100%;
+      aspect-ratio: 4/3;
       margin-bottom: 8px;
     }
     .pm-recent-thumb-placeholder {
-      width: 120px;
-      height: 90px;
+      width: 100%;
+      aspect-ratio: 4/3;
       display: flex;
       align-items: center;
       justify-content: center;

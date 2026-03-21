@@ -356,8 +356,6 @@ function populateRecentFiles(): void {
       thumb.className = 'pm-recent-thumb';
       thumb.src = entry.thumbnail;
       thumb.alt = entry.name;
-      thumb.width = 120;
-      thumb.height = 90;
       item.appendChild(thumb);
     } else {
       const placeholder = document.createElement('div');
