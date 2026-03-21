@@ -103,18 +103,31 @@ export function optimizeTrace(
       if (dir === Dir45.UNDEFINED) continue;
 
       // Check: angles at junctions must not be acute (< 90°)
-      // Check angle at 'before' point (prev_segment → new_segment)
+      // Professional PCB routing rule: always H/V → 45° → H/V
+      // Never two diagonals in a row. Only remove vertex if:
+      // 1. The resulting segment direction is the same as both neighbors (colinear)
+      // 2. OR the resulting connection doesn't create diagonal→diagonal
+
+      // Check: would this create two diagonals in a row?
+      const newIsDiag = (dir === Dir45.NE || dir === Dir45.SE || dir === Dir45.SW || dir === Dir45.NW);
+
       if (i >= 2) {
         const prevDir = dirFromSeg(pts[i - 2], before);
+        const prevIsDiag = (prevDir === Dir45.NE || prevDir === Dir45.SE || prevDir === Dir45.SW || prevDir === Dir45.NW);
+        // Block: diagonal followed by diagonal
+        if (prevIsDiag && newIsDiag) continue;
+        // Block: any angle that isn't obtuse or straight
         if (prevDir !== Dir45.UNDEFINED) {
           const ang = angleBetween(prevDir, dir);
-          // Only allow obtuse (45° bend) or straight — reject right (90°), acute, half-full
           if (ang !== AngleType.ANG_OBTUSE && ang !== AngleType.ANG_STRAIGHT) continue;
         }
       }
-      // Check angle at 'after' point (new_segment → next_segment)
+
       if (i + 2 < pts.length) {
         const nextDir = dirFromSeg(after, pts[i + 2]);
+        const nextIsDiag = (nextDir === Dir45.NE || nextDir === Dir45.SE || nextDir === Dir45.SW || nextDir === Dir45.NW);
+        // Block: diagonal followed by diagonal
+        if (newIsDiag && nextIsDiag) continue;
         if (nextDir !== Dir45.UNDEFINED) {
           const ang = angleBetween(dir, nextDir);
           if (ang !== AngleType.ANG_OBTUSE && ang !== AngleType.ANG_STRAIGHT) continue;
