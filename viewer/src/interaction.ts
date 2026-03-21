@@ -753,45 +753,10 @@ export function setupInteraction(
       return;
     }
 
-    // Try trace hit-test — start routing from existing trace on same net
+    // Try trace hit-test — single click = SELECT, double click = start routing
     const hit = hitTestTrace(state.snapshot, state.viewport, screenX, screenY);
-    if (hit && hit.trace.net_name) {
-      // Click on existing trace — start routing FROM this point on the trace
-      // Snap to nearest point on the trace segment
-      const seg = hit.trace.segments[hit.segmentIndex];
-      const snapPt = nearestPointOnSeg(worldX, worldY, Number(seg.start_x), Number(seg.start_y), Number(seg.end_x), Number(seg.end_y));
-
-      // Create a synthetic PadHit-like start from the trace point
-      state.routing = {
-        ...createRoutingState(),
-        mode: 'routing' as const,
-        currentLayer: hit.trace.layer || 'Top',
-        anchorPoint: { x: snapPt.x, y: snapPt.y },
-        netName: hit.trace.net_name,
-        traceWidth: Number(hit.trace.width) || 250_000,
-        angleSnapEnabled: state.routing.angleSnapEnabled,
-        gridSnapEnabled: state.routing.gridSnapEnabled,
-        gridSpacing: state.routing.gridSpacing,
-        magneticSnapEnabled: state.routing.magneticSnapEnabled,
-        magneticSnapRadius: state.routing.magneticSnapRadius,
-        cornerMode: state.routing.cornerMode,
-        clearanceNm: state.routing.clearanceNm,
-      };
-      // Compute target pads for magnetic snap
-      if (state.snapshot) {
-        const targets = computeTargetPads(state.snapshot, hit.trace.net_name, '', '');
-        state.routing.targetPads = targets;
-      }
-      ensureDrcChecker();
-      state.onRoutingChange(state.routing);
-      state.onRouteStart?.(hit.trace.net_name);
-      console.log(`[Route] Started from trace ${hit.trace.id} net=${hit.trace.net_name} at (${(snapPt.x/1e6).toFixed(2)}, ${(snapPt.y/1e6).toFixed(2)})`);
-      state.dirty = true;
-      return;
-    }
-
-    // If hit but no net — just select
     if (hit) {
+      // Single click: just select the trace
       state.selectedTraceId = hit.trace.id;
       state.onTraceSelect(hit.trace.id, e.clientX, e.clientY);
       state.dirty = true;
@@ -942,6 +907,48 @@ export function setupInteraction(
 
   // Prevent context menu on right-click (reserve for future)
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+  // Double-click on trace: start routing from that point (T-junction source)
+  canvas.addEventListener('dblclick', (e) => {
+    if (e.button !== 0) return;
+    if (state.routing.mode === 'routing') return; // already routing
+
+    const rect = canvas.getBoundingClientRect();
+    const screenX = e.clientX - rect.left;
+    const screenY = e.clientY - rect.top;
+    const [worldX, worldY] = screenToWorld(state.viewport, screenX, screenY);
+
+    const hit = hitTestTrace(state.snapshot, state.viewport, screenX, screenY);
+    if (!hit || !hit.trace.net_name) return;
+
+    const seg = hit.trace.segments[hit.segmentIndex];
+    const snapPt = nearestPointOnSeg(worldX, worldY,
+      Number(seg.start_x), Number(seg.start_y),
+      Number(seg.end_x), Number(seg.end_y));
+
+    state.routing = {
+      ...createRoutingState(),
+      mode: 'routing' as const,
+      currentLayer: hit.trace.layer || 'Top',
+      anchorPoint: { x: snapPt.x, y: snapPt.y },
+      netName: hit.trace.net_name,
+      traceWidth: Number(hit.trace.width) || 250_000,
+      angleSnapEnabled: state.routing.angleSnapEnabled,
+      gridSnapEnabled: state.routing.gridSnapEnabled,
+      gridSpacing: state.routing.gridSpacing,
+      magneticSnapEnabled: state.routing.magneticSnapEnabled,
+      magneticSnapRadius: state.routing.magneticSnapRadius,
+      cornerMode: state.routing.cornerMode,
+      clearanceNm: state.routing.clearanceNm,
+    };
+    if (state.snapshot) {
+      state.routing.targetPads = computeTargetPads(state.snapshot, hit.trace.net_name, '', '');
+    }
+    ensureDrcChecker();
+    state.onRoutingChange(state.routing);
+    state.onRouteStart?.(hit.trace.net_name);
+    state.dirty = true;
+  });
 }
 
 /**
