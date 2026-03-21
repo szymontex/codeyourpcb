@@ -154,7 +154,7 @@ export function setupInteraction(
     // Touchpads send small deltas (±2–10), mice send large (±100).
     // Clamp to avoid extreme jumps. Matches Three.js OrbitControls feel.
     const delta = Math.max(-150, Math.min(150, e.deltaY));
-    const zoomSpeed = 0.001;
+    const zoomSpeed = 0.0018;
     const factor = Math.pow(0.95, delta * zoomSpeed * 10);
 
     state.viewport = zoomAtPoint(state.viewport, x, y, factor);
@@ -607,6 +607,7 @@ export function setupInteraction(
 
     // Hit-test pads to start routing
     const padHit = hitTestPad(state.snapshot, worldX, worldY, PAD_HIT_TOLERANCE_NM);
+    console.log(`[Click] idle mode: world=(${(worldX/1e6).toFixed(2)}, ${(worldY/1e6).toFixed(2)}) padHit=${padHit ? padHit.component.refdes + '.' + padHit.pad.number + ' net=' + padHit.netName : 'null'}`);
     if (padHit && padHit.netName) {
       state.routing = startRoute(state.routing, padHit, state.snapshot);
       // Read clearance from engine design rules

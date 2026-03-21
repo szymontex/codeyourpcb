@@ -331,6 +331,7 @@ async function init(): Promise<void> {
       width: canvas.width,
       height: canvas.height,
     };
+    interactionState.viewport = viewport;
     dirty = true;
   }
   resize();
@@ -803,6 +804,8 @@ async function init(): Promise<void> {
     if (snapshot?.board) {
       viewport = fitBoard(viewport, snapshot.board.width_nm, snapshot.board.height_nm);
     }
+    // Sync viewport to interaction state (critical for click→world coord mapping)
+    interactionState.viewport = viewport;
     if (is3DActive && renderer3d) {
       renderer3d.resize();
     }

@@ -152,6 +152,7 @@ export class Renderer3D {
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.1;
+    this.controls.zoomSpeed = 1.8;
     this.controls.target.set(0, 0, 0);
     this.controls.update();
 
