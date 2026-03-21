@@ -18,6 +18,29 @@
 import type { BoardSnapshot, ComponentInfo, PadInfo, NetInfo, PinRef, BoardInfo, TraceSegmentInfo, ViolationInfo } from './types';
 import { pointToSegmentDistance } from './geometry';
 
+/**
+ * Recursively convert all BigInt values in an object to plain Numbers.
+ * WASM (Rust i64) returns BigInt which can't be mixed with Number in JS arithmetic.
+ */
+function deepBigIntToNumber(obj: any): any {
+  if (obj === null || obj === undefined) return obj;
+  if (typeof obj === 'bigint') return Number(obj);
+  if (Array.isArray(obj)) return obj.map(deepBigIntToNumber);
+  if (typeof obj === 'object') {
+    const result: any = {};
+    for (const key of Object.keys(obj)) {
+      result[key] = deepBigIntToNumber(obj[key]);
+    }
+    return result;
+  }
+  return obj;
+}
+
+/** Sanitize a WASM-returned snapshot, converting all BigInt values to Number. */
+function sanitizeSnapshot(snap: any): BoardSnapshot {
+  return deepBigIntToNumber(snap) as BoardSnapshot;
+}
+
 // ---------------------------------------------------------------------------
 // Dynamic footprint registry — populated from EasyEDA API at insert time
 // ---------------------------------------------------------------------------
@@ -747,13 +770,13 @@ class WasmPcbEngineAdapter implements PcbEngine {
     // we only populated components/board, not Trace entities
     if (this.cachedSnapshot) {
       // Get DRC violations from WASM (computed in Rust)
-      const wasmSnapshot = this.wasmEngine.get_snapshot();
+      const wasmSnapshot = sanitizeSnapshot(this.wasmEngine.get_snapshot());
       return {
         ...this.cachedSnapshot,
         violations: wasmSnapshot.violations || [],
       };
     }
-    return this.wasmEngine.get_snapshot();
+    return sanitizeSnapshot(this.wasmEngine.get_snapshot());
   }
 
   query_point(x_nm: number, y_nm: number): string[] {

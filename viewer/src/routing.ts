@@ -855,17 +855,18 @@ export function checkRouteObstacles(
           const a = path[i];
           const b = path[i + 1];
 
-          // Check if trace segments are within clearance
-          // Simplified: check if any endpoint of our path segment is near the trace segment
-          const traceClearance = clearanceNm + halfTrace + trace.width / 2;
+          // Check if trace segments are within clearance (Number() guards BigInt from WASM)
+          const traceClearance = clearanceNm + halfTrace + Number(trace.width) / 2;
+          const sx0 = Number(seg.start_x), sy0 = Number(seg.start_y);
+          const sx1 = Number(seg.end_x), sy1 = Number(seg.end_y);
           if (
-            segmentNearCircle(seg.start_x, seg.start_y, seg.end_x, seg.end_y,
+            segmentNearCircle(sx0, sy0, sx1, sy1,
               (a.x + b.x) / 2, (a.y + b.y) / 2, traceClearance)
           ) {
             obstacles.push({
               type: 'trace',
-              x: (seg.start_x + seg.end_x) / 2,
-              y: (seg.start_y + seg.end_y) / 2,
+              x: (sx0 + sx1) / 2,
+              y: (sy0 + sy1) / 2,
               netName: trace.net_name,
             });
             break;
