@@ -133,7 +133,7 @@ A code-first PCB design tool where you write code and it generates circuit board
 - ✅ 2D board view renderer (Canvas) with hot reload — v1.0
 - ✅ Component placement (absolute and relative) — v1.0
 - ✅ Net connections with constraints (width, clearance, current) — v1.0
-- ✅ Comprehensive DRC (clearance, trace width, drill size, connectivity) — v1.0
+- ✅ Comprehensive DRC (12 rules: clearance, edge clearance, trace width, drill size, annular ring, connectivity, keepout, hole-to-hole, via diameter, courtyard clearance, solder mask bridge, silk clearance) — v2.0
 - ✅ Gerber X2 export (all layers) — v1.0
 - ✅ Excellon drill file export — v1.0
 - ✅ BOM and pick-and-place file generation — v1.0

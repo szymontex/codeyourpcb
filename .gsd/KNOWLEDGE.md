@@ -48,3 +48,38 @@ Append-only register of project-specific rules, patterns, and lessons learned.
 **Context:** Route has a split-button — main button triggers routing, caret opens dropdown with options (auto-route toggle, tuning sliders).
 **Rule:** Keep the split-button group (`.tb-route-group`). Main button = action, caret = options. The caret dropdown `#route-menu-dropdown` contains auto-route checkbox + 4 tuning sliders (via cost, layer preference, roundness, density). Sliders debounce at 300ms.
 **Applies to:** `viewer/index.html`, `viewer/src/main.ts`.
+
+### K010: DRC per-pad entity architecture (KiCad pattern)
+**Context:** DRC clearance check compares copper features pair-by-pair. Components are single ECS entities with `NetConnections` (multiple nets). If only component-level AABB is in spatial index, same-net exemption fails because component has multiple nets and clearance check can't determine which pad is involved.
+**Rule:** Each pad of a placed component must have its own ECS entity with `PadInstance` marker + `NetId` + `Position`. The spatial index must have per-pad AABB entries (not per-component courtyard). Clearance check finds `NetId` on the pad entity directly → same-net exemption works correctly: trace on VCC near VCC pad = skip, trace on VCC near GND pad = violation. This mirrors KiCad's `BOARD_CONNECTED_ITEM::GetNet()` architecture.
+**Applies to:** `crates/cypcb-render/src/lib.rs` (`populate_from_snapshot`, `rebuild_spatial_index_full`), `crates/cypcb-drc/src/rules/clearance.rs`.
+
+### K011: Pad AABB must use rotated bounds, not max(half_w, half_h)
+**Context:** Rectangular pads (e.g. SOIC-8: 1.5mm × 0.6mm) have different dimensions per axis. Using `max(half_w, half_h)` as square AABB makes the pad look 1.5mm × 1.5mm, causing false clearance violations between adjacent pads at 1.27mm pitch (actual edge-to-edge 0.67mm, AABB edge-to-edge -0.23mm → overlap).
+**Rule:** Compute tight AABB for rotated rectangle: `half_x = |cos|*hw + |sin|*hh`, `half_y = |sin|*hw + |cos|*hh`. This gives the minimum axis-aligned bounding box that fully contains the rotated pad.
+**Applies to:** `crates/cypcb-render/src/lib.rs` `rebuild_spatial_index_full()` pad AABB computation.
+
+### K012: Trace entities must have NetId as separate ECS component
+**Context:** `Trace` struct has a `net_id` field, but clearance check queries `ecs.query::<(Entity, &NetId)>()` looking for `NetId` as a separate ECS component. If trace is spawned with only `spawn_entity(trace)`, `NetId` component is missing → trace invisible to same-net exemption → false DRC violations.
+**Rule:** Always spawn traces and vias as `spawn_entity((trace, net_id))` — tuple bundle with both the data component and `NetId` as separate ECS component. Applies to `add_trace()`, `parse_route_segment()`, `parse_route_via()`.
+**Applies to:** `crates/cypcb-render/src/lib.rs` all trace/via spawn sites.
+
+### K013: DRC triggers — complete list of mutation points
+**Context:** DRC must run after every mutation that changes copper geometry or board outline. Missing a trigger = stale violations.
+**Rule:** DRC (`run_drc_internal()`) must be called after: `load_snapshot`, `add_trace`, `remove_trace`, `autoroute*`, `sync_from_source`, `rotate_component`, `set_board_size`. JS-side: all `BoardCommand.execute()` and `.undo()` methods call `engine.run_drc_incremental()`. When adding new mutation APIs, always add DRC trigger.
+**Applies to:** `crates/cypcb-render/src/lib.rs`, `viewer/src/undo.ts`.
+
+### K014: Silk clearance check runs in JS, not WASM
+**Context:** Silk shapes (`SilkShape[]`) live only in JS snapshot — they come from EasyEDA footprint data parsed client-side. Rust ECS has no silk geometry.
+**Rule:** Silk-to-pad clearance is checked in `checkSilkClearance()` in `viewer/src/wasm.ts`. Results are merged with WASM violations in `get_snapshot()`. When silk geometry is eventually modeled in Rust, this should move to the Rust DRC engine.
+**Applies to:** `viewer/src/wasm.ts` `WasmPcbEngineAdapter.get_snapshot()`.
+
+### K015: Routing clearance must come from DesignRules, not hardcoded
+**Context:** Routing obstacle detection had `150_000` (0.15mm) hardcoded. If user changes DRC preset (e.g. JLCPCB 4-layer 0.1mm), routing would use wrong clearance.
+**Rule:** Routing reads clearance from `state.routing.clearanceNm` which is set from `engine.get_min_clearance_nm()` at route start. Never hardcode clearance values in routing code.
+**Applies to:** `viewer/src/routing.ts` `updatePreview()`, `viewer/src/interaction.ts` route start.
+
+### K016: DRC violation messages enriched with entity names post-check
+**Context:** Raw DRC violations only have entity IDs. Users need to see component names (R1, U1), net names (VCC, GND), and entity types (trace, via, pad).
+**Rule:** `enrich_violation_messages()` in `run_drc()` post-processes all violations — builds RefDes, NetId→name, PadInstance→parent, Trace/Via→net lookups and prepends entity labels to messages. Format: `trace 'VCC' ↔ pad on R1: Clearance violation...`. JS `formatViolationDetail()` parses the enriched message to show human-readable panel entries.
+**Applies to:** `crates/cypcb-drc/src/lib.rs` `enrich_violation_messages()`, `viewer/src/main.ts` `formatViolationDetail()`.

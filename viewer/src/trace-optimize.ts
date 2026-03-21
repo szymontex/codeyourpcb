@@ -108,7 +108,8 @@ export function optimizeTrace(
         const prevDir = dirFromSeg(pts[i - 2], before);
         if (prevDir !== Dir45.UNDEFINED) {
           const ang = angleBetween(prevDir, dir);
-          if (ang === AngleType.ANG_ACUTE) continue; // would create sharp turn
+          // Only allow obtuse (45° bend) or straight — reject right (90°), acute, half-full
+          if (ang !== AngleType.ANG_OBTUSE && ang !== AngleType.ANG_STRAIGHT) continue;
         }
       }
       // Check angle at 'after' point (new_segment → next_segment)
@@ -116,7 +117,7 @@ export function optimizeTrace(
         const nextDir = dirFromSeg(after, pts[i + 2]);
         if (nextDir !== Dir45.UNDEFINED) {
           const ang = angleBetween(dir, nextDir);
-          if (ang === AngleType.ANG_ACUTE) continue; // would create sharp turn
+          if (ang !== AngleType.ANG_OBTUSE && ang !== AngleType.ANG_STRAIGHT) continue;
         }
       }
 
