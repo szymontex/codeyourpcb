@@ -114,6 +114,35 @@ export interface RectSelectState {
  * - Right-click: reserved (context menu prevented)
  */
 /**
+ * Find a trace segment at a given world point (for trace snap completion).
+ */
+function findTraceAtPoint(
+  snapshot: BoardSnapshot | null,
+  pt: Vec2,
+  netName: string,
+): { trace: import('./types').TraceInfo; segmentIndex: number } | null {
+  if (!snapshot?.traces) return null;
+  const tolerance = 200_000; // 0.2mm
+  for (const trace of snapshot.traces) {
+    if (trace.net_name !== netName) continue;
+    for (let i = 0; i < trace.segments.length; i++) {
+      const seg = trace.segments[i];
+      const sx = Number(seg.start_x), sy = Number(seg.start_y);
+      const ex = Number(seg.end_x), ey = Number(seg.end_y);
+      const dx = ex - sx, dy = ey - sy;
+      const lenSq = dx * dx + dy * dy;
+      if (lenSq < 1) continue;
+      const t = Math.max(0, Math.min(1, ((pt.x - sx) * dx + (pt.y - sy) * dy) / lenSq));
+      const nx = sx + t * dx, ny = sy + t * dy;
+      if (Math.hypot(pt.x - nx, pt.y - ny) <= tolerance) {
+        return { trace, segmentIndex: i };
+      }
+    }
+  }
+  return null;
+}
+
+/**
  * Split an existing trace at a junction point — KiCad SplitAdjacentSegments.
  * Removes the original trace and adds two new traces:
  * one from trace start to junction, one from junction to trace end.
@@ -682,13 +711,28 @@ export function setupInteraction(
         }
       }
 
-      // No pad hit — check if we clicked on an existing trace of the SAME net (T-junction)
+      // No pad hit — check if we're snapped to a trace (magnetic snap) or clicked near one
       if (!state.routing.hasCollision) {
+        // If magnetically snapped to a trace, complete immediately
+        const isTraceSnap = state.routing.snappedToPad?.component?.refdes === '__trace__';
+        
+        // Use snapped position if available, else raw click position
+        const checkX = isTraceSnap ? state.routing.snappedToPad!.worldX : worldX;
+        const checkY = isTraceSnap ? state.routing.snappedToPad!.worldY : worldY;
+        
         const traceHit = hitTestTrace(state.snapshot, state.viewport, screenX, screenY);
-        if (traceHit && traceHit.trace.net_name === state.routing.netName) {
-          // Snap to nearest point on the trace segment
-          const seg = traceHit.trace.segments[traceHit.segmentIndex];
-          const snapPt = nearestPointOnSeg(worldX, worldY, Number(seg.start_x), Number(seg.start_y), Number(seg.end_x), Number(seg.end_y));
+        
+        if (isTraceSnap || (traceHit && traceHit.trace.net_name === state.routing.netName)) {
+          // Get snap point: from magnetic snap or from trace hit
+          let snapPt: Vec2;
+          if (isTraceSnap) {
+            snapPt = { x: state.routing.snappedToPad!.worldX, y: state.routing.snappedToPad!.worldY };
+          } else {
+            const seg = traceHit!.trace.segments[traceHit!.segmentIndex];
+            snapPt = nearestPointOnSeg(worldX, worldY, Number(seg.start_x), Number(seg.start_y), Number(seg.end_x), Number(seg.end_y));
+          }
+          
+          const targetTrace = traceHit ?? (isTraceSnap ? findTraceAtPoint(state.snapshot, snapPt, state.routing.netName) : null);
 
           // Complete route to this point (create a synthetic target)
           const syntheticTarget: PadHit = {
@@ -710,14 +754,16 @@ export function setupInteraction(
             }
 
             // Split the existing trace at the junction point (KiCad SplitAdjacentSegments)
-            splitTraceAtPoint(state.engine, traceHit.trace, traceHit.segmentIndex, snapPt, state.onTraceAdd);
+            if (targetTrace) {
+              splitTraceAtPoint(state.engine, targetTrace.trace, targetTrace.segmentIndex, snapPt, state.onTraceAdd);
+            }
           }
 
           state.routing = resetToIdle(state.routing);
           if (drcChecker) drcChecker.cancel();
           state.onRoutingChange(state.routing);
           state.onRouteEnd?.();
-          console.log(`[Route] Completed to trace ${traceHit.trace.id} (T-junction)`);
+          console.log(`[Route] Completed to trace (T-junction)`);
           state.dirty = true;
           return;
         }

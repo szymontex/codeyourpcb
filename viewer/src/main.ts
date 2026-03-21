@@ -971,6 +971,12 @@ async function init(): Promise<void> {
     onRequestFileList: () => {
       wsConnection?.send({ type: 'list-files' });
     },
+    onRefreshThumbnail: () => {
+      // Regenerate thumbnail from current snapshot (may have LCSC footprints now)
+      if (currentFilePath && snapshot) {
+        addRecentFile(currentFilePath, snapshot, buildRenderStateForThumbnail(), lastLoadedSource);
+      }
+    },
     onOpenProjectFile: (_path, _name) => {
       // Request the file from the WS server — it will come as a reload
       wsConnection?.send({ type: 'open-file', file: _path });

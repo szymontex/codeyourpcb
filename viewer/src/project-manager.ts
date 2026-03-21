@@ -75,6 +75,8 @@ export interface ProjectManagerCallbacks {
   onLoadRecent: (source: string, name: string) => void;
   onRequestFileList: () => void;
   onOpenProjectFile: (path: string, name: string) => void;
+  /** Called when PM opens — host should refresh thumbnail for the current file */
+  onRefreshThumbnail?: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -142,6 +144,9 @@ export function initProjectManager(cb: ProjectManagerCallbacks): void {
  */
 export function showProjectManager(): void {
   if (!overlay) return;
+
+  // Refresh thumbnail for current file before displaying
+  callbacks?.onRefreshThumbnail?.();
 
   populateRecentFiles();
   overlay.classList.remove('hidden');
