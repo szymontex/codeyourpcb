@@ -33,6 +33,115 @@ function deepBigIntToNumber(obj: any): any {
 }
 
 /** Sanitize a WASM-returned snapshot, converting all BigInt values to Number. */
+/**
+ * JS-side silk clearance check.
+ *
+ * Silk shapes live only in JS (not in WASM ECS), so this check runs client-side.
+ * For each silk segment/circle/arc on a component, checks if it overlaps any
+ * copper pad of a DIFFERENT component on the same side. Reports violations
+ * when the silk-to-pad distance is less than min_silk_clearance.
+ */
+function checkSilkClearance(snapshot: BoardSnapshot, minClearanceNm: number): ViolationInfo[] {
+  const violations: ViolationInfo[] = [];
+  if (!snapshot.components || snapshot.components.length === 0) return violations;
+
+  // Build pad world positions for all components
+  const allPads: { comp: ComponentInfo; pad: PadInfo; wx: number; wy: number; side: 'top' | 'bottom' }[] = [];
+  for (const comp of snapshot.components) {
+    const rad = (comp.rotation_mdeg / 1000) * (Math.PI / 180);
+    const cos = Math.cos(rad);
+    const sin = Math.sin(rad);
+    for (const pad of comp.pads) {
+      const rx = pad.x_nm * cos - pad.y_nm * sin;
+      const ry = pad.x_nm * sin + pad.y_nm * cos;
+      const side = (pad.layer_mask & 1) ? 'top' as const : 'bottom' as const;
+      allPads.push({ comp, pad, wx: comp.x_nm + rx, wy: comp.y_nm + ry, side });
+    }
+  }
+
+  for (const comp of snapshot.components) {
+    if (!comp.silk || comp.silk.length === 0) continue;
+
+    const rad = (comp.rotation_mdeg / 1000) * (Math.PI / 180);
+    const cos = Math.cos(rad);
+    const sin = Math.sin(rad);
+
+    for (const shape of comp.silk) {
+      const silkSide = shape.layer;
+
+      // Transform silk shape to world coordinates
+      if (shape.type === 'segment') {
+        const sx1 = comp.x_nm + shape.x1 * cos - shape.y1 * sin;
+        const sy1 = comp.y_nm + shape.x1 * sin + shape.y1 * cos;
+        const sx2 = comp.x_nm + shape.x2 * cos - shape.y2 * sin;
+        const sy2 = comp.y_nm + shape.x2 * sin + shape.y2 * cos;
+        const halfSilk = (shape.width || 150_000) / 2;
+
+        // Check against pads of OTHER components on the same side
+        for (const p of allPads) {
+          if (p.comp.refdes === comp.refdes) continue; // Skip own pads
+          if (p.side !== silkSide) continue; // Different side
+
+          const padRadius = Math.max(p.pad.width_nm, p.pad.height_nm) / 2;
+          const exclusion = padRadius + halfSilk + minClearanceNm;
+
+          if (segmentNearPoint(sx1, sy1, sx2, sy2, p.wx, p.wy, exclusion)) {
+            violations.push({
+              kind: 'silk-clearance',
+              x_nm: p.wx,
+              y_nm: p.wy,
+              message: `${comp.refdes} silk ↔ ${p.comp.refdes}.${p.pad.number}: Silk-to-pad clearance violation`,
+            });
+            break; // One violation per silk shape is enough
+          }
+        }
+      } else if (shape.type === 'circle') {
+        const cx = comp.x_nm + shape.cx * cos - shape.cy * sin;
+        const cy = comp.y_nm + shape.cx * sin + shape.cy * cos;
+        const halfSilk = (shape.width || 150_000) / 2;
+        const outerRadius = shape.radius + halfSilk;
+
+        for (const p of allPads) {
+          if (p.comp.refdes === comp.refdes) continue;
+          if (p.side !== silkSide) continue;
+
+          const padRadius = Math.max(p.pad.width_nm, p.pad.height_nm) / 2;
+          const dist = Math.hypot(cx - p.wx, cy - p.wy);
+
+          if (dist < outerRadius + padRadius + minClearanceNm) {
+            violations.push({
+              kind: 'silk-clearance',
+              x_nm: p.wx,
+              y_nm: p.wy,
+              message: `${comp.refdes} silk ↔ ${p.comp.refdes}.${p.pad.number}: Silk-to-pad clearance violation`,
+            });
+            break;
+          }
+        }
+      }
+      // Arc shapes: skip for now (uncommon to overlap pads)
+    }
+  }
+
+  return violations;
+}
+
+/** Point-to-segment distance check (used by silk clearance). */
+function segmentNearPoint(
+  sx: number, sy: number, ex: number, ey: number,
+  px: number, py: number, radius: number,
+): boolean {
+  const dx = ex - sx;
+  const dy = ey - sy;
+  const lenSq = dx * dx + dy * dy;
+  if (lenSq < 1) return Math.hypot(px - sx, py - sy) <= radius;
+  let t = ((px - sx) * dx + (py - sy) * dy) / lenSq;
+  t = Math.max(0, Math.min(1, t));
+  const nearX = sx + t * dx;
+  const nearY = sy + t * dy;
+  return Math.hypot(px - nearX, py - nearY) <= radius;
+}
+
 function sanitizeSnapshot(snap: any): BoardSnapshot {
   return deepBigIntToNumber(snap) as BoardSnapshot;
 }
@@ -769,9 +878,12 @@ class WasmPcbEngineAdapter implements PcbEngine {
     if (this.cachedSnapshot) {
       // Get DRC violations from WASM (computed in Rust)
       const wasmSnapshot = sanitizeSnapshot(this.wasmEngine.get_snapshot());
+      const wasmViolations = wasmSnapshot.violations || [];
+      // Add JS-side silk clearance violations (silk data only exists in JS)
+      const silkViolations = checkSilkClearance(this.cachedSnapshot, this.get_min_clearance_nm());
       return {
         ...this.cachedSnapshot,
-        violations: wasmSnapshot.violations || [],
+        violations: [...wasmViolations, ...silkViolations],
       };
     }
     return sanitizeSnapshot(this.wasmEngine.get_snapshot());
