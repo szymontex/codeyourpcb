@@ -11,7 +11,7 @@
  */
 
 import type { TraceSegmentInfo, BoardSnapshot } from './types';
-import { type Vec2, Dir45, dirFromSeg, buildInitialTrace } from './direction45';
+import { type Vec2, Dir45, dirFromSeg, buildInitialTrace, angleBetween, AngleType } from './direction45';
 import { traceVertices } from './trace-edit';
 import { checkRouteObstacles } from './routing';
 
@@ -100,17 +100,31 @@ export function optimizeTrace(
 
       // Check: does direct before→after maintain valid 45° direction?
       const dir = dirFromSeg(before, after);
-      // Allow straight lines (H/V/45°) — reject weird angles
-      if (dir === Dir45.UNDEFINED) {
-        // Not a valid 45° line — can't remove this vertex
-        continue;
+      if (dir === Dir45.UNDEFINED) continue;
+
+      // Check: angles at junctions must not be acute (< 90°)
+      // Check angle at 'before' point (prev_segment → new_segment)
+      if (i >= 2) {
+        const prevDir = dirFromSeg(pts[i - 2], before);
+        if (prevDir !== Dir45.UNDEFINED) {
+          const ang = angleBetween(prevDir, dir);
+          if (ang === AngleType.ANG_ACUTE) continue; // would create sharp turn
+        }
+      }
+      // Check angle at 'after' point (new_segment → next_segment)
+      if (i + 2 < pts.length) {
+        const nextDir = dirFromSeg(after, pts[i + 2]);
+        if (nextDir !== Dir45.UNDEFINED) {
+          const ang = angleBetween(dir, nextDir);
+          if (ang === AngleType.ANG_ACUTE) continue; // would create sharp turn
+        }
       }
 
-      // Check collision: does before→after cross any obstacle?
+      // Check collision
       if (snapshot && netName) {
         const testPath = [before, after];
         const obstacles = checkRouteObstacles(testPath, snapshot, netName, cl, tw, padNetMap);
-        if (obstacles.length > 0) continue; // would collide — keep vertex
+        if (obstacles.length > 0) continue;
       }
 
       // Safe to remove — direct connection is valid and collision-free
