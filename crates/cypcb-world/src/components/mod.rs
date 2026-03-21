@@ -41,7 +41,7 @@ pub mod zone;
 
 // Re-export all components
 pub use board::{Board, BoardSize, LayerStack};
-pub use electrical::{NetConnections, NetId, PinConnection, RefDes, Value};
+pub use electrical::{NetConnections, NetId, PadInstance, PinConnection, RefDes, Value};
 pub use metadata::{ComponentKind, Name, SourceSpan};
 pub use physical::{FootprintRef, Layer, Pad, PadShape};
 pub use position::{Position, Rotation};

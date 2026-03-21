@@ -24,7 +24,8 @@ import { formatDimension, parseUserDimension } from './units';
 import type { DisplayUnit } from './units';
 import { initProjectManager, showProjectManager, hideProjectManager, addRecentFile } from './project-manager';
 import { initSearchPanel, hideSearchPanel, toggleSearchPanel, isSearchPanelVisible, buildComponentSnippet } from './jlcpcb-panel';
-import { fetch3DModel } from './jlcpcb';
+import { fetch3DModel, fetchComponentFootprint } from './jlcpcb';
+import { registerDynamicFootprint, register3DModel } from './wasm';
 import { initVariantPanel, showVariants, hideVariants, isVariantPanelVisible, type VariantData } from './variant-panel';
 import type { VariantPreviewData } from './renderer';
 
@@ -849,7 +850,23 @@ async function init(): Promise<void> {
   initSearchPanel({
     onComponentSelect: async (component) => {
       const lcscStr = `C${component.lcsc}`;
+      const pkg = component.package || 'unknown';
       console.log(`[JLCPCB] Selected: ${lcscStr} (${component.mfr})`);
+
+      // Pre-fetch footprint data (pads + 3D UUID) for this component.
+      // This populates the dynamic registry so subsequent insert or re-parse
+      // will use real pad geometry instead of hardcoded templates.
+      try {
+        const footprint = await fetchComponentFootprint(component.lcsc);
+        if (footprint) {
+          registerDynamicFootprint(pkg, footprint.pads);
+          if (footprint.modelUuid) {
+            register3DModel(pkg, footprint.modelUuid);
+          }
+        }
+      } catch (e) {
+        console.warn(`[JLCPCB] Footprint pre-fetch failed for ${lcscStr}:`, e);
+      }
 
       if (is3DActive && renderer3d) {
         console.log(`[JLCPCB] Fetching 3D model for ${lcscStr}...`);
@@ -962,6 +979,23 @@ async function init(): Promise<void> {
 
   // --- Insert component snippet into editor ---
   async function insertComponentSnippet(component: import('./jlcpcb').JLCPCBComponent): Promise<void> {
+    // Pre-fetch footprint from EasyEDA before inserting the snippet.
+    // This populates the dynamic footprint registry so the parser can
+    // generate real pads when the editor re-parses the source.
+    const pkg = component.package || 'unknown';
+    try {
+      const footprint = await fetchComponentFootprint(component.lcsc);
+      if (footprint) {
+        registerDynamicFootprint(pkg, footprint.pads);
+        if (footprint.modelUuid) {
+          register3DModel(pkg, footprint.modelUuid);
+        }
+      }
+    } catch (e) {
+      console.warn(`[JLCPCB] Footprint pre-fetch failed for C${component.lcsc}:`, e);
+      // Continue with insert — will fall back to hardcoded pads or empty
+    }
+
     // Collect existing refdes from current board snapshot
     const existingRefDes = snapshot?.components?.map((c) => c.refdes) ?? [];
     const snippet = buildComponentSnippet(component, existingRefDes);

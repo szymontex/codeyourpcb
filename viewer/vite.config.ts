@@ -22,6 +22,20 @@ export default defineConfig({
     watch: {
       ignored: ['**/src-tauri/**'],
     },
+    proxy: {
+      // EasyEDA API proxy — bypass CORS for footprint/component data
+      '/easyeda-api': {
+        target: 'https://easyeda.com',
+        changeOrigin: true,
+        rewrite: (path: string) => path.replace(/^\/easyeda-api/, ''),
+      },
+      // EasyEDA 3D model modules proxy
+      '/easyeda-modules': {
+        target: 'https://modules.easyeda.com',
+        changeOrigin: true,
+        rewrite: (path: string) => path.replace(/^\/easyeda-modules/, ''),
+      },
+    },
   },
   envPrefix: ['VITE_', 'TAURI_ENV_*'],
   build: {

@@ -429,16 +429,19 @@ function drawTrace(
 
   const isSelected = trace.id === selectedTraceId;
   const isHovered = trace.id === hoveredTraceId && !isSelected;
-  const baseLineWidth = trace.width * vp.scale;
-  if (baseLineWidth < 0.5) return;
+  const trackWidth = trace.width * vp.scale;
+  if (trackWidth < 0.5) return;
 
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
 
-  // Selection glow
+  // KiCad-style: draw each segment as a filled capsule (round-capped thick line)
+  // This matches DrawSegment(start, end, width) from KiCad's GAL
+
+  // Selection glow — wider aura behind the track
   if (isSelected) {
     ctx.strokeStyle = colorWithAlpha(brightenColor(color, 25), 0.35);
-    ctx.lineWidth = baseLineWidth * 2.5;
+    ctx.lineWidth = trackWidth * 2.5;
     tracePolyline(ctx, vp, trace);
     ctx.stroke();
   }
@@ -446,33 +449,38 @@ function drawTrace(
   // Net highlight glow
   if (isHighlightedNet && !isSelected) {
     ctx.strokeStyle = colorWithAlpha(brightenColor(color, 20), 0.3);
-    ctx.lineWidth = baseLineWidth * 2.0;
+    ctx.lineWidth = trackWidth * 2.0;
     tracePolyline(ctx, vp, trace);
     ctx.stroke();
   }
 
-  // Main stroke
-  const drawColor = isSelected ? brightenColor(color, 20) : isHighlightedNet ? brightenColor(color, 15) : color;
-  const lineWidth = isSelected ? baseLineWidth * 1.5 : isHighlightedNet ? baseLineWidth * 1.2 : baseLineWidth;
+  // Main fill — solid track color (KiCad fill mode, not outline)
+  const drawColor = isSelected ? brightenColor(color, 20)
+    : isHighlightedNet ? brightenColor(color, 15)
+    : color;
+  const lineWidth = isSelected ? trackWidth * 1.3
+    : isHighlightedNet ? trackWidth * 1.1
+    : trackWidth;
+
   ctx.strokeStyle = drawColor;
   ctx.lineWidth = lineWidth;
   tracePolyline(ctx, vp, trace);
   ctx.stroke();
 
-  // Hover overlay
+  // Hover overlay — subtle white highlight
   if (isHovered) {
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
-    ctx.lineWidth = baseLineWidth;
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+    ctx.lineWidth = trackWidth;
     tracePolyline(ctx, vp, trace);
     ctx.stroke();
   }
 
-  // Locked indicator
-  if (trace.locked && baseLineWidth > 2) {
+  // Locked indicator — dashed overlay
+  if (trace.locked && trackWidth > 2) {
     ctx.save();
     ctx.setLineDash([5, 5]);
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
-    ctx.lineWidth = Math.max(1, baseLineWidth * 0.3);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+    ctx.lineWidth = Math.max(1, trackWidth * 0.3);
     tracePolyline(ctx, vp, trace);
     ctx.stroke();
     ctx.restore();
@@ -487,67 +495,84 @@ function drawTraceNetLabels(
   ctx: CanvasRenderingContext2D, vp: Viewport, traces: TraceInfo[],
   layers: LayerVisibility, config: RenderConfig,
 ): void {
-  // World-space label size: 0.5mm
-  const labelWorldSize = 500_000;
-  const fontSize = Math.min(14, Math.max(8, labelWorldSize * vp.scale));
-  ctx.font = `${fontSize.toFixed(1)}px system-ui, sans-serif`;
+  // KiCad-style: net name rendered INSIDE the trace, sized to fit the track width.
+  // Text size = track_width * 0.55 (KiCad convention).
+  // Repeated along long segments to fill viewport.
+  // Only drawn if segment is long enough for the text to fit.
+
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
   for (const trace of traces) {
     if (!trace.net_name || trace.segments.length === 0) continue;
-    // Check layer visibility
     if (getTraceColor(trace.layer, layers) === null) continue;
 
-    // Find longest segment
-    let longestLen = 0;
-    let longestIdx = 0;
-    for (let i = 0; i < trace.segments.length; i++) {
-      const seg = trace.segments[i];
+    const trackWidthPx = trace.width * vp.scale;
+    // KiCad: textSize = trackWidth, glyphSize = textSize * 0.55
+    const textSizePx = trackWidthPx * 0.55;
+
+    // Don't draw if text would be too small to read
+    if (textSizePx < 6) continue;
+    // Cap at reasonable maximum
+    const fontSize = Math.min(24, textSizePx);
+
+    ctx.font = `${fontSize.toFixed(1)}px system-ui, sans-serif`;
+
+    // KiCad: min segment length = trackWidth * num_chars
+    const minSegLenPx = trackWidthPx * trace.net_name.length;
+
+    for (const seg of trace.segments) {
       const [sx1, sy1] = worldToScreen(vp, seg.start_x, seg.start_y);
       const [sx2, sy2] = worldToScreen(vp, seg.end_x, seg.end_y);
-      const len = Math.hypot(sx2 - sx1, sy2 - sy1);
-      if (len > longestLen) {
-        longestLen = len;
-        longestIdx = i;
+      const segLen = Math.hypot(sx2 - sx1, sy2 - sy1);
+
+      if (segLen < minSegLenPx) continue;
+
+      // KiCad: repeat net name along segment based on viewport size
+      // num_names depends on segment direction vs viewport size
+      const dx = sx2 - sx1;
+      const dy = sy2 - sy1;
+      let numNames = 1;
+
+      if (Math.abs(dy) < 1) {
+        // Horizontal
+        numNames = Math.max(1, Math.round(segLen / vp.width));
+      } else if (Math.abs(dx) < 1) {
+        // Vertical
+        numNames = Math.max(1, Math.round(segLen / vp.height));
+      } else {
+        const minDim = Math.min(vp.width, vp.height);
+        numNames = Math.max(1, Math.round(segLen / (Math.SQRT2 * minDim)));
+      }
+
+      // Rotation angle — keep text upright
+      let angle = Math.atan2(dy, dx);
+      if (angle > Math.PI / 2) angle -= Math.PI;
+      if (angle < -Math.PI / 2) angle += Math.PI;
+
+      // KiCad: penWidth = textSize / 12 — we approximate with strokeText
+      const penWidth = fontSize / 12;
+
+      // Draw net name at evenly spaced positions along segment
+      const divisions = numNames + 1;
+      for (let ii = 1; ii < divisions + 1; ii++) {
+        const t = ii / (divisions + 1);
+        const tx = sx1 + dx * t;
+        const ty = sy1 + dy * t;
+
+        ctx.save();
+        ctx.translate(tx, ty);
+        ctx.rotate(angle);
+
+        // KiCad draws with stroke only (no fill) — gives thinner look
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+        ctx.lineWidth = penWidth;
+        ctx.strokeText(trace.net_name, 0, 0);
+
+        ctx.restore();
+        _textElementsDrawn++;
       }
     }
-
-    if (longestLen < config.fontConfig.netLabelMinSegmentPx) continue;
-
-    const seg = trace.segments[longestIdx];
-    const [sx1, sy1] = worldToScreen(vp, seg.start_x, seg.start_y);
-    const [sx2, sy2] = worldToScreen(vp, seg.end_x, seg.end_y);
-    const midX = (sx1 + sx2) / 2;
-    const midY = (sy1 + sy2) / 2;
-
-    // Rotate along segment
-    let angle = Math.atan2(sy2 - sy1, sx2 - sx1);
-    // Keep text upright (avoid upside-down text)
-    if (angle > Math.PI / 2) angle -= Math.PI;
-    if (angle < -Math.PI / 2) angle += Math.PI;
-
-    ctx.save();
-    ctx.translate(midX, midY);
-    ctx.rotate(angle);
-
-    // Background pill for readability
-    const textMetrics = ctx.measureText(trace.net_name);
-    const padX = 3;
-    const padY = 2;
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-    ctx.fillRect(
-      -textMetrics.width / 2 - padX,
-      -fontSize / 2 - padY,
-      textMetrics.width + padX * 2,
-      fontSize + padY * 2,
-    );
-
-    ctx.fillStyle = '#FFFFFF';
-    ctx.fillText(trace.net_name, 0, 0);
-    ctx.restore();
-
-    _textElementsDrawn++;
   }
 }
 
@@ -1006,6 +1031,7 @@ function drawRoutingPreview(ctx: CanvasRenderingContext2D, vp: Viewport, routing
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
 
+  // Draw committed segments (solid)
   if (routing.committedSegments.length > 0) {
     ctx.strokeStyle = colorWithAlpha(color, 0.7);
     ctx.lineWidth = drawWidth;
@@ -1020,21 +1046,37 @@ function drawRoutingPreview(ctx: CanvasRenderingContext2D, vp: Viewport, routing
     ctx.stroke();
   }
 
-  if (routing.previewSegment) {
-    const seg = routing.previewSegment;
-    const [sx, sy] = worldToScreen(vp, seg.start_x, seg.start_y);
-    const [ex, ey] = worldToScreen(vp, seg.end_x, seg.end_y);
+  // Draw KiCad-style preview path (multi-segment: H/V + 45° diagonal)
+  if (routing.previewPath && routing.previewPath.length >= 2) {
+    const path = routing.previewPath;
 
+    // Draw the preview path as dashed polyline
     ctx.save();
     ctx.setLineDash([8, 4]);
     ctx.strokeStyle = colorWithAlpha(color, 0.8);
     ctx.lineWidth = drawWidth;
     ctx.beginPath();
+    const [sx, sy] = worldToScreen(vp, path[0].x, path[0].y);
     ctx.moveTo(sx, sy);
-    ctx.lineTo(ex, ey);
+    for (let i = 1; i < path.length; i++) {
+      const [px, py] = worldToScreen(vp, path[i].x, path[i].y);
+      ctx.lineTo(px, py);
+    }
     ctx.stroke();
     ctx.restore();
 
+    // Draw small circles at path corners (shows the H/V-to-diagonal bend point)
+    for (let i = 1; i < path.length - 1; i++) {
+      const [cx, cy] = worldToScreen(vp, path[i].x, path[i].y);
+      ctx.beginPath();
+      ctx.arc(cx, cy, 3, 0, Math.PI * 2);
+      ctx.fillStyle = colorWithAlpha(color, 0.6);
+      ctx.fill();
+    }
+
+    // Cursor endpoint indicator
+    const last = path[path.length - 1];
+    const [ex, ey] = worldToScreen(vp, last.x, last.y);
     ctx.beginPath();
     ctx.arc(ex, ey, Math.max(4, drawWidth * 0.6), 0, Math.PI * 2);
     ctx.fillStyle = colorWithAlpha(color, 0.5);
@@ -1047,10 +1089,9 @@ function drawRoutingPreview(ctx: CanvasRenderingContext2D, vp: Viewport, routing
   // Magnetic snap indicator: pulsing circle + crosshair at target pad
   if (routing.snappedToPad) {
     const [snapX, snapY] = worldToScreen(vp, routing.snappedToPad.worldX, routing.snappedToPad.worldY);
-    const snapRadius = 300_000 * vp.scale; // 0.3mm in screen px
+    const snapRadius = 300_000 * vp.scale;
     const drawRadius = Math.max(snapRadius, 6);
 
-    // Pulsing circle (alpha oscillates via time)
     const pulse = 0.4 + 0.2 * Math.sin(Date.now() / 200);
     ctx.beginPath();
     ctx.arc(snapX, snapY, drawRadius, 0, Math.PI * 2);
@@ -1060,7 +1101,6 @@ function drawRoutingPreview(ctx: CanvasRenderingContext2D, vp: Viewport, routing
     ctx.lineWidth = 2;
     ctx.stroke();
 
-    // Crosshair
     const crossLen = drawRadius * 1.5;
     ctx.strokeStyle = colorWithAlpha(color, 0.6);
     ctx.lineWidth = 1.5;
@@ -1072,6 +1112,7 @@ function drawRoutingPreview(ctx: CanvasRenderingContext2D, vp: Viewport, routing
     ctx.stroke();
   }
 
+  // Anchor point (start of current segment)
   const [ax, ay] = worldToScreen(vp, routing.anchorPoint.x, routing.anchorPoint.y);
   ctx.beginPath();
   ctx.arc(ax, ay, 5, 0, Math.PI * 2);
@@ -1081,30 +1122,18 @@ function drawRoutingPreview(ctx: CanvasRenderingContext2D, vp: Viewport, routing
   ctx.lineWidth = 2;
   ctx.stroke();
 
-  // DRC violation circles during routing preview (disabled — see above)
-  // for (const v of routing.drcViolations) {
-  //   const [vx, vy] = worldToScreen(vp, v.x_nm, v.y_nm);
-  //   ctx.beginPath();
-  //   ctx.arc(vx, vy, 12, 0, Math.PI * 2);
-  //   ctx.strokeStyle = '#FF0000';
-  //   ctx.lineWidth = 2.5;
-  //   ctx.stroke();
-  //   ctx.beginPath();
-  //   ctx.arc(vx, vy, 8, 0, Math.PI * 2);
-  //   ctx.fillStyle = 'rgba(255, 0, 0, 0.25)';
-  //   ctx.fill();
-  // }
-
-  if (routing.previewSegment) {
-    const seg = routing.previewSegment;
-    const [ex, ey] = worldToScreen(vp, seg.end_x, seg.end_y);
+  // Status text at cursor
+  if (routing.previewPath && routing.previewPath.length >= 2) {
+    const last = routing.previewPath[routing.previewPath.length - 1];
+    const [ex, ey] = worldToScreen(vp, last.x, last.y);
     ctx.font = '11px system-ui, sans-serif';
     ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
     ctx.textAlign = 'left';
 
-    // Show angle + snap mode indicator
-    const snapMode = routing.snappedToPad ? '⊕' : routing.angleSnapEnabled ? '∠' : '';
-    ctx.fillText(`${routing.snapAngle}° ${snapMode}`, ex + 12, ey - 8);
+    const modeStr = routing.snappedToPad ? '⊕'
+      : routing.angleSnapEnabled ? (routing.cornerMode === 0 ? '45°' : '90°')
+      : 'free';
+    ctx.fillText(`${routing.snapAngle}° ${modeStr}`, ex + 12, ey - 8);
 
     let label = routing.currentLayer;
     if (routing.netName) label = `${routing.netName} [${routing.currentLayer}]`;

@@ -486,7 +486,7 @@ export function buildComponentSnippet(
     lines.push(`    value "${value}"`);
   }
 
-  lines.push(`    // lcsc "${lcscStr}"`);
+  lines.push(`    lcsc "${lcscStr}"`);
   lines.push(`    at 10mm, 10mm`);
   lines.push(`}`);
 

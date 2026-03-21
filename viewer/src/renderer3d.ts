@@ -244,6 +244,9 @@ export class Renderer3D {
     // Build component bodies (on top layer group for now — all top-side)
     this.buildComponents(snapshot.components || [], topGroup);
 
+    // Auto-load 3D models for components that have model_3d UUID
+    this.autoLoad3DModels(snapshot.components || []);
+
     // Apply initial layer visibility
     this.updateLayerVisibility(layers);
 
@@ -839,6 +842,46 @@ export class Renderer3D {
 
   /**
    * Build component body geometry as colored boxes with refdes labels.
+  /**
+   * Auto-load 3D models for components that have a model_3d UUID.
+   * Fetches OBJ from EasyEDA modules API and replaces the placeholder box.
+   * Non-blocking — each model loads asynchronously.
+   */
+  private autoLoad3DModels(components: ComponentInfo[]): void {
+    const EASYEDA_MODULES_BASE = 'https://modules.easyeda.com';
+
+    for (const comp of components) {
+      if (!comp.model_3d) continue;
+
+      // Skip if already loaded
+      if (this.loadedModels.has(comp.refdes)) continue;
+
+      const uuid = comp.model_3d;
+      const refdes = comp.refdes;
+      const objUrl = `${EASYEDA_MODULES_BASE}/3dmodel/${uuid}`;
+
+      // Fire and forget — each model loads independently
+      fetch(objUrl)
+        .then(resp => {
+          if (!resp.ok) {
+            console.warn(`[3D] Auto-load failed for ${refdes}: HTTP ${resp.status}`);
+            return null;
+          }
+          return resp.text();
+        })
+        .then(objText => {
+          if (objText) {
+            this.loadComponentFromOBJ(objText, refdes);
+          }
+        })
+        .catch(err => {
+          console.warn(`[3D] Auto-load error for ${refdes}:`, err);
+        });
+    }
+  }
+
+  /**
+   * Build colored box meshes for each component.
    * SMD parts get 1.2mm height, THT parts get 5mm height.
    * IC packages (U/IC prefix) are dark gray, passives (R/C/L) are tan.
    */

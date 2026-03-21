@@ -19,6 +19,8 @@ import {
   cancelRoute,
   flipLayer,
   toggleAngleSnap,
+  flipPosture,
+  toggleCornerMode,
   resetToIdle,
   setDrcViolations,
   createDrcPreviewChecker,
@@ -486,6 +488,24 @@ export function setupInteraction(
 
       if (e.key === 'a' || e.key === 'A') {
         state.routing = toggleAngleSnap(state.routing);
+        state.onRoutingChange(state.routing);
+        state.dirty = true;
+        e.preventDefault();
+        return;
+      }
+
+      // '/' to flip posture (KiCad-style: straight-first ↔ diagonal-first)
+      if (e.key === '/') {
+        state.routing = flipPosture(state.routing);
+        state.onRoutingChange(state.routing);
+        state.dirty = true;
+        e.preventDefault();
+        return;
+      }
+
+      // 'q' or 'Q' to toggle corner mode (45° mitered ↔ 90° only)
+      if (e.key === 'q' || e.key === 'Q') {
+        state.routing = toggleCornerMode(state.routing);
         state.onRoutingChange(state.routing);
         state.dirty = true;
         e.preventDefault();

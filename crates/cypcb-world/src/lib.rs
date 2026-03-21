@@ -113,6 +113,7 @@ pub use components::{
     NetConnections,
     NetId,
     Pad,
+    PadInstance,
     PadShape,
     PinConnection,
     // Position components

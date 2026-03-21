@@ -1,10 +1,14 @@
 /**
  * JLCPCB / EasyEDA API Client
  *
- * Two pipelines:
+ * Three pipelines:
  * 1. Component search via tscircuit/jlcsearch (CORS-enabled, no auth)
- * 2. 3D model fetch via EasyEDA API: LCSC ID → component data → 3D UUID → OBJ text
+ * 2. Footprint fetch via EasyEDA API: LCSC ID → component data → PAD shapes → PadInfo[]
+ * 3. 3D model fetch via EasyEDA API: LCSC ID → component data → 3D UUID → OBJ text
  */
+
+import type { PadInfo } from './types';
+import { parseEasyEDAFootprint, type EasyEDAFootprint } from './easyeda-footprint-parser';
 
 /** Component result from jlcsearch API */
 export interface JLCPCBComponent {
@@ -43,8 +47,25 @@ export class JLCPCBSearchError extends Error {
 }
 
 const JLCSEARCH_BASE = 'https://jlcsearch.tscircuit.com';
-const EASYEDA_API_BASE = 'https://easyeda.com';
-const EASYEDA_MODULES_BASE = 'https://modules.easyeda.com';
+
+/**
+ * EasyEDA API base URLs.
+ *
+ * In dev mode, Vite proxies /easyeda-api/* and /easyeda-modules/* to the real
+ * EasyEDA servers (see vite.config.ts proxy config), bypassing CORS.
+ *
+ * In production, requests go through the Cloudflare Worker proxy at
+ * VITE_EASYEDA_PROXY_URL, or fall back to direct URLs (which will fail
+ * on CORS in browsers but work in Tauri desktop).
+ */
+const EASYEDA_PROXY_URL = (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_EASYEDA_PROXY_URL) || '';
+
+const EASYEDA_API_BASE = EASYEDA_PROXY_URL
+  ? EASYEDA_PROXY_URL       // production: Cloudflare Worker proxy
+  : '/easyeda-api';          // dev: Vite proxy
+const EASYEDA_MODULES_BASE = EASYEDA_PROXY_URL
+  ? EASYEDA_PROXY_URL       // production: same Worker handles /3dmodel/ paths
+  : '/easyeda-modules';      // dev: Vite proxy
 
 /**
  * Proxy an LCSC image URL through wsrv.nl to bypass hot-link protection.
@@ -127,18 +148,9 @@ export async function searchComponents(
  */
 export async function fetch3DModel(lcscId: number): Promise<string | null> {
   try {
-    // Step 1: Fetch component data from EasyEDA
-    const lcscStr = `C${lcscId}`;
-    const componentUrl =
-      `${EASYEDA_API_BASE}/api/products/${lcscStr}/components?version=6.4.19.5`;
-    const compResponse = await fetch(componentUrl);
-
-    if (!compResponse.ok) {
-      console.error(`[JLCPCB] 3D fetch error: HTTP ${compResponse.status} for ${lcscStr}`);
-      return null;
-    }
-
-    const compData = await compResponse.json();
+    // Step 1: Fetch component data from EasyEDA (use cached if available)
+    const compData = await fetchEasyEDAComponentData(lcscId);
+    if (!compData) return null;
 
     // Step 2: Extract 3D model UUID from shape array
     const uuid = extract3DModelUUID(compData);
@@ -160,6 +172,100 @@ export async function fetch3DModel(lcscId: number): Promise<string | null> {
     console.error(`[JLCPCB] 3D fetch error: ${error}`);
     return null;
   }
+}
+
+// ---------------------------------------------------------------------------
+// EasyEDA component data cache (shared between footprint and 3D pipelines)
+// ---------------------------------------------------------------------------
+
+/** Cache of raw EasyEDA component API responses, keyed by LCSC number */
+const easyedaDataCache = new Map<number, any>();
+
+/**
+ * Fetch EasyEDA component data with caching.
+ * Both footprint and 3D model pipelines need the same API response,
+ * so we cache it to avoid duplicate requests.
+ */
+async function fetchEasyEDAComponentData(lcscId: number): Promise<any | null> {
+  if (easyedaDataCache.has(lcscId)) {
+    return easyedaDataCache.get(lcscId);
+  }
+
+  try {
+    const lcscStr = `C${lcscId}`;
+    const componentUrl =
+      `${EASYEDA_API_BASE}/api/products/${lcscStr}/components?version=6.4.19.5`;
+    const compResponse = await fetch(componentUrl);
+
+    if (!compResponse.ok) {
+      console.error(`[JLCPCB] EasyEDA API error: HTTP ${compResponse.status} for ${lcscStr}`);
+      return null;
+    }
+
+    const compData = await compResponse.json();
+    easyedaDataCache.set(lcscId, compData);
+    return compData;
+  } catch (error) {
+    console.error(`[JLCPCB] EasyEDA API error: ${error}`);
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Footprint cache (parsed PadInfo[] keyed by LCSC ID)
+// ---------------------------------------------------------------------------
+
+/** Cached parsed footprints keyed by LCSC number */
+const footprintCache = new Map<number, EasyEDAFootprint>();
+
+/**
+ * Fetch and parse footprint data for an LCSC part number.
+ * Pipeline: LCSC ID → EasyEDA component API → parse PAD shapes → PadInfo[].
+ *
+ * Returns cached result on subsequent calls for the same part.
+ * Returns null if no footprint data is available — never throws.
+ */
+export async function fetchComponentFootprint(lcscId: number): Promise<EasyEDAFootprint | null> {
+  // Check cache first
+  if (footprintCache.has(lcscId)) {
+    return footprintCache.get(lcscId)!;
+  }
+
+  try {
+    const compData = await fetchEasyEDAComponentData(lcscId);
+    if (!compData) return null;
+
+    const footprint = parseEasyEDAFootprint(compData);
+    if (!footprint) {
+      console.log(`[JLCPCB] No footprint data for C${lcscId}`);
+      return null;
+    }
+
+    footprintCache.set(lcscId, footprint);
+    console.log(`[JLCPCB] Parsed footprint for C${lcscId}: ${footprint.pads.length} pads, 3D: ${footprint.modelUuid ? 'yes' : 'no'}`);
+    return footprint;
+  } catch (error) {
+    console.error(`[JLCPCB] Footprint fetch error for C${lcscId}: ${error}`);
+    return null;
+  }
+}
+
+/**
+ * Get cached footprint pads for an LCSC part number (synchronous).
+ * Returns null if not yet fetched. Use fetchComponentFootprint() to populate.
+ */
+export function getCachedFootprintPads(lcscId: number): PadInfo[] | null {
+  const fp = footprintCache.get(lcscId);
+  return fp ? fp.pads : null;
+}
+
+/**
+ * Get cached 3D model UUID for an LCSC part number (synchronous).
+ * Returns null if not yet fetched or no 3D model available.
+ */
+export function getCached3DModelUuid(lcscId: number): string | null {
+  const fp = footprintCache.get(lcscId);
+  return fp ? fp.modelUuid : null;
 }
 
 /**

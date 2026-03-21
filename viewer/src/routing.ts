@@ -1,14 +1,22 @@
 /**
  * Manual routing state machine and utilities.
  *
- * States: idle → routing (on pad click) → idle (on pad click / Escape)
- *
- * While routing, the user sees a preview trace following the cursor
- * with 45°/90° snapping and live DRC violation overlay.
+ * KiCad-compatible interactive routing:
+ * - Traces constrained to H/V/45° segments
+ * - 2-segment paths: one H/V + one 45° diagonal (or vice versa)
+ * - Automatic posture detection from mouse movement trail
+ * - '/' key to flip posture (straight-first ↔ diagonal-first)
+ * - Magnetic snap to target pads
+ * - Grid snap
  */
 
 import type { ComponentInfo, PadInfo, TraceSegmentInfo, ViolationInfo, BoardSnapshot } from './types';
 import type { PcbEngine } from './wasm';
+import {
+  type Vec2, Dir45, CornerMode,
+  dirFromSeg, isDiagonal, buildInitialTrace,
+  MouseTrailTracer,
+} from './direction45';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -50,6 +58,12 @@ export interface RoutingState {
   snappedToPad: PadHit | null;
   /** All pads on the same net as startPad, pre-computed at route start */
   targetPads: PadHit[];
+  /** KiCad-style multi-segment preview (replaces previewSegment for rendering) */
+  previewPath: Vec2[];
+  /** Current posture direction (KiCad DIRECTION_45) */
+  currentDirection: Dir45;
+  /** Corner mode: 45° mitered (default) or 90° */
+  cornerMode: CornerMode;
 }
 
 export interface PadHit {
@@ -66,6 +80,9 @@ export interface PadHit {
 // Initial state
 // ---------------------------------------------------------------------------
 
+// Module-level mouse trail tracer (KiCad-style posture detection)
+const _mouseTrail = new MouseTrailTracer();
+
 export function createRoutingState(): RoutingState {
   return {
     mode: 'idle',
@@ -80,11 +97,14 @@ export function createRoutingState(): RoutingState {
     traceWidth: 250_000, // 0.25mm default
     gridSnapEnabled: false,
     gridSpacing: 1_270_000, // 1.27mm = 50mil default
-    angleSnapEnabled: false,
+    angleSnapEnabled: true, // KiCad: 45° snap is ON by default
     magneticSnapEnabled: true,
     magneticSnapRadius: 1_000_000, // 1mm
     snappedToPad: null,
     targetPads: [],
+    previewPath: [],
+    currentDirection: Dir45.UNDEFINED,
+    cornerMode: CornerMode.MITERED_45,
   };
 }
 
@@ -217,8 +237,30 @@ export function computeSnappedPoint(
  */
 export function toggleAngleSnap(state: RoutingState): RoutingState {
   const next = !state.angleSnapEnabled;
-  console.log(`[Route] Angle snap: ${next ? 'ON' : 'OFF'}`);
+  console.log(`[Route] Angle snap: ${next ? 'ON (45°)' : 'OFF (free)'}`);
   return { ...state, angleSnapEnabled: next };
+}
+
+/**
+ * Flip posture: straight-first ↔ diagonal-first.
+ * KiCad: '/' key.
+ */
+export function flipPosture(state: RoutingState): RoutingState {
+  if (state.mode !== 'routing') return state;
+  _mouseTrail.flipPosture();
+  console.log('[Route] Posture flipped (/)');
+  return { ...state };
+}
+
+/**
+ * Toggle corner mode: 45° mitered ↔ 90° only.
+ */
+export function toggleCornerMode(state: RoutingState): RoutingState {
+  const next = state.cornerMode === CornerMode.MITERED_45
+    ? CornerMode.MITERED_90
+    : CornerMode.MITERED_45;
+  console.log(`[Route] Corner mode: ${next === CornerMode.MITERED_45 ? '45° mitered' : '90° only'}`);
+  return { ...state, cornerMode: next };
 }
 
 // ---------------------------------------------------------------------------
@@ -337,6 +379,11 @@ export function startRoute(
     ? computeTargetPads(snapshot, padHit.netName, padHit.component.refdes, padHit.pad.number)
     : [];
 
+  // Initialize mouse trail tracer (KiCad-style posture detection)
+  _mouseTrail.clear();
+  _mouseTrail.setDefaultDirections(Dir45.N, Dir45.UNDEFINED);
+  _mouseTrail.addTrailPoint({ x: padHit.worldX, y: padHit.worldY });
+
   console.log(`[Route] idle → routing: pad ${padHit.component.refdes}.${padHit.pad.number} net=${padHit.netName} layer=${layer} targets=${targets.length}`);
 
   return {
@@ -347,22 +394,28 @@ export function startRoute(
     anchorPoint: { x: padHit.worldX, y: padHit.worldY },
     committedSegments: [],
     previewSegment: null,
+    previewPath: [],
     snapAngle: 0,
     netName: padHit.netName,
     drcViolations: [],
     snappedToPad: null,
     targetPads: targets,
+    currentDirection: Dir45.UNDEFINED,
+    cornerMode: state.cornerMode,
   };
 }
 
 /**
- * Update the preview segment during mouse move (while routing).
+ * Update the preview trace during mouse move (while routing).
  *
- * Pipeline: grid snap → magnetic snap → angle snap (if enabled & not snapped).
- * Magnetic snap wins: when cursor is near a target pad, endpoint locks to pad center.
- * Angle snap is optional (toggle A) and only applies when no magnetic snap is active.
+ * KiCad-style behavior:
+ * 1. Grid snap (if enabled)
+ * 2. Magnetic snap to target pads (if cursor near one)
+ * 3. Add point to mouse trail tracer
+ * 4. Get posture from trail tracer (or manual override)
+ * 5. Build 2-segment trace via BuildInitialTrace (H/V + 45° diagonal)
  *
- * @param viewportScale  Current viewport scale (px per nm) — needed for screen-px snap threshold
+ * The preview is a multi-point path, not a single segment.
  */
 export function updatePreview(
   state: RoutingState,
@@ -380,63 +433,117 @@ export function updatePreview(
   const scale = viewportScale ?? 1;
   const magneticHit = findNearestTargetPad(gridAdjusted.x, gridAdjusted.y, state, scale);
 
-  let endPoint: { x: number; y: number };
-  let angleDeg: number;
+  let endPoint: Vec2;
 
   if (magneticHit) {
-    // Magnetic snap wins — lock to pad center
     endPoint = { x: magneticHit.worldX, y: magneticHit.worldY };
-    // Compute angle for display only
-    const dx = endPoint.x - state.anchorPoint.x;
-    const dy = endPoint.y - state.anchorPoint.y;
-    angleDeg = Math.round(((Math.atan2(dy, dx) * 180) / Math.PI + 360) % 360);
-  } else if (state.angleSnapEnabled) {
-    // Angle snap (only when enabled and not magnetically snapped)
-    const snapped = computeSnappedPoint(state.anchorPoint, gridAdjusted);
-    endPoint = { x: snapped.x, y: snapped.y };
-    angleDeg = snapped.angleDeg;
   } else {
-    // Free movement (no angle snap, no magnetic snap)
-    endPoint = gridAdjusted;
-    const dx = endPoint.x - state.anchorPoint.x;
-    const dy = endPoint.y - state.anchorPoint.y;
-    angleDeg = Math.round(((Math.atan2(dy, dx) * 180) / Math.PI + 360) % 360);
+    endPoint = { x: gridAdjusted.x, y: gridAdjusted.y };
   }
+
+  // Feed mouse trail tracer (KiCad posture detection)
+  _mouseTrail.addTrailPoint(endPoint);
+
+  // Get posture direction from mouse trail
+  const anchor: Vec2 = state.anchorPoint;
+  let direction: Dir45;
+
+  if (state.angleSnapEnabled) {
+    // KiCad-style: determine posture automatically from mouse trail
+    direction = _mouseTrail.getPosture(endPoint);
+  } else {
+    // Free angle mode — no 45° constraint
+    direction = Dir45.UNDEFINED;
+  }
+
+  // Build the 2-segment trace path using KiCad's BuildInitialTrace
+  let previewPath: Vec2[];
+
+  if (state.angleSnapEnabled) {
+    previewPath = buildInitialTrace(anchor, endPoint, direction, undefined, state.cornerMode);
+  } else {
+    // Free angle: just a straight line
+    previewPath = [{ ...anchor }, { ...endPoint }];
+  }
+
+  // Convert path to legacy previewSegment (last segment for backward compat)
+  const lastIdx = previewPath.length - 1;
+  const previewSegment: TraceSegmentInfo | null = previewPath.length >= 2
+    ? {
+        start_x: previewPath[lastIdx - 1].x,
+        start_y: previewPath[lastIdx - 1].y,
+        end_x: previewPath[lastIdx].x,
+        end_y: previewPath[lastIdx].y,
+      }
+    : null;
+
+  // Compute angle for display
+  const dx = endPoint.x - anchor.x;
+  const dy = endPoint.y - anchor.y;
+  const angleDeg = Math.round(((Math.atan2(dy, dx) * 180) / Math.PI + 360) % 360);
 
   return {
     ...state,
-    previewSegment: {
-      start_x: state.anchorPoint.x,
-      start_y: state.anchorPoint.y,
-      end_x: endPoint.x,
-      end_y: endPoint.y,
-    },
+    previewSegment: previewSegment,
+    previewPath,
     snapAngle: angleDeg,
     snappedToPad: magneticHit,
+    currentDirection: direction,
   };
 }
 
 /**
  * Add a waypoint (click in empty space while routing).
- * Commits the current preview segment and starts a new one from the endpoint.
+ * Commits the preview path and starts a new segment from the endpoint.
+ * Sets direction from the last committed segment (KiCad behavior).
  */
 export function addWaypoint(state: RoutingState): RoutingState {
-  if (state.mode !== 'routing' || !state.previewSegment) return state;
+  if (state.mode !== 'routing' || state.previewPath.length < 2) return state;
 
-  const seg = state.previewSegment;
-  console.log(`[Route] waypoint at (${(seg.end_x / 1e6).toFixed(2)}, ${(seg.end_y / 1e6).toFixed(2)})mm`);
+  const path = state.previewPath;
+  const newSegments: TraceSegmentInfo[] = [];
+
+  // Convert path points to segments
+  for (let i = 0; i < path.length - 1; i++) {
+    const a = path[i];
+    const b = path[i + 1];
+    // Skip zero-length segments
+    if (Math.abs(a.x - b.x) < 1 && Math.abs(a.y - b.y) < 1) continue;
+    newSegments.push({
+      start_x: a.x, start_y: a.y,
+      end_x: b.x, end_y: b.y,
+    });
+  }
+
+  if (newSegments.length === 0) return state;
+
+  const lastSeg = newSegments[newSegments.length - 1];
+  const endPt = { x: lastSeg.end_x, y: lastSeg.end_y };
+  const newDir = dirFromSeg(
+    { x: lastSeg.start_x, y: lastSeg.start_y },
+    endPt,
+  );
+
+  console.log(`[Route] waypoint at (${(endPt.x / 1e6).toFixed(2)}, ${(endPt.y / 1e6).toFixed(2)})mm dir=${Dir45[newDir]}`);
+
+  // Reset mouse trail for new segment
+  _mouseTrail.clear();
+  _mouseTrail.setDefaultDirections(newDir, Dir45.UNDEFINED);
+  _mouseTrail.addTrailPoint(endPt);
 
   return {
     ...state,
-    committedSegments: [...state.committedSegments, seg],
-    anchorPoint: { x: seg.end_x, y: seg.end_y },
+    committedSegments: [...state.committedSegments, ...newSegments],
+    anchorPoint: endPt,
     previewSegment: null,
+    previewPath: [],
+    currentDirection: newDir,
   };
 }
 
 /**
  * Complete the route by clicking on a target pad.
- * Returns the final list of segments to add as a trace.
+ * Builds final segments from anchor to target using BuildInitialTrace.
  */
 export function completeRoute(
   state: RoutingState,
@@ -444,19 +551,30 @@ export function completeRoute(
 ): { segments: TraceSegmentInfo[]; netName: string; layer: string; width: number } | null {
   if (state.mode !== 'routing') return null;
 
-  // Build final segment from last anchor to target pad center
-  const finalSeg: TraceSegmentInfo = {
-    start_x: state.anchorPoint.x,
-    start_y: state.anchorPoint.y,
-    end_x: targetPad.worldX,
-    end_y: targetPad.worldY,
-  };
+  const target: Vec2 = { x: targetPad.worldX, y: targetPad.worldY };
+  const anchor: Vec2 = state.anchorPoint;
 
-  const allSegments = [...state.committedSegments, finalSeg];
+  // Build final path from anchor to target pad
+  const finalPath = state.angleSnapEnabled
+    ? buildInitialTrace(anchor, target, state.currentDirection, undefined, state.cornerMode)
+    : [{ ...anchor }, { ...target }];
+
+  // Convert path to segments
+  const finalSegments: TraceSegmentInfo[] = [];
+  for (let i = 0; i < finalPath.length - 1; i++) {
+    const a = finalPath[i];
+    const b = finalPath[i + 1];
+    if (Math.abs(a.x - b.x) < 1 && Math.abs(a.y - b.y) < 1) continue;
+    finalSegments.push({
+      start_x: a.x, start_y: a.y,
+      end_x: b.x, end_y: b.y,
+    });
+  }
+
+  const allSegments = [...state.committedSegments, ...finalSegments];
 
   console.log(`[Route] routing → idle: completed ${allSegments.length} segments to ${targetPad.component.refdes}.${targetPad.pad.number}`);
 
-  // Note: caller is responsible for resetting state to idle (clearing snappedToPad, targetPads)
   return {
     segments: allSegments,
     netName: state.netName,
@@ -476,6 +594,7 @@ export function resetToIdle(state: RoutingState): RoutingState {
     angleSnapEnabled: state.angleSnapEnabled,
     magneticSnapEnabled: state.magneticSnapEnabled,
     magneticSnapRadius: state.magneticSnapRadius,
+    cornerMode: state.cornerMode,
   };
 }
 
@@ -516,7 +635,22 @@ export function setDrcViolations(state: RoutingState, violations: ViolationInfo[
  */
 export function previewSegmentsFlat(state: RoutingState): number[] {
   const segs = [...state.committedSegments];
-  if (state.previewSegment) segs.push(state.previewSegment);
+
+  // Add preview path segments (KiCad-style multi-segment)
+  if (state.previewPath && state.previewPath.length >= 2) {
+    for (let i = 0; i < state.previewPath.length - 1; i++) {
+      const a = state.previewPath[i];
+      const b = state.previewPath[i + 1];
+      if (Math.abs(a.x - b.x) < 1 && Math.abs(a.y - b.y) < 1) continue;
+      segs.push({
+        start_x: a.x, start_y: a.y,
+        end_x: b.x, end_y: b.y,
+      });
+    }
+  } else if (state.previewSegment) {
+    segs.push(state.previewSegment);
+  }
+
   const flat: number[] = [];
   for (const s of segs) {
     flat.push(

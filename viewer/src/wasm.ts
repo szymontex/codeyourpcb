@@ -18,6 +18,68 @@
 import type { BoardSnapshot, ComponentInfo, PadInfo, NetInfo, PinRef, BoardInfo, TraceSegmentInfo, ViolationInfo } from './types';
 import { pointToSegmentDistance } from './geometry';
 
+// ---------------------------------------------------------------------------
+// Dynamic footprint registry — populated from EasyEDA API at insert time
+// ---------------------------------------------------------------------------
+
+/**
+ * Registry of footprint pad definitions fetched from EasyEDA.
+ * Key: footprint/package name as it appears in .cypcb source (e.g. "LQFP-48", "QFN-24").
+ * Value: PadInfo[] with positions relative to component origin.
+ *
+ * When a user inserts a JLCPCB component, the insert flow pre-fetches the
+ * footprint from EasyEDA and registers it here before the editor re-parses.
+ * The parser's getFootprintPads() checks this registry first.
+ */
+const dynamicFootprintRegistry = new Map<string, PadInfo[]>();
+
+/**
+ * Register a dynamic footprint for use by the parser.
+ * Call this after fetching footprint data from EasyEDA API.
+ *
+ * @param packageName The package/footprint name as it will appear in .cypcb source
+ * @param pads Pad definitions in PadInfo format (nm, relative to origin)
+ */
+export function registerDynamicFootprint(packageName: string, pads: PadInfo[]): void {
+  dynamicFootprintRegistry.set(packageName, pads);
+  console.log(`[Footprint] Registered dynamic footprint: ${packageName} (${pads.length} pads)`);
+}
+
+/**
+ * Check if a dynamic footprint is registered for the given package name.
+ */
+export function hasDynamicFootprint(packageName: string): boolean {
+  return dynamicFootprintRegistry.has(packageName);
+}
+
+/**
+ * Get all registered dynamic footprint names (for debugging).
+ */
+export function getRegisteredFootprints(): string[] {
+  return Array.from(dynamicFootprintRegistry.keys());
+}
+
+/**
+ * Registry mapping LCSC part numbers to 3D model UUIDs.
+ * Populated during footprint fetch. Used by the parser to set model_3d on components.
+ */
+const model3dRegistry = new Map<string, string>();
+
+/**
+ * Register a 3D model UUID for an LCSC part / package name.
+ */
+export function register3DModel(packageName: string, uuid: string): void {
+  model3dRegistry.set(packageName, uuid);
+  console.log(`[3D] Registered model for ${packageName}: ${uuid}`);
+}
+
+/**
+ * Get a registered 3D model UUID for a package name.
+ */
+export function get3DModelUuid(packageName: string): string | null {
+  return model3dRegistry.get(packageName) ?? null;
+}
+
 /**
  * Interface for the PCB rendering engine exposed from Rust/WASM
  */
@@ -158,9 +220,15 @@ function parseUnit(value: number, unit: string): number {
 
 /**
  * Get standard pad definitions for common footprints.
+ * First checks the dynamic footprint registry (populated from EasyEDA API),
+ * then falls back to hardcoded templates for common packages.
  */
 function getFootprintPads(footprint: string): PadInfo[] {
-  // Pad templates must match the Rust footprint library (cypcb-world/src/footprint/).
+  // Check dynamic registry first (populated by JLCPCB component inserts)
+  const dynamic = dynamicFootprintRegistry.get(footprint);
+  if (dynamic) return dynamic;
+
+  // Hardcoded templates for common packages (matches Rust footprint library)
   // All coordinates are in nanometers, relative to component origin.
   // layer_mask: 1 = TopCopper (SMD), 3 = TopCopper|BottomCopper (THT)
   const padTemplates: Record<string, PadInfo[]> = {
@@ -322,7 +390,7 @@ function parseSource(source: string): { snapshot: BoardSnapshot; errors: string[
         pads,
         body_width_nm: bodyWidthNm,
         body_height_nm: bodyHeightNm,
-        model_3d: null,
+        model_3d: get3DModelUuid(compMatch[3]),
       };
       inComponent = true;
       braceDepth += openBraces;
@@ -364,6 +432,13 @@ function parseSource(source: string): { snapshot: BoardSnapshot; errors: string[
         if (atMatch[5]) {
           currentComponent.rotation_mdeg = Math.round(parseFloat(atMatch[5]) * 1000);
         }
+      }
+      // Parse lcsc attribute — recognized but stored only for reference.
+      // The actual footprint/3D data is pre-fetched and registered before parsing.
+      const lcscMatch = line.match(/^lcsc\s+"([^"]*)"$/);
+      if (lcscMatch) {
+        // Store LCSC ID in metadata (could be used for BOM export)
+        // For now, just acknowledge it so it doesn't get flagged as unknown
       }
     }
 

@@ -43,6 +43,27 @@ impl std::fmt::Display for NetId {
     }
 }
 
+/// Marker component for pad instances spawned for DRC.
+///
+/// Each pad of a placed component gets its own ECS entity with this marker,
+/// a [`NetId`], and spatial index entries. This enables per-pad clearance
+/// checking — a trace on net VCC near a VCC pad won't trigger a violation,
+/// while a trace on net SIG near a GND pad will.
+///
+/// The `parent` field links back to the component entity for reference.
+#[derive(Component, Debug, Clone, Copy)]
+pub struct PadInstance {
+    /// Entity of the parent component.
+    pub parent: Entity,
+}
+
+impl PadInstance {
+    /// Create a new pad instance marker.
+    pub fn new(parent: Entity) -> Self {
+        PadInstance { parent }
+    }
+}
+
 /// Reference designator for a component (R1, C1, U1, etc.).
 ///
 /// Reference designators uniquely identify components on a board.

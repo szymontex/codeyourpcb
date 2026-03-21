@@ -30,8 +30,8 @@ use cypcb_drc::{run_drc, DesignRules, DrcViolation};
 use cypcb_world::footprint::FootprintLibrary;
 use cypcb_world::{
     components::trace::{Trace, Via},
-    BoardWorld, Entity, FootprintRef, Layer, NetConnections, NetId, PadShape, PinConnection,
-    Position, RefDes, Rotation, Value,
+    BoardWorld, Entity, FootprintRef, Layer, NetConnections, NetId, PadInstance, PadShape,
+    PinConnection, Position, RefDes, Rotation, Value,
 };
 
 // Import sync and parse only in native mode
@@ -186,7 +186,7 @@ impl PcbEngine {
             source: TraceSource::Manual,
         };
 
-        let entity = self.world.spawn_entity(trace);
+        let entity = self.world.spawn_entity((trace, net_id));
 
         // Rebuild spatial index to include the new trace
         self.rebuild_spatial_index_full();
@@ -620,17 +620,175 @@ impl PcbEngine {
 
     /// Rebuild the spatial index including components, traces, and vias.
     fn rebuild_spatial_index_full(&mut self) {
-        let lib = &self.footprint_lib;
-        self.world.rebuild_spatial_index_with_traces(|name| {
-            lib.get(name).map(|fp| fp.courtyard).unwrap_or_else(|| {
-                cypcb_core::Rect::from_center_size(
-                    Point::ORIGIN,
-                    (Nm::from_mm(1.0), Nm::from_mm(1.0)),
-                )
-            })
-        });
-    }
+        use cypcb_world::components::trace::{Trace as TraceComp, Via};
+        use cypcb_world::components::{FootprintRef, Position, Rotation};
+        use cypcb_world::SpatialEntry;
+        use std::collections::HashMap;
 
+        let mut entries = Vec::new();
+
+        // ---- Index individual pad entities ----
+        // Each pad was spawned as a separate entity with PadInstance + NetId + Position.
+        // We look up the footprint to get pad size/layer for the AABB.
+        {
+            let ecs = self.world.ecs_mut();
+            let mut query = ecs.query::<(Entity, &PadInstance, &Position)>();
+            let pad_entities: Vec<_> = query
+                .iter(ecs)
+                .map(|(e, pi, pos)| (e, pi.parent, pos.0))
+                .collect();
+
+            // Also need parent component's footprint to get pad sizes
+            let mut fp_query = ecs.query::<(Entity, &FootprintRef, &Position, &Rotation)>();
+            let comps: Vec<_> = fp_query
+                .iter(ecs)
+                .map(|(e, f, p, r)| (e, f.as_str().to_string(), p.0, r.0))
+                .collect();
+
+            // Build parent entity -> (footprint_name, comp_pos, rotation) map
+            let comp_map: HashMap<u32, (&str, Point, i32)> = comps
+                .iter()
+                .map(|(e, f, p, r)| (e.index(), (f.as_str(), *p, *r)))
+                .collect();
+
+            for (entity, parent, pad_pos) in &pad_entities {
+                // Find pad definition by matching position
+                if let Some(&(fp_name, _comp_pos, _rotation)) = comp_map.get(&parent.index()) {
+                    if let Some(fp) = self.footprint_lib.get(fp_name) {
+                        // Find the pad definition closest to this pad's position
+                        // (since pad entities store world position)
+                        let mut best_pad: Option<&cypcb_world::footprint::PadDef> = None;
+                        let mut best_dist = i64::MAX;
+
+                        let radians = (_rotation as f64 / 1000.0) * std::f64::consts::PI / 180.0;
+                        let cos_r = radians.cos();
+                        let sin_r = radians.sin();
+
+                        for pd in &fp.pads {
+                            let px = pd.position.x.0 as f64;
+                            let py = pd.position.y.0 as f64;
+                            let rx = (px * cos_r - py * sin_r) as i64;
+                            let ry = (px * sin_r + py * cos_r) as i64;
+                            let wx = _comp_pos.x.0 + rx;
+                            let wy = _comp_pos.y.0 + ry;
+                            let dist = (wx - pad_pos.x.0).abs() + (wy - pad_pos.y.0).abs();
+                            if dist < best_dist {
+                                best_dist = dist;
+                                best_pad = Some(pd);
+                            }
+                        }
+
+                        if let Some(pd) = best_pad {
+                            let half_w = pd.size.0 .0 / 2;
+                            let half_h = pd.size.1 .0 / 2;
+                            let half_ext = half_w.max(half_h);
+                            let layer_mask = if pd.layers.is_empty() {
+                                0xFFFFFFFF
+                            } else {
+                                pd.layers.iter().fold(0u32, |m, l| m | l.to_copper_mask())
+                            };
+                            entries.push(SpatialEntry::from_raw(
+                                *entity,
+                                pad_pos.x.0 - half_ext,
+                                pad_pos.y.0 - half_ext,
+                                pad_pos.x.0 + half_ext,
+                                pad_pos.y.0 + half_ext,
+                                layer_mask,
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+
+        // ---- Also index component courtyards (for non-copper DRC like courtyard overlap) ----
+        {
+            let ecs = self.world.ecs_mut();
+            let mut query = ecs.query::<(Entity, &Position, &FootprintRef)>();
+            let items: Vec<_> = query
+                .iter(ecs)
+                .map(|(e, p, f)| (e, p.0, f.as_str().to_string()))
+                .collect();
+
+            // Skip courtyard indexing for copper clearance — pads are indexed above.
+            // We still keep courtyards for other DRC rules (courtyard clearance, etc.)
+            // but mark them with layer_mask = 0 so copper clearance check skips them.
+            for (entity, pos, footprint_name) in &items {
+                if let Some(fp) = self.footprint_lib.get(footprint_name) {
+                    let bounds = fp.courtyard;
+                    let min = Point::new(
+                        Nm(pos.x.0 + bounds.min.x.0),
+                        Nm(pos.y.0 + bounds.min.y.0),
+                    );
+                    let max = Point::new(
+                        Nm(pos.x.0 + bounds.max.x.0),
+                        Nm(pos.y.0 + bounds.max.y.0),
+                    );
+                    // layer_mask = 0 means this entry won't match any copper layer check
+                    entries.push(SpatialEntry::new(*entity, min, max, 0));
+                }
+            }
+        }
+
+        // ---- Index trace segments ----
+        {
+            let ecs = self.world.ecs_mut();
+            let mut query = ecs.query::<(Entity, &TraceComp)>();
+            let traces: Vec<_> = query
+                .iter(ecs)
+                .map(|(e, t)| {
+                    let segs: Vec<_> = t.segments.iter().map(|s| (s.start, s.end)).collect();
+                    (e, t.width.0, t.layer.to_copper_mask(), segs)
+                })
+                .collect();
+
+            for (entity, width, layer_mask, segs) in &traces {
+                let half_width = width / 2;
+                for (start, end) in segs {
+                    let min_x = start.x.0.min(end.x.0) - half_width;
+                    let min_y = start.y.0.min(end.y.0) - half_width;
+                    let max_x = start.x.0.max(end.x.0) + half_width;
+                    let max_y = start.y.0.max(end.y.0) + half_width;
+                    entries.push(SpatialEntry::from_raw(
+                        *entity, min_x, min_y, max_x, max_y, *layer_mask,
+                    ));
+                }
+            }
+        }
+
+        // ---- Index vias ----
+        {
+            let ecs = self.world.ecs_mut();
+            let mut query = ecs.query::<(Entity, &Via)>();
+            let vias: Vec<_> = query
+                .iter(ecs)
+                .map(|(e, v)| {
+                    (
+                        e,
+                        v.position,
+                        v.outer_diameter.0 / 2,
+                        v.start_layer.to_copper_mask() | v.end_layer.to_copper_mask(),
+                    )
+                })
+                .collect();
+
+            for (entity, position, radius, layer_mask) in &vias {
+                entries.push(SpatialEntry::from_raw(
+                    *entity,
+                    position.x.0 - radius,
+                    position.y.0 - radius,
+                    position.x.0 + radius,
+                    position.y.0 + radius,
+                    *layer_mask,
+                ));
+            }
+        }
+
+        self.world
+            .ecs_mut()
+            .resource_mut::<cypcb_world::SpatialIndex>()
+            .rebuild(entries);
+    }
     /// Clear autorouted traces and vias from the world.
     fn clear_autorouted_traces(&mut self) {
         use cypcb_world::components::trace::{Trace, TraceSource, Via};
@@ -703,7 +861,7 @@ impl PcbEngine {
             source: TraceSource::Autorouted,
         };
 
-        self.world.spawn_entity(trace);
+        self.world.spawn_entity((trace, NetId::new(net_id_num)));
         Ok(())
     }
 
@@ -738,7 +896,7 @@ impl PcbEngine {
             locked: false,
         };
 
-        self.world.spawn_entity(via);
+        self.world.spawn_entity((via, NetId::new(net_id_num)));
         Ok(())
     }
 
@@ -818,20 +976,49 @@ impl PcbEngine {
             let rotation = Rotation(comp.rotation_mdeg);
             let footprint_ref = FootprintRef::new(&comp.footprint);
 
-            // Build NetConnections from pin_to_net map
+            // Build NetConnections from pin_to_net map.
+            // We iterate over the pin_to_net map (built from snapshot.nets)
+            // and match entries belonging to this component's refdes.
+            // This works regardless of whether the footprint library has pads.
             let mut nets = NetConnections::new();
-            // Get pad numbers from footprint library (since JS parser may not have pads)
-            if let Some(fp) = self.footprint_lib.get(&comp.footprint) {
-                for pad in &fp.pads {
-                    let key = format!("{}.{}", comp.refdes, pad.number);
-                    if let Some(&net_id) = pin_to_net.get(&key) {
-                        nets.add(PinConnection::new(&pad.number, net_id));
-                    }
+            let prefix = format!("{}.", comp.refdes);
+            for (key, &net_id) in &pin_to_net {
+                if let Some(pin) = key.strip_prefix(&prefix) {
+                    nets.add(PinConnection::new(pin, net_id));
                 }
             }
 
-            self.world
+            let comp_entity = self.world
                 .spawn_component(refdes, value, position, rotation, footprint_ref, nets);
+
+            // Spawn individual pad entities for per-pad DRC clearance checking.
+            // Each pad gets its own entity with NetId + PadInstance marker so the
+            // clearance checker can do precise same-net exemption per pad, not per
+            // component (which would incorrectly exempt all nets on the component).
+            if let Some(fp) = self.footprint_lib.get(&comp.footprint) {
+                let radians = (comp.rotation_mdeg as f64 / 1000.0) * std::f64::consts::PI / 180.0;
+                let cos_r = radians.cos();
+                let sin_r = radians.sin();
+
+                for pad_def in &fp.pads {
+                    // Look up which net this specific pad is on
+                    let pad_key = format!("{}.{}", comp.refdes, pad_def.number);
+                    if let Some(&net_id) = pin_to_net.get(&pad_key) {
+                        // Compute world position (rotate pad around component origin)
+                        let px = pad_def.position.x.0 as f64;
+                        let py = pad_def.position.y.0 as f64;
+                        let rx = (px * cos_r - py * sin_r) as i64;
+                        let ry = (px * sin_r + py * cos_r) as i64;
+                        let wx = comp.x_nm + rx;
+                        let wy = comp.y_nm + ry;
+
+                        // Spawn pad entity with NetId for per-pad DRC
+                        let pad_marker = PadInstance::new(comp_entity);
+                        let pad_pos = Position(Point::new(Nm(wx), Nm(wy)));
+                        self.world.spawn_entity((pad_marker, net_id, pad_pos));
+                    }
+                }
+            }
         }
 
         // Rebuild spatial index for DRC queries (includes traces and vias)
