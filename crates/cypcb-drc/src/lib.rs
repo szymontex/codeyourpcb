@@ -45,6 +45,8 @@ pub use violation::{DrcViolation, ViolationKind};
 
 use cypcb_world::BoardWorld;
 
+use hashbrown::HashMap;
+
 /// Result of running DRC on a board.
 #[derive(Debug, Clone, Default)]
 pub struct DrcResult {
@@ -136,6 +138,10 @@ pub fn run_drc(world: &mut BoardWorld, rules: &DesignRules) -> DrcResult {
         violations.extend(checker.check(world, rules));
     }
 
+    // Enrich violation messages with entity names (refdes, net, pad info).
+    // Build lookups from ECS once, then annotate all violations.
+    enrich_violation_messages(&mut violations, world);
+
     #[cfg(not(target_arch = "wasm32"))]
     let duration_ms = start.elapsed().as_millis() as u64;
     #[cfg(target_arch = "wasm32")]
@@ -144,6 +150,119 @@ pub fn run_drc(world: &mut BoardWorld, rules: &DesignRules) -> DrcResult {
     DrcResult {
         violations,
         duration_ms,
+    }
+}
+
+/// Enrich violation messages with human-readable entity identifiers.
+///
+/// Builds lookups from ECS (entity → refdes, entity → net name, entity → pad parent)
+/// and prepends entity identifiers to each violation message so users can see
+/// which components/traces are involved.
+fn enrich_violation_messages(violations: &mut [DrcViolation], world: &mut BoardWorld) {
+    use cypcb_world::components::trace::{Trace, Via};
+    use cypcb_world::components::{NetId, PadInstance, RefDes};
+
+    // Entity index → refdes string
+    let refdes_map: HashMap<u32, String> = {
+        let ecs = world.ecs_mut();
+        let mut query = ecs.query::<(bevy_ecs::entity::Entity, &RefDes)>();
+        query
+            .iter(ecs)
+            .map(|(e, r)| (e.index(), r.as_str().to_string()))
+            .collect()
+    };
+
+    // Entity index → net name (for traces/vias with NetId)
+    let net_name_map: HashMap<u32, String> = {
+        let ecs = world.ecs_mut();
+        let mut query = ecs.query::<(bevy_ecs::entity::Entity, &NetId)>();
+        let pairs: Vec<_> = query.iter(ecs).map(|(e, n)| (e.index(), *n)).collect();
+
+        pairs
+            .into_iter()
+            .filter_map(|(idx, net_id)| {
+                world.net_name(net_id).map(|name| (idx, name.to_string()))
+            })
+            .collect()
+    };
+
+    // Entity index → parent refdes (for PadInstance entities)
+    let pad_parent_map: HashMap<u32, String> = {
+        let ecs = world.ecs_mut();
+        let mut query = ecs.query::<(bevy_ecs::entity::Entity, &PadInstance)>();
+        let pads: Vec<_> = query
+            .iter(ecs)
+            .map(|(e, pi)| (e.index(), pi.parent.index()))
+            .collect();
+        pads.into_iter()
+            .filter_map(|(idx, parent_idx)| {
+                refdes_map.get(&parent_idx).map(|r| (idx, r.clone()))
+            })
+            .collect()
+    };
+
+    // Entity index → "trace on <net>" or "via on <net>"
+    let trace_label_map: HashMap<u32, String> = {
+        let ecs = world.ecs_mut();
+        let mut query = ecs.query::<(bevy_ecs::entity::Entity, &Trace)>();
+        query
+            .iter(ecs)
+            .map(|(e, _)| {
+                let net = net_name_map
+                    .get(&e.index())
+                    .map(|n| n.as_str())
+                    .unwrap_or("?");
+                (e.index(), format!("trace '{}'", net))
+            })
+            .collect()
+    };
+
+    let via_label_map: HashMap<u32, String> = {
+        let ecs = world.ecs_mut();
+        let mut query = ecs.query::<(bevy_ecs::entity::Entity, &Via)>();
+        query
+            .iter(ecs)
+            .map(|(e, _)| {
+                let net = net_name_map
+                    .get(&e.index())
+                    .map(|n| n.as_str())
+                    .unwrap_or("?");
+                (e.index(), format!("via '{}'", net))
+            })
+            .collect()
+    };
+
+    // Helper: get human label for an entity
+    let label = |idx: u32| -> String {
+        if let Some(r) = refdes_map.get(&idx) {
+            return r.clone();
+        }
+        if let Some(r) = pad_parent_map.get(&idx) {
+            return format!("pad on {}", r);
+        }
+        if let Some(l) = trace_label_map.get(&idx) {
+            return l.clone();
+        }
+        if let Some(l) = via_label_map.get(&idx) {
+            return l.clone();
+        }
+        format!("entity #{}", idx)
+    };
+
+    for v in violations.iter_mut() {
+        let primary = label(v.entity.index());
+        let secondary = v.other_entity.map(|e| label(e.index()));
+
+        // Prepend entity info to the message
+        let between = match secondary {
+            Some(ref other) => format!("{} ↔ {}: ", primary, other),
+            None => format!("{}: ", primary),
+        };
+
+        // Only prepend if message doesn't already contain the refdes
+        if !v.message.contains(&primary) {
+            v.message = format!("{}{}", between, v.message);
+        }
     }
 }
 

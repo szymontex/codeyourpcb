@@ -1,0 +1,73 @@
+// 3D Model Alignment Test Board
+// All components use real JLCPCB parts with LCSC IDs.
+// Footprints and 3D models are fetched from EasyEDA API.
+// Place components at corners/edges to verify alignment.
+version 1
+
+board alignment_test {
+    size 50mm x 40mm
+    layers 2
+}
+
+// Bottom-left corner — 0805 10k resistor (UNI-ROYAL)
+component R1 resistor "R0805" {
+    value "10k"
+    lcsc "C17414"
+    at 3mm, 3mm
+}
+
+// Top-right corner — 0603 100nF capacitor (YAGEO)
+component C1 capacitor "C0603" {
+    value "100nF"
+    lcsc "C14663"
+    at 47mm, 37mm
+}
+
+// Bottom-right corner — 0603 red LED, rotated 90°
+component LED1 led "LED0603-RD" {
+    value "RED"
+    lcsc "C2286"
+    at 47mm, 3mm rotate 90
+}
+
+// Center — STM32F103C8T6 LQFP-48 (big IC, many pins)
+component U1 ic "LQFP-48_L7.0-W7.0-P0.50-LS9.0-BL" {
+    value "STM32F103C8T6"
+    lcsc "C8734"
+    at 25mm, 20mm
+}
+
+// Left edge — through-hole 3-pin header
+component J1 connector "HDR-TH_3P-P2.54-V-M-1" {
+    value "HEADER"
+    lcsc "C49257"
+    at 4mm, 20mm
+}
+
+// Top-left — SOD-123 diode
+component D1 diode "SOD-123_L2.8-W1.8-LS3.7-RD" {
+    value "1N4148"
+    lcsc "C2099"
+    at 3mm, 37mm
+}
+
+// Simple nets to show ratsnest
+net VCC {
+    R1.1
+    U1.1
+    J1.1
+}
+
+net GND {
+    C1.2
+    LED1.2
+    U1.24
+    J1.3
+    D1.1
+}
+
+net SIG {
+    R1.2
+    U1.10
+    LED1.1
+}

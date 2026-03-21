@@ -20,6 +20,7 @@ When adding a new shortcut:
 | `3` | Toggle 3D view | Global (not in editor/input) | `main.ts` |
 | `Ctrl+Shift+T` | Toggle theme (Light/Dark) | Global | `main.ts` |
 | `Ctrl+S` | Save file (web only) | Global | `main.ts` |
+| `Ctrl+O` | Open file / project manager | Global | `main.ts` |
 | `Ctrl+J` | Toggle JLCPCB parts search panel | Global | `main.ts` |
 | `?` | Show keyboard shortcuts help | Global (not in editor/input) | `main.ts` |
 | `Escape` | Close panel / clear selection | Contextual | `main.ts` |

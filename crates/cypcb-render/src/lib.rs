@@ -311,6 +311,14 @@ impl PcbEngine {
         query.iter(ecs).count()
     }
 
+    /// Get the minimum copper clearance in nanometers.
+    ///
+    /// Returns the clearance value from the active design rules (default preset).
+    /// Used by the JS routing engine to enforce clearance during interactive routing.
+    pub fn get_min_clearance_nm(&self) -> i64 {
+        DesignRules::default().min_clearance.0
+    }
+
     /// Get DRC violations as JSON string (WASM-friendly).
     #[cfg(target_arch = "wasm32")]
     pub fn get_violations_json(&self) -> String {

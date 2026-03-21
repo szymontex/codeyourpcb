@@ -72,6 +72,13 @@ export class PcbEngine {
      */
     auto_route_with_params(params_json: string): string;
     /**
+     * Get the minimum copper clearance in nanometers.
+     *
+     * Returns the clearance value from the active design rules (default preset).
+     * Used by the JS routing engine to enforce clearance during interactive routing.
+     */
+    get_min_clearance_nm(): bigint;
+    /**
      * Get a snapshot of the current board state for rendering (WASM version).
      *
      * Returns a JsValue that can be used directly in JavaScript.
@@ -151,6 +158,7 @@ export interface InitOutput {
     readonly pcbengine_auto_route_debug: (a: number, b: number, c: number, d: number) => void;
     readonly pcbengine_auto_route_variants: (a: number, b: number) => void;
     readonly pcbengine_auto_route_with_params: (a: number, b: number, c: number, d: number) => void;
+    readonly pcbengine_get_min_clearance_nm: (a: number) => bigint;
     readonly pcbengine_get_snapshot: (a: number) => number;
     readonly pcbengine_get_trace_at_point: (a: number, b: bigint, c: bigint, d: bigint) => number;
     readonly pcbengine_get_violations_json: (a: number, b: number) => void;

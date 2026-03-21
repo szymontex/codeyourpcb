@@ -25,7 +25,7 @@ import type { DisplayUnit } from './units';
 import { initProjectManager, showProjectManager, hideProjectManager, addRecentFile } from './project-manager';
 import { initSearchPanel, hideSearchPanel, toggleSearchPanel, isSearchPanelVisible, buildComponentSnippet } from './jlcpcb-panel';
 import { fetch3DModel, fetchComponentFootprint } from './jlcpcb';
-import { registerDynamicFootprint, register3DModel } from './wasm';
+import { registerDynamicFootprint, register3DModel, hasDynamicFootprint } from './wasm';
 import { initVariantPanel, showVariants, hideVariants, isVariantPanelVisible, type VariantData } from './variant-panel';
 import type { VariantPreviewData } from './renderer';
 
@@ -189,6 +189,7 @@ async function init(): Promise<void> {
   const undoBtn = document.getElementById('undo-btn') as HTMLButtonElement;
   const redoBtn = document.getElementById('redo-btn') as HTMLButtonElement;
   const routeBtn = document.getElementById('route-btn') as HTMLButtonElement;
+  const routeMenuBtn = document.getElementById('route-menu-btn') as HTMLButtonElement;
   const cancelRouteBtn = document.getElementById('cancel-route-btn') as HTMLButtonElement;
   const autoRouteCb = document.getElementById('auto-route') as HTMLInputElement;
   const routingStatus = document.getElementById('routing-status')!;
@@ -217,6 +218,9 @@ async function init(): Promise<void> {
     if (violations.length > 0) {
       errorCountEl.textContent = String(violations.length);
       errorBadge.classList.remove('hidden');
+      // Update panel header count too
+      const panelCount = document.getElementById('error-panel-count');
+      if (panelCount) panelCount.textContent = String(violations.length);
     } else {
       errorBadge.classList.add('hidden');
       errorPanel.classList.add('hidden');
@@ -257,6 +261,50 @@ async function init(): Promise<void> {
     snapshot = s;
     padNetMap = s.nets ? buildPadNetMap(s.nets) : new Map();
     return s;
+  }
+
+  /**
+   * Scan source for `lcsc "C..."` attributes and auto-fetch footprints
+   * from EasyEDA for any packages not yet in the dynamic registry.
+   * After fetching, re-parses the source so components get real pads.
+   */
+  async function autoFetchLcscFootprints(source: string): Promise<boolean> {
+    // Find all component blocks with lcsc attributes
+    // Pattern: component REFDES TYPE "PACKAGE" { ... lcsc "CNNNN" ... }
+    const compRegex = /component\s+\w+\s+\w+\s+"([^"]+)"\s*\{[^}]*lcsc\s+"C(\d+)"[^}]*\}/g;
+    const toFetch: { pkg: string; lcscId: number }[] = [];
+
+    let match;
+    while ((match = compRegex.exec(source)) !== null) {
+      const pkg = match[1];
+      const lcscId = parseInt(match[2], 10);
+      if (!hasDynamicFootprint(pkg) && !isNaN(lcscId)) {
+        toFetch.push({ pkg, lcscId });
+      }
+    }
+
+    if (toFetch.length === 0) return false;
+
+    console.log(`[LCSC] Auto-fetching ${toFetch.length} footprint(s)...`);
+    let fetched = 0;
+
+    await Promise.all(toFetch.map(async ({ pkg, lcscId }) => {
+      try {
+        const fp = await fetchComponentFootprint(lcscId);
+        if (fp) {
+          registerDynamicFootprint(pkg, fp.pads);
+          if (fp.modelUuid) {
+            register3DModel(pkg, fp.modelUuid, fp.model3dOffsetX, fp.model3dOffsetY);
+          }
+          fetched++;
+        }
+      } catch (e) {
+        console.warn(`[LCSC] Failed to fetch footprint for C${lcscId}:`, e);
+      }
+    }));
+
+    console.log(`[LCSC] Fetched ${fetched}/${toFetch.length} footprints`);
+    return fetched > 0;
   }
 
   // 3D view state
@@ -638,6 +686,18 @@ async function init(): Promise<void> {
         // Mark as dirty for re-render
         dirty = true;
 
+        // Auto-fetch LCSC footprints if any new lcsc attributes found
+        autoFetchLcscFootprints(content).then((fetched) => {
+          if (fetched) {
+            engine.load_source(content);
+            pullSnapshot();
+            dirty = true;
+            if (is3DActive && renderer3d && snapshot) {
+              renderer3d.updateBoard(snapshot, layers);
+            }
+          }
+        });
+
         debounceTimer = null;
       }, 300);
     });
@@ -807,6 +867,19 @@ async function init(): Promise<void> {
       addRecentFile(currentFilePath, snap, buildRenderStateForThumbnail(), source);
       hideProjectManager();
       dirty = true;
+
+      // Auto-fetch LCSC footprints (async — re-parses after fetch)
+      autoFetchLcscFootprints(source).then((fetched) => {
+        if (fetched) {
+          // Re-parse with real footprints now registered
+          engine.load_source(source);
+          pullSnapshot();
+          dirty = true;
+          if (is3DActive && renderer3d && snapshot) {
+            renderer3d.updateBoard(snapshot, layers);
+          }
+        }
+      });
     },
     onLoadRecent: (source, name) => {
       undoStack.clear();
@@ -836,6 +909,18 @@ async function init(): Promise<void> {
 
       hideProjectManager();
       dirty = true;
+
+      // Auto-fetch LCSC footprints (async — re-parses after fetch)
+      autoFetchLcscFootprints(source).then((fetched) => {
+        if (fetched) {
+          engine.load_source(source);
+          pullSnapshot();
+          dirty = true;
+          if (is3DActive && renderer3d && snapshot) {
+            renderer3d.updateBoard(snapshot, layers);
+          }
+        }
+      });
     },
     onNewBlank: (source) => {
       undoStack.clear();
@@ -1464,37 +1549,175 @@ async function init(): Promise<void> {
     // Clear existing content safely
     errorList.textContent = '';
 
-    if (!snapshot?.violations) {
+    if (!snapshot?.violations || snapshot.violations.length === 0) {
       const noErrors = document.createElement('div');
       noErrors.className = 'error-item';
-      noErrors.textContent = 'No errors';
+      noErrors.innerHTML = '<span class="error-icon">✅</span><span class="error-body"><span class="error-title">No DRC errors</span></span>';
       errorList.appendChild(noErrors);
       return;
     }
 
-    // Build DOM nodes programmatically — never insert user-controlled text as HTML
-    snapshot.violations.forEach((v, i) => {
+    // Human-readable descriptions and icons per violation kind
+    const kindMeta: Record<string, { icon: string; label: string }> = {
+      'clearance':           { icon: '⚡', label: 'Copper clearance' },
+      'edge-clearance':      { icon: '📐', label: 'Edge clearance' },
+      'trace-width':         { icon: '📏', label: 'Trace too narrow' },
+      'drill-size':          { icon: '🔩', label: 'Drill too small' },
+      'via-drill':           { icon: '🔩', label: 'Via drill too small' },
+      'via-diameter':        { icon: '⭕', label: 'Via too small' },
+      'annular-ring':        { icon: '🔘', label: 'Annular ring' },
+      'hole-to-hole':        { icon: '🕳️', label: 'Holes too close' },
+      'unconnected-pin':     { icon: '🔌', label: 'Unconnected pin' },
+      'keepout-violation':   { icon: '🚫', label: 'Keepout zone' },
+      'courtyard-clearance': { icon: '📦', label: 'Components overlap' },
+      'solder-mask-bridge':  { icon: '🩹', label: 'Solder mask bridge' },
+      'silk-clearance':      { icon: '🏷️', label: 'Silk over copper' },
+    };
+
+    snapshot.violations.forEach((v) => {
+      const meta = kindMeta[v.kind] ?? { icon: '⚠️', label: v.kind };
+
+      // Parse detail from the raw message
+      const detail = formatViolationDetail(v);
+      const locationMm = `(${(v.x_nm / 1e6).toFixed(2)}, ${(v.y_nm / 1e6).toFixed(2)}) mm`;
+
       const item = document.createElement('div');
       item.className = 'error-item';
-      item.dataset.index = String(i);
 
-      const kind = document.createElement('span');
-      kind.className = 'error-kind';
-      kind.textContent = `[${v.kind}]`;
+      const icon = document.createElement('span');
+      icon.className = 'error-icon';
+      icon.textContent = meta.icon;
 
-      const message = document.createElement('span');
-      message.className = 'error-message';
-      message.textContent = v.message;
+      const body = document.createElement('div');
+      body.className = 'error-body';
 
-      item.appendChild(kind);
-      item.appendChild(message);
+      const title = document.createElement('div');
+      title.className = 'error-title';
+      title.textContent = meta.label;
+
+      const detailParts = detail.split('\n');
+
+      const detailEl = document.createElement('div');
+      detailEl.className = 'error-detail';
+      detailEl.textContent = detailParts[0];
+
+      const loc = document.createElement('div');
+      loc.className = 'error-location';
+      loc.textContent = locationMm;
+
+      body.appendChild(title);
+      body.appendChild(detailEl);
+
+      // Entity labels line (e.g. "trace 'VCC' ↔ pad on R1")
+      if (detailParts.length > 1) {
+        const entitiesEl = document.createElement('div');
+        entitiesEl.className = 'error-entities';
+        entitiesEl.textContent = detailParts[1];
+        body.appendChild(entitiesEl);
+      }
+
+      body.appendChild(loc);
+      item.appendChild(icon);
+      item.appendChild(body);
       errorList.appendChild(item);
 
-      // Click handler for zoom-to-location
       item.addEventListener('click', () => {
         zoomToLocation(v.x_nm, v.y_nm);
       });
     });
+  }
+
+  /**
+   * Format violation detail into a human-readable string.
+   */
+  function formatViolationDetail(v: ViolationInfo): string {
+    const msg = v.message;
+
+    // Extract entity labels if present (format: "label ↔ label: original message")
+    let entities = '';
+    let core = msg;
+    const entityMatch = msg.match(/^(.+?): (.+)$/);
+    if (entityMatch && entityMatch[1].includes('↔')) {
+      entities = entityMatch[1];
+      core = entityMatch[2];
+    } else if (entityMatch && !entityMatch[2].includes('violation')) {
+      // Single entity prefix without "violation" in rest — skip
+    } else if (entityMatch) {
+      entities = entityMatch[1];
+      core = entityMatch[2];
+    }
+
+    // Format the core message
+    let detail = '';
+
+    // "Clearance violation: 0.00mm actual, 0.15mm required"
+    const clearanceMatch = core.match(/([\d.]+)mm actual.*?([\d.]+)mm required/);
+    if (clearanceMatch) {
+      const actual = parseFloat(clearanceMatch[1]);
+      const required = parseFloat(clearanceMatch[2]);
+      if (actual === 0) {
+        detail = `Items touching — need ${required}mm gap`;
+      } else {
+        detail = `${actual}mm gap — need at least ${required}mm`;
+      }
+    }
+
+    // "Unconnected pin: R1.2"
+    if (!detail) {
+      const pinMatch = core.match(/Unconnected pin: (.+)/);
+      if (pinMatch) detail = `${pinMatch[1]} has no net connection`;
+    }
+
+    // "Component R1 placed in keepout zone 'X'"
+    if (!detail) {
+      const keepoutMatch = core.match(/Component (\S+) placed in (.+)/);
+      if (keepoutMatch) detail = `${keepoutMatch[1]} is inside ${keepoutMatch[2]}`;
+    }
+
+    // "Courtyard overlap: ..."
+    if (!detail) {
+      const courtyardMatch = core.match(/Courtyard overlap.*?([\d.]+)mm actual.*?([\d.]+)mm required/);
+      if (courtyardMatch) detail = `Components too close — need ${courtyardMatch[2]}mm clearance`;
+    }
+
+    // "Via diameter violation: ..."
+    if (!detail) {
+      const viaMatch = core.match(/Via diameter.*?([\d.]+)mm actual.*?([\d.]+)mm required/);
+      if (viaMatch) detail = `Via is ${viaMatch[1]}mm — minimum ${viaMatch[2]}mm`;
+    }
+
+    // "Hole-to-hole violation: ..."
+    if (!detail) {
+      const holeMatch = core.match(/Hole-to-hole.*?([\d.]+)mm actual.*?([\d.]+)mm required/);
+      if (holeMatch) detail = `Holes ${holeMatch[1]}mm apart — need ${holeMatch[2]}mm`;
+    }
+
+    // "Drill size violation at R1.1: ..."
+    if (!detail) {
+      const drillMatch = core.match(/Drill size.*?at (\S+).*?([\d.]+)mm actual.*?([\d.]+)mm minimum/);
+      if (drillMatch) detail = `${drillMatch[1]}: ${drillMatch[2]}mm drill — minimum ${drillMatch[3]}mm`;
+    }
+
+    // "Annular ring violation at R1.1: ..."
+    if (!detail) {
+      const ringMatch = core.match(/Annular ring.*?at (\S+).*?([\d.]+)mm actual.*?([\d.]+)mm required/);
+      if (ringMatch) detail = `${ringMatch[1]}: ${ringMatch[2]}mm ring — minimum ${ringMatch[3]}mm`;
+    }
+
+    // "Edge clearance violation: ..."
+    if (!detail) {
+      const edgeMatch = core.match(/Edge clearance.*?([\d.]+)mm actual.*?([\d.]+)mm required/);
+      if (edgeMatch) detail = `${edgeMatch[1]}mm from edge — need ${edgeMatch[2]}mm`;
+    }
+
+    // Fallback
+    if (!detail) detail = core;
+
+    // Append entity labels if present
+    if (entities) {
+      return `${detail}\n${entities}`;
+    }
+    return detail;
   }
 
   /**
@@ -1738,17 +1961,20 @@ async function init(): Promise<void> {
    * Update UI to reflect autorouter state
    */
   function updateRoutingUI(state: AutorouteUiState): void {
+    const routeLabel = routeBtn.querySelector('.tb-route-label');
     if (state.isRouting) {
       routeBtn.disabled = true;
       routeBtn.classList.add('routing');
-      routeBtn.textContent = 'Routing...';
+      routeMenuBtn.classList.add('routing');
+      if (routeLabel) routeLabel.textContent = 'Routing…';
       cancelRouteBtn.classList.remove('hidden');
       routingStatus.classList.remove('hidden');
       routingProgress.textContent = 'This may take a moment — the browser will be unresponsive while routing.';
     } else {
       routeBtn.disabled = false;
       routeBtn.classList.remove('routing');
-      routeBtn.textContent = 'Route';
+      routeMenuBtn.classList.remove('routing');
+      if (routeLabel) routeLabel.textContent = 'Route';
       cancelRouteBtn.classList.add('hidden');
       routingStatus.classList.add('hidden');
     }
@@ -2100,11 +2326,10 @@ async function init(): Promise<void> {
   });
 
   // ========================================================================
-  // Tuning Panel
+  // Route Menu Dropdown (auto-route + tuning)
   // ========================================================================
 
-  const tuningToggle = document.getElementById('tuning-toggle') as HTMLButtonElement;
-  const tuningPanel = document.getElementById('tuning-panel')!;
+  const routeMenuDropdown = document.getElementById('route-menu-dropdown')!;
   const tuneViaCost = document.getElementById('tune-via-cost') as HTMLInputElement;
   const tuneLayerPref = document.getElementById('tune-layer-pref') as HTMLInputElement;
   const tuneRoundness = document.getElementById('tune-roundness') as HTMLInputElement;
@@ -2125,20 +2350,19 @@ async function init(): Promise<void> {
   tuneDensity.value = String(savedParams.density);
   tuneDensityVal.textContent = savedParams.density.toFixed(1);
 
-  // Toggle panel visibility
-  tuningToggle.addEventListener('click', (e) => {
+  // Toggle route menu
+  routeMenuBtn.addEventListener('click', (e) => {
     e.stopPropagation();
-    tuningPanel.classList.toggle('hidden');
-    console.log(`[Tuning] Panel ${tuningPanel.classList.contains('hidden') ? 'hidden' : 'visible'}`);
+    routeMenuDropdown.classList.toggle('hidden');
     updateTuningDebugSurface();
   });
 
-  // Close tuning panel on click outside
+  // Close route menu on click outside
   document.addEventListener('click', (e) => {
-    if (!tuningPanel.classList.contains('hidden') &&
-        !tuningPanel.contains(e.target as Node) &&
-        e.target !== tuningToggle) {
-      tuningPanel.classList.add('hidden');
+    if (!routeMenuDropdown.classList.contains('hidden') &&
+        !routeMenuDropdown.contains(e.target as Node) &&
+        e.target !== routeMenuBtn) {
+      routeMenuDropdown.classList.add('hidden');
       updateTuningDebugSurface();
     }
   });
@@ -2200,7 +2424,7 @@ async function init(): Promise<void> {
    */
   function updateTuningDebugSurface(): void {
     (window as any).__tuningPanel = {
-      visible: !tuningPanel.classList.contains('hidden'),
+      visible: !routeMenuDropdown.classList.contains('hidden'),
       params: readTuningSliders(),
     };
   }
@@ -2391,6 +2615,11 @@ async function init(): Promise<void> {
     if ((e.ctrlKey || e.metaKey) && e.key === 's' && !isDesktop()) {
       e.preventDefault();
       await handleSaveFile();
+    }
+    // Ctrl+O to open file / show project manager
+    if ((e.ctrlKey || e.metaKey) && e.key === 'o') {
+      e.preventDefault();
+      openBtn.click();
     }
     // '3' key toggles 3D view (skip if typing in editor/input)
     if (e.key === '3' && !e.ctrlKey && !e.metaKey && !e.altKey) {

@@ -69,6 +69,8 @@ export interface RoutingState {
   obstacles: ObstacleInfo[];
   /** Whether the current preview path has collisions */
   hasCollision: boolean;
+  /** Minimum copper clearance in nm (from design rules, default 150_000 = 0.15mm) */
+  clearanceNm: number;
 }
 
 export interface PadHit {
@@ -87,6 +89,7 @@ export interface PadHit {
 
 // Module-level mouse trail tracer (KiCad-style posture detection)
 const _mouseTrail = new MouseTrailTracer();
+let _lastWalkaroundLog = 0;
 
 export function createRoutingState(): RoutingState {
   return {
@@ -112,6 +115,7 @@ export function createRoutingState(): RoutingState {
     cornerMode: CornerMode.MITERED_45,
     obstacles: [],
     hasCollision: false,
+    clearanceNm: 150_000, // default; overridden from engine at route start
   };
 }
 
@@ -491,7 +495,7 @@ export function updatePreview(
     fullPath.length >= 2 ? fullPath : previewPath,
     snapshot ?? null,
     state.netName,
-    150_000, // 0.15mm clearance
+    state.clearanceNm,
     state.traceWidth,
     padNetMap,
   );
@@ -501,21 +505,33 @@ export function updatePreview(
   let hasCollision = obstacles.length > 0;
 
   if (hasCollision && snapshot) {
-    const clearance = 150_000; // 0.15mm
+    const clearance = state.clearanceNm;
     const hulls = buildObstacleHulls(snapshot, state.netName, clearance, state.traceWidth, padNetMap);
 
     if (hulls.length > 0) {
       const walkedPath = walkaroundPath(previewPath, hulls);
 
       if (walkedPath && walkedPath.length >= 2) {
-        // Walkaround succeeded — use the new path and recheck for collisions
+        // Walkaround succeeded — use the new path
         finalPath = walkedPath;
         const remainingObstacles = checkRouteObstacles(
           walkedPath, snapshot, state.netName, clearance, state.traceWidth, padNetMap,
         );
         hasCollision = remainingObstacles.length > 0;
       }
-      // If walkaround returned null (stuck), keep original path in red
+      // Throttled debug logging (once per 500ms)
+      const now = Date.now();
+      if (!_lastWalkaroundLog || now - _lastWalkaroundLog > 500) {
+        _lastWalkaroundLog = now;
+        if (walkedPath && walkedPath.length >= 2) {
+          console.log(`[Walkaround] ${hasCollision ? 'PARTIAL' : 'OK'}: ${obstacles.length} obs, ${hulls.length} hulls, path ${previewPath.length}→${walkedPath.length} pts`);
+        } else {
+          console.warn(`[Walkaround] STUCK: ${hulls.length} hulls, path ${previewPath.length} pts`);
+        }
+      }
+    } else if (!_lastWalkaroundLog || Date.now() - _lastWalkaroundLog > 500) {
+      _lastWalkaroundLog = Date.now();
+      console.warn(`[Walkaround] No hulls built (padNetMap=${padNetMap?.size ?? 0})`);
     }
   }
 

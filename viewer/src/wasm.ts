@@ -138,6 +138,9 @@ export interface PcbEngine {
    */
   trace_count(): number;
 
+  /** Get minimum copper clearance in nanometers from active design rules. */
+  get_min_clearance_nm(): number;
+
   /**
    * Rotate a component by delta millidegrees.
    * @param refdes Reference designator (e.g. "R1")
@@ -193,6 +196,7 @@ interface WasmPcbEngine {
   get_trace_at_point(x_nm: bigint, y_nm: bigint, tolerance_nm: bigint): number;
   run_drc_incremental(): number;
   trace_count(): number;
+  get_min_clearance_nm(): number;
   get_violations_json(): string;
   rotate_component(refdes: string, delta_mdeg: number): boolean;
   set_board_size(width_nm: bigint, height_nm: bigint): boolean;
@@ -826,6 +830,13 @@ class WasmPcbEngineAdapter implements PcbEngine {
     return this.cachedSnapshot?.traces?.length ?? 0;
   }
 
+  get_min_clearance_nm(): number {
+    if (typeof this.wasmEngine.get_min_clearance_nm === 'function') {
+      return this.wasmEngine.get_min_clearance_nm();
+    }
+    return 150_000; // Default 0.15mm fallback
+  }
+
   rotate_component(refdes: string, delta_mdeg: number): boolean {
     const result = this.wasmEngine.rotate_component(refdes, delta_mdeg);
     if (result) {
@@ -1013,6 +1024,10 @@ class MockPcbEngine implements PcbEngine {
 
   trace_count(): number {
     return this.snapshot.traces.length;
+  }
+
+  get_min_clearance_nm(): number {
+    return 150_000; // Mock: 0.15mm default
   }
 
   rotate_component(refdes: string, delta_mdeg: number): boolean {

@@ -177,6 +177,17 @@ export class PcbEngine {
         }
     }
     /**
+     * Get the minimum copper clearance in nanometers.
+     *
+     * Returns the clearance value from the active design rules (default preset).
+     * Used by the JS routing engine to enforce clearance during interactive routing.
+     * @returns {bigint}
+     */
+    get_min_clearance_nm() {
+        const ret = wasm.pcbengine_get_min_clearance_nm(this.__wbg_ptr);
+        return ret;
+    }
+    /**
      * Get a snapshot of the current board state for rendering (WASM version).
      *
      * Returns a JsValue that can be used directly in JavaScript.

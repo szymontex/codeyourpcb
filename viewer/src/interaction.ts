@@ -604,6 +604,10 @@ export function setupInteraction(
     const padHit = hitTestPad(state.snapshot, worldX, worldY, PAD_HIT_TOLERANCE_NM);
     if (padHit && padHit.netName) {
       state.routing = startRoute(state.routing, padHit, state.snapshot);
+      // Read clearance from engine design rules
+      if (state.engine) {
+        state.routing = { ...state.routing, clearanceNm: state.engine.get_min_clearance_nm() };
+      }
       ensureDrcChecker();
       state.onRoutingChange(state.routing);
       state.onRouteStart?.(padHit.netName);

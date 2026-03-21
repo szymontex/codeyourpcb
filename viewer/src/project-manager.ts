@@ -44,6 +44,12 @@ const TEMPLATES: TemplateInfo[] = [
     description: '5V regulated power supply — 7805 with filter caps',
     file: 'simple-psu.cypcb',
   },
+  {
+    id: 'alignment-test',
+    name: '3D Alignment Test',
+    description: 'Components at corners & edges — verify 3D model placement',
+    file: 'alignment-test.cypcb',
+  },
 ];
 
 // ---------------------------------------------------------------------------

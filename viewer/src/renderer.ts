@@ -176,14 +176,9 @@ export function render(ctx: CanvasRenderingContext2D, state: RenderState): void 
     }
   }
 
-  // Draw violations on top of everything (disabled — DRC circles clutter the view
-  // and post-routing violations are currently false positives from spatial index
-  // mismatch between JS-side traces and WASM world state)
-  // if (showViolations && snapshot.violations) {
-  //   for (const violation of snapshot.violations) {
-  //     drawViolation(ctx, viewport, violation);
-  //   }
-  // }
+  // DRC violations are shown in the error badge + error panel (click to zoom).
+  // Visual markers on the board are intentionally disabled — red circles
+  // clutter the view and obscure the actual copper geometry.
 
   // ---- TEXT PASS (after all shapes, for readability) ----
 
