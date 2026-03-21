@@ -467,11 +467,45 @@ export function updatePreview(
   const magneticHit = findNearestTargetPad(gridAdjusted.x, gridAdjusted.y, state, scale);
 
   let endPoint: Vec2;
+  let snappedToTrace = false;
 
   if (magneticHit) {
     endPoint = { x: magneticHit.worldX, y: magneticHit.worldY };
   } else {
-    endPoint = { x: gridAdjusted.x, y: gridAdjusted.y };
+    // Try magnetic snap to existing traces of the same net
+    let traceSnap: Vec2 | null = null;
+    if (state.magneticSnapEnabled && snapshot?.traces) {
+      const screenRadiusWorld = 15 / scale;
+      const snapRadius = Math.max(state.magneticSnapRadius, screenRadiusWorld);
+      let bestDist = Infinity;
+
+      for (const trace of snapshot.traces) {
+        if (trace.net_name !== state.netName) continue;
+        for (const seg of trace.segments) {
+          const sx = Number(seg.start_x), sy = Number(seg.start_y);
+          const ex = Number(seg.end_x), ey = Number(seg.end_y);
+          // Nearest point on segment
+          const dx = ex - sx, dy = ey - sy;
+          const lenSq = dx * dx + dy * dy;
+          if (lenSq < 1) continue;
+          const t = Math.max(0, Math.min(1, ((gridAdjusted.x - sx) * dx + (gridAdjusted.y - sy) * dy) / lenSq));
+          const nx = sx + t * dx, ny = sy + t * dy;
+          const dist = Math.hypot(gridAdjusted.x - nx, gridAdjusted.y - ny);
+          if (dist <= snapRadius && dist < bestDist) {
+            bestDist = dist;
+            // Snap to nearest 45°-aligned point on the segment
+            traceSnap = { x: Math.round(nx), y: Math.round(ny) };
+          }
+        }
+      }
+    }
+
+    if (traceSnap) {
+      endPoint = traceSnap;
+      snappedToTrace = true;
+    } else {
+      endPoint = { x: gridAdjusted.x, y: gridAdjusted.y };
+    }
   }
 
   // Feed mouse trail tracer (KiCad posture detection)
@@ -558,7 +592,11 @@ export function updatePreview(
     previewSegment: finalPreviewSegment,
     previewPath: finalPath,
     snapAngle: angleDeg,
-    snappedToPad: magneticHit,
+    snappedToPad: magneticHit || (snappedToTrace ? {
+      component: { refdes: '__trace__', value: '', x_nm: endPoint.x, y_nm: endPoint.y, rotation_mdeg: 0, footprint: '', pads: [], body_width_nm: 0, body_height_nm: 0, model_3d: null, silk: [] },
+      pad: { number: '0', x_nm: 0, y_nm: 0, width_nm: 100000, height_nm: 100000, shape: 'rect', layer_mask: 1, drill_nm: 0 },
+      worldX: endPoint.x, worldY: endPoint.y, netName: state.netName,
+    } as PadHit : null),
     currentDirection: direction,
     obstacles,
     hasCollision,
