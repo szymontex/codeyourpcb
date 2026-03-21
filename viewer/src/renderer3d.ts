@@ -491,9 +491,20 @@ export class Renderer3D {
       model.add(mesh);
     }
 
-    // Copy transform from placeholder — XY position and Z rotation.
-    // OBJ models from EasyEDA are already centered on the footprint origin (0,0),
-    // so we just need the component position (XY) and board surface height (Z).
+    // Place model at component position, on top of board.
+    // Re-center model XY so its bounding box center aligns with the
+    // pad centroid (placeholder position). This handles OBJ models that
+    // have their origin at pin 1 rather than at the geometric center.
+    const bbox = new THREE.Box3().setFromObject(model);
+    const bboxCenter = new THREE.Vector3();
+    bbox.getCenter(bboxCenter);
+
+    // Shift children so model bbox center maps to (0,0,0)
+    model.children.forEach((child) => {
+      child.position.x -= bboxCenter.x;
+      child.position.y -= bboxCenter.y;
+    });
+
     const pos = (placeholder as THREE.Mesh).position.clone();
     const rot = (placeholder as THREE.Mesh).rotation.clone();
     model.position.set(pos.x, pos.y, BOARD_THICKNESS_MM);

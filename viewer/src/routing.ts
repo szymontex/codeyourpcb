@@ -17,7 +17,7 @@ import {
   dirFromSeg, buildInitialTrace,
   MouseTrailTracer,
 } from './direction45';
-import { buildObstacleHulls, walkaroundPath } from './walkaround';
+import { dodgeObstacles } from './dodge';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -501,39 +501,15 @@ export function updatePreview(
     padNetMap,
   );
 
-  // Walkaround: if collisions detected, try to route around obstacles
+  // Dodge obstacles: reroute around pads of other nets
   let finalPath = previewPath;
   let hasCollision = obstacles.length > 0;
 
-  if (hasCollision && snapshot) {
-    const clearance = state.clearanceNm;
-    const hulls = buildObstacleHulls(snapshot, state.netName, clearance, state.traceWidth, padNetMap);
-
-    if (hulls.length > 0) {
-      const walkedPath = walkaroundPath(previewPath, hulls);
-
-      if (walkedPath && walkedPath.length >= 2) {
-        // Walkaround succeeded — use the new path
-        finalPath = walkedPath;
-        const remainingObstacles = checkRouteObstacles(
-          walkedPath, snapshot, state.netName, clearance, state.traceWidth, padNetMap,
-        );
-        hasCollision = remainingObstacles.length > 0;
-      }
-      // Throttled debug logging (once per 500ms)
-      const now = Date.now();
-      if (!_lastWalkaroundLog || now - _lastWalkaroundLog > 500) {
-        _lastWalkaroundLog = now;
-        if (walkedPath && walkedPath.length >= 2) {
-          console.log(`[Walkaround] ${hasCollision ? 'PARTIAL' : 'OK'}: ${obstacles.length} obs, ${hulls.length} hulls, path ${previewPath.length}→${walkedPath.length} pts`);
-        } else {
-          console.warn(`[Walkaround] STUCK: ${hulls.length} hulls, path ${previewPath.length} pts`);
-        }
-      }
-    } else if (!_lastWalkaroundLog || Date.now() - _lastWalkaroundLog > 500) {
-      _lastWalkaroundLog = Date.now();
-      console.warn(`[Walkaround] No hulls built (padNetMap=${padNetMap?.size ?? 0})`);
-    }
+  if (hasCollision && snapshot && padNetMap) {
+    finalPath = dodgeObstacles(previewPath, snapshot, state.netName, state.clearanceNm, state.traceWidth, padNetMap);
+    // Recheck after dodge
+    const remaining = checkRouteObstacles(finalPath, snapshot, state.netName, state.clearanceNm, state.traceWidth, padNetMap);
+    hasCollision = remaining.length > 0;
   }
 
   // Recompute legacy previewSegment from final path

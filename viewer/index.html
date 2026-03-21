@@ -107,15 +107,15 @@
     }
     /* Primary action button (Route) */
     .tb-btn-primary {
-      background: var(--success);
-      color: white;
-      border-color: var(--success);
-      font-weight: 600;
-      padding: 4px 14px;
+      background: none;
+      color: var(--text-secondary);
+      border-color: transparent;
+      font-weight: 500;
+      padding: 4px 10px;
     }
     .tb-btn-primary:hover {
-      filter: brightness(0.9);
-      color: white;
+      background: var(--bg-secondary);
+      color: var(--text-primary);
     }
     .tb-btn-primary.routing {
       background: var(--warning);
@@ -290,7 +290,7 @@
       margin-left: 0;
       border-top-right-radius: 0;
       border-bottom-right-radius: 0;
-      border-right: 1px solid rgba(255,255,255,0.2);
+      border-right: 1px solid var(--border-secondary);
     }
     #route-btn:disabled {
       opacity: 0.35;
@@ -311,6 +311,10 @@
       border-bottom-left-radius: 0;
       padding: 4px 4px;
       min-width: 22px;
+    }
+    .tb-route-caret:hover {
+      background: var(--bg-secondary);
+      color: var(--text-primary);
     }
     .tb-route-caret.routing {
       background: var(--warning);
