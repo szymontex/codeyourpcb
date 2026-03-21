@@ -331,7 +331,10 @@ async function init(): Promise<void> {
       width: canvas.width,
       height: canvas.height,
     };
-    interactionState.viewport = viewport;
+    // Sync to interaction state if it exists (not yet initialized on first call)
+    if (typeof interactionState !== 'undefined' && interactionState) {
+      interactionState.viewport = viewport;
+    }
     dirty = true;
   }
   resize();
