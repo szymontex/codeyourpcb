@@ -696,9 +696,14 @@ impl PcbEngine {
                         }
 
                         if let Some(pd) = best_pad {
-                            let half_w = pd.size.0 .0 / 2;
-                            let half_h = pd.size.1 .0 / 2;
-                            let half_ext = half_w.max(half_h);
+                            let hw = pd.size.0 .0 / 2; // half width
+                            let hh = pd.size.1 .0 / 2; // half height
+                            // Compute tight AABB for rotated rectangle.
+                            // |cos|*hw + |sin|*hh gives the axis-aligned half-extent.
+                            let abs_cos = cos_r.abs();
+                            let abs_sin = sin_r.abs();
+                            let half_x = (abs_cos * hw as f64 + abs_sin * hh as f64) as i64;
+                            let half_y = (abs_sin * hw as f64 + abs_cos * hh as f64) as i64;
                             let layer_mask = if pd.layers.is_empty() {
                                 0xFFFFFFFF
                             } else {
@@ -706,10 +711,10 @@ impl PcbEngine {
                             };
                             entries.push(SpatialEntry::from_raw(
                                 *entity,
-                                pad_pos.x.0 - half_ext,
-                                pad_pos.y.0 - half_ext,
-                                pad_pos.x.0 + half_ext,
-                                pad_pos.y.0 + half_ext,
+                                pad_pos.x.0 - half_x,
+                                pad_pos.y.0 - half_y,
+                                pad_pos.x.0 + half_x,
+                                pad_pos.y.0 + half_y,
                                 layer_mask,
                             ));
                         }

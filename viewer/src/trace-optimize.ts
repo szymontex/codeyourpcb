@@ -40,23 +40,14 @@ export function simplifyTrace(segments: TraceSegmentInfo[]): TraceSegmentInfo[] 
     // Skip zero-length
     if (Math.abs(curr.x - prev.x) < 100 && Math.abs(curr.y - prev.y) < 100) continue;
 
-    // Check if colinear with previous direction (exact or near-colinear)
+    // Check if colinear with previous segment (exact same direction only)
     if (simplified.length >= 2) {
       const pp = simplified[simplified.length - 2];
       const dirPrev = dirFromSeg(pp, prev);
       const dirCurr = dirFromSeg(prev, curr);
 
-      // Exact colinear
       if (dirPrev !== Dir45.UNDEFINED && dirPrev === dirCurr) {
-        simplified[simplified.length - 1] = curr;
-        continue;
-      }
-
-      // Also check: is pp→curr a valid 45° direction?
-      // If so, prev is a redundant bend point on a straight line
-      const dirDirect = dirFromSeg(pp, curr);
-      if (dirDirect !== Dir45.UNDEFINED && dirDirect === dirPrev) {
-        // pp→curr has same direction as pp→prev — prev is redundant
+        // Exact colinear — extend previous segment
         simplified[simplified.length - 1] = curr;
         continue;
       }
