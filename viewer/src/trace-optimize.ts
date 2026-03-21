@@ -101,43 +101,66 @@ export function optimizeTrace(
     // Try to merge consecutive segment pairs
     for (let i = 0; i < pts.length - 2; i++) {
       const a = pts[i];
+      const b = pts[i + 1];
       const c = pts[i + 2];
 
-      // Can we replace A→B→C with a direct A→C via BuildInitialTrace?
-      const direct = buildInitialTrace(a, c, Dir45.UNDEFINED);
+      // Use existing first segment direction as posture hint
+      const existingDir = dirFromSeg(a, b);
 
-      if (direct.length <= 2) {
-        // Direct connection possible (straight line or single bend)
-        // Check it's actually shorter
-        const oldLen = segLen(a, pts[i + 1]) + segLen(pts[i + 1], c);
-        const newLen = pathLen(direct);
-
-        if (newLen <= oldLen * 1.01) { // allow 1% tolerance
-          // Check collision before accepting
-          const candidate = [...pts.slice(0, i + 1), ...pts.slice(i + 2)];
-          if (hasCollision(candidate)) continue;
-          // Replace: remove middle point
-          pts.splice(i + 1, 1);
-          improved = true;
-          break; // restart scan
+      // Can we replace A→B→C with a direct A→C?
+      // Try both postures, pick one that matches existing direction
+      let bestDirect: Vec2[] | null = null;
+      for (let j = 0; j < 2; j++) {
+        const d = buildInitialTrace(a, c, Dir45.UNDEFINED, j === 1);
+        if (d.length > 3) continue; // too many segments
+        // Prefer posture that matches existing first segment direction
+        if (d.length >= 2) {
+          const newDir = dirFromSeg(d[0], d[1]);
+          if (newDir === existingDir || bestDirect === null) {
+            bestDirect = d;
+            if (newDir === existingDir) break; // perfect match
+          }
         }
       }
 
-      // Try 3→2 reduction: A→B→C→D → try BuildInitialTrace(A, D)
-      if (i + 3 < pts.length) {
-        const d = pts[i + 3];
-        const direct2 = buildInitialTrace(a, d, Dir45.UNDEFINED);
+      if (bestDirect && bestDirect.length <= 3) {
+        const oldLen = segLen(a, b) + segLen(b, c);
+        const newLen = pathLen(bestDirect);
 
-        if (direct2.length <= 3) { // at most one bend
-          const oldLen = segLen(a, pts[i+1]) + segLen(pts[i+1], pts[i+2]) + segLen(pts[i+2], d);
-          const newLen = pathLen(direct2);
+        if (newLen <= oldLen * 1.01) {
+          // Build candidate with this replacement
+          const candidate = [...pts.slice(0, i), ...bestDirect, ...pts.slice(i + 3)];
+          if (hasCollision(candidate)) continue;
+          pts = candidate;
+          improved = true;
+          break;
+        }
+      }
+
+      // Try 3→2 reduction: A→B→C→D
+      if (i + 3 < pts.length) {
+        const dd = pts[i + 3];
+        let bestDirect2: Vec2[] | null = null;
+        for (let j = 0; j < 2; j++) {
+          const d2 = buildInitialTrace(a, dd, Dir45.UNDEFINED, j === 1);
+          if (d2.length > 3) continue;
+          if (d2.length >= 2) {
+            const newDir = dirFromSeg(d2[0], d2[1]);
+            if (newDir === existingDir || bestDirect2 === null) {
+              bestDirect2 = d2;
+              if (newDir === existingDir) break;
+            }
+          }
+        }
+
+        if (bestDirect2 && bestDirect2.length <= 3) {
+          const oldLen = segLen(a, b) + segLen(b, c) + segLen(c, dd);
+          const newLen = pathLen(bestDirect2);
 
           if (newLen <= oldLen * 1.01) {
-            // Check collision before accepting
-            const candidate = [...pts.slice(0, i + 1), ...direct2.slice(1, -1), ...pts.slice(i + 3)];
+            const candidate = [...pts.slice(0, i), ...bestDirect2, ...pts.slice(i + 4)];
             if (hasCollision(candidate)) continue;
-            // Replace A, B, C, D with direct path
-            pts.splice(i + 1, 2, ...direct2.slice(1, -1));
+            pts = candidate;
             improved = true;
             break;
           }
