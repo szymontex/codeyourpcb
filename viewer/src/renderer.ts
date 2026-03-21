@@ -1164,6 +1164,7 @@ function drawRoutingPreview(ctx: CanvasRenderingContext2D, vp: Viewport, routing
   }
 
   // Draw KiCad-style preview path (multi-segment: H/V + 45° diagonal)
+  // Draw KiCad-style preview path (multi-segment: H/V + 45° diagonal)
   if (routing.previewPath && routing.previewPath.length >= 2) {
     const path = routing.previewPath;
 
@@ -1201,6 +1202,27 @@ function drawRoutingPreview(ctx: CanvasRenderingContext2D, vp: Viewport, routing
     ctx.strokeStyle = color;
     ctx.lineWidth = 1.5;
     ctx.stroke();
+  } else if (routing.previewSegment) {
+    // Fallback: single segment preview (when previewPath is empty)
+    const seg = routing.previewSegment;
+    const [sx, sy] = worldToScreen(vp, seg.start_x, seg.start_y);
+    const [ex, ey] = worldToScreen(vp, seg.end_x, seg.end_y);
+
+    ctx.save();
+    ctx.setLineDash([8, 4]);
+    ctx.strokeStyle = colorWithAlpha(color, 0.8);
+    ctx.lineWidth = drawWidth;
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    ctx.lineTo(ex, ey);
+    ctx.stroke();
+    ctx.restore();
+
+    // Endpoint
+    ctx.beginPath();
+    ctx.arc(ex, ey, Math.max(4, drawWidth * 0.6), 0, Math.PI * 2);
+    ctx.fillStyle = colorWithAlpha(color, 0.5);
+    ctx.fill();
   }
 
   // Magnetic snap indicator: pulsing circle + crosshair at target pad

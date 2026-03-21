@@ -505,11 +505,22 @@ export function updatePreview(
   let finalPath = previewPath;
   let hasCollision = obstacles.length > 0;
 
-  if (hasCollision && snapshot && padNetMap) {
-    finalPath = dodgeObstacles(previewPath, snapshot, state.netName, state.clearanceNm, state.traceWidth, padNetMap);
-    // Recheck after dodge
-    const remaining = checkRouteObstacles(finalPath, snapshot, state.netName, state.clearanceNm, state.traceWidth, padNetMap);
-    hasCollision = remaining.length > 0;
+  if (hasCollision && snapshot) {
+    // Build padNetMap on-the-fly if not provided (fallback)
+    let netMap = padNetMap;
+    if (!netMap || netMap.size === 0) {
+      netMap = new Map<string, string>();
+      for (const net of (snapshot.nets ?? [])) {
+        for (const conn of net.connections) {
+          netMap.set(`${conn.component}.${conn.pin}`, net.name);
+        }
+      }
+    }
+    if (netMap.size > 0) {
+      finalPath = dodgeObstacles(previewPath, snapshot, state.netName, state.clearanceNm, state.traceWidth, netMap);
+      const remaining = checkRouteObstacles(finalPath, snapshot, state.netName, state.clearanceNm, state.traceWidth, netMap);
+      hasCollision = remaining.length > 0;
+    }
   }
 
   // Recompute legacy previewSegment from final path

@@ -167,7 +167,7 @@ export async function fetch3DModel(lcscId: number): Promise<string | null> {
       return null;
     }
 
-    return await objResponse.text();
+    return await responseToText(objResponse);
   } catch (error) {
     console.error(`[JLCPCB] 3D fetch error: ${error}`);
     return null;
@@ -177,6 +177,8 @@ export async function fetch3DModel(lcscId: number): Promise<string | null> {
 /**
  * Fetch a 3D model OBJ text by its EasyEDA UUID.
  * Uses the same proxy-aware URL as fetch3DModel.
+ * Auto-detects and decompresses gzipped responses (some EasyEDA models
+ * are served as raw gzip without Content-Encoding header).
  * Returns null on any error — never throws.
  */
 export async function fetch3DModelByUuid(uuid: string): Promise<string | null> {
@@ -187,11 +189,55 @@ export async function fetch3DModelByUuid(uuid: string): Promise<string | null> {
       console.error(`[JLCPCB] 3D fetch error: HTTP ${objResponse.status} for OBJ ${uuid}`);
       return null;
     }
-    return await objResponse.text();
+    return await responseToText(objResponse);
   } catch (error) {
     console.error(`[JLCPCB] 3D fetch error: ${error}`);
     return null;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Gzip-aware response reader
+// ---------------------------------------------------------------------------
+
+/**
+ * Read a fetch Response as text, auto-decompressing gzip if needed.
+ * Some EasyEDA 3D model responses are served as raw gzip bytes without
+ * the Content-Encoding header, so the browser doesn't auto-decompress.
+ * We detect gzip magic bytes (0x1f 0x8b) and decompress manually.
+ */
+async function responseToText(response: Response): Promise<string> {
+  const buffer = await response.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+
+  // Check for gzip magic bytes
+  if (bytes.length >= 2 && bytes[0] === 0x1f && bytes[1] === 0x8b) {
+    // Decompress using DecompressionStream (available in modern browsers)
+    if (typeof DecompressionStream !== 'undefined') {
+      const ds = new DecompressionStream('gzip');
+      const writer = ds.writable.getWriter();
+      writer.write(bytes);
+      writer.close();
+      const reader = ds.readable.getReader();
+      const chunks: Uint8Array[] = [];
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+      }
+      const totalLen = chunks.reduce((a, c) => a + c.length, 0);
+      const merged = new Uint8Array(totalLen);
+      let offset = 0;
+      for (const chunk of chunks) {
+        merged.set(chunk, offset);
+        offset += chunk.length;
+      }
+      return new TextDecoder().decode(merged);
+    }
+    console.warn('[JLCPCB] Gzip response but DecompressionStream unavailable');
+  }
+
+  return new TextDecoder().decode(bytes);
 }
 
 // ---------------------------------------------------------------------------
