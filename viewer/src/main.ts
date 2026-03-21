@@ -1384,8 +1384,8 @@ async function init(): Promise<void> {
       const trace = snapshot?.traces?.find(t => t.id === traceId);
       if (!trace || !trace.segments.length) return;
 
-      const { simplifyTrace } = await import('./trace-optimize');
-      const optimized = simplifyTrace(trace.segments);
+      const { optimizeTrace } = await import('./trace-optimize');
+      const optimized = optimizeTrace(trace.segments, snapshot, trace.net_name || '', 150_000, Number(trace.width), padNetMap);
 
       if (optimized.length < trace.segments.length) {
         // Segments were reduced
