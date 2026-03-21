@@ -113,6 +113,73 @@ export interface RectSelectState {
  * - Left-click: select component at point
  * - Right-click: reserved (context menu prevented)
  */
+/**
+ * Split an existing trace at a junction point — KiCad SplitAdjacentSegments.
+ * Removes the original trace and adds two new traces:
+ * one from trace start to junction, one from junction to trace end.
+ */
+function splitTraceAtPoint(
+  engine: PcbEngine,
+  trace: import('./types').TraceInfo,
+  segIdx: number,
+  junctionPt: Vec2,
+  onTraceAdd?: (net: string, layer: string, width: number, segs: number[]) => void,
+): void {
+  const seg = trace.segments[segIdx];
+  const sx = Number(seg.start_x), sy = Number(seg.start_y);
+  const ex = Number(seg.end_x), ey = Number(seg.end_y);
+  const jx = Math.round(junctionPt.x), jy = Math.round(junctionPt.y);
+
+  // Don't split if junction is at segment endpoint
+  if ((Math.abs(jx - sx) < 100 && Math.abs(jy - sy) < 100) ||
+      (Math.abs(jx - ex) < 100 && Math.abs(jy - ey) < 100)) {
+    return;
+  }
+
+  // Remove original trace
+  engine.remove_trace(trace.id);
+
+  const net = trace.net_name || '';
+  const layer = trace.layer || 'Top';
+  const width = Number(trace.width);
+
+  // Build segments BEFORE junction
+  const segsBefore: number[] = [];
+  for (let i = 0; i <= segIdx; i++) {
+    const s = trace.segments[i];
+    if (i < segIdx) {
+      segsBefore.push(Math.round(Number(s.start_x)), Math.round(Number(s.start_y)),
+                       Math.round(Number(s.end_x)), Math.round(Number(s.end_y)));
+    } else {
+      // Last segment before junction: start → junction
+      segsBefore.push(Math.round(Number(s.start_x)), Math.round(Number(s.start_y)), jx, jy);
+    }
+  }
+
+  // Build segments AFTER junction
+  const segsAfter: number[] = [];
+  for (let i = segIdx; i < trace.segments.length; i++) {
+    const s = trace.segments[i];
+    if (i === segIdx) {
+      // First segment after junction: junction → end
+      segsAfter.push(jx, jy, Math.round(Number(s.end_x)), Math.round(Number(s.end_y)));
+    } else {
+      segsAfter.push(Math.round(Number(s.start_x)), Math.round(Number(s.start_y)),
+                      Math.round(Number(s.end_x)), Math.round(Number(s.end_y)));
+    }
+  }
+
+  // Add both halves
+  if (segsBefore.length >= 4) {
+    if (onTraceAdd) onTraceAdd(net, layer, width, segsBefore);
+    else engine.add_trace(net, layer, width, segsBefore);
+  }
+  if (segsAfter.length >= 4) {
+    if (onTraceAdd) onTraceAdd(net, layer, width, segsAfter);
+    else engine.add_trace(net, layer, width, segsAfter);
+  }
+}
+
 export function setupInteraction(
   canvas: HTMLCanvasElement,
   state: InteractionState
@@ -641,6 +708,9 @@ export function setupInteraction(
             if (state.onTraceAdd) {
               state.onTraceAdd(result.netName, result.layer, result.width, flat);
             }
+
+            // Split the existing trace at the junction point (KiCad SplitAdjacentSegments)
+            splitTraceAtPoint(state.engine, traceHit.trace, traceHit.segmentIndex, snapPt, state.onTraceAdd);
           }
 
           state.routing = resetToIdle(state.routing);
