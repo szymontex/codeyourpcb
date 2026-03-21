@@ -1,39 +1,43 @@
 /**
- * Simple obstacle dodge — deterministic pad avoidance.
+ * KiCad-style obstacle avoidance for interactive routing.
  *
- * Instead of complex graph-based walkaround, this adds waypoints
- * around each obstacle pad that the path crosses. For each collision:
- * - Compute pad bounding box + clearance
- * - Try 4 dodge routes (above, below, left, right of pad)
- * - Pick the shortest valid one
+ * When the preview trace crosses a pad of another net, reroutes
+ * the ENTIRE path from anchor to cursor to go around the obstacle.
  *
- * This runs per-frame during routing preview.
+ * Approach: for each colliding pad, generate candidate routes that
+ * pass along two edges of the pad's exclusion zone, pick the shortest
+ * valid candidate. Uses buildInitialTrace for 45° constrained sub-paths.
  */
 
-import type { Vec2 } from './direction45';
+import { type Vec2, Dir45, buildInitialTrace } from './direction45';
 import type { BoardSnapshot } from './types';
 import { padWorldPosition } from './routing';
 
-interface PadObstacle {
+interface PadRect {
   x: number;
   y: number;
-  halfW: number; // half-width including clearance
-  halfH: number; // half-height including clearance
+  left: number;
+  right: number;
+  top: number;    // min Y
+  bottom: number; // max Y
   netName: string;
 }
 
+/** Force all values to plain Number (WASM BigInt guard). */
+const N = Number;
+
 /**
- * Build a list of pad obstacles for other nets.
+ * Build pad exclusion rectangles for all pads NOT on the routing net.
  */
-export function buildPadObstacles(
+export function buildPadRects(
   snapshot: BoardSnapshot,
   routingNet: string,
   clearance: number,
   traceWidth: number,
   padNetMap: Map<string, string>,
-): PadObstacle[] {
-  const margin = clearance + traceWidth / 2;
-  const obstacles: PadObstacle[] = [];
+): PadRect[] {
+  const margin = N(clearance) + N(traceWidth) / 2;
+  const rects: PadRect[] = [];
 
   for (const comp of snapshot.components) {
     for (const pad of comp.pads) {
@@ -42,119 +46,162 @@ export function buildPadObstacles(
       if (net === routingNet || !net) continue;
 
       const [px, py] = padWorldPosition(comp, pad);
-      obstacles.push({
-        x: Number(px),
-        y: Number(py),
-        halfW: Number(pad.width_nm) / 2 + margin,
-        halfH: Number(pad.height_nm) / 2 + margin,
+      const hw = N(pad.width_nm) / 2 + margin;
+      const hh = N(pad.height_nm) / 2 + margin;
+
+      rects.push({
+        x: N(px), y: N(py),
+        left: N(px) - hw, right: N(px) + hw,
+        top: N(py) - hh, bottom: N(py) + hh,
         netName: net,
       });
     }
   }
-  return obstacles;
+  return rects;
 }
 
 /**
- * Check if a line segment intersects a rectangle.
+ * Test if a line segment crosses a rectangle (Cohen-Sutherland).
  */
-function segHitsRect(
-  ax: number, ay: number, bx: number, by: number,
-  obs: PadObstacle,
-): boolean {
-  const left = obs.x - obs.halfW;
-  const right = obs.x + obs.halfW;
-  const top = obs.y - obs.halfH;
-  const bottom = obs.y + obs.halfH;
-
-  // Cohen-Sutherland outcode
-  function outcode(x: number, y: number): number {
-    let code = 0;
-    if (x < left) code |= 1;
-    else if (x > right) code |= 2;
-    if (y < top) code |= 4;
-    else if (y > bottom) code |= 8;
-    return code;
+function segCrossesRect(ax: number, ay: number, bx: number, by: number, r: PadRect): boolean {
+  function code(x: number, y: number): number {
+    let c = 0;
+    if (x < r.left) c |= 1;
+    else if (x > r.right) c |= 2;
+    if (y < r.top) c |= 4;
+    else if (y > r.bottom) c |= 8;
+    return c;
   }
-
-  let c1 = outcode(ax, ay);
-  let c2 = outcode(bx, by);
-
+  let c1 = code(ax, ay), c2 = code(bx, by);
   let x0 = ax, y0 = ay, x1 = bx, y1 = by;
-
   for (let i = 0; i < 20; i++) {
-    if ((c1 | c2) === 0) return true;   // both inside
-    if ((c1 & c2) !== 0) return false;  // both outside same side
-
-    const cOut = c1 !== 0 ? c1 : c2;
+    if ((c1 | c2) === 0) return true;
+    if ((c1 & c2) !== 0) return false;
+    const co = c1 || c2;
     let x = 0, y = 0;
-    if (cOut & 8) { x = x0 + (x1 - x0) * (bottom - y0) / (y1 - y0); y = bottom; }
-    else if (cOut & 4) { x = x0 + (x1 - x0) * (top - y0) / (y1 - y0); y = top; }
-    else if (cOut & 2) { y = y0 + (y1 - y0) * (right - x0) / (x1 - x0); x = right; }
-    else if (cOut & 1) { y = y0 + (y1 - y0) * (left - x0) / (x1 - x0); x = left; }
-
-    if (cOut === c1) { x0 = x; y0 = y; c1 = outcode(x0, y0); }
-    else { x1 = x; y1 = y; c2 = outcode(x1, y1); }
+    if (co & 8) { x = x0 + (x1 - x0) * (r.bottom - y0) / (y1 - y0); y = r.bottom; }
+    else if (co & 4) { x = x0 + (x1 - x0) * (r.top - y0) / (y1 - y0); y = r.top; }
+    else if (co & 2) { y = y0 + (y1 - y0) * (r.right - x0) / (x1 - x0); x = r.right; }
+    else if (co & 1) { y = y0 + (y1 - y0) * (r.left - x0) / (x1 - x0); x = r.left; }
+    if (co === c1) { x0 = x; y0 = y; c1 = code(x0, y0); }
+    else { x1 = x; y1 = y; c2 = code(x1, y1); }
   }
   return true;
 }
 
-/**
- * For a path that hits an obstacle, compute a detour around it.
- * Returns a new path that goes around the pad via one of 4 corners.
- */
-function dodgeSingleObstacle(path: Vec2[], obs: PadObstacle): Vec2[] {
-  // Find first segment that hits the obstacle
-  let hitIdx = -1;
+/** Check if ANY segment of a path crosses a rect. */
+function pathCrossesRect(path: Vec2[], r: PadRect): boolean {
   for (let i = 0; i < path.length - 1; i++) {
-    if (segHitsRect(path[i].x, path[i].y, path[i + 1].x, path[i + 1].y, obs)) {
-      hitIdx = i;
-      break;
-    }
+    if (segCrossesRect(path[i].x, path[i].y, path[i + 1].x, path[i + 1].y, r)) return true;
   }
-  if (hitIdx < 0) return path;
+  return false;
+}
 
-  const a = path[hitIdx];
-  const b = path[hitIdx + 1];
+/** Check if path crosses ANY of the given rects. */
+function pathCrossesAnyRect(path: Vec2[], rects: PadRect[]): boolean {
+  for (const r of rects) {
+    if (pathCrossesRect(path, r)) return true;
+  }
+  return false;
+}
 
-  // 4 candidate dodge points (corners of the obstacle rect + small margin)
-  const m = 100_000; // extra 0.1mm margin
+/** Path length. */
+function pathLen(pts: Vec2[]): number {
+  let len = 0;
+  for (let i = 1; i < pts.length; i++) {
+    len += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+  }
+  return len;
+}
+
+/**
+ * Build a candidate route from start to end that goes via a waypoint.
+ * Uses BuildInitialTrace for 45° constrained segments.
+ * Returns path points or null if any sub-path is degenerate.
+ */
+function routeViaWaypoint(start: Vec2, waypoint: Vec2, end: Vec2): Vec2[] {
+  const seg1 = buildInitialTrace(start, waypoint, Dir45.UNDEFINED);
+  const seg2 = buildInitialTrace(waypoint, end, Dir45.UNDEFINED);
+
+  // Merge: seg1 + seg2 (skip duplicate waypoint)
+  const result = [...seg1];
+  for (let i = 1; i < seg2.length; i++) {
+    result.push(seg2[i]);
+  }
+  return result;
+}
+
+/**
+ * For a path that collides with a pad rect, try routing around it
+ * via each of the 4 corners of the exclusion zone.
+ *
+ * KiCad routes the detour from the LAST point before the collision
+ * to the FIRST point after it. We simplify: route from path start
+ * to path end via a corner waypoint.
+ */
+function dodgeAroundRect(
+  start: Vec2,
+  end: Vec2,
+  rect: PadRect,
+  allRects: PadRect[],
+): Vec2[] | null {
+  // 4 corner waypoints just outside the exclusion zone
+  const margin = 100_000; // extra 0.1mm
   const corners: Vec2[] = [
-    { x: obs.x - obs.halfW - m, y: obs.y - obs.halfH - m }, // top-left
-    { x: obs.x + obs.halfW + m, y: obs.y - obs.halfH - m }, // top-right
-    { x: obs.x + obs.halfW + m, y: obs.y + obs.halfH + m }, // bottom-right
-    { x: obs.x - obs.halfW - m, y: obs.y + obs.halfH + m }, // bottom-left
+    { x: rect.left - margin,  y: rect.top - margin },     // top-left
+    { x: rect.right + margin, y: rect.top - margin },     // top-right
+    { x: rect.right + margin, y: rect.bottom + margin },  // bottom-right
+    { x: rect.left - margin,  y: rect.bottom + margin },  // bottom-left
   ];
 
-  // Try each corner as dodge point, build 2-segment detour (a→corner→b)
   let bestPath: Vec2[] | null = null;
   let bestLen = Infinity;
 
   for (const corner of corners) {
-    // Check the detour segments don't hit the same obstacle
-    const seg1Hits = segHitsRect(a.x, a.y, corner.x, corner.y, obs);
-    const seg2Hits = segHitsRect(corner.x, corner.y, b.x, b.y, obs);
+    const candidate = routeViaWaypoint(start, corner, end);
+    if (candidate.length < 3) continue;
 
-    if (!seg1Hits && !seg2Hits) {
-      const len = Math.hypot(corner.x - a.x, corner.y - a.y) +
-                  Math.hypot(b.x - corner.x, b.y - corner.y);
+    // Check this candidate doesn't cross the SAME rect
+    if (pathCrossesRect(candidate, rect)) continue;
+
+    const len = pathLen(candidate);
+    if (len < bestLen) {
+      bestLen = len;
+      bestPath = candidate;
+    }
+  }
+
+  // If single-corner dodge fails, try 2-corner routes (go around 2 edges)
+  if (!bestPath) {
+    for (let i = 0; i < corners.length; i++) {
+      const j = (i + 1) % corners.length;
+      const c1 = corners[i];
+      const c2 = corners[j];
+
+      const seg1 = buildInitialTrace(start, c1, Dir45.UNDEFINED);
+      const seg2: Vec2[] = [c1, c2]; // straight edge along exclusion zone
+      const seg3 = buildInitialTrace(c2, end, Dir45.UNDEFINED);
+
+      const candidate = [...seg1];
+      for (const p of seg2.slice(1)) candidate.push(p);
+      for (const p of seg3.slice(1)) candidate.push(p);
+
+      if (pathCrossesRect(candidate, rect)) continue;
+
+      const len = pathLen(candidate);
       if (len < bestLen) {
         bestLen = len;
-        // Build new path: [...before hit, a, corner, b, ...after hit]
-        bestPath = [
-          ...path.slice(0, hitIdx + 1),
-          { x: corner.x, y: corner.y },
-          ...path.slice(hitIdx + 1),
-        ];
+        bestPath = candidate;
       }
     }
   }
 
-  return bestPath ?? path;
+  return bestPath;
 }
 
 /**
- * Dodge all obstacle pads in the path.
- * Iteratively resolves collisions (max 10 passes).
+ * Main dodge function: given a path, reroute around all colliding pad rects.
+ * Iterates until no collisions remain (max 8 passes).
  */
 export function dodgeObstacles(
   originalPath: Vec2[],
@@ -164,31 +211,32 @@ export function dodgeObstacles(
   traceWidth: number,
   padNetMap: Map<string, string>,
 ): Vec2[] {
-  const obstacles = buildPadObstacles(snapshot, routingNet, clearance, traceWidth, padNetMap);
-  if (obstacles.length === 0) return originalPath;
+  const rects = buildPadRects(snapshot, routingNet, clearance, traceWidth, padNetMap);
+  if (rects.length === 0 || originalPath.length < 2) return originalPath;
 
   let path = originalPath;
+  const start = path[0];
+  const end = path[path.length - 1];
 
-  for (let pass = 0; pass < 10; pass++) {
-    let anyHit = false;
-    for (const obs of obstacles) {
-      // Check if any segment hits this obstacle
-      let hits = false;
-      for (let i = 0; i < path.length - 1; i++) {
-        if (segHitsRect(path[i].x, path[i].y, path[i + 1].x, path[i + 1].y, obs)) {
-          hits = true;
-          break;
-        }
-      }
-      if (hits) {
-        path = dodgeSingleObstacle(path, obs);
-        anyHit = true;
+  for (let pass = 0; pass < 8; pass++) {
+    // Find first colliding rect
+    let hitRect: PadRect | null = null;
+    for (const r of rects) {
+      if (pathCrossesRect(path, r)) {
+        hitRect = r;
+        break;
       }
     }
-    if (!anyHit) break;
+    if (!hitRect) break; // No more collisions
+
+    // Try to dodge around this rect
+    const dodged = dodgeAroundRect(start, end, hitRect, rects);
+    if (!dodged) break; // Can't dodge — give up
+
+    path = dodged;
 
     // Safety: don't let path explode
-    if (path.length > 50) break;
+    if (path.length > 40) break;
   }
 
   return path;
