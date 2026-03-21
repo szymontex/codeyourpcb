@@ -117,6 +117,18 @@ function lineIsect(p1: Vec2, d1: Vec2, p2: Vec2, d2: Vec2): Vec2 | null {
   return { x: p1.x + t * d1.x, y: p1.y + t * d1.y };
 }
 
+/** Finite segment intersection: returns point if segments A→B and C→D cross. */
+function segIsect(a: Vec2, b: Vec2, c: Vec2, d: Vec2): Vec2 | null {
+  const dx1 = b.x - a.x, dy1 = b.y - a.y;
+  const dx2 = d.x - c.x, dy2 = d.y - c.y;
+  const cross = dx1 * dy2 - dy1 * dx2;
+  if (Math.abs(cross) < 0.001) return null;
+  const t = ((c.x - a.x) * dy2 - (c.y - a.y) * dx2) / cross;
+  const u = ((c.x - a.x) * dy1 - (c.y - a.y) * dx1) / cross;
+  if (t < -0.001 || t > 1.001 || u < -0.001 || u > 1.001) return null;
+  return { x: a.x + t * dx1, y: a.y + t * dy1 };
+}
+
 // ---------------------------------------------------------------------------
 // dragSegment — KiCad LINE::dragSegment45 faithful port
 // ---------------------------------------------------------------------------
@@ -216,21 +228,22 @@ export function dragSegment(
 
       const candidates: Vec2[][] = [];
 
-      // s1 ∩ s_next
-      const d1 = { x: ip1.x - prevA.x, y: ip1.y - prevA.y };
-      const ipSN = lineIsect(prevA, d1, nextB, dirVec(dirNext));
+      // KiCad: s1 = prevA→ip1, s2 = ip1→ip2, s3 = ip2→nextB
+      // s_prev = prevA→dragA, s_next = dragB→nextB
+
+      // Try s1 ∩ s_next (segment intersection, not line!)
+      const ipSN = segIsect(prevA, ip1, dragB, nextB);
       if (ipSN) candidates.push([prevA, ipSN, nextB]);
 
-      // s3 ∩ s_prev
-      const d3 = { x: ip2.x - nextB.x, y: ip2.y - nextB.y };
-      const ipSP = lineIsect(nextB, d3, prevA, dirVec(dirPrev));
+      // Try s3 ∩ s_prev
+      const ipSP = segIsect(ip2, nextB, prevA, dragA);
       if (ipSP) candidates.push([prevA, ipSP, nextB]);
 
-      // s1 ∩ s3
-      const ip13 = lineIsect(prevA, d1, nextB, d3);
+      // Try s1 ∩ s3
+      const ip13 = segIsect(prevA, ip1, ip2, nextB);
       if (ip13) candidates.push([prevA, ip13, nextB]);
 
-      // Full 4-point
+      // Full 4-point (always valid as fallback)
       candidates.push([prevA, ip1, ip2, nextB]);
 
       for (const c of candidates) {
