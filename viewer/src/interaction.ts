@@ -80,6 +80,8 @@ export interface InteractionState {
   onTraceEdit?: (oldTraceId: number, netName: string, layer: string, width: number, oldSegments: number[], newSegments: number[]) => void;
   /** Callback when rectangle selection completes */
   onRectSelect?: (traceIds: number[], componentRefdes: string[]) => void;
+  /** Callback to optimize/simplify a trace (Ctrl+L) */
+  onTraceOptimize?: (traceId: number) => void;
   /** Current drag-editing state for rendering preview */
   dragEdit: DragEditState | null;
   /** Current rectangle selection state for rendering */
@@ -946,6 +948,16 @@ export function setupInteraction(
         e.preventDefault();
         return;
       }
+    }
+
+    // Ctrl+L: simplify/optimize selected trace (like Inkscape)
+    if ((e.ctrlKey || e.metaKey) && e.key === 'l' && state.selectedTraceId != null) {
+      e.preventDefault();
+      if (state.onTraceOptimize) {
+        state.onTraceOptimize(state.selectedTraceId);
+        state.dirty = true;
+      }
+      return;
     }
   }
 

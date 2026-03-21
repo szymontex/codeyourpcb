@@ -1380,6 +1380,31 @@ async function init(): Promise<void> {
       }
       dirty = true;
     },
+    onTraceOptimize: async (traceId: number) => {
+      const trace = snapshot?.traces?.find(t => t.id === traceId);
+      if (!trace || !trace.segments.length) return;
+
+      const { optimizeTrace } = await import('./trace-optimize');
+      const optimized = optimizeTrace(trace.segments);
+
+      if (optimized.length < trace.segments.length) {
+        // Build flat arrays for undo command
+        const oldFlat: number[] = [];
+        for (const s of trace.segments) oldFlat.push(Math.round(Number(s.start_x)), Math.round(Number(s.start_y)), Math.round(Number(s.end_x)), Math.round(Number(s.end_y)));
+        const newFlat: number[] = [];
+        for (const s of optimized) newFlat.push(Math.round(s.start_x), Math.round(s.start_y), Math.round(s.end_x), Math.round(s.end_y));
+
+        const cmd = new EditTraceCommand(engine, traceId,
+          { netName: trace.net_name || '', layer: trace.layer || 'Top', width: Number(trace.width), segments: oldFlat },
+          { netName: trace.net_name || '', layer: trace.layer || 'Top', width: Number(trace.width), segments: newFlat },
+          refreshSnapshot);
+        undoStack.push(cmd);
+        statusText.textContent = `Optimized: ${trace.segments.length} → ${optimized.length} segments`;
+      } else {
+        statusText.textContent = 'Trace already optimal';
+      }
+      dirty = true;
+    },
     dragEdit: null,
     rectSelect: null,
   };
