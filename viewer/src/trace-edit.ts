@@ -121,8 +121,8 @@ export function dragSegment(
   if (pts.length < 2) return null;
 
   const idx = segIndex;
-  const dragA = pts[idx];      // start of dragged segment
-  const dragB = pts[idx + 1];  // end of dragged segment
+  const dragA = pts[idx];
+  const dragB = pts[idx + 1];
 
   // Direction vector of dragged segment
   const dx = dragB.x - dragA.x;
@@ -130,26 +130,26 @@ export function dragSegment(
   const len = Math.hypot(dx, dy);
   if (len < 1) return null;
 
-  // Unit perpendicular vector (pointing "left" of the segment direction)
+  // Unit perpendicular vector
   const perpX = -dy / len;
   const perpY = dx / len;
 
-  // Compute perpendicular offset: project (newPos - dragA) onto perpendicular
+  // Perpendicular offset from mouse
   const offset = (newPos.x - dragA.x) * perpX + (newPos.y - dragA.y) * perpY;
 
-  // Shift both endpoints
+  // Shift both endpoints of dragged segment
   const newA: Vec2 = { x: dragA.x + offset * perpX, y: dragA.y + offset * perpY };
   const newB: Vec2 = { x: dragB.x + offset * perpX, y: dragB.y + offset * perpY };
-
-  // Direction of dragged segment (unchanged — parallel shift)
   const dragDirV: Vec2 = { x: dx, y: dy };
 
-  // Build new point list
   const result = [...pts];
 
-  // If there's a previous segment, intersect its line with the shifted segment
+  // FIRST point of trace is LOCKED (pad connection) — never moves
+  // LAST point of trace is LOCKED (pad connection) — never moves
+
   if (idx > 0) {
-    const prevStart = pts[idx - 1];
+    // Previous segment exists — intersect prev line with shifted segment
+    const prevStart = pts[idx - 1]; // this is FIXED (either pad or earlier vertex)
     const prevDir: Vec2 = { x: dragA.x - prevStart.x, y: dragA.y - prevStart.y };
     const ip = lineIsect(prevStart, prevDir, newA, dragDirV);
     if (ip) {
@@ -158,12 +158,14 @@ export function dragSegment(
       result[idx] = newA;
     }
   } else {
-    result[idx] = newA;
+    // Dragging first segment — start point (pad) is LOCKED
+    // Don't move result[0], just update result[1] via next-segment intersection
+    // result[idx] stays at pts[0] (locked)
   }
 
-  // If there's a next segment, intersect its line with the shifted segment
   if (idx + 2 < pts.length) {
-    const nextEnd = pts[idx + 2];
+    // Next segment exists — intersect next line with shifted segment
+    const nextEnd = pts[idx + 2]; // this is FIXED
     const nextDir: Vec2 = { x: nextEnd.x - dragB.x, y: nextEnd.y - dragB.y };
     const ip = lineIsect(nextEnd, nextDir, newB, dragDirV);
     if (ip) {
@@ -172,7 +174,9 @@ export function dragSegment(
       result[idx + 1] = newB;
     }
   } else {
-    result[idx + 1] = newB;
+    // Dragging last segment — end point (pad) is LOCKED
+    // Don't move result[last], just update result[last-1] via prev intersection
+    // result[idx+1] stays at pts[last] (locked)
   }
 
   return verticesToSegments(result);
