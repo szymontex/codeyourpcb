@@ -101,14 +101,22 @@ function lineIsect(p1: Vec2, d1: Vec2, p2: Vec2, d2: Vec2): Vec2 | null {
 // ---------------------------------------------------------------------------
 
 /**
- * Drag a trace segment parallel to itself.
+ * Drag a trace segment — KiCad dragSegment45.
  *
- * Algorithm (simple and correct):
- * 1. Compute perpendicular offset from newPos to the original segment line
- * 2. Shift both endpoints of the dragged segment by that offset
- * 3. Intersect the shifted segment's LINE with the adjacent segments' LINES
- *    to find new junction points
- * 4. Replace the 3-segment section (prev + dragged + next) with the result
+ * KiCad behavior: draws a line through `newPos` in the direction of the
+ * dragged segment. Intersects this line with "guide lines" extending from
+ * the fixed endpoints of adjacent segments. The intersection points become
+ * the new junction points, effectively sliding the break-points along
+ * the adjacent segments.
+ *
+ * For a trace like: A──────B╲C
+ * Dragging the diagonal B→C means:
+ * - guideA is a line from A in direction of A→B (horizontal)
+ * - guideB is a line from C in direction of C→(next point) or drag_dir perpendicular
+ * - s_current is a line through mouse position in direction of B→C (the diagonal)
+ * - ip1 = s_current ∩ guideA → new B position (slides along horizontal)
+ * - ip2 = s_current ∩ guideB → new C position
+ * Result: A → ip1 → ip2 → D (endpoints A and D stay fixed)
  */
 export function dragSegment(
   segments: TraceSegmentInfo[],
@@ -124,62 +132,80 @@ export function dragSegment(
   const dragA = pts[idx];
   const dragB = pts[idx + 1];
 
-  // Direction vector of dragged segment
-  const dx = dragB.x - dragA.x;
-  const dy = dragB.y - dragA.y;
-  const len = Math.hypot(dx, dy);
-  if (len < 1) return null;
+  const ddx = dragB.x - dragA.x;
+  const ddy = dragB.y - dragA.y;
+  if (Math.abs(ddx) < 1 && Math.abs(ddy) < 1) return null;
 
-  // Unit perpendicular vector
-  const perpX = -dy / len;
-  const perpY = dx / len;
+  // drag_dir vector (direction of the dragged segment)
+  const dragDirV: Vec2 = { x: ddx, y: ddy };
 
-  // Perpendicular offset from mouse
-  const offset = (newPos.x - dragA.x) * perpX + (newPos.y - dragA.y) * perpY;
+  // s_current: line through newPos in drag direction
+  // guideA: line from the FIXED point before the dragged segment, in the direction of the previous segment
+  // guideB: line from the FIXED point after the dragged segment, in the direction of the next segment
 
-  // Shift both endpoints of dragged segment
-  const newA: Vec2 = { x: dragA.x + offset * perpX, y: dragA.y + offset * perpY };
-  const newB: Vec2 = { x: dragB.x + offset * perpX, y: dragB.y + offset * perpY };
-  const dragDirV: Vec2 = { x: dx, y: dy };
-
-  const result = [...pts];
-
-  // FIRST point of trace is LOCKED (pad connection) — never moves
-  // LAST point of trace is LOCKED (pad connection) — never moves
+  let fixedA: Vec2; // anchor point for guide A (won't move)
+  let guideDirA: Vec2; // direction of guide A
 
   if (idx > 0) {
-    // Previous segment exists — intersect prev line with shifted segment
-    const prevStart = pts[idx - 1]; // this is FIXED (either pad or earlier vertex)
-    const prevDir: Vec2 = { x: dragA.x - prevStart.x, y: dragA.y - prevStart.y };
-    const ip = lineIsect(prevStart, prevDir, newA, dragDirV);
-    if (ip) {
-      result[idx] = ip;
-    } else {
-      result[idx] = newA;
-    }
+    // There's a prev segment: guide from prevStart in direction of prev segment
+    fixedA = pts[idx - 1];
+    guideDirA = { x: dragA.x - fixedA.x, y: dragA.y - fixedA.y };
   } else {
-    // Dragging first segment — start point (pad) is LOCKED
-    // Don't move result[0], just update result[1] via next-segment intersection
-    // result[idx] stays at pts[0] (locked)
+    // First segment: pad is locked. Guide perpendicular to drag.
+    fixedA = { ...dragA };
+    guideDirA = { x: -ddy, y: ddx }; // perpendicular
   }
+
+  let fixedB: Vec2;
+  let guideDirB: Vec2;
 
   if (idx + 2 < pts.length) {
-    // Next segment exists — intersect next line with shifted segment
-    const nextEnd = pts[idx + 2]; // this is FIXED
-    const nextDir: Vec2 = { x: nextEnd.x - dragB.x, y: nextEnd.y - dragB.y };
-    const ip = lineIsect(nextEnd, nextDir, newB, dragDirV);
-    if (ip) {
-      result[idx + 1] = ip;
-    } else {
-      result[idx + 1] = newB;
-    }
+    // There's a next segment: guide from nextEnd in direction of next segment
+    fixedB = pts[idx + 2];
+    guideDirB = { x: dragB.x - fixedB.x, y: dragB.y - fixedB.y };
   } else {
-    // Dragging last segment — end point (pad) is LOCKED
-    // Don't move result[last], just update result[last-1] via prev intersection
-    // result[idx+1] stays at pts[last] (locked)
+    // Last segment: pad is locked. Guide perpendicular to drag.
+    fixedB = { ...dragB };
+    guideDirB = { x: -ddy, y: ddx }; // perpendicular
   }
 
-  return verticesToSegments(result);
+  // Intersect s_current (line through newPos in dragDir) with guides
+  const ip1 = lineIsect(newPos, dragDirV, fixedA, guideDirA);
+  const ip2 = lineIsect(newPos, dragDirV, fixedB, guideDirB);
+
+  if (!ip1 || !ip2) return null;
+
+  // Build result: replace dragged segment section with fixedA → ip1 → ip2 → fixedB
+  const before = pts.slice(0, Math.max(0, idx - 1));
+  const after = pts.slice(Math.min(pts.length, idx + 3));
+
+  // Include fixedA only if it's not already in 'before'
+  const newPts: Vec2[] = [];
+  if (idx > 1) {
+    newPts.push(...before);
+  }
+  newPts.push(fixedA, ip1, ip2, fixedB);
+  if (after.length > 0) {
+    newPts.push(...after);
+  }
+
+  // Handle edge cases for first/last segments
+  if (idx === 0) {
+    // First segment dragged: result is dragA(locked) → ip2 → fixedB → ...rest
+    // ip1 is on the perpendicular from dragA, don't need it
+    const r = [pts[0], ip2, ...pts.slice(idx + 2)];
+    return verticesToSegments(r);
+  }
+
+  if (idx === segments.length - 1) {
+    // Last segment: result is ...rest → fixedA → ip1 → dragB(locked)
+    const r = [...pts.slice(0, idx), ip1, pts[pts.length - 1]];
+    return verticesToSegments(r);
+  }
+
+  // Middle segment: fixedA → ip1 → ip2 → fixedB
+  const r = [...pts.slice(0, idx - 1), fixedA, ip1, ip2, fixedB, ...pts.slice(idx + 3)];
+  return verticesToSegments(r);
 }
 
 // ---------------------------------------------------------------------------
