@@ -216,8 +216,8 @@ export function generateThumbnail(
   snapshot: BoardSnapshot,
   partialState: Partial<RenderState>,
 ): string {
-  const width = 200;
-  const height = 150;
+  const width = 400;
+  const height = 300;
 
   const offscreen = document.createElement('canvas');
   offscreen.width = width;

@@ -7,6 +7,7 @@ import type { Viewport } from './viewport';
 import type { BoardSnapshot, TraceSegmentInfo } from './types';
 import type { PcbEngine } from './wasm';
 import type { RoutingState } from './routing';
+import { checkRouteObstacles } from './routing';
 import { zoomAtPoint, pan, screenToWorld } from './viewport';
 import { hitTestTrace } from './hit-test';
 import { hitTestTraceSegment, dragSegment, dragCorner, tracesInRect, componentsInRect, type TraceSegmentHit } from './trace-edit';
@@ -77,14 +78,12 @@ export interface InteractionState {
 
 /** State for trace segment/corner drag editing */
 export interface DragEditState {
-  /** The original hit result */
   hit: TraceSegmentHit;
-  /** Original segments (before drag) */
   originalSegments: TraceSegmentInfo[];
-  /** Preview segments (during drag, updated on mousemove) */
   previewSegments: TraceSegmentInfo[] | null;
-  /** Whether dragging a corner (vs segment) */
   isCornerDrag: boolean;
+  /** True if preview collides with pads of other nets */
+  hasCollision?: boolean;
 }
 
 /** State for rectangle selection */
@@ -347,11 +346,26 @@ export function setupInteraction(
         previewSegs = dragSegment(traceDrag.originalSegments, traceDrag.hit.segmentIndex, newPos);
       }
 
+      // Check if new segments collide with pads of other nets
+      let hasCollision = false;
+      if (previewSegs && state.snapshot && state.padNetMap) {
+        const traceNet = traceDrag.hit.trace.net_name || '';
+        const path: Vec2[] = previewSegs.length > 0
+          ? [{ x: previewSegs[0].start_x, y: previewSegs[0].start_y },
+             ...previewSegs.map(s => ({ x: s.end_x, y: s.end_y }))]
+          : [];
+        if (path.length >= 2) {
+          const obstacles = checkRouteObstacles(path, state.snapshot, traceNet, 150_000, Number(traceDrag.hit.trace.width), state.padNetMap);
+          hasCollision = obstacles.length > 0;
+        }
+      }
+
       state.dragEdit = {
         hit: traceDrag.hit,
         originalSegments: traceDrag.originalSegments,
-        previewSegments: previewSegs,
+        previewSegments: hasCollision ? null : previewSegs, // null = red/invalid
         isCornerDrag: traceDrag.isCornerDrag,
+        hasCollision,
       };
       state.dirty = true;
       return;
@@ -419,7 +433,7 @@ export function setupInteraction(
 
     // Finish trace drag — commit via undo stack
     if (traceDrag) {
-      if (traceDrag.moved && state.dragEdit?.previewSegments) {
+      if (traceDrag.moved && state.dragEdit?.previewSegments && !state.dragEdit?.hasCollision) {
         const hit = traceDrag.hit;
         const oldSegs = traceDrag.originalSegments;
         const newSegs = state.dragEdit.previewSegments;
