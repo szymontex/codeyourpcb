@@ -45,44 +45,50 @@ function checkSilkClearance(snapshot: BoardSnapshot, minClearanceNm: number): Vi
   const violations: ViolationInfo[] = [];
   if (!snapshot.components || snapshot.components.length === 0) return violations;
 
+  // Helper: ensure Number (WASM may return BigInt for nm values)
+  const N = (v: any): number => typeof v === 'bigint' ? Number(v) : (v as number);
+
   // Build pad world positions for all components
   const allPads: { comp: ComponentInfo; pad: PadInfo; wx: number; wy: number; side: 'top' | 'bottom' }[] = [];
   for (const comp of snapshot.components) {
-    const rad = (comp.rotation_mdeg / 1000) * (Math.PI / 180);
+    const rad = (N(comp.rotation_mdeg) / 1000) * (Math.PI / 180);
     const cos = Math.cos(rad);
     const sin = Math.sin(rad);
     for (const pad of comp.pads) {
-      const rx = pad.x_nm * cos - pad.y_nm * sin;
-      const ry = pad.x_nm * sin + pad.y_nm * cos;
-      const side = (pad.layer_mask & 1) ? 'top' as const : 'bottom' as const;
-      allPads.push({ comp, pad, wx: comp.x_nm + rx, wy: comp.y_nm + ry, side });
+      const px = N(pad.x_nm), py = N(pad.y_nm);
+      const rx = px * cos - py * sin;
+      const ry = px * sin + py * cos;
+      const side = (N(pad.layer_mask) & 1) ? 'top' as const : 'bottom' as const;
+      allPads.push({ comp, pad, wx: N(comp.x_nm) + rx, wy: N(comp.y_nm) + ry, side });
     }
   }
 
   for (const comp of snapshot.components) {
     if (!comp.silk || comp.silk.length === 0) continue;
 
-    const rad = (comp.rotation_mdeg / 1000) * (Math.PI / 180);
+    const rad = (N(comp.rotation_mdeg) / 1000) * (Math.PI / 180);
     const cos = Math.cos(rad);
     const sin = Math.sin(rad);
+    const compX = N(comp.x_nm), compY = N(comp.y_nm);
 
     for (const shape of comp.silk) {
       const silkSide = shape.layer;
 
       // Transform silk shape to world coordinates
       if (shape.type === 'segment') {
-        const sx1 = comp.x_nm + shape.x1 * cos - shape.y1 * sin;
-        const sy1 = comp.y_nm + shape.x1 * sin + shape.y1 * cos;
-        const sx2 = comp.x_nm + shape.x2 * cos - shape.y2 * sin;
-        const sy2 = comp.y_nm + shape.x2 * sin + shape.y2 * cos;
-        const halfSilk = (shape.width || 150_000) / 2;
+        const x1 = N(shape.x1), y1 = N(shape.y1), x2 = N(shape.x2), y2 = N(shape.y2);
+        const sx1 = compX + x1 * cos - y1 * sin;
+        const sy1 = compY + x1 * sin + y1 * cos;
+        const sx2 = compX + x2 * cos - y2 * sin;
+        const sy2 = compY + x2 * sin + y2 * cos;
+        const halfSilk = (N(shape.width) || 150_000) / 2;
 
         // Check against pads of OTHER components on the same side
         for (const p of allPads) {
           if (p.comp.refdes === comp.refdes) continue; // Skip own pads
           if (p.side !== silkSide) continue; // Different side
 
-          const padRadius = Math.max(p.pad.width_nm, p.pad.height_nm) / 2;
+          const padRadius = Math.max(N(p.pad.width_nm), N(p.pad.height_nm)) / 2;
           const exclusion = padRadius + halfSilk + minClearanceNm;
 
           if (segmentNearPoint(sx1, sy1, sx2, sy2, p.wx, p.wy, exclusion)) {
@@ -96,16 +102,17 @@ function checkSilkClearance(snapshot: BoardSnapshot, minClearanceNm: number): Vi
           }
         }
       } else if (shape.type === 'circle') {
-        const cx = comp.x_nm + shape.cx * cos - shape.cy * sin;
-        const cy = comp.y_nm + shape.cx * sin + shape.cy * cos;
-        const halfSilk = (shape.width || 150_000) / 2;
-        const outerRadius = shape.radius + halfSilk;
+        const scx = N(shape.cx), scy = N(shape.cy);
+        const cx = compX + scx * cos - scy * sin;
+        const cy = compY + scx * sin + scy * cos;
+        const halfSilk = (N(shape.width) || 150_000) / 2;
+        const outerRadius = N(shape.radius) + halfSilk;
 
         for (const p of allPads) {
           if (p.comp.refdes === comp.refdes) continue;
           if (p.side !== silkSide) continue;
 
-          const padRadius = Math.max(p.pad.width_nm, p.pad.height_nm) / 2;
+          const padRadius = Math.max(N(p.pad.width_nm), N(p.pad.height_nm)) / 2;
           const dist = Math.hypot(cx - p.wx, cy - p.wy);
 
           if (dist < outerRadius + padRadius + minClearanceNm) {
@@ -880,7 +887,7 @@ class WasmPcbEngineAdapter implements PcbEngine {
       const wasmSnapshot = sanitizeSnapshot(this.wasmEngine.get_snapshot());
       const wasmViolations = wasmSnapshot.violations || [];
       // Add JS-side silk clearance violations (silk data only exists in JS)
-      const silkViolations = checkSilkClearance(this.cachedSnapshot, this.get_min_clearance_nm());
+      const silkViolations = checkSilkClearance(this.cachedSnapshot, Number(this.get_min_clearance_nm()));
       return {
         ...this.cachedSnapshot,
         violations: [...wasmViolations, ...silkViolations],
