@@ -7,7 +7,7 @@
  * Debug surface: `window.__jlcpcbSearch` exposes lastQuery, resultCount, lastError for E2E.
  */
 
-import { searchComponents, JLCPCBSearchError, proxyImageUrl, type JLCPCBComponent } from './jlcpcb';
+import { searchComponents, JLCPCBSearchError, proxyImageUrl, fetchComponentImageUrl, type JLCPCBComponent } from './jlcpcb';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -198,14 +198,12 @@ function renderResults(results: JLCPCBComponent[]): void {
     const topRow = document.createElement('div');
     topRow.className = 'jlcpcb-result-top';
 
-    // Reserve image slot only if component has an imageUrl
-    if (comp.imageUrl) {
-      const imgWrap = document.createElement('div');
-      imgWrap.className = 'jlcpcb-result-img-wrap';
-      imgWrap.style.display = 'none'; // hidden until thumbnail loads
-      topRow.appendChild(imgWrap);
-      imageSlots.push({ wrap: imgWrap, comp });
-    }
+    // Always reserve image slot — will be filled from search result or EasyEDA API
+    const imgWrap = document.createElement('div');
+    imgWrap.className = 'jlcpcb-result-img-wrap';
+    imgWrap.style.display = 'none'; // hidden until thumbnail loads
+    topRow.appendChild(imgWrap);
+    imageSlots.push({ wrap: imgWrap, comp });
 
     const infoCol = document.createElement('div');
     infoCol.className = 'jlcpcb-result-info';
@@ -334,6 +332,9 @@ const THUMB_BATCH_SIZE = 5;
  * Load thumbnails in small batches so results appear instantly,
  * then images pop in progressively. Each loaded image reveals its wrapper;
  * failed loads leave the wrapper hidden (no placeholder).
+ *
+ * If the component has no imageUrl from jlcsearch, fetches it from the
+ * EasyEDA API (which returns szlcsc product photos and schematic thumbnails).
  */
 function loadThumbnailsLazy(
   slots: { wrap: HTMLElement; comp: JLCPCBComponent }[],
@@ -346,33 +347,54 @@ function loadThumbnailsLazy(
     index += THUMB_BATCH_SIZE;
 
     for (const { wrap, comp } of batch) {
-      const img = document.createElement('img');
-      img.className = 'jlcpcb-result-img';
-      img.referrerPolicy = 'no-referrer';
-      img.alt = `C${comp.lcsc}`;
-      img.onload = () => {
-        wrap.style.display = '';
-        // Wire hover preview only after thumbnail loaded
-        const largeUrl = comp.imageUrlLarge || comp.imageUrl;
-        wrap.addEventListener('mouseenter', () => {
-          showImagePreview(proxyImageUrl(largeUrl, true), wrap);
-        });
-        wrap.addEventListener('mouseleave', () => {
-          hideImagePreview();
-        });
-      };
-      img.onerror = () => {
-        // Failed — leave wrapper hidden, no placeholder
-        wrap.remove();
-      };
-      wrap.appendChild(img);
-      img.src = proxyImageUrl(comp.imageUrl);
+      loadSingleImage(wrap, comp);
     }
 
     // Schedule next batch after a short delay
     if (index < slots.length) {
-      setTimeout(loadBatch, 100);
+      setTimeout(loadBatch, 150);
     }
+  }
+
+  async function loadSingleImage(wrap: HTMLElement, comp: JLCPCBComponent): Promise<void> {
+    let thumbUrl = comp.imageUrl;
+    let largeUrl = comp.imageUrlLarge || comp.imageUrl;
+
+    // No image from search? Fetch from EasyEDA API
+    if (!thumbUrl && comp.lcsc) {
+      const urls = await fetchComponentImageUrl(comp.lcsc);
+      if (urls) {
+        thumbUrl = urls.thumb;
+        largeUrl = urls.large || urls.thumb;
+        // Update component so drag-and-drop also has the URL
+        comp.imageUrl = thumbUrl;
+        comp.imageUrlLarge = largeUrl;
+      }
+    }
+
+    if (!thumbUrl) {
+      wrap.remove();
+      return;
+    }
+
+    const img = document.createElement('img');
+    img.className = 'jlcpcb-result-img';
+    img.referrerPolicy = 'no-referrer';
+    img.alt = `C${comp.lcsc}`;
+    img.onload = () => {
+      wrap.style.display = '';
+      wrap.addEventListener('mouseenter', () => {
+        showImagePreview(proxyImageUrl(largeUrl, true), wrap);
+      });
+      wrap.addEventListener('mouseleave', () => {
+        hideImagePreview();
+      });
+    };
+    img.onerror = () => {
+      wrap.remove();
+    };
+    wrap.appendChild(img);
+    img.src = proxyImageUrl(thumbUrl);
   }
 
   // Start first batch on next frame so DOM renders first

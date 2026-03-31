@@ -23,6 +23,48 @@ export default defineConfig({
       ignored: ['**/src-tauri/**'],
     },
     proxy: {
+      // LCSC product detail API proxy — fetch product images
+      '/easyeda-api/lcsc/product': {
+        target: 'https://wmsc.lcsc.com',
+        changeOrigin: true,
+        configure: (proxy: any) => {
+          proxy.on('proxyReq', (proxyReq: any) => {
+            proxyReq.setHeader('Referer', 'https://www.lcsc.com/');
+          });
+        },
+        rewrite: (path: string) => {
+          const url = new URL(path, 'http://localhost');
+          const code = url.searchParams.get('code') || '';
+          return `/ftps/wm/product/detail?productCode=${code}`;
+        },
+      },
+      // LCSC image proxy — bypass hot-link protection for component images
+      '/easyeda-api/img': {
+        target: 'https://assets.lcsc.com', // placeholder, overridden by router
+        changeOrigin: true,
+        configure: (proxy: any) => {
+          proxy.on('proxyReq', (proxyReq: any, req: any) => {
+            proxyReq.setHeader('Referer', 'https://www.lcsc.com/');
+            // Extract real image URL from ?url= param
+            const reqUrl = new URL(req.url!, `http://${req.headers.host}`);
+            const imgUrl = reqUrl.searchParams.get('url');
+            if (imgUrl) {
+              const parsed = new URL(imgUrl);
+              proxyReq.setHeader('host', parsed.hostname);
+              proxyReq.path = parsed.pathname + parsed.search;
+            }
+          });
+        },
+        router: (req: any) => {
+          const reqUrl = new URL(req.url!, `http://${req.headers.host}`);
+          const imgUrl = reqUrl.searchParams.get('url');
+          if (imgUrl) {
+            const parsed = new URL(imgUrl);
+            return `${parsed.protocol}//${parsed.host}`;
+          }
+          return 'https://assets.lcsc.com';
+        },
+      },
       // EasyEDA API proxy — bypass CORS for footprint/component data
       '/easyeda-api': {
         target: 'https://easyeda.com',

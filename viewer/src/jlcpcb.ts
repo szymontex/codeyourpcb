@@ -58,7 +58,7 @@ const JLCSEARCH_BASE = 'https://jlcsearch.tscircuit.com';
  * VITE_EASYEDA_PROXY_URL, or fall back to direct URLs (which will fail
  * on CORS in browsers but work in Tauri desktop).
  */
-const EASYEDA_PROXY_URL = (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_EASYEDA_PROXY_URL) || '';
+export const EASYEDA_PROXY_URL = (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_EASYEDA_PROXY_URL) || '';
 
 const EASYEDA_API_BASE = EASYEDA_PROXY_URL
   ? EASYEDA_PROXY_URL       // production: Cloudflare Worker proxy
@@ -68,77 +68,139 @@ const EASYEDA_MODULES_BASE = EASYEDA_PROXY_URL
   : '/easyeda-modules';      // dev: Vite proxy
 
 /**
- * Proxy an LCSC image URL through wsrv.nl to bypass hot-link protection.
+ * Proxy an LCSC image URL to bypass hot-link protection.
  * LCSC's CDN (assets.lcsc.com) returns 403 for cross-origin image requests
- * from browsers. The wsrv.nl service is an open-source image proxy that
- * fetches server-side, avoiding the referer/origin block.
+ * from browsers. We route through our Cloudflare Worker proxy which fetches
+ * server-side, or in dev mode through the Vite proxy.
  */
-export function proxyImageUrl(url: string, large = false): string {
+export function proxyImageUrl(url: string, _large = false): string {
   if (!url) return '';
-  // Only proxy assets.lcsc.com URLs
-  if (url.includes('assets.lcsc.com')) {
-    const size = large ? 300 : 48;
-    return `https://wsrv.nl/?url=${encodeURIComponent(url)}&w=${size}&h=${size}&fit=cover&output=webp`;
-  }
-  return url;
+  if (!url.includes('assets.lcsc.com')) return url;
+
+  // Use our own proxy (Cloudflare Worker in prod, Vite proxy in dev)
+  const proxyBase = EASYEDA_PROXY_URL || '/easyeda-api';
+  return `${proxyBase}/img/?url=${encodeURIComponent(url)}`;
 }
 
 /**
+ * All jlcsearch category endpoints to search across.
+ * The general `/components/list.json?q=` endpoint ignores the query parameter,
+ * so we search category-specific endpoints and filter client-side by mfr name.
+ */
+const JLCSEARCH_CATEGORIES = [
+  'resistors', 'capacitors', 'leds', 'diodes', 'headers',
+  'microcontrollers', 'arm_processors', 'risc_v_processors', 'fpgas',
+  'wifi_modules', 'mosfets', 'bjt_transistors',
+  'ldos', 'voltage_regulators', 'boost_converters', 'buck_boost_converters',
+  'led_drivers', 'io_expanders', 'adcs', 'dacs',
+  'fuses', 'switches', 'relays',
+  'usb_c_connectors', 'fpc_connectors', 'jst_connectors',
+  'wire_to_board_connectors', 'battery_holders',
+  'gyroscopes', 'accelerometers', 'microphones',
+  'potentiometers', 'resistor_arrays', 'inductors',
+];
+
+/** Cache of category data — fetched once per session */
+const categoryCache = new Map<string, any[]>();
+
+/**
  * Search JLCPCB/LCSC components via tscircuit jlcsearch API.
- * Returns typed results with parsed metadata from the `extra` JSON string.
- * Throws JLCPCBSearchError on HTTP errors (4xx/5xx).
- * Returns empty array on network-level failures (DNS, timeout, CORS).
- * Retries once on 502/503 with a short delay.
+ *
+ * Since jlcsearch's `/components/list.json?q=` ignores query params,
+ * we fetch from all category endpoints in parallel and filter client-side
+ * by matching the query against mfr part number, package, and attributes.
+ *
+ * Results are cached per category so subsequent searches are instant.
  */
 export async function searchComponents(
   query: string,
   limit = 20,
 ): Promise<JLCPCBComponent[]> {
-  const params = new URLSearchParams({
-    q: query,
-    limit: String(limit),
-    full: 'true',
-  });
-  const url = `${JLCSEARCH_BASE}/api/search?${params}`;
+  const q = query.toLowerCase().trim();
+  if (!q) return [];
 
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      const response = await fetch(url);
+  // Fetch all categories in parallel (cached after first search)
+  const allItems = await fetchAllCategories();
 
-      // Retry on 502/503 — server may be temporarily overloaded
-      if ((response.status === 502 || response.status === 503) && attempt === 0) {
-        console.warn(`[JLCPCB] Search got ${response.status}, retrying in 1s...`);
-        await new Promise((r) => setTimeout(r, 1000));
-        continue;
-      }
+  // Score and filter results by relevance to query
+  const scored: { item: any; score: number }[] = [];
 
-      if (!response.ok) {
-        console.error(`[JLCPCB] Search error: HTTP ${response.status} for "${query}"`);
-        throw new JLCPCBSearchError(response.status, query);
-      }
+  for (const item of allItems) {
+    const mfr = (item.mfr || '').toLowerCase();
+    const pkg = (item.package || '').toLowerCase();
+    const cat = (item.category || '').toLowerCase();
+    const subcat = (item.subcategory || '').toLowerCase();
+    let attrsText = '';
+    if (item.attributes && typeof item.attributes === 'string') {
+      try { attrsText = JSON.stringify(JSON.parse(item.attributes)).toLowerCase(); } catch { /* */ }
+    }
 
-      const data = await response.json();
-      const components = data?.components;
+    let score = 0;
+    // Exact mfr match
+    if (mfr === q) score += 100;
+    // mfr contains query
+    else if (mfr.includes(q)) score += 50;
+    // LCSC code match (e.g. "C25744")
+    if (q.startsWith('c') && String(item.lcsc) === q.slice(1)) score += 100;
+    // Package match
+    if (pkg.includes(q)) score += 20;
+    // Category/subcategory match
+    if (cat.includes(q) || subcat.includes(q)) score += 10;
+    // Attributes match
+    if (attrsText.includes(q)) score += 5;
 
-      if (!Array.isArray(components)) {
-        return [];
-      }
-
-      return components.map((raw: any) => parseSearchResult(raw));
-    } catch (error) {
-      if (error instanceof JLCPCBSearchError) throw error;
-      // On network error, retry once
-      if (attempt === 0) {
-        console.warn(`[JLCPCB] Search network error, retrying in 1s...`);
-        await new Promise((r) => setTimeout(r, 1000));
-        continue;
-      }
-      console.error(`[JLCPCB] Search error: ${error}`);
-      return [];
+    if (score > 0) {
+      // Boost in-stock items
+      if (item.stock > 0) score += 3;
+      if (item.is_basic) score += 2;
+      scored.push({ item, score });
     }
   }
 
-  return [];
+  // Sort by score desc, then stock desc
+  scored.sort((a, b) => b.score - a.score || (b.item.stock || 0) - (a.item.stock || 0));
+
+  return scored.slice(0, limit).map(({ item }) => parseSearchResult(item));
+}
+
+/**
+ * Fetch all categories in parallel. Cached after first call.
+ * Each category returns up to 100 items — total ~3000-4000 items.
+ */
+async function fetchAllCategories(): Promise<any[]> {
+  const uncached = JLCSEARCH_CATEGORIES.filter(c => !categoryCache.has(c));
+
+  if (uncached.length > 0) {
+    const fetches = uncached.map(async (cat) => {
+      try {
+        const resp = await fetch(`${JLCSEARCH_BASE}/${cat}/list.json?limit=100`);
+        if (!resp.ok) return;
+        const data = await resp.json();
+        // Response key is the category name (e.g. "resistors", "wifi_modules")
+        const items = data?.[cat] || data?.components || [];
+        if (Array.isArray(items)) {
+          // Tag each item with category for display
+          const tagged = items.map((item: any) => ({
+            ...item,
+            category: item.category || cat.replace(/_/g, ' '),
+          }));
+          categoryCache.set(cat, tagged);
+        }
+      } catch {
+        categoryCache.set(cat, []); // mark as fetched (empty) to avoid retries
+      }
+    });
+
+    await Promise.all(fetches);
+    console.log(`[JLCPCB] Cached ${uncached.length} categories, ${[...categoryCache.values()].reduce((n, a) => n + a.length, 0)} total items`);
+  }
+
+  // Merge all cached items
+  const all: any[] = [];
+  for (const items of categoryCache.values()) {
+    all.push(...items);
+  }
+  return all;
 }
 
 /**
@@ -278,6 +340,68 @@ async function fetchEasyEDAComponentData(lcscId: number): Promise<any | null> {
 }
 
 // ---------------------------------------------------------------------------
+// Component image URL extraction from EasyEDA API
+// ---------------------------------------------------------------------------
+
+/** Cache of image URLs keyed by LCSC number */
+const imageUrlCache = new Map<number, { thumb: string; large: string }>();
+
+/**
+ * Fetch product image URLs for an LCSC part from the LCSC product detail API.
+ * Pipeline: LCSC code → wmsc.lcsc.com/ftps/wm/product/detail → productImages[]
+ *
+ * Returns 900x900 product photos (front, back, etc.) — the real deal, not schematic symbols.
+ * Falls back to EasyEDA szlcsc.image (96x96) if LCSC API fails.
+ * Returns null if no images available — never throws.
+ */
+export async function fetchComponentImageUrl(lcscId: number): Promise<{ thumb: string; large: string } | null> {
+  if (imageUrlCache.has(lcscId)) {
+    return imageUrlCache.get(lcscId)!;
+  }
+
+  try {
+    // Primary: LCSC product detail API (900x900 product photos)
+    const lcscCode = `C${lcscId}`;
+    const proxyBase = EASYEDA_PROXY_URL || '/easyeda-api';
+    const detailUrl = `${proxyBase}/lcsc/product?code=${lcscCode}`;
+    const detailResp = await fetch(detailUrl);
+
+    if (detailResp.ok) {
+      const data = await detailResp.json();
+      const images: string[] = data?.result?.productImages || [];
+      if (images.length > 0) {
+        // Use 900x900 for large, derive 96x96 for thumbnail
+        const large = images[0];
+        const thumb = large.replace('/900x900/', '/96x96/');
+        const entry = { thumb, large };
+        imageUrlCache.set(lcscId, entry);
+        return entry;
+      }
+    }
+  } catch {
+    // Fall through to EasyEDA fallback
+  }
+
+  try {
+    // Fallback: EasyEDA API szlcsc.image (96x96 only)
+    const compData = await fetchEasyEDAComponentData(lcscId);
+    if (!compData) return null;
+
+    const result = compData?.result;
+    if (!result) return null;
+
+    const lcscImage = result?.szlcsc?.image || '';
+    if (!lcscImage) return null;
+
+    const entry = { thumb: lcscImage, large: lcscImage };
+    imageUrlCache.set(lcscId, entry);
+    return entry;
+  } catch {
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Footprint cache (parsed PadInfo[] keyed by LCSC ID)
 // ---------------------------------------------------------------------------
 
@@ -335,8 +459,10 @@ export function getCached3DModelUuid(lcscId: number): string | null {
 }
 
 /**
- * Parse a single search result from jlcsearch API, extracting the nested
- * `extra` JSON string into structured fields.
+ * Parse a single search result from jlcsearch API.
+ *
+ * Handles both the new format (direct fields, `attributes` as JSON string)
+ * and the legacy format (nested `extra` JSON string with images).
  */
 export function parseSearchResult(raw: any): JLCPCBComponent {
   let manufacturer = '';
@@ -344,19 +470,31 @@ export function parseSearchResult(raw: any): JLCPCBComponent {
   let datasheetUrl = '';
   let imageUrl = '';
   let imageUrlLarge = '';
-  let description = '';
+  let description = raw.description || '';
 
+  // New format: attributes as direct JSON string field
+  if (raw.attributes && typeof raw.attributes === 'string') {
+    try {
+      const parsed = JSON.parse(raw.attributes);
+      if (parsed && typeof parsed === 'object') {
+        attributes = parsed;
+      }
+    } catch {
+      // Malformed — use empty
+    }
+  }
+
+  // Legacy format: nested extra JSON string (kept for backwards compat)
   if (raw.extra && typeof raw.extra === 'string') {
     try {
       const extra = JSON.parse(raw.extra);
       manufacturer = extra?.manufacturer?.name ?? '';
       if (extra?.attributes && typeof extra.attributes === 'object') {
-        attributes = extra.attributes;
+        attributes = { ...attributes, ...extra.attributes };
       }
       datasheetUrl = extra?.datasheet?.pdf ?? '';
-      description = extra?.description ?? '';
+      if (extra?.description) description = extra.description;
 
-      // Extract image URLs: 224x224 for thumbnail, 900x900 for hover preview
       if (Array.isArray(extra?.images) && extra.images.length > 0) {
         const first = extra.images[0];
         imageUrl = first?.['224x224'] ?? first?.['96x96'] ?? '';
@@ -367,13 +505,22 @@ export function parseSearchResult(raw: any): JLCPCBComponent {
     }
   }
 
+  // Build description from category + attributes if not provided
+  if (!description && raw.category) {
+    const parts = [raw.subcategory || raw.category];
+    if (attributes['Resistance']) parts.push(attributes['Resistance']);
+    if (attributes['Capacitance']) parts.push(attributes['Capacitance']);
+    if (attributes['Type']) parts.push(attributes['Type']);
+    description = parts.join(' — ');
+  }
+
   return {
     lcsc: typeof raw.lcsc === 'number' ? raw.lcsc : 0,
     mfr: raw.mfr ?? '',
     package: raw.package ?? '',
-    isBasic: raw.is_basic ?? false,
+    isBasic: raw.is_basic ?? raw.isBasic ?? false,
     stock: typeof raw.stock === 'number' ? raw.stock : 0,
-    price: parsePrice(raw.price),
+    price: parsePrice(raw.price ?? raw.price1),
     manufacturer,
     attributes,
     datasheetUrl,
@@ -424,10 +571,12 @@ export function extract3DModelUUID(compData: any): string | null {
       const shapes = item?.packageDetail?.dataStr?.shape;
       if (!Array.isArray(shapes)) continue;
 
+      // Scan shape array for outline3D SVGNODE entries — their "uuid" field
+      // is the actual 3D model UUID used by modules.easyeda.com/3dmodel/{uuid}.
+      // Note: head.uuid_3d is NOT the model download UUID — it returns 404.
       for (const shape of shapes) {
         if (typeof shape !== 'string') continue;
 
-        // Shape entries are like "SVGNODE~{...}" — look for outline3D with uuid
         if (shape.includes('outline3D') || shape.includes('3D')) {
           const uuidMatch = shape.match(/"uuid"\s*:\s*"([a-f0-9]{32})"/i);
           if (uuidMatch) {
