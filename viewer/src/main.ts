@@ -314,7 +314,7 @@ async function init(): Promise<void> {
       }
     }));
 
-    console.log(`[LCSC] Fetched ${fetched}/${toFetch.length} footprints`);
+    console.log(`[LCSC] Fetched ${fetched}/${toFetch.length} footprints. Registered packages:`, toFetch.map(t => t.pkg));
     return fetched > 0;
   }
 
@@ -853,8 +853,10 @@ async function init(): Promise<void> {
    * Re-parse + re-render after LCSC footprint fetch, updating the thumbnail.
    */
   function reloadAfterLcscFetch(source: string): void {
+    console.log('[LCSC] reloadAfterLcscFetch — re-parsing source with registered footprints');
     engine.load_source(source);
     const updatedSnap = pullSnapshot();
+    console.log('[LCSC] After re-parse: components =', updatedSnap.components?.length, 'pads on first =', updatedSnap.components?.[0]?.pads?.length);
     forceRender2D();
     // Re-generate thumbnail now that footprints are loaded
     if (currentFilePath) {
@@ -2733,13 +2735,10 @@ async function init(): Promise<void> {
         // Hide project manager when a file is loaded
         hideProjectManager();
 
-        // Auto-route if enabled
-        if (autoRouteCb.checked && !isRouting) {
-          // Small delay to let reload complete
-          setTimeout(() => {
-            triggerRouting();
-          }, 500);
-        }
+        // Auto-route disabled — autorouter needs fundamental rewrite
+        // if (autoRouteCb.checked && !isRouting) {
+        //   setTimeout(() => { triggerRouting(); }, 500);
+        // }
       },
       onRouteStart: () => {
         console.log('[Routing] Server started routing...');
