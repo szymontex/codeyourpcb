@@ -90,7 +90,8 @@ An LLM can generate this, review it, refactor it, and catch mistakes — just li
 | Desktop app (Tauri v2, Win/Mac/Linux) | Done |
 | KiCad component library import | Done |
 | Share URL (viewport state) | Done |
-| Autorouter | In progress |
+| Save & reload routed traces | Planned |
+| Autorouter | Planned |
 
 <p align="center">
   <img src="docs/images/board-view.png" alt="555 timer blink circuit — board view with routed traces" width="720">
