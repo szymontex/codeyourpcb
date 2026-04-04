@@ -2,7 +2,7 @@
 
 **Code-first PCB design.** Describe your circuit board in a simple DSL — get a deterministic, git-friendly, AI-editable design.
 
-```
+```cypcb
 // blink.cypcb — 555 timer LED blink circuit
 version 1
 
@@ -14,16 +14,18 @@ board blink {
 component J1 connector "PIN-HDR-1x2" { value "5V PWR"; at 5mm, 20mm }
 component U1 ic "SOIC-8" { value "NE555"; at 28mm, 20mm }
 component R1 resistor "0402" { value "10k"; at 35mm, 30mm }
-component R2 resistor "0402" { value "47k"; at 35mm, 24mm }
 component C1 capacitor "1206" { value "10uF"; at 43mm, 20mm }
 component LED1 led "0805" { value "RED"; at 55mm, 20mm }
 
-net VCC { J1.1; U1.8; U1.4; R1.1 }
+net VCC [width 0.5mm  current 2A] { J1.1; U1.8; U1.4; R1.1 }
 net GND { J1.2; U1.1; C1.2; LED1.K }
-net DIS { U1.7; R1.2; R2.1 }
-net TRG_THR { U1.2; U1.6; R2.2; C1.1 }
-net OUT { U1.3; R3.1 }
-net LED_ANODE { R3.2; LED1.A }
+
+// Routed traces are saved in the file — deterministic, git-friendly
+trace VCC {
+    layer Top
+    width 0.500000mm
+    path 5mm,20mm -> 15mm,20mm -> 28mm,20mm -> 35mm,30mm
+}
 ```
 
 <p align="center">
@@ -55,13 +57,18 @@ Traditional PCB formats are opaque to LLMs. A KiCad `.kicad_pcb` file is thousan
 
 `.cypcb` is different — the semantics are declarative and human-readable:
 
-```
+```cypcb
 component U1 ic "SOIC-8" { value "NE555"; at 28mm, 20mm }
-net VCC { U1.8; U1.4; R1.1 }
-net GND { U1.1; C1.2 }
+net VCC [width 0.5mm  current 2A] { U1.8; U1.4; R1.1 }
+
+trace VCC {
+    layer Top
+    width 0.500000mm
+    path 5mm,20mm -> 28mm,20mm -> 35mm,30mm
+}
 ```
 
-An LLM can generate this, review it, refactor it, and catch mistakes — just like source code.
+An LLM can generate this, review it, refactor it, and catch mistakes — just like source code. Even routed traces are human-readable `path` blocks that diff cleanly in git.
 
 <p align="center">
   <img src="docs/images/jlcpcb-3d.png" alt="3D board view with JLCPCB parts search" width="720">
@@ -76,22 +83,31 @@ An LLM can generate this, review it, refactor it, and catch mistakes — just li
 | Live preview — save file, board updates instantly | Done |
 | `.cypcb` DSL with Tree-sitter parser | Done |
 | Professional 2D renderer (KiCad-style) | Done |
-| 3D board viewer with component models | Done |
+| 3D board viewer with KiCad-style copper, solder mask, round trace caps | Done |
 | Interactive trace routing (45° constraint, obstacle dodge) | Done |
 | Trace segment editing (drag segments & corners) | Done |
+| **Trace persistence** — routed traces saved to `.cypcb` file, survive reload | Done |
+| **Bidirectional sync** — edit trace code ↔ board updates in real-time | Done |
+| **Net constraints** — `[width 0.5mm]`, `[current 2A]` per net | Done |
+| **IPC-2221 auto-width** — routing auto-sets trace width from current rating | Done |
+| **DRC: trace width vs current** — warns when trace too thin for current | Done |
 | Design Rule Check (DRC) | Done |
 | Gerber / Excellon / pick-and-place export | Done |
-| Monaco editor with syntax highlighting | Done |
+| Monaco editor with **context-aware completions** and syntax hints | Done |
 | LSP (diagnostics, autocomplete, hover, go-to-definition) | Done |
 | JLCPCB parts search & drag-and-drop placement | Done |
-| Project manager with templates | Done |
+| Custom footprint definitions in DSL | Done |
+| Project manager with templates & thumbnail persistence | Done |
 | Dark / Light theme (WCAG AA) | Done |
 | Web app | Done |
 | Desktop app (Tauri v2, Win/Mac/Linux) | Done |
 | KiCad component library import | Done |
 | Share URL (viewport state) | Done |
-| Save & reload routed traces | Planned |
-| Autorouter | Planned |
+| Copper pour / ground planes (zone fill with clearance) | Planned |
+| Zone & keepout rendering (2D + 3D) | Planned |
+| Autorouter (fundamental rewrite) | Planned |
+| Differential pair routing | Planned |
+| Impedance calculator | Planned |
 
 <p align="center">
   <img src="docs/images/board-view.png" alt="555 timer blink circuit — board view with routed traces" width="720">
@@ -206,7 +222,16 @@ codeyourpcb/
 
 This project is **experimental**. The DSL, APIs, and file formats may change between versions.
 
-The interactive routing (manual trace drawing, segment editing) works well. The autorouter is being reworked — contributions welcome.
+**What works well:**
+- Interactive routing (manual trace drawing, segment/corner editing, 45° constraints)
+- Trace persistence — routed traces are saved as `path` blocks in the `.cypcb` file, survive reload with bit-exact determinism
+- Net constraints with IPC-2221 auto-width and DRC current validation
+- Context-aware Monaco editor with syntax snippets and live bidirectional sync
+- 3D viewer with KiCad-style copper, solder mask, and round trace caps
+
+**What's in progress:**
+- Copper pour / zone fill (grammar + ECS exist, renderer not yet)
+- Autorouter (fundamental rewrite needed)
 
 PRs welcome — whether it's a bug fix, new feature, or just a typo.
 

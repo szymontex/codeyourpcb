@@ -360,6 +360,7 @@ module.exports = grammar({
       $.trace_from,
       $.trace_to,
       $.trace_via,
+      $.trace_path,
       $.trace_layer,
       $.trace_width,
       $.trace_locked,
@@ -377,9 +378,23 @@ module.exports = grammar({
       field('pin', $.pin_ref),
     ),
 
-    // via 5mm, 8mm (waypoint position)
+    // via 5mm, 8mm [drill 0.3mm] (waypoint position with optional drill size)
     trace_via: $ => seq(
       'via',
+      field('x', $.dimension),
+      ',',
+      field('y', $.dimension),
+      optional(seq('drill', field('drill', $.dimension))),
+    ),
+
+    // path 10mm,12mm -> 15mm,12mm -> 15mm,8mm (explicit polyline geometry)
+    trace_path: $ => seq(
+      'path',
+      $.path_point,
+      repeat(seq('->', $.path_point)),
+    ),
+
+    path_point: $ => seq(
       field('x', $.dimension),
       ',',
       field('y', $.dimension),

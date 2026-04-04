@@ -72,6 +72,18 @@ export class PcbEngine {
      */
     auto_route_with_params(params_json: string): string;
     /**
+     * Export all traces and vias as DSL `trace` blocks.
+     *
+     * Iterates all Trace and Via entities in the ECS, groups them by net,
+     * and emits properly formatted DSL trace blocks with `path` coordinates.
+     *
+     * Coordinates use 6 decimal places in mm for deterministic round-trip:
+     * nm → mm string → parse → nm gives exactly the original value.
+     *
+     * Returns an empty string if there are no traces.
+     */
+    export_traces_as_dsl(): string;
+    /**
      * Get the minimum copper clearance in nanometers.
      *
      * Returns the clearance value from the active design rules (default preset).
@@ -158,6 +170,7 @@ export interface InitOutput {
     readonly pcbengine_auto_route_debug: (a: number, b: number, c: number, d: number) => void;
     readonly pcbengine_auto_route_variants: (a: number, b: number) => void;
     readonly pcbengine_auto_route_with_params: (a: number, b: number, c: number, d: number) => void;
+    readonly pcbengine_export_traces_as_dsl: (a: number, b: number) => void;
     readonly pcbengine_get_min_clearance_nm: (a: number) => bigint;
     readonly pcbengine_get_snapshot: (a: number) => number;
     readonly pcbengine_get_trace_at_point: (a: number, b: bigint, c: bigint, d: bigint) => number;

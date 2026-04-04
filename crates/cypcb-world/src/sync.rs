@@ -48,11 +48,12 @@ use miette::{Diagnostic, LabeledSpan, SourceCode, SourceSpan};
 use cypcb_core::{Nm, Point, Rect};
 use cypcb_parser::ast::{
     BoardDef, ComponentDef, Definition, FootprintDef, NetDef, PadShape as AstPadShape,
-    PinId as AstPinId, SourceFile, Span, TraceDef, ZoneDef, ZoneKind as AstZoneKind,
+    PinId as AstPinId, SourceFile, Span, TraceDef, TraceDirective, ZoneDef,
+    ZoneKind as AstZoneKind,
 };
 
 use crate::components::{
-    trace::{Trace, TraceSegment, TraceSource},
+    trace::{Trace, TraceSegment, TraceSource, Via},
     ComponentKind, FootprintRef, Layer, NetConnections, PadShape as EcsPadShape, PinConnection,
     Position, RefDes, Rotation, SourceSpan as EcsSourceSpan, Value, Zone, ZoneKind as EcsZoneKind,
 };
@@ -671,48 +672,123 @@ fn sync_trace(
         None
     };
 
-    // Build the trace segments
-    // Connect: from -> waypoints -> to
-    let mut segments = Vec::new();
-    let mut all_points: Vec<Point> = Vec::new();
+    // Check if this trace uses geometric (path-based) directives
+    let has_paths = trace_def
+        .directives
+        .iter()
+        .any(|d| matches!(d, TraceDirective::Path(_)));
 
-    if let Some(start) = from_position {
-        all_points.push(start);
-    }
+    if has_paths {
+        // Geometric mode: process ordered directives to create traces and vias
+        let mut current_layer = layer;
+        let span = EcsSourceSpan::new(trace_def.span.start, trace_def.span.end, 0, 0);
 
-    // Add waypoints
-    for waypoint in &trace_def.waypoints {
-        let point = Point::new(waypoint.x.to_nm(), waypoint.y.to_nm());
-        all_points.push(point);
-    }
+        for directive in &trace_def.directives {
+            match directive {
+                TraceDirective::Layer(name) => {
+                    current_layer = match parse_layer_name(name) {
+                        Some(l) => l,
+                        None => {
+                            result.errors.push(SyncError::UnknownLayer {
+                                layer: name.clone(),
+                                src: source.to_string(),
+                                span: span_to_source_span(&trace_def.span),
+                            });
+                            current_layer // keep previous
+                        }
+                    };
+                }
+                TraceDirective::Path(path) => {
+                    let mut segments = Vec::new();
+                    let points: Vec<Point> = path
+                        .points
+                        .iter()
+                        .map(|p| Point::new(p.x.to_nm(), p.y.to_nm()))
+                        .collect();
 
-    if let Some(end) = to_position {
-        all_points.push(end);
-    }
+                    for window in points.windows(2) {
+                        if let [start, end] = window {
+                            segments.push(TraceSegment::new(*start, *end));
+                        }
+                    }
 
-    // Create segments from consecutive points
-    for window in all_points.windows(2) {
-        if let [start, end] = window {
-            segments.push(TraceSegment::new(*start, *end));
+                    if !segments.is_empty() {
+                        let trace = Trace {
+                            segments,
+                            width,
+                            layer: current_layer,
+                            net_id,
+                            locked: trace_def.locked,
+                            source: TraceSource::Manual,
+                        };
+                        world.ecs_mut().spawn((trace, span));
+                    }
+                }
+                TraceDirective::Via(via_def) => {
+                    let position =
+                        Point::new(via_def.position.x.to_nm(), via_def.position.y.to_nm());
+                    let drill = via_def
+                        .drill
+                        .as_ref()
+                        .map(|d| d.to_nm())
+                        .unwrap_or_else(|| Nm::from_mm(0.3));
+                    let outer_diameter = Nm(drill.0 * 2); // 2x drill for annular ring
+
+                    let via = Via {
+                        position,
+                        drill,
+                        outer_diameter,
+                        start_layer: Layer::TopCopper,
+                        end_layer: Layer::BottomCopper,
+                        net_id,
+                        locked: trace_def.locked,
+                    };
+                    world.ecs_mut().spawn((via, span));
+                }
+            }
         }
+    } else {
+        // Logical mode: from -> waypoints -> to (existing behavior)
+        let mut segments = Vec::new();
+        let mut all_points: Vec<Point> = Vec::new();
+
+        if let Some(start) = from_position {
+            all_points.push(start);
+        }
+
+        // Add waypoints
+        for waypoint in &trace_def.waypoints {
+            let point = Point::new(waypoint.x.to_nm(), waypoint.y.to_nm());
+            all_points.push(point);
+        }
+
+        if let Some(end) = to_position {
+            all_points.push(end);
+        }
+
+        // Create segments from consecutive points
+        for window in all_points.windows(2) {
+            if let [start, end] = window {
+                segments.push(TraceSegment::new(*start, *end));
+            }
+        }
+
+        // Create the trace entity
+        let trace = Trace {
+            segments,
+            width,
+            layer,
+            net_id,
+            locked: trace_def.locked,
+            source: TraceSource::Manual,
+        };
+
+        // Add source span for error reporting
+        let span = EcsSourceSpan::new(trace_def.span.start, trace_def.span.end, 0, 0);
+
+        // Spawn the trace entity
+        world.ecs_mut().spawn((trace, span));
     }
-
-    // Create the trace entity
-    let trace = Trace {
-        segments,
-        width,
-        layer,
-        net_id,
-        locked: trace_def.locked,
-        source: TraceSource::Manual,
-    };
-
-    // Add source span for error reporting
-    // Note: We don't have line/column from the AST Span, so use defaults
-    let span = EcsSourceSpan::new(trace_def.span.start, trace_def.span.end, 0, 0);
-
-    // Spawn the trace entity
-    world.ecs_mut().spawn((trace, span));
 }
 
 /// Helper to get the position of a pin reference.

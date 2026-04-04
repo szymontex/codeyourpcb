@@ -1,12 +1,11 @@
 /**
  * LSP-like bridge for Monaco editor
  *
- * Bridges WASM engine diagnostics to Monaco marker API and provides
- * completion/hover providers without requiring a separate LSP server.
+ * Two-phase context detection (inspired by GraphQL Language Service + Prisma):
+ *   Phase 1: Block context — which block `{ }` or `[ ]` contains the cursor
+ *   Phase 2: Inline slot — what token position is the cursor at on THIS LINE
  *
- * This satisfies EDIT-02 (auto-completion), EDIT-03 (inline errors),
- * and EDIT-09 (LSP connection) by using the WASM engine as the source
- * of truth instead of connecting to tower-lsp over WebSocket.
+ * This gives precise, position-aware completions: only show what's valid HERE.
  */
 
 import type { ViolationInfo } from '../types';
@@ -15,18 +14,6 @@ import type { ViolationInfo } from '../types';
 // Diagnostics (EDIT-03)
 // ============================================================================
 
-/**
- * Update Monaco editor markers from WASM engine diagnostics
- *
- * Converts parse errors and DRC violations to Monaco's marker format.
- * Parse errors show as red squiggly underlines (MarkerSeverity.Error).
- * DRC violations show as warning markers (MarkerSeverity.Warning).
- *
- * @param monaco - Monaco editor module
- * @param editor - Monaco editor instance
- * @param parseErrors - Error string from engine.load_source() (newline-separated)
- * @param violations - DRC violations from snapshot.violations
- */
 export function updateDiagnostics(
   monaco: typeof import('monaco-editor'),
   editor: any,
@@ -38,56 +25,35 @@ export function updateDiagnostics(
 
   const markers: any[] = [];
 
-  // Parse error strings and convert to markers
   if (parseErrors && parseErrors.trim()) {
-    const errorLines = parseErrors.split('\n').filter(line => line.trim());
-
-    for (const errorMsg of errorLines) {
-      // Try to extract line number from error message
-      // Expected format: "Line 5: unexpected token 'foo'" or similar
+    for (const errorMsg of parseErrors.split('\n').filter(l => l.trim())) {
       const lineMatch = errorMsg.match(/[Ll]ine\s+(\d+)/);
-      const lineNum = lineMatch ? parseInt(lineMatch[1], 10) : 1;
-
-      // Ensure line number is valid
-      const maxLine = model.getLineCount();
-      const validLineNum = Math.max(1, Math.min(lineNum, maxLine));
-
+      const lineNum = Math.max(1, Math.min(lineMatch ? parseInt(lineMatch[1], 10) : 1, model.getLineCount()));
       markers.push({
         severity: monaco.MarkerSeverity.Error,
         message: errorMsg,
-        startLineNumber: validLineNum,
-        startColumn: 1,
-        endLineNumber: validLineNum,
-        endColumn: model.getLineMaxColumn(validLineNum),
+        startLineNumber: lineNum, startColumn: 1,
+        endLineNumber: lineNum, endColumn: model.getLineMaxColumn(lineNum),
       });
     }
   }
 
-  // Convert DRC violations to warning markers
-  // Violations don't have line numbers (they have x_nm, y_nm positions),
-  // so we add them as editor-level warnings at line 1
-  for (const violation of violations) {
+  for (const v of violations) {
     markers.push({
       severity: monaco.MarkerSeverity.Warning,
-      message: `[DRC ${violation.kind}] ${violation.message}`,
-      startLineNumber: 1,
-      startColumn: 1,
-      endLineNumber: 1,
-      endColumn: model.getLineMaxColumn(1),
+      message: `[DRC ${v.kind}] ${v.message}`,
+      startLineNumber: 1, startColumn: 1,
+      endLineNumber: 1, endColumn: model.getLineMaxColumn(1),
     });
   }
 
-  // Update markers for this model
   monaco.editor.setModelMarkers(model, 'cypcb', markers);
 }
 
 // ============================================================================
-// Context Detection
+// Phase 1: Block Context — which block contains the cursor?
 // ============================================================================
 
-/**
- * Block context types for context-aware completions
- */
 type BlockContext =
   | 'top-level'
   | 'board'
@@ -98,704 +64,449 @@ type BlockContext =
   | 'footprint'
   | 'zone';
 
-/**
- * Detect what block context the cursor is inside by scanning backwards
- * from the cursor position to find the nearest unclosed `{` or `[`.
- *
- * Context rules:
- * - `board NAME {` -> board context
- * - `component REFDES TYPE "FP" {` -> component context
- * - `net NAME [` -> net constraint context
- * - `net NAME {` -> net pins context
- * - `trace NAME {` -> trace context
- * - `footprint NAME {` -> footprint context
- * - `zone NAME {` or `keepout NAME {` -> zone context
- * - Otherwise -> top-level
- */
 function detectBlockContext(model: any, position: any): BlockContext {
   let braceDepth = 0;
   let bracketDepth = 0;
 
-  // Scan backwards from cursor line to find enclosing block
   for (let lineNum = position.lineNumber; lineNum >= 1; lineNum--) {
     const lineText = lineNum === position.lineNumber
       ? model.getLineContent(lineNum).substring(0, position.column - 1)
       : model.getLineContent(lineNum);
 
-    // Scan characters right-to-left on this line
     for (let i = lineText.length - 1; i >= 0; i--) {
       const ch = lineText[i];
-
-      if (ch === '}') {
-        braceDepth++;
-      } else if (ch === '{') {
-        if (braceDepth > 0) {
-          braceDepth--;
-        } else {
-          // Found the unclosed `{` — check what keyword precedes it
-          // Check the full line from the model for context
+      if (ch === '}') braceDepth++;
+      else if (ch === '{') {
+        if (braceDepth > 0) { braceDepth--; }
+        else {
           const fullLine = model.getLineContent(lineNum);
-          const lineBeforeBrace = fullLine.substring(0, i).trim();
-
-          if (/^board\b/.test(lineBeforeBrace)) return 'board';
-          if (/^component\b/.test(lineBeforeBrace)) return 'component';
-          if (/^net\b/.test(lineBeforeBrace)) return 'net-pins';
-          if (/^trace\b/.test(lineBeforeBrace)) return 'trace';
-          if (/^footprint\b/.test(lineBeforeBrace)) return 'footprint';
-          if (/^(zone|keepout)\b/.test(lineBeforeBrace)) return 'zone';
-
-          // Brace not preceded by a known keyword; could be nested
-          // Continue scanning outward
-          // (don't return top-level, keep looking)
+          const before = fullLine.substring(0, i).trim();
+          if (/^board\b/.test(before)) return 'board';
+          if (/^component\b/.test(before)) return 'component';
+          if (/^net\b/.test(before)) return 'net-pins';
+          if (/^trace\b/.test(before)) return 'trace';
+          if (/^footprint\b/.test(before)) return 'footprint';
+          if (/^(zone|keepout)\b/.test(before)) return 'zone';
         }
-      } else if (ch === ']') {
-        bracketDepth++;
-      } else if (ch === '[') {
-        if (bracketDepth > 0) {
-          bracketDepth--;
-        } else {
-          // Found unclosed `[` — check if preceded by net
+      } else if (ch === ']') bracketDepth++;
+      else if (ch === '[') {
+        if (bracketDepth > 0) { bracketDepth--; }
+        else {
           const fullLine = model.getLineContent(lineNum);
-          const lineBeforeBracket = fullLine.substring(0, i).trim();
-
-          if (/^net\b/.test(lineBeforeBracket)) return 'net-constraint';
-          // Some other bracket context, continue scanning
+          const before = fullLine.substring(0, i).trim();
+          if (/^net\b/.test(before)) return 'net-constraint';
         }
       }
     }
   }
-
   return 'top-level';
 }
 
-/**
- * Extract component reference designators (refdes) declared in the document.
- * Scans for `component XX` declarations and returns the refdes list.
- */
-function extractComponentRefdes(model: any): string[] {
-  const refdesList: string[] = [];
-  const lineCount = model.getLineCount();
+// ============================================================================
+// Phase 2: Inline Slot — what token position is the cursor at?
+// ============================================================================
 
-  for (let i = 1; i <= lineCount; i++) {
-    const line = model.getLineContent(i);
-    const match = line.match(/^\s*component\s+(\w+)/);
-    if (match) {
-      refdesList.push(match[1]);
+type InlineSlot =
+  | 'top-keyword'
+  | 'component-refdes'
+  | 'component-type'
+  | 'block-property'
+  | 'layer-value'
+  | 'after-number'
+  | 'pin-reference'
+  | 'pin-number'
+  | 'nothing';
+
+function detectInlineSlot(beforeCursor: string, block: BlockContext): InlineSlot {
+  const trimmed = beforeCursor.trimStart();
+
+  // Inside a string → no completions
+  let inString = false;
+  for (const ch of beforeCursor) if (ch === '"') inString = !inString;
+  if (inString) return 'nothing';
+
+  // After a number → suggest units (only inside blocks)
+  if (/\d+(\.\d+)?\s*$/.test(trimmed) && block !== 'top-level') return 'after-number';
+
+  // Inside a block
+  if (block !== 'top-level') {
+    // After "R1." → pin numbers
+    if (/\b\w+\.\s*$/.test(trimmed)) return 'pin-number';
+
+    // After "layer " → layer names
+    if (/\blayer\s+$/i.test(trimmed)) return 'layer-value';
+
+    // Net pins context
+    if (block === 'net-pins') return 'pin-reference';
+
+    // Line has property keyword + value already → nothing
+    const words = trimmed.split(/\s+/).filter(Boolean);
+    if (words.length >= 2) {
+      const PROPS = new Set(['size','layers','value','at','rotate','lcsc','width',
+        'clearance','current','from','to','path','via','layer','bounds',
+        'net','pad','courtyard','description','stackup','drill']);
+      if (PROPS.has(words[0])) return 'nothing';
     }
+
+    // Start of line or partial word → suggest block properties
+    if (words.length <= 1) return 'block-property';
+    return 'nothing';
   }
 
-  return refdesList;
+  // Top level
+  const words = trimmed.split(/\s+/).filter(Boolean);
+  if (words.length === 0) return 'top-keyword';
+
+  switch (words[0]) {
+    case 'component':
+      if (words.length === 1 && beforeCursor.endsWith(' ')) return 'component-refdes';
+      if (words.length === 2 && beforeCursor.endsWith(' ')) return 'component-type';
+      if (words.length <= 1) return 'top-keyword';
+      return 'nothing';
+    case 'board': case 'net': case 'trace': case 'footprint': case 'zone': case 'keepout':
+      return words.length >= 2 ? 'nothing' : 'top-keyword';
+    default:
+      return words.length <= 1 ? 'top-keyword' : 'nothing';
+  }
 }
 
 // ============================================================================
-// Auto-completion (EDIT-02) - Context-Aware Snippets
+// Helpers
 // ============================================================================
 
-/**
- * Completion items for .cypcb language (legacy flat lists for backward compat)
- */
-const COMPLETION_ITEMS = {
-  componentTypes: [
-    { label: 'resistor', detail: 'Resistor', documentation: 'Passive component - resistor' },
-    { label: 'capacitor', detail: 'Capacitor', documentation: 'Passive component - capacitor' },
-    { label: 'ic', detail: 'Integrated circuit', documentation: 'Active component - integrated circuit' },
-    { label: 'connector', detail: 'Connector', documentation: 'Mechanical component - connector' },
-    { label: 'diode', detail: 'Diode', documentation: 'Active component - diode' },
-    { label: 'transistor', detail: 'Transistor', documentation: 'Active component - transistor' },
-    { label: 'led', detail: 'LED', documentation: 'Active component - light-emitting diode' },
-    { label: 'crystal', detail: 'Crystal', documentation: 'Passive component - crystal oscillator' },
-    { label: 'inductor', detail: 'Inductor', documentation: 'Passive component - inductor' },
-    { label: 'generic', detail: 'Generic component', documentation: 'Generic component type' },
+function extractRefdes(model: any): string[] {
+  const list: string[] = [];
+  for (let i = 1; i <= model.getLineCount(); i++) {
+    const m = model.getLineContent(i).match(/^\s*component\s+(\w+)/);
+    if (m) list.push(m[1]);
+  }
+  return list;
+}
+
+function nextRefdes(model: any): string {
+  const existing = extractRefdes(model);
+  const maxByPrefix = new Map<string, number>();
+  for (const r of existing) {
+    const m = r.match(/^([A-Za-z]+)(\d+)$/);
+    if (m) maxByPrefix.set(m[1], Math.max(maxByPrefix.get(m[1]) || 0, parseInt(m[2], 10)));
+  }
+  if (maxByPrefix.size === 0) return 'R1';
+  // Use the prefix with the highest number (most recently added)
+  let best = 'R'; let bestN = 0;
+  for (const [p, n] of maxByPrefix) { if (n >= bestN) { best = p; bestN = n; } }
+  return `${best}${bestN + 1}`;
+}
+
+/** Get properties already used in the current block (full block scan). */
+function getUsedProperties(model: any, position: any): Set<string> {
+  const used = new Set<string>();
+  let braceDepth = 0;
+  let blockStartLine = -1;
+
+  // Find block opening
+  for (let ln = position.lineNumber; ln >= 1; ln--) {
+    const text = ln === position.lineNumber
+      ? model.getLineContent(ln).substring(0, position.column - 1)
+      : model.getLineContent(ln);
+    for (let i = text.length - 1; i >= 0; i--) {
+      const ch = text[i];
+      if (ch === '}' || ch === ']') braceDepth++;
+      else if (ch === '{' || ch === '[') {
+        if (braceDepth > 0) braceDepth--;
+        else { blockStartLine = ln; break; }
+      }
+    }
+    if (blockStartLine !== -1) break;
+  }
+  if (blockStartLine === -1) return used;
+
+  // Find block closing
+  let blockEndLine = model.getLineCount();
+  let depth = 0;
+  for (let ln = blockStartLine; ln <= model.getLineCount(); ln++) {
+    const line = model.getLineContent(ln);
+    for (const ch of line) {
+      if (ch === '{' || ch === '[') depth++;
+      else if (ch === '}' || ch === ']') { depth--; if (depth === 0) { blockEndLine = ln; break; } }
+    }
+    if (depth === 0 && ln >= blockStartLine) break;
+  }
+
+  // Collect first-word of each line in the block
+  for (let ln = blockStartLine; ln <= blockEndLine; ln++) {
+    let line = model.getLineContent(ln);
+    if (ln === blockStartLine) {
+      const idx = Math.max(line.indexOf('{'), line.indexOf('['));
+      if (idx >= 0) line = line.substring(idx + 1);
+    }
+    if (ln === position.lineNumber) continue; // Skip cursor line
+    line = line.trim();
+    if (!line || line.startsWith('//') || line === '}' || line === ']') continue;
+    for (const stmt of line.split(/[;]/)) {
+      const w = stmt.trim().match(/^(\w+)/);
+      if (w) used.add(w[1]);
+    }
+  }
+  return used;
+}
+
+// ============================================================================
+// Phase 3: Completion Provider
+// ============================================================================
+
+const BLOCK_PROPERTIES: Record<string, { label: string; snippet: string; detail: string }[]> = {
+  board: [
+    { label: 'size', snippet: 'size ${1:100}mm x ${2:80}mm', detail: 'Board dimensions' },
+    { label: 'layers', snippet: 'layers ${1|2,4,6|}', detail: 'Copper layer count' },
+    { label: 'stackup', snippet: 'stackup {\n\t$0\n}', detail: 'Layer stackup' },
   ],
-  layers: [
-    { label: 'Top', detail: 'Top copper layer', documentation: 'Top copper layer (layer 1)' },
-    { label: 'Bottom', detail: 'Bottom copper layer', documentation: 'Bottom copper layer (layer 2)' },
-    { label: 'Inner1', detail: 'Inner layer 1', documentation: 'Inner copper layer 1' },
-    { label: 'Inner2', detail: 'Inner layer 2', documentation: 'Inner copper layer 2' },
-    { label: 'Inner3', detail: 'Inner layer 3', documentation: 'Inner copper layer 3' },
-    { label: 'Inner4', detail: 'Inner layer 4', documentation: 'Inner copper layer 4' },
-    { label: 'all', detail: 'All layers', documentation: 'Applies to all layers' },
+  component: [
+    { label: 'value', snippet: 'value "${1:10k}"', detail: 'Component value' },
+    { label: 'at', snippet: 'at ${1:10}mm, ${2:20}mm', detail: 'Position on board' },
+    { label: 'rotate', snippet: 'rotate ${1|0,90,180,270|}', detail: 'Rotation (degrees)' },
+    { label: 'lcsc', snippet: 'lcsc "${1:C12345}"', detail: 'JLCPCB/LCSC part number' },
   ],
-  units: [
-    { label: 'mm', detail: 'Millimeters', documentation: 'Millimeters (metric)' },
-    { label: 'mil', detail: 'Mils', documentation: 'Mils (1/1000 inch)' },
-    { label: 'mA', detail: 'Milliamps', documentation: 'Milliamps (current)' },
-    { label: 'A', detail: 'Amps', documentation: 'Amps (current)' },
-    { label: 'V', detail: 'Volts', documentation: 'Volts (voltage)' },
-    { label: 'k', detail: 'Kilo', documentation: 'Kilo prefix (1000x)' },
-    { label: 'M', detail: 'Mega', documentation: 'Mega prefix (1000000x)' },
-    { label: 'u', detail: 'Micro', documentation: 'Micro prefix (0.000001x)' },
-    { label: 'n', detail: 'Nano', documentation: 'Nano prefix (0.000000001x)' },
-    { label: 'p', detail: 'Pico', documentation: 'Pico prefix (0.000000000001x)' },
+  'net-constraint': [
+    { label: 'width', snippet: 'width ${1:0.25}mm', detail: 'Trace width constraint' },
+    { label: 'clearance', snippet: 'clearance ${1:0.15}mm', detail: 'Min clearance' },
+    { label: 'current', snippet: 'current ${1:500}mA', detail: 'Current → IPC-2221 auto-width' },
+  ],
+  trace: [
+    { label: 'layer', snippet: 'layer ${1|Top,Bottom,Inner1,Inner2|}', detail: 'Copper layer' },
+    { label: 'width', snippet: 'width ${1:0.25}mm', detail: 'Trace width' },
+    { label: 'from', snippet: 'from ${1:R1}.${2:1}', detail: 'Start pin' },
+    { label: 'to', snippet: 'to ${1:R1}.${2:2}', detail: 'End pin' },
+    { label: 'path', snippet: 'path ${1:10}mm,${2:20}mm -> ${3:30}mm,${4:20}mm', detail: 'Polyline geometry' },
+    { label: 'via', snippet: 'via ${1:15}mm,${2:20}mm drill ${3:0.3}mm', detail: 'Via + drill size' },
+    { label: 'locked', snippet: 'locked', detail: 'Prevent autorouter modification' },
+  ],
+  footprint: [
+    { label: 'description', snippet: 'description "${1:text}"', detail: 'Description' },
+    { label: 'pad', snippet: 'pad ${1:1} ${2|rect,circle,roundrect,oblong|} at ${3:0}mm, ${4:0}mm size ${5:1}mm x ${6:1}mm', detail: 'Pad definition' },
+    { label: 'courtyard', snippet: 'courtyard ${1:5}mm x ${2:5}mm', detail: 'Courtyard boundary' },
+  ],
+  zone: [
+    { label: 'bounds', snippet: 'bounds ${1:0}mm, ${2:0}mm to ${3:50}mm, ${4:30}mm', detail: 'Zone boundary' },
+    { label: 'layer', snippet: 'layer ${1|top,bottom,all|}', detail: 'Copper layer' },
+    { label: 'net', snippet: 'net ${1:GND}', detail: 'Net for copper pour' },
   ],
 };
 
-/**
- * Snippet definition for context-aware completions
- */
-interface SnippetDef {
-  label: string;
-  detail: string;
-  documentation: string;
-  insertText: string;
-  isSnippet: boolean;
-  sortOrder?: string;
-}
+const SINGULAR = new Set([
+  'size','layers','stackup','value','at','rotate','lcsc','locked','width',
+  'clearance','current','from','to','description','courtyard',
+]);
 
-/**
- * Get context-specific snippet completions based on block context.
- */
-function getContextSnippets(context: BlockContext, model: any): SnippetDef[] {
-  switch (context) {
-    case 'board':
-      return [
-        {
-          label: 'size',
-          detail: 'Board dimensions (width x height)',
-          documentation: 'Sets the physical board dimensions.\n\nSyntax: `size <width>mm x <height>mm`\n\nExample: `size 100mm x 80mm`',
-          insertText: 'size ${1:100}mm x ${2:80}mm',
-          isSnippet: true,
-          sortOrder: '0',
-        },
-        {
-          label: 'layers',
-          detail: 'Number of copper layers',
-          documentation: 'Sets the PCB layer count.\n\nSyntax: `layers <count>`\n\nValid values: 2, 4, 6\n\nExample: `layers 2`',
-          insertText: 'layers ${1|2,4,6|}',
-          isSnippet: true,
-          sortOrder: '1',
-        },
-        {
-          label: 'stackup',
-          detail: 'Layer stackup configuration',
-          documentation: 'Defines the board layer stackup configuration (copper, dielectric, etc.).\n\nSyntax: `stackup { ... }`',
-          insertText: 'stackup',
-          isSnippet: false,
-          sortOrder: '2',
-        },
-      ];
+const COMPONENT_TYPES = [
+  'resistor','capacitor','ic','connector','diode','led','transistor','crystal','inductor','generic',
+];
 
-    case 'component':
-      return [
-        {
-          label: 'value',
-          detail: 'Component value',
-          documentation: 'Sets the component value (resistance, capacitance, part number, etc.).\n\nSyntax: `value "<value>"`\n\nExamples: `value "10k"`, `value "100nF"`, `value "ATmega328P"`',
-          insertText: 'value "${1:10k}"',
-          isSnippet: true,
-          sortOrder: '0',
-        },
-        {
-          label: 'at',
-          detail: 'Position on board',
-          documentation: 'Places the component at the given board coordinates.\n\nSyntax: `at <x>mm, <y>mm`\n\nExample: `at 10mm, 20mm`',
-          insertText: 'at ${1:10}mm, ${2:20}mm',
-          isSnippet: true,
-          sortOrder: '1',
-        },
-        {
-          label: 'rotate',
-          detail: 'Rotation in degrees (0, 90, 180, 270)',
-          documentation: 'Sets the component rotation.\n\nSyntax: `rotate <degrees>`\n\nValid values: 0, 90, 180, 270\n\nExample: `rotate 90`',
-          insertText: 'rotate ${1:0}',
-          isSnippet: true,
-          sortOrder: '2',
-        },
-        {
-          label: 'lcsc',
-          detail: 'LCSC/JLCPCB part number',
-          documentation: 'Associates an LCSC part number for JLCPCB assembly.\n\nSyntax: `lcsc "<part_number>"`\n\nExample: `lcsc "C12345"`\n\nThe footprint is auto-fetched from EasyEDA API.',
-          insertText: 'lcsc "${1:C12345}"',
-          isSnippet: true,
-          sortOrder: '3',
-        },
-        {
-          label: 'locked',
-          detail: 'Prevent autorouter from moving this component',
-          documentation: 'Locks the component position so the autorouter cannot modify it.\n\nSyntax: `locked`',
-          insertText: 'locked',
-          isSnippet: false,
-          sortOrder: '4',
-        },
-      ];
-
-    case 'net-constraint':
-      return [
-        {
-          label: 'width',
-          detail: 'Trace width constraint',
-          documentation: 'Sets the trace width for this net.\n\nSyntax: `width <value><unit>`\n\nExamples: `width 0.25mm`, `width 10mil`\n\nIPC-2221 default for signal: 0.15-0.25mm\nJLCPCB minimum: 0.127mm (5mil)',
-          insertText: 'width ${1:0.25}mm',
-          isSnippet: true,
-          sortOrder: '0',
-        },
-        {
-          label: 'clearance',
-          detail: 'Min clearance to other copper',
-          documentation: 'Sets the minimum clearance from traces of this net to other copper.\n\nSyntax: `clearance <value><unit>`\n\nExamples: `clearance 0.15mm`, `clearance 6mil`\n\nJLCPCB minimum: 0.127mm (5mil)',
-          insertText: 'clearance ${1:0.15}mm',
-          isSnippet: true,
-          sortOrder: '1',
-        },
-        {
-          label: 'current',
-          detail: 'Current rating (auto-calculates min trace width)',
-          documentation: 'Current rating for IPC-2221 trace width calculation.\n\nSyntax: `current <value><unit>`\n\nExamples: `current 500mA`, `current 2A`\n\nUsed inside net constraints: `net VCC [current 2A] { ... }`\nAutomatic DRC checks trace width against IPC-2221 minimum.',
-          insertText: 'current ${1:500}mA',
-          isSnippet: true,
-          sortOrder: '2',
-        },
-      ];
-
-    case 'net-pins': {
-      // In net pin context, suggest component refdes from the document
-      const refdesList = extractComponentRefdes(model);
-      const snippets: SnippetDef[] = [];
-
-      for (let i = 0; i < refdesList.length; i++) {
-        const refdes = refdesList[i];
-        snippets.push({
-          label: refdes,
-          detail: `Component ${refdes}`,
-          documentation: `Reference to component ${refdes}.\n\nSyntax: \`${refdes}.<pin>\`\n\nExample: \`${refdes}.1\`, \`${refdes}.2\``,
-          insertText: `${refdes}.\${1:1}`,
-          isSnippet: true,
-          sortOrder: String(i),
-        });
-      }
-
-      return snippets;
-    }
-
-    case 'trace':
-      return [
-        {
-          label: 'layer',
-          detail: 'Copper layer for this trace segment',
-          documentation: 'Sets the copper layer.\n\nSyntax: `layer <name>`\n\nOptions: Top, Bottom, Inner1, Inner2, Inner3, Inner4\n\nExample: `layer Top`',
-          insertText: 'layer ${1|Top,Bottom,Inner1,Inner2|}',
-          isSnippet: true,
-          sortOrder: '0',
-        },
-        {
-          label: 'width',
-          detail: 'Override trace width (default from net constraint)',
-          documentation: 'Override trace width for this specific trace.\n\nSyntax: `width <value><unit>`\n\nExamples: `width 0.25mm`, `width 10mil`\n\nOverrides the net-level constraint if set.',
-          insertText: 'width ${1:0.25}mm',
-          isSnippet: true,
-          sortOrder: '1',
-        },
-        {
-          label: 'from',
-          detail: 'Start pin (component.pin)',
-          documentation: 'Starting point of the trace.\n\nSyntax: `from <refdes>.<pin>`\n\nExample: `from R1.1`',
-          insertText: 'from ${1:R1}.${2:1}',
-          isSnippet: true,
-          sortOrder: '2',
-        },
-        {
-          label: 'to',
-          detail: 'End pin (component.pin)',
-          documentation: 'Ending point of the trace.\n\nSyntax: `to <refdes>.<pin>`\n\nExample: `to R1.2`',
-          insertText: 'to ${1:R1}.${2:2}',
-          isSnippet: true,
-          sortOrder: '3',
-        },
-        {
-          label: 'path',
-          detail: 'Explicit polyline geometry',
-          documentation: 'Defines an explicit trace path as a series of coordinates.\n\nSyntax: `path <x1>mm,<y1>mm -> <x2>mm,<y2>mm [-> ...]`\n\nExample: `path 10mm,20mm -> 30mm,20mm -> 30mm,40mm`',
-          insertText: 'path ${1:10}mm,${2:20}mm -> ${3:30}mm,${4:20}mm',
-          isSnippet: true,
-          sortOrder: '4',
-        },
-        {
-          label: 'via',
-          detail: 'Via with drill size',
-          documentation: 'Places a via for layer transition.\n\nSyntax: `via <x>mm,<y>mm drill <size>mm`\n\nExample: `via 15mm,20mm drill 0.3mm`',
-          insertText: 'via ${1:15}mm,${2:20}mm drill ${3:0.3}mm',
-          isSnippet: true,
-          sortOrder: '5',
-        },
-        {
-          label: 'locked',
-          detail: 'Prevent autorouter from modifying this trace',
-          documentation: 'Locks the trace so the autorouter cannot reroute it.\n\nSyntax: `locked`',
-          insertText: 'locked',
-          isSnippet: false,
-          sortOrder: '6',
-        },
-      ];
-
-    case 'footprint':
-      return [
-        {
-          label: 'description',
-          detail: 'Footprint description',
-          documentation: 'Human-readable description of the footprint.\n\nSyntax: `description "<text>"`\n\nExample: `description "0402 resistor footprint"`',
-          insertText: 'description "${1:text}"',
-          isSnippet: true,
-          sortOrder: '0',
-        },
-        {
-          label: 'pad',
-          detail: 'Pad definition',
-          documentation: 'Defines a pad in the footprint.\n\nSyntax: `pad <number> <shape> at <x>mm, <y>mm size <w>mm x <h>mm`\n\nShapes: rect, circle, roundrect, oblong\n\nExample: `pad 1 rect at 0mm, 0mm size 1mm x 1mm`',
-          insertText: 'pad ${1:1} ${2|rect,circle,roundrect,oblong|} at ${3:0}mm, ${4:0}mm size ${5:1}mm x ${6:1}mm',
-          isSnippet: true,
-          sortOrder: '1',
-        },
-        {
-          label: 'courtyard',
-          detail: 'Component courtyard boundary',
-          documentation: 'Defines the component courtyard for placement clearance DRC.\n\nSyntax: `courtyard <width>mm x <height>mm`\n\nExample: `courtyard 5mm x 5mm`',
-          insertText: 'courtyard ${1:5}mm x ${2:5}mm',
-          isSnippet: true,
-          sortOrder: '2',
-        },
-      ];
-
-    case 'zone':
-      return [
-        {
-          label: 'bounds',
-          detail: 'Zone boundary rectangle',
-          documentation: 'Defines the zone boundary as a rectangle.\n\nSyntax: `bounds <x1>mm, <y1>mm to <x2>mm, <y2>mm`\n\nExample: `bounds 0mm, 0mm to 50mm, 30mm`',
-          insertText: 'bounds ${1:0}mm, ${2:0}mm to ${3:50}mm, ${4:30}mm',
-          isSnippet: true,
-          sortOrder: '0',
-        },
-        {
-          label: 'layer',
-          detail: 'Which copper layer (lowercase for zones)',
-          documentation: 'Sets the copper layer for the zone pour.\n\nSyntax: `layer <name>`\n\nOptions: top, bottom, all\n\nExample: `layer bottom`',
-          insertText: 'layer ${1|top,bottom,all|}',
-          isSnippet: true,
-          sortOrder: '1',
-        },
-        {
-          label: 'net',
-          detail: 'Net for copper pour',
-          documentation: 'Assigns the zone to a net for copper fill.\n\nSyntax: `net <name>`\n\nExample: `net GND`',
-          insertText: 'net ${1:GND}',
-          isSnippet: true,
-          sortOrder: '2',
-        },
-      ];
-
-    case 'top-level':
-    default:
-      return [
-        {
-          label: 'version',
-          detail: 'File format version',
-          documentation: 'Specifies the .cypcb file format version (currently 1).\n\nSyntax: `version <number>`\n\nExample: `version 1`',
-          insertText: 'version ${1:1}',
-          isSnippet: true,
-          sortOrder: '00',
-        },
-        {
-          label: 'board',
-          detail: 'Board definition block',
-          documentation: 'Defines the PCB board dimensions and layer stackup.\n\nSyntax:\n```\nboard <name> {\n  size <w>mm x <h>mm\n  layers <count>\n}\n```',
-          insertText: 'board ${1:myboard} {\n\tsize ${2:100}mm x ${3:80}mm\n\tlayers ${4:2}\n}',
-          isSnippet: true,
-          sortOrder: '01',
-        },
-        {
-          label: 'component',
-          detail: 'Component placement block',
-          documentation: 'Places a component on the board.\n\nSyntax:\n```\ncomponent <refdes> <type> "<footprint>" {\n  value "<val>"\n  at <x>mm, <y>mm\n}\n```\n\nTypes: resistor, capacitor, ic, connector, diode, led, transistor, crystal, inductor, generic',
-          insertText: 'component ${1:R1} ${2|resistor,capacitor,ic,connector,diode,led,transistor,crystal,inductor,generic|} "${3:0402}" {\n\tvalue "${4:10k}"\n\tat ${5:10}mm, ${6:20}mm\n}',
-          isSnippet: true,
-          sortOrder: '02',
-        },
-        {
-          label: 'net',
-          detail: 'Electrical net block',
-          documentation: 'Defines an electrical net connecting component pins.\n\nSyntax:\n```\nnet <name> {\n  <refdes>.<pin>\n  <refdes>.<pin>\n}\n```\n\nWith constraints:\n```\nnet <name> [width 0.25mm] {\n  R1.1\n  C1.1\n}\n```',
-          insertText: 'net ${1:VCC} {\n\t${2:R1.1}\n}',
-          isSnippet: true,
-          sortOrder: '03',
-        },
-        {
-          label: 'trace',
-          detail: 'Copper trace block',
-          documentation: 'Defines a copper trace routing a net.\n\nSyntax:\n```\ntrace <net_name> {\n  layer <Top|Bottom>\n  width <value>mm\n  path <x1>mm,<y1>mm -> <x2>mm,<y2>mm\n}\n```',
-          insertText: 'trace ${1:VCC} {\n\tlayer ${2|Top,Bottom|}\n\twidth ${3:0.25}mm\n\tpath ${4:10}mm,${5:20}mm -> ${6:30}mm,${7:20}mm\n}',
-          isSnippet: true,
-          sortOrder: '04',
-        },
-        {
-          label: 'footprint',
-          detail: 'Custom footprint definition',
-          documentation: 'Defines a custom component footprint with pads.\n\nSyntax:\n```\nfootprint <name> {\n  description "<text>"\n  pad <n> <shape> at <x>mm, <y>mm size <w>mm x <h>mm\n}\n```',
-          insertText: 'footprint ${1:my_footprint} {\n\tdescription "${2:Custom footprint}"\n\tpad ${3:1} ${4|rect,circle,roundrect|} at ${5:0}mm, ${6:0}mm size ${7:1}mm x ${8:1}mm\n}',
-          isSnippet: true,
-          sortOrder: '05',
-        },
-        {
-          label: 'zone',
-          detail: 'Copper zone (pour)',
-          documentation: 'Defines a copper zone for power or ground planes.\n\nSyntax:\n```\nzone <name> {\n  bounds <x1>mm, <y1>mm to <x2>mm, <y2>mm\n  layer <top|bottom|all>\n  net <net_name>\n}\n```',
-          insertText: 'zone ${1:GND_zone} {\n\tbounds ${2:0}mm, ${3:0}mm to ${4:50}mm, ${5:30}mm\n\tlayer ${6|top,bottom,all|}\n\tnet ${7:GND}\n}',
-          isSnippet: true,
-          sortOrder: '06',
-        },
-        {
-          label: 'keepout',
-          detail: 'Keepout area',
-          documentation: 'Defines an area where components or traces cannot be placed.\n\nSyntax:\n```\nkeepout <name> {\n  bounds <x1>mm, <y1>mm to <x2>mm, <y2>mm\n}\n```',
-          insertText: 'keepout ${1:no_go} {\n\tbounds ${2:0}mm, ${3:0}mm to ${4:10}mm, ${5:10}mm\n}',
-          isSnippet: true,
-          sortOrder: '07',
-        },
-      ];
-  }
-}
-
-/**
- * Register auto-completion provider for .cypcb language
- *
- * Provides context-aware snippet completions based on the cursor position.
- * Detects the enclosing block (board, component, net, trace, etc.) and
- * offers only relevant properties with full syntax format hints.
- *
- * @param monaco - Monaco editor module
- */
 export function registerCompletionProvider(monaco: typeof import('monaco-editor')): void {
   monaco.languages.registerCompletionItemProvider('cypcb', {
-    triggerCharacters: ['.', ' '],
+    triggerCharacters: ['.', ' ', '\n', '{', '['],
 
     provideCompletionItems: (model, position) => {
       const word = model.getWordUntilPosition(position);
       const range = {
-        startLineNumber: position.lineNumber,
-        endLineNumber: position.lineNumber,
-        startColumn: word.startColumn,
-        endColumn: word.endColumn,
+        startLineNumber: position.lineNumber, endLineNumber: position.lineNumber,
+        startColumn: word.startColumn, endColumn: word.endColumn,
       };
-
-      const suggestions: any[] = [];
-
-      // Get the line content to determine inline context
+      const S = monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet;
       const lineContent = model.getLineContent(position.lineNumber);
       const beforeCursor = lineContent.substring(0, position.column - 1);
 
-      // Check if we're after a number (for unit suggestions)
-      const afterNumber = /\d+(\.\d+)?\s*$/.test(beforeCursor);
+      const block = detectBlockContext(model, position);
+      const slot = detectInlineSlot(beforeCursor, block);
+      const suggestions: any[] = [];
 
-      if (afterNumber) {
-        // Suggest units after a number
-        for (const item of COMPLETION_ITEMS.units) {
-          suggestions.push({
-            label: item.label,
-            kind: monaco.languages.CompletionItemKind.Unit,
-            documentation: item.documentation,
-            detail: item.detail,
-            insertText: item.label,
-            range,
-          });
-        }
-        return { suggestions };
-      }
+      switch (slot) {
+        case 'nothing':
+          return { suggestions: [], incomplete: true };
 
-      // Check if we're after "component REFDES " (suggest component types)
-      if (/^\s*component\s+\w+\s+$/.test(beforeCursor)) {
-        for (const item of COMPLETION_ITEMS.componentTypes) {
-          suggestions.push({
-            label: item.label,
-            kind: monaco.languages.CompletionItemKind.Class,
-            documentation: item.documentation,
-            detail: item.detail,
-            insertText: item.label,
-            range,
-          });
-        }
-        return { suggestions };
-      }
-
-      // Check if we're after "layer " (suggest layer names)
-      if (/\blayer\s+$/.test(beforeCursor)) {
-        for (const item of COMPLETION_ITEMS.layers) {
-          suggestions.push({
-            label: item.label,
-            kind: monaco.languages.CompletionItemKind.Enum,
-            documentation: item.documentation,
-            detail: item.detail,
-            insertText: item.label,
-            range,
-          });
-        }
-        return { suggestions };
-      }
-
-      // Check if we're after a refdes dot (e.g. "R1.") — suggest pin numbers
-      const dotMatch = beforeCursor.match(/\b(\w+)\.\s*$/);
-      if (dotMatch) {
-        const refdesList = extractComponentRefdes(model);
-        const typedRefdes = dotMatch[1];
-        if (refdesList.includes(typedRefdes)) {
-          // Suggest common pin numbers
-          for (let pin = 1; pin <= 8; pin++) {
+        case 'top-keyword': {
+          const nr = nextRefdes(model);
+          const items = [
+            { label: 'version', insert: 'version ${1:1}', detail: 'File format version' },
+            { label: 'board', insert: 'board ${1:myboard} {\n\tsize ${2:100}mm x ${3:80}mm\n\tlayers ${4:2}\n}', detail: 'Board definition' },
+            { label: 'component', insert: `component \${1:${nr}} \${2|resistor,capacitor,ic,connector,diode,led,transistor,crystal,inductor,generic|} "\${3:0402}" {\n\tvalue "\${4:10k}"\n\tat \${5:10}mm, \${6:20}mm\n}`, detail: 'Component placement' },
+            { label: 'net', insert: 'net ${1:VCC} {\n\t${2:R1.1}\n}', detail: 'Electrical net' },
+            { label: 'trace', insert: 'trace ${1:VCC} {\n\tlayer ${2|Top,Bottom|}\n\twidth ${3:0.25}mm\n\tpath ${4:10}mm,${5:20}mm -> ${6:30}mm,${7:20}mm\n}', detail: 'Copper trace' },
+            { label: 'footprint', insert: 'footprint ${1:name} {\n\tpad ${2:1} ${3|rect,circle|} at ${4:0}mm, ${5:0}mm size ${6:1}mm x ${7:1}mm\n}', detail: 'Custom footprint' },
+            { label: 'zone', insert: 'zone ${1:GND_pour} {\n\tbounds ${2:0}mm, ${3:0}mm to ${4:50}mm, ${5:30}mm\n\tlayer ${6|bottom,top,all|}\n\tnet ${7:GND}\n}', detail: 'Copper zone' },
+            { label: 'keepout', insert: 'keepout ${1:name} {\n\tbounds ${2:0}mm, ${3:0}mm to ${4:10}mm, ${5:10}mm\n}', detail: 'Keepout area' },
+            { label: 'import', insert: 'import "${1:path.cypcb}"', detail: 'Import module (v2)' },
+            { label: 'assert', insert: 'assert ${1:R1.value} ${2|>=,<=,==|} ${3:10kohm}', detail: 'Design assertion (v2)' },
+          ];
+          for (let i = 0; i < items.length; i++) {
             suggestions.push({
-              label: String(pin),
-              kind: monaco.languages.CompletionItemKind.Value,
-              documentation: `Pin ${pin} of ${typedRefdes}`,
-              detail: `${typedRefdes}.${pin}`,
-              insertText: String(pin),
-              range,
-              sortText: String(pin).padStart(2, '0'),
+              label: items[i].label, detail: items[i].detail,
+              kind: monaco.languages.CompletionItemKind.Snippet,
+              insertText: items[i].insert, insertTextRules: S,
+              range, sortText: String(i).padStart(2, '0'),
             });
           }
-          return { suggestions };
+          break;
         }
+
+        case 'component-refdes': {
+          // Suggest next refdes for each prefix
+          const prefixes = ['R', 'C', 'U', 'J', 'D', 'L', 'Q', 'LED'];
+          for (const p of prefixes) {
+            const nr = nextRefdes(model);
+            const existing = extractRefdes(model);
+            let max = 0;
+            for (const r of existing) {
+              const m = r.match(new RegExp(`^${p}(\\d+)$`));
+              if (m) max = Math.max(max, parseInt(m[1], 10));
+            }
+            const next = `${p}${max + 1}`;
+            suggestions.push({
+              label: next, detail: `Next ${p} refdes`,
+              kind: monaco.languages.CompletionItemKind.Value,
+              insertText: next, range, sortText: `0_${next}`,
+            });
+          }
+          break;
+        }
+
+        case 'component-type':
+          for (const t of COMPONENT_TYPES) {
+            suggestions.push({
+              label: t, detail: `Component type`,
+              kind: monaco.languages.CompletionItemKind.Class,
+              insertText: t, range,
+            });
+          }
+          break;
+
+        case 'block-property': {
+          const props = BLOCK_PROPERTIES[block] || [];
+          const used = getUsedProperties(model, position);
+          for (let i = 0; i < props.length; i++) {
+            if (SINGULAR.has(props[i].label) && used.has(props[i].label)) continue;
+            suggestions.push({
+              label: props[i].label, detail: props[i].detail,
+              kind: monaco.languages.CompletionItemKind.Snippet,
+              insertText: props[i].snippet, insertTextRules: S,
+              range, sortText: String(i).padStart(2, '0'),
+            });
+          }
+          break;
+        }
+
+        case 'layer-value':
+          for (const l of ['Top', 'Bottom', 'Inner1', 'Inner2', 'Inner3', 'Inner4']) {
+            suggestions.push({
+              label: l, detail: `Copper layer`,
+              kind: monaco.languages.CompletionItemKind.Enum,
+              insertText: l, range,
+            });
+          }
+          break;
+
+        case 'after-number':
+          for (const u of [
+            { l: 'mm', d: 'Millimeters' }, { l: 'mil', d: 'Mils' },
+            { l: 'mA', d: 'Milliamps' }, { l: 'A', d: 'Amps' },
+          ]) {
+            suggestions.push({
+              label: u.l, detail: u.d,
+              kind: monaco.languages.CompletionItemKind.Unit,
+              insertText: u.l, range,
+            });
+          }
+          break;
+
+        case 'pin-reference': {
+          const refs = extractRefdes(model);
+          for (const r of refs) {
+            suggestions.push({
+              label: r, detail: `Component ${r}`,
+              kind: monaco.languages.CompletionItemKind.Value,
+              insertText: `${r}.\${1:1}`, insertTextRules: S,
+              range,
+            });
+          }
+          break;
+        }
+
+        case 'pin-number':
+          for (let p = 1; p <= 8; p++) {
+            suggestions.push({
+              label: String(p), detail: `Pin ${p}`,
+              kind: monaco.languages.CompletionItemKind.Value,
+              insertText: String(p), range,
+              sortText: String(p).padStart(2, '0'),
+            });
+          }
+          break;
       }
 
-      // Detect block context for context-aware completions
-      const context = detectBlockContext(model, position);
-      const snippets = getContextSnippets(context, model);
-
-      for (const snippet of snippets) {
-        suggestions.push({
-          label: snippet.label,
-          kind: snippet.isSnippet
-            ? monaco.languages.CompletionItemKind.Snippet
-            : monaco.languages.CompletionItemKind.Keyword,
-          documentation: {
-            value: snippet.documentation,
-            isTrusted: true,
-          },
-          detail: snippet.detail,
-          insertText: snippet.insertText,
-          insertTextRules: snippet.isSnippet
-            ? monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet
-            : undefined,
-          range,
-          sortText: snippet.sortOrder,
-        });
-      }
-
-      return { suggestions };
+      return { suggestions, incomplete: true };
     },
   });
 }
 
 // ============================================================================
-// Hover (partial EDIT-09)
+// Hover
 // ============================================================================
 
-/**
- * Keyword documentation for hover tooltips.
- * Each entry includes full syntax format and usage examples.
- */
 const KEYWORD_DOCS: Record<string, string> = {
-  version: 'File format version number.\n\nSyntax: `version <number>`\n\nExample: `version 1`\n\nCurrently the only valid version is 1.',
-
-  board: 'Defines the PCB board dimensions and layer stackup.\n\nSyntax:\n```\nboard <name> {\n  size <width>mm x <height>mm\n  layers <count>\n}\n```\n\nExample:\n```\nboard myboard {\n  size 100mm x 80mm\n  layers 2\n}\n```',
-
-  component: 'Places a component on the board.\n\nSyntax:\n```\ncomponent <refdes> <type> "<footprint>" {\n  value "<value>"\n  at <x>mm, <y>mm\n  rotate <degrees>\n  lcsc "<part_number>"\n}\n```\n\nTypes: resistor, capacitor, ic, connector, diode, transistor, led, crystal, inductor, generic\n\nExample:\n```\ncomponent R1 resistor "0402" {\n  value "10k"\n  at 10mm, 20mm\n}\n```',
-
-  net: 'Defines an electrical net connecting component pins.\n\nSyntax:\n```\nnet <name> [<constraints>] {\n  <refdes>.<pin>\n  ...\n}\n```\n\nConstraints (inside `[...]`): `width`, `clearance`, `current`\n\nExample:\n```\nnet VCC [width 0.5mm, current 2A] {\n  U1.1\n  C1.1\n}\n```',
-
-  footprint: 'Defines a custom component footprint with pads.\n\nSyntax:\n```\nfootprint <name> {\n  description "<text>"\n  pad <number> <shape> at <x>mm, <y>mm size <w>mm x <h>mm\n  courtyard <w>mm x <h>mm\n}\n```\n\nShapes: rect, circle, roundrect, oblong\n\nExample:\n```\nfootprint my_sot23 {\n  description "SOT-23 footprint"\n  pad 1 rect at -0.95mm, -1mm size 0.6mm x 0.7mm\n  pad 2 rect at 0.95mm, -1mm size 0.6mm x 0.7mm\n  pad 3 rect at 0mm, 1mm size 0.6mm x 0.7mm\n}\n```',
-
-  trace: 'Defines a copper trace routing a net between points.\n\nSyntax:\n```\ntrace <net_name> {\n  layer <Top|Bottom|Inner1|Inner2>\n  width <value>mm\n  from <refdes>.<pin>\n  to <refdes>.<pin>\n  path <x1>mm,<y1>mm -> <x2>mm,<y2>mm\n  via <x>mm,<y>mm drill <size>mm\n  locked\n}\n```\n\nExample:\n```\ntrace VCC {\n  layer Top\n  width 0.3mm\n  from U1.1\n  to C1.1\n  path 10mm,20mm -> 30mm,20mm\n}\n```',
-
-  zone: 'Defines a copper zone (pour) for power or ground planes.\n\nSyntax:\n```\nzone <name> {\n  bounds <x1>mm, <y1>mm to <x2>mm, <y2>mm\n  layer <top|bottom|all>\n  net <net_name>\n}\n```\n\nExample:\n```\nzone GND_pour {\n  bounds 0mm, 0mm to 100mm, 80mm\n  layer bottom\n  net GND\n}\n```',
-
-  keepout: 'Defines an area where components or traces cannot be placed.\n\nSyntax:\n```\nkeepout <name> {\n  bounds <x1>mm, <y1>mm to <x2>mm, <y2>mm\n}\n```\n\nExample:\n```\nkeepout connector_area {\n  bounds 0mm, 0mm to 10mm, 10mm\n}\n```',
-
-  resistor: 'Passive component type - resistor.\n\nSpecify value in ohms: `"330"`, `"10k"`, `"4.7M"`\n\nCommon footprints: "0402", "0603", "0805", "1206"',
-  capacitor: 'Passive component type - capacitor.\n\nSpecify value in farads: `"100n"`, `"10u"`, `"1p"`\n\nCommon footprints: "0402", "0603", "0805", "1206"',
-  ic: 'Active component type - integrated circuit.\n\nUse for chips, microcontrollers, op-amps, etc.\nSpecify the footprint package (e.g., "SOIC-8", "QFP-48").',
-  connector: 'Mechanical component type - connector.\n\nUse for headers, sockets, JST, USB, etc.\nSpecify the footprint to match the connector type.',
-  diode: 'Active component type - diode.\n\nUse for rectifier diodes, Zener, Schottky, etc.\nCommon footprints: "SOD-123", "SMA", "SMB"',
-  transistor: 'Active component type - transistor.\n\nUse for MOSFETs, BJTs, JFETs, etc.\nCommon footprints: "SOT-23", "SOT-223", "TO-252"',
-  led: 'Active component type - light-emitting diode.\n\nCommon footprints: "0402", "0603", "0805", "5mm"',
-  crystal: 'Passive component type - crystal oscillator or resonator.\n\nCommon footprints: "HC49", "3215", "5032"',
-  inductor: 'Passive component type - inductor or coil.\n\nSpecify value in henries: `"10u"`, `"100n"`, `"4.7u"`',
-  generic: 'Generic component type for components that don\'t fit other categories.\n\nUse when no specific type applies.',
-
-  size: 'Defines board dimensions.\n\nSyntax: `size <width>mm x <height>mm`\n\nExamples: `size 100mm x 80mm`, `size 50mm x 50mm`\n\nUsed inside `board { }` block.',
-
-  layers: 'Number of copper layers.\n\nSyntax: `layers <count>`\n\nValid values: 2, 4, 6\n\nExample: `layers 4`\n\nUsed inside `board { }` block.',
-
-  value: 'Component value (resistance, capacitance, part number, etc.).\n\nSyntax: `value "<text>"`\n\nExamples: `value "10k"`, `value "100nF"`, `value "ATmega328P"`\n\nUsed inside `component { }` block.',
-
-  at: 'Component position on the board.\n\nSyntax: `at <x>mm, <y>mm`\n\nExample: `at 10mm, 20mm`\n\nUsed inside `component { }` block. Coordinates are from the board origin (top-left).',
-
-  rotate: 'Component rotation in degrees.\n\nSyntax: `rotate <degrees>`\n\nValid values: 0, 90, 180, 270\n\nExample: `rotate 90`\n\nUsed inside `component { }` block.',
-
-  lcsc: 'LCSC/JLCPCB part number for automated assembly.\n\nSyntax: `lcsc "<part_number>"`\n\nExample: `lcsc "C12345"`\n\nUsed inside `component { }` block.\nThe footprint is auto-fetched from the EasyEDA API when set.',
-
-  pin: 'Defines a pin in a custom footprint.\n\nSpecifies number, position, and pad properties.',
-
-  width: 'Trace or zone width.\n\nSyntax: `width <value><unit>`\n\nExamples: `width 0.25mm`, `width 10mil`\n\nIn net constraints: `net VCC [width 0.5mm] { ... }`\nIn trace blocks: `trace VCC { width 0.3mm ... }`\n\nIPC-2221 signal default: 0.15-0.25mm\nJLCPCB minimum: 0.127mm (5mil)',
-
-  clearance: 'Minimum clearance to other copper.\n\nSyntax: `clearance <value><unit>`\n\nExamples: `clearance 0.15mm`, `clearance 6mil`\n\nUsed in net constraints: `net VCC [clearance 0.2mm] { ... }`\n\nJLCPCB minimum: 0.127mm (5mil)\nIPC-2221 depends on voltage class.',
-
-  current: 'Current rating for IPC-2221 trace width calculation.\n\nSyntax: `current <value><unit>`\n\nExamples: `current 500mA`, `current 2A`\n\nUsed inside net constraints: `net VCC [current 2A] { ... }`\nAutomatic DRC checks trace width against IPC-2221 minimum.\n\nUnits: mA (milliamps) or A (amps)',
-
-  from: 'Starting point of a trace.\n\nSyntax: `from <refdes>.<pin>`\n\nExample: `from R1.1`\n\nUsed inside `trace { }` block.',
-
-  to: 'Ending point of a trace.\n\nSyntax: `to <refdes>.<pin>`\n\nExample: `to R1.2`\n\nUsed inside `trace { }` block.',
-
-  via: 'Via connecting layers in a trace.\n\nSyntax: `via <x>mm,<y>mm drill <size>mm`\n\nExample: `via 15mm,20mm drill 0.3mm`\n\nUsed inside `trace { }` block. Allows routing to change copper layers.',
-
-  layer: 'Copper layer name.\n\nSyntax: `layer <name>`\n\nIn trace blocks: `layer Top`, `layer Bottom`, `layer Inner1`, `layer Inner2`\nIn zone blocks: `layer top`, `layer bottom`, `layer all` (lowercase)',
-
-  locked: 'Prevents modification by the autorouter.\n\nSyntax: `locked`\n\nUsed inside `component { }` or `trace { }` blocks.\nLocked items are preserved during autorouting.',
-
-  bounds: 'Defines a boundary rectangle for zones or keepouts.\n\nSyntax: `bounds <x1>mm, <y1>mm to <x2>mm, <y2>mm`\n\nExample: `bounds 0mm, 0mm to 50mm, 30mm`',
-
-  stackup: 'Defines the board layer stackup configuration.\n\nUsed inside `board { }` block for specifying copper, dielectric, and solder mask layers.',
-
-  description: 'Human-readable description.\n\nSyntax: `description "<text>"`\n\nExample: `description "SOT-23 footprint"`\n\nUsed inside `footprint { }` block.',
-
-  pad: 'Defines a pad in a custom footprint.\n\nSyntax: `pad <number> <shape> at <x>mm, <y>mm size <w>mm x <h>mm`\n\nShapes: rect, circle, roundrect, oblong\n\nExample: `pad 1 rect at 0mm, 0mm size 1.2mm x 0.6mm`\n\nUsed inside `footprint { }` block.',
-
-  courtyard: 'Component courtyard boundary for placement clearance DRC.\n\nSyntax: `courtyard <width>mm x <height>mm`\n\nExample: `courtyard 5mm x 5mm`\n\nUsed inside `footprint { }` block.',
-
-  path: 'Explicit polyline trace geometry.\n\nSyntax: `path <x1>mm,<y1>mm -> <x2>mm,<y2>mm [-> ...]`\n\nExample: `path 10mm,20mm -> 30mm,20mm -> 30mm,40mm`\n\nUsed inside `trace { }` block. Each `->` adds a waypoint.',
-
-  Top: 'Top copper layer (layer 1). Primary component side.',
-  Bottom: 'Bottom copper layer (layer 2). Secondary component side.',
-  Inner1: 'Inner copper layer 1. Available on 4+ layer boards.',
-  Inner2: 'Inner copper layer 2. Available on 4+ layer boards.',
-  Inner3: 'Inner copper layer 3. Available on 6+ layer boards.',
-  Inner4: 'Inner copper layer 4. Available on 6+ layer boards.',
-  all: 'Applies to all layers. Used for through-hole pads and vias.',
+  version: 'File format version.\n\nSyntax: `version <number>`\n\nExample: `version 1`',
+  board: 'Board definition.\n\nSyntax:\n```\nboard <name> {\n  size <w>mm x <h>mm\n  layers <count>\n}\n```',
+  component: 'Component placement.\n\nSyntax:\n```\ncomponent <refdes> <type> "<footprint>" {\n  value "<val>"\n  at <x>mm, <y>mm\n  rotate <deg>\n}\n```\n\nTypes: resistor, capacitor, ic, connector, diode, led, transistor, crystal, inductor, generic',
+  net: 'Electrical net.\n\nSyntax:\n```\nnet <name> [width 0.25mm  current 2A] {\n  R1.1\n  C1.1\n}\n```',
+  trace: 'Copper trace.\n\nSyntax:\n```\ntrace <net> {\n  layer Top\n  width 0.25mm\n  path 10mm,20mm -> 30mm,20mm\n}\n```',
+  footprint: 'Custom footprint.\n\nSyntax:\n```\nfootprint <name> {\n  pad 1 rect at 0mm,0mm size 1mm x 1mm\n}\n```',
+  zone: 'Copper zone (pour).\n\nSyntax:\n```\nzone <name> {\n  bounds 0mm,0mm to 50mm,30mm\n  layer bottom\n  net GND\n}\n```',
+  keepout: 'Keepout area.\n\nSyntax:\n```\nkeepout <name> {\n  bounds 0mm,0mm to 10mm,10mm\n}\n```',
+  resistor: 'Resistor. Value in ohms: `"330"`, `"10k"`, `"4.7M"`',
+  capacitor: 'Capacitor. Value in farads: `"100n"`, `"10u"`',
+  ic: 'Integrated circuit. Footprint: `"SOIC-8"`, `"QFP-48"`',
+  connector: 'Connector. Footprint: `"PIN-HDR-1x2"`, `"JST-XH-2"`',
+  diode: 'Diode. Footprint: `"SOD-123"`, `"SMA"`',
+  transistor: 'Transistor. Footprint: `"SOT-23"`, `"TO-252"`',
+  led: 'LED. Footprint: `"0402"`, `"0805"`, `"5mm"`',
+  crystal: 'Crystal oscillator. Footprint: `"HC49"`, `"3215"`',
+  inductor: 'Inductor. Value: `"10u"`, `"100n"`',
+  generic: 'Generic component type.',
+  size: 'Board dimensions.\n\nSyntax: `size <w>mm x <h>mm`\n\nExample: `size 100mm x 80mm`',
+  layers: 'Copper layer count.\n\nSyntax: `layers <2|4|6>`',
+  value: 'Component value.\n\nSyntax: `value "<text>"`',
+  at: 'Position.\n\nSyntax: `at <x>mm, <y>mm`',
+  rotate: 'Rotation.\n\nSyntax: `rotate <0|90|180|270>`',
+  lcsc: 'JLCPCB part.\n\nSyntax: `lcsc "<Cxxxxx>"`\n\nAuto-fetches footprint from EasyEDA.',
+  width: 'Trace width.\n\nSyntax: `width <val>mm`\n\nIn net: `[width 0.5mm]`\nIn trace: `width 0.25mm`\n\nJLCPCB min: 0.127mm',
+  clearance: 'Min clearance.\n\nSyntax: `clearance <val>mm`\n\nJLCPCB min: 0.127mm',
+  current: 'Current rating → IPC-2221 auto trace width.\n\nSyntax: `current <val>mA` or `current <val>A`\n\nExample: `current 2A`',
+  from: 'Trace start pin.\n\nSyntax: `from <refdes>.<pin>`',
+  to: 'Trace end pin.\n\nSyntax: `to <refdes>.<pin>`',
+  via: 'Via.\n\nSyntax: `via <x>mm,<y>mm drill <d>mm`',
+  path: 'Trace polyline.\n\nSyntax: `path <x1>mm,<y1>mm -> <x2>mm,<y2>mm [-> ...]`',
+  layer: 'Copper layer.\n\nTrace: `layer Top` / `layer Bottom`\nZone: `layer top` / `layer bottom` / `layer all`',
+  locked: 'Prevent autorouter modification.\n\nSyntax: `locked`',
+  bounds: 'Zone boundary.\n\nSyntax: `bounds <x1>mm,<y1>mm to <x2>mm,<y2>mm`',
+  pad: 'Footprint pad.\n\nSyntax: `pad <n> <rect|circle|roundrect|oblong> at <x>mm,<y>mm size <w>mm x <h>mm`',
+  courtyard: 'Courtyard.\n\nSyntax: `courtyard <w>mm x <h>mm`',
+  description: 'Description.\n\nSyntax: `description "<text>"`',
+  stackup: 'Layer stackup.\n\nSyntax: `stackup { copper ... prepreg ... }`',
+  Top: 'Top copper layer (layer 1).',
+  Bottom: 'Bottom copper layer (layer 2).',
+  Inner1: 'Inner layer 1 (4+ layer boards).',
+  Inner2: 'Inner layer 2 (4+ layer boards).',
+  all: 'All layers.',
 };
 
-/**
- * Register hover provider for .cypcb language
- *
- * Shows documentation tooltips when hovering over keywords.
- * Documentation includes full syntax format, examples, and usage context.
- *
- * @param monaco - Monaco editor module
- */
 export function registerHoverProvider(monaco: typeof import('monaco-editor')): void {
   monaco.languages.registerHoverProvider('cypcb', {
     provideHover: (model, position) => {
       const word = model.getWordAtPosition(position);
       if (!word) return null;
-
-      const documentation = KEYWORD_DOCS[word.word];
-      if (!documentation) return null;
-
+      const doc = KEYWORD_DOCS[word.word];
+      if (!doc) return null;
       return {
-        range: new monaco.Range(
-          position.lineNumber,
-          word.startColumn,
-          position.lineNumber,
-          word.endColumn
-        ),
-        contents: [
-          { value: `**${word.word}**` },
-          { value: documentation },
-        ],
+        range: new monaco.Range(position.lineNumber, word.startColumn, position.lineNumber, word.endColumn),
+        contents: [{ value: `**${word.word}**` }, { value: doc }],
       };
     },
   });
@@ -805,15 +516,11 @@ export function registerHoverProvider(monaco: typeof import('monaco-editor')): v
 // Provider Registration
 // ============================================================================
 
-/**
- * Register all LSP-like providers for Monaco editor
- *
- * Call this once after Monaco is loaded and the .cypcb language is registered.
- *
- * @param monaco - Monaco editor module
- */
+let providersRegistered = false;
 export function registerProviders(monaco: typeof import('monaco-editor')): void {
+  if (providersRegistered) return;
+  providersRegistered = true;
   registerCompletionProvider(monaco);
   registerHoverProvider(monaco);
-  console.log('[LSP Bridge] Completion and hover providers registered');
+  console.log('[LSP Bridge] Providers registered');
 }

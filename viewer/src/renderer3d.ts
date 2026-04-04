@@ -31,18 +31,48 @@ const BOARD_THICKNESS_MM = 1.6;
 /** Copper layer thickness in mm */
 const COPPER_THICKNESS_MM = 0.035;
 
-/** Z-heights for copper layers (center of copper slab) */
-const Z_BOTTOM_COPPER = COPPER_THICKNESS_MM; // 0.035 mm
-const Z_TOP_COPPER = BOARD_THICKNESS_MM - COPPER_THICKNESS_MM; // 1.565 mm
+/** Solder mask thickness in mm (KiCad DEFAULT_TECH_LAYER_THICKNESS) */
+const MASK_THICKNESS_MM = 0.025;
 
-/** Pad Z-offsets slightly above traces to avoid Z-fighting */
-const Z_BOTTOM_PAD = Z_BOTTOM_COPPER + 0.005; // 0.04 mm
-const Z_TOP_PAD = Z_TOP_COPPER + 0.005; // 1.57 mm
+/**
+ * Z-layer stack (KiCad convention: board centered at Z=0)
+ *
+ *   F_Silk     +0.86mm   ─── silkscreen on top
+ *   F_Mask     +0.835mm  ─── solder mask (green, semi-transparent)
+ *   F_Cu       +0.8mm    ─── front copper (traces, pads)
+ *   ─── Board top ───  +0.8mm
+ *        FR-4 substrate  1.6mm
+ *   ─── Board bot ───  -0.8mm
+ *   B_Cu       -0.8mm    ─── back copper
+ *   B_Mask     -0.835mm  ─── solder mask bottom
+ */
+const BOARD_TOP_Z = BOARD_THICKNESS_MM / 2;   // +0.8
+const BOARD_BOT_Z = -BOARD_THICKNESS_MM / 2;  // -0.8
+
+// Front copper: sits on board top surface
+const F_COPPER_BOT_Z = BOARD_TOP_Z;
+const F_COPPER_TOP_Z = BOARD_TOP_Z + COPPER_THICKNESS_MM;
+
+// Back copper: sits on board bottom surface
+const B_COPPER_TOP_Z = BOARD_BOT_Z;
+const B_COPPER_BOT_Z = BOARD_BOT_Z - COPPER_THICKNESS_MM;
+
+// Solder mask: sits on top of copper
+const F_MASK_Z = F_COPPER_TOP_Z + 0.001;  // tiny offset to avoid z-fight
+const B_MASK_Z = B_COPPER_BOT_Z - 0.001;
+
+// Pads: slightly above mask to be visible through openings
+const Z_TOP_PAD = F_COPPER_TOP_Z + 0.003;
+const Z_BOTTOM_PAD = B_COPPER_BOT_Z - 0.003;
+
+// Legacy aliases (used by existing pad/silk code)
+const Z_TOP_COPPER = F_COPPER_TOP_Z;
+const Z_BOTTOM_COPPER = B_COPPER_BOT_Z;
 
 /** Nanometers to millimeters conversion factor */
 const NM_TO_MM = 1e-6;
 
-/** PCB substrate green material color */
+/** PCB solder mask green (bright KiCad green) */
 const PCB_GREEN = 0x1a7a3a;
 
 /** PCB substrate roughness for physical material */
@@ -60,7 +90,7 @@ function hexToColor(hex: string): THREE.Color {
  */
 function addCopperMesh(
   positions: number[],
-  colorHex: string,
+  _colorHex: string,
   name: string,
   group: THREE.Group,
 ): void {
@@ -68,10 +98,12 @@ function addCopperMesh(
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
   geo.computeVertexNormals();
-  const mat = new THREE.MeshStandardMaterial({
-    color: hexToColor(colorHex),
-    metalness: 0.6,
-    roughness: 0.3,
+  // KiCad copper: high metalness, warm bronze, polished
+  const mat = new THREE.MeshPhysicalMaterial({
+    color: 0xB87333,        // Warm copper bronze (184, 115, 51)
+    metalness: 0.95,        // Very metallic (KiCad: specular = color*0.75+0.25)
+    roughness: 0.15,        // Polished (KiCad: shininess = 51.2/128)
+    reflectivity: 0.9,
     side: THREE.DoubleSide,
   });
   const mesh = new THREE.Mesh(geo, mat);
@@ -157,14 +189,15 @@ export class Renderer3D {
     this.controls.update();
 
     // Lighting — ambient + directional for even illumination
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    // KiCad-style 3-point lighting: bright ambient + two directional
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
     this.scene.add(ambientLight);
 
-    const dirLight1 = new THREE.DirectionalLight(0xffffff, 0.8);
+    const dirLight1 = new THREE.DirectionalLight(0xffffff, 1.0);
     dirLight1.position.set(50, 80, 100);
     this.scene.add(dirLight1);
 
-    const dirLight2 = new THREE.DirectionalLight(0xffffff, 0.3);
+    const dirLight2 = new THREE.DirectionalLight(0xffffff, 0.5);
     dirLight2.position.set(-30, -50, 60);
     this.scene.add(dirLight2);
 
@@ -206,16 +239,17 @@ export class Renderer3D {
     const widthMm = snapshot.board.width_nm * NM_TO_MM;
     const heightMm = snapshot.board.height_nm * NM_TO_MM;
 
-    // Board substrate — box geometry centered on X/Y, bottom at Z=0
+    // Board substrate — centered at Z=0 (KiCad convention)
     const subGeo = new THREE.BoxGeometry(widthMm, heightMm, BOARD_THICKNESS_MM);
-    subGeo.translate(widthMm / 2, heightMm / 2, BOARD_THICKNESS_MM / 2);
+    subGeo.translate(widthMm / 2, heightMm / 2, 0); // Z=0 center
 
+    // FR-4 substrate — yellowish-brown visible at board edges
     const subMat = new THREE.MeshPhysicalMaterial({
-      color: PCB_GREEN,
-      roughness: PCB_ROUGHNESS,
-      metalness: 0.05,
-      clearcoat: 0.3,
-      clearcoatRoughness: 0.4,
+      color: 0x8B7D3C,      // Light olive-tan FR-4
+      roughness: 0.7,
+      metalness: 0.0,
+      clearcoat: 0.1,
+      clearcoatRoughness: 0.5,
     });
 
     const boardMesh = new THREE.Mesh(subGeo, subMat);
@@ -238,10 +272,13 @@ export class Renderer3D {
     this.layerGroups.set('bottomCopper', bottomGroup);
     this.layerGroups.set('vias', viaGroup);
 
-    // Build copper geometry
+    // Build copper geometry (hidden under solder mask except at pads)
     this.buildTraces(snapshot.traces || [], topGroup, bottomGroup);
     this.buildPads(snapshot.components || [], topGroup, bottomGroup);
     this.buildVias(snapshot.vias || [], viaGroup);
+
+    // Build solder mask — green layer covering copper with openings at pads
+    this.buildSolderMask(widthMm, heightMm, snapshot.components || [], topGroup, bottomGroup);
 
     // Build component bodies (on top layer group for now — all top-side)
     this.buildComponents(snapshot.components || [], topGroup);
@@ -259,12 +296,13 @@ export class Renderer3D {
     if (this.controls && this.camera) {
       const cx = widthMm / 2;
       const cy = heightMm / 2;
-      const cz = BOARD_THICKNESS_MM / 2;
+      const cz = 0; // board centered at Z=0
       this.controls.target.set(cx, cy, cz);
 
+      // KiCad-like 45° isometric view
       const maxDim = Math.max(widthMm, heightMm);
       const distance = maxDim * 1.5;
-      this.camera.position.set(cx, cy - distance * 0.3, distance);
+      this.camera.position.set(cx + distance * 0.2, cy - distance * 0.4, distance * 0.7);
       this.controls.update();
     }
 
@@ -571,19 +609,45 @@ export class Renderer3D {
    * All segments on a layer are merged into one BufferGeometry for draw-call efficiency.
    */
   private buildTraces(traces: TraceInfo[], topGroup: THREE.Group, bottomGroup: THREE.Group): void {
-    // Bucket segments by layer
     const topPositions: number[] = [];
     const bottomPositions: number[] = [];
-
     let topSegCount = 0;
     let bottomSegCount = 0;
+
+    const CAP_SEGMENTS = 8; // semicircle resolution for round caps
+
+    // Helper: push a round cap (disc) at a point for top and bottom faces + side wall
+    function pushRoundCap(positions: number[], cx: number, cy: number, radius: number, zBot: number, zTop: number) {
+      const step = Math.PI * 2 / (CAP_SEGMENTS * 2);
+      for (let i = 0; i < CAP_SEGMENTS * 2; i++) {
+        const a0 = i * step;
+        const a1 = (i + 1) * step;
+        const x0 = cx + Math.cos(a0) * radius;
+        const y0 = cy + Math.sin(a0) * radius;
+        const x1 = cx + Math.cos(a1) * radius;
+        const y1 = cy + Math.sin(a1) * radius;
+
+        // Top disc triangle
+        positions.push(cx, cy, zTop, x0, y0, zTop, x1, y1, zTop);
+        // Bottom disc triangle
+        positions.push(cx, cy, zBot, x1, y1, zBot, x0, y0, zBot);
+        // Side wall quad (2 triangles)
+        positions.push(x0, y0, zBot, x0, y0, zTop, x1, y1, zTop);
+        positions.push(x0, y0, zBot, x1, y1, zTop, x1, y1, zBot);
+      }
+    }
 
     for (const trace of traces) {
       const widthMm = trace.width * NM_TO_MM;
       const halfW = widthMm / 2;
       const isTop = trace.layer === 'Top';
-      const zHeight = isTop ? Z_TOP_COPPER : Z_BOTTOM_COPPER;
       const positions = isTop ? topPositions : bottomPositions;
+
+      const zBot = isTop ? F_COPPER_BOT_Z : B_COPPER_BOT_Z;
+      const zTop = isTop ? F_COPPER_TOP_Z : B_COPPER_TOP_Z;
+
+      // Track endpoints for round caps (deduplicate shared points)
+      const capPoints = new Set<string>();
 
       for (const seg of trace.segments) {
         const sx = seg.start_x * NM_TO_MM;
@@ -591,47 +655,172 @@ export class Renderer3D {
         const ex = seg.end_x * NM_TO_MM;
         const ey = seg.end_y * NM_TO_MM;
 
-        // Direction vector and perpendicular for width
         const dx = ex - sx;
         const dy = ey - sy;
         const len = Math.sqrt(dx * dx + dy * dy);
-        if (len < 1e-6) continue; // skip zero-length segments
+        if (len < 1e-6) continue;
 
-        // Perpendicular (normalized) scaled by half-width
         const px = (-dy / len) * halfW;
         const py = (dx / len) * halfW;
 
-        // Quad corners: start-left, start-right, end-right, end-left
         const slx = sx + px, sly = sy + py;
         const srx = sx - px, sry = sy - py;
         const erx = ex - px, ery = ey - py;
         const elx = ex + px, ely = ey + py;
 
-        // Triangle 1: SL, SR, ER
-        positions.push(slx, sly, zHeight);
-        positions.push(srx, sry, zHeight);
-        positions.push(erx, ery, zHeight);
+        // TOP FACE
+        positions.push(slx, sly, zTop, srx, sry, zTop, erx, ery, zTop);
+        positions.push(slx, sly, zTop, erx, ery, zTop, elx, ely, zTop);
 
-        // Triangle 2: SL, ER, EL
-        positions.push(slx, sly, zHeight);
-        positions.push(erx, ery, zHeight);
-        positions.push(elx, ely, zHeight);
+        // BOTTOM FACE
+        positions.push(slx, sly, zBot, erx, ery, zBot, srx, sry, zBot);
+        positions.push(slx, sly, zBot, elx, ely, zBot, erx, ery, zBot);
+
+        // LEFT SIDE
+        positions.push(slx, sly, zBot, slx, sly, zTop, elx, ely, zTop);
+        positions.push(slx, sly, zBot, elx, ely, zTop, elx, ely, zBot);
+
+        // RIGHT SIDE
+        positions.push(srx, sry, zBot, erx, ery, zTop, srx, sry, zTop);
+        positions.push(srx, sry, zBot, erx, ery, zBot, erx, ery, zTop);
+
+        // No flat start/end caps — round caps handle endpoints
+
+        // Register endpoints for round caps
+        const sKey = `${sx.toFixed(4)},${sy.toFixed(4)}`;
+        const eKey = `${ex.toFixed(4)},${ey.toFixed(4)}`;
+        if (!capPoints.has(sKey)) {
+          capPoints.add(sKey);
+          pushRoundCap(positions, sx, sy, halfW, zBot, zTop);
+        }
+        if (!capPoints.has(eKey)) {
+          capPoints.add(eKey);
+          pushRoundCap(positions, ex, ey, halfW, zBot, zTop);
+        }
 
         if (isTop) topSegCount++;
         else bottomSegCount++;
       }
     }
 
-    // Create copper trace meshes per layer
     addCopperMesh(topPositions, LAYER_COLORS.top_copper, 'traces-top', topGroup);
     addCopperMesh(bottomPositions, LAYER_COLORS.bottom_copper, 'traces-bottom', bottomGroup);
 
     this._traceSegmentCount = topSegCount + bottomSegCount;
+  }
 
-    if (topSegCount > 0) console.log(`[3D] Built ${topSegCount} trace segments on layer Top`);
-    else console.log('[3D] Warning: 0 traces on layer Top');
-    if (bottomSegCount > 0) console.log(`[3D] Built ${bottomSegCount} trace segments on layer Bottom`);
-    else console.log('[3D] Warning: 0 traces on layer Bottom');
+  /**
+   * Build solder mask — green protective layer covering copper, with openings at pads.
+   *
+   * Uses a grid-based approach: divides the board into cells, marks cells that
+   * overlap with pads as "open", and creates green quads only for covered cells.
+   * This gives the appearance of solder mask with pad openings.
+   *
+   * Simplified approach: render full board mask plane, then render pads ABOVE it.
+   * The mask sits between copper and pads in Z-order.
+   */
+  private buildSolderMask(
+    widthMm: number,
+    heightMm: number,
+    components: ComponentInfo[],
+    topGroup: THREE.Group,
+    bottomGroup: THREE.Group,
+  ): void {
+    const MASK_THICKNESS = 0.02; // 20μm solder mask
+    const MASK_EXPANSION = 0.05; // 50μm expansion around pad openings
+
+    // Collect pad rectangles (in mm, board coordinates) for masking
+    const padRects: { x: number; y: number; hw: number; hh: number }[] = [];
+    for (const comp of components) {
+      const cx = comp.x_nm * NM_TO_MM;
+      const cy = comp.y_nm * NM_TO_MM;
+      const rad = ((comp.rotation_mdeg || 0) / 1000) * (Math.PI / 180);
+      const cos = Math.cos(rad);
+      const sin = Math.sin(rad);
+
+      for (const pad of comp.pads) {
+        const px = pad.x_nm * NM_TO_MM;
+        const py = pad.y_nm * NM_TO_MM;
+        const wx = cx + (px * cos - py * sin);
+        const wy = cy + (px * sin + py * cos);
+        const hw = (pad.width_nm * NM_TO_MM) / 2 + MASK_EXPANSION;
+        const hh = (pad.height_nm * NM_TO_MM) / 2 + MASK_EXPANSION;
+        padRects.push({ x: wx, y: wy, hw: Math.max(hw, hh), hh: Math.max(hw, hh) });
+      }
+    }
+
+    // Grid-based mask: divide board into cells, skip cells that overlap pads
+    const CELL_SIZE = 0.5; // 0.5mm grid cells
+    const cols = Math.ceil(widthMm / CELL_SIZE);
+    const rows = Math.ceil(heightMm / CELL_SIZE);
+
+    const topPositions: number[] = [];
+    const botPositions: number[] = [];
+
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        const cx = (col + 0.5) * CELL_SIZE;
+        const cy = (row + 0.5) * CELL_SIZE;
+
+        // Check if this cell overlaps any pad
+        let overlaps = false;
+        for (const pr of padRects) {
+          if (Math.abs(cx - pr.x) < pr.hw + CELL_SIZE / 2 &&
+              Math.abs(cy - pr.y) < pr.hh + CELL_SIZE / 2) {
+            overlaps = true;
+            break;
+          }
+        }
+        if (overlaps) continue;
+
+        const x0 = col * CELL_SIZE;
+        const y0 = row * CELL_SIZE;
+        const x1 = Math.min(x0 + CELL_SIZE, widthMm);
+        const y1 = Math.min(y0 + CELL_SIZE, heightMm);
+
+        // Top solder mask quad (sits on top of front copper)
+        topPositions.push(x0, y0, F_MASK_Z, x1, y0, F_MASK_Z, x1, y1, F_MASK_Z);
+        topPositions.push(x0, y0, F_MASK_Z, x1, y1, F_MASK_Z, x0, y1, F_MASK_Z);
+
+        // Bottom solder mask quad (sits below back copper)
+        botPositions.push(x0, y0, B_MASK_Z, x1, y1, B_MASK_Z, x1, y0, B_MASK_Z);
+        botPositions.push(x0, y0, B_MASK_Z, x0, y1, B_MASK_Z, x1, y1, B_MASK_Z);
+      }
+    }
+
+    // KiCad solder mask: semi-transparent dark green, glossy plastic
+    const maskMat = new THREE.MeshPhysicalMaterial({
+      color: PCB_GREEN,
+      metalness: 0.0,
+      roughness: 0.25,
+      transparent: true,
+      opacity: 0.85,
+      side: THREE.DoubleSide,
+      depthWrite: true,
+      polygonOffset: true,     // Prevent z-fighting with copper underneath
+      polygonOffsetFactor: -1,
+      polygonOffsetUnits: -1,
+    });
+
+    if (topPositions.length > 0) {
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(topPositions, 3));
+      geo.computeVertexNormals();
+      const mesh = new THREE.Mesh(geo, maskMat);
+      mesh.name = 'solder-mask-top';
+      topGroup.add(mesh);
+    }
+
+    if (botPositions.length > 0) {
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(botPositions, 3));
+      geo.computeVertexNormals();
+      const mesh = new THREE.Mesh(geo, maskMat.clone());
+      mesh.name = 'solder-mask-bottom';
+      bottomGroup.add(mesh);
+    }
+
+    console.log(`[3D] Built solder mask: ${cols}x${rows} grid, ${padRects.length} pad openings`);
   }
 
   /**
@@ -801,9 +990,9 @@ export class Renderer3D {
     tubeGeo.rotateX(Math.PI / 2);
 
     const viaMat = new THREE.MeshStandardMaterial({
-      color: hexToColor(LAYER_COLORS.via),
-      metalness: 0.7,
-      roughness: 0.3,
+      color: 0xB87333,       // Same copper as traces
+      metalness: 0.9,
+      roughness: 0.2,
     });
 
     const instancedMesh = new THREE.InstancedMesh(tubeGeo, viaMat, vias.length);
@@ -813,8 +1002,9 @@ export class Renderer3D {
     drillGeo.rotateX(Math.PI / 2);
 
     const drillMat = new THREE.MeshStandardMaterial({
-      color: PCB_GREEN,
-      roughness: PCB_ROUGHNESS,
+      color: 0x0a0a0a,      // Dark void (drilled hole)
+      metalness: 0.1,
+      roughness: 0.9,
     });
 
     const drillInstancedMesh = new THREE.InstancedMesh(drillGeo, drillMat, vias.length);
@@ -828,7 +1018,7 @@ export class Renderer3D {
       const via = vias[i];
       const x = via.x * NM_TO_MM;
       const y = via.y * NM_TO_MM;
-      const z = BOARD_THICKNESS_MM / 2; // center of board
+      const z = 0; // board center at Z=0
 
       // Scale factor relative to reference via
       const thisOuterR = (via.outer_diameter * NM_TO_MM) / 2;
@@ -892,8 +1082,8 @@ export class Renderer3D {
    * Silk lines rendered as flat quads slightly above the board surface.
    */
   private buildSilkscreen(components: ComponentInfo[], topGroup: THREE.Group, bottomGroup: THREE.Group): void {
-    const Z_TOP_SILK = BOARD_THICKNESS_MM + 0.02; // slightly above copper
-    const Z_BOTTOM_SILK = -0.02;
+    const Z_TOP_SILK = F_MASK_Z + MASK_THICKNESS_MM + 0.002; // above solder mask
+    const Z_BOTTOM_SILK = B_MASK_Z - MASK_THICKNESS_MM - 0.002;
     const topPositions: number[] = [];
     const bottomPositions: number[] = [];
     let shapeCount = 0;

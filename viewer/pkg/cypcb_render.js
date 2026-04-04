@@ -177,6 +177,34 @@ export class PcbEngine {
         }
     }
     /**
+     * Export all traces and vias as DSL `trace` blocks.
+     *
+     * Iterates all Trace and Via entities in the ECS, groups them by net,
+     * and emits properly formatted DSL trace blocks with `path` coordinates.
+     *
+     * Coordinates use 6 decimal places in mm for deterministic round-trip:
+     * nm → mm string → parse → nm gives exactly the original value.
+     *
+     * Returns an empty string if there are no traces.
+     * @returns {string}
+     */
+    export_traces_as_dsl() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            wasm.pcbengine_export_traces_as_dsl(retptr, this.__wbg_ptr);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            deferred1_0 = r0;
+            deferred1_1 = r1;
+            return getStringFromWasm0(r0, r1);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            wasm.__wbindgen_export4(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
      * Get the minimum copper clearance in nanometers.
      *
      * Returns the clearance value from the active design rules (default preset).

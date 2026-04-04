@@ -28,6 +28,7 @@ import { fetch3DModel, fetchComponentFootprint } from './jlcpcb';
 import { registerDynamicFootprint, register3DModel, hasDynamicFootprint } from './wasm';
 import { initVariantPanel, showVariants, hideVariants, isVariantPanelVisible, type VariantData } from './variant-panel';
 import type { VariantPreviewData } from './renderer';
+import { mergeTracesIntoDsl, syncTracesToEditor } from './trace-persist';
 
 // WebSocket server URL for hot reload + FreeRouting.
 // Only used when `npm run start` (dev server with file watcher) is running.
@@ -240,6 +241,7 @@ async function init(): Promise<void> {
   let layers = createLayerVisibility();
   let selectedRefdes: string | null = null;
   let dirty = true;
+  let tracesUnsaved = false; // True when routed traces haven't been saved to file
   let debugOverlayStage: number = -1;
   let debugData: any = null;
   let lastLoadedSource: string | null = null;
@@ -269,6 +271,40 @@ async function init(): Promise<void> {
     padNetMap = s.nets ? buildPadNetMap(s.nets) : new Map();
     return s;
   }
+
+  /** Update document title with unsaved indicator. */
+  function updateTitle(): void {
+    const name = currentFilePath || 'Untitled';
+    document.title = tracesUnsaved ? `\u2022 ${name} — CodeYourPCB` : `${name} — CodeYourPCB`;
+  }
+
+  /** Mark traces as modified (unsaved). */
+  function markTracesUnsaved(): void {
+    if (!tracesUnsaved) {
+      tracesUnsaved = true;
+      updateTitle();
+    }
+  }
+
+  /**
+   * Live-sync routed traces to the Monaco editor (if open).
+   * Uses targeted edit to replace only the trace section — no cursor jump.
+   */
+  function syncEditorTraces(): void {
+    if (!editorReady || !editorInstance) return;
+    const exportedTraces = engine.export_traces_as_dsl();
+    // Wrap suppressSync as ref object so syncTracesToEditor can toggle it
+    const ref = { get value() { return suppressSync; }, set value(v: boolean) { suppressSync = v; } };
+    syncTracesToEditor(editorInstance, exportedTraces, ref);
+  }
+
+  // Warn before closing with unsaved trace data
+  window.addEventListener('beforeunload', (e) => {
+    if (tracesUnsaved) {
+      e.preventDefault();
+      e.returnValue = '';
+    }
+  });
 
   /**
    * Scan source for `lcsc "C..."` attributes and auto-fetch footprints
@@ -842,6 +878,25 @@ async function init(): Promise<void> {
   currentFilePath = null;
   statusText.textContent = usingWasm ? 'Ready (WASM) - Open a file' : 'Ready (Mock) - Open a file';
 
+  // Preload Monaco editor in the background so Ctrl+E opens instantly
+  const preloadEditor = () => {
+    if (!editorReady) {
+      ensureEditorReady().then(() => {
+        console.log('[Editor] Preloaded in background');
+        // Keep it hidden — user hasn't toggled it yet
+        const container = document.getElementById('editor-container');
+        if (container && !container.classList.contains('hidden')) {
+          toggleEditorPanel(); // hide it if it auto-showed
+        }
+      });
+    }
+  };
+  if (typeof requestIdleCallback === 'function') {
+    requestIdleCallback(preloadEditor, { timeout: 3000 });
+  } else {
+    setTimeout(preloadEditor, 1500);
+  }
+
   /**
    * Build a partial RenderState for thumbnail generation from current config.
    */
@@ -899,6 +954,7 @@ async function init(): Promise<void> {
         interactionState.viewport = viewport;
       }
       if (snap.violations) updateErrorBadge(snap.violations);
+      if (is3DActive && renderer3d) renderer3d.updateBoard(snap, layers);
 
       currentFilePath = `${templateName}.cypcb`;
       statusText.textContent = `Loaded template: ${templateName}`;
@@ -914,6 +970,8 @@ async function init(): Promise<void> {
     },
     onLoadRecent: (source, name) => {
       undoStack.clear();
+
+      console.log(`[TracePersist] onLoadRecent: name=${name}, source length=${source?.length}, has trace blocks=${source?.includes('trace ') && source?.includes('path ')}`);
 
       const errors = engine.load_source(source);
       if (errors) console.warn('[Recent] Parse warnings:', errors);
@@ -934,6 +992,7 @@ async function init(): Promise<void> {
         interactionState.viewport = viewport;
       }
       if (snap.violations) updateErrorBadge(snap.violations);
+      if (is3DActive && renderer3d) renderer3d.updateBoard(snap, layers);
 
       currentFilePath = name;
       statusText.textContent = `Loaded: ${name}`;
@@ -964,6 +1023,7 @@ async function init(): Promise<void> {
         viewport = fitBoard(viewport, snap.board.width_nm, snap.board.height_nm);
         interactionState.viewport = viewport;
       }
+      if (is3DActive && renderer3d) renderer3d.updateBoard(snap, layers);
 
       currentFilePath = null;
       statusText.textContent = usingWasm ? 'Ready (WASM)' : 'Ready (Mock)';
@@ -974,8 +1034,15 @@ async function init(): Promise<void> {
       wsConnection?.send({ type: 'list-files' });
     },
     onRefreshThumbnail: () => {
-      // Regenerate thumbnail from current snapshot (may have LCSC footprints now)
+      // Regenerate thumbnail and persist trace data into recent file source
       if (currentFilePath && snapshot) {
+        // Merge current traces into source so reopening preserves them
+        const currentSource = (editorReady && editorInstance) ? editorInstance.getValue() : lastLoadedSource;
+        if (currentSource) {
+          const exportedTraces = engine.export_traces_as_dsl();
+          const mergedSource = mergeTracesIntoDsl(currentSource, exportedTraces);
+          lastLoadedSource = mergedSource;
+        }
         addRecentFile(currentFilePath, snapshot, buildRenderStateForThumbnail(), lastLoadedSource);
       }
     },
@@ -1246,10 +1313,14 @@ async function init(): Promise<void> {
     pullSnapshot();
     if (interactionState) {
       interactionState.snapshot = snapshot;
-    interactionState.padNetMap = padNetMap;
+      interactionState.padNetMap = padNetMap;
     }
     if (snapshot?.violations) {
       updateErrorBadge(snapshot.violations);
+    }
+    // Update 3D view if active
+    if (is3DActive && renderer3d && snapshot) {
+      renderer3d.updateBoard(snapshot, layers);
     }
     dirty = true;
   }
@@ -1288,6 +1359,10 @@ async function init(): Promise<void> {
     onTraceSelect: (traceId, screenX, screenY) => {
       selectedTraceId = traceId;
       if (traceId != null) {
+        // Blur Monaco editor so Delete/Backspace goes to trace handler, not editor
+        if (document.activeElement && (document.activeElement as HTMLElement).closest?.('.monaco-editor')) {
+          (document.activeElement as HTMLElement).blur();
+        }
         // Convert client coords to canvas-relative for label positioning
         const rect = canvas.getBoundingClientRect();
         labelPosition = { x: screenX - rect.left, y: screenY - rect.top };
@@ -1335,6 +1410,8 @@ async function init(): Promise<void> {
       const cmd = new AddTraceCommand(engine, { netName, layer, width, segments }, refreshSnapshot);
       undoStack.push(cmd);
       dirty = true;
+      markTracesUnsaved();
+      syncEditorTraces();
     },
     onBoardResize: (oldW: number, oldH: number, newW: number, newH: number) => {
       const cmd = new ResizeBoardCommand(engine, oldW, oldH, newW, newH, refreshSnapshot);
@@ -1365,6 +1442,8 @@ async function init(): Promise<void> {
       );
       undoStack.push(cmd);
       dirty = true;
+      markTracesUnsaved();
+      syncEditorTraces();
     },
     onRectSelect: (traceIds: number[], componentRefdes: string[]) => {
       // For now, select the first trace or component in the rectangle
@@ -1401,6 +1480,8 @@ async function init(): Promise<void> {
           { netName: trace.net_name || '', layer: trace.layer || 'Top', width: Number(trace.width), segments: newFlat },
           refreshSnapshot);
         undoStack.push(cmd);
+        markTracesUnsaved();
+        syncEditorTraces();
         statusText.textContent = `Optimized: ${trace.segments.length} → ${optimized.length} segments`;
       } else {
         statusText.textContent = `Already optimal (${trace.segments.length} segments)`;
@@ -1518,6 +1599,8 @@ async function init(): Promise<void> {
         // Load routes
         engine.load_routes(content);
         pullSnapshot();
+        markTracesUnsaved();
+        syncEditorTraces();
 
         statusText.textContent = `Loaded routes from ${file.name}`;
         dirty = true;
@@ -1540,6 +1623,17 @@ async function init(): Promise<void> {
       // Desktop uses its own file dialog via Tauri IPC
       filePicker.click();
       return;
+    }
+
+    // Persist current traces into source before showing project manager
+    // so reopening the same project preserves routed traces
+    const traceCount = engine.trace_count();
+    if (lastLoadedSource && traceCount > 0) {
+      const exportedTraces = engine.export_traces_as_dsl();
+      lastLoadedSource = mergeTracesIntoDsl(lastLoadedSource, exportedTraces);
+      if (currentFilePath) {
+        addRecentFile(currentFilePath, snapshot, buildRenderStateForThumbnail(), lastLoadedSource);
+      }
     }
 
     showProjectManager();
@@ -1595,6 +1689,8 @@ async function init(): Promise<void> {
       }
       engine.load_routes(result.content);
       pullSnapshot();
+      markTracesUnsaved();
+      syncEditorTraces();
       statusText.textContent = `Loaded routes from ${result.name}`;
       dirty = true;
 
@@ -2178,6 +2274,8 @@ async function init(): Promise<void> {
       console.log('[Routing] Loading SES routes...');
       engine.load_routes(sesContent);
       pullSnapshot();
+      markTracesUnsaved();
+      syncEditorTraces();
       dirty = true;
       statusText.textContent = `Routing complete (${elapsed}s)`;
     } else {
@@ -2508,9 +2606,9 @@ async function init(): Promise<void> {
    */
   async function handleSaveFile(): Promise<void> {
     // Use editor content if editor is active, otherwise use lastLoadedSource
-    const contentToSave = (editorReady && editorInstance) ? editorInstance.getValue() : lastLoadedSource;
+    const sourceContent = (editorReady && editorInstance) ? editorInstance.getValue() : lastLoadedSource;
 
-    if (!contentToSave) {
+    if (!sourceContent) {
       console.log('[Save] No content to save');
       statusText.textContent = 'No design loaded';
       setTimeout(() => {
@@ -2518,6 +2616,10 @@ async function init(): Promise<void> {
       }, 2000);
       return;
     }
+
+    // Merge routed traces into the source before saving
+    const exportedTraces = engine.export_traces_as_dsl();
+    const contentToSave = mergeTracesIntoDsl(sourceContent, exportedTraces);
 
     try {
       const defaultName = currentFilePath || 'design.cypcb';
@@ -2527,6 +2629,20 @@ async function init(): Promise<void> {
       if (newHandle) {
         currentFileHandle = newHandle;
       }
+
+      // Update in-memory source to match what we saved (includes traces)
+      lastLoadedSource = contentToSave;
+
+      // Update editor if open (suppress sync to avoid re-parse loop)
+      if (editorReady && editorInstance) {
+        suppressSync = true;
+        editorInstance.setValue(contentToSave);
+        suppressSync = false;
+      }
+
+      // Clear unsaved-traces flag
+      tracesUnsaved = false;
+      updateTitle();
 
       // Show saved status briefly
       statusText.textContent = 'Saved';
@@ -2622,8 +2738,12 @@ async function init(): Promise<void> {
     }
 
     // Delete: remove selected trace (through undo stack)
+    // Skip if focus is in editor/input (let Monaco handle Delete/Backspace)
     if ((e.key === 'Delete' || e.key === 'Backspace') && routingState.mode === 'idle') {
-      if (selectedTraceId != null) {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement)?.closest('.monaco-editor')) {
+        // Let the editor handle it
+      } else if (selectedTraceId != null) {
         // Capture trace data for undo before removing
         const trace = snapshot?.traces?.find(t => t.id === selectedTraceId);
         if (trace) {
@@ -2641,6 +2761,8 @@ async function init(): Promise<void> {
             refreshSnapshot,
           );
           undoStack.push(cmd);
+          markTracesUnsaved();
+          syncEditorTraces();
         }
         selectedTraceId = null;
         interactionState.selectedTraceId = null;
@@ -2826,9 +2948,20 @@ async function init(): Promise<void> {
       console.log('[Desktop] Content requested for save');
 
       // Use editor content if editor is active, otherwise use lastLoadedSource
-      const contentToSave = (editorReady && editorInstance) ? editorInstance.getValue() : lastLoadedSource;
+      const sourceContent = (editorReady && editorInstance) ? editorInstance.getValue() : lastLoadedSource;
 
-      // Respond with current source content
+      // Merge routed traces into the source before responding
+      const exportedTraces = engine.export_traces_as_dsl();
+      const contentToSave = sourceContent ? mergeTracesIntoDsl(sourceContent, exportedTraces) : sourceContent;
+
+      // Update in-memory source and clear unsaved flag
+      if (contentToSave) {
+        lastLoadedSource = contentToSave;
+        tracesUnsaved = false;
+        updateTitle();
+      }
+
+      // Respond with merged content
       const event = new CustomEvent('desktop:content-response', {
         detail: { content: contentToSave },
       });

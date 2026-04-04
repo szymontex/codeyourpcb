@@ -148,6 +148,15 @@ pub struct NetInfo {
     pub id: u32,
     /// All pin connections to this net.
     pub connections: Vec<PinRef>,
+    /// Trace width constraint in nanometers (from `[width 0.3mm]`). None = use default.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub width_nm: Option<i64>,
+    /// Clearance constraint in nanometers (from `[clearance 0.2mm]`). None = use default.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub clearance_nm: Option<i64>,
+    /// Current constraint in milliamps (from `[current 2A]`). None = no constraint.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub current_ma: Option<f64>,
 }
 
 /// Reference to a component pin.
@@ -285,6 +294,9 @@ mod tests {
                     component: "R1".to_string(),
                     pin: "1".to_string(),
                 }],
+                width_nm: None,
+                clearance_nm: None,
+                current_ma: None,
             }],
             violations: vec![],
             traces: vec![],

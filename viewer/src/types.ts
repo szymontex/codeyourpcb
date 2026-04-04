@@ -76,6 +76,12 @@ export interface NetInfo {
   name: string;
   id: number;
   connections: PinRef[];
+  /** Trace width constraint in nm (from `[width 0.3mm]`). */
+  width_nm?: number;
+  /** Clearance constraint in nm (from `[clearance 0.2mm]`). */
+  clearance_nm?: number;
+  /** Current constraint in milliamps (from `[current 2A]`). */
+  current_ma?: number;
 }
 
 export interface PinRef {

@@ -36,7 +36,7 @@ use crate::ast::{
     ImportDef, InterfaceDef, LayerType, ModuleDef, NetAssignment, NetConstraints, NetDef, PadDef,
     PadShape, PhysicalValue, PinDeclaration, PinId, PinRef, PositionExpr, RotationExpr,
     SizeProperty, SourceFile, Span, StackupDef, StackupLayer, StringLit, Tolerance, ToleranceKind,
-    TraceDef, ZoneDef, ZoneKind,
+    TraceDef, TraceDirective, TracePath, TraceVia, ZoneDef, ZoneKind,
 };
 use crate::errors::{ParseError, ParseResult};
 use crate::node_kinds;
@@ -991,6 +991,7 @@ impl CypcbParser {
         let mut layer: Option<String> = None;
         let mut width: Option<Dimension> = None;
         let mut locked = false;
+        let mut directives: Vec<TraceDirective> = Vec::new();
 
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
@@ -1010,18 +1011,60 @@ impl CypcbParser {
                         .and_then(|n| self.convert_dimension(source, &n, errors));
                     let y = get_child_by_field(&child, "y")
                         .and_then(|n| self.convert_dimension(source, &n, errors));
+                    let drill = get_child_by_field(&child, "drill")
+                        .and_then(|n| self.convert_dimension(source, &n, errors));
 
                     if let (Some(x), Some(y)) = (x, y) {
+                        let position = PositionExpr {
+                            x: x.clone(),
+                            y: y.clone(),
+                            span: span_of(&child),
+                        };
+                        // Add to waypoints for backward compat (logical mode)
                         waypoints.push(PositionExpr {
                             x,
                             y,
                             span: span_of(&child),
                         });
+                        // Also add as directive (geometric mode)
+                        directives.push(TraceDirective::Via(TraceVia {
+                            position,
+                            drill,
+                            span: span_of(&child),
+                        }));
+                    }
+                }
+                "trace_path" => {
+                    let mut points: Vec<PositionExpr> = Vec::new();
+                    let mut path_cursor = child.walk();
+                    for path_child in child.children(&mut path_cursor) {
+                        if path_child.kind() == "path_point" {
+                            let x = get_child_by_field(&path_child, "x")
+                                .and_then(|n| self.convert_dimension(source, &n, errors));
+                            let y = get_child_by_field(&path_child, "y")
+                                .and_then(|n| self.convert_dimension(source, &n, errors));
+                            if let (Some(x), Some(y)) = (x, y) {
+                                points.push(PositionExpr {
+                                    x,
+                                    y,
+                                    span: span_of(&path_child),
+                                });
+                            }
+                        }
+                    }
+                    if !points.is_empty() {
+                        directives.push(TraceDirective::Path(TracePath {
+                            points,
+                            span: span_of(&child),
+                        }));
                     }
                 }
                 "trace_layer" => {
                     if let Some(name_node) = get_child_by_field(&child, "name") {
-                        layer = Some(node_text(source, &name_node).to_string());
+                        let name = node_text(source, &name_node).to_string();
+                        layer = Some(name.clone());
+                        // Also add as directive (geometric mode)
+                        directives.push(TraceDirective::Layer(name));
                     }
                 }
                 "trace_width" => {
@@ -1044,6 +1087,7 @@ impl CypcbParser {
             layer,
             width,
             locked,
+            directives,
             span: span_of(node),
         })
     }

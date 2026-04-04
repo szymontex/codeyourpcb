@@ -794,6 +794,23 @@ export function setupInteraction(
       if (state.engine) {
         state.routing = { ...state.routing, clearanceNm: state.engine.get_min_clearance_nm() };
       }
+      // Apply net constraint width if defined (overrides default 0.25mm)
+      // If net has current but no explicit width, auto-calculate IPC-2221 minimum
+      if (state.snapshot?.nets) {
+        const netInfo = state.snapshot.nets.find(n => n.name === padHit.netName);
+        if (netInfo?.width_nm) {
+          state.routing = { ...state.routing, traceWidth: netInfo.width_nm };
+          console.log(`[Route] Using net constraint width: ${(netInfo.width_nm / 1e6).toFixed(3)}mm for ${padHit.netName}`);
+        } else if (netInfo?.current_ma) {
+          // IPC-2221 external layer, 10°C rise, 1oz copper
+          const currentA = netInfo.current_ma / 1000;
+          const areaMils2 = Math.pow(currentA / (0.048 * Math.pow(10, 0.44)), 1 / 0.725);
+          const widthMils = areaMils2 / 1.378;
+          const widthNm = Math.round(widthMils * 25_400);
+          state.routing = { ...state.routing, traceWidth: widthNm };
+          console.log(`[Route] IPC-2221 auto-width for ${netInfo.current_ma}mA: ${(widthNm / 1e6).toFixed(3)}mm for ${padHit.netName}`);
+        }
+      }
       ensureDrcChecker();
       state.onRoutingChange(state.routing);
       state.onRouteStart?.(padHit.netName);
@@ -990,7 +1007,14 @@ export function setupInteraction(
       currentLayer: hit.trace.layer || 'Top',
       anchorPoint: { x: snapPt.x, y: snapPt.y },
       netName: hit.trace.net_name,
-      traceWidth: Number(hit.trace.width) || 250_000,
+      traceWidth: Number(hit.trace.width) || (state.snapshot?.nets?.find(n => n.name === hit.trace.net_name)?.width_nm) || (() => {
+        const ni = state.snapshot?.nets?.find(n => n.name === hit.trace.net_name);
+        if (ni?.current_ma) {
+          const a = ni.current_ma / 1000;
+          return Math.round((Math.pow(a / (0.048 * Math.pow(10, 0.44)), 1 / 0.725) / 1.378) * 25_400);
+        }
+        return 250_000;
+      })(),
       angleSnapEnabled: state.routing.angleSnapEnabled,
       gridSnapEnabled: state.routing.gridSnapEnabled,
       gridSpacing: state.routing.gridSpacing,

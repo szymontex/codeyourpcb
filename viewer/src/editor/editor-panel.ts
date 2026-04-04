@@ -52,6 +52,14 @@ export async function initEditor(container: HTMLElement): Promise<any> {
     wordWrap: 'off',
     scrollBeyondLastLine: false,
     dropIntoEditor: { enabled: false }, // We handle drops ourselves via editor-container
+    quickSuggestions: { other: true, comments: false, strings: false },
+    suggestOnTriggerCharacters: true,
+    wordBasedSuggestions: 'off',
+    acceptSuggestionOnEnter: 'on',
+    suggest: {
+      showInlineDetails: true,
+      preview: true,
+    },
   });
 
   editorInstance = editor;

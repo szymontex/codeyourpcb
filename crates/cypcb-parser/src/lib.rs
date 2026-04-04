@@ -88,7 +88,8 @@ use tree_sitter::Language;
 // Re-export AST types (always available)
 pub use ast::{
     BoardDef, ComponentDef, ComponentKind, Definition, Dimension, Identifier, NetDef, PinId,
-    PinRef, PositionExpr, SizeProperty, SourceFile, Span, StringLit,
+    PinRef, PositionExpr, SizeProperty, SourceFile, Span, StringLit, TraceDef, TraceDirective,
+    TracePath, TraceVia,
 };
 
 // Re-export error types (always available)

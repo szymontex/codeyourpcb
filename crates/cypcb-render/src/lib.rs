@@ -57,6 +57,20 @@ pub struct PcbEngine {
     violations: Vec<DrcViolation>,
     /// Time taken for last DRC run in milliseconds.
     drc_duration_ms: u64,
+    /// Cached net constraints from last parse (net_name → constraints).
+    #[cfg(feature = "native")]
+    net_constraints: std::collections::HashMap<String, NetConstraintCache>,
+}
+
+/// Cached net constraint data extracted during parsing.
+#[derive(Debug, Clone, Default)]
+pub struct NetConstraintCache {
+    /// Trace width in nm (from `[width ...]`).
+    pub width_nm: Option<i64>,
+    /// Clearance in nm (from `[clearance ...]`).
+    pub clearance_nm: Option<i64>,
+    /// Current in milliamps (from `[current ...]`).
+    pub current_ma: Option<f64>,
 }
 
 // WASM-exposed methods
@@ -72,6 +86,8 @@ impl PcbEngine {
             source: String::new(),
             violations: Vec::new(),
             drc_duration_ms: 0,
+            #[cfg(feature = "native")]
+            net_constraints: std::collections::HashMap::new(),
         }
     }
 
@@ -311,6 +327,167 @@ impl PcbEngine {
         query.iter(ecs).count()
     }
 
+    /// Export all traces and vias as DSL `trace` blocks.
+    ///
+    /// Iterates all Trace and Via entities in the ECS, groups them by net,
+    /// and emits properly formatted DSL trace blocks with `path` coordinates.
+    ///
+    /// Coordinates use 6 decimal places in mm for deterministic round-trip:
+    /// nm → mm string → parse → nm gives exactly the original value.
+    ///
+    /// Returns an empty string if there are no traces.
+    pub fn export_traces_as_dsl(&mut self) -> String {
+        use std::collections::BTreeMap;
+        use std::fmt::Write;
+
+        // Collect all traces grouped by net name
+        let trace_data: Vec<Trace> = {
+            let ecs = self.world.ecs_mut();
+            let mut query = ecs.query::<&Trace>();
+            query.iter(ecs).cloned().collect()
+        };
+
+        // Collect all vias grouped by net name
+        let via_data: Vec<Via> = {
+            let ecs = self.world.ecs_mut();
+            let mut query = ecs.query::<&Via>();
+            query.iter(ecs).copied().collect()
+        };
+
+        if trace_data.is_empty() && via_data.is_empty() {
+            return String::new();
+        }
+
+        // Group traces by net name, using BTreeMap for deterministic ordering
+        let mut net_traces: BTreeMap<String, Vec<&Trace>> = BTreeMap::new();
+        let mut net_vias: BTreeMap<String, Vec<&Via>> = BTreeMap::new();
+
+        for trace in &trace_data {
+            let net_name = self
+                .world
+                .net_name(trace.net_id)
+                .unwrap_or("unknown")
+                .to_string();
+            net_traces.entry(net_name).or_default().push(trace);
+        }
+
+        for via in &via_data {
+            let net_name = self
+                .world
+                .net_name(via.net_id)
+                .unwrap_or("unknown")
+                .to_string();
+            net_vias.entry(net_name).or_default().push(via);
+        }
+
+        // Collect all net names
+        let mut all_nets: Vec<String> = net_traces.keys().cloned().collect();
+        for net in net_vias.keys() {
+            if !all_nets.contains(net) {
+                all_nets.push(net.clone());
+            }
+        }
+        all_nets.sort();
+
+        let mut output = String::with_capacity(4096);
+
+        for net_name in &all_nets {
+            let traces = net_traces.get(net_name);
+            let vias = net_vias.get(net_name);
+
+            if traces.is_none() && vias.is_none() {
+                continue;
+            }
+
+            // For each trace on this net, emit a separate trace block
+            if let Some(traces) = traces {
+                for trace in traces {
+                    let _ = writeln!(output, "trace {} {{", net_name);
+
+                    // Layer
+                    let layer_str = match trace.layer {
+                        Layer::TopCopper => "Top",
+                        Layer::BottomCopper => "Bottom",
+                        Layer::Inner(n) => {
+                            let _ = writeln!(output, "    layer Inner{}", n);
+                            ""
+                        }
+                        _ => "Top",
+                    };
+                    if !layer_str.is_empty() {
+                        let _ = writeln!(output, "    layer {}", layer_str);
+                    }
+
+                    // Width
+                    let width_mm = trace.width.to_mm();
+                    let _ = writeln!(output, "    width {}mm", format_mm(width_mm));
+
+                    // Path — extract polyline from segments
+                    if !trace.segments.is_empty() {
+                        let _ = write!(output, "    path ");
+
+                        // First point
+                        let first = &trace.segments[0];
+                        let _ = write!(
+                            output,
+                            "{}mm,{}mm",
+                            format_mm(first.start.x.to_mm()),
+                            format_mm(first.start.y.to_mm())
+                        );
+
+                        // Subsequent endpoints
+                        for seg in &trace.segments {
+                            let _ = write!(
+                                output,
+                                " -> {}mm,{}mm",
+                                format_mm(seg.end.x.to_mm()),
+                                format_mm(seg.end.y.to_mm())
+                            );
+                        }
+                        let _ = writeln!(output);
+                    }
+
+                    // Locked
+                    if trace.locked {
+                        let _ = writeln!(output, "    locked");
+                    }
+
+                    let _ = writeln!(output, "}}");
+                    let _ = writeln!(output);
+                }
+            }
+
+            // Vias that are not associated with a trace (standalone vias)
+            // These get their own trace block
+            if let Some(vias) = vias {
+                for via in vias {
+                    let _ = writeln!(output, "trace {} {{", net_name);
+                    let _ = writeln!(
+                        output,
+                        "    via {}mm,{}mm drill {}mm",
+                        format_mm(via.position.x.to_mm()),
+                        format_mm(via.position.y.to_mm()),
+                        format_mm(via.drill.to_mm())
+                    );
+                    if via.locked {
+                        let _ = writeln!(output, "    locked");
+                    }
+                    let _ = writeln!(output, "}}");
+                    let _ = writeln!(output);
+                }
+            }
+        }
+
+        // Trim trailing newline
+        while output.ends_with('\n') {
+            output.pop();
+        }
+        // Add exactly one trailing newline
+        output.push('\n');
+
+        output
+    }
+
     /// Get the minimum copper clearance in nanometers.
     ///
     /// Returns the clearance value from the active design rules (default preset).
@@ -547,6 +724,7 @@ impl PcbEngine {
         self.world.clear();
         self.violations.clear();
         self.drc_duration_ms = 0;
+        self.net_constraints.clear();
 
         // Parse the source
         let parse_result = parse(source);
@@ -555,6 +733,26 @@ impl PcbEngine {
         let mut errors: Vec<String> = Vec::new();
         for e in &parse_result.errors {
             errors.push(format!("{}", e));
+        }
+
+        // Extract net constraints from AST before sync
+        for def in &parse_result.value.definitions {
+            if let cypcb_parser::ast::Definition::Net(net_def) = def {
+                if let Some(ref constraints) = net_def.constraints {
+                    let mut cache = NetConstraintCache::default();
+                    if let Some(ref w) = constraints.width {
+                        cache.width_nm = Some(w.to_nm().0);
+                    }
+                    if let Some(ref c) = constraints.clearance {
+                        cache.clearance_nm = Some(c.to_nm().0);
+                    }
+                    if let Some(ref cur) = constraints.current {
+                        cache.current_ma = Some(cur.to_milliamps());
+                    }
+                    self.net_constraints
+                        .insert(net_def.name.value.clone(), cache);
+                }
+            }
         }
 
         // Sync AST to world
@@ -1276,10 +1474,27 @@ impl PcbEngine {
                 }
             }
 
+            // Look up cached constraints for this net
+            #[cfg(feature = "native")]
+            let (width_nm, clearance_nm, current_ma) = {
+                let c = self.net_constraints.get(&net_name);
+                (
+                    c.and_then(|c| c.width_nm),
+                    c.and_then(|c| c.clearance_nm),
+                    c.and_then(|c| c.current_ma),
+                )
+            };
+            #[cfg(not(feature = "native"))]
+            let (width_nm, clearance_nm, current_ma): (Option<i64>, Option<i64>, Option<f64>) =
+                (None, None, None);
+
             nets.push(NetInfo {
                 name: net_name,
                 id: net_id.0,
                 connections,
+                width_nm,
+                clearance_nm,
+                current_ma,
             });
         }
 
@@ -1540,6 +1755,16 @@ fn pad_shape_to_string(shape: &PadShape) -> String {
         PadShape::RoundRect { .. } => "roundrect".to_string(),
         PadShape::Oblong => "oblong".to_string(),
     }
+}
+
+/// Format a millimeter value with exactly 6 decimal places for deterministic round-trip.
+///
+/// 6 decimal places = 1nm resolution, which guarantees:
+/// nm → mm string → parse → nm gives exactly the original value.
+///
+/// Trailing zeros after the 6th decimal are preserved for consistency.
+fn format_mm(mm: f64) -> String {
+    format!("{:.6}", mm)
 }
 
 /// Parse layer string from routes file format.
@@ -2076,5 +2301,164 @@ mod tests {
             "Expected ~5mm, got {} nm",
             dist
         );
+    }
+
+    // ====================================================================
+    // Trace Persistence Tests
+    // ====================================================================
+
+    #[test]
+    fn test_export_traces_empty() {
+        let mut engine = PcbEngine::new();
+        engine.load_source("version 1\nboard t { size 50mm x 30mm; layers 2 }");
+        let dsl = engine.export_traces_as_dsl();
+        assert!(dsl.is_empty(), "Expected empty export, got: {}", dsl);
+    }
+
+    #[test]
+    fn test_export_traces_basic() {
+        let mut engine = PcbEngine::new();
+        engine.load_source(
+            "version 1\nboard t { size 50mm x 30mm; layers 2 }\nnet VCC { }",
+        );
+
+        // Add a trace manually via the API
+        let segments = [
+            5_000_000i64, 10_000_000, 15_000_000, 10_000_000, // seg1: (5,10) -> (15,10)
+            15_000_000, 10_000_000, 15_000_000, 20_000_000,    // seg2: (15,10) -> (15,20)
+        ];
+        let id = engine.add_trace("VCC", "Top", 250_000, &segments);
+        assert_ne!(id, u32::MAX, "add_trace failed");
+
+        let dsl = engine.export_traces_as_dsl();
+        assert!(dsl.contains("trace VCC"), "Missing net name: {}", dsl);
+        assert!(dsl.contains("layer Top"), "Missing layer: {}", dsl);
+        assert!(dsl.contains("width 0.250000mm"), "Missing width: {}", dsl);
+        assert!(dsl.contains("path "), "Missing path: {}", dsl);
+        assert!(
+            dsl.contains("5.000000mm,10.000000mm"),
+            "Missing start coord: {}",
+            dsl
+        );
+        assert!(
+            dsl.contains("15.000000mm,20.000000mm"),
+            "Missing end coord: {}",
+            dsl
+        );
+    }
+
+    #[test]
+    fn test_trace_round_trip_determinism() {
+        // Phase 1: create engine, add traces, export to DSL
+        let mut engine1 = PcbEngine::new();
+        engine1.load_source(
+            "version 1\nboard t { size 60mm x 40mm\nlayers 2 }\nnet VCC { }\nnet GND { }",
+        );
+
+        // Add traces with various coordinate values (including tricky float cases)
+        let segs_vcc = [
+            3_731_260i64, 19_999_960, 4_879_340, 19_999_960,
+            4_879_340, 19_999_960, 10_000_001, 15_555_555,
+        ];
+        let segs_gnd = [
+            1_000_000i64, 2_000_000, 30_000_000, 2_000_000,
+        ];
+        engine1.add_trace("VCC", "Top", 203_200, &segs_vcc);
+        engine1.add_trace("GND", "Bottom", 150_000, &segs_gnd);
+
+        let dsl1 = engine1.export_traces_as_dsl();
+
+        // Phase 2: load the exported DSL into a fresh engine, export again
+        let source2 = format!(
+            "version 1\nboard t {{ size 60mm x 40mm\nlayers 2 }}\nnet VCC {{ }}\nnet GND {{ }}\n{}",
+            dsl1
+        );
+        let mut engine2 = PcbEngine::new();
+        let err = engine2.load_source(&source2);
+        assert!(err.is_empty(), "Load error on round-trip: {}", err);
+
+        let dsl2 = engine2.export_traces_as_dsl();
+
+        // Phase 3: the two exports must be IDENTICAL (determinism)
+        assert_eq!(
+            dsl1, dsl2,
+            "Round-trip NOT deterministic!\n--- First export ---\n{}\n--- Second export ---\n{}",
+            dsl1, dsl2
+        );
+
+        // Phase 4: verify coordinates survived exactly
+        let snapshot = engine2.build_snapshot();
+        let vcc_traces: Vec<_> = snapshot
+            .traces
+            .iter()
+            .filter(|t| t.net_name == "VCC")
+            .collect();
+        assert_eq!(vcc_traces.len(), 1, "Expected 1 VCC trace");
+        let vcc = &vcc_traces[0];
+        assert_eq!(vcc.segments.len(), 2, "Expected 2 segments");
+
+        // Check exact nm values survived
+        assert_eq!(vcc.segments[0].start_x as i64, 3_731_260);
+        assert_eq!(vcc.segments[0].start_y as i64, 19_999_960);
+        assert_eq!(vcc.segments[1].end_x as i64, 10_000_001);
+        assert_eq!(vcc.segments[1].end_y as i64, 15_555_555);
+    }
+
+    #[test]
+    fn test_format_mm_round_trip() {
+        // Verify that format_mm produces values that round-trip exactly
+        let test_values: Vec<i64> = vec![
+            0,
+            1,
+            999_999,
+            1_000_000,     // 1mm
+            10_000_000,    // 10mm
+            10_000_001,    // 10.000001mm (1nm precision)
+            15_555_555,    // 15.555555mm
+            3_731_260,     // 3.731260mm (real routing coordinate)
+            100_000_000,   // 100mm
+            999_999_999,   // 999.999999mm
+        ];
+
+        for nm_val in &test_values {
+            let nm = Nm(*nm_val);
+            let mm_str = format_mm(nm.to_mm());
+            let parsed_f64: f64 = mm_str.parse().unwrap();
+            let back_to_nm = Nm::from_mm(parsed_f64);
+            assert_eq!(
+                nm, back_to_nm,
+                "Round-trip failed for {}nm: formatted as '{}mm', parsed back as {}nm",
+                nm_val, mm_str, back_to_nm.0
+            );
+        }
+    }
+
+    #[test]
+    fn test_export_traces_locked() {
+        let mut engine = PcbEngine::new();
+        engine.load_source(
+            "version 1\nboard t { size 50mm x 30mm; layers 2 }\nnet VCC { }\ntrace VCC {\n    layer Top\n    width 0.25mm\n    path 5mm,10mm -> 15mm,10mm\n    locked\n}",
+        );
+
+        let dsl = engine.export_traces_as_dsl();
+        assert!(dsl.contains("locked"), "Missing locked flag: {}", dsl);
+    }
+
+    #[test]
+    fn test_export_traces_multi_layer() {
+        let mut engine = PcbEngine::new();
+        engine.load_source(
+            "version 1\nboard t { size 50mm x 30mm; layers 2 }\nnet SIG { }",
+        );
+
+        // Add traces on both layers
+        let seg_top = [5_000_000i64, 10_000_000, 15_000_000, 10_000_000];
+        let seg_bot = [15_000_000i64, 10_000_000, 25_000_000, 10_000_000];
+        engine.add_trace("SIG", "Top", 200_000, &seg_top);
+        engine.add_trace("SIG", "Bottom", 200_000, &seg_bot);
+
+        let dsl = engine.export_traces_as_dsl();
+        assert!(dsl.contains("layer Top"), "Missing Top layer: {}", dsl);
+        assert!(dsl.contains("layer Bottom"), "Missing Bottom layer: {}", dsl);
     }
 }

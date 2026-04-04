@@ -704,7 +704,13 @@ pub struct ZoneDef {
 /// optionally with via waypoints. These traces can be locked to prevent
 /// the autorouter from modifying them.
 ///
-/// # Example DSL
+/// Supports two modes:
+/// 1. **Logical** (from/to/waypoints): high-level pin-to-pin routing
+/// 2. **Geometric** (directives with path/layer/via): explicit polyline geometry
+///
+/// When `directives` is non-empty, it takes precedence over from/to/waypoints.
+///
+/// # Example DSL (logical)
 ///
 /// ```cypcb
 /// trace VCC {
@@ -716,15 +722,29 @@ pub struct ZoneDef {
 ///     locked
 /// }
 /// ```
+///
+/// # Example DSL (geometric — path-based persistence)
+///
+/// ```cypcb
+/// trace GND {
+///     layer Top
+///     width 0.3mm
+///     path 5mm,10mm -> 12mm,10mm
+///     via 12mm,10mm drill 0.3mm
+///     layer Bottom
+///     path 12mm,10mm -> 20mm,10mm
+///     locked
+/// }
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TraceDef {
     /// Net name this trace belongs to.
     pub net: Identifier,
-    /// Starting pin reference.
+    /// Starting pin reference (logical mode).
     pub from: Option<PinRef>,
-    /// Ending pin reference.
+    /// Ending pin reference (logical mode).
     pub to: Option<PinRef>,
-    /// Via waypoints (positions between from and to).
+    /// Via waypoints — positions between from and to (logical mode).
     pub waypoints: Vec<PositionExpr>,
     /// Copper layer (None = use net default or TopCopper).
     pub layer: Option<String>,
@@ -732,7 +752,48 @@ pub struct TraceDef {
     pub width: Option<Dimension>,
     /// If true, autorouter should not modify this trace.
     pub locked: bool,
+    /// Ordered directives for geometric (path-based) traces.
+    /// When non-empty, these define the exact trace geometry.
+    pub directives: Vec<TraceDirective>,
     /// Source span.
+    pub span: Span,
+}
+
+/// An ordered directive within a geometric trace definition.
+///
+/// Directives appear in the order written in the DSL, preserving the
+/// interleaving of layer switches, path segments, and vias.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum TraceDirective {
+    /// Switch current layer: `layer Top`
+    Layer(String),
+    /// Explicit polyline path: `path X1,Y1 -> X2,Y2 -> ...`
+    Path(TracePath),
+    /// Via with optional drill size: `via X,Y [drill D]`
+    Via(TraceVia),
+}
+
+/// An explicit trace path: a polyline of coordinate pairs.
+///
+/// In the DSL: `path 10mm,12mm -> 15mm,12mm -> 15mm,8mm`
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TracePath {
+    /// Ordered list of points in the polyline.
+    pub points: Vec<PositionExpr>,
+    /// Span covering the entire path statement.
+    pub span: Span,
+}
+
+/// A via waypoint with optional drill diameter.
+///
+/// In the DSL: `via 12mm,10mm drill 0.3mm`
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TraceVia {
+    /// Via position.
+    pub position: PositionExpr,
+    /// Optional drill diameter.
+    pub drill: Option<Dimension>,
+    /// Span covering the via statement.
     pub span: Span,
 }
 

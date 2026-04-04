@@ -15,7 +15,7 @@
  * by parsing in JavaScript and calling load_snapshot() on the WASM engine.
  */
 
-import type { BoardSnapshot, ComponentInfo, PadInfo, NetInfo, PinRef, BoardInfo, TraceSegmentInfo, ViolationInfo, SilkShape } from './types';
+import type { BoardSnapshot, ComponentInfo, PadInfo, NetInfo, PinRef, BoardInfo, TraceInfo, TraceSegmentInfo, ViaInfo, ViolationInfo, SilkShape } from './types';
 import { pointToSegmentDistance } from './geometry';
 
 /**
@@ -261,6 +261,12 @@ export interface PcbEngine {
    */
   trace_count(): number;
 
+  /**
+   * Export all traces and vias as DSL trace blocks.
+   * Returns empty string if no traces exist.
+   */
+  export_traces_as_dsl(): string;
+
   /** Get minimum copper clearance in nanometers from active design rules. */
   get_min_clearance_nm(): number;
 
@@ -319,6 +325,7 @@ interface WasmPcbEngine {
   get_trace_at_point(x_nm: bigint, y_nm: bigint, tolerance_nm: bigint): number;
   run_drc_incremental(): number;
   trace_count(): number;
+  export_traces_as_dsl(): string;
   get_min_clearance_nm(): number;
   get_violations_json(): string;
   rotate_component(refdes: string, delta_mdeg: number): boolean;
@@ -456,6 +463,76 @@ function normalizePinName(name: string): string {
   }
 }
 
+/**
+ * IPC-2221 minimum trace width calculation for external copper layers.
+ * Formula: W = (I / (k * dT^b))^(1/c) where k=0.048, b=0.44, c=0.725
+ * Returns width in nanometers.
+ *
+ * @param current_ma Current in milliamps
+ * @param tempRise Temperature rise in °C (default 10°C)
+ * @param copperOz Copper weight in oz/ft² (default 1oz)
+ */
+function ipc2221MinWidthNm(current_ma: number, tempRise = 10, copperOz = 1): number {
+  const currentA = current_ma / 1000;
+  if (currentA <= 0) return 0;
+  // Cross-sectional area in mils² (IPC-2221 external layer)
+  const k = 0.048;
+  const b = 0.44;
+  const c = 0.725;
+  const areaMils2 = Math.pow(currentA / (k * Math.pow(tempRise, b)), 1 / c);
+  // Convert area (mils²) to width (mils) using copper thickness
+  // 1oz copper ≈ 1.378 mils thick
+  const thicknessMils = copperOz * 1.378;
+  const widthMils = areaMils2 / thicknessMils;
+  // Convert mils to nm (1 mil = 25400 nm)
+  return Math.round(widthMils * 25_400);
+}
+
+/**
+ * Check traces against net current constraints using IPC-2221.
+ * Returns violations for traces that are too narrow for the specified current.
+ */
+function checkTraceCurrentViolations(snapshot: BoardSnapshot): ViolationInfo[] {
+  const violations: ViolationInfo[] = [];
+  if (!snapshot.nets || !snapshot.traces) return violations;
+
+  // Build net name → current constraint map
+  const netCurrentMa = new Map<string, number>();
+  const netWidthConstraint = new Map<string, number>();
+  for (const net of snapshot.nets) {
+    if (net.current_ma) netCurrentMa.set(net.name, net.current_ma);
+    if (net.width_nm) netWidthConstraint.set(net.name, net.width_nm);
+  }
+
+  for (const trace of snapshot.traces) {
+    const currentMa = netCurrentMa.get(trace.net_name);
+    if (!currentMa) continue;
+
+    const minWidthNm = ipc2221MinWidthNm(currentMa);
+    const traceWidthNm = Math.round(trace.width);
+
+    if (traceWidthNm < minWidthNm) {
+      // Find trace midpoint for violation marker
+      const midSeg = trace.segments[Math.floor(trace.segments.length / 2)];
+      const mx = (midSeg.start_x + midSeg.end_x) / 2;
+      const my = (midSeg.start_y + midSeg.end_y) / 2;
+
+      const traceWidthMm = (traceWidthNm / 1e6).toFixed(2);
+      const minWidthMm = (minWidthNm / 1e6).toFixed(2);
+      const currentStr = currentMa >= 1000 ? `${(currentMa / 1000).toFixed(1)}A` : `${currentMa}mA`;
+
+      violations.push({
+        kind: 'trace-width-current',
+        x_nm: Math.round(mx),
+        y_nm: Math.round(my),
+        message: `Trace ${trace.net_name}: width ${traceWidthMm}mm too thin for ${currentStr} — IPC-2221 recommends ≥${minWidthMm}mm`,
+      });
+    }
+  }
+
+  return violations;
+}
+
 function parseSource(source: string): { snapshot: BoardSnapshot; errors: string[] } {
   const errors: string[] = [];
   const lines = source.split('\n');
@@ -464,12 +541,21 @@ function parseSource(source: string): { snapshot: BoardSnapshot; errors: string[
   let currentBoard: BoardInfo | null = null;
   const components: ComponentInfo[] = [];
   const nets: Map<string, NetInfo> = new Map();
+  const traces: TraceInfo[] = [];
+  const vias: ViaInfo[] = [];
   let currentComponent: Partial<ComponentInfo> | null = null;
-  let currentNet: { name: string; pins: string[] } | null = null;
+  let currentNet: { name: string; pins: string[]; constraints: { width_nm?: number; clearance_nm?: number; current_ma?: number } } | null = null;
+  let currentTrace: { netName: string; layer: string; width: number; locked: boolean; segments: TraceSegmentInfo[] } | null = null;
+  let currentFootprint: { name: string; pads: PadInfo[] } | null = null;
+  const customFootprints = new Map<string, PadInfo[]>();
   let braceDepth = 0;
   let inBoard = false;
   let inComponent = false;
   let inNet = false;
+  let inTrace = false;
+  let inFootprint = false;
+  let inZone = false; // skip zone/keepout blocks gracefully
+  let traceIdCounter = 200_000;
 
   for (let lineNum = 0; lineNum < lines.length; lineNum++) {
     const line = lines[lineNum].trim();
@@ -539,10 +625,50 @@ function parseSource(source: string): { snapshot: BoardSnapshot; errors: string[
     }
 
     // Parse net definition (with optional constraints in square brackets)
-    const netMatch = line.match(/^net\s+(\w+)\s*(?:\[.*?\])?\s*{?$/);
+    const netMatch = line.match(/^net\s+(\w+)\s*(\[.*?\])?\s*{?$/);
     if (netMatch) {
-      currentNet = { name: netMatch[1], pins: [] };
+      const netConstraints: { width_nm?: number; clearance_nm?: number; current_ma?: number } = {};
+      if (netMatch[2]) {
+        const block = netMatch[2];
+        const wm = block.match(/width\s+(\d+(?:\.\d+)?)(mm|mil|nm)/);
+        if (wm) netConstraints.width_nm = parseUnit(parseFloat(wm[1]), wm[2]);
+        const cm = block.match(/clearance\s+(\d+(?:\.\d+)?)(mm|mil|nm)/);
+        if (cm) netConstraints.clearance_nm = parseUnit(parseFloat(cm[1]), cm[2]);
+        const curMa = block.match(/current\s+(\d+(?:\.\d+)?)(mA|A)/);
+        if (curMa) {
+          netConstraints.current_ma = curMa[2] === 'A'
+            ? parseFloat(curMa[1]) * 1000
+            : parseFloat(curMa[1]);
+        }
+      }
+      currentNet = { name: netMatch[1], pins: [], constraints: netConstraints };
       inNet = true;
+      braceDepth += openBraces;
+      continue;
+    }
+
+    // Parse trace definition: trace NET_NAME { ... }
+    const traceMatch = line.match(/^trace\s+(\w+)\s*{?$/);
+    if (traceMatch) {
+      currentTrace = { netName: traceMatch[1], layer: 'Top', width: 200_000, locked: false, segments: [] };
+      inTrace = true;
+      braceDepth += openBraces;
+      continue;
+    }
+
+    // Parse footprint definition: footprint NAME { ... }
+    const fpMatch = line.match(/^footprint\s+(\w+)\s*{?$/);
+    if (fpMatch) {
+      currentFootprint = { name: fpMatch[1], pads: [] };
+      inFootprint = true;
+      braceDepth += openBraces;
+      continue;
+    }
+
+    // Parse zone/keepout (skip gracefully — renderer doesn't support yet)
+    const zoneMatch = line.match(/^(?:zone|keepout)\s+(\w+)\s*{?$/);
+    if (zoneMatch) {
+      inZone = true;
       braceDepth += openBraces;
       continue;
     }
@@ -566,7 +692,7 @@ function parseSource(source: string): { snapshot: BoardSnapshot; errors: string[
       if (valueMatch) {
         currentComponent.value = valueMatch[1];
       }
-      const atMatch = line.match(/^at\s+(\d+(?:\.\d+)?)(mm|mil|inch),\s*(\d+(?:\.\d+)?)(mm|mil|inch)(?:\s+rotate\s+(\d+(?:\.\d+)?))?$/);
+      const atMatch = line.match(/^at\s+(-?\d+(?:\.\d+)?)(mm|mil|inch),\s*(-?\d+(?:\.\d+)?)(mm|mil|inch)(?:\s+rotate\s+(\d+(?:\.\d+)?))?$/);
       if (atMatch) {
         currentComponent.x_nm = parseUnit(parseFloat(atMatch[1]), atMatch[2]);
         currentComponent.y_nm = parseUnit(parseFloat(atMatch[3]), atMatch[4]);
@@ -574,8 +700,12 @@ function parseSource(source: string): { snapshot: BoardSnapshot; errors: string[
           currentComponent.rotation_mdeg = Math.round(parseFloat(atMatch[5]) * 1000);
         }
       }
-      // Parse lcsc attribute — recognized but stored only for reference.
-      // The actual footprint/3D data is pre-fetched and registered before parsing.
+      // Parse standalone rotate property
+      const rotateMatch = line.match(/^rotate\s+(\d+(?:\.\d+)?)(?:\s*(?:deg|degrees))?$/);
+      if (rotateMatch) {
+        currentComponent.rotation_mdeg = Math.round(parseFloat(rotateMatch[1]) * 1000);
+      }
+      // Parse lcsc attribute
       const lcscMatch = line.match(/^lcsc\s+"([^"]*)"$/);
       if (lcscMatch) {
         // Store LCSC ID in metadata (could be used for BOM export)
@@ -588,6 +718,76 @@ function parseSource(source: string): { snapshot: BoardSnapshot; errors: string[
       const pinMatch = line.match(/^(\w+)\.(\w+)/);
       if (pinMatch) {
         currentNet.pins.push(`${pinMatch[1]}.${pinMatch[2]}`);
+      }
+    }
+
+    // Parse footprint properties (pad definitions)
+    if (inFootprint && currentFootprint) {
+      // pad 1 rect at -2.54mm, 0mm size 1.5mm x 2mm [drill 1mm]
+      const padMatch = line.match(/^pad\s+(\w+)\s+(rect|circle|roundrect|oblong)\s+at\s+(-?\d+(?:\.\d+)?)(mm|mil|nm),\s*(-?\d+(?:\.\d+)?)(mm|mil|nm)\s+size\s+(-?\d+(?:\.\d+)?)(mm|mil|nm)\s+x\s+(-?\d+(?:\.\d+)?)(mm|mil|nm)(?:\s+drill\s+(-?\d+(?:\.\d+)?)(mm|mil|nm))?$/);
+      if (padMatch) {
+        const drillNm = padMatch[11] ? parseUnit(parseFloat(padMatch[11]), padMatch[12]) : null;
+        currentFootprint.pads.push({
+          number: padMatch[1],
+          shape: padMatch[2],
+          x_nm: parseUnit(parseFloat(padMatch[3]), padMatch[4]),
+          y_nm: parseUnit(parseFloat(padMatch[5]), padMatch[6]),
+          width_nm: parseUnit(parseFloat(padMatch[7]), padMatch[8]),
+          height_nm: parseUnit(parseFloat(padMatch[9]), padMatch[10]),
+          layer_mask: drillNm ? 3 : 1, // THT pads on both layers, SMD on top only
+          drill_nm: drillNm,
+        });
+      }
+    }
+
+    // Parse trace properties
+    if (inTrace && currentTrace) {
+      const layerMatch = line.match(/^layer\s+(Top|Bottom|Inner\d+)$/);
+      if (layerMatch) {
+        currentTrace.layer = layerMatch[1];
+      }
+      const widthMatch = line.match(/^width\s+(-?\d+(?:\.\d+)?)(mm|mil|nm)$/);
+      if (widthMatch) {
+        currentTrace.width = parseUnit(parseFloat(widthMatch[1]), widthMatch[2]);
+      }
+      if (line === 'locked') {
+        currentTrace.locked = true;
+      }
+      // Parse path: path X1mm,Y1mm -> X2mm,Y2mm -> ...
+      const pathMatch = line.match(/^path\s+(.+)$/);
+      if (pathMatch) {
+        const pointStrs = pathMatch[1].split('->').map(s => s.trim());
+        const points: { x: number; y: number }[] = [];
+        for (const ps of pointStrs) {
+          const coordMatch = ps.match(/^(-?\d+(?:\.\d+)?)(mm|mil|nm),\s*(-?\d+(?:\.\d+)?)(mm|mil|nm)$/);
+          if (coordMatch) {
+            points.push({
+              x: parseUnit(parseFloat(coordMatch[1]), coordMatch[2]),
+              y: parseUnit(parseFloat(coordMatch[3]), coordMatch[4]),
+            });
+          }
+        }
+        // Convert consecutive points to segments
+        for (let i = 0; i < points.length - 1; i++) {
+          currentTrace.segments.push({
+            start_x: points[i].x,
+            start_y: points[i].y,
+            end_x: points[i + 1].x,
+            end_y: points[i + 1].y,
+          });
+        }
+      }
+      // Parse via: via X,Y drill D
+      const viaMatch = line.match(/^via\s+(-?\d+(?:\.\d+)?)(mm|mil|nm),\s*(-?\d+(?:\.\d+)?)(mm|mil|nm)(?:\s+drill\s+(-?\d+(?:\.\d+)?)(mm|mil|nm))?$/);
+      if (viaMatch) {
+        vias.push({
+          id: traceIdCounter++,
+          x: parseUnit(parseFloat(viaMatch[1]), viaMatch[2]),
+          y: parseUnit(parseFloat(viaMatch[3]), viaMatch[4]),
+          drill: viaMatch[5] ? parseUnit(parseFloat(viaMatch[5]), viaMatch[6]) : 300_000,
+          outer_diameter: viaMatch[5] ? parseUnit(parseFloat(viaMatch[5]), viaMatch[6]) * 2 : 600_000,
+          net_name: currentTrace.netName,
+        });
       }
     }
 
@@ -615,9 +815,34 @@ function parseSource(source: string): { snapshot: BoardSnapshot; errors: string[
             name: currentNet.name,
             id: nets.size,
             connections,
+            ...currentNet.constraints,
           });
           currentNet = null;
           inNet = false;
+        }
+        if (inTrace && currentTrace) {
+          if (currentTrace.segments.length > 0) {
+            traces.push({
+              id: traceIdCounter++,
+              segments: currentTrace.segments,
+              width: currentTrace.width,
+              layer: currentTrace.layer,
+              net_name: currentTrace.netName,
+              locked: currentTrace.locked,
+            });
+          }
+          currentTrace = null;
+          inTrace = false;
+        }
+        if (inFootprint && currentFootprint) {
+          if (currentFootprint.pads.length > 0) {
+            customFootprints.set(currentFootprint.name, currentFootprint.pads);
+          }
+          currentFootprint = null;
+          inFootprint = false;
+        }
+        if (inZone) {
+          inZone = false;
         }
         braceDepth = 0;
       }
@@ -626,8 +851,26 @@ function parseSource(source: string): { snapshot: BoardSnapshot; errors: string[
     braceDepth += openBraces;
   }
 
+  // Post-process: fix up components using custom footprints
+  for (const comp of components) {
+    if (comp.pads.length === 0 && customFootprints.has(comp.footprint)) {
+      comp.pads = customFootprints.get(comp.footprint)!;
+      // Recompute body dimensions from pads
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      for (const pad of comp.pads) {
+        const hw = pad.width_nm / 2, hh = pad.height_nm / 2;
+        minX = Math.min(minX, pad.x_nm - hw);
+        minY = Math.min(minY, pad.y_nm - hh);
+        maxX = Math.max(maxX, pad.x_nm + hw);
+        maxY = Math.max(maxY, pad.y_nm + hh);
+      }
+      comp.body_width_nm = maxX - minX;
+      comp.body_height_nm = maxY - minY;
+    }
+  }
+
   return {
-    snapshot: { board, components, nets: Array.from(nets.values()), violations: [], traces: [], vias: [], ratsnest: [] },
+    snapshot: { board, components, nets: Array.from(nets.values()), violations: [], traces, vias, ratsnest: [] },
     errors,
   };
 }
@@ -750,35 +993,30 @@ export function parseSesFile(sesContent: string): { traces: BoardSnapshot['trace
 // ============================================================================
 
 /**
- * Apply parsed routes to a snapshot: replace traces/vias and regenerate
- * star-topology ratsnest for unrouted nets. Used by both WasmPcbEngineAdapter
- * and MockPcbEngine to avoid duplicating the ratsnest logic.
+ * Regenerate star-topology ratsnest for unrouted nets.
+ * Called after load_source and after applying routes.
  */
-function applyRoutesToSnapshot(
-  snapshot: BoardSnapshot,
-  sesContent: string,
-): void {
-  const { traces, vias } = parseSesFile(sesContent);
-
-  snapshot.traces = traces;
-  snapshot.vias = vias;
-
-  // Regenerate ratsnest only for unrouted nets
+function regenerateRatsnest(snapshot: BoardSnapshot): void {
   snapshot.ratsnest = [];
   for (const net of snapshot.nets) {
     if (net.connections.length < 2) continue;
 
-    const hasTraces = traces.some(t => t.net_name === net.name);
+    const hasTraces = snapshot.traces.some(t => t.net_name === net.name);
     if (hasTraces) continue;
 
     const positions: { x: number; y: number }[] = [];
     for (const conn of net.connections) {
       const comp = snapshot.components.find(c => c.refdes === conn.component);
       if (comp) {
+        const rad = ((comp.rotation_mdeg || 0) / 1000) * (Math.PI / 180);
+        const cos = Math.cos(rad);
+        const sin = Math.sin(rad);
         const pad = comp.pads.find(p => p.number === conn.pin);
+        const px = pad?.x_nm ?? 0;
+        const py = pad?.y_nm ?? 0;
         positions.push({
-          x: comp.x_nm + (pad?.x_nm ?? 0),
-          y: comp.y_nm + (pad?.y_nm ?? 0),
+          x: comp.x_nm + (px * cos - py * sin),
+          y: comp.y_nm + (px * sin + py * cos),
         });
       }
     }
@@ -795,6 +1033,19 @@ function applyRoutesToSnapshot(
       }
     }
   }
+}
+
+/**
+ * Apply parsed routes to a snapshot: replace traces/vias and regenerate ratsnest.
+ */
+function applyRoutesToSnapshot(
+  snapshot: BoardSnapshot,
+  sesContent: string,
+): void {
+  const { traces, vias } = parseSesFile(sesContent);
+  snapshot.traces = traces;
+  snapshot.vias = vias;
+  regenerateRatsnest(snapshot);
 }
 
 // ============================================================================
@@ -850,6 +1101,8 @@ function buildTraceSegments(
 class WasmPcbEngineAdapter implements PcbEngine {
   private wasmEngine: WasmPcbEngine;
   private cachedSnapshot: BoardSnapshot | null = null;
+  /** Preserved net constraint data — survives cache invalidation */
+  private cachedNetConstraints: Map<string, { width_nm?: number; clearance_nm?: number; current_ma?: number }> = new Map();
   /** Auto-increment entity ID for JS-fallback trace/via mutations */
   private nextEntityId = 100_000;
 
@@ -861,13 +1114,51 @@ class WasmPcbEngineAdapter implements PcbEngine {
     // Parse in JavaScript
     const { snapshot, errors } = parseSource(source);
 
-    // Cache snapshot (traces/vias/ratsnest will be populated by load_routes)
+    // Generate ratsnest for unrouted nets
+    regenerateRatsnest(snapshot);
+
+    // Cache snapshot + preserve net constraints separately (survives cache invalidation)
     this.cachedSnapshot = snapshot;
+    this.cachedNetConstraints.clear();
+    for (const net of snapshot.nets) {
+      if (net.width_nm || net.clearance_nm || net.current_ma) {
+        this.cachedNetConstraints.set(net.name, {
+          width_nm: net.width_nm,
+          clearance_nm: net.clearance_nm,
+          current_ma: net.current_ma,
+        });
+      }
+    }
 
     // Store snapshot and load into WASM engine for queries
     const wasmError = this.wasmEngine.load_snapshot(snapshot);
     if (wasmError) {
       errors.push(wasmError);
+    }
+
+    // Replay parsed traces into WASM engine so export_traces_as_dsl() can find them
+    // Update snapshot trace IDs to match WASM-assigned IDs
+    if (snapshot.traces.length > 0 && typeof this.wasmEngine.add_trace_json === 'function') {
+      for (const trace of snapshot.traces) {
+        const flatSegs: number[] = [];
+        for (const seg of trace.segments) {
+          flatSegs.push(
+            Math.round(seg.start_x), Math.round(seg.start_y),
+            Math.round(seg.end_x), Math.round(seg.end_y),
+          );
+        }
+        const wasmId = this.wasmEngine.add_trace_json(
+          trace.net_name,
+          trace.layer,
+          BigInt(Math.round(trace.width)),
+          JSON.stringify(flatSegs),
+        );
+        // Update the trace ID in snapshot to match WASM entity ID
+        if (wasmId !== 0xFFFFFFFF) {
+          trace.id = wasmId;
+        }
+      }
+      console.log(`[TracePersist] Replayed ${snapshot.traces.length} traces into WASM engine`);
     }
 
     return errors.join('\n');
@@ -886,14 +1177,33 @@ class WasmPcbEngineAdapter implements PcbEngine {
       // Get DRC violations from WASM (computed in Rust)
       const wasmSnapshot = sanitizeSnapshot(this.wasmEngine.get_snapshot());
       const wasmViolations = wasmSnapshot.violations || [];
-      // Add JS-side silk clearance violations (silk data only exists in JS)
+      // Add JS-side violations (silk data + trace current check only exist in JS)
       const silkViolations = checkSilkClearance(this.cachedSnapshot, Number(this.get_min_clearance_nm()));
+      const currentViolations = checkTraceCurrentViolations(this.cachedSnapshot);
       return {
         ...this.cachedSnapshot,
-        violations: [...wasmViolations, ...silkViolations],
+        violations: [...wasmViolations, ...silkViolations, ...currentViolations],
       };
     }
-    return sanitizeSnapshot(this.wasmEngine.get_snapshot());
+    // Cache was invalidated — get fresh snapshot from WASM and restore net constraints
+    const wasmSnap = sanitizeSnapshot(this.wasmEngine.get_snapshot());
+    if (this.cachedNetConstraints.size > 0 && wasmSnap.nets) {
+      for (const net of wasmSnap.nets) {
+        const c = this.cachedNetConstraints.get(net.name);
+        if (c) {
+          net.width_nm = c.width_nm;
+          net.clearance_nm = c.clearance_nm;
+          net.current_ma = c.current_ma;
+        }
+      }
+    }
+    // Also run JS-side DRC (current violations)
+    const silkV = checkSilkClearance(wasmSnap, Number(this.get_min_clearance_nm()));
+    const currentV = checkTraceCurrentViolations(wasmSnap);
+    if (silkV.length > 0 || currentV.length > 0) {
+      wasmSnap.violations = [...(wasmSnap.violations || []), ...silkV, ...currentV];
+    }
+    return wasmSnap;
   }
 
   query_point(x_nm: number, y_nm: number): string[] {
@@ -925,21 +1235,26 @@ class WasmPcbEngineAdapter implements PcbEngine {
   }
 
   remove_trace(trace_id: number): boolean {
-    // Try WASM method first; fall back to JS-side snapshot mutation
+    let removed = false;
+
+    // Try WASM method
     if (typeof this.wasmEngine.remove_trace === 'function') {
-      const removed = this.wasmEngine.remove_trace(trace_id);
+      removed = this.wasmEngine.remove_trace(trace_id);
       if (removed) {
         this.cachedSnapshot = null;
       }
-      return removed;
     }
 
-    // JS fallback
-    if (!this.cachedSnapshot) return false;
-    const idx = this.cachedSnapshot.traces.findIndex(t => t.id === trace_id);
-    if (idx === -1) return false;
-    this.cachedSnapshot.traces.splice(idx, 1);
-    return true;
+    // Also try JS-side snapshot (trace may have a JS-assigned ID not in WASM)
+    if (!removed && this.cachedSnapshot) {
+      const idx = this.cachedSnapshot.traces.findIndex(t => t.id === trace_id);
+      if (idx !== -1) {
+        this.cachedSnapshot.traces.splice(idx, 1);
+        removed = true;
+      }
+    }
+
+    return removed;
   }
 
   get_trace_at_point(x_nm: number, y_nm: number, tolerance_nm: number): number {
@@ -958,6 +1273,16 @@ class WasmPcbEngineAdapter implements PcbEngine {
       return this.wasmEngine.trace_count();
     }
     return this.cachedSnapshot?.traces?.length ?? 0;
+  }
+
+  export_traces_as_dsl(): string {
+    if (typeof this.wasmEngine.export_traces_as_dsl === 'function') {
+      const result = this.wasmEngine.export_traces_as_dsl();
+      console.log(`[WASM] export_traces_as_dsl: ${result.length} chars`);
+      return result;
+    }
+    console.warn('[WASM] export_traces_as_dsl NOT available in WASM module — using fallback');
+    return '';
   }
 
   get_min_clearance_nm(): number {
@@ -1025,6 +1350,7 @@ class MockPcbEngine implements PcbEngine {
 
   load_source(source: string): string {
     const { snapshot, errors } = parseSource(source);
+    regenerateRatsnest(snapshot);
     this.snapshot = snapshot;
     return errors.join('\n');
   }
@@ -1147,6 +1473,10 @@ class MockPcbEngine implements PcbEngine {
       }
     }
 
+    // Add IPC-2221 current violations
+    const currentViolations = checkTraceCurrentViolations(this.snapshot);
+    violations.push(...currentViolations);
+
     this.snapshot.violations = violations;
     console.log(`[MockEngine] run_drc_incremental: ${violations.length} violations`);
     return violations.length;
@@ -1154,6 +1484,10 @@ class MockPcbEngine implements PcbEngine {
 
   trace_count(): number {
     return this.snapshot.traces.length;
+  }
+
+  export_traces_as_dsl(): string {
+    return ''; // Mock engine: no export
   }
 
   get_min_clearance_nm(): number {
