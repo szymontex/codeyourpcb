@@ -20,10 +20,10 @@ component LED1 led "0805" { value "RED"; at 55mm, 20mm }
 net VCC [width 0.5mm  current 2A] { J1.1; U1.8; U1.4; R1.1 }
 net GND { J1.2; U1.1; C1.2; LED1.K }
 
-// Routed traces are saved in the file — deterministic, git-friendly
+// Routed traces saved in the file — survives reload, diffs cleanly
 trace VCC {
     layer Top
-    width 0.500000mm
+    width 0.5mm
     path 5mm,20mm -> 15mm,20mm -> 28mm,20mm -> 35mm,30mm
 }
 ```
@@ -63,7 +63,7 @@ net VCC [width 0.5mm  current 2A] { U1.8; U1.4; R1.1 }
 
 trace VCC {
     layer Top
-    width 0.500000mm
+    width 0.5mm
     path 5mm,20mm -> 28mm,20mm -> 35mm,30mm
 }
 ```
@@ -80,34 +80,33 @@ An LLM can generate this, review it, refactor it, and catch mistakes — just li
 
 | Feature | Status |
 |---------|--------|
-| Live preview — save file, board updates instantly | Done |
 | `.cypcb` DSL with Tree-sitter parser | Done |
-| Professional 2D renderer (KiCad-style) | Done |
-| 3D board viewer with KiCad-style copper, solder mask, round trace caps | Done |
+| Live preview — save file, board updates instantly | Done |
+| 2D renderer (KiCad-style) | Done |
+| 3D viewer — extruded copper, solder mask, round trace caps | Done |
 | Interactive trace routing (45° constraint, obstacle dodge) | Done |
-| Trace segment editing (drag segments & corners) | Done |
-| **Trace persistence** — routed traces saved to `.cypcb` file, survive reload | Done |
-| **Bidirectional sync** — edit trace code ↔ board updates in real-time | Done |
-| **Net constraints** — `[width 0.5mm]`, `[current 2A]` per net | Done |
-| **IPC-2221 auto-width** — routing auto-sets trace width from current rating | Done |
-| **DRC: trace width vs current** — warns when trace too thin for current | Done |
-| Design Rule Check (DRC) | Done |
-| Gerber / Excellon / pick-and-place export | Done |
-| Monaco editor with **context-aware completions** and syntax hints | Done |
-| LSP (diagnostics, autocomplete, hover, go-to-definition) | Done |
-| JLCPCB parts search & drag-and-drop placement | Done |
+| Trace segment & corner editing (drag to reshape) | Done |
+| Trace persistence — routed traces saved as `path` blocks, survive reload | Done |
+| Bidirectional sync — edit trace code ↔ board updates in real-time | Done |
+| Net constraints — `[width 0.5mm]`, `[current 2A]` per net | Done |
+| IPC-2221 auto-width from current rating | Done |
+| DRC — clearance, drill, connectivity, trace width vs current | Done |
+| Gerber / Excellon / BOM / pick-and-place export | Done |
+| Monaco editor with context-aware completions | Done |
+| JLCPCB parts search & placement | Done |
 | Custom footprint definitions in DSL | Done |
-| Project manager with templates & thumbnail persistence | Done |
-| Dark / Light theme (WCAG AA) | Done |
-| Web app | Done |
-| Desktop app (Tauri v2, Win/Mac/Linux) | Done |
+| Project manager with templates | Done |
+| Dark / Light theme | Done |
+| Web app (WASM) + Desktop app (Tauri v2) | Done |
 | KiCad component library import | Done |
-| Share URL (viewport state) | Done |
-| Copper pour / ground planes (zone fill with clearance) | Planned |
-| Zone & keepout rendering (2D + 3D) | Planned |
-| Autorouter (fundamental rewrite) | Planned |
+| Copper pour / ground planes | Planned |
+| Module system — reusable circuit blocks, packages | Planned |
+| KiCad interop — import/export `.kicad_pcb` | Planned |
+| Parts engine — auto component picking from JLCPCB/LCSC | Planned |
+| Schematic generation from `.cypcb` | Planned |
+| Autorouter rewrite | Planned |
 | Differential pair routing | Planned |
-| Impedance calculator | Planned |
+| CI/CD — `cypcb check` + `cypcb export` in GitHub Actions | Planned |
 
 <p align="center">
   <img src="docs/images/board-view.png" alt="555 timer blink circuit — board view with routed traces" width="720">
@@ -205,6 +204,18 @@ codeyourpcb/
 
 ---
 
+## Landscape
+
+CodeYourPCB sits in the emerging "PCB as code" space alongside a few other tools:
+
+- **[JITX](https://www.jitx.com/)** — commercial, most mature code-first EDA. Constraint-driven routing, signal integrity, VS Code integration. Proprietary.
+- **[atopile](https://atopile.io/)** — open-source `.ato` language with compiler, reusable modules, component picking. Uses KiCad for layout. MIT.
+- **[tscircuit](https://tscircuit.com/)** — open-source React/TypeScript PCB framework. Very LLM-friendly (TypeScript is natural for models). MIT.
+
+Where CodeYourPCB differs: own rendering engine (no KiCad dependency), runs in browser via WASM, interactive routing built-in, traces persist as readable DSL code. Where it's behind: no module/package system yet, no schematic capture, smaller component library.
+
+---
+
 ## Documentation
 
 - [Getting Started](docs/user-guide/getting-started.md)
@@ -220,20 +231,11 @@ codeyourpcb/
 
 ## Status
 
-This project is **experimental**. The DSL, APIs, and file formats may change between versions.
+Experimental. The DSL and file format may change between versions.
 
-**What works well:**
-- Interactive routing (manual trace drawing, segment/corner editing, 45° constraints)
-- Trace persistence — routed traces are saved as `path` blocks in the `.cypcb` file, survive reload with bit-exact determinism
-- Net constraints with IPC-2221 auto-width and DRC current validation
-- Context-aware Monaco editor with syntax snippets and live bidirectional sync
-- 3D viewer with KiCad-style copper, solder mask, and round trace caps
+The core loop works: write `.cypcb` → see board → route traces → save → reload. Traces are deterministic (bit-exact round-trip). The main gaps are copper pour, module system, and autorouter.
 
-**What's in progress:**
-- Copper pour / zone fill (grammar + ECS exist, renderer not yet)
-- Autorouter (fundamental rewrite needed)
-
-PRs welcome — whether it's a bug fix, new feature, or just a typo.
+PRs welcome.
 
 ---
 
