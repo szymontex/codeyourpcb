@@ -130,6 +130,47 @@ impl PcbEngine {
         serde_json::to_string(&snapshot).unwrap_or_else(|_| "{}".to_string())
     }
 
+    /// Register a footprint the host fetched at runtime (WASM version).
+    ///
+    /// A `.cypcb` file names a package - "LQFP-48" - without describing its
+    /// pads, and for a part that is not in the built-in library the viewer
+    /// fetches the geometry from a supplier after the fact. Registering it here
+    /// puts it in the same library the parser resolves against, so the next
+    /// `load_source` places real copper instead of an empty outline.
+    ///
+    /// This is what lets the engine own parsing. Without it the viewer has to
+    /// keep its own parser purely so it can consult its own footprint registry.
+    ///
+    /// Registrations survive re-parsing: a footprint the design file defines
+    /// itself still wins while it exists, and this one comes back when it goes.
+    ///
+    /// Returns an empty string on success, or the deserialisation error.
+    #[cfg(target_arch = "wasm32")]
+    pub fn register_footprint(&mut self, name: &str, pads_js: wasm_bindgen::JsValue) -> String {
+        match serde_wasm_bindgen::from_value::<Vec<PadInfo>>(pads_js) {
+            Ok(pads) => {
+                self.register_footprint_pads(name, &pads);
+                String::new()
+            }
+            Err(e) => format!("Failed to deserialize pads: {}", e),
+        }
+    }
+
+    /// Register a footprint the host fetched at runtime (native version).
+    ///
+    /// Takes the pads as a JSON array. See the WASM counterpart for why this
+    /// exists.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn register_footprint(&mut self, name: &str, pads_json: &str) -> String {
+        match serde_json::from_str::<Vec<PadInfo>>(pads_json) {
+            Ok(pads) => {
+                self.register_footprint_pads(name, &pads);
+                String::new()
+            }
+            Err(e) => format!("Failed to deserialize pads: {}", e),
+        }
+    }
+
     /// Parse `.cypcb` source and load it into the board model.
     ///
     /// Available wherever the tree-sitter parser is compiled in, which includes
@@ -1255,6 +1296,13 @@ impl PcbEngine {
 
     /// Create a Footprint from PadInfo data.
     #[allow(dead_code)] // Reserved for snapshot-based rendering path
+    /// Put a host-supplied footprint into the library the parser resolves
+    /// against.
+    fn register_footprint_pads(&mut self, name: &str, pads: &[PadInfo]) {
+        let footprint = self.footprint_from_pads(name, pads);
+        self.footprint_lib.register(footprint);
+    }
+
     fn footprint_from_pads(
         &self,
         name: &str,
@@ -1809,6 +1857,71 @@ mod tests {
     fn test_engine_new() {
         let engine = PcbEngine::new();
         assert!(engine.source.is_empty());
+    }
+
+    #[test]
+    fn a_fetched_footprint_reaches_the_parser() {
+        // A package the built-in library has never heard of, with geometry that
+        // only exists because the host went and got it.
+        let pads = r#"[
+            {"number":"1","x_nm":-500000,"y_nm":0,"width_nm":300000,
+             "height_nm":400000,"shape":"rect","layer_mask":1,"drill_nm":null},
+            {"number":"2","x_nm":500000,"y_nm":0,"width_nm":300000,
+             "height_nm":400000,"shape":"rect","layer_mask":1,"drill_nm":null}
+        ]"#;
+
+        let source = "version 1\n\nboard b {\n    size 20mm x 20mm\n    layers 2\n}\n\n\
+                      component U1 ic \"XKCD-2\" {\n    value \"part\"\n    at 10mm, 10mm\n}\n";
+
+        let mut without = PcbEngine::new();
+        assert!(
+            without.load_source(source).contains("unknown footprint"),
+            "the engine cannot place a package it has never been given"
+        );
+
+        let mut with = PcbEngine::new();
+        assert_eq!(with.register_footprint("XKCD-2", pads), "");
+        assert_eq!(
+            with.load_source(source),
+            "",
+            "the same source parses cleanly once the footprint has been handed over"
+        );
+
+        let after = with.get_snapshot();
+        assert!(
+            after.contains("\"number\":\"1\"") && after.contains("\"number\":\"2\""),
+            "the fetched pads must reach the snapshot: {after}"
+        );
+    }
+
+    #[test]
+    fn a_fetched_footprint_survives_reparsing() {
+        let pads = r#"[{"number":"1","x_nm":0,"y_nm":0,"width_nm":300000,
+                        "height_nm":300000,"shape":"rect","layer_mask":1,"drill_nm":null}]"#;
+        let source = "version 1\n\nboard b {\n    size 20mm x 20mm\n    layers 2\n}\n\n\
+                      component U1 ic \"XKCD-1\" {\n    value \"part\"\n    at 10mm, 10mm\n}\n";
+
+        let mut engine = PcbEngine::new();
+        assert_eq!(engine.register_footprint("XKCD-1", pads), "");
+
+        // Every keystroke in the editor re-parses. The fetch happened once.
+        for _ in 0..3 {
+            assert_eq!(engine.load_source(source), "");
+            assert!(
+                engine.get_snapshot().contains("\"number\":\"1\""),
+                "re-parsing must not drop a footprint the host registered"
+            );
+        }
+    }
+
+    #[test]
+    fn malformed_pads_are_reported_not_swallowed() {
+        let mut engine = PcbEngine::new();
+        let error = engine.register_footprint("BROKEN", "not json");
+        assert!(
+            error.starts_with("Failed to deserialize pads"),
+            "got {error}"
+        );
     }
 
     #[test]
