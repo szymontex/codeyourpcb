@@ -343,10 +343,18 @@ pub fn segment_closest(p1: [i64; 2], p2: [i64; 2], p3: [i64; 2], p4: [i64; 2]) -
     let mut t: f64;
 
     if a == 0 {
-        // First segment degenerates to a point
-        // Minimize |P1 - P3 - t·D2|²: t = f/e
+        // First segment degenerates to a point.
+        //
+        // Minimising |P1 - P3 - t·D2|² over t gives t = -(D2·r)/e, with
+        // r = P3 - P1. This read `t = f/e` and dropped the sign, which walks
+        // the closest point to the wrong end of the segment. The general
+        // branch below computes `t = (b·s - f)/e`, which is -f/e at s = 0, so
+        // the two disagreed. Nothing exercised it until a rule started asking
+        // for point-to-segment distances - `point_to_segment_distance` was
+        // marked dead code - and the silkscreen rule was under-reporting
+        // because of it.
         s = 0.0;
-        t = (f as f64 / e as f64).clamp(0.0, 1.0);
+        t = (-(f as f64) / e as f64).clamp(0.0, 1.0);
     } else if e == 0 {
         // Second segment degenerates to a point
         // Minimize |P1 + s·D1 - P3|²: s = c/a
@@ -556,6 +564,28 @@ mod tests {
 
         assert_eq!(violations.len(), 1, "Should have one violation");
         assert_eq!(violations[0].kind, ViolationKind::Clearance);
+    }
+
+    #[test]
+    fn point_to_segment_measures_the_perpendicular() {
+        // A point beside the middle of a vertical segment. The answer is the
+        // perpendicular distance, not the distance to whichever end the sign
+        // of a dot product happened to pick.
+        let point = [1_000_000i64, 5_000_000i64];
+        let start = [0i64, 0i64];
+        let end = [0i64, 10_000_000i64];
+
+        assert_eq!(segment_distance(point, point, start, end), 1_000_000);
+
+        // Beyond the end, the nearest point is the endpoint.
+        let beyond = [0i64, 14_000_000i64];
+        assert_eq!(segment_distance(beyond, beyond, start, end), 4_000_000);
+
+        // Symmetric in the argument order.
+        assert_eq!(
+            segment_distance(start, end, point, point),
+            segment_distance(point, point, start, end)
+        );
     }
 
     #[test]

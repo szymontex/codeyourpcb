@@ -357,3 +357,23 @@ mod tests {
         assert!(!refdes_list.iter().any(|m| m.contains("R2")));
     }
 }
+
+/// Rotate a point about the origin by `degrees`, clockwise-positive to match
+/// the `Rotation` component.
+///
+/// Placement geometry needs this in three rules; it lives here so they cannot
+/// drift apart.
+pub(crate) fn rotate_point(p: cypcb_core::Point, degrees: f64) -> cypcb_core::Point {
+    use cypcb_core::{Nm, Point};
+    if degrees.abs() < 0.001 {
+        return p;
+    }
+    let rad = degrees.to_radians();
+    let (sin, cos) = rad.sin_cos();
+    let x = p.x.raw() as f64;
+    let y = p.y.raw() as f64;
+    Point::new(
+        Nm((x * cos - y * sin).round() as i64),
+        Nm((x * sin + y * cos).round() as i64),
+    )
+}

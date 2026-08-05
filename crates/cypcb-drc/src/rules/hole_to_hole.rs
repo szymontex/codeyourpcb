@@ -11,7 +11,7 @@ use cypcb_world::BoardWorld;
 use crate::presets::DesignRules;
 use crate::violation::DrcViolation;
 
-use super::DrcRule;
+use super::{rotate_point, DrcRule};
 
 /// Rule for checking minimum hole-to-hole clearance.
 pub struct HoleToHoleRule;
@@ -111,19 +111,4 @@ impl DrcRule for HoleToHoleRule {
 
         violations
     }
-}
-
-/// Rotate a pad offset around the component origin.
-fn rotate_point(p: Point, degrees: f64) -> Point {
-    if degrees.abs() < 0.001 {
-        return p;
-    }
-    let rad = degrees.to_radians();
-    let (sin, cos) = rad.sin_cos();
-    let x = p.x.raw() as f64;
-    let y = p.y.raw() as f64;
-    Point::new(
-        Nm((x * cos - y * sin).round() as i64),
-        Nm((x * sin + y * cos).round() as i64),
-    )
 }
