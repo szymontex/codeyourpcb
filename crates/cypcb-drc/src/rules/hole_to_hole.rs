@@ -6,7 +6,6 @@
 use cypcb_core::{Nm, Point};
 use cypcb_world::components::trace::Via;
 use cypcb_world::components::{FootprintRef, Position, Rotation};
-use cypcb_world::footprint::FootprintLibrary;
 use cypcb_world::BoardWorld;
 
 use crate::presets::DesignRules;
@@ -52,7 +51,9 @@ impl DrcRule for HoleToHoleRule {
                 .collect()
         };
 
-        let lib = FootprintLibrary::new();
+        // The board carries the table it was synced with, including any footprint
+        // the source defined inline; building a fresh one here would see built-ins only.
+        let lib = world.footprints();
         for (entity, footprint_ref, position, rotation) in components {
             let Some(footprint) = lib.get(footprint_ref.as_str()) else {
                 continue; // Unknown footprint - sync already reported it

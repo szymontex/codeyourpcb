@@ -154,6 +154,53 @@ fn test_export_board_with_custom_footprint() {
 }
 
 #[test]
+fn test_check_sees_drills_of_inline_footprints() {
+    // A footprint defined in the source, with a drill under every preset's
+    // minimum. DRC rules used to build their own built-in-only library, so a
+    // board like this passed the drill check by being invisible.
+    let dir = std::env::temp_dir().join("cypcb-inline-footprint-drc");
+    std::fs::create_dir_all(&dir).expect("temp dir");
+    let board = dir.join("tiny-drill.cypcb");
+    std::fs::write(
+        &board,
+        r#"version 1
+
+footprint TINY_DRILL {
+    pad 1 circle at 0mm, 0mm size 1mm x 1mm drill 0.1mm
+}
+
+board tiny { size 10mm x 10mm }
+
+component J1 connector "TINY_DRILL" {
+    at 5mm, 5mm
+}
+"#,
+    )
+    .expect("write board");
+
+    let output = Command::new(cypcb_binary())
+        .arg("check")
+        .arg(&board)
+        .output()
+        .expect("Failed to execute cypcb check");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        !output.status.success(),
+        "a 0.1mm drill must fail the check, got: {}{}",
+        String::from_utf8_lossy(&output.stdout),
+        stderr
+    );
+    assert!(
+        stderr.contains("drill-size"),
+        "expected a drill-size violation, got: {}",
+        stderr
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn test_check_unknown_preset_fails() {
     let example = examples_dir().join("blink.cypcb");
     let output = Command::new(cypcb_binary())

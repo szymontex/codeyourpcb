@@ -9,7 +9,6 @@
 
 use cypcb_core::{Nm, Point};
 use cypcb_world::components::{FootprintRef, Position, RefDes};
-use cypcb_world::footprint::FootprintLibrary;
 use cypcb_world::BoardWorld;
 
 use super::DrcRule;
@@ -45,7 +44,6 @@ impl DrcRule for AnnularRingRule {
     fn check(&self, world: &mut BoardWorld, rules: &DesignRules) -> Vec<DrcViolation> {
         let mut violations = Vec::new();
         let min_ring = rules.min_annular_ring;
-        let lib = FootprintLibrary::new();
 
         // Collect components first to avoid borrow issues with ECS
         let components: Vec<_> = {
@@ -58,6 +56,9 @@ impl DrcRule for AnnularRingRule {
                 .collect()
         };
 
+        // The board carries the table it was synced with, including any footprint
+        // the source defined inline; building a fresh one here would see built-ins only.
+        let lib = world.footprints();
         for (entity, refdes, footprint_ref, position) in components {
             let Some(footprint) = lib.get(footprint_ref.as_str()) else {
                 continue; // Unknown footprint — skip

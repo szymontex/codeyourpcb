@@ -2,6 +2,8 @@
 
 use std::collections::HashMap;
 
+use bevy_ecs::prelude::Resource;
+
 use cypcb_core::{Nm, Point, Rect};
 
 use crate::components::{Layer, PadShape};
@@ -135,7 +137,10 @@ impl Footprint {
 ///     println!("{}: {} pads", name, fp.pads.len());
 /// }
 /// ```
-#[derive(Debug, Default, Clone)]
+/// Stored in the board world as a resource so every consumer - DRC rules,
+/// export, the renderer - resolves pads through the same table, including the
+/// footprints a design defines inline.
+#[derive(Debug, Default, Clone, Resource)]
 pub struct FootprintLibrary {
     footprints: HashMap<String, Footprint>,
     /// Footprints registered from a design source, mapped to whatever entry they

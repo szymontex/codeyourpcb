@@ -98,6 +98,7 @@ impl BoardWorld {
         let mut world = World::new();
         world.insert_resource(SpatialIndex::new());
         world.insert_resource(NetRegistry::new());
+        world.insert_resource(crate::footprint::FootprintLibrary::new());
         BoardWorld {
             world,
             board_entity: None,
@@ -705,7 +706,21 @@ impl BoardWorld {
         self.world.clear_entities();
         self.world.insert_resource(SpatialIndex::new());
         self.world.insert_resource(NetRegistry::new());
+        // The footprint table is not entity state; a re-sync refreshes it.
         self.board_entity = None;
+    }
+
+    /// The footprint table this board resolves pads through.
+    ///
+    /// Populated by [`sync_ast_to_world`](crate::sync_ast_to_world), so it holds
+    /// the built-ins plus whatever the source defined inline.
+    pub fn footprints(&self) -> &crate::footprint::FootprintLibrary {
+        self.world.resource::<crate::footprint::FootprintLibrary>()
+    }
+
+    /// Replace the footprint table.
+    pub fn set_footprints(&mut self, library: crate::footprint::FootprintLibrary) {
+        self.world.insert_resource(library);
     }
 }
 

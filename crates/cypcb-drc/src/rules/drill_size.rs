@@ -4,7 +4,6 @@
 //! specified by the manufacturer's design rules.
 
 use cypcb_world::components::{FootprintRef, Position, RefDes};
-use cypcb_world::footprint::FootprintLibrary;
 use cypcb_world::BoardWorld;
 
 use super::DrcRule;
@@ -40,7 +39,6 @@ impl DrcRule for MinDrillSizeRule {
     fn check(&self, world: &mut BoardWorld, rules: &DesignRules) -> Vec<DrcViolation> {
         let mut violations = Vec::new();
         let min_drill = rules.min_drill_size;
-        let lib = FootprintLibrary::new();
 
         // Collect components first to avoid borrow issues
         let components: Vec<_> = {
@@ -53,6 +51,9 @@ impl DrcRule for MinDrillSizeRule {
                 .collect()
         };
 
+        // The board carries the table it was synced with, including any footprint
+        // the source defined inline; building a fresh one here would see built-ins only.
+        let lib = world.footprints();
         for (entity, refdes, footprint_ref, position) in components {
             // Look up footprint in library
             let Some(footprint) = lib.get(footprint_ref.as_str()) else {

@@ -380,6 +380,10 @@ pub fn sync_ast_to_world(
         }
     }
 
+    // Publish the effective table on the world so consumers that only get a
+    // &BoardWorld - every DRC rule - resolve the same footprints this sync used.
+    world.set_footprints(footprint_lib.clone());
+
     // Rebuild spatial index after all entities are added (including traces/vias)
     world.rebuild_spatial_index_with_traces(|name| {
         footprint_lib

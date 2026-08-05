@@ -4,7 +4,6 @@
 //! incomplete designs before manufacturing.
 
 use cypcb_world::components::{FootprintRef, NetConnections, Position, RefDes};
-use cypcb_world::footprint::FootprintLibrary;
 use cypcb_world::BoardWorld;
 
 use super::DrcRule;
@@ -41,7 +40,6 @@ impl DrcRule for UnconnectedPinRule {
 
     fn check(&self, world: &mut BoardWorld, _rules: &DesignRules) -> Vec<DrcViolation> {
         let mut violations = Vec::new();
-        let lib = FootprintLibrary::new();
 
         // Collect components first to avoid borrow issues
         let components: Vec<_> = {
@@ -59,6 +57,9 @@ impl DrcRule for UnconnectedPinRule {
                 .collect()
         };
 
+        // The board carries the table it was synced with, including any footprint
+        // the source defined inline; building a fresh one here would see built-ins only.
+        let lib = world.footprints();
         for (entity, refdes, footprint_ref, nets, position) in components {
             // Look up footprint in library
             let Some(footprint) = lib.get(footprint_ref.as_str()) else {
