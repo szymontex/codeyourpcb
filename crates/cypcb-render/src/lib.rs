@@ -60,6 +60,12 @@ pub struct PcbEngine {
     /// Cached net constraints from last parse (net_name → constraints).
     #[cfg(feature = "native")]
     net_constraints: std::collections::HashMap<String, NetConstraintCache>,
+    /// Package name -> 3D model identifier, supplied by the host.
+    ///
+    /// The same story as a fetched footprint: nothing in a `.cypcb` file says
+    /// which 3D model a package has, and the viewer learns it from a supplier
+    /// at runtime.
+    model_3d: std::collections::HashMap<String, String>,
 }
 
 /// Cached net constraint data extracted during parsing.
@@ -88,6 +94,7 @@ impl PcbEngine {
             drc_duration_ms: 0,
             #[cfg(feature = "native")]
             net_constraints: std::collections::HashMap::new(),
+            model_3d: std::collections::HashMap::new(),
         }
     }
 
@@ -169,6 +176,17 @@ impl PcbEngine {
             }
             Err(e) => format!("Failed to deserialize pads: {}", e),
         }
+    }
+
+    /// Record which 3D model a package uses.
+    ///
+    /// Takes plain strings, so the same method serves both targets. Like
+    /// [`register_footprint`](Self::register_footprint), this exists because
+    /// the fact arrives from a supplier after the source was written, and the
+    /// engine has to own it for the viewer to stop keeping its own copy of the
+    /// board model.
+    pub fn register_3d_model(&mut self, package: &str, model: &str) {
+        self.model_3d.insert(package.to_string(), model.to_string());
     }
 
     /// Parse `.cypcb` source and load it into the board model.
@@ -1495,6 +1513,12 @@ impl PcbEngine {
             });
         }
 
+        // Attach 3D models. Done after the loop above, whose ECS query holds a
+        // borrow of the world for its whole body.
+        for component in &mut components {
+            component.model_3d = self.model_3d.get(&component.footprint).cloned();
+        }
+
         // Build net info - collect nets first to avoid borrow issues
         let mut net_list: Vec<(NetId, String)> = Vec::new();
         for pair in self.world.nets() {
@@ -1912,6 +1936,60 @@ mod tests {
                 "re-parsing must not drop a footprint the host registered"
             );
         }
+    }
+
+    #[test]
+    fn a_registered_3d_model_reaches_the_snapshot() {
+        let source = "version 1\n\nboard b {\n    size 20mm x 20mm\n    layers 2\n}\n\n\
+                      component U1 ic \"SOIC-8\" {\n    value \"part\"\n    at 10mm, 10mm\n}\n";
+
+        let mut engine = PcbEngine::new();
+        assert_eq!(engine.load_source(source), "");
+        assert!(
+            engine.get_snapshot().contains("\"model_3d\":null"),
+            "nothing in the source names a 3D model"
+        );
+
+        engine.register_3d_model("SOIC-8", "abc123");
+        assert_eq!(engine.load_source(source), "");
+        assert!(
+            engine.get_snapshot().contains("\"model_3d\":\"abc123\""),
+            "the registered model must reach the component it belongs to"
+        );
+
+        // A package nobody registered stays empty rather than borrowing one.
+        engine.register_3d_model("QFN-24", "def456");
+        assert_eq!(engine.load_source(source), "");
+        let snapshot = engine.get_snapshot();
+        assert!(snapshot.contains("\"model_3d\":\"abc123\""));
+        assert!(!snapshot.contains("def456"));
+    }
+
+    #[test]
+    fn load_source_produces_a_snapshot_with_traces() {
+        // The viewer keeps its own board model because the engine's snapshot
+        // "would have empty traces". That is true of the load_snapshot path,
+        // where JavaScript only ever hands over components and the board. It
+        // is not true of load_source, and the difference is what decides
+        // whether the duplicate model in the viewer can go.
+        let source = std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../examples/uat-routing-locked.cypcb"),
+        )
+        .expect("fixture");
+
+        let mut engine = PcbEngine::new();
+        assert_eq!(engine.load_source(&source), "");
+
+        let snapshot = engine.get_snapshot();
+        assert!(
+            snapshot.contains("\"net_name\":\"VCC\""),
+            "the trace block in the source must reach the snapshot: {snapshot}"
+        );
+        assert!(
+            !snapshot.contains("\"traces\":[]"),
+            "traces must not be empty"
+        );
     }
 
     #[test]
