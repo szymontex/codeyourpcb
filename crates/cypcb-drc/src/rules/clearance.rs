@@ -69,6 +69,20 @@ impl DrcRule for ClearanceRule {
             query.iter(ecs).map(|(e, n)| (e.index(), *n)).collect()
         };
 
+        // What each net's own block asks for. A design that writes
+        // `net HV [clearance 0.5mm]` has stated a rule; the fab preset is a
+        // floor, not the answer, and a checker that quietly applies the floor
+        // instead passes a board the designer said was wrong.
+        let net_clearance: HashMap<u32, Nm> = {
+            let ids: Vec<u32> = world.nets().map(|(net, _name)| net.id()).collect();
+            ids.into_iter()
+                .filter_map(|id| {
+                    let stated = world.net_constraints(NetId::new(id))?.clearance?;
+                    Some((id, stated))
+                })
+                .collect()
+        };
+
         // Build entity -> NetConnections lookup for components.
         // Components (footprints) don't have a single NetId — they have
         // NetConnections mapping each pin to a net. A trace touching a
@@ -116,15 +130,23 @@ impl DrcRule for ClearanceRule {
         // Collect all entries first to avoid borrowing issues
         let entries: Vec<_> = world.spatial().iter().cloned().collect();
 
+        // The broad phase has to reach as far as the strictest rule in play.
+        // Expanding by the preset alone means a net that asks for more can
+        // never be caught: the pair is filtered out before anyone looks at what
+        // it required.
+        let widest = net_clearance
+            .values()
+            .copied()
+            .fold(min_clearance, |acc, stated| acc.max(stated));
+
         for entry in &entries {
-            // Expand bounding box by min_clearance to find candidates
             let query_min = Point::new(
-                Nm(entry.envelope.lower()[0] - min_clearance.0),
-                Nm(entry.envelope.lower()[1] - min_clearance.0),
+                Nm(entry.envelope.lower()[0] - widest.0),
+                Nm(entry.envelope.lower()[1] - widest.0),
             );
             let query_max = Point::new(
-                Nm(entry.envelope.upper()[0] + min_clearance.0),
-                Nm(entry.envelope.upper()[1] + min_clearance.0),
+                Nm(entry.envelope.upper()[0] + widest.0),
+                Nm(entry.envelope.upper()[1] + widest.0),
             );
 
             // Phase 1: R*-tree query for candidates
@@ -217,7 +239,31 @@ impl DrcRule for ClearanceRule {
                     ),
                 };
 
-                if distance < min_clearance.0 {
+                // The pair's requirement is the strictest thing either side
+                // asked for, never below the fab floor.
+                //
+                // A trace or via names one net. A component names several
+                // through its pins, and the spatial index boxes the whole
+                // component, so the strictest of its nets applies to all of it.
+                // That over-reports for a part with one high-voltage pin among
+                // many - and over-reporting a rule the design stated is the
+                // right way to be wrong, where staying silent is not.
+                let stated = |net: Option<&NetId>, connections: Option<&Vec<NetId>>| -> Nm {
+                    let single = net.and_then(|n| net_clearance.get(&n.id())).copied();
+                    let many = connections
+                        .into_iter()
+                        .flatten()
+                        .filter_map(|n| net_clearance.get(&n.id()).copied());
+                    single
+                        .into_iter()
+                        .chain(many)
+                        .fold(Nm(0), |acc, s| acc.max(s))
+                };
+                let required = min_clearance
+                    .max(stated(net_a, nc_a))
+                    .max(stated(net_b, nc_b));
+
+                if distance < required.0 {
                     // Report the pair the same way round however the loop
                     // reached it, and point at the gap between the two
                     // features rather than at whichever one the outer loop
@@ -236,7 +282,7 @@ impl DrcRule for ClearanceRule {
                         primary.entity,
                         secondary.entity,
                         Nm(distance),
-                        min_clearance,
+                        required,
                         contact,
                     ));
                 }
@@ -512,6 +558,48 @@ mod tests {
             .resource_mut::<cypcb_world::SpatialIndex>()
             .rebuild(entries);
         world
+    }
+
+    #[test]
+    fn a_net_that_asks_for_more_clearance_gets_it() {
+        // Two pads 0.2mm apart. The JLCPCB preset wants 0.127mm, so this board
+        // is clean until a net says otherwise.
+        let mut world = BoardWorld::new();
+        let quiet = world.intern_net("SIG");
+        let strict = world.intern_net("HV");
+
+        let a = world.ecs_mut().spawn(quiet).id();
+        let b = world.ecs_mut().spawn(strict).id();
+        world
+            .ecs_mut()
+            .resource_mut::<cypcb_world::SpatialIndex>()
+            .rebuild(vec![
+                SpatialEntry::new(a, Point::from_mm(0.0, 0.0), Point::from_mm(1.0, 1.0), 0b01),
+                SpatialEntry::new(b, Point::from_mm(1.2, 0.0), Point::from_mm(2.2, 1.0), 0b01),
+            ]);
+
+        let rules = DesignRules::jlcpcb_2layer();
+        assert!(
+            ClearanceRule.check(&mut world, &rules).is_empty(),
+            "0.2mm clears the 0.127mm preset"
+        );
+
+        // The design states a rule the fab preset cannot know about.
+        world.set_net_constraints(
+            strict,
+            cypcb_world::registry::NetConstraints {
+                clearance: Some(Nm::from_mm(0.5)),
+                ..Default::default()
+            },
+        );
+
+        let violations = ClearanceRule.check(&mut world, &rules);
+        assert_eq!(violations.len(), 1, "0.2mm does not clear a stated 0.5mm");
+        assert!(
+            violations[0].message.contains("0.50mm required"),
+            "the reported requirement is the net's, not the preset's: {}",
+            violations[0].message
+        );
     }
 
     #[test]
