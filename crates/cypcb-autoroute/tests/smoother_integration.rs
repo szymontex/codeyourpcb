@@ -83,10 +83,14 @@ fn print_row(label: &str, score: &RoutingScore) {
 
 /// Route led_blink with PathFinder (smoother active), assert improvement.
 ///
-/// The smoother is now always integrated into PathFinder's route() method.
-/// We route the board and verify:
+/// The smoother is always integrated into PathFinder's route() method, so this
+/// test measures the final output only:
 /// - Smoothness ≥ 0.5 (grid paths without smoothing score ~0.2–0.3)
-/// - DRC violations ≤ 5 (S03 baseline — must not regress)
+/// - DRC violations ≤ 3, a ratchet on the routed and smoothed board
+///
+/// It cannot prove the smoother introduces no violations of its own - that
+/// needs a run with smoothing disabled to compare against, and the config has
+/// no switch for it. The DRC number here moves whenever the router changes.
 #[test]
 fn smoother_integration_led_blink() {
     let pathfinder = PathFinderStrategy;
@@ -109,11 +113,15 @@ fn smoother_integration_led_blink() {
         score.smoothness,
     );
 
-    // Assert DRC non-regression: S03 baseline is ≤ 5 violations for PathFinder on led_blink
+    // DRC ratchet on the final board. The old threshold of 5 was measured while
+    // PathFinder abandoned a connection on this fixture - less copper, fewer
+    // violations. Fully routed, with traces carrying their NetId so the same-net
+    // exemption applies, the count is 3. Lower this as R107 is worked; never
+    // raise it.
     assert!(
-        score.drc_violations <= 5,
-        "DRC violations should be ≤ 5 (S03 baseline), got {}. \
-         The smoother must not introduce new DRC violations.",
+        score.drc_violations <= 3,
+        "DRC violations should be ≤ 3 on the routed and smoothed board, got {}. \
+         R107 targets 0.",
         score.drc_violations,
     );
 

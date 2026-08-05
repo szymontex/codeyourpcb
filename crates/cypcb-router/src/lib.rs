@@ -149,7 +149,10 @@ pub fn apply_routes(world: &mut BoardWorld, result: &RoutingResult) {
             source: TraceSource::Autorouted,
         };
 
-        world.spawn_entity(trace);
+        // NetId has to be its own component, not just a field on Trace: DRC's
+        // same-net exemption queries for it, and without it every trace reads as
+        // netless and collides with the pads it connects to.
+        world.spawn_entity((trace, net_id));
     }
 
     // Create Via entities
@@ -164,7 +167,7 @@ pub fn apply_routes(world: &mut BoardWorld, result: &RoutingResult) {
             locked: false,
         };
 
-        world.spawn_entity(via);
+        world.spawn_entity((via, via_placement.net_id));
     }
 }
 
