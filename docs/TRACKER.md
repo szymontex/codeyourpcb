@@ -28,6 +28,15 @@ Read this file first. It is the source of truth for what is in flight and what c
 - DONE: hole-to-hole now includes through-hole pads, placed by component position and rotation, with a footprint's own pin pitch exempted. Proven both ways - the new test panics on the previous rule and passes on this one.
 - DONE: the library question, answered the way the codebase already answers this kind of thing. `FootprintLibrary` is a bevy resource on `BoardWorld`, beside `SpatialIndex` and `NetRegistry`; `sync_ast_to_world` publishes the table it synced against and the four rules read `world.footprints()`. No `run_drc` signature change, so `score_board`'s 21 call sites were never touched, and no clone per rule - the borrow is taken after the ECS queries end. Proven end to end: a board with an inline footprint and a 0.1mm drill now fails `cypcb check`; the test panics against the previous rule.
 - DONE: solder mask bridge implemented. The stub blamed missing per-pad mask expansion; `cypcb-rules` had `solder_mask_expansion` all along (0.05mm for JLCPCB) and it is mapped into `DesignRules` now. Openings are built from the footprint with placement and rotation, swept sorted by x. Zero findings on blink, power-indicator and custom-footprint; 3 on drc-test, which places two 0402s half a millimetre apart. Five unit tests plus a sandbox test that expects a bridge.
+- DONE: **the checker was measuring through a blindfold.** The spatial index is DRC's broad phase, and `score_board`'s crossing metric rebuilt it with a fixed 1mm box for every footprint - discarding whatever the caller had built and hiding every violation on the pads of anything bigger than a millimetre. `cypcb score` built the same 1mm index itself. On byte-identical routing:
+
+| fixture | reported through a 1mm box | reported through real courtyards |
+|---|---|---|
+| led_blink | 0 | 0 |
+| stm32_breakout | 137 | **176** |
+| multi_ic | 64 | **127** |
+
+  24 of stm32_breakout's violations and 54 of multi_ic's name a component - exactly the pairs the old index could not see, e.g. `trace 'VCC_3V3' ↔ Y1: 0.00mm actual, 0.13mm required`, a trace sitting on a crystal's copper. `BoardWorld::rebuild_spatial_index_from_library` is now the one way to build it, `compute_crossings` no longer clobbers the caller's index, and `score_board` documents that the caller owns it. Ratchets raised to 0/176/127 - the router did not get worse, the measurement stopped lying. Six scoring unit tests scored an unindexed world and now build the index first; one of them was asserting zero crossings against an empty index.
 - NEXT-ACTION: one stub left, `silk_clearance.rs:26`. KNOWLEDGE.md K014 records that this check currently runs in JS, in the viewer, not in WASM - so implementing it in Rust is also a chance to delete the JS copy. Check what geometry the viewer uses before writing anything.
 
 ### V2 - Autorouter and routing quality
@@ -142,7 +151,17 @@ Read this file first. It is the source of truth for what is in flight and what c
 
 - DONE: re-classified. stm32_breakout is now dominated by **trace-via, 66 of 119 pairs**; multi_ic by trace-trace (23) and pad-trace (21). Owning the via ring outright instead of only pricing it - a two-cell disc on the coarse grid, against eight on the old one - was measured: stm32_breakout **137 -> 108**, multi_ic **64 -> 78**, led_blink unchanged at 0, all complete. Reverted: it trades one board against the other, and the ratchet discipline exists so that trade is not rationalised into the codebase.
 - **Six experiments in, the pattern is the finding.** Every geometry lever - vetoing cells near foreign copper (twice), reserving trace footprints, pricing trace footprints, owning via rings - improves one benchmark board and worsens the other by a similar amount. The grid-level fixes that *did* land (track pitch, corner-cut refusal, obstacle bloat, via pricing) all improved every board at once. That difference says the remaining ~200 violations are no longer a geometry problem but a **cost-model** one: which conflicts the router should accept where.
-- NEXT-ACTION: the one approach not yet tried, and the only one that works on real violations instead of proxies - a **post-route repair pass**. Run DRC on the routed board, take the nets named in the violations, rip up only those, re-route them with the offending cells blocked, and keep the result only if the violation count actually drops. Everything it needs already exists: `run_drc` gives the pairs, `clear_cells` rips up, `mark_route` blocks.
+- **Seventh failed experiment, and the one that was meant to work: the post-route repair pass.** Route, run the real DRC, forbid exactly the cells it complained about, route again, keep the result only if the violation count drops and the board stays complete. Built it (`route_with_blockers` on the strategy, a `Blocker` carrying a point and a layer mask, an accumulate-and-retry loop). Then measured the same binary on the same input three times:
+
+| run | stm32_breakout, 2 repair passes |
+|---|---|
+| 1 | 115 |
+| 2 | 135 |
+| 3 | 129 |
+
+  Against a baseline of 137. multi_ic never improved in any run (64 every time) and led_blink was already at zero, so repair exits immediately there. Reverted. A pass that cannot reproduce its own number is not shippable, and shipping it off-by-default is how this project ended up with empty DRC checkers and a disabled A*.
+- **The measurement left a sharper question than the feature did: the router is deterministic without extra obstacles and nondeterministic with them.** Three runs, fresh process each, plain routing: byte-identical, 858 routes / 53 vias / 1630.67mm / 137 violations. Add blocked cells and the same three runs diverge. `extract_ratsnest` sorts by net ID, `order_nets` is a stable sort over it, `nets_needing_reroute` and the congestion map iterate Vecs - the entropy is somewhere else and is worth finding, because a router that answers differently each run cannot be ratcheted at all.
+- NEXT-ACTION: find the nondeterminism. Reproduce it with a fixed set of extra obstacles on stm32_breakout across three processes, then bisect the pipeline - hash the grid after `pathfinder_loop`, then after postprocess, then after smoothing - until the first stage whose output differs across runs is named.
 
 ## Session summary, 2026-08-05
 
@@ -150,8 +169,9 @@ Read this file first. It is the source of truth for what is in flight and what c
 |---|---|---|
 | blink.cypcb routing time | 93,459ms | ~200ms |
 | led_blink DRC violations | 3 (only board measured) | **0** |
-| stm32_breakout | not measured (312 when first seen) | 137 |
-| multi_ic | not measured (383 when first seen) | 64 |
+| stm32_breakout | not measured (312 when first seen) | 176 |
+| multi_ic | not measured (383 when first seen) | 127 |
+| what the two numbers above are measured with | a 1mm box per footprint, hiding component pairs | the real courtyards |
 | completeness | 5 unrouted on blink | 0 on every fixture |
 | autoroute suite runtime | 432s | 26s |
 - QUEUED: routing stm32_breakout takes about two minutes. Same treatment as blink - probe where it goes before optimizing.

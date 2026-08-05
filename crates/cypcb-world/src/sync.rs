@@ -385,15 +385,7 @@ pub fn sync_ast_to_world(
     world.set_footprints(footprint_lib.clone());
 
     // Rebuild spatial index after all entities are added (including traces/vias)
-    world.rebuild_spatial_index_with_traces(|name| {
-        footprint_lib
-            .get(name)
-            .map(|fp| fp.courtyard)
-            .unwrap_or_else(|| {
-                // Default 1mm x 1mm bounds for unknown footprints
-                Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(1.0), Nm::from_mm(1.0)))
-            })
-    });
+    world.rebuild_spatial_index_from_library(footprint_lib);
 
     result
 }

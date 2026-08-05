@@ -49,12 +49,7 @@ fn report_drc_violations_per_fixture() {
             &AutorouteConfig::default(),
         );
         apply_routes(&mut world, &result);
-        world.rebuild_spatial_index_with_traces(|_| {
-            cypcb_core::Rect::from_center_size(
-                cypcb_core::Point::ORIGIN,
-                (cypcb_core::Nm::from_mm(1.0), cypcb_core::Nm::from_mm(1.0)),
-            )
-        });
+        world.rebuild_spatial_index_from_library(&library);
 
         let drc = run_drc(&mut world, &drc_rules);
 

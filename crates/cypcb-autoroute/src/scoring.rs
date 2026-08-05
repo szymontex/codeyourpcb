@@ -107,6 +107,12 @@ pub struct ScoringConfig {
 /// # Returns
 ///
 /// A [`RoutingScore`] with all 7 metrics populated.
+/// # Prerequisite
+///
+/// The caller must have built the spatial index over the routed board, with
+/// [`BoardWorld::rebuild_spatial_index_from_library`]. Both the DRC count and
+/// the crossing count read that index, and an index sized from anything other
+/// than the real footprints under-reports both.
 pub fn score_board(
     world: &mut BoardWorld,
     rules: &DesignRules,
@@ -301,10 +307,10 @@ fn compute_crossings(world: &mut BoardWorld, traces: &[TraceData]) -> u32 {
     use cypcb_core::{Point, Rect};
     use std::collections::HashSet;
 
-    // Rebuild spatial index to ensure traces are included
-    world.rebuild_spatial_index_with_traces(|_| {
-        Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(1.0), Nm::from_mm(1.0)))
-    });
+    // The caller owns the index. This used to rebuild it here, sizing every
+    // component as a fixed 1mm box - which both discarded whatever the caller
+    // had built and left the world holding an index that hides violations on
+    // any component larger than a millimetre.
 
     // Build entity → (layer, net_id, segments) lookup
     let mut trace_lookup: std::collections::HashMap<Entity, &TraceData> =
@@ -492,6 +498,7 @@ mod tests {
     use super::*;
     use cypcb_core::{Nm, Point};
     use cypcb_world::components::trace::{Trace, TraceSegment, TraceSource};
+    use cypcb_world::footprint::FootprintLibrary;
     use cypcb_world::Layer;
     use cypcb_world::NetId;
 
@@ -852,6 +859,7 @@ mod tests {
         );
 
         let rules = DesignRules::default();
+        world.rebuild_spatial_index_from_library(&FootprintLibrary::new());
         let score = score_board(&mut world, &rules, &ScoreWeights::default());
 
         assert_eq!(score.total_length, Nm(0), "Empty board has zero length");
@@ -895,6 +903,7 @@ mod tests {
         world.spawn_entity(trace);
 
         let rules = DesignRules::default();
+        world.rebuild_spatial_index_from_library(&FootprintLibrary::new());
         let score = score_board(&mut world, &rules, &ScoreWeights::default());
 
         // 10mm + 10mm = 20mm
@@ -923,6 +932,7 @@ mod tests {
         world.spawn_entity(via2);
 
         let rules = DesignRules::default();
+        world.rebuild_spatial_index_from_library(&FootprintLibrary::new());
         let score = score_board(&mut world, &rules, &ScoreWeights::default());
 
         assert_eq!(score.via_count, 2);
@@ -969,6 +979,7 @@ mod tests {
         world.spawn_entity(t2);
 
         let rules = DesignRules::default();
+        world.rebuild_spatial_index_from_library(&FootprintLibrary::new());
         let score = score_board(&mut world, &rules, &ScoreWeights::default());
 
         assert!(
@@ -1015,6 +1026,7 @@ mod tests {
         world.spawn_entity(t2);
 
         let rules = DesignRules::default();
+        world.rebuild_spatial_index_from_library(&FootprintLibrary::new());
         let score = score_board(&mut world, &rules, &ScoreWeights::default());
 
         assert_eq!(
@@ -1060,6 +1072,7 @@ mod tests {
         world.spawn_entity(t2);
 
         let rules = DesignRules::default();
+        world.rebuild_spatial_index_from_library(&FootprintLibrary::new());
         let score = score_board(&mut world, &rules, &ScoreWeights::default());
 
         assert_eq!(

@@ -72,12 +72,7 @@ fn route_and_apply(world: &mut BoardWorld) {
     apply_routes(world, &result);
 
     // Rebuild spatial index with traces for accurate crossing/scoring
-    world.rebuild_spatial_index_with_traces(|_| {
-        cypcb_core::Rect::from_center_size(
-            cypcb_core::Point::ORIGIN,
-            (Nm::from_mm(1.0), Nm::from_mm(1.0)),
-        )
-    });
+    world.rebuild_spatial_index_from_library(&library);
 }
 
 // ============================================================================
