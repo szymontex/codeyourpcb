@@ -12,11 +12,12 @@ test.describe('Theme Toggle & Persistence', () => {
     expect(['light', 'dark']).toContain(theme);
   });
 
-  test('clicking theme toggle cycles theme', async ({ page }) => {
+  test('theme shortcut cycles theme', async ({ page }) => {
     const initialTheme = await page.getAttribute('html', 'data-theme');
 
-    // Click theme toggle button
-    await page.click('#theme-toggle');
+    // #theme-toggle is display:none - theme moved into Preferences, and the
+    // keyboard shortcut is the surviving direct path.
+    await page.keyboard.press('Control+Shift+t');
 
     // Theme should change (cycle: light → dark → auto → light)
     // The data-theme value should potentially change
@@ -26,8 +27,8 @@ test.describe('Theme Toggle & Persistence', () => {
     // Just verify the attribute is still valid
     expect(['light', 'dark']).toContain(afterFirst);
 
-    // Click again to advance cycle
-    await page.click('#theme-toggle');
+    // Advance the cycle again
+    await page.keyboard.press('Control+Shift+t');
     const afterSecond = await page.getAttribute('html', 'data-theme');
     expect(['light', 'dark']).toContain(afterSecond);
   });
@@ -43,15 +44,15 @@ test.describe('Theme Toggle & Persistence', () => {
   });
 
   test('theme persists to localStorage', async ({ page }) => {
-    // Set to a known state by clicking toggle
-    await page.click('#theme-toggle');
+    // Set to a known state
+    await page.keyboard.press('Control+Shift+t');
 
     const stored = await page.evaluate(() => localStorage.getItem('theme'));
     expect(stored).toBeTruthy();
     expect(['light', 'dark', 'auto']).toContain(stored);
 
     // Toggle again
-    await page.click('#theme-toggle');
+    await page.keyboard.press('Control+Shift+t');
     const stored2 = await page.evaluate(() => localStorage.getItem('theme'));
     expect(stored2).toBeTruthy();
     expect(stored2).not.toBe(stored); // Should have advanced in the cycle

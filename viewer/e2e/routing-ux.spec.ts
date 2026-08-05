@@ -240,21 +240,21 @@ test.describe('Routing UX — E2E', () => {
 
     const before = await getRoutingState(page);
     expect(before?.mode).toBe('routing');
-    expect(before?.angleSnapEnabled).toBe(false); // default is OFF per roadmap
+    expect(before?.angleSnapEnabled).toBe(true); // KiCad: 45 degree snap starts on
 
-    // Press A to toggle angle snap ON
+    // Press A to toggle angle snap off
     await page.keyboard.press('a');
     await page.waitForTimeout(100);
 
     const afterOn = await getRoutingState(page);
-    expect(afterOn?.angleSnapEnabled).toBe(true);
+    expect(afterOn?.angleSnapEnabled).toBe(false);
 
-    // Press A again to toggle OFF
+    // Press A again to toggle back on
     await page.keyboard.press('a');
     await page.waitForTimeout(100);
 
     const afterOff = await getRoutingState(page);
-    expect(afterOff?.angleSnapEnabled).toBe(false);
+    expect(afterOff?.angleSnapEnabled).toBe(true);
   });
 
   test('layer flip with F key → currentLayer toggles', async ({ page }) => {

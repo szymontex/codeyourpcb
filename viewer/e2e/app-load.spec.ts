@@ -38,7 +38,7 @@ test.describe('App Load & WASM Initialization', () => {
     await expect(page.locator('#fit-btn')).toBeVisible();
     await expect(page.locator('#view-menu-btn')).toBeVisible();
     await expect(page.locator('#view-3d-btn')).toBeVisible();
-    await expect(page.locator('#theme-toggle')).toBeVisible();
+    // #theme-toggle is display:none - theme lives in the Preferences modal.
     await expect(page.locator('#prefs-btn')).toBeVisible();
     await expect(page.locator('#open-btn')).toBeVisible();
     // Layer checkboxes are inside View dropdown, not directly in toolbar

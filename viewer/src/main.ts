@@ -2808,8 +2808,10 @@ async function init(): Promise<void> {
       }
       toggleSearchPanel();
     }
-    // Ctrl+Shift+T to toggle theme
-    if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'T') {
+    // Ctrl+Shift+T to toggle theme. Match both cases: whether the browser
+    // reports the shifted 'T' or the plain 't' depends on the layout and the
+    // input path, and every other letter shortcut here already accepts both.
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'T' || e.key === 't')) {
       e.preventDefault();
       themeToggle.click();
     }
