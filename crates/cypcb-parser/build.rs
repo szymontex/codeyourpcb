@@ -45,4 +45,59 @@ fn compile_tree_sitter() {
         .compile("tree-sitter-cypcb");
 
     println!("cargo:rustc-link-lib=static=tree-sitter-cypcb");
+
+    assert_object_matches_target();
+}
+
+/// Refuse to produce an archive the linker will silently ignore.
+///
+/// `cc` asks the host compiler to build for `TARGET`. gcc cannot emit wasm, so
+/// on a wasm32 target it quietly produces host objects instead; the wasm linker
+/// then skips the wrong-architecture archive members without a word and turns
+/// every tree-sitter symbol into an import from `env`. The build reports
+/// success and the module fails to load in a browser, which cost a full session
+/// to diagnose: `ts_parser_new`, `tree_sitter_cypcb` and 23 others arrived as
+/// unresolved imports and Vite refused the bundle.
+///
+/// A wasm object starts with `\0asm`. Anything else here means the toolchain
+/// cannot do what was asked, and saying so now is worth more than an artifact
+/// that links and will not run.
+#[cfg(feature = "tree-sitter-parser")]
+fn assert_object_matches_target() {
+    let target = std::env::var("TARGET").unwrap_or_default();
+    if !target.starts_with("wasm32") {
+        return;
+    }
+
+    let out_dir = std::path::PathBuf::from(std::env::var("OUT_DIR").unwrap());
+    let object = match std::fs::read_dir(&out_dir).ok().and_then(|entries| {
+        entries
+            .filter_map(Result::ok)
+            .map(|entry| entry.path())
+            .find(|path| path.extension().is_some_and(|ext| ext == "o"))
+    }) {
+        Some(path) => path,
+        // Nothing to check: cc produced no object, which cargo would already
+        // have reported.
+        None => return,
+    };
+
+    let mut magic = [0u8; 4];
+    if let Ok(bytes) = std::fs::read(&object) {
+        magic.copy_from_slice(&bytes[..4.min(bytes.len())]);
+    }
+
+    assert!(
+        magic == *b"\0asm",
+        "the C parser was compiled for the wrong architecture.\n\n\
+         Target is {target}, but {} is not a wasm object (starts with {magic:?}).\n\
+         cc fell back to the host compiler, and the wasm linker will skip this\n\
+         archive without an error - leaving tree_sitter_cypcb and the ts_* runtime\n\
+         as imports from \"env\" that no bundler can resolve.\n\n\
+         Either build with a C compiler that targets wasm32:\n  \
+         TARGET_CC=clang cargo build --target {target}\n\
+         or build without this feature and leave parsing to the caller:\n  \
+         cargo build --target {target} --no-default-features",
+        object.display(),
+    );
 }
