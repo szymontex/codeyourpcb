@@ -463,6 +463,28 @@ impl RoutingGrid {
         self.net_map[layer][idx] = net_id;
     }
 
+    /// Clear a known set of cells belonging to a net (for rip-up).
+    ///
+    /// Equivalent to [`clear_route`](RoutingGrid::clear_route) when the caller
+    /// already knows which cells the net occupies, but costs `cells.len()` steps
+    /// instead of a full `width * height * layers` scan.
+    ///
+    /// Cells the net no longer owns are left alone - during negotiated congestion
+    /// another net may have taken them over, and its trace must survive.
+    pub fn clear_cells(&mut self, cells: &[(u32, u32, u8)], net_id: u32) {
+        for &(x, y, layer) in cells {
+            let layer = layer as usize;
+            if x >= self.width || y >= self.height || layer >= self.layers.len() {
+                continue;
+            }
+            let idx = (y as usize) * (self.width as usize) + (x as usize);
+            if self.net_map[layer][idx] == net_id {
+                self.net_map[layer][idx] = u32::MAX;
+                self.layers[layer][idx] &= !CELL_TRACE;
+            }
+        }
+    }
+
     /// Clear all cells belonging to a specific net (for rip-up).
     pub fn clear_route(&mut self, net_id: u32) {
         for layer in 0..self.layer_count as usize {
@@ -611,6 +633,41 @@ mod tests {
             layers: (0..layers).map(|_| vec![CELL_FREE; cell_count]).collect(),
             net_map: (0..layers).map(|_| vec![u32::MAX; cell_count]).collect(),
         }
+    }
+
+    #[test]
+    fn clear_cells_frees_every_cell_of_the_net() {
+        let mut grid = make_test_grid(10, 10, 63_500, 2);
+        let cells: Vec<(u32, u32, u8)> = (0..5).map(|x| (x, 3, 0)).collect();
+        for &(x, y, layer) in &cells {
+            grid.mark_route(x, y, layer as usize, 7);
+        }
+        assert!(!grid.is_free(2, 3, 0));
+
+        grid.clear_cells(&cells, 7);
+
+        for &(x, y, layer) in &cells {
+            assert!(
+                grid.is_free(x, y, layer as usize),
+                "cell ({x},{y}) must not stay blocked after rip-up"
+            );
+            assert_eq!(grid.net_at(x, y, layer as usize), None);
+        }
+    }
+
+    #[test]
+    fn clear_cells_leaves_cells_taken_over_by_another_net() {
+        let mut grid = make_test_grid(10, 10, 63_500, 2);
+        grid.mark_route(1, 1, 0, 7);
+        grid.mark_route(2, 1, 0, 7);
+        // Net 9 negotiated cell (2,1) away from net 7.
+        grid.mark_route(2, 1, 0, 9);
+
+        grid.clear_cells(&[(1, 1, 0), (2, 1, 0)], 7);
+
+        assert!(grid.is_free(1, 1, 0), "net 7's own cell is released");
+        assert_eq!(grid.net_at(2, 1, 0), Some(9), "net 9 keeps its cell");
+        assert!(!grid.is_free(2, 1, 0));
     }
 
     #[test]

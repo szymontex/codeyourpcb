@@ -262,14 +262,15 @@ pub fn pathfinder_loop(
             let net = &ratsnest[net_idx];
             let net_id = net.net_id.id();
 
-            // Rip up previous route if exists
+            // Rip up previous route if exists.
+            //
+            // Clear only the cells this net actually recorded. Scanning the whole
+            // grid for the net id (clear_route) does the same work in
+            // width * height * layers steps per rip-up, and PathFinder rips up
+            // most nets on every iteration.
             if let Some(cells) = net_cells.remove(&net_id) {
                 congestion_map.unmark_net(&cells);
-                // Clear from grid
-                for &(x, y, layer) in &cells {
-                    grid.mark_route(x, y, layer as usize, u32::MAX);
-                }
-                grid.clear_route(net_id);
+                grid.clear_cells(&cells, net_id);
             }
             routed_paths.remove(&net_id);
 
