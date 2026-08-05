@@ -23,7 +23,14 @@ fi
 # Work around TLS allocation issue on some Linux systems
 export GLIBC_TUNABLES=glibc.rtld.optional_static_tls=2048
 
-# Build the WASM module with the wasm feature (excludes tree-sitter)
+# Built without the tree-sitter parser: the viewer parses .cypcb in JavaScript
+# and hands the engine a snapshot.
+#
+# The parser does build for wasm32 - the "not WASM compatible" note in
+# cypcb-parser/Cargo.toml is wrong - and switching to --features native exports
+# PcbEngine::load_source to JS for 804,520 bytes against 702,357 here, so about
+# 100KB buys deleting the duplicate JS parser in viewer/src/wasm.ts. Do both in
+# one step or the module carries the parser twice.
 wasm-pack build crates/cypcb-render \
   --target web \
   --release \

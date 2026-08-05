@@ -130,6 +130,75 @@ impl PcbEngine {
         serde_json::to_string(&snapshot).unwrap_or_else(|_| "{}".to_string())
     }
 
+    /// Parse `.cypcb` source and load it into the board model.
+    ///
+    /// Available wherever the tree-sitter parser is compiled in, which includes
+    /// wasm32 - the parser builds for that target and the resulting module is
+    /// no larger than one that leaves parsing to JavaScript.
+    ///
+    /// Returns an empty string on success, or the collected parse and semantic
+    /// errors joined by newlines. The board state is updated even when there are
+    /// errors, so partial results stay visible. DRC runs afterwards either way.
+    #[cfg(feature = "native")]
+    pub fn load_source(&mut self, source: &str) -> String {
+        self.source = source.to_string();
+        self.world.clear();
+        self.violations.clear();
+        self.drc_duration_ms = 0;
+        self.net_constraints.clear();
+
+        // Parse the source
+        let parse_result = parse(source);
+
+        // Collect parse errors
+        let mut errors: Vec<String> = Vec::new();
+        for e in &parse_result.errors {
+            errors.push(format!("{}", e));
+        }
+
+        // Extract net constraints from AST before sync
+        for def in &parse_result.value.definitions {
+            if let cypcb_parser::ast::Definition::Net(net_def) = def {
+                if let Some(ref constraints) = net_def.constraints {
+                    let mut cache = NetConstraintCache::default();
+                    if let Some(ref w) = constraints.width {
+                        cache.width_nm = Some(w.to_nm().0);
+                    }
+                    if let Some(ref c) = constraints.clearance {
+                        cache.clearance_nm = Some(c.to_nm().0);
+                    }
+                    if let Some(ref cur) = constraints.current {
+                        cache.current_ma = Some(cur.to_milliamps());
+                    }
+                    self.net_constraints
+                        .insert(net_def.name.value.clone(), cache);
+                }
+            }
+        }
+
+        // Sync AST to world
+        let sync_result = sync_ast_to_world(
+            &parse_result.value,
+            source,
+            &mut self.world,
+            &mut self.footprint_lib,
+        );
+
+        // Collect sync errors
+        for err in &sync_result.errors {
+            errors.push(format!("{}", err));
+        }
+
+        // Run DRC after sync (even if there were parse/sync errors, check what we have)
+        self.run_drc_internal();
+
+        if errors.is_empty() {
+            String::new()
+        } else {
+            errors.join("\n")
+        }
+    }
+
     /// Query components at a specific point.
     ///
     /// Returns reference designator strings.
@@ -715,73 +784,6 @@ impl PcbEngine {
 
 // Internal methods (not exposed to WASM)
 impl PcbEngine {
-    /// Load and parse source code (native mode only).
-    ///
-    /// Returns an empty string on success, or an error message on failure.
-    /// The board state is updated even if there are errors (partial results).
-    /// DRC is run automatically after successful sync.
-    ///
-    /// In WASM mode, use `load_snapshot()` instead.
-    #[cfg(feature = "native")]
-    pub fn load_source(&mut self, source: &str) -> String {
-        self.source = source.to_string();
-        self.world.clear();
-        self.violations.clear();
-        self.drc_duration_ms = 0;
-        self.net_constraints.clear();
-
-        // Parse the source
-        let parse_result = parse(source);
-
-        // Collect parse errors
-        let mut errors: Vec<String> = Vec::new();
-        for e in &parse_result.errors {
-            errors.push(format!("{}", e));
-        }
-
-        // Extract net constraints from AST before sync
-        for def in &parse_result.value.definitions {
-            if let cypcb_parser::ast::Definition::Net(net_def) = def {
-                if let Some(ref constraints) = net_def.constraints {
-                    let mut cache = NetConstraintCache::default();
-                    if let Some(ref w) = constraints.width {
-                        cache.width_nm = Some(w.to_nm().0);
-                    }
-                    if let Some(ref c) = constraints.clearance {
-                        cache.clearance_nm = Some(c.to_nm().0);
-                    }
-                    if let Some(ref cur) = constraints.current {
-                        cache.current_ma = Some(cur.to_milliamps());
-                    }
-                    self.net_constraints
-                        .insert(net_def.name.value.clone(), cache);
-                }
-            }
-        }
-
-        // Sync AST to world
-        let sync_result = sync_ast_to_world(
-            &parse_result.value,
-            source,
-            &mut self.world,
-            &mut self.footprint_lib,
-        );
-
-        // Collect sync errors
-        for err in &sync_result.errors {
-            errors.push(format!("{}", err));
-        }
-
-        // Run DRC after sync (even if there were parse/sync errors, check what we have)
-        self.run_drc_internal();
-
-        if errors.is_empty() {
-            String::new()
-        } else {
-            errors.join("\n")
-        }
-    }
-
     /// Run DRC using default rules (JLCPCB 2-layer).
     fn run_drc_internal(&mut self) {
         let rules = DesignRules::default();
