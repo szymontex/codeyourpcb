@@ -343,6 +343,15 @@ pub fn pathfinder_loop(
                 }
             }
 
+            // A net occupies a cell once. net_path_cells collects every
+            // connection of the net, so the cells where its own branches meet
+            // appear twice, and marking them twice pushes occupancy over a
+            // capacity of one - the router then spends every remaining
+            // iteration negotiating against itself over junctions it created
+            // and cannot remove.
+            net_path_cells.sort_unstable();
+            net_path_cells.dedup();
+
             if net_ok && !connections.is_empty() {
                 // Update congestion map with this net's cells
                 congestion_map.mark_net(&net_path_cells);
