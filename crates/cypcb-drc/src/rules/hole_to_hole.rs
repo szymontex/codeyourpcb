@@ -5,6 +5,8 @@
 
 use cypcb_core::{Nm, Point};
 use cypcb_world::components::trace::Via;
+use cypcb_world::components::{FootprintRef, Position, Rotation};
+use cypcb_world::footprint::FootprintLibrary;
 use cypcb_world::BoardWorld;
 
 use crate::presets::DesignRules;
@@ -24,8 +26,10 @@ impl DrcRule for HoleToHoleRule {
         let mut violations = Vec::new();
         let min_distance = rules.min_hole_to_hole;
 
-        // Collect all entities with drill holes: vias
-        let vias: Vec<_> = {
+        // Every drilled feature on the board: vias and through-hole pads. A via
+        // 0.2mm from a connector pin is as unmanufacturable as two vias that
+        // close, so checking only via-to-via missed most of the real cases.
+        let mut holes: Vec<(bevy_ecs::entity::Entity, Point, Nm)> = {
             let ecs = world.ecs_mut();
             let mut query = ecs.query::<(bevy_ecs::entity::Entity, &Via)>();
             query
@@ -34,14 +38,51 @@ impl DrcRule for HoleToHoleRule {
                 .collect()
         };
 
-        // TODO: Also collect through-hole pad drills from footprint library
-        // For now we only check via-to-via distances.
+        let components: Vec<_> = {
+            let ecs = world.ecs_mut();
+            let mut query = ecs.query::<(
+                bevy_ecs::entity::Entity,
+                &FootprintRef,
+                &Position,
+                &Rotation,
+            )>();
+            query
+                .iter(ecs)
+                .map(|(e, f, p, r)| (e, f.clone(), *p, *r))
+                .collect()
+        };
+
+        let lib = FootprintLibrary::new();
+        for (entity, footprint_ref, position, rotation) in components {
+            let Some(footprint) = lib.get(footprint_ref.as_str()) else {
+                continue; // Unknown footprint - sync already reported it
+            };
+            for pad in &footprint.pads {
+                let Some(drill) = pad.drill else { continue };
+                let offset = rotate_point(pad.position, rotation.to_degrees());
+                holes.push((
+                    entity,
+                    Point::new(
+                        Nm(position.0.x.0 + offset.x.0),
+                        Nm(position.0.y.0 + offset.y.0),
+                    ),
+                    drill,
+                ));
+            }
+        }
 
         // Check all pairs
-        for i in 0..vias.len() {
-            for j in (i + 1)..vias.len() {
-                let (e_a, pos_a, drill_a) = &vias[i];
-                let (e_b, pos_b, drill_b) = &vias[j];
+        for i in 0..holes.len() {
+            for j in (i + 1)..holes.len() {
+                let (e_a, pos_a, drill_a) = &holes[i];
+                let (e_b, pos_b, drill_b) = &holes[j];
+
+                // Two pads of the same component are placed by the footprint,
+                // not by the designer, so a footprint's own pitch is not a
+                // board defect to report here.
+                if e_a == e_b {
+                    continue;
+                }
 
                 // Center-to-center distance
                 let dx = (pos_a.x.0 - pos_b.x.0) as f64;
@@ -69,4 +110,19 @@ impl DrcRule for HoleToHoleRule {
 
         violations
     }
+}
+
+/// Rotate a pad offset around the component origin.
+fn rotate_point(p: Point, degrees: f64) -> Point {
+    if degrees.abs() < 0.001 {
+        return p;
+    }
+    let rad = degrees.to_radians();
+    let (sin, cos) = rad.sin_cos();
+    let x = p.x.raw() as f64;
+    let y = p.y.raw() as f64;
+    Point::new(
+        Nm((x * cos - y * sin).round() as i64),
+        Nm((x * sin + y * cos).round() as i64),
+    )
 }

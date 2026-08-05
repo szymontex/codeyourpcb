@@ -51,6 +51,22 @@ fn spawn_component(
     )
 }
 
+/// Spawn a through-hole component (2-pin header, 2.54mm pitch, 1.0mm drills).
+fn spawn_tht_component(world: &mut BoardWorld, refdes: &str, pos_mm: (f64, f64)) -> Entity {
+    let net = world.intern_net("THT");
+    let mut nets = NetConnections::new();
+    nets.add(PinConnection::new("1", net));
+    nets.add(PinConnection::new("2", net));
+    world.spawn_component(
+        RefDes::new(refdes),
+        Value::new(""),
+        Position::from_mm(pos_mm.0, pos_mm.1),
+        Rotation::ZERO,
+        FootprintRef::new("PIN-HDR-1x2"),
+        nets,
+    )
+}
+
 /// Spawn a trace on a given net/layer, returning entity.
 fn spawn_trace(
     world: &mut BoardWorld,
@@ -556,6 +572,42 @@ mod hole_to_hole {
                 &DesignRules::jlcpcb_2layer(),
                 ViolationKind::HoleToHole
             ) > 0
+        );
+    }
+
+    #[test]
+    fn via_too_close_to_a_through_hole_pad_violation() {
+        let mut world = world_with_board();
+        let net = world.intern_net("VCC");
+        // PIN-HDR-1x2 sits at (25, 25) with its first pad on the component
+        // origin. A via 0.4mm away edge-to-edge is under the 0.5mm minimum.
+        spawn_tht_component(&mut world, "J1", (25.0, 25.0));
+        spawn_via(&mut world, net, (25.4, 25.0), 0.3, 0.6);
+        rebuild_spatial(&mut world, vec![]);
+        assert!(
+            count_violations(
+                &mut world,
+                &DesignRules::jlcpcb_2layer(),
+                ViolationKind::HoleToHole
+            ) > 0,
+            "a via next to a header pin is a hole-to-hole violation"
+        );
+    }
+
+    #[test]
+    fn a_footprints_own_pin_pitch_is_not_a_violation() {
+        let mut world = world_with_board();
+        // The 2.54mm pitch of a header is the footprint's business, not a board
+        // defect - two pads of the same component must not report each other.
+        spawn_tht_component(&mut world, "J1", (25.0, 25.0));
+        rebuild_spatial(&mut world, vec![]);
+        assert_eq!(
+            count_violations(
+                &mut world,
+                &DesignRules::jlcpcb_2layer(),
+                ViolationKind::HoleToHole
+            ),
+            0
         );
     }
 
