@@ -101,7 +101,6 @@ export interface PadHit {
 
 // Module-level mouse trail tracer (KiCad-style posture detection)
 const _mouseTrail = new MouseTrailTracer();
-let _lastWalkaroundLog = 0;
 
 export function createRoutingState(): RoutingState {
   return {

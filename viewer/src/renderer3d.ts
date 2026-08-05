@@ -65,9 +65,6 @@ const B_MASK_Z = B_COPPER_BOT_Z - 0.001;
 const Z_TOP_PAD = F_COPPER_TOP_Z + 0.003;
 const Z_BOTTOM_PAD = B_COPPER_BOT_Z - 0.003;
 
-// Legacy aliases (used by existing pad/silk code)
-const Z_TOP_COPPER = F_COPPER_TOP_Z;
-const Z_BOTTOM_COPPER = B_COPPER_BOT_Z;
 
 /** Nanometers to millimeters conversion factor */
 const NM_TO_MM = 1e-6;
@@ -75,14 +72,8 @@ const NM_TO_MM = 1e-6;
 /** PCB solder mask green (bright KiCad green) */
 const PCB_GREEN = 0x1a7a3a;
 
-/** PCB substrate roughness for physical material */
-const PCB_ROUGHNESS = 0.7;
 
 /** Parse a CSS hex color string to a Three.js Color */
-function hexToColor(hex: string): THREE.Color {
-  return new THREE.Color(hex);
-}
-
 /**
  * Create a merged copper mesh from a flat positions array and add it to a group.
  * Used for both traces and pads on each layer to avoid duplicating the
@@ -726,7 +717,6 @@ export class Renderer3D {
     topGroup: THREE.Group,
     bottomGroup: THREE.Group,
   ): void {
-    const MASK_THICKNESS = 0.02; // 20μm solder mask
     const MASK_EXPANSION = 0.05; // 50μm expansion around pad openings
 
     // Collect pad rectangles (in mm, board coordinates) for masking
@@ -1170,8 +1160,8 @@ export class Renderer3D {
           const r = shape.radius * NM_TO_MM;
           const segs = Math.max(8, Math.round(r * 4));
 
-          let startA = shape.startAngle + radians;
-          let endA = shape.endAngle + radians;
+          const startA = shape.startAngle + radians;
+          const endA = shape.endAngle + radians;
           const totalAngle = endA - startA;
 
           for (let i = 0; i < segs; i++) {

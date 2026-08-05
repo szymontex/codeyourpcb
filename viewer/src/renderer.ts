@@ -4,7 +4,7 @@
  * component body outlines, pad pin numbers, net labels, and drill marks.
  */
 
-import type { BoardSnapshot, ComponentInfo, PadInfo, ViolationInfo, TraceInfo, ViaInfo, RatsnestInfo, SilkShape } from './types';
+import type { BoardSnapshot, ComponentInfo, PadInfo, TraceInfo, ViaInfo, RatsnestInfo } from './types';
 import type { Viewport } from './viewport';
 import type { RoutingState } from './routing';
 import type { DragEditState, RectSelectState } from './interaction';
@@ -86,7 +86,7 @@ export function render(ctx: CanvasRenderingContext2D, state: RenderState): void 
   const frameStart = performance.now();
   _textElementsDrawn = 0;
 
-  const { snapshot, viewport, layers, selectedRefdes, showViolations, showRatsnest } = state;
+  const { snapshot, viewport, layers, selectedRefdes, showRatsnest } = state;
   const config = state.renderConfig ?? createDefaultRenderConfig();
   const padNetMap = state.padNetMap ?? new Map<string, string>();
   const lodTier = getLodTier(viewport.scale, config);
@@ -381,22 +381,6 @@ export function resizeHandleCursor(handle: ResizeHandle): string {
 // Violations
 // ---------------------------------------------------------------------------
 
-function drawViolation(ctx: CanvasRenderingContext2D, vp: Viewport, violation: ViolationInfo): void {
-  const [sx, sy] = worldToScreen(vp, violation.x_nm, violation.y_nm);
-  const radius = 15;
-  const innerRadius = 10;
-
-  ctx.beginPath();
-  ctx.arc(sx, sy, radius, 0, Math.PI * 2);
-  ctx.strokeStyle = LAYER_COLORS.violation_ring;
-  ctx.lineWidth = 3;
-  ctx.stroke();
-
-  ctx.beginPath();
-  ctx.arc(sx, sy, innerRadius, 0, Math.PI * 2);
-  ctx.fillStyle = 'rgba(255, 0, 0, 0.3)';
-  ctx.fill();
-}
 
 // ---------------------------------------------------------------------------
 // Traces
@@ -503,7 +487,7 @@ function drawTrace(
 
 function drawTraceNetLabels(
   ctx: CanvasRenderingContext2D, vp: Viewport, traces: TraceInfo[],
-  layers: LayerVisibility, config: RenderConfig,
+  layers: LayerVisibility, _config: RenderConfig,
 ): void {
   // KiCad-style: net name rendered INSIDE the trace, sized to fit the track width.
   // Text size = track_width * 0.55 (KiCad convention).
@@ -620,7 +604,7 @@ function drawNetLabel(ctx: CanvasRenderingContext2D, screenX: number, screenY: n
 // Vias
 // ---------------------------------------------------------------------------
 
-function drawVia(ctx: CanvasRenderingContext2D, vp: Viewport, via: ViaInfo, themeColors: ReturnType<typeof getThemeColors>): void {
+function drawVia(ctx: CanvasRenderingContext2D, vp: Viewport, via: ViaInfo, _themeColors: ReturnType<typeof getThemeColors>): void {
   const [sx, sy] = worldToScreen(vp, via.x, via.y);
   const outerRadius = (via.outer_diameter * vp.scale) / 2;
   const drillRadius = (via.drill * vp.scale) / 2;
@@ -744,7 +728,7 @@ function drawBodyOutline(
 
 function drawSilkShapes(
   ctx: CanvasRenderingContext2D, vp: Viewport,
-  comp: ComponentInfo, config: RenderConfig,
+  comp: ComponentInfo, _config: RenderConfig,
 ): void {
   if (!comp.silk || comp.silk.length === 0) return;
 
@@ -873,11 +857,11 @@ function drawPad(
   ctx: CanvasRenderingContext2D, vp: Viewport,
   compX: number, compY: number, rotationMdeg: number,
   pad: PadInfo, layers: LayerVisibility, isSelected: boolean,
-  themeColors: ReturnType<typeof getThemeColors>,
+  _themeColors: ReturnType<typeof getThemeColors>,
   highlightedNet: string | null,
   compRefdes: string,
   padNetMap: Map<string, string>,
-  lodTier: LodTier,
+  _lodTier: LodTier,
 ): void {
   let color = getPadColor(pad.layer_mask, layers);
   if (!color) return;
@@ -1018,7 +1002,7 @@ function drawOblong(ctx: CanvasRenderingContext2D, x: number, y: number, w: numb
  */
 function drawSolderMask(
   ctx: CanvasRenderingContext2D, vp: Viewport,
-  snapshot: BoardSnapshot, layers: LayerVisibility,
+  snapshot: BoardSnapshot, _layers: LayerVisibility,
 ): void {
   if (!snapshot.board) return;
 

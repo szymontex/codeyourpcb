@@ -220,16 +220,8 @@ export async function fetch3DModel(lcscId: number): Promise<string | null> {
       return null; // No 3D model available for this component
     }
 
-    // Step 3: Fetch OBJ text
-    const objUrl = `${EASYEDA_MODULES_BASE}/3dmodel/${uuid}`;
-    const objResponse = await fetch(objUrl);
-
-    if (!objResponse.ok) {
-      console.error(`[JLCPCB] 3D fetch error: HTTP ${objResponse.status} for OBJ ${uuid}`);
-      return null;
-    }
-
-    return await responseToText(objResponse);
+    // Step 3: Fetch the OBJ text for that UUID
+    return await fetch3DModelByUuid(uuid);
   } catch (error) {
     console.error(`[JLCPCB] 3D fetch error: ${error}`);
     return null;

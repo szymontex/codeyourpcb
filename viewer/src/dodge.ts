@@ -97,14 +97,6 @@ function pathCrossesRect(path: Vec2[], r: PadRect): boolean {
   return false;
 }
 
-/** Check if path crosses ANY of the given rects. */
-function pathCrossesAnyRect(path: Vec2[], rects: PadRect[]): boolean {
-  for (const r of rects) {
-    if (pathCrossesRect(path, r)) return true;
-  }
-  return false;
-}
-
 /** Path length. */
 function pathLen(pts: Vec2[]): number {
   let len = 0;
@@ -143,7 +135,7 @@ function dodgeAroundRect(
   start: Vec2,
   end: Vec2,
   rect: PadRect,
-  allRects: PadRect[],
+  _allRects: PadRect[],
 ): Vec2[] | null {
   // 4 corner waypoints just outside the exclusion zone
   const margin = 100_000; // extra 0.1mm

@@ -7,7 +7,7 @@ import { pointToSegmentDistance } from './geometry';
 import {
   type Vec2, Dir45,
   dirFromSeg, isDiagonal, buildInitialTrace,
-  leftDir, rightDir, angleBetween, AngleType,
+  angleBetween, AngleType,
 } from './direction45';
 
 // ---------------------------------------------------------------------------
@@ -74,11 +74,6 @@ function v2s(pts: Vec2[]): TraceSegmentInfo[] {
 // ---------------------------------------------------------------------------
 // Direction vector (45° unit vectors)
 // ---------------------------------------------------------------------------
-const DIR_VECS: Vec2[] = [
-  {x:0,y:1},{x:1,y:1},{x:1,y:0},{x:1,y:-1},
-  {x:0,y:-1},{x:-1,y:-1},{x:-1,y:0},{x:-1,y:1},
-];
-function dv(d: Dir45): Vec2 { return d >= 0 && d < 8 ? DIR_VECS[d] : {x:0,y:0}; }
 
 /** Infinite line intersection: (p1 + t*d1) ∩ (p2 + u*d2) */
 function lli(p1: Vec2, d1: Vec2, p2: Vec2, d2: Vec2): Vec2 | null {
@@ -88,16 +83,6 @@ function lli(p1: Vec2, d1: Vec2, p2: Vec2, d2: Vec2): Vec2 | null {
   return { x: p1.x + t * d1.x, y: p1.y + t * d1.y };
 }
 
-/** Finite segment intersection: A→B ∩ C→D */
-function ssi(a: Vec2, b: Vec2, c: Vec2, d: Vec2): Vec2 | null {
-  const d1x = b.x-a.x, d1y = b.y-a.y, d2x = d.x-c.x, d2y = d.y-c.y;
-  const cross = d1x*d2y - d1y*d2x;
-  if (Math.abs(cross) < 0.001) return null;
-  const t = ((c.x-a.x)*d2y - (c.y-a.y)*d2x) / cross;
-  const u = ((c.x-a.x)*d1y - (c.y-a.y)*d1x) / cross;
-  if (t < -0.001 || t > 1.001 || u < -0.001 || u > 1.001) return null;
-  return { x: a.x+t*d1x, y: a.y+t*d1y };
-}
 
 // ---------------------------------------------------------------------------
 // dragSegment45 — 1:1 port of KiCad LINE::dragSegment45

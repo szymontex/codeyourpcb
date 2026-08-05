@@ -719,8 +719,6 @@ export function setupInteraction(
         const isTraceSnap = state.routing.snappedToPad?.component?.refdes === '__trace__';
         
         // Use snapped position if available, else raw click position
-        const checkX = isTraceSnap ? state.routing.snappedToPad!.worldX : worldX;
-        const checkY = isTraceSnap ? state.routing.snappedToPad!.worldY : worldY;
         
         const traceHit = hitTestTrace(state.snapshot, state.viewport, screenX, screenY);
         

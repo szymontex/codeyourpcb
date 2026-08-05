@@ -11,7 +11,7 @@
  */
 
 import type { TraceSegmentInfo, BoardSnapshot } from './types';
-import { type Vec2, Dir45, dirFromSeg, buildInitialTrace, angleBetween, AngleType } from './direction45';
+import { type Vec2, Dir45, dirFromSeg, angleBetween, AngleType } from './direction45';
 import { traceVertices } from './trace-edit';
 import { checkRouteObstacles } from './routing';
 
@@ -78,8 +78,8 @@ export function optimizeTrace(
   padNetMap?: Map<string, string>,
 ): TraceSegmentInfo[] {
   // First: merge exact colinear segments
-  let segs = simplifyTrace(segments);
-  let pts = ptsFromSegs(segs);
+  const segs = simplifyTrace(segments);
+  const pts = ptsFromSegs(segs);
   if (pts.length <= 3) return segs;
 
   const cl = clearance ?? 150_000;
@@ -175,12 +175,3 @@ function ptsFromSegs(segs: TraceSegmentInfo[]): Vec2[] {
   return pts;
 }
 
-function segLen(a: Vec2, b: Vec2): number {
-  return Math.hypot(b.x - a.x, b.y - a.y);
-}
-
-function pathLen(pts: Vec2[]): number {
-  let len = 0;
-  for (let i = 1; i < pts.length; i++) len += segLen(pts[i-1], pts[i]);
-  return len;
-}

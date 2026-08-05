@@ -352,7 +352,6 @@ export function registerCompletionProvider(monaco: typeof import('monaco-editor'
           // Suggest next refdes for each prefix
           const prefixes = ['R', 'C', 'U', 'J', 'D', 'L', 'Q', 'LED'];
           for (const p of prefixes) {
-            const nr = nextRefdes(model);
             const existing = extractRefdes(model);
             let max = 0;
             for (const r of existing) {

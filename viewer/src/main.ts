@@ -26,7 +26,7 @@ import { initProjectManager, showProjectManager, hideProjectManager, addRecentFi
 import { initSearchPanel, hideSearchPanel, toggleSearchPanel, isSearchPanelVisible, buildComponentSnippet } from './jlcpcb-panel';
 import { fetch3DModel, fetchComponentFootprint } from './jlcpcb';
 import { registerDynamicFootprint, register3DModel, hasDynamicFootprint } from './wasm';
-import { initVariantPanel, showVariants, hideVariants, isVariantPanelVisible, type VariantData } from './variant-panel';
+import { initVariantPanel, hideVariants, isVariantPanelVisible, type VariantData } from './variant-panel';
 import type { VariantPreviewData } from './renderer';
 import { mergeTracesIntoDsl, syncTracesToEditor } from './trace-persist';
 
@@ -199,7 +199,6 @@ async function init(): Promise<void> {
   const routeBtn = document.getElementById('route-btn') as HTMLButtonElement;
   const routeMenuBtn = document.getElementById('route-menu-btn') as HTMLButtonElement;
   const cancelRouteBtn = document.getElementById('cancel-route-btn') as HTMLButtonElement;
-  const autoRouteCb = document.getElementById('auto-route') as HTMLInputElement;
   const routingStatus = document.getElementById('routing-status')!;
   const routingProgress = document.getElementById('routing-progress')!;
   const openBtn = document.getElementById('open-btn') as HTMLButtonElement;
