@@ -186,23 +186,35 @@ impl DrcRule for ClearanceRule {
                 let trace_a = trace_map.get(&entry.entity.index());
                 let trace_b = trace_map.get(&candidate.entity.index());
 
-                let distance = match (trace_a, trace_b) {
+                //
+                // The location travels with the distance. Reporting the gap the
+                // checker actually measured - rather than a centroid of the two
+                // entities - is what makes the coordinate usable: a long GND
+                // trace and a pad have a centroid nowhere near the short.
+                let (contact, distance) = match (trace_a, trace_b) {
                     // Both are traces: segment-to-segment distance minus both half-widths
                     (Some(ta), Some(tb)) => {
-                        let seg_dist = trace_to_trace_distance(ta, tb);
-                        (seg_dist - ta.half_width - tb.half_width).max(0)
+                        let (at, seg_dist) = trace_to_trace_distance(ta, tb);
+                        (at, (seg_dist - ta.half_width - tb.half_width).max(0))
                     }
                     // One is a trace, the other is a pad/component AABB
                     (Some(t), None) => {
-                        let seg_dist = trace_to_aabb_distance(t, &candidate.envelope);
-                        (seg_dist - t.half_width).max(0)
+                        let (at, seg_dist) = trace_to_aabb_distance(t, &candidate.envelope);
+                        (at, (seg_dist - t.half_width).max(0))
                     }
                     (None, Some(t)) => {
-                        let seg_dist = trace_to_aabb_distance(t, &entry.envelope);
-                        (seg_dist - t.half_width).max(0)
+                        let (at, seg_dist) = trace_to_aabb_distance(t, &entry.envelope);
+                        (at, (seg_dist - t.half_width).max(0))
                     }
-                    // Neither is a trace: use AABB distance (original behavior)
-                    (None, None) => aabb_distance(&entry.envelope, &candidate.envelope),
+                    // Neither is a trace: the two boxes are pads, and the middle
+                    // of the line between their centres is the best available.
+                    (None, None) => (
+                        midpoint(
+                            aabb_center(&entry.envelope),
+                            aabb_center(&candidate.envelope),
+                        ),
+                        aabb_distance(&entry.envelope, &candidate.envelope),
+                    ),
                 };
 
                 if distance < min_clearance.0 {
@@ -220,16 +232,12 @@ impl DrcRule for ClearanceRule {
                     } else {
                         (candidate, entry)
                     };
-                    let location = midpoint(
-                        aabb_center(&primary.envelope),
-                        aabb_center(&secondary.envelope),
-                    );
                     violations.push(DrcViolation::clearance(
                         primary.entity,
                         secondary.entity,
                         Nm(distance),
                         min_clearance,
-                        location,
+                        contact,
                     ));
                 }
             }
@@ -304,6 +312,16 @@ struct TraceData {
 /// to s,t ∈ [0,1]. The unconstrained critical point is found first, then
 /// clamped with recomputation to handle boundary cases.
 pub fn segment_distance(p1: [i64; 2], p2: [i64; 2], p3: [i64; 2], p4: [i64; 2]) -> i64 {
+    segment_closest(p1, p2, p3, p4).1
+}
+
+/// Closest point between two segments, and the distance across the gap.
+///
+/// The point is the midpoint of the two closest points, one on each segment -
+/// the middle of the gap the checker is complaining about. A violation reported
+/// anywhere else sends click-to-zoom to the wrong part of the board and gives
+/// anything that consumes the report a coordinate it cannot act on.
+pub fn segment_closest(p1: [i64; 2], p2: [i64; 2], p3: [i64; 2], p4: [i64; 2]) -> (Point, i64) {
     // Direction vectors
     let d1 = [p2[0] - p1[0], p2[1] - p1[1]];
     let d2 = [p4[0] - p3[0], p4[1] - p3[1]];
@@ -315,7 +333,7 @@ pub fn segment_distance(p1: [i64; 2], p2: [i64; 2], p3: [i64; 2], p4: [i64; 2]) 
 
     // Both segments degenerate to points
     if a == 0 && e == 0 {
-        return point_distance(p1, p3);
+        return (midpoint_raw(p1, p3), point_distance(p1, p3));
     }
 
     let c = dot128(d1, r); // D1 · r
@@ -377,7 +395,17 @@ pub fn segment_distance(p1: [i64; 2], p2: [i64; 2], p3: [i64; 2], p4: [i64; 2]) 
 
     let dx = closest1[0] - closest2[0];
     let dy = closest1[1] - closest2[1];
-    (dx * dx + dy * dy).sqrt() as i64
+    let location = Point::new(
+        Nm(((closest1[0] + closest2[0]) / 2.0).round() as i64),
+        Nm(((closest1[1] + closest2[1]) / 2.0).round() as i64),
+    );
+    (location, (dx * dx + dy * dy).sqrt() as i64)
+}
+
+/// Midpoint of two raw coordinate pairs.
+#[inline]
+fn midpoint_raw(a: [i64; 2], b: [i64; 2]) -> Point {
+    Point::new(Nm((a[0] + b[0]) / 2), Nm((a[1] + b[1]) / 2))
 }
 
 /// Dot product using i128 to prevent overflow.
@@ -401,15 +429,17 @@ fn point_to_segment_distance(p: [i64; 2], s1: [i64; 2], s2: [i64; 2]) -> i64 {
 }
 
 /// Minimum distance between trace centerlines (segment-to-segment).
-fn trace_to_trace_distance(a: &TraceData, b: &TraceData) -> i64 {
-    let mut min_dist = i64::MAX;
+fn trace_to_trace_distance(a: &TraceData, b: &TraceData) -> (Point, i64) {
+    let mut best = (Point::new(Nm(0), Nm(0)), i64::MAX);
     for seg_a in &a.segments {
         for seg_b in &b.segments {
-            let d = segment_distance(seg_a.0, seg_a.1, seg_b.0, seg_b.1);
-            min_dist = min_dist.min(d);
+            let (at, distance) = segment_closest(seg_a.0, seg_a.1, seg_b.0, seg_b.1);
+            if distance < best.1 {
+                best = (at, distance);
+            }
         }
     }
-    min_dist
+    best
 }
 
 /// Minimum distance from trace centerlines to an AABB.
@@ -417,7 +447,7 @@ fn trace_to_trace_distance(a: &TraceData, b: &TraceData) -> i64 {
 /// Computes the closest distance from any trace segment endpoint
 /// or perpendicular projection to the AABB edges. For AABB-to-segment,
 /// we test distance from each segment to each AABB edge segment.
-fn trace_to_aabb_distance(trace: &TraceData, aabb: &AABB<[i64; 2]>) -> i64 {
+fn trace_to_aabb_distance(trace: &TraceData, aabb: &AABB<[i64; 2]>) -> (Point, i64) {
     let lo = aabb.lower();
     let hi = aabb.upper();
     // AABB edge segments (4 sides)
@@ -427,30 +457,31 @@ fn trace_to_aabb_distance(trace: &TraceData, aabb: &AABB<[i64; 2]>) -> i64 {
         ([hi[0], hi[1]], [lo[0], hi[1]]), // top
         ([lo[0], hi[1]], [lo[0], lo[1]]), // left
     ];
+    let inside = |p: [i64; 2]| p[0] >= lo[0] && p[0] <= hi[0] && p[1] >= lo[1] && p[1] <= hi[1];
 
-    let mut min_dist = i64::MAX;
+    let mut best = (Point::new(Nm(0), Nm(0)), i64::MAX);
     for seg in &trace.segments {
-        // Check if the segment center is inside the AABB (overlap)
-        let mid_x = (seg.0[0] + seg.1[0]) / 2;
-        let mid_y = (seg.0[1] + seg.1[1]) / 2;
-        if mid_x >= lo[0] && mid_x <= hi[0] && mid_y >= lo[1] && mid_y <= hi[1] {
-            return 0; // Centerline passes through AABB
+        // The centreline runs through the box: the overlap is the violation,
+        // and the point that overlaps is where to report it.
+        let mid = [(seg.0[0] + seg.1[0]) / 2, (seg.0[1] + seg.1[1]) / 2];
+        if inside(mid) {
+            return (midpoint_raw(mid, mid), 0);
         }
-
-        // Check endpoints inside AABB
-        if seg.0[0] >= lo[0] && seg.0[0] <= hi[0] && seg.0[1] >= lo[1] && seg.0[1] <= hi[1] {
-            return 0;
+        if inside(seg.0) {
+            return (midpoint_raw(seg.0, seg.0), 0);
         }
-        if seg.1[0] >= lo[0] && seg.1[0] <= hi[0] && seg.1[1] >= lo[1] && seg.1[1] <= hi[1] {
-            return 0;
+        if inside(seg.1) {
+            return (midpoint_raw(seg.1, seg.1), 0);
         }
 
         for edge in &edges {
-            let d = segment_distance(seg.0, seg.1, edge.0, edge.1);
-            min_dist = min_dist.min(d);
+            let (at, distance) = segment_closest(seg.0, seg.1, edge.0, edge.1);
+            if distance < best.1 {
+                best = (at, distance);
+            }
         }
     }
-    min_dist
+    best
 }
 
 #[cfg(test)]
@@ -525,6 +556,29 @@ mod tests {
 
         assert_eq!(violations.len(), 1, "Should have one violation");
         assert_eq!(violations[0].kind, ViolationKind::Clearance);
+    }
+
+    #[test]
+    fn contact_point_is_the_gap_not_a_centroid() {
+        // A long trace running down the board, and a short one that comes
+        // close to its far end only. The centroid of the two is near the
+        // middle of the long trace, tens of millimetres from the actual
+        // problem; the gap is at the far end.
+        let long = [([0i64, 0i64], [0, 100_000_000])]; // 0 -> 100mm, vertical
+        let short = [([100_000i64, 99_000_000i64], [5_000_000, 99_000_000])];
+
+        let (at, distance) = segment_closest(long[0].0, long[0].1, short[0].0, short[0].1);
+
+        assert_eq!(distance, 100_000, "0.1mm gap between the two");
+        assert_eq!(
+            at,
+            Point::new(Nm(50_000), Nm(99_000_000)),
+            "the contact sits in the middle of the gap, at the far end"
+        );
+        assert!(
+            at.y.0 > 90_000_000,
+            "a centroid would have landed near y=50mm"
+        );
     }
 
     #[test]
