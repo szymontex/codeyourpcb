@@ -90,23 +90,39 @@ An LLM can generate this, review it, refactor it, and catch mistakes — just li
 | Bidirectional sync — edit trace code ↔ board updates in real-time | Done |
 | Net constraints — `[width 0.5mm]`, `[current 2A]` per net | Done |
 | IPC-2221 auto-width from current rating | Done |
-| DRC — clearance, drill, connectivity, trace width vs current | Done |
+| DRC — clearance, drill, connectivity, trace width, hole-to-hole, solder mask, annular ring, edge, courtyard | Done |
+| DRC — silkscreen clearance | Stub, runs in the viewer's JavaScript only |
 | Gerber / Excellon / BOM / pick-and-place export | Done |
 | Monaco editor with context-aware completions | Done |
 | JLCPCB parts search & placement | Done |
 | Custom footprint definitions in DSL | Done |
 | Project manager with templates | Done |
 | Dark / Light theme | Done |
-| Web app (WASM) + Desktop app (Tauri v2) | Done |
+| Web app (WASM) | Done |
+| Desktop app (Tauri v2) | Builds on macOS and Windows; the Linux build needs GTK/webkit dev packages and is excluded from CI |
+| Autorouter — PathFinder negotiated congestion, multi-layer | Routes the benchmark boards complete; **the toolbar button is hidden** while routing quality is worked on |
 | KiCad component library import | Done |
+| KiCad `.kicad_pcb` import | Done — `cypcb parse-kicad`, used by the routing benchmarks |
+| KiCad `.kicad_pcb` export | Planned |
 | Copper pour / ground planes | Planned |
-| Module system — reusable circuit blocks, packages | Planned |
-| KiCad interop — import/export `.kicad_pcb` | Planned |
+| Module system — reusable circuit blocks, packages | Parsed by the DSL, not yet instantiated |
 | Parts engine — auto component picking from JLCPCB/LCSC | Planned |
 | Schematic generation from `.cypcb` | Planned |
-| Autorouter rewrite | Planned |
 | Differential pair routing | Planned |
 | CI/CD — `cypcb check` + `cypcb export` in GitHub Actions | Planned |
+
+Routing quality on the bundled KiCad benchmarks, measured with
+`cargo test --release -p cypcb-autoroute -- benchmark_all_fixtures_drc --ignored`:
+
+| Board | Connections | DRC violations |
+|---|---|---|
+| led_blink | all routed | 0 |
+| stm32_breakout | all routed | 137 |
+| multi_ic | all routed | 64 |
+
+Every board routes to completion; the remaining violations are clearance
+conflicts the router accepts rather than leave a net unrouted. `cypcb check`
+reports them, and `docs/TRACKER.md` records what has been tried.
 
 <p align="center">
   <img src="docs/images/board-view.png" alt="555 timer blink circuit — board view with routed traces" width="720">

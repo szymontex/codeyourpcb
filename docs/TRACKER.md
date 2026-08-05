@@ -76,7 +76,8 @@ Read this file first. It is the source of truth for what is in flight and what c
 
 ### V6 - Documentation truth
 - DONE: nothing this cycle.
-- NEXT-ACTION: README lists 9 features as done that are partial, broken or orphaned, and 8 as planned that have zero code. Rewrite the feature table against verified behavior, with a command next to each claim.
+- DONE: the README feature table now matches what the code does. Corrections: DRC lists the nine checks that actually run and marks silkscreen clearance as a stub living in the viewer's JavaScript; the desktop app no longer claims a working Linux build; the autorouter is listed with its toolbar button hidden; KiCad `.kicad_pcb` import moved from Planned to Done (`cypcb parse-kicad` returns JSON for the benchmark fixtures) with export left as Planned; the module system is "parsed, not instantiated" rather than absent. Added the measured routing quality table so a reader sees 0/137/64 instead of guessing.
+- NEXT-ACTION: `.gsd/REQUIREMENTS.md` still counts "23 active, 0 validated" while listing 14 as validated, and M005's outcomes were never written back. Reconcile it against what the tests now prove, or delete the counter if nothing maintains it.
 - QUEUED: `.gsd/REQUIREMENTS.md` never received the M005 status writeback - `STATE.md` counts "23 active, 0 validated" while REQUIREMENTS lists 14 as validated. Empty DRC checkers (`trace_width.rs:53`, `solder_mask_bridge.rs:27`, `silk_clearance.rs:26`, `hole_to_hole.rs:37`) count toward "12 checkers" while doing nothing.
 
 ### V7 - Performance (GP-002 discipline: measure, then optimize, publish before/after)
