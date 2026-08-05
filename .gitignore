@@ -77,3 +77,13 @@ vendor/
 .gsd/DISCUSSION-MANIFEST.json
 .gsd/milestones/**/*-CONTINUE.md
 .gsd/milestones/**/continue.md
+
+# Reference checkouts of other projects. They were committed as submodule
+# pointers with no .gitmodules entry, so a fresh clone could not resolve them
+# and `git submodule update` failed outright. Nothing here imports them.
+viewer/svg-pcb/
+viewer/circuitron/
+
+# Playwright output: screenshots, traces and the last-run marker. Regenerated on
+# every run, 42MB of it, and it made every test run show up as a dirty tree.
+viewer/test-results/
