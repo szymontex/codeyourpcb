@@ -22,9 +22,9 @@ else
 fi
 echo ""
 
-# Stage 2: Clippy (strict, excluding desktop crates)
+# Stage 2: Clippy (strict, excluding desktop crates - they need system GTK/webkit)
 echo "[2/8] cargo clippy"
-if cargo clippy --workspace --exclude cypcb-cli --exclude cypcb-desktop -- -D warnings 2>&1; then
+if cargo clippy --workspace --exclude cypcb-desktop -- -D warnings 2>&1; then
   pass "cargo-clippy"
 else
   fail "cargo-clippy"
@@ -33,7 +33,7 @@ echo ""
 
 # Stage 3: Rust tests
 echo "[3/8] cargo test"
-if cargo test --workspace --exclude cypcb-cli --exclude cypcb-desktop 2>&1; then
+if cargo test --workspace --exclude cypcb-desktop 2>&1; then
   pass "cargo-test"
 else
   fail "cargo-test"

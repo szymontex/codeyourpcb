@@ -5,7 +5,7 @@
 
 use std::collections::HashMap;
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use clap::Args;
@@ -358,7 +358,7 @@ fn save_routes(path: &PathBuf, result: &RoutingResult) -> Result<()> {
 }
 
 /// Print routing summary.
-fn print_summary(result: &RoutingResult, routes_path: &PathBuf, elapsed: std::time::Duration) {
+fn print_summary(result: &RoutingResult, routes_path: &Path, elapsed: std::time::Duration) {
     use cypcb_router::calculate_metrics;
 
     let metrics = calculate_metrics(result);
