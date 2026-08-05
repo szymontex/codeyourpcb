@@ -69,6 +69,17 @@ impl RoutingStrategy for ImprovedAStarStrategy {
 
         // Extract ratsnest
         let ratsnest = extract_ratsnest(world, library);
+        // Widths the design states per net. Read once, before the ratsnest walk
+        // borrows the world, and keyed by the raw id so the lookup in the
+        // output loop is a hash of a u32 rather than of a net name.
+        let net_widths: HashMap<u32, cypcb_core::Nm> = ratsnest
+            .iter()
+            .filter_map(|net| {
+                let width = world.net_constraints(net.net_id)?.width?;
+                Some((net.net_id.id(), width))
+            })
+            .collect();
+
         if ratsnest.is_empty() {
             tracing::info!("No nets to route");
             return RoutingResult::complete(Vec::new(), Vec::new());
@@ -89,7 +100,13 @@ impl RoutingStrategy for ImprovedAStarStrategy {
 
         for net in &ratsnest {
             if let Some(paths) = loop_result.routed_paths.get(&net.net_id.id()) {
-                let (segs, vias) = postprocess::paths_to_output(&grid, net.net_id, paths, rules);
+                let (segs, vias) = postprocess::paths_to_output(
+                    &grid,
+                    net.net_id,
+                    paths,
+                    rules,
+                    net_widths.get(&net.net_id.id()).copied(),
+                );
                 all_segments.extend(segs);
                 all_vias.extend(vias);
             }

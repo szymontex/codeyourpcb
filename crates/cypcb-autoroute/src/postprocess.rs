@@ -132,16 +132,24 @@ pub fn simplify_path(path: &[GridNode]) -> SimplifiedPath {
 ///
 /// - Grid coordinates are converted to Nm via `grid.grid_to_nm()`
 /// - Layer indices map to `Layer` enum (0→TopCopper, 1→BottomCopper, 2+→Inner)
-/// - Trace width comes from `rules.constraints_for_net(net_id).min_trace_width`
+/// - Trace width comes from `width_override` when the design states one for
+///   this net, floored at the preset minimum; otherwise from the preset
 /// - Via drill size comes from `rules.constraints_for_net(net_id).min_via_drill`
 pub fn convert_to_route_segments(
     simplified: &SimplifiedPath,
     grid: &RoutingGrid,
     net_id: NetId,
     rules: &dyn RoutingRuleSet,
+    width_override: Option<cypcb_core::Nm>,
 ) -> (Vec<RouteSegment>, Vec<ViaPlacement>) {
     let constraints = rules.constraints_for_net(net_id.id());
-    let trace_width = constraints.min_trace_width;
+    // A design that writes `net VCC [width 0.3mm]` has said something the fab
+    // preset cannot know. Its number wins, and never goes below the preset
+    // minimum - a design cannot ask for copper thinner than the board house
+    // will etch.
+    let trace_width = width_override
+        .map(|width| width.max(constraints.min_trace_width))
+        .unwrap_or(constraints.min_trace_width);
     let via_drill = constraints.min_via_drill;
 
     let mut segments = Vec::with_capacity(simplified.segments.len());
@@ -173,6 +181,7 @@ pub fn paths_to_output(
     net_id: NetId,
     paths: &[Vec<GridNode>],
     rules: &dyn RoutingRuleSet,
+    width_override: Option<cypcb_core::Nm>,
 ) -> (Vec<RouteSegment>, Vec<ViaPlacement>) {
     let mut all_segments = Vec::new();
     let mut all_vias = Vec::new();
@@ -181,7 +190,8 @@ pub fn paths_to_output(
     for path in paths {
         raw_steps += path.len();
         let simplified = simplify_path(path);
-        let (segs, vias) = convert_to_route_segments(&simplified, grid, net_id, rules);
+        let (segs, vias) =
+            convert_to_route_segments(&simplified, grid, net_id, rules, width_override);
         all_segments.extend(segs);
 
         // Filter out vias at pad positions — THT pads already connect layers,
@@ -370,7 +380,7 @@ mod tests {
         // Create a path from (10,20) to (50,20) on layer 0
         let path: Vec<GridNode> = (10..=50).map(|x| (x, 20, 0)).collect();
         let simplified = simplify_path(&path);
-        let (segments, _vias) = convert_to_route_segments(&simplified, &grid, net_id, &rules);
+        let (segments, _vias) = convert_to_route_segments(&simplified, &grid, net_id, &rules, None);
 
         assert_eq!(segments.len(), 1);
         let seg = &segments[0];
@@ -433,7 +443,7 @@ mod tests {
         ];
 
         let simplified = simplify_path(&path);
-        let (segments, vias) = convert_to_route_segments(&simplified, &grid, net_id, &rules);
+        let (segments, vias) = convert_to_route_segments(&simplified, &grid, net_id, &rules, None);
 
         assert_eq!(segments.len(), 2);
         assert_eq!(vias.len(), 1);
@@ -493,7 +503,7 @@ mod tests {
         }
 
         let simplified = simplify_path(&path);
-        let (segments, _) = convert_to_route_segments(&simplified, &grid, net_id, &rules);
+        let (segments, _) = convert_to_route_segments(&simplified, &grid, net_id, &rules, None);
 
         assert_eq!(segments.len(), 3, "Z-shaped path should produce 3 segments");
         for seg in &segments {

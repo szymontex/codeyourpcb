@@ -139,6 +139,17 @@ impl PathFinderStrategy {
         // Order nets (short first, power last)
         let order = order_nets(&ratsnest);
 
+        // Widths the design states per net. Read once, before the ratsnest walk
+        // borrows the world, and keyed by the raw id so the lookup in the
+        // output loop is a hash of a u32 rather than of a net name.
+        let net_widths: HashMap<u32, cypcb_core::Nm> = ratsnest
+            .iter()
+            .filter_map(|net| {
+                let width = world.net_constraints(net.net_id)?.width?;
+                Some((net.net_id.id(), width))
+            })
+            .collect();
+
         // Run PathFinder iteration loop
         let loop_result = pathfinder_loop(&mut grid, &ratsnest, &order, rules, config);
 
@@ -148,7 +159,13 @@ impl PathFinderStrategy {
 
         for net in &ratsnest {
             if let Some(paths) = loop_result.routed_paths.get(&net.net_id.id()) {
-                let (segs, vias) = postprocess::paths_to_output(&grid, net.net_id, paths, rules);
+                let (segs, vias) = postprocess::paths_to_output(
+                    &grid,
+                    net.net_id,
+                    paths,
+                    rules,
+                    net_widths.get(&net.net_id.id()).copied(),
+                );
                 all_segments.extend(segs);
                 all_vias.extend(vias);
             }

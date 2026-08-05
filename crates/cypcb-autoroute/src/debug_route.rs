@@ -13,6 +13,7 @@ use cypcb_rules::RoutingRuleSet;
 use cypcb_world::footprint::FootprintLibrary;
 use cypcb_world::{BoardWorld, NetId};
 use serde::Serialize;
+use std::collections::HashMap;
 
 use crate::orchestrator::{extract_ratsnest, order_nets};
 use crate::pathfinder_v2::pathfinder_loop;
@@ -138,6 +139,17 @@ pub fn route_with_debug(
 
     // Extract ratsnest
     let ratsnest = extract_ratsnest(world, library);
+    // Widths the design states per net. Read once, before the ratsnest walk
+    // borrows the world, and keyed by the raw id so the lookup in the
+    // output loop is a hash of a u32 rather than of a net name.
+    let net_widths: HashMap<u32, cypcb_core::Nm> = ratsnest
+        .iter()
+        .filter_map(|net| {
+            let width = world.net_constraints(net.net_id)?.width?;
+            Some((net.net_id.id(), width))
+        })
+        .collect();
+
     let order = order_nets(&ratsnest);
 
     // Stage 1: PathFinder loop (raw grid paths)
@@ -148,7 +160,13 @@ pub fn route_with_debug(
     let mut raw_vias = Vec::new();
     for net in &ratsnest {
         if let Some(paths) = loop_result.routed_paths.get(&net.net_id.id()) {
-            let (segs, vias) = postprocess::paths_to_output(&grid, net.net_id, paths, rules);
+            let (segs, vias) = postprocess::paths_to_output(
+                &grid,
+                net.net_id,
+                paths,
+                rules,
+                net_widths.get(&net.net_id.id()).copied(),
+            );
             raw_segments.extend(segs);
             raw_vias.extend(vias);
         }
