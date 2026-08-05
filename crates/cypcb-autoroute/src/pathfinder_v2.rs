@@ -236,6 +236,15 @@ pub fn pathfinder_loop(
 
     let mut converged = false;
     let mut final_iteration = 0u32;
+    // Negotiated congestion is supposed to shrink the overused set until it is
+    // empty. When it stops shrinking it has settled on a conflict it cannot
+    // resolve, and every further iteration re-routes the same nets to the same
+    // places - only slower, because the history cost keeps growing and A*
+    // explores more of the grid each time. Stop after this many iterations
+    // without a new best.
+    const STAGNATION_LIMIT: u32 = 3;
+    let mut best_overused = usize::MAX;
+    let mut iterations_without_progress = 0u32;
 
     for iteration in 1..=MAX_PATHFINDER_ITERATIONS {
         final_iteration = iteration;
@@ -253,6 +262,22 @@ pub fn pathfinder_loop(
                 tracing::info!(iteration, "PathFinder converged — zero overused cells");
                 break;
             }
+
+            if overused.len() < best_overused {
+                best_overused = overused.len();
+                iterations_without_progress = 0;
+            } else {
+                iterations_without_progress += 1;
+                if iterations_without_progress >= STAGNATION_LIMIT {
+                    tracing::info!(
+                        iteration,
+                        overused = overused.len(),
+                        "PathFinder stalled — overused set stopped shrinking"
+                    );
+                    break;
+                }
+            }
+
             nets_needing_reroute(order, ratsnest, &net_cells, &overused)
         };
 

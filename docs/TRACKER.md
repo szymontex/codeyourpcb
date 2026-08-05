@@ -80,9 +80,9 @@ Read this file first. It is the source of truth for what is in flight and what c
 - QUEUED: `.gsd/REQUIREMENTS.md` never received the M005 status writeback - `STATE.md` counts "23 active, 0 validated" while REQUIREMENTS lists 14 as validated. Empty DRC checkers (`trace_width.rs:53`, `solder_mask_bridge.rs:27`, `silk_clearance.rs:26`, `hole_to_hole.rs:37`) count toward "12 checkers" while doing nothing.
 
 ### V7 - Performance (GP-002 discipline: measure, then optimize, publish before/after)
-- DONE: nothing this cycle.
-- NEXT-ACTION: establish baselines before touching anything - WASM binary size breakdown (`twiggy top`), autorouter benchmark composite on all 3 fixtures, render frame time on the largest example, allocation counts in the DRC hot loop.
-- QUEUED: after baselines, attack in order of measured cost. Candidates: spatial index queries in DRC clearance checking, PathFinder congestion map churn, per-frame allocation in the 2D renderer, WASM size (670KB).
+- DONE: first baseline, and it found a 28x. `benchmark_routing_time` reported blink.cypcb at **93,459ms**. A per-iteration probe showed PathFinder shrinking the overused set for three iterations, then re-routing the same four nets for the remaining 46 - never converging, always burning the full budget, with each iteration slower than the last as the history cost climbed. Stopping after three iterations without a new best: **93,459ms -> 3,366ms**, routing-test **8,459ms -> 274ms**, both with byte-identical output. Regression gate 21s -> 1.12s; whole autoroute suite 44s.
+- NEXT-ACTION: the four nets PathFinder cannot separate on blink are now the routing-quality question - the same shape as the 3 remaining DRC violations on led_blink. Dump which nets they are and where they collide before touching the cost function.
+- QUEUED: WASM size breakdown (`twiggy top`, 702,357 bytes today), render frame time on the largest example, allocation counts in the DRC hot loop.
 
 ## Owner-decision queue (only the owner closes these)
 
