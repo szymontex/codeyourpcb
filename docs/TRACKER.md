@@ -121,7 +121,17 @@ Read this file first. It is the source of truth for what is in flight and what c
 | multi_ic | 297 | **240** | 0 |
 
   **This is the answer to three failed experiments.** Blocking cells (the two vetoes and the trace-footprint reservation) always traded completeness for correctness; the hard-blocked version of this very change left stm32_breakout with 6 unrouted connections. The same geometry expressed as a price the router can negotiate keeps every board complete and still removes a fifth of the violations. Ratchets tightened to 1/238/240.
-- NEXT-ACTION: apply the same treatment to trace width - trace-trace is now the biggest group at 114 and 135. Feed each routed path's real width into the congestion map the way the via footprint now is, and measure. If it holds, the "reserve the footprint" idea finally lands, on the side where it works.
+- **Fifth failed experiment:** pricing every trace's footprint in the congestion map, the way the via footprint works. led_blink 1 -> 2 violations, stm32_breakout 238 -> 342, multi_ic 240 -> 263. Congestion pricing needs the priced feature to be *sparse*: a few dozen vias give a sharp signal, while every path node claiming a disc floods the map and the signal stops discriminating. Reverted.
+- DONE: **the routing grid is a track pitch now, not half a clearance.** Every experiment so far tried to patch around a grid whose neighbouring cells are closer than two traces may be. Measured across resolutions on stm32_breakout: 238 violations in 127.8s at clearance/2, 193 at clearance, 199 at 1.5x, and **124 in 9.7s at `min_trace_width + min_clearance`**. One cell per legal track position means adjacency is clearance-legal by construction.
+
+| fixture | violations before | after | time |
+|---|---|---|---|
+| led_blink | 1 | 1 | - |
+| stm32_breakout | 238 | **124** | 127.8s -> 9.7s |
+| multi_ic | 240 | **116** | - |
+
+  All three complete, lengths within 1%, vias down (43 -> 23 on stm32). The whole all-fixtures gate now runs in 21s against 339s. Ratchets tightened to 1/124/116.
+- NEXT-ACTION: 124 and 116 remain. Re-classify them by pair type - the mix has shifted twice since the last dump - and check whether the coarse grid changed which group dominates before choosing the next lever.
 - QUEUED: routing stm32_breakout takes about two minutes. Same treatment as blink - probe where it goes before optimizing.
 - QUEUED: WASM size breakdown (`twiggy top`, 702,357 bytes today), render frame time on the largest example, allocation counts in the DRC hot loop.
 

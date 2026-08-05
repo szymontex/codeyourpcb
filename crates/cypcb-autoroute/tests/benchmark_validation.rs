@@ -159,17 +159,17 @@ fn print_table_footer() {
 /// improves, never raise them to accommodate a regression.
 const DRC_RATCHETS: &[(&str, &str, u32)] = &[
     ("led_blink.kicad_pcb", "led_blink", 1),
-    ("stm32_breakout.kicad_pcb", "stm32_breakout", 238),
-    ("multi_ic.kicad_pcb", "multi_ic", 240),
+    ("stm32_breakout.kicad_pcb", "stm32_breakout", 124),
+    ("multi_ic.kicad_pcb", "multi_ic", 116),
 ];
 
 /// Routes every fixture and holds the line on completeness and DRC count.
 ///
-/// Ignored by default: the two realistic fixtures take about two minutes each
-/// to route, which does not belong in `cargo test`. scripts/quality-gate.sh
-/// runs it explicitly in the benchmark stage.
+/// Ignored by default so `cargo test` stays quick; scripts/quality-gate.sh runs
+/// it explicitly in the benchmark stage. It takes about 20 seconds now that the
+/// routing grid is a track pitch rather than half a clearance.
 #[test]
-#[ignore = "slow: routes all three fixtures, ~4 minutes"]
+#[ignore = "slow: routes all three fixtures"]
 fn benchmark_all_fixtures_drc() {
     let pathfinder = PathFinderStrategy;
 

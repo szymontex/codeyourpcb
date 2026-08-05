@@ -145,9 +145,17 @@ impl AutorouteConfig {
     /// Resolve the grid resolution: use explicit value or derive from rules.
     pub fn resolve_grid_resolution(&self, rules: &dyn RoutingRuleSet) -> i64 {
         self.grid_resolution_nm.unwrap_or_else(|| {
-            let clearance = rules.constraints_for_net(0).min_clearance;
-            // Half the minimum clearance gives good resolution
-            (clearance.raw() / 2).max(10_000) // floor at 10µm
+            // One cell per legal track position: a trace plus the clearance it
+            // needs. Neighbouring cells are then clearance-legal by
+            // construction, which is what a routing grid is for.
+            //
+            // The old half-a-clearance grid let two nets sit in adjacent cells
+            // whose copper physically overlapped. Measured on stm32_breakout:
+            // 238 DRC violations in 127.8s at clearance/2, against 124 in 9.7s
+            // at track pitch, with the same board fully routed.
+            let constraints = rules.constraints_for_net(0);
+            let pitch = constraints.min_trace_width.raw() + constraints.min_clearance.raw();
+            pitch.max(10_000) // floor at 10µm
         })
     }
 
