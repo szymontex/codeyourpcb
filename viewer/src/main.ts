@@ -811,23 +811,35 @@ async function init(): Promise<void> {
    * Ensure the Monaco editor is initialized and visible.
    * Lazy-loads on first call. Returns when the editor is ready.
    */
+  // Memoized so concurrent callers share one initialization. The toolbar click
+  // and the idle preload can both land before Monaco finishes loading, and two
+  // initEditor() calls create two editors in the same container - which is why
+  // specs saw `.monaco-editor` resolve to two elements.
+  let editorInitPromise: Promise<void> | null = null;
+
   async function ensureEditorReady(): Promise<void> {
-    if (!editorReady) {
-      console.log('[Editor] Initializing Monaco editor...');
-      editorInstance = await initEditor(editorContainer);
+    if (editorReady) return;
 
-      if (lastLoadedSource) {
-        suppressSync = true;
-        editorInstance.setValue(lastLoadedSource);
-        suppressSync = false;
-      }
+    if (!editorInitPromise) {
+      editorInitPromise = (async () => {
+        console.log('[Editor] Initializing Monaco editor...');
+        editorInstance = await initEditor(editorContainer);
 
-      setupEditorSync(editorInstance);
+        if (lastLoadedSource) {
+          suppressSync = true;
+          editorInstance.setValue(lastLoadedSource);
+          suppressSync = false;
+        }
 
-      editorReady = true;
-      (window as any).__editor = editorInstance;
-      console.log('[Editor] Monaco editor ready');
+        setupEditorSync(editorInstance);
+
+        editorReady = true;
+        (window as any).__editor = editorInstance;
+        console.log('[Editor] Monaco editor ready');
+      })();
     }
+
+    await editorInitPromise;
   }
 
   editorToggleBtn.addEventListener('click', async () => {
@@ -880,13 +892,12 @@ async function init(): Promise<void> {
   // Preload Monaco editor in the background so Ctrl+E opens instantly
   const preloadEditor = () => {
     if (!editorReady) {
+      // initEditor() only builds the editor; it never changes visibility, so the
+      // preload has nothing to undo. The previous guard tested for a `hidden`
+      // class the container never carries, so it toggled the panel open a few
+      // seconds after every page load.
       ensureEditorReady().then(() => {
         console.log('[Editor] Preloaded in background');
-        // Keep it hidden — user hasn't toggled it yet
-        const container = document.getElementById('editor-container');
-        if (container && !container.classList.contains('hidden')) {
-          toggleEditorPanel(); // hide it if it auto-showed
-        }
       });
     }
   };
