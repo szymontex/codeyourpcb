@@ -8,6 +8,7 @@
  * Debug surface: `window.__settings` exposes the current snapshot for E2E.
  */
 
+import { LAYER_COLORS } from './layers';
 import type { DisplayUnit } from './units';
 
 // ---------------------------------------------------------------------------
@@ -83,11 +84,11 @@ export const DEFAULT_SETTINGS: Readonly<AppSettings> = {
   ratsnestVisible: true,
   netLabelsVisible: true,
   layerColors: {
-    topCopper: '#C83434',
-    bottomCopper: '#3434C8',
-    silkscreen: '#C8C800',
-    via: '#808080',
-    drill: '#FFFFFF',
+    topCopper: LAYER_COLORS.top_copper,
+    bottomCopper: LAYER_COLORS.bottom_copper,
+    silkscreen: LAYER_COLORS.top_silk,
+    via: LAYER_COLORS.via,
+    drill: LAYER_COLORS.drill,
   },
   autorouteParams: {
     viaCost: 1.0,

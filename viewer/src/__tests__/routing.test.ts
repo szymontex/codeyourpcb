@@ -171,11 +171,11 @@ describe('routing state machine — UX features', () => {
 
   // (e) toggleAngleSnap flips state
   it('toggleAngleSnap flips state', () => {
-    expect(state.angleSnapEnabled).toBe(false);
+    expect(state.angleSnapEnabled).toBe(true);
     const toggled1 = toggleAngleSnap(state);
-    expect(toggled1.angleSnapEnabled).toBe(true);
+    expect(toggled1.angleSnapEnabled).toBe(false);
     const toggled2 = toggleAngleSnap(toggled1);
-    expect(toggled2.angleSnapEnabled).toBe(false);
+    expect(toggled2.angleSnapEnabled).toBe(true);
   });
 
   // (f) completeRoute + resetToIdle clears snappedToPad and targetPads
@@ -211,9 +211,9 @@ describe('routing state machine — UX features', () => {
     expect(cancelled.targetPads.length).toBe(0);
   });
 
-  // (h) angle snap disabled by default
-  it('angle snap disabled by default', () => {
-    expect(state.angleSnapEnabled).toBe(false);
+  // (h) angle snap follows KiCad and starts on
+  it('angle snap enabled by default', () => {
+    expect(state.angleSnapEnabled).toBe(true);
     // magneticSnap is enabled by default
     expect(state.magneticSnapEnabled).toBe(true);
   });

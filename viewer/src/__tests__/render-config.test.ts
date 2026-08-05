@@ -5,6 +5,7 @@ import {
   buildPadNetMap,
   LodTier,
 } from '../render-config';
+import { LAYER_COLORS } from '../layers';
 import type { NetInfo } from '../types';
 
 describe('createDefaultRenderConfig', () => {
@@ -12,11 +13,13 @@ describe('createDefaultRenderConfig', () => {
     const config = createDefaultRenderConfig();
 
     expect(config.layerColors).toBeDefined();
-    expect(config.layerColors.topCopper).toBe('#C83434');
-    expect(config.layerColors.bottomCopper).toBe('#3434C8');
-    expect(config.layerColors.silkscreen).toBe('#C8C800');
-    expect(config.layerColors.via).toBe('#808080');
-    expect(config.layerColors.drill).toBe('#FFFFFF');
+    // The palette lives in layers.ts; render config and user settings both
+    // read it, so a colour change cannot leave one of them behind.
+    expect(config.layerColors.topCopper).toBe(LAYER_COLORS.top_copper);
+    expect(config.layerColors.bottomCopper).toBe(LAYER_COLORS.bottom_copper);
+    expect(config.layerColors.silkscreen).toBe(LAYER_COLORS.top_silk);
+    expect(config.layerColors.via).toBe(LAYER_COLORS.via);
+    expect(config.layerColors.drill).toBe(LAYER_COLORS.drill);
 
     expect(config.fontConfig.refdesWorldSize).toBeGreaterThan(0);
     expect(config.fontConfig.padNumberMinScreenPx).toBeGreaterThan(0);

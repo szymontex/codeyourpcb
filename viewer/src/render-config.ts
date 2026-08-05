@@ -6,6 +6,7 @@
  * that enables per-pad net highlighting.
  */
 
+import { LAYER_COLORS } from './layers';
 import type { NetInfo } from './types';
 
 // ---------------------------------------------------------------------------
@@ -70,11 +71,11 @@ export interface RenderConfig {
 export function createDefaultRenderConfig(): RenderConfig {
   return {
     layerColors: {
-      topCopper: '#C41E1E',
-      bottomCopper: '#1E1EC4',
-      silkscreen: '#F0F0F0',
-      via: '#C8C800',
-      drill: '#1A1A1A',
+      topCopper: LAYER_COLORS.top_copper,
+      bottomCopper: LAYER_COLORS.bottom_copper,
+      silkscreen: LAYER_COLORS.top_silk,
+      via: LAYER_COLORS.via,
+      drill: LAYER_COLORS.drill,
     },
 
     fontConfig: {
