@@ -38,6 +38,7 @@ mod oshpark;
 mod pcbway;
 
 use cypcb_core::Nm;
+use cypcb_rules::DesignConstraints;
 
 /// Complete set of design rules for a board.
 ///
@@ -68,7 +69,7 @@ use cypcb_core::Nm;
 ///
 /// // Use a manufacturer preset
 /// let jlcpcb = DesignRules::jlcpcb_2layer();
-/// assert_eq!(jlcpcb.min_clearance, Nm::from_mm(0.15));
+/// assert_eq!(jlcpcb.min_clearance, Nm::from_mm(0.127));
 ///
 /// // Or create custom rules
 /// let custom = DesignRules {
@@ -112,6 +113,38 @@ pub struct DesignRules {
     pub min_silk_clearance: Nm,
     /// Minimum courtyard clearance between components.
     pub min_courtyard_clearance: Nm,
+}
+
+impl DesignRules {
+    /// Build DRC rules from a manufacturer's routing constraints.
+    ///
+    /// `cypcb-rules` is the single source of fabrication numbers: the autorouter
+    /// routes against it, so the checker has to grade against the same table.
+    /// They used to be two hand-maintained copies, and they disagreed - the
+    /// JLCPCB router preset allowed 0.127mm clearance while the JLCPCB DRC
+    /// preset demanded 0.15mm, so a correctly routed board failed its own check.
+    ///
+    /// Four assembly-side rules have no counterpart in the routing constraints
+    /// and are derived or defaulted here: the via diameter comes from the drill
+    /// plus two annular rings, silk clearance follows the silk width, and
+    /// hole-to-hole and courtyard clearance take conservative IPC-style values
+    /// that a preset can override.
+    pub fn from_constraints(c: &DesignConstraints) -> Self {
+        DesignRules {
+            min_clearance: c.min_clearance,
+            min_trace_width: c.min_trace_width,
+            min_drill_size: c.min_drill_size,
+            min_via_drill: c.min_via_drill,
+            min_via_diameter: Nm(c.min_via_drill.0 + 2 * c.min_via_annular_ring.0),
+            min_annular_ring: c.min_annular_ring,
+            min_silk_width: c.min_silk_width,
+            min_edge_clearance: c.min_edge_clearance,
+            min_hole_to_hole: Nm::from_mm(0.5),
+            min_solder_mask_bridge: c.min_solder_mask_bridge,
+            min_silk_clearance: c.min_silk_width,
+            min_courtyard_clearance: Nm::from_mm(0.25),
+        }
+    }
 }
 
 impl Default for DesignRules {
@@ -171,7 +204,7 @@ impl Preset {
     /// use cypcb_core::Nm;
     ///
     /// let rules = Preset::Jlcpcb2Layer.rules();
-    /// assert_eq!(rules.min_clearance, Nm::from_mm(0.15));
+    /// assert_eq!(rules.min_clearance, Nm::from_mm(0.127));
     /// ```
     pub fn rules(self) -> DesignRules {
         match self {
@@ -292,10 +325,10 @@ mod tests {
     #[test]
     fn test_jlcpcb_2layer_values() {
         let rules = DesignRules::jlcpcb_2layer();
-        assert_eq!(rules.min_clearance, Nm::from_mm(0.15));
-        assert_eq!(rules.min_trace_width, Nm::from_mm(0.15));
+        assert_eq!(rules.min_clearance, Nm::from_mm(0.127));
+        assert_eq!(rules.min_trace_width, Nm::from_mm(0.127));
         assert_eq!(rules.min_drill_size, Nm::from_mm(0.3));
-        assert_eq!(rules.min_via_drill, Nm::from_mm(0.2));
+        assert_eq!(rules.min_via_drill, Nm::from_mm(0.3));
         assert_eq!(rules.min_annular_ring, Nm::from_mm(0.15));
         assert_eq!(rules.min_silk_width, Nm::from_mm(0.15));
         assert_eq!(rules.min_edge_clearance, Nm::from_mm(0.3));
@@ -394,12 +427,50 @@ mod tests {
     }
 
     #[test]
+    fn drc_presets_do_not_diverge_from_routing_constraints() {
+        use cypcb_rules::presets::RulesPreset;
+
+        let pairs = [
+            (Preset::Jlcpcb2Layer, RulesPreset::JlcpcbStandard2Layer),
+            (Preset::Jlcpcb4Layer, RulesPreset::JlcpcbStandard4Layer),
+            (
+                Preset::JlcpcbAdvanced2Layer,
+                RulesPreset::JlcpcbAdvanced2Layer,
+            ),
+            (
+                Preset::JlcpcbAdvanced4Layer,
+                RulesPreset::JlcpcbAdvanced4Layer,
+            ),
+            (Preset::OshPark2Layer, RulesPreset::OshPark2Layer),
+            (Preset::OshPark4Layer, RulesPreset::OshPark4Layer),
+            (Preset::PcbwayStandard, RulesPreset::PcbWayStandard),
+        ];
+
+        for (drc_preset, routing_preset) in pairs {
+            let rules = drc_preset.rules();
+            let constraints = routing_preset.constraints();
+            assert_eq!(
+                rules.min_clearance,
+                constraints.min_clearance,
+                "{} clearance must match what the router routes against",
+                drc_preset.name()
+            );
+            assert_eq!(rules.min_trace_width, constraints.min_trace_width);
+            assert_eq!(rules.min_drill_size, constraints.min_drill_size);
+            assert_eq!(rules.min_via_drill, constraints.min_via_drill);
+            assert_eq!(rules.min_annular_ring, constraints.min_annular_ring);
+            assert_eq!(rules.min_edge_clearance, constraints.min_edge_clearance);
+        }
+    }
+
+    #[test]
     fn test_preset_rules_accessor() {
         let rules = Preset::Jlcpcb2Layer.rules();
-        assert_eq!(rules.min_clearance, Nm::from_mm(0.15));
+        assert_eq!(rules.min_clearance, Nm::from_mm(0.127));
 
         let rules = Preset::PcbwayStandard.rules();
         assert_eq!(rules.min_drill_size, Nm::from_mm(0.2));
+        assert_eq!(rules.min_silk_width, Nm::from_mm(0.22));
     }
 
     #[test]

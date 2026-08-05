@@ -45,8 +45,8 @@ Read this file first. It is the source of truth for what is in flight and what c
 - QUEUED: fresh clone does not build - `crates/cypcb-parser/grammar/src/parser.c` is gitignored (`.gitignore:19`) and `build.rs` panics without it. WASM-dependent Playwright tests only ever skip (`isWasmAvailable()` guard); `M005-VALIDATION.md` verdict is `needs-attention` for exactly this - CI needs a `wasm-pack build` step before Playwright. `cypcb check` + `cypcb export` in GitHub Actions (README lists it as Planned).
 
 ### V4 - Architecture and deduplication
-- DONE: nothing this cycle.
-- NEXT-ACTION: two independent `.cypcb` parsers - Rust tree-sitter (CLI, LSP) and a regex parser in `viewer/src/wasm.ts` (web). They will diverge; arguably already have. Decide the collapse strategy (WASM-export the Rust parser to the viewer) and execute.
+- DONE: manufacturer rules had two copies that disagreed - the router routed JLCPCB to 0.127mm clearance while the checker demanded 0.15mm, so a correctly routed board failed its own DRC. `cypcb-drc` already depended on `cypcb-rules` without using it; the seven fab presets are now one line each on top of `DesignRules::from_constraints`, and `drc_presets_do_not_diverge_from_routing_constraints` walks every pair so they cannot drift again. Proof: `cargo test -p cypcb-drc` -> 113 + 31 + 23 passed, consumers green, gate clean.
+- NEXT-ACTION: two independent `.cypcb` parsers - Rust tree-sitter (CLI, LSP) and a regex parser in `viewer/src/wasm.ts` (web). Same failure mode as the rules tables, one layer up. Decide the collapse strategy (WASM-export the Rust parser to the viewer) and execute.
 - QUEUED: IPC-2221 trace width formula duplicated in 4 places with a divergent constant. Orphan crates with zero consumers: `cypcb-calc`, `cypcb-kicad`, `cypcb-watcher`, most of `cypcb-platform`.
 
 ### V5 - Features from the roadmap

@@ -10,6 +10,7 @@
 
 use super::DesignRules;
 use cypcb_core::Nm;
+use cypcb_rules::presets::RulesPreset;
 
 impl DesignRules {
     /// PCBWay standard rules.
@@ -41,20 +42,7 @@ impl DesignRules {
     /// assert_eq!(rules.min_drill_size, Nm::from_mm(0.2));
     /// ```
     pub fn pcbway_standard() -> Self {
-        DesignRules {
-            min_clearance: Nm::from_mm(0.15), // 6 mil recommended
-            min_trace_width: Nm::from_mm(0.15),
-            min_drill_size: Nm::from_mm(0.2), // Mechanical
-            min_via_drill: Nm::from_mm(0.2),
-            min_via_diameter: Nm::from_mm(0.5), // 0.5mm
-            min_annular_ring: Nm::from_mm(0.15),
-            min_silk_width: Nm::from_mm(0.22), // 8.66 mil - wider than JLCPCB
-            min_edge_clearance: Nm::from_mm(0.3),
-            min_hole_to_hole: Nm::from_mm(0.5),
-            min_solder_mask_bridge: Nm::from_mm(0.1),
-            min_silk_clearance: Nm::from_mm(0.15),
-            min_courtyard_clearance: Nm::from_mm(0.25),
-        }
+        Self::from_constraints(&RulesPreset::PcbWayStandard.constraints())
     }
 
     /// Relaxed rules for prototyping.
@@ -140,11 +128,13 @@ mod tests {
         let proto = DesignRules::prototype();
         let jlcpcb = DesignRules::jlcpcb_2layer();
 
-        // Prototype should have larger (more relaxed) minimums
+        // Prototype should have larger (more relaxed) minimums. Via drill is the
+        // one exception: JLCPCB's standard process also wants 0.3mm, so it can
+        // only be no tighter, not strictly larger.
         assert!(proto.min_clearance > jlcpcb.min_clearance);
         assert!(proto.min_trace_width > jlcpcb.min_trace_width);
         assert!(proto.min_drill_size > jlcpcb.min_drill_size);
-        assert!(proto.min_via_drill > jlcpcb.min_via_drill);
+        assert!(proto.min_via_drill >= jlcpcb.min_via_drill);
         assert!(proto.min_annular_ring > jlcpcb.min_annular_ring);
         assert!(proto.min_edge_clearance > jlcpcb.min_edge_clearance);
     }

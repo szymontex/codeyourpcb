@@ -627,7 +627,8 @@ mod via_diameter {
     fn normal_via_ok() {
         let mut world = world_with_board();
         let net = world.intern_net("VCC");
-        // Via with 0.6mm outer — above 0.45mm minimum
+        // Via with 0.6mm outer — above the 0.554mm minimum
+        // (0.3mm drill + 2 x 0.127mm annular ring, from the JLCPCB constraints)
         spawn_via(&mut world, net, (25.0, 25.0), 0.3, 0.6);
         rebuild_spatial(&mut world, vec![]);
         assert_eq!(
@@ -647,7 +648,7 @@ mod via_diameter {
         spawn_via(&mut world, net, (20.0, 25.0), 0.3, 0.6); // OK
         spawn_via(&mut world, net, (25.0, 25.0), 0.2, 0.3); // Too small
         spawn_via(&mut world, net, (30.0, 25.0), 0.2, 0.35); // Too small
-        spawn_via(&mut world, net, (35.0, 25.0), 0.3, 0.5); // OK
+        spawn_via(&mut world, net, (35.0, 25.0), 0.3, 0.5); // Too small: min is 0.554mm
         rebuild_spatial(&mut world, vec![]);
         assert_eq!(
             count_violations(
@@ -655,7 +656,7 @@ mod via_diameter {
                 &DesignRules::jlcpcb_2layer(),
                 ViolationKind::ViaDiameter
             ),
-            2
+            3
         );
     }
 }

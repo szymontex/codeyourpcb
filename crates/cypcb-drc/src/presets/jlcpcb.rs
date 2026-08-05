@@ -10,7 +10,7 @@
 //! - <https://www.schemalyzer.com/en/blog/manufacturing/jlcpcb/jlcpcb-design-rules>
 
 use super::DesignRules;
-use cypcb_core::Nm;
+use cypcb_rules::presets::RulesPreset;
 
 impl DesignRules {
     /// JLCPCB standard 2-layer board rules.
@@ -37,24 +37,11 @@ impl DesignRules {
     /// use cypcb_core::Nm;
     ///
     /// let rules = DesignRules::jlcpcb_2layer();
-    /// assert_eq!(rules.min_clearance, Nm::from_mm(0.15));
+    /// assert_eq!(rules.min_clearance, Nm::from_mm(0.127));
     /// assert_eq!(rules.min_drill_size, Nm::from_mm(0.3));
     /// ```
     pub fn jlcpcb_2layer() -> Self {
-        DesignRules {
-            min_clearance: Nm::from_mm(0.15),           // 6 mil
-            min_trace_width: Nm::from_mm(0.15),         // 6 mil
-            min_drill_size: Nm::from_mm(0.3),           // 0.3mm mechanical
-            min_via_drill: Nm::from_mm(0.2),            // 0.2mm via
-            min_via_diameter: Nm::from_mm(0.45),        // 0.45mm outer (0.2 drill + 2*0.125 ring)
-            min_annular_ring: Nm::from_mm(0.15),        // 6 mil
-            min_silk_width: Nm::from_mm(0.15),          // 6 mil
-            min_edge_clearance: Nm::from_mm(0.3),       // 0.3mm
-            min_hole_to_hole: Nm::from_mm(0.5),         // 0.5mm edge-to-edge
-            min_solder_mask_bridge: Nm::from_mm(0.1),   // 0.1mm solder mask web
-            min_silk_clearance: Nm::from_mm(0.15),      // 0.15mm silk to pad
-            min_courtyard_clearance: Nm::from_mm(0.25), // 0.25mm between courtyards
-        }
+        Self::from_constraints(&RulesPreset::JlcpcbStandard2Layer.constraints())
     }
 
     /// JLCPCB 4-layer board rules with tighter tolerances.
@@ -86,39 +73,27 @@ impl DesignRules {
     /// assert_eq!(rules.min_drill_size, Nm::from_mm(0.2));
     /// ```
     pub fn jlcpcb_4layer() -> Self {
-        DesignRules {
-            min_clearance: Nm::from_mm(0.1),   // 4 mil
-            min_trace_width: Nm::from_mm(0.1), // 4 mil
-            min_drill_size: Nm::from_mm(0.2),  // 0.2mm
-            min_via_drill: Nm::from_mm(0.2),
-            min_via_diameter: Nm::from_mm(0.45),  // 0.45mm
-            min_annular_ring: Nm::from_mm(0.125), // 5 mil
-            min_silk_width: Nm::from_mm(0.15),
-            min_edge_clearance: Nm::from_mm(0.25),
-            min_hole_to_hole: Nm::from_mm(0.5),
-            min_solder_mask_bridge: Nm::from_mm(0.1),
-            min_silk_clearance: Nm::from_mm(0.15),
-            min_courtyard_clearance: Nm::from_mm(0.25),
-        }
+        Self::from_constraints(&RulesPreset::JlcpcbStandard4Layer.constraints())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use cypcb_core::Nm;
 
     #[test]
     fn test_jlcpcb_2layer_clearance() {
         let rules = DesignRules::jlcpcb_2layer();
-        // 6 mil = 0.1524mm, rounded to 0.15mm
-        assert_eq!(rules.min_clearance, Nm::from_mm(0.15));
+        // 5 mil standard process, same number the autorouter routes against
+        assert_eq!(rules.min_clearance, Nm::from_mm(0.127));
     }
 
     #[test]
     fn test_jlcpcb_2layer_drill() {
         let rules = DesignRules::jlcpcb_2layer();
         assert_eq!(rules.min_drill_size, Nm::from_mm(0.3));
-        assert_eq!(rules.min_via_drill, Nm::from_mm(0.2));
+        assert_eq!(rules.min_via_drill, Nm::from_mm(0.3));
     }
 
     #[test]
@@ -137,10 +112,10 @@ mod tests {
     #[test]
     fn test_jlcpcb_2layer_all_fields() {
         let rules = DesignRules::jlcpcb_2layer();
-        assert_eq!(rules.min_clearance, Nm::from_mm(0.15));
-        assert_eq!(rules.min_trace_width, Nm::from_mm(0.15));
+        assert_eq!(rules.min_clearance, Nm::from_mm(0.127));
+        assert_eq!(rules.min_trace_width, Nm::from_mm(0.127));
         assert_eq!(rules.min_drill_size, Nm::from_mm(0.3));
-        assert_eq!(rules.min_via_drill, Nm::from_mm(0.2));
+        assert_eq!(rules.min_via_drill, Nm::from_mm(0.3));
         assert_eq!(rules.min_annular_ring, Nm::from_mm(0.15));
         assert_eq!(rules.min_silk_width, Nm::from_mm(0.15));
         assert_eq!(rules.min_edge_clearance, Nm::from_mm(0.3));
