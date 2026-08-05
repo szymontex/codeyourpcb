@@ -96,6 +96,7 @@ Read this file first. It is the source of truth for what is in flight and what c
 
 ### V5 - Features from the roadmap
 - DONE: nothing this cycle.
+- DONE: **a copper pour can say what it is poured to.** The grammar has read `net` on a zone since the beginning, the parser filled `ZoneDef.net`, and sync ended at `let _ = net;` under a comment saying it would matter one day. `Zone` carries a `NetId` now, and the first thing that uses it is the ratsnest: a pad of that net sitting inside a pour on a layer the pour reaches is already connected by the plane, so the router is not asked to reach it. Proven both ways in one test - the same two-resistor board yields a GND net to route without the plane and none with it, while the signal between them still has to be routed.
 - NEXT-ACTION: DSL v2 constructs parse but do nothing - no module instantiation, no import resolution, no constraint evaluation. Pick module instantiation first; it is what makes the DSL worth using over a schematic editor.
 - QUEUED: copper pour / ground planes - **the claim that no `Zone` type exists was wrong**, see M2 in the domain-model register; the gap is that a zone cannot name its net. KiCad `.kicad_pcb` export (import exists), parts engine, schematic generation, differential pairs, polygon board outline editing.
 
@@ -224,7 +225,7 @@ this list whenever a piece of work runs into a missing concept.
 | # | Missing | Evidence | What it blocks |
 |---|---|---|---|
 | M1 | ~~Per-net electrical constraints on the board model.~~ **Closed.** `NetRegistry` carries them, indexed by `NetId`; `sync_ast_to_world` fills them from the `net X { ... }` block. | - | Was blocking the trace-current rule, which now ships. Per-net routing widths are still unused by the router - that part stays open. |
-| M2 | **A net on a copper zone.** `Zone` carries bounds, kind, layer mask and a name. | `crates/cypcb-world/src/components/zone.rs:41`. | Ground planes. A pour that cannot name its net cannot be filled, cannot take thermal reliefs, and cannot be checked against foreign copper. |
+| M2 | ~~A net on a copper zone.~~ **Closed.** `Zone.net`, filled by sync, and the ratsnest drops a pad the pour already connects. | - | Filling a pour with real geometry and checking it against foreign copper are still open - see V5. |
 | M3 | **Which side a component is on.** No `Side` component exists; the silkscreen rule infers it from the layers its pads sit on and says so in a comment. | `rg 'struct Side' crates/cypcb-world/src` is empty. | Bottom-side assembly, pick-and-place output, and every rule that has to ask "same side?" - which currently guesses from copper. |
 | M4 | **A board outline that is not a rectangle.** `BoardSize` is a width and a height. | `crates/cypcb-world/src/components/board.rs:47`. | Cutouts, slots, rounded corners, any non-rectangular board, and edge-clearance measured against the real edge. |
 | M5 | **Net classes.** Every net gets the same preset. | `rg NetClass crates` finds nothing. | Saying "every power net is 0.5mm" once instead of per net, which is how real designs are constrained. |

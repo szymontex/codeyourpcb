@@ -4,6 +4,7 @@
 //! - Keepouts prevent copper from being placed in the region
 //! - Copper pours fill the region with copper connected to a net
 
+use crate::components::NetId;
 use bevy_ecs::prelude::*;
 use cypcb_core::Rect;
 
@@ -48,6 +49,12 @@ pub struct Zone {
     pub layer_mask: u32,
     /// Optional name for reference.
     pub name: Option<String>,
+    /// Net this zone is poured to. Always `None` for a keepout.
+    ///
+    /// A pour without a net is not a pour: it cannot be filled, it cannot be
+    /// checked against foreign copper, and the pads it swallows are not
+    /// connected to anything.
+    pub net: Option<NetId>,
 }
 
 impl Zone {
@@ -73,6 +80,7 @@ impl Zone {
     /// ```
     pub fn keepout(bounds: Rect, layer_mask: u32) -> Self {
         Zone {
+            net: None,
             bounds,
             kind: ZoneKind::Keepout,
             layer_mask,
@@ -88,10 +96,23 @@ impl Zone {
     /// * `layer_mask` - Bit mask of layers this zone applies to
     pub fn copper_pour(bounds: Rect, layer_mask: u32) -> Self {
         Zone {
+            net: None,
             bounds,
             kind: ZoneKind::CopperPour,
             layer_mask,
             name: None,
+        }
+    }
+
+    /// Create a copper pour tied to a net.
+    ///
+    /// This is what a ground plane is. The pads of that net which fall inside
+    /// the pour are connected by it, so the router does not have to reach them
+    /// and the checker must not read them as shorts.
+    pub fn copper_pour_for_net(bounds: Rect, layer_mask: u32, net: NetId) -> Self {
+        Zone {
+            net: Some(net),
+            ..Zone::copper_pour(bounds, layer_mask)
         }
     }
 

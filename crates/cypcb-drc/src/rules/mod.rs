@@ -222,6 +222,7 @@ mod tests {
             kind: ZoneKind::Keepout,
             layer_mask: 0xFFFFFFFF,
             name: Some("test_zone".to_string()),
+            net: None,
         };
         world.ecs_mut().spawn(zone);
 
@@ -254,6 +255,7 @@ mod tests {
             kind: ZoneKind::Keepout,
             layer_mask: 0xFFFFFFFF,
             name: Some("test_zone".to_string()),
+            net: None,
         };
         world.ecs_mut().spawn(zone);
 
@@ -283,6 +285,7 @@ mod tests {
             kind: ZoneKind::CopperPour,
             layer_mask: 0xFFFFFFFF,
             name: Some("gnd_pour".to_string()),
+            net: None,
         };
         world.ecs_mut().spawn(zone);
 
@@ -315,6 +318,7 @@ mod tests {
             kind: ZoneKind::Keepout,
             layer_mask: 0xFFFFFFFF,
             name: None,
+            net: None,
         };
         world.ecs_mut().spawn(zone);
 

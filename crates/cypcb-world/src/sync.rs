@@ -587,25 +587,26 @@ fn sync_zone(zone_def: &ZoneDef, world: &mut BoardWorld, _result: &mut SyncResul
         Some(_) => 0xFFFFFFFF,            // Unknown layer defaults to all
     };
 
-    // Create zone component
+    // A pour's net. The grammar has read this since the beginning and sync
+    // dropped it on the floor, which left a copper pour unable to say what it
+    // is poured to - so it could be neither filled nor checked, and the pads it
+    // swallows looked unconnected.
+    let net = match zone_def.kind {
+        AstZoneKind::CopperPour => zone_def
+            .net
+            .as_ref()
+            .map(|net| world.intern_net(&net.value)),
+        AstZoneKind::Keepout => None,
+    };
+
     let zone = Zone {
         bounds,
         kind,
         layer_mask,
         name: zone_def.name.as_ref().map(|n| n.value.clone()),
+        net,
     };
 
-    // If copper pour, we would also store the net reference
-    // For now, we store it in the name if present
-    if zone_def.kind == AstZoneKind::CopperPour {
-        if let Some(net) = &zone_def.net {
-            // Could intern the net and store it, but for now just note it
-            // In the future this would be used for DRC checks
-            let _ = net;
-        }
-    }
-
-    // Spawn zone entity
     world.ecs_mut().spawn(zone);
 }
 

@@ -852,6 +852,7 @@ mod keepout {
             kind: ZoneKind::Keepout,
             layer_mask: 0xFFFFFFFF,
             name: Some("antenna_area".to_string()),
+            net: None,
         };
         world.ecs_mut().spawn(zone);
 
@@ -879,6 +880,7 @@ mod keepout {
             kind: ZoneKind::Keepout,
             layer_mask: 0xFFFFFFFF,
             name: None,
+            net: None,
         };
         world.ecs_mut().spawn(zone);
 

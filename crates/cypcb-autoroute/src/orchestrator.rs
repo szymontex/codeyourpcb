@@ -7,6 +7,7 @@
 //! 4. Handles congestion via rip-up/reroute when a net fails
 
 use std::collections::HashMap;
+use std::ops::Not;
 
 use cypcb_core::{Nm, Point};
 use cypcb_rules::RoutingRuleSet;
@@ -73,6 +74,20 @@ pub fn extract_ratsnest(world: &mut BoardWorld, library: &FootprintLibrary) -> V
             .collect()
     };
 
+    // Copper pours, with the net each is poured to. A pad of that net sitting
+    // inside one is already connected by the plane - routing to it would be
+    // laying copper on top of copper.
+    let pours: Vec<(NetId, cypcb_core::Rect, u32)> = world
+        .zones()
+        .into_iter()
+        .filter_map(|(_entity, zone)| {
+            let net = zone.net?;
+            zone.is_keepout()
+                .not()
+                .then_some((net, zone.bounds, zone.layer_mask))
+        })
+        .collect();
+
     // Build a map: net_id -> Vec<PadTarget>
     let mut net_pads: HashMap<NetId, Vec<PadTarget>> = HashMap::new();
 
@@ -112,6 +127,15 @@ pub fn extract_ratsnest(world: &mut BoardWorld, library: &FootprintLibrary) -> V
                 if let Some(idx) = layer_to_index(*layer) {
                     layer_mask |= 1u32 << idx;
                 }
+            }
+
+            if covered_by_pour(&pours, pin_conn.net, abs_pos, layer_mask) {
+                tracing::debug!(
+                    net = pin_conn.net.id(),
+                    pin = %pin_conn.pin,
+                    "Pad is inside a pour of its own net, nothing to route"
+                );
+                continue;
             }
 
             net_pads.entry(pin_conn.net).or_default().push(PadTarget {
@@ -714,6 +738,66 @@ fn rotate_point(p: Point, degrees: f64) -> Point {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn a_ground_plane_removes_its_net_from_the_ratsnest() {
+        use cypcb_world::components::zone::Zone;
+        use cypcb_world::components::{NetConnections, PinConnection, RefDes, Value};
+        use cypcb_world::footprint::FootprintLibrary;
+
+        // Two parts whose pin 2 is GND and whose pin 1 is a signal between them.
+        let build = |with_pour: bool| {
+            let mut world = BoardWorld::new();
+            world.set_board("t".to_string(), (Nm::from_mm(40.0), Nm::from_mm(20.0)), 2);
+            let gnd = world.intern_net("GND");
+            let sig = world.intern_net("SIG");
+
+            for (index, refdes) in ["R1", "R2"].iter().enumerate() {
+                let mut nets = NetConnections::new();
+                nets.add(PinConnection::new("1".to_string(), sig));
+                nets.add(PinConnection::new("2".to_string(), gnd));
+                world.spawn_component(
+                    RefDes::new(*refdes),
+                    Value::new("10k"),
+                    Position::from_mm(10.0 + index as f64 * 15.0, 10.0),
+                    Rotation::ZERO,
+                    FootprintRef::new("0402"),
+                    nets,
+                );
+            }
+
+            if with_pour {
+                let bounds =
+                    cypcb_core::Rect::new(Point::from_mm(0.0, 0.0), Point::from_mm(40.0, 20.0));
+                world
+                    .ecs_mut()
+                    .spawn(Zone::copper_pour_for_net(bounds, 0b01, gnd));
+            }
+            world
+        };
+
+        let library = FootprintLibrary::new();
+
+        let mut without = build(false);
+        let bare = extract_ratsnest(&mut without, &library);
+        assert!(
+            bare.iter().any(|net| net.net_name == "GND"),
+            "with no plane, GND has to be routed: {:?}",
+            bare.iter().map(|n| &n.net_name).collect::<Vec<_>>()
+        );
+
+        let mut with = build(true);
+        let poured = extract_ratsnest(&mut with, &library);
+        assert!(
+            !poured.iter().any(|net| net.net_name == "GND"),
+            "a top-side plane over both GND pads connects them: {:?}",
+            poured.iter().map(|n| &n.net_name).collect::<Vec<_>>()
+        );
+        assert!(
+            poured.iter().any(|net| net.net_name == "SIG"),
+            "the signal still needs routing"
+        );
+    }
     use super::*;
     use cypcb_core::Nm;
     use cypcb_rules::signal_class::{SignalClass, SignalClassConstraints};
@@ -1027,4 +1111,19 @@ mod tests {
         assert_eq!(ratsnest[0].net_name, "GND");
         assert_eq!(ratsnest[0].pads.len(), 3);
     }
+}
+
+/// Whether a pad is already connected by a copper pour of its own net.
+///
+/// The pour has to be on a layer the pad reaches - a ground plane on the bottom
+/// does not connect a top-side SMD pad - and has to contain the pad's centre.
+fn covered_by_pour(
+    pours: &[(NetId, cypcb_core::Rect, u32)],
+    net: NetId,
+    position: Point,
+    pad_layers: u32,
+) -> bool {
+    pours.iter().any(|(pour_net, bounds, pour_layers)| {
+        *pour_net == net && pour_layers & pad_layers != 0 && bounds.contains(position)
+    })
 }
