@@ -1,11 +1,10 @@
 //! Improved A* routing strategy.
 //!
-//! Wraps the existing A* orchestrator with three improvements:
+//! Wraps the existing A* orchestrator with two improvements:
 //!
 //! 1. **Congestion-aware cost** — penalizes routing near existing nets via
 //!    `grid.net_at()` checks during neighbor expansion
-//! 2. **Increased rip-up iterations** — 20 iterations (up from 10)
-//! 3. **Multi-victim rip-up** — tries up to 3 different blocking nets per
+//! 2. **Multi-victim rip-up** — tries up to 3 different blocking nets per
 //!    failed connection before giving up
 //!
 //! Net ordering also considers fanout (pad count) alongside span, routing
@@ -44,7 +43,10 @@ impl RoutingStrategy for ImprovedAStarStrategy {
         config: &AutorouteConfig,
     ) -> RoutingResult {
         let _span = tracing::info_span!("improved_astar_strategy").entered();
-        tracing::info!(routing_strategy = self.name(), "Starting improved A* routing");
+        tracing::info!(
+            routing_strategy = self.name(),
+            "Starting improved A* routing"
+        );
 
         // Use adaptive resolution for large boards
         let resolution = if let Some((board_size, _)) = world.board_info() {
@@ -75,19 +77,11 @@ impl RoutingStrategy for ImprovedAStarStrategy {
         // Order nets with improved ordering (fanout-aware)
         let order = order_nets_improved(&ratsnest);
 
-        // Route with improved parameters: 20 iterations, 3 victims
-        let max_ripup = 20u32;
+        // Rip-up breadth: try up to 3 different blocking nets per failed connection.
         let max_victims = 3u32;
 
-        let loop_result = route_all_nets_improved(
-            &mut grid,
-            &ratsnest,
-            &order,
-            rules,
-            config,
-            max_ripup,
-            max_victims,
-        );
+        let loop_result =
+            route_all_nets_improved(&mut grid, &ratsnest, &order, rules, config, max_victims);
 
         // Post-process: convert grid paths to segments and vias
         let mut all_segments = Vec::new();
@@ -116,9 +110,22 @@ impl RoutingStrategy for ImprovedAStarStrategy {
 
         let mut smoothed_segments = Vec::new();
         for net_id in &net_ids {
-            let net_segs: Vec<_> = all_segments.iter().filter(|s| s.net_id == *net_id).cloned().collect();
-            let other_segs: Vec<_> = all_segments.iter().filter(|s| s.net_id != *net_id).cloned().collect();
-            let smoothed = smooth_routes(&net_segs, &other_segs, min_clearance, config.params.roundness);
+            let net_segs: Vec<_> = all_segments
+                .iter()
+                .filter(|s| s.net_id == *net_id)
+                .cloned()
+                .collect();
+            let other_segs: Vec<_> = all_segments
+                .iter()
+                .filter(|s| s.net_id != *net_id)
+                .cloned()
+                .collect();
+            let smoothed = smooth_routes(
+                &net_segs,
+                &other_segs,
+                min_clearance,
+                config.params.roundness,
+            );
             smoothed_segments.extend(smoothed);
         }
         all_segments = smoothed_segments;
@@ -268,7 +275,6 @@ fn route_all_nets_improved(
     order: &[usize],
     rules: &dyn RoutingRuleSet,
     config: &AutorouteConfig,
-    max_ripup_iterations: u32,
     max_victims_per_failure: u32,
 ) -> ImprovedRoutingResult {
     let _span = tracing::info_span!("route_all_nets_improved").entered();
@@ -303,7 +309,12 @@ fn route_all_nets_improved(
             let end = pad_to_grid_node(grid, to_pad);
             let any_end = is_multi_layer(to_pad.layer_mask);
 
-            let cost = RoutingCost::new(rules, net_id, config.via_cost_multiplier, config.params.layer_preference);
+            let cost = RoutingCost::new(
+                rules,
+                net_id,
+                config.via_cost_multiplier,
+                config.params.layer_preference,
+            );
 
             // Try direct routing first
             match find_path_with_zones(grid, start, end, &cost, any_end, &net_pad_zones) {
@@ -323,7 +334,6 @@ fn route_all_nets_improved(
                         ratsnest,
                         rules,
                         config,
-                        max_ripup_iterations,
                         max_victims_per_failure,
                     );
                     match routed {
@@ -337,7 +347,6 @@ fn route_all_nets_improved(
                                 from_pin = %from_pad.pin,
                                 to_pin = %to_pad.pin,
                                 victims_tried = max_victims_per_failure,
-                                max_ripup_iterations,
                                 "Connection failed after exhausting all rip-up victims"
                             );
                             net_success = false;
@@ -410,7 +419,6 @@ fn attempt_multi_victim_ripup(
     ratsnest: &[NetRoute],
     rules: &dyn RoutingRuleSet,
     config: &AutorouteConfig,
-    max_iterations: u32,
     max_victims: u32,
 ) -> Option<Vec<GridNode>> {
     let mut tried_victims: Vec<u32> = Vec::new();
@@ -442,48 +450,43 @@ fn attempt_multi_victim_ripup(
             "Multi-victim rip-up: trying victim"
         );
 
-        // Try rip-up with this victim, with multiple iterations
-        for iter in 0..max_iterations {
-            // Save victim's paths
-            let victim_paths = routed_paths.remove(&victim_id);
+        // One attempt per victim: if removing this net does not open a path,
+        // retrying with the same net removed cannot change the outcome. The
+        // retry budget is spent on the next victim instead.
+        let victim_paths = routed_paths.remove(&victim_id);
+        grid.clear_route(victim_id);
 
-            // Clear victim from grid
-            grid.clear_route(victim_id);
-
-            // Try routing current net
-            let cost = RoutingCost::new(rules, current_net_id, config.via_cost_multiplier, config.params.layer_preference);
-            if let Some(path) =
-                find_path_with_zones(grid, start, end, &cost, any_end, pad_zones)
-            {
-                // Current net routed. Re-route victim.
-                if let Some(old_paths) = victim_paths {
-                    if reroute_victim(grid, victim_id, ratsnest, rules, config, routed_paths) {
-                        tracing::info!(
-                            victim = victim_id,
-                            victim_round,
-                            iter,
-                            "Victim re-routed successfully"
-                        );
-                        return Some(path);
-                    } else {
-                        // Victim re-route failed. Undo current, restore victim.
-                        grid.clear_route(current_net_id);
-                        restore_paths(grid, victim_id, &old_paths);
-                        routed_paths.insert(victim_id, old_paths);
-                        break; // Try next victim
-                    }
+        let cost = RoutingCost::new(
+            rules,
+            current_net_id,
+            config.via_cost_multiplier,
+            config.params.layer_preference,
+        );
+        match find_path_with_zones(grid, start, end, &cost, any_end, pad_zones) {
+            Some(path) => {
+                // Current net routed. Re-route the victim we displaced.
+                let Some(old_paths) = victim_paths else {
+                    return Some(path);
+                };
+                if reroute_victim(grid, victim_id, ratsnest, rules, config, routed_paths) {
+                    tracing::info!(
+                        victim = victim_id,
+                        victim_round,
+                        "Victim re-routed successfully"
+                    );
+                    return Some(path);
                 }
-                return Some(path);
-            } else {
-                // Current net still can't route. Restore victim and try next iteration.
+                // Victim re-route failed. Undo current, restore victim.
+                grid.clear_route(current_net_id);
+                restore_paths(grid, victim_id, &old_paths);
+                routed_paths.insert(victim_id, old_paths);
+            }
+            None => {
+                // Current net still cannot route. Restore the victim untouched.
                 if let Some(old_paths) = victim_paths {
                     restore_paths(grid, victim_id, &old_paths);
                     routed_paths.insert(victim_id, old_paths);
                 }
-                // Only first iteration matters for a given victim — if removing it
-                // doesn't help, more iterations won't either. Break to next victim.
-                let _ = iter;
-                break;
             }
         }
     }
@@ -505,7 +508,12 @@ fn reroute_victim(
         None => return false,
     };
 
-    let victim_cost = RoutingCost::new(rules, victim_id, config.via_cost_multiplier, config.params.layer_preference);
+    let victim_cost = RoutingCost::new(
+        rules,
+        victim_id,
+        config.via_cost_multiplier,
+        config.params.layer_preference,
+    );
     let victim_pad_zones: Vec<PadZone> = victim_net
         .pads
         .iter()
@@ -519,8 +527,14 @@ fn reroute_victim(
         let v_end = pad_to_grid_node(grid, &victim_net.pads[conn.to_idx]);
         let v_any_end = is_multi_layer(victim_net.pads[conn.to_idx].layer_mask);
 
-        match find_path_with_zones(grid, v_start, v_end, &victim_cost, v_any_end, &victim_pad_zones)
-        {
+        match find_path_with_zones(
+            grid,
+            v_start,
+            v_end,
+            &victim_cost,
+            v_any_end,
+            &victim_pad_zones,
+        ) {
             Some(vp) => victim_rerouted.push(vp),
             None => return false,
         }
@@ -798,7 +812,6 @@ mod tests {
             &ratsnest,
             &rules,
             &config,
-            20,
             3,
         );
 
@@ -923,15 +936,7 @@ mod tests {
         let ratsnest = vec![net1, net2];
         let order = order_nets_improved(&ratsnest);
 
-        let result = route_all_nets_improved(
-            &mut grid,
-            &ratsnest,
-            &order,
-            &rules,
-            &config,
-            20,
-            3,
-        );
+        let result = route_all_nets_improved(&mut grid, &ratsnest, &order, &rules, &config, 3);
 
         assert!(result.unrouted.is_empty(), "Both nets should route");
         assert_eq!(
@@ -1007,15 +1012,7 @@ mod tests {
         let ratsnest = vec![net1, net2];
         let order = order_nets_improved(&ratsnest);
 
-        let result = route_all_nets_improved(
-            &mut grid,
-            &ratsnest,
-            &order,
-            &rules,
-            &config,
-            20,
-            3,
-        );
+        let result = route_all_nets_improved(&mut grid, &ratsnest, &order, &rules, &config, 3);
 
         // Both nets should route (via layer switching or rip-up)
         assert!(
