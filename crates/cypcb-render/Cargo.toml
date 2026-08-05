@@ -25,6 +25,7 @@ cypcb-drc = { path = "../cypcb-drc" }
 cypcb-autoroute = { path = "../cypcb-autoroute" }
 cypcb-router = { path = "../cypcb-router" }
 cypcb-rules = { path = "../cypcb-rules" }
+cypcb-calc = { path = "../cypcb-calc" }
 
 # Logging
 tracing = { workspace = true }

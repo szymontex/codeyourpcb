@@ -1126,6 +1126,7 @@ name = "cypcb-lsp"
 version = "0.1.0-beta"
 dependencies = [
  "async-trait",
+ "cypcb-calc",
  "cypcb-core",
  "cypcb-drc",
  "cypcb-parser",
@@ -1176,6 +1177,7 @@ version = "0.1.0-beta"
 dependencies = [
  "console_error_panic_hook",
  "cypcb-autoroute",
+ "cypcb-calc",
  "cypcb-core",
  "cypcb-drc",
  "cypcb-parser",

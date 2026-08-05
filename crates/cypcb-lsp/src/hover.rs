@@ -3,6 +3,7 @@
 //! Provides hover information for components, nets, footprints, and pins.
 //! Enhanced hover includes net connections, calculated trace width, and DRC status.
 
+use cypcb_calc::TraceWidthCalculator;
 use cypcb_parser::ast::{
     AssertDef, AssertExpression, AssertOperand, BoardDef, ComponentDef, Definition, FootprintDef,
     ImportDef, InterfaceDef, ModuleDef, NetDef, SourceFile, TraceDef, ZoneDef, ZoneKind,
@@ -337,32 +338,18 @@ fn make_net_hover(net: &NetDef) -> HoverInfo {
     }
 }
 
-/// Calculate recommended trace width using IPC-2221 formula.
-/// Returns width in mm for external layer with 10C temperature rise.
+/// Recommended trace width for a current, in mm.
+///
+/// Delegates to `cypcb-calc`, which is the one implementation of IPC-2221 in
+/// the workspace. This used to be a fourth copy of the formula and it had
+/// drifted: it took 1 oz copper as 1.37 mils where every other copy uses
+/// 1.378, so the hover tooltip quoted a width 0.6% wider than the router
+/// would draw.
 fn calculate_trace_width(current_amps: f64) -> Option<f64> {
-    // IPC-2221 formula: I = k * dT^0.44 * A^0.725
-    // Solving for A (cross-section): A = (I / (k * dT^0.44))^(1/0.725)
-    // For external layer, k = 0.048
-    // Default temp rise = 10C
-
     if current_amps <= 0.0 {
         return None;
     }
-
-    let k: f64 = 0.048; // External layer constant
-    let temp_rise: f64 = 10.0; // Default 10C rise
-
-    // Cross-section in mil^2
-    let area_mil2 = (current_amps / (k * temp_rise.powf(0.44))).powf(1.0 / 0.725);
-
-    // Convert to width assuming 1oz copper (1.37 mil = 0.035mm thickness)
-    let copper_thickness_mil: f64 = 1.37;
-    let width_mil = area_mil2 / copper_thickness_mil;
-
-    // Convert mil to mm
-    let width_mm = width_mil * 0.0254;
-
-    Some(width_mm)
+    Some(TraceWidthCalculator::min_width_for_current(current_amps, true).to_mm())
 }
 
 fn hover_for_footprint_def(

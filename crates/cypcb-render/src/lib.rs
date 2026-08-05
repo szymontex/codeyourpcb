@@ -178,6 +178,22 @@ impl PcbEngine {
         }
     }
 
+    /// Minimum trace width for a current, in nanometers.
+    ///
+    /// IPC-2221 for an external layer, 10C rise, 1 oz copper - the same
+    /// defaults the router and the language server use, because all three go
+    /// through `cypcb-calc`. The viewer carried three copies of this
+    /// arithmetic and the language server a fourth, and they had already
+    /// drifted apart on how thick an ounce of copper is.
+    ///
+    /// Returns 0 for a current of zero or less: no constraint to check.
+    pub fn min_trace_width_for_current_ma(&self, current_ma: f64) -> f64 {
+        if current_ma <= 0.0 {
+            return 0.0;
+        }
+        cypcb_calc::TraceWidthCalculator::min_width_for_current(current_ma / 1000.0, true).0 as f64
+    }
+
     /// Record which 3D model a package uses.
     ///
     /// Takes plain strings, so the same method serves both targets. Like
@@ -1936,6 +1952,34 @@ mod tests {
                 "re-parsing must not drop a footprint the host registered"
             );
         }
+    }
+
+    #[test]
+    fn trace_width_for_current_comes_from_the_calculator() {
+        let engine = PcbEngine::new();
+
+        assert_eq!(engine.min_trace_width_for_current_ma(0.0), 0.0);
+        assert_eq!(engine.min_trace_width_for_current_ma(-5.0), 0.0);
+
+        let one_amp = engine.min_trace_width_for_current_ma(1000.0);
+        assert_eq!(
+            one_amp,
+            cypcb_calc::TraceWidthCalculator::min_width_for_current(1.0, true).0 as f64,
+            "the engine must not do its own arithmetic"
+        );
+
+        // The number the copies disagreed about: 1 oz copper as 1.378 mils
+        // against the language server's 1.37.
+        println!("1A external, 10C rise: {:.4}mm", one_amp / 1_000_000.0);
+        let with_old_constant = one_amp * 1.378 / 1.37;
+        println!(
+            "same current at 1.37 mils/oz: {:.4}mm, a {:.2}% difference",
+            with_old_constant / 1_000_000.0,
+            (with_old_constant - one_amp) / one_amp * 100.0
+        );
+
+        // More current needs more copper, monotonically.
+        assert!(engine.min_trace_width_for_current_ma(2000.0) > one_amp);
     }
 
     #[test]

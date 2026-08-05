@@ -472,19 +472,30 @@ function normalizePinName(name: string): string {
  * @param tempRise Temperature rise in °C (default 10°C)
  * @param copperOz Copper weight in oz/ft² (default 1oz)
  */
-function ipc2221MinWidthNm(current_ma: number, tempRise = 10, copperOz = 1): number {
+/**
+ * Minimum trace width in nanometers for a current, per IPC-2221.
+ *
+ * External layer, 10C rise, 1oz copper. The engine computes the same thing in
+ * `PcbEngine::min_trace_width_for_current_ma`, via `cypcb-calc`, which is the
+ * one implementation in the Rust workspace. This copy exists only until the
+ * viewer stops owning the board model; until then it is the one JavaScript
+ * copy, not the third.
+ *
+ * Exported because `interaction.ts` picks a routing width from the same rule
+ * and used to inline the arithmetic twice.
+ */
+export function ipc2221MinWidthNm(current_ma: number, tempRise = 10, copperOz = 1): number {
   const currentA = current_ma / 1000;
   if (currentA <= 0) return 0;
-  // Cross-sectional area in mils² (IPC-2221 external layer)
+  // Cross-sectional area in mils^2 (IPC-2221 external layer)
   const k = 0.048;
   const b = 0.44;
   const c = 0.725;
   const areaMils2 = Math.pow(currentA / (k * Math.pow(tempRise, b)), 1 / c);
-  // Convert area (mils²) to width (mils) using copper thickness
-  // 1oz copper ≈ 1.378 mils thick
+  // 1oz copper is 1.378 mils thick. The language server had 1.37 here, which
+  // quoted the user a width 0.58% off what the router would draw.
   const thicknessMils = copperOz * 1.378;
   const widthMils = areaMils2 / thicknessMils;
-  // Convert mils to nm (1 mil = 25400 nm)
   return Math.round(widthMils * 25_400);
 }
 

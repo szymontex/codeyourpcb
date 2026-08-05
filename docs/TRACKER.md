@@ -84,13 +84,14 @@ Read this file first. It is the source of truth for what is in flight and what c
 - DONE: `PcbEngine::register_3d_model`, the second runtime registry the viewer keeps. Same story as a fetched footprint - nothing in a `.cypcb` file says which 3D model a package uses, and the viewer learns it from a supplier. Plain strings, so one method serves both targets; exported in the generated bindings. Tested three ways: no model before registration, the right model after, and a package nobody registered does not borrow someone else's.
 - **"Retire the JS parser in one step" was wrong, and reading the adapter is what showed it.** `parseSource` is not the only thing in the way. The JS snapshot is the viewer's *board model* - traces, vias, drag, undo all mutate it - and `get_snapshot()` merges WASM's violations with two checks that exist only in JavaScript, `checkSilkClearance` and `checkTraceCurrentViolations`. `MockPcbEngine` is a second full implementation of that model for when WASM fails to load. Deleting the parser without those is not a smaller change, it is a broken one.
 - **One claim in the adapter was already stale.** It caches the JS snapshot because the engine's "would have empty traces since we only populated components/board" - true of `load_snapshot`, where JavaScript hands over components and nothing else, and not true of `load_source`. Verified: `uat-routing-locked.cypcb` through `load_source` yields a snapshot carrying its `trace VCC` block. A regression test now says so.
+- DONE: **the IPC-2221 trace-width formula was in five places, not four, and they disagreed.** `cypcb-calc` had the real implementation and zero consumers; `cypcb-lsp/hover.rs`, `viewer/src/wasm.ts` and *two* inline copies in `viewer/src/interaction.ts` each did the arithmetic again. The language server took 1 oz copper as **1.37 mils** where every other copy uses **1.378**, so its hover quoted a width 0.58% off what the router draws - 0.3021mm against 0.3004mm at 1A. The language server now calls `cypcb-calc`, which un-orphans that crate; `PcbEngine::min_trace_width_for_current_ma` exposes the same one implementation to the browser; the three JavaScript copies are one exported helper, which dies with the parser swap. Five down to two, one per language, and a test pins the engine to the calculator rather than to a number.
 - NEXT-ACTION: **port `checkTraceCurrentViolations` to Rust**, the second and last JS-only check in `get_snapshot()`'s violation merge. It reads a net's `current` constraint - which the engine already parses into `NetConstraintCache` - against the trace width actually drawn, so the IPC-2221 formula is the only piece to move, and the tracker already lists that formula as duplicated in four places with a divergent constant. Fix it once in Rust and delete the JS copy with the check. Then the swap itself: `build-wasm.sh` to `--features native`, the adapter onto `load_source`/`get_snapshot`, `registerDynamicFootprint` and `register3DModel` forwarding to the engine, `parseSource` and the mock's copy deleted in one commit. Silk artwork from a fetch stays a known gap - `register_footprint` takes pads only.
 - QUEUED: IPC-2221 trace width formula duplicated in 4 places with a divergent constant. Orphan crates with zero consumers: `cypcb-calc`, `cypcb-kicad`, `cypcb-watcher`, most of `cypcb-platform`.
 
 ### V5 - Features from the roadmap
 - DONE: nothing this cycle.
 - NEXT-ACTION: DSL v2 constructs parse but do nothing - no module instantiation, no import resolution, no constraint evaluation. Pick module instantiation first; it is what makes the DSL worth using over a schematic editor.
-- QUEUED: copper pour / ground planes (needs a `Zone` type in the ECS model - none exists), KiCad `.kicad_pcb` export (import exists), parts engine, schematic generation, differential pairs, polygon board outline editing.
+- QUEUED: copper pour / ground planes - **the claim that no `Zone` type exists was wrong**, see M2 in the domain-model register; the gap is that a zone cannot name its net. KiCad `.kicad_pcb` export (import exists), parts engine, schematic generation, differential pairs, polygon board outline editing.
 
 ### V6 - Documentation truth
 - DONE: nothing this cycle.
@@ -206,6 +207,22 @@ Read this file first. It is the source of truth for what is in flight and what c
 | autoroute suite runtime | 432s | 26s |
 - QUEUED: routing stm32_breakout takes about two minutes. Same treatment as blink - probe where it goes before optimizing.
 - QUEUED: WASM size breakdown (`twiggy top`, 702,357 bytes today), render frame time on the largest example, allocation counts in the DRC hot loop.
+
+## Domain model - what a tool of this kind has to represent
+
+Gaps found by working on the code, each one verified rather than assumed. These
+are not features; they are things a board cannot be described without, and every
+one is why some check, export or router decision is currently guessing. Add to
+this list whenever a piece of work runs into a missing concept.
+
+| # | Missing | Evidence | What it blocks |
+|---|---|---|---|
+| M1 | **Per-net electrical constraints on the board model.** The DSL parses `net X { current 2A, width, clearance }` and `cypcb-render` caches it in `NetConstraintCache`, but `BoardWorld` never receives it. | `rg current crates/cypcb-world/src` finds only local variables. | A trace-current DRC rule - the last JS-only check in the viewer. Also per-net routing widths: the router asks `rules.constraints_for_net(0)` and gets the same preset for every net. |
+| M2 | **A net on a copper zone.** `Zone` carries bounds, kind, layer mask and a name. | `crates/cypcb-world/src/components/zone.rs:41`. | Ground planes. A pour that cannot name its net cannot be filled, cannot take thermal reliefs, and cannot be checked against foreign copper. |
+| M3 | **Which side a component is on.** No `Side` component exists; the silkscreen rule infers it from the layers its pads sit on and says so in a comment. | `rg 'struct Side' crates/cypcb-world/src` is empty. | Bottom-side assembly, pick-and-place output, and every rule that has to ask "same side?" - which currently guesses from copper. |
+| M4 | **A board outline that is not a rectangle.** `BoardSize` is a width and a height. | `crates/cypcb-world/src/components/board.rs:47`. | Cutouts, slots, rounded corners, any non-rectangular board, and edge-clearance measured against the real edge. |
+| M5 | **Net classes.** Every net gets the same preset. | `rg NetClass crates` finds nothing. | Saying "every power net is 0.5mm" once instead of per net, which is how real designs are constrained. |
+| M6 | **Silkscreen artwork per footprint.** The library carries pads, bounds and courtyard; the only legend the exporter draws is the courtyard outline, and a footprint fetched from a supplier arrives with real artwork that has nowhere to go. | `register_footprint` takes pads only; `gerber::silk` draws courtyards. | Honest silkscreen output, and the silk-clearance rule seeing what will actually print. |
 
 ## Owner-decision queue (only the owner closes these)
 

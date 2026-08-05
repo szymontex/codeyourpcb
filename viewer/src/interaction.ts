@@ -6,6 +6,7 @@
 import type { Viewport } from './viewport';
 import type { BoardSnapshot, TraceSegmentInfo } from './types';
 import type { PcbEngine } from './wasm';
+import { ipc2221MinWidthNm } from './wasm';
 import type { RoutingState, PadHit } from './routing';
 import { checkRouteObstacles } from './routing';
 import { zoomAtPoint, pan, screenToWorld } from './viewport';
@@ -800,11 +801,7 @@ export function setupInteraction(
           state.routing = { ...state.routing, traceWidth: netInfo.width_nm };
           console.log(`[Route] Using net constraint width: ${(netInfo.width_nm / 1e6).toFixed(3)}mm for ${padHit.netName}`);
         } else if (netInfo?.current_ma) {
-          // IPC-2221 external layer, 10°C rise, 1oz copper
-          const currentA = netInfo.current_ma / 1000;
-          const areaMils2 = Math.pow(currentA / (0.048 * Math.pow(10, 0.44)), 1 / 0.725);
-          const widthMils = areaMils2 / 1.378;
-          const widthNm = Math.round(widthMils * 25_400);
+          const widthNm = ipc2221MinWidthNm(netInfo.current_ma);
           state.routing = { ...state.routing, traceWidth: widthNm };
           console.log(`[Route] IPC-2221 auto-width for ${netInfo.current_ma}mA: ${(widthNm / 1e6).toFixed(3)}mm for ${padHit.netName}`);
         }
@@ -1008,8 +1005,7 @@ export function setupInteraction(
       traceWidth: Number(hit.trace.width) || (state.snapshot?.nets?.find(n => n.name === hit.trace.net_name)?.width_nm) || (() => {
         const ni = state.snapshot?.nets?.find(n => n.name === hit.trace.net_name);
         if (ni?.current_ma) {
-          const a = ni.current_ma / 1000;
-          return Math.round((Math.pow(a / (0.048 * Math.pow(10, 0.44)), 1 / 0.725) / 1.378) * 25_400);
+          return ipc2221MinWidthNm(ni.current_ma);
         }
         return 250_000;
       })(),
