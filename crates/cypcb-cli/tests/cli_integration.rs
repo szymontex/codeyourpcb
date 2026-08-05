@@ -126,6 +126,34 @@ fn test_check_runs_drc() {
 }
 
 #[test]
+fn test_export_board_with_custom_footprint() {
+    let example = examples_dir().join("custom-footprint.cypcb");
+    let out_dir = std::env::temp_dir().join("cypcb-export-custom-footprint");
+    let _ = std::fs::remove_dir_all(&out_dir);
+
+    let output = Command::new(cypcb_binary())
+        .arg("export")
+        .arg(&example)
+        .arg("--output")
+        .arg(&out_dir)
+        .output()
+        .expect("Failed to execute cypcb export");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        output.status.success(),
+        "export must resolve footprints defined in the source, got: {}",
+        stderr
+    );
+    assert!(
+        out_dir.join("gerber").exists(),
+        "gerber output directory should exist"
+    );
+
+    let _ = std::fs::remove_dir_all(&out_dir);
+}
+
+#[test]
 fn test_check_unknown_preset_fails() {
     let example = examples_dir().join("blink.cypcb");
     let output = Command::new(cypcb_binary())

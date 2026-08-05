@@ -42,8 +42,8 @@ fn parse_board(relative_path: &str) -> BoardWorld {
     );
 
     let mut world = BoardWorld::new();
-    let library = FootprintLibrary::new();
-    let sync_result = sync_ast_to_world(&parse_result.value, &source, &mut world, &library);
+    let mut library = FootprintLibrary::new();
+    let sync_result = sync_ast_to_world(&parse_result.value, &source, &mut world, &mut library);
 
     if sync_result.has_errors() {
         for err in &sync_result.errors {
@@ -62,7 +62,7 @@ fn test_rules() -> PresetRuleSet {
 
 /// Route a board and apply routes, returning the world ready for scoring.
 fn route_and_apply(world: &mut BoardWorld) {
-    let library = FootprintLibrary::new();
+    let mut library = FootprintLibrary::new();
     let rules = test_rules();
     let config = AutorouteConfig::default();
 
@@ -222,10 +222,7 @@ fn score_empty_board_is_valid() {
         "Empty board should have zero trace length"
     );
     assert_eq!(score.via_count, 0, "Empty board should have zero vias");
-    assert_eq!(
-        score.crossings, 0,
-        "Empty board should have zero crossings"
-    );
+    assert_eq!(score.crossings, 0, "Empty board should have zero crossings");
     assert!(
         (score.smoothness - 1.0).abs() < 1e-10,
         "Empty board should have perfect smoothness (1.0), got {}",

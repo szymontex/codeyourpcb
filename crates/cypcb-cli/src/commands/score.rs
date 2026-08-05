@@ -53,8 +53,8 @@ impl ScoreCommand {
 
         // Build world from AST
         let mut world = BoardWorld::new();
-        let library = FootprintLibrary::new();
-        let sync_result = sync_ast_to_world(&ast, &source, &mut world, &library);
+        let mut library = FootprintLibrary::new();
+        let sync_result = sync_ast_to_world(&ast, &source, &mut world, &mut library);
 
         if !sync_result.errors.is_empty() {
             for err in &sync_result.errors {
@@ -82,10 +82,7 @@ impl ScoreCommand {
         world.rebuild_spatial_index_with_traces(|_| {
             cypcb_core::Rect::from_center_size(
                 cypcb_core::Point::ORIGIN,
-                (
-                    cypcb_core::Nm::from_mm(1.0),
-                    cypcb_core::Nm::from_mm(1.0),
-                ),
+                (cypcb_core::Nm::from_mm(1.0), cypcb_core::Nm::from_mm(1.0)),
             )
         });
 

@@ -1,0 +1,38 @@
+// Board using an inline custom footprint definition.
+// Exercises the path where the DSL itself defines the pad geometry
+// instead of referencing a built-in footprint.
+version 1
+
+footprint MY_CONNECTOR {
+    description "Custom 3-pin connector"
+    courtyard 6mm x 4mm
+
+    pad 1 rect at -2mm, 0mm size 1mm x 1.5mm drill 0.8mm
+    pad 2 circle at 0mm, 0mm size 1mm x 1mm drill 0.8mm
+    pad 3 rect at 2mm, 0mm size 1mm x 1.5mm drill 0.8mm
+}
+
+board custom_footprint {
+    size 30mm x 20mm
+    layers 2
+}
+
+component J1 connector "MY_CONNECTOR" {
+    value "3-pin"
+    at 10mm, 10mm
+}
+
+component R1 resistor "0402" {
+    value "1k"
+    at 20mm, 10mm
+}
+
+net VCC {
+    J1.1
+    R1.1
+}
+
+net GND {
+    J1.3
+    R1.2
+}

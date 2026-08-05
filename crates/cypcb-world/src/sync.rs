@@ -26,8 +26,8 @@
 //! let parse_result = parse(source);
 //! if parse_result.is_ok() {
 //!     let mut world = BoardWorld::new();
-//!     let lib = FootprintLibrary::new();
-//!     let sync_result = sync_ast_to_world(&parse_result.value, source, &mut world, &lib);
+//!     let mut lib = FootprintLibrary::new();
+//!     let sync_result = sync_ast_to_world(&parse_result.value, source, &mut world, &mut lib);
 //!
 //!     if sync_result.errors.is_empty() {
 //!         println!("Synchronized successfully!");
@@ -293,7 +293,10 @@ impl SyncResult {
 /// * `ast` - The parsed AST source file
 /// * `source` - The original source code (for error spans)
 /// * `world` - The BoardWorld to populate
-/// * `footprint_lib` - Library of available footprints
+/// * `footprint_lib` - Library of available footprints. Footprints defined in the
+///   source are registered into it, so callers that need pad geometry afterwards
+///   (export, rendering) see them. Footprints from a previous sync are dropped
+///   first, so the library always matches the source it was last synced with.
 ///
 /// # Returns
 ///
@@ -309,28 +312,27 @@ impl SyncResult {
 /// let source = "version 1\nboard test { size 10mm x 10mm }";
 /// let parse_result = parse(source);
 /// let mut world = BoardWorld::new();
-/// let lib = FootprintLibrary::new();
+/// let mut lib = FootprintLibrary::new();
 ///
-/// let result = sync_ast_to_world(&parse_result.value, source, &mut world, &lib);
+/// let result = sync_ast_to_world(&parse_result.value, source, &mut world, &mut lib);
 /// assert!(result.is_ok());
 /// ```
 pub fn sync_ast_to_world(
     ast: &SourceFile,
     source: &str,
     world: &mut BoardWorld,
-    footprint_lib: &FootprintLibrary,
+    footprint_lib: &mut FootprintLibrary,
 ) -> SyncResult {
     let mut result = SyncResult::new();
 
-    // Clone the library so we can add custom footprints from the AST
-    let mut lib = footprint_lib.clone();
-
-    // Phase 0: Register custom footprints BEFORE component sync
-    // This ensures custom footprints are available when components reference them
+    // Phase 0: Register custom footprints BEFORE component sync so they are
+    // available when components reference them. Registering into the caller's
+    // library (rather than a local clone) is what lets export and rendering
+    // resolve them afterwards.
+    footprint_lib.clear_design();
     for def in &ast.definitions {
         if let Definition::Footprint(fp_def) = def {
-            let footprint = convert_footprint_def(fp_def);
-            lib.register(footprint);
+            footprint_lib.register_design(convert_footprint_def(fp_def));
         }
     }
 
@@ -352,7 +354,7 @@ pub fn sync_ast_to_world(
                     comp,
                     source,
                     world,
-                    &lib, // Use our modified library with custom footprints
+                    footprint_lib,
                     &mut refdes_spans,
                     &mut component_entities,
                     &mut result,
@@ -380,10 +382,13 @@ pub fn sync_ast_to_world(
 
     // Rebuild spatial index after all entities are added (including traces/vias)
     world.rebuild_spatial_index_with_traces(|name| {
-        lib.get(name).map(|fp| fp.courtyard).unwrap_or_else(|| {
-            // Default 1mm x 1mm bounds for unknown footprints
-            Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(1.0), Nm::from_mm(1.0)))
-        })
+        footprint_lib
+            .get(name)
+            .map(|fp| fp.courtyard)
+            .unwrap_or_else(|| {
+                // Default 1mm x 1mm bounds for unknown footprints
+                Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(1.0), Nm::from_mm(1.0)))
+            })
     });
 
     result
@@ -979,9 +984,9 @@ board test {
         );
 
         let mut world = BoardWorld::new();
-        let lib = FootprintLibrary::new();
+        let mut lib = FootprintLibrary::new();
 
-        let result = sync_ast_to_world(&parse_result.value, source, &mut world, &lib);
+        let result = sync_ast_to_world(&parse_result.value, source, &mut world, &mut lib);
 
         assert!(result.is_ok(), "sync errors: {:?}", result.errors);
         assert_eq!(world.board_name(), Some("test"));
@@ -1014,9 +1019,9 @@ component R1 resistor "0402" {
         );
 
         let mut world = BoardWorld::new();
-        let lib = FootprintLibrary::new();
+        let mut lib = FootprintLibrary::new();
 
-        let result = sync_ast_to_world(&parse_result.value, source, &mut world, &lib);
+        let result = sync_ast_to_world(&parse_result.value, source, &mut world, &mut lib);
 
         assert!(result.is_ok(), "sync errors: {:?}", result.errors);
         assert_eq!(world.component_count(), 1);
@@ -1059,9 +1064,9 @@ net VCC {
         );
 
         let mut world = BoardWorld::new();
-        let lib = FootprintLibrary::new();
+        let mut lib = FootprintLibrary::new();
 
-        let result = sync_ast_to_world(&parse_result.value, source, &mut world, &lib);
+        let result = sync_ast_to_world(&parse_result.value, source, &mut world, &mut lib);
 
         assert!(result.is_ok(), "sync errors: {:?}", result.errors);
 
@@ -1094,9 +1099,9 @@ component R1 resistor "UNKNOWN_FOOTPRINT" {
         assert!(parse_result.is_ok());
 
         let mut world = BoardWorld::new();
-        let lib = FootprintLibrary::new();
+        let mut lib = FootprintLibrary::new();
 
-        let result = sync_ast_to_world(&parse_result.value, source, &mut world, &lib);
+        let result = sync_ast_to_world(&parse_result.value, source, &mut world, &mut lib);
 
         assert!(result.has_errors());
         assert_eq!(result.errors.len(), 1);
@@ -1121,9 +1126,9 @@ component R1 resistor "0402" { at 20mm, 20mm }
         assert!(parse_result.is_ok());
 
         let mut world = BoardWorld::new();
-        let lib = FootprintLibrary::new();
+        let mut lib = FootprintLibrary::new();
 
-        let result = sync_ast_to_world(&parse_result.value, source, &mut world, &lib);
+        let result = sync_ast_to_world(&parse_result.value, source, &mut world, &mut lib);
 
         assert!(result.has_errors());
         assert_eq!(result.errors.len(), 1);
@@ -1151,9 +1156,9 @@ net VCC {
         assert!(parse_result.is_ok());
 
         let mut world = BoardWorld::new();
-        let lib = FootprintLibrary::new();
+        let mut lib = FootprintLibrary::new();
 
-        let result = sync_ast_to_world(&parse_result.value, source, &mut world, &lib);
+        let result = sync_ast_to_world(&parse_result.value, source, &mut world, &mut lib);
 
         assert!(result.has_errors());
         assert_eq!(result.errors.len(), 1);
@@ -1181,9 +1186,9 @@ net ANODE {
         );
 
         let mut world = BoardWorld::new();
-        let lib = FootprintLibrary::new();
+        let mut lib = FootprintLibrary::new();
 
-        let result = sync_ast_to_world(&parse_result.value, source, &mut world, &lib);
+        let result = sync_ast_to_world(&parse_result.value, source, &mut world, &mut lib);
 
         assert!(result.is_ok(), "sync errors: {:?}", result.errors);
 
@@ -1241,9 +1246,9 @@ net LED_SIGNAL {
         );
 
         let mut world = BoardWorld::new();
-        let lib = FootprintLibrary::new();
+        let mut lib = FootprintLibrary::new();
 
-        let result = sync_ast_to_world(&parse_result.value, source, &mut world, &lib);
+        let result = sync_ast_to_world(&parse_result.value, source, &mut world, &mut lib);
 
         assert!(result.is_ok(), "sync errors: {:?}", result.errors);
         assert_eq!(world.board_name(), Some("blink"));
@@ -1266,9 +1271,9 @@ board minimal {
         assert!(parse_result.is_ok());
 
         let mut world = BoardWorld::new();
-        let lib = FootprintLibrary::new();
+        let mut lib = FootprintLibrary::new();
 
-        let result = sync_ast_to_world(&parse_result.value, source, &mut world, &lib);
+        let result = sync_ast_to_world(&parse_result.value, source, &mut world, &mut lib);
 
         // Should have warnings about defaults
         assert!(!result.warnings.is_empty());
@@ -1294,9 +1299,9 @@ net NET_B { R1.2 }
         assert!(parse_result.is_ok());
 
         let mut world = BoardWorld::new();
-        let lib = FootprintLibrary::new();
+        let mut lib = FootprintLibrary::new();
 
-        let result = sync_ast_to_world(&parse_result.value, source, &mut world, &lib);
+        let result = sync_ast_to_world(&parse_result.value, source, &mut world, &mut lib);
         assert!(result.is_ok());
 
         let r1 = world.find_by_refdes("R1").unwrap();
@@ -1319,9 +1324,9 @@ component R1 resistor "0402" { at 10mm, 10mm }
         assert!(parse_result.is_ok());
 
         let mut world = BoardWorld::new();
-        let lib = FootprintLibrary::new();
+        let mut lib = FootprintLibrary::new();
 
-        let result = sync_ast_to_world(&parse_result.value, source, &mut world, &lib);
+        let result = sync_ast_to_world(&parse_result.value, source, &mut world, &mut lib);
         assert!(result.is_ok());
 
         let r1 = world.find_by_refdes("R1").unwrap();
@@ -1350,9 +1355,9 @@ keepout antenna_area {
         );
 
         let mut world = BoardWorld::new();
-        let lib = FootprintLibrary::new();
+        let mut lib = FootprintLibrary::new();
 
-        let result = sync_ast_to_world(&parse_result.value, source, &mut world, &lib);
+        let result = sync_ast_to_world(&parse_result.value, source, &mut world, &mut lib);
         assert!(result.is_ok(), "sync errors: {:?}", result.errors);
 
         // Query for zone entities
@@ -1390,9 +1395,9 @@ zone gnd_pour {
         );
 
         let mut world = BoardWorld::new();
-        let lib = FootprintLibrary::new();
+        let mut lib = FootprintLibrary::new();
 
-        let result = sync_ast_to_world(&parse_result.value, source, &mut world, &lib);
+        let result = sync_ast_to_world(&parse_result.value, source, &mut world, &mut lib);
         assert!(result.is_ok(), "sync errors: {:?}", result.errors);
 
         // Query for zone entities
@@ -1425,9 +1430,9 @@ keepout restricted {
         );
 
         let mut world = BoardWorld::new();
-        let lib = FootprintLibrary::new();
+        let mut lib = FootprintLibrary::new();
 
-        let result = sync_ast_to_world(&parse_result.value, source, &mut world, &lib);
+        let result = sync_ast_to_world(&parse_result.value, source, &mut world, &mut lib);
         assert!(result.is_ok(), "sync errors: {:?}", result.errors);
 
         // Query for zone entities
@@ -1462,13 +1467,13 @@ component R1 resistor "CUSTOM_2PIN" {
         );
 
         let mut world = BoardWorld::new();
-        let lib = FootprintLibrary::new();
+        let mut lib = FootprintLibrary::new();
 
         // CUSTOM_2PIN is not in the built-in library
         assert!(lib.get("CUSTOM_2PIN").is_none());
 
         // But sync should still succeed because we register custom footprints first
-        let result = sync_ast_to_world(&parse_result.value, source, &mut world, &lib);
+        let result = sync_ast_to_world(&parse_result.value, source, &mut world, &mut lib);
         assert!(result.is_ok(), "sync errors: {:?}", result.errors);
 
         // Component should be synced
@@ -1476,6 +1481,41 @@ component R1 resistor "CUSTOM_2PIN" {
         let r1 = world.find_by_refdes("R1").expect("R1 should exist");
         let fp_ref = world.get::<FootprintRef>(r1).unwrap();
         assert_eq!(fp_ref.as_str(), "CUSTOM_2PIN");
+
+        // The caller's library must keep the custom footprint - export and
+        // rendering resolve pad geometry through it after sync returns.
+        let registered = lib
+            .get("CUSTOM_2PIN")
+            .expect("custom footprint must be visible to the caller after sync");
+        assert_eq!(registered.pads.len(), 2);
+    }
+
+    #[test]
+    fn test_resync_drops_removed_custom_footprint() {
+        let with_footprint = r#"
+version 1
+
+footprint TEMP_PART {
+    pad 1 rect at 0mm, 0mm size 0.5mm x 0.5mm
+}
+
+board test { size 20mm x 20mm }
+"#;
+        let without_footprint = "version 1\n\nboard test { size 20mm x 20mm }\n";
+
+        let mut world = BoardWorld::new();
+        let mut lib = FootprintLibrary::new();
+
+        let first = parse(with_footprint);
+        sync_ast_to_world(&first.value, with_footprint, &mut world, &mut lib);
+        assert!(lib.contains("TEMP_PART"));
+
+        // Hot reload with the footprint deleted from the source: it must not
+        // linger and keep resolving.
+        let second = parse(without_footprint);
+        sync_ast_to_world(&second.value, without_footprint, &mut world, &mut lib);
+        assert!(!lib.contains("TEMP_PART"));
+        assert!(lib.contains("0402"), "built-ins must survive a re-sync");
     }
 
     #[test]
@@ -1510,9 +1550,9 @@ component U1 ic "MY_DIP8" {
         );
 
         let mut world = BoardWorld::new();
-        let lib = FootprintLibrary::new();
+        let mut lib = FootprintLibrary::new();
 
-        let result = sync_ast_to_world(&parse_result.value, source, &mut world, &lib);
+        let result = sync_ast_to_world(&parse_result.value, source, &mut world, &mut lib);
         assert!(result.is_ok(), "sync errors: {:?}", result.errors);
 
         // Component should be synced
@@ -1548,9 +1588,9 @@ trace VCC {
         );
 
         let mut world = BoardWorld::new();
-        let lib = FootprintLibrary::new();
+        let mut lib = FootprintLibrary::new();
 
-        let result = sync_ast_to_world(&parse_result.value, source, &mut world, &lib);
+        let result = sync_ast_to_world(&parse_result.value, source, &mut world, &mut lib);
         assert!(result.is_ok(), "sync errors: {:?}", result.errors);
 
         // Query for trace entities
@@ -1598,9 +1638,9 @@ trace SIG {
         );
 
         let mut world = BoardWorld::new();
-        let lib = FootprintLibrary::new();
+        let mut lib = FootprintLibrary::new();
 
-        let result = sync_ast_to_world(&parse_result.value, source, &mut world, &lib);
+        let result = sync_ast_to_world(&parse_result.value, source, &mut world, &mut lib);
         assert!(result.is_ok(), "sync errors: {:?}", result.errors);
 
         use crate::components::trace::Trace;
@@ -1637,9 +1677,9 @@ trace VCC {
         );
 
         let mut world = BoardWorld::new();
-        let lib = FootprintLibrary::new();
+        let mut lib = FootprintLibrary::new();
 
-        let result = sync_ast_to_world(&parse_result.value, source, &mut world, &lib);
+        let result = sync_ast_to_world(&parse_result.value, source, &mut world, &mut lib);
         assert!(result.is_ok(), "sync errors: {:?}", result.errors);
 
         use crate::components::trace::Trace;
@@ -1671,9 +1711,9 @@ trace UNDEFINED_NET {
         );
 
         let mut world = BoardWorld::new();
-        let lib = FootprintLibrary::new();
+        let mut lib = FootprintLibrary::new();
 
-        let result = sync_ast_to_world(&parse_result.value, source, &mut world, &lib);
+        let result = sync_ast_to_world(&parse_result.value, source, &mut world, &mut lib);
 
         assert!(result.has_errors());
         assert!(matches!(result.errors[0], SyncError::MissingNet { .. }));
@@ -1702,9 +1742,9 @@ trace VCC {
         );
 
         let mut world = BoardWorld::new();
-        let lib = FootprintLibrary::new();
+        let mut lib = FootprintLibrary::new();
 
-        let result = sync_ast_to_world(&parse_result.value, source, &mut world, &lib);
+        let result = sync_ast_to_world(&parse_result.value, source, &mut world, &mut lib);
 
         assert!(result.has_errors());
         assert!(matches!(

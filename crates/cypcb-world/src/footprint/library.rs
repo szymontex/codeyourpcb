@@ -138,6 +138,9 @@ impl Footprint {
 #[derive(Debug, Default, Clone)]
 pub struct FootprintLibrary {
     footprints: HashMap<String, Footprint>,
+    /// Footprints registered from a design source, mapped to whatever entry they
+    /// shadowed, so [`clear_design`](FootprintLibrary::clear_design) can undo them.
+    design_defined: HashMap<String, Option<Footprint>>,
 }
 
 impl FootprintLibrary {
@@ -162,6 +165,54 @@ impl FootprintLibrary {
     /// If a footprint with the same name already exists, it is replaced.
     pub fn register(&mut self, footprint: Footprint) {
         self.footprints.insert(footprint.name.clone(), footprint);
+    }
+
+    /// Register a footprint that came from the design source rather than the
+    /// built-in set.
+    ///
+    /// Design-defined footprints are tracked so that [`clear_design`](FootprintLibrary::clear_design)
+    /// can undo them on the next sync. Without that, a footprint deleted from the
+    /// source would keep resolving from a previous sync, and one that shadowed a
+    /// built-in would hide it forever.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use cypcb_world::footprint::{Footprint, FootprintLibrary};
+    /// use cypcb_core::{Point, Rect};
+    ///
+    /// let empty = Rect::new(Point::ORIGIN, Point::ORIGIN);
+    /// let mut lib = FootprintLibrary::new();
+    /// lib.register_design(Footprint {
+    ///     name: "MY_PART".to_string(),
+    ///     description: String::new(),
+    ///     pads: Vec::new(),
+    ///     bounds: empty,
+    ///     courtyard: empty,
+    /// });
+    /// assert!(lib.contains("MY_PART"));
+    ///
+    /// lib.clear_design();
+    /// assert!(!lib.contains("MY_PART"));
+    /// assert!(lib.contains("0402")); // built-ins are untouched
+    /// ```
+    pub fn register_design(&mut self, footprint: Footprint) {
+        let name = footprint.name.clone();
+        let shadowed = self.footprints.insert(name.clone(), footprint);
+        // Only the first registration records what was shadowed - re-registering
+        // the same name must not snapshot the design footprint over the built-in.
+        self.design_defined.entry(name).or_insert(shadowed);
+    }
+
+    /// Drop every footprint added by [`register_design`](FootprintLibrary::register_design),
+    /// restoring any built-in they shadowed.
+    pub fn clear_design(&mut self) {
+        for (name, shadowed) in self.design_defined.drain() {
+            match shadowed {
+                Some(builtin) => self.footprints.insert(name, builtin),
+                None => self.footprints.remove(&name),
+            };
+        }
     }
 
     /// Iterate over all footprints in the library.
@@ -265,6 +316,77 @@ mod tests {
         lib.register(custom);
         assert_eq!(lib.len(), initial_count + 1);
         assert!(lib.contains("CUSTOM-1"));
+    }
+
+    #[test]
+    fn test_clear_design_removes_only_design_footprints() {
+        let mut lib = FootprintLibrary::new();
+        let initial_count = lib.len();
+
+        lib.register_design(Footprint {
+            name: "DESIGN-1".into(),
+            description: String::new(),
+            pads: vec![],
+            bounds: Rect::default(),
+            courtyard: Rect::default(),
+        });
+        lib.register(Footprint {
+            name: "MANUAL-1".into(),
+            description: String::new(),
+            pads: vec![],
+            bounds: Rect::default(),
+            courtyard: Rect::default(),
+        });
+        assert_eq!(lib.len(), initial_count + 2);
+
+        lib.clear_design();
+        assert!(
+            !lib.contains("DESIGN-1"),
+            "design footprint must be dropped"
+        );
+        assert!(lib.contains("MANUAL-1"), "manual registration must survive");
+        assert!(lib.contains("0402"), "built-ins must survive");
+        assert_eq!(lib.len(), initial_count + 1);
+    }
+
+    #[test]
+    fn test_clear_design_restores_shadowed_builtin() {
+        let mut lib = FootprintLibrary::new();
+        let builtin_pads = lib.get("0402").expect("0402 is built in").pads.len();
+        assert_ne!(builtin_pads, 0);
+
+        // A design may redefine a built-in name. Dropping the design footprint
+        // has to bring the built-in back, not delete it.
+        lib.register_design(Footprint {
+            name: "0402".into(),
+            description: "redefined by the design".into(),
+            pads: vec![],
+            bounds: Rect::default(),
+            courtyard: Rect::default(),
+        });
+        assert_eq!(lib.get("0402").unwrap().pads.len(), 0);
+
+        lib.clear_design();
+        assert_eq!(lib.get("0402").unwrap().pads.len(), builtin_pads);
+    }
+
+    #[test]
+    fn test_register_design_twice_keeps_original_shadowed_entry() {
+        let mut lib = FootprintLibrary::new();
+        let builtin_pads = lib.get("0603").expect("0603 is built in").pads.len();
+
+        for description in ["first", "second"] {
+            lib.register_design(Footprint {
+                name: "0603".into(),
+                description: description.into(),
+                pads: vec![],
+                bounds: Rect::default(),
+                courtyard: Rect::default(),
+            });
+        }
+
+        lib.clear_design();
+        assert_eq!(lib.get("0603").unwrap().pads.len(), builtin_pads);
     }
 
     #[test]

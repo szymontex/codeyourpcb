@@ -77,8 +77,8 @@ impl DocumentState {
 
         if let Some(ast) = &self.ast {
             let mut world = BoardWorld::new();
-            let library = FootprintLibrary::new();
-            let sync_result = sync_ast_to_world(ast, &self.content, &mut world, &library);
+            let mut library = FootprintLibrary::new();
+            let sync_result = sync_ast_to_world(ast, &self.content, &mut world, &mut library);
 
             // Run DRC on the built world
             let rules = DesignRules::default();

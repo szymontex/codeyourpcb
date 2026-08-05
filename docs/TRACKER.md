@@ -23,12 +23,13 @@ Read this file first. It is the source of truth for what is in flight and what c
 
 ### V1 - CLI and core correctness
 - DONE: `cypcb check` runs real DRC (`crates/cypcb-cli/src/commands/check.rs`). Root cause of the disabled path was a corrupted 23GB `target/debug`, not the "cargo workspace dependency resolution issues" the TODO claimed. Adds `--preset` (8 fab presets) and `--no-drc`. Exit code 1 on violations, so it is CI-usable. Proof: `cypcb check examples/drc-test.cypcb` -> 9 violations, rc=1; `cargo test -p cypcb-cli` -> 7 + 11 passed.
-- NEXT-ACTION: fix `FootprintNotFound` hard crash on custom `footprint {}` blocks. `sync_ast_to_world` registers footprints into a clone that is then discarded. Repro: `cargo run -p cypcb-cli -- export` on any board with a footprint block.
+- DONE: export no longer dies with `FootprintNotFound` on inline footprint definitions. `sync_ast_to_world` now takes the library by `&mut` and registers design footprints into it instead of into a clone it drops; `register_design`/`clear_design` keep re-syncs honest (deleted footprints disappear, shadowed built-ins come back). Also removes one full library clone per sync - per keystroke in the LSP, per hot reload in the viewer. Proof: `cypcb export examples/custom-footprint.cypcb` -> 13 files rc=0, PTH drill holds the three declared holes; `cargo test -p cypcb-world -p cypcb-cli` -> 140 + 73 + 7 + 12 passed.
+- NEXT-ACTION: none - at a good stopping point. Next candidates: the four DRC checkers that are empty stubs (`trace_width.rs:53`, `solder_mask_bridge.rs:27`, `silk_clearance.rs:26`, `hole_to_hole.rs:37`) count toward "12 checkers" while doing nothing.
 
 ### V2 - Autorouter and routing quality
 - DONE: nothing this cycle.
-- NEXT-ACTION: `crates/cypcb-autoroute/src/astar_improved.rs:446` - clippy deny-level `this loop never actually loops`. It blocks `cargo clippy` for the entire workspace, so no other crate can be linted until it is fixed. Determine whether the loop body is supposed to iterate (a real rip-up/reroute bug) or the loop is vestigial.
-- QUEUED: 3 failing integration tests in `cypcb-autoroute` (380s run). A* is disabled in the UI by the author's own note ("poor results, needs fundamental rewrite"). R107 "zero DRC violations from the autorouter" is still unmet - 5 violations on the led_blink benchmark.
+- NEXT-ACTION: `crates/cypcb-autoroute/src/astar_improved.rs:446` - clippy deny-level `this loop never actually loops`. It blocks `cargo clippy` for the entire workspace, so no other crate can be linted until it is fixed. Determine whether the loop body is supposed to iterate (a real rip-up/reroute bug) or the loop is vestigial - it sits inside the rip-up path, so the three failing tests below may be the same defect.
+- QUEUED: 3 failing integration tests in `cypcb-autoroute`, confirmed 2026-08-05 on a full run (438s): `route_blink_board`, `blink_apply_routes_compatibility`, `routed_output_passes_drc`. They fail the workspace suite fast, so use `--no-fail-fast` to see the rest. A* is disabled in the UI by the author's own note ("poor results, needs fundamental rewrite"). R107 "zero DRC violations from the autorouter" is still unmet - 5 violations on the led_blink benchmark.
 
 ### V3 - Build, CI and quality gates
 - DONE: nothing this cycle.

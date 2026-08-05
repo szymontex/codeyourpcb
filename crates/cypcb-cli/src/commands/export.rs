@@ -64,8 +64,8 @@ impl ExportCommand {
         // Build world from AST
         eprintln!("Building board model...");
         let mut world = BoardWorld::new();
-        let library = FootprintLibrary::new();
-        let sync_result = sync_ast_to_world(&ast, &source, &mut world, &library);
+        let mut library = FootprintLibrary::new();
+        let sync_result = sync_ast_to_world(&ast, &source, &mut world, &mut library);
 
         if !sync_result.errors.is_empty() {
             for err in &sync_result.errors {

@@ -40,8 +40,8 @@ fn parse_board(relative_path: &str) -> BoardWorld {
     );
 
     let mut world = BoardWorld::new();
-    let library = FootprintLibrary::new();
-    let sync_result = sync_ast_to_world(&parse_result.value, &source, &mut world, &library);
+    let mut library = FootprintLibrary::new();
+    let sync_result = sync_ast_to_world(&parse_result.value, &source, &mut world, &mut library);
 
     if sync_result.has_errors() {
         for err in &sync_result.errors {
@@ -61,7 +61,7 @@ fn test_rules() -> PresetRuleSet {
 #[test]
 fn grid_from_blink() {
     let mut world = parse_board("examples/blink.cypcb");
-    let library = FootprintLibrary::new();
+    let mut library = FootprintLibrary::new();
     let rules = test_rules();
     let config = AutorouteConfig::default();
     let resolution = config.resolve_grid_resolution(&rules);
@@ -112,7 +112,7 @@ fn grid_from_blink() {
 #[test]
 fn route_routing_test_board() {
     let mut world = parse_board("examples/routing-test.cypcb");
-    let library = FootprintLibrary::new();
+    let mut library = FootprintLibrary::new();
     let rules = test_rules();
     let config = AutorouteConfig::default();
 
@@ -155,7 +155,7 @@ fn route_routing_test_board() {
 #[test]
 fn route_blink_board() {
     let mut world = parse_board("examples/blink.cypcb");
-    let library = FootprintLibrary::new();
+    let mut library = FootprintLibrary::new();
     let rules = test_rules();
     let config = AutorouteConfig::default();
 
@@ -260,7 +260,7 @@ fn route_blink_board() {
 #[test]
 fn blink_apply_routes_compatibility() {
     let mut world = parse_board("examples/blink.cypcb");
-    let library = FootprintLibrary::new();
+    let mut library = FootprintLibrary::new();
     let rules = test_rules();
     let config = AutorouteConfig::default();
 
@@ -345,7 +345,7 @@ fn routed_output_passes_drc() {
     use cypcb_drc::{run_drc, DesignRules};
 
     let mut world = parse_board("examples/blink.cypcb");
-    let library = FootprintLibrary::new();
+    let mut library = FootprintLibrary::new();
     let rules = test_rules();
     let config = AutorouteConfig::default();
 
@@ -416,7 +416,7 @@ fn routed_output_passes_drc() {
 fn benchmark_routing_time() {
     use std::time::Instant;
 
-    let library = FootprintLibrary::new();
+    let mut library = FootprintLibrary::new();
     let rules = test_rules();
     let config = AutorouteConfig::default();
 
@@ -506,7 +506,7 @@ fn generate_synthetic_board(component_count: usize) -> (BoardWorld, FootprintLib
         FootprintRef, NetConnections, NetId, PinConnection, Position, RefDes, Rotation, Value,
     };
 
-    let library = FootprintLibrary::new();
+    let mut library = FootprintLibrary::new();
     let mut world = BoardWorld::new();
 
     // Grid layout: roughly square arrangement

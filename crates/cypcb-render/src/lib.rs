@@ -533,8 +533,7 @@ impl PcbEngine {
         // Clear existing autorouted traces first
         self.clear_autorouted_traces();
 
-        let preset = RulesPreset::from_name("jlcpcb")
-            .expect("jlcpcb preset must exist");
+        let preset = RulesPreset::from_name("jlcpcb").expect("jlcpcb preset must exist");
         let rules = PresetRuleSet::new(preset);
         let config = AutorouteConfig::default();
 
@@ -547,7 +546,10 @@ impl PcbEngine {
                 cypcb_router::RoutingStatus::Failed { reason } => reason.clone(),
                 _ => "Unknown routing error".into(),
             };
-            format!(r#"{{"ok":false,"error":"{}"}}"#, reason.replace('"', r#"\""#))
+            format!(
+                r#"{{"ok":false,"error":"{}"}}"#,
+                reason.replace('"', r#"\""#)
+            )
         } else {
             let unrouted = match &result.status {
                 cypcb_router::RoutingStatus::Partial { unrouted_count } => *unrouted_count,
@@ -556,7 +558,10 @@ impl PcbEngine {
             apply_routes(&mut self.world, &result);
             self.rebuild_spatial_index_full();
             self.run_drc_internal();
-            format!(r#"{{"ok":true,"routed":{},"unrouted":{}}}"#, routed, unrouted)
+            format!(
+                r#"{{"ok":true,"routed":{},"unrouted":{}}}"#,
+                routed, unrouted
+            )
         }
     }
 
@@ -601,8 +606,7 @@ impl PcbEngine {
         // Clear existing autorouted traces first
         self.clear_autorouted_traces();
 
-        let preset = RulesPreset::from_name("jlcpcb")
-            .expect("jlcpcb preset must exist");
+        let preset = RulesPreset::from_name("jlcpcb").expect("jlcpcb preset must exist");
         let rules = PresetRuleSet::new(preset);
         let config = AutorouteConfig {
             params,
@@ -618,7 +622,10 @@ impl PcbEngine {
                 cypcb_router::RoutingStatus::Failed { reason } => reason.clone(),
                 _ => "Unknown routing error".into(),
             };
-            format!(r#"{{"ok":false,"error":"{}"}}"#, reason.replace('"', r#"\""#))
+            format!(
+                r#"{{"ok":false,"error":"{}"}}"#,
+                reason.replace('"', r#"\""#)
+            )
         } else {
             let unrouted = match &result.status {
                 cypcb_router::RoutingStatus::Partial { unrouted_count } => *unrouted_count,
@@ -627,7 +634,10 @@ impl PcbEngine {
             apply_routes(&mut self.world, &result);
             self.rebuild_spatial_index_full();
             self.run_drc_internal();
-            format!(r#"{{"ok":true,"routed":{},"unrouted":{}}}"#, routed, unrouted)
+            format!(
+                r#"{{"ok":true,"routed":{},"unrouted":{}}}"#,
+                routed, unrouted
+            )
         }
     }
 
@@ -640,8 +650,8 @@ impl PcbEngine {
         use cypcb_autoroute::AutorouteConfig;
         use cypcb_rules::presets::{PresetRuleSet, RulesPreset};
 
-        let params: cypcb_autoroute::AutorouteParams = serde_json::from_str(&params_json)
-            .unwrap_or_default();
+        let params: cypcb_autoroute::AutorouteParams =
+            serde_json::from_str(&params_json).unwrap_or_default();
 
         let preset = RulesPreset::from_name("jlcpcb").expect("jlcpcb preset");
         let rules = PresetRuleSet::new(preset);
@@ -649,16 +659,10 @@ impl PcbEngine {
         config.params = params.clamped();
         config.via_cost_multiplier = config.params.via_cost;
 
-        let debug_output = route_with_debug(
-            &mut self.world,
-            &self.footprint_lib,
-            &rules,
-            &config,
-        );
+        let debug_output = route_with_debug(&mut self.world, &self.footprint_lib, &rules, &config);
 
-        serde_json::to_string(&debug_output).unwrap_or_else(|e| {
-            format!(r#"{{"ok":false,"error":"serialize: {}"}}"#, e)
-        })
+        serde_json::to_string(&debug_output)
+            .unwrap_or_else(|e| format!(r#"{{"ok":false,"error":"serialize: {}"}}"#, e))
     }
 
     /// Returns a JSON array of variant results:
@@ -760,7 +764,7 @@ impl PcbEngine {
             &parse_result.value,
             source,
             &mut self.world,
-            &self.footprint_lib,
+            &mut self.footprint_lib,
         );
 
         // Collect sync errors
@@ -896,8 +900,8 @@ impl PcbEngine {
                         if let Some(pd) = best_pad {
                             let hw = pd.size.0 .0 / 2; // half width
                             let hh = pd.size.1 .0 / 2; // half height
-                            // Compute tight AABB for rotated rectangle.
-                            // |cos|*hw + |sin|*hh gives the axis-aligned half-extent.
+                                                       // Compute tight AABB for rotated rectangle.
+                                                       // |cos|*hw + |sin|*hh gives the axis-aligned half-extent.
                             let abs_cos = cos_r.abs();
                             let abs_sin = sin_r.abs();
                             let half_x = (abs_cos * hw as f64 + abs_sin * hh as f64) as i64;
@@ -936,14 +940,10 @@ impl PcbEngine {
             for (entity, pos, footprint_name) in &items {
                 if let Some(fp) = self.footprint_lib.get(footprint_name) {
                     let bounds = fp.courtyard;
-                    let min = Point::new(
-                        Nm(pos.x.0 + bounds.min.x.0),
-                        Nm(pos.y.0 + bounds.min.y.0),
-                    );
-                    let max = Point::new(
-                        Nm(pos.x.0 + bounds.max.x.0),
-                        Nm(pos.y.0 + bounds.max.y.0),
-                    );
+                    let min =
+                        Point::new(Nm(pos.x.0 + bounds.min.x.0), Nm(pos.y.0 + bounds.min.y.0));
+                    let max =
+                        Point::new(Nm(pos.x.0 + bounds.max.x.0), Nm(pos.y.0 + bounds.max.y.0));
                     // layer_mask = 0 means this entry won't match any copper layer check
                     entries.push(SpatialEntry::new(*entity, min, max, 0));
                 }
@@ -970,7 +970,12 @@ impl PcbEngine {
                     let max_x = start.x.0.max(end.x.0) + half_width;
                     let max_y = start.y.0.max(end.y.0) + half_width;
                     entries.push(SpatialEntry::from_raw(
-                        *entity, min_x, min_y, max_x, max_y, *layer_mask,
+                        *entity,
+                        min_x,
+                        min_y,
+                        max_x,
+                        max_y,
+                        *layer_mask,
                     ));
                 }
             }
@@ -1208,8 +1213,9 @@ impl PcbEngine {
                 }
             }
 
-            let comp_entity = self.world
-                .spawn_component(refdes, value, position, rotation, footprint_ref, nets);
+            let comp_entity =
+                self.world
+                    .spawn_component(refdes, value, position, rotation, footprint_ref, nets);
 
             // Spawn individual pad entities for per-pad DRC clearance checking.
             // Each pad gets its own entity with NetId + PadInstance marker so the
@@ -1485,8 +1491,11 @@ impl PcbEngine {
                 )
             };
             #[cfg(not(feature = "native"))]
-            let (width_nm, clearance_nm, current_ma): (Option<i64>, Option<i64>, Option<f64>) =
-                (None, None, None);
+            let (width_nm, clearance_nm, current_ma): (
+                Option<i64>,
+                Option<i64>,
+                Option<f64>,
+            ) = (None, None, None);
 
             nets.push(NetInfo {
                 name: net_name,
@@ -2318,14 +2327,18 @@ mod tests {
     #[test]
     fn test_export_traces_basic() {
         let mut engine = PcbEngine::new();
-        engine.load_source(
-            "version 1\nboard t { size 50mm x 30mm; layers 2 }\nnet VCC { }",
-        );
+        engine.load_source("version 1\nboard t { size 50mm x 30mm; layers 2 }\nnet VCC { }");
 
         // Add a trace manually via the API
         let segments = [
-            5_000_000i64, 10_000_000, 15_000_000, 10_000_000, // seg1: (5,10) -> (15,10)
-            15_000_000, 10_000_000, 15_000_000, 20_000_000,    // seg2: (15,10) -> (15,20)
+            5_000_000i64,
+            10_000_000,
+            15_000_000,
+            10_000_000, // seg1: (5,10) -> (15,10)
+            15_000_000,
+            10_000_000,
+            15_000_000,
+            20_000_000, // seg2: (15,10) -> (15,20)
         ];
         let id = engine.add_trace("VCC", "Top", 250_000, &segments);
         assert_ne!(id, u32::MAX, "add_trace failed");
@@ -2357,12 +2370,16 @@ mod tests {
 
         // Add traces with various coordinate values (including tricky float cases)
         let segs_vcc = [
-            3_731_260i64, 19_999_960, 4_879_340, 19_999_960,
-            4_879_340, 19_999_960, 10_000_001, 15_555_555,
+            3_731_260i64,
+            19_999_960,
+            4_879_340,
+            19_999_960,
+            4_879_340,
+            19_999_960,
+            10_000_001,
+            15_555_555,
         ];
-        let segs_gnd = [
-            1_000_000i64, 2_000_000, 30_000_000, 2_000_000,
-        ];
+        let segs_gnd = [1_000_000i64, 2_000_000, 30_000_000, 2_000_000];
         engine1.add_trace("VCC", "Top", 203_200, &segs_vcc);
         engine1.add_trace("GND", "Bottom", 150_000, &segs_gnd);
 
@@ -2411,13 +2428,13 @@ mod tests {
             0,
             1,
             999_999,
-            1_000_000,     // 1mm
-            10_000_000,    // 10mm
-            10_000_001,    // 10.000001mm (1nm precision)
-            15_555_555,    // 15.555555mm
-            3_731_260,     // 3.731260mm (real routing coordinate)
-            100_000_000,   // 100mm
-            999_999_999,   // 999.999999mm
+            1_000_000,   // 1mm
+            10_000_000,  // 10mm
+            10_000_001,  // 10.000001mm (1nm precision)
+            15_555_555,  // 15.555555mm
+            3_731_260,   // 3.731260mm (real routing coordinate)
+            100_000_000, // 100mm
+            999_999_999, // 999.999999mm
         ];
 
         for nm_val in &test_values {
@@ -2447,9 +2464,7 @@ mod tests {
     #[test]
     fn test_export_traces_multi_layer() {
         let mut engine = PcbEngine::new();
-        engine.load_source(
-            "version 1\nboard t { size 50mm x 30mm; layers 2 }\nnet SIG { }",
-        );
+        engine.load_source("version 1\nboard t { size 50mm x 30mm; layers 2 }\nnet SIG { }");
 
         // Add traces on both layers
         let seg_top = [5_000_000i64, 10_000_000, 15_000_000, 10_000_000];
@@ -2459,6 +2474,10 @@ mod tests {
 
         let dsl = engine.export_traces_as_dsl();
         assert!(dsl.contains("layer Top"), "Missing Top layer: {}", dsl);
-        assert!(dsl.contains("layer Bottom"), "Missing Bottom layer: {}", dsl);
+        assert!(
+            dsl.contains("layer Bottom"),
+            "Missing Bottom layer: {}",
+            dsl
+        );
     }
 }
