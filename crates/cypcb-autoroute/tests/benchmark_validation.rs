@@ -2,7 +2,8 @@
 //!
 //! Two test functions:
 //! - `benchmark_regression` — fast CI gate (non-ignored): routes led_blink with PathFinder,
-//!   asserts score thresholds (composite ≤ 5501, DRC ≤ 5, smoothness ≥ 0.95).
+//!   asserts the solution is complete (0 unrouted, >= 20 routes) and then that quality has
+//!   not regressed (composite ≤ 14900, DRC ≤ 13, smoothness ≥ 0.95).
 //! - `benchmark_full_matrix` — comprehensive comparison (`#[ignore]`): routes all 3 fixtures
 //!   × 2 strategies, prints comparison table, emits JSON report, confirms PathFinder default.
 
@@ -18,6 +19,7 @@ use cypcb_autoroute::AutorouteConfig;
 use cypcb_drc::DesignRules;
 use cypcb_kicad::{parse_kicad_pcb, BENCHMARKS};
 use cypcb_router::apply_routes;
+use cypcb_router::types::RoutingStatus;
 use cypcb_rules::presets::{PresetRuleSet, RulesPreset};
 
 // ============================================================================
@@ -39,11 +41,11 @@ fn test_rules() -> PresetRuleSet {
     PresetRuleSet::new(preset)
 }
 
-/// Route a board with a given strategy and return (RoutingScore, route_count).
+/// Route a board with a given strategy and return (RoutingScore, route_count, unrouted).
 ///
 /// Always calls `rebuild_spatial_index_with_traces()` before scoring
 /// and uses `DesignRules::jlcpcb_2layer()` for DRC.
-fn route_and_score(strategy: &dyn RoutingStrategy, fixture: &str) -> (RoutingScore, usize) {
+fn route_and_score(strategy: &dyn RoutingStrategy, fixture: &str) -> (RoutingScore, usize, usize) {
     let parsed = parse_kicad_pcb(&fixture_path(fixture))
         .unwrap_or_else(|e| panic!("Failed to parse {}: {:?}", fixture, e));
     let mut world = parsed.world;
@@ -53,6 +55,11 @@ fn route_and_score(strategy: &dyn RoutingStrategy, fixture: &str) -> (RoutingSco
 
     let result = strategy.route(&mut world, &library, &rules, &config);
     let route_count = result.route_count();
+    let unrouted = match result.status {
+        RoutingStatus::Complete => 0,
+        RoutingStatus::Partial { unrouted_count } => unrouted_count,
+        RoutingStatus::Failed { .. } => usize::MAX,
+    };
 
     apply_routes(&mut world, &result);
 
@@ -67,7 +74,7 @@ fn route_and_score(strategy: &dyn RoutingStrategy, fixture: &str) -> (RoutingSco
     let drc_rules = DesignRules::jlcpcb_2layer();
     let score = score_board(&mut world, &drc_rules, &ScoreWeights::default());
 
-    (score, route_count)
+    (score, route_count, unrouted)
 }
 
 // ============================================================================
@@ -84,10 +91,17 @@ struct BenchmarkResult {
     via_count: u32,
     total_length_mm: f64,
     route_count: usize,
+    unrouted: usize,
 }
 
 impl BenchmarkResult {
-    fn from_score(fixture: &str, strategy: &str, score: &RoutingScore, route_count: usize) -> Self {
+    fn from_score(
+        fixture: &str,
+        strategy: &str,
+        score: &RoutingScore,
+        route_count: usize,
+        unrouted: usize,
+    ) -> Self {
         Self {
             fixture: fixture.to_string(),
             strategy: strategy.to_string(),
@@ -97,6 +111,7 @@ impl BenchmarkResult {
             via_count: score.via_count,
             total_length_mm: score.total_length.0 as f64 / 1_000_000.0,
             route_count,
+            unrouted,
         }
     }
 }
@@ -106,14 +121,14 @@ impl BenchmarkResult {
 // ============================================================================
 
 fn print_table_header() {
-    eprintln!("╔═══════════════════╦════════════════╦══════════╦══════════╦══════════╦══════════╦══════════════╗");
-    eprintln!("║ Strategy          ║ Fixture        ║Composite ║ DRC Viol ║Smoothness║ Vias     ║ Length (mm)  ║");
-    eprintln!("╠═══════════════════╬════════════════╬══════════╬══════════╬══════════╬══════════╬══════════════╣");
+    eprintln!("╔═══════════════════╦════════════════╦══════════╦══════════╦══════════╦══════════╦══════════════╦══════════╗");
+    eprintln!("║ Strategy          ║ Fixture        ║Composite ║ DRC Viol ║Smoothness║ Vias     ║ Length (mm)  ║ Unrouted ║");
+    eprintln!("╠═══════════════════╬════════════════╬══════════╬══════════╬══════════╬══════════╬══════════════╬══════════╣");
 }
 
 fn print_table_row(r: &BenchmarkResult) {
     eprintln!(
-        "║ {:<17} ║ {:<14} ║ {:>8.1} ║ {:>8} ║ {:>8.3} ║ {:>8} ║ {:>12.2} ║",
+        "║ {:<17} ║ {:<14} ║ {:>8.1} ║ {:>8} ║ {:>8.3} ║ {:>8} ║ {:>12.2} ║ {:>8} ║",
         r.strategy,
         r.fixture,
         r.composite,
@@ -121,11 +136,12 @@ fn print_table_row(r: &BenchmarkResult) {
         r.smoothness,
         r.via_count,
         r.total_length_mm,
+        r.unrouted,
     );
 }
 
 fn print_table_separator() {
-    eprintln!("╠═══════════════════╬════════════════╬══════════╬══════════╬══════════╬══════════╬══════════════╣");
+    eprintln!("╠═══════════════════╬════════════════╬══════════╬══════════╬══════════╬══════════╬══════════════╬══════════╣");
 }
 
 fn print_table_footer() {
@@ -141,41 +157,59 @@ fn print_table_footer() {
 #[test]
 fn benchmark_regression() {
     let pathfinder = PathFinderStrategy;
-    let (score, route_count) = route_and_score(&pathfinder, "led_blink.kicad_pcb");
+    let (score, route_count, unrouted) = route_and_score(&pathfinder, "led_blink.kicad_pcb");
 
     // Print score table
     eprintln!();
-    let result = BenchmarkResult::from_score("led_blink", "PathFinder", &score, route_count);
+    let result =
+        BenchmarkResult::from_score("led_blink", "PathFinder", &score, route_count, unrouted);
     print_table_header();
     print_table_row(&result);
     print_table_footer();
     eprintln!();
 
     // --- Regression assertions with diagnostic messages ---
+    //
+    // Completeness comes first. Every other metric improves when the router
+    // abandons connections - fewer traces means less length, fewer vias and
+    // fewer DRC violations - so a gate that only reads quality scores rewards
+    // giving up. This gate used to assert `route_count > 0` and passed while
+    // PathFinder left a connection unrouted and emitted 7 routes.
 
-    assert!(
-        route_count > 0,
-        "FAIL benchmark_regression: route_count = 0, expected > 0"
+    assert_eq!(
+        unrouted, 0,
+        "FAIL benchmark_regression: {} unrouted connections, threshold 0",
+        unrouted
     );
-    eprintln!("  ✓ route_count: got {}, threshold > 0", route_count);
+    eprintln!("  ✓ unrouted: got {}, threshold 0", unrouted);
 
     assert!(
-        score.composite <= 5501.0,
-        "FAIL benchmark_regression: composite got {:.1}, threshold ≤ 5501.0 (baseline 5001 × 1.1)",
+        route_count >= 20,
+        "FAIL benchmark_regression: route_count got {}, threshold >= 20 - the router is emitting far less copper than a complete solution needs",
+        route_count
+    );
+    eprintln!("  ✓ route_count: got {}, threshold >= 20", route_count);
+
+    // Quality thresholds are ratchets measured against a complete solution.
+    // They are deliberately tight: lower them whenever the router improves,
+    // never raise them to accommodate a regression. R107 targets 0 violations.
+    assert!(
+        score.composite <= 14_900.0,
+        "FAIL benchmark_regression: composite got {:.1}, threshold ≤ 14900.0 (baseline 13543 × 1.1)",
         score.composite
     );
     eprintln!(
-        "  ✓ composite: got {:.1}, threshold ≤ 5501.0",
+        "  ✓ composite: got {:.1}, threshold ≤ 14900.0",
         score.composite
     );
 
     assert!(
-        score.drc_violations <= 5,
-        "FAIL benchmark_regression: drc_violations got {}, threshold ≤ 5",
+        score.drc_violations <= 13,
+        "FAIL benchmark_regression: drc_violations got {}, threshold ≤ 13 (R107 targets 0)",
         score.drc_violations
     );
     eprintln!(
-        "  ✓ drc_violations: got {}, threshold ≤ 5",
+        "  ✓ drc_violations: got {}, threshold ≤ 13 (R107 targets 0)",
         score.drc_violations
     );
 
@@ -223,10 +257,16 @@ fn benchmark_full_matrix() {
         for strategy in &strategies {
             eprintln!("  [{}] routing {} ...", strategy.name(), fixture_label);
 
-            let (score, route_count) = route_and_score(strategy.as_ref(), benchmark.filename);
+            let (score, route_count, unrouted) =
+                route_and_score(strategy.as_ref(), benchmark.filename);
 
-            let br =
-                BenchmarkResult::from_score(fixture_label, strategy.name(), &score, route_count);
+            let br = BenchmarkResult::from_score(
+                fixture_label,
+                strategy.name(),
+                &score,
+                route_count,
+                unrouted,
+            );
             results.push(br);
         }
     }
