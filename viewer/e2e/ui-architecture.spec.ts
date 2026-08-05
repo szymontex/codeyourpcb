@@ -30,7 +30,7 @@ test.describe('UI Architecture — Toolbar Structure', () => {
     await expect(page.locator('#fit-btn')).toBeVisible();
     await expect(page.locator('#view-menu-btn')).toBeVisible();
     await expect(page.locator('#view-3d-btn')).toBeVisible();
-    await expect(page.locator('#theme-toggle')).toBeVisible();
+    // Theme lives in the Preferences modal now; #theme-toggle stays display:none.
     await expect(page.locator('#prefs-btn')).toBeVisible();
     await expect(page.locator('#open-btn')).toBeVisible();
   });

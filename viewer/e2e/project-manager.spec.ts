@@ -28,16 +28,17 @@ test.describe('Project Manager', () => {
     await expect(page.locator('#view-menu-btn')).toBeVisible();
     await expect(page.locator('#open-btn')).toBeVisible();
     await expect(page.locator('#prefs-btn')).toBeVisible();
-    await expect(page.locator('#theme-toggle')).toBeVisible();
+    // #theme-toggle exists but is display:none - theme moved into Preferences.
   });
 
   test('shows template cards', async ({ page }) => {
     const pm = page.locator('#project-manager');
     await expect(pm).toBeVisible();
 
-    // All 3 templates + blank card
+    // 4 bundled templates + the blank card
     const cards = pm.locator('.pm-template-card');
-    await expect(cards).toHaveCount(4);
+    await expect(cards).toHaveCount(5);
+    await expect(pm.locator('[data-template]')).toHaveCount(4);
 
     // Verify template names
     await expect(pm.locator('[data-template="blink"] h3')).toHaveText('Blink LED');
@@ -46,15 +47,17 @@ test.describe('Project Manager', () => {
     await expect(pm.locator('[data-template-blank] h3')).toHaveText('Blank Board');
   });
 
-  test('shows empty recent files message', async ({ page }) => {
-    const emptyMsg = page.locator('.pm-recent-empty');
-    await expect(emptyMsg).toHaveText('No recent files');
+  test('hides the recent files section when there are none', async ({ page }) => {
+    // populateRecentFiles() hides the whole section rather than rendering an
+    // empty-state message (project-manager.ts, "Hide the entire section").
+    await expect(page.locator('#pm-recent-section')).toBeHidden();
+    await expect(page.locator('#pm-recent-list')).toBeEmpty();
   });
 
   test('debug surface exposes state', async ({ page }) => {
     const debug = await page.evaluate(() => (window as any).__projectManager);
     expect(debug.visible).toBe(true);
-    expect(debug.templateCount).toBe(3);
+    expect(debug.templateCount).toBe(4);
     expect(debug.recentFiles).toHaveLength(0);
   });
 
@@ -127,7 +130,12 @@ test.describe('Project Manager', () => {
     // Load a template to trigger addRecentFile
     await page.reload();
     await expect(page.locator('#status-text')).toContainText('Ready', { timeout: 15_000 });
-    await page.locator('[data-template="blink"]').click();
+    // With a full recent list the templates grid sits above the scroll position,
+    // and the thumbnails keep shifting layout while they render, so scroll the
+    // card into view before clicking rather than racing the auto-scroll.
+    const blinkCard = page.locator('[data-template="blink"]');
+    await blinkCard.scrollIntoViewIfNeeded();
+    await blinkCard.click();
 
     // Wait for template to load and PM to hide
     await expect(page.locator('#project-manager')).toBeHidden();
@@ -147,7 +155,8 @@ test.describe('Project Manager', () => {
   test('open file button exists and is clickable', async ({ page }) => {
     const openBtn = page.locator('#pm-open-btn');
     await expect(openBtn).toBeVisible();
-    await expect(openBtn).toHaveText('📁 Open File');
+    // "Open" means open from the workspace list; this button imports from disk.
+    await expect(openBtn).toHaveText('📁 Import File');
   });
 
   test('__loadBoard() hides project manager', async ({ page }) => {
@@ -183,7 +192,8 @@ test.describe('Project Manager', () => {
     // Recent files list should show the previously loaded file
     const recentItem = page.locator('.pm-recent-item');
     await expect(recentItem).toHaveCount(1);
-    await expect(page.locator('.pm-recent-name')).toHaveText('Power Indicator.cypcb');
+    // Display names strip the .cypcb extension.
+    await expect(page.locator('.pm-recent-name')).toHaveText('Power Indicator');
   });
 
   test('showProjectManager() re-shows project manager after dismiss', async ({ page }) => {
