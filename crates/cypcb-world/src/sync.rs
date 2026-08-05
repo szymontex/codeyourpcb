@@ -486,6 +486,16 @@ fn sync_component(
     // Add component kind
     world.ecs_mut().entity_mut(entity).insert(kind);
 
+    // Which face the part sits on. The DSL has no word for this yet, so it is
+    // derived from where the footprint's copper is - a footprint whose pads are
+    // bottom-only is a bottom-side part. Storing the answer means every rule
+    // and every exporter reads the same one instead of each deriving its own.
+    let side = footprint_lib
+        .get(footprint_name)
+        .map(side_of_footprint)
+        .unwrap_or_default();
+    world.ecs_mut().entity_mut(entity).insert(side);
+
     // Track for net resolution
     component_entities.insert(refdes_str, entity);
 }
@@ -1831,5 +1841,29 @@ fn cypcb_world_net_constraints(
         width: constraints.width.as_ref().map(|w| w.to_nm()),
         clearance: constraints.clearance.as_ref().map(|c| c.to_nm()),
         current_ma: constraints.current.as_ref().map(|c| c.to_milliamps()),
+    }
+}
+
+/// Which face a footprint's copper puts it on.
+///
+/// Bottom only when every pad that touches copper touches the bottom and none
+/// the top; anything else, including a through-hole part that reaches both, is
+/// a top-side part until something says otherwise.
+fn side_of_footprint(footprint: &Footprint) -> crate::components::Side {
+    let mut top = false;
+    let mut bottom = false;
+    for pad in &footprint.pads {
+        for layer in &pad.layers {
+            match layer {
+                Layer::TopCopper => top = true,
+                Layer::BottomCopper => bottom = true,
+                _ => {}
+            }
+        }
+    }
+    if bottom && !top {
+        crate::components::Side::Bottom
+    } else {
+        crate::components::Side::Top
     }
 }

@@ -27,7 +27,7 @@ use std::path::Path;
 
 use cypcb_core::{Nm, Point, Rect};
 use cypcb_router::types::{RouteSegment, RoutingResult, RoutingStatus, ViaPlacement};
-use cypcb_world::components::{Layer, PadShape};
+use cypcb_world::components::{Layer, PadShape, Side};
 use cypcb_world::footprint::{Footprint, FootprintLibrary, PadDef};
 use cypcb_world::{
     BoardWorld, FootprintRef, NetConnections, NetId, PinConnection, Position, RefDes, Rotation,
@@ -587,6 +587,10 @@ fn parse_footprint(
     let mut refdes_str = String::new();
     let mut value_str = String::new();
     let mut pads: Vec<ParsedPad> = Vec::new();
+    // A footprint states its own face - `(layer "B.Cu")` means bottom. This is
+    // the one place in the codebase where the side is data rather than a guess
+    // from where the copper is.
+    let mut side = Side::Top;
 
     let children = if elements.is_empty() {
         &[][..]
@@ -620,6 +624,13 @@ fn parse_footprint(
                                 "value" => value_str = text_value,
                                 _ => {}
                             }
+                        }
+                    }
+                }
+                "layer" => {
+                    if let Ok(sub) = child.list() {
+                        if sub.len() >= 2 && get_string(&sub[1]).as_deref() == Some("B.Cu") {
+                            side = Side::Bottom;
                         }
                     }
                 }
@@ -693,7 +704,7 @@ fn parse_footprint(
         RefDes::new(refdes_str)
     };
 
-    world.spawn_component(
+    let entity = world.spawn_component(
         refdes,
         Value::new(value_str),
         position,
@@ -701,6 +712,7 @@ fn parse_footprint(
         FootprintRef::new(library_key),
         net_connections,
     );
+    world.ecs_mut().entity_mut(entity).insert(side);
 
     Ok(())
 }
@@ -1101,6 +1113,49 @@ fn calculate_pad_bounds(pads: &[PadDef]) -> Rect {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn a_footprint_states_which_face_it_is_on() {
+        // `(layer "B.Cu")` on a footprint means the part is placed from the
+        // bottom. Everything else in the codebase has to guess this from where
+        // the copper is, which cannot tell a bottom-side through-hole part from
+        // a top-side one; here it is data.
+        let pcb = r#"(kicad_pcb (version 20240108) (generator pcbnew)
+  (general (thickness 1.6))
+  (layers (0 "F.Cu" signal) (31 "B.Cu" signal))
+  (gr_line (start 0 0) (end 50 0) (layer "Edge.Cuts") (width 0.05))
+  (gr_line (start 50 0) (end 50 30) (layer "Edge.Cuts") (width 0.05))
+  (gr_line (start 50 30) (end 0 30) (layer "Edge.Cuts") (width 0.05))
+  (gr_line (start 0 30) (end 0 0) (layer "Edge.Cuts") (width 0.05))
+  (footprint "R_0402" (layer "F.Cu") (at 10 10)
+    (property "Reference" "R1")
+    (pad "1" smd rect (at -0.5 0) (size 0.6 0.5) (layers "F.Cu" "F.Paste" "F.Mask"))
+  )
+  (footprint "R_0402" (layer "B.Cu") (at 20 10)
+    (property "Reference" "R2")
+    (pad "1" smd rect (at -0.5 0) (size 0.6 0.5) (layers "B.Cu" "B.Paste" "B.Mask"))
+  )
+)"#;
+
+        let parsed = parse_kicad_pcb_str(pcb).expect("parse");
+        let mut world = parsed.world;
+
+        let ecs = world.ecs_mut();
+        let mut query = ecs.query::<(&RefDes, &Side)>();
+        let mut sides: Vec<(String, Side)> = query
+            .iter(ecs)
+            .map(|(refdes, side)| (refdes.as_str().to_string(), *side))
+            .collect();
+        sides.sort();
+
+        assert_eq!(
+            sides,
+            vec![
+                ("R1".to_string(), Side::Top),
+                ("R2".to_string(), Side::Bottom)
+            ]
+        );
+    }
     use super::*;
 
     #[test]

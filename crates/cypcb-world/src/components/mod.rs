@@ -43,6 +43,6 @@ pub mod zone;
 pub use board::{Board, BoardSize, LayerStack};
 pub use electrical::{NetConnections, NetId, PadInstance, PinConnection, RefDes, Value};
 pub use metadata::{ComponentKind, Name, SourceSpan};
-pub use physical::{FootprintRef, Layer, Pad, PadShape};
+pub use physical::{FootprintRef, Layer, Pad, PadShape, Side};
 pub use position::{Position, Rotation};
 pub use zone::{Zone, ZoneKind};

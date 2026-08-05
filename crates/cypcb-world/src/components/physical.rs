@@ -36,6 +36,67 @@ use serde::{Deserialize, Serialize};
 // Ord gives a stable order to sort layers by. Entity spawn order decides
 // entity IDs, which decide what DRC reports first, so anything that spawns per
 // layer needs a total order rather than a hash map's.
+/// Which face of the board a component is mounted on.
+///
+/// Distinct from the layers its pads occupy. A through-hole part reaches both
+/// copper layers and is still placed from one side, and that side decides where
+/// its legend prints, which stencil aperture it gets and which pick-and-place
+/// file it lands in.
+///
+/// Rules used to infer this from a footprint's pad layers, which is a guess: it
+/// cannot tell a bottom-side through-hole part from a top-side one.
+#[derive(
+    Component,
+    Debug,
+    Clone,
+    Copy,
+    Default,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Serialize,
+    Deserialize,
+)]
+pub enum Side {
+    /// Placed on the top face. Where a part goes unless something says
+    /// otherwise.
+    #[default]
+    Top,
+    /// Placed on the bottom face.
+    Bottom,
+}
+
+impl Side {
+    /// The copper layer this side's SMD pads sit on.
+    #[inline]
+    pub fn copper(&self) -> Layer {
+        match self {
+            Side::Top => Layer::TopCopper,
+            Side::Bottom => Layer::BottomCopper,
+        }
+    }
+
+    /// The silkscreen layer a part on this side prints to.
+    #[inline]
+    pub fn silk(&self) -> Layer {
+        match self {
+            Side::Top => Layer::TopSilk,
+            Side::Bottom => Layer::BottomSilk,
+        }
+    }
+
+    /// Bit mask matching the copper-layer convention: bit 0 top, bit 1 bottom.
+    #[inline]
+    pub fn mask(&self) -> u32 {
+        match self {
+            Side::Top => 1,
+            Side::Bottom => 2,
+        }
+    }
+}
+
 #[derive(
     Component, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
 )]

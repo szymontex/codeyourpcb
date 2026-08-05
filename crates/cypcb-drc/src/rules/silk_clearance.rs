@@ -14,7 +14,7 @@
 //! flagging that would fire on every part on the board.
 
 use cypcb_core::{Nm, Point};
-use cypcb_world::components::{FootprintRef, Position, RefDes, Rotation};
+use cypcb_world::components::{FootprintRef, Position, RefDes, Rotation, Side};
 use cypcb_world::footprint::Footprint;
 use cypcb_world::{BoardWorld, Layer};
 
@@ -57,7 +57,12 @@ impl DrcRule for SilkClearanceRule {
             if edges.is_empty() {
                 continue;
             }
-            let silk_side = side_mask(footprint);
+            // The part says which face it is on when the model knows; falling
+            // back to its copper is a guess that cannot tell a bottom-side
+            // through-hole part from a top-side one.
+            let silk_side = silk
+                .side
+                .map_or_else(|| side_mask(footprint), |s| s.mask() as u8);
 
             for other in &placed {
                 if other.entity == silk.entity {
@@ -92,6 +97,8 @@ struct Placed {
     footprint: String,
     position: Point,
     rotation_deg: f64,
+    /// The face this part is mounted on, when the model states it.
+    side: Option<Side>,
 }
 
 fn collect_placed(world: &mut BoardWorld) -> Vec<Placed> {
@@ -102,16 +109,20 @@ fn collect_placed(world: &mut BoardWorld) -> Vec<Placed> {
         &FootprintRef,
         &Position,
         &Rotation,
+        Option<&Side>,
     )>();
     query
         .iter(ecs)
-        .map(|(entity, refdes, footprint, position, rotation)| Placed {
-            entity,
-            refdes: refdes.as_str().to_string(),
-            footprint: footprint.as_str().to_string(),
-            position: position.0,
-            rotation_deg: rotation.to_degrees(),
-        })
+        .map(
+            |(entity, refdes, footprint, position, rotation, side)| Placed {
+                entity,
+                refdes: refdes.as_str().to_string(),
+                footprint: footprint.as_str().to_string(),
+                position: position.0,
+                rotation_deg: rotation.to_degrees(),
+                side: side.copied(),
+            },
+        )
         .collect()
 }
 
