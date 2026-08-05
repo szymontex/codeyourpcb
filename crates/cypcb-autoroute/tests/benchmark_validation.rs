@@ -3,7 +3,7 @@
 //! Two test functions:
 //! - `benchmark_regression` — fast CI gate (non-ignored): routes led_blink with PathFinder,
 //!   asserts the solution is complete (0 unrouted, >= 20 routes) and then that quality has
-//!   not regressed (composite ≤ 3900, DRC ≤ 3, smoothness ≥ 0.95).
+//!   not regressed (composite ≤ 2800, DRC ≤ 2, smoothness ≥ 0.95).
 //! - `benchmark_full_matrix` — comprehensive comparison (`#[ignore]`): routes all 3 fixtures
 //!   × 2 strategies, prints comparison table, emits JSON report, confirms PathFinder default.
 
@@ -158,9 +158,9 @@ fn print_table_footer() {
 /// sitting at 312 and 383. These are ratchets - lower them as the router
 /// improves, never raise them to accommodate a regression.
 const DRC_RATCHETS: &[(&str, &str, u32)] = &[
-    ("led_blink.kicad_pcb", "led_blink", 3),
-    ("stm32_breakout.kicad_pcb", "stm32_breakout", 312),
-    ("multi_ic.kicad_pcb", "multi_ic", 383),
+    ("led_blink.kicad_pcb", "led_blink", 2),
+    ("stm32_breakout.kicad_pcb", "stm32_breakout", 299),
+    ("multi_ic.kicad_pcb", "multi_ic", 297),
 ];
 
 /// Routes every fixture and holds the line on completeness and DRC count.
@@ -255,22 +255,22 @@ fn benchmark_regression() {
     // They are deliberately tight: lower them whenever the router improves,
     // never raise them to accommodate a regression. R107 targets 0 violations.
     assert!(
-        score.composite <= 3_900.0,
-        "FAIL benchmark_regression: composite got {:.1}, threshold ≤ 3900.0 (baseline 3543 × 1.1)",
+        score.composite <= 2_800.0,
+        "FAIL benchmark_regression: composite got {:.1}, threshold ≤ 2800.0 (baseline 2543 × 1.1)",
         score.composite
     );
     eprintln!(
-        "  ✓ composite: got {:.1}, threshold ≤ 3900.0",
+        "  ✓ composite: got {:.1}, threshold ≤ 2800.0",
         score.composite
     );
 
     assert!(
-        score.drc_violations <= 3,
-        "FAIL benchmark_regression: drc_violations got {}, threshold ≤ 3 (R107 targets 0)",
+        score.drc_violations <= 2,
+        "FAIL benchmark_regression: drc_violations got {}, threshold ≤ 2 (R107 targets 0)",
         score.drc_violations
     );
     eprintln!(
-        "  ✓ drc_violations: got {}, threshold ≤ 3 (R107 targets 0)",
+        "  ✓ drc_violations: got {}, threshold ≤ 2 (R107 targets 0)",
         score.drc_violations
     );
 

@@ -102,7 +102,17 @@ Read this file first. It is the source of truth for what is in flight and what c
 | 21.2µm (clearance/6) | 11 | **2** | 0 | 32.50mm | 1.94s |
 
   Violations do not fall as cells shrink, and the finest grid only reaches zero by abandoning connections - exactly what the completeness gate exists to catch. So the geometry of the grid is not the problem: **a route marks one cell per path node regardless of how wide the trace actually is**. At 63.5µm cells a 0.127mm trace covers two of them, one gets marked, and the neighbouring net legally takes the other.
-- NEXT-ACTION: mark the trace's real footprint. Reserve every cell within `trace_width/2 + min_clearance/2` of a path node for the routing net, through the existing occupancy mechanism rather than a veto - the net's own cells stay usable by it (`net_at == Some(net_id)` already allows that), rip-up already clears recorded cells, and congestion accounting stays honest. This is what the failed veto experiments were reaching for, applied at marking time where it belongs.
+- DONE: obstacles are bloated by clearance **plus half a trace** now. The grid tracks a route's centre line, so a node sitting exactly `min_clearance` from a pad still has half its copper inside that gap - which is precisely the 0.07mm-against-0.127mm violation on led_blink. One term in one expression:
+
+| fixture | violations before | after | routes before | after |
+|---|---|---|---|---|
+| led_blink | 3 | **2** | 22 | 27 |
+| stm32_breakout | 312 | **299** | 668 | 701 |
+| multi_ic | 383 | **297** | 833 | 902 |
+
+  All three still complete, and with *more* copper laid, so this is not the router winning by giving up. multi_ic composite 426,138 -> 338,113. Ratchets tightened to the new numbers.
+- **Third failed experiment:** reserving the full trace footprint at marking time (every cell within `trace_width/2 + clearance/2` of a path node, via the occupancy mechanism rather than a veto). led_blink went 3 -> 4 violations, 22 -> 20 routes. Same outcome as both veto attempts. The reservation is right in principle but it fights the A* cost model, which still plans on centre lines; whoever picks this up needs to change both together, or nothing.
+- NEXT-ACTION: 299 and 297 are still hundreds of shorts. The next measurement is which *kind*: dump the remaining violations on stm32_breakout grouped by whether both sides are traces, trace-to-via, or trace-to-pad. The pad case just moved, so the mix has changed and the next fix should follow the biggest group.
 - QUEUED: routing stm32_breakout takes about two minutes. Same treatment as blink - probe where it goes before optimizing.
 - QUEUED: WASM size breakdown (`twiggy top`, 702,357 bytes today), render frame time on the largest example, allocation counts in the DRC hot loop.
 

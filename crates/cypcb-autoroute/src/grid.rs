@@ -156,9 +156,14 @@ impl RoutingGrid {
             net_map,
         };
 
-        // Get min_clearance for bloating
-        let min_clearance = rules.constraints_for_net(0).min_clearance;
-        let clearance_cells = ((min_clearance.raw() + resolution_nm - 1) / resolution_nm) as u32;
+        // Bloat obstacles by the clearance *plus half a trace*, because the
+        // grid tracks a route's centre line: a path node sitting exactly
+        // min_clearance from a pad still has half its copper inside that gap.
+        // Without the trace term, a legal-looking route lands 0.0635mm from a
+        // pad that requires 0.127mm.
+        let constraints = rules.constraints_for_net(0);
+        let keepout_nm = constraints.min_clearance.raw() + constraints.min_trace_width.raw() / 2;
+        let clearance_cells = ((keepout_nm + resolution_nm - 1) / resolution_nm) as u32;
 
         // Mark pads as obstacles
         grid.populate_pads(world, library, clearance_cells);
@@ -461,6 +466,55 @@ impl RoutingGrid {
         let idx = (y as usize) * (self.width as usize) + (x as usize);
         self.layers[layer][idx] |= CELL_TRACE;
         self.net_map[layer][idx] = net_id;
+    }
+
+    /// Reserve the copper a routed path actually occupies.
+    ///
+    /// `mark_route` marks a single cell per path node, but a trace is wider
+    /// than one cell: at the default resolution of `min_clearance / 2` a
+    /// minimum-width trace covers two, and the neighbouring net takes the
+    /// other one legitimately. That is where the 0.00mm clearance violations
+    /// come from - the grid never knew the copper was there.
+    ///
+    /// Marks every cell within `radius` of each node, skipping cells another
+    /// net already owns (rip-up decides who yields, not this). Returns the
+    /// cells it marked so the caller can record them for congestion accounting
+    /// and clear them on rip-up.
+    pub fn mark_route_footprint(
+        &mut self,
+        path: &[(u16, u16, u8)],
+        net_id: u32,
+        radius: u32,
+    ) -> Vec<(u32, u32, u8)> {
+        let mut marked = Vec::with_capacity(path.len() * ((2 * radius as usize + 1).pow(2)));
+
+        for &(nx, ny, nl) in path {
+            let layer = nl as usize;
+            if layer >= self.layers.len() {
+                continue;
+            }
+            let min_x = (nx as u32).saturating_sub(radius);
+            let max_x = (nx as u32 + radius).min(self.width.saturating_sub(1));
+            let min_y = (ny as u32).saturating_sub(radius);
+            let max_y = (ny as u32 + radius).min(self.height.saturating_sub(1));
+
+            for cy in min_y..=max_y {
+                for cx in min_x..=max_x {
+                    let idx = (cy as usize) * (self.width as usize) + (cx as usize);
+                    let owner = self.net_map[layer][idx];
+                    if owner != u32::MAX && owner != net_id {
+                        continue; // Another net's copper - leave it alone
+                    }
+                    self.layers[layer][idx] |= CELL_TRACE;
+                    self.net_map[layer][idx] = net_id;
+                    marked.push((cx, cy, nl));
+                }
+            }
+        }
+
+        marked.sort_unstable();
+        marked.dedup();
+        marked
     }
 
     /// Clear a known set of cells belonging to a net (for rip-up).
