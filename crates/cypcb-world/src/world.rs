@@ -468,6 +468,24 @@ impl BoardWorld {
         self.world.resource_mut::<SpatialIndex>().rebuild(entries);
     }
 
+    /// Record what the design requires of a net.
+    pub fn set_net_constraints(&mut self, id: NetId, constraints: crate::registry::NetConstraints) {
+        self.world
+            .resource_mut::<NetRegistry>()
+            .set_constraints(id, constraints);
+    }
+
+    /// What the design requires of a net, if its block said anything.
+    ///
+    /// Empty for every net until `sync_ast_to_world` has run: these come from
+    /// the source file, not from the fab preset.
+    pub fn net_constraints(&self, id: NetId) -> Option<crate::registry::NetConstraints> {
+        self.world
+            .resource::<NetRegistry>()
+            .constraints(id)
+            .copied()
+    }
+
     /// Rebuild the spatial index, sizing every component from its footprint.
     ///
     /// This is the correct way to build the index before running DRC. The index

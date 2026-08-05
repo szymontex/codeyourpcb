@@ -53,6 +53,8 @@ pub enum ViolationKind {
     SolderMaskBridge,
     /// Silkscreen overlaps copper pad.
     SilkClearance,
+    /// Trace is too narrow for the current its net declares.
+    TraceCurrent,
     /// Component courtyards overlap.
     CourtyardClearance,
 }
@@ -72,6 +74,7 @@ impl std::fmt::Display for ViolationKind {
             ViolationKind::HoleToHole => write!(f, "hole-to-hole"),
             ViolationKind::SolderMaskBridge => write!(f, "solder-mask-bridge"),
             ViolationKind::SilkClearance => write!(f, "silk-clearance"),
+            ViolationKind::TraceCurrent => write!(f, "trace-current"),
             ViolationKind::CourtyardClearance => write!(f, "courtyard-clearance"),
         }
     }
@@ -420,6 +423,26 @@ impl DrcViolation {
                 "Solder mask bridge violation: {:.2}mm actual, {:.2}mm required",
                 actual.to_mm(),
                 required.to_mm(),
+            ),
+        }
+    }
+
+    /// Create a trace-current violation.
+    ///
+    /// The trace is narrower than the current its net declares needs, per
+    /// IPC-2221. Distinct from `TraceWidth`, which is the fabricator's floor:
+    /// a trace can clear the fab minimum and still be too thin for its load.
+    pub fn trace_current(entity: Entity, actual: Nm, required: Nm, location: Point) -> Self {
+        DrcViolation {
+            kind: ViolationKind::TraceCurrent,
+            location,
+            entity,
+            other_entity: None,
+            source_span: None,
+            message: format!(
+                "Trace current violation: {:.3}mm actual, {:.3}mm required",
+                actual.0 as f64 / 1_000_000.0,
+                required.0 as f64 / 1_000_000.0
             ),
         }
     }

@@ -12,6 +12,7 @@ pub mod edge_clearance;
 pub mod hole_to_hole;
 pub mod silk_clearance;
 pub mod solder_mask_bridge;
+pub mod trace_current;
 pub mod trace_width;
 pub mod via_diameter;
 
@@ -29,6 +30,7 @@ pub use edge_clearance::EdgeClearanceRule;
 pub use hole_to_hole::HoleToHoleRule;
 pub use silk_clearance::SilkClearanceRule;
 pub use solder_mask_bridge::SolderMaskBridgeRule;
+pub use trace_current::TraceCurrentRule;
 pub use trace_width::MinTraceWidthRule;
 pub use via_diameter::ViaDiameterRule;
 

@@ -8,6 +8,8 @@ use bevy_ecs::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+use cypcb_core::Nm;
+
 use crate::components::NetId;
 
 /// Registry for interning net names to integer IDs.
@@ -49,6 +51,36 @@ pub struct NetRegistry {
     /// Lookup from name to NetId for fast interning.
     #[serde(skip)]
     lookup: HashMap<String, NetId>,
+    /// Electrical constraints per net, indexed by `NetId`.
+    ///
+    /// A `Vec` rather than a map: a `NetId` is already a dense index into
+    /// `names`, so the constraint for a net is one bounds-checked load, and a
+    /// board with no constraints at all costs one `None` per net.
+    #[serde(default)]
+    constraints: Vec<Option<NetConstraints>>,
+}
+
+/// What a design says a net must carry, from its `net X { ... }` block.
+///
+/// The DSL parses these and the viewer has always cached them, but the board
+/// model never received them, so the checker could not see a current
+/// requirement and the router gave every net the same preset width.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
+pub struct NetConstraints {
+    /// Required trace width, if the design states one.
+    pub width: Option<Nm>,
+    /// Required clearance to foreign copper, if the design states one.
+    pub clearance: Option<Nm>,
+    /// Current the net has to carry, in milliamps.
+    pub current_ma: Option<f64>,
+}
+
+impl NetConstraints {
+    /// Whether the design said anything at all about this net.
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.width.is_none() && self.clearance.is_none() && self.current_ma.is_none()
+    }
 }
 
 impl NetRegistry {
@@ -58,6 +90,7 @@ impl NetRegistry {
         NetRegistry {
             names: Vec::new(),
             lookup: HashMap::new(),
+            constraints: Vec::new(),
         }
     }
 
@@ -67,6 +100,7 @@ impl NetRegistry {
         NetRegistry {
             names: Vec::with_capacity(capacity),
             lookup: HashMap::with_capacity(capacity),
+            constraints: Vec::with_capacity(capacity),
         }
     }
 
@@ -93,7 +127,24 @@ impl NetRegistry {
         let id = NetId::new(self.names.len() as u32);
         self.names.push(name.to_string());
         self.lookup.insert(name.to_string(), id);
+        self.constraints.push(None);
         id
+    }
+
+    /// Record what the design requires of a net.
+    ///
+    /// Interning a net always leaves room for its constraints, so this only
+    /// fails for a `NetId` that was never interned here.
+    pub fn set_constraints(&mut self, id: NetId, constraints: NetConstraints) {
+        if let Some(slot) = self.constraints.get_mut(id.0 as usize) {
+            *slot = Some(constraints);
+        }
+    }
+
+    /// What the design requires of a net, if it said anything.
+    #[inline]
+    pub fn constraints(&self, id: NetId) -> Option<&NetConstraints> {
+        self.constraints.get(id.0 as usize)?.as_ref()
     }
 
     /// Get the name for a NetId.

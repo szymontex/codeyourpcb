@@ -13,6 +13,7 @@ parallel = ["rayon"]
 cypcb-core = { workspace = true }
 cypcb-parser = { workspace = true, default-features = false }
 cypcb-rules = { path = "../cypcb-rules" }
+cypcb-calc = { path = "../cypcb-calc" }
 cypcb-world = { workspace = true, default-features = false }
 
 bevy_ecs = { workspace = true }

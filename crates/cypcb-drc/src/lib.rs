@@ -131,6 +131,7 @@ pub fn run_drc(world: &mut BoardWorld, rules: &DesignRules) -> DrcResult {
         Box::new(rules::CourtyardClearanceRule),
         Box::new(rules::SolderMaskBridgeRule),
         Box::new(rules::SilkClearanceRule),
+        Box::new(rules::TraceCurrentRule),
     ];
 
     // Run each checker

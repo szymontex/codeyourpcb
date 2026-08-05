@@ -523,6 +523,16 @@ fn sync_net(
     // Intern the net name
     let net_id = world.intern_net(&net.name.value);
 
+    // Carry the design's own requirements onto the board model. Without this
+    // the checker cannot see a current requirement and the router hands every
+    // net the same preset width.
+    if let Some(ref constraints) = net.constraints {
+        let carried = cypcb_world_net_constraints(constraints);
+        if !carried.is_empty() {
+            world.set_net_constraints(net_id, carried);
+        }
+    }
+
     // Process each pin reference in the net
     for pin_ref in &net.connections {
         let comp_name = &pin_ref.component.value;
@@ -722,7 +732,12 @@ fn sync_trace(
                             locked: trace_def.locked,
                             source: TraceSource::Manual,
                         };
-                        world.ecs_mut().spawn((trace, span));
+                        // NetId has to be its own component, not just a field on Trace: DRC's
+                        // same-net exemption and its message enrichment both query for
+                        // it. The autorouted path learned this already (KNOWLEDGE.md
+                        // K012); traces written in the DSL never did, so they collided
+                        // with the pads they connect and reported as trace '?'.
+                        world.ecs_mut().spawn((trace, net_id, span));
                     }
                 }
                 TraceDirective::Via(via_def) => {
@@ -744,7 +759,7 @@ fn sync_trace(
                         net_id,
                         locked: trace_def.locked,
                     };
-                    world.ecs_mut().spawn((via, span));
+                    world.ecs_mut().spawn((via, net_id, span));
                 }
             }
         }
@@ -788,7 +803,12 @@ fn sync_trace(
         let span = EcsSourceSpan::new(trace_def.span.start, trace_def.span.end, 0, 0);
 
         // Spawn the trace entity
-        world.ecs_mut().spawn((trace, span));
+        // NetId has to be its own component, not just a field on Trace: DRC's
+        // same-net exemption and its message enrichment both query for
+        // it. The autorouted path learned this already (KNOWLEDGE.md
+        // K012); traces written in the DSL never did, so they collided
+        // with the pads they connect and reported as trace '?'.
+        world.ecs_mut().spawn((trace, net_id, span));
     }
 }
 
@@ -960,6 +980,58 @@ fn calculate_footprint_bounds(pads: &[FootprintPadDef]) -> Rect {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn a_trace_written_in_the_dsl_carries_its_net_as_a_component() {
+        // DRC's same-net exemption and its message enrichment both query for a
+        // NetId component. The autorouted path attaches one; the DSL path did
+        // not, so a hand-written trace collided with the pad it connects to and
+        // reported as trace '?'.
+        let source = r#"version 1
+
+board t {
+    size 30mm x 20mm
+    layers 2
+}
+
+component R1 resistor "0402" {
+    value "10k"
+    at 10mm, 10mm
+}
+
+component R2 resistor "0402" {
+    value "10k"
+    at 20mm, 10mm
+}
+
+net SIG {
+    R1.1
+    R2.1
+}
+
+trace SIG {
+    from R1.1
+    to R2.1
+    layer Top
+}
+"#;
+        let parsed = cypcb_parser::parse(source);
+        let mut world = BoardWorld::new();
+        let mut library = FootprintLibrary::new();
+        sync_ast_to_world(&parsed.value, source, &mut world, &mut library);
+
+        let expected = world.get_net("SIG").expect("net interned");
+        let ecs = world.ecs_mut();
+        let mut query = ecs.query::<(&Trace, &crate::components::NetId)>();
+        let tagged: Vec<_> = query.iter(ecs).collect();
+
+        assert_eq!(
+            tagged.len(),
+            1,
+            "the DSL trace must carry a NetId component"
+        );
+        assert_eq!(*tagged[0].1, expected);
+    }
     use super::*;
     use cypcb_parser::parse;
 
@@ -1747,5 +1819,16 @@ trace VCC {
             result.errors[0],
             SyncError::InvalidTracePin { .. }
         ));
+    }
+}
+
+/// Convert the parsed constraint block into what the board model stores.
+fn cypcb_world_net_constraints(
+    constraints: &cypcb_parser::ast::NetConstraints,
+) -> crate::registry::NetConstraints {
+    crate::registry::NetConstraints {
+        width: constraints.width.as_ref().map(|w| w.to_nm()),
+        clearance: constraints.clearance.as_ref().map(|c| c.to_nm()),
+        current_ma: constraints.current.as_ref().map(|c| c.to_milliamps()),
     }
 }
