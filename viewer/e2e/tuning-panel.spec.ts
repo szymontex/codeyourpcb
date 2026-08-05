@@ -19,7 +19,12 @@ net VCC {
   R2.1
 }`;
 
-test.describe('Tuning Panel', () => {
+// The Route split-button and its dropdown are hidden in index.html - see the
+// "Autorouter disabled - needs fundamental rewrite" comment on the
+// .tb-route-group wrapper. Nothing in this file can be driven from the UI until
+// that wrapper is visible again, so these run as skipped rather than as noise in
+// the gate. Delete the .skip the moment the button comes back.
+test.describe.skip('Tuning Panel', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
     await expect(page.locator('#status-text')).toContainText('Ready', { timeout: 15_000 });
