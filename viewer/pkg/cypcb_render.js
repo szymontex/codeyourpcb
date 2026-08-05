@@ -287,6 +287,23 @@ export class PcbEngine {
         }
     }
     /**
+     * Minimum trace width for a current, in nanometers.
+     *
+     * IPC-2221 for an external layer, 10C rise, 1 oz copper - the same
+     * defaults the router and the language server use, because all three go
+     * through `cypcb-calc`. The viewer carried three copies of this
+     * arithmetic and the language server a fourth, and they had already
+     * drifted apart on how thick an ounce of copper is.
+     *
+     * Returns 0 for a current of zero or less: no constraint to check.
+     * @param {number} current_ma
+     * @returns {number}
+     */
+    min_trace_width_for_current_ma(current_ma) {
+        const ret = wasm.pcbengine_min_trace_width_for_current_ma(this.__wbg_ptr, current_ma);
+        return ret;
+    }
+    /**
      * Create a new PcbEngine instance.
      */
     constructor() {
@@ -314,6 +331,62 @@ export class PcbEngine {
             return v1;
         } finally {
             wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
+     * Record which 3D model a package uses.
+     *
+     * Takes plain strings, so the same method serves both targets. Like
+     * [`register_footprint`](Self::register_footprint), this exists because
+     * the fact arrives from a supplier after the source was written, and the
+     * engine has to own it for the viewer to stop keeping its own copy of the
+     * board model.
+     * @param {string} _package
+     * @param {string} model
+     */
+    register_3d_model(_package, model) {
+        const ptr0 = passStringToWasm0(_package, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passStringToWasm0(model, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len1 = WASM_VECTOR_LEN;
+        wasm.pcbengine_register_3d_model(this.__wbg_ptr, ptr0, len0, ptr1, len1);
+    }
+    /**
+     * Register a footprint the host fetched at runtime (WASM version).
+     *
+     * A `.cypcb` file names a package - "LQFP-48" - without describing its
+     * pads, and for a part that is not in the built-in library the viewer
+     * fetches the geometry from a supplier after the fact. Registering it here
+     * puts it in the same library the parser resolves against, so the next
+     * `load_source` places real copper instead of an empty outline.
+     *
+     * This is what lets the engine own parsing. Without it the viewer has to
+     * keep its own parser purely so it can consult its own footprint registry.
+     *
+     * Registrations survive re-parsing: a footprint the design file defines
+     * itself still wins while it exists, and this one comes back when it goes.
+     *
+     * Returns an empty string on success, or the deserialisation error.
+     * @param {string} name
+     * @param {any} pads_js
+     * @returns {string}
+     */
+    register_footprint(name, pads_js) {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            const ptr0 = passStringToWasm0(name, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            const len0 = WASM_VECTOR_LEN;
+            wasm.pcbengine_register_footprint(retptr, this.__wbg_ptr, ptr0, len0, addHeapObject(pads_js));
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            deferred2_0 = r0;
+            deferred2_1 = r1;
+            return getStringFromWasm0(r0, r1);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            wasm.__wbindgen_export4(deferred2_0, deferred2_1, 1);
         }
     }
     /**

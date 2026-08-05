@@ -118,6 +118,18 @@ export class PcbEngine {
      */
     load_snapshot(snapshot_js: any): string;
     /**
+     * Minimum trace width for a current, in nanometers.
+     *
+     * IPC-2221 for an external layer, 10C rise, 1 oz copper - the same
+     * defaults the router and the language server use, because all three go
+     * through `cypcb-calc`. The viewer carried three copies of this
+     * arithmetic and the language server a fourth, and they had already
+     * drifted apart on how thick an ounce of copper is.
+     *
+     * Returns 0 for a current of zero or less: no constraint to check.
+     */
+    min_trace_width_for_current_ma(current_ma: number): number;
+    /**
      * Create a new PcbEngine instance.
      */
     constructor();
@@ -127,6 +139,34 @@ export class PcbEngine {
      * Returns reference designator strings.
      */
     query_point(x_nm: bigint, y_nm: bigint): string[];
+    /**
+     * Record which 3D model a package uses.
+     *
+     * Takes plain strings, so the same method serves both targets. Like
+     * [`register_footprint`](Self::register_footprint), this exists because
+     * the fact arrives from a supplier after the source was written, and the
+     * engine has to own it for the viewer to stop keeping its own copy of the
+     * board model.
+     */
+    register_3d_model(_package: string, model: string): void;
+    /**
+     * Register a footprint the host fetched at runtime (WASM version).
+     *
+     * A `.cypcb` file names a package - "LQFP-48" - without describing its
+     * pads, and for a part that is not in the built-in library the viewer
+     * fetches the geometry from a supplier after the fact. Registering it here
+     * puts it in the same library the parser resolves against, so the next
+     * `load_source` places real copper instead of an empty outline.
+     *
+     * This is what lets the engine own parsing. Without it the viewer has to
+     * keep its own parser purely so it can consult its own footprint registry.
+     *
+     * Registrations survive re-parsing: a footprint the design file defines
+     * itself still wins while it exists, and this one comes back when it goes.
+     *
+     * Returns an empty string on success, or the deserialisation error.
+     */
+    register_footprint(name: string, pads_js: any): string;
     /**
      * Remove a trace by entity index.
      *
@@ -176,8 +216,11 @@ export interface InitOutput {
     readonly pcbengine_get_trace_at_point: (a: number, b: bigint, c: bigint, d: bigint) => number;
     readonly pcbengine_get_violations_json: (a: number, b: number) => void;
     readonly pcbengine_load_snapshot: (a: number, b: number, c: number) => void;
+    readonly pcbengine_min_trace_width_for_current_ma: (a: number, b: number) => number;
     readonly pcbengine_new: () => number;
     readonly pcbengine_query_point: (a: number, b: number, c: bigint, d: bigint) => void;
+    readonly pcbengine_register_3d_model: (a: number, b: number, c: number, d: number, e: number) => void;
+    readonly pcbengine_register_footprint: (a: number, b: number, c: number, d: number, e: number) => void;
     readonly pcbengine_remove_trace: (a: number, b: number) => number;
     readonly pcbengine_rotate_component: (a: number, b: number, c: number, d: number) => number;
     readonly pcbengine_run_drc_incremental: (a: number) => number;
