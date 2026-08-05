@@ -86,7 +86,7 @@ fn print_row(label: &str, score: &RoutingScore) {
 /// The smoother is always integrated into PathFinder's route() method, so this
 /// test measures the final output only:
 /// - Smoothness ≥ 0.5 (grid paths without smoothing score ~0.2–0.3)
-/// - DRC violations ≤ 1, a ratchet on the routed and smoothed board
+/// - DRC violations 0 - R107 is met on this board
 ///
 /// It cannot prove the smoother introduces no violations of its own - that
 /// needs a run with smoothing disabled to compare against, and the config has
@@ -119,8 +119,8 @@ fn smoother_integration_led_blink() {
     // exemption applies, the count is 3. Lower this as R107 is worked; never
     // raise it.
     assert!(
-        score.drc_violations <= 1,
-        "DRC violations should be ≤ 1 on the routed and smoothed board, got {}. \
+        score.drc_violations == 0,
+        "DRC violations should be 0 on the routed and smoothed board, got {}. \
          R107 targets 0.",
         score.drc_violations,
     );

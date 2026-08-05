@@ -131,7 +131,15 @@ Read this file first. It is the source of truth for what is in flight and what c
 | multi_ic | 240 | **116** | - |
 
   All three complete, lengths within 1%, vias down (43 -> 23 on stm32). The whole all-fixtures gate now runs in 21s against 339s. Ratchets tightened to 1/124/116.
-- NEXT-ACTION: 124 and 116 remain. Re-classify them by pair type - the mix has shifted twice since the last dump - and check whether the coarse grid changed which group dominates before choosing the next lever.
+- DONE: **led_blink routes with zero DRC violations.** Re-classifying showed trace-trace had become the biggest group (64 of 106 on stm32, 56 of 100 on multi_ic), still ~80% at exactly 0.00mm - which on a track-pitch grid can only be diagonal corner-cutting: two diagonals crossing between cells without ever sharing one. Refusing to cut a corner past another net's copper: led_blink 1 -> **0**, multi_ic 116 -> **64**, stm32_breakout 124 -> 137.
+- **stm32_breakout regressed by 13 and the ratchet was raised deliberately.** Routes that used to slip past each other diagonally become layer changes instead - vias went 23 -> 53 on that board. Measured alternative: `via_cost` 4.0 gives stm32 95 and multi_ic 91, but costs led_blink its zero (0 -> 3). No single default wins on all three, and tuning a product default to three fixtures is not the answer, so the default stays at 1.0 and the trade-off is recorded here:
+
+| via_cost | led_blink | stm32_breakout | multi_ic |
+|---|---|---|---|
+| 1.0 (shipped) | **0** | 137 | 64 |
+| 4.0 | 3 | 95 | 91 |
+
+- NEXT-ACTION: stm32_breakout's via count doubling is the lead. Its 137 violations should be re-classified - if they are now mostly trace-via, the via footprint that the congestion map already prices may just need a stronger weight on that board's density, which is a cost-model question rather than another geometry one.
 - QUEUED: routing stm32_breakout takes about two minutes. Same treatment as blink - probe where it goes before optimizing.
 - QUEUED: WASM size breakdown (`twiggy top`, 702,357 bytes today), render frame time on the largest example, allocation counts in the DRC hot loop.
 

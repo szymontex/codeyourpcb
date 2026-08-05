@@ -3,7 +3,7 @@
 //! Two test functions:
 //! - `benchmark_regression` — fast CI gate (non-ignored): routes led_blink with PathFinder,
 //!   asserts the solution is complete (0 unrouted, >= 20 routes) and then that quality has
-//!   not regressed (composite ≤ 2200, DRC ≤ 1, smoothness ≥ 0.95).
+//!   not regressed (composite ≤ 100, DRC 0, smoothness ≥ 0.95).
 //! - `benchmark_full_matrix` — comprehensive comparison (`#[ignore]`): routes all 3 fixtures
 //!   × 2 strategies, prints comparison table, emits JSON report, confirms PathFinder default.
 
@@ -158,9 +158,13 @@ fn print_table_footer() {
 /// sitting at 312 and 383. These are ratchets - lower them as the router
 /// improves, never raise them to accommodate a regression.
 const DRC_RATCHETS: &[(&str, &str, u32)] = &[
-    ("led_blink.kicad_pcb", "led_blink", 1),
-    ("stm32_breakout.kicad_pcb", "stm32_breakout", 124),
-    ("multi_ic.kicad_pcb", "multi_ic", 116),
+    ("led_blink.kicad_pcb", "led_blink", 0),
+    // stm32_breakout is the one board the corner-cut rule cost: routes it
+    // can no longer squeeze past each other diagonally turn into layer changes,
+    // and via count went 23 -> 53. Raised deliberately and loudly, with the
+    // trade-off recorded in the tracker.
+    ("stm32_breakout.kicad_pcb", "stm32_breakout", 137),
+    ("multi_ic.kicad_pcb", "multi_ic", 64),
 ];
 
 /// Routes every fixture and holds the line on completeness and DRC count.
@@ -255,22 +259,22 @@ fn benchmark_regression() {
     // They are deliberately tight: lower them whenever the router improves,
     // never raise them to accommodate a regression. R107 targets 0 violations.
     assert!(
-        score.composite <= 2_200.0,
-        "FAIL benchmark_regression: composite got {:.1}, threshold ≤ 2200.0 (baseline 2002 × 1.1)",
+        score.composite <= 100.0,
+        "FAIL benchmark_regression: composite got {:.1}, threshold ≤ 100.0 (baseline 42.6)",
         score.composite
     );
     eprintln!(
-        "  ✓ composite: got {:.1}, threshold ≤ 2200.0",
+        "  ✓ composite: got {:.1}, threshold ≤ 100.0",
         score.composite
     );
 
     assert!(
-        score.drc_violations <= 1,
-        "FAIL benchmark_regression: drc_violations got {}, threshold ≤ 1 (R107 targets 0)",
+        score.drc_violations == 0,
+        "FAIL benchmark_regression: drc_violations got {}, threshold 0 - R107 is met on this board, keep it that way",
         score.drc_violations
     );
     eprintln!(
-        "  ✓ drc_violations: got {}, threshold ≤ 1 (R107 targets 0)",
+        "  ✓ drc_violations: got {}, threshold 0 (R107 met)",
         score.drc_violations
     );
 
