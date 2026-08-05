@@ -139,7 +139,20 @@ Read this file first. It is the source of truth for what is in flight and what c
 | 1.0 (shipped) | **0** | 137 | 64 |
 | 4.0 | 3 | 95 | 91 |
 
-- NEXT-ACTION: stm32_breakout's via count doubling is the lead. Its 137 violations should be re-classified - if they are now mostly trace-via, the via footprint that the congestion map already prices may just need a stronger weight on that board's density, which is a cost-model question rather than another geometry one.
+- DONE: re-classified. stm32_breakout is now dominated by **trace-via, 66 of 119 pairs**; multi_ic by trace-trace (23) and pad-trace (21). Owning the via ring outright instead of only pricing it - a two-cell disc on the coarse grid, against eight on the old one - was measured: stm32_breakout **137 -> 108**, multi_ic **64 -> 78**, led_blink unchanged at 0, all complete. Reverted: it trades one board against the other, and the ratchet discipline exists so that trade is not rationalised into the codebase.
+- **Six experiments in, the pattern is the finding.** Every geometry lever - vetoing cells near foreign copper (twice), reserving trace footprints, pricing trace footprints, owning via rings - improves one benchmark board and worsens the other by a similar amount. The grid-level fixes that *did* land (track pitch, corner-cut refusal, obstacle bloat, via pricing) all improved every board at once. That difference says the remaining ~200 violations are no longer a geometry problem but a **cost-model** one: which conflicts the router should accept where.
+- NEXT-ACTION: the one approach not yet tried, and the only one that works on real violations instead of proxies - a **post-route repair pass**. Run DRC on the routed board, take the nets named in the violations, rip up only those, re-route them with the offending cells blocked, and keep the result only if the violation count actually drops. Everything it needs already exists: `run_drc` gives the pairs, `clear_cells` rips up, `mark_route` blocks.
+
+## Session summary, 2026-08-05
+
+| measure | start of day | now |
+|---|---|---|
+| blink.cypcb routing time | 93,459ms | ~200ms |
+| led_blink DRC violations | 3 (only board measured) | **0** |
+| stm32_breakout | not measured (312 when first seen) | 137 |
+| multi_ic | not measured (383 when first seen) | 64 |
+| completeness | 5 unrouted on blink | 0 on every fixture |
+| autoroute suite runtime | 432s | 26s |
 - QUEUED: routing stm32_breakout takes about two minutes. Same treatment as blink - probe where it goes before optimizing.
 - QUEUED: WASM size breakdown (`twiggy top`, 702,357 bytes today), render frame time on the largest example, allocation counts in the DRC hot loop.
 
