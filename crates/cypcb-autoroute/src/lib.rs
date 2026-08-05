@@ -31,6 +31,7 @@ pub mod orchestrator;
 pub mod pathfinder;
 pub mod pathfinder_v2;
 pub mod postprocess;
+pub mod repair;
 pub mod scoring;
 pub mod smoother;
 pub mod strategy;
@@ -126,6 +127,23 @@ pub struct AutorouteConfig {
 
     /// User-facing tuning parameters.
     pub params: AutorouteParams,
+
+    /// How many DRC-driven repair passes to run per block radius.
+    ///
+    /// Each pass forbids the cells the checker complained about and routes
+    /// again, keeping the result only if the violation count drops and the
+    /// board stays complete. Zero disables repair.
+    pub repair_passes: u32,
+
+    /// Block radii, in cells, that repair tries around each reported violation.
+    ///
+    /// Each radius is an independent attempt and the best measured result
+    /// wins, so this is a list of candidates rather than a tuned constant.
+    /// Measured across the benchmark boards: radius 0 takes stm32_breakout
+    /// from 176 violations to 167 and does nothing for multi_ic, radius 2
+    /// takes multi_ic from 127 to 110 and does nothing for stm32_breakout.
+    /// Trying both is what makes the pass board-independent.
+    pub repair_block_radii: Vec<u32>,
 }
 
 impl Default for AutorouteConfig {
@@ -137,6 +155,8 @@ impl Default for AutorouteConfig {
             prefer_top_layer: true,
             strategy: StrategyKind::default(),
             params: AutorouteParams::default(),
+            repair_passes: 2,
+            repair_block_radii: vec![0, 2],
         }
     }
 }
@@ -252,7 +272,16 @@ pub fn route_board(
         }
     };
 
-    strategy.route(world, library, rules, &effective_config)
+    let result = strategy.route(world, library, rules, &effective_config);
+
+    // Repair re-routes with PathFinder, so it only applies to a PathFinder
+    // solution - handing it an A* result would silently swap strategies.
+    match effective_config.strategy {
+        StrategyKind::PathFinder => {
+            repair::repair_routes(world, library, rules, &effective_config, result)
+        }
+        StrategyKind::ImprovedAStar => result,
+    }
 }
 
 #[cfg(test)]

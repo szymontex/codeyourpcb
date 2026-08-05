@@ -25,13 +25,14 @@ use cypcb_world::BoardWorld;
 
 use crate::congestion::CongestionMap;
 use crate::cost::RoutingCost;
-use crate::grid::RoutingGrid;
+use crate::grid::{RoutingGrid, CELL_OBSTACLE};
 use crate::orchestrator::{
     build_spanning_tree, extract_ratsnest, is_multi_layer, order_nets, pad_to_grid_node,
     pad_to_zone, NetRoute,
 };
 use crate::pathfinder::{GridNode, PadZone};
 use crate::postprocess;
+use crate::repair::Blocker;
 use crate::smoother::smooth_routes;
 use crate::strategy::RoutingStrategy;
 use crate::via_optimizer::optimize_vias;
@@ -60,14 +61,21 @@ impl RoutingStrategy for PathFinderStrategy {
         rules: &dyn RoutingRuleSet,
         config: &AutorouteConfig,
     ) -> RoutingResult {
-        let _span = tracing::info_span!("pathfinder_strategy").entered();
-        tracing::info!(
-            routing_strategy = self.name(),
-            "Starting PathFinder routing"
-        );
+        self.route_with_blockers(world, library, rules, config, &[])
+    }
+}
 
-        // Resolve grid resolution (adaptive for large boards)
-        let resolution = if let Some((board_size, _)) = world.board_info() {
+impl PathFinderStrategy {
+    /// Resolve the grid resolution this strategy will use for `world`.
+    ///
+    /// The repair pass needs the same number, so that a cell it forbids lands
+    /// where the router will look for it.
+    pub fn resolution_for(
+        world: &mut BoardWorld,
+        rules: &dyn RoutingRuleSet,
+        config: &AutorouteConfig,
+    ) -> i64 {
+        if let Some((board_size, _)) = world.board_info() {
             config.resolve_adaptive_grid_resolution(
                 rules,
                 board_size.width.raw(),
@@ -75,7 +83,32 @@ impl RoutingStrategy for PathFinderStrategy {
             )
         } else {
             config.resolve_grid_resolution(rules)
-        };
+        }
+    }
+
+    /// Route the board, refusing every cell named in `blockers`.
+    ///
+    /// `blockers` is empty on a first pass. The repair pass fills it from real
+    /// DRC output, so the router is denied exactly the places the checker
+    /// complained about instead of everywhere a geometric rule might apply -
+    /// which is what separates this from the blanket vetoes that traded
+    /// completeness for correctness.
+    pub fn route_with_blockers(
+        &self,
+        world: &mut BoardWorld,
+        library: &FootprintLibrary,
+        rules: &dyn RoutingRuleSet,
+        config: &AutorouteConfig,
+        blockers: &[Blocker],
+    ) -> RoutingResult {
+        let _span = tracing::info_span!("pathfinder_strategy").entered();
+        tracing::info!(
+            routing_strategy = self.name(),
+            "Starting PathFinder routing"
+        );
+
+        // Resolve grid resolution (adaptive for large boards)
+        let resolution = Self::resolution_for(world, rules, config);
 
         // Build grid
         let mut grid = match RoutingGrid::from_board(world, library, rules, resolution) {
@@ -84,6 +117,17 @@ impl RoutingStrategy for PathFinderStrategy {
                 return RoutingResult::failed("Failed to build routing grid (no board entity?)")
             }
         };
+
+        // Forbid the cells a previous pass was caught violating.
+        let layer_count = grid.layer_count() as usize;
+        for blocker in blockers {
+            let (gx, gy) = grid.nm_to_grid(blocker.at);
+            for layer in 0..layer_count {
+                if blocker.covers_layer(layer) {
+                    grid.mark_obstacle(gx, gy, layer, blocker.radius_cells, CELL_OBSTACLE);
+                }
+            }
+        }
 
         // Extract ratsnest
         let ratsnest = extract_ratsnest(world, library);

@@ -15,7 +15,7 @@ use cypcb_autoroute::astar_improved::ImprovedAStarStrategy;
 use cypcb_autoroute::pathfinder_v2::PathFinderStrategy;
 use cypcb_autoroute::scoring::{score_board, RoutingScore, ScoreWeights};
 use cypcb_autoroute::strategy::RoutingStrategy;
-use cypcb_autoroute::AutorouteConfig;
+use cypcb_autoroute::{route_board, AutorouteConfig};
 use cypcb_drc::DesignRules;
 use cypcb_kicad::{parse_kicad_pcb, BENCHMARKS};
 use cypcb_router::apply_routes;
@@ -53,7 +53,14 @@ fn route_and_score(strategy: &dyn RoutingStrategy, fixture: &str) -> (RoutingSco
     let rules = test_rules();
     let config = AutorouteConfig::default();
 
-    let result = strategy.route(&mut world, &library, &rules, &config);
+    // Route through the shipped entry point, not the bare strategy: repair is
+    // part of what a user gets when they press Route, so it has to be part of
+    // what the ratchets measure.
+    let result = if strategy.name() == "pathfinder" {
+        route_board(&mut world, &library, &rules, &config)
+    } else {
+        strategy.route(&mut world, &library, &rules, &config)
+    };
     let route_count = result.route_count();
     let unrouted = match result.status {
         RoutingStatus::Complete => 0,
@@ -158,17 +165,21 @@ fn print_table_footer() {
 /// That is not a regression; it is the same board measured without a blind
 /// spot. 24 of stm32_breakout's violations and 54 of multi_ic's name a
 /// component, and those are precisely the pairs the old index could not see.
+///
+/// Lowered by the DRC-driven repair pass, which routes, reads the real report
+/// and re-routes with the offending cells forbidden: 176 -> 167 and 127 -> 110,
+/// every board still complete.
 const DRC_RATCHETS: &[(&str, &str, u32)] = &[
     ("led_blink.kicad_pcb", "led_blink", 0),
-    ("stm32_breakout.kicad_pcb", "stm32_breakout", 176),
-    ("multi_ic.kicad_pcb", "multi_ic", 127),
+    ("stm32_breakout.kicad_pcb", "stm32_breakout", 167),
+    ("multi_ic.kicad_pcb", "multi_ic", 110),
 ];
 
 /// Routes every fixture and holds the line on completeness and DRC count.
 ///
 /// Ignored by default so `cargo test` stays quick; scripts/quality-gate.sh runs
-/// it explicitly in the benchmark stage. It takes about 20 seconds now that the
-/// routing grid is a track pitch rather than half a clearance.
+/// it explicitly in the benchmark stage. About 100 seconds: the grid is a track
+/// pitch rather than half a clearance, and repair routes each board three times.
 #[test]
 #[ignore = "slow: routes all three fixtures"]
 fn benchmark_all_fixtures_drc() {

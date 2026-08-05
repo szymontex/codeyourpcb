@@ -173,7 +173,16 @@ Read this file first. It is the source of truth for what is in flight and what c
 | 3, 4, 6 | 176 | 127 |
 
   Every board stays complete, and the accept-only-if-better gate means a repair pass can never ship a worse board - only a slower one, about 3x the routing time. But radius 0 helps one board and radius 2 the other, which is the same shape as the six geometry experiments before it. Reverted again; the code was written twice now and is in the history at `450d734^..` if a third attempt wants it.
-- NEXT-ACTION: the tuning question answers itself - **try both radii and keep the verified best**. The gate already picks the winner, so the pass does not need a right constant, it needs to measure the candidates: one pass at radius 0, one at radius 2, keep whichever DRC likes. That is 2 extra routings against the 2 a fixed radius already costs, and it removes the fixture-tuning objection entirely. Measure the total time on multi_ic before deciding whether it belongs on by default.
+- DONE: **the repair pass ships.** Written and reverted twice for the same reason - one radius helped one board - the third version stops choosing. Each radius in `repair_block_radii` is an independent attempt from the same starting board and the measured winner is kept, so there is no constant to tune to a fixture. Defaults: 2 passes over radii `[0, 2]`.
+
+| fixture | before | after | routing time |
+|---|---|---|---|
+| led_blink | 0 | 0 | 0.07s -> 0.07s (exits at zero, pays nothing) |
+| stm32_breakout | 176 | **167** | 6.1s -> 27.2s |
+| multi_ic | 127 | **110** | 23.5s -> 69.1s |
+
+  Every board complete, none worse - the pass keeps a candidate only when the count drops and the board still routes, so the worst it can cost is time. One pass buys nothing on either board; the win lands on the second, once a rejected attempt's cells have joined the next one. `benchmark_all_fixtures_drc` now routes through `route_board` rather than the bare strategy, because repair is what a user gets when they press Route and the ratchet has to measure what ships. Ratchets 0/167/110, gate 29s -> 98s. Variant exploration sets `repair_passes: 0` - ranking candidates that are about to be discarded should not cost 3x.
+- NEXT-ACTION: repair spends its whole budget re-routing the entire board to move a handful of nets. `clear_cells` already rips up a single net and the DRC report already names which nets are involved, so a pass could re-route only those - the difference between 23s and something near a second. Measure how many nets a pass actually changes before building it.
 
 ## Session summary, 2026-08-05
 

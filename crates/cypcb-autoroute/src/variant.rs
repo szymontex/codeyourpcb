@@ -135,6 +135,10 @@ pub fn generate_variants(
         let autoroute_config = AutorouteConfig {
             strategy: config.strategy,
             params: config.params.clone(),
+            // Variant exploration compares many routings; paying for repair on
+            // each one triples the wall clock to rank candidates that are about
+            // to be thrown away. The winner can be repaired afterwards.
+            repair_passes: 0,
             ..AutorouteConfig::default()
         };
 
