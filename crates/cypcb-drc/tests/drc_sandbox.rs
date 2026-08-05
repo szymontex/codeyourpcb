@@ -460,7 +460,7 @@ mod trace_width {
     fn thin_trace_violation() {
         let mut world = world_with_board();
         let net = world.intern_net("SIG");
-        // 0.05mm trace — violates 0.15mm minimum
+        // 0.05mm trace — violates the 0.127mm minimum
         spawn_trace(
             &mut world,
             net,
@@ -476,16 +476,14 @@ mod trace_width {
             .iter()
             .filter(|v| v.kind == ViolationKind::TraceWidth)
             .count();
-        // Note: trace_width rule is still a placeholder — may return 0
-        // When implemented, this should be > 0
-        let _ = tw;
+        assert_eq!(tw, 1, "a 0.05mm trace is under every preset's minimum");
     }
 
     #[test]
     fn normal_trace_ok() {
         let mut world = world_with_board();
         let net = world.intern_net("SIG");
-        // 0.2mm trace — above 0.15mm minimum
+        // 0.2mm trace — above the 0.127mm minimum
         spawn_trace(
             &mut world,
             net,

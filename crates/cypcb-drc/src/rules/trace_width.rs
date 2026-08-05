@@ -1,24 +1,20 @@
 //! Minimum trace width rule (DRC-02).
 //!
-//! NOTE: This rule is a placeholder. Trace entities do not exist in the current
-//! board model (Phase 1-3). When traces are added in Phase 5 (autorouting),
-//! this rule will be implemented to check trace widths against min_trace_width.
-//!
-//! # Future Implementation
-//!
-//! When Phase 5 adds the Trace ECS component, this rule will:
-//! 1. Query all Trace entities from the board world
-//! 2. Check each trace's width against `rules.min_trace_width`
-//! 3. Report violations with exact location on the trace segment
+//! Every routed or hand-drawn trace has to be at least as wide as the fab can
+//! etch. The width lives on the `Trace` component, so one pass over the trace
+//! entities is enough - no geometry work.
 //!
 //! # Design Rules Reference
 //!
-//! The `DesignRules.min_trace_width` field is already defined:
-//! - JLCPCB 2-layer: 0.15mm (6 mil)
+//! `DesignRules.min_trace_width` comes from the manufacturer's constraints, the
+//! same table the autorouter routes against:
+//! - JLCPCB 2-layer: 0.127mm (5 mil)
 //! - JLCPCB 4-layer: 0.10mm (4 mil)
 //! - PCBWay standard: 0.15mm
 //! - Prototype: 0.25mm (10 mil)
 
+use cypcb_core::{Nm, Point};
+use cypcb_world::components::trace::Trace;
 use cypcb_world::BoardWorld;
 
 use super::DrcRule;
@@ -26,9 +22,6 @@ use crate::presets::DesignRules;
 use crate::violation::DrcViolation;
 
 /// Rule that checks all traces meet minimum width.
-///
-/// Currently a no-op placeholder. Will be implemented when trace entities
-/// are added to the board model (Phase 5).
 ///
 /// # Examples
 ///
@@ -38,44 +31,69 @@ use crate::violation::DrcViolation;
 ///
 /// let rule = MinTraceWidthRule;
 /// let mut world = BoardWorld::new();
-/// // ... traces will exist in Phase 5 ...
-/// let rules = DesignRules::jlcpcb_2layer(); // min_trace = 0.15mm
+/// // ... spawn traces ...
+/// let rules = DesignRules::jlcpcb_2layer(); // min_trace_width = 0.127mm
 /// let violations = rule.check(&mut world, &rules);
 /// ```
 pub struct MinTraceWidthRule;
+
+/// Midpoint of a trace, used to place the violation marker.
+///
+/// Falls back to the origin for a trace with no segments - which the sync layer
+/// does not produce, but the ECS does not forbid either.
+fn trace_midpoint(trace: &Trace) -> Point {
+    let Some(first) = trace.segments.first() else {
+        return Point::ORIGIN;
+    };
+    let last = trace.segments.last().unwrap_or(first);
+    Point::new(
+        Nm((first.start.x.0 + last.end.x.0) / 2),
+        Nm((first.start.y.0 + last.end.y.0) / 2),
+    )
+}
 
 impl DrcRule for MinTraceWidthRule {
     fn name(&self) -> &'static str {
         "min-trace-width"
     }
 
-    fn check(&self, _world: &mut BoardWorld, _rules: &DesignRules) -> Vec<DrcViolation> {
-        // TODO: Implement when Trace component exists (Phase 5)
-        //
-        // Future implementation pseudocode:
-        // ```
-        // let min_width = rules.min_trace_width;
-        // let ecs = world.ecs_mut();
-        // let mut query = ecs.query::<(Entity, &Trace, &Layer)>();
-        //
-        // for (entity, trace, layer) in query.iter(ecs) {
-        //     if trace.width < min_width {
-        //         violations.push(DrcViolation::trace_width(
-        //             entity,
-        //             trace.width,
-        //             min_width,
-        //             trace.center_point(),
-        //         ));
-        //     }
-        // }
-        // ```
-        Vec::new()
+    fn check(&self, world: &mut BoardWorld, rules: &DesignRules) -> Vec<DrcViolation> {
+        let min_width = rules.min_trace_width;
+
+        let ecs = world.ecs_mut();
+        let mut query = ecs.query::<(bevy_ecs::entity::Entity, &Trace)>();
+
+        query
+            .iter(ecs)
+            .filter(|(_, trace)| trace.width < min_width)
+            .map(|(entity, trace)| {
+                DrcViolation::trace_width(entity, trace.width, min_width, trace_midpoint(trace))
+            })
+            .collect()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use cypcb_world::components::trace::{TraceSegment, TraceSource};
+    use cypcb_world::components::Layer;
+    use cypcb_world::NetId;
+
+    fn spawn_trace(world: &mut BoardWorld, width_mm: f64) -> bevy_ecs::entity::Entity {
+        let trace = Trace {
+            segments: vec![TraceSegment::new(
+                Point::from_mm(10.0, 10.0),
+                Point::from_mm(20.0, 10.0),
+            )],
+            width: Nm::from_mm(width_mm),
+            layer: Layer::TopCopper,
+            net_id: NetId::new(1),
+            locked: false,
+            source: TraceSource::Manual,
+        };
+        world.spawn_entity(trace)
+    }
 
     #[test]
     fn test_rule_name() {
@@ -83,30 +101,43 @@ mod tests {
     }
 
     #[test]
-    fn test_trace_width_rule_is_placeholder() {
-        // Placeholder returns no violations (no traces exist yet)
+    fn no_traces_no_violations() {
         let mut world = BoardWorld::new();
         let rules = DesignRules::default();
-        let violations = MinTraceWidthRule.check(&mut world, &rules);
-        assert!(
-            violations.is_empty(),
-            "Placeholder should return no violations"
-        );
+        assert!(MinTraceWidthRule.check(&mut world, &rules).is_empty());
     }
 
     #[test]
-    fn test_placeholder_with_different_presets() {
-        // Verify placeholder works with all presets
+    fn trace_at_the_minimum_passes() {
         let mut world = BoardWorld::new();
+        let rules = DesignRules::jlcpcb_2layer();
+        spawn_trace(&mut world, rules.min_trace_width.to_mm());
+        assert!(MinTraceWidthRule.check(&mut world, &rules).is_empty());
+    }
 
-        for preset in crate::Preset::all() {
-            let rules = preset.rules();
-            let violations = MinTraceWidthRule.check(&mut world, &rules);
-            assert!(
-                violations.is_empty(),
-                "Placeholder should return empty for {:?} preset",
-                preset
-            );
-        }
+    #[test]
+    fn trace_below_the_minimum_is_reported_once() {
+        let mut world = BoardWorld::new();
+        let rules = DesignRules::jlcpcb_2layer();
+        spawn_trace(&mut world, 0.05);
+        spawn_trace(&mut world, 0.3);
+
+        let violations = MinTraceWidthRule.check(&mut world, &rules);
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0].kind, crate::ViolationKind::TraceWidth);
+        // Marker sits on the trace, not at the origin.
+        assert_eq!(violations[0].location, Point::from_mm(15.0, 10.0));
+        assert!(violations[0].message.contains("0.050mm actual"));
+    }
+
+    #[test]
+    fn stricter_preset_catches_more() {
+        let mut world = BoardWorld::new();
+        spawn_trace(&mut world, 0.2);
+
+        let relaxed = DesignRules::jlcpcb_2layer(); // 0.127mm
+        let strict = DesignRules::prototype(); // 0.25mm
+        assert!(MinTraceWidthRule.check(&mut world, &relaxed).is_empty());
+        assert_eq!(MinTraceWidthRule.check(&mut world, &strict).len(), 1);
     }
 }

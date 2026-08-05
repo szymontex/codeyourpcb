@@ -164,6 +164,45 @@ impl DrcViolation {
         }
     }
 
+    /// Create a trace width violation.
+    ///
+    /// # Arguments
+    ///
+    /// * `entity` - Trace entity that is too narrow
+    /// * `actual` - Width the trace was drawn at
+    /// * `required` - Minimum width the fab allows
+    /// * `location` - Board location for click-to-zoom
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use bevy_ecs::entity::Entity;
+    /// use cypcb_core::{Nm, Point};
+    /// use cypcb_drc::DrcViolation;
+    ///
+    /// let violation = DrcViolation::trace_width(
+    ///     Entity::from_raw(1),
+    ///     Nm::from_mm(0.1),
+    ///     Nm::from_mm(0.127),
+    ///     Point::from_mm(10.0, 20.0),
+    /// );
+    /// assert_eq!(violation.kind, cypcb_drc::ViolationKind::TraceWidth);
+    /// ```
+    pub fn trace_width(entity: Entity, actual: Nm, required: Nm, location: Point) -> Self {
+        DrcViolation {
+            kind: ViolationKind::TraceWidth,
+            location,
+            entity,
+            other_entity: None,
+            source_span: None,
+            message: format!(
+                "Trace width violation: {:.3}mm actual, {:.3}mm minimum",
+                actual.to_mm(),
+                required.to_mm(),
+            ),
+        }
+    }
+
     /// Create an unconnected pin violation.
     ///
     /// # Arguments
