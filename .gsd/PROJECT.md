@@ -46,7 +46,7 @@
 - Library management still needs depth (JLCPCB search exists but no "add to library" flow)
 - Pre-existing E2E flake in errors.spec.ts:102 ("Ready" vs "Reloaded" status race) — stable in current runs
 - ThemeManager has separate 'theme' localStorage key from settings 'cypcb-settings' key (by design for FART prevention)
-- DRC violations at 5 (not zero) on led_blink benchmark — grid-boundary artifacts, not crossing traces (90% reduction from baseline 50)
+- DRC violations at 3 (not zero) on the led_blink benchmark, and they are real: a trace 0.07mm from a foreign pad, a trace-to-trace overlap and a trace-to-via overlap, all between different nets. The earlier "grid-boundary artifacts, not crossing traces" note was wrong — it was written when the count was 5, measured on a board the router had abandoned partway. See `crates/cypcb-autoroute/tests/drc_report.rs` for the per-violation dump.
 - Benchmark fixtures are synthetic (not real downloaded KiCad projects) — functionally equivalent but lack real-world edge case coverage
 - Variant click-to-apply is display-only (doesn't re-route with clicked config) — hover preview works correctly
 
