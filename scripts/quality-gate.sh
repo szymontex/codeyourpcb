@@ -74,6 +74,14 @@ if cargo test --release -p cypcb-autoroute -- benchmark_regression 2>&1; then
 else
   fail "benchmark-regression"
 fi
+# DRC ratchets across all three fixtures. led_blink alone reported 3 violations
+# while stm32_breakout sat at 312 and multi_ic at 383 - the gate could not see
+# the router's real output.
+if cargo test --release -p cypcb-autoroute -- benchmark_all_fixtures_drc --ignored 2>&1; then
+  pass "benchmark-all-fixtures-drc"
+else
+  fail "benchmark-all-fixtures-drc"
+fi
 if cargo test --release -p cypcb-autoroute -- benchmark_500 --ignored 2>&1; then
   pass "benchmark-500"
 else

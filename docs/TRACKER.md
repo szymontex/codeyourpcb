@@ -83,7 +83,17 @@ Read this file first. It is the source of truth for what is in flight and what c
 - DONE: first baseline, and it found a 28x. `benchmark_routing_time` reported blink.cypcb at **93,459ms**. A per-iteration probe showed PathFinder shrinking the overused set for three iterations, then re-routing the same four nets for the remaining 46 - never converging, always burning the full budget, with each iteration slower than the last as the history cost climbed. Stopping after three iterations without a new best: **93,459ms -> 3,366ms**, routing-test **8,459ms -> 274ms**, both with byte-identical output. Regression gate 21s -> 1.12s; whole autoroute suite 44s.
 - DONE: found why those four nets never separated - they were `DIS`, `TRG_THR`, `VCC`, `GND`, all multi-pin. `net_path_cells` gathers every connection of a net into one list and `mark_net` increments per entry, so a net's own junctions pushed occupancy to 2 against a capacity of 1 and stayed overused forever. The router was negotiating against itself. Deduplicating a net's cells before marking: blink **3,366ms -> 1,288ms**, routing-test **274ms -> 72ms**, output identical. Cumulative against the 2026-08-05 baseline: **93,459ms -> 1,288ms, 72x**.
 - DONE: measured both. blink.cypcb now **converges in 3 iterations** (overuse 19 -> 1 -> 0) where before it never converged and always burned all 50; the stagnation break is a safety net now, not the normal exit. led_blink.kicad_pcb converges on the **first** iteration - zero cells shared between nets - and still reports 3 clearance violations, which settles what they are: not grid contention but the physical overlap of neighbouring cells, since a trace is 0.127mm wide and cells sit 0.0635mm apart.
-- NEXT-ACTION: the 3 remaining violations need geometry the grid cannot express. Two candidates worth measuring before coding: a soft congestion cost for near-miss cells (rather than the veto that failed twice), or a post-route repair pass that reads the DRC output and nudges the offending segments. Measure the second first - it works on the real violation list rather than a proxy.
+- **The 3 violations on led_blink were never the story.** Running the DRC diagnostic across every fixture:
+
+| fixture | routes | violations | clearance | edge | hole-to-hole |
+|---|---|---|---|---|---|
+| led_blink | 22 | 3 | 3 | 0 | 0 |
+| stm32_breakout | 668 | **312** | 273 | 22 | 17 |
+| multi_ic | 833 | **383** | 358 | 15 | 10 |
+
+  The CI gate only ever looked at led_blink, so a router that produces hundreds of 0.00mm shorts on a realistic board looked healthy. `benchmark_all_fixtures_drc` now routes all three and ratchets each one; it is `#[ignore]`d because the two big fixtures take about two minutes each, and `scripts/quality-gate.sh` runs it explicitly in the benchmark stage.
+- NEXT-ACTION: 273 and 358 clearance violations, nearly all at 0.00mm, on boards that converge with zero shared cells. That is the neighbouring-cell overlap at scale. The measurement to take before coding: how many of them disappear if the grid resolution drops to a third of min_clearance instead of a half - it is a one-line change to `resolve_grid_resolution` and it says whether the geometry or the cost model is the problem.
+- QUEUED: routing stm32_breakout takes about two minutes. Same treatment as blink - probe where it goes before optimizing.
 - QUEUED: WASM size breakdown (`twiggy top`, 702,357 bytes today), render frame time on the largest example, allocation counts in the DRC hot loop.
 
 ## Owner-decision queue (only the owner closes these)

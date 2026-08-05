@@ -152,6 +152,67 @@ fn print_table_footer() {
 // Tests
 // ============================================================================
 
+/// Every benchmark fixture, with the DRC violation count each one currently
+/// produces. led_blink is the only board the gate used to look at, and at 3
+/// violations it made the router look healthy; the two realistic fixtures were
+/// sitting at 312 and 383. These are ratchets - lower them as the router
+/// improves, never raise them to accommodate a regression.
+const DRC_RATCHETS: &[(&str, &str, u32)] = &[
+    ("led_blink.kicad_pcb", "led_blink", 3),
+    ("stm32_breakout.kicad_pcb", "stm32_breakout", 312),
+    ("multi_ic.kicad_pcb", "multi_ic", 383),
+];
+
+/// Routes every fixture and holds the line on completeness and DRC count.
+///
+/// Ignored by default: the two realistic fixtures take about two minutes each
+/// to route, which does not belong in `cargo test`. scripts/quality-gate.sh
+/// runs it explicitly in the benchmark stage.
+#[test]
+#[ignore = "slow: routes all three fixtures, ~4 minutes"]
+fn benchmark_all_fixtures_drc() {
+    let pathfinder = PathFinderStrategy;
+
+    eprintln!();
+    print_table_header();
+    let mut measured = Vec::new();
+    for (filename, label, _) in DRC_RATCHETS {
+        let (score, route_count, unrouted) = route_and_score(&pathfinder, filename);
+        print_table_row(&BenchmarkResult::from_score(
+            label,
+            "PathFinder",
+            &score,
+            route_count,
+            unrouted,
+        ));
+        measured.push((label, score.drc_violations, unrouted, route_count));
+    }
+    print_table_footer();
+    eprintln!();
+
+    for ((label, violations, unrouted, route_count), (_, _, ratchet)) in
+        measured.iter().zip(DRC_RATCHETS)
+    {
+        assert_eq!(
+            *unrouted, 0,
+            "FAIL {}: {} unrouted connections, threshold 0",
+            label, unrouted
+        );
+        assert!(*route_count > 0, "FAIL {}: routed nothing at all", label);
+        assert!(
+            violations <= ratchet,
+            "FAIL {}: {} DRC violations, threshold {} - the router got worse",
+            label,
+            violations,
+            ratchet
+        );
+        eprintln!(
+            "  ✓ {}: {} routes, {} DRC violations (threshold {})",
+            label, route_count, violations, ratchet
+        );
+    }
+}
+
 /// Fast CI regression gate: routes led_blink with PathFinder and asserts
 /// score thresholds. Non-ignored so it runs in `cargo test --workspace`.
 #[test]
