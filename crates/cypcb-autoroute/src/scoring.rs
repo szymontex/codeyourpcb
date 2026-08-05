@@ -88,17 +88,9 @@ impl Default for ScoreWeights {
 }
 
 /// Configuration for the scoring system.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ScoringConfig {
     pub weights: ScoreWeights,
-}
-
-impl Default for ScoringConfig {
-    fn default() -> Self {
-        ScoringConfig {
-            weights: ScoreWeights::default(),
-        }
-    }
 }
 
 /// Score a routed board on all 7 metrics.
@@ -198,8 +190,8 @@ pub fn score_board(
 // Internal data structures
 // ============================================================================
 
-use cypcb_world::Layer;
 use cypcb_world::components::trace::TraceSegment;
+use cypcb_world::Layer;
 use cypcb_world::NetId;
 
 /// Collected trace data for metric computation.
@@ -227,7 +219,7 @@ impl TraceData {
 /// 1.0 = maximally off (22.5° from nearest multiple).
 pub(crate) fn angle_penalty(angle_rad: f64) -> f64 {
     let deg45 = std::f64::consts::FRAC_PI_4; // π/4 = 45°
-    // Normalize angle to [0, π/4) range by taking modulo 45°
+                                             // Normalize angle to [0, π/4) range by taking modulo 45°
     let remainder = (angle_rad.abs() % deg45).min(deg45 - (angle_rad.abs() % deg45));
     // Max deviation from a 45° multiple is 22.5° = π/8
     let max_deviation = deg45 / 2.0;
@@ -315,7 +307,8 @@ fn compute_crossings(world: &mut BoardWorld, traces: &[TraceData]) -> u32 {
     });
 
     // Build entity → (layer, net_id, segments) lookup
-    let mut trace_lookup: std::collections::HashMap<Entity, &TraceData> = std::collections::HashMap::new();
+    let mut trace_lookup: std::collections::HashMap<Entity, &TraceData> =
+        std::collections::HashMap::new();
     for td in traces {
         trace_lookup.insert(td.entity, td);
     }
@@ -366,9 +359,19 @@ fn compute_crossings(world: &mut BoardWorld, traces: &[TraceData]) -> u32 {
                         || (trace.entity.index() == candidate_entity.index()
                             && seg_idx < cand_seg_idx)
                     {
-                        (trace.entity.index(), seg_idx, candidate_entity.index(), cand_seg_idx)
+                        (
+                            trace.entity.index(),
+                            seg_idx,
+                            candidate_entity.index(),
+                            cand_seg_idx,
+                        )
                     } else {
-                        (candidate_entity.index(), cand_seg_idx, trace.entity.index(), seg_idx)
+                        (
+                            candidate_entity.index(),
+                            cand_seg_idx,
+                            trace.entity.index(),
+                            seg_idx,
+                        )
                     };
 
                     if !checked.insert(pair) {
@@ -455,6 +458,7 @@ fn board_diagonal_nm(world: &BoardWorld) -> f64 {
 ///           + w_crossings * crossings * 500
 ///           + w_balance * (1.0 - layer_balance) * 50
 /// ```
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn compute_composite(
     total_length: Nm,
     via_count: u32,
@@ -718,12 +722,12 @@ mod tests {
     #[test]
     fn test_composite_all_zero() {
         let composite = compute_composite(
-            Nm(0),       // length
-            0,           // vias
-            0,           // drc
-            1.0,         // smoothness (perfect)
-            0,           // crossings
-            1.0,         // balance (perfect)
+            Nm(0),         // length
+            0,             // vias
+            0,             // drc
+            1.0,           // smoothness (perfect)
+            0,             // crossings
+            1.0,           // balance (perfect)
             100_000_000.0, // diagonal
             &ScoreWeights::default(),
         );
@@ -740,7 +744,11 @@ mod tests {
 
         let composite = compute_composite(
             Nm(100_000_000), // 100mm length = 1.0 normalized
-            0, 0, 1.0, 0, 1.0,
+            0,
+            0,
+            1.0,
+            0,
+            1.0,
             diagonal,
             &weights,
         );
@@ -753,7 +761,12 @@ mod tests {
     #[test]
     fn test_composite_via_contributes() {
         let composite = compute_composite(
-            Nm(0), 5, 0, 1.0, 0, 1.0,
+            Nm(0),
+            5,
+            0,
+            1.0,
+            0,
+            1.0,
             100_000_000.0,
             &ScoreWeights::default(),
         );
@@ -766,7 +779,12 @@ mod tests {
     #[test]
     fn test_composite_drc_contributes() {
         let composite = compute_composite(
-            Nm(0), 0, 3, 1.0, 0, 1.0,
+            Nm(0),
+            0,
+            3,
+            1.0,
+            0,
+            1.0,
             100_000_000.0,
             &ScoreWeights::default(),
         );
@@ -781,14 +799,8 @@ mod tests {
         let weights = ScoreWeights::default();
         let diagonal = 100_000_000.0;
 
-        let good = compute_composite(
-            Nm(50_000_000), 2, 0, 0.95, 0, 0.9,
-            diagonal, &weights,
-        );
-        let bad = compute_composite(
-            Nm(200_000_000), 10, 5, 0.5, 3, 0.3,
-            diagonal, &weights,
-        );
+        let good = compute_composite(Nm(50_000_000), 2, 0, 0.95, 0, 0.9, diagonal, &weights);
+        let bad = compute_composite(Nm(200_000_000), 10, 5, 0.5, 3, 0.3, diagonal, &weights);
         assert!(
             good < bad,
             "Better routing should have lower composite: good={good} bad={bad}"
@@ -812,9 +824,18 @@ mod tests {
         };
 
         let json = serde_json::to_string(&score).expect("RoutingScore should serialize to JSON");
-        assert!(json.contains("\"via_count\":5"), "JSON should contain via_count");
-        assert!(json.contains("\"smoothness\":0.95"), "JSON should contain smoothness");
-        assert!(json.contains("\"composite\":42.5"), "JSON should contain composite");
+        assert!(
+            json.contains("\"via_count\":5"),
+            "JSON should contain via_count"
+        );
+        assert!(
+            json.contains("\"smoothness\":0.95"),
+            "JSON should contain smoothness"
+        );
+        assert!(
+            json.contains("\"composite\":42.5"),
+            "JSON should contain composite"
+        );
     }
 
     // ====================================================================

@@ -354,7 +354,12 @@ pub fn route_all_nets(
             // Determine if end pad is through-hole (can end on any layer)
             let any_end = is_multi_layer(to_pad.layer_mask);
 
-            let cost = RoutingCost::new(rules, net_id, config.via_cost_multiplier, config.params.layer_preference);
+            let cost = RoutingCost::new(
+                rules,
+                net_id,
+                config.via_cost_multiplier,
+                config.params.layer_preference,
+            );
 
             // Try to route directly
             match find_path_with_zones(grid, start, end, &cost, any_end, &net_pad_zones) {
@@ -494,7 +499,12 @@ fn attempt_ripup_reroute(
         grid.clear_route(victim_id);
 
         // Try routing current net
-        let cost = RoutingCost::new(rules, current_net_id, config.via_cost_multiplier, config.params.layer_preference);
+        let cost = RoutingCost::new(
+            rules,
+            current_net_id,
+            config.via_cost_multiplier,
+            config.params.layer_preference,
+        );
         if let Some(path) = find_path_with_zones(
             grid,
             attempt.start,
@@ -505,7 +515,12 @@ fn attempt_ripup_reroute(
         ) {
             // Current net routed. Now re-route victim.
             if let Some(old_paths) = victim_paths {
-                let victim_cost = RoutingCost::new(rules, victim_id, config.via_cost_multiplier, config.params.layer_preference);
+                let victim_cost = RoutingCost::new(
+                    rules,
+                    victim_id,
+                    config.via_cost_multiplier,
+                    config.params.layer_preference,
+                );
                 let mut victim_rerouted = Vec::new();
                 let mut victim_ok = true;
 

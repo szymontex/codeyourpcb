@@ -16,9 +16,7 @@ impl ParseKicadCommand {
     pub fn run(self) -> Result<()> {
         let result = cypcb_kicad::parse_kicad_pcb(&self.file)
             .map_err(|e| miette::miette!("{e}"))
-            .wrap_err_with(|| {
-                format!("Failed to parse KiCad PCB file: {}", self.file.display())
-            })?;
+            .wrap_err_with(|| format!("Failed to parse KiCad PCB file: {}", self.file.display()))?;
 
         let json = serde_json::to_string_pretty(&result.metadata)
             .into_diagnostic()

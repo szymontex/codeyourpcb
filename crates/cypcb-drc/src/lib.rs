@@ -180,9 +180,7 @@ fn enrich_violation_messages(violations: &mut [DrcViolation], world: &mut BoardW
 
         pairs
             .into_iter()
-            .filter_map(|(idx, net_id)| {
-                world.net_name(net_id).map(|name| (idx, name.to_string()))
-            })
+            .filter_map(|(idx, net_id)| world.net_name(net_id).map(|name| (idx, name.to_string())))
             .collect()
     };
 
@@ -195,9 +193,7 @@ fn enrich_violation_messages(violations: &mut [DrcViolation], world: &mut BoardW
             .map(|(e, pi)| (e.index(), pi.parent.index()))
             .collect();
         pads.into_iter()
-            .filter_map(|(idx, parent_idx)| {
-                refdes_map.get(&parent_idx).map(|r| (idx, r.clone()))
-            })
+            .filter_map(|(idx, parent_idx)| refdes_map.get(&parent_idx).map(|r| (idx, r.clone())))
             .collect()
     };
 

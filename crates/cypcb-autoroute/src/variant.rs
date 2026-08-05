@@ -287,7 +287,9 @@ mod tests {
     fn all_variant_configs_includes_improved_astar() {
         let configs = all_variant_configs();
         assert_eq!(configs.len(), 4);
-        assert!(configs.iter().any(|c| c.strategy == StrategyKind::ImprovedAStar));
+        assert!(configs
+            .iter()
+            .any(|c| c.strategy == StrategyKind::ImprovedAStar));
     }
 
     #[test]

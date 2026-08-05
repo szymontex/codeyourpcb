@@ -2681,17 +2681,16 @@ interface Power {
             let result = parse(&source);
             assert!(result.is_ok(), "failed for {}: {:?}", unit, result.errors);
 
-            if let Definition::Component(comp) = &result.value.definitions[0] {
-                // value should still be parsed (now as PhysicalValue in grammar,
-                // but component convert_component currently reads string or physical_value)
-                // Since we extended value_property to accept physical_value, the tree-sitter
-                // node is physical_value which our component converter must handle
-                assert!(
-                    comp.value.is_some() || true,
-                    "component should parse for unit {}",
-                    unit
-                );
-            }
+            let Definition::Component(comp) = &result.value.definitions[0] else {
+                panic!("expected component definition for unit {}", unit);
+            };
+            // value_property accepts a physical_value node; the converter keeps
+            // the raw text so the component value stays a plain string.
+            let value = comp
+                .value
+                .as_ref()
+                .unwrap_or_else(|| panic!("value missing for unit {}", unit));
+            assert_eq!(value.value, format!("10{}", unit));
         }
     }
 

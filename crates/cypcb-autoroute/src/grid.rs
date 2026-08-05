@@ -580,12 +580,7 @@ fn rotate_point(p: Point, degrees: f64) -> Point {
 }
 
 /// Create a minimal grid for unit testing (no board needed).
-pub fn make_test_grid(
-    width: u32,
-    height: u32,
-    resolution_nm: i64,
-    layers: u8,
-) -> RoutingGrid {
+pub fn make_test_grid(width: u32, height: u32, resolution_nm: i64, layers: u8) -> RoutingGrid {
     let cell_count = (width as usize) * (height as usize);
     RoutingGrid {
         width,

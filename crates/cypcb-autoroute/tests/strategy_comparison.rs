@@ -86,10 +86,7 @@ fn route_and_score(
     world.rebuild_spatial_index_with_traces(|_| {
         cypcb_core::Rect::from_center_size(
             cypcb_core::Point::ORIGIN,
-            (
-                cypcb_core::Nm::from_mm(1.0),
-                cypcb_core::Nm::from_mm(1.0),
-            ),
+            (cypcb_core::Nm::from_mm(1.0), cypcb_core::Nm::from_mm(1.0)),
         )
     });
 
@@ -156,12 +153,20 @@ fn compare_fixture(filename: &str, baseline_drc: Option<u32>) {
 
     // Print comparison table
     eprintln!();
-    eprintln!("╔═══════════════════╦════════════════╦══════════╦══════════╦══════════╦══════════════╗");
-    eprintln!("║ Strategy          ║ Fixture        ║Composite ║ DRC Viol ║ Vias     ║ Length (mm)  ║");
-    eprintln!("╠═══════════════════╬════════════════╬══════════╬══════════╬══════════╬══════════════╣");
+    eprintln!(
+        "╔═══════════════════╦════════════════╦══════════╦══════════╦══════════╦══════════════╗"
+    );
+    eprintln!(
+        "║ Strategy          ║ Fixture        ║Composite ║ DRC Viol ║ Vias     ║ Length (mm)  ║"
+    );
+    eprintln!(
+        "╠═══════════════════╬════════════════╬══════════╬══════════╬══════════╬══════════════╣"
+    );
     print_table_row(&astar_result);
     print_table_row(&pf_result);
-    eprintln!("╚═══════════════════╩════════════════╩══════════╩══════════╩══════════╩══════════════╝");
+    eprintln!(
+        "╚═══════════════════╩════════════════╩══════════╩══════════╩══════════╩══════════════╝"
+    );
 
     // Score comparison
     if pf_result.score.composite > astar_result.score.composite {
@@ -174,17 +179,12 @@ fn compare_fixture(filename: &str, baseline_drc: Option<u32>) {
         eprintln!(
             "⚠ [{}] PathFinder composite ({:.1}) > ImprovedAStar ({:.1}) by {:.1}% — \
              likely congestion non-convergence on complex board topology",
-            fixture_label,
-            pf_result.score.composite,
-            astar_result.score.composite,
-            pct,
+            fixture_label, pf_result.score.composite, astar_result.score.composite, pct,
         );
     } else {
         eprintln!(
             "✓ [{}] PathFinder composite ({:.1}) ≤ ImprovedAStar ({:.1})",
-            fixture_label,
-            pf_result.score.composite,
-            astar_result.score.composite,
+            fixture_label, pf_result.score.composite, astar_result.score.composite,
         );
     }
 

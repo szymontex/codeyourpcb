@@ -48,20 +48,15 @@ pub trait RoutingStrategy {
 /// Which routing strategy to use.
 ///
 /// Selects the algorithm used by [`route_board()`](crate::route_board).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum StrategyKind {
     /// PathFinder negotiated congestion router (VPR-style iterative rip-up).
+    #[default]
     PathFinder,
 
     /// Improved A* with congestion-aware cost, better net ordering,
-    /// and multi-victim rip-up (20 iterations, 3 victims per failure).
+    /// and multi-victim rip-up (3 victims per failed connection).
     ImprovedAStar,
-}
-
-impl Default for StrategyKind {
-    fn default() -> Self {
-        StrategyKind::PathFinder
-    }
 }
 
 impl std::fmt::Display for StrategyKind {

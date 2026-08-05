@@ -71,9 +71,15 @@ pub struct AutorouteParams {
     pub density: f64,
 }
 
-fn default_via_cost() -> f64 { 1.0 }
-fn default_roundness() -> f64 { 0.5 }
-fn default_density() -> f64 { 1.0 }
+fn default_via_cost() -> f64 {
+    1.0
+}
+fn default_roundness() -> f64 {
+    0.5
+}
+fn default_density() -> f64 {
+    1.0
+}
 
 impl Default for AutorouteParams {
     fn default() -> Self {
@@ -331,21 +337,26 @@ mod tests {
     #[test]
     fn density_affects_grid_resolution() {
         use cypcb_core::Nm;
-        use cypcb_rules::{DesignConstraints, RoutingRuleSet};
         use cypcb_rules::signal_class::{SignalClass, SignalClassConstraints};
+        use cypcb_rules::{DesignConstraints, RoutingRuleSet};
 
         struct TestRules;
         impl RoutingRuleSet for TestRules {
             fn constraints_for_net(&self, _: u32) -> &DesignConstraints {
                 // Use a static to satisfy the lifetime
-                static CONSTRAINTS: std::sync::OnceLock<DesignConstraints> = std::sync::OnceLock::new();
+                static CONSTRAINTS: std::sync::OnceLock<DesignConstraints> =
+                    std::sync::OnceLock::new();
                 CONSTRAINTS.get_or_init(DesignConstraints::default)
             }
             fn constraints_for_class(&self, c: SignalClass) -> SignalClassConstraints {
                 c.default_constraints()
             }
-            fn via_cost(&self, _: u8, _: u8) -> f64 { 2.0 }
-            fn layer_change_cost(&self, _: u8) -> f64 { 0.1 }
+            fn via_cost(&self, _: u8, _: u8) -> f64 {
+                2.0
+            }
+            fn layer_change_cost(&self, _: u8) -> f64 {
+                0.1
+            }
             fn clearance_between(&self, _: u32, _: u32) -> Nm {
                 Nm(127_000) // 0.127mm
             }
@@ -366,8 +377,14 @@ mod tests {
         config.params.density = 0.5;
         let res_coarse = config.resolve_adaptive_grid_resolution(&rules, 50_000_000, 30_000_000);
 
-        assert!(res_dense < res_default, "density=2.0 should produce finer grid (smaller resolution) than default");
-        assert!(res_coarse > res_default, "density=0.5 should produce coarser grid (larger resolution) than default");
+        assert!(
+            res_dense < res_default,
+            "density=2.0 should produce finer grid (smaller resolution) than default"
+        );
+        assert!(
+            res_coarse > res_default,
+            "density=0.5 should produce coarser grid (larger resolution) than default"
+        );
         assert!(res_dense >= 10_000, "resolution should never go below 10µm");
     }
 }

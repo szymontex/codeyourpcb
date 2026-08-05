@@ -8,11 +8,11 @@
 //! 5. Post-smoothing segments
 //! 6. Post-via-optimization final output
 
-use serde::Serialize;
 use crate::grid::RoutingGrid;
 use cypcb_rules::RoutingRuleSet;
 use cypcb_world::footprint::FootprintLibrary;
 use cypcb_world::{BoardWorld, NetId};
+use serde::Serialize;
 
 use crate::orchestrator::{extract_ratsnest, order_nets};
 use crate::pathfinder_v2::pathfinder_loop;
@@ -120,9 +120,15 @@ pub fn route_with_debug(
         Some(g) => g,
         None => {
             return RoutingDebugOutput {
-                grid_width: 0, grid_height: 0, grid_resolution_nm: resolution,
-                ratsnest_count: 0, net_count: 0, stages: vec![], unrouted_count: 0,
-                iterations: 0, converged: false,
+                grid_width: 0,
+                grid_height: 0,
+                grid_resolution_nm: resolution,
+                ratsnest_count: 0,
+                net_count: 0,
+                stages: vec![],
+                unrouted_count: 0,
+                iterations: 0,
+                converged: false,
             };
         }
     };
@@ -155,7 +161,11 @@ pub fn route_with_debug(
         stats: StageStats {
             segment_count: raw_segments.len(),
             via_count: raw_vias.len(),
-            description: format!("{} segments, {} vias from grid paths", raw_segments.len(), raw_vias.len()),
+            description: format!(
+                "{} segments, {} vias from grid paths",
+                raw_segments.len(),
+                raw_vias.len()
+            ),
         },
     };
 
@@ -170,9 +180,22 @@ pub fn route_with_debug(
 
     let mut smoothed_segments = Vec::new();
     for net_id in &net_ids {
-        let net_segs: Vec<_> = raw_segments.iter().filter(|s| s.net_id == *net_id).cloned().collect();
-        let other_segs: Vec<_> = raw_segments.iter().filter(|s| s.net_id != *net_id).cloned().collect();
-        let smoothed = smooth_routes(&net_segs, &other_segs, min_clearance, config.params.roundness);
+        let net_segs: Vec<_> = raw_segments
+            .iter()
+            .filter(|s| s.net_id == *net_id)
+            .cloned()
+            .collect();
+        let other_segs: Vec<_> = raw_segments
+            .iter()
+            .filter(|s| s.net_id != *net_id)
+            .cloned()
+            .collect();
+        let smoothed = smooth_routes(
+            &net_segs,
+            &other_segs,
+            min_clearance,
+            config.params.roundness,
+        );
         smoothed_segments.extend(smoothed);
     }
 
@@ -183,7 +206,11 @@ pub fn route_with_debug(
         stats: StageStats {
             segment_count: smoothed_segments.len(),
             via_count: raw_vias.len(),
-            description: format!("{} → {} segments after smoothing", raw_segments.len(), smoothed_segments.len()),
+            description: format!(
+                "{} → {} segments after smoothing",
+                raw_segments.len(),
+                smoothed_segments.len()
+            ),
         },
     };
 
@@ -198,7 +225,11 @@ pub fn route_with_debug(
         stats: StageStats {
             segment_count: final_segments.len(),
             via_count: final_vias.len(),
-            description: format!("Final: {} segments, {} vias", final_segments.len(), final_vias.len()),
+            description: format!(
+                "Final: {} segments, {} vias",
+                final_segments.len(),
+                final_vias.len()
+            ),
         },
     };
 

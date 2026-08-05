@@ -71,7 +71,10 @@ fn variants_sorted_by_composite_score() {
 
     let results = generate_variants(&mut world, &library, &rules, &design_rules, &configs);
 
-    assert!(results.len() >= 2, "Need at least 2 variants to test sorting");
+    assert!(
+        results.len() >= 2,
+        "Need at least 2 variants to test sorting"
+    );
 
     // Verify ascending composite score order
     for window in results.windows(2) {
@@ -166,8 +169,7 @@ fn variant_results_serialize_to_json() {
     assert!(json.starts_with('['), "Should be a JSON array");
 
     // Parse back and validate structure
-    let parsed_json: serde_json::Value =
-        serde_json::from_str(&json).expect("Should be valid JSON");
+    let parsed_json: serde_json::Value = serde_json::from_str(&json).expect("Should be valid JSON");
     let arr = parsed_json.as_array().expect("Should be an array");
     assert!(arr.len() >= 3);
 

@@ -326,7 +326,13 @@ impl DrcViolation {
     }
 
     /// Create a hole-to-hole clearance violation.
-    pub fn hole_to_hole(entity: Entity, other: Entity, actual: Nm, required: Nm, location: Point) -> Self {
+    pub fn hole_to_hole(
+        entity: Entity,
+        other: Entity,
+        actual: Nm,
+        required: Nm,
+        location: Point,
+    ) -> Self {
         DrcViolation {
             kind: ViolationKind::HoleToHole,
             location,
@@ -335,7 +341,8 @@ impl DrcViolation {
             source_span: None,
             message: format!(
                 "Hole-to-hole violation: {:.2}mm actual, {:.2}mm required",
-                actual.to_mm(), required.to_mm(),
+                actual.to_mm(),
+                required.to_mm(),
             ),
         }
     }
@@ -350,13 +357,20 @@ impl DrcViolation {
             source_span: None,
             message: format!(
                 "Via diameter violation: {:.2}mm actual, {:.2}mm required",
-                actual.to_mm(), required.to_mm(),
+                actual.to_mm(),
+                required.to_mm(),
             ),
         }
     }
 
     /// Create a solder mask bridge violation.
-    pub fn solder_mask_bridge(entity: Entity, other: Entity, actual: Nm, required: Nm, location: Point) -> Self {
+    pub fn solder_mask_bridge(
+        entity: Entity,
+        other: Entity,
+        actual: Nm,
+        required: Nm,
+        location: Point,
+    ) -> Self {
         DrcViolation {
             kind: ViolationKind::SolderMaskBridge,
             location,
@@ -365,7 +379,8 @@ impl DrcViolation {
             source_span: None,
             message: format!(
                 "Solder mask bridge violation: {:.2}mm actual, {:.2}mm required",
-                actual.to_mm(), required.to_mm(),
+                actual.to_mm(),
+                required.to_mm(),
             ),
         }
     }
@@ -380,13 +395,20 @@ impl DrcViolation {
             source_span: None,
             message: format!(
                 "Silk-to-pad clearance violation: {:.2}mm actual, {:.2}mm required",
-                actual.to_mm(), required.to_mm(),
+                actual.to_mm(),
+                required.to_mm(),
             ),
         }
     }
 
     /// Create a courtyard clearance violation.
-    pub fn courtyard_clearance(entity: Entity, other: Entity, actual: Nm, required: Nm, location: Point) -> Self {
+    pub fn courtyard_clearance(
+        entity: Entity,
+        other: Entity,
+        actual: Nm,
+        required: Nm,
+        location: Point,
+    ) -> Self {
         DrcViolation {
             kind: ViolationKind::CourtyardClearance,
             location,
@@ -395,7 +417,8 @@ impl DrcViolation {
             source_span: None,
             message: format!(
                 "Courtyard overlap: {:.2}mm actual, {:.2}mm required",
-                actual.to_mm(), required.to_mm(),
+                actual.to_mm(),
+                required.to_mm(),
             ),
         }
     }

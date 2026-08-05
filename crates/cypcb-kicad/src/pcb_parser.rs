@@ -148,14 +148,16 @@ pub const BENCHMARKS: &[KicadBenchmark] = &[
     },
     KicadBenchmark {
         filename: "stm32_breakout.kicad_pcb",
-        description: "STM32F103C8T6 breakout with USB, SWD, GPIO headers — 29 components, 2-layer, 75×65mm",
+        description:
+            "STM32F103C8T6 breakout with USB, SWD, GPIO headers — 29 components, 2-layer, 75×65mm",
         complexity: BenchmarkComplexity::Medium,
         expected_component_count: 29,
         expected_net_count: 40,
     },
     KicadBenchmark {
         filename: "multi_ic.kicad_pcb",
-        description: "STM32F407 + Ethernet PHY + SPI Flash + CAN — 52 components, 4-layer, 100×80mm",
+        description:
+            "STM32F407 + Ethernet PHY + SPI Flash + CAN — 52 components, 4-layer, 100×80mm",
         complexity: BenchmarkComplexity::Complex,
         expected_component_count: 52,
         expected_net_count: 94,
@@ -266,7 +268,12 @@ pub fn parse_kicad_pcb_str(content: &str) -> Result<KicadPcbParseResult, KicadPc
     // so we translate them relative to the board's top-left corner.
     let board_origin = board_bounds
         .as_ref()
-        .map(|b| (b.min.x.0 as f64 / 1_000_000.0, b.min.y.0 as f64 / 1_000_000.0))
+        .map(|b| {
+            (
+                b.min.x.0 as f64 / 1_000_000.0,
+                b.min.y.0 as f64 / 1_000_000.0,
+            )
+        })
         .unwrap_or((0.0, 0.0));
     if let Some(ref bounds) = board_bounds {
         let width = Nm(bounds.max.x.0 - bounds.min.x.0);
@@ -444,8 +451,12 @@ fn extract_board_outline(elements: &[Sexp]) -> Option<Rect> {
                         if let (Some(start), Some(end)) =
                             (find_xy_child(elem, "start"), find_xy_child(elem, "end"))
                         {
-                            update_bounds(start.0, start.1, &mut min_x, &mut min_y, &mut max_x, &mut max_y);
-                            update_bounds(end.0, end.1, &mut min_x, &mut min_y, &mut max_x, &mut max_y);
+                            update_bounds(
+                                start.0, start.1, &mut min_x, &mut min_y, &mut max_x, &mut max_y,
+                            );
+                            update_bounds(
+                                end.0, end.1, &mut min_x, &mut min_y, &mut max_x, &mut max_y,
+                            );
                             found = true;
                         }
                     }
@@ -455,8 +466,12 @@ fn extract_board_outline(elements: &[Sexp]) -> Option<Rect> {
                         if let (Some(start), Some(end)) =
                             (find_xy_child(elem, "start"), find_xy_child(elem, "end"))
                         {
-                            update_bounds(start.0, start.1, &mut min_x, &mut min_y, &mut max_x, &mut max_y);
-                            update_bounds(end.0, end.1, &mut min_x, &mut min_y, &mut max_x, &mut max_y);
+                            update_bounds(
+                                start.0, start.1, &mut min_x, &mut min_y, &mut max_x, &mut max_y,
+                            );
+                            update_bounds(
+                                end.0, end.1, &mut min_x, &mut min_y, &mut max_x, &mut max_y,
+                            );
                             found = true;
                         }
                     }
@@ -471,8 +486,14 @@ fn extract_board_outline(elements: &[Sexp]) -> Option<Rect> {
                                             if list_name(pt).as_deref() == Some("xy") {
                                                 if let Ok(pt_list) = pt.list() {
                                                     if pt_list.len() >= 3 {
-                                                        if let (Some(x), Some(y)) = (get_f64(&pt_list[1]), get_f64(&pt_list[2])) {
-                                                            update_bounds(x, y, &mut min_x, &mut min_y, &mut max_x, &mut max_y);
+                                                        if let (Some(x), Some(y)) = (
+                                                            get_f64(&pt_list[1]),
+                                                            get_f64(&pt_list[2]),
+                                                        ) {
+                                                            update_bounds(
+                                                                x, y, &mut min_x, &mut min_y,
+                                                                &mut max_x, &mut max_y,
+                                                            );
                                                             found = true;
                                                         }
                                                     }
@@ -516,11 +537,26 @@ fn is_on_edge_cuts(sexp: &Sexp) -> bool {
     false
 }
 
-fn update_bounds(x: f64, y: f64, min_x: &mut f64, min_y: &mut f64, max_x: &mut f64, max_y: &mut f64) {
-    if x < *min_x { *min_x = x; }
-    if y < *min_y { *min_y = y; }
-    if x > *max_x { *max_x = x; }
-    if y > *max_y { *max_y = y; }
+fn update_bounds(
+    x: f64,
+    y: f64,
+    min_x: &mut f64,
+    min_y: &mut f64,
+    max_x: &mut f64,
+    max_y: &mut f64,
+) {
+    if x < *min_x {
+        *min_x = x;
+    }
+    if y < *min_y {
+        *min_y = y;
+    }
+    if x > *max_x {
+        *max_x = x;
+    }
+    if y > *max_y {
+        *max_y = y;
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -542,11 +578,7 @@ fn parse_footprint(
     };
 
     // Extract a short name from the lib_link for the footprint ref
-    let fp_name = lib_link
-        .rsplit(':')
-        .next()
-        .unwrap_or(&lib_link)
-        .to_string();
+    let fp_name = lib_link.rsplit(':').next().unwrap_or(&lib_link).to_string();
 
     // Parse position: (at X Y [angle])
     let mut pos_x = 0.0f64;
@@ -577,7 +609,7 @@ fn parse_footprint(
                     }
                 }
                 "fp_text" | "property" => {
-                    // KiCad 7/8 uses (property "Reference" "R1" ...) 
+                    // KiCad 7/8 uses (property "Reference" "R1" ...)
                     // KiCad 5/6 uses (fp_text reference "R1" ...)
                     if let Ok(list) = child.list() {
                         if list.len() >= 3 {
@@ -707,7 +739,7 @@ fn parse_pad(elements: &[Sexp], kicad_net_map: &HashMap<i64, NetId>) -> Option<P
         "circle" => PadShape::Circle,
         "oval" => PadShape::Oblong,
         "roundrect" => PadShape::round_rect(25), // Default corner ratio
-        _ => PadShape::Rect, // Fallback
+        _ => PadShape::Rect,                     // Fallback
     };
 
     let is_through_hole = pad_type_str == "thru_hole" || pad_type_str == "np_thru_hole";

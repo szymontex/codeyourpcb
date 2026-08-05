@@ -35,10 +35,7 @@ fn test_rules() -> PresetRuleSet {
 }
 
 /// Route and score a board with the given strategy.
-fn route_and_score(
-    strategy: &dyn RoutingStrategy,
-    fixture: &str,
-) -> RoutingScore {
+fn route_and_score(strategy: &dyn RoutingStrategy, fixture: &str) -> RoutingScore {
     let parsed = parse_kicad_pcb(&fixture_path(fixture))
         .unwrap_or_else(|e| panic!("Failed to parse {}: {:?}", fixture, e));
     let mut world = parsed.world;
@@ -59,10 +56,7 @@ fn route_and_score(
     world.rebuild_spatial_index_with_traces(|_| {
         cypcb_core::Rect::from_center_size(
             cypcb_core::Point::ORIGIN,
-            (
-                cypcb_core::Nm::from_mm(1.0),
-                cypcb_core::Nm::from_mm(1.0),
-            ),
+            (cypcb_core::Nm::from_mm(1.0), cypcb_core::Nm::from_mm(1.0)),
         )
     });
 

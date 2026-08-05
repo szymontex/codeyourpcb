@@ -166,14 +166,12 @@ impl DrcRule for ClearanceRule {
                     // Case 1: both have a single NetId
                     (Some(na), Some(nb)) => na == nb,
                     // Case 2a: A has NetId, B is a component
-                    (Some(na), None) => nc_b.map_or(false, |nets| nets.contains(na)),
+                    (Some(na), None) => nc_b.is_some_and(|nets| nets.contains(na)),
                     // Case 2b: B has NetId, A is a component
-                    (None, Some(nb)) => nc_a.map_or(false, |nets| nets.contains(nb)),
+                    (None, Some(nb)) => nc_a.is_some_and(|nets| nets.contains(nb)),
                     // Case 3: both are components — share a common net
                     (None, None) => match (nc_a, nc_b) {
-                        (Some(nets_a), Some(nets_b)) => {
-                            nets_a.iter().any(|n| nets_b.contains(n))
-                        }
+                        (Some(nets_a), Some(nets_b)) => nets_a.iter().any(|n| nets_b.contains(n)),
                         _ => false,
                     },
                 };
@@ -1072,7 +1070,7 @@ mod tests {
             ),
             SpatialEntry::new(
                 trace_entity,
-                Point::from_mm(0.9, 0.4),  // trace AABB (with half-width)
+                Point::from_mm(0.9, 0.4), // trace AABB (with half-width)
                 Point::from_mm(5.1, 0.6),
                 Layer::TopCopper.to_copper_mask(),
             ),

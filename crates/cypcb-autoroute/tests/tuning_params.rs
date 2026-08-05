@@ -41,10 +41,7 @@ fn route_with_params(params: AutorouteParams) -> RoutingScore {
     world.rebuild_spatial_index_with_traces(|_| {
         cypcb_core::Rect::from_center_size(
             cypcb_core::Point::ORIGIN,
-            (
-                cypcb_core::Nm::from_mm(1.0),
-                cypcb_core::Nm::from_mm(1.0),
-            ),
+            (cypcb_core::Nm::from_mm(1.0), cypcb_core::Nm::from_mm(1.0)),
         )
     });
 
@@ -187,5 +184,8 @@ fn via_cost_param_accepted() {
 
     assert!(score.composite.is_finite(), "Score should be finite");
     assert!(score.smoothness >= 0.0 && score.smoothness <= 1.0);
-    eprintln!("  via_cost=10.0 produces valid routing (composite={:.2})", score.composite);
+    eprintln!(
+        "  via_cost=10.0 produces valid routing (composite={:.2})",
+        score.composite
+    );
 }

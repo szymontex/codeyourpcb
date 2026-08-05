@@ -71,8 +71,8 @@ pub fn optimize_vias(
 
                 // Check if they form a complementary pair:
                 // via_a goes L1→L2, via_b goes L2→L1 (or vice versa)
-                let is_complementary = via_a.start_layer == via_b.end_layer
-                    && via_a.end_layer == via_b.start_layer;
+                let is_complementary =
+                    via_a.start_layer == via_b.end_layer && via_a.end_layer == via_b.start_layer;
 
                 if !is_complementary {
                     continue;
@@ -163,14 +163,7 @@ mod tests {
     use cypcb_core::Point;
     use cypcb_world::Layer;
 
-    fn make_seg(
-        net_id: u32,
-        layer: Layer,
-        x1: f64,
-        y1: f64,
-        x2: f64,
-        y2: f64,
-    ) -> RouteSegment {
+    fn make_seg(net_id: u32, layer: Layer, x1: f64, y1: f64, x2: f64, y2: f64) -> RouteSegment {
         RouteSegment::new(
             NetId::new(net_id),
             layer,
@@ -207,10 +200,17 @@ mod tests {
 
         assert_eq!(opt_vias.len(), 0, "both vias should be eliminated");
         // Should have: original top seg + direct top seg replacing bottom + original top seg
-        assert!(opt_segs.len() >= 3, "should have at least 3 segments after optimization");
+        assert!(
+            opt_segs.len() >= 3,
+            "should have at least 3 segments after optimization"
+        );
         // All segments should be on top layer
         for s in &opt_segs {
-            assert_eq!(s.layer, Layer::TopCopper, "all segments should be on top layer");
+            assert_eq!(
+                s.layer,
+                Layer::TopCopper,
+                "all segments should be on top layer"
+            );
         }
     }
 
@@ -231,7 +231,11 @@ mod tests {
 
         let (opt_segs, opt_vias) = optimize_vias(segments, vias, &[obstacle], Nm::from_mm(0.15));
 
-        assert_eq!(opt_vias.len(), 2, "vias should be kept when DRC blocks direct path");
+        assert_eq!(
+            opt_vias.len(),
+            2,
+            "vias should be kept when DRC blocks direct path"
+        );
         assert!(
             opt_segs.iter().any(|s| s.layer == Layer::BottomCopper),
             "bottom layer segment should be preserved"
@@ -255,13 +259,7 @@ mod tests {
             make_seg(1, Layer::TopCopper, 0.0, 0.0, 5.0, 0.0),
             make_seg(1, Layer::BottomCopper, 5.0, 0.0, 10.0, 0.0),
         ];
-        let vias = vec![make_via(
-            1,
-            5.0,
-            0.0,
-            Layer::TopCopper,
-            Layer::BottomCopper,
-        )];
+        let vias = vec![make_via(1, 5.0, 0.0, Layer::TopCopper, Layer::BottomCopper)];
 
         let (opt_segs, opt_vias) = optimize_vias(segments, vias, &[], Nm(0));
 
@@ -274,26 +272,50 @@ mod tests {
         let net_id = NetId::new(7);
         let segments = vec![
             RouteSegment::new(
-                net_id, Layer::TopCopper, Nm::from_mm(0.25),
-                Point::from_mm(0.0, 0.0), Point::from_mm(5.0, 0.0),
+                net_id,
+                Layer::TopCopper,
+                Nm::from_mm(0.25),
+                Point::from_mm(0.0, 0.0),
+                Point::from_mm(5.0, 0.0),
             ),
             RouteSegment::new(
-                net_id, Layer::BottomCopper, Nm::from_mm(0.25),
-                Point::from_mm(5.0, 0.0), Point::from_mm(10.0, 0.0),
+                net_id,
+                Layer::BottomCopper,
+                Nm::from_mm(0.25),
+                Point::from_mm(5.0, 0.0),
+                Point::from_mm(10.0, 0.0),
             ),
             RouteSegment::new(
-                net_id, Layer::TopCopper, Nm::from_mm(0.25),
-                Point::from_mm(10.0, 0.0), Point::from_mm(15.0, 0.0),
+                net_id,
+                Layer::TopCopper,
+                Nm::from_mm(0.25),
+                Point::from_mm(10.0, 0.0),
+                Point::from_mm(15.0, 0.0),
             ),
         ];
         let vias = vec![
-            ViaPlacement::new(net_id, Point::from_mm(5.0, 0.0), Nm::from_mm(0.3), Layer::TopCopper, Layer::BottomCopper),
-            ViaPlacement::new(net_id, Point::from_mm(10.0, 0.0), Nm::from_mm(0.3), Layer::BottomCopper, Layer::TopCopper),
+            ViaPlacement::new(
+                net_id,
+                Point::from_mm(5.0, 0.0),
+                Nm::from_mm(0.3),
+                Layer::TopCopper,
+                Layer::BottomCopper,
+            ),
+            ViaPlacement::new(
+                net_id,
+                Point::from_mm(10.0, 0.0),
+                Nm::from_mm(0.3),
+                Layer::BottomCopper,
+                Layer::TopCopper,
+            ),
         ];
 
         let (opt_segs, _) = optimize_vias(segments, vias, &[], Nm(0));
         for s in &opt_segs {
-            assert_eq!(s.net_id, net_id, "net_id must be preserved after via optimization");
+            assert_eq!(
+                s.net_id, net_id,
+                "net_id must be preserved after via optimization"
+            );
         }
     }
 }

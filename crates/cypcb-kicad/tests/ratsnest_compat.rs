@@ -67,8 +67,8 @@ fn ratsnest_from_led_blink_is_nonempty() {
 fn ratsnest_from_all_benchmarks_succeeds() {
     for benchmark in BENCHMARKS {
         let path = fixture_path(benchmark.filename);
-        let mut result =
-            parse_kicad_pcb(&path).unwrap_or_else(|e| panic!("Failed to parse {}: {e}", benchmark.filename));
+        let mut result = parse_kicad_pcb(&path)
+            .unwrap_or_else(|e| panic!("Failed to parse {}: {e}", benchmark.filename));
 
         // extract_ratsnest must not panic — this is the core compatibility proof
         let ratsnest = extract_ratsnest(&mut result.world, &result.library);

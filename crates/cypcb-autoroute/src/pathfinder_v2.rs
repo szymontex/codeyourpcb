@@ -61,7 +61,10 @@ impl RoutingStrategy for PathFinderStrategy {
         config: &AutorouteConfig,
     ) -> RoutingResult {
         let _span = tracing::info_span!("pathfinder_strategy").entered();
-        tracing::info!(routing_strategy = self.name(), "Starting PathFinder routing");
+        tracing::info!(
+            routing_strategy = self.name(),
+            "Starting PathFinder routing"
+        );
 
         // Resolve grid resolution (adaptive for large boards)
         let resolution = if let Some((board_size, _)) = world.board_info() {
@@ -122,9 +125,22 @@ impl RoutingStrategy for PathFinderStrategy {
 
         let mut smoothed_segments = Vec::new();
         for net_id in &net_ids {
-            let net_segs: Vec<_> = all_segments.iter().filter(|s| s.net_id == *net_id).cloned().collect();
-            let other_segs: Vec<_> = all_segments.iter().filter(|s| s.net_id != *net_id).cloned().collect();
-            let smoothed = smooth_routes(&net_segs, &other_segs, min_clearance, config.params.roundness);
+            let net_segs: Vec<_> = all_segments
+                .iter()
+                .filter(|s| s.net_id == *net_id)
+                .cloned()
+                .collect();
+            let other_segs: Vec<_> = all_segments
+                .iter()
+                .filter(|s| s.net_id != *net_id)
+                .cloned()
+                .collect();
+            let smoothed = smooth_routes(
+                &net_segs,
+                &other_segs,
+                min_clearance,
+                config.params.roundness,
+            );
             smoothed_segments.extend(smoothed);
         }
         all_segments = smoothed_segments;
@@ -234,10 +250,7 @@ pub fn pathfinder_loop(
             let overused = congestion_map.overused_cells();
             if overused.is_empty() {
                 converged = true;
-                tracing::info!(
-                    iteration,
-                    "PathFinder converged — zero overused cells"
-                );
+                tracing::info!(iteration, "PathFinder converged — zero overused cells");
                 break;
             }
             nets_needing_reroute(order, ratsnest, &net_cells, &overused)
@@ -337,10 +350,7 @@ pub fn pathfinder_loop(
 
         if overuse == 0 {
             converged = true;
-            tracing::info!(
-                iteration,
-                "PathFinder converged — zero overused cells"
-            );
+            tracing::info!(iteration, "PathFinder converged — zero overused cells");
             break;
         }
     }
@@ -384,6 +394,7 @@ pub fn pathfinder_loop(
 /// The base cost comes from `RoutingCost::neighbor_cost()`. Congestion cost
 /// from the `CongestionMap` is added on top. The heuristic remains
 /// unadulterated (admissible) to preserve A* optimality.
+#[allow(clippy::too_many_arguments)]
 fn find_path_congestion_augmented(
     grid: &mut RoutingGrid,
     start: GridNode,
@@ -470,8 +481,7 @@ fn find_path_congestion_augmented(
                 || grid.net_at(nx as u32, ny as u32, target_layer as usize) == Some(net_id)
             {
                 let base = cost_fn.neighbor_cost(*node, target);
-                let congestion =
-                    congestion_map.congestion_cost(nx as u32, ny as u32, target_layer);
+                let congestion = congestion_map.congestion_cost(nx as u32, ny as u32, target_layer);
                 neighbors.push((target, float_to_int_cost(base + congestion)));
             }
         }
@@ -480,8 +490,7 @@ fn find_path_congestion_augmented(
     };
 
     // Heuristic remains unadulterated for admissibility
-    let heuristic =
-        |node: &GridNode| -> u64 { float_to_int_cost(cost_fn.heuristic(*node, end)) };
+    let heuristic = |node: &GridNode| -> u64 { float_to_int_cost(cost_fn.heuristic(*node, end)) };
 
     let result = pathfinding::directed::astar::astar(&start, successors, heuristic, success);
 

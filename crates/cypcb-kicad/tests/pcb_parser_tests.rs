@@ -35,11 +35,11 @@ fn test_parse_minimal_fixture() {
     let expected_width = Nm::from_mm(30.0);
     let expected_height = Nm::from_mm(20.0);
 
-    let (board_size, _layers) = result
-        .world
-        .board_info()
-        .expect("Board should be set");
-    assert_eq!(board_size.width, expected_width, "Board width should be 30mm");
+    let (board_size, _layers) = result.world.board_info().expect("Board should be set");
+    assert_eq!(
+        board_size.width, expected_width,
+        "Board width should be 30mm"
+    );
     assert_eq!(
         board_size.height, expected_height,
         "Board height should be 20mm"
@@ -54,9 +54,7 @@ fn test_component_positions() {
     let mut world = result.world;
 
     // R1 is at (10, 8) mm
-    let r1_entity = world
-        .find_by_refdes("R1")
-        .expect("R1 should exist");
+    let r1_entity = world.find_by_refdes("R1").expect("R1 should exist");
     let r1_pos = world
         .get::<cypcb_world::Position>(r1_entity)
         .expect("R1 should have Position");
@@ -70,9 +68,7 @@ fn test_component_positions() {
     assert_eq!(r1_rot.0, 0, "R1 should have 0 rotation");
 
     // LED1 is at (20, 12) mm with 90° rotation
-    let led1_entity = world
-        .find_by_refdes("LED1")
-        .expect("LED1 should exist");
+    let led1_entity = world.find_by_refdes("LED1").expect("LED1 should exist");
     let led1_pos = world
         .get::<cypcb_world::Position>(led1_entity)
         .expect("LED1 should have Position");
@@ -82,7 +78,10 @@ fn test_component_positions() {
     let led1_rot = world
         .get::<cypcb_world::Rotation>(led1_entity)
         .expect("LED1 should have Rotation");
-    assert_eq!(led1_rot.0, 90_000, "LED1 should have 90° rotation (90000 millideg)");
+    assert_eq!(
+        led1_rot.0, 90_000,
+        "LED1 should have 90° rotation (90000 millideg)"
+    );
 }
 
 #[test]
@@ -101,16 +100,8 @@ fn test_pad_net_assignments() {
     let r1_nets = world
         .get::<cypcb_world::NetConnections>(r1_entity)
         .expect("R1 should have NetConnections");
-    assert_eq!(
-        r1_nets.pin_net("1"),
-        Some(vcc_id),
-        "R1 pad 1 should be VCC"
-    );
-    assert_eq!(
-        r1_nets.pin_net("2"),
-        Some(gnd_id),
-        "R1 pad 2 should be GND"
-    );
+    assert_eq!(r1_nets.pin_net("1"), Some(vcc_id), "R1 pad 1 should be VCC");
+    assert_eq!(r1_nets.pin_net("2"), Some(gnd_id), "R1 pad 2 should be GND");
 
     // LED1: pad 1 → VCC, pad 2 → GND
     let led1_entity = world.find_by_refdes("LED1").expect("LED1 should exist");
@@ -139,11 +130,7 @@ fn test_reference_routes_extracted() {
         .as_ref()
         .expect("Should have reference routes");
 
-    assert_eq!(
-        ref_routes.routes.len(),
-        1,
-        "Should have 1 trace segment"
-    );
+    assert_eq!(ref_routes.routes.len(), 1, "Should have 1 trace segment");
     assert_eq!(ref_routes.vias.len(), 1, "Should have 1 via");
 
     // Verify segment positions
@@ -261,5 +248,8 @@ fn test_module_keyword_backward_compat() {
 fn test_layer_count_extraction() {
     let content = load_minimal_fixture();
     let result = parse_kicad_pcb_str(&content).expect("Failed to parse");
-    assert_eq!(result.metadata.layer_count, 2, "Minimal fixture has 2 copper layers");
+    assert_eq!(
+        result.metadata.layer_count, 2,
+        "Minimal fixture has 2 copper layers"
+    );
 }

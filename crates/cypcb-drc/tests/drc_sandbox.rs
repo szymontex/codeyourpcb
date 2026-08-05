@@ -177,10 +177,31 @@ mod clearance {
         let mut world = world_with_board();
         let net = world.intern_net("VCC");
         // Two traces on the same net overlapping — should be fine
-        spawn_trace(&mut world, net, Layer::TopCopper, 0.2, (10.0, 10.0), (20.0, 10.0));
-        spawn_trace(&mut world, net, Layer::TopCopper, 0.2, (15.0, 10.0), (25.0, 10.0));
+        spawn_trace(
+            &mut world,
+            net,
+            Layer::TopCopper,
+            0.2,
+            (10.0, 10.0),
+            (20.0, 10.0),
+        );
+        spawn_trace(
+            &mut world,
+            net,
+            Layer::TopCopper,
+            0.2,
+            (15.0, 10.0),
+            (25.0, 10.0),
+        );
         rebuild_spatial(&mut world, vec![]);
-        assert_eq!(count_violations(&mut world, &DesignRules::jlcpcb_2layer(), ViolationKind::Clearance), 0);
+        assert_eq!(
+            count_violations(
+                &mut world,
+                &DesignRules::jlcpcb_2layer(),
+                ViolationKind::Clearance
+            ),
+            0
+        );
     }
 
     #[test]
@@ -189,10 +210,30 @@ mod clearance {
         let vcc = world.intern_net("VCC");
         let gnd = world.intern_net("GND");
         // Two traces 0.05mm apart — violates 0.15mm clearance
-        spawn_trace(&mut world, vcc, Layer::TopCopper, 0.2, (10.0, 10.0), (20.0, 10.0));
-        spawn_trace(&mut world, gnd, Layer::TopCopper, 0.2, (10.0, 10.25), (20.0, 10.25));
+        spawn_trace(
+            &mut world,
+            vcc,
+            Layer::TopCopper,
+            0.2,
+            (10.0, 10.0),
+            (20.0, 10.0),
+        );
+        spawn_trace(
+            &mut world,
+            gnd,
+            Layer::TopCopper,
+            0.2,
+            (10.0, 10.25),
+            (20.0, 10.25),
+        );
         rebuild_spatial(&mut world, vec![]);
-        assert!(count_violations(&mut world, &DesignRules::jlcpcb_2layer(), ViolationKind::Clearance) > 0);
+        assert!(
+            count_violations(
+                &mut world,
+                &DesignRules::jlcpcb_2layer(),
+                ViolationKind::Clearance
+            ) > 0
+        );
     }
 
     #[test]
@@ -201,10 +242,31 @@ mod clearance {
         let vcc = world.intern_net("VCC");
         let gnd = world.intern_net("GND");
         // Two traces 5mm apart — plenty of room
-        spawn_trace(&mut world, vcc, Layer::TopCopper, 0.2, (10.0, 10.0), (20.0, 10.0));
-        spawn_trace(&mut world, gnd, Layer::TopCopper, 0.2, (10.0, 15.0), (20.0, 15.0));
+        spawn_trace(
+            &mut world,
+            vcc,
+            Layer::TopCopper,
+            0.2,
+            (10.0, 10.0),
+            (20.0, 10.0),
+        );
+        spawn_trace(
+            &mut world,
+            gnd,
+            Layer::TopCopper,
+            0.2,
+            (10.0, 15.0),
+            (20.0, 15.0),
+        );
         rebuild_spatial(&mut world, vec![]);
-        assert_eq!(count_violations(&mut world, &DesignRules::jlcpcb_2layer(), ViolationKind::Clearance), 0);
+        assert_eq!(
+            count_violations(
+                &mut world,
+                &DesignRules::jlcpcb_2layer(),
+                ViolationKind::Clearance
+            ),
+            0
+        );
     }
 
     #[test]
@@ -213,10 +275,31 @@ mod clearance {
         let vcc = world.intern_net("VCC");
         let gnd = world.intern_net("GND");
         // Overlapping traces on different layers — no copper interaction
-        spawn_trace(&mut world, vcc, Layer::TopCopper, 0.2, (10.0, 10.0), (20.0, 10.0));
-        spawn_trace(&mut world, gnd, Layer::BottomCopper, 0.2, (10.0, 10.0), (20.0, 10.0));
+        spawn_trace(
+            &mut world,
+            vcc,
+            Layer::TopCopper,
+            0.2,
+            (10.0, 10.0),
+            (20.0, 10.0),
+        );
+        spawn_trace(
+            &mut world,
+            gnd,
+            Layer::BottomCopper,
+            0.2,
+            (10.0, 10.0),
+            (20.0, 10.0),
+        );
         rebuild_spatial(&mut world, vec![]);
-        assert_eq!(count_violations(&mut world, &DesignRules::jlcpcb_2layer(), ViolationKind::Clearance), 0);
+        assert_eq!(
+            count_violations(
+                &mut world,
+                &DesignRules::jlcpcb_2layer(),
+                ViolationKind::Clearance
+            ),
+            0
+        );
     }
 
     #[test]
@@ -236,17 +319,33 @@ mod clearance {
         ));
 
         // Trace on VCC touching the pad — should NOT violate
-        let _trace = spawn_trace(&mut world, vcc, Layer::TopCopper, 0.2, (10.0, 10.0), (20.0, 10.0));
+        let _trace = spawn_trace(
+            &mut world,
+            vcc,
+            Layer::TopCopper,
+            0.2,
+            (10.0, 10.0),
+            (20.0, 10.0),
+        );
 
         let pad_entry = SpatialEntry::from_raw(
             pad_entity,
-            Nm::from_mm(9.5).0, Nm::from_mm(9.5).0,
-            Nm::from_mm(10.5).0, Nm::from_mm(10.5).0,
+            Nm::from_mm(9.5).0,
+            Nm::from_mm(9.5).0,
+            Nm::from_mm(10.5).0,
+            Nm::from_mm(10.5).0,
             Layer::TopCopper.to_copper_mask(),
         );
         rebuild_spatial(&mut world, vec![pad_entry]);
 
-        assert_eq!(count_violations(&mut world, &DesignRules::jlcpcb_2layer(), ViolationKind::Clearance), 0);
+        assert_eq!(
+            count_violations(
+                &mut world,
+                &DesignRules::jlcpcb_2layer(),
+                ViolationKind::Clearance
+            ),
+            0
+        );
     }
 
     #[test]
@@ -266,17 +365,32 @@ mod clearance {
         ));
 
         // Trace on SIG touching the VCC pad — should violate
-        spawn_trace(&mut world, sig, Layer::TopCopper, 0.2, (10.0, 10.0), (20.0, 10.0));
+        spawn_trace(
+            &mut world,
+            sig,
+            Layer::TopCopper,
+            0.2,
+            (10.0, 10.0),
+            (20.0, 10.0),
+        );
 
         let pad_entry = SpatialEntry::from_raw(
             pad_entity,
-            Nm::from_mm(9.5).0, Nm::from_mm(9.5).0,
-            Nm::from_mm(10.5).0, Nm::from_mm(10.5).0,
+            Nm::from_mm(9.5).0,
+            Nm::from_mm(9.5).0,
+            Nm::from_mm(10.5).0,
+            Nm::from_mm(10.5).0,
             Layer::TopCopper.to_copper_mask(),
         );
         rebuild_spatial(&mut world, vec![pad_entry]);
 
-        assert!(count_violations(&mut world, &DesignRules::jlcpcb_2layer(), ViolationKind::Clearance) > 0);
+        assert!(
+            count_violations(
+                &mut world,
+                &DesignRules::jlcpcb_2layer(),
+                ViolationKind::Clearance
+            ) > 0
+        );
     }
 }
 
@@ -292,9 +406,22 @@ mod edge_clearance {
         let mut world = world_with_board();
         let net = world.intern_net("SIG");
         // Trace at x=0.1mm — within 0.3mm of left edge
-        spawn_trace(&mut world, net, Layer::TopCopper, 0.15, (0.1, 25.0), (0.1, 30.0));
+        spawn_trace(
+            &mut world,
+            net,
+            Layer::TopCopper,
+            0.15,
+            (0.1, 25.0),
+            (0.1, 30.0),
+        );
         rebuild_spatial(&mut world, vec![]);
-        assert!(count_violations(&mut world, &DesignRules::jlcpcb_2layer(), ViolationKind::EdgeClearance) > 0);
+        assert!(
+            count_violations(
+                &mut world,
+                &DesignRules::jlcpcb_2layer(),
+                ViolationKind::EdgeClearance
+            ) > 0
+        );
     }
 
     #[test]
@@ -302,9 +429,23 @@ mod edge_clearance {
         let mut world = world_with_board();
         let net = world.intern_net("SIG");
         // Trace at center — 25mm from any edge
-        spawn_trace(&mut world, net, Layer::TopCopper, 0.15, (20.0, 25.0), (30.0, 25.0));
+        spawn_trace(
+            &mut world,
+            net,
+            Layer::TopCopper,
+            0.15,
+            (20.0, 25.0),
+            (30.0, 25.0),
+        );
         rebuild_spatial(&mut world, vec![]);
-        assert_eq!(count_violations(&mut world, &DesignRules::jlcpcb_2layer(), ViolationKind::EdgeClearance), 0);
+        assert_eq!(
+            count_violations(
+                &mut world,
+                &DesignRules::jlcpcb_2layer(),
+                ViolationKind::EdgeClearance
+            ),
+            0
+        );
     }
 }
 
@@ -320,10 +461,21 @@ mod trace_width {
         let mut world = world_with_board();
         let net = world.intern_net("SIG");
         // 0.05mm trace — violates 0.15mm minimum
-        spawn_trace(&mut world, net, Layer::TopCopper, 0.05, (10.0, 10.0), (20.0, 10.0));
+        spawn_trace(
+            &mut world,
+            net,
+            Layer::TopCopper,
+            0.05,
+            (10.0, 10.0),
+            (20.0, 10.0),
+        );
         rebuild_spatial(&mut world, vec![]);
         let result = run_drc(&mut world, &DesignRules::jlcpcb_2layer());
-        let tw = result.violations.iter().filter(|v| v.kind == ViolationKind::TraceWidth).count();
+        let tw = result
+            .violations
+            .iter()
+            .filter(|v| v.kind == ViolationKind::TraceWidth)
+            .count();
         // Note: trace_width rule is still a placeholder — may return 0
         // When implemented, this should be > 0
         let _ = tw;
@@ -334,9 +486,23 @@ mod trace_width {
         let mut world = world_with_board();
         let net = world.intern_net("SIG");
         // 0.2mm trace — above 0.15mm minimum
-        spawn_trace(&mut world, net, Layer::TopCopper, 0.2, (10.0, 10.0), (20.0, 10.0));
+        spawn_trace(
+            &mut world,
+            net,
+            Layer::TopCopper,
+            0.2,
+            (10.0, 10.0),
+            (20.0, 10.0),
+        );
         rebuild_spatial(&mut world, vec![]);
-        assert_eq!(count_violations(&mut world, &DesignRules::jlcpcb_2layer(), ViolationKind::TraceWidth), 0);
+        assert_eq!(
+            count_violations(
+                &mut world,
+                &DesignRules::jlcpcb_2layer(),
+                ViolationKind::TraceWidth
+            ),
+            0
+        );
     }
 }
 
@@ -386,7 +552,13 @@ mod hole_to_hole {
         spawn_via(&mut world, net, (25.0, 25.0), 0.3, 0.6);
         spawn_via(&mut world, net, (25.5, 25.0), 0.3, 0.6);
         rebuild_spatial(&mut world, vec![]);
-        assert!(count_violations(&mut world, &DesignRules::jlcpcb_2layer(), ViolationKind::HoleToHole) > 0);
+        assert!(
+            count_violations(
+                &mut world,
+                &DesignRules::jlcpcb_2layer(),
+                ViolationKind::HoleToHole
+            ) > 0
+        );
     }
 
     #[test]
@@ -397,7 +569,14 @@ mod hole_to_hole {
         spawn_via(&mut world, net, (20.0, 25.0), 0.3, 0.6);
         spawn_via(&mut world, net, (25.0, 25.0), 0.3, 0.6);
         rebuild_spatial(&mut world, vec![]);
-        assert_eq!(count_violations(&mut world, &DesignRules::jlcpcb_2layer(), ViolationKind::HoleToHole), 0);
+        assert_eq!(
+            count_violations(
+                &mut world,
+                &DesignRules::jlcpcb_2layer(),
+                ViolationKind::HoleToHole
+            ),
+            0
+        );
     }
 
     #[test]
@@ -411,7 +590,13 @@ mod hole_to_hole {
         spawn_via(&mut world, net, (25.8, 25.0), 0.3, 0.6);
         rebuild_spatial(&mut world, vec![]);
         // At least 2 pairs should violate (A-B and B-C, possibly A-C too)
-        assert!(count_violations(&mut world, &DesignRules::jlcpcb_2layer(), ViolationKind::HoleToHole) >= 2);
+        assert!(
+            count_violations(
+                &mut world,
+                &DesignRules::jlcpcb_2layer(),
+                ViolationKind::HoleToHole
+            ) >= 2
+        );
     }
 }
 
@@ -429,7 +614,13 @@ mod via_diameter {
         // Via with 0.3mm outer — violates 0.45mm minimum
         spawn_via(&mut world, net, (25.0, 25.0), 0.2, 0.3);
         rebuild_spatial(&mut world, vec![]);
-        assert!(count_violations(&mut world, &DesignRules::jlcpcb_2layer(), ViolationKind::ViaDiameter) > 0);
+        assert!(
+            count_violations(
+                &mut world,
+                &DesignRules::jlcpcb_2layer(),
+                ViolationKind::ViaDiameter
+            ) > 0
+        );
     }
 
     #[test]
@@ -439,19 +630,33 @@ mod via_diameter {
         // Via with 0.6mm outer — above 0.45mm minimum
         spawn_via(&mut world, net, (25.0, 25.0), 0.3, 0.6);
         rebuild_spatial(&mut world, vec![]);
-        assert_eq!(count_violations(&mut world, &DesignRules::jlcpcb_2layer(), ViolationKind::ViaDiameter), 0);
+        assert_eq!(
+            count_violations(
+                &mut world,
+                &DesignRules::jlcpcb_2layer(),
+                ViolationKind::ViaDiameter
+            ),
+            0
+        );
     }
 
     #[test]
     fn multiple_vias_mixed() {
         let mut world = world_with_board();
         let net = world.intern_net("VCC");
-        spawn_via(&mut world, net, (20.0, 25.0), 0.3, 0.6);  // OK
-        spawn_via(&mut world, net, (25.0, 25.0), 0.2, 0.3);  // Too small
+        spawn_via(&mut world, net, (20.0, 25.0), 0.3, 0.6); // OK
+        spawn_via(&mut world, net, (25.0, 25.0), 0.2, 0.3); // Too small
         spawn_via(&mut world, net, (30.0, 25.0), 0.2, 0.35); // Too small
-        spawn_via(&mut world, net, (35.0, 25.0), 0.3, 0.5);  // OK
+        spawn_via(&mut world, net, (35.0, 25.0), 0.3, 0.5); // OK
         rebuild_spatial(&mut world, vec![]);
-        assert_eq!(count_violations(&mut world, &DesignRules::jlcpcb_2layer(), ViolationKind::ViaDiameter), 2);
+        assert_eq!(
+            count_violations(
+                &mut world,
+                &DesignRules::jlcpcb_2layer(),
+                ViolationKind::ViaDiameter
+            ),
+            2
+        );
     }
 }
 
@@ -466,7 +671,10 @@ mod annular_ring {
     fn empty_board_no_violation() {
         let mut world = world_with_board();
         let rules = DesignRules::jlcpcb_2layer();
-        assert_eq!(count_violations(&mut world, &rules, ViolationKind::AnnularRing), 0);
+        assert_eq!(
+            count_violations(&mut world, &rules, ViolationKind::AnnularRing),
+            0
+        );
     }
 
     // Note: annular ring rule checks footprint pads from the library,
@@ -498,7 +706,13 @@ mod courtyard_clearance {
         ];
         rebuild_spatial(&mut world, entries);
 
-        assert!(count_violations(&mut world, &DesignRules::jlcpcb_2layer(), ViolationKind::CourtyardClearance) > 0);
+        assert!(
+            count_violations(
+                &mut world,
+                &DesignRules::jlcpcb_2layer(),
+                ViolationKind::CourtyardClearance
+            ) > 0
+        );
     }
 
     #[test]
@@ -517,7 +731,14 @@ mod courtyard_clearance {
         ];
         rebuild_spatial(&mut world, entries);
 
-        assert_eq!(count_violations(&mut world, &DesignRules::jlcpcb_2layer(), ViolationKind::CourtyardClearance), 0);
+        assert_eq!(
+            count_violations(
+                &mut world,
+                &DesignRules::jlcpcb_2layer(),
+                ViolationKind::CourtyardClearance
+            ),
+            0
+        );
     }
 }
 
@@ -551,7 +772,11 @@ mod connectivity {
         // Connectivity rule checks footprint pads vs NetConnections
         // This depends on footprint library having "0402" with 2 pads
         let result = run_drc(&mut world, &DesignRules::jlcpcb_2layer());
-        let unconnected = result.violations.iter().filter(|v| v.kind == ViolationKind::UnconnectedPin).count();
+        let unconnected = result
+            .violations
+            .iter()
+            .filter(|v| v.kind == ViolationKind::UnconnectedPin)
+            .count();
         // If footprint library has 0402, pin 2 should be flagged
         let _ = unconnected;
     }
@@ -583,7 +808,13 @@ mod keepout {
         spawn_component(&mut world, "R1", (15.0, 15.0), vcc, gnd);
         rebuild_spatial(&mut world, vec![]);
 
-        assert!(count_violations(&mut world, &DesignRules::jlcpcb_2layer(), ViolationKind::KeepoutViolation) > 0);
+        assert!(
+            count_violations(
+                &mut world,
+                &DesignRules::jlcpcb_2layer(),
+                ViolationKind::KeepoutViolation
+            ) > 0
+        );
     }
 
     #[test]
@@ -603,7 +834,14 @@ mod keepout {
         spawn_component(&mut world, "R1", (30.0, 30.0), vcc, gnd);
         rebuild_spatial(&mut world, vec![]);
 
-        assert_eq!(count_violations(&mut world, &DesignRules::jlcpcb_2layer(), ViolationKind::KeepoutViolation), 0);
+        assert_eq!(
+            count_violations(
+                &mut world,
+                &DesignRules::jlcpcb_2layer(),
+                ViolationKind::KeepoutViolation
+            ),
+            0
+        );
     }
 }
 
@@ -618,7 +856,14 @@ mod solder_mask {
     fn stub_returns_no_violations() {
         let mut world = world_with_board();
         rebuild_spatial(&mut world, vec![]);
-        assert_eq!(count_violations(&mut world, &DesignRules::jlcpcb_2layer(), ViolationKind::SolderMaskBridge), 0);
+        assert_eq!(
+            count_violations(
+                &mut world,
+                &DesignRules::jlcpcb_2layer(),
+                ViolationKind::SolderMaskBridge
+            ),
+            0
+        );
     }
 }
 
@@ -633,7 +878,14 @@ mod silk_clearance {
     fn stub_returns_no_violations() {
         let mut world = world_with_board();
         rebuild_spatial(&mut world, vec![]);
-        assert_eq!(count_violations(&mut world, &DesignRules::jlcpcb_2layer(), ViolationKind::SilkClearance), 0);
+        assert_eq!(
+            count_violations(
+                &mut world,
+                &DesignRules::jlcpcb_2layer(),
+                ViolationKind::SilkClearance
+            ),
+            0
+        );
     }
 }
 
@@ -658,9 +910,17 @@ mod presets {
             assert!(r.min_silk_width.0 > 0, "{}: min_silk_width", preset);
             assert!(r.min_edge_clearance.0 > 0, "{}: min_edge_clearance", preset);
             assert!(r.min_hole_to_hole.0 > 0, "{}: min_hole_to_hole", preset);
-            assert!(r.min_solder_mask_bridge.0 > 0, "{}: min_solder_mask_bridge", preset);
+            assert!(
+                r.min_solder_mask_bridge.0 > 0,
+                "{}: min_solder_mask_bridge",
+                preset
+            );
             assert!(r.min_silk_clearance.0 > 0, "{}: min_silk_clearance", preset);
-            assert!(r.min_courtyard_clearance.0 > 0, "{}: min_courtyard_clearance", preset);
+            assert!(
+                r.min_courtyard_clearance.0 > 0,
+                "{}: min_courtyard_clearance",
+                preset
+            );
         }
     }
 
@@ -671,7 +931,9 @@ mod presets {
             assert!(
                 r.min_via_diameter > r.min_via_drill,
                 "{}: via_diameter ({:?}) must be > via_drill ({:?})",
-                preset, r.min_via_diameter, r.min_via_drill,
+                preset,
+                r.min_via_diameter,
+                r.min_via_drill,
             );
         }
     }
@@ -680,12 +942,15 @@ mod presets {
     fn prototype_most_relaxed() {
         let proto = DesignRules::prototype();
         for preset in Preset::all() {
-            if *preset == Preset::Prototype { continue; }
+            if *preset == Preset::Prototype {
+                continue;
+            }
             let r = preset.rules();
             assert!(
                 proto.min_clearance >= r.min_clearance,
                 "Prototype clearance should be >= {} ({})",
-                r.min_clearance, preset,
+                r.min_clearance,
+                preset,
             );
         }
     }
@@ -709,35 +974,79 @@ mod full_board {
         let c2 = spawn_component(&mut world, "C1", (35.0, 25.0), vcc, gnd);
 
         // Pad entities
-        let pad1 = world.spawn_entity((cypcb_world::PadInstance::new(c1), vcc, Position::from_mm(15.0, 25.0)));
-        let pad2 = world.spawn_entity((cypcb_world::PadInstance::new(c2), vcc, Position::from_mm(35.0, 25.0)));
+        let pad1 = world.spawn_entity((
+            cypcb_world::PadInstance::new(c1),
+            vcc,
+            Position::from_mm(15.0, 25.0),
+        ));
+        let pad2 = world.spawn_entity((
+            cypcb_world::PadInstance::new(c2),
+            vcc,
+            Position::from_mm(35.0, 25.0),
+        ));
 
         // Trace connecting them on VCC
-        spawn_trace(&mut world, vcc, Layer::TopCopper, 0.2, (15.0, 25.0), (35.0, 25.0));
+        spawn_trace(
+            &mut world,
+            vcc,
+            Layer::TopCopper,
+            0.2,
+            (15.0, 25.0),
+            (35.0, 25.0),
+        );
 
         // Well-placed via
         spawn_via(&mut world, gnd, (25.0, 15.0), 0.3, 0.6);
 
         // Spatial entries for pads + courtyard
         let entries = vec![
-            SpatialEntry::from_raw(pad1, Nm::from_mm(14.5).0, Nm::from_mm(24.5).0, Nm::from_mm(15.5).0, Nm::from_mm(25.5).0, Layer::TopCopper.to_copper_mask()),
-            SpatialEntry::from_raw(pad2, Nm::from_mm(34.5).0, Nm::from_mm(24.5).0, Nm::from_mm(35.5).0, Nm::from_mm(25.5).0, Layer::TopCopper.to_copper_mask()),
-            SpatialEntry::new(c1, Point::from_mm(14.0, 24.0), Point::from_mm(16.0, 26.0), 0),
-            SpatialEntry::new(c2, Point::from_mm(34.0, 24.0), Point::from_mm(36.0, 26.0), 0),
+            SpatialEntry::from_raw(
+                pad1,
+                Nm::from_mm(14.5).0,
+                Nm::from_mm(24.5).0,
+                Nm::from_mm(15.5).0,
+                Nm::from_mm(25.5).0,
+                Layer::TopCopper.to_copper_mask(),
+            ),
+            SpatialEntry::from_raw(
+                pad2,
+                Nm::from_mm(34.5).0,
+                Nm::from_mm(24.5).0,
+                Nm::from_mm(35.5).0,
+                Nm::from_mm(25.5).0,
+                Layer::TopCopper.to_copper_mask(),
+            ),
+            SpatialEntry::new(
+                c1,
+                Point::from_mm(14.0, 24.0),
+                Point::from_mm(16.0, 26.0),
+                0,
+            ),
+            SpatialEntry::new(
+                c2,
+                Point::from_mm(34.0, 24.0),
+                Point::from_mm(36.0, 26.0),
+                0,
+            ),
         ];
         rebuild_spatial(&mut world, entries);
 
         let result = run_drc(&mut world, &DesignRules::jlcpcb_2layer());
 
         // Filter out unconnected-pin (depends on footprint library) and count real issues
-        let real_violations: Vec<_> = result.violations.iter()
+        let real_violations: Vec<_> = result
+            .violations
+            .iter()
             .filter(|v| v.kind != ViolationKind::UnconnectedPin)
             .collect();
 
         assert!(
             real_violations.is_empty(),
             "Clean board should have no violations, got: {:?}",
-            real_violations.iter().map(|v| format!("{}: {}", v.kind, v.message)).collect::<Vec<_>>(),
+            real_violations
+                .iter()
+                .map(|v| format!("{}: {}", v.kind, v.message))
+                .collect::<Vec<_>>(),
         );
     }
 
@@ -748,11 +1057,32 @@ mod full_board {
         let gnd = world.intern_net("GND");
 
         // Trace too close to edge
-        spawn_trace(&mut world, vcc, Layer::TopCopper, 0.15, (0.1, 25.0), (0.1, 30.0));
+        spawn_trace(
+            &mut world,
+            vcc,
+            Layer::TopCopper,
+            0.15,
+            (0.1, 25.0),
+            (0.1, 30.0),
+        );
 
         // Two traces on different nets too close
-        spawn_trace(&mut world, vcc, Layer::TopCopper, 0.2, (10.0, 10.0), (20.0, 10.0));
-        spawn_trace(&mut world, gnd, Layer::TopCopper, 0.2, (10.0, 10.25), (20.0, 10.25));
+        spawn_trace(
+            &mut world,
+            vcc,
+            Layer::TopCopper,
+            0.2,
+            (10.0, 10.0),
+            (20.0, 10.0),
+        );
+        spawn_trace(
+            &mut world,
+            gnd,
+            Layer::TopCopper,
+            0.2,
+            (10.0, 10.25),
+            (20.0, 10.25),
+        );
 
         // Undersized via
         spawn_via(&mut world, vcc, (30.0, 30.0), 0.2, 0.3);
@@ -766,10 +1096,26 @@ mod full_board {
         let result = run_drc(&mut world, &DesignRules::jlcpcb_2layer());
 
         // Should have at least: edge clearance + copper clearance + via diameter + hole-to-hole
-        let edge = result.violations.iter().filter(|v| v.kind == ViolationKind::EdgeClearance).count();
-        let clearance = result.violations.iter().filter(|v| v.kind == ViolationKind::Clearance).count();
-        let via_dia = result.violations.iter().filter(|v| v.kind == ViolationKind::ViaDiameter).count();
-        let h2h = result.violations.iter().filter(|v| v.kind == ViolationKind::HoleToHole).count();
+        let edge = result
+            .violations
+            .iter()
+            .filter(|v| v.kind == ViolationKind::EdgeClearance)
+            .count();
+        let clearance = result
+            .violations
+            .iter()
+            .filter(|v| v.kind == ViolationKind::Clearance)
+            .count();
+        let via_dia = result
+            .violations
+            .iter()
+            .filter(|v| v.kind == ViolationKind::ViaDiameter)
+            .count();
+        let h2h = result
+            .violations
+            .iter()
+            .filter(|v| v.kind == ViolationKind::HoleToHole)
+            .count();
 
         assert!(edge > 0, "Expected edge clearance violations");
         assert!(clearance > 0, "Expected clearance violations");

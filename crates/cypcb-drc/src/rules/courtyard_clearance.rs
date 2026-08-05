@@ -28,10 +28,7 @@ impl DrcRule for CourtyardClearanceRule {
         let entries: Vec<_> = world.spatial().iter().cloned().collect();
 
         // Filter to courtyard entries (layer_mask == 0, set in rebuild_spatial_index_full)
-        let courtyards: Vec<_> = entries
-            .iter()
-            .filter(|e| e.layer_mask == 0)
-            .collect();
+        let courtyards: Vec<_> = entries.iter().filter(|e| e.layer_mask == 0).collect();
 
         // Check all pairs of courtyard AABBs
         for i in 0..courtyards.len() {

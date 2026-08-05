@@ -31,7 +31,12 @@ pub struct RoutingCost<'a> {
 
 impl<'a> RoutingCost<'a> {
     /// Create a new cost calculator for routing a specific net.
-    pub fn new(rules: &'a dyn RoutingRuleSet, net_id: u32, via_cost_multiplier: f64, layer_preference: f64) -> Self {
+    pub fn new(
+        rules: &'a dyn RoutingRuleSet,
+        net_id: u32,
+        via_cost_multiplier: f64,
+        layer_preference: f64,
+    ) -> Self {
         // Precompute the minimum via cost for admissible heuristic.
         // Sample a few common layer pairs.
         let mut min_via = f64::MAX;

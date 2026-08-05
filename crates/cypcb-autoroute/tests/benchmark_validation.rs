@@ -43,10 +43,7 @@ fn test_rules() -> PresetRuleSet {
 ///
 /// Always calls `rebuild_spatial_index_with_traces()` before scoring
 /// and uses `DesignRules::jlcpcb_2layer()` for DRC.
-fn route_and_score(
-    strategy: &dyn RoutingStrategy,
-    fixture: &str,
-) -> (RoutingScore, usize) {
+fn route_and_score(strategy: &dyn RoutingStrategy, fixture: &str) -> (RoutingScore, usize) {
     let parsed = parse_kicad_pcb(&fixture_path(fixture))
         .unwrap_or_else(|e| panic!("Failed to parse {}: {:?}", fixture, e));
     let mut world = parsed.world;
@@ -63,10 +60,7 @@ fn route_and_score(
     world.rebuild_spatial_index_with_traces(|_| {
         cypcb_core::Rect::from_center_size(
             cypcb_core::Point::ORIGIN,
-            (
-                cypcb_core::Nm::from_mm(1.0),
-                cypcb_core::Nm::from_mm(1.0),
-            ),
+            (cypcb_core::Nm::from_mm(1.0), cypcb_core::Nm::from_mm(1.0)),
         )
     });
 
@@ -163,10 +157,7 @@ fn benchmark_regression() {
         route_count > 0,
         "FAIL benchmark_regression: route_count = 0, expected > 0"
     );
-    eprintln!(
-        "  ✓ route_count: got {}, threshold > 0",
-        route_count
-    );
+    eprintln!("  ✓ route_count: got {}, threshold > 0", route_count);
 
     assert!(
         score.composite <= 5501.0,
@@ -230,20 +221,12 @@ fn benchmark_full_matrix() {
             .unwrap_or(benchmark.filename);
 
         for strategy in &strategies {
-            eprintln!(
-                "  [{}] routing {} ...",
-                strategy.name(),
-                fixture_label
-            );
+            eprintln!("  [{}] routing {} ...", strategy.name(), fixture_label);
 
             let (score, route_count) = route_and_score(strategy.as_ref(), benchmark.filename);
 
-            let br = BenchmarkResult::from_score(
-                fixture_label,
-                strategy.name(),
-                &score,
-                route_count,
-            );
+            let br =
+                BenchmarkResult::from_score(fixture_label, strategy.name(), &score, route_count);
             results.push(br);
         }
     }
@@ -293,8 +276,7 @@ fn benchmark_full_matrix() {
     );
     eprintln!(
         "✓ Strategy selection: PathFinder ({:.1}) ≤ ImprovedAStar ({:.1}) on led_blink",
-        pf_led.composite,
-        astar_led.composite,
+        pf_led.composite, astar_led.composite,
     );
 
     // --- Assert route_count > 0 for all results ---

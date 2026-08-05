@@ -8,7 +8,6 @@
 /// 5. Load the merged file into a fresh engine
 /// 6. Verify traces survived exactly (bit-for-bit coordinates)
 /// 7. Export again and verify the output is IDENTICAL (determinism)
-
 use cypcb_render::PcbEngine;
 
 #[test]
@@ -44,25 +43,38 @@ net DIS { U1.7
     // Step 2: Add traces (simulating interactive routing)
     // VCC trace: J1.1 → U1.8 → R1.1
     let vcc_segs = [
-        5_000_000i64, 20_000_000, 15_000_000, 20_000_000,  // J1 area → middle
-        15_000_000, 20_000_000, 28_000_000, 20_000_000,     // middle → U1
-        28_000_000, 20_000_000, 35_000_000, 30_000_000,     // U1 → R1
+        5_000_000i64,
+        20_000_000,
+        15_000_000,
+        20_000_000, // J1 area → middle
+        15_000_000,
+        20_000_000,
+        28_000_000,
+        20_000_000, // middle → U1
+        28_000_000,
+        20_000_000,
+        35_000_000,
+        30_000_000, // U1 → R1
     ];
     let id1 = engine1.add_trace("VCC", "Top", 250_000, &vcc_segs);
     assert_ne!(id1, u32::MAX, "Failed to add VCC trace");
 
     // GND trace: J1.2 → U1.1
     let gnd_segs = [
-        5_000_000i64, 20_000_000, 10_000_000, 25_000_000,
-        10_000_000, 25_000_000, 28_000_000, 25_000_000,
+        5_000_000i64,
+        20_000_000,
+        10_000_000,
+        25_000_000,
+        10_000_000,
+        25_000_000,
+        28_000_000,
+        25_000_000,
     ];
     let id2 = engine1.add_trace("GND", "Bottom", 200_000, &gnd_segs);
     assert_ne!(id2, u32::MAX, "Failed to add GND trace");
 
     // DIS trace with odd coordinates (testing precision)
-    let dis_segs = [
-        28_123_456i64, 20_654_321, 35_999_999, 30_000_001,
-    ];
+    let dis_segs = [28_123_456i64, 20_654_321, 35_999_999, 30_000_001];
     let id3 = engine1.add_trace("DIS", "Top", 150_000, &dis_segs);
     assert_ne!(id3, u32::MAX, "Failed to add DIS trace");
 

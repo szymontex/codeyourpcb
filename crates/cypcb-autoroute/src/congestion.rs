@@ -51,12 +51,8 @@ impl CongestionMap {
             width,
             height,
             layers,
-            history_cost: (0..layers)
-                .map(|_| vec![0.0; cell_count])
-                .collect(),
-            occupancy: (0..layers)
-                .map(|_| vec![0u16; cell_count])
-                .collect(),
+            history_cost: (0..layers).map(|_| vec![0.0; cell_count]).collect(),
+            occupancy: (0..layers).map(|_| vec![0u16; cell_count]).collect(),
             capacity: 1,
         }
     }

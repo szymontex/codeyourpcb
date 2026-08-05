@@ -4,9 +4,7 @@
 //! and produce metadata within expected ranges. These tests exercise the
 //! parser against realistic KiCad 8 files of varying complexity.
 
-use cypcb_kicad::pcb_parser::{
-    get_benchmarks, parse_kicad_pcb, BenchmarkComplexity, BENCHMARKS,
-};
+use cypcb_kicad::pcb_parser::{get_benchmarks, parse_kicad_pcb, BenchmarkComplexity, BENCHMARKS};
 
 /// Workspace root — integration tests run from the crate directory,
 /// so we need to go up to the workspace root where `tests/fixtures/` lives.
@@ -17,7 +15,9 @@ fn workspace_root() -> std::path::PathBuf {
 }
 
 fn fixture_path(filename: &str) -> std::path::PathBuf {
-    workspace_root().join("tests/fixtures/benchmark").join(filename)
+    workspace_root()
+        .join("tests/fixtures/benchmark")
+        .join(filename)
 }
 
 // ---------------------------------------------------------------------------
@@ -235,12 +235,7 @@ fn assert_within_tolerance(actual: usize, expected: usize, tolerance: f64, label
     assert_within_tolerance_named(actual, expected, tolerance, label);
 }
 
-fn assert_within_tolerance_named(
-    actual: usize,
-    expected: usize,
-    tolerance: f64,
-    label: &str,
-) {
+fn assert_within_tolerance_named(actual: usize, expected: usize, tolerance: f64, label: &str) {
     if tolerance == 0.0 {
         assert_eq!(actual, expected, "{}: expected exactly {}", label, expected);
     } else {

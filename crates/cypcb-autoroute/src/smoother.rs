@@ -61,7 +61,10 @@ pub fn smooth_routes(
 
     for seg in segments {
         let key = (seg.net_id, seg.layer);
-        if let Some(group) = groups.iter_mut().find(|(n, l, _)| *n == key.0 && *l == key.1) {
+        if let Some(group) = groups
+            .iter_mut()
+            .find(|(n, l, _)| *n == key.0 && *l == key.1)
+        {
             group.2.push(seg);
         } else {
             groups.push((key.0, key.1, vec![seg]));
@@ -73,7 +76,8 @@ pub fn smooth_routes(
 
     for (net_id, layer, group) in &groups {
         let group_segs: Vec<RouteSegment> = group.iter().map(|s| (*s).clone()).collect();
-        let smoothed = smooth_net_layer_group(&group_segs, other_net_segments, min_clearance, roundness);
+        let smoothed =
+            smooth_net_layer_group(&group_segs, other_net_segments, min_clearance, roundness);
         tracing::debug!(
             net_id = net_id.id(),
             layer = ?layer,
@@ -118,10 +122,15 @@ fn smooth_net_layer_group(
         others.iter().filter(|s| s.layer == layer).collect();
 
     // Pass 1: Staircase-to-diagonal collapse
-    let after_staircase = collapse_staircases(&group.to_vec(), &same_layer_others, min_clearance);
+    let after_staircase = collapse_staircases(group, &same_layer_others, min_clearance);
 
     // Pass 2: Corner chamfering
-    let after_chamfer = chamfer_corners(&after_staircase, &same_layer_others, min_clearance, roundness);
+    let after_chamfer = chamfer_corners(
+        &after_staircase,
+        &same_layer_others,
+        min_clearance,
+        roundness,
+    );
 
     // Pass 3: Collinear segment merge
     let after_merge = merge_collinear(&after_chamfer);
@@ -273,9 +282,7 @@ fn collapse_staircases(
 
         if diag_len == 0 {
             // Degenerate — just keep originals
-            for j in i..=stair_end {
-                result.push(segments[j].clone());
-            }
+            result.extend_from_slice(&segments[i..=stair_end]);
             i = stair_end + 1;
             continue;
         }
@@ -283,10 +290,7 @@ fn collapse_staircases(
         let diag_dx = if dx > 0 { diag_len } else { -diag_len };
         let diag_dy = if dy > 0 { diag_len } else { -diag_len };
 
-        let diag_end = Point::new(
-            Nm(stair_start.x.0 + diag_dx),
-            Nm(stair_start.y.0 + diag_dy),
-        );
+        let diag_end = Point::new(Nm(stair_start.x.0 + diag_dx), Nm(stair_start.y.0 + diag_dy));
 
         // Verify the diagonal is a valid 45° angle
         debug_assert!(is_valid_angle(stair_start, diag_end));
@@ -294,26 +298,34 @@ fn collapse_staircases(
         // Check DRC safety of the diagonal
         if is_drc_clean(stair_start, diag_end, others, min_clearance) {
             // Emit the diagonal
-            result.push(RouteSegment::new(net_id, layer, width, stair_start, diag_end));
+            result.push(RouteSegment::new(
+                net_id,
+                layer,
+                width,
+                stair_start,
+                diag_end,
+            ));
 
             // If there's remaining distance, emit an orthogonal segment
             if diag_end != stair_finish {
                 debug_assert!(is_valid_angle(diag_end, stair_finish));
                 if is_drc_clean(diag_end, stair_finish, others, min_clearance) {
-                    result.push(RouteSegment::new(net_id, layer, width, diag_end, stair_finish));
+                    result.push(RouteSegment::new(
+                        net_id,
+                        layer,
+                        width,
+                        diag_end,
+                        stair_finish,
+                    ));
                 } else {
                     // Orthogonal tail not safe — keep original staircase
                     result.pop(); // remove the diagonal we just added
-                    for j in i..=stair_end {
-                        result.push(segments[j].clone());
-                    }
+                    result.extend_from_slice(&segments[i..=stair_end]);
                 }
             }
         } else {
             // Diagonal not DRC-safe — keep original staircase
-            for j in i..=stair_end {
-                result.push(segments[j].clone());
-            }
+            result.extend_from_slice(&segments[i..=stair_end]);
         }
 
         i = stair_end + 1;
@@ -379,7 +391,8 @@ fn chamfer_corners(
         let len_b = seg_b.length().0;
 
         // Chamfer length scaled by roundness: roundness=0 → no chamfer, roundness=1 → full chamfer
-        let chamfer_len = ((len_a.min(len_b) as f64 * roundness.clamp(0.0, 1.0) / 3.0) as i64).min(max_chamfer);
+        let chamfer_len =
+            ((len_a.min(len_b) as f64 * roundness.clamp(0.0, 1.0) / 3.0) as i64).min(max_chamfer);
 
         if chamfer_len < 1000 {
             // Too short to chamfer (< 1µm) — skip
@@ -490,13 +503,8 @@ fn merge_collinear(segments: &[RouteSegment]) -> Vec<RouteSegment> {
         // Check if connected and collinear
         if last.end == seg.start && are_collinear(last.start, last.end, seg.end) {
             // Extend the last segment
-            let extended = RouteSegment::new(
-                last.net_id,
-                last.layer,
-                last.width,
-                last.start,
-                seg.end,
-            );
+            let extended =
+                RouteSegment::new(last.net_id, last.layer, last.width, last.start, seg.end);
             *result.last_mut().unwrap() = extended;
         } else {
             result.push(seg.clone());
@@ -613,20 +621,27 @@ mod tests {
         // 3 alternating H/V segments forming a staircase
         let step = 1_000_000; // 1mm
         let segments = vec![
-            seg(0, 0, step, 0),               // H
-            seg(step, 0, step, step),          // V
-            seg(step, step, 2 * step, step),   // H
+            seg(0, 0, step, 0),              // H
+            seg(step, 0, step, step),        // V
+            seg(step, step, 2 * step, step), // H
         ];
         let result = smooth_routes(&segments, &[], Nm(0), 0.5);
         // Should collapse to 1 diagonal + maybe 1 orthogonal
-        assert!(result.len() <= 2, "3-step staircase should collapse to ≤2 segments, got {}", result.len());
+        assert!(
+            result.len() <= 2,
+            "3-step staircase should collapse to ≤2 segments, got {}",
+            result.len()
+        );
         // Verify all angles are valid
         for s in &result {
             assert!(is_valid_angle(s.start, s.end), "invalid angle in output");
         }
         // Endpoints preserved
         assert_eq!(result.first().unwrap().start, Point::new(Nm(0), Nm(0)));
-        assert_eq!(result.last().unwrap().end, Point::new(Nm(2 * step), Nm(step)));
+        assert_eq!(
+            result.last().unwrap().end,
+            Point::new(Nm(2 * step), Nm(step))
+        );
     }
 
     #[test]
@@ -636,14 +651,18 @@ mod tests {
         let segments = vec![
             seg(0, 0, s, 0),
             seg(s, 0, s, s),
-            seg(s, s, 2*s, s),
-            seg(2*s, s, 2*s, 2*s),
-            seg(2*s, 2*s, 3*s, 2*s),
+            seg(s, s, 2 * s, s),
+            seg(2 * s, s, 2 * s, 2 * s),
+            seg(2 * s, 2 * s, 3 * s, 2 * s),
         ];
         let result = smooth_routes(&segments, &[], Nm(0), 0.5);
-        assert!(result.len() <= 3, "5-step staircase should collapse to ≤3 segments, got {}", result.len());
+        assert!(
+            result.len() <= 3,
+            "5-step staircase should collapse to ≤3 segments, got {}",
+            result.len()
+        );
         assert_eq!(result.first().unwrap().start, Point::new(Nm(0), Nm(0)));
-        assert_eq!(result.last().unwrap().end, Point::new(Nm(3*s), Nm(2*s)));
+        assert_eq!(result.last().unwrap().end, Point::new(Nm(3 * s), Nm(2 * s)));
         for s in &result {
             assert!(is_valid_angle(s.start, s.end));
         }
@@ -668,7 +687,11 @@ mod tests {
             }
         }
         let result = smooth_routes(&segments, &[], Nm(0), 0.5);
-        assert!(result.len() <= 3, "10-step staircase should produce ≤3 segments, got {}", result.len());
+        assert!(
+            result.len() <= 3,
+            "10-step staircase should produce ≤3 segments, got {}",
+            result.len()
+        );
     }
 
     #[test]
@@ -677,8 +700,8 @@ mod tests {
         let s = 1_000_000;
         let segments = vec![
             seg(0, 0, s, 0),
-            seg(s, 0, 2*s, 0),    // same direction as previous — not alternating
-            seg(2*s, 0, 2*s, s),
+            seg(s, 0, 2 * s, 0), // same direction as previous — not alternating
+            seg(2 * s, 0, 2 * s, s),
         ];
         let result = smooth_routes(&segments, &[], Nm(0), 0.5);
         // Should still be valid but may not collapse as aggressively
@@ -693,12 +716,16 @@ mod tests {
     fn chamfer_90_degree_bend() {
         // An L-shaped path: horizontal then vertical
         let segments = vec![
-            seg_mm(0.0, 0.0, 6.0, 0.0),   // 6mm horizontal
-            seg_mm(6.0, 0.0, 6.0, 6.0),   // 6mm vertical
+            seg_mm(0.0, 0.0, 6.0, 0.0), // 6mm horizontal
+            seg_mm(6.0, 0.0, 6.0, 6.0), // 6mm vertical
         ];
         let result = smooth_routes(&segments, &[], Nm(0), 0.5);
         // Should have 3 segments after chamfering: shortened H + 45° chamfer + shortened V
-        assert_eq!(result.len(), 3, "90° bend should be chamfered into 3 segments");
+        assert_eq!(
+            result.len(),
+            3,
+            "90° bend should be chamfered into 3 segments"
+        );
         // Middle segment should be diagonal
         assert!(is_valid_angle(result[1].start, result[1].end));
         let dx = (result[1].end.x.0 - result[1].start.x.0).abs();
@@ -710,7 +737,7 @@ mod tests {
     fn chamfer_already_45_no_op() {
         // A segment that's already 45° — should not be modified
         let segments = vec![
-            seg_mm(0.0, 0.0, 3.0, 3.0),  // 45° diagonal
+            seg_mm(0.0, 0.0, 3.0, 3.0), // 45° diagonal
         ];
         let result = smooth_routes(&segments, &[], Nm(0), 0.5);
         assert_eq!(result.len(), 1);
@@ -723,10 +750,7 @@ mod tests {
     #[test]
     fn merge_collinear_segments() {
         // Two horizontal segments end-to-end in the same direction
-        let segments = vec![
-            seg_mm(0.0, 0.0, 3.0, 0.0),
-            seg_mm(3.0, 0.0, 7.0, 0.0),
-        ];
+        let segments = vec![seg_mm(0.0, 0.0, 3.0, 0.0), seg_mm(3.0, 0.0, 7.0, 0.0)];
         let result = smooth_routes(&segments, &[], Nm(0), 0.5);
         assert_eq!(result.len(), 1, "collinear segments should merge");
         assert_eq!(result[0].start, Point::from_mm(0.0, 0.0));
@@ -739,24 +763,24 @@ mod tests {
     fn drc_rejection_staircase_blocked() {
         // A staircase that would violate clearance if collapsed
         let s = 1_000_000; // 1mm steps
-        let staircase = vec![
-            seg(0, 0, s, 0),
-            seg(s, 0, s, s),
-            seg(s, s, 2*s, s),
-        ];
+        let staircase = vec![seg(0, 0, s, 0), seg(s, 0, s, s), seg(s, s, 2 * s, s)];
 
         // Place an obstacle segment right where the diagonal would go
         let obstacle = RouteSegment::new(
             NetId::new(99), // different net
             Layer::TopCopper,
             Nm::from_mm(0.2),
-            Point::new(Nm(s/2), Nm(s/2 - 50_000)), // very close to diagonal path
-            Point::new(Nm(s/2), Nm(s/2 + 50_000)),
+            Point::new(Nm(s / 2), Nm(s / 2 - 50_000)), // very close to diagonal path
+            Point::new(Nm(s / 2), Nm(s / 2 + 50_000)),
         );
 
         let result = smooth_routes(&staircase, &[obstacle], Nm(200_000), 0.5); // 0.2mm clearance
-        // Should keep original staircase since diagonal violates clearance
-        assert!(result.len() >= 3, "should keep original staircase when diagonal violates DRC, got {} segments", result.len());
+                                                                               // Should keep original staircase since diagonal violates clearance
+        assert!(
+            result.len() >= 3,
+            "should keep original staircase when diagonal violates DRC, got {} segments",
+            result.len()
+        );
     }
 
     // ====== Edge cases ======
@@ -793,12 +817,16 @@ mod tests {
         let width = Nm::from_mm(0.3);
         let segments = vec![
             RouteSegment::new(
-                net, layer, width,
+                net,
+                layer,
+                width,
                 Point::from_mm(0.0, 0.0),
                 Point::from_mm(3.0, 0.0),
             ),
             RouteSegment::new(
-                net, layer, width,
+                net,
+                layer,
+                width,
                 Point::from_mm(3.0, 0.0),
                 Point::from_mm(3.0, 3.0),
             ),
