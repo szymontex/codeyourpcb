@@ -816,9 +816,13 @@
       background: var(--bg-secondary);
       z-index: 150;
       display: flex;
-      align-items: center;
-      justify-content: center;
       overflow-y: auto;
+      /* Centring with align-items/justify-content puts the top of a panel
+         taller than the viewport out of reach: the overflow spills both ways
+         and browsers will not scroll above the origin, so with a full recent
+         list the templates section was unreachable. margin:auto on the child
+         centres it while it fits and keeps the top scrollable once it does
+         not. */
     }
     #project-manager.hidden {
       display: none;
@@ -827,6 +831,7 @@
       max-width: 720px;
       width: 100%;
       padding: 48px 24px;
+      margin: auto;
     }
     .pm-header {
       text-align: center;

@@ -148,7 +148,25 @@ async function interceptAPIs(
     });
   });
 
-  // Intercept EasyEDA component API
+  // Intercept the EasyEDA component API. In dev the app talks to the Vite proxy
+  // path, not to easyeda.com - matching only the upstream host let every one of
+  // these requests leave the machine for real during the E2E run.
+  await page.route('**/easyeda-api/api/products/*/components*', async (route: Route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      headers: { 'Access-Control-Allow-Origin': '*' },
+      body: JSON.stringify(componentResponse),
+    });
+  });
+  await page.route('**/easyeda-modules/3dmodel/**', async (route: Route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'text/plain',
+      headers: { 'Access-Control-Allow-Origin': '*' },
+      body: objText,
+    });
+  });
   await page.route('**/easyeda.com/api/products/*/components*', async (route: Route) => {
     await route.fulfill({
       status: 200,
@@ -344,6 +362,26 @@ test.describe('JLCPCB 3D Model Loading', () => {
         contentType: 'application/json',
         headers: { 'Access-Control-Allow-Origin': '*' },
         body: JSON.stringify(isResistors ? MOCK_SEARCH_RESULTS : { components: [] }),
+      });
+    });
+
+    await page.route('**/easyeda-api/api/products/*/components*', async (route: Route) => {
+      easyedaHit = true;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        headers: { 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify(MOCK_COMPONENT_DATA),
+      });
+    });
+
+    await page.route('**/easyeda-modules/3dmodel/**', async (route: Route) => {
+      modulesHit = true;
+      await route.fulfill({
+        status: 200,
+        contentType: 'text/plain',
+        headers: { 'Access-Control-Allow-Origin': '*' },
+        body: MOCK_OBJ_TEXT,
       });
     });
 
