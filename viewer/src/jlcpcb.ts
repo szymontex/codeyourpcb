@@ -119,6 +119,11 @@ export async function searchComponents(
   const q = query.toLowerCase().trim();
   if (!q) return [];
 
+  // Search term by term. "0805 10k" describes a package and a value, and no
+  // single field holds both, so a whole-string match finds nothing - which is
+  // what a parts search is asked for most of the time.
+  const terms = q.split(/\s+/).filter(Boolean);
+
   // Fetch all categories in parallel (cached after first search)
   const allItems = await fetchAllCategories();
 
@@ -130,24 +135,38 @@ export async function searchComponents(
     const pkg = (item.package || '').toLowerCase();
     const cat = (item.category || '').toLowerCase();
     const subcat = (item.subcategory || '').toLowerCase();
+    // Attributes arrive either as an `attributes` JSON string or, on the older
+    // shape, nested inside `extra` - parseSearchResult reads both, so search
+    // has to as well.
     let attrsText = '';
-    if (item.attributes && typeof item.attributes === 'string') {
-      try { attrsText = JSON.stringify(JSON.parse(item.attributes)).toLowerCase(); } catch { /* */ }
+    for (const field of [item.attributes, item.extra]) {
+      if (typeof field === 'string') {
+        try { attrsText += JSON.stringify(JSON.parse(field)).toLowerCase(); } catch { /* */ }
+      }
     }
 
     let score = 0;
-    // Exact mfr match
+    // Exact mfr match on the whole query
     if (mfr === q) score += 100;
-    // mfr contains query
-    else if (mfr.includes(q)) score += 50;
     // LCSC code match (e.g. "C25744")
     if (q.startsWith('c') && String(item.lcsc) === q.slice(1)) score += 100;
-    // Package match
-    if (pkg.includes(q)) score += 20;
-    // Category/subcategory match
-    if (cat.includes(q) || subcat.includes(q)) score += 10;
-    // Attributes match
-    if (attrsText.includes(q)) score += 5;
+
+    // Every term has to land somewhere; the score is the sum of what each hit.
+    let allTermsMatched = true;
+    for (const term of terms) {
+      let termScore = 0;
+      if (mfr.includes(term)) termScore += 50;
+      if (pkg.includes(term)) termScore += 20;
+      if (cat.includes(term) || subcat.includes(term)) termScore += 10;
+      if (attrsText.includes(term)) termScore += 5;
+
+      if (termScore === 0) {
+        allTermsMatched = false;
+        break;
+      }
+      score += termScore;
+    }
+    if (!allTermsMatched) score = 0;
 
     if (score > 0) {
       // Boost in-stock items
