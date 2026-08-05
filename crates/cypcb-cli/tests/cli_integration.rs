@@ -88,6 +88,7 @@ fn test_check_valid_file() {
     let example = examples_dir().join("blink.cypcb");
     let output = Command::new(cypcb_binary())
         .arg("check")
+        .arg("--no-drc")
         .arg(&example)
         .output()
         .expect("Failed to execute cypcb check");
@@ -95,7 +96,49 @@ fn test_check_valid_file() {
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("OK"));
-    assert!(stdout.contains("validated successfully"));
+    assert!(stdout.contains("parsed and validated"));
+}
+
+#[test]
+fn test_check_runs_drc() {
+    let example = examples_dir().join("drc-test.cypcb");
+    let output = Command::new(cypcb_binary())
+        .arg("check")
+        .arg(&example)
+        .output()
+        .expect("Failed to execute cypcb check");
+
+    assert!(
+        !output.status.success(),
+        "Check should fail on a board with DRC violations"
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("DRC violation"),
+        "stderr should report DRC violations, got: {}",
+        stderr
+    );
+    assert!(
+        stderr.contains("Summary:"),
+        "stderr should contain a per-kind summary, got: {}",
+        stderr
+    );
+}
+
+#[test]
+fn test_check_unknown_preset_fails() {
+    let example = examples_dir().join("blink.cypcb");
+    let output = Command::new(cypcb_binary())
+        .arg("check")
+        .arg("--preset")
+        .arg("no-such-fab")
+        .arg(&example)
+        .output()
+        .expect("Failed to execute cypcb check");
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("Unknown preset"));
 }
 
 #[test]

@@ -2,9 +2,14 @@
 
 use clap::Args;
 use miette::{IntoDiagnostic, Result, WrapErr};
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 
+use cypcb_drc::{run_drc, Preset};
 use cypcb_parser::CypcbParser;
+use cypcb_world::footprint::FootprintLibrary;
+use cypcb_world::sync_ast_to_world;
+use cypcb_world::BoardWorld;
 
 /// Check a .cypcb file for errors.
 #[derive(Args)]
@@ -12,6 +17,14 @@ pub struct CheckCommand {
     /// Input .cypcb file
     #[arg(value_name = "FILE")]
     pub file: PathBuf,
+
+    /// Manufacturer preset for design rules
+    #[arg(short, long, default_value = "jlcpcb")]
+    pub preset: String,
+
+    /// Check syntax and semantics only, skip design rule check
+    #[arg(long)]
+    pub no_drc: bool,
 }
 
 impl CheckCommand {
@@ -25,24 +38,84 @@ impl CheckCommand {
         let result = parser.parse(&source);
 
         // Report parse errors
-        let mut has_errors = false;
         if result.has_errors() {
             for err in result.errors {
                 eprintln!("{:?}", miette::Report::new(err));
             }
-            has_errors = true;
-        }
-
-        // Note: Semantic validation via sync_ast_to_world is currently disabled
-        // due to cargo workspace dependency resolution issues between cypcb-cli
-        // and cypcb-world. The parse-level validation still catches syntax errors.
-        // TODO: Re-enable semantic validation when cargo issues are resolved.
-
-        if has_errors {
             std::process::exit(1);
         }
 
-        println!("OK: {} validated successfully", self.file.display());
-        Ok(())
+        let ast = result.value;
+
+        // Semantic validation: build the board model from the AST.
+        let mut world = BoardWorld::new();
+        let library = FootprintLibrary::new();
+        let sync_result = sync_ast_to_world(&ast, &source, &mut world, &library);
+
+        if !sync_result.errors.is_empty() {
+            for err in &sync_result.errors {
+                eprintln!("Semantic error: {}", err);
+            }
+            std::process::exit(1);
+        }
+
+        for warning in &sync_result.warnings {
+            eprintln!("Warning: {}", warning);
+        }
+
+        if self.no_drc {
+            println!(
+                "OK: {} parsed and validated (DRC skipped)",
+                self.file.display()
+            );
+            return Ok(());
+        }
+
+        // Design rule check
+        let preset = Preset::from_name(&self.preset).ok_or_else(|| {
+            let available: Vec<&str> = Preset::all().iter().map(|p| p.name()).collect();
+            miette::miette!(
+                "Unknown preset '{}'. Available presets: {}",
+                self.preset,
+                available.join(", ")
+            )
+        })?;
+
+        let drc = run_drc(&mut world, &preset.rules());
+
+        if drc.violations.is_empty() {
+            println!(
+                "OK: {} passed DRC against {} in {}ms",
+                self.file.display(),
+                preset.name(),
+                drc.duration_ms
+            );
+            return Ok(());
+        }
+
+        eprintln!(
+            "{} DRC violation(s) against {}:",
+            drc.violations.len(),
+            preset.name()
+        );
+
+        let mut counts: BTreeMap<String, usize> = BTreeMap::new();
+        for violation in &drc.violations {
+            *counts.entry(violation.kind.to_string()).or_insert(0) += 1;
+            eprintln!(
+                "  {} at ({:.3}mm, {:.3}mm): {}",
+                violation.kind,
+                violation.location.x.to_mm(),
+                violation.location.y.to_mm(),
+                violation.message
+            );
+        }
+
+        eprintln!("Summary:");
+        for (kind, count) in &counts {
+            eprintln!("  {}: {}", kind, count);
+        }
+
+        std::process::exit(1);
     }
 }
