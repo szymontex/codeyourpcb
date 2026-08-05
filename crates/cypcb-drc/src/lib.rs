@@ -138,6 +138,21 @@ pub fn run_drc(world: &mut BoardWorld, rules: &DesignRules) -> DrcResult {
         violations.extend(checker.check(world, rules));
     }
 
+    // Sort into a canonical order. The rules run in a fixed sequence, but each
+    // one walks the spatial index or an ECS query, and neither promises the
+    // same order twice. An unsorted report makes two runs of the same board
+    // undiffable and leaves anything that consumes the list - a repair pass, a
+    // regression baseline - reading noise.
+    violations.sort_by_key(|v| {
+        (
+            v.kind as u8,
+            v.location.x.0,
+            v.location.y.0,
+            v.entity.index(),
+            v.other_entity.map_or(u32::MAX, |e| e.index()),
+        )
+    });
+
     // Enrich violation messages with entity names (refdes, net, pad info).
     // Build lookups from ECS once, then annotate all violations.
     enrich_violation_messages(&mut violations, world);

@@ -33,7 +33,12 @@ use serde::{Deserialize, Serialize};
 /// assert!(inner.is_copper());
 /// assert!(!Layer::TopSilk.is_copper());
 /// ```
-#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+// Ord gives a stable order to sort layers by. Entity spawn order decides
+// entity IDs, which decide what DRC reports first, so anything that spawns per
+// layer needs a total order rather than a hash map's.
+#[derive(
+    Component, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
+)]
 pub enum Layer {
     /// Top copper layer (component side).
     TopCopper,

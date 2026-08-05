@@ -136,8 +136,19 @@ pub fn apply_routes(world: &mut BoardWorld, result: &RoutingResult) {
         trace_widths.entry(key).or_insert(segment.width);
     }
 
-    // Create Trace entities
-    for ((net_id, layer), segments) in traces_by_key {
+    // Create Trace entities, lowest net then lowest layer first.
+    //
+    // Spawn order decides entity IDs, and entity IDs decide the order the
+    // spatial index is built in, which decides which of two overlapping
+    // features DRC names first and what coordinate it reports. Draining a
+    // HashMap here made the same board produce a different DRC report on every
+    // run - 308 violations both times, 152 of the printed lines different.
+    let mut trace_keys: Vec<_> = traces_by_key.keys().copied().collect();
+    trace_keys.sort_by_key(|(net_id, layer)| (net_id.id(), *layer));
+
+    for key in trace_keys {
+        let (net_id, layer) = key;
+        let segments = traces_by_key.remove(&key).expect("key came from the map");
         let width = trace_widths[&(net_id, layer)];
 
         let trace = Trace {
@@ -239,6 +250,58 @@ mod tests {
         assert_eq!(trace.layer, Layer::TopCopper);
         assert_eq!(trace.source, TraceSource::Autorouted);
         assert!(!trace.locked);
+    }
+
+    #[test]
+    fn traces_are_spawned_in_a_fixed_order() {
+        // Entity IDs come from spawn order, and DRC's report - which of two
+        // features it names first, and the coordinate it prints - follows
+        // entity IDs. Grouping by net and layer in a HashMap and draining it
+        // made the same board report differently on every run, so the spawn
+        // order has to be a total order over (net, layer).
+        let mut world = BoardWorld::new();
+        let vcc = world.intern_net("VCC");
+        let gnd = world.intern_net("GND");
+        let sig = world.intern_net("SIG");
+
+        let segment = |net, layer| {
+            RouteSegment::new(
+                net,
+                layer,
+                Nm::from_mm(0.2),
+                Point::from_mm(0.0, 0.0),
+                Point::from_mm(1.0, 0.0),
+            )
+        };
+
+        // Deliberately out of order on the way in.
+        let routes = vec![
+            segment(sig, Layer::BottomCopper),
+            segment(gnd, Layer::TopCopper),
+            segment(sig, Layer::TopCopper),
+            segment(vcc, Layer::BottomCopper),
+            segment(vcc, Layer::TopCopper),
+        ];
+
+        apply_routes(&mut world, &RoutingResult::complete(routes, Vec::new()));
+
+        let ecs = world.ecs_mut();
+        let mut query = ecs.query::<(Entity, &Trace)>();
+        let mut spawned: Vec<_> = query.iter(ecs).collect();
+        spawned.sort_by_key(|(entity, _)| entity.index());
+
+        let order: Vec<_> = spawned
+            .iter()
+            .map(|(_, trace)| (trace.net_id.id(), trace.layer))
+            .collect();
+
+        let mut expected = order.clone();
+        expected.sort();
+        assert_eq!(
+            order, expected,
+            "traces must spawn in (net, layer) order, got {order:?}"
+        );
+        assert_eq!(order.len(), 5);
     }
 
     #[test]
