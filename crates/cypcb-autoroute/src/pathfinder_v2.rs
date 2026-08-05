@@ -303,6 +303,16 @@ pub fn pathfinder_loop(
             let connections = build_spanning_tree(&net.pads);
             let net_pad_zones = &pad_zones_per_net[net_idx];
 
+            // A via's ring plus the clearance and half the trace that meets it:
+            // the radius the next net has to stay outside of.
+            let constraints = rules.constraints_for_net(net_id);
+            let via_keepout_nm = constraints.min_via_drill.raw() / 2
+                + constraints.min_via_annular_ring.raw()
+                + constraints.min_clearance.raw()
+                + constraints.min_trace_width.raw() / 2;
+            let via_radius_cells =
+                ((via_keepout_nm + grid.resolution() - 1) / grid.resolution()).max(0) as u32;
+
             let mut net_path_cells: Vec<(u32, u32, u8)> = Vec::new();
             let mut net_paths: Vec<Vec<GridNode>> = Vec::new();
             let mut net_ok = true;
@@ -333,6 +343,19 @@ pub fn pathfinder_loop(
                         // Collect cells for this path
                         for node in &p {
                             net_path_cells.push((node.0 as u32, node.1 as u32, node.2));
+                        }
+                        // Wherever the path changes layer there is a via, and a
+                        // via is far wider than the single cell the path marks.
+                        for pair in p.windows(2) {
+                            let (a, b) = (pair[0], pair[1]);
+                            if a.2 != b.2 && a.0 == b.0 && a.1 == b.1 {
+                                net_path_cells.extend(grid.via_footprint_cells(
+                                    a.0 as u32,
+                                    a.1 as u32,
+                                    (a.2, b.2),
+                                    via_radius_cells,
+                                ));
+                            }
                         }
                         net_paths.push(p);
                     }

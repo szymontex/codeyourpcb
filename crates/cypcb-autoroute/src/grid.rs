@@ -517,6 +517,50 @@ impl RoutingGrid {
         marked
     }
 
+    /// The cells a via's copper covers on both of the layers it joins.
+    ///
+    /// A path marks one cell where it changes layer, but a via's ring is far
+    /// bigger than a cell - 0.554mm against 0.0635mm for JLCPCB, about nine
+    /// cells across. Handing these cells to the congestion map lets other nets
+    /// see the ring and price it, without blocking the board outright.
+    pub fn via_footprint_cells(
+        &self,
+        x: u32,
+        y: u32,
+        layers: (u8, u8),
+        radius: u32,
+    ) -> Vec<(u32, u32, u8)> {
+        let mut marked = Vec::new();
+        let r = radius as i64;
+        let r_sq = r * r;
+
+        for layer in [layers.0, layers.1] {
+            let li = layer as usize;
+            if li >= self.layers.len() {
+                continue;
+            }
+            let min_x = (x as i64 - r).max(0) as u32;
+            let max_x = ((x as i64 + r) as u32).min(self.width.saturating_sub(1));
+            let min_y = (y as i64 - r).max(0) as u32;
+            let max_y = ((y as i64 + r) as u32).min(self.height.saturating_sub(1));
+
+            for cy in min_y..=max_y {
+                let dy = cy as i64 - y as i64;
+                for cx in min_x..=max_x {
+                    let dx = cx as i64 - x as i64;
+                    if dx * dx + dy * dy > r_sq {
+                        continue; // Outside the ring
+                    }
+                    marked.push((cx, cy, layer));
+                }
+            }
+        }
+
+        marked.sort_unstable();
+        marked.dedup();
+        marked
+    }
+
     /// Clear a known set of cells belonging to a net (for rip-up).
     ///
     /// Equivalent to [`clear_route`](RoutingGrid::clear_route) when the caller

@@ -112,7 +112,16 @@ Read this file first. It is the source of truth for what is in flight and what c
 
   All three still complete, and with *more* copper laid, so this is not the router winning by giving up. multi_ic composite 426,138 -> 338,113. Ratchets tightened to the new numbers.
 - **Third failed experiment:** reserving the full trace footprint at marking time (every cell within `trace_width/2 + clearance/2` of a path node, via the occupancy mechanism rather than a veto). led_blink went 3 -> 4 violations, 22 -> 20 routes. Same outcome as both veto attempts. The reservation is right in principle but it fights the A* cost model, which still plans on centre lines; whoever picks this up needs to change both together, or nothing.
-- NEXT-ACTION: 299 and 297 are still hundreds of shorts. The next measurement is which *kind*: dump the remaining violations on stm32_breakout grouped by whether both sides are traces, trace-to-via, or trace-to-pad. The pad case just moved, so the mix has changed and the next fix should follow the biggest group.
+- DONE: classified the remaining violations and followed the biggest group. On stm32_breakout: 114 trace-trace, 114 trace-via, 19 pad-trace, 35 via-via - **over half involve a via**, and 243 of 285 sit at exactly 0.00mm. The grid marked a via as a single cell while its ring is 0.554mm across, about nine cells, so other nets routed straight through it. Feeding the via's real footprint to the **congestion map** - as cost, through occupancy - rather than blocking those cells:
+
+| fixture | before | after | unrouted |
+|---|---|---|---|
+| led_blink | 2 | **1** | 0 |
+| stm32_breakout | 299 | **238** | 0 |
+| multi_ic | 297 | **240** | 0 |
+
+  **This is the answer to three failed experiments.** Blocking cells (the two vetoes and the trace-footprint reservation) always traded completeness for correctness; the hard-blocked version of this very change left stm32_breakout with 6 unrouted connections. The same geometry expressed as a price the router can negotiate keeps every board complete and still removes a fifth of the violations. Ratchets tightened to 1/238/240.
+- NEXT-ACTION: apply the same treatment to trace width - trace-trace is now the biggest group at 114 and 135. Feed each routed path's real width into the congestion map the way the via footprint now is, and measure. If it holds, the "reserve the footprint" idea finally lands, on the side where it works.
 - QUEUED: routing stm32_breakout takes about two minutes. Same treatment as blink - probe where it goes before optimizing.
 - QUEUED: WASM size breakdown (`twiggy top`, 702,357 bytes today), render frame time on the largest example, allocation counts in the DRC hot loop.
 
