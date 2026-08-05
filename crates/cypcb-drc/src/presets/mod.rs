@@ -83,6 +83,7 @@ use cypcb_rules::DesignConstraints;
 ///     min_edge_clearance: Nm::from_mm(0.5),
 ///     min_hole_to_hole: Nm::from_mm(0.5),
 ///     min_solder_mask_bridge: Nm::from_mm(0.1),
+///     solder_mask_expansion: Nm::from_mm(0.05),
 ///     min_silk_clearance: Nm::from_mm(0.15),
 ///     min_courtyard_clearance: Nm::from_mm(0.25),
 /// };
@@ -109,6 +110,8 @@ pub struct DesignRules {
     pub min_hole_to_hole: Nm,
     /// Minimum solder mask bridge between pads.
     pub min_solder_mask_bridge: Nm,
+    /// How far the mask opening extends beyond the pad on every side.
+    pub solder_mask_expansion: Nm,
     /// Minimum silkscreen to copper pad clearance.
     pub min_silk_clearance: Nm,
     /// Minimum courtyard clearance between components.
@@ -141,6 +144,7 @@ impl DesignRules {
             min_edge_clearance: c.min_edge_clearance,
             min_hole_to_hole: Nm::from_mm(0.5),
             min_solder_mask_bridge: c.min_solder_mask_bridge,
+            solder_mask_expansion: c.solder_mask_expansion,
             min_silk_clearance: c.min_silk_width,
             min_courtyard_clearance: Nm::from_mm(0.25),
         }

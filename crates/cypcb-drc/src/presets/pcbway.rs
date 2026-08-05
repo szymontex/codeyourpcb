@@ -85,6 +85,7 @@ impl DesignRules {
             min_edge_clearance: Nm::from_mm(0.5),
             min_hole_to_hole: Nm::from_mm(0.6),
             min_solder_mask_bridge: Nm::from_mm(0.15),
+            solder_mask_expansion: Nm::from_mm(0.075),
             min_silk_clearance: Nm::from_mm(0.2),
             min_courtyard_clearance: Nm::from_mm(0.5),
         }

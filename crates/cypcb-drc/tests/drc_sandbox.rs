@@ -904,7 +904,7 @@ mod solder_mask {
     use super::*;
 
     #[test]
-    fn stub_returns_no_violations() {
+    fn empty_board_has_no_mask_bridges() {
         let mut world = world_with_board();
         rebuild_spatial(&mut world, vec![]);
         assert_eq!(
@@ -914,6 +914,24 @@ mod solder_mask {
                 ViolationKind::SolderMaskBridge
             ),
             0
+        );
+    }
+
+    #[test]
+    fn parts_placed_on_top_of_each_other_bridge() {
+        let mut world = world_with_board();
+        let net = world.intern_net("SIG");
+        // 0402 pads are 0.6mm wide on a 1.0mm span; half a millimetre apart the
+        // facing openings overlap outright.
+        spawn_component(&mut world, "R1", (10.0, 15.0), net, net);
+        spawn_component(&mut world, "R2", (10.5, 15.0), net, net);
+        rebuild_spatial(&mut world, vec![]);
+        assert!(
+            count_violations(
+                &mut world,
+                &DesignRules::jlcpcb_2layer(),
+                ViolationKind::SolderMaskBridge
+            ) > 0
         );
     }
 }
