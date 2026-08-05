@@ -92,7 +92,17 @@ Read this file first. It is the source of truth for what is in flight and what c
 | multi_ic | 833 | **383** | 358 | 15 | 10 |
 
   The CI gate only ever looked at led_blink, so a router that produces hundreds of 0.00mm shorts on a realistic board looked healthy. `benchmark_all_fixtures_drc` now routes all three and ratchets each one; it is `#[ignore]`d because the two big fixtures take about two minutes each, and `scripts/quality-gate.sh` runs it explicitly in the benchmark stage.
-- NEXT-ACTION: 273 and 358 clearance violations, nearly all at 0.00mm, on boards that converge with zero shared cells. That is the neighbouring-cell overlap at scale. The measurement to take before coding: how many of them disappear if the grid resolution drops to a third of min_clearance instead of a half - it is a one-line change to `resolve_grid_resolution` and it says whether the geometry or the cost model is the problem.
+- **Measured: a finer grid is not the answer.** Routing led_blink at four resolutions, with everything else held:
+
+| resolution | routes | unrouted | DRC | length | time |
+|---|---|---|---|---|---|
+| 63.5µm (default, clearance/2) | 22 | 0 | 3 | 79.61mm | 0.42s |
+| 42.3µm (clearance/3) | 50 | 0 | 2 | 79.60mm | 0.93s |
+| 31.8µm (clearance/4) | 47 | 0 | 3 | 79.57mm | 1.65s |
+| 21.2µm (clearance/6) | 11 | **2** | 0 | 32.50mm | 1.94s |
+
+  Violations do not fall as cells shrink, and the finest grid only reaches zero by abandoning connections - exactly what the completeness gate exists to catch. So the geometry of the grid is not the problem: **a route marks one cell per path node regardless of how wide the trace actually is**. At 63.5µm cells a 0.127mm trace covers two of them, one gets marked, and the neighbouring net legally takes the other.
+- NEXT-ACTION: mark the trace's real footprint. Reserve every cell within `trace_width/2 + min_clearance/2` of a path node for the routing net, through the existing occupancy mechanism rather than a veto - the net's own cells stay usable by it (`net_at == Some(net_id)` already allows that), rip-up already clears recorded cells, and congestion accounting stays honest. This is what the failed veto experiments were reaching for, applied at marking time where it belongs.
 - QUEUED: routing stm32_breakout takes about two minutes. Same treatment as blink - probe where it goes before optimizing.
 - QUEUED: WASM size breakdown (`twiggy top`, 702,357 bytes today), render frame time on the largest example, allocation counts in the DRC hot loop.
 
