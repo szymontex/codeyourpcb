@@ -1461,6 +1461,72 @@ mod tests {
     }
 
     #[test]
+    fn two_traces_meeting_corner_to_corner_are_one_violation() {
+        // The pad case is only half the shape. `per_segment_to_trace` pairs
+        // every segment of one trace against every segment of the other, so
+        // two bends facing each other can report the same gap up to four
+        // times - once per pair of segments that finds the corner nearest.
+        let mut world = BoardWorld::new();
+
+        let lower = Trace {
+            segments: vec![
+                TraceSegment::new(Point::from_mm(-0.5, 0.5), Point::from_mm(0.5, 1.0)),
+                TraceSegment::new(Point::from_mm(0.5, 1.0), Point::from_mm(1.5, 0.5)),
+            ],
+            width: Nm::from_mm(0.2),
+            layer: Layer::TopCopper,
+            net_id: NetId::new(1),
+            locked: false,
+            source: TraceSource::Autorouted,
+        };
+        let upper = Trace {
+            segments: vec![
+                TraceSegment::new(Point::from_mm(-0.5, 1.7), Point::from_mm(0.5, 1.2)),
+                TraceSegment::new(Point::from_mm(0.5, 1.2), Point::from_mm(1.5, 1.7)),
+            ],
+            width: Nm::from_mm(0.2),
+            layer: Layer::TopCopper,
+            net_id: NetId::new(2),
+            locked: false,
+            source: TraceSource::Autorouted,
+        };
+
+        let lower_entity = world.ecs_mut().spawn((lower, NetId::new(1))).id();
+        let upper_entity = world.ecs_mut().spawn((upper, NetId::new(2))).id();
+
+        let entries = vec![
+            SpatialEntry::new(
+                lower_entity,
+                Point::from_mm(-0.6, 0.4),
+                Point::from_mm(1.6, 1.1),
+                Layer::TopCopper.to_copper_mask(),
+            ),
+            SpatialEntry::new(
+                upper_entity,
+                Point::from_mm(-0.6, 1.1),
+                Point::from_mm(1.6, 1.8),
+                Layer::TopCopper.to_copper_mask(),
+            ),
+        ];
+        world
+            .ecs_mut()
+            .resource_mut::<cypcb_world::SpatialIndex>()
+            .rebuild(entries);
+
+        let violations = ClearanceRule.check(&mut world, &DesignRules::jlcpcb_2layer());
+
+        assert_eq!(
+            violations.len(),
+            1,
+            "two corners 0.2mm apart are one gap, got {:?}",
+            violations
+                .iter()
+                .map(|v| (v.location.x.to_mm(), v.location.y.to_mm(), &v.message))
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
     fn test_trace_to_pad_no_violation_when_far() {
         // Trace is 2mm from pad — no violation
         let mut world = BoardWorld::new();
