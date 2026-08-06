@@ -53,8 +53,23 @@ fn fingerprint(violation: &cypcb_drc::DrcViolation) -> String {
 #[ignore = "diagnostic: prints the DRC violations behind the benchmark scores"]
 fn report_drc_violations_per_fixture() {
     let drc_rules = DesignRules::jlcpcb_2layer();
-    let config = AutorouteConfig::default();
 
+    // Both settings, because the difference between them is the question the
+    // tracker is on: reserving a trace's copper wins the two dense boards and
+    // costs the small one two violations, and a count cannot say whether those
+    // two are a real regression.
+    let configs = [
+        ("default", AutorouteConfig::default()),
+        (
+            "reserved copper",
+            AutorouteConfig {
+                reserve_trace_footprint: true,
+                ..AutorouteConfig::default()
+            },
+        ),
+    ];
+
+    for (label, config) in &configs {
     for benchmark in BENCHMARKS {
         let parsed = parse_kicad_pcb(&fixture_path(benchmark.filename))
             .unwrap_or_else(|e| panic!("Failed to parse {}: {:?}", benchmark.filename, e));
@@ -72,7 +87,7 @@ fn report_drc_violations_per_fixture() {
         }
         let baseline: BTreeSet<String> = before.violations.iter().map(fingerprint).collect();
 
-        let result = route_board(&mut world, &library, &test_rules(), &config);
+        let result = route_board(&mut world, &library, &test_rules(), config);
         apply_routes(&mut world, &result);
         world.rebuild_spatial_index_from_library(&library);
 
@@ -87,8 +102,9 @@ fn report_drc_violations_per_fixture() {
 
         eprintln!();
         eprintln!(
-            "=== {} - {:?}, {} routes, {} violations before routing, {} after, {} introduced ===",
+            "=== {} [{}] - {:?}, {} routes, {} violations before routing, {} after, {} introduced ===",
             benchmark.filename,
+            label,
             result.status,
             result.route_count(),
             baseline.len(),
@@ -116,5 +132,6 @@ fn report_drc_violations_per_fixture() {
         for (kind, count) in &by_kind {
             eprintln!("  {:<20} {}", kind, count);
         }
+    }
     }
 }

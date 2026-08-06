@@ -15,7 +15,7 @@ use serde::Serialize;
 use cypcb_core::Nm;
 use cypcb_drc::DesignRules;
 use cypcb_router::apply_routes;
-use cypcb_router::types::{RouteSegment, RoutingResult, ViaPlacement};
+use cypcb_router::types::{RouteSegment, RoutingResult, RoutingStatus, ViaPlacement};
 use cypcb_rules::RoutingRuleSet;
 use cypcb_world::footprint::FootprintLibrary;
 use cypcb_world::BoardWorld;
@@ -67,6 +67,15 @@ pub struct VariantResult {
     pub routes: Vec<RouteSegment>,
     /// Via placements produced by this variant.
     pub vias: Vec<ViaPlacement>,
+    /// Connections this variant gave up on.
+    ///
+    /// Ranking cannot be left to the score alone: an abandoned connection
+    /// removes copper, and copper is what earns violations and length, so a
+    /// variant that quits on three nets outscores one that routes them. It was
+    /// not hypothetical - `PathFinder Reserved Copper` won stm32_breakout
+    /// while leaving 3 connections unrouted, and the score said 162,588
+    /// against 287,564 as though that were the better board.
+    pub unrouted: usize,
 }
 
 /// Return the default set of variant configurations.
@@ -243,17 +252,28 @@ pub fn generate_variants(
             score,
             routes,
             vias,
+            unrouted: match routing_result.status {
+                RoutingStatus::Partial { unrouted_count } => unrouted_count,
+                _ => 0,
+            },
         });
 
         drop(variant_span);
     }
 
-    // Sort by composite score ascending (best = lowest first)
+    // A complete board outranks an incomplete one whatever it scores, and
+    // among incomplete ones fewer abandoned connections wins. Only then does
+    // the composite decide. The alternative is a ranking that rewards giving
+    // up, which is the same defect the CI regression gate was fixed for.
     results.sort_by(|a, b| {
-        a.score
-            .composite
-            .partial_cmp(&b.score.composite)
-            .unwrap_or(std::cmp::Ordering::Equal)
+        a.unrouted
+            .cmp(&b.unrouted)
+            .then_with(|| {
+                a.score
+                    .composite
+                    .partial_cmp(&b.score.composite)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
     });
 
     // Apply the best variant to the world
@@ -411,6 +431,7 @@ mod tests {
                 cypcb_core::Point::from_mm(5.0, 5.0),
                 Nm::from_mm(0.3),
             )],
+            unrouted: 0,
         };
 
         let json = serde_json::to_string(&result).expect("VariantResult should serialize");
@@ -436,6 +457,7 @@ mod tests {
                 },
                 routes: vec![],
                 vias: vec![],
+                unrouted: 0,
             },
             VariantResult {
                 name: "B".to_string(),
@@ -450,6 +472,7 @@ mod tests {
                 },
                 routes: vec![],
                 vias: vec![],
+                unrouted: 0,
             },
         ];
 

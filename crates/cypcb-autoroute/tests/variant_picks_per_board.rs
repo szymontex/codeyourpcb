@@ -58,6 +58,18 @@ fn which_variant_each_board_picks() {
             .iter()
             .find(|r| r.name == "PathFinder Default")
             .expect("the baseline variant is in the list");
+        // A winner that abandoned connections is not a winner. The scorer
+        // measures the board that exists, and a net nobody routed leaves no
+        // copper to charge for.
+        assert_eq!(
+            winner.unrouted, 0,
+            "best-of-{} on {} picked {} with {} unrouted connections",
+            results.len(),
+            benchmark.filename,
+            winner.name,
+            winner.unrouted
+        );
+
         assert!(
             winner.score.composite <= default.score.composite,
             "best-of-{} scored worse than routing once on {}: {:.1} against {:.1}",
@@ -71,13 +83,14 @@ fn which_variant_each_board_picks() {
         // winner to the world.
         for (rank, result) in results.iter().enumerate() {
             eprintln!(
-                "  {}. {:<32} composite {:>8.1}, drc {:>4}, vias {:>4}, {:.1}mm",
+                "  {}. {:<32} composite {:>8.1}, drc {:>4}, vias {:>4}, {:.1}mm, {} unrouted",
                 rank + 1,
                 result.name,
                 result.score.composite,
                 result.score.drc_violations,
                 result.score.via_count,
                 result.score.total_length.to_mm(),
+                result.unrouted,
             );
         }
     }
