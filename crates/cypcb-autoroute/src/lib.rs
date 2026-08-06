@@ -169,6 +169,18 @@ pub struct AutorouteConfig {
     /// can pay for the copper it adds.
     pub pad_zone_blocks_foreign_copper: bool,
 
+    /// Whether a routed trace reserves the copper it covers, or only the
+    /// centre line the search walked.
+    ///
+    /// A minimum-width trace is 0.127mm on a 0.254mm cell, so the cell beside
+    /// a marked one reads as free while the copper in it is touching. Marking
+    /// the cells around each node closes that, and the measurement says it is
+    /// a per-board trade rather than a default: on multi_ic the introduced
+    /// violations fall from 143 to 64 and the routing gets 6 seconds faster,
+    /// while led_blink goes from 2 to 4 - which is why it is a variant the
+    /// scorer can pick rather than a rule every board obeys.
+    pub reserve_trace_footprint: bool,
+
     /// Whether to smooth the grid paths into diagonals before emitting them.
     ///
     /// On by default: raw grid output is a staircase, which is longer, uglier
@@ -211,6 +223,7 @@ impl Default for AutorouteConfig {
             params: AutorouteParams::default(),
             via_ring_penalty: 0.0,
             pad_zone_blocks_foreign_copper: false,
+            reserve_trace_footprint: false,
             smoothing: true,
             stagnation_limit: 3,
             repair_passes: 0,

@@ -37,6 +37,9 @@ pub struct VariantConfig {
     pub via_ring_penalty: f64,
     /// Whether a route may cross another net's copper inside a pad keepout.
     pub pad_zone_blocks_foreign_copper: bool,
+    /// Whether a routed trace reserves the copper it covers, not just its
+    /// centre line.
+    pub reserve_trace_footprint: bool,
 }
 
 impl VariantConfig {
@@ -48,6 +51,7 @@ impl VariantConfig {
             params,
             via_ring_penalty: 0.0,
             pad_zone_blocks_foreign_copper: false,
+            reserve_trace_footprint: false,
         }
     }
 }
@@ -107,6 +111,7 @@ pub fn default_variant_configs() -> Vec<VariantConfig> {
             params: AutorouteParams::default(),
             via_ring_penalty: 3.0,
             pad_zone_blocks_foreign_copper: false,
+            reserve_trace_footprint: false,
         },
         VariantConfig {
             name: "PathFinder Guarded Pads".to_string(),
@@ -117,6 +122,20 @@ pub fn default_variant_configs() -> Vec<VariantConfig> {
             },
             via_ring_penalty: 0.0,
             pad_zone_blocks_foreign_copper: true,
+            reserve_trace_footprint: false,
+        },
+        // A trace is narrower than a cell, so the grid can call a cell free
+        // while the copper in it is touching a neighbour's. Reserving the
+        // cells around each node closes that, at the price of the space it
+        // takes: measured a large win on the dense board and a loss on the
+        // small one, which is what a variant is for.
+        VariantConfig {
+            name: "PathFinder Reserved Copper".to_string(),
+            strategy: StrategyKind::PathFinder,
+            params: AutorouteParams::default(),
+            via_ring_penalty: 0.0,
+            pad_zone_blocks_foreign_copper: false,
+            reserve_trace_footprint: true,
         },
     ]
 }
@@ -177,6 +196,7 @@ pub fn generate_variants(
             params: config.params.clone(),
             via_ring_penalty: config.via_ring_penalty,
             pad_zone_blocks_foreign_copper: config.pad_zone_blocks_foreign_copper,
+            reserve_trace_footprint: config.reserve_trace_footprint,
             // Variant exploration compares many routings; paying for repair on
             // each one triples the wall clock to rank candidates that are about
             // to be thrown away. The winner can be repaired afterwards.

@@ -422,10 +422,25 @@ pub fn pathfinder_loop(
 
                 match path {
                     Some(p) => {
-                        // Collect cells for this path
-                        for node in &p {
-                            net_path_cells.push((node.0 as u32, node.1 as u32, node.2));
-                            net_trace_cells.push((node.0 as u32, node.1 as u32, node.2));
+                        // Reserve the copper the trace actually covers, not
+                        // the centre line the search walked. A minimum-width
+                        // trace is 0.127mm on a 0.254mm cell, so the cell next
+                        // to a marked one is free as far as the grid knows and
+                        // the two nets' copper ends up touching - which is what
+                        // 176 of stm32_breakout's 238 clearance violations are.
+                        // The returned cells go into net_path_cells so rip-up
+                        // clears them; a cell marked and not recorded is a
+                        // permanent wall.
+                        if config.reserve_trace_footprint {
+                            for cell in grid.mark_route_footprint(&p, net_id, 1) {
+                                net_path_cells.push(cell);
+                                net_trace_cells.push(cell);
+                            }
+                        } else {
+                            for node in &p {
+                                net_path_cells.push((node.0 as u32, node.1 as u32, node.2));
+                                net_trace_cells.push((node.0 as u32, node.1 as u32, node.2));
+                            }
                         }
                         // Wherever the path changes layer there is a via, and a
                         // via is far wider than the single cell the path marks.
