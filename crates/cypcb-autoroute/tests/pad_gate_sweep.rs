@@ -1,4 +1,5 @@
-//! Can the cost model pay for closing the pad-zone gate?
+//! Can the cost model pay for closing the pad-zone gate, and what does a via
+//! ring cost when the search can finally see it?
 //!
 //! `cargo test -p cypcb-autoroute --test pad_gate_sweep -- --ignored --nocapture`
 //!
@@ -41,7 +42,7 @@ fn fingerprint(violation: &cypcb_drc::DrcViolation) -> String {
 
 #[test]
 #[ignore = "diagnostic: sweeps the pad-zone gate against the price of a via"]
-fn what_a_cheaper_via_buys_the_closed_gate() {
+fn what_a_priced_via_ring_buys() {
     let drc_rules = DesignRules::jlcpcb_2layer();
 
     for benchmark in BENCHMARKS {
@@ -49,7 +50,8 @@ fn what_a_cheaper_via_buys_the_closed_gate() {
         eprintln!("=== {} ===", benchmark.filename);
 
         for gate_closed in [false, true] {
-            for via_cost in [0.25f64, 0.5, 1.0] {
+            for ring_penalty in [0.0f64, 1.0, 3.0] {
+                let via_cost = 1.0f64;
                 let parsed = parse_kicad_pcb(&fixture_path(benchmark.filename))
                     .unwrap_or_else(|e| panic!("Failed to parse {}: {:?}", benchmark.filename, e));
                 let mut world = parsed.world;
@@ -63,6 +65,7 @@ fn what_a_cheaper_via_buys_the_closed_gate() {
                     .collect();
 
                 let config = AutorouteConfig {
+                    via_ring_penalty: ring_penalty,
                     pad_zone_blocks_foreign_copper: gate_closed,
                     params: AutorouteParams {
                         via_cost,
@@ -88,9 +91,9 @@ fn what_a_cheaper_via_buys_the_closed_gate() {
                     |kind: ViolationKind| introduced.iter().filter(|v| v.kind == kind).count();
 
                 eprintln!(
-                    "  gate {:>6}, via {:>4}: {:?}, {} routes, {} introduced (clearance {}, edge {}, hole {}), {:.1}s",
+                    "  gate {:>6}, ring {:>3}: {:?}, {} routes, {} introduced (clearance {}, edge {}, hole {}), {:.1}s",
                     if gate_closed { "closed" } else { "open" },
-                    via_cost,
+                    ring_penalty,
                     result.status,
                     result.route_count(),
                     introduced.len(),

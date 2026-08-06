@@ -37,6 +37,20 @@ pub struct CongestionMap {
 
     /// Cell capacity (typically 1 for PCB routing — one net per cell).
     capacity: u16,
+
+    /// How many via rings cover each cell: `[layer][y * width + x]`.
+    ///
+    /// Separate from `occupancy` because a ring is copper the search cannot
+    /// see. `via_footprint_cells` has always fed the congestion map, but a
+    /// cell occupied once costs nothing - the formula charges for overuse, not
+    /// for presence - so a route could cross a ring for free until a later
+    /// iteration built history on it.
+    ring: Vec<Vec<u16>>,
+
+    /// What a cell costs per ring covering it.
+    ///
+    /// Zero reproduces the behaviour before rings were priced.
+    ring_penalty: f64,
 }
 
 impl CongestionMap {
@@ -54,6 +68,31 @@ impl CongestionMap {
             history_cost: (0..layers).map(|_| vec![0.0; cell_count]).collect(),
             occupancy: (0..layers).map(|_| vec![0u16; cell_count]).collect(),
             capacity: 1,
+            ring: (0..layers).map(|_| vec![0u16; cell_count]).collect(),
+            ring_penalty: 0.0,
+        }
+    }
+
+    /// Set what a cell costs per via ring covering it.
+    pub fn set_ring_penalty(&mut self, penalty: f64) {
+        self.ring_penalty = penalty;
+    }
+
+    /// Record the cells a net's via rings cover.
+    pub fn mark_rings(&mut self, cells: &[(u32, u32, u8)]) {
+        for &(x, y, layer) in cells {
+            if let Some(idx) = self.cell_index(x, y, layer) {
+                self.ring[layer as usize][idx] = self.ring[layer as usize][idx].saturating_add(1);
+            }
+        }
+    }
+
+    /// Forget the cells a net's via rings covered, before ripping it up.
+    pub fn unmark_rings(&mut self, cells: &[(u32, u32, u8)]) {
+        for &(x, y, layer) in cells {
+            if let Some(idx) = self.cell_index(x, y, layer) {
+                self.ring[layer as usize][idx] = self.ring[layer as usize][idx].saturating_sub(1);
+            }
         }
     }
 
@@ -118,7 +157,8 @@ impl CongestionMap {
         } else {
             0.0
         };
-        (1.0 + history) * (1.0 + overuse) - 1.0
+        let rings = self.ring[li][idx] as f64;
+        (1.0 + history) * (1.0 + overuse) - 1.0 + self.ring_penalty * rings
     }
 
     /// Return a list of all overused cells (occupancy > capacity).

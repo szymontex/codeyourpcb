@@ -283,6 +283,7 @@ pub fn pathfinder_loop(
 
     // Initialize congestion map
     let mut congestion_map = CongestionMap::new(width, height, layers);
+    congestion_map.set_ring_penalty(config.via_ring_penalty);
 
     // Per-net cell index: net_id -> cells occupied by this net.
     // Enables O(path_length) rip-up instead of scanning the entire grid.
@@ -312,6 +313,8 @@ pub fn pathfinder_loop(
     let stagnation_limit = config.stagnation_limit;
     // Path cells per net, rings excluded, for reporting contested copper.
     let mut trace_cells: HashMap<u32, Vec<(u32, u32, u8)>> = HashMap::new();
+    // Ring cells per net, so a rip-up takes its rings' price with it.
+    let mut ring_cells: HashMap<u32, Vec<(u32, u32, u8)>> = HashMap::new();
     let mut best_overused = usize::MAX;
     let mut iterations_without_progress = 0u32;
 
@@ -362,6 +365,9 @@ pub fn pathfinder_loop(
             // grid for the net id (clear_route) does the same work in
             // width * height * layers steps per rip-up, and PathFinder rips up
             // most nets on every iteration.
+            if let Some(rings) = ring_cells.remove(&net_id) {
+                congestion_map.unmark_rings(&rings);
+            }
             if let Some(cells) = net_cells.remove(&net_id) {
                 congestion_map.unmark_net(&cells);
                 grid.clear_cells(&cells, net_id);
@@ -388,6 +394,7 @@ pub fn pathfinder_loop(
             // on copper; two nets sharing a ring cell is not, and mixing them
             // is what made the overuse figure unreadable.
             let mut net_trace_cells: Vec<(u32, u32, u8)> = Vec::new();
+            let mut net_ring_cells: Vec<(u32, u32, u8)> = Vec::new();
             let mut net_paths: Vec<Vec<GridNode>> = Vec::new();
             let mut net_ok = true;
 
@@ -425,12 +432,14 @@ pub fn pathfinder_loop(
                         for pair in p.windows(2) {
                             let (a, b) = (pair[0], pair[1]);
                             if a.2 != b.2 && a.0 == b.0 && a.1 == b.1 {
-                                net_path_cells.extend(grid.via_footprint_cells(
+                                let ring = grid.via_footprint_cells(
                                     a.0 as u32,
                                     a.1 as u32,
                                     (a.2, b.2),
                                     via_radius_cells,
-                                ));
+                                );
+                                net_ring_cells.extend(ring.iter().copied());
+                                net_path_cells.extend(ring);
                             }
                         }
                         net_paths.push(p);
@@ -473,10 +482,14 @@ pub fn pathfinder_loop(
             net_path_cells.dedup();
             net_trace_cells.sort_unstable();
             net_trace_cells.dedup();
+            net_ring_cells.sort_unstable();
+            net_ring_cells.dedup();
 
             if net_ok && !connections.is_empty() {
                 // Update congestion map with this net's cells
                 congestion_map.mark_net(&net_path_cells);
+                congestion_map.mark_rings(&net_ring_cells);
+                ring_cells.insert(net_id, net_ring_cells);
                 trace_cells.insert(net_id, net_trace_cells);
                 net_cells.insert(net_id, net_path_cells);
                 routed_paths.insert(net_id, net_paths);

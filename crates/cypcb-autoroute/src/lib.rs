@@ -146,6 +146,18 @@ pub struct AutorouteConfig {
     /// 0.05mm overlap moves the route further than the problem.
     pub repair_passes: u32,
 
+    /// What a cell costs the search for each via ring covering it.
+    ///
+    /// A via's ring is copper roughly 0.55mm across against a 0.254mm cell,
+    /// and the search has never been able to see it: `via_footprint_cells`
+    /// feeds the congestion map, where a cell occupied once costs nothing
+    /// because the formula charges for overuse rather than presence. So a
+    /// route crosses a ring for free. Trace-to-via is the largest group of
+    /// 0.00mm overlaps on every benchmark board.
+    ///
+    /// Zero keeps the old behaviour.
+    pub via_ring_penalty: f64,
+
     /// Whether a route may enter a pad's keepout that another net's copper
     /// already occupies.
     ///
@@ -197,6 +209,7 @@ impl Default for AutorouteConfig {
             prefer_top_layer: true,
             strategy: StrategyKind::default(),
             params: AutorouteParams::default(),
+            via_ring_penalty: 0.0,
             pad_zone_blocks_foreign_copper: false,
             smoothing: true,
             stagnation_limit: 3,
