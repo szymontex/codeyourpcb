@@ -16,7 +16,8 @@ use cypcb_autoroute::{route_board, AutorouteConfig};
 use cypcb_export::coords::CoordinateFormat;
 use cypcb_export::excellon::export_excellon;
 use cypcb_export::gerber::{
-    export_copper_layer, export_outline, export_soldermask, MaskPasteConfig, Side,
+    export_copper_layer, export_outline, export_soldermask, export_solderpaste, MaskPasteConfig,
+    Side,
 };
 use cypcb_router::apply_routes;
 use cypcb_rules::presets::{PresetRuleSet, RulesPreset};
@@ -328,5 +329,58 @@ fn every_pad_gets_an_opening_in_the_soldermask() {
     assert!(
         widest_opening > widest_pad,
         "the mask opening ({widest_opening}mm) has to be wider than the pad ({widest_pad}mm)"
+    );
+}
+
+#[test]
+fn the_paste_stencil_sits_on_the_pads_and_can_be_made_smaller_than_them() {
+    // A stencil aperture cut to pad size deposits as much solder as the pad
+    // can hold, which is how a 0402 tombstones: one end wets before the other
+    // and the part stands up. The apertures have to sit on the pads, and the
+    // reduction that keeps them under pad size has to reach the output.
+    let (mut world, library) = load(CUTOUT);
+    let format = CoordinateFormat::FORMAT_MM_2_6;
+
+    let copper =
+        export_copper_layer(&mut world, &library, Layer::TopCopper, &format).expect("top copper");
+    let one_to_one = export_solderpaste(
+        &mut world,
+        &library,
+        Side::Top,
+        &format,
+        &MaskPasteConfig::default(),
+    )
+    .expect("top paste");
+
+    assert_eq!(
+        flashes(&one_to_one),
+        flashes(&copper),
+        "the stencil openings do not sit where the pads do"
+    );
+
+    let reduced = export_solderpaste(
+        &mut world,
+        &library,
+        Side::Top,
+        &format,
+        &MaskPasteConfig::default().with_paste_reduction(0.1),
+    )
+    .expect("top paste, reduced");
+
+    let full = aperture_sizes(&one_to_one)
+        .into_iter()
+        .fold(0.0f64, f64::max);
+    let shrunk = aperture_sizes(&reduced).into_iter().fold(0.0f64, f64::max);
+    assert!(
+        shrunk < full,
+        "a 10% reduction has to make the aperture smaller: {shrunk}mm against {full}mm"
+    );
+
+    // The shipped default is 1:1, which is a fab's choice to make and not a
+    // defect - but it is a choice, so it is asserted rather than assumed.
+    let pad = aperture_sizes(&copper).into_iter().fold(0.0f64, f64::max);
+    assert!(
+        (full - pad).abs() < 1e-9,
+        "the default stencil is cut to pad size: {full}mm against {pad}mm"
     );
 }
