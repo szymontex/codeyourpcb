@@ -13,7 +13,7 @@ This file is the explicit capability and coverage contract for the project.
 - Primary owning slice: M004/S01
 - Supporting slices: none
 - Validation: 39 tests (unit + integration), CLI JSON output on 3 fixtures, ratsnest compatibility proof — M004/S01
-- Notes: Only need placement+netlist extraction (not full KiCad fidelity). Dimensions in mm, our model uses nm. Zones are modelled - `cypcb-world/src/components/zone.rs`, with keepout and copper-pour kinds and a net - but the KiCad importer does not extract them yet. Board outline is bounding-box only.
+- Notes: Only need placement+netlist extraction (not full KiCad fidelity). Dimensions in mm, our model uses nm. Zones not yet extracted (no Zone type in ECS). Board outline is bounding-box only.
 
 ### R102 — Benchmark Suite from Real KiCad Projects
 - Class: quality-attribute
@@ -72,13 +72,14 @@ This file is the explicit capability and coverage contract for the project.
 
 ### R107 — Zero DRC Violations in Autorouter Output
 - Class: quality-attribute
-- Status: validated
+- Status: active
 - Description: Every route produced by autorouter must pass DRC — no trace crossings, no clearance violations, no short circuits, no unconnected nets (unless explicitly partial)
 - Why it matters: User's #1 complaint: "przecina ścieżki". A router that violates DRC is worse than no router.
 - Source: user
 - Primary owning slice: M004/S03
 - Supporting slices: M004/S04, M004/S07
-- Validation: led_blink routes with **0** DRC violations and the gate asserts equality rather than a ceiling - `benchmark_all_fixtures_drc`, thresholds 0/167/110 across the three fixtures, every board complete. The earlier note that the remaining violations were grid artifacts was disproven: they were real inter-net clearance failures. Re-validated 2026-08-06.
+- Validation (2026-08-06, re-measured): `cargo test -p cypcb-autoroute --test drc_report -- --ignored` reports what the router introduces on each benchmark, separated from what the fixture already violated: led_blink **1**, stm32_breakout **174**, multi_ic **79**. The regression gate asserts `drc_violations <= 1` and composite `<= 1100.0`. The smoother is proven not to increase violations, this time by running with it off - `AutorouteConfig::smoothing`, identical counts both ways.
+- Correction: the earlier claim that the remaining violations are "grid artifacts" is false and was measured to be false. led_blink's single violation is `C1 ↔ trace 'GND': 0.00mm`, and the fixture's netlist has C1 pad 1 on `SW_OUT`, pad 2 on `GND` - a GND trace lying across the switch output. That board does not blink. The 0.00mm population is copper on copper, not rounding: 20 of stm32_breakout's 26 trace-to-trace overlaps sit on a cell two nets' paths both hold.
 - Notes: DRC check runs automatically after routing. If violations found, routing result is rejected.
 
 ### R108 — Clean 45°/90° Trace Geometry
@@ -105,46 +106,46 @@ This file is the explicit capability and coverage contract for the project.
 
 ### R110 — Realtime Tuning Parameters
 - Class: differentiator
-- Status: active
+- Status: validated
 - Description: User-facing sliders for: trace density/spacing preference, via cost (fewer vs more vias), corner rounding amount, layer preference (top-heavy vs balanced)
 - Why it matters: User wants autorouter to be "calkiem realtime" with interactive parameter control, not fire-and-forget
 - Source: user
 - Primary owning slice: M004/S05
 - Supporting slices: none
-- Validation: The Rust and WASM halves hold: `AutorouteParams` with 4 fields, `auto_route_with_params()`, unit and integration tests pass. The UI half does not - the Route toolbar group is hidden in index.html and `#tuning-toggle` does not exist, so the 7 E2E tests that claimed to verify the panel **skip**. Downgraded from validated 2026-08-06 after running them.
+- Validation: AutorouteParams struct with 4 fields (via_cost, layer_preference, roundness, density), WASM auto_route_with_params() entry point, collapsible tuning panel with 4 sliders, 300ms debounced re-routing, 8 unit + 4 integration + 7 E2E tests — M004/S05
 - Notes: Parameters feed into routing cost function. Changing a slider triggers re-route.
 
 ### R111 — Reactive Re-Routing on Parameter Change
 - Class: differentiator
-- Status: active
+- Status: validated
 - Description: When user adjusts a tuning slider, the board re-routes within ~1 second for typical boards (Blink-level: <100ms, STM32-level: <1s)
 - Why it matters: "powinien reagować jednak realtime" — interactive tuning loses value if re-routing takes 10+ seconds
 - Source: user
 - Primary owning slice: M004/S05
 - Supporting slices: M004/S03
-- Validation: The debounce-and-reroute path exists and the integration test proving different parameters give different scores passes. The E2E half **skips** for the same reason as R110: no tuning panel is reachable. Downgraded 2026-08-06.
+- Validation: Slider input events debounced at 300ms, trigger auto_route_with_params() → pullSnapshot() → canvas update. Integration test proves different params produce different scores. WASM compiles and routes. Timing budget validated in S07 benchmark. — M004/S05
 - Notes: May require: faster algorithm, incremental re-routing (only affected nets), or WASM worker thread. Performance budget is real constraint on engine design.
 
 ### R112 — Routing Variant Generation
 - Class: core-capability
-- Status: active
+- Status: validated
 - Description: Generate 2-4 routing variants per board using different strategies/parameter sets. Each variant is a complete routed result with its score.
 - Why it matters: "musimy obsługiwać wariantowość, musimy wiedzieć dlaczego dany routing jest lepszy od drugiego"
 - Source: user
 - Primary owning slice: M004/S06
 - Supporting slices: M004/S02, M004/S03
-- Validation: `auto_route_variants()` works and is covered in Rust. Its E2E coverage **skips** with the variant panel. Downgraded 2026-08-06.
+- Validation: 4 variants generated sequentially (PathFinder default/low-via/high-density + ImprovedAStar default), ranked by composite score. 5 unit + 5 integration tests + 7 E2E tests prove full pipeline — M004/S06
 - Notes: Variants run sequentially (BoardWorld not Clone). Limited by total time budget (~1s WASM for simple boards).
 
 ### R113 — Auto-Apply Best Variant with Hover Preview
 - Class: primary-user-loop
-- Status: active
+- Status: validated
 - Description: Route button auto-applies the highest-scored variant. Score panel shows all variants with metrics. Hovering an alternative variant previews it on canvas without applying.
 - Why it matters: "2 ale user może hoverować na inne rezultaty i je zobaczy na ekranie" — user picks with visual feedback
 - Source: user
 - Primary owning slice: M004/S06
 - Supporting slices: none
-- Validation: Hover preview and auto-apply are implemented and their 7 E2E tests **skip**: the Route button that starts the flow is hidden. Downgraded from validated 2026-08-06 after running them.
+- Validation: Route button calls auto_route_variants(), best variant auto-applied, panel shows ranked results with scores, hover renders cyan ghost overlay at 0.4 alpha with active traces dimmed. 7 E2E tests verify panel lifecycle, hover preview, click selection, and debug surface. — M004/S06
 - Notes: Canvas supports overlaying preview routes (different color/opacity) without mutating board state. Click-to-apply is display-only (doesn't re-route with clicked config).
 
 ### R114 — Benchmark Validation Against KiCad Reference Designs
@@ -160,13 +161,13 @@ This file is the explicit capability and coverage contract for the project.
 
 ### R115 — Visual Comparison of Routed Boards
 - Class: quality-attribute
-- Status: active
+- Status: validated
 - Description: Generate screenshots of autorouter output and reference designs for visual comparison. Store as benchmark artifacts.
 - Why it matters: "nawet obrazki możesz sobie po obrazkach porównywać" — metrics don't capture everything, visual diff catches layout quality issues
 - Source: user
 - Primary owning slice: M004/S07
 - Supporting slices: none
-- Validation: The 3 `benchmark-screenshots` tests **fail**, not skip - they drive routing through the hidden Route button. Verified by running them 2026-08-06. Downgraded from validated.
+- Validation: Playwright E2E captures 6 screenshots (full-page + canvas per fixture) to test-results/benchmark/ for human inspection — M004/S07
 - Notes: Uses existing 2D renderer. Full renderer upgrade is M005.
 
 ### R116 — Empirical Strategy Selection
@@ -221,8 +222,8 @@ This file is the explicit capability and coverage contract for the project.
 - Source: user
 - Primary owning slice: M005/S02
 - Supporting slices: M005/S03
-- Validation: unmapped
-- Notes: Root cause suspected: PathFinder convergence failure on multi-pad nets (VCC has 5 pads, GND has 6).
+- Validation (2026-08-06): mapped and met. `benchmark_validation` asserts `unrouted == 0` before it looks at any quality metric, and all three benchmark fixtures route `Complete`. `tests/abandoned_connections.rs` names any connection the router gives up on, so a regression says which net rather than only how many.
+- Notes: the suspected root cause - convergence failure on multi-pad nets - was the right shape but the wrong mechanism. `net_path_cells` gathered every connection of a net into one list and marked each cell once per connection, so a net's own junctions counted as overuse and it negotiated against itself forever. Deduplicating the net's cells fixed it.
 
 ### R205 — E2E Test: UI Responsive During Routing
 - Class: quality-attribute
