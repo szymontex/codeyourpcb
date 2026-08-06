@@ -437,3 +437,82 @@ fn the_pick_and_place_says_where_and_which_way_up() {
         .unwrap_or_else(|| panic!("R1 is missing from the CPL:\n{cpl}"));
     assert!(r1.contains("Top"), "R1 is a top-side part: {r1}");
 }
+
+/// A board whose parts share values on purpose: two 10k resistors that must
+/// group into one line, and one 100nF that must not join them.
+const PURCHASING: &str = r#"version 1
+
+board fab {
+    size 30mm x 20mm
+    layers 2
+}
+
+component R1 resistor "0402" {
+    value 10kohm
+    at 6mm, 10mm
+}
+
+component R2 resistor "0402" {
+    value 10kohm
+    at 14mm, 10mm
+}
+
+component C1 capacitor "0402" {
+    value 100nF
+    at 22mm, 10mm
+}
+"#;
+
+#[test]
+fn the_bom_accounts_for_every_part_exactly_once() {
+    // A purchaser orders from this file. A part missing from it does not get
+    // bought and the board cannot be built; a part counted twice is money
+    // spent on a component nobody needs. Grouping is the point of the file -
+    // two identical resistors are one line of quantity two - so the check is
+    // on the total accounted for, not on the number of lines.
+    use cypcb_export::bom::export_bom_csv;
+
+    let (mut world, _library) = load(PURCHASING);
+    let bom = export_bom_csv(&mut world).expect("bill of materials");
+
+    for refdes in ["R1", "R2", "C1"] {
+        let mentions = bom.matches(refdes).count();
+        assert_eq!(
+            mentions, 1,
+            "{refdes} has to appear exactly once in the BOM:\n{bom}"
+        );
+    }
+
+    // The two resistors share a value and a footprint, so they are one line.
+    let lines: Vec<&str> = bom
+        .lines()
+        .skip(1)
+        .filter(|line| !line.trim().is_empty())
+        .collect();
+    assert_eq!(
+        lines.len(),
+        2,
+        "two 10k resistors group into one line and the capacitor makes two:\n{bom}"
+    );
+
+    let resistors = lines
+        .iter()
+        .find(|line| line.contains("R1"))
+        .expect("the resistor line");
+    assert!(
+        resistors.contains("R2"),
+        "both resistors belong to the same line: {resistors}"
+    );
+    assert!(
+        resistors.contains(",2,") || resistors.contains(",2\r") || resistors.ends_with(",2"),
+        "the resistor line has to be quantity two: {resistors}"
+    );
+
+    // And the values the source states have to survive into the file a
+    // purchaser reads.
+    assert!(bom.contains("10k"), "the resistor value is missing:\n{bom}");
+    assert!(
+        bom.contains("100nF"),
+        "the capacitor value is missing:\n{bom}"
+    );
+}
