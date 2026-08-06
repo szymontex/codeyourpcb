@@ -310,6 +310,8 @@ pub fn pathfinder_loop(
     // explores more of the grid each time. Stop after this many iterations
     // without a new best.
     let stagnation_limit = config.stagnation_limit;
+    // Path cells per net, rings excluded, for reporting contested copper.
+    let mut trace_cells: HashMap<u32, Vec<(u32, u32, u8)>> = HashMap::new();
     let mut best_overused = usize::MAX;
     let mut iterations_without_progress = 0u32;
 
@@ -381,6 +383,11 @@ pub fn pathfinder_loop(
                 ((via_keepout_nm + grid.resolution() - 1) / grid.resolution()).max(0) as u32;
 
             let mut net_path_cells: Vec<(u32, u32, u8)> = Vec::new();
+            // The path on its own, without the via rings that go into the
+            // congestion map with it. Two nets sharing one of these is copper
+            // on copper; two nets sharing a ring cell is not, and mixing them
+            // is what made the overuse figure unreadable.
+            let mut net_trace_cells: Vec<(u32, u32, u8)> = Vec::new();
             let mut net_paths: Vec<Vec<GridNode>> = Vec::new();
             let mut net_ok = true;
 
@@ -410,6 +417,7 @@ pub fn pathfinder_loop(
                         // Collect cells for this path
                         for node in &p {
                             net_path_cells.push((node.0 as u32, node.1 as u32, node.2));
+                            net_trace_cells.push((node.0 as u32, node.1 as u32, node.2));
                         }
                         // Wherever the path changes layer there is a via, and a
                         // via is far wider than the single cell the path marks.
@@ -462,10 +470,13 @@ pub fn pathfinder_loop(
             // and cannot remove.
             net_path_cells.sort_unstable();
             net_path_cells.dedup();
+            net_trace_cells.sort_unstable();
+            net_trace_cells.dedup();
 
             if net_ok && !connections.is_empty() {
                 // Update congestion map with this net's cells
                 congestion_map.mark_net(&net_path_cells);
+                trace_cells.insert(net_id, net_trace_cells);
                 net_cells.insert(net_id, net_path_cells);
                 routed_paths.insert(net_id, net_paths);
             } else if !connections.is_empty() {
@@ -503,11 +514,52 @@ pub fn pathfinder_loop(
 
     if !converged {
         let overuse = congestion_map.overuse_count();
+
+        // Which cells two nets' *traces* hold, as opposed to the via rings
+        // that make up most of the overuse count. These are shorts: one cell
+        // of copper claimed twice.
+        let mut holders: HashMap<(u32, u32, u8), Vec<u32>> = HashMap::new();
+        for (net_id, cells) in &trace_cells {
+            for cell in cells {
+                holders.entry(*cell).or_default().push(*net_id);
+            }
+        }
+        let names: HashMap<u32, &str> = ratsnest
+            .iter()
+            .map(|net| (net.net_id.id(), net.net_name.as_str()))
+            .collect();
+        let mut contested: Vec<((u32, u32, u8), Vec<u32>)> = holders
+            .into_iter()
+            .filter(|(_, nets)| nets.len() > 1)
+            .collect();
+        contested.sort_by_key(|(cell, _)| *cell);
+
         tracing::warn!(
             iterations = final_iteration,
             remaining_overuse = overuse,
+            contested_trace_cells = contested.len(),
             "PathFinder did not converge within iteration cap"
         );
+
+        for (cell, nets) in contested.iter().take(40) {
+            let mut held: Vec<&str> = nets
+                .iter()
+                .map(|id| names.get(id).copied().unwrap_or("?"))
+                .collect();
+            held.sort_unstable();
+            tracing::warn!(
+                at = %format!(
+                    "cell ({}, {}) layer {} = {:.3},{:.3}mm",
+                    cell.0,
+                    cell.1,
+                    cell.2,
+                    grid.grid_to_nm_x(cell.0) as f64 / 1_000_000.0,
+                    grid.grid_to_nm_y(cell.1) as f64 / 1_000_000.0
+                ),
+                nets = %held.join(" + "),
+                "Two nets hold one cell of copper"
+            );
+        }
     }
 
     // Determine unrouted nets
