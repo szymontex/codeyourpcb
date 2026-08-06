@@ -97,27 +97,44 @@ pub fn export_cpl(
     let mut entries = Vec::new();
 
     // Query all components
-    let mut query = world
-        .ecs_mut()
-        .query::<(&RefDes, &Position, &Rotation, &FootprintRef)>();
+    let mut query = world.ecs_mut().query::<(
+        &RefDes,
+        &Position,
+        &Rotation,
+        &FootprintRef,
+        Option<&cypcb_world::components::Side>,
+    )>();
 
-    for (refdes, position, rotation, footprint_ref) in query.iter(world.ecs()) {
+    for (refdes, position, rotation, footprint_ref, side) in query.iter(world.ecs()) {
         // Get footprint to determine layer
         let footprint = library
             .get(&footprint_ref.0)
             .ok_or_else(|| format!("Footprint not found: {}", footprint_ref.0))?;
 
-        // Determine layer from first pad
-        let layer = if let Some(first_pad) = footprint.pads.first() {
-            if first_pad.layers.contains(&Layer::TopCopper) {
-                "Top"
-            } else if first_pad.layers.contains(&Layer::BottomCopper) {
-                "Bottom"
-            } else {
-                "Top" // Default to top if no copper layer found
+        // Which face the part is assembled on.
+        //
+        // The `Side` component is the answer when the design states one - the
+        // KiCad importer reads it from `(layer "B.Cu")` and sync derives it
+        // once so every consumer agrees. Guessing from the first pad's layers
+        // instead puts a bottom-side part on the top of the pick-and-place
+        // file whenever its footprint is shared with top-side parts, and every
+        // one of them is then placed on the wrong face of the board.
+        let layer = match side {
+            Some(cypcb_world::components::Side::Bottom) => "Bottom",
+            Some(cypcb_world::components::Side::Top) => "Top",
+            None => {
+                if let Some(first_pad) = footprint.pads.first() {
+                    if first_pad.layers.contains(&Layer::TopCopper) {
+                        "Top"
+                    } else if first_pad.layers.contains(&Layer::BottomCopper) {
+                        "Bottom"
+                    } else {
+                        "Top"
+                    }
+                } else {
+                    "Top"
+                }
             }
-        } else {
-            "Top" // Default to top if no pads
         };
 
         // Convert coordinates from nanometers to millimeters

@@ -384,3 +384,56 @@ fn the_paste_stencil_sits_on_the_pads_and_can_be_made_smaller_than_them() {
         "the default stencil is cut to pad size: {full}mm against {pad}mm"
     );
 }
+
+#[test]
+fn the_pick_and_place_says_where_and_which_way_up() {
+    // A CPL with the wrong side or the wrong rotation puts every part down
+    // turned or on the wrong face, and it is three columns of numbers nobody
+    // reads until the boards come back. This checks all three against the
+    // design.
+    use cypcb_export::cpl::export_cpl;
+    use cypcb_world::components::{FootprintRef, Position, RefDes, Rotation, Side, Value};
+
+    let (mut world, library) = load(CUTOUT);
+
+    // A second part, deliberately on the far face and turned a quarter turn.
+    // `Side` is what the design states; the footprint is the same one R1 uses,
+    // so nothing about the pads gives the answer away.
+    let r2 = world.spawn_component(
+        RefDes::new("R2"),
+        Value::new("10k"),
+        Position::from_mm(30.0, 20.0),
+        Rotation(90_000),
+        FootprintRef::new("0402"),
+        cypcb_world::components::NetConnections::new(),
+    );
+    world.ecs_mut().entity_mut(r2).insert(Side::Bottom);
+
+    let cpl = export_cpl(&mut world, &library, None).expect("pick and place");
+
+    let row = cpl
+        .lines()
+        .find(|line| line.starts_with("R2,"))
+        .unwrap_or_else(|| panic!("R2 is missing from the CPL:\n{cpl}"));
+    let fields: Vec<&str> = row.split(',').collect();
+
+    assert!(
+        row.contains("30.0") && row.contains("20.0"),
+        "R2 sits at 30mm, 20mm and the CPL says {row}"
+    );
+    assert!(
+        fields.iter().any(|f| f.trim() == "90"),
+        "R2 is turned a quarter turn and the CPL says {row}"
+    );
+    assert!(
+        fields.iter().any(|f| f.trim() == "Bottom"),
+        "R2 is assembled on the bottom face and the CPL says {row}"
+    );
+
+    // And the part that says nothing is still on top.
+    let r1 = cpl
+        .lines()
+        .find(|line| line.starts_with("R1,"))
+        .unwrap_or_else(|| panic!("R1 is missing from the CPL:\n{cpl}"));
+    assert!(r1.contains("Top"), "R1 is a top-side part: {r1}");
+}
