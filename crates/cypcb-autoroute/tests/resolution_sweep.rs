@@ -124,13 +124,52 @@ fn what_a_finer_grid_buys() {
                 .filter(|v| v.kind == ViolationKind::Clearance)
                 .count();
 
+            // A count on its own cannot be compared across resolutions: the
+            // clearance rule reports per segment, and a finer grid makes more
+            // of them. Copper length is the invariant to divide by, and the
+            // actual distances say which failure is being counted - 0.00mm is
+            // copper on copper, anything above it is a trace parked just
+            // inside the gap the fab requires.
+            let mm = result.total_length().to_mm();
+            // What the gaps actually measure. If a finer grid simply reports
+            // the same board more often, these sit where the coarse ones do;
+            // if it lets the router park closer, they move down.
+            let mut gaps: Vec<f64> = introduced
+                .iter()
+                .filter(|v| v.kind == ViolationKind::Clearance)
+                .filter_map(|v| {
+                    // The message is prefixed with the pair it names, so the
+                    // distance is found rather than stripped from the front.
+                    v.message
+                        .split("Clearance violation: ")
+                        .nth(1)
+                        .and_then(|rest| rest.split("mm").next())
+                        .and_then(|mm| mm.parse::<f64>().ok())
+                })
+                .collect();
+            gaps.sort_by(|a, b| a.partial_cmp(b).expect("no NaN in a distance"));
+            let median = gaps.get(gaps.len() / 2).copied().unwrap_or(0.0);
+            let worst = gaps.first().copied().unwrap_or(0.0);
+
+            let touching = introduced
+                .iter()
+                .filter(|v| v.kind == ViolationKind::Clearance)
+                .filter(|v| v.message.contains("Clearance violation: 0.00mm"))
+                .count();
+
             eprintln!(
-                "  {:>8}: {:?}, {} routes, {} introduced ({} clearance), {:.1}s",
+                "  {:>8}: {:?}, {} segments, {} vias, {:.0}mm copper, {} introduced ({} clearance, {} at 0.00mm), gap min {:.2}mm median {:.2}mm, {:.2} per 100mm, {:.1}s",
                 label,
                 result.status,
                 result.route_count(),
+                result.via_count(),
+                mm,
                 introduced.len(),
                 clearance,
+                touching,
+                worst,
+                median,
+                introduced.len() as f64 * 100.0 / mm.max(1.0),
                 elapsed.as_secs_f64()
             );
         }
