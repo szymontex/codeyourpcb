@@ -217,7 +217,16 @@ Read this file first. It is the source of truth for what is in flight and what c
 | multi_ic | 127 | **110** | 23.5s -> 69.1s |
 
   Every board complete, none worse - the pass keeps a candidate only when the count drops and the board still routes, so the worst it can cost is time. One pass buys nothing on either board; the win lands on the second, once a rejected attempt's cells have joined the next one. `benchmark_all_fixtures_drc` now routes through `route_board` rather than the bare strategy, because repair is what a user gets when they press Route and the ratchet has to measure what ships. Ratchets 0/167/110, gate 29s -> 98s. Variant exploration sets `repair_passes: 0` - ranking candidates that are about to be discarded should not cost 3x.
-- NEXT-ACTION: repair spends its whole budget re-routing the entire board to move a handful of nets. `clear_cells` already rips up a single net and the DRC report already names which nets are involved, so a pass could re-route only those - the difference between 23s and something near a second. Measure how many nets a pass actually changes before building it.
+- **The planned repair optimisation is dead, and the measurement is why.** The idea was that repair re-routes the whole board to move a handful of nets, so ripping up only the nets named in violations would turn 23s into about a second. Measured instead of assumed - comparing every net's routed geometry before and after a repair pass:
+
+| fixture | nets | changed by repair | first pass | with repair |
+|---|---|---|---|---|
+| stm32_breakout | 34 | **34 (100%)** | 6.6s | 27.8s |
+| multi_ic | 47 | **45 (96%)** | 24.3s | 74.8s |
+
+  Nothing to save. PathFinder is a negotiated-congestion router: blocking a few cells perturbs the congestion map that every net is planned against, so the whole board re-plans whether or not that was asked for. An incremental repair would either produce a different answer from the one the gate measures, or not be incremental.
+- **What the numbers do suggest**, recorded rather than built: repair is already "route the board several times under different constraints and keep the best", which is the shape `variant.rs` implements for a different purpose. If the 3x wall clock ever needs paying down, unifying the two is the lever - not per-net rip-up.
+- NEXT-ACTION: none in this vector that is worth its cost right now. The 3x buys 176 -> 167 and 127 -> 110 with no board made worse, which is a fair trade for an autorouter; the next real gain is a better cost model, which is a project rather than a fire.
 
 ## Session summary, 2026-08-05
 
