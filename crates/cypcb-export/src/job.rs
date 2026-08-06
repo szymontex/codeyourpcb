@@ -326,6 +326,26 @@ pub fn run_export(
             warnings.push("the board has no traces: this exports an unrouted design".to_string());
         }
 
+        // A zone the design asks for and the exporter cannot draw.
+        //
+        // Copper pour is not implemented: a `zone` carries a net and the
+        // ratsnest treats a pad inside it as connected, so the design reads as
+        // finished, and the Gerber has nothing where the pour should be.
+        // Measured on a board with one ground pour: four pad flashes and zero
+        // copper. Someone who draws a ground plane and sends these files gets
+        // a board without one.
+        let zone_count = world
+            .zones()
+            .iter()
+            .filter(|(_, z)| !z.is_keepout())
+            .count();
+        if zone_count > 0 {
+            warnings.push(format!(
+                "{zone_count} copper pour(s) are declared and not exported: filling a zone is not implemented, \
+                 so the board will be made without them"
+            ));
+        }
+
         for file in &files {
             // Only the outline. A silkscreen or a paste layer with nothing on
             // it is ordinary - a board with parts on one side has an empty

@@ -257,3 +257,43 @@ fn the_legend_prints_the_names_of_the_parts_it_labels() {
         "each part's label is more than a crosshair: {strokes_per_part} draws each"
     );
 }
+
+#[test]
+fn a_declared_pour_that_cannot_be_made_is_named() {
+    // A `zone` carries a net and the ratsnest treats a pad inside it as
+    // connected, so a design with a ground plane reads as finished. The
+    // exporter draws nothing there - measured on a board with one pour: four
+    // pad flashes and no copper. Someone who draws a plane and sends these
+    // files gets a board without one, so the export has to say so.
+    use cypcb_core::Rect;
+    use cypcb_world::components::zone::{Zone, ZoneKind};
+
+    let (mut world, library) = board();
+    world.spawn_entity(Zone {
+        bounds: Rect::from_center_size(
+            Point::from_mm(10.0, 10.0),
+            (Nm::from_mm(16.0), Nm::from_mm(16.0)),
+        ),
+        kind: ZoneKind::CopperPour,
+        layer_mask: Layer::TopCopper.to_copper_mask(),
+        name: Some("GND_POUR".to_string()),
+        net: Some(NetId::new(1)),
+    });
+
+    let preset = from_name("jlcpcb").expect("the jlcpcb preset");
+    let output_dir = scratch_dir("pour");
+    let job = ExportJob {
+        source_path: PathBuf::from("pour.cypcb"),
+        output_dir: output_dir.clone(),
+        preset,
+        board_name: "pour".to_string(),
+    };
+    let result = run_export(&job, &mut world, &library).expect("the export runs");
+    let _ = std::fs::remove_dir_all(&output_dir);
+
+    assert!(
+        result.warnings.iter().any(|w| w.contains("copper pour")),
+        "a pour the exporter cannot draw has to be named: {:?}",
+        result.warnings
+    );
+}
