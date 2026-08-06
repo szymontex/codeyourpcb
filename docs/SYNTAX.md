@@ -56,7 +56,6 @@ component <refdes> <type> "<footprint>" {
     value "<value>"
     at <x>, <y>
     rotate <angle>
-    pin.<number> = <net>
 }
 ```
 
@@ -66,8 +65,6 @@ component R1 resistor "0402" {
     value "330"
     at 15mm, 10mm
     rotate 90
-    pin.1 = VCC
-    pin.2 = LED_ANODE
 }
 ```
 
@@ -80,7 +77,11 @@ component R1 resistor "0402" {
 - `value`: Component value as string (e.g., "330", "100nF", "ATmega328P")
 - `at`: Position in board coordinates (x, y)
 - `rotate`: Rotation angle in degrees (optional, defaults to 0)
-- `pin.<N> = <NET>`: Inline net assignment for specific pins (optional)
+
+A component does not name its own nets. Connections are declared the other way
+round, in a `net` block that lists the pins it joins - see [Nets](#nets). An
+earlier version of this guide documented `pin.<N> = <NET>` as a component
+property; the parser has never accepted it.
 
 **Footprint Examples:**
 - SMD resistors/capacitors: "0402", "0603", "0805", "1206"
