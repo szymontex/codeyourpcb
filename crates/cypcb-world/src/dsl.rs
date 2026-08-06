@@ -7,6 +7,23 @@
 //!
 //! Lives here rather than in the WASM engine because the command line needs it
 //! too, and one implementation is the point.
+//!
+//! # What this cannot say yet
+//!
+//! The writer can only be as complete as the language. Two things a `Via`
+//! carries have no syntax, so they are rebuilt from defaults on the way back
+//! in rather than read:
+//!
+//! - **which layers it joins.** `via x,y drill d` says nothing about span, so
+//!   a blind or buried via reloads as a through via. Nothing produces those
+//!   today - the router places through vias only - but a four-layer design
+//!   that gains them will lose them silently.
+//! - **its outer diameter.** Rebuilt as twice the drill, which is what both
+//!   the router and `sync` assume, so nothing is lost today and a via with a
+//!   deliberate ring would be.
+//!
+//! Proposed syntax when either matters: `via 10mm,12mm drill 0.3mm diameter
+//! 0.6mm layers Top-Inner1`, both parts optional.
 
 use std::collections::BTreeMap;
 use std::fmt::Write;
@@ -112,8 +129,13 @@ pub fn traces_as_dsl(world: &mut BoardWorld) -> String {
                 let layer_str = match trace.layer {
                     Layer::TopCopper => "Top",
                     Layer::BottomCopper => "Bottom",
+                    // One-based in the language, zero-based in the model:
+                    // `Layer::Inner(0)` is the first inner layer and the
+                    // grammar calls it `Inner1`. Writing the raw number
+                    // produced `layer Inner0`, which does not parse, so a
+                    // routed four-layer board could not be read back at all.
                     Layer::Inner(n) => {
-                        let _ = writeln!(output, "    layer Inner{}", n);
+                        let _ = writeln!(output, "    layer Inner{}", n + 1);
                         ""
                     }
                     _ => "Top",

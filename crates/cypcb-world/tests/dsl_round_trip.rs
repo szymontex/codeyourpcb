@@ -229,3 +229,64 @@ fn a_branching_net_does_not_gain_copper_between_its_branches() {
         "writing a branching net and reading it back changed its copper"
     );
 }
+
+#[test]
+fn an_inner_layer_trace_survives_being_written() {
+    // `Inner1` in the DSL is `Layer::Inner(0)` in the model - one-based in the
+    // language, zero-based in the code. The writer emitted the raw number, so a
+    // routed four-layer board saved itself as `layer Inner0`, which the grammar
+    // does not accept: the file did not come back at all.
+    use cypcb_world::components::trace::{Trace, TraceSegment, TraceSource};
+    use cypcb_world::components::Layer;
+
+    let mut world = BoardWorld::new();
+    world.set_board(
+        "t".to_string(),
+        (cypcb_core::Nm::from_mm(40.0), cypcb_core::Nm::from_mm(20.0)),
+        4,
+    );
+    let net = world.intern_net("SIG");
+    world.spawn_entity((
+        Trace {
+            segments: vec![TraceSegment::new(
+                cypcb_core::Point::from_mm(10.0, 10.0),
+                cypcb_core::Point::from_mm(20.0, 10.0),
+            )],
+            width: cypcb_core::Nm::from_mm(0.2),
+            layer: Layer::Inner(0),
+            net_id: net,
+            locked: true,
+            source: TraceSource::Autorouted,
+        },
+        net,
+    ));
+
+    let written = traces_as_dsl(&mut world);
+    assert!(
+        written.contains("layer Inner1"),
+        "the first inner layer is Inner1 in the language:\n{written}"
+    );
+
+    let header = ROUTED.split("trace SIG {").next().unwrap();
+    let source = format!("{header}{written}");
+    let parsed = cypcb_parser::parse(&source);
+    assert!(
+        parsed.errors.is_empty(),
+        "a board written on an inner layer has to parse back: {:?}",
+        parsed.errors
+    );
+
+    let mut second = load(&source);
+    assert_eq!(
+        segments(&mut second),
+        segments(&mut world),
+        "the inner-layer trace changed on the way out and back"
+    );
+
+    let locked = {
+        let ecs = second.ecs_mut();
+        let mut query = ecs.query::<&Trace>();
+        query.iter(ecs).all(|t| t.locked)
+    };
+    assert!(locked, "a locked trace must not come back unlocked");
+}
