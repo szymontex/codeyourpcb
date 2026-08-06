@@ -59,8 +59,15 @@ fi
 echo ""
 
 # Stage 6: Playwright E2E
+#
+# CI=1 turns off `reuseExistingServer` in playwright.config.ts. Without it the
+# suite silently attaches to whatever is already listening on 4321 - a dev
+# server someone left running from another checkout, or anything else at all -
+# and reports the result as if it had tested this tree. Proven by pointing a
+# bare `python3 -m http.server` at that port: the default run happily executed
+# the whole suite against it, while CI=1 stops with "already used".
 echo "[6/8] playwright"
-if (cd viewer && npx playwright test) 2>&1; then
+if (cd viewer && CI=1 npx playwright test) 2>&1; then
   pass "playwright"
 else
   fail "playwright"
