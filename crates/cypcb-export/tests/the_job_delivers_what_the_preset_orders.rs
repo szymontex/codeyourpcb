@@ -335,7 +335,7 @@ fn a_pour_keeps_clear_of_other_nets_and_reaches_its_own() {
         &library,
         Layer::TopCopper,
         &format,
-        Nm::from_mm(0.3),
+        &cypcb_export::pour::PourOptions::default(),
     )
     .expect("top copper");
 
@@ -394,17 +394,27 @@ fn a_pour_keeps_clear_of_other_nets_and_reaches_its_own() {
         );
     }
 
-    // And the pour's own net is reached: R1 pad 1 sits at 7.5mm, 10mm and the
-    // copper has to run right up to it, so some region contains that point.
+    // And the pour's own net is reached, by spokes rather than solid copper.
+    // R1 pad 1 sits at 7.5mm, 10mm; a spoke crosses its centre, so some region
+    // contains that point - and the ring around it is open, so no region covers
+    // the whole thermal gap.
     let own_pad = (7.5_f64, 10.0_f64);
-    let reaches_own = rects.iter().any(|r| {
-        r.0 <= own_pad.0 + 0.35
-            && own_pad.0 - 0.35 <= r.2
-            && r.1 <= own_pad.1 + 0.3
-            && own_pad.1 - 0.3 <= r.3
-    });
+    let bridged = rects
+        .iter()
+        .any(|r| r.0 <= own_pad.0 && own_pad.0 <= r.2 && r.1 <= own_pad.1 && own_pad.1 <= r.3);
     assert!(
-        reaches_own,
-        "the pour never reaches a pad on its own net, so it grounds nothing: {rects:?}"
+        bridged,
+        "no spoke reaches the pad on the pour's own net, so it grounds nothing: {rects:?}"
+    );
+
+    // A corner of the gap ring, diagonally out from the pad and clear of both
+    // spokes: solid flooding would cover it, a thermal relief does not.
+    let corner = (own_pad.0 + 0.45, own_pad.1 + 0.4);
+    let flooded = rects
+        .iter()
+        .any(|r| r.0 <= corner.0 && corner.0 <= r.2 && r.1 <= corner.1 && corner.1 <= r.3);
+    assert!(
+        !flooded,
+        "the pad is flooded solid instead of relieved: {corner:?} is covered by {rects:?}"
     );
 }

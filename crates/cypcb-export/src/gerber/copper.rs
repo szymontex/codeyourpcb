@@ -64,7 +64,13 @@ pub fn export_copper_layer(
     // `export_copper_layer_with`; this default is what a caller gets who has
     // not said - deliberately generous, because a pour that keeps too much
     // distance is a smaller board and one that keeps too little is a short.
-    export_copper_layer_with(world, library, layer, format, Nm::from_mm(0.3))
+    export_copper_layer_with(
+        world,
+        library,
+        layer,
+        format,
+        &crate::pour::PourOptions::default(),
+    )
 }
 
 /// Export a copper layer, filling any pour on it to `pour_clearance`.
@@ -77,7 +83,7 @@ pub fn export_copper_layer_with(
     library: &FootprintLibrary,
     layer: Layer,
     format: &CoordinateFormat,
-    pour_clearance: Nm,
+    pour: &crate::pour::PourOptions,
 ) -> Result<String, ExportError> {
     // Only copper layers are supported
     assert!(layer.is_copper(), "Layer must be a copper layer");
@@ -128,14 +134,7 @@ pub fn export_copper_layer_with(
 
     // Fill any copper pour on this layer, last, so the regions are cut around
     // copper that is already placed.
-    export_pours(
-        world,
-        library,
-        layer,
-        pour_clearance,
-        &mut drawing_commands,
-        format,
-    );
+    export_pours(world, library, layer, pour, &mut drawing_commands, format);
 
     // Emit aperture definitions
     output.push_str(&apertures.to_definitions(format));
@@ -350,7 +349,7 @@ fn export_pours(
     world: &mut BoardWorld,
     library: &FootprintLibrary,
     layer: Layer,
-    clearance: Nm,
+    options: &crate::pour::PourOptions,
     output: &mut String,
     format: &CoordinateFormat,
 ) {
@@ -369,9 +368,50 @@ fn export_pours(
     }
 
     for zone in zones {
-        let obstacles = foreign_copper(world, library, layer, zone.net);
-        for piece in crate::pour::fill(zone.bounds, &obstacles, clearance) {
+        let (obstacles, own_pads) = copper_on_layer(world, library, layer, zone.net);
+
+        // Foreign copper is cut with the fab's clearance. A pad on the pour's
+        // own net is cut with the thermal gap instead and then bridged, so the
+        // joint can be soldered: solid copper carries heat away from a pin
+        // faster than an iron can put it in.
+        let mut holes = obstacles.clone();
+        for pad in &own_pads {
+            holes.push(crate::pour::grown(*pad, options.thermal_gap));
+        }
+
+        // The clearance applies to the foreign copper only; the thermal gap is
+        // already in the box, so those are added at their own size.
+        let mut pieces = crate::pour::fill(zone.bounds, &obstacles, options.clearance);
+        for pad in &own_pads {
+            let keepout = crate::pour::grown(*pad, options.thermal_gap);
+            pieces = pieces
+                .into_iter()
+                .flat_map(|piece| crate::pour::fill(piece, &[keepout], Nm::ZERO))
+                .collect();
+        }
+
+        for piece in pieces {
             emit_region(piece, output, format);
+        }
+
+        // Put the spokes back, cut to the copper they are allowed to occupy.
+        //
+        // A spoke reaches a quarter of a millimetre past its pad, which on a
+        // dense board is far enough to cross into a neighbour's clearance -
+        // measured on two 0402s a millimetre apart, where the horizontal bar
+        // ran from 6.946mm to 8.054mm and the foreign keepout started at
+        // 7.9mm. Subtracting the same obstacles the pour was cut against keeps
+        // the bridge inside the plane it bridges to.
+        for pad in &own_pads {
+            for spoke in crate::pour::thermal_spokes(*pad, options) {
+                let inside_zone = crate::pour::intersect(spoke, zone.bounds);
+                let Some(spoke) = inside_zone else {
+                    continue;
+                };
+                for piece in crate::pour::fill(spoke, &obstacles, options.clearance) {
+                    emit_region(piece, output, format);
+                }
+            }
         }
     }
 }
@@ -380,16 +420,17 @@ fn export_pours(
 ///
 /// Copper on the pour's own net is left out: the pour is that net, and keeping
 /// clear of it would leave the plane unconnected to the thing it grounds.
-fn foreign_copper(
+fn copper_on_layer(
     world: &mut BoardWorld,
     library: &FootprintLibrary,
     layer: Layer,
     pour_net: Option<cypcb_world::NetId>,
-) -> Vec<cypcb_core::Rect> {
+) -> (Vec<cypcb_core::Rect>, Vec<cypcb_core::Rect>) {
     use cypcb_core::Rect;
     use cypcb_world::components::{FootprintRef, NetConnections, Position, Rotation};
 
     let mut boxes = Vec::new();
+    let mut own = Vec::new();
 
     // Pads.
     /// A placed part as this function needs it: where it is, how it is
@@ -431,9 +472,7 @@ fn foreign_copper(
                 .iter()
                 .find(|(pin, _)| *pin == pad.number)
                 .map(|(_, net)| *net);
-            if pad_net.is_some() && pad_net == pour_net {
-                continue;
-            }
+            let is_own = pad_net.is_some() && pad_net == pour_net;
 
             let px = pad.position.x.0 as f64;
             let py = pad.position.y.0 as f64;
@@ -444,10 +483,15 @@ fn foreign_copper(
             let ex = (half_w * cos.abs() + half_h * sin.abs()).round() as i64;
             let ey = (half_w * sin.abs() + half_h * cos.abs()).round() as i64;
 
-            boxes.push(Rect {
+            let box_ = Rect {
                 min: Point::new(Nm(cx - ex), Nm(cy - ey)),
                 max: Point::new(Nm(cx + ex), Nm(cy + ey)),
-            });
+            };
+            if is_own {
+                own.push(box_);
+            } else {
+                boxes.push(box_);
+            }
         }
     }
 
@@ -492,7 +536,7 @@ fn foreign_copper(
         });
     }
 
-    boxes
+    (boxes, own)
 }
 
 /// Emit one rectangle as a Gerber region.
