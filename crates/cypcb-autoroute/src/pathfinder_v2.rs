@@ -415,7 +415,7 @@ pub fn pathfinder_loop(
                 let any_end = is_multi_layer(to_pad.layer_mask);
 
                 // Route with congestion-augmented cost
-                let path = find_path_congestion_augmented(
+                let mut path = find_path_congestion_augmented(
                     grid,
                     start,
                     end,
@@ -427,7 +427,32 @@ pub fn pathfinder_loop(
                     net_pad_zones,
                     config.pad_zone_blocks_foreign_copper,
                     &congestion_map,
+                    false,
                 );
+
+                // A reservation that cannot be relaxed is a veto, and three
+                // measured experiments in this vector say a veto costs more
+                // than it buys. When the strict attempt finds nothing, the
+                // second one may route through the copper a neighbouring trace
+                // only brushes - never through its centre line. An abandoned
+                // connection is a board that does not work; a tight gap is a
+                // violation the checker will name.
+                if path.is_none() && config.reserve_trace_footprint {
+                    path = find_path_congestion_augmented(
+                        grid,
+                        start,
+                        end,
+                        rules,
+                        net_id,
+                        config.via_cost_multiplier,
+                        config.params.layer_preference,
+                        any_end,
+                        net_pad_zones,
+                        config.pad_zone_blocks_foreign_copper,
+                        &congestion_map,
+                        true,
+                    );
+                }
 
                 match path {
                     Some(p) => {
@@ -660,6 +685,7 @@ fn find_path_congestion_augmented(
     pad_zones: &[PadZone],
     block_foreign_copper: bool,
     congestion_map: &CongestionMap,
+    yield_halo: bool,
 ) -> Option<Vec<GridNode>> {
     let grid_w = grid.width();
     let grid_h = grid.height();
@@ -719,14 +745,24 @@ fn find_path_congestion_augmented(
             if dx != 0 && dy != 0 {
                 let side_a = grid.net_at(ux, ny as u32, nl as usize);
                 let side_b = grid.net_at(nx as u32, uy, nl as usize);
-                let blocked = |owner: Option<u32>| matches!(owner, Some(other) if other != net_id);
-                if blocked(side_a) || blocked(side_b) {
+                let blocked = |owner: Option<u32>, x: u32, y: u32| {
+                    if yield_halo && grid.is_halo_only(x, y, nl as usize) {
+                        return false;
+                    }
+                    matches!(owner, Some(other) if other != net_id)
+                };
+                if blocked(side_a, ux, ny as u32) || blocked(side_b, nx as u32, uy) {
                     continue;
                 }
             }
 
             let target = (ux as u16, uy as u16, nl);
-            if grid.is_free(ux, uy, nl as usize)
+            let free = if yield_halo {
+                grid.is_free_ignoring_halo(ux, uy, nl as usize)
+            } else {
+                grid.is_free(ux, uy, nl as usize)
+            };
+            if free
                 || success(&target)
                 || pad_zone_open(
                     grid,
@@ -751,7 +787,12 @@ fn find_path_congestion_augmented(
                 continue;
             }
             let target = (nx, ny, target_layer);
-            if grid.is_free(nx as u32, ny as u32, target_layer as usize)
+            let free = if yield_halo {
+                grid.is_free_ignoring_halo(nx as u32, ny as u32, target_layer as usize)
+            } else {
+                grid.is_free(nx as u32, ny as u32, target_layer as usize)
+            };
+            if free
                 || success(&target)
                 || pad_zone_open(
                     grid,
@@ -929,6 +970,7 @@ mod tests {
             &[],
             false,
             &congestion,
+            false,
         );
 
         assert!(path.is_some(), "Should find path on empty grid");

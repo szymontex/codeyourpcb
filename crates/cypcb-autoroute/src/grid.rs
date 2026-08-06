@@ -19,6 +19,14 @@ use cypcb_world::{BoardWorld, Layer};
 pub const CELL_FREE: u8 = 0;
 pub const CELL_PAD: u8 = 1 << 0;
 pub const CELL_TRACE: u8 = 1 << 1;
+/// Copper a trace covers beside its centre line.
+///
+/// A minimum-width trace is 0.127mm on a 0.254mm cell, so the cell next to the
+/// one the search walked holds copper the grid would otherwise call free. It
+/// is marked separately from `CELL_TRACE` because it can be yielded: a net
+/// with nowhere else to go may route through a halo cell, where routing
+/// through the centre line of another net's trace is a short.
+pub const CELL_HALO: u8 = 1 << 2;
 pub const CELL_ZONE: u8 = 1 << 2;
 pub const CELL_VIA: u8 = 1 << 3;
 /// Generic obstacle (clearance bloat, board edge, etc.)
@@ -399,6 +407,32 @@ impl RoutingGrid {
         self.layers[layer][idx] == CELL_FREE
     }
 
+    /// Whether a cell is free once the copper a trace merely brushes is
+    /// ignored.
+    ///
+    /// A net that finds no path at all is worse than a net that runs close to
+    /// another: an abandoned connection is a board that does not work, and a
+    /// tight gap is a violation the checker will name. This is the second
+    /// attempt's test, never the first.
+    #[inline]
+    pub fn is_free_ignoring_halo(&self, x: u32, y: u32, layer: usize) -> bool {
+        if x >= self.width || y >= self.height || layer >= self.layers.len() {
+            return false;
+        }
+        let idx = (y as usize) * (self.width as usize) + (x as usize);
+        self.layers[layer][idx] & !CELL_HALO == CELL_FREE
+    }
+
+    /// Whether this cell holds only the copper a neighbouring trace brushes.
+    #[inline]
+    pub fn is_halo_only(&self, x: u32, y: u32, layer: usize) -> bool {
+        if x >= self.width || y >= self.height || layer >= self.layers.len() {
+            return false;
+        }
+        let idx = (y as usize) * (self.width as usize) + (x as usize);
+        self.layers[layer][idx] == CELL_HALO
+    }
+
     /// Get the occupancy flags for a cell.
     #[inline]
     pub fn cell(&self, x: u32, y: u32, layer: usize) -> u8 {
@@ -505,7 +539,12 @@ impl RoutingGrid {
                     if owner != u32::MAX && owner != net_id {
                         continue; // Another net's copper - leave it alone
                     }
-                    self.layers[layer][idx] |= CELL_TRACE;
+                    let flag = if cx == nx as u32 && cy == ny as u32 {
+                        CELL_TRACE
+                    } else {
+                        CELL_HALO
+                    };
+                    self.layers[layer][idx] |= flag;
                     self.net_map[layer][idx] = net_id;
                     marked.push((cx, cy, nl));
                 }
@@ -578,7 +617,7 @@ impl RoutingGrid {
             let idx = (y as usize) * (self.width as usize) + (x as usize);
             if self.net_map[layer][idx] == net_id {
                 self.net_map[layer][idx] = u32::MAX;
-                self.layers[layer][idx] &= !CELL_TRACE;
+                self.layers[layer][idx] &= !(CELL_TRACE | CELL_HALO);
             }
         }
     }
@@ -591,8 +630,8 @@ impl RoutingGrid {
             for idx in 0..(w * h) {
                 if self.net_map[layer][idx] == net_id {
                     self.net_map[layer][idx] = u32::MAX;
-                    // Clear the trace bit but keep other obstacle flags
-                    self.layers[layer][idx] &= !CELL_TRACE;
+                    // Clear the trace bits but keep other obstacle flags
+                    self.layers[layer][idx] &= !(CELL_TRACE | CELL_HALO);
                 }
             }
         }
