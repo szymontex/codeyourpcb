@@ -120,6 +120,8 @@ pub enum Definition {
     Module(ModuleDef),
     /// A module instantiation (v2).
     ModuleInstance(ModuleInstance),
+    /// A net class: one rule stated for a group of nets.
+    NetClass(NetClassDef),
     /// An interface definition (v2).
     Interface(InterfaceDef),
     /// An import statement (v2).
@@ -140,6 +142,7 @@ impl Definition {
             Definition::Trace(t) => t.span,
             Definition::Module(m) => m.span,
             Definition::ModuleInstance(i) => i.span,
+            Definition::NetClass(c) => c.span,
             Definition::Interface(i) => i.span,
             Definition::Import(i) => i.span,
             Definition::Assert(a) => a.span,
@@ -357,6 +360,22 @@ pub struct NetDef {
     /// List of pin references connected to this net.
     pub connections: Vec<PinRef>,
     /// Span covering the entire net definition.
+    pub span: Span,
+}
+
+/// A net class: `netclass Power [width 0.5mm] { VCC GND }`.
+///
+/// States a rule once for a group of nets. A net that states something itself
+/// keeps its own answer; the class fills in what the net left unsaid.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NetClassDef {
+    /// Class name, for reading and for error messages.
+    pub name: Identifier,
+    /// What the class requires of its members.
+    pub constraints: Option<NetConstraints>,
+    /// The nets in the class.
+    pub members: Vec<Identifier>,
+    /// Source span.
     pub span: Span,
 }
 

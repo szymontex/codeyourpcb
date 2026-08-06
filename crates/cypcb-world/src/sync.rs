@@ -418,6 +418,16 @@ pub fn sync_ast_to_world(
         }
     }
 
+    // Net classes first: a class states a rule for a group, and a net that
+    // states something itself overwrites only the field it states. Applying
+    // classes first is what makes that precedence work regardless of the order
+    // the two appear in the file.
+    for def in definitions {
+        if let Definition::NetClass(class) = def {
+            sync_netclass(class, world);
+        }
+    }
+
     // Claims the design makes about itself. Collected here rather than acted
     // on: an assertion is about the finished board, so the checker evaluates
     // it once everything is placed.
@@ -466,6 +476,9 @@ pub fn sync_ast_to_world(
             }
             Definition::Footprint(_) => {
                 // Already handled in Phase 0 above
+            }
+            Definition::NetClass(_) => {
+                // Already applied above, before any net could overwrite it.
             }
             Definition::ModuleInstance(_) => {
                 // Already replaced by expand_module_instances above; an
@@ -650,7 +663,19 @@ fn sync_net(
     if let Some(ref constraints) = net.constraints {
         let carried = cypcb_world_net_constraints(constraints);
         if !carried.is_empty() {
-            world.set_net_constraints(net_id, carried);
+            // Merge rather than replace: whatever a net class already put here
+            // stays for the fields this net says nothing about.
+            let mut merged = world.net_constraints(net_id).unwrap_or_default();
+            if carried.width.is_some() {
+                merged.width = carried.width;
+            }
+            if carried.clearance.is_some() {
+                merged.clearance = carried.clearance;
+            }
+            if carried.current_ma.is_some() {
+                merged.current_ma = carried.current_ma;
+            }
+            world.set_net_constraints(net_id, merged);
         }
     }
 
@@ -1102,6 +1127,71 @@ fn calculate_footprint_bounds(pads: &[FootprintPadDef]) -> Rect {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn a_net_class_states_a_rule_once_and_a_net_can_still_override_it() {
+        let source = r#"version 1
+
+board t {
+    size 40mm x 20mm
+    layers 2
+}
+
+component R1 resistor "0402" {
+    value 10kohm
+    at 10mm, 10mm
+}
+
+component R2 resistor "0402" {
+    value 10kohm
+    at 20mm, 10mm
+}
+
+netclass Power [width 0.5mm clearance 0.3mm] {
+    VCC
+    GND
+}
+
+net VCC [width 0.8mm] {
+    R1.1
+    R2.1
+}
+
+net GND {
+    R1.2
+    R2.2
+}
+"#;
+        let parsed = cypcb_parser::parse(source);
+        assert!(parsed.errors.is_empty(), "{:?}", parsed.errors);
+
+        let mut world = BoardWorld::new();
+        let mut library = FootprintLibrary::new();
+        let result = sync_ast_to_world(&parsed.value, source, &mut world, &mut library);
+        assert!(result.errors.is_empty(), "{:?}", result.errors);
+
+        let gnd = world.get_net("GND").expect("GND");
+        let vcc = world.get_net("VCC").expect("VCC");
+
+        // GND says nothing, so it takes the class whole.
+        let gnd_rules = world.net_constraints(gnd).expect("GND is in a class");
+        assert_eq!(gnd_rules.width, Some(Nm::from_mm(0.5)));
+        assert_eq!(gnd_rules.clearance, Some(Nm::from_mm(0.3)));
+
+        // VCC states a width, which wins, while the clearance it says nothing
+        // about still comes from the class.
+        let vcc_rules = world.net_constraints(vcc).expect("VCC is in a class");
+        assert_eq!(
+            vcc_rules.width,
+            Some(Nm::from_mm(0.8)),
+            "a net's own statement beats its class"
+        );
+        assert_eq!(
+            vcc_rules.clearance,
+            Some(Nm::from_mm(0.3)),
+            "and the class still fills in what the net left unsaid"
+        );
+    }
 
     #[test]
     fn a_module_instance_becomes_real_components() {
@@ -2568,5 +2658,25 @@ fn place_in_instance(component: &mut ComponentDef, origin: (i64, i64), angle_deg
             angle: own + angle_deg,
             span,
         });
+    }
+}
+
+/// Give every net in a class the rule the class states.
+///
+/// A net that says nothing takes the class's answer whole. A net that says
+/// something keeps its own for that field, which `sync_net` arranges by
+/// merging rather than replacing.
+fn sync_netclass(class: &cypcb_parser::ast::NetClassDef, world: &mut BoardWorld) {
+    let Some(constraints) = &class.constraints else {
+        return;
+    };
+    let carried = cypcb_world_net_constraints(constraints);
+    if carried.is_empty() {
+        return;
+    }
+
+    for member in &class.members {
+        let net_id = world.intern_net(&member.value);
+        world.set_net_constraints(net_id, carried);
     }
 }

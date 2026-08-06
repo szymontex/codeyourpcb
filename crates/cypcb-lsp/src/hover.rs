@@ -53,6 +53,9 @@ fn hover_for_definition(doc: &DocumentState, def: &Definition, offset: usize) ->
         // An instance is a `use` line; there is nothing to explain about it that
         // the module it names does not already say.
         Definition::ModuleInstance(_) => None,
+        // A class is a list of names and a constraint block; hovering one net
+        // of it should explain the net, which the net hover already does.
+        Definition::NetClass(_) => None,
         Definition::Interface(iface) => hover_for_interface(iface, offset),
         Definition::Import(import) => hover_for_import(import, offset),
         Definition::Assert(assert_def) => hover_for_assert(assert_def, offset),

@@ -46,6 +46,7 @@ module.exports = grammar({
       $.board_definition,
       $.component_definition,
       $.net_definition,
+      $.netclass_definition,
       $.footprint_definition,
       $.zone_definition,
       $.trace_definition,
@@ -164,6 +165,18 @@ module.exports = grammar({
       optional($.net_constraint_block),
       '{',
       optional($.pin_ref_list),
+      '}',
+    ),
+
+    // netclass Power [width 0.5mm] { VCC BUS_5V }
+    //
+    // States a rule once for a group of nets instead of repeating it on each.
+    netclass_definition: $ => seq(
+      'netclass',
+      field('name', $.identifier),
+      optional($.net_constraint_block),
+      '{',
+      repeat(field('member', $.identifier)),
       '}',
     ),
 

@@ -33,11 +33,11 @@
 use crate::ast::{
     AssertDef, AssertExpression, AssertOperand, BoardDef, ComparisonOp, ComponentDef,
     ComponentKind, CurrentUnit, CurrentValue, Definition, Dimension, FootprintDef, Identifier,
-    ImportDef, InterfaceDef, LayerType, ModuleDef, ModuleInstance, NetAssignment, NetConstraints,
-    NetDef, PadDef, PadShape, PhysicalValue, PinDeclaration, PinId, PinRef, PortConnection,
-    PositionExpr, RotationExpr, SizeProperty, SourceFile, Span, StackupDef, StackupLayer,
-    StringLit, Tolerance, ToleranceKind, TraceDef, TraceDirective, TracePath, TraceVia, ZoneDef,
-    ZoneKind,
+    ImportDef, InterfaceDef, LayerType, ModuleDef, ModuleInstance, NetAssignment, NetClassDef,
+    NetConstraints, NetDef, PadDef, PadShape, PhysicalValue, PinDeclaration, PinId, PinRef,
+    PortConnection, PositionExpr, RotationExpr, SizeProperty, SourceFile, Span, StackupDef,
+    StackupLayer, StringLit, Tolerance, ToleranceKind, TraceDef, TraceDirective, TracePath,
+    TraceVia, ZoneDef, ZoneKind,
 };
 use crate::errors::{ParseError, ParseResult};
 use crate::node_kinds;
@@ -154,6 +154,11 @@ impl CypcbParser {
                 "module_instance" => {
                     if let Some(instance) = self.convert_module_instance(source, &child, errors) {
                         definitions.push(Definition::ModuleInstance(instance));
+                    }
+                }
+                "netclass_definition" => {
+                    if let Some(class) = self.convert_netclass(source, &child, errors) {
+                        definitions.push(Definition::NetClass(class));
                     }
                 }
                 "interface_definition" => {
@@ -1129,6 +1134,44 @@ impl CypcbParser {
         Some(ImportDef {
             names,
             path,
+            span: span_of(node),
+        })
+    }
+
+    /// Convert a net class node.
+    fn convert_netclass(
+        &self,
+        source: &str,
+        node: &Node,
+        errors: &mut Vec<ParseError>,
+    ) -> Option<NetClassDef> {
+        let name_node = get_child_by_field(node, "name")?;
+        let name = Identifier::new(node_text(source, &name_node), span_of(&name_node));
+
+        let mut constraints = None;
+        let mut members = Vec::new();
+
+        let mut cursor = node.walk();
+        for child in node.children(&mut cursor) {
+            match child.kind() {
+                "net_constraint_block" => {
+                    constraints = self.convert_net_constraints(source, &child, errors);
+                }
+                "identifier" => {
+                    let identifier = Identifier::new(node_text(source, &child), span_of(&child));
+                    // The first identifier is the class name, already taken.
+                    if identifier.span != name.span {
+                        members.push(identifier);
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        Some(NetClassDef {
+            name,
+            constraints,
+            members,
             span: span_of(node),
         })
     }
