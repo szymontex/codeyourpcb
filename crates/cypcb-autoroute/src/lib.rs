@@ -146,6 +146,16 @@ pub struct AutorouteConfig {
     /// 0.05mm overlap moves the route further than the problem.
     pub repair_passes: u32,
 
+    /// How many PathFinder iterations may pass without shrinking the overused
+    /// set before the loop gives up.
+    ///
+    /// An overused cell is two nets on one cell of copper, so a run that ends
+    /// with overuse ships overlapping traces. The break exists because the
+    /// loop used to burn all 50 iterations re-routing the same nets; it is a
+    /// trade of correctness for time, and it is worth knowing what each end of
+    /// it costs.
+    pub stagnation_limit: u32,
+
     /// Block radii, in cells, that repair tries around each reported violation.
     ///
     /// Each radius is an independent attempt and the best measured result
@@ -166,6 +176,7 @@ impl Default for AutorouteConfig {
             prefer_top_layer: true,
             strategy: StrategyKind::default(),
             params: AutorouteParams::default(),
+            stagnation_limit: 3,
             repair_passes: 0,
             repair_block_radii: vec![0, 2],
         }

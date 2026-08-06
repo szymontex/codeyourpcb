@@ -303,7 +303,7 @@ pub fn pathfinder_loop(
     // places - only slower, because the history cost keeps growing and A*
     // explores more of the grid each time. Stop after this many iterations
     // without a new best.
-    const STAGNATION_LIMIT: u32 = 3;
+    let stagnation_limit = config.stagnation_limit;
     let mut best_overused = usize::MAX;
     let mut iterations_without_progress = 0u32;
 
@@ -329,7 +329,7 @@ pub fn pathfinder_loop(
                 iterations_without_progress = 0;
             } else {
                 iterations_without_progress += 1;
-                if iterations_without_progress >= STAGNATION_LIMIT {
+                if stagnation_limit > 0 && iterations_without_progress >= stagnation_limit {
                     tracing::info!(
                         iteration,
                         overused = overused.len(),
