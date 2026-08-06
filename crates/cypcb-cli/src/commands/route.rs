@@ -55,6 +55,15 @@ pub struct RouteCommand {
     /// docs/TRACKER.md), not because it is the better path today.
     #[arg(long)]
     pub in_house: bool,
+
+    /// Route the board several ways, score each and keep the best.
+    ///
+    /// Six routing settings have been measured on this project's benchmark
+    /// boards and none is best everywhere - the winner differs per board, so
+    /// the router asks the board instead of guessing. Costs roughly ten times
+    /// the wall clock of a single run. Implies `--in-house`.
+    #[arg(long)]
+    pub variants: bool,
 }
 
 impl RouteCommand {
@@ -104,7 +113,7 @@ impl RouteCommand {
             return Err(miette::miette!("Semantic errors in design"));
         }
 
-        if self.in_house {
+        if self.in_house || self.variants {
             return self.route_in_house(&source, world, library, start_time);
         }
 
@@ -504,8 +513,12 @@ impl RouteCommand {
             .ok_or_else(|| miette::miette!("Failed to load JLCPCB preset rules"))?;
         let rules = PresetRuleSet::new(preset);
 
-        eprintln!("Routing with the built-in autorouter...");
-        let result = route_board(&mut world, &library, &rules, &AutorouteConfig::default());
+        let result = if self.variants {
+            self.route_variants(&mut world, &library, &rules)?
+        } else {
+            eprintln!("Routing with the built-in autorouter...");
+            route_board(&mut world, &library, &rules, &AutorouteConfig::default())
+        };
 
         match result.status {
             RoutingStatus::Failed { ref reason } => {
@@ -549,5 +562,49 @@ impl RouteCommand {
             start_time.elapsed().as_secs_f64()
         );
         Ok(())
+    }
+
+    /// Route every variant, report how each scored, and return the winner.
+    ///
+    /// The viewer has had this since variants existed; the command line routed
+    /// one way and called it the answer. A board that needs a different
+    /// setting than the default got a worse board depending on which front end
+    /// its owner happened to use.
+    fn route_variants(
+        &self,
+        world: &mut BoardWorld,
+        library: &FootprintLibrary,
+        rules: &cypcb_rules::presets::PresetRuleSet,
+    ) -> Result<cypcb_router::types::RoutingResult> {
+        use cypcb_autoroute::variant::{default_variant_configs, generate_variants};
+        use cypcb_drc::DesignRules;
+
+        let configs = default_variant_configs();
+        eprintln!("Routing {} variants and keeping the best...", configs.len());
+
+        let design_rules = DesignRules::jlcpcb_2layer();
+        let results = generate_variants(world, library, rules, &design_rules, &configs);
+
+        let best = results
+            .first()
+            .ok_or_else(|| miette::miette!("Every routing variant failed"))?;
+
+        // Ranked best first, so the list reads as the decision it made.
+        for (rank, entry) in results.iter().enumerate() {
+            eprintln!(
+                "  {}. {:<28} composite {:>10.1}, {} DRC violations, {} vias",
+                rank + 1,
+                entry.name,
+                entry.score.composite,
+                entry.score.drc_violations,
+                entry.score.via_count
+            );
+        }
+        eprintln!("Chose {}", best.name);
+
+        Ok(cypcb_router::types::RoutingResult::complete(
+            best.routes.clone(),
+            best.vias.clone(),
+        ))
     }
 }
