@@ -1,0 +1,2197 @@
+[
+  {
+    "type": "assert_comparison",
+    "named": true,
+    "fields": {
+      "left": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "assert_operand",
+            "named": true
+          }
+        ]
+      },
+      "op": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "comparison_operator",
+            "named": true
+          }
+        ]
+      },
+      "right": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "assert_operand",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "assert_expression",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "assert_comparison",
+          "named": true
+        },
+        {
+          "type": "assert_within",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "assert_operand",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "dimension",
+          "named": true
+        },
+        {
+          "type": "number",
+          "named": true
+        },
+        {
+          "type": "physical_value",
+          "named": true
+        },
+        {
+          "type": "qualified_name",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "assert_statement",
+    "named": true,
+    "fields": {
+      "expression": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "assert_expression",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "assert_within",
+    "named": true,
+    "fields": {
+      "left": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "assert_operand",
+            "named": true
+          }
+        ]
+      },
+      "target": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "physical_value",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "board_definition",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "board_property",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "board_property",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "layers_property",
+          "named": true
+        },
+        {
+          "type": "size_property",
+          "named": true
+        },
+        {
+          "type": "stackup_property",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "clearance_constraint",
+    "named": true,
+    "fields": {
+      "value": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "dimension",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "comparison_operator",
+    "named": true,
+    "fields": {}
+  },
+  {
+    "type": "component_definition",
+    "named": true,
+    "fields": {
+      "footprint": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "string",
+            "named": true
+          }
+        ]
+      },
+      "refdes": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      },
+      "type": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "component_type",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "net_assignment",
+          "named": true
+        },
+        {
+          "type": "position_property",
+          "named": true
+        },
+        {
+          "type": "rotation_property",
+          "named": true
+        },
+        {
+          "type": "value_property",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "component_type",
+    "named": true,
+    "fields": {}
+  },
+  {
+    "type": "courtyard_property",
+    "named": true,
+    "fields": {
+      "height": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "dimension",
+            "named": true
+          }
+        ]
+      },
+      "width": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "dimension",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "current_constraint",
+    "named": true,
+    "fields": {
+      "value": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "current_value",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "current_unit",
+    "named": true,
+    "fields": {}
+  },
+  {
+    "type": "current_value",
+    "named": true,
+    "fields": {
+      "amount": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "number",
+            "named": true
+          }
+        ]
+      },
+      "unit": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "current_unit",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "description_property",
+    "named": true,
+    "fields": {
+      "text": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "string",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "dimension",
+    "named": true,
+    "fields": {
+      "sign": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "-",
+            "named": false
+          }
+        ]
+      },
+      "unit": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "unit",
+            "named": true
+          }
+        ]
+      },
+      "value": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "number",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "drill_spec",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "dimension",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "footprint_definition",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "footprint_property",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "footprint_property",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "courtyard_property",
+          "named": true
+        },
+        {
+          "type": "description_property",
+          "named": true
+        },
+        {
+          "type": "pad_definition",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "import_name_list",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "identifier",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "import_statement",
+    "named": true,
+    "fields": {
+      "names": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "import_name_list",
+            "named": true
+          }
+        ]
+      },
+      "path": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "string",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "interface_definition",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "pin_declaration",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "layer_name",
+    "named": true,
+    "fields": {}
+  },
+  {
+    "type": "layers_property",
+    "named": true,
+    "fields": {
+      "count": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "number",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "module_definition",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "assert_statement",
+          "named": true
+        },
+        {
+          "type": "component_definition",
+          "named": true
+        },
+        {
+          "type": "module_instance",
+          "named": true
+        },
+        {
+          "type": "net_definition",
+          "named": true
+        },
+        {
+          "type": "pin_declaration",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "module_instance",
+    "named": true,
+    "fields": {
+      "module": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      },
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      },
+      "position": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "position_property",
+            "named": true
+          }
+        ]
+      },
+      "rotation": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "rotation_property",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "port_connection",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "net_assignment",
+    "named": true,
+    "fields": {
+      "net": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      },
+      "pin": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "pin_identifier",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "net_constraint",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "clearance_constraint",
+          "named": true
+        },
+        {
+          "type": "current_constraint",
+          "named": true
+        },
+        {
+          "type": "width_constraint",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "net_constraint_block",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "net_constraint",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "net_definition",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "net_constraint_block",
+          "named": true
+        },
+        {
+          "type": "pin_ref_list",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "netclass_definition",
+    "named": true,
+    "fields": {
+      "member": {
+        "multiple": true,
+        "required": false,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      },
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": false,
+      "required": false,
+      "types": [
+        {
+          "type": "net_constraint_block",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "outline_definition",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "outline_point",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "outline_point",
+    "named": true,
+    "fields": {
+      "x": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "dimension",
+            "named": true
+          }
+        ]
+      },
+      "y": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "dimension",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "pad_definition",
+    "named": true,
+    "fields": {
+      "drill": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "drill_spec",
+            "named": true
+          }
+        ]
+      },
+      "height": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "dimension",
+            "named": true
+          }
+        ]
+      },
+      "number": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "number",
+            "named": true
+          }
+        ]
+      },
+      "shape": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "pad_shape",
+            "named": true
+          }
+        ]
+      },
+      "width": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "dimension",
+            "named": true
+          }
+        ]
+      },
+      "x": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "dimension",
+            "named": true
+          }
+        ]
+      },
+      "y": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "dimension",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "pad_shape",
+    "named": true,
+    "fields": {}
+  },
+  {
+    "type": "path_point",
+    "named": true,
+    "fields": {
+      "x": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "dimension",
+            "named": true
+          }
+        ]
+      },
+      "y": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "dimension",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "physical_unit",
+    "named": true,
+    "fields": {}
+  },
+  {
+    "type": "physical_value",
+    "named": true,
+    "fields": {
+      "tolerance": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "tolerance",
+            "named": true
+          }
+        ]
+      },
+      "unit": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "physical_unit",
+            "named": true
+          }
+        ]
+      },
+      "value": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "number",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "pin_declaration",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "pin_identifier",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "identifier",
+          "named": true
+        },
+        {
+          "type": "number",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "pin_ref",
+    "named": true,
+    "fields": {
+      "component": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      },
+      "pin": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "pin_identifier",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "pin_ref_list",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "pin_ref",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "port_connection",
+    "named": true,
+    "fields": {
+      "net": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      },
+      "pin": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "position_property",
+    "named": true,
+    "fields": {
+      "x": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "dimension",
+            "named": true
+          }
+        ]
+      },
+      "y": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "dimension",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "qualified_name",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "identifier",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "rotation_property",
+    "named": true,
+    "fields": {
+      "angle": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "number",
+            "named": true
+          }
+        ]
+      },
+      "unit": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "deg",
+            "named": false
+          },
+          {
+            "type": "degrees",
+            "named": false
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "size_property",
+    "named": true,
+    "fields": {
+      "height": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "dimension",
+            "named": true
+          }
+        ]
+      },
+      "width": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "dimension",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "source_file",
+    "named": true,
+    "root": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "assert_statement",
+          "named": true
+        },
+        {
+          "type": "board_definition",
+          "named": true
+        },
+        {
+          "type": "component_definition",
+          "named": true
+        },
+        {
+          "type": "footprint_definition",
+          "named": true
+        },
+        {
+          "type": "import_statement",
+          "named": true
+        },
+        {
+          "type": "interface_definition",
+          "named": true
+        },
+        {
+          "type": "module_definition",
+          "named": true
+        },
+        {
+          "type": "module_instance",
+          "named": true
+        },
+        {
+          "type": "net_definition",
+          "named": true
+        },
+        {
+          "type": "netclass_definition",
+          "named": true
+        },
+        {
+          "type": "outline_definition",
+          "named": true
+        },
+        {
+          "type": "trace_definition",
+          "named": true
+        },
+        {
+          "type": "version_statement",
+          "named": true
+        },
+        {
+          "type": "zone_definition",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "stackup_layer",
+    "named": true,
+    "fields": {
+      "layer_type": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "copper",
+            "named": false
+          },
+          {
+            "type": "core",
+            "named": false
+          },
+          {
+            "type": "mask",
+            "named": false
+          },
+          {
+            "type": "prepreg",
+            "named": false
+          },
+          {
+            "type": "silk",
+            "named": false
+          }
+        ]
+      },
+      "thickness": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "dimension",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "stackup_property",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "stackup_layer",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "string",
+    "named": true,
+    "fields": {}
+  },
+  {
+    "type": "tolerance",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "tolerance_plus_minus",
+          "named": true
+        },
+        {
+          "type": "tolerance_range",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "tolerance_plus_minus",
+    "named": true,
+    "fields": {
+      "kind": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "%",
+            "named": false
+          },
+          {
+            "type": "physical_unit",
+            "named": true
+          }
+        ]
+      },
+      "value": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "number",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "tolerance_range",
+    "named": true,
+    "fields": {
+      "upper": {
+        "multiple": true,
+        "required": true,
+        "types": [
+          {
+            "type": "number",
+            "named": true
+          },
+          {
+            "type": "physical_unit",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "trace_definition",
+    "named": true,
+    "fields": {
+      "net": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "trace_from",
+          "named": true
+        },
+        {
+          "type": "trace_layer",
+          "named": true
+        },
+        {
+          "type": "trace_locked",
+          "named": true
+        },
+        {
+          "type": "trace_path",
+          "named": true
+        },
+        {
+          "type": "trace_to",
+          "named": true
+        },
+        {
+          "type": "trace_via",
+          "named": true
+        },
+        {
+          "type": "trace_width",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "trace_from",
+    "named": true,
+    "fields": {
+      "pin": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "pin_ref",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "trace_layer",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "trace_layer_name",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "trace_layer_name",
+    "named": true,
+    "fields": {}
+  },
+  {
+    "type": "trace_path",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "path_point",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "trace_to",
+    "named": true,
+    "fields": {
+      "pin": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "pin_ref",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "trace_via",
+    "named": true,
+    "fields": {
+      "drill": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "dimension",
+            "named": true
+          }
+        ]
+      },
+      "x": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "dimension",
+            "named": true
+          }
+        ]
+      },
+      "y": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "dimension",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "trace_width",
+    "named": true,
+    "fields": {
+      "value": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "dimension",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "unit",
+    "named": true,
+    "fields": {}
+  },
+  {
+    "type": "value_property",
+    "named": true,
+    "fields": {
+      "value": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "physical_value",
+            "named": true
+          },
+          {
+            "type": "string",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "version_statement",
+    "named": true,
+    "fields": {
+      "number": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "number",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "width_constraint",
+    "named": true,
+    "fields": {
+      "value": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "dimension",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "zone_bounds",
+    "named": true,
+    "fields": {
+      "max_x": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "dimension",
+            "named": true
+          }
+        ]
+      },
+      "max_y": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "dimension",
+            "named": true
+          }
+        ]
+      },
+      "min_x": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "dimension",
+            "named": true
+          }
+        ]
+      },
+      "min_y": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "dimension",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "zone_definition",
+    "named": true,
+    "fields": {
+      "kind": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "keepout",
+            "named": false
+          },
+          {
+            "type": "zone",
+            "named": false
+          }
+        ]
+      },
+      "name": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "zone_property",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "zone_layer",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "layer_name",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "zone_net",
+    "named": true,
+    "fields": {
+      "net": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "zone_property",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "zone_bounds",
+          "named": true
+        },
+        {
+          "type": "zone_layer",
+          "named": true
+        },
+        {
+          "type": "zone_net",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "!=",
+    "named": false
+  },
+  {
+    "type": "\"",
+    "named": false
+  },
+  {
+    "type": "%",
+    "named": false
+  },
+  {
+    "type": "+/-",
+    "named": false
+  },
+  {
+    "type": ",",
+    "named": false
+  },
+  {
+    "type": "-",
+    "named": false
+  },
+  {
+    "type": "->",
+    "named": false
+  },
+  {
+    "type": ".",
+    "named": false
+  },
+  {
+    "type": "<",
+    "named": false
+  },
+  {
+    "type": "<=",
+    "named": false
+  },
+  {
+    "type": "=",
+    "named": false
+  },
+  {
+    "type": "==",
+    "named": false
+  },
+  {
+    "type": ">",
+    "named": false
+  },
+  {
+    "type": ">=",
+    "named": false
+  },
+  {
+    "type": "A",
+    "named": false
+  },
+  {
+    "type": "Bottom",
+    "named": false
+  },
+  {
+    "type": "GHz",
+    "named": false
+  },
+  {
+    "type": "H",
+    "named": false
+  },
+  {
+    "type": "Hz",
+    "named": false
+  },
+  {
+    "type": "Inner1",
+    "named": false
+  },
+  {
+    "type": "Inner2",
+    "named": false
+  },
+  {
+    "type": "Inner3",
+    "named": false
+  },
+  {
+    "type": "Inner4",
+    "named": false
+  },
+  {
+    "type": "MHz",
+    "named": false
+  },
+  {
+    "type": "Mohm",
+    "named": false
+  },
+  {
+    "type": "Top",
+    "named": false
+  },
+  {
+    "type": "V",
+    "named": false
+  },
+  {
+    "type": "W",
+    "named": false
+  },
+  {
+    "type": "[",
+    "named": false
+  },
+  {
+    "type": "]",
+    "named": false
+  },
+  {
+    "type": "all",
+    "named": false
+  },
+  {
+    "type": "as",
+    "named": false
+  },
+  {
+    "type": "assert",
+    "named": false
+  },
+  {
+    "type": "at",
+    "named": false
+  },
+  {
+    "type": "block_comment",
+    "named": true,
+    "extra": true
+  },
+  {
+    "type": "board",
+    "named": false
+  },
+  {
+    "type": "bottom",
+    "named": false
+  },
+  {
+    "type": "bounds",
+    "named": false
+  },
+  {
+    "type": "capacitor",
+    "named": false
+  },
+  {
+    "type": "circle",
+    "named": false
+  },
+  {
+    "type": "clearance",
+    "named": false
+  },
+  {
+    "type": "component",
+    "named": false
+  },
+  {
+    "type": "connector",
+    "named": false
+  },
+  {
+    "type": "copper",
+    "named": false
+  },
+  {
+    "type": "core",
+    "named": false
+  },
+  {
+    "type": "courtyard",
+    "named": false
+  },
+  {
+    "type": "crystal",
+    "named": false
+  },
+  {
+    "type": "current",
+    "named": false
+  },
+  {
+    "type": "deg",
+    "named": false
+  },
+  {
+    "type": "degrees",
+    "named": false
+  },
+  {
+    "type": "description",
+    "named": false
+  },
+  {
+    "type": "diode",
+    "named": false
+  },
+  {
+    "type": "drill",
+    "named": false
+  },
+  {
+    "type": "footprint",
+    "named": false
+  },
+  {
+    "type": "from",
+    "named": false
+  },
+  {
+    "type": "generic",
+    "named": false
+  },
+  {
+    "type": "ic",
+    "named": false
+  },
+  {
+    "type": "identifier",
+    "named": true
+  },
+  {
+    "type": "import",
+    "named": false
+  },
+  {
+    "type": "in",
+    "named": false
+  },
+  {
+    "type": "inductor",
+    "named": false
+  },
+  {
+    "type": "interface",
+    "named": false
+  },
+  {
+    "type": "kHz",
+    "named": false
+  },
+  {
+    "type": "kV",
+    "named": false
+  },
+  {
+    "type": "keepout",
+    "named": false
+  },
+  {
+    "type": "kohm",
+    "named": false
+  },
+  {
+    "type": "layer",
+    "named": false
+  },
+  {
+    "type": "layers",
+    "named": false
+  },
+  {
+    "type": "led",
+    "named": false
+  },
+  {
+    "type": "line_comment",
+    "named": true,
+    "extra": true
+  },
+  {
+    "type": "mA",
+    "named": false
+  },
+  {
+    "type": "mF",
+    "named": false
+  },
+  {
+    "type": "mH",
+    "named": false
+  },
+  {
+    "type": "mV",
+    "named": false
+  },
+  {
+    "type": "mW",
+    "named": false
+  },
+  {
+    "type": "mask",
+    "named": false
+  },
+  {
+    "type": "mil",
+    "named": false
+  },
+  {
+    "type": "mm",
+    "named": false
+  },
+  {
+    "type": "module",
+    "named": false
+  },
+  {
+    "type": "nF",
+    "named": false
+  },
+  {
+    "type": "nH",
+    "named": false
+  },
+  {
+    "type": "net",
+    "named": false
+  },
+  {
+    "type": "netclass",
+    "named": false
+  },
+  {
+    "type": "nm",
+    "named": false
+  },
+  {
+    "type": "number",
+    "named": true
+  },
+  {
+    "type": "oblong",
+    "named": false
+  },
+  {
+    "type": "ohm",
+    "named": false
+  },
+  {
+    "type": "outline",
+    "named": false
+  },
+  {
+    "type": "pF",
+    "named": false
+  },
+  {
+    "type": "pad",
+    "named": false
+  },
+  {
+    "type": "path",
+    "named": false
+  },
+  {
+    "type": "pin",
+    "named": false
+  },
+  {
+    "type": "point",
+    "named": false
+  },
+  {
+    "type": "prepreg",
+    "named": false
+  },
+  {
+    "type": "rect",
+    "named": false
+  },
+  {
+    "type": "resistor",
+    "named": false
+  },
+  {
+    "type": "rotate",
+    "named": false
+  },
+  {
+    "type": "roundrect",
+    "named": false
+  },
+  {
+    "type": "silk",
+    "named": false
+  },
+  {
+    "type": "size",
+    "named": false
+  },
+  {
+    "type": "stackup",
+    "named": false
+  },
+  {
+    "type": "to",
+    "named": false
+  },
+  {
+    "type": "top",
+    "named": false
+  },
+  {
+    "type": "trace",
+    "named": false
+  },
+  {
+    "type": "trace_locked",
+    "named": true
+  },
+  {
+    "type": "transistor",
+    "named": false
+  },
+  {
+    "type": "uA",
+    "named": false
+  },
+  {
+    "type": "uF",
+    "named": false
+  },
+  {
+    "type": "uH",
+    "named": false
+  },
+  {
+    "type": "use",
+    "named": false
+  },
+  {
+    "type": "value",
+    "named": false
+  },
+  {
+    "type": "version",
+    "named": false
+  },
+  {
+    "type": "via",
+    "named": false
+  },
+  {
+    "type": "width",
+    "named": false
+  },
+  {
+    "type": "within",
+    "named": false
+  },
+  {
+    "type": "x",
+    "named": false
+  },
+  {
+    "type": "zone",
+    "named": false
+  },
+  {
+    "type": "{",
+    "named": false
+  },
+  {
+    "type": "}",
+    "named": false
+  }
+]

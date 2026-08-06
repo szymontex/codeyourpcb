@@ -15,8 +15,11 @@
 .DS_Store
 Thumbs.db
 
-# Generated Tree-sitter parser files
-crates/cypcb-parser/grammar/src/
+# Tree-sitter working files. The generated parser itself is committed:
+# build.rs compiles grammar/src/parser.c, so a clone that does not have it
+# cannot build at all, and requiring node and the tree-sitter CLI to compile a
+# Rust workspace is a worse trade than carrying a generated file. Every
+# tree-sitter grammar repository upstream does the same.
 crates/cypcb-parser/grammar/node_modules/
 crates/cypcb-parser/grammar/package-lock.json
 
