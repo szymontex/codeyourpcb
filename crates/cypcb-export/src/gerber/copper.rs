@@ -197,17 +197,26 @@ fn export_traces(
         output.push_str(&format!("D{}*\n", dcode));
 
         // Move to start of first segment
-        let start = trace.segments[0].start;
-        let x = nm_to_gerber(start.x.0, format);
-        let y = nm_to_gerber(start.y.0, format);
-        output.push_str(&format!("X{}Y{}D02*\n", x, y)); // D02 = move
-
-        // Draw all segments
+        // Lift the pen wherever the segments stop joining.
+        //
+        // A `Trace` holds every segment a net has on this layer, and a net with
+        // three or more pads branches: the list is several chains, not one.
+        // Moving once and drawing through all of them etches a straight line
+        // from the end of one branch to the start of the next - copper nobody
+        // routed, across whatever lies between. The DSL writer had the same
+        // defect; this is the copy that reaches the board house.
+        let mut pen: Option<cypcb_core::Point> = None;
         for segment in &trace.segments {
+            if pen != Some(segment.start) {
+                let x = nm_to_gerber(segment.start.x.0, format);
+                let y = nm_to_gerber(segment.start.y.0, format);
+                output.push_str(&format!("X{}Y{}D02*\n", x, y)); // D02 = move
+            }
             let end = segment.end;
             let x = nm_to_gerber(end.x.0, format);
             let y = nm_to_gerber(end.y.0, format);
             output.push_str(&format!("X{}Y{}D01*\n", x, y)); // D01 = draw
+            pen = Some(end);
         }
     }
 }
