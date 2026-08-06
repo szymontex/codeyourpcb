@@ -41,7 +41,7 @@ function deepBigIntToNumber(obj: any): any {
  * copper pad of a DIFFERENT component on the same side. Reports violations
  * when the silk-to-pad distance is less than min_silk_clearance.
  */
-function checkSilkClearance(snapshot: BoardSnapshot, minClearanceNm: number): ViolationInfo[] {
+export function checkSilkClearance(snapshot: BoardSnapshot, minClearanceNm: number): ViolationInfo[] {
   const violations: ViolationInfo[] = [];
   if (!snapshot.components || snapshot.components.length === 0) return violations;
 
@@ -71,8 +71,20 @@ function checkSilkClearance(snapshot: BoardSnapshot, minClearanceNm: number): Vi
     const sin = Math.sin(rad);
     const compX = N(comp.x_nm), compY = N(comp.y_nm);
 
+    // Which face this component's legend prints on.
+    //
+    // A shape may state a side - the EasyEDA parser sets one - and the engine
+    // does not: a footprint's artwork lives in footprint coordinates and the
+    // part decides where it goes. Reading only the shape meant every
+    // engine-supplied legend compared `undefined` against a pad's side, matched
+    // nothing, and skipped the check without saying so. The part's own pads are
+    // the fallback, because a legend prints on the face its copper is on.
+    const componentSide = comp.pads.some((pad) => N(pad.layer_mask) & 1)
+      ? ('top' as const)
+      : ('bottom' as const);
+
     for (const shape of comp.silk) {
-      const silkSide = shape.layer;
+      const silkSide = shape.layer ?? componentSide;
 
       // Transform silk shape to world coordinates
       if (shape.type === 'segment') {
