@@ -94,7 +94,6 @@ fn describe(cell: u8) -> &'static str {
 #[ignore = "diagnostic: compares the router's obstacle grid against DRC output"]
 fn what_the_grid_thought_was_there() {
     let drc_rules = DesignRules::jlcpcb_2layer();
-    let config = AutorouteConfig::default();
 
     for (strategy, label) in [
         (StrategyKind::PathFinder, "pathfinder"),
