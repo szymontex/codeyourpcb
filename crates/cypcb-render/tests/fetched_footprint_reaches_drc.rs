@@ -161,3 +161,45 @@ fn a_fetched_arc_becomes_ink_instead_of_being_dropped() {
     };
     assert_eq!(whole.to_shapes().len(), 32, "a full turn is 32 segments");
 }
+
+#[test]
+fn the_snapshot_carries_the_legend_the_engine_holds() {
+    // The viewer used to draw silk from its own JavaScript copy of the
+    // footprint, because the snapshot said nothing about it. Two copies of one
+    // fact drift: the engine could take an arc and turn it into ink, and the
+    // board on screen would still show whatever the fetch code decided.
+    let mut engine = PcbEngine::new();
+
+    let legend = r#"[
+        {"type":"segment","x1":-1000000,"y1":600000,"x2":1000000,"y2":600000,"width":150000},
+        {"type":"circle","cx":-1200000,"cy":0,"radius":150000,"width":150000},
+        {"type":"arc","cx":0,"cy":0,"radius":800000,"width":150000,
+         "start_angle":0.0,"end_angle":90.0}
+    ]"#;
+    assert!(engine.register_footprint("MARKED", PADS, legend).is_empty());
+
+    let source = r#"version 1
+
+board legends {
+    size 20mm x 20mm
+    layers 2
+}
+
+component R1 resistor "MARKED" {
+    value 10kohm
+    at 10mm, 10mm
+}
+"#;
+    assert!(engine.load_source(source).is_empty());
+
+    let snapshot = engine.get_snapshot();
+    let segments = snapshot.matches(r#""type":"segment""#).count();
+    let circles = snapshot.matches(r#""type":"circle""#).count();
+
+    // One drawn segment, one circle, and the quarter arc as eight more.
+    assert_eq!(
+        (segments, circles),
+        (9, 1),
+        "the legend has to reach the host as the engine holds it: {snapshot}"
+    );
+}

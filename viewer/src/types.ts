@@ -56,10 +56,17 @@ export interface ComponentInfo {
  * A silkscreen drawing primitive, relative to component origin.
  * Coordinates in nanometers.
  */
+/**
+ * `layer` is optional because nothing requires it: the engine does not send
+ * one - the board model keeps a footprint's artwork in footprint coordinates
+ * and the part's own side decides where it prints - and the renderer draws
+ * every shape in the silkscreen colour without asking. Declaring it required
+ * described neither producer.
+ */
 export type SilkShape =
-  | { type: 'segment'; x1: number; y1: number; x2: number; y2: number; width: number; layer: 'top' | 'bottom' }
-  | { type: 'circle'; cx: number; cy: number; radius: number; width: number; layer: 'top' | 'bottom' }
-  | { type: 'arc'; cx: number; cy: number; radius: number; startAngle: number; endAngle: number; width: number; layer: 'top' | 'bottom' };
+  | { type: 'segment'; x1: number; y1: number; x2: number; y2: number; width: number; layer?: 'top' | 'bottom' }
+  | { type: 'circle'; cx: number; cy: number; radius: number; width: number; layer?: 'top' | 'bottom' }
+  | { type: 'arc'; cx: number; cy: number; radius: number; startAngle: number; endAngle: number; width: number; layer?: 'top' | 'bottom' };
 
 export interface PadInfo {
   number: string;

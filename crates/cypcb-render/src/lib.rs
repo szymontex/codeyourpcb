@@ -1390,9 +1390,18 @@ impl PcbEngine {
                 body_height_nm = max_y - min_y;
             }
 
+            // The legend the engine holds, so the host does not need its own
+            // copy of the footprint to draw one.
+            let silk: Vec<SilkInfo> = self
+                .footprint_lib
+                .get(&footprint_name)
+                .map(|fp| fp.silk.iter().map(SilkInfo::from_shape).collect())
+                .unwrap_or_default();
+
             let refdes_str: String = refdes.as_str().to_string();
             components.push(ComponentInfo {
                 refdes: refdes_str,
+                silk,
                 value,
                 x_nm: position.0.x.0,
                 y_nm: position.0.y.0,
@@ -2097,6 +2106,7 @@ mod tests {
                     body_width_nm: 0,
                     body_height_nm: 0,
                     model_3d: None,
+                    silk: Vec::new(),
                 },
                 ComponentInfo {
                     refdes: "R2".to_string(),
@@ -2109,6 +2119,7 @@ mod tests {
                     body_width_nm: 0,
                     body_height_nm: 0,
                     model_3d: None,
+                    silk: Vec::new(),
                 },
             ],
             nets: vec![],

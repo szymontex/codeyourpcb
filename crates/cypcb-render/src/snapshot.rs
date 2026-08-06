@@ -114,6 +114,14 @@ pub struct ComponentInfo {
     pub body_height_nm: i64,
     /// Optional path/key to a GLB 3D model file (for future use).
     pub model_3d: Option<String>,
+    /// The footprint's own silkscreen artwork, in footprint coordinates.
+    ///
+    /// Sent so the viewer draws the legend the engine holds rather than its
+    /// own copy of the footprint. Empty when the part carries no artwork, and
+    /// omitted from the JSON entirely in that case so a snapshot of a board
+    /// without legends is no larger than it was.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub silk: Vec<SilkInfo>,
 }
 
 /// Pad information for rendering.
@@ -286,6 +294,7 @@ mod tests {
                 body_width_nm: 1_000_000,
                 body_height_nm: 500_000,
                 model_3d: None,
+                silk: Vec::new(),
             }],
             nets: vec![NetInfo {
                 name: "VCC".to_string(),
@@ -471,7 +480,7 @@ mod tests {
 /// dropped rather than refused - the board model has no arc, and rejecting a
 /// whole footprint over a rounded corner would be worse than printing it
 /// without one. That trade is recorded in the tracker rather than hidden here.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum SilkInfo {
     /// A straight line.
@@ -589,6 +598,33 @@ impl SilkInfo {
         }
 
         self.to_shape().into_iter().collect()
+    }
+
+    /// Describe a shape the board model holds, for sending to a host.
+    ///
+    /// The model has no arc, so nothing here produces one: an arc that came in
+    /// was turned into segments on the way and goes back out as segments.
+    pub fn from_shape(shape: &cypcb_world::footprint::SilkShape) -> Self {
+        use cypcb_world::footprint::SilkShape;
+        match shape {
+            SilkShape::Segment { start, end, width } => SilkInfo::Segment {
+                x1: start.x.0,
+                y1: start.y.0,
+                x2: end.x.0,
+                y2: end.y.0,
+                width: width.0,
+            },
+            SilkShape::Circle {
+                centre,
+                radius,
+                width,
+            } => SilkInfo::Circle {
+                cx: centre.x.0,
+                cy: centre.y.0,
+                radius: radius.0,
+                width: width.0,
+            },
+        }
     }
 
     /// Convert to the board model's shape, if it is a single one.
