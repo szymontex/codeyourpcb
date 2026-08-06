@@ -355,14 +355,23 @@ Used by CLI for `--watch` mode. Not used in web/desktop (handled by Vite dev ser
 
 **Purpose**: Command-line interface
 
-**Key Commands**:
-- `cypcb check <file>` - Parse and validate
-- `cypcb export <file>` - Generate manufacturing files
-- `cypcb route <file>` - Run autorouter
+**Key Commands** (count them rather than trust this list:
+`cypcb --help`):
+- `cypcb check <file>` - parse, validate and run DRC. Exit code 1 on
+  violations, so it is usable from a script. `--preset` picks the fab rules,
+  `--no-drc` stops at parsing.
+- `cypcb export <file> --output <dir>` - Gerbers, drill, BOM and
+  pick-and-place. 13 files.
+- `cypcb route <file>` - autorouter. `--in-house` uses the built-in
+  PathFinder and writes the result back as `.cypcb` trace blocks;
+  `--variants` routes several ways, scores each and keeps the best, which is
+  what the viewer has always done. Without either flag it exports DSN for
+  FreeRouting.
+- `cypcb score <file>` - route and print quality metrics as JSON.
+- `cypcb parse` / `cypcb parse-kicad` - the AST, and KiCad board metadata.
 
-**Dependencies**: `clap`, `cypcb-parser`, `cypcb-world`, `cypcb-export`, `cypcb-router`
-
-**Size**: ~600 lines
+**Dependencies**: `clap`, `cypcb-parser`, `cypcb-world`, `cypcb-export`,
+`cypcb-router`, `cypcb-autoroute`, `cypcb-drc`, `cypcb-rules`, `cypcb-kicad`
 
 CLI is standalone binary, useful for CI/CD pipelines and headless builds.
 

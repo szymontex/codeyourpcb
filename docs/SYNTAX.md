@@ -412,7 +412,10 @@ This checks for:
 
 - Review example files in `examples/`
 - Run `cypcb check` on your designs
-- Use `cypcb route` to auto-route traces
+- Use `cypcb route --variants` to auto-route traces. It routes the board
+  several ways and keeps the one that scores best, because no single setting
+  wins on every board - measured across the benchmark suite, the winner
+  differs per board every time.
 - Export Gerber files with `cypcb export`
 
 For more information, see the main project README.
