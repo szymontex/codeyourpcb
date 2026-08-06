@@ -158,8 +158,18 @@ pub fn export_silkscreen(
             draw_crosshair(position.0, config.line_width, &mut drawing_commands, format);
         }
 
-        // Draw courtyard outline
-        if config.show_courtyards {
+        // A footprint that carries its own artwork prints that. Drawing the
+        // courtyard as well would put a box on the board that the footprint
+        // never had.
+        if !footprint.silk.is_empty() {
+            draw_artwork(
+                position.0,
+                &footprint.silk,
+                rotation.0,
+                &mut drawing_commands,
+                format,
+            );
+        } else if config.show_courtyards {
             draw_courtyard(
                 position.0,
                 &footprint.courtyard,
@@ -209,6 +219,75 @@ fn draw_crosshair(
 
     let y_top = nm_to_gerber(position.y.0 + half_size, format);
     output.push_str(&format!("X{}Y{}D01*\n", x, y_top)); // Draw to top
+}
+
+/// Draw a footprint's own silkscreen artwork.
+///
+/// Placed and turned with the part. A circle is emitted as a polygon of 32
+/// sides, which at the scale a legend is printed differs from the curve by
+/// less than the width of the line drawing it.
+fn draw_artwork(
+    position: cypcb_core::Point,
+    shapes: &[cypcb_world::footprint::SilkShape],
+    rotation_millideg: i32,
+    output: &mut String,
+    format: &CoordinateFormat,
+) {
+    use cypcb_world::footprint::SilkShape;
+
+    let radians = (rotation_millideg as f64 / 1000.0).to_radians();
+    let (sin, cos) = radians.sin_cos();
+    let place = |p: cypcb_core::Point| -> (i64, i64) {
+        let x = p.x.0 as f64;
+        let y = p.y.0 as f64;
+        (
+            position.x.0 + (x * cos - y * sin).round() as i64,
+            position.y.0 + (x * sin + y * cos).round() as i64,
+        )
+    };
+
+    let mut move_to = |x: i64, y: i64, output: &mut String| {
+        output.push_str(&format!(
+            "X{}Y{}D02*\n",
+            nm_to_gerber(x, format),
+            nm_to_gerber(y, format)
+        ));
+    };
+    let line_to = |x: i64, y: i64, output: &mut String| {
+        output.push_str(&format!(
+            "X{}Y{}D01*\n",
+            nm_to_gerber(x, format),
+            nm_to_gerber(y, format)
+        ));
+    };
+
+    for shape in shapes {
+        match shape {
+            SilkShape::Segment { start, end, .. } => {
+                let (sx, sy) = place(*start);
+                let (ex, ey) = place(*end);
+                move_to(sx, sy, output);
+                line_to(ex, ey, output);
+            }
+            SilkShape::Circle { centre, radius, .. } => {
+                const STEPS: usize = 32;
+                let radius = radius.0 as f64;
+                for step in 0..=STEPS {
+                    let angle = step as f64 / STEPS as f64 * std::f64::consts::TAU;
+                    let point = cypcb_core::Point::new(
+                        cypcb_core::Nm(centre.x.0 + (radius * angle.cos()).round() as i64),
+                        cypcb_core::Nm(centre.y.0 + (radius * angle.sin()).round() as i64),
+                    );
+                    let (x, y) = place(point);
+                    if step == 0 {
+                        move_to(x, y, output);
+                    } else {
+                        line_to(x, y, output);
+                    }
+                }
+            }
+        }
+    }
 }
 
 /// Draw a courtyard outline rectangle.
@@ -288,6 +367,7 @@ mod tests {
             pads: vec![pad1, pad2],
             bounds: Rect::new(Point::from_mm(-1.5, -0.75), Point::from_mm(1.5, 0.75)),
             courtyard: Rect::new(Point::from_mm(-2.0, -1.0), Point::from_mm(2.0, 1.0)),
+            silk: Vec::new(),
         }
     }
 
@@ -411,6 +491,7 @@ mod tests {
             pads: vec![pad],
             bounds: Rect::new(Point::from_mm(-0.75, -0.75), Point::from_mm(0.75, 0.75)),
             courtyard: Rect::new(Point::from_mm(-1.0, -1.0), Point::from_mm(1.0, 1.0)),
+            silk: Vec::new(),
         };
 
         let mut library = FootprintLibrary::new();

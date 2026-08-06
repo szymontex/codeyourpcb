@@ -142,6 +142,7 @@ pub fn gullwing_footprint(
         description: description.into(),
         pads,
         bounds: Rect::from_center_size(Point::ORIGIN, body_size),
+        silk: Vec::new(),
         courtyard: Rect::from_center_size(
             Point::ORIGIN,
             (
@@ -292,6 +293,7 @@ pub fn sot23() -> Footprint {
             },
         ],
         bounds: Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(3.0), Nm::from_mm(2.5))),
+        silk: Vec::new(),
         courtyard: Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(3.5), Nm::from_mm(3.0))),
     }
 }
@@ -384,6 +386,7 @@ pub fn sot23_5() -> Footprint {
             },
         ],
         bounds: Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(3.0), Nm::from_mm(3.0))),
+        silk: Vec::new(),
         courtyard: Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(3.5), Nm::from_mm(3.5))),
     }
 }
@@ -505,6 +508,7 @@ pub fn tqfp32() -> Footprint {
         description: "Thin Quad Flat Package, 32 pins, 0.8mm pitch".into(),
         pads,
         bounds: Rect::from_center_size(Point::ORIGIN, (body_size, body_size)),
+        silk: Vec::new(),
         courtyard: Rect::from_center_size(
             Point::ORIGIN,
             (body_size + courtyard_margin, body_size + courtyard_margin),

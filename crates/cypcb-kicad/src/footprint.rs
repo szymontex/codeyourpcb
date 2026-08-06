@@ -140,6 +140,7 @@ fn convert_module(module: &Module) -> Result<Footprint, KicadImportError> {
         pads,
         bounds,
         courtyard,
+        silk: Vec::new(),
     })
 }
 

@@ -1421,6 +1421,9 @@ impl PcbEngine {
             pads: pad_defs,
             bounds,
             courtyard,
+            // A snapshot carries pads, not artwork; the host registers silk
+            // separately when it has any.
+            silk: Vec::new(),
         }
     }
 

@@ -71,6 +71,44 @@ impl PadDef {
     }
 }
 
+/// A piece of silkscreen artwork, in footprint coordinates.
+///
+/// What a fabricator prints as the legend: outlines, polarity marks, pin-one
+/// dots. Held per footprint because that is where it comes from - a courtyard
+/// outline is what the exporter can derive, artwork is what a real footprint
+/// carries.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum SilkShape {
+    /// A straight line of the given width.
+    Segment {
+        /// One end.
+        start: Point,
+        /// The other end.
+        end: Point,
+        /// Stroke width.
+        width: Nm,
+    },
+    /// A circle outline of the given stroke width.
+    Circle {
+        /// Centre.
+        centre: Point,
+        /// Radius to the centre of the stroke.
+        radius: Nm,
+        /// Stroke width.
+        width: Nm,
+    },
+}
+
+impl SilkShape {
+    /// The stroke width, whatever the shape.
+    #[inline]
+    pub fn width(&self) -> Nm {
+        match self {
+            SilkShape::Segment { width, .. } | SilkShape::Circle { width, .. } => *width,
+        }
+    }
+}
+
 /// A complete footprint definition.
 ///
 /// A footprint represents the physical landing pattern for a component,
@@ -100,6 +138,12 @@ pub struct Footprint {
     pub bounds: Rect,
     /// Assembly courtyard (clearance area).
     pub courtyard: Rect,
+    /// Silkscreen artwork, in footprint coordinates.
+    ///
+    /// Empty means the footprint says nothing about its legend, and the only
+    /// ink the exporter draws is the courtyard outline. A part fetched from a
+    /// supplier arrives with real artwork, and this is where it survives.
+    pub silk: Vec<SilkShape>,
 }
 
 impl Footprint {
@@ -194,6 +238,7 @@ impl FootprintLibrary {
     ///     pads: Vec::new(),
     ///     bounds: empty,
     ///     courtyard: empty,
+    ///     silk: Vec::new(),
     /// });
     /// assert!(lib.contains("MY_PART"));
     ///
@@ -315,6 +360,7 @@ mod tests {
             description: "Custom test footprint".into(),
             pads: vec![],
             bounds: Rect::default(),
+            silk: Vec::new(),
             courtyard: Rect::default(),
         };
 
@@ -333,6 +379,7 @@ mod tests {
             description: String::new(),
             pads: vec![],
             bounds: Rect::default(),
+            silk: Vec::new(),
             courtyard: Rect::default(),
         });
         lib.register(Footprint {
@@ -340,6 +387,7 @@ mod tests {
             description: String::new(),
             pads: vec![],
             bounds: Rect::default(),
+            silk: Vec::new(),
             courtyard: Rect::default(),
         });
         assert_eq!(lib.len(), initial_count + 2);
@@ -367,6 +415,7 @@ mod tests {
             description: "redefined by the design".into(),
             pads: vec![],
             bounds: Rect::default(),
+            silk: Vec::new(),
             courtyard: Rect::default(),
         });
         assert_eq!(lib.get("0402").unwrap().pads.len(), 0);
@@ -386,6 +435,7 @@ mod tests {
                 description: description.into(),
                 pads: vec![],
                 bounds: Rect::default(),
+                silk: Vec::new(),
                 courtyard: Rect::default(),
             });
         }

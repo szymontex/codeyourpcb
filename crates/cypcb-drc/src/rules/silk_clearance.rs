@@ -15,7 +15,7 @@
 
 use cypcb_core::{Nm, Point};
 use cypcb_world::components::{FootprintRef, Position, RefDes, Rotation, Side};
-use cypcb_world::footprint::Footprint;
+use cypcb_world::footprint::{Footprint, SilkShape};
 use cypcb_world::{BoardWorld, Layer};
 
 use crate::presets::DesignRules;
@@ -53,7 +53,7 @@ impl DrcRule for SilkClearanceRule {
             let Some(footprint) = library.get(&silk.footprint) else {
                 continue;
             };
-            let edges = courtyard_edges(footprint, silk);
+            let edges = silk_segments(footprint, silk);
             if edges.is_empty() {
                 continue;
             }
@@ -130,6 +130,51 @@ fn collect_placed(world: &mut BoardWorld) -> Vec<Placed> {
 ///
 /// Returns nothing for a footprint whose courtyard has no area, which is how
 /// the library represents "not known" - there is no artwork to check.
+/// The artwork a placed footprint prints, as segments in board coordinates.
+///
+/// A footprint that carries its own artwork prints that; one that does not
+/// prints the courtyard outline the exporter derives, which is what
+/// `gerber::silk` emits. A circle is walked as a polygon fine enough that the
+/// error is under a tenth of its stroke - close enough to measure clearance
+/// against, and far cheaper than a curve intersection.
+fn silk_segments(footprint: &Footprint, placed: &Placed) -> Vec<(Point, Point)> {
+    if footprint.silk.is_empty() {
+        return courtyard_edges(footprint, placed);
+    }
+
+    let place = |p: Point| -> Point {
+        let rotated = rotate_point(p, placed.rotation_deg);
+        Point::new(
+            Nm(placed.position.x.raw() + rotated.x.raw()),
+            Nm(placed.position.y.raw() + rotated.y.raw()),
+        )
+    };
+
+    let mut out = Vec::new();
+    for shape in &footprint.silk {
+        match shape {
+            SilkShape::Segment { start, end, .. } => out.push((place(*start), place(*end))),
+            SilkShape::Circle { centre, radius, .. } => {
+                const STEPS: usize = 24;
+                let radius = radius.raw() as f64;
+                let mut previous = None;
+                for step in 0..=STEPS {
+                    let angle = step as f64 / STEPS as f64 * std::f64::consts::TAU;
+                    let point = place(Point::new(
+                        Nm(centre.x.raw() + (radius * angle.cos()).round() as i64),
+                        Nm(centre.y.raw() + (radius * angle.sin()).round() as i64),
+                    ));
+                    if let Some(previous) = previous {
+                        out.push((previous, point));
+                    }
+                    previous = Some(point);
+                }
+            }
+        }
+    }
+    out
+}
+
 fn courtyard_edges(footprint: &Footprint, placed: &Placed) -> Vec<(Point, Point)> {
     let court = &footprint.courtyard;
     if court.min.x.raw() >= court.max.x.raw() || court.min.y.raw() >= court.max.y.raw() {
@@ -309,6 +354,53 @@ mod tests {
             violations[0].message.contains("silkscreen over R"),
             "the message names the part whose ink it is: {}",
             violations[0].message
+        );
+    }
+
+    #[test]
+    fn real_artwork_is_measured_instead_of_the_courtyard() {
+        use cypcb_world::footprint::{FootprintLibrary, SilkShape};
+
+        // A part whose legend is a single line reaching well past its own
+        // courtyard - the kind of outline a supplier's footprint carries.
+        let mut world = BoardWorld::new();
+        world.set_board("t".to_string(), (Nm::from_mm(20.0), Nm::from_mm(20.0)), 2);
+
+        let mut library = FootprintLibrary::new();
+        let mut marked = library.get("0402").expect("built-in").clone();
+        marked.name = "0402-MARKED".to_string();
+        marked.silk = vec![SilkShape::Segment {
+            start: Point::from_mm(0.0, 0.0),
+            end: Point::from_mm(4.0, 0.0),
+            width: Nm::from_mm(0.15),
+        }];
+        library.register(marked);
+        world.set_footprints(library);
+
+        world.spawn_component(
+            RefDes::new("U1"),
+            Value::new("part"),
+            Position::from_mm(5.0, 10.0),
+            Rotation::ZERO,
+            FootprintRef::new("0402-MARKED"),
+            NetConnections::new(),
+        );
+        // Its pad sits under where that line runs.
+        world.spawn_component(
+            RefDes::new("R9"),
+            Value::new("10k"),
+            Position::from_mm(9.0, 10.0),
+            Rotation::ZERO,
+            FootprintRef::new("0402"),
+            NetConnections::new(),
+        );
+
+        let violations = SilkClearanceRule.check(&mut world, &DesignRules::jlcpcb_2layer());
+        assert!(
+            violations
+                .iter()
+                .any(|v| v.message.contains("U1 silkscreen over R9")),
+            "the line reaches R9's copper, and only the artwork says so: {violations:?}"
         );
     }
 

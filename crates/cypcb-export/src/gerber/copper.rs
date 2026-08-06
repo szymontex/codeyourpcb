@@ -333,6 +333,7 @@ mod tests {
             description: "Test footprint".into(),
             bounds: Rect::new(Point::ORIGIN, Point::ORIGIN),
             courtyard: Rect::new(Point::ORIGIN, Point::ORIGIN),
+            silk: Vec::new(),
             pads: vec![PadDef {
                 number: "1".into(),
                 shape: PadShape::Circle,

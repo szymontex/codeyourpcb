@@ -38,4 +38,4 @@ mod library;
 mod smd;
 mod tht;
 
-pub use library::{Footprint, FootprintLibrary, PadDef};
+pub use library::{Footprint, FootprintLibrary, PadDef, SilkShape};

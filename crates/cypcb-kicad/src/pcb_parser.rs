@@ -686,6 +686,7 @@ fn parse_footprint(
             pads: pad_defs,
             bounds,
             courtyard,
+            silk: Vec::new(),
         });
     }
 

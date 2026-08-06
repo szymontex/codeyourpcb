@@ -1093,6 +1093,9 @@ fn convert_footprint_def(fp_def: &FootprintDef) -> Footprint {
         pads,
         bounds,
         courtyard,
+        // The DSL has no syntax for silkscreen artwork; a footprint written by
+        // hand gets the courtyard outline the exporter derives.
+        silk: Vec::new(),
     }
 }
 

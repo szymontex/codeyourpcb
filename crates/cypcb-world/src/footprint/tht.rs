@@ -75,6 +75,7 @@ pub fn axial_300mil() -> Footprint {
             },
         ],
         bounds: Rect::from_center_size(Point::ORIGIN, (lead_spacing + pad_size, Nm::from_mm(2.5))),
+        silk: Vec::new(),
         courtyard: Rect::from_center_size(
             Point::ORIGIN,
             (lead_spacing + pad_size + Nm::from_mm(0.5), Nm::from_mm(3.5)),
@@ -154,6 +155,7 @@ pub fn dip8() -> Footprint {
         description: "8-pin DIP, 300mil row spacing".into(),
         pads,
         bounds: Rect::from_center_size(Point::ORIGIN, (body_width, body_height)),
+        silk: Vec::new(),
         courtyard: Rect::from_center_size(
             Point::ORIGIN,
             (
@@ -200,6 +202,7 @@ pub fn pin_header_1x2() -> Footprint {
             },
         ],
         bounds: Rect::from_center_size(Point::ORIGIN, (pin_pitch + pad_size, Nm::from_mm(2.54))),
+        silk: Vec::new(),
         courtyard: Rect::from_center_size(
             Point::ORIGIN,
             (pin_pitch + pad_size + Nm::from_mm(0.5), Nm::from_mm(3.5)),

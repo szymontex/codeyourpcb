@@ -84,6 +84,7 @@ fn chip_footprint(
         ],
         bounds: Rect::from_center_size(Point::ORIGIN, (body_width, body_height)),
         // Courtyard: body + 0.25mm clearance per IPC-7351B
+        silk: Vec::new(),
         courtyard: Rect::from_center_size(
             Point::ORIGIN,
             (
