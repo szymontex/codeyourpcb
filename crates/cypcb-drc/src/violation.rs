@@ -24,6 +24,16 @@ pub struct DrcViolation {
     pub source_span: Option<Span>,
     /// Human-readable description.
     pub message: String,
+    /// The distance measured, where the rule measures one.
+    ///
+    /// Carried as a number rather than only inside `message`, because the
+    /// difference between 0.00mm and 0.05mm is the difference between copper
+    /// touching copper and a gap under spec - a board that cannot work and a
+    /// board a fab may still build. Anything ranking violations has to be
+    /// able to tell them apart without parsing a sentence.
+    pub actual: Option<Nm>,
+    /// What the rule demanded, where it demands a distance.
+    pub required: Option<Nm>,
 }
 
 /// Categories of design rule violations.
@@ -119,6 +129,8 @@ impl DrcViolation {
     ) -> Self {
         DrcViolation {
             kind: ViolationKind::Clearance,
+            actual: Some(actual),
+            required: Some(required),
             location,
             entity,
             other_entity: Some(other),
@@ -158,6 +170,8 @@ impl DrcViolation {
     pub fn drill_size(entity: Entity, actual: Nm, required: Nm, location: Point) -> Self {
         DrcViolation {
             kind: ViolationKind::DrillSize,
+            actual: None,
+            required: None,
             location,
             entity,
             other_entity: None,
@@ -197,6 +211,8 @@ impl DrcViolation {
     pub fn trace_width(entity: Entity, actual: Nm, required: Nm, location: Point) -> Self {
         DrcViolation {
             kind: ViolationKind::TraceWidth,
+            actual: None,
+            required: None,
             location,
             entity,
             other_entity: None,
@@ -237,6 +253,8 @@ impl DrcViolation {
     pub fn unconnected_pin(entity: Entity, pin: &str, refdes: &str, location: Point) -> Self {
         DrcViolation {
             kind: ViolationKind::UnconnectedPin,
+            actual: None,
+            required: None,
             location,
             entity,
             other_entity: None,
@@ -284,6 +302,8 @@ impl DrcViolation {
             .unwrap_or_else(|| "keepout zone".to_string());
         DrcViolation {
             kind: ViolationKind::KeepoutViolation,
+            actual: None,
+            required: None,
             location,
             entity,
             other_entity: Some(zone_entity),
@@ -319,6 +339,8 @@ impl DrcViolation {
     pub fn edge_clearance(entity: Entity, actual: Nm, required: Nm, location: Point) -> Self {
         DrcViolation {
             kind: ViolationKind::EdgeClearance,
+            actual: None,
+            required: None,
             location,
             entity,
             other_entity: None,
@@ -358,6 +380,8 @@ impl DrcViolation {
     pub fn annular_ring(entity: Entity, actual: Nm, required: Nm, location: Point) -> Self {
         DrcViolation {
             kind: ViolationKind::AnnularRing,
+            actual: None,
+            required: None,
             location,
             entity,
             other_entity: None,
@@ -380,6 +404,8 @@ impl DrcViolation {
     ) -> Self {
         DrcViolation {
             kind: ViolationKind::HoleToHole,
+            actual: None,
+            required: None,
             location,
             entity,
             other_entity: Some(other),
@@ -396,6 +422,8 @@ impl DrcViolation {
     pub fn via_diameter(entity: Entity, actual: Nm, required: Nm, location: Point) -> Self {
         DrcViolation {
             kind: ViolationKind::ViaDiameter,
+            actual: None,
+            required: None,
             location,
             entity,
             other_entity: None,
@@ -415,6 +443,8 @@ impl DrcViolation {
     pub fn via_drill(entity: Entity, actual: Nm, required: Nm, location: Point) -> Self {
         DrcViolation {
             kind: ViolationKind::ViaDrill,
+            actual: None,
+            required: None,
             location,
             entity,
             other_entity: None,
@@ -437,6 +467,8 @@ impl DrcViolation {
     ) -> Self {
         DrcViolation {
             kind: ViolationKind::SolderMaskBridge,
+            actual: None,
+            required: None,
             location,
             entity,
             other_entity: Some(other),
@@ -456,6 +488,8 @@ impl DrcViolation {
     pub fn assertion(entity: Entity, location: Point) -> Self {
         DrcViolation {
             kind: ViolationKind::Assertion,
+            actual: None,
+            required: None,
             location,
             entity,
             other_entity: None,
@@ -472,6 +506,8 @@ impl DrcViolation {
     pub fn trace_current(entity: Entity, actual: Nm, required: Nm, location: Point) -> Self {
         DrcViolation {
             kind: ViolationKind::TraceCurrent,
+            actual: None,
+            required: None,
             location,
             entity,
             other_entity: None,
@@ -488,6 +524,8 @@ impl DrcViolation {
     pub fn silk_clearance(entity: Entity, actual: Nm, required: Nm, location: Point) -> Self {
         DrcViolation {
             kind: ViolationKind::SilkClearance,
+            actual: None,
+            required: None,
             location,
             entity,
             other_entity: None,
@@ -510,6 +548,8 @@ impl DrcViolation {
     ) -> Self {
         DrcViolation {
             kind: ViolationKind::CourtyardClearance,
+            actual: None,
+            required: None,
             location,
             entity,
             other_entity: Some(other),

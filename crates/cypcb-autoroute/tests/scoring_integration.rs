@@ -255,6 +255,10 @@ fn score_json_serialization() {
         "crossings",
         "layer_balance",
         "composite",
+        // Shorts are carried beside the violation count because a board with
+        // copper on copper is a different failure from one with a gap under
+        // spec, and the ranking has to be able to tell them apart.
+        "shorts",
     ];
 
     for field in &expected_fields {
@@ -274,8 +278,8 @@ fn score_json_serialization() {
     let obj = parsed.as_object().unwrap();
     assert_eq!(
         obj.len(),
-        7,
-        "JSON object should have exactly 7 fields, got {}",
+        8,
+        "JSON object should have exactly 8 fields, got {}",
         obj.len()
     );
 

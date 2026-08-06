@@ -268,6 +268,12 @@ pub fn generate_variants(
     results.sort_by(|a, b| {
         a.unrouted
             .cmp(&b.unrouted)
+            // Copper touching copper next, whatever the totals say. A board
+            // with one short and one tight gap is not better than a board with
+            // three tight gaps: the first cannot work and the second is a
+            // yield risk. The composite charges every violation the same, so
+            // the ordering has to make the distinction the score cannot.
+            .then_with(|| a.score.shorts.cmp(&b.score.shorts))
             .then_with(|| {
                 a.score
                     .composite
@@ -414,6 +420,7 @@ mod tests {
                 total_length: Nm::from_mm(100.0),
                 via_count: 3,
                 drc_violations: 0,
+                shorts: 0,
                 smoothness: 0.95,
                 crossings: 1,
                 layer_balance: 0.8,
@@ -450,6 +457,7 @@ mod tests {
                     total_length: Nm(0),
                     via_count: 0,
                     drc_violations: 0,
+                    shorts: 0,
                     smoothness: 1.0,
                     crossings: 0,
                     layer_balance: 1.0,
@@ -465,6 +473,7 @@ mod tests {
                     total_length: Nm(0),
                     via_count: 0,
                     drc_violations: 0,
+                    shorts: 0,
                     smoothness: 1.0,
                     crossings: 0,
                     layer_balance: 1.0,

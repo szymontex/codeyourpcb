@@ -83,11 +83,12 @@ fn which_variant_each_board_picks() {
         // winner to the world.
         for (rank, result) in results.iter().enumerate() {
             eprintln!(
-                "  {}. {:<32} composite {:>8.1}, drc {:>4}, vias {:>4}, {:.1}mm, {} unrouted",
+                "  {}. {:<32} composite {:>8.1}, drc {:>4} ({} shorts), vias {:>4}, {:.1}mm, {} unrouted",
                 rank + 1,
                 result.name,
                 result.score.composite,
                 result.score.drc_violations,
+                result.score.shorts,
                 result.score.via_count,
                 result.score.total_length.to_mm(),
                 result.unrouted,

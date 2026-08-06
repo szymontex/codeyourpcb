@@ -60,7 +60,7 @@ fn variant_generation_returns_multiple_results() {
 }
 
 #[test]
-fn variants_sorted_by_composite_score() {
+fn variants_sorted_by_completeness_then_shorts_then_score() {
     let parsed = parse_kicad_pcb(&fixture_path("led_blink.kicad_pcb"))
         .expect("Failed to parse led_blink fixture");
     let mut world = parsed.world;
@@ -76,15 +76,35 @@ fn variants_sorted_by_composite_score() {
         "Need at least 2 variants to test sorting"
     );
 
-    // Verify ascending composite score order
+    // The ranking is not the composite alone, and it is deliberate. A variant
+    // that abandons connections is a board that does not work, and a variant
+    // with copper touching copper is a board that shorts - the composite
+    // charges both the same as a gap 0.05mm under spec, so the ordering makes
+    // the distinctions the score cannot.
     for window in results.windows(2) {
-        assert!(
-            window[0].score.composite <= window[1].score.composite,
-            "Variants not sorted: {} ({}) should be <= {} ({})",
-            window[0].name,
+        let (a_unrouted, a_shorts, a_composite) = (
+            window[0].unrouted,
+            window[0].score.shorts,
             window[0].score.composite,
+        );
+        let (b_unrouted, b_shorts, b_composite) = (
+            window[1].unrouted,
+            window[1].score.shorts,
+            window[1].score.composite,
+        );
+        let ordered = (a_unrouted, a_shorts) < (b_unrouted, b_shorts)
+            || ((a_unrouted, a_shorts) == (b_unrouted, b_shorts) && a_composite <= b_composite);
+        assert!(
+            ordered,
+            "Variants not sorted: {} ({} unrouted, {} shorts, {}) before {} ({} unrouted, {} shorts, {})",
+            window[0].name,
+            a_unrouted,
+            a_shorts,
+            a_composite,
             window[1].name,
-            window[1].score.composite
+            b_unrouted,
+            b_shorts,
+            b_composite
         );
     }
 

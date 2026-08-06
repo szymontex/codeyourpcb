@@ -52,6 +52,13 @@ pub struct RoutingScore {
     pub drc_violations: u32,
     /// Smoothness score (0.0–1.0). 1.0 = all bends at 45° multiples.
     pub smoothness: f64,
+    /// Violations where the two features are touching - measured at 0.00mm.
+    ///
+    /// Counted apart from the rest because they are a different failure. A
+    /// board with copper on copper does not work; a board with a gap under
+    /// spec is a yield risk a fab may still build. A ranking that adds them
+    /// together prefers three near misses to one short, which is backwards.
+    pub shorts: u32,
     /// Number of same-layer inter-net segment crossings.
     pub crossings: u32,
     /// Layer balance ratio (0.0–1.0). 1.0 = traces evenly distributed across layers.
@@ -147,6 +154,11 @@ pub fn score_board(
     // 3. DRC violations
     let drc_result = run_drc(world, rules);
     let drc_violations = drc_result.violation_count() as u32;
+    let shorts = drc_result
+        .violations
+        .iter()
+        .filter(|v| v.actual == Some(Nm::ZERO))
+        .count() as u32;
 
     // 4. Smoothness
     let smoothness = compute_smoothness(&traces);
@@ -185,6 +197,7 @@ pub fn score_board(
         total_length,
         via_count,
         drc_violations,
+        shorts,
         smoothness,
         crossings,
         layer_balance,
@@ -824,6 +837,7 @@ mod tests {
             total_length: Nm::from_mm(100.0),
             via_count: 5,
             drc_violations: 0,
+            shorts: 0,
             smoothness: 0.95,
             crossings: 1,
             layer_balance: 0.8,
