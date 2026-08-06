@@ -173,7 +173,34 @@ const dynamicFootprintRegistry = new Map<string, { pads: PadInfo[]; silk: SilkSh
  */
 export function registerDynamicFootprint(packageName: string, pads: PadInfo[], silk: SilkShape[] = []): void {
   dynamicFootprintRegistry.set(packageName, { pads, silk });
-  console.log(`[Footprint] Registered: ${packageName} (${pads.length} pads, ${silk.length} silk)`);
+
+  // And tell the engine, which is the half that was missing: the map above
+  // feeds the JavaScript parser, so the pads were drawn while the board model
+  // held an unknown footprint - nothing to measure clearance against and
+  // nothing to export. A fetch can land before the engine exists, so
+  // `replayRegisteredFootprints` hands over whatever arrived early.
+  if (engineInstance) {
+    const error = engineInstance.register_footprint(packageName, pads, silk);
+    if (error) {
+      console.warn(`[Footprint] The engine refused ${packageName}: ${error}`);
+    }
+  }
+}
+
+/**
+ * Hand the engine every footprint that was registered before it existed.
+ *
+ * Called once the engine is created. Without it a part fetched during startup
+ * is known to the drawing code and unknown to the model for the rest of the
+ * session.
+ */
+function replayRegisteredFootprints(engine: PcbEngine): void {
+  for (const [name, { pads, silk }] of dynamicFootprintRegistry) {
+    const error = engine.register_footprint(name, pads, silk);
+    if (error) {
+      console.warn(`[Footprint] The engine refused ${name}: ${error}`);
+    }
+  }
 }
 
 /**
@@ -215,6 +242,17 @@ export function get3DModelUuid(packageName: string): string | null {
  * Interface for the PCB rendering engine exposed from Rust/WASM
  */
 export interface PcbEngine {
+  /**
+   * Teach the engine a footprint that did not come from the source file.
+   *
+   * A part fetched from a supplier arrives as pads and silk artwork with no
+   * `footprint` block behind it. Without this the engine never hears about it:
+   * the JavaScript side draws the pads and the board model has an unknown
+   * footprint, so DRC measures nothing there and an export leaves it out.
+   *
+   * Returns an empty string on success, an error message otherwise.
+   */
+  register_footprint(name: string, pads: PadInfo[], silk: SilkShape[]): string;
   /** Load and parse a .cypcb source file, returns error message if failed */
   load_source(source: string): string;
   /** Load routing results from .ses file content */
@@ -334,6 +372,7 @@ interface WasmPcbEngine {
   auto_route_with_params(params_json: string): string;
   auto_route_variants(): string;
   auto_route_debug(params_json: string): string;
+  register_footprint(name: string, pads_json: string, silk_json: string): string;
   free(): void;
 }
 
@@ -1121,6 +1160,10 @@ class WasmPcbEngineAdapter implements PcbEngine {
     this.wasmEngine = wasmEngine;
   }
 
+  register_footprint(name: string, pads: PadInfo[], silk: SilkShape[]): string {
+    return this.wasmEngine.register_footprint(name, JSON.stringify(pads), JSON.stringify(silk));
+  }
+
   load_source(source: string): string {
     // Parse in JavaScript
     const { snapshot, errors } = parseSource(source);
@@ -1356,8 +1399,15 @@ class WasmPcbEngineAdapter implements PcbEngine {
  */
 class MockPcbEngine implements PcbEngine {
   private snapshot: BoardSnapshot = { board: null, components: [], nets: [], violations: [], traces: [], vias: [], ratsnest: [] };
+  /** Footprints handed to the engine that did not come from source. */
+  private registered = new Map<string, { pads: PadInfo[]; silk: SilkShape[] }>();
   /** Next mock entity ID counter */
   private nextEntityId = 1000;
+
+  register_footprint(name: string, pads: PadInfo[], silk: SilkShape[]): string {
+    this.registered.set(name, { pads, silk });
+    return '';
+  }
 
   load_source(source: string): string {
     const { snapshot, errors } = parseSource(source);
@@ -1573,6 +1623,7 @@ export async function loadWasm(): Promise<PcbEngine> {
     // Wrap the WASM engine with our adapter that provides load_source()
     const rawEngine = new wasm.PcbEngine() as unknown as WasmPcbEngine;
     engineInstance = new WasmPcbEngineAdapter(rawEngine);
+    replayRegisteredFootprints(engineInstance);
     console.log('WASM module loaded successfully');
     return engineInstance;
   } catch (e) {
@@ -1585,6 +1636,7 @@ export async function loadWasm(): Promise<PcbEngine> {
   // - Testing without the Rust backend
   console.log('Using MockPcbEngine (WASM fallback)');
   engineInstance = new MockPcbEngine();
+  replayRegisteredFootprints(engineInstance);
   return engineInstance;
 }
 
