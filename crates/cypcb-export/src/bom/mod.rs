@@ -164,7 +164,7 @@ mod tests {
     #[test]
     fn test_natural_sort_order() {
         let mut designators = vec!["R10", "R2", "R1", "R100"];
-        designators.sort_by(|a, b| natural_sort_key(a).cmp(&natural_sort_key(b)));
+        designators.sort_by_key(|a| natural_sort_key(a));
         assert_eq!(designators, vec!["R1", "R2", "R10", "R100"]);
     }
 
