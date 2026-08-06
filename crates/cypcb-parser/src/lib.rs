@@ -78,6 +78,10 @@ pub mod ast;
 #[allow(unused_assignments)]
 pub mod errors;
 
+/// Resolving `import` statements against the filesystem.
+#[cfg(feature = "tree-sitter-parser")]
+pub mod imports;
+
 // Tree-sitter parser module only available with the feature
 #[cfg(feature = "tree-sitter-parser")]
 pub mod parser;
@@ -94,6 +98,8 @@ pub use ast::{
 
 // Re-export error types (always available)
 pub use errors::{ParseError, ParseResult};
+#[cfg(feature = "tree-sitter-parser")]
+pub use imports::{resolve_imports, ImportError};
 
 // Re-export parser types (only with feature)
 #[cfg(feature = "tree-sitter-parser")]

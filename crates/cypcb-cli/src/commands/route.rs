@@ -73,6 +73,15 @@ impl RouteCommand {
 
         let ast = result.value;
 
+        // Bring in whatever the file imports, resolved against its own
+        // directory. Errors are collected rather than fatal so the rest of the
+        // design is still checked.
+        let mut import_errors = Vec::new();
+        let ast = cypcb_parser::resolve_imports(&ast, &self.file, &mut import_errors);
+        for error in &import_errors {
+            eprintln!("Import error: {error}");
+        }
+
         // Build world from AST
         eprintln!("Building board model...");
         let mut world = BoardWorld::new();
