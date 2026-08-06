@@ -89,6 +89,9 @@
 //! ```
 
 pub mod components;
+
+/// Writing a routed board back out as `.cypcb` source.
+pub mod dsl;
 pub mod footprint;
 pub mod registry;
 pub mod spatial;

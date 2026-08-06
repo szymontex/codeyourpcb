@@ -501,155 +501,7 @@ impl PcbEngine {
     ///
     /// Returns an empty string if there are no traces.
     pub fn export_traces_as_dsl(&mut self) -> String {
-        use std::collections::BTreeMap;
-        use std::fmt::Write;
-
-        // Collect all traces grouped by net name
-        let trace_data: Vec<Trace> = {
-            let ecs = self.world.ecs_mut();
-            let mut query = ecs.query::<&Trace>();
-            query.iter(ecs).cloned().collect()
-        };
-
-        // Collect all vias grouped by net name
-        let via_data: Vec<Via> = {
-            let ecs = self.world.ecs_mut();
-            let mut query = ecs.query::<&Via>();
-            query.iter(ecs).copied().collect()
-        };
-
-        if trace_data.is_empty() && via_data.is_empty() {
-            return String::new();
-        }
-
-        // Group traces by net name, using BTreeMap for deterministic ordering
-        let mut net_traces: BTreeMap<String, Vec<&Trace>> = BTreeMap::new();
-        let mut net_vias: BTreeMap<String, Vec<&Via>> = BTreeMap::new();
-
-        for trace in &trace_data {
-            let net_name = self
-                .world
-                .net_name(trace.net_id)
-                .unwrap_or("unknown")
-                .to_string();
-            net_traces.entry(net_name).or_default().push(trace);
-        }
-
-        for via in &via_data {
-            let net_name = self
-                .world
-                .net_name(via.net_id)
-                .unwrap_or("unknown")
-                .to_string();
-            net_vias.entry(net_name).or_default().push(via);
-        }
-
-        // Collect all net names
-        let mut all_nets: Vec<String> = net_traces.keys().cloned().collect();
-        for net in net_vias.keys() {
-            if !all_nets.contains(net) {
-                all_nets.push(net.clone());
-            }
-        }
-        all_nets.sort();
-
-        let mut output = String::with_capacity(4096);
-
-        for net_name in &all_nets {
-            let traces = net_traces.get(net_name);
-            let vias = net_vias.get(net_name);
-
-            if traces.is_none() && vias.is_none() {
-                continue;
-            }
-
-            // For each trace on this net, emit a separate trace block
-            if let Some(traces) = traces {
-                for trace in traces {
-                    let _ = writeln!(output, "trace {} {{", net_name);
-
-                    // Layer
-                    let layer_str = match trace.layer {
-                        Layer::TopCopper => "Top",
-                        Layer::BottomCopper => "Bottom",
-                        Layer::Inner(n) => {
-                            let _ = writeln!(output, "    layer Inner{}", n);
-                            ""
-                        }
-                        _ => "Top",
-                    };
-                    if !layer_str.is_empty() {
-                        let _ = writeln!(output, "    layer {}", layer_str);
-                    }
-
-                    // Width
-                    let width_mm = trace.width.to_mm();
-                    let _ = writeln!(output, "    width {}mm", format_mm(width_mm));
-
-                    // Path — extract polyline from segments
-                    if !trace.segments.is_empty() {
-                        let _ = write!(output, "    path ");
-
-                        // First point
-                        let first = &trace.segments[0];
-                        let _ = write!(
-                            output,
-                            "{}mm,{}mm",
-                            format_mm(first.start.x.to_mm()),
-                            format_mm(first.start.y.to_mm())
-                        );
-
-                        // Subsequent endpoints
-                        for seg in &trace.segments {
-                            let _ = write!(
-                                output,
-                                " -> {}mm,{}mm",
-                                format_mm(seg.end.x.to_mm()),
-                                format_mm(seg.end.y.to_mm())
-                            );
-                        }
-                        let _ = writeln!(output);
-                    }
-
-                    // Locked
-                    if trace.locked {
-                        let _ = writeln!(output, "    locked");
-                    }
-
-                    let _ = writeln!(output, "}}");
-                    let _ = writeln!(output);
-                }
-            }
-
-            // Vias that are not associated with a trace (standalone vias)
-            // These get their own trace block
-            if let Some(vias) = vias {
-                for via in vias {
-                    let _ = writeln!(output, "trace {} {{", net_name);
-                    let _ = writeln!(
-                        output,
-                        "    via {}mm,{}mm drill {}mm",
-                        format_mm(via.position.x.to_mm()),
-                        format_mm(via.position.y.to_mm()),
-                        format_mm(via.drill.to_mm())
-                    );
-                    if via.locked {
-                        let _ = writeln!(output, "    locked");
-                    }
-                    let _ = writeln!(output, "}}");
-                    let _ = writeln!(output);
-                }
-            }
-        }
-
-        // Trim trailing newline
-        while output.ends_with('\n') {
-            output.pop();
-        }
-        // Add exactly one trailing newline
-        output.push('\n');
-
-        output
+        cypcb_world::dsl::traces_as_dsl(&mut self.world)
     }
 
     /// Get the minimum copper clearance in nanometers.
@@ -1880,16 +1732,6 @@ fn pad_shape_to_string(shape: &PadShape) -> String {
     }
 }
 
-/// Format a millimeter value with exactly 6 decimal places for deterministic round-trip.
-///
-/// 6 decimal places = 1nm resolution, which guarantees:
-/// nm → mm string → parse → nm gives exactly the original value.
-///
-/// Trailing zeros after the 6th decimal are preserved for consistency.
-fn format_mm(mm: f64) -> String {
-    format!("{:.6}", mm)
-}
-
 /// Parse layer string from routes file format.
 fn parse_layer(layer_str: &str) -> Result<Layer, String> {
     match layer_str {
@@ -2721,35 +2563,6 @@ mod tests {
         assert_eq!(vcc.segments[0].start_y as i64, 19_999_960);
         assert_eq!(vcc.segments[1].end_x as i64, 10_000_001);
         assert_eq!(vcc.segments[1].end_y as i64, 15_555_555);
-    }
-
-    #[test]
-    fn test_format_mm_round_trip() {
-        // Verify that format_mm produces values that round-trip exactly
-        let test_values: Vec<i64> = vec![
-            0,
-            1,
-            999_999,
-            1_000_000,   // 1mm
-            10_000_000,  // 10mm
-            10_000_001,  // 10.000001mm (1nm precision)
-            15_555_555,  // 15.555555mm
-            3_731_260,   // 3.731260mm (real routing coordinate)
-            100_000_000, // 100mm
-            999_999_999, // 999.999999mm
-        ];
-
-        for nm_val in &test_values {
-            let nm = Nm(*nm_val);
-            let mm_str = format_mm(nm.to_mm());
-            let parsed_f64: f64 = mm_str.parse().unwrap();
-            let back_to_nm = Nm::from_mm(parsed_f64);
-            assert_eq!(
-                nm, back_to_nm,
-                "Round-trip failed for {}nm: formatted as '{}mm', parsed back as {}nm",
-                nm_val, mm_str, back_to_nm.0
-            );
-        }
     }
 
     #[test]

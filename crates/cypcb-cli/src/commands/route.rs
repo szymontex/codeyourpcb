@@ -46,6 +46,15 @@ pub struct RouteCommand {
     /// Dry run: export DSN only, don't run FreeRouting
     #[arg(long)]
     pub dry_run: bool,
+
+    /// Route with the built-in PathFinder autorouter instead of FreeRouting,
+    /// and write the result back as `.cypcb` trace blocks.
+    ///
+    /// Needs no Java and no jar. The default is left on FreeRouting because
+    /// which router this project bets on is an open decision (D1 in
+    /// docs/TRACKER.md), not because it is the better path today.
+    #[arg(long)]
+    pub in_house: bool,
 }
 
 impl RouteCommand {
@@ -93,6 +102,10 @@ impl RouteCommand {
                 eprintln!("Semantic error: {}", err);
             }
             return Err(miette::miette!("Semantic errors in design"));
+        }
+
+        if self.in_house {
+            return self.route_in_house(&source, world, library, start_time);
         }
 
         // Determine output paths
@@ -463,5 +476,78 @@ mod tests {
             cli.route.freerouting,
             Some(PathBuf::from("/path/to/freerouting.jar"))
         );
+    }
+}
+
+impl RouteCommand {
+    /// Route with the project's own autorouter and write the traces back as
+    /// `.cypcb` source.
+    ///
+    /// This is the round trip the README promises - "traces persist as
+    /// readable DSL code" - and until now nothing on the command line did it:
+    /// `route` shells out to a Java jar, and `score` routes only to print
+    /// numbers. The output is a new file rather than an edit in place, because
+    /// a router is not something to point at someone's source without asking.
+    fn route_in_house(
+        &self,
+        source: &str,
+        mut world: BoardWorld,
+        library: FootprintLibrary,
+        start_time: Instant,
+    ) -> Result<()> {
+        use cypcb_autoroute::{route_board, AutorouteConfig};
+        use cypcb_router::apply_routes;
+        use cypcb_router::types::RoutingStatus;
+        use cypcb_rules::presets::{PresetRuleSet, RulesPreset};
+
+        let preset = RulesPreset::from_name("jlcpcb")
+            .ok_or_else(|| miette::miette!("Failed to load JLCPCB preset rules"))?;
+        let rules = PresetRuleSet::new(preset);
+
+        eprintln!("Routing with the built-in autorouter...");
+        let result = route_board(&mut world, &library, &rules, &AutorouteConfig::default());
+
+        match result.status {
+            RoutingStatus::Failed { ref reason } => {
+                return Err(miette::miette!("Routing failed: {reason}"));
+            }
+            RoutingStatus::Partial { unrouted_count } => {
+                eprintln!("Warning: {unrouted_count} connection(s) could not be routed");
+            }
+            RoutingStatus::Complete => {}
+        }
+
+        apply_routes(&mut world, &result);
+
+        let traces = cypcb_world::dsl::traces_as_dsl(&mut world);
+        if traces.is_empty() {
+            return Err(miette::miette!("The router produced nothing to write"));
+        }
+
+        // Append to a copy of the source, so the design is unchanged and the
+        // traces are readable underneath it.
+        let routed_path = self
+            .output
+            .clone()
+            .unwrap_or_else(|| self.file.with_extension("routed.cypcb"));
+        let mut out = source.to_string();
+        if !out.ends_with('\n') {
+            out.push('\n');
+        }
+        out.push_str("\n// Traces below were produced by `cypcb route --in-house`.\n");
+        out.push_str(&traces);
+
+        std::fs::write(&routed_path, &out)
+            .into_diagnostic()
+            .wrap_err_with(|| format!("Failed to write {}", routed_path.display()))?;
+
+        eprintln!(
+            "Wrote {} ({} segments, {} vias) in {:.2}s",
+            routed_path.display(),
+            result.routes.len(),
+            result.vias.len(),
+            start_time.elapsed().as_secs_f64()
+        );
+        Ok(())
     }
 }
