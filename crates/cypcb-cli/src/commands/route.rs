@@ -56,6 +56,14 @@ pub struct RouteCommand {
     #[arg(long)]
     pub in_house: bool,
 
+    /// Fabrication rules to route and check against.
+    ///
+    /// The router and the DRC report both used JLCPCB whatever the design was
+    /// for, so a board meant for another house was routed to the wrong
+    /// clearances and then measured against them - two wrongs that agree.
+    #[arg(long, default_value = "jlcpcb")]
+    pub preset: String,
+
     /// Route the board several ways, score each and keep the best.
     ///
     /// Six routing settings have been measured on this project's benchmark
@@ -436,8 +444,16 @@ impl RouteCommand {
         use cypcb_router::types::RoutingStatus;
         use cypcb_rules::presets::{PresetRuleSet, RulesPreset};
 
-        let preset = RulesPreset::from_name("jlcpcb")
-            .ok_or_else(|| miette::miette!("Failed to load JLCPCB preset rules"))?;
+        let preset = RulesPreset::from_name(&self.preset).ok_or_else(|| {
+            // Listed from the presets themselves, so the message cannot go
+            // stale when one is added.
+            let available: Vec<&str> = RulesPreset::all().iter().map(|p| p.name()).collect();
+            miette::miette!(
+                "Unknown preset '{}'. Available presets: {}",
+                self.preset,
+                available.join(", ")
+            )
+        })?;
         let rules = PresetRuleSet::new(preset);
 
         let result = if self.variants {
@@ -466,7 +482,10 @@ impl RouteCommand {
         {
             use cypcb_drc::{run_drc, DesignRules};
             world.rebuild_spatial_index_from_library(&library);
-            let report = run_drc(&mut world, &DesignRules::jlcpcb_2layer());
+            let report = run_drc(
+                &mut world,
+                &DesignRules::from_constraints(&preset.constraints()),
+            );
             eprintln!(
                 "DRC on the routed board: {} violations",
                 report.violations.len()
@@ -523,7 +542,11 @@ impl RouteCommand {
         let configs = default_variant_configs();
         eprintln!("Routing {} variants and keeping the best...", configs.len());
 
-        let design_rules = DesignRules::jlcpcb_2layer();
+        // The same rules the router is using, so the score is measured
+        // against the fab the board is for.
+        let design_rules = DesignRules::from_constraints(
+            &cypcb_rules::RoutingRuleSet::constraints_for_net(rules, 0).clone(),
+        );
         let results = generate_variants(world, library, rules, &design_rules, &configs);
 
         let best = results
