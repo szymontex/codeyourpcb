@@ -17,9 +17,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use cypcb_autoroute::pathfinder_v2::PathFinderStrategy;
-use cypcb_autoroute::strategy::RoutingStrategy;
-use cypcb_autoroute::AutorouteConfig;
+use cypcb_autoroute::{route_board, AutorouteConfig};
 use cypcb_drc::{run_drc, DesignRules};
 use cypcb_kicad::{parse_kicad_pcb, BENCHMARKS};
 use cypcb_router::apply_routes;
@@ -54,8 +52,8 @@ fn fingerprint(violation: &cypcb_drc::DrcViolation) -> String {
 #[test]
 #[ignore = "diagnostic: prints the DRC violations behind the benchmark scores"]
 fn report_drc_violations_per_fixture() {
-    let strategy = PathFinderStrategy;
     let drc_rules = DesignRules::jlcpcb_2layer();
+    let config = AutorouteConfig::default();
 
     for benchmark in BENCHMARKS {
         let parsed = parse_kicad_pcb(&fixture_path(benchmark.filename))
@@ -74,12 +72,7 @@ fn report_drc_violations_per_fixture() {
         }
         let baseline: BTreeSet<String> = before.violations.iter().map(fingerprint).collect();
 
-        let result = strategy.route(
-            &mut world,
-            &library,
-            &test_rules(),
-            &AutorouteConfig::default(),
-        );
+        let result = route_board(&mut world, &library, &test_rules(), &config);
         apply_routes(&mut world, &result);
         world.rebuild_spatial_index_from_library(&library);
 
