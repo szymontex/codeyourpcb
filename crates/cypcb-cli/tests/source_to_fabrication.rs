@@ -572,3 +572,97 @@ fn the_legend_puts_each_part_on_the_side_it_is_assembled_on() {
         "the bottom legend must not draw around a top-side part:\n{bottom}"
     );
 }
+
+#[test]
+fn saving_a_routed_board_does_not_change_what_the_checker_says_about_it() {
+    round_trip_says_the_same_thing(SOURCE);
+}
+
+/// The project's own example, which is the board the numbers in the tracker
+/// came from and a busier one than the fixture above.
+#[test]
+fn the_blink_example_reads_back_as_the_board_it_was() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join("examples/blink.cypcb");
+    let source = std::fs::read_to_string(&path).expect("the example is in the repo");
+    round_trip_says_the_same_thing(&source);
+}
+
+fn round_trip_says_the_same_thing(source: &str) {
+    // `cypcb route` reported 5 violations in memory and `cypcb check` reported
+    // 6 for the file it had just written. The Gerber strokes are proven
+    // identical across that round trip, so whatever the file gained is not
+    // copper - and a board that reads back as a different board is the defect
+    // this suite exists for, whatever the difference turns out to be.
+    use cypcb_drc::{run_drc, DesignRules};
+    use std::collections::BTreeSet;
+
+    let (mut world, library) = load(source);
+    let rules = PresetRuleSet::new(RulesPreset::from_name("jlcpcb").expect("jlcpcb preset"));
+    let drc_rules = DesignRules::jlcpcb_2layer();
+
+    let result = route_board(&mut world, &library, &rules, &AutorouteConfig::default());
+    apply_routes(&mut world, &result);
+    world.rebuild_spatial_index_from_library(&library);
+
+    let describe = |world: &mut cypcb_world::BoardWorld| -> BTreeSet<String> {
+        run_drc(world, &drc_rules)
+            .violations
+            .iter()
+            .map(|v| {
+                // The pair reads in whichever order the entities were indexed,
+                // and indices differ between a routed board and the same board
+                // parsed back, so `A vs B` and `B vs A` are one fact. Sorted so
+                // the comparison is about the board rather than about ids.
+                let message = match v.message.split_once('\u{2194}') {
+                    Some((left, rest)) => match rest.split_once(':') {
+                        Some((right, tail)) => {
+                            let mut pair = [left.trim(), right.trim()];
+                            pair.sort_unstable();
+                            format!("{} <-> {}:{}", pair[0], pair[1], tail)
+                        }
+                        None => v.message.clone(),
+                    },
+                    None => v.message.clone(),
+                };
+                format!(
+                    "{} at {:.3},{:.3}: {}",
+                    v.kind,
+                    v.location.x.to_mm(),
+                    v.location.y.to_mm(),
+                    message
+                )
+            })
+            .collect()
+    };
+
+    let before = describe(&mut world);
+
+    let saved = format!(
+        "{}\n{}",
+        source,
+        cypcb_world::dsl::traces_as_dsl(&mut world)
+    );
+    let (mut reloaded, reloaded_library) = load(&saved);
+    reloaded.rebuild_spatial_index_from_library(&reloaded_library);
+    let after = describe(&mut reloaded);
+
+    // Nothing may be lost. A board that reads back reporting less than it did
+    // is a board whose file hides a fault.
+    //
+    // More is allowed, and on examples/blink.cypcb there is more: in memory
+    // every segment a net has on a layer lives in one `Trace` entity, and the
+    // clearance rule reports once per entity pair with the closest distance it
+    // found - so a component too close to a net in two places is reported
+    // once. Written out, that net becomes several `trace` blocks and both
+    // places are named. The round trip does not add a fault; it stops the
+    // checker from merging two into one. That is recorded in the tracker as
+    // the next thing to fix, in the checker rather than in the file.
+    let lost: Vec<&String> = before.difference(&after).collect();
+    assert!(
+        lost.is_empty(),
+        "the file reports less than the board it was written from.\n  lost: {lost:#?}\n  gained: {:#?}",
+        after.difference(&before).collect::<Vec<_>>()
+    );
+}
