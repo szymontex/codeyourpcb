@@ -14,6 +14,11 @@ import { createDefaultRenderConfig, buildPadNetMap } from './render-config';
 import { createLayerVisibility } from './layers';
 import type { BoardSnapshot } from './types';
 
+// How many recent projects the app keeps and shows. One number, because a
+// writer that caps at ten and a reader that renders everything disagree in
+// front of the user.
+const RECENT_FILES_SHOWN = 10;
+
 // ---------------------------------------------------------------------------
 // Template descriptors (static, bundled in public/templates/)
 // ---------------------------------------------------------------------------
@@ -207,8 +212,7 @@ export function addRecentFile(
 
   filtered.unshift(entry);
 
-  // Cap at 10 entries
-  const capped = filtered.slice(0, 10);
+  const capped = filtered.slice(0, RECENT_FILES_SHOWN);
 
   setPreference('recentFiles', capped);
   exposeDebugSurface();
@@ -345,7 +349,10 @@ function populateRecentFiles(): void {
 
   if (sectionEl) sectionEl.style.display = '';
 
-  recentFiles.forEach((entry) => {
+  // The same limit the writer applies. Stored state can hold more - an older
+  // build wrote a longer list, or a test seeded one - and rendering all of it
+  // shows a user rows the app will silently drop on their next save.
+  recentFiles.slice(0, RECENT_FILES_SHOWN).forEach((entry) => {
     const item = document.createElement('div');
     item.className = 'pm-recent-item';
     item.addEventListener('click', () => {
