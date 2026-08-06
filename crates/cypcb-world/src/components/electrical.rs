@@ -387,3 +387,24 @@ mod tests {
         assert!(!conns.is_empty());
     }
 }
+
+/// A component's value as a quantity rather than a label.
+///
+/// `value "10k"` is a string: ten kilohms only if you already know the part is
+/// a resistor. `value 10kohm` says so, and this is where that survives, so a
+/// checker can compare it against something.
+#[derive(Component, Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct TypedValue {
+    /// The number as written.
+    pub value: f64,
+    /// The unit it was written in.
+    pub unit: cypcb_core::physical_units::PhysicalUnit,
+}
+
+impl TypedValue {
+    /// The value in the unit's base - ohms, farads, volts.
+    #[inline]
+    pub fn base(&self) -> f64 {
+        self.unit.to_base_f64(self.value)
+    }
+}

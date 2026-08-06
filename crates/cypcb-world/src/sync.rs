@@ -585,6 +585,18 @@ fn sync_component(
     // Add component kind
     world.ecs_mut().entity_mut(entity).insert(kind);
 
+    // A value written as a quantity stays one. Without this the checker sees
+    // only the label and cannot tell ten kilohms from ten microfarads.
+    if let Some(typed) = &comp.typed_value {
+        world
+            .ecs_mut()
+            .entity_mut(entity)
+            .insert(crate::components::TypedValue {
+                value: typed.value,
+                unit: typed.unit,
+            });
+    }
+
     // Which face the part sits on. The DSL has no word for this yet, so it is
     // derived from where the footprint's copper is - a footprint whose pads are
     // bottom-only is a bottom-side part. Storing the answer means every rule

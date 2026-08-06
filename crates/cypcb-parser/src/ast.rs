@@ -234,7 +234,16 @@ pub struct ComponentDef {
     /// Footprint name (e.g., "0402", "SOIC-8").
     pub footprint: StringLit,
     /// Component value if specified (e.g., "10k", "100nF").
+    ///
+    /// Always populated when a value is given, including for a typed one, so
+    /// anything that just wants to print it keeps working.
     pub value: Option<StringLit>,
+    /// The value as a typed quantity, when the design wrote one: `value 10kohm`
+    /// rather than `value "10k"`.
+    ///
+    /// A string cannot be checked - "10k" is ten kilohms only if you already
+    /// know the part is a resistor - so the type is kept rather than flattened.
+    pub typed_value: Option<PhysicalValue>,
     /// Position if specified.
     pub position: Option<PositionExpr>,
     /// Rotation in degrees if specified.

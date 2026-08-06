@@ -10,6 +10,7 @@
 
 use cypcb_core::physical_units::PhysicalUnit;
 use cypcb_parser::ast::{AssertExpression, AssertOperand, ComparisonOp};
+use cypcb_world::components::{RefDes, TypedValue};
 use cypcb_world::BoardWorld;
 
 use crate::presets::DesignRules;
@@ -33,6 +34,16 @@ impl DrcRule for AssertionRule {
 
         let board = world.board_info();
         let entity = world.board_entity();
+
+        // Values the design wrote as quantities, by reference designator.
+        let values: std::collections::HashMap<String, TypedValue> = {
+            let ecs = world.ecs_mut();
+            let mut query = ecs.query::<(&RefDes, &TypedValue)>();
+            query
+                .iter(ecs)
+                .map(|(refdes, value)| (refdes.as_str().to_string(), *value))
+                .collect()
+        };
         let at = cypcb_core::Point::new(cypcb_core::Nm(0), cypcb_core::Nm(0));
 
         let mut violations = Vec::new();
@@ -42,7 +53,7 @@ impl DrcRule for AssertionRule {
                 None => continue,
             };
 
-            match evaluate(&assertion.expression, board) {
+            match evaluate(&assertion.expression, board, &values) {
                 Outcome::Held => {}
                 Outcome::Failed(message) | Outcome::Unevaluable(message) => {
                     let mut violation = DrcViolation::assertion(entity, at);
@@ -107,17 +118,19 @@ struct Value {
 fn evaluate(
     expression: &AssertExpression,
     board: Option<(cypcb_world::components::BoardSize, cypcb_world::LayerStack)>,
+    values: &std::collections::HashMap<String, TypedValue>,
 ) -> Outcome {
     match expression {
         AssertExpression::Comparison {
             left, op, right, ..
         } => {
-            let (left_value, right_value) = match (resolve(left, board), resolve(right, board)) {
-                (Ok(l), Ok(r)) => (l, r),
-                (Err(why), _) | (_, Err(why)) => {
-                    return Outcome::Unevaluable(format!("assertion not checked: {why}"))
-                }
-            };
+            let (left_value, right_value) =
+                match (resolve(left, board, values), resolve(right, board, values)) {
+                    (Ok(l), Ok(r)) => (l, r),
+                    (Err(why), _) | (_, Err(why)) => {
+                        return Outcome::Unevaluable(format!("assertion not checked: {why}"))
+                    }
+                };
 
             if left_value.quantity != right_value.quantity {
                 return Outcome::Unevaluable(format!(
@@ -153,6 +166,7 @@ fn evaluate(
 fn resolve(
     operand: &AssertOperand,
     board: Option<(cypcb_world::components::BoardSize, cypcb_world::LayerStack)>,
+    values: &std::collections::HashMap<String, TypedValue>,
 ) -> Result<Value, String> {
     match operand {
         AssertOperand::Number { value, .. } => Ok(Value {
@@ -169,6 +183,26 @@ fn resolve(
         }),
         AssertOperand::QualifiedName { parts, .. } => {
             let path = parts.join(".");
+
+            // `R1.value`, when the design wrote it as a quantity.
+            if let [refdes, "value"] = parts
+                .as_slice()
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>()[..]
+            {
+                return match values.get(refdes) {
+                    Some(typed) => Ok(Value {
+                        base: typed.base(),
+                        quantity: quantity_of(typed.unit),
+                    }),
+                    None => Err(format!(
+                        "'{path}' is not a quantity: write `value 10kohm` rather than `value \"10k\"`, \
+                         or the checker has only a label to go on"
+                    )),
+                };
+            }
+
             let Some((size, layers)) = board else {
                 return Err(format!("'{path}' needs a board, and none is defined"));
             };
@@ -246,7 +280,15 @@ fn format_base(value: Value) -> String {
     match value.quantity {
         Quantity::Length => format!("{:.3}mm", value.base / 1_000_000.0),
         Quantity::Count => format!("{}", value.base),
-        _ => format!("{}", value.base),
+        // Base SI, so the number is comparable with whatever was claimed even
+        // when the claim used a prefix.
+        Quantity::Resistance => format!("{}ohm", value.base),
+        Quantity::Capacitance => format!("{}F", value.base),
+        Quantity::Inductance => format!("{}H", value.base),
+        Quantity::Voltage => format!("{}V", value.base),
+        Quantity::Current => format!("{}A", value.base),
+        Quantity::Frequency => format!("{}Hz", value.base),
+        Quantity::Power => format!("{}W", value.base),
     }
 }
 
@@ -356,6 +398,43 @@ mod tests {
         assert_eq!(violations.len(), 1);
         assert!(
             violations[0].message.contains("cannot be compared"),
+            "got {}",
+            violations[0].message
+        );
+    }
+
+    #[test]
+    fn a_value_written_as_a_quantity_can_be_checked() {
+        use cypcb_world::components::{
+            FootprintRef, NetConnections, Position, RefDes, Rotation, TypedValue, Value,
+        };
+
+        let mut world = board_of(80.0, 40.0, 2);
+        let entity = world.spawn_component(
+            RefDes::new("R1"),
+            Value::new("10kohm"),
+            Position::from_mm(5.0, 5.0),
+            Rotation::ZERO,
+            FootprintRef::new("0402"),
+            NetConnections::new(),
+        );
+        world.ecs_mut().entity_mut(entity).insert(TypedValue {
+            value: 10.0,
+            unit: PhysicalUnit::KiloOhm,
+        });
+
+        let holds = vec![claim(name("R1.value"), ComparisonOp::Eq, kilohm(10.0))];
+        world.set_assertions(holds);
+        assert!(AssertionRule
+            .check(&mut world, &DesignRules::jlcpcb_2layer())
+            .is_empty());
+
+        let breaks = vec![claim(name("R1.value"), ComparisonOp::Ge, kilohm(47.0))];
+        world.set_assertions(breaks);
+        let violations = AssertionRule.check(&mut world, &DesignRules::jlcpcb_2layer());
+        assert_eq!(violations.len(), 1);
+        assert!(
+            violations[0].message.contains("assertion failed"),
             "got {}",
             violations[0].message
         );

@@ -426,6 +426,7 @@ impl CypcbParser {
         let mut position = None;
         let mut rotation = None;
         let mut net_assignments = Vec::new();
+        let mut typed_value = None;
 
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
@@ -435,10 +436,12 @@ impl CypcbParser {
                         if val_node.kind() == "string" {
                             value = Some(self.convert_string_literal(source, &val_node));
                         } else {
-                            // physical_value — convert the raw text to a StringLit
-                            // so the component value field remains compatible
+                            // A typed value. Keep the text for anything that
+                            // only wants to print it, and the quantity for
+                            // anything that wants to check it.
                             let text = node_text(source, &val_node).to_string();
                             value = Some(StringLit::new(text, span_of(&val_node)));
+                            typed_value = self.convert_physical_value(source, &val_node, errors);
                         }
                     }
                 }
@@ -462,6 +465,7 @@ impl CypcbParser {
             kind,
             footprint,
             value,
+            typed_value,
             position,
             rotation,
             net_assignments,
