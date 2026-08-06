@@ -409,6 +409,7 @@ pub fn pathfinder_loop(
                     config.params.layer_preference,
                     any_end,
                     net_pad_zones,
+                    config.pad_zone_blocks_foreign_copper,
                     &congestion_map,
                 );
 
@@ -603,6 +604,7 @@ fn find_path_congestion_augmented(
     layer_preference: f64,
     any_end_layer: bool,
     pad_zones: &[PadZone],
+    block_foreign_copper: bool,
     congestion_map: &CongestionMap,
 ) -> Option<Vec<GridNode>> {
     let grid_w = grid.width();
@@ -672,7 +674,15 @@ fn find_path_congestion_augmented(
             let target = (ux as u16, uy as u16, nl);
             if grid.is_free(ux, uy, nl as usize)
                 || success(&target)
-                || in_pad_zone(ux as u16, uy as u16, pad_zones)
+                || pad_zone_open(
+                    grid,
+                    ux,
+                    uy,
+                    nl as usize,
+                    net_id,
+                    pad_zones,
+                    block_foreign_copper,
+                )
                 || grid.net_at(ux, uy, nl as usize) == Some(net_id)
             {
                 let base = cost_fn.neighbor_cost(*node, target);
@@ -689,7 +699,15 @@ fn find_path_congestion_augmented(
             let target = (nx, ny, target_layer);
             if grid.is_free(nx as u32, ny as u32, target_layer as usize)
                 || success(&target)
-                || in_pad_zone(nx, ny, pad_zones)
+                || pad_zone_open(
+                    grid,
+                    nx as u32,
+                    ny as u32,
+                    target_layer as usize,
+                    net_id,
+                    pad_zones,
+                    block_foreign_copper,
+                )
                 || grid.net_at(nx as u32, ny as u32, target_layer as usize) == Some(net_id)
             {
                 let base = cost_fn.neighbor_cost(*node, target);
@@ -747,6 +765,31 @@ fn nets_needing_reroute(
 
 /// Check if a position is within any pad zone.
 #[inline]
+/// May this net use this cell on its way into one of its own pads?
+///
+/// With `block_foreign_copper` off this is the historical behaviour: any cell
+/// inside the zone, whatever is already in it. With it on, a cell another
+/// net's route holds is refused - the zone is there to get through a keepout,
+/// not through someone else's trace.
+#[allow(clippy::too_many_arguments)]
+fn pad_zone_open(
+    grid: &RoutingGrid,
+    x: u32,
+    y: u32,
+    layer: usize,
+    net_id: u32,
+    zones: &[PadZone],
+    block_foreign_copper: bool,
+) -> bool {
+    if !in_pad_zone(x as u16, y as u16, zones) {
+        return false;
+    }
+    if !block_foreign_copper {
+        return true;
+    }
+    !matches!(grid.net_at(x, y, layer), Some(owner) if owner != net_id)
+}
+
 fn in_pad_zone(x: u16, y: u16, zones: &[PadZone]) -> bool {
     for zone in zones {
         let dx = (x as i32 - zone.cx as i32).unsigned_abs();
@@ -830,6 +873,7 @@ mod tests {
             0.0,
             false,
             &[],
+            false,
             &congestion,
         );
 

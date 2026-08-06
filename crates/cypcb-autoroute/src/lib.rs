@@ -146,6 +146,17 @@ pub struct AutorouteConfig {
     /// 0.05mm overlap moves the route further than the problem.
     pub repair_passes: u32,
 
+    /// Whether a route may enter a pad's keepout that another net's copper
+    /// already occupies.
+    ///
+    /// The keepout exists so a route can reach the pad it is heading for. It
+    /// admits any cell inside it, occupied or not, which is how two nets end
+    /// up on one cell: 20 of stm32_breakout's 26 copper-on-copper overlaps sit
+    /// on exactly such a cell. Closing it removes them and costs detours -
+    /// 858 segments become 1084 - so it is only worth having if the cost model
+    /// can pay for the copper it adds.
+    pub pad_zone_blocks_foreign_copper: bool,
+
     /// Whether to smooth the grid paths into diagonals before emitting them.
     ///
     /// On by default: raw grid output is a staircase, which is longer, uglier
@@ -186,6 +197,7 @@ impl Default for AutorouteConfig {
             prefer_top_layer: true,
             strategy: StrategyKind::default(),
             params: AutorouteParams::default(),
+            pad_zone_blocks_foreign_copper: false,
             smoothing: true,
             stagnation_limit: 3,
             repair_passes: 0,
