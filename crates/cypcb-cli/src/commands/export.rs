@@ -210,6 +210,16 @@ impl ExportCommand {
             export_result.duration_ms
         );
 
+        // What the export passed over. These are not errors - the files are
+        // written and a fabricator will make what they say - which is exactly
+        // why they have to be said out loud.
+        if !export_result.warnings.is_empty() {
+            eprintln!();
+            for warning in &export_result.warnings {
+                eprintln!("Warning: {warning}");
+            }
+        }
+
         Ok(())
     }
 }

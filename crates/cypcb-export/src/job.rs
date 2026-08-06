@@ -120,7 +120,7 @@ pub fn run_export(
 ) -> Result<ExportResult, ExportError> {
     let start = Instant::now();
     let mut files = Vec::new();
-    let warnings = Vec::new();
+    let mut warnings = Vec::new();
 
     // Create output directory structure
     let gerber_dir = job.output_dir.join("gerber");
@@ -306,6 +306,56 @@ pub fn run_export(
             .map_err(|e| ExportError::Export(format!("{:?}", e)))?;
         let file = write_export_file(&path, &content, "Pick-and-Place")?;
         files.push(file);
+    }
+
+    // What the export passed over without stopping.
+    //
+    // This vector existed and was always empty, which promises warnings that
+    // never come. A fabricator does what the files say, so the things worth
+    // saying out loud are the ones that produce a board nobody wanted: copper
+    // with no traces on it is an unrouted design sent to be made, and a board
+    // whose only holes are its through-hole pads has no vias at all - fine on
+    // a one-layer design, a sign of an unfinished one otherwise.
+    {
+        let trace_count = {
+            let ecs = world.ecs_mut();
+            let mut query = ecs.query::<&cypcb_world::components::trace::Trace>();
+            query.iter(ecs).count()
+        };
+        if trace_count == 0 {
+            warnings.push("the board has no traces: this exports an unrouted design".to_string());
+        }
+
+        for file in &files {
+            // Only the outline. A silkscreen or a paste layer with nothing on
+            // it is ordinary - a board with parts on one side has an empty
+            // legend on the other - and warning about those buries the one
+            // that matters. A board with no cut path cannot be made at all.
+            let is_outline = file
+                .path
+                .file_name()
+                .map(|name| name.to_string_lossy().contains("Edge_Cuts"))
+                .unwrap_or(false);
+            if is_outline {
+                if let Ok(content) = fs::read_to_string(&file.path) {
+                    let draws = content
+                        .lines()
+                        .filter(|line| {
+                            line.contains("D01") || line.contains("D02") || line.contains("D03")
+                        })
+                        .count();
+                    if draws == 0 {
+                        warnings.push(format!(
+                            "{} has no geometry: a board with no cut path cannot be made",
+                            file.path
+                                .file_name()
+                                .map(|n| n.to_string_lossy().to_string())
+                                .unwrap_or_default()
+                        ));
+                    }
+                }
+            }
+        }
     }
 
     let duration_ms = start.elapsed().as_millis() as u64;

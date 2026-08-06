@@ -164,3 +164,57 @@ fn every_layer_the_preset_asks_for_is_written() {
 
     let _ = std::fs::remove_dir_all(&output_dir);
 }
+
+#[test]
+fn an_unrouted_board_says_so_and_a_routed_one_does_not() {
+    // `warnings` was declared and always empty, which promises warnings that
+    // never come. The one worth saying is the one that produces a board nobody
+    // wanted: copper with no traces on it is an unrouted design sent to be
+    // made, and the files are written either way, so nothing else stops it.
+    use cypcb_world::components::trace::{Trace, TraceSegment, TraceSource};
+
+    let (mut world, library) = board();
+    let preset = from_name("jlcpcb").expect("the jlcpcb preset");
+    let run = |world: &mut BoardWorld, name: &str| -> Vec<String> {
+        let output_dir = scratch_dir(name);
+        let job = ExportJob {
+            source_path: PathBuf::from("delivery.cypcb"),
+            output_dir: output_dir.clone(),
+            preset: preset.clone(),
+            board_name: "delivery".to_string(),
+        };
+        let result = run_export(&job, world, &library).expect("the export runs");
+        let _ = std::fs::remove_dir_all(&output_dir);
+        result.warnings
+    };
+
+    let unrouted = run(&mut world, "unrouted");
+    assert!(
+        unrouted.iter().any(|w| w.contains("no traces")),
+        "an unrouted board has to say so: {unrouted:?}"
+    );
+
+    // One trace between the two pads, and the warning goes away.
+    let net = NetId::new(1);
+    world.spawn_entity((
+        Trace {
+            segments: vec![TraceSegment::new(
+                Point::from_mm(8.5, 10.0),
+                Point::from_mm(11.5, 10.0),
+            )],
+            width: Nm::from_mm(0.2),
+            layer: Layer::TopCopper,
+            net_id: net,
+            locked: false,
+            source: TraceSource::Autorouted,
+        },
+        net,
+    ));
+    world.rebuild_spatial_index_from_library(&library);
+
+    let routed = run(&mut world, "routed");
+    assert!(
+        !routed.iter().any(|w| w.contains("no traces")),
+        "a routed board must not be warned about: {routed:?}"
+    );
+}
