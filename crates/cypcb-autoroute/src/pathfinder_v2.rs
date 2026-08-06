@@ -421,6 +421,27 @@ pub fn pathfinder_loop(
                         net_paths.push(p);
                     }
                     None => {
+                        // A router that gives up has to say on what. Without
+                        // this the result carries a count and nothing else, so
+                        // "6 unrouted" is a number nobody can act on.
+                        tracing::warn!(
+                            net = %net.net_name,
+                            from = %format!(
+                                "{}.{} at {:.3},{:.3}mm",
+                                net.net_name,
+                                from_pad.pin,
+                                from_pad.position.x.to_mm(),
+                                from_pad.position.y.to_mm()
+                            ),
+                            to = %format!(
+                                "{}.{} at {:.3},{:.3}mm",
+                                net.net_name,
+                                to_pad.pin,
+                                to_pad.position.x.to_mm(),
+                                to_pad.position.y.to_mm()
+                            ),
+                            "No path found: connection abandoned"
+                        );
                         net_ok = false;
                         break;
                     }
