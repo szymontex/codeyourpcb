@@ -358,10 +358,32 @@ impl DrcRule for ClearanceRule {
                     .max(stated(net_a, nc_a))
                     .max(stated(net_b, nc_b));
 
+                // One gap is one violation. Two segments of a trace meet at a
+                // corner, and when that corner is the nearest point to the
+                // other feature both report it - the same coordinate with the
+                // same message, twice. Per-segment reporting exists so a trace
+                // that violates in three places counts three; one place
+                // counted twice is not that, and every score in this project
+                // is charged per violation. Keyed by contact point, worst
+                // distance kept.
+                let mut worst_at: HashMap<(i64, i64), i64> = HashMap::new();
                 for (contact, distance) in contacts {
                     if distance >= required.0 {
                         continue;
                     }
+                    worst_at
+                        .entry((contact.x.0, contact.y.0))
+                        .and_modify(|held| *held = (*held).min(distance))
+                        .or_insert(distance);
+                }
+
+                // A map iterates in whatever order it likes, and a violation
+                // list that reshuffles run to run is one nobody can diff.
+                let mut gaps: Vec<((i64, i64), i64)> = worst_at.into_iter().collect();
+                gaps.sort_unstable();
+
+                for ((x, y), distance) in gaps {
+                    let contact = Point::new(Nm(x), Nm(y));
                     // Report the pair the same way round however the loop
                     // reached it, and point at the gap between the two
                     // features rather than at whichever one the outer loop
@@ -1379,6 +1401,63 @@ mod tests {
             "Trace 0.0mm from pad should violate 0.15mm clearance"
         );
         assert_eq!(violations[0].kind, ViolationKind::Clearance);
+    }
+
+    #[test]
+    fn one_gap_is_one_violation_even_when_two_segments_share_it() {
+        // A trace bends, and the corner is the closest point to a pad. Both
+        // segments meeting there report that same gap, so the board gets two
+        // violations at one coordinate with one message - which is what
+        // led_blink prints today: `C1 <-> trace 'GND'` twice at
+        // (19.431mm, 14.648mm). Per-segment reporting exists so a trace that
+        // violates in three places counts three; one place counted twice is
+        // not that, and every score in this project is charged per violation.
+        let mut world = BoardWorld::new();
+
+        let pad_entity = world.ecs_mut().spawn(NetId::new(1)).id();
+        let trace = Trace {
+            segments: vec![
+                TraceSegment::new(Point::from_mm(-0.5, 1.6), Point::from_mm(0.5, 1.1)),
+                TraceSegment::new(Point::from_mm(0.5, 1.1), Point::from_mm(1.5, 1.6)),
+            ],
+            width: Nm::from_mm(0.2),
+            layer: Layer::TopCopper,
+            net_id: NetId::new(2),
+            locked: false,
+            source: TraceSource::Autorouted,
+        };
+        let trace_entity = world.ecs_mut().spawn((trace, NetId::new(2))).id();
+
+        let entries = vec![
+            SpatialEntry::new(
+                pad_entity,
+                Point::from_mm(0.0, 0.0),
+                Point::from_mm(1.0, 1.0),
+                Layer::TopCopper.to_copper_mask(),
+            ),
+            SpatialEntry::new(
+                trace_entity,
+                Point::from_mm(-0.6, 1.0),
+                Point::from_mm(1.6, 1.7),
+                Layer::TopCopper.to_copper_mask(),
+            ),
+        ];
+        world
+            .ecs_mut()
+            .resource_mut::<cypcb_world::SpatialIndex>()
+            .rebuild(entries);
+
+        let violations = ClearanceRule.check(&mut world, &DesignRules::jlcpcb_2layer());
+
+        assert_eq!(
+            violations.len(),
+            1,
+            "one corner too close to one pad is one violation, got {:?}",
+            violations
+                .iter()
+                .map(|v| (v.location.x.to_mm(), v.location.y.to_mm(), &v.message))
+                .collect::<Vec<_>>()
+        );
     }
 
     #[test]

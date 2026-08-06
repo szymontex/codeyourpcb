@@ -195,10 +195,15 @@ fn print_table_footer() {
 /// SW_OUT pad. The default router still makes it; `PathFinder High-Density`
 /// routes the same board with zero, which is what `--variants` is for. Lower
 /// these when the router improves. Never raise them for a regression.
+/// Lowered on 2026-08-07, and not because the router improved: the clearance
+/// rule was counting one gap twice wherever a trace's corner was the nearest
+/// point to the other feature, and both segments meeting there reported it.
+/// The boards are unchanged - 271 became 251 and 210 became 191 because the
+/// checker stopped double-counting.
 const DRC_RATCHETS: &[(&str, &str, u32)] = &[
     ("led_blink.kicad_pcb", "led_blink", 2),
-    ("stm32_breakout.kicad_pcb", "stm32_breakout", 271),
-    ("multi_ic.kicad_pcb", "multi_ic", 210),
+    ("stm32_breakout.kicad_pcb", "stm32_breakout", 251),
+    ("multi_ic.kicad_pcb", "multi_ic", 191),
 ];
 
 /// Routes every fixture and holds the line on completeness and DRC count.
