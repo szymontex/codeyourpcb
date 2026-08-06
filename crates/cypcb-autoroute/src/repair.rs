@@ -159,9 +159,16 @@ pub fn repair_routes(
 
 /// Apply a result, index it and run the real DRC over it.
 ///
-/// Returns the violation count and, for every violation the router could act
-/// on, where it was and which copper layers it touched. The layers are
+/// Returns the count of violations this pass could act on, and for each of
+/// them where it was and which copper layers it touched. The layers are
 /// resolved here because a later attempt despawns these entities.
+///
+/// The count deliberately excludes everything rerouting cannot move - a part
+/// placed off the board edge, silkscreen over a pad, a pin nobody connected.
+/// Judging attempts on a total dominated by violations the pass is powerless
+/// over is how a pass ends up looking like it failed when it did not, and on
+/// a board where the fixed part of the total moves for its own reasons, how
+/// it accepts an attempt that made its own work worse.
 fn measure(
     world: &mut BoardWorld,
     library: &FootprintLibrary,
@@ -172,17 +179,10 @@ fn measure(
     world.rebuild_spatial_index_from_library(library);
 
     let report = run_drc(world, design_rules);
-    let contacts = report
+    let contacts: Vec<Contact> = report
         .violations
         .iter()
-        .filter(|v| {
-            // Only positional violations are actionable: moving copper cannot
-            // fix a trace that is too thin or a drill that is too small.
-            matches!(
-                v.kind,
-                ViolationKind::Clearance | ViolationKind::EdgeClearance | ViolationKind::HoleToHole
-            )
-        })
+        .filter(|v| is_actionable(v.kind))
         .map(|v| {
             let mut layers = layer_mask(world, v.entity);
             if let Some(other) = v.other_entity {
@@ -195,7 +195,18 @@ fn measure(
         })
         .collect();
 
-    (report.violations.len(), contacts)
+    (contacts.len(), contacts)
+}
+
+/// Can rerouting copper change this kind of violation?
+///
+/// Only positional ones: moving a trace cannot widen it, drill a bigger hole,
+/// move a component or connect a pin nobody wired.
+fn is_actionable(kind: ViolationKind) -> bool {
+    matches!(
+        kind,
+        ViolationKind::Clearance | ViolationKind::EdgeClearance | ViolationKind::HoleToHole
+    )
 }
 
 /// A place the checker measured a violation, with the layers it touched.

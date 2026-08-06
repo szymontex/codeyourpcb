@@ -132,17 +132,28 @@ pub struct AutorouteConfig {
     ///
     /// Each pass forbids the cells the checker complained about and routes
     /// again, keeping the result only if the violation count drops and the
-    /// board stays complete. Zero disables repair.
+    /// board stays complete. Zero disables repair, which is the default.
+    ///
+    /// Off by default because it was measured and it does not pay. Every
+    /// attempt is a full re-route of the board, and with the default two radii
+    /// of two passes that is four of them: multi_ic takes 259.5s with repair
+    /// against 74.7s without, and lands on the same 1027 routes and the same
+    /// 109 violations. Across all three benchmark fixtures the routed board is
+    /// byte-for-byte the same count with the pass and without it. The
+    /// machinery is sound and stays available; what it needs before it earns a
+    /// place in the default path is an instrument that works in nanometres
+    /// rather than in whole grid cells - blocking a 0.254mm cell to fix a
+    /// 0.05mm overlap moves the route further than the problem.
     pub repair_passes: u32,
 
     /// Block radii, in cells, that repair tries around each reported violation.
     ///
     /// Each radius is an independent attempt and the best measured result
     /// wins, so this is a list of candidates rather than a tuned constant.
-    /// Measured across the benchmark boards: radius 0 takes stm32_breakout
-    /// from 176 violations to 167 and does nothing for multi_ic, radius 2
-    /// takes multi_ic from 127 to 110 and does nothing for stm32_breakout.
-    /// Trying both is what makes the pass board-independent.
+    /// Both are tried because neither wins everywhere. Those numbers were
+    /// measured before the clearance rule was fixed; on the current checker
+    /// neither radius improves any benchmark board, which is why the pass is
+    /// off by default.
     pub repair_block_radii: Vec<u32>,
 }
 
@@ -155,7 +166,7 @@ impl Default for AutorouteConfig {
             prefer_top_layer: true,
             strategy: StrategyKind::default(),
             params: AutorouteParams::default(),
-            repair_passes: 2,
+            repair_passes: 0,
             repair_block_radii: vec![0, 2],
         }
     }
