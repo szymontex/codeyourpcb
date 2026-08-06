@@ -28,6 +28,14 @@ pub struct ScoreCommand {
     /// Use custom weights (future-proofing — currently uses equal defaults)
     #[arg(long, hide = true)]
     pub weights: Option<String>,
+
+    /// Fabrication rules to score against.
+    ///
+    /// A score is a count of violations against somebody's rules, so which
+    /// rules decides the number. This used to be JLCPCB whatever the board was
+    /// for.
+    #[arg(long, default_value = "jlcpcb")]
+    pub preset: String,
 }
 
 impl ScoreCommand {
@@ -76,8 +84,14 @@ impl ScoreCommand {
         }
 
         // Build rules (JLCPCB 2-layer default)
-        let preset = RulesPreset::from_name("jlcpcb")
-            .ok_or_else(|| miette::miette!("Failed to load JLCPCB preset rules"))?;
+        let preset = RulesPreset::from_name(&self.preset).ok_or_else(|| {
+            let available: Vec<&str> = RulesPreset::all().iter().map(|p| p.name()).collect();
+            miette::miette!(
+                "Unknown preset '{}'. Available presets: {}",
+                self.preset,
+                available.join(", ")
+            )
+        })?;
         let rules = PresetRuleSet::new(preset);
 
         // Score the board in front of us, and route only a board that has no
@@ -109,7 +123,8 @@ impl ScoreCommand {
 
         // Score the routed board
         let weights = ScoreWeights::default();
-        let drc_rules = DesignRules::jlcpcb_2layer();
+        // The rules the board is being scored against, not a fixed fab.
+        let drc_rules = DesignRules::from_constraints(&preset.constraints());
         let score = score_board(&mut world, &drc_rules, &weights);
 
         // Output as pretty JSON
