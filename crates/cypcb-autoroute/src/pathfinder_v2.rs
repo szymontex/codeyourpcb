@@ -388,6 +388,15 @@ pub fn pathfinder_loop(
             let via_radius_cells =
                 ((via_keepout_nm + grid.resolution() - 1) / grid.resolution()).max(0) as u32;
 
+            // The copper a via ring actually is, in cells: drill plus annular
+            // ring, without the clearance the keepout radius adds. Rounded
+            // rather than ceilinged, because a ring 1.09 cells across that is
+            // rounded up owns two cells in every direction.
+            let via_copper_nm =
+                constraints.min_via_drill.raw() / 2 + constraints.min_via_annular_ring.raw();
+            let via_copper_cells =
+                ((via_copper_nm + grid.resolution() - 1) / grid.resolution()).max(1) as u32;
+
             let mut net_path_cells: Vec<(u32, u32, u8)> = Vec::new();
             // The path on its own, without the via rings that go into the
             // congestion map with it. Two nets sharing one of these is copper
@@ -455,6 +464,23 @@ pub fn pathfinder_loop(
                                 );
                                 net_ring_cells.extend(ring.iter().copied());
                                 net_path_cells.extend(ring);
+
+                                // Under the same flag as the trace above, the
+                                // ring's own copper is reserved in the grid.
+                                // Not its keepout: marking the full keepout
+                                // disc was measured and rejected - at 0.254mm
+                                // per cell it blocks 0.508mm around a ring
+                                // that is 0.277mm across, and both boards got
+                                // worse. This marks what the copper covers,
+                                // and only cells no other net already owns.
+                                if config.reserve_trace_footprint {
+                                    let via = [(a.0, a.1, a.2), (b.0, b.1, b.2)];
+                                    for cell in
+                                        grid.mark_route_footprint(&via, net_id, via_copper_cells)
+                                    {
+                                        net_path_cells.push(cell);
+                                    }
+                                }
                             }
                         }
                         net_paths.push(p);
