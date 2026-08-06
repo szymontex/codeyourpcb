@@ -1322,6 +1322,7 @@ fn extract_board_ring(elements: &[Sexp]) -> Option<Vec<Point>> {
 
     for _ in 1..segments.len() {
         ring.push(cursor);
+        #[allow(clippy::question_mark)] // `?` would return None from the walk, not from this arm
         let Some((index, next)) = segments.iter().enumerate().find_map(|(i, (a, b))| {
             if used[i] {
                 return None;

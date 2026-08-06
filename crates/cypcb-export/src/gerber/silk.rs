@@ -246,7 +246,7 @@ fn draw_artwork(
         )
     };
 
-    let mut move_to = |x: i64, y: i64, output: &mut String| {
+    let move_to = |x: i64, y: i64, output: &mut String| {
         output.push_str(&format!(
             "X{}Y{}D02*\n",
             nm_to_gerber(x, format),

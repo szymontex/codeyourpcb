@@ -441,6 +441,14 @@
         {
           "type": "pad_definition",
           "named": true
+        },
+        {
+          "type": "silk_circle",
+          "named": true
+        },
+        {
+          "type": "silk_line",
+          "named": true
         }
       ]
     }
@@ -1118,6 +1126,108 @@
           {
             "type": "degrees",
             "named": false
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "silk_circle",
+    "named": true,
+    "fields": {
+      "cx": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "dimension",
+            "named": true
+          }
+        ]
+      },
+      "cy": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "dimension",
+            "named": true
+          }
+        ]
+      },
+      "radius": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "dimension",
+            "named": true
+          }
+        ]
+      },
+      "width": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "dimension",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "silk_line",
+    "named": true,
+    "fields": {
+      "width": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "dimension",
+            "named": true
+          }
+        ]
+      },
+      "x1": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "dimension",
+            "named": true
+          }
+        ]
+      },
+      "x2": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "dimension",
+            "named": true
+          }
+        ]
+      },
+      "y1": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "dimension",
+            "named": true
+          }
+        ]
+      },
+      "y2": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "dimension",
+            "named": true
           }
         ]
       }
@@ -1994,6 +2104,10 @@
     "named": false
   },
   {
+    "type": "line",
+    "named": false
+  },
+  {
     "type": "line_comment",
     "named": true,
     "extra": true
@@ -2092,6 +2206,10 @@
   },
   {
     "type": "prepreg",
+    "named": false
+  },
+  {
+    "type": "radius",
     "named": false
   },
   {

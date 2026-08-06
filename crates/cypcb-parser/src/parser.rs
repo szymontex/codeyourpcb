@@ -35,9 +35,9 @@ use crate::ast::{
     ComponentKind, CurrentUnit, CurrentValue, Definition, Dimension, FootprintDef, Identifier,
     ImportDef, InterfaceDef, LayerType, ModuleDef, ModuleInstance, NetAssignment, NetClassDef,
     NetConstraints, NetDef, OutlineDef, PadDef, PadShape, PhysicalValue, PinDeclaration, PinId,
-    PinRef, PortConnection, PositionExpr, RotationExpr, SizeProperty, SourceFile, Span, StackupDef,
-    StackupLayer, StringLit, Tolerance, ToleranceKind, TraceDef, TraceDirective, TracePath,
-    TraceVia, ZoneDef, ZoneKind,
+    PinRef, PortConnection, PositionExpr, RotationExpr, SilkDef, SizeProperty, SourceFile, Span,
+    StackupDef, StackupLayer, StringLit, Tolerance, ToleranceKind, TraceDef, TraceDirective,
+    TracePath, TraceVia, ZoneDef, ZoneKind,
 };
 use crate::errors::{ParseError, ParseResult};
 use crate::node_kinds;
@@ -805,6 +805,7 @@ impl CypcbParser {
         let mut description: Option<String> = None;
         let mut pads: Vec<PadDef> = Vec::new();
         let mut courtyard: Option<(Dimension, Dimension)> = None;
+        let mut silk: Vec<SilkDef> = Vec::new();
 
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
@@ -838,6 +839,43 @@ impl CypcbParser {
                             courtyard = Some((w, h));
                         }
                     }
+                    "silk_line" => {
+                        let dim = |field: &str, errors: &mut Vec<ParseError>| {
+                            get_child_by_field(&prop, field)
+                                .and_then(|n| self.convert_dimension(source, &n, errors))
+                        };
+                        let x1 = dim("x1", errors);
+                        let y1 = dim("y1", errors);
+                        let x2 = dim("x2", errors);
+                        let y2 = dim("y2", errors);
+                        let width = dim("width", errors);
+                        if let (Some(x1), Some(y1), Some(x2), Some(y2)) = (x1, y1, x2, y2) {
+                            silk.push(SilkDef::Line {
+                                start: (x1, y1),
+                                end: (x2, y2),
+                                width,
+                                span: span_of(&prop),
+                            });
+                        }
+                    }
+                    "silk_circle" => {
+                        let dim = |field: &str, errors: &mut Vec<ParseError>| {
+                            get_child_by_field(&prop, field)
+                                .and_then(|n| self.convert_dimension(source, &n, errors))
+                        };
+                        let cx = dim("cx", errors);
+                        let cy = dim("cy", errors);
+                        let radius = dim("radius", errors);
+                        let width = dim("width", errors);
+                        if let (Some(cx), Some(cy), Some(radius)) = (cx, cy, radius) {
+                            silk.push(SilkDef::Circle {
+                                centre: (cx, cy),
+                                radius,
+                                width,
+                                span: span_of(&prop),
+                            });
+                        }
+                    }
                     _ => {}
                 }
             }
@@ -848,6 +886,7 @@ impl CypcbParser {
             description,
             pads,
             courtyard,
+            silk,
             span: span_of(node),
         })
     }

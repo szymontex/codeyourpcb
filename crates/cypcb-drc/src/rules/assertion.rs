@@ -38,7 +38,7 @@ impl DrcRule for AssertionRule {
         // What each net's own block asks for, by name.
         let nets: std::collections::HashMap<String, cypcb_world::registry::NetConstraints> = world
             .nets()
-            .filter_map(|(id, name)| Some((name.to_string(), id)))
+            .map(|(id, name)| (name.to_string(), id))
             .collect::<Vec<_>>()
             .into_iter()
             .filter_map(|(name, id)| Some((name, world.net_constraints(id)?)))

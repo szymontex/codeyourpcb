@@ -79,7 +79,7 @@ pub fn repair_routes(
         return initial;
     }
 
-    let design_rules = DesignRules::from_constraints(&rules.constraints_for_net(0));
+    let design_rules = DesignRules::from_constraints(rules.constraints_for_net(0));
     let resolution = PathFinderStrategy::resolution_for(world, rules, config);
 
     let mut best = initial;

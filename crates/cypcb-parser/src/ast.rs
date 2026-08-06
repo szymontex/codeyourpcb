@@ -366,6 +366,36 @@ pub struct NetDef {
     pub span: Span,
 }
 
+/// A piece of silkscreen artwork inside a footprint definition.
+///
+/// Coordinates are relative to the footprint origin, like a pad's. A width of
+/// `None` means the exporter's default stroke.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum SilkDef {
+    /// `silk line X1, Y1 to X2, Y2 [width W]`.
+    Line {
+        /// Start.
+        start: (Dimension, Dimension),
+        /// End.
+        end: (Dimension, Dimension),
+        /// Stroke width, if stated.
+        width: Option<Dimension>,
+        /// Source span.
+        span: Span,
+    },
+    /// `silk circle CX, CY radius R [width W]`.
+    Circle {
+        /// Centre.
+        centre: (Dimension, Dimension),
+        /// Radius.
+        radius: Dimension,
+        /// Stroke width, if stated.
+        width: Option<Dimension>,
+        /// Source span.
+        span: Span,
+    },
+}
+
 /// The board's outline: `outline { point 0mm, 0mm  point 40mm, 0mm ... }`.
 ///
 /// A ring of points, closed implicitly. A board without one is the rectangle
@@ -682,6 +712,8 @@ pub struct FootprintDef {
     pub pads: Vec<PadDef>,
     /// Optional explicit courtyard dimensions (width, height).
     pub courtyard: Option<(Dimension, Dimension)>,
+    /// Silkscreen artwork the footprint carries.
+    pub silk: Vec<SilkDef>,
     /// Source span.
     pub span: Span,
 }

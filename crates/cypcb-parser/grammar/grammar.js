@@ -305,6 +305,29 @@ module.exports = grammar({
       $.description_property,
       $.pad_definition,
       $.courtyard_property,
+      $.silk_line,
+      $.silk_circle,
+    ),
+
+    // silk line 0mm, 0mm to 2mm, 0mm width 0.15mm
+    //
+    // The legend the fabricator prints. A footprint without any gets the
+    // courtyard outline the exporter derives, which is a box rather than
+    // artwork.
+    silk_line: $ => seq(
+      'silk', 'line',
+      field('x1', $.dimension), ',', field('y1', $.dimension),
+      'to',
+      field('x2', $.dimension), ',', field('y2', $.dimension),
+      optional(seq('width', field('width', $.dimension))),
+    ),
+
+    // silk circle 0mm, 1mm radius 0.3mm width 0.15mm
+    silk_circle: $ => seq(
+      'silk', 'circle',
+      field('cx', $.dimension), ',', field('cy', $.dimension),
+      'radius', field('radius', $.dimension),
+      optional(seq('width', field('width', $.dimension))),
     ),
 
     // description "text"

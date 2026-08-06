@@ -60,6 +60,12 @@ use crate::components::{
 use crate::footprint::{Footprint, FootprintLibrary, PadDef as FootprintPadDef};
 use crate::world::BoardWorld;
 
+/// Stroke a silkscreen shape gets when the design does not state one.
+///
+/// Matches the exporter's default line width, so a legend written without a
+/// width prints as the same ink the exporter would have drawn anyway.
+const DEFAULT_SILK_WIDTH: Nm = Nm(150_000);
+
 /// Semantic errors that can occur during AST to ECS synchronization.
 ///
 /// These errors are distinct from parse errors - they occur when the AST
@@ -1093,9 +1099,35 @@ fn convert_footprint_def(fp_def: &FootprintDef) -> Footprint {
         pads,
         bounds,
         courtyard,
-        // The DSL has no syntax for silkscreen artwork; a footprint written by
-        // hand gets the courtyard outline the exporter derives.
-        silk: Vec::new(),
+        silk: fp_def
+            .silk
+            .iter()
+            .map(|shape| match shape {
+                cypcb_parser::ast::SilkDef::Line {
+                    start, end, width, ..
+                } => crate::footprint::SilkShape::Segment {
+                    start: Point::new(start.0.to_nm(), start.1.to_nm()),
+                    end: Point::new(end.0.to_nm(), end.1.to_nm()),
+                    width: width
+                        .as_ref()
+                        .map(|w| w.to_nm())
+                        .unwrap_or(DEFAULT_SILK_WIDTH),
+                },
+                cypcb_parser::ast::SilkDef::Circle {
+                    centre,
+                    radius,
+                    width,
+                    ..
+                } => crate::footprint::SilkShape::Circle {
+                    centre: Point::new(centre.0.to_nm(), centre.1.to_nm()),
+                    radius: radius.to_nm(),
+                    width: width
+                        .as_ref()
+                        .map(|w| w.to_nm())
+                        .unwrap_or(DEFAULT_SILK_WIDTH),
+                },
+            })
+            .collect(),
     }
 }
 
