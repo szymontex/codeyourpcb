@@ -516,3 +516,59 @@ fn the_bom_accounts_for_every_part_exactly_once() {
         "the capacitor value is missing:\n{bom}"
     );
 }
+
+#[test]
+fn the_legend_puts_each_part_on_the_side_it_is_assembled_on() {
+    // Silkscreen is printed per face. A part drawn on the wrong one leaves the
+    // assembler with a legend that does not match what is in front of them,
+    // and the board it describes cannot be checked by eye.
+    //
+    // The layer carries courtyard outlines and position markers; designator
+    // text is not implemented, which is recorded in the tracker as a gap
+    // rather than tested for here.
+    use cypcb_export::gerber::{export_silkscreen, SilkConfig};
+    use cypcb_world::components::{
+        FootprintRef, Position, RefDes, Rotation, Side as PartSide, Value,
+    };
+
+    let (mut world, library) = load(CUTOUT);
+
+    let underside = world.spawn_component(
+        RefDes::new("R9"),
+        Value::new("10k"),
+        Position::from_mm(30.0, 20.0),
+        Rotation(0),
+        FootprintRef::new("0402"),
+        cypcb_world::components::NetConnections::new(),
+    );
+    world
+        .ecs_mut()
+        .entity_mut(underside)
+        .insert(PartSide::Bottom);
+
+    let format = CoordinateFormat::FORMAT_MM_2_6;
+    let config = SilkConfig::default();
+    let top = export_silkscreen(&mut world, &library, Side::Top, &format, &config)
+        .expect("top silkscreen");
+    let bottom = export_silkscreen(&mut world, &library, Side::Bottom, &format, &config)
+        .expect("bottom silkscreen");
+
+    // R1 sits at 8mm, 8mm on top; R9 at 30mm, 20mm underneath. Each legend
+    // draws around its own parts and not around the other side's.
+    assert!(
+        top.contains("X8.") || top.contains("X7.") || top.contains("X9."),
+        "the top legend has to draw around R1 at 8mm:\n{top}"
+    );
+    assert!(
+        !top.contains("X30.") && !top.contains("X29."),
+        "the top legend must not draw around a part assembled underneath:\n{top}"
+    );
+    assert!(
+        bottom.contains("X30.") || bottom.contains("X29.") || bottom.contains("X31."),
+        "the bottom legend has to draw around R9 at 30mm:\n{bottom}"
+    );
+    assert!(
+        !bottom.contains("X8.") && !bottom.contains("X7."),
+        "the bottom legend must not draw around a top-side part:\n{bottom}"
+    );
+}

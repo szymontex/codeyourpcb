@@ -133,21 +133,33 @@ pub fn export_silkscreen(
     };
 
     // Query all components with position and footprint
-    let mut query = world
-        .ecs_mut()
-        .query::<(&Position, &FootprintRef, &Rotation)>();
+    let mut query = world.ecs_mut().query::<(
+        &Position,
+        &FootprintRef,
+        &Rotation,
+        Option<&cypcb_world::components::Side>,
+    )>();
 
-    for (position, footprint_ref, rotation) in query.iter(world.ecs()) {
+    for (position, footprint_ref, rotation, part_side) in query.iter(world.ecs()) {
         // Look up footprint in library
         let footprint = library
             .get(&footprint_ref.0)
             .ok_or_else(|| SilkError::FootprintNotFound(footprint_ref.0.clone()))?;
 
-        // Check if component has pads on target layer
-        let on_target_side = footprint
-            .pads
-            .iter()
-            .any(|pad| pad.layers.contains(&target_layer));
+        // Which legend this part belongs on.
+        //
+        // The `Side` component is the answer when the design states one. Asking
+        // the footprint's pads instead draws a part assembled underneath onto
+        // the top legend whenever it shares a footprint with top-side parts,
+        // and the assembler is left with a legend that does not match the board
+        // in front of them.
+        let on_target_side = match part_side {
+            Some(side) => side.copper() == target_layer,
+            None => footprint
+                .pads
+                .iter()
+                .any(|pad| pad.layers.contains(&target_layer)),
+        };
 
         if !on_target_side {
             continue;
