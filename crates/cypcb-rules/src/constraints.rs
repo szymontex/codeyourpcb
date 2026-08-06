@@ -117,8 +117,13 @@ pub struct DesignConstraints {
 
 impl DesignConstraints {
     /// Number of constraint fields in the struct.
-    /// Used for verification that the struct has 30+ fields.
-    pub const FIELD_COUNT: usize = 35;
+    ///
+    /// The point of the number is the claim behind it: this type is meant to
+    /// carry everything a fab house states about a process, so a shrinking
+    /// count is a regression. It said 35 while the struct had 34, because
+    /// nothing checked it - `field_count_matches_the_struct` does now, and a
+    /// field added or removed without touching this line fails to compile.
+    pub const FIELD_COUNT: usize = 34;
 }
 
 impl Default for DesignConstraints {
@@ -206,9 +211,58 @@ mod tests {
     }
 
     #[test]
-    fn test_field_count_at_least_30() {
-        // Compile-time verified: DesignConstraints::FIELD_COUNT = 35
-        assert!(DesignConstraints::FIELD_COUNT >= 30);
+    fn field_count_matches_the_struct() {
+        // Destructured without `..`, so the compiler refuses to build this
+        // until every field is named. That is what keeps the count honest:
+        // `assert!(FIELD_COUNT >= 30)` was true of any number at all, and the
+        // number it was guarding had been wrong by four fields.
+        let DesignConstraints {
+            min_clearance: _,
+            min_trace_width: _,
+            min_drill_size: _,
+            min_via_drill: _,
+            min_annular_ring: _,
+            min_silk_width: _,
+            min_edge_clearance: _,
+            min_via_annular_ring: _,
+            max_drill_aspect_ratio: _,
+            min_solder_mask_bridge: _,
+            min_paste_clearance: _,
+            solder_mask_expansion: _,
+            min_pad_size: _,
+            min_slot_clearance: _,
+            diff_pair_gap: _,
+            diff_pair_tolerance: _,
+            max_stub_length: _,
+            length_match_tolerance: _,
+            max_vias_per_high_speed_net: _,
+            thermal_relief_gap: _,
+            thermal_relief_spoke_width: _,
+            min_copper_pour_clearance: _,
+            thermal_relief_spokes: _,
+            board_thickness: _,
+            min_hole_to_hole: _,
+            min_hole_to_edge: _,
+            blind_vias_allowed: _,
+            buried_vias_allowed: _,
+            min_acid_trap: _,
+            max_copper_layers: _,
+            castellated_holes_allowed: _,
+            default_impedance_ohms_x100: _,
+            max_current_per_width_x100: _,
+            copper_weight_oz_x10: _,
+        } = DesignConstraints::default();
+
+        let named = 34;
+        assert_eq!(
+            DesignConstraints::FIELD_COUNT,
+            named,
+            "the constant and the struct disagree"
+        );
+        assert!(
+            named >= 30,
+            "a fab process description this thin is a regression"
+        );
     }
 
     #[test]

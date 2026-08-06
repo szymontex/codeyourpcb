@@ -3076,7 +3076,7 @@ assert R1.value within 10kohm +/- 5%
         for entry in std::fs::read_dir(&examples_dir).expect("examples dir should exist") {
             let entry = entry.unwrap();
             let path = entry.path();
-            if path.extension().map_or(false, |ext| ext == "cypcb") {
+            if path.extension().is_some_and(|ext| ext == "cypcb") {
                 let filename = path.file_name().unwrap().to_string_lossy().to_string();
                 let source = std::fs::read_to_string(&path)
                     .unwrap_or_else(|e| panic!("failed to read {}: {}", filename, e));
