@@ -59,6 +59,26 @@ pub fn export_copper_layer(
     layer: Layer,
     format: &CoordinateFormat,
 ) -> Result<String, ExportError> {
+    // The clearance a pour keeps from foreign copper is the fab's, and this
+    // crate does not know the fab. `ExportJob` does, and passes it through
+    // `export_copper_layer_with`; this default is what a caller gets who has
+    // not said - deliberately generous, because a pour that keeps too much
+    // distance is a smaller board and one that keeps too little is a short.
+    export_copper_layer_with(world, library, layer, format, Nm::from_mm(0.3))
+}
+
+/// Export a copper layer, filling any pour on it to `pour_clearance`.
+///
+/// See [`export_copper_layer`] for the shape of the output. The clearance is
+/// separate because it comes from the fabrication rules, which this crate does
+/// not carry.
+pub fn export_copper_layer_with(
+    world: &mut BoardWorld,
+    library: &FootprintLibrary,
+    layer: Layer,
+    format: &CoordinateFormat,
+    pour_clearance: Nm,
+) -> Result<String, ExportError> {
     // Only copper layers are supported
     assert!(layer.is_copper(), "Layer must be a copper layer");
 
@@ -105,6 +125,17 @@ pub fn export_copper_layer(
 
     // Export vias (if they span this layer)
     export_vias(world, layer, &mut apertures, &mut drawing_commands, format);
+
+    // Fill any copper pour on this layer, last, so the regions are cut around
+    // copper that is already placed.
+    export_pours(
+        world,
+        library,
+        layer,
+        pour_clearance,
+        &mut drawing_commands,
+        format,
+    );
 
     // Emit aperture definitions
     output.push_str(&apertures.to_definitions(format));
@@ -303,6 +334,185 @@ fn via_spans_layer(via: &Via, layer: Layer) -> bool {
         (Layer::Inner(n), Layer::BottomCopper, Layer::Inner(m)) if m >= n => true,
         _ => false,
     }
+}
+
+/// Fill every copper pour on this layer.
+///
+/// A zone is a rectangle and a net. What is made is that rectangle minus the
+/// copper that is already there, each piece grown by `clearance` - except
+/// copper on the pour's own net, which the pour is meant to reach. The pieces
+/// come from [`crate::pour::fill`], and each is emitted as a Gerber region.
+///
+/// A pad on the pour's own net is flooded right up to, which connects it and
+/// makes it hard to solder: a thermal relief is the usual answer and is not
+/// implemented, so this is recorded rather than pretended.
+fn export_pours(
+    world: &mut BoardWorld,
+    library: &FootprintLibrary,
+    layer: Layer,
+    clearance: Nm,
+    output: &mut String,
+    format: &CoordinateFormat,
+) {
+    use cypcb_world::components::zone::ZoneKind;
+
+    let mask = layer.to_copper_mask();
+    let zones: Vec<_> = world
+        .zones()
+        .into_iter()
+        .map(|(_, zone)| zone)
+        .filter(|zone| zone.kind == ZoneKind::CopperPour && zone.layer_mask & mask != 0)
+        .collect();
+
+    if zones.is_empty() {
+        return;
+    }
+
+    for zone in zones {
+        let obstacles = foreign_copper(world, library, layer, zone.net);
+        for piece in crate::pour::fill(zone.bounds, &obstacles, clearance) {
+            emit_region(piece, output, format);
+        }
+    }
+}
+
+/// Every piece of copper on this layer that the pour must keep away from.
+///
+/// Copper on the pour's own net is left out: the pour is that net, and keeping
+/// clear of it would leave the plane unconnected to the thing it grounds.
+fn foreign_copper(
+    world: &mut BoardWorld,
+    library: &FootprintLibrary,
+    layer: Layer,
+    pour_net: Option<cypcb_world::NetId>,
+) -> Vec<cypcb_core::Rect> {
+    use cypcb_core::Rect;
+    use cypcb_world::components::{FootprintRef, NetConnections, Position, Rotation};
+
+    let mut boxes = Vec::new();
+
+    // Pads.
+    /// A placed part as this function needs it: where it is, how it is
+    /// turned, which footprint it wears and what its pins are wired to.
+    type Placement = (Point, f64, String, Vec<(String, cypcb_world::NetId)>);
+
+    let placements: Vec<Placement> = {
+        let ecs = world.ecs_mut();
+        let mut query =
+            ecs.query::<(&Position, &Rotation, &FootprintRef, Option<&NetConnections>)>();
+        query
+            .iter(ecs)
+            .map(|(position, rotation, footprint, nets)| {
+                let pins = nets
+                    .map(|n| n.iter().map(|p| (p.pin.clone(), p.net)).collect())
+                    .unwrap_or_default();
+                (
+                    position.0,
+                    rotation.to_degrees(),
+                    footprint.as_str().to_string(),
+                    pins,
+                )
+            })
+            .collect()
+    };
+
+    for (position, degrees, name, pins) in placements {
+        let Some(footprint) = library.get(&name) else {
+            continue;
+        };
+        let radians = degrees.to_radians();
+        let (sin, cos) = radians.sin_cos();
+
+        for pad in &footprint.pads {
+            if !pad.layers.contains(&layer) {
+                continue;
+            }
+            let pad_net = pins
+                .iter()
+                .find(|(pin, _)| *pin == pad.number)
+                .map(|(_, net)| *net);
+            if pad_net.is_some() && pad_net == pour_net {
+                continue;
+            }
+
+            let px = pad.position.x.0 as f64;
+            let py = pad.position.y.0 as f64;
+            let cx = position.x.0 + (px * cos - py * sin).round() as i64;
+            let cy = position.y.0 + (px * sin + py * cos).round() as i64;
+            let half_w = pad.size.0 .0 as f64 / 2.0;
+            let half_h = pad.size.1 .0 as f64 / 2.0;
+            let ex = (half_w * cos.abs() + half_h * sin.abs()).round() as i64;
+            let ey = (half_w * sin.abs() + half_h * cos.abs()).round() as i64;
+
+            boxes.push(Rect {
+                min: Point::new(Nm(cx - ex), Nm(cy - ey)),
+                max: Point::new(Nm(cx + ex), Nm(cy + ey)),
+            });
+        }
+    }
+
+    // Traces and vias.
+    let traces: Vec<Trace> = {
+        let ecs = world.ecs_mut();
+        let mut query = ecs.query::<&Trace>();
+        query.iter(ecs).cloned().collect()
+    };
+    for trace in traces {
+        if trace.layer != layer || Some(trace.net_id) == pour_net {
+            continue;
+        }
+        let half = trace.width.0 / 2;
+        for segment in &trace.segments {
+            boxes.push(Rect {
+                min: Point::new(
+                    Nm(segment.start.x.0.min(segment.end.x.0) - half),
+                    Nm(segment.start.y.0.min(segment.end.y.0) - half),
+                ),
+                max: Point::new(
+                    Nm(segment.start.x.0.max(segment.end.x.0) + half),
+                    Nm(segment.start.y.0.max(segment.end.y.0) + half),
+                ),
+            });
+        }
+    }
+
+    let vias: Vec<Via> = {
+        let ecs = world.ecs_mut();
+        let mut query = ecs.query::<&Via>();
+        query.iter(ecs).copied().collect()
+    };
+    for via in vias {
+        if Some(via.net_id) == pour_net {
+            continue;
+        }
+        let radius = via.outer_diameter.0 / 2;
+        boxes.push(Rect {
+            min: Point::new(Nm(via.position.x.0 - radius), Nm(via.position.y.0 - radius)),
+            max: Point::new(Nm(via.position.x.0 + radius), Nm(via.position.y.0 + radius)),
+        });
+    }
+
+    boxes
+}
+
+/// Emit one rectangle as a Gerber region.
+fn emit_region(rect: cypcb_core::Rect, output: &mut String, format: &CoordinateFormat) {
+    let corners = [
+        (rect.min.x, rect.min.y),
+        (rect.max.x, rect.min.y),
+        (rect.max.x, rect.max.y),
+        (rect.min.x, rect.max.y),
+        (rect.min.x, rect.min.y),
+    ];
+
+    output.push_str("G36*\n");
+    for (index, (x, y)) in corners.iter().enumerate() {
+        let gx = nm_to_gerber(x.0, format);
+        let gy = nm_to_gerber(y.0, format);
+        let command = if index == 0 { "D02" } else { "D01" };
+        output.push_str(&format!("X{}Y{}{}*\n", gx, gy, command));
+    }
+    output.push_str("G37*\n");
 }
 
 #[cfg(test)]

@@ -20,7 +20,7 @@ pub mod outline;
 pub mod silk;
 
 // Re-export key types for convenience
-pub use copper::export_copper_layer;
+pub use copper::{export_copper_layer, export_copper_layer_with};
 pub use header::{write_header, CopperSide, GerberFileFunction, Side};
 pub use mask::{export_soldermask, export_solderpaste, MaskPasteConfig};
 pub use outline::export_outline;

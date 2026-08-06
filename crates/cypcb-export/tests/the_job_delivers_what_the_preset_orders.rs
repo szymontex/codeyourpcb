@@ -292,8 +292,119 @@ fn a_declared_pour_that_cannot_be_made_is_named() {
     let _ = std::fs::remove_dir_all(&output_dir);
 
     assert!(
-        result.warnings.iter().any(|w| w.contains("copper pour")),
-        "a pour the exporter cannot draw has to be named: {:?}",
+        result.warnings.iter().any(|w| w.contains("thermal relief")),
+        "what the pour cannot do yet has to be named: {:?}",
         result.warnings
+    );
+
+    // And the pour itself reaches the copper layer.
+    let format = cypcb_export::coords::CoordinateFormat::FORMAT_MM_2_6;
+    let copper =
+        cypcb_export::gerber::export_copper_layer(&mut world, &library, Layer::TopCopper, &format)
+            .expect("top copper");
+    assert!(
+        copper.contains("G36*") && copper.contains("G37*"),
+        "a declared pour has to be filled:\n{copper}"
+    );
+}
+
+#[test]
+fn a_pour_keeps_clear_of_other_nets_and_reaches_its_own() {
+    // The pour is a net. Copper on another net has to stay outside it or the
+    // plane shorts the board it was meant to ground; copper on its own net has
+    // to be inside it, or the plane grounds nothing.
+    use cypcb_core::Rect;
+    use cypcb_world::components::zone::{Zone, ZoneKind};
+
+    let (mut world, library) = board();
+    // R1's pads are net 1 and net 2; the pour is net 1.
+    world.spawn_entity(Zone {
+        bounds: Rect::from_center_size(
+            Point::from_mm(10.0, 10.0),
+            (Nm::from_mm(16.0), Nm::from_mm(16.0)),
+        ),
+        kind: ZoneKind::CopperPour,
+        layer_mask: Layer::TopCopper.to_copper_mask(),
+        name: Some("GND_POUR".to_string()),
+        net: Some(NetId::new(1)),
+    });
+
+    let format = cypcb_export::coords::CoordinateFormat::FORMAT_MM_2_6;
+    let copper = cypcb_export::gerber::export_copper_layer_with(
+        &mut world,
+        &library,
+        Layer::TopCopper,
+        &format,
+        Nm::from_mm(0.3),
+    )
+    .expect("top copper");
+
+    let regions = copper.matches("G36*").count();
+    assert!(regions > 0, "the pour produced no copper:\n{copper}");
+
+    // Read the regions back as rectangles. Checking a coordinate alone is not
+    // enough - a band running under an obstacle legitimately spans the same x -
+    // so the question is whether any region overlaps the pad's keepout.
+    let mut rects: Vec<(f64, f64, f64, f64)> = Vec::new();
+    let mut corners: Vec<(f64, f64)> = Vec::new();
+    let mut inside = false;
+    for line in copper.lines() {
+        if line.starts_with("G36") {
+            inside = true;
+            corners.clear();
+        } else if line.starts_with("G37") {
+            inside = false;
+            if !corners.is_empty() {
+                let xs: Vec<f64> = corners.iter().map(|c| c.0).collect();
+                let ys: Vec<f64> = corners.iter().map(|c| c.1).collect();
+                rects.push((
+                    xs.iter().cloned().fold(f64::MAX, f64::min),
+                    ys.iter().cloned().fold(f64::MAX, f64::min),
+                    xs.iter().cloned().fold(f64::MIN, f64::max),
+                    ys.iter().cloned().fold(f64::MIN, f64::max),
+                ));
+            }
+        } else if inside && line.starts_with('X') {
+            let rest = &line[1..];
+            if let Some((x, tail)) = rest.split_once('Y') {
+                let y: String = tail
+                    .chars()
+                    .take_while(|c| c.is_ascii_digit() || *c == '.')
+                    .collect();
+                if let (Ok(x), Ok(y)) = (x.parse::<f64>(), y.parse::<f64>()) {
+                    corners.push((x, y));
+                }
+            }
+        }
+    }
+    assert!(!rects.is_empty(), "no regions parsed back:\n{copper}");
+
+    // R1 sits at 8mm, 10mm; its pad 2 is on net 2, a foreign net, at +0.5mm,
+    // and measures 0.6 x 0.5mm. With 0.3mm of clearance the pour must stay out
+    // of 7.9..9.1 by 9.45..10.55.
+    let keepout = (7.9_f64, 9.45_f64, 9.1_f64, 10.55_f64);
+    for r in &rects {
+        let overlap = r.0 < keepout.2 - 1e-9
+            && keepout.0 < r.2 - 1e-9
+            && r.1 < keepout.3 - 1e-9
+            && keepout.1 < r.3 - 1e-9;
+        assert!(
+            !overlap,
+            "a region {r:?} reaches into the keepout {keepout:?} around a foreign pad"
+        );
+    }
+
+    // And the pour's own net is reached: R1 pad 1 sits at 7.5mm, 10mm and the
+    // copper has to run right up to it, so some region contains that point.
+    let own_pad = (7.5_f64, 10.0_f64);
+    let reaches_own = rects.iter().any(|r| {
+        r.0 <= own_pad.0 + 0.35
+            && own_pad.0 - 0.35 <= r.2
+            && r.1 <= own_pad.1 + 0.3
+            && own_pad.1 - 0.3 <= r.3
+    });
+    assert!(
+        reaches_own,
+        "the pour never reaches a pad on its own net, so it grounds nothing: {rects:?}"
     );
 }

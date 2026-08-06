@@ -341,8 +341,8 @@ pub fn run_export(
             .count();
         if zone_count > 0 {
             warnings.push(format!(
-                "{zone_count} copper pour(s) are declared and not exported: filling a zone is not implemented, \
-                 so the board will be made without them"
+                "{zone_count} copper pour(s) are filled without thermal relief: a pad on the pour's own net \
+                 is flooded solid, which connects it and makes it hard to solder by hand"
             ));
         }
 
