@@ -122,6 +122,8 @@ pub enum Definition {
     ModuleInstance(ModuleInstance),
     /// A net class: one rule stated for a group of nets.
     NetClass(NetClassDef),
+    /// The board's outline, when it is not a rectangle.
+    Outline(OutlineDef),
     /// An interface definition (v2).
     Interface(InterfaceDef),
     /// An import statement (v2).
@@ -143,6 +145,7 @@ impl Definition {
             Definition::Module(m) => m.span,
             Definition::ModuleInstance(i) => i.span,
             Definition::NetClass(c) => c.span,
+            Definition::Outline(o) => o.span,
             Definition::Interface(i) => i.span,
             Definition::Import(i) => i.span,
             Definition::Assert(a) => a.span,
@@ -360,6 +363,18 @@ pub struct NetDef {
     /// List of pin references connected to this net.
     pub connections: Vec<PinRef>,
     /// Span covering the entire net definition.
+    pub span: Span,
+}
+
+/// The board's outline: `outline { point 0mm, 0mm  point 40mm, 0mm ... }`.
+///
+/// A ring of points, closed implicitly. A board without one is the rectangle
+/// its size describes, which cannot say cutout, slot or chamfer.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OutlineDef {
+    /// The ring, in order.
+    pub points: Vec<(Dimension, Dimension)>,
+    /// Source span.
     pub span: Span,
 }
 

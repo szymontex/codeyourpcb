@@ -480,6 +480,9 @@ pub fn sync_ast_to_world(
             Definition::NetClass(_) => {
                 // Already applied above, before any net could overwrite it.
             }
+            Definition::Outline(_) => {
+                // Already applied above, once the board existed.
+            }
             Definition::ModuleInstance(_) => {
                 // Already replaced by expand_module_instances above; an
                 // instance never reaches this point.
@@ -498,6 +501,13 @@ pub fn sync_ast_to_world(
 
     // Rebuild spatial index after all entities are added (including traces/vias)
     world.rebuild_spatial_index_from_library(footprint_lib);
+    // The board's outline, once the board itself exists: the loop above is
+    // what creates it, so this cannot run before it.
+    for def in definitions {
+        if let Definition::Outline(outline) = def {
+            sync_outline(outline, world);
+        }
+    }
 
     result
 }
@@ -2678,5 +2688,24 @@ fn sync_netclass(class: &cypcb_parser::ast::NetClassDef, world: &mut BoardWorld)
     for member in &class.members {
         let net_id = world.intern_net(&member.value);
         world.set_net_constraints(net_id, carried);
+    }
+}
+
+/// Put the design's outline on the board.
+///
+/// A ring of fewer than three points cannot enclose an area; rather than store
+/// a line and call it a board, nothing is set and the rectangle stands.
+fn sync_outline(outline: &cypcb_parser::ast::OutlineDef, world: &mut BoardWorld) {
+    let Some(board) = world.board_entity() else {
+        return;
+    };
+    let points: Vec<Point> = outline
+        .points
+        .iter()
+        .map(|(x, y)| Point::new(x.to_nm(), y.to_nm()))
+        .collect();
+
+    if let Some(ring) = crate::components::BoardOutline::new(points) {
+        world.ecs_mut().entity_mut(board).insert(ring);
     }
 }

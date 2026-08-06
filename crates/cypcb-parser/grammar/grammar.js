@@ -44,6 +44,7 @@ module.exports = grammar({
     // Top-level definitions
     _definition: $ => choice(
       $.board_definition,
+      $.outline_definition,
       $.component_definition,
       $.net_definition,
       $.netclass_definition,
@@ -55,6 +56,24 @@ module.exports = grammar({
       $.interface_definition,
       $.import_statement,
       $.assert_statement,
+    ),
+
+    // outline { point 0mm, 0mm  point 40mm, 0mm  ... }
+    //
+    // The board's real edge, as a ring of points. Without one a board is the
+    // rectangle its size describes, which cannot say cutout, slot or chamfer.
+    outline_definition: $ => seq(
+      'outline',
+      '{',
+      repeat($.outline_point),
+      '}',
+    ),
+
+    outline_point: $ => seq(
+      'point',
+      field('x', $.dimension),
+      ',',
+      field('y', $.dimension),
     ),
 
     // board name { properties }

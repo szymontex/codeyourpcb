@@ -34,8 +34,8 @@ use crate::ast::{
     AssertDef, AssertExpression, AssertOperand, BoardDef, ComparisonOp, ComponentDef,
     ComponentKind, CurrentUnit, CurrentValue, Definition, Dimension, FootprintDef, Identifier,
     ImportDef, InterfaceDef, LayerType, ModuleDef, ModuleInstance, NetAssignment, NetClassDef,
-    NetConstraints, NetDef, PadDef, PadShape, PhysicalValue, PinDeclaration, PinId, PinRef,
-    PortConnection, PositionExpr, RotationExpr, SizeProperty, SourceFile, Span, StackupDef,
+    NetConstraints, NetDef, OutlineDef, PadDef, PadShape, PhysicalValue, PinDeclaration, PinId,
+    PinRef, PortConnection, PositionExpr, RotationExpr, SizeProperty, SourceFile, Span, StackupDef,
     StackupLayer, StringLit, Tolerance, ToleranceKind, TraceDef, TraceDirective, TracePath,
     TraceVia, ZoneDef, ZoneKind,
 };
@@ -154,6 +154,11 @@ impl CypcbParser {
                 "module_instance" => {
                     if let Some(instance) = self.convert_module_instance(source, &child, errors) {
                         definitions.push(Definition::ModuleInstance(instance));
+                    }
+                }
+                "outline_definition" => {
+                    if let Some(outline) = self.convert_outline(source, &child, errors) {
+                        definitions.push(Definition::Outline(outline));
                     }
                 }
                 "netclass_definition" => {
@@ -1138,6 +1143,40 @@ impl CypcbParser {
         })
     }
 
+    /// Convert a board outline node.
+    fn convert_outline(
+        &self,
+        source: &str,
+        node: &Node,
+        errors: &mut Vec<ParseError>,
+    ) -> Option<OutlineDef> {
+        let mut points = Vec::new();
+        let mut cursor = node.walk();
+        for child in node.children(&mut cursor) {
+            if child.kind() != "outline_point" {
+                continue;
+            }
+            let (Some(x_node), Some(y_node)) = (
+                get_child_by_field(&child, "x"),
+                get_child_by_field(&child, "y"),
+            ) else {
+                continue;
+            };
+            let (Some(x), Some(y)) = (
+                self.convert_dimension(source, &x_node, errors),
+                self.convert_dimension(source, &y_node, errors),
+            ) else {
+                continue;
+            };
+            points.push((x, y));
+        }
+
+        Some(OutlineDef {
+            points,
+            span: span_of(node),
+        })
+    }
+
     /// Convert a net class node.
     fn convert_netclass(
         &self,
@@ -1655,6 +1694,29 @@ pub fn parse(source: &str) -> ParseResult<SourceFile> {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn an_outline_block_parses_into_points() {
+        let source = "version 1\n\nboard b {\n    size 40mm x 40mm\n    layers 2\n}\n\n\
+                      outline {\n    point 0mm, 0mm\n    point 40mm, 0mm\n    point 40mm, 20mm\n\
+                      \x20   point 20mm, 20mm\n    point 20mm, 40mm\n    point 0mm, 40mm\n}\n";
+        let parsed = parse(source);
+        assert!(parsed.errors.is_empty(), "{:?}", parsed.errors);
+
+        let outline = parsed
+            .value
+            .definitions
+            .iter()
+            .find_map(|d| match d {
+                Definition::Outline(outline) => Some(outline),
+                _ => None,
+            })
+            .expect("the outline block has to reach the AST");
+
+        assert_eq!(outline.points.len(), 6);
+        assert_eq!(outline.points[2].0.to_nm(), cypcb_core::Nm::from_mm(40.0));
+        assert_eq!(outline.points[2].1.to_nm(), cypcb_core::Nm::from_mm(20.0));
+    }
     use super::*;
 
     #[test]
