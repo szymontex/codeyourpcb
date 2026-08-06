@@ -179,6 +179,33 @@ impl ExportCommand {
             return Ok(());
         }
 
+        // What the checker says about the board before anyone makes it.
+        //
+        // `check` and `export` were two commands with nothing joining them, so
+        // a shorted board exported without a word. This does not refuse -
+        // whether to make a board with known faults is the designer's call,
+        // and a fabricator will make whatever the files say - but it refuses
+        // to be silent about it.
+        {
+            use cypcb_drc::{run_drc, Preset as DrcPreset};
+            // Named the same way `cypcb check` names it, so the two commands
+            // measure the same board against the same rules. A preset the
+            // checker does not know is not a reason to stop an export.
+            let rules = DrcPreset::from_name(&self.preset)
+                .map(|p| p.rules())
+                .unwrap_or_else(cypcb_drc::DesignRules::jlcpcb_2layer);
+            world.rebuild_spatial_index_from_library(&library);
+            let report = run_drc(&mut world, &rules);
+            if !report.violations.is_empty() {
+                eprintln!();
+                eprintln!(
+                    "Warning: exporting a board with {} DRC violation(s). Run `cypcb check {}` to read them.",
+                    report.violations.len(),
+                    self.input.display()
+                );
+            }
+        }
+
         // Run export
         eprintln!();
         eprintln!("Generating Gerber files...");
