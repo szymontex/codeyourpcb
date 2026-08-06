@@ -145,6 +145,16 @@ pub enum SyncError {
         span: miette::SourceSpan,
     },
 
+    /// A module instantiates itself, directly or through others.
+    ModuleCycle {
+        /// The chain of modules, from the outermost to the repeat.
+        chain: String,
+        /// Source code for miette display.
+        src: String,
+        /// Source span of the instantiation that closes the loop.
+        span: miette::SourceSpan,
+    },
+
     /// A trace references an unknown layer.
     UnknownLayer {
         /// The unknown layer name.
@@ -189,6 +199,9 @@ impl fmt::Display for SyncError {
                     instance, pin
                 )
             }
+            SyncError::ModuleCycle { chain, .. } => {
+                write!(f, "module instantiates itself: {}", chain)
+            }
             SyncError::UnknownLayer { layer, .. } => {
                 write!(f, "unknown layer: '{}'", layer)
             }
@@ -210,6 +223,7 @@ impl Diagnostic for SyncError {
             SyncError::UnconnectedModulePin { .. } => {
                 Some(Box::new("cypcb::sync::unconnected_module_pin"))
             }
+            SyncError::ModuleCycle { .. } => Some(Box::new("cypcb::sync::module_cycle")),
             SyncError::UnknownLayer { .. } => Some(Box::new("cypcb::sync::unknown_layer")),
         }
     }
@@ -237,6 +251,9 @@ impl Diagnostic for SyncError {
             SyncError::UnconnectedModulePin { .. } => Some(Box::new(
                 "give every pin the module declares a net: `use M as N { PIN = net }`",
             )),
+            SyncError::ModuleCycle { .. } => Some(Box::new(
+                "a module cannot contain itself; break the loop or inline one of the blocks",
+            )),
             SyncError::UnknownLayer { .. } => {
                 Some(Box::new("use a valid layer name: Top, Bottom, Inner1, Inner2, etc."))
             }
@@ -252,6 +269,7 @@ impl Diagnostic for SyncError {
             SyncError::MissingNet { src, .. } => Some(src),
             SyncError::UnknownModule { src, .. } => Some(src),
             SyncError::UnconnectedModulePin { src, .. } => Some(src),
+            SyncError::ModuleCycle { src, .. } => Some(src),
             SyncError::UnknownLayer { src, .. } => Some(src),
         }
     }
@@ -297,6 +315,9 @@ impl Diagnostic for SyncError {
                     *span,
                 ))))
             }
+            SyncError::ModuleCycle { span, .. } => Some(Box::new(std::iter::once(
+                LabeledSpan::new_with_span(Some("this closes the loop".to_string()), *span),
+            ))),
             SyncError::UnknownLayer { span, .. } => Some(Box::new(std::iter::once(
                 LabeledSpan::new_with_span(Some("unknown layer".to_string()), *span),
             ))),
@@ -1161,6 +1182,142 @@ use Divider as DIV2 at 25mm, 5mm rotate 90 {
 
         // Two instances no longer occupy the same square millimetre.
         assert_ne!(placed("DIV1_RBOT"), placed("DIV2_RBOT"));
+    }
+
+    #[test]
+    fn modules_nest() {
+        // A pair block made of two dividers, instantiated once. Names and
+        // placements compose through both levels, and a port on the inner
+        // instance reaches the design's net through the outer one.
+        let source = r#"version 1
+
+board t {
+    size 60mm x 40mm
+    layers 2
+}
+
+module Divider {
+    pin IN
+    pin OUT
+
+    component R1 resistor "0402" {
+        value "10k"
+        at 2mm, 0mm
+    }
+
+    net IN {
+        R1.1
+    }
+
+    net OUT {
+        R1.2
+    }
+}
+
+module Pair {
+    pin SUPPLY
+    pin A
+    pin B
+
+    use Divider as LEFT at 0mm, 0mm {
+        IN = SUPPLY
+        OUT = A
+    }
+
+    use Divider as RIGHT at 10mm, 0mm {
+        IN = SUPPLY
+        OUT = B
+    }
+}
+
+use Pair as BANK at 20mm, 15mm {
+    SUPPLY = VIN
+    A = SENSE_A
+    B = SENSE_B
+}
+"#;
+        let parsed = cypcb_parser::parse(source);
+        assert!(parsed.errors.is_empty(), "{:?}", parsed.errors);
+
+        let mut world = BoardWorld::new();
+        let mut library = FootprintLibrary::new();
+        let result = sync_ast_to_world(&parsed.value, source, &mut world, &mut library);
+        assert!(result.errors.is_empty(), "{:?}", result.errors);
+
+        let mut refdes: Vec<String> = {
+            let ecs = world.ecs_mut();
+            let mut query = ecs.query::<&RefDes>();
+            query.iter(ecs).map(|r| r.as_str().to_string()).collect()
+        };
+        refdes.sort();
+        assert_eq!(refdes, vec!["BANK_LEFT_R1", "BANK_RIGHT_R1"]);
+
+        // 20mm (BANK) + 10mm (RIGHT inside Pair) + 2mm (R1 inside Divider).
+        let mut placed = |name: &str| -> (i64, i64) {
+            let ecs = world.ecs_mut();
+            let mut query = ecs.query::<(&RefDes, &Position)>();
+            let found = query
+                .iter(ecs)
+                .find(|(r, _)| r.as_str() == name)
+                .unwrap_or_else(|| panic!("{name} missing"));
+            (found.1 .0.x.raw(), found.1 .0.y.raw())
+        };
+        assert_eq!(placed("BANK_LEFT_R1"), (22_000_000, 15_000_000));
+        assert_eq!(placed("BANK_RIGHT_R1"), (32_000_000, 15_000_000));
+
+        // A port two levels down reaches the design's own net, and both
+        // dividers share the supply.
+        assert!(world.get_net("VIN").is_some(), "SUPPLY -> VIN through Pair");
+        assert!(world.get_net("SENSE_A").is_some());
+        assert!(world.get_net("SENSE_B").is_some());
+        assert!(
+            world.get_net("BANK_LEFT_IN").is_none(),
+            "an inner pin must not become a local net when it is wired through"
+        );
+    }
+
+    #[test]
+    fn a_module_that_contains_itself_is_reported() {
+        let source = r#"version 1
+
+board t {
+    size 20mm x 20mm
+    layers 2
+}
+
+module A {
+    pin P
+
+    use B as INNER {
+        Q = P
+    }
+}
+
+module B {
+    pin Q
+
+    use A as INNER {
+        P = Q
+    }
+}
+
+use A as TOP {
+    P = VIN
+}
+"#;
+        let parsed = cypcb_parser::parse(source);
+        let mut world = BoardWorld::new();
+        let mut library = FootprintLibrary::new();
+        let result = sync_ast_to_world(&parsed.value, source, &mut world, &mut library);
+
+        assert!(
+            result
+                .errors
+                .iter()
+                .any(|e| matches!(e, SyncError::ModuleCycle { .. })),
+            "expansion has to stop and say why: {:?}",
+            result.errors
+        );
     }
 
     #[test]
@@ -2122,6 +2279,11 @@ fn side_of_footprint(footprint: &Footprint) -> crate::components::Side {
 /// one of the module's pins, which is the whole point of a pin: `IN = VIN`
 /// makes the module's `IN` and the design's `VIN` one net.
 ///
+/// Modules nest. An instance inside a module is expanded with the enclosing
+/// instance's name and frame already applied, so `TOP_INNER_R1` sits where the
+/// composition of both placements puts it, and a port two levels down still
+/// reaches the design's own net.
+///
 /// Returns the design's own definitions with instances replaced in place, so
 /// every pass downstream works on components and nets and needs to know
 /// nothing about modules.
@@ -2146,79 +2308,196 @@ fn expand_module_instances(
             continue;
         };
 
-        let Some(module) = modules.get(instance.module.value.as_str()) else {
-            result.errors.push(SyncError::UnknownModule {
-                name: instance.module.value.clone(),
-                src: source.to_string(),
-                span: span_to_source_span(&instance.module.span),
-            });
-            continue;
-        };
-
-        // pin name -> the design's net for it
-        let ports: HashMap<&str, &str> = instance
-            .ports
-            .iter()
-            .map(|port| (port.pin.value.as_str(), port.net.value.as_str()))
-            .collect();
-
-        // A pin the instance does not connect is left dangling rather than
-        // silently merged with something; say so.
-        for pin in &module.pins {
-            if !ports.contains_key(pin.name.value.as_str()) {
-                result.errors.push(SyncError::UnconnectedModulePin {
-                    instance: instance.name.value.clone(),
-                    pin: pin.name.value.clone(),
-                    src: source.to_string(),
-                    span: span_to_source_span(&instance.span),
-                });
-            }
-        }
-
-        let prefix = &instance.name.value;
-        let local_name = |name: &str| -> String { format!("{prefix}_{name}") };
-        let net_name = |name: &str| -> String {
-            ports
-                .get(name)
-                .map(|design_net| (*design_net).to_string())
-                .unwrap_or_else(|| local_name(name))
-        };
-
-        // Where the instance sits, and how far it is turned. A module places
-        // its parts in its own coordinates; an instance decides where those
-        // coordinates land on the board.
-        let origin = instance
-            .position
-            .as_ref()
-            .map(|at| (at.x.to_nm().raw(), at.y.to_nm().raw()))
-            .unwrap_or((0, 0));
-        let angle_deg = instance.rotation.as_ref().map(|r| r.angle).unwrap_or(0.0);
-
-        for inner in &module.definitions {
-            match inner {
-                Definition::Component(component) => {
-                    let mut copy = component.clone();
-                    copy.refdes.value = local_name(&component.refdes.value);
-                    place_in_instance(&mut copy, origin, angle_deg);
-                    out.push(Definition::Component(copy));
-                }
-                Definition::Net(net) => {
-                    let mut copy = net.clone();
-                    copy.name.value = net_name(&net.name.value);
-                    for connection in &mut copy.connections {
-                        connection.component.value = local_name(&connection.component.value);
-                    }
-                    out.push(Definition::Net(copy));
-                }
-                // A module holding a board or another module is not something
-                // the language allows; the grammar only admits components,
-                // nets, pins and assertions.
-                other => out.push(other.clone()),
-            }
-        }
+        let mut chain = Vec::new();
+        expand_one(
+            instance,
+            &modules,
+            &Frame::identity(),
+            "",
+            &HashMap::new(),
+            &mut chain,
+            source,
+            &mut out,
+            result,
+        );
     }
 
     out
+}
+
+/// Where an instance's coordinates sit on the board.
+#[derive(Clone, Copy)]
+struct Frame {
+    origin: (i64, i64),
+    angle_deg: f64,
+}
+
+impl Frame {
+    fn identity() -> Self {
+        Frame {
+            origin: (0, 0),
+            angle_deg: 0.0,
+        }
+    }
+
+    /// Place a child frame inside this one.
+    ///
+    /// A nested instance's origin is stated in its parent's coordinates, so it
+    /// has to be turned by the parent's angle before being added, and the
+    /// angles accumulate.
+    fn compose(&self, child: Frame) -> Frame {
+        let (sin, cos) = self.angle_deg.to_radians().sin_cos();
+        let x = child.origin.0 as f64;
+        let y = child.origin.1 as f64;
+        Frame {
+            origin: (
+                self.origin.0 + (x * cos - y * sin).round() as i64,
+                self.origin.1 + (x * sin + y * cos).round() as i64,
+            ),
+            angle_deg: self.angle_deg + child.angle_deg,
+        }
+    }
+}
+
+/// Expand one instance, and anything it instantiates in turn.
+///
+/// `prefix` is what the enclosing instances have already contributed to every
+/// name; `outer_nets` maps a net name in the enclosing scope to the name it
+/// finally has, which is how a port two levels down still reaches the design's
+/// own net. `chain` is the stack of modules currently being expanded, and is
+/// what stops a module that instantiates itself from expanding for ever - no
+/// depth limit is needed, because a chain without repeats cannot be longer
+/// than the number of modules in the file.
+#[allow(clippy::too_many_arguments)] // each argument is a distinct piece of scope
+fn expand_one(
+    instance: &cypcb_parser::ast::ModuleInstance,
+    modules: &HashMap<&str, &cypcb_parser::ast::ModuleDef>,
+    outer_frame: &Frame,
+    prefix: &str,
+    outer_nets: &HashMap<String, String>,
+    chain: &mut Vec<String>,
+    source: &str,
+    out: &mut Vec<Definition>,
+    result: &mut SyncResult,
+) {
+    let module_name = instance.module.value.as_str();
+
+    let Some(module) = modules.get(module_name) else {
+        result.errors.push(SyncError::UnknownModule {
+            name: instance.module.value.clone(),
+            src: source.to_string(),
+            span: span_to_source_span(&instance.module.span),
+        });
+        return;
+    };
+
+    if chain.iter().any(|seen| seen == module_name) {
+        let mut path = chain.clone();
+        path.push(module_name.to_string());
+        result.errors.push(SyncError::ModuleCycle {
+            chain: path.join(" -> "),
+            src: source.to_string(),
+            span: span_to_source_span(&instance.span),
+        });
+        return;
+    }
+    chain.push(module_name.to_string());
+
+    // Each port names a net in the enclosing scope, which may itself be a
+    // port of the instance above. Resolving through `outer_nets` is what makes
+    // a pin three levels down land on the design's own net.
+    let resolve_outer = |name: &str| -> String {
+        outer_nets
+            .get(name)
+            .cloned()
+            .unwrap_or_else(|| name.to_string())
+    };
+    let ports: HashMap<&str, String> = instance
+        .ports
+        .iter()
+        .map(|port| (port.pin.value.as_str(), resolve_outer(&port.net.value)))
+        .collect();
+
+    for pin in &module.pins {
+        if !ports.contains_key(pin.name.value.as_str()) {
+            result.errors.push(SyncError::UnconnectedModulePin {
+                instance: instance.name.value.clone(),
+                pin: pin.name.value.clone(),
+                src: source.to_string(),
+                span: span_to_source_span(&instance.span),
+            });
+        }
+    }
+
+    let scope = if prefix.is_empty() {
+        instance.name.value.clone()
+    } else {
+        format!("{prefix}_{}", instance.name.value)
+    };
+    let local_name = |name: &str| -> String { format!("{scope}_{name}") };
+    let net_name =
+        |name: &str| -> String { ports.get(name).cloned().unwrap_or_else(|| local_name(name)) };
+
+    let frame = outer_frame.compose(Frame {
+        origin: instance
+            .position
+            .as_ref()
+            .map(|at| (at.x.to_nm().raw(), at.y.to_nm().raw()))
+            .unwrap_or((0, 0)),
+        angle_deg: instance.rotation.as_ref().map(|r| r.angle).unwrap_or(0.0),
+    });
+
+    // What every net inside this module is finally called, for anything it
+    // instantiates in turn.
+    let inner_nets: HashMap<String, String> = module
+        .definitions
+        .iter()
+        .filter_map(|def| match def {
+            Definition::Net(net) => Some((net.name.value.clone(), net_name(&net.name.value))),
+            _ => None,
+        })
+        .chain(
+            module
+                .pins
+                .iter()
+                .map(|pin| (pin.name.value.clone(), net_name(&pin.name.value))),
+        )
+        .collect();
+
+    for inner in &module.definitions {
+        match inner {
+            Definition::Component(component) => {
+                let mut copy = component.clone();
+                copy.refdes.value = local_name(&component.refdes.value);
+                place_in_instance(&mut copy, frame.origin, frame.angle_deg);
+                out.push(Definition::Component(copy));
+            }
+            Definition::Net(net) => {
+                let mut copy = net.clone();
+                copy.name.value = net_name(&net.name.value);
+                for connection in &mut copy.connections {
+                    connection.component.value = local_name(&connection.component.value);
+                }
+                out.push(Definition::Net(copy));
+            }
+            Definition::ModuleInstance(nested) => {
+                expand_one(
+                    nested,
+                    modules,
+                    &frame,
+                    &scope,
+                    &inner_nets,
+                    chain,
+                    source,
+                    out,
+                    result,
+                );
+            }
+            other => out.push(other.clone()),
+        }
+    }
+
+    chain.pop();
 }
 
 /// Move a module's component into the instance's frame.

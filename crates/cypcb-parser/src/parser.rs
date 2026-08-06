@@ -1207,6 +1207,11 @@ impl CypcbParser {
                         definitions.push(Definition::Assert(assert_def));
                     }
                 }
+                "module_instance" => {
+                    if let Some(instance) = self.convert_module_instance(source, &child, errors) {
+                        definitions.push(Definition::ModuleInstance(instance));
+                    }
+                }
                 _ => {}
             }
         }

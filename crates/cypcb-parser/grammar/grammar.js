@@ -447,6 +447,8 @@ module.exports = grammar({
       $.net_definition,
       $.pin_declaration,
       $.assert_statement,
+      // A module can be built from other modules.
+      $.module_instance,
     ),
 
     // use Module as Name [at X, Y] [rotate A] { PIN = net, ... }
