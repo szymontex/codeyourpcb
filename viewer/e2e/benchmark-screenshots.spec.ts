@@ -23,7 +23,17 @@ const FIXTURES = [
   { name: 'multi_ic.kicad_pcb', slow: true },
 ] as const;
 
-test.describe('Benchmark Screenshots', () => {
+// These drive routing through #route-btn, which index.html hides inside a
+// .tb-route-group wrapper marked display:none while the router's quality is
+// worked on (decision D5 in docs/TRACKER.md). Nothing here can be reached from
+// the UI until that wrapper is visible again.
+//
+// They run as skipped rather than as three permanent failures, because a gate
+// that is always red is a gate nobody reads - and this one exits at the
+// Playwright stage, so the autorouter benchmark and the duplication check
+// never ran at all while these failed. Delete the .skip the moment the button
+// comes back.
+test.describe.skip('Benchmark Screenshots', () => {
   for (const fixture of FIXTURES) {
     const baseName = fixture.name.replace('.kicad_pcb', '');
 
