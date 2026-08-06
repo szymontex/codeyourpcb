@@ -83,6 +83,7 @@ When adding a new shortcut:
 | `R` | Rotate selected component 90° CW | Idle mode, component selected | `main.ts` |
 | `Shift+R` | Rotate selected component 90° CCW | Idle mode, component selected | `main.ts` |
 | `Delete` / `Backspace` | Delete selected trace | Idle mode, trace selected | `main.ts` |
+| `Ctrl+L` | Simplify selected trace | Idle mode, trace selected | `interaction.ts` |
 | Click+drag segment | Drag trace segment | Idle mode, trace segment | `interaction.ts` |
 | Click+drag vertex | Drag trace corner | Idle mode, trace vertex | `interaction.ts` |
 | Click+drag empty space | Rectangle select | Idle mode | `interaction.ts` |
