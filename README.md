@@ -104,12 +104,14 @@ An LLM can generate this, review it, refactor it, and catch mistakes — just li
 | KiCad component library import | Done |
 | KiCad `.kicad_pcb` import | Done — `cypcb parse-kicad`, used by the routing benchmarks |
 | KiCad `.kicad_pcb` export | Planned |
-| Copper pour / ground planes | Planned |
-| Module system — reusable circuit blocks, packages | Parsed by the DSL, not yet instantiated |
+| Copper pour / ground planes | Zones carry a net and the ratsnest treats a pad inside a pour as connected; filling the pour with copper is not implemented |
+| Module system — reusable circuit blocks | Done — `module` defines one, `use M as N at 10mm, 5mm` places it, modules nest. See `examples/v2-modules.cypcb` |
+| `import` — block libraries across files | Done — resolved relative to the importing file; modules, footprints and interfaces cross, a design's own board and parts do not. See `examples/v2-imports.cypcb` |
+| `assert` — the design's own claims, checked | Done — `board.*`, `<part>.value` and `<net>.current/width/clearance`; anything else is reported as not checked rather than skipped |
 | Parts engine — auto component picking from JLCPCB/LCSC | Planned |
 | Schematic generation from `.cypcb` | Planned |
 | Differential pair routing | Planned |
-| CI/CD — `cypcb check` + `cypcb export` in GitHub Actions | Planned |
+| CI/CD in GitHub Actions | Not planned — the quality gate is `scripts/quality-gate.sh`, run locally |
 
 Routing quality on the bundled KiCad benchmarks, measured with
 `cargo test --release -p cypcb-autoroute -- benchmark_all_fixtures_drc --ignored`:
@@ -228,7 +230,7 @@ CodeYourPCB sits in the emerging "PCB as code" space alongside a few other tools
 - **[atopile](https://atopile.io/)** — open-source `.ato` language with compiler, reusable modules, component picking. Uses KiCad for layout. MIT.
 - **[tscircuit](https://tscircuit.com/)** — open-source React/TypeScript PCB framework. Very LLM-friendly (TypeScript is natural for models). MIT.
 
-Where CodeYourPCB differs: own rendering engine (no KiCad dependency), runs in browser via WASM, interactive routing built-in, traces persist as readable DSL code. Where it's behind: no module/package system yet, no schematic capture, smaller component library.
+Where CodeYourPCB differs: own rendering engine (no KiCad dependency), runs in browser via WASM, interactive routing built-in, traces persist as readable DSL code. Where it's behind: no schematic capture, smaller component library.
 
 ---
 
@@ -249,7 +251,7 @@ Where CodeYourPCB differs: own rendering engine (no KiCad dependency), runs in b
 
 Experimental. The DSL and file format may change between versions.
 
-The core loop works: write `.cypcb` → see board → route traces → save → reload. Traces are deterministic (bit-exact round-trip). The main gaps are copper pour, module system, and autorouter.
+The core loop works: write `.cypcb` → see board → route traces → save → reload. Traces are deterministic (bit-exact round-trip). The main gaps are copper pour and the autorouter's toolbar button, which is hidden.
 
 PRs welcome.
 

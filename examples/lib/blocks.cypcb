@@ -1,0 +1,66 @@
+// blocks.cypcb - a small library of reusable blocks.
+//
+// This file defines modules and nothing else. It has no board, so it is not a
+// design; it is meant to be imported. Only modules, footprints and interfaces
+// cross a file boundary, which is what keeps an import from being a paste.
+
+version 1
+
+// A resistor divider. Its two exposed pins are the nets a design wires it to;
+// `mid` is internal and stays private to each instance.
+module Divider {
+    pin IN
+    pin OUT
+
+    component RTOP resistor "0402" {
+        value 10kohm
+        at 0mm, 0mm
+    }
+
+    component RBOT resistor "0402" {
+        value 10kohm
+        at 0mm, 2mm
+    }
+
+    net IN {
+        RTOP.1
+    }
+
+    net mid {
+        RTOP.2
+        RBOT.1
+    }
+
+    net OUT {
+        RBOT.2
+    }
+}
+
+// An LED and its series resistor.
+module LedDriver {
+    pin INPUT
+    pin GND
+
+    component D1 led "0603" {
+        value "RED"
+        at 0mm, 0mm
+    }
+
+    component R1 resistor "0402" {
+        value 330ohm
+        at 0mm, 3mm
+    }
+
+    net INPUT {
+        R1.1
+    }
+
+    net anode {
+        R1.2
+        D1.1
+    }
+
+    net GND {
+        D1.2
+    }
+}

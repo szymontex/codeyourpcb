@@ -1,0 +1,40 @@
+// v2-imports.cypcb - using a block library from another file.
+//
+// A path is resolved relative to this file, so `lib/blocks.cypcb` is the
+// neighbour of the same name. `import A, B from "..."` takes only what it
+// names; plain `import "..."` takes every reusable definition.
+//
+// Check it with:
+//   cypcb check examples/v2-imports.cypcb
+
+version 1
+
+import Divider, LedDriver from "lib/blocks.cypcb"
+
+board sensor_front_end {
+    size 50mm x 30mm
+    layers 2
+}
+
+// Two dividers reading the same rail. Each instance brings its own copy of the
+// parts - DIV_A_RTOP and DIV_B_RTOP - and its own private `mid` net, while
+// both IN pins land on VIN because that is what the design wires them to.
+use Divider as DIV_A at 10mm, 8mm {
+    IN = VIN
+    OUT = SENSE_A
+}
+
+use Divider as DIV_B at 25mm, 8mm {
+    IN = VIN
+    OUT = SENSE_B
+}
+
+// Turned a quarter turn: an instance rotates its parts about its own origin.
+use LedDriver as STATUS at 40mm, 8mm rotate 90 {
+    INPUT = SENSE_A
+    GND = GND
+}
+
+// What this design says about itself. The checker reports any that do not hold.
+assert board.width <= 100mm
+assert board.layers >= 2

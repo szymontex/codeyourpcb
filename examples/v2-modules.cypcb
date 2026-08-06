@@ -22,18 +22,19 @@ module PowerSupply {
         at 3mm, 0mm
     }
 
-    // Internal nets
-    net input_rail {
+    // A net named after an exposed pin becomes the design's net when the
+    // module is instantiated. One that is not stays private to the instance.
+    net VIN {
         U1.1
         C_IN.1
     }
 
-    net output_rail {
+    net VOUT {
         U1.3
         C_OUT.1
     }
 
-    net gnd_internal {
+    net GND {
         U1.2
         C_IN.2
         C_OUT.2
@@ -57,17 +58,46 @@ module LedDriver {
         at 0mm, 3mm
     }
 
+    pin INPUT
+    pin GND
+
+    net INPUT {
+        R1.1
+    }
+
+    // Private to each instance: two drivers do not share an anode.
     net led_anode {
         R1.2
         D1.1
     }
 
-    pin INPUT
-    pin GND
+    net GND {
+        D1.2
+    }
 }
 
 // Top-level board using the modules
 board main_board {
     size 50mm x 30mm
     layers 2
+}
+
+// Instantiating a module copies its parts under the instance name, so the
+// regulator's U1 becomes PSU_U1 and each driver gets its own D1. An instance
+// says where it goes; without a placement every copy lands on the last.
+use PowerSupply as PSU at 10mm, 10mm {
+    VIN = V_IN
+    VOUT = V_3V3
+    GND = GND
+}
+
+use LedDriver as LED_PWR at 30mm, 8mm {
+    INPUT = V_3V3
+    GND = GND
+}
+
+// An instance turns its parts about its own origin.
+use LedDriver as LED_STAT at 30mm, 20mm rotate 90 {
+    INPUT = V_3V3
+    GND = GND
 }
