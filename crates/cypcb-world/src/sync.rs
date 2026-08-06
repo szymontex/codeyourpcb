@@ -846,13 +846,20 @@ fn sync_trace(
         None
     };
 
-    // Check if this trace uses geometric (path-based) directives
-    let has_paths = trace_def
+    // Whether this block describes geometry rather than a pin-to-pin
+    // connection.
+    //
+    // A via counts. The writer emits each via as a block of its own -
+    // `trace GND { via 20mm,10mm drill 0.3mm }` - with no path in it, and
+    // testing only for a path skipped that block entirely: every via the
+    // router placed disappeared the moment the file was read back, silently,
+    // taking its layer change with it.
+    let has_geometry = trace_def
         .directives
         .iter()
-        .any(|d| matches!(d, TraceDirective::Path(_)));
+        .any(|d| matches!(d, TraceDirective::Path(_) | TraceDirective::Via(_)));
 
-    if has_paths {
+    if has_geometry {
         // Geometric mode: process ordered directives to create traces and vias
         let mut current_layer = layer;
         let span = EcsSourceSpan::new(trace_def.span.start, trace_def.span.end, 0, 0);
