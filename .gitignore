@@ -15,11 +15,8 @@
 .DS_Store
 Thumbs.db
 
-# Tree-sitter working files. The generated parser itself is committed:
-# build.rs compiles grammar/src/parser.c, so a clone that does not have it
-# cannot build at all, and requiring node and the tree-sitter CLI to compile a
-# Rust workspace is a worse trade than carrying a generated file. Every
-# tree-sitter grammar repository upstream does the same.
+# Generated Tree-sitter parser files
+crates/cypcb-parser/grammar/src/
 crates/cypcb-parser/grammar/node_modules/
 crates/cypcb-parser/grammar/package-lock.json
 
@@ -90,3 +87,6 @@ viewer/circuitron/
 # Playwright output: screenshots, traces and the last-run marker. Regenerated on
 # every run, 42MB of it, and it made every test run show up as a dirty tree.
 viewer/test-results/
+
+# Router output: `cypcb route` writes these beside the design it read.
+*.routed.cypcb
