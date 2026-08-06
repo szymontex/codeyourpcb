@@ -51,7 +51,10 @@ impl VariantConfig {
             params,
             via_ring_penalty: 0.0,
             pad_zone_blocks_foreign_copper: false,
-            reserve_trace_footprint: false,
+            // Follows the default: reserving a trace's copper is what the
+            // router does now, and a variant that differs in one knob should
+            // differ in that knob alone.
+            reserve_trace_footprint: true,
         }
     }
 }
@@ -120,7 +123,7 @@ pub fn default_variant_configs() -> Vec<VariantConfig> {
             params: AutorouteParams::default(),
             via_ring_penalty: 3.0,
             pad_zone_blocks_foreign_copper: false,
-            reserve_trace_footprint: false,
+            reserve_trace_footprint: true,
         },
         VariantConfig {
             name: "PathFinder Guarded Pads".to_string(),
@@ -131,20 +134,20 @@ pub fn default_variant_configs() -> Vec<VariantConfig> {
             },
             via_ring_penalty: 0.0,
             pad_zone_blocks_foreign_copper: true,
-            reserve_trace_footprint: false,
+            reserve_trace_footprint: true,
         },
-        // A trace is narrower than a cell, so the grid can call a cell free
-        // while the copper in it is touching a neighbour's. Reserving the
-        // cells around each node closes that, at the price of the space it
-        // takes: measured a large win on the dense board and a loss on the
-        // small one, which is what a variant is for.
+        // Reserving a trace's copper is the default since it was measured
+        // better on every fixture and both columns. This is the control: the
+        // router as it was, marking only the centre line the search walked.
+        // Kept because a board that does worse under the reservation should
+        // still have somewhere to go.
         VariantConfig {
-            name: "PathFinder Reserved Copper".to_string(),
+            name: "PathFinder Bare Centre Line".to_string(),
             strategy: StrategyKind::PathFinder,
             params: AutorouteParams::default(),
             via_ring_penalty: 0.0,
             pad_zone_blocks_foreign_copper: false,
-            reserve_trace_footprint: true,
+            reserve_trace_footprint: false,
         },
     ]
 }

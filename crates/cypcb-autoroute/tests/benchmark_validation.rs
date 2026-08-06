@@ -205,10 +205,14 @@ fn print_table_footer() {
 /// spec is a yield risk a fab may still build. A single count treats one short
 /// as better than two near misses, which is backwards, and it hid that
 /// reserving trace copper halves the shorts on both dense fixtures.
+/// Lowered on 2026-08-07, second time that day: the router reserves the copper
+/// a trace covers and prices a via by the foreign copper inside its keepout,
+/// and every fixture improved on both columns at once. led_blink 2/1 -> 2/0,
+/// stm32_breakout 251/159 -> 171/91, multi_ic 191/75 -> 154/54.
 const DRC_RATCHETS: &[(&str, &str, u32, u32)] = &[
-    ("led_blink.kicad_pcb", "led_blink", 2, 1),
-    ("stm32_breakout.kicad_pcb", "stm32_breakout", 251, 159),
-    ("multi_ic.kicad_pcb", "multi_ic", 191, 75),
+    ("led_blink.kicad_pcb", "led_blink", 2, 0),
+    ("stm32_breakout.kicad_pcb", "stm32_breakout", 171, 91),
+    ("multi_ic.kicad_pcb", "multi_ic", 154, 54),
 ];
 
 /// Routes every fixture and holds the line on completeness and DRC count.
@@ -308,12 +312,22 @@ fn benchmark_regression() {
     );
     eprintln!("  ✓ unrouted: got {}, threshold 0", unrouted);
 
+    // Copper, not segment count. The threshold used to be 20 segments, which
+    // was a stand-in for "the router did not quietly give up" - a job the
+    // `unrouted` assertion above already does properly. It went off when the
+    // router started reserving copper and solved the same board in 18 segments
+    // instead of 23, with the same 79mm of copper: fewer corners is better,
+    // and a gate that calls it a regression is measuring the wrong thing.
+    let copper_mm = score.total_length.0 as f64 / 1_000_000.0;
     assert!(
-        route_count >= 20,
-        "FAIL benchmark_regression: route_count got {}, threshold >= 20 - the router is emitting far less copper than a complete solution needs",
-        route_count
+        copper_mm >= 70.0,
+        "FAIL benchmark_regression: {:.1}mm of copper, threshold >= 70.0mm - the router is emitting far less than a complete solution needs",
+        copper_mm
     );
-    eprintln!("  ✓ route_count: got {}, threshold >= 20", route_count);
+    eprintln!(
+        "  ✓ copper: got {:.1}mm in {} segments, threshold >= 70.0mm",
+        copper_mm, route_count
+    );
 
     // Quality thresholds are ratchets measured against a complete solution.
     // They are deliberately tight: lower them whenever the router improves,

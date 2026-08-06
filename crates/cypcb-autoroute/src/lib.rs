@@ -181,6 +181,17 @@ pub struct AutorouteConfig {
     /// scorer can pick rather than a rule every board obeys.
     pub reserve_trace_footprint: bool,
 
+    /// What a via pays for each foreign cell inside the keepout its ring
+    /// needs, per cell, on top of the via cost.
+    ///
+    /// A price rather than a veto. Refusing such a via was measured and
+    /// reverted - it fixed led_blink and cost multi_ic 117 violations - and it
+    /// was the fifth veto in this vector to cost more than it bought. A price
+    /// lets the search take a tight via when the alternative is worse, which
+    /// is the thing a veto cannot express. Zero means the via pays nothing,
+    /// which is the behaviour before this existed.
+    pub via_foreign_copper_penalty: f64,
+
     /// Whether to smooth the grid paths into diagonals before emitting them.
     ///
     /// On by default: raw grid output is a staircase, which is longer, uglier
@@ -223,7 +234,8 @@ impl Default for AutorouteConfig {
             params: AutorouteParams::default(),
             via_ring_penalty: 0.0,
             pad_zone_blocks_foreign_copper: false,
-            reserve_trace_footprint: false,
+            reserve_trace_footprint: true,
+            via_foreign_copper_penalty: 0.5,
             smoothing: true,
             stagnation_limit: 3,
             repair_passes: 0,

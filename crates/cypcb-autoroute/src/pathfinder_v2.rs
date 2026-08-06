@@ -428,6 +428,7 @@ pub fn pathfinder_loop(
                     config.pad_zone_blocks_foreign_copper,
                     &congestion_map,
                     false,
+                    config.via_foreign_copper_penalty,
                 );
 
                 // A reservation that cannot be relaxed is a veto, and three
@@ -451,6 +452,7 @@ pub fn pathfinder_loop(
                         config.pad_zone_blocks_foreign_copper,
                         &congestion_map,
                         true,
+                        config.via_foreign_copper_penalty,
                     );
                 }
 
@@ -673,6 +675,42 @@ pub fn pathfinder_loop(
 /// from the `CongestionMap` is added on top. The heuristic remains
 /// unadulterated (admissible) to preserve A* optimality.
 #[allow(clippy::too_many_arguments)]
+/// How many cells inside a via's keepout belong to another net.
+///
+/// Both layers the via joins are counted, because its copper is on both.
+fn foreign_cells_in_via_keepout(
+    grid: &RoutingGrid,
+    x: u32,
+    y: u32,
+    layers: (u8, u8),
+    net_id: u32,
+    radius: u32,
+) -> u32 {
+    let r = radius as i64;
+    let mut count = 0;
+    for &layer in &[layers.0, layers.1] {
+        for dy in -r..=r {
+            for dx in -r..=r {
+                if dx * dx + dy * dy > r * r {
+                    continue;
+                }
+                let cx = x as i64 + dx;
+                let cy = y as i64 + dy;
+                if cx < 0 || cy < 0 {
+                    continue;
+                }
+                if matches!(
+                    grid.net_at(cx as u32, cy as u32, layer as usize),
+                    Some(owner) if owner != net_id
+                ) {
+                    count += 1;
+                }
+            }
+        }
+    }
+    count
+}
+
 fn find_path_congestion_augmented(
     grid: &mut RoutingGrid,
     start: GridNode,
@@ -686,10 +724,25 @@ fn find_path_congestion_augmented(
     block_foreign_copper: bool,
     congestion_map: &CongestionMap,
     yield_halo: bool,
+    via_foreign_copper_penalty: f64,
 ) -> Option<Vec<GridNode>> {
     let grid_w = grid.width();
     let grid_h = grid.height();
     let layer_count = grid.layer_count();
+
+    // The radius a via's ring wants clear of foreign copper: the hole, the
+    // annular ring, the fab's clearance and half the trace that meets it.
+    // Used as a price, never as a veto - see `via_foreign_copper_penalty`.
+    let via_keepout_cells = if via_foreign_copper_penalty > 0.0 {
+        let constraints = rules.constraints_for_net(net_id);
+        let keepout_nm = constraints.min_via_drill.raw() / 2
+            + constraints.min_via_annular_ring.raw()
+            + constraints.min_clearance.raw()
+            + constraints.min_trace_width.raw() / 2;
+        ((keepout_nm + grid.resolution() - 1) / grid.resolution()).max(0) as u32
+    } else {
+        0
+    };
 
     // Validate bounds
     if start.0 as u32 >= grid_w
@@ -807,7 +860,20 @@ fn find_path_congestion_augmented(
             {
                 let base = cost_fn.neighbor_cost(*node, target);
                 let congestion = congestion_map.congestion_cost(nx as u32, ny as u32, target_layer);
-                neighbors.push((target, float_to_int_cost(base + congestion)));
+                let crowding = if via_keepout_cells > 0 {
+                    foreign_cells_in_via_keepout(
+                        grid,
+                        nx as u32,
+                        ny as u32,
+                        (nl, target_layer),
+                        net_id,
+                        via_keepout_cells,
+                    ) as f64
+                        * via_foreign_copper_penalty
+                } else {
+                    0.0
+                };
+                neighbors.push((target, float_to_int_cost(base + congestion + crowding)));
             }
         }
 
@@ -971,6 +1037,7 @@ mod tests {
             false,
             &congestion,
             false,
+            0.0,
         );
 
         assert!(path.is_some(), "Should find path on empty grid");
