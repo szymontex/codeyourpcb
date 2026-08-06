@@ -65,11 +65,14 @@ fn report_drc_violations_per_fixture() {
 
         // What the fixture violates before the router has done anything.
         world.rebuild_spatial_index_from_library(&library);
-        let baseline: BTreeSet<String> = run_drc(&mut world, &drc_rules)
-            .violations
-            .iter()
-            .map(fingerprint)
-            .collect();
+        let before = run_drc(&mut world, &drc_rules);
+        let mut before_by_kind: BTreeMap<String, usize> = BTreeMap::new();
+        for violation in &before.violations {
+            *before_by_kind
+                .entry(violation.kind.to_string())
+                .or_insert(0) += 1;
+        }
+        let baseline: BTreeSet<String> = before.violations.iter().map(fingerprint).collect();
 
         let result = strategy.route(
             &mut world,
@@ -99,6 +102,10 @@ fn report_drc_violations_per_fixture() {
             drc.violations.len(),
             introduced.len()
         );
+
+        for (kind, count) in &before_by_kind {
+            eprintln!("  before  {:<20} {}", kind, count);
+        }
 
         let mut by_kind: BTreeMap<String, usize> = BTreeMap::new();
         for violation in introduced {

@@ -364,6 +364,14 @@ pub fn parse_kicad_pcb_str(content: &str) -> Result<KicadPcbParseResult, KicadPc
         layer_count,
     };
 
+    // The board carries its own footprints. Callers are handed the library
+    // separately as well, but anything that only has the world - the DRC rules
+    // that need pad copper or silkscreen artwork - has to be able to find them,
+    // and an imported board that hides its footprints silently degrades every
+    // one of those checks to a courtyard box.
+    let mut world = world;
+    world.set_footprints(library.clone());
+
     Ok(KicadPcbParseResult {
         world,
         library,

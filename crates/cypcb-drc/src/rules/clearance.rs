@@ -100,6 +100,16 @@ impl DrcRule for ClearanceRule {
                 .collect()
         };
 
+        // Pre-collect each component's pad copper.
+        //
+        // A component sits in the spatial index as its courtyard - the
+        // assembly keepout that covers the whole part body. Clearance is a
+        // copper rule, and the body is not copper: measured against the
+        // courtyard, a trace running through the gap between two pads reads as
+        // a dead short, which is ordinary manufacturing. Bodies that collide
+        // are `CourtyardClearanceRule`'s subject, not this one's.
+        let pad_map: HashMap<u32, Vec<PadBox>> = component_pads(world);
+
         // Pre-collect trace data for refined segment distance checking.
         // Each trace entity maps to (half_width, segments) for exact distance.
         let trace_map: HashMap<u32, TraceData> = {
@@ -213,31 +223,71 @@ impl DrcRule for ClearanceRule {
                 // checker actually measured - rather than a centroid of the two
                 // entities - is what makes the coordinate usable: a long GND
                 // trace and a pad have a centroid nowhere near the short.
+                // Copper of the other side, when that side is a component: its
+                // pads on the layers this pair shares. An empty result means
+                // the part has no copper the other one can reach, and the pair
+                // is not this rule's business.
+                let copper_of = |idx: u32, mask: u32| -> Option<Vec<&AABB<[i64; 2]>>> {
+                    let pads = pad_map.get(&idx)?;
+                    Some(
+                        pads.iter()
+                            .filter(|pad| pad.layer_mask & mask != 0)
+                            .map(|pad| &pad.box_)
+                            .collect(),
+                    )
+                };
+
+                let mut no_copper_in_reach = false;
                 let (contact, distance) = match (trace_a, trace_b) {
                     // Both are traces: segment-to-segment distance minus both half-widths
                     (Some(ta), Some(tb)) => {
                         let (at, seg_dist) = trace_to_trace_distance(ta, tb);
                         (at, (seg_dist - ta.half_width - tb.half_width).max(0))
                     }
-                    // One is a trace, the other is a pad/component AABB
+                    // One is a trace, the other is a via or a component
                     (Some(t), None) => {
-                        let (at, seg_dist) = trace_to_aabb_distance(t, &candidate.envelope);
+                        let (at, seg_dist) = match copper_of(b_idx, entry.layer_mask) {
+                            Some(pads) if pads.is_empty() => {
+                                no_copper_in_reach = true;
+                                (Point::ORIGIN, i64::MAX)
+                            }
+                            Some(pads) => trace_to_nearest(t, &pads),
+                            None => trace_to_aabb_distance(t, &candidate.envelope),
+                        };
                         (at, (seg_dist - t.half_width).max(0))
                     }
                     (None, Some(t)) => {
-                        let (at, seg_dist) = trace_to_aabb_distance(t, &entry.envelope);
+                        let (at, seg_dist) = match copper_of(a_idx, candidate.layer_mask) {
+                            Some(pads) if pads.is_empty() => {
+                                no_copper_in_reach = true;
+                                (Point::ORIGIN, i64::MAX)
+                            }
+                            Some(pads) => trace_to_nearest(t, &pads),
+                            None => trace_to_aabb_distance(t, &entry.envelope),
+                        };
                         (at, (seg_dist - t.half_width).max(0))
                     }
-                    // Neither is a trace: the two boxes are pads, and the middle
-                    // of the line between their centres is the best available.
-                    (None, None) => (
-                        midpoint(
-                            aabb_center(&entry.envelope),
-                            aabb_center(&candidate.envelope),
-                        ),
-                        aabb_distance(&entry.envelope, &candidate.envelope),
-                    ),
+                    // Neither is a trace: vias and pads. A component stands for
+                    // its pads; anything else stands for its own box.
+                    (None, None) => {
+                        let a_boxes = copper_of(a_idx, candidate.layer_mask);
+                        let b_boxes = copper_of(b_idx, entry.layer_mask);
+                        if a_boxes.as_ref().is_some_and(|p| p.is_empty())
+                            || b_boxes.as_ref().is_some_and(|p| p.is_empty())
+                        {
+                            no_copper_in_reach = true;
+                            (Point::ORIGIN, i64::MAX)
+                        } else {
+                            let a_list = a_boxes.unwrap_or_else(|| vec![&entry.envelope]);
+                            let b_list = b_boxes.unwrap_or_else(|| vec![&candidate.envelope]);
+                            nearest_pair(&a_list, &b_list)
+                        }
+                    }
                 };
+
+                if no_copper_in_reach {
+                    continue;
+                }
 
                 // The pair's requirement is the strictest thing either side
                 // asked for, never below the fab floor.
@@ -291,6 +341,116 @@ impl DrcRule for ClearanceRule {
 
         violations
     }
+}
+
+/// One pad's copper, in board coordinates, and the layers it is on.
+struct PadBox {
+    box_: AABB<[i64; 2]>,
+    layer_mask: u32,
+}
+
+/// Every component's pad copper, keyed by entity index.
+///
+/// Pads are placed the way the exporter and the renderer place them: the pad
+/// offset is rotated around the component origin and added to its position. A
+/// pad rotated off the axes is boxed by the extent of the rotated rectangle,
+/// which is never smaller than the copper - a checker may over-report, and may
+/// not under-report.
+fn component_pads(world: &mut BoardWorld) -> HashMap<u32, Vec<PadBox>> {
+    use cypcb_world::components::{FootprintRef, Position, Rotation};
+
+    let placements: Vec<(u32, Point, f64, String)> = {
+        let ecs = world.ecs_mut();
+        let mut query = ecs.query::<(
+            bevy_ecs::entity::Entity,
+            &Position,
+            &Rotation,
+            &FootprintRef,
+        )>();
+        query
+            .iter(ecs)
+            .map(|(entity, position, rotation, footprint)| {
+                (
+                    entity.index(),
+                    position.0,
+                    rotation.to_degrees(),
+                    footprint.as_str().to_string(),
+                )
+            })
+            .collect()
+    };
+
+    let library = world.footprints();
+    let mut out = HashMap::new();
+
+    for (index, position, degrees, name) in placements {
+        let Some(footprint) = library.get(&name) else {
+            // No footprint means no pad geometry to measure. Leaving the entry
+            // out keeps the courtyard fallback, which over-reports rather than
+            // silently passing a part nobody can see.
+            continue;
+        };
+
+        let radians = degrees.to_radians();
+        let (sin, cos) = radians.sin_cos();
+
+        let boxes = footprint
+            .pads
+            .iter()
+            .map(|pad| {
+                let px = pad.position.x.0 as f64;
+                let py = pad.position.y.0 as f64;
+                let cx = position.x.0 + (px * cos - py * sin).round() as i64;
+                let cy = position.y.0 + (px * sin + py * cos).round() as i64;
+
+                let half_w = pad.size.0 .0 as f64 / 2.0;
+                let half_h = pad.size.1 .0 as f64 / 2.0;
+                let extent_x = (half_w * cos.abs() + half_h * sin.abs()).round() as i64;
+                let extent_y = (half_w * sin.abs() + half_h * cos.abs()).round() as i64;
+
+                let layer_mask = pad
+                    .layers
+                    .iter()
+                    .fold(0u32, |mask, layer| mask | layer.to_copper_mask());
+
+                PadBox {
+                    box_: AABB::from_corners(
+                        [cx - extent_x, cy - extent_y],
+                        [cx + extent_x, cy + extent_y],
+                    ),
+                    layer_mask,
+                }
+            })
+            .collect();
+
+        out.insert(index, boxes);
+    }
+
+    out
+}
+
+/// Closest approach between a trace and the nearest of several boxes.
+fn trace_to_nearest(trace: &TraceData, boxes: &[&AABB<[i64; 2]>]) -> (Point, i64) {
+    boxes
+        .iter()
+        .map(|b| trace_to_aabb_distance(trace, b))
+        .min_by_key(|(_, distance)| *distance)
+        .unwrap_or((Point::ORIGIN, i64::MAX))
+}
+
+/// Closest approach between two sets of boxes, and where it happens.
+fn nearest_pair(a: &[&AABB<[i64; 2]>], b: &[&AABB<[i64; 2]>]) -> (Point, i64) {
+    a.iter()
+        .flat_map(|box_a| {
+            b.iter().map(move |box_b| {
+                (
+                    midpoint(aabb_center(box_a), aabb_center(box_b)),
+                    aabb_distance(box_a, box_b),
+                )
+            })
+        })
+        .min_by_key(|(_, distance)| *distance)
+        .unwrap_or((Point::ORIGIN, i64::MAX))
 }
 
 /// Create a canonical pair ordering to avoid duplicate checks.
