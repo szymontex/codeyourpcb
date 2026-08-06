@@ -235,7 +235,7 @@ impl Default for AutorouteConfig {
             via_ring_penalty: 0.0,
             pad_zone_blocks_foreign_copper: false,
             reserve_trace_footprint: true,
-            via_foreign_copper_penalty: 0.5,
+            via_foreign_copper_penalty: 0.25,
             smoothing: true,
             stagnation_limit: 3,
             repair_passes: 0,

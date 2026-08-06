@@ -205,14 +205,16 @@ fn print_table_footer() {
 /// spec is a yield risk a fab may still build. A single count treats one short
 /// as better than two near misses, which is backwards, and it hid that
 /// reserving trace copper halves the shorts on both dense fixtures.
-/// Lowered on 2026-08-07, second time that day: the router reserves the copper
-/// a trace covers and prices a via by the foreign copper inside its keepout,
-/// and every fixture improved on both columns at once. led_blink 2/1 -> 2/0,
-/// stm32_breakout 251/159 -> 171/91, multi_ic 191/75 -> 154/54.
+/// Lowered on 2026-08-07: the router reserves the copper a trace covers and
+/// prices a via by the foreign copper inside its keepout. The price was swept
+/// rather than guessed - see `via_price_sweep` - and 0.25 beat the 0.5 it
+/// shipped at on both dense boards and both columns. Across the three moves
+/// that day: led_blink 2/1 -> 2/0, stm32_breakout 251/159 -> 133/58,
+/// multi_ic 191/75 -> 140/37.
 const DRC_RATCHETS: &[(&str, &str, u32, u32)] = &[
     ("led_blink.kicad_pcb", "led_blink", 2, 0),
-    ("stm32_breakout.kicad_pcb", "stm32_breakout", 171, 91),
-    ("multi_ic.kicad_pcb", "multi_ic", 154, 54),
+    ("stm32_breakout.kicad_pcb", "stm32_breakout", 133, 58),
+    ("multi_ic.kicad_pcb", "multi_ic", 140, 37),
 ];
 
 /// Routes every fixture and holds the line on completeness and DRC count.
