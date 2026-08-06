@@ -37,8 +37,10 @@ fn what_repair_decided() {
     // What the pass costs, against what it returns. Each repair attempt is a
     // full re-route of the board, and the default is two radii of two passes.
     let off = AutorouteConfig::default();
-    let mut on = AutorouteConfig::default();
-    on.repair_passes = 2;
+    let on = AutorouteConfig {
+        repair_passes: 2,
+        ..AutorouteConfig::default()
+    };
 
     for (label, config) in [("repair off", &off), ("repair on ", &on)] {
         let mut board = parse_kicad_pcb(&fixture).expect("the fixture parses").world;

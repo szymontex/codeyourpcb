@@ -186,6 +186,12 @@ impl PathFinderStrategy {
 
         let mut smoothed_segments = Vec::new();
         for net_id in &net_ids {
+            if !config.smoothing {
+                smoothed_segments
+                    .extend(all_segments.iter().filter(|s| s.net_id == *net_id).cloned());
+                continue;
+            }
+
             let net_segs: Vec<_> = all_segments
                 .iter()
                 .filter(|s| s.net_id == *net_id)

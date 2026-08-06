@@ -146,6 +146,16 @@ pub struct AutorouteConfig {
     /// 0.05mm overlap moves the route further than the problem.
     pub repair_passes: u32,
 
+    /// Whether to smooth the grid paths into diagonals before emitting them.
+    ///
+    /// On by default: raw grid output is a staircase, which is longer, uglier
+    /// and harder to manufacture than the diagonal it approximates. The switch
+    /// exists because the smoother moves copper after the grid has finished
+    /// reasoning about clearance, and no measurement could separate the
+    /// violations it introduces from the ones it inherits without a run to
+    /// compare against.
+    pub smoothing: bool,
+
     /// How many PathFinder iterations may pass without shrinking the overused
     /// set before the loop gives up.
     ///
@@ -176,6 +186,7 @@ impl Default for AutorouteConfig {
             prefer_top_layer: true,
             strategy: StrategyKind::default(),
             params: AutorouteParams::default(),
+            smoothing: true,
             stagnation_limit: 3,
             repair_passes: 0,
             repair_block_radii: vec![0, 2],
