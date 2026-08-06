@@ -4,6 +4,7 @@
 //! Design rules configuration is defined in the [`presets`](crate::presets) module.
 
 pub mod annular_ring;
+pub mod assertion;
 pub mod clearance;
 pub mod connectivity;
 pub mod courtyard_clearance;
@@ -22,6 +23,7 @@ use crate::presets::DesignRules;
 use crate::violation::DrcViolation;
 
 pub use annular_ring::AnnularRingRule;
+pub use assertion::AssertionRule;
 pub use clearance::ClearanceRule;
 pub use connectivity::UnconnectedPinRule;
 pub use courtyard_clearance::CourtyardClearanceRule;

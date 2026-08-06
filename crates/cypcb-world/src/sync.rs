@@ -418,6 +418,19 @@ pub fn sync_ast_to_world(
         }
     }
 
+    // Claims the design makes about itself. Collected here rather than acted
+    // on: an assertion is about the finished board, so the checker evaluates
+    // it once everything is placed.
+    world.set_assertions(
+        definitions
+            .iter()
+            .filter_map(|def| match def {
+                Definition::Assert(assert) => Some(assert.clone()),
+                _ => None,
+            })
+            .collect(),
+    );
+
     // Track reference designators for duplicate detection
     // Maps refdes string to (span, entity)
     let mut refdes_spans: HashMap<String, Span> = HashMap::new();

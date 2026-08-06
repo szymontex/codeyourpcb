@@ -55,6 +55,8 @@ pub enum ViolationKind {
     SilkClearance,
     /// Trace is too narrow for the current its net declares.
     TraceCurrent,
+    /// A claim the design makes about itself does not hold.
+    Assertion,
     /// Component courtyards overlap.
     CourtyardClearance,
 }
@@ -75,6 +77,7 @@ impl std::fmt::Display for ViolationKind {
             ViolationKind::SolderMaskBridge => write!(f, "solder-mask-bridge"),
             ViolationKind::SilkClearance => write!(f, "silk-clearance"),
             ViolationKind::TraceCurrent => write!(f, "trace-current"),
+            ViolationKind::Assertion => write!(f, "assertion"),
             ViolationKind::CourtyardClearance => write!(f, "courtyard-clearance"),
         }
     }
@@ -424,6 +427,21 @@ impl DrcViolation {
                 actual.to_mm(),
                 required.to_mm(),
             ),
+        }
+    }
+
+    /// Create an assertion violation.
+    ///
+    /// The message is written by the rule, which knows what was claimed and
+    /// what the board actually is.
+    pub fn assertion(entity: Entity, location: Point) -> Self {
+        DrcViolation {
+            kind: ViolationKind::Assertion,
+            location,
+            entity,
+            other_entity: None,
+            source_span: None,
+            message: String::new(),
         }
     }
 

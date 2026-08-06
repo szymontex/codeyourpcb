@@ -132,6 +132,7 @@ pub fn run_drc(world: &mut BoardWorld, rules: &DesignRules) -> DrcResult {
         Box::new(rules::SolderMaskBridgeRule),
         Box::new(rules::SilkClearanceRule),
         Box::new(rules::TraceCurrentRule),
+        Box::new(rules::AssertionRule),
     ];
 
     // Run each checker
@@ -258,7 +259,10 @@ fn enrich_violation_messages(violations: &mut [DrcViolation], world: &mut BoardW
         if let Some(l) = via_label_map.get(&idx) {
             return l.clone();
         }
-        format!("entity #{}", idx)
+        // Nothing in the world names this entity. Rather than invent a label,
+        // say nothing: a message that already reads as a sentence is better
+        // without `entity #0:` in front of it.
+        String::new()
     };
 
     for v in violations.iter_mut() {
@@ -266,13 +270,16 @@ fn enrich_violation_messages(violations: &mut [DrcViolation], world: &mut BoardW
         let secondary = v.other_entity.map(|e| label(e.index()));
 
         // Prepend entity info to the message
-        let between = match secondary {
-            Some(ref other) => format!("{} ↔ {}: ", primary, other),
-            None => format!("{}: ", primary),
+        let between = match (primary.is_empty(), secondary) {
+            (true, _) => String::new(),
+            (false, Some(ref other)) if !other.is_empty() => {
+                format!("{} ↔ {}: ", primary, other)
+            }
+            (false, _) => format!("{}: ", primary),
         };
 
         // Only prepend if message doesn't already contain the refdes
-        if !v.message.contains(&primary) {
+        if !between.is_empty() && !v.message.contains(&primary) {
             v.message = format!("{}{}", between, v.message);
         }
     }

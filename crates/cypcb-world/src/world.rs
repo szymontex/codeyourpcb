@@ -77,6 +77,8 @@ pub struct BoardWorld {
     world: World,
     /// Entity ID of the board (if set).
     board_entity: Option<Entity>,
+    /// Claims the design makes about itself.
+    assertions: Vec<cypcb_parser::ast::AssertDef>,
 }
 
 impl BoardWorld {
@@ -102,6 +104,7 @@ impl BoardWorld {
         BoardWorld {
             world,
             board_entity: None,
+            assertions: Vec::new(),
         }
     }
 
@@ -473,6 +476,20 @@ impl BoardWorld {
         self.world
             .resource_mut::<NetRegistry>()
             .set_constraints(id, constraints);
+    }
+
+    /// Claims the design makes about itself, from its `assert` statements.
+    ///
+    /// Held as written rather than pre-evaluated: an assertion is about the
+    /// finished board, so it has to be checked after everything else is in
+    /// place, which is what the checker is for.
+    pub fn assertions(&self) -> &[cypcb_parser::ast::AssertDef] {
+        &self.assertions
+    }
+
+    /// Record the design's assertions.
+    pub fn set_assertions(&mut self, assertions: Vec<cypcb_parser::ast::AssertDef>) {
+        self.assertions = assertions;
     }
 
     /// What the design requires of a net, if its block said anything.

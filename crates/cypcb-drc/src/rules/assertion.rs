@@ -1,0 +1,379 @@
+//! Claims the design makes about itself.
+//!
+//! `assert board.width <= 100mm` is a rule the designer wrote, not one the
+//! fabricator imposed, and it belongs with the other things the checker
+//! enforces. Until now these statements parsed and nothing read them.
+//!
+//! An assertion the checker cannot evaluate is reported rather than skipped.
+//! A statement that quietly does nothing is worse than one that fails: the
+//! board looks checked.
+
+use cypcb_core::physical_units::PhysicalUnit;
+use cypcb_parser::ast::{AssertExpression, AssertOperand, ComparisonOp};
+use cypcb_world::BoardWorld;
+
+use crate::presets::DesignRules;
+use crate::violation::DrcViolation;
+
+use super::DrcRule;
+
+/// Rule for evaluating the design's own `assert` statements.
+pub struct AssertionRule;
+
+impl DrcRule for AssertionRule {
+    fn name(&self) -> &'static str {
+        "assertion"
+    }
+
+    fn check(&self, world: &mut BoardWorld, _rules: &DesignRules) -> Vec<DrcViolation> {
+        let assertions = world.assertions().to_vec();
+        if assertions.is_empty() {
+            return Vec::new();
+        }
+
+        let board = world.board_info();
+        let entity = world.board_entity();
+        let at = cypcb_core::Point::new(cypcb_core::Nm(0), cypcb_core::Nm(0));
+
+        let mut violations = Vec::new();
+        for assertion in &assertions {
+            let entity = match entity {
+                Some(entity) => entity,
+                None => continue,
+            };
+
+            match evaluate(&assertion.expression, board) {
+                Outcome::Held => {}
+                Outcome::Failed(message) | Outcome::Unevaluable(message) => {
+                    let mut violation = DrcViolation::assertion(entity, at);
+                    violation.message = message;
+                    violations.push(violation);
+                }
+            }
+        }
+
+        violations
+    }
+}
+
+/// What happened when an assertion was checked.
+enum Outcome {
+    /// The board satisfies it.
+    Held,
+    /// The board does not.
+    Failed(String),
+    /// The checker could not tell, which is itself worth reporting.
+    Unevaluable(String),
+}
+
+/// A number with the kind of thing it measures, so that a length is never
+/// compared against a resistance.
+#[derive(Clone, Copy, PartialEq, Debug)]
+enum Quantity {
+    Length,
+    Resistance,
+    Capacitance,
+    Inductance,
+    Voltage,
+    Current,
+    Frequency,
+    Power,
+    Count,
+}
+
+impl Quantity {
+    fn name(&self) -> &'static str {
+        match self {
+            Quantity::Length => "a length",
+            Quantity::Resistance => "a resistance",
+            Quantity::Capacitance => "a capacitance",
+            Quantity::Inductance => "an inductance",
+            Quantity::Voltage => "a voltage",
+            Quantity::Current => "a current",
+            Quantity::Frequency => "a frequency",
+            Quantity::Power => "a power",
+            Quantity::Count => "a plain number",
+        }
+    }
+}
+
+/// A resolved operand: its value in base units, and what it measures.
+#[derive(Clone, Copy, Debug)]
+struct Value {
+    base: f64,
+    quantity: Quantity,
+}
+
+fn evaluate(
+    expression: &AssertExpression,
+    board: Option<(cypcb_world::components::BoardSize, cypcb_world::LayerStack)>,
+) -> Outcome {
+    match expression {
+        AssertExpression::Comparison {
+            left, op, right, ..
+        } => {
+            let (left_value, right_value) = match (resolve(left, board), resolve(right, board)) {
+                (Ok(l), Ok(r)) => (l, r),
+                (Err(why), _) | (_, Err(why)) => {
+                    return Outcome::Unevaluable(format!("assertion not checked: {why}"))
+                }
+            };
+
+            if left_value.quantity != right_value.quantity {
+                return Outcome::Unevaluable(format!(
+                    "assertion not checked: {} cannot be compared with {}",
+                    left_value.quantity.name(),
+                    right_value.quantity.name()
+                ));
+            }
+
+            if holds(left_value.base, *op, right_value.base) {
+                Outcome::Held
+            } else {
+                Outcome::Failed(format!(
+                    "assertion failed: {} {} {}, but the board has {}",
+                    describe(left),
+                    symbol(*op),
+                    describe(right),
+                    format_base(left_value)
+                ))
+            }
+        }
+        // `within` compares against a tolerance the model does not carry yet.
+        // Say so rather than pass the board.
+        AssertExpression::Within { .. } => Outcome::Unevaluable(
+            "assertion not checked: `within` needs tolerances, which the board model does not \
+             carry yet"
+                .to_string(),
+        ),
+    }
+}
+
+/// Turn an operand into a number the checker can compare.
+fn resolve(
+    operand: &AssertOperand,
+    board: Option<(cypcb_world::components::BoardSize, cypcb_world::LayerStack)>,
+) -> Result<Value, String> {
+    match operand {
+        AssertOperand::Number { value, .. } => Ok(Value {
+            base: *value,
+            quantity: Quantity::Count,
+        }),
+        AssertOperand::Dimension(dimension) => Ok(Value {
+            base: dimension.to_nm().raw() as f64,
+            quantity: Quantity::Length,
+        }),
+        AssertOperand::Physical(physical) => Ok(Value {
+            base: physical.unit.to_base_f64(physical.value),
+            quantity: quantity_of(physical.unit),
+        }),
+        AssertOperand::QualifiedName { parts, .. } => {
+            let path = parts.join(".");
+            let Some((size, layers)) = board else {
+                return Err(format!("'{path}' needs a board, and none is defined"));
+            };
+            match path.as_str() {
+                "board.width" => Ok(Value {
+                    base: size.width.raw() as f64,
+                    quantity: Quantity::Length,
+                }),
+                "board.height" => Ok(Value {
+                    base: size.height.raw() as f64,
+                    quantity: Quantity::Length,
+                }),
+                "board.layers" => Ok(Value {
+                    base: layers.count as f64,
+                    quantity: Quantity::Count,
+                }),
+                _ => Err(format!(
+                    "'{path}' is not something the checker can read yet; it knows board.width, \
+                     board.height and board.layers"
+                )),
+            }
+        }
+    }
+}
+
+fn quantity_of(unit: PhysicalUnit) -> Quantity {
+    use PhysicalUnit::*;
+    match unit {
+        Ohm | KiloOhm | MegaOhm => Quantity::Resistance,
+        PicoFarad | NanoFarad | MicroFarad | MilliFarad => Quantity::Capacitance,
+        NanoHenry | MicroHenry | MilliHenry | Henry => Quantity::Inductance,
+        MilliVolt | Volt | KiloVolt => Quantity::Voltage,
+        MicroAmp | MilliAmp | Amp => Quantity::Current,
+        Hertz | KiloHertz | MegaHertz | GigaHertz => Quantity::Frequency,
+        MilliWatt | Watt => Quantity::Power,
+    }
+}
+
+fn holds(left: f64, op: ComparisonOp, right: f64) -> bool {
+    match op {
+        ComparisonOp::Eq => (left - right).abs() < f64::EPSILON.max(right.abs() * 1e-9),
+        ComparisonOp::Ne => (left - right).abs() >= f64::EPSILON.max(right.abs() * 1e-9),
+        ComparisonOp::Ge => left >= right,
+        ComparisonOp::Le => left <= right,
+        ComparisonOp::Gt => left > right,
+        ComparisonOp::Lt => left < right,
+    }
+}
+
+fn symbol(op: ComparisonOp) -> &'static str {
+    match op {
+        ComparisonOp::Eq => "==",
+        ComparisonOp::Ne => "!=",
+        ComparisonOp::Ge => ">=",
+        ComparisonOp::Le => "<=",
+        ComparisonOp::Gt => ">",
+        ComparisonOp::Lt => "<",
+    }
+}
+
+fn describe(operand: &AssertOperand) -> String {
+    match operand {
+        AssertOperand::QualifiedName { parts, .. } => parts.join("."),
+        AssertOperand::Physical(physical) => {
+            format!("{}{}", physical.value, physical.unit.suffix())
+        }
+        AssertOperand::Dimension(dimension) => {
+            format!("{:.3}mm", dimension.to_nm().raw() as f64 / 1_000_000.0)
+        }
+        AssertOperand::Number { value, .. } => format!("{value}"),
+    }
+}
+
+fn format_base(value: Value) -> String {
+    match value.quantity {
+        Quantity::Length => format!("{:.3}mm", value.base / 1_000_000.0),
+        Quantity::Count => format!("{}", value.base),
+        _ => format!("{}", value.base),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use cypcb_core::Nm;
+    use cypcb_parser::ast::{AssertDef, Dimension as AstDimension, PhysicalValue, Span};
+
+    fn board_of(width_mm: f64, height_mm: f64, layers: u8) -> BoardWorld {
+        let mut world = BoardWorld::new();
+        world.set_board(
+            "t".to_string(),
+            (Nm::from_mm(width_mm), Nm::from_mm(height_mm)),
+            layers,
+        );
+        world
+    }
+
+    /// Build `assert <left> <op> <right>` without a parser: this crate does
+    /// not compile one in, and the rule under test only reads the AST.
+    fn claim(left: AssertOperand, op: ComparisonOp, right: AssertOperand) -> AssertDef {
+        let span = Span::new(0, 0);
+        AssertDef {
+            expression: AssertExpression::Comparison {
+                left,
+                op,
+                right,
+                span,
+            },
+            span,
+        }
+    }
+
+    fn name(path: &str) -> AssertOperand {
+        AssertOperand::QualifiedName {
+            parts: path.split('.').map(str::to_string).collect(),
+            span: Span::new(0, 0),
+        }
+    }
+
+    fn mm(value: f64) -> AssertOperand {
+        AssertOperand::Dimension(AstDimension {
+            value,
+            unit: cypcb_core::Unit::Mm,
+            span: Span::new(0, 0),
+        })
+    }
+
+    fn count(value: f64) -> AssertOperand {
+        AssertOperand::Number {
+            value,
+            span: Span::new(0, 0),
+        }
+    }
+
+    fn kilohm(value: f64) -> AssertOperand {
+        AssertOperand::Physical(PhysicalValue {
+            value,
+            unit: PhysicalUnit::KiloOhm,
+            tolerance: None,
+            span: Span::new(0, 0),
+        })
+    }
+
+    fn check(claims: Vec<AssertDef>, width_mm: f64, layers: u8) -> Vec<DrcViolation> {
+        let mut world = board_of(width_mm, 40.0, layers);
+        world.set_assertions(claims);
+        AssertionRule.check(&mut world, &DesignRules::jlcpcb_2layer())
+    }
+
+    #[test]
+    fn a_claim_the_board_meets_is_silent() {
+        let claims = vec![claim(name("board.width"), ComparisonOp::Le, mm(100.0))];
+        assert!(check(claims, 80.0, 2).is_empty());
+    }
+
+    #[test]
+    fn a_claim_the_board_breaks_is_reported_with_the_number() {
+        let claims = vec![claim(name("board.width"), ComparisonOp::Le, mm(50.0))];
+        let violations = check(claims, 80.0, 2);
+
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0].kind, crate::ViolationKind::Assertion);
+        assert!(
+            violations[0].message.contains("board.width <= 50.000mm")
+                && violations[0].message.contains("80.000mm"),
+            "the message has to say what was claimed and what is true: {}",
+            violations[0].message
+        );
+    }
+
+    #[test]
+    fn layer_count_is_a_plain_number() {
+        let ok = vec![claim(name("board.layers"), ComparisonOp::Ge, count(2.0))];
+        assert!(check(ok, 80.0, 2).is_empty());
+
+        let bad = vec![claim(name("board.layers"), ComparisonOp::Ge, count(4.0))];
+        assert_eq!(check(bad, 80.0, 2).len(), 1);
+    }
+
+    #[test]
+    fn a_length_is_not_compared_against_a_resistance() {
+        let claims = vec![claim(name("board.width"), ComparisonOp::Le, kilohm(10.0))];
+        let violations = check(claims, 80.0, 2);
+
+        assert_eq!(violations.len(), 1);
+        assert!(
+            violations[0].message.contains("cannot be compared"),
+            "got {}",
+            violations[0].message
+        );
+    }
+
+    #[test]
+    fn something_the_checker_cannot_read_is_said_out_loud() {
+        // The alternative is a statement that silently does nothing, which
+        // leaves the board looking checked.
+        let claims = vec![claim(name("R1.value"), ComparisonOp::Eq, kilohm(10.0))];
+        let violations = check(claims, 80.0, 2);
+
+        assert_eq!(violations.len(), 1);
+        assert!(
+            violations[0].message.contains("not checked")
+                && violations[0].message.contains("R1.value"),
+            "got {}",
+            violations[0].message
+        );
+    }
+}
