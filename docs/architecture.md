@@ -92,6 +92,19 @@ The system runs in two modes:
 
 ## Crate Descriptions
 
+Each entry used to carry a `**Size**: ~N lines` note. They were snapshots and
+they had drifted by whole multiples - `cypcb-drc` said 1,800 against 7,221 -
+so they are gone. A line count that moves with every commit ships as the
+command that answers it:
+
+```bash
+for c in crates/*/; do
+  printf '%s %s\n' "$(basename "$c")" \
+    "$(find "$c/src" -name '*.rs' -not -path '*grammar*' | xargs wc -l | tail -1 | awk '{print $1}')"
+done
+```
+
+
 ### cypcb-core
 
 **Purpose**: Foundation types used across the entire codebase
@@ -103,7 +116,6 @@ The system runs in two modes:
 
 **Dependencies**: None (standalone)
 
-**Size**: ~800 lines
 
 Core provides the vocabulary for all other crates. All measurements use typed units (no raw floats), preventing unit confusion bugs (mm vs mil vs inches).
 
@@ -118,7 +130,6 @@ Core provides the vocabulary for all other crates. All measurements use typed un
 
 **Dependencies**: `tree-sitter`, `cypcb-core`
 
-**Size**: ~2,500 lines (including generated grammar)
 
 **Features**:
 - `tree-sitter-parser` (default): Includes C-based Tree-sitter parser (requires C compiler)
@@ -139,7 +150,6 @@ Parsing happens differently on native vs WASM:
 
 **Dependencies**: `bevy_ecs`, `rstar` (spatial index), `cypcb-parser`, `cypcb-core`
 
-**Size**: ~3,000 lines
 
 **Features**:
 - `sync` (default): AST-to-ECS synchronization (requires parser)
@@ -162,12 +172,53 @@ The world uses Bevy ECS for performance and flexibility:
 
 **Dependencies**: `cypcb-world`, `cypcb-core`, `bevy_ecs`, `rstar`
 
-**Size**: ~1,200 lines
 
 **Features**:
 - `parallel` (optional): Use rayon for multi-threaded checks (not WASM compatible)
 
 DRC runs incrementally - only checks affected regions when board changes. Results stored as ECS entities, allowing visualization to query and highlight violations.
+
+### cypcb-autoroute
+
+**Purpose**: Turn a ratsnest into copper. The largest crate in the workspace
+and the one this project has spent the most measurement on.
+
+**Key Exports**:
+- `route_board` - the entry point the CLI and the viewer both use: pick a
+  strategy, route, then run the repair pass if one is configured
+- `PathFinderStrategy` - negotiated congestion with rip-up and reroute, the
+  default and the better of the two on every benchmark board
+- `ImprovedAStarStrategy` - the other strategy, kept because a second opinion
+  scores differently and the variant machinery can pick it
+- `variant::generate_variants` - route several ways, score each, keep the best
+- `score_board` - the quality metrics `cypcb score` prints
+
+**Dependencies**: `cypcb-world`, `cypcb-router`, `cypcb-rules`, `cypcb-drc`,
+`cypcb-core`, `pathfinding`
+
+The grid is one cell per legal track position - a trace width plus the
+clearance it needs - so neighbouring cells are clearance-legal by
+construction. Most of the knobs on `AutorouteConfig` exist because they were
+measured to help one board and hurt another; `docs/TRACKER.md` carries the
+numbers for each, including the ones that were reverted.
+
+### cypcb-rules
+
+**Purpose**: What a fabricator will make. One table of constraints per house
+and process, and the lookup that turns a name into it.
+
+**Key Exports**:
+- `RulesPreset` - jlcpcb, pcbway, oshpark and the rest, each with its own
+  clearances, widths, drills and annular rings
+- `PresetRuleSet` - a preset as the `RoutingRuleSet` the router asks
+- `DesignConstraints` - the fields themselves, checked against the struct by
+  a test so the count cannot drift
+
+**Dependencies**: `cypcb-core`
+
+Every command that measures a board - `check`, `route`, `score`, `export` -
+resolves its `--preset` through this crate, which is what makes their numbers
+agree on the same file.
 
 ### cypcb-export
 
@@ -181,7 +232,6 @@ DRC runs incrementally - only checks affected regions when board changes. Result
 
 **Dependencies**: `gerber-types`, `csv`, `cypcb-world`, `cypcb-core`, `bevy_ecs`
 
-**Size**: ~1,500 lines
 
 Gerber export uses aperture-based rendering:
 - Define apertures (circles, rectangles, rounded rectangles)
@@ -201,7 +251,6 @@ Gerber export uses aperture-based rendering:
 
 **Dependencies**: `wasm-bindgen`, `cypcb-world`, `cypcb-parser`, `cypcb-drc`, `cypcb-core`
 
-**Size**: ~1,800 lines
 
 **Features**:
 - `native` (default): Full parsing support with tree-sitter
@@ -224,7 +273,6 @@ WASM binary is aggressively optimized:
 
 **Dependencies**: `tower-lsp`, `tokio`, `dashmap`, `cypcb-parser`, `cypcb-world`, `cypcb-drc`
 
-**Size**: ~1,400 lines
 
 **Features**:
 - `server` (optional): Build LSP server binary (disabled in dev due to proc-macro loading issues)
@@ -245,7 +293,6 @@ The LSP uses a two-level approach:
 
 **Dependencies**: `rusqlite`, `lexpr` (S-expression parser), `serde`, `serde_json`
 
-**Size**: ~2,000 lines
 
 **Features**:
 - `jlcpcb` (optional): JLCPCB API integration (requires API key)
@@ -271,7 +318,6 @@ Search supports optional filters:
 
 **Dependencies**: `kicad_parse_gen`, `walkdir`, `cypcb-core`, `cypcb-world`
 
-**Size**: ~600 lines
 
 KiCad files use S-expressions with variable structure. Parser walks the tree manually (more maintainable than custom Serde deserializers).
 
@@ -286,7 +332,6 @@ KiCad files use S-expressions with variable structure. Parser walks the tree man
 
 **Dependencies**: `cypcb-world`, `cypcb-core`, `bevy_ecs`
 
-**Size**: ~800 lines
 
 Routing workflow:
 1. Export board to DSN format (nets, pads, board outline, rules)
@@ -306,7 +351,6 @@ Routing workflow:
 
 **Dependencies**: `async-trait`, `cfg-if`, platform-specific crates
 
-**Size**: ~1,000 lines
 
 **Features**:
 - `desktop`: Tauri-specific features
@@ -333,7 +377,6 @@ WASM constraints:
 
 **Dependencies**: `cypcb-core`
 
-**Size**: ~400 lines
 
 Utility crate with no external dependencies beyond core types.
 
@@ -347,7 +390,6 @@ Utility crate with no external dependencies beyond core types.
 
 **Dependencies**: `notify`, `notify-debouncer-full`
 
-**Size**: ~200 lines
 
 Used by CLI for `--watch` mode. Not used in web/desktop (handled by Vite dev server).
 
