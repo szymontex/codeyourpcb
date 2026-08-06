@@ -35,6 +35,11 @@ pub struct SilkConfig {
     pub show_courtyards: bool,
     /// Show designator position marks (crosshairs).
     pub show_designator_marks: bool,
+    /// How tall a printed designator is.
+    ///
+    /// One millimetre is what a fabricator's own silkscreen minimum allows on
+    /// a 0.15mm stroke, and what a person can read without a loupe.
+    pub text_height: Nm,
 }
 
 impl Default for SilkConfig {
@@ -43,6 +48,7 @@ impl Default for SilkConfig {
             line_width: Nm::from_mm(0.15),
             show_courtyards: true,
             show_designator_marks: true,
+            text_height: Nm::from_mm(1.0),
         }
     }
 }
@@ -138,9 +144,10 @@ pub fn export_silkscreen(
         &FootprintRef,
         &Rotation,
         Option<&cypcb_world::components::Side>,
+        Option<&cypcb_world::components::RefDes>,
     )>();
 
-    for (position, footprint_ref, rotation, part_side) in query.iter(world.ecs()) {
+    for (position, footprint_ref, rotation, part_side, refdes) in query.iter(world.ecs()) {
         // Look up footprint in library
         let footprint = library
             .get(&footprint_ref.0)
@@ -165,9 +172,33 @@ pub fn export_silkscreen(
             continue;
         }
 
-        // Draw designator mark (crosshair at component center)
+        // The part's name, printed where an assembler can read it.
+        //
+        // A board with no `R1` beside R1 cannot be assembled by eye - the
+        // person holding the reel has to read the design file instead. Gerber
+        // has no text a fabricator is obliged to honour, so the letters are
+        // strokes like everything else on this layer. A part with no refdes,
+        // or a name this font cannot spell, falls back to the crosshair that
+        // used to be all there was.
         if config.show_designator_marks {
-            draw_crosshair(position.0, config.line_width, &mut drawing_commands, format);
+            let printed = refdes
+                .map(|r| r.as_str())
+                .filter(|name| !name.is_empty())
+                .map(|name| {
+                    draw_text(
+                        name,
+                        position.0,
+                        config.text_height,
+                        config.line_width,
+                        &mut drawing_commands,
+                        format,
+                    )
+                })
+                .unwrap_or(false);
+
+            if !printed {
+                draw_crosshair(position.0, config.line_width, &mut drawing_commands, format);
+            }
         }
 
         // A footprint that carries its own artwork prints that. Drawing the
@@ -207,6 +238,49 @@ pub fn export_silkscreen(
 /// Draw a crosshair mark at the given position.
 ///
 /// Draws a simple + mark to indicate component location without full text rendering.
+/// Draw a name centred on `position`, as strokes.
+///
+/// Returns false when nothing was drawn - an empty name, or one made entirely
+/// of characters the font cannot spell - so the caller can fall back rather
+/// than print a part with no label at all.
+fn draw_text(
+    text: &str,
+    position: cypcb_core::Point,
+    height: Nm,
+    _line_width: Nm,
+    output: &mut String,
+    format: &CoordinateFormat,
+) -> bool {
+    use super::font;
+
+    let glyph_width = height.0 as f32 * 0.6;
+    let advance = glyph_width * (1.0 + font::ADVANCE_GAP);
+    let total = font::width_in_glyphs(text) * glyph_width;
+    let start_x = position.x.0 as f32 - total / 2.0;
+    // Sat above the part's centre, where a courtyard outline leaves room.
+    let baseline_y = position.y.0 as f32 + height.0 as f32 * 0.6;
+
+    let mut drew = false;
+    for (index, c) in text.chars().enumerate() {
+        let Some(strokes) = font::glyph(c) else {
+            continue;
+        };
+        let origin_x = start_x + index as f32 * advance;
+
+        for stroke in strokes {
+            for (point_index, (gx, gy)) in stroke.iter().enumerate() {
+                let x = nm_to_gerber((origin_x + gx * glyph_width) as i64, format);
+                let y = nm_to_gerber((baseline_y + gy * height.0 as f32) as i64, format);
+                let command = if point_index == 0 { "D02" } else { "D01" };
+                output.push_str(&format!("X{}Y{}{}*\n", x, y, command));
+                drew = true;
+            }
+        }
+    }
+
+    drew
+}
+
 fn draw_crosshair(
     position: cypcb_core::Point,
     line_width: Nm,

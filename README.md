@@ -274,8 +274,7 @@ cut path matches the outline the source declares, the mask opens over every
 pad and the pick-and-place names the side each part is assembled on.
 
 The main gaps are copper pour (zones carry a net; filling them is not
-implemented), silkscreen text (the legend carries outlines and markers, not
-designators), and the autorouter's toolbar button, which is hidden while
+implemented) and the autorouter's toolbar button, which is hidden while
 routing quality is worked on.
 
 PRs welcome.

@@ -13,6 +13,7 @@
 //! - [`silk`] - Silkscreen layer export
 
 pub mod copper;
+pub mod font;
 pub mod header;
 pub mod mask;
 pub mod outline;

@@ -218,3 +218,42 @@ fn an_unrouted_board_says_so_and_a_routed_one_does_not() {
         "a routed board must not be warned about: {routed:?}"
     );
 }
+
+#[test]
+fn the_legend_prints_the_names_of_the_parts_it_labels() {
+    // A fabricated board with no `R1` beside R1 cannot be assembled by eye:
+    // the person holding the reel has to read the design file instead. Gerber
+    // has no text a fabricator is obliged to honour, so the letters are
+    // strokes like everything else on the layer.
+    use cypcb_export::gerber::{export_silkscreen, Side as GerberSide, SilkConfig};
+
+    let (mut world, library) = board();
+    let format = cypcb_export::coords::CoordinateFormat::FORMAT_MM_2_6;
+
+    let legend = export_silkscreen(
+        &mut world,
+        &library,
+        GerberSide::Top,
+        &format,
+        &SilkConfig::default(),
+    )
+    .expect("top silkscreen");
+
+    let draws = legend.lines().filter(|line| line.contains("D01")).count();
+
+    // Two parts named R1 and R2: four glyphs, and a glyph is several strokes.
+    // The number matters less than the fact that a legend carrying only
+    // courtyards and crosshairs cannot reach it.
+    assert!(
+        draws > 20,
+        "a legend with two named parts has more ink than this: {draws} draws\n{legend}"
+    );
+
+    // And a part whose name the font cannot spell still gets a mark, rather
+    // than vanishing from the legend.
+    let strokes_per_part = draws / 2;
+    assert!(
+        strokes_per_part > 5,
+        "each part's label is more than a crosshair: {strokes_per_part} draws each"
+    );
+}
