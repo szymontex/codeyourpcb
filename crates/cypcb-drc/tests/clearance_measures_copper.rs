@@ -193,3 +193,64 @@ fn overlapping_part_bodies_are_still_reported_by_the_courtyard_rule() {
             .collect::<Vec<_>>()
     );
 }
+
+/// Spawn a trace on `net`, running vertically at `x` on the top layer.
+fn spawn_trace_on_net(world: &mut BoardWorld, x: f64, net: NetId) {
+    world.spawn_entity((
+        Trace {
+            segments: vec![TraceSegment::new(
+                Point::from_mm(x, 8.0),
+                Point::from_mm(x, 12.0),
+            )],
+            width: Nm::from_mm(0.1),
+            layer: Layer::TopCopper,
+            net_id: net,
+            locked: false,
+            source: TraceSource::Autorouted,
+        },
+        net,
+    ));
+}
+
+#[test]
+fn a_net_a_part_carries_does_not_exempt_that_part_s_other_pads() {
+    // R1 has pad 1 on net 1 and pad 2 on net 2. A trace on net 2 running over
+    // pad 1 is a short: the part carries net 2, but not on that pad.
+    let (mut world, library) = board_with_part();
+    spawn_trace_on_net(&mut world, 9.5, NetId::new(2));
+    world.rebuild_spatial_index_from_library(&library);
+
+    let violations = ClearanceRule.check(&mut world, &DesignRules::jlcpcb_2layer());
+
+    assert_eq!(
+        violations.len(),
+        1,
+        "a trace across a pad on another net is a short, whatever else the \
+         part is connected to: {:?}",
+        violations
+            .iter()
+            .map(|v| v.message.clone())
+            .collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn a_trace_meeting_the_pad_it_belongs_to_is_still_exempt() {
+    // The same geometry on net 1, which is what pad 1 carries. This is a
+    // connection, not a short, and reporting it would make the checker
+    // unusable.
+    let (mut world, library) = board_with_part();
+    spawn_trace_on_net(&mut world, 9.5, NetId::new(1));
+    world.rebuild_spatial_index_from_library(&library);
+
+    let violations = ClearanceRule.check(&mut world, &DesignRules::jlcpcb_2layer());
+
+    assert!(
+        violations.is_empty(),
+        "a trace reaching its own pad is the point of the trace: {:?}",
+        violations
+            .iter()
+            .map(|v| v.message.clone())
+            .collect::<Vec<_>>()
+    );
+}

@@ -194,15 +194,23 @@ impl DrcRule for ClearanceRule {
                 let nc_a = net_connections_map.get(&a_idx);
                 let nc_b = net_connections_map.get(&b_idx);
 
+                // Where pad geometry exists the exemption is decided per pad,
+                // further down, and not here: a part with one GND pin is not a
+                // GND part, and exempting the whole component would hide a
+                // trace running across its VCC pad.
+                let has_pads_a = pad_map.contains_key(&a_idx);
+                let has_pads_b = pad_map.contains_key(&b_idx);
+
                 let same_net = match (net_a, net_b) {
                     // Case 1: both have a single NetId
                     (Some(na), Some(nb)) => na == nb,
                     // Case 2a: A has NetId, B is a component
-                    (Some(na), None) => nc_b.is_some_and(|nets| nets.contains(na)),
+                    (Some(na), None) => !has_pads_b && nc_b.is_some_and(|nets| nets.contains(na)),
                     // Case 2b: B has NetId, A is a component
-                    (None, Some(nb)) => nc_a.is_some_and(|nets| nets.contains(nb)),
+                    (None, Some(nb)) => !has_pads_a && nc_a.is_some_and(|nets| nets.contains(nb)),
                     // Case 3: both are components — share a common net
                     (None, None) => match (nc_a, nc_b) {
+                        _ if has_pads_a && has_pads_b => false,
                         (Some(nets_a), Some(nets_b)) => nets_a.iter().any(|n| nets_b.contains(n)),
                         _ => false,
                     },
@@ -227,15 +235,23 @@ impl DrcRule for ClearanceRule {
                 // pads on the layers this pair shares. An empty result means
                 // the part has no copper the other one can reach, and the pair
                 // is not this rule's business.
-                let copper_of = |idx: u32, mask: u32| -> Option<Vec<&AABB<[i64; 2]>>> {
-                    let pads = pad_map.get(&idx)?;
-                    Some(
-                        pads.iter()
-                            .filter(|pad| pad.layer_mask & mask != 0)
-                            .map(|pad| &pad.box_)
-                            .collect(),
-                    )
-                };
+                // The other side's copper, when that side is a component: the
+                // pads it has on the layers this pair shares, minus any pad
+                // that carries `exempt` - the net the other side is on, which
+                // that pad is meant to be connected to.
+                let copper_of =
+                    |idx: u32, mask: u32, exempt: Option<&NetId>| -> Option<Vec<&PadBox>> {
+                        let pads = pad_map.get(&idx)?;
+                        Some(
+                            pads.iter()
+                                .filter(|pad| pad.layer_mask & mask != 0)
+                                .filter(|pad| match (pad.net, exempt) {
+                                    (Some(pad_net), Some(other)) => pad_net != *other,
+                                    _ => true,
+                                })
+                                .collect(),
+                        )
+                    };
 
                 let mut no_copper_in_reach = false;
                 let (contact, distance) = match (trace_a, trace_b) {
@@ -246,23 +262,23 @@ impl DrcRule for ClearanceRule {
                     }
                     // One is a trace, the other is a via or a component
                     (Some(t), None) => {
-                        let (at, seg_dist) = match copper_of(b_idx, entry.layer_mask) {
+                        let (at, seg_dist) = match copper_of(b_idx, entry.layer_mask, net_a) {
                             Some(pads) if pads.is_empty() => {
                                 no_copper_in_reach = true;
                                 (Point::ORIGIN, i64::MAX)
                             }
-                            Some(pads) => trace_to_nearest(t, &pads),
+                            Some(pads) => trace_to_nearest(t, &boxes_of(&pads)),
                             None => trace_to_aabb_distance(t, &candidate.envelope),
                         };
                         (at, (seg_dist - t.half_width).max(0))
                     }
                     (None, Some(t)) => {
-                        let (at, seg_dist) = match copper_of(a_idx, candidate.layer_mask) {
+                        let (at, seg_dist) = match copper_of(a_idx, candidate.layer_mask, net_b) {
                             Some(pads) if pads.is_empty() => {
                                 no_copper_in_reach = true;
                                 (Point::ORIGIN, i64::MAX)
                             }
-                            Some(pads) => trace_to_nearest(t, &pads),
+                            Some(pads) => trace_to_nearest(t, &boxes_of(&pads)),
                             None => trace_to_aabb_distance(t, &entry.envelope),
                         };
                         (at, (seg_dist - t.half_width).max(0))
@@ -270,17 +286,38 @@ impl DrcRule for ClearanceRule {
                     // Neither is a trace: vias and pads. A component stands for
                     // its pads; anything else stands for its own box.
                     (None, None) => {
-                        let a_boxes = copper_of(a_idx, candidate.layer_mask);
-                        let b_boxes = copper_of(b_idx, entry.layer_mask);
+                        let a_boxes = copper_of(a_idx, candidate.layer_mask, None);
+                        let b_boxes = copper_of(b_idx, entry.layer_mask, None);
                         if a_boxes.as_ref().is_some_and(|p| p.is_empty())
                             || b_boxes.as_ref().is_some_and(|p| p.is_empty())
                         {
                             no_copper_in_reach = true;
                             (Point::ORIGIN, i64::MAX)
                         } else {
-                            let a_list = a_boxes.unwrap_or_else(|| vec![&entry.envelope]);
-                            let b_list = b_boxes.unwrap_or_else(|| vec![&candidate.envelope]);
-                            nearest_pair(&a_list, &b_list)
+                            match (a_boxes, b_boxes) {
+                                // Two components: pad against pad, skipping the
+                                // pairs that are meant to touch - two pads of
+                                // the same net, which is a deliberate join.
+                                (Some(a_pads), Some(b_pads)) => {
+                                    let pairs = nearest_pad_pair(&a_pads, &b_pads);
+                                    match pairs {
+                                        Some(found) => found,
+                                        None => {
+                                            no_copper_in_reach = true;
+                                            (Point::ORIGIN, i64::MAX)
+                                        }
+                                    }
+                                }
+                                (Some(a_pads), None) => {
+                                    nearest_pair(&boxes_of(&a_pads), &[&candidate.envelope])
+                                }
+                                (None, Some(b_pads)) => {
+                                    nearest_pair(&[&entry.envelope], &boxes_of(&b_pads))
+                                }
+                                (None, None) => {
+                                    nearest_pair(&[&entry.envelope], &[&candidate.envelope])
+                                }
+                            }
                         }
                     }
                 };
@@ -343,10 +380,16 @@ impl DrcRule for ClearanceRule {
     }
 }
 
-/// One pad's copper, in board coordinates, and the layers it is on.
+/// One pad's copper, in board coordinates, with the layers and the net it is
+/// on.
+///
+/// The net is per pad, not per component. A part with one GND pin does not
+/// make its other pads GND, and treating it that way exempts a trace from
+/// copper it can genuinely short.
 struct PadBox {
     box_: AABB<[i64; 2]>,
     layer_mask: u32,
+    net: Option<NetId>,
 }
 
 /// Every component's pad copper, keyed by entity index.
@@ -358,6 +401,24 @@ struct PadBox {
 /// not under-report.
 fn component_pads(world: &mut BoardWorld) -> HashMap<u32, Vec<PadBox>> {
     use cypcb_world::components::{FootprintRef, Position, Rotation};
+
+    // Which net each pin is on, per component. `PadDef::number` and
+    // `PinConnection::pin` are the same identifier seen from the footprint and
+    // from the schematic.
+    let pin_nets: HashMap<u32, HashMap<String, NetId>> = {
+        let ecs = world.ecs_mut();
+        let mut query = ecs.query::<(bevy_ecs::entity::Entity, &NetConnections)>();
+        query
+            .iter(ecs)
+            .map(|(entity, connections)| {
+                let by_pin = connections
+                    .iter()
+                    .map(|pin| (pin.pin.clone(), pin.net))
+                    .collect();
+                (entity.index(), by_pin)
+            })
+            .collect()
+    };
 
     let placements: Vec<(u32, Point, f64, String)> = {
         let ecs = world.ecs_mut();
@@ -419,6 +480,10 @@ fn component_pads(world: &mut BoardWorld) -> HashMap<u32, Vec<PadBox>> {
                         [cx + extent_x, cy + extent_y],
                     ),
                     layer_mask,
+                    net: pin_nets
+                        .get(&index)
+                        .and_then(|by_pin| by_pin.get(&pad.number))
+                        .copied(),
                 }
             })
             .collect();
@@ -427,6 +492,32 @@ fn component_pads(world: &mut BoardWorld) -> HashMap<u32, Vec<PadBox>> {
     }
 
     out
+}
+
+/// The geometry out of a list of pads, once the net filtering is done.
+fn boxes_of<'a>(pads: &[&'a PadBox]) -> Vec<&'a AABB<[i64; 2]>> {
+    pads.iter().map(|pad| &pad.box_).collect()
+}
+
+/// Closest approach between two components' pads, ignoring pad pairs that
+/// share a net.
+///
+/// `None` when every pair shares one, which means the two parts have no
+/// copper that could short.
+fn nearest_pad_pair(a: &[&PadBox], b: &[&PadBox]) -> Option<(Point, i64)> {
+    a.iter()
+        .flat_map(|pad_a| b.iter().map(move |pad_b| (pad_a, pad_b)))
+        .filter(|(pad_a, pad_b)| match (pad_a.net, pad_b.net) {
+            (Some(net_a), Some(net_b)) => net_a != net_b,
+            _ => true,
+        })
+        .map(|(pad_a, pad_b)| {
+            (
+                midpoint(aabb_center(&pad_a.box_), aabb_center(&pad_b.box_)),
+                aabb_distance(&pad_a.box_, &pad_b.box_),
+            )
+        })
+        .min_by_key(|(_, distance)| *distance)
 }
 
 /// Closest approach between a trace and the nearest of several boxes.
