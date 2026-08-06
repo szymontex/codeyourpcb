@@ -123,6 +123,28 @@ pub enum SyncError {
         span: miette::SourceSpan,
     },
 
+    /// A `use` names a module that was never defined.
+    UnknownModule {
+        /// The module name.
+        name: String,
+        /// Source code for miette display.
+        src: String,
+        /// Source span of the module reference.
+        span: miette::SourceSpan,
+    },
+
+    /// An instance leaves one of its module's pins unconnected.
+    UnconnectedModulePin {
+        /// The instance name.
+        instance: String,
+        /// The pin the module exposes.
+        pin: String,
+        /// Source code for miette display.
+        src: String,
+        /// Source span of the instantiation.
+        span: miette::SourceSpan,
+    },
+
     /// A trace references an unknown layer.
     UnknownLayer {
         /// The unknown layer name.
@@ -157,6 +179,16 @@ impl fmt::Display for SyncError {
             SyncError::MissingNet { net, .. } => {
                 write!(f, "trace references undefined net: '{}'", net)
             }
+            SyncError::UnknownModule { name, .. } => {
+                write!(f, "unknown module: '{}'", name)
+            }
+            SyncError::UnconnectedModulePin { instance, pin, .. } => {
+                write!(
+                    f,
+                    "instance '{}' leaves pin '{}' unconnected",
+                    instance, pin
+                )
+            }
             SyncError::UnknownLayer { layer, .. } => {
                 write!(f, "unknown layer: '{}'", layer)
             }
@@ -174,6 +206,10 @@ impl Diagnostic for SyncError {
             SyncError::UnknownComponent { .. } => Some(Box::new("cypcb::sync::unknown_component")),
             SyncError::InvalidTracePin { .. } => Some(Box::new("cypcb::sync::invalid_trace_pin")),
             SyncError::MissingNet { .. } => Some(Box::new("cypcb::sync::missing_net")),
+            SyncError::UnknownModule { .. } => Some(Box::new("cypcb::sync::unknown_module")),
+            SyncError::UnconnectedModulePin { .. } => {
+                Some(Box::new("cypcb::sync::unconnected_module_pin"))
+            }
             SyncError::UnknownLayer { .. } => Some(Box::new("cypcb::sync::unknown_layer")),
         }
     }
@@ -195,6 +231,12 @@ impl Diagnostic for SyncError {
             SyncError::MissingNet { .. } => {
                 Some(Box::new("define the net before creating manual traces for it"))
             }
+            SyncError::UnknownModule { .. } => {
+                Some(Box::new("define the module before instantiating it with `use`"))
+            }
+            SyncError::UnconnectedModulePin { .. } => Some(Box::new(
+                "give every pin the module declares a net: `use M as N { PIN = net }`",
+            )),
             SyncError::UnknownLayer { .. } => {
                 Some(Box::new("use a valid layer name: Top, Bottom, Inner1, Inner2, etc."))
             }
@@ -208,6 +250,8 @@ impl Diagnostic for SyncError {
             SyncError::UnknownComponent { src, .. } => Some(src),
             SyncError::InvalidTracePin { src, .. } => Some(src),
             SyncError::MissingNet { src, .. } => Some(src),
+            SyncError::UnknownModule { src, .. } => Some(src),
+            SyncError::UnconnectedModulePin { src, .. } => Some(src),
             SyncError::UnknownLayer { src, .. } => Some(src),
         }
     }
@@ -241,6 +285,18 @@ impl Diagnostic for SyncError {
             SyncError::MissingNet { span, .. } => Some(Box::new(std::iter::once(
                 LabeledSpan::new_with_span(Some("net not defined".to_string()), *span),
             ))),
+            SyncError::UnknownModule { span, .. } => {
+                Some(Box::new(std::iter::once(LabeledSpan::new_with_span(
+                    Some("no module with this name is defined".to_string()),
+                    *span,
+                ))))
+            }
+            SyncError::UnconnectedModulePin { span, pin, .. } => {
+                Some(Box::new(std::iter::once(LabeledSpan::new_with_span(
+                    Some(format!("pin '{pin}' is given no net here")),
+                    *span,
+                ))))
+            }
             SyncError::UnknownLayer { span, .. } => Some(Box::new(std::iter::once(
                 LabeledSpan::new_with_span(Some("unknown layer".to_string()), *span),
             ))),
@@ -329,8 +385,13 @@ pub fn sync_ast_to_world(
     // available when components reference them. Registering into the caller's
     // library (rather than a local clone) is what lets export and rendering
     // resolve them afterwards.
+    // Expand module instances first, so every later pass sees plain
+    // components and nets and none of them needs to know modules exist.
+    let expanded = expand_module_instances(ast, source, &mut result);
+    let definitions = &expanded;
+
     footprint_lib.clear_design();
-    for def in &ast.definitions {
+    for def in definitions {
         if let Definition::Footprint(fp_def) = def {
             footprint_lib.register_design(convert_footprint_def(fp_def));
         }
@@ -344,7 +405,7 @@ pub fn sync_ast_to_world(
     let mut component_entities: HashMap<String, Entity> = HashMap::new();
 
     // Process definitions in order (footprints already handled above)
-    for def in &ast.definitions {
+    for def in definitions {
         match def {
             Definition::Board(board) => {
                 sync_board(board, source, world, &mut result);
@@ -371,6 +432,10 @@ pub fn sync_ast_to_world(
             }
             Definition::Footprint(_) => {
                 // Already handled in Phase 0 above
+            }
+            Definition::ModuleInstance(_) => {
+                // Already replaced by expand_module_instances above; an
+                // instance never reaches this point.
             }
             // v2 constructs — not yet wired to ECS, parsed and stored in AST only
             Definition::Module(_)
@@ -991,6 +1056,163 @@ fn calculate_footprint_bounds(pads: &[FootprintPadDef]) -> Rect {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn a_module_instance_becomes_real_components() {
+        // Two instances of one block. Each gets its own copy of the parts,
+        // under its own name, and its pins are wired to whatever nets the
+        // design names - which is what makes a module worth writing.
+        let source = r#"version 1
+
+board t {
+    size 40mm x 20mm
+    layers 2
+}
+
+module Divider {
+    pin IN
+    pin OUT
+
+    component RTOP resistor "0402" {
+        value "10k"
+        at 5mm, 5mm
+    }
+
+    component RBOT resistor "0402" {
+        value "10k"
+        at 5mm, 10mm
+    }
+
+    net IN {
+        RTOP.1
+    }
+
+    net MID {
+        RTOP.2
+        RBOT.1
+    }
+
+    net OUT {
+        RBOT.2
+    }
+}
+
+use Divider as DIV1 {
+    IN = VIN
+    OUT = SENSE_A
+}
+
+use Divider as DIV2 {
+    IN = VIN
+    OUT = SENSE_B
+}
+"#;
+        let parsed = cypcb_parser::parse(source);
+        assert!(parsed.errors.is_empty(), "{:?}", parsed.errors);
+
+        let mut world = BoardWorld::new();
+        let mut library = FootprintLibrary::new();
+        let result = sync_ast_to_world(&parsed.value, source, &mut world, &mut library);
+        assert!(result.errors.is_empty(), "{:?}", result.errors);
+
+        let mut refdes: Vec<String> = {
+            let ecs = world.ecs_mut();
+            let mut query = ecs.query::<&RefDes>();
+            query.iter(ecs).map(|r| r.as_str().to_string()).collect()
+        };
+        refdes.sort();
+        assert_eq!(
+            refdes,
+            vec!["DIV1_RBOT", "DIV1_RTOP", "DIV2_RBOT", "DIV2_RTOP"],
+            "each instance brings its own parts, named after it"
+        );
+
+        // A pin becomes the design's net; an internal net stays the instance's
+        // own, or the two dividers would short their midpoints together.
+        assert!(world.get_net("VIN").is_some(), "both instances share VIN");
+        assert!(world.get_net("SENSE_A").is_some());
+        assert!(world.get_net("SENSE_B").is_some());
+        assert!(world.get_net("DIV1_MID").is_some(), "internal net is local");
+        assert!(world.get_net("DIV2_MID").is_some());
+        assert!(
+            world.get_net("MID").is_none(),
+            "an unprefixed MID would be one net across both instances"
+        );
+    }
+
+    #[test]
+    fn instantiating_something_that_does_not_exist_is_an_error() {
+        let source = r#"version 1
+
+board t {
+    size 10mm x 10mm
+    layers 2
+}
+
+use NoSuchThing as X {
+    IN = VIN
+}
+"#;
+        let parsed = cypcb_parser::parse(source);
+        let mut world = BoardWorld::new();
+        let mut library = FootprintLibrary::new();
+        let result = sync_ast_to_world(&parsed.value, source, &mut world, &mut library);
+
+        assert!(
+            result
+                .errors
+                .iter()
+                .any(|e| matches!(e, SyncError::UnknownModule { .. })),
+            "{:?}",
+            result.errors
+        );
+    }
+
+    #[test]
+    fn a_pin_left_unconnected_is_reported() {
+        let source = r#"version 1
+
+board t {
+    size 10mm x 10mm
+    layers 2
+}
+
+module M {
+    pin IN
+    pin OUT
+
+    component R1 resistor "0402" {
+        value "10k"
+        at 5mm, 5mm
+    }
+
+    net IN {
+        R1.1
+    }
+
+    net OUT {
+        R1.2
+    }
+}
+
+use M as A {
+    IN = VIN
+}
+"#;
+        let parsed = cypcb_parser::parse(source);
+        let mut world = BoardWorld::new();
+        let mut library = FootprintLibrary::new();
+        let result = sync_ast_to_world(&parsed.value, source, &mut world, &mut library);
+
+        assert!(
+            result.errors.iter().any(|e| matches!(
+                e,
+                SyncError::UnconnectedModulePin { pin, .. } if pin == "OUT"
+            )),
+            "a dangling pin has to be named, not quietly localised: {:?}",
+            result.errors
+        );
+    }
 
     #[test]
     fn a_trace_written_in_the_dsl_carries_its_net_as_a_component() {
@@ -1866,4 +2088,101 @@ fn side_of_footprint(footprint: &Footprint) -> crate::components::Side {
     } else {
         crate::components::Side::Top
     }
+}
+
+/// Replace every `use M as N { ... }` with the definitions it stands for.
+///
+/// A module is a circuit block; an instance is a copy of it under a name. The
+/// copy's components take that name as a prefix, so two instances of the same
+/// divider are `DIV1_R1` and `DIV2_R1` rather than two `R1`s. A net inside the
+/// module is local in the same way - `DIV1_MID` - except where it is named by
+/// one of the module's pins, which is the whole point of a pin: `IN = VIN`
+/// makes the module's `IN` and the design's `VIN` one net.
+///
+/// Returns the design's own definitions with instances replaced in place, so
+/// every pass downstream works on components and nets and needs to know
+/// nothing about modules.
+fn expand_module_instances(
+    ast: &SourceFile,
+    source: &str,
+    result: &mut SyncResult,
+) -> Vec<Definition> {
+    let modules: HashMap<&str, &cypcb_parser::ast::ModuleDef> = ast
+        .definitions
+        .iter()
+        .filter_map(|def| match def {
+            Definition::Module(module) => Some((module.name.value.as_str(), module)),
+            _ => None,
+        })
+        .collect();
+
+    let mut out = Vec::with_capacity(ast.definitions.len());
+    for def in &ast.definitions {
+        let Definition::ModuleInstance(instance) = def else {
+            out.push(def.clone());
+            continue;
+        };
+
+        let Some(module) = modules.get(instance.module.value.as_str()) else {
+            result.errors.push(SyncError::UnknownModule {
+                name: instance.module.value.clone(),
+                src: source.to_string(),
+                span: span_to_source_span(&instance.module.span),
+            });
+            continue;
+        };
+
+        // pin name -> the design's net for it
+        let ports: HashMap<&str, &str> = instance
+            .ports
+            .iter()
+            .map(|port| (port.pin.value.as_str(), port.net.value.as_str()))
+            .collect();
+
+        // A pin the instance does not connect is left dangling rather than
+        // silently merged with something; say so.
+        for pin in &module.pins {
+            if !ports.contains_key(pin.name.value.as_str()) {
+                result.errors.push(SyncError::UnconnectedModulePin {
+                    instance: instance.name.value.clone(),
+                    pin: pin.name.value.clone(),
+                    src: source.to_string(),
+                    span: span_to_source_span(&instance.span),
+                });
+            }
+        }
+
+        let prefix = &instance.name.value;
+        let local_name = |name: &str| -> String { format!("{prefix}_{name}") };
+        let net_name = |name: &str| -> String {
+            ports
+                .get(name)
+                .map(|design_net| (*design_net).to_string())
+                .unwrap_or_else(|| local_name(name))
+        };
+
+        for inner in &module.definitions {
+            match inner {
+                Definition::Component(component) => {
+                    let mut copy = component.clone();
+                    copy.refdes.value = local_name(&component.refdes.value);
+                    out.push(Definition::Component(copy));
+                }
+                Definition::Net(net) => {
+                    let mut copy = net.clone();
+                    copy.name.value = net_name(&net.name.value);
+                    for connection in &mut copy.connections {
+                        connection.component.value = local_name(&connection.component.value);
+                    }
+                    out.push(Definition::Net(copy));
+                }
+                // A module holding a board or another module is not something
+                // the language allows; the grammar only admits components,
+                // nets, pins and assertions.
+                other => out.push(other.clone()),
+            }
+        }
+    }
+
+    out
 }

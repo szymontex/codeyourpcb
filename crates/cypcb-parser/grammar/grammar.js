@@ -50,6 +50,7 @@ module.exports = grammar({
       $.zone_definition,
       $.trace_definition,
       $.module_definition,
+      $.module_instance,
       $.interface_definition,
       $.import_statement,
       $.assert_statement,
@@ -446,6 +447,28 @@ module.exports = grammar({
       $.net_definition,
       $.pin_declaration,
       $.assert_statement,
+    ),
+
+    // use Module as Name { PIN = net, ... }
+    //
+    // Instantiates a module: its components are placed with the instance name
+    // as a prefix, and each of its exposed pins is wired to a net in the
+    // enclosing design.
+    module_instance: $ => seq(
+      'use',
+      field('module', $.identifier),
+      'as',
+      field('name', $.identifier),
+      '{',
+      repeat($.port_connection),
+      '}',
+    ),
+
+    // PIN = net
+    port_connection: $ => seq(
+      field('pin', $.identifier),
+      '=',
+      field('net', $.identifier),
     ),
 
     // interface Name { pin declarations... }

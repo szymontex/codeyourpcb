@@ -33,10 +33,11 @@
 use crate::ast::{
     AssertDef, AssertExpression, AssertOperand, BoardDef, ComparisonOp, ComponentDef,
     ComponentKind, CurrentUnit, CurrentValue, Definition, Dimension, FootprintDef, Identifier,
-    ImportDef, InterfaceDef, LayerType, ModuleDef, NetAssignment, NetConstraints, NetDef, PadDef,
-    PadShape, PhysicalValue, PinDeclaration, PinId, PinRef, PositionExpr, RotationExpr,
-    SizeProperty, SourceFile, Span, StackupDef, StackupLayer, StringLit, Tolerance, ToleranceKind,
-    TraceDef, TraceDirective, TracePath, TraceVia, ZoneDef, ZoneKind,
+    ImportDef, InterfaceDef, LayerType, ModuleDef, ModuleInstance, NetAssignment, NetConstraints,
+    NetDef, PadDef, PadShape, PhysicalValue, PinDeclaration, PinId, PinRef, PortConnection,
+    PositionExpr, RotationExpr, SizeProperty, SourceFile, Span, StackupDef, StackupLayer,
+    StringLit, Tolerance, ToleranceKind, TraceDef, TraceDirective, TracePath, TraceVia, ZoneDef,
+    ZoneKind,
 };
 use crate::errors::{ParseError, ParseResult};
 use crate::node_kinds;
@@ -148,6 +149,11 @@ impl CypcbParser {
                 "module_definition" => {
                     if let Some(module) = self.convert_module_definition(source, &child, errors) {
                         definitions.push(Definition::Module(module));
+                    }
+                }
+                "module_instance" => {
+                    if let Some(instance) = self.convert_module_instance(source, &child) {
+                        definitions.push(Definition::ModuleInstance(instance));
                     }
                 }
                 "interface_definition" => {
@@ -1119,6 +1125,38 @@ impl CypcbParser {
         Some(ImportDef {
             names,
             path,
+            span: span_of(node),
+        })
+    }
+
+    /// Convert a module instantiation node.
+    fn convert_module_instance(&self, source: &str, node: &Node) -> Option<ModuleInstance> {
+        let module = get_child_by_field(node, "module")?;
+        let name = get_child_by_field(node, "name")?;
+
+        let mut ports = Vec::new();
+        let mut cursor = node.walk();
+        for child in node.named_children(&mut cursor) {
+            if child.kind() != "port_connection" {
+                continue;
+            }
+            let (Some(pin), Some(net)) = (
+                get_child_by_field(&child, "pin"),
+                get_child_by_field(&child, "net"),
+            ) else {
+                continue;
+            };
+            ports.push(PortConnection {
+                pin: Identifier::new(node_text(source, &pin), span_of(&pin)),
+                net: Identifier::new(node_text(source, &net), span_of(&net)),
+                span: span_of(&child),
+            });
+        }
+
+        Some(ModuleInstance {
+            module: Identifier::new(node_text(source, &module), span_of(&module)),
+            name: Identifier::new(node_text(source, &name), span_of(&name)),
+            ports,
             span: span_of(node),
         })
     }

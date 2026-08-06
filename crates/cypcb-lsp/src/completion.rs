@@ -168,7 +168,8 @@ fn find_context_in_definition(def: &Definition, content: &str, offset: usize) ->
         Definition::Zone(_) => find_context_in_zone(content, offset),
         Definition::Trace(_) => find_context_in_trace(content, offset),
         // v2 constructs — completion context not yet implemented
-        Definition::Module(_)
+        Definition::ModuleInstance(_)
+        | Definition::Module(_)
         | Definition::Interface(_)
         | Definition::Import(_)
         | Definition::Assert(_) => CompletionContext::TopLevel,

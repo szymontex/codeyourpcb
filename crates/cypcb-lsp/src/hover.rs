@@ -50,6 +50,9 @@ fn hover_for_definition(doc: &DocumentState, def: &Definition, offset: usize) ->
         Definition::Trace(trace) => hover_for_trace(doc, trace, offset),
         // v2 constructs
         Definition::Module(module) => hover_for_module(module, offset),
+        // An instance is a `use` line; there is nothing to explain about it that
+        // the module it names does not already say.
+        Definition::ModuleInstance(_) => None,
         Definition::Interface(iface) => hover_for_interface(iface, offset),
         Definition::Import(import) => hover_for_import(import, offset),
         Definition::Assert(assert_def) => hover_for_assert(assert_def, offset),

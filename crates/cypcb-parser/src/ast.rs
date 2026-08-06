@@ -118,6 +118,8 @@ pub enum Definition {
     Trace(TraceDef),
     /// A module definition (v2).
     Module(ModuleDef),
+    /// A module instantiation (v2).
+    ModuleInstance(ModuleInstance),
     /// An interface definition (v2).
     Interface(InterfaceDef),
     /// An import statement (v2).
@@ -137,6 +139,7 @@ impl Definition {
             Definition::Zone(z) => z.span,
             Definition::Trace(t) => t.span,
             Definition::Module(m) => m.span,
+            Definition::ModuleInstance(i) => i.span,
             Definition::Interface(i) => i.span,
             Definition::Import(i) => i.span,
             Definition::Assert(a) => a.span,
@@ -824,6 +827,34 @@ pub struct ModuleDef {
     pub definitions: Vec<Definition>,
     /// Exposed pins of the module.
     pub pins: Vec<PinDeclaration>,
+    /// Source span.
+    pub span: Span,
+}
+
+/// A module instantiation: `use Divider as DIV1 { IN = VIN, OUT = VOUT }`.
+///
+/// Placing an instance copies the module's components into the design under
+/// the instance's name, and wires each exposed pin to a net the design names.
+/// Without this a module is a definition nothing can reach.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModuleInstance {
+    /// Name of the module being instantiated.
+    pub module: Identifier,
+    /// Name this instance is known by; also the prefix for its components.
+    pub name: Identifier,
+    /// Which net each of the module's pins connects to.
+    pub ports: Vec<PortConnection>,
+    /// Source span.
+    pub span: Span,
+}
+
+/// One `PIN = net` line inside an instantiation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PortConnection {
+    /// The module pin being connected.
+    pub pin: Identifier,
+    /// The net in the enclosing design.
+    pub net: Identifier,
     /// Source span.
     pub span: Span,
 }
