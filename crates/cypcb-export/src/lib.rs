@@ -23,6 +23,7 @@ pub mod cpl;
 pub mod excellon;
 pub mod gerber;
 pub mod job;
+pub mod pour;
 pub mod presets;
 
 // Re-export commonly used types
