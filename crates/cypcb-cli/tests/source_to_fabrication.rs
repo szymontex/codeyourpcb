@@ -15,7 +15,7 @@
 use cypcb_autoroute::{route_board, AutorouteConfig};
 use cypcb_export::coords::CoordinateFormat;
 use cypcb_export::excellon::export_excellon;
-use cypcb_export::gerber::export_copper_layer;
+use cypcb_export::gerber::{export_copper_layer, export_outline};
 use cypcb_router::apply_routes;
 use cypcb_rules::presets::{PresetRuleSet, RulesPreset};
 use cypcb_world::components::Layer;
@@ -202,4 +202,67 @@ fn saving_a_routed_board_does_not_change_how_much_copper_it_has() {
         strokes(&direct_bottom),
         "saving and reloading moved copper on the bottom layer"
     );
+}
+
+/// The same board with a corner taken out of it.
+///
+/// A fabricator cuts to `Edge_Cuts`, so a board that states an outline and
+/// gets a rectangle back is not the board that was ordered.
+const CUTOUT: &str = r#"version 1
+
+board fab {
+    size 40mm x 30mm
+    layers 2
+}
+
+outline {
+    point 0mm, 0mm
+    point 40mm, 0mm
+    point 40mm, 15mm
+    point 20mm, 15mm
+    point 20mm, 30mm
+    point 0mm, 30mm
+}
+
+component R1 resistor "0402" {
+    value 10kohm
+    at 8mm, 8mm
+}
+"#;
+
+#[test]
+fn the_fabricator_cuts_the_board_the_source_declared() {
+    let (mut world, library) = load(CUTOUT);
+    let format = CoordinateFormat::FORMAT_MM_2_6;
+
+    let edge = export_outline(&mut world, &format).expect("board outline");
+
+    // Six corners and back to the first: one pen-up, six draws.
+    let moves = edge.lines().filter(|line| line.contains("D02")).count();
+    let cuts = edge.lines().filter(|line| line.contains("D01")).count();
+    assert_eq!(moves, 1, "the outline is one closed path:\n{edge}");
+    assert_eq!(
+        cuts, 6,
+        "six corners means six cuts back to the start:\n{edge}"
+    );
+
+    // The distinct X coordinates are what separates this board from the
+    // rectangle it would be mistaken for: a rectangle has two, this has three.
+    let xs: std::collections::BTreeSet<&str> = edge
+        .lines()
+        .filter(|line| line.contains("D01") || line.contains("D02"))
+        .filter_map(|line| line.split('Y').next())
+        .map(|x| x.trim_start_matches('X'))
+        .collect();
+    assert_eq!(
+        xs.len(),
+        3,
+        "a board with a cutout has three distinct X coordinates, a rectangle two:\n{edge}"
+    );
+    for x in ["0.000000", "20.000000", "40.000000"] {
+        assert!(
+            xs.contains(x),
+            "the outline is missing the corner at X{x}: {xs:?}"
+        );
+    }
 }
