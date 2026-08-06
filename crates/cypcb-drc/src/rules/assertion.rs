@@ -35,6 +35,15 @@ impl DrcRule for AssertionRule {
         let board = world.board_info();
         let entity = world.board_entity();
 
+        // What each net's own block asks for, by name.
+        let nets: std::collections::HashMap<String, cypcb_world::registry::NetConstraints> = world
+            .nets()
+            .filter_map(|(id, name)| Some((name.to_string(), id)))
+            .collect::<Vec<_>>()
+            .into_iter()
+            .filter_map(|(name, id)| Some((name, world.net_constraints(id)?)))
+            .collect();
+
         // Values the design wrote as quantities, by reference designator.
         let values: std::collections::HashMap<String, TypedValue> = {
             let ecs = world.ecs_mut();
@@ -53,7 +62,7 @@ impl DrcRule for AssertionRule {
                 None => continue,
             };
 
-            match evaluate(&assertion.expression, board, &values) {
+            match evaluate(&assertion.expression, board, &values, &nets) {
                 Outcome::Held => {}
                 Outcome::Failed(message) | Outcome::Unevaluable(message) => {
                     let mut violation = DrcViolation::assertion(entity, at);
@@ -119,18 +128,21 @@ fn evaluate(
     expression: &AssertExpression,
     board: Option<(cypcb_world::components::BoardSize, cypcb_world::LayerStack)>,
     values: &std::collections::HashMap<String, TypedValue>,
+    nets: &std::collections::HashMap<String, cypcb_world::registry::NetConstraints>,
 ) -> Outcome {
     match expression {
         AssertExpression::Comparison {
             left, op, right, ..
         } => {
-            let (left_value, right_value) =
-                match (resolve(left, board, values), resolve(right, board, values)) {
-                    (Ok(l), Ok(r)) => (l, r),
-                    (Err(why), _) | (_, Err(why)) => {
-                        return Outcome::Unevaluable(format!("assertion not checked: {why}"))
-                    }
-                };
+            let (left_value, right_value) = match (
+                resolve(left, board, values, nets),
+                resolve(right, board, values, nets),
+            ) {
+                (Ok(l), Ok(r)) => (l, r),
+                (Err(why), _) | (_, Err(why)) => {
+                    return Outcome::Unevaluable(format!("assertion not checked: {why}"))
+                }
+            };
 
             if left_value.quantity != right_value.quantity {
                 return Outcome::Unevaluable(format!(
@@ -167,6 +179,7 @@ fn resolve(
     operand: &AssertOperand,
     board: Option<(cypcb_world::components::BoardSize, cypcb_world::LayerStack)>,
     values: &std::collections::HashMap<String, TypedValue>,
+    nets: &std::collections::HashMap<String, cypcb_world::registry::NetConstraints>,
 ) -> Result<Value, String> {
     match operand {
         AssertOperand::Number { value, .. } => Ok(Value {
@@ -203,6 +216,54 @@ fn resolve(
                 };
             }
 
+            // `VCC.current`, `VCC.width`, `VCC.clearance` - what a net's own
+            // block asks for. The field decides which kind of name this is:
+            // a component has a value, a net has the three below. `board` is
+            // neither: `board.width` is a length the board has rather than one
+            // a net asks for.
+            // `board` is not a net, and `board.width` is a length the board
+            // has rather than one a net asks for.
+            if let [net_name, field @ ("current" | "width" | "clearance")] = parts
+                .as_slice()
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>()[..]
+            {
+                if net_name == "board" {
+                    // Falls through to the board paths below.
+                } else {
+                    let Some(constraints) = nets.get(net_name) else {
+                        return Err(format!(
+                            "'{path}' is not a net that states anything: give it a block like \
+                         `net {net_name} [{field} ...]`"
+                        ));
+                    };
+                    return match field {
+                        "current" => constraints
+                            .current_ma
+                            .map(|ma| Value {
+                                base: ma / 1000.0,
+                                quantity: Quantity::Current,
+                            })
+                            .ok_or_else(|| format!("net '{net_name}' does not state a current")),
+                        "width" => constraints
+                            .width
+                            .map(|width| Value {
+                                base: width.raw() as f64,
+                                quantity: Quantity::Length,
+                            })
+                            .ok_or_else(|| format!("net '{net_name}' does not state a width")),
+                        _ => constraints
+                            .clearance
+                            .map(|clearance| Value {
+                                base: clearance.raw() as f64,
+                                quantity: Quantity::Length,
+                            })
+                            .ok_or_else(|| format!("net '{net_name}' does not state a clearance")),
+                    };
+                }
+            }
+
             let Some((size, layers)) = board else {
                 return Err(format!("'{path}' needs a board, and none is defined"));
             };
@@ -221,7 +282,7 @@ fn resolve(
                 }),
                 _ => Err(format!(
                     "'{path}' is not something the checker can read yet; it knows board.width, \
-                     board.height and board.layers"
+                     board.height, board.layers, <part>.value and <net>.current/width/clearance"
                 )),
             }
         }
@@ -435,6 +496,61 @@ mod tests {
         assert_eq!(violations.len(), 1);
         assert!(
             violations[0].message.contains("assertion failed"),
+            "got {}",
+            violations[0].message
+        );
+    }
+
+    #[test]
+    fn a_net_can_be_asserted_about() {
+        use cypcb_world::registry::NetConstraints;
+
+        let mut world = board_of(80.0, 40.0, 2);
+        let vbus = world.intern_net("VBUS");
+        world.intern_net("SIG");
+        world.set_net_constraints(
+            vbus,
+            NetConstraints {
+                current_ma: Some(2000.0),
+                width: Some(Nm::from_mm(0.8)),
+                ..Default::default()
+            },
+        );
+
+        let amp = |value: f64| {
+            AssertOperand::Physical(PhysicalValue {
+                value,
+                unit: PhysicalUnit::Amp,
+                tolerance: None,
+                span: Span::new(0, 0),
+            })
+        };
+
+        world.set_assertions(vec![claim(
+            name("VBUS.current"),
+            ComparisonOp::Ge,
+            amp(1.0),
+        )]);
+        assert!(AssertionRule
+            .check(&mut world, &DesignRules::jlcpcb_2layer())
+            .is_empty());
+
+        world.set_assertions(vec![claim(name("VBUS.width"), ComparisonOp::Ge, mm(1.0))]);
+        let violations = AssertionRule.check(&mut world, &DesignRules::jlcpcb_2layer());
+        assert_eq!(violations.len(), 1);
+        assert!(
+            violations[0].message.contains("0.800mm"),
+            "got {}",
+            violations[0].message
+        );
+
+        // A net that states nothing is not silently treated as satisfying
+        // everything.
+        world.set_assertions(vec![claim(name("SIG.width"), ComparisonOp::Ge, mm(0.2))]);
+        let violations = AssertionRule.check(&mut world, &DesignRules::jlcpcb_2layer());
+        assert_eq!(violations.len(), 1);
+        assert!(
+            violations[0].message.contains("not checked"),
             "got {}",
             violations[0].message
         );

@@ -566,9 +566,10 @@ module.exports = grammar({
       'nH', 'uH', 'mH', 'H',
       // Voltage
       'mV', 'V', 'kV',
-      // Current
-      'uA',
-      // Note: mA and A are already handled by current_unit but also valid as physical units
+      // Current. The note that used to sit here said mA and A were "already
+      // handled by current_unit"; they were not listed, so `assert X >= 1A`
+      // would not parse while `current 2A` did.
+      'uA', 'mA', 'A',
       // Frequency
       'Hz', 'kHz', 'MHz', 'GHz',
       // Power
