@@ -200,10 +200,15 @@ fn print_table_footer() {
 /// point to the other feature, and both segments meeting there reported it.
 /// The boards are unchanged - 271 became 251 and 210 became 191 because the
 /// checker stopped double-counting.
-const DRC_RATCHETS: &[(&str, &str, u32)] = &[
-    ("led_blink.kicad_pcb", "led_blink", 2),
-    ("stm32_breakout.kicad_pcb", "stm32_breakout", 251),
-    ("multi_ic.kicad_pcb", "multi_ic", 191),
+/// Two columns since 2026-08-07, because they are two different failures. A
+/// board with copper touching copper cannot work; a board with a gap under
+/// spec is a yield risk a fab may still build. A single count treats one short
+/// as better than two near misses, which is backwards, and it hid that
+/// reserving trace copper halves the shorts on both dense fixtures.
+const DRC_RATCHETS: &[(&str, &str, u32, u32)] = &[
+    ("led_blink.kicad_pcb", "led_blink", 2, 1),
+    ("stm32_breakout.kicad_pcb", "stm32_breakout", 251, 159),
+    ("multi_ic.kicad_pcb", "multi_ic", 191, 75),
 ];
 
 /// Routes every fixture and holds the line on completeness and DRC count.
@@ -219,7 +224,7 @@ fn benchmark_all_fixtures_drc() {
     eprintln!();
     print_table_header();
     let mut measured = Vec::new();
-    for (filename, label, _) in DRC_RATCHETS {
+    for (filename, label, _, _) in DRC_RATCHETS {
         let (score, route_count, unrouted) = route_and_score(&pathfinder, filename);
         print_table_row(&BenchmarkResult::from_score(
             label,
@@ -228,32 +233,48 @@ fn benchmark_all_fixtures_drc() {
             route_count,
             unrouted,
         ));
-        measured.push((label, score.drc_violations, unrouted, route_count));
+        measured.push((label, score.drc_violations, score.shorts, unrouted, route_count));
     }
     print_table_footer();
     eprintln!();
 
-    for ((label, violations, unrouted, route_count), (_, _, ratchet)) in
+    // Every fixture is measured and printed before anything fails. A test that
+    // stops at the first bad row hides what the other boards did, and the
+    // question these numbers answer - is this setting worth its cost - cannot
+    // be read off one row.
+    let mut failures: Vec<String> = Vec::new();
+
+    for ((label, violations, shorts, unrouted, route_count), (_, _, ratchet, shorts_ratchet)) in
         measured.iter().zip(DRC_RATCHETS)
     {
-        assert_eq!(
-            *unrouted, 0,
-            "FAIL {}: {} unrouted connections, threshold 0",
-            label, unrouted
-        );
-        assert!(*route_count > 0, "FAIL {}: routed nothing at all", label);
-        assert!(
-            violations <= ratchet,
-            "FAIL {}: {} DRC violations, threshold {} - the router got worse",
-            label,
-            violations,
-            ratchet
-        );
         eprintln!(
-            "  ✓ {}: {} routes, {} DRC violations (threshold {})",
-            label, route_count, violations, ratchet
+            "  {}: {} routes, {} violations against {}, {} shorts against {}, {} unrouted",
+            label, route_count, violations, ratchet, shorts, shorts_ratchet, unrouted
         );
+
+        if *unrouted != 0 {
+            failures.push(format!("{label}: {unrouted} unrouted connections, threshold 0"));
+        }
+        if *route_count == 0 {
+            failures.push(format!("{label}: routed nothing at all"));
+        }
+        if violations > ratchet {
+            failures.push(format!(
+                "{label}: {violations} DRC violations, threshold {ratchet} - the router got worse"
+            ));
+        }
+        if shorts > shorts_ratchet {
+            failures.push(format!(
+                "{label}: {shorts} of the violations are copper touching copper, threshold {shorts_ratchet} - the router started shorting the board"
+            ));
+        }
     }
+
+    assert!(
+        failures.is_empty(),
+        "FAIL benchmark_all_fixtures_drc:\n  {}",
+        failures.join("\n  ")
+    );
 }
 
 /// Fast CI regression gate: routes led_blink with PathFinder and asserts
