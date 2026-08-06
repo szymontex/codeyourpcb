@@ -47,3 +47,8 @@ getrandom_03 = { package = "getrandom", version = "0.3", features = ["wasm_js"] 
 # wasm-pack configuration for size optimization
 [package.metadata.wasm-pack.profile.release]
 wasm-opt = ["-O4", "--enable-bulk-memory", "--enable-nontrapping-float-to-int"]
+
+[dev-dependencies]
+# Test-only: proves the viewer and the Gerber get the same copper.
+cypcb-export = { path = "../cypcb-export" }
+serde_json = { workspace = true }

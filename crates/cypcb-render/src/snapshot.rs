@@ -29,6 +29,25 @@ pub struct BoardSnapshot {
     pub vias: Vec<ViaInfo>,
     /// Ratsnest lines (unrouted connections).
     pub ratsnest: Vec<RatsnestInfo>,
+    /// Copper pours, as the copper they become.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pours: Vec<PourInfo>,
+}
+
+/// A copper pour, as the copper it actually becomes.
+///
+/// Sent as the rectangles a fabricator receives rather than as the zone the
+/// designer drew: a plane is its outline minus every piece of foreign copper
+/// and the clearance around it, so a viewer showing the outline shows a board
+/// nobody will be sent.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PourInfo {
+    /// Net name this pour belongs to, empty when it names none.
+    pub net: String,
+    /// Copper layers it covers, as a layer mask.
+    pub layer_mask: u32,
+    /// The filled copper: min x, min y, max x, max y, in nanometres.
+    pub rects: Vec<[i64; 4]>,
 }
 
 /// A DRC violation for display in the viewer.
@@ -311,6 +330,7 @@ mod tests {
             traces: vec![],
             vias: vec![],
             ratsnest: vec![],
+            pours: vec![],
         };
 
         // Verify it can serialize to JSON (serde-wasm-bindgen uses serde)
@@ -464,6 +484,7 @@ mod tests {
                 net_name: "VCC".to_string(),
             }],
             ratsnest: vec![],
+            pours: vec![],
         };
 
         let json = serde_json::to_string(&snapshot).unwrap();

@@ -42,6 +42,7 @@
 pub mod coords;
 pub mod geometry;
 pub mod physical_units;
+pub mod pour;
 pub mod units;
 
 // Re-export primary types at crate root for convenience

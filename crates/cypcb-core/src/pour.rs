@@ -12,7 +12,7 @@
 //! pour back further than it strictly needs - the safe direction, and the same
 //! one the checker takes elsewhere.
 
-use cypcb_core::{Nm, Point, Rect};
+use crate::{Nm, Point, Rect};
 
 /// Subtract `obstacles` from `zone`, returning the copper that remains.
 ///

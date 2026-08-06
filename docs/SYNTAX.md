@@ -220,7 +220,10 @@ keepout mounting_hole {
 
 ### Copper Pour Zone
 
-Defines a copper pour area (future):
+Defines a copper pour area. The zone is filled against the copper already on
+its layer - foreign copper is cut out with the fab's clearance, and a pad on
+the pour's own net keeps a thermal gap bridged by spokes. The filled copper is
+what the Gerber carries and what the viewer draws.
 ```
 zone <name> {
     bounds <x1>, <y1> to <x2>, <y2>

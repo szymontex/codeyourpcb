@@ -1498,6 +1498,9 @@ impl PcbEngine {
         // Build ratsnest info (unrouted connections)
         let ratsnest = self.collect_ratsnest(&nets);
 
+        // Build the copper the pours actually become
+        let pours = self.collect_pours();
+
         BoardSnapshot {
             board,
             components,
@@ -1506,7 +1509,63 @@ impl PcbEngine {
             traces,
             vias,
             ratsnest,
+            pours,
         }
+    }
+
+    /// Collect every copper pour, as the copper it becomes.
+    ///
+    /// A zone as written is a rectangle; the copper made from it is that
+    /// rectangle minus the clearance around everything else on the layer. The
+    /// exporter has always sent the fabricator the second one, so a viewer
+    /// drawing the first shows a board nobody will be sent - it hides exactly
+    /// the mistakes a pour causes: a plane swallowing a pad, an island cut off
+    /// from the net it is supposed to be.
+    fn collect_pours(&mut self) -> Vec<PourInfo> {
+        use cypcb_world::components::zone::ZoneKind;
+
+        let zones: Vec<_> = self
+            .world
+            .zones()
+            .into_iter()
+            .map(|(_, zone)| zone)
+            .filter(|zone| zone.kind == ZoneKind::CopperPour)
+            .collect();
+
+        let options = cypcb_core::pour::PourOptions::default();
+        let mut pours = Vec::new();
+
+        for zone in zones {
+            let net = zone
+                .net
+                .and_then(|id| self.world.net_name(id).map(|name| name.to_string()))
+                .unwrap_or_default();
+
+            // A zone can span several layers, and what obstructs it differs on
+            // each, so each layer is filled on its own.
+            for layer in [Layer::TopCopper, Layer::BottomCopper] {
+                if zone.layer_mask & layer.to_copper_mask() == 0 {
+                    continue;
+                }
+                let library = self.footprint_lib.clone();
+                let filled =
+                    cypcb_world::copper::fill_zone(&mut self.world, &library, layer, &zone, &options);
+                let rects: Vec<[i64; 4]> = filled
+                    .all()
+                    .map(|r| [r.min.x.0, r.min.y.0, r.max.x.0, r.max.y.0])
+                    .collect();
+                if rects.is_empty() {
+                    continue;
+                }
+                pours.push(PourInfo {
+                    net: net.clone(),
+                    layer_mask: layer.to_copper_mask(),
+                    rects,
+                });
+            }
+        }
+
+        pours
     }
 
     /// Collect all traces from the world.
@@ -2127,6 +2186,7 @@ mod tests {
             traces: vec![],
             vias: vec![],
             ratsnest: vec![],
+            pours: vec![],
         };
 
         let mut engine = PcbEngine::new();

@@ -89,6 +89,7 @@
 //! ```
 
 pub mod components;
+pub mod copper;
 
 /// Writing a routed board back out as `.cypcb` source.
 pub mod dsl;

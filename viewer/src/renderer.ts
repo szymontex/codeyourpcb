@@ -4,7 +4,7 @@
  * component body outlines, pad pin numbers, net labels, and drill marks.
  */
 
-import type { BoardSnapshot, ComponentInfo, PadInfo, TraceInfo, ViaInfo, RatsnestInfo } from './types';
+import type { BoardSnapshot, ComponentInfo, PadInfo, PourInfo, TraceInfo, ViaInfo, RatsnestInfo } from './types';
 import type { Viewport } from './viewport';
 import type { RoutingState } from './routing';
 import type { DragEditState, RectSelectState } from './interaction';
@@ -118,6 +118,14 @@ export function render(ctx: CanvasRenderingContext2D, state: RenderState): void 
   // They clutter the professional PCB view
   if (state.activeResizeHandle) {
     drawResizeHandles(ctx, viewport, snapshot.board.width_nm, snapshot.board.height_nm, themeColors, state.activeResizeHandle ?? null);
+  }
+
+  // Draw copper pours under the traces: a plane is the bottom-most copper on
+  // its layer, and anything routed over it sits on top.
+  if (snapshot.pours) {
+    for (const pour of snapshot.pours) {
+      drawPour(ctx, viewport, pour, layers, state.highlightedNet);
+    }
   }
 
   // Draw traces by layer (bottom first, then top)
@@ -394,6 +402,37 @@ function tracePolyline(ctx: CanvasRenderingContext2D, vp: Viewport, trace: Trace
   for (const seg of trace.segments) {
     const [endX, endY] = worldToScreen(vp, seg.end_x, seg.end_y);
     ctx.lineTo(endX, endY);
+  }
+}
+
+/**
+ * Draw one filled copper pour.
+ *
+ * The rectangles arrive already cut around pads, traces and vias, so this only
+ * has to place them. They are drawn semi-transparent because a plane covers
+ * most of a board and an opaque one would hide the silkscreen and the parts.
+ */
+function drawPour(
+  ctx: CanvasRenderingContext2D, vp: Viewport, pour: PourInfo,
+  layers: LayerVisibility, highlightedNet: string | null,
+): void {
+  // Layer mask bit 0 is top copper, bit 1 bottom - the same order the engine
+  // assigns them.
+  const isTop = (pour.layer_mask & 0b01) !== 0;
+  const color = getTraceColor(isTop ? 'Top' : 'Bottom', layers);
+  if (!color) return;
+
+  const isDimmed = highlightedNet != null && pour.net !== highlightedNet;
+  ctx.fillStyle = colorWithAlpha(color, isDimmed ? 0.08 : 0.35);
+
+  for (const [x1, y1, x2, y2] of pour.rects) {
+    const [sx1, sy1] = worldToScreen(vp, x1, y1);
+    const [sx2, sy2] = worldToScreen(vp, x2, y2);
+    // The screen's y axis runs the other way, so the corners swap.
+    ctx.fillRect(
+      Math.min(sx1, sx2), Math.min(sy1, sy2),
+      Math.abs(sx2 - sx1), Math.abs(sy2 - sy1),
+    );
   }
 }
 

@@ -11,6 +11,26 @@ export interface BoardSnapshot {
   traces: TraceInfo[];
   vias: ViaInfo[];
   ratsnest: RatsnestInfo[];
+  /** Copper pours, as the copper they become (absent from older snapshots) */
+  pours?: PourInfo[];
+}
+
+/**
+ * A copper pour, as the copper it actually becomes.
+ *
+ * The engine sends the rectangles a fabricator receives, not the zone the
+ * designer drew: a plane is its outline minus every piece of foreign copper
+ * and the clearance around it. Drawing the outline would hide exactly the
+ * mistakes a pour causes - a plane swallowing a pad, an island cut off from
+ * the net it is meant to be.
+ */
+export interface PourInfo {
+  /** Net name this pour belongs to, empty when it names none */
+  net: string;
+  /** Copper layers it covers, as a layer mask */
+  layer_mask: number;
+  /** The filled copper: [min x, min y, max x, max y] in nm */
+  rects: [number, number, number, number][];
 }
 
 /**

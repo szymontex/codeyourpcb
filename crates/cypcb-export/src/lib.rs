@@ -23,7 +23,10 @@ pub mod cpl;
 pub mod excellon;
 pub mod gerber;
 pub mod job;
-pub mod pour;
+/// The geometry a copper pour takes, re-exported from cypcb-core where both
+/// the exporter and the renderer can reach it.
+pub use cypcb_core::pour;
+
 pub mod presets;
 
 // Re-export commonly used types
