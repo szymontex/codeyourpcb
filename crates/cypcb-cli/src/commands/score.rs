@@ -80,12 +80,29 @@ impl ScoreCommand {
             .ok_or_else(|| miette::miette!("Failed to load JLCPCB preset rules"))?;
         let rules = PresetRuleSet::new(preset);
 
-        // Route the board
-        let config = AutorouteConfig::default();
-        let routing_result = route_board(&mut world, &library, &rules, &config);
+        // Score the board in front of us, and route only a board that has no
+        // copper yet.
+        //
+        // This used to route unconditionally. A file that already carries
+        // traces parses them as `Manual`, and `apply_routes` only clears
+        // `Autorouted` ones - so scoring a routed board laid a second routing
+        // on top of the first and measured the pile. Measured on
+        // examples/blink.cypcb routed with `--in-house`: 11 violations from
+        // `score` against 6 from `cypcb check` on the same file.
+        let already_routed = {
+            let ecs = world.ecs_mut();
+            let mut query = ecs.query::<&cypcb_world::components::trace::Trace>();
+            query.iter(ecs).count()
+        };
 
-        // Apply routes to world (spawns Trace and Via entities)
-        apply_routes(&mut world, &routing_result);
+        if already_routed == 0 {
+            eprintln!("No traces in the file - routing it first.");
+            let config = AutorouteConfig::default();
+            let routing_result = route_board(&mut world, &library, &rules, &config);
+            apply_routes(&mut world, &routing_result);
+        } else {
+            eprintln!("Scoring the {already_routed} trace(s) the file carries.");
+        }
 
         // Rebuild spatial index with traces for accurate scoring
         world.rebuild_spatial_index_from_library(&library);
