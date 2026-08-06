@@ -408,6 +408,25 @@ impl DrcViolation {
         }
     }
 
+    /// Create a via-drill violation.
+    ///
+    /// The hole through the via, as distinct from the copper ring around it -
+    /// a fab that quotes 0.2mm cannot drill 0.1mm whatever the ring looks like.
+    pub fn via_drill(entity: Entity, actual: Nm, required: Nm, location: Point) -> Self {
+        DrcViolation {
+            kind: ViolationKind::ViaDrill,
+            location,
+            entity,
+            other_entity: None,
+            source_span: None,
+            message: format!(
+                "Via drill violation: {:.2}mm actual, {:.2}mm required",
+                actual.to_mm(),
+                required.to_mm(),
+            ),
+        }
+    }
+
     /// Create a solder mask bridge violation.
     pub fn solder_mask_bridge(
         entity: Entity,

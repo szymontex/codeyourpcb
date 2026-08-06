@@ -534,9 +534,18 @@ mod drill_size {
         // Via with 0.1mm drill — violates 0.2mm min_via_drill
         spawn_via(&mut world, net, (25.0, 25.0), 0.1, 0.4);
         rebuild_spatial(&mut world, vec![]);
-        // drill_size rule checks pads, not vias directly — but via_drill may catch this
         let result = run_drc(&mut world, &DesignRules::jlcpcb_2layer());
-        let _ = result; // Drill size checks pads from footprint library
+
+        let drill_findings = result
+            .violations
+            .iter()
+            .filter(|v| matches!(v.kind, ViolationKind::ViaDrill | ViolationKind::DrillSize))
+            .count();
+        assert_eq!(
+            drill_findings, 1,
+            "a 0.1mm drill is under the 0.2mm minimum and has to be reported: {:?}",
+            result.violations
+        );
     }
 
     #[test]
@@ -546,7 +555,16 @@ mod drill_size {
         // Via with 0.3mm drill — above 0.2mm minimum
         spawn_via(&mut world, net, (25.0, 25.0), 0.3, 0.6);
         rebuild_spatial(&mut world, vec![]);
-        // No drill violation expected for normally sized via
+        let result = run_drc(&mut world, &DesignRules::jlcpcb_2layer());
+
+        assert!(
+            !result
+                .violations
+                .iter()
+                .any(|v| { matches!(v.kind, ViolationKind::ViaDrill | ViolationKind::DrillSize) }),
+            "0.3mm clears the 0.2mm minimum: {:?}",
+            result.violations
+        );
     }
 }
 
@@ -820,16 +838,17 @@ mod connectivity {
         );
 
         rebuild_spatial(&mut world, vec![]);
-        // Connectivity rule checks footprint pads vs NetConnections
-        // This depends on footprint library having "0402" with 2 pads
         let result = run_drc(&mut world, &DesignRules::jlcpcb_2layer());
         let unconnected = result
             .violations
             .iter()
             .filter(|v| v.kind == ViolationKind::UnconnectedPin)
             .count();
-        // If footprint library has 0402, pin 2 should be flagged
-        let _ = unconnected;
+        assert_eq!(
+            unconnected, 1,
+            "pin 2 of an 0402 is on no net, and that is the whole point of this rule: {:?}",
+            result.violations
+        );
     }
 }
 
