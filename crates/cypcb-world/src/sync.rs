@@ -1097,12 +1097,12 @@ module Divider {
     }
 }
 
-use Divider as DIV1 {
+use Divider as DIV1 at 10mm, 5mm {
     IN = VIN
     OUT = SENSE_A
 }
 
-use Divider as DIV2 {
+use Divider as DIV2 at 25mm, 5mm rotate 90 {
     IN = VIN
     OUT = SENSE_B
 }
@@ -1138,6 +1138,29 @@ use Divider as DIV2 {
             world.get_net("MID").is_none(),
             "an unprefixed MID would be one net across both instances"
         );
+
+        // The instance decides where the module's coordinates land. RTOP sits
+        // at 5mm, 5mm inside the module, so it belongs at 15mm, 10mm in DIV1.
+        let mut placed = |refdes: &str| -> (i64, i64, i32) {
+            let ecs = world.ecs_mut();
+            let mut query = ecs.query::<(&RefDes, &Position, &Rotation)>();
+            let found = query
+                .iter(ecs)
+                .find(|(r, _, _)| r.as_str() == refdes)
+                .unwrap_or_else(|| panic!("{refdes} missing"));
+            (found.1 .0.x.raw(), found.1 .0.y.raw(), found.2 .0)
+        };
+
+        let (x, y, rot) = placed("DIV1_RTOP");
+        assert_eq!((x, y, rot), (15_000_000, 10_000_000, 0));
+
+        // DIV2 is turned a quarter turn about its own origin: 5mm, 5mm becomes
+        // -5mm, 5mm before the origin is added, and every part turns with it.
+        let (x, y, rot) = placed("DIV2_RTOP");
+        assert_eq!((x, y, rot), (20_000_000, 10_000_000, 90_000));
+
+        // Two instances no longer occupy the same square millimetre.
+        assert_ne!(placed("DIV1_RBOT"), placed("DIV2_RBOT"));
     }
 
     #[test]
@@ -2161,11 +2184,22 @@ fn expand_module_instances(
                 .unwrap_or_else(|| local_name(name))
         };
 
+        // Where the instance sits, and how far it is turned. A module places
+        // its parts in its own coordinates; an instance decides where those
+        // coordinates land on the board.
+        let origin = instance
+            .position
+            .as_ref()
+            .map(|at| (at.x.to_nm().raw(), at.y.to_nm().raw()))
+            .unwrap_or((0, 0));
+        let angle_deg = instance.rotation.as_ref().map(|r| r.angle).unwrap_or(0.0);
+
         for inner in &module.definitions {
             match inner {
                 Definition::Component(component) => {
                     let mut copy = component.clone();
                     copy.refdes.value = local_name(&component.refdes.value);
+                    place_in_instance(&mut copy, origin, angle_deg);
                     out.push(Definition::Component(copy));
                 }
                 Definition::Net(net) => {
@@ -2185,4 +2219,50 @@ fn expand_module_instances(
     }
 
     out
+}
+
+/// Move a module's component into the instance's frame.
+///
+/// The module's own coordinates are relative to its origin, so a part at
+/// `5mm, 5mm` in a module placed at `20mm, 10mm` belongs at `25mm, 15mm`. A
+/// turned instance turns its parts about that origin and adds its angle to
+/// each one, which is what makes a rotated block behave like the same block.
+///
+/// Positions are rewritten in millimetres because that is what the DSL's own
+/// dimensions carry; the value is exact either way, since everything is held
+/// in nanometres underneath.
+fn place_in_instance(component: &mut ComponentDef, origin: (i64, i64), angle_deg: f64) {
+    use cypcb_parser::ast::{Dimension as AstDimension, RotationExpr};
+
+    if let Some(position) = &mut component.position {
+        let x = position.x.to_nm().raw() as f64;
+        let y = position.y.to_nm().raw() as f64;
+        let (sin, cos) = angle_deg.to_radians().sin_cos();
+        let rotated_x = x * cos - y * sin;
+        let rotated_y = x * sin + y * cos;
+
+        position.x = AstDimension {
+            value: (origin.0 as f64 + rotated_x) / 1_000_000.0,
+            unit: cypcb_core::Unit::Mm,
+            span: position.x.span,
+        };
+        position.y = AstDimension {
+            value: (origin.1 as f64 + rotated_y) / 1_000_000.0,
+            unit: cypcb_core::Unit::Mm,
+            span: position.y.span,
+        };
+    }
+
+    if angle_deg != 0.0 {
+        let span = component
+            .rotation
+            .as_ref()
+            .map(|r| r.span)
+            .unwrap_or(component.span);
+        let own = component.rotation.as_ref().map(|r| r.angle).unwrap_or(0.0);
+        component.rotation = Some(RotationExpr {
+            angle: own + angle_deg,
+            span,
+        });
+    }
 }

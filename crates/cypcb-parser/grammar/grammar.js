@@ -449,7 +449,7 @@ module.exports = grammar({
       $.assert_statement,
     ),
 
-    // use Module as Name { PIN = net, ... }
+    // use Module as Name [at X, Y] [rotate A] { PIN = net, ... }
     //
     // Instantiates a module: its components are placed with the instance name
     // as a prefix, and each of its exposed pins is wired to a net in the
@@ -459,6 +459,8 @@ module.exports = grammar({
       field('module', $.identifier),
       'as',
       field('name', $.identifier),
+      optional(field('position', $.position_property)),
+      optional(field('rotation', $.rotation_property)),
       '{',
       repeat($.port_connection),
       '}',

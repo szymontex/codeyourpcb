@@ -842,6 +842,11 @@ pub struct ModuleInstance {
     pub module: Identifier,
     /// Name this instance is known by; also the prefix for its components.
     pub name: Identifier,
+    /// Where the instance's origin sits on the board. Without one, every
+    /// instance of a module lands on top of the last.
+    pub position: Option<PositionExpr>,
+    /// How far the whole instance is turned, in degrees.
+    pub rotation: Option<RotationExpr>,
     /// Which net each of the module's pins connects to.
     pub ports: Vec<PortConnection>,
     /// Source span.

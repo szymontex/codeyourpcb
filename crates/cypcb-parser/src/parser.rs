@@ -152,7 +152,7 @@ impl CypcbParser {
                     }
                 }
                 "module_instance" => {
-                    if let Some(instance) = self.convert_module_instance(source, &child) {
+                    if let Some(instance) = self.convert_module_instance(source, &child, errors) {
                         definitions.push(Definition::ModuleInstance(instance));
                     }
                 }
@@ -1130,7 +1130,12 @@ impl CypcbParser {
     }
 
     /// Convert a module instantiation node.
-    fn convert_module_instance(&self, source: &str, node: &Node) -> Option<ModuleInstance> {
+    fn convert_module_instance(
+        &self,
+        source: &str,
+        node: &Node,
+        errors: &mut Vec<ParseError>,
+    ) -> Option<ModuleInstance> {
         let module = get_child_by_field(node, "module")?;
         let name = get_child_by_field(node, "name")?;
 
@@ -1156,6 +1161,10 @@ impl CypcbParser {
         Some(ModuleInstance {
             module: Identifier::new(node_text(source, &module), span_of(&module)),
             name: Identifier::new(node_text(source, &name), span_of(&name)),
+            position: get_child_by_field(node, "position")
+                .and_then(|n| self.convert_position(source, &n, errors)),
+            rotation: get_child_by_field(node, "rotation")
+                .and_then(|n| self.convert_rotation(source, &n, errors)),
             ports,
             span: span_of(node),
         })
