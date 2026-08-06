@@ -150,6 +150,24 @@ pub fn find_path_with_zones(
                 continue;
             }
 
+            // A diagonal step passes between the two cells beside it. If
+            // another net owns one of those, the two diagonals cross without
+            // ever sharing a cell - copper on copper at 0.00mm.
+            //
+            // PathFinder's own search has refused that since the crossing
+            // violations were traced to it; this search, which the A* strategy
+            // uses, never got the same guard. Measured on stm32_breakout:
+            // trace-to-trace violations on cells the grid calls free, 17 under
+            // PathFinder against 118 under A*.
+            if dx != 0 && dy != 0 {
+                let side_a = grid.net_at(ux, ny as u32, nl as usize);
+                let side_b = grid.net_at(nx as u32, uy, nl as usize);
+                let blocked = |owner: Option<u32>| matches!(owner, Some(other) if other != net_id);
+                if blocked(side_a) || blocked(side_b) {
+                    continue;
+                }
+            }
+
             // Check if the target cell is free, is our destination, or is within a pad zone
             let target = (ux as u16, uy as u16, nl);
             if grid.is_free(ux, uy, nl as usize)
