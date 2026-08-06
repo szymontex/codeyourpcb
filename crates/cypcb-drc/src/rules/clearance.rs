@@ -254,38 +254,46 @@ impl DrcRule for ClearanceRule {
                     };
 
                 let mut no_copper_in_reach = false;
-                let (contact, distance) = match (trace_a, trace_b) {
+                let contacts: Vec<(Point, i64)> = match (trace_a, trace_b) {
                     // Both are traces: segment-to-segment distance minus both half-widths
-                    (Some(ta), Some(tb)) => {
-                        let (at, seg_dist) = trace_to_trace_distance(ta, tb);
-                        (at, (seg_dist - ta.half_width - tb.half_width).max(0))
-                    }
+                    (Some(ta), Some(tb)) => per_segment_to_trace(ta, tb)
+                        .into_iter()
+                        .map(|(at, seg_dist)| {
+                            (at, (seg_dist - ta.half_width - tb.half_width).max(0))
+                        })
+                        .collect(),
                     // One is a trace, the other is a via or a component
                     (Some(t), None) => {
-                        let (at, seg_dist) = match copper_of(b_idx, entry.layer_mask, net_a) {
+                        let measured = match copper_of(b_idx, entry.layer_mask, net_a) {
                             Some(pads) if pads.is_empty() => {
                                 no_copper_in_reach = true;
-                                (Point::ORIGIN, i64::MAX)
+                                Vec::new()
                             }
-                            Some(pads) => trace_to_nearest(t, &boxes_of(&pads)),
-                            None => trace_to_aabb_distance(t, &candidate.envelope),
+                            Some(pads) => per_segment_to_boxes(t, &boxes_of(&pads)),
+                            None => per_segment_to_boxes(t, &[&candidate.envelope]),
                         };
-                        (at, (seg_dist - t.half_width).max(0))
+                        measured
+                            .into_iter()
+                            .map(|(at, seg_dist)| (at, (seg_dist - t.half_width).max(0)))
+                            .collect()
                     }
                     (None, Some(t)) => {
-                        let (at, seg_dist) = match copper_of(a_idx, candidate.layer_mask, net_b) {
+                        let measured = match copper_of(a_idx, candidate.layer_mask, net_b) {
                             Some(pads) if pads.is_empty() => {
                                 no_copper_in_reach = true;
-                                (Point::ORIGIN, i64::MAX)
+                                Vec::new()
                             }
-                            Some(pads) => trace_to_nearest(t, &boxes_of(&pads)),
-                            None => trace_to_aabb_distance(t, &entry.envelope),
+                            Some(pads) => per_segment_to_boxes(t, &boxes_of(&pads)),
+                            None => per_segment_to_boxes(t, &[&entry.envelope]),
                         };
-                        (at, (seg_dist - t.half_width).max(0))
+                        measured
+                            .into_iter()
+                            .map(|(at, seg_dist)| (at, (seg_dist - t.half_width).max(0)))
+                            .collect()
                     }
                     // Neither is a trace: vias and pads. A component stands for
                     // its pads; anything else stands for its own box.
-                    (None, None) => {
+                    (None, None) => vec![{
                         let a_boxes = copper_of(a_idx, candidate.layer_mask, None);
                         let b_boxes = copper_of(b_idx, entry.layer_mask, None);
                         if a_boxes.as_ref().is_some_and(|p| p.is_empty())
@@ -319,7 +327,7 @@ impl DrcRule for ClearanceRule {
                                 }
                             }
                         }
-                    }
+                    }],
                 };
 
                 if no_copper_in_reach {
@@ -350,7 +358,10 @@ impl DrcRule for ClearanceRule {
                     .max(stated(net_a, nc_a))
                     .max(stated(net_b, nc_b));
 
-                if distance < required.0 {
+                for (contact, distance) in contacts {
+                    if distance >= required.0 {
+                        continue;
+                    }
                     // Report the pair the same way round however the loop
                     // reached it, and point at the gap between the two
                     // features rather than at whichever one the outer loop
@@ -745,6 +756,44 @@ fn trace_to_trace_distance(a: &TraceData, b: &TraceData) -> (Point, i64) {
         }
     }
     best
+}
+
+/// One closest approach per segment of `trace`, against another trace.
+///
+/// The whole-trace helpers answer "how close does this trace get", which is
+/// the right question for a yes-or-no check and the wrong one for a report: a
+/// trace that runs too close to a part in two places is one answer and two
+/// faults. Reporting per segment also makes the count a property of the board
+/// rather than of how its copper happens to be grouped into entities - the
+/// same board, written out and read back, splits one net's segments across
+/// several entities and used to gain violations by doing so.
+fn per_segment_to_trace(a: &TraceData, b: &TraceData) -> Vec<(Point, i64)> {
+    a.segments
+        .iter()
+        .map(|seg| {
+            let one = TraceData {
+                half_width: a.half_width,
+                segments: vec![*seg],
+            };
+            trace_to_trace_distance(&one, b)
+        })
+        .collect()
+}
+
+/// One closest approach per segment of `trace`, against the nearest of several
+/// boxes.
+fn per_segment_to_boxes(trace: &TraceData, boxes: &[&AABB<[i64; 2]>]) -> Vec<(Point, i64)> {
+    trace
+        .segments
+        .iter()
+        .map(|seg| {
+            let one = TraceData {
+                half_width: trace.half_width,
+                segments: vec![*seg],
+            };
+            trace_to_nearest(&one, boxes)
+        })
+        .collect()
 }
 
 /// Minimum distance from trace centerlines to an AABB.

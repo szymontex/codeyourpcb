@@ -659,10 +659,14 @@ fn round_trip_says_the_same_thing(source: &str) {
     // places are named. The round trip does not add a fault; it stops the
     // checker from merging two into one. That is recorded in the tracker as
     // the next thing to fix, in the checker rather than in the file.
+    // Equal, both ways. The checker reports per offending segment now rather
+    // than once per pair of entities, so the count is a property of the board
+    // instead of a property of how its copper is grouped - which is what made
+    // a saved board report more than the board it came from.
     let lost: Vec<&String> = before.difference(&after).collect();
+    let gained: Vec<&String> = after.difference(&before).collect();
     assert!(
-        lost.is_empty(),
-        "the file reports less than the board it was written from.\n  lost: {lost:#?}\n  gained: {:#?}",
-        after.difference(&before).collect::<Vec<_>>()
+        lost.is_empty() && gained.is_empty(),
+        "the board reads back as a different board.\n  lost: {lost:#?}\n  gained: {gained:#?}"
     );
 }
