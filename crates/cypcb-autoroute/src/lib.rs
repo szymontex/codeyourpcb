@@ -206,6 +206,14 @@ impl AutorouteConfig {
         board_width_nm: i64,
         board_height_nm: i64,
     ) -> i64 {
+        // An explicit resolution is an instruction, not a hint. Scaling it
+        // because the board is large meant a caller asking for 0.254mm on a
+        // 100mm board silently got 0.508mm, and a benchmark sweep comparing
+        // resolutions compared the same grid twice without saying so.
+        if let Some(explicit) = self.grid_resolution_nm {
+            return explicit.max(10_000);
+        }
+
         let base = self.resolve_grid_resolution(rules);
         let threshold_nm: i64 = 80_000_000; // 80mm
 
