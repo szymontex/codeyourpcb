@@ -106,7 +106,17 @@ Read this file first. It is the source of truth for what is in flight and what c
 | multi_ic | closed | 72 | 75 | 72 |
 
 - **Which is the finding this vector has been circling for eight fires.** Grid resolution, iteration count, via price, pad ownership, the pad-zone gate, the ring penalty: six knobs, each measured on the same three boards, and **not one has a setting that is best everywhere**. stm32_breakout wants the defaults and rejects every addition; multi_ic improves by 18% with a ring penalty of 3 and by 18% with the gate closed at a cheaper via. The two boards do not agree because they are not the same problem - multi_ic routes on a 0.508mm grid and stm32_breakout on 0.254mm. Hunting a global default has been the wrong search.
-- NEXT-ACTION: **stop tuning and start choosing.** `REQUIREMENTS.md` R112 and R113 already ask for routing variants with the best applied automatically, and the machinery to score a routed board exists - `score_board` and the composite the regression gate reads. Route the board two or three ways with the settings this vector has measured, score each, keep the winner. Every knob measured so far becomes a variant rather than an argument, and a board gets the setting that suits it instead of the setting that suited stm32_breakout.
+- DONE: **the board picks, and it picks a different variant every time.** The two settings this vector measured into existence are variants now - `PathFinder Priced Via Rings` and `PathFinder Guarded Pads` - alongside the three that already existed, and `VariantConfig` carries the whole config rather than only `AutorouteParams`. `tests/variant_picks_per_board.rs` scores all five on all three fixtures. The winner is different on each:
+
+| board | winner | its DRC | default's DRC |
+|---|---|---|---|
+| led_blink | High-Density | **0** | 1 |
+| stm32_breakout | Low-Via | **159** | 186 |
+| multi_ic | Guarded Pads | **132** | 146 |
+
+  led_blink is the one that matters: **the short is gone**. `PathFinder High-Density` routes it with zero violations, which no amount of tuning the default achieved in eight fires of trying - the GND trace no longer crosses C1's `SW_OUT` pad. The board that could not blink, blinks. And the winning variant was already in the list; nobody had ever scored them against each other on this fixture.
+- The cost is honest: five variants take 197.6s on stm32_breakout and 346.1s on multi_ic against 20s and 75s for one. Ten times the wall clock to be 10-15% better and, on the smallest board, correct instead of shorted.
+- NEXT-ACTION: the CLI still routes one way. `cypcb route --in-house` calls `route_board`; the viewer's WASM path calls `generate_variants` and gets the winner. Give the command line the same choice - a `--variants` flag that routes every config, scores them and writes the best - so the two front ends stop disagreeing about what this router can do.
 - DONE: **components say which face they are on.** A `Side` component with the three questions a face answers - which copper its SMD pads take, which silkscreen it prints to, and its layer-mask bit. The KiCad importer reads `(layer "B.Cu")` from a footprint, which is the only place in the codebase where the side is data rather than inference; sync derives it from the footprint's copper and stores the answer so every rule reads the same one. The silkscreen rule takes it and falls back to the old guess only when nothing states it. Proven on a two-footprint board where one is `F.Cu` and one `B.Cu`: `[("R1", Top), ("R2", Bottom)]`.
 
 ### V2 - Autorouter and routing quality

@@ -33,6 +33,23 @@ pub struct VariantConfig {
     pub strategy: StrategyKind,
     /// Tuning parameters for this variant.
     pub params: AutorouteParams,
+    /// What a via ring costs the search, per ring covering a cell.
+    pub via_ring_penalty: f64,
+    /// Whether a route may cross another net's copper inside a pad keepout.
+    pub pad_zone_blocks_foreign_copper: bool,
+}
+
+impl VariantConfig {
+    /// A variant that differs from the defaults only in strategy and params.
+    pub fn tuned(name: &str, strategy: StrategyKind, params: AutorouteParams) -> Self {
+        Self {
+            name: name.to_string(),
+            strategy,
+            params,
+            via_ring_penalty: 0.0,
+            pad_zone_blocks_foreign_copper: false,
+        }
+    }
 }
 
 /// Result of a single routing variant, including score and serialized route data.
@@ -57,26 +74,49 @@ pub struct VariantResult {
 /// 4. PathFinder high-density (density=1.5)
 pub fn default_variant_configs() -> Vec<VariantConfig> {
     vec![
-        VariantConfig {
-            name: "PathFinder Default".to_string(),
-            strategy: StrategyKind::PathFinder,
-            params: AutorouteParams::default(),
-        },
-        VariantConfig {
-            name: "PathFinder Low-Via".to_string(),
-            strategy: StrategyKind::PathFinder,
-            params: AutorouteParams {
+        VariantConfig::tuned(
+            "PathFinder Default",
+            StrategyKind::PathFinder,
+            AutorouteParams::default(),
+        ),
+        VariantConfig::tuned(
+            "PathFinder Low-Via",
+            StrategyKind::PathFinder,
+            AutorouteParams {
                 via_cost: 5.0,
                 ..AutorouteParams::default()
             },
-        },
-        VariantConfig {
-            name: "PathFinder High-Density".to_string(),
-            strategy: StrategyKind::PathFinder,
-            params: AutorouteParams {
+        ),
+        VariantConfig::tuned(
+            "PathFinder High-Density",
+            StrategyKind::PathFinder,
+            AutorouteParams {
                 density: 1.5,
                 ..AutorouteParams::default()
             },
+        ),
+        // The two settings this project measured into existence. Neither is a
+        // good default - each helps one benchmark board and hurts the other -
+        // and that is exactly what a variant is for: the board picks, not the
+        // author. multi_ic improves 18% under a priced via ring, and again
+        // under a closed pad gate with a cheaper via; stm32_breakout rejects
+        // both and keeps the first variant in this list.
+        VariantConfig {
+            name: "PathFinder Priced Via Rings".to_string(),
+            strategy: StrategyKind::PathFinder,
+            params: AutorouteParams::default(),
+            via_ring_penalty: 3.0,
+            pad_zone_blocks_foreign_copper: false,
+        },
+        VariantConfig {
+            name: "PathFinder Guarded Pads".to_string(),
+            strategy: StrategyKind::PathFinder,
+            params: AutorouteParams {
+                via_cost: 0.5,
+                ..AutorouteParams::default()
+            },
+            via_ring_penalty: 0.0,
+            pad_zone_blocks_foreign_copper: true,
         },
     ]
 }
@@ -85,11 +125,11 @@ pub fn default_variant_configs() -> Vec<VariantConfig> {
 /// ImprovedAStar is too slow for WASM (blocks main thread for 20s+ on simple boards).
 pub fn all_variant_configs() -> Vec<VariantConfig> {
     let mut configs = default_variant_configs();
-    configs.push(VariantConfig {
-        name: "ImprovedAStar Default".to_string(),
-        strategy: StrategyKind::ImprovedAStar,
-        params: AutorouteParams::default(),
-    });
+    configs.push(VariantConfig::tuned(
+        "ImprovedAStar Default",
+        StrategyKind::ImprovedAStar,
+        AutorouteParams::default(),
+    ));
     configs
 }
 
@@ -135,6 +175,8 @@ pub fn generate_variants(
         let autoroute_config = AutorouteConfig {
             strategy: config.strategy,
             params: config.params.clone(),
+            via_ring_penalty: config.via_ring_penalty,
+            pad_zone_blocks_foreign_copper: config.pad_zone_blocks_foreign_copper,
             // Variant exploration compares many routings; paying for repair on
             // each one triples the wall clock to rank candidates that are about
             // to be thrown away. The winner can be repaired afterwards.
@@ -279,18 +321,29 @@ mod tests {
     use super::*;
 
     #[test]
-    fn default_variant_configs_returns_3() {
+    fn default_variant_configs_cover_the_measured_settings() {
+        // The count is not the point - the coverage is. Every setting this
+        // project measured into a per-board win has to be reachable, or a
+        // board that needs it never gets it.
         let configs = default_variant_configs();
-        assert_eq!(configs.len(), 3);
-        assert_eq!(configs[0].name, "PathFinder Default");
-        assert_eq!(configs[1].name, "PathFinder Low-Via");
-        assert_eq!(configs[2].name, "PathFinder High-Density");
+        let names: Vec<&str> = configs.iter().map(|c| c.name.as_str()).collect();
+        assert_eq!(names[0], "PathFinder Default", "the baseline comes first");
+        assert!(names.contains(&"PathFinder Low-Via"));
+        assert!(names.contains(&"PathFinder High-Density"));
+        assert!(
+            configs.iter().any(|c| c.via_ring_penalty > 0.0),
+            "a variant has to price via rings: multi_ic improves 18% under it"
+        );
+        assert!(
+            configs.iter().any(|c| c.pad_zone_blocks_foreign_copper),
+            "a variant has to guard pad keepouts: it is multi_ic's best result"
+        );
     }
 
     #[test]
     fn all_variant_configs_includes_improved_astar() {
         let configs = all_variant_configs();
-        assert_eq!(configs.len(), 4);
+        assert_eq!(configs.len(), default_variant_configs().len() + 1);
         assert!(configs
             .iter()
             .any(|c| c.strategy == StrategyKind::ImprovedAStar));

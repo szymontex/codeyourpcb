@@ -1,0 +1,66 @@
+//! Does letting the board choose beat picking a default?
+//!
+//! `cargo test -p cypcb-autoroute --test variant_picks_per_board -- --ignored --nocapture`
+//!
+//! Six routing knobs have been measured on these fixtures - grid resolution,
+//! iteration count, via price, pad ownership, the pad-zone gate, the via ring
+//! penalty - and not one has a setting that is best on both stm32_breakout and
+//! multi_ic. The boards are not the same problem, so the search for a global
+//! default was the wrong search. This runs every variant on every fixture and
+//! prints what each scores, so the claim "the winner differs per board" is
+//! either visible in the numbers or it is not.
+
+use std::path::Path;
+
+use cypcb_autoroute::variant::{default_variant_configs, generate_variants};
+use cypcb_drc::DesignRules;
+use cypcb_kicad::{parse_kicad_pcb, BENCHMARKS};
+use cypcb_rules::presets::{PresetRuleSet, RulesPreset};
+
+fn fixture_path(filename: &str) -> std::path::PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join("tests/fixtures/benchmark")
+        .join(filename)
+}
+
+#[test]
+#[ignore = "diagnostic: scores every routing variant on every benchmark board"]
+fn which_variant_each_board_picks() {
+    let rules = PresetRuleSet::new(RulesPreset::from_name("jlcpcb").unwrap());
+    let design_rules = DesignRules::jlcpcb_2layer();
+    let configs = default_variant_configs();
+
+    for benchmark in BENCHMARKS {
+        let parsed = parse_kicad_pcb(&fixture_path(benchmark.filename))
+            .unwrap_or_else(|e| panic!("Failed to parse {}: {:?}", benchmark.filename, e));
+        let mut world = parsed.world;
+
+        let started = std::time::Instant::now();
+        let results =
+            generate_variants(&mut world, &parsed.library, &rules, &design_rules, &configs);
+        let elapsed = started.elapsed();
+
+        eprintln!();
+        eprintln!(
+            "=== {} - {} variants in {:.1}s ===",
+            benchmark.filename,
+            results.len(),
+            elapsed.as_secs_f64()
+        );
+
+        // generate_variants returns them ranked, best first, and applies the
+        // winner to the world.
+        for (rank, result) in results.iter().enumerate() {
+            eprintln!(
+                "  {}. {:<32} composite {:>8.1}, drc {:>4}, vias {:>4}, {:.1}mm",
+                rank + 1,
+                result.name,
+                result.score.composite,
+                result.score.drc_violations,
+                result.score.via_count,
+                result.score.total_length.to_mm(),
+            );
+        }
+    }
+}
