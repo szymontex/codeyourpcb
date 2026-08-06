@@ -138,65 +138,23 @@ test.describe('Reliability — URL state roundtrip', () => {
     expect(appliedState.ratsnestChecked).toBe(false);
   });
 
-  test('share button produces URL with current view state', async ({ page }) => {
-    await page.goto('/');
-    await expect(page.locator('#status-text')).toContainText('Ready', { timeout: 15_000 });
-
-    // Grant clipboard permissions for this context
-    await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
-
-    // Click share button
-    const shareBtn = page.locator('#share-btn');
-    if (await shareBtn.isVisible()) {
-      await shareBtn.click();
-
-      // Wait for clipboard write and status update
-      await page.waitForTimeout(500);
-
-      // Read clipboard
-      const clipboardText = await page.evaluate(() => navigator.clipboard.readText());
-
-      // The share URL should contain view state params
-      expect(clipboardText).toContain('?l=');
-      expect(clipboardText).toContain('&z=');
-      expect(clipboardText).toContain('&x=');
-      expect(clipboardText).toContain('&y=');
-
-      // Verify it's a valid URL
-      const url = new URL(clipboardText);
-      expect(url.searchParams.has('l')).toBe(true);
-      expect(url.searchParams.has('z')).toBe(true);
-    }
-  });
-
-  test('URL state roundtrip preserves values', async ({ page }) => {
-    // Load with known state
+  // There is no share button. `#share-btn` does not exist in index.html and
+  // nothing in the viewer writes a URL to the clipboard, so the two tests that
+  // used to live here wrapped every assertion in
+  // `if (await shareBtn.isVisible())` and passed having checked nothing - the
+  // same shape that hid a dead keyboard shortcut for months.
+  //
+  // Half of the feature does exist: the app reads view state out of a URL on
+  // load. That half is testable, so it is tested; producing such a URL is
+  // recorded in docs/TRACKER.md as missing rather than pretended.
+  test('a shared URL restores the view state it carries', async ({ page }) => {
     await page.goto('/?l=top&z=3.00&x=5000000&y=8000000');
     await expect(page.locator('#status-text')).toContainText('Ready', { timeout: 15_000 });
 
-    await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
-
-    // Click share to encode current state back to URL
-    const shareBtn = page.locator('#share-btn');
-    if (await shareBtn.isVisible()) {
-      await shareBtn.click();
-      await page.waitForTimeout(500);
-
-      const clipboardText = await page.evaluate(() => navigator.clipboard.readText());
-      const url = new URL(clipboardText);
-
-      // Layers should roundtrip
-      expect(url.searchParams.get('l')).toContain('top');
-
-      // Zoom should roundtrip (may have floating point rounding)
-      const z = parseFloat(url.searchParams.get('z') || '0');
-      expect(z).toBeGreaterThan(0);
-
-      // Pan values should roundtrip (allow integer rounding)
-      const x = parseFloat(url.searchParams.get('x') || '0');
-      const y = parseFloat(url.searchParams.get('y') || '0');
-      expect(x).not.toBe(0);
-      expect(y).not.toBe(0);
-    }
+    // `l=top` names the top layer and nothing else, so the checkboxes have to
+    // follow it rather than keep their defaults - both start checked.
+    await expect(page.locator('#layer-top')).toBeChecked();
+    await expect(page.locator('#layer-bottom')).not.toBeChecked();
+    await expect(page.locator('#layer-ratsnest')).not.toBeChecked();
   });
 });
