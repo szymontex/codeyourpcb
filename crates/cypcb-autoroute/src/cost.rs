@@ -178,7 +178,7 @@ mod tests {
         let to: GridNode = (6, 5, 0);
         let c = cost.neighbor_cost(from, to);
         // Base 1.0 + small layer preference
-        assert!(c >= 1.0 && c < 1.5, "Cardinal cost: {c}");
+        assert!((1.0..1.5).contains(&c), "Cardinal cost: {c}");
     }
 
     #[test]
@@ -188,7 +188,7 @@ mod tests {
         let from: GridNode = (5, 5, 0);
         let to: GridNode = (6, 6, 0);
         let c = cost.neighbor_cost(from, to);
-        assert!(c >= SQRT2 && c < SQRT2 + 0.5, "Diagonal cost: {c}");
+        assert!((SQRT2..SQRT2 + 0.5).contains(&c), "Diagonal cost: {c}");
     }
 
     #[test]

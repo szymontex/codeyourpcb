@@ -61,7 +61,7 @@ fn test_rules() -> PresetRuleSet {
 #[test]
 fn grid_from_blink() {
     let mut world = parse_board("examples/blink.cypcb");
-    let mut library = FootprintLibrary::new();
+    let library = FootprintLibrary::new();
     let rules = test_rules();
     let config = AutorouteConfig::default();
     let resolution = config.resolve_grid_resolution(&rules);
@@ -112,7 +112,7 @@ fn grid_from_blink() {
 #[test]
 fn route_routing_test_board() {
     let mut world = parse_board("examples/routing-test.cypcb");
-    let mut library = FootprintLibrary::new();
+    let library = FootprintLibrary::new();
     let rules = test_rules();
     let config = AutorouteConfig::default();
 
@@ -155,7 +155,7 @@ fn route_routing_test_board() {
 #[test]
 fn route_blink_board() {
     let mut world = parse_board("examples/blink.cypcb");
-    let mut library = FootprintLibrary::new();
+    let library = FootprintLibrary::new();
     let rules = test_rules();
     let config = AutorouteConfig::default();
 
@@ -247,7 +247,7 @@ fn route_blink_board() {
 
     // 6. Segments should be meaningful (collinear merge worked — fewer segments than raw steps)
     assert!(
-        result.routes.len() > 0,
+        !result.routes.is_empty(),
         "Should have at least one route segment"
     );
     assert!(
@@ -260,7 +260,7 @@ fn route_blink_board() {
 #[test]
 fn blink_apply_routes_compatibility() {
     let mut world = parse_board("examples/blink.cypcb");
-    let mut library = FootprintLibrary::new();
+    let library = FootprintLibrary::new();
     let rules = test_rules();
     let config = AutorouteConfig::default();
 
@@ -345,7 +345,7 @@ fn routed_output_passes_drc() {
     use cypcb_drc::{run_drc, DesignRules};
 
     let mut world = parse_board("examples/blink.cypcb");
-    let mut library = FootprintLibrary::new();
+    let library = FootprintLibrary::new();
     let rules = test_rules();
     let config = AutorouteConfig::default();
 
@@ -416,7 +416,7 @@ fn routed_output_passes_drc() {
 fn benchmark_routing_time() {
     use std::time::Instant;
 
-    let mut library = FootprintLibrary::new();
+    let library = FootprintLibrary::new();
     let rules = test_rules();
     let config = AutorouteConfig::default();
 
@@ -506,12 +506,12 @@ fn generate_synthetic_board(component_count: usize) -> (BoardWorld, FootprintLib
         FootprintRef, NetConnections, NetId, PinConnection, Position, RefDes, Rotation, Value,
     };
 
-    let mut library = FootprintLibrary::new();
+    let library = FootprintLibrary::new();
     let mut world = BoardWorld::new();
 
     // Grid layout: roughly square arrangement
     let cols = (component_count as f64).sqrt().ceil() as usize;
-    let rows = (component_count + cols - 1) / cols;
+    let rows = component_count.div_ceil(cols);
 
     // Component spacing: 3mm pitch (0805 is ~2x1.25mm, so 3mm gives clearance)
     let pitch_mm = 3.0;

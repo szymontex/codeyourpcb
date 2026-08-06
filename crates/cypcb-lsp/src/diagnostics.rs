@@ -223,9 +223,41 @@ component R1 resistor "0402" {
     }
 
     #[test]
-    fn test_diagnostic_limit() {
-        assert!(MAX_DIAGNOSTICS >= 50);
-        assert!(MAX_DIAGNOSTICS <= 200);
+    fn a_flood_of_problems_is_truncated_and_says_so() {
+        // This used to assert `MAX_DIAGNOSTICS >= 50` and `<= 200`, which
+        // compares two literals and holds whatever the code does. What matters
+        // is the behaviour the constant governs: an editor handed thousands of
+        // diagnostics stops being usable, so the list is cut and the last entry
+        // says how many were dropped. A cut that loses the count silently is
+        // worse than no cut.
+        // Broken syntax will not do it - the parser collapses a file of
+        // garbage into one error, which is how the first version of this test
+        // passed while checking nothing. Overlapping parts will: twenty of them
+        // in the same spot is 190 pairs for the courtyard rule to complain
+        // about.
+        let mut source =
+            String::from("version 1\n\nboard flood {\n    size 30mm x 20mm\n    layers 2\n}\n\n");
+        for i in 0..20 {
+            source.push_str(&format!(
+                "component R{i} resistor \"0402\" {{\n    value 10kohm\n    at 10mm, 10mm\n}}\n\n"
+            ));
+        }
+        let doc = make_doc(&source);
+
+        let diagnostics = run_diagnostics(&doc);
+        assert_eq!(
+            diagnostics.len(),
+            MAX_DIAGNOSTICS + 1,
+            "the list is capped at {MAX_DIAGNOSTICS} plus the note that says so"
+        );
+
+        let last = diagnostics.last().expect("the overflow note");
+        assert_eq!(last.code, "cypcb::overflow");
+        assert!(
+            last.message.contains("more diagnostics"),
+            "the note has to say how many were dropped: {}",
+            last.message
+        );
     }
 
     #[test]

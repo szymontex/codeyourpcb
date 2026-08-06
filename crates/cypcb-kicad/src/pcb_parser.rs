@@ -1126,133 +1126,6 @@ fn calculate_pad_bounds(pads: &[PadDef]) -> Rect {
     )
 }
 
-#[cfg(test)]
-mod tests {
-
-    #[test]
-    fn a_boards_edge_cuts_become_an_outline() {
-        // Four loose segments, written in an order that does not follow the
-        // ring, with one reversed - which is how a hand-edited board looks.
-        let pcb = r#"(kicad_pcb (version 20240108) (generator pcbnew)
-  (layers (0 "F.Cu" signal) (31 "B.Cu" signal))
-  (gr_line (start 50 30) (end 0 30) (layer "Edge.Cuts") (width 0.05))
-  (gr_line (start 0 0) (end 50 0) (layer "Edge.Cuts") (width 0.05))
-  (gr_line (start 0 0) (end 0 30) (layer "Edge.Cuts") (width 0.05))
-  (gr_line (start 50 0) (end 50 30) (layer "Edge.Cuts") (width 0.05))
-)"#;
-
-        let parsed = parse_kicad_pcb_str(pcb).expect("parse");
-        let mut world = parsed.world;
-        let board = world.board_entity().expect("board");
-
-        let outline = world
-            .ecs()
-            .get::<BoardOutline>(board)
-            .expect("edge cuts describe a ring, so the board has an outline");
-
-        assert_eq!(outline.points.len(), 4);
-        assert!(outline.contains(Point::from_mm(25.0, 15.0)));
-        assert!(!outline.contains(Point::from_mm(60.0, 15.0)));
-    }
-
-    #[test]
-    fn edge_cuts_that_do_not_close_yield_no_outline() {
-        // Three sides of a rectangle. A partial ring is worse than none: it
-        // would put an edge where the board has none.
-        let pcb = r#"(kicad_pcb (version 20240108) (generator pcbnew)
-  (layers (0 "F.Cu" signal) (31 "B.Cu" signal))
-  (gr_line (start 0 0) (end 50 0) (layer "Edge.Cuts") (width 0.05))
-  (gr_line (start 50 0) (end 50 30) (layer "Edge.Cuts") (width 0.05))
-  (gr_line (start 50 30) (end 0 30) (layer "Edge.Cuts") (width 0.05))
-)"#;
-
-        let parsed = parse_kicad_pcb_str(pcb).expect("parse");
-        let mut world = parsed.world;
-        let board = world.board_entity().expect("board");
-        assert!(world.ecs().get::<BoardOutline>(board).is_none());
-    }
-
-    #[test]
-    fn a_footprint_states_which_face_it_is_on() {
-        // `(layer "B.Cu")` on a footprint means the part is placed from the
-        // bottom. Everything else in the codebase has to guess this from where
-        // the copper is, which cannot tell a bottom-side through-hole part from
-        // a top-side one; here it is data.
-        let pcb = r#"(kicad_pcb (version 20240108) (generator pcbnew)
-  (general (thickness 1.6))
-  (layers (0 "F.Cu" signal) (31 "B.Cu" signal))
-  (gr_line (start 0 0) (end 50 0) (layer "Edge.Cuts") (width 0.05))
-  (gr_line (start 50 0) (end 50 30) (layer "Edge.Cuts") (width 0.05))
-  (gr_line (start 50 30) (end 0 30) (layer "Edge.Cuts") (width 0.05))
-  (gr_line (start 0 30) (end 0 0) (layer "Edge.Cuts") (width 0.05))
-  (footprint "R_0402" (layer "F.Cu") (at 10 10)
-    (property "Reference" "R1")
-    (pad "1" smd rect (at -0.5 0) (size 0.6 0.5) (layers "F.Cu" "F.Paste" "F.Mask"))
-  )
-  (footprint "R_0402" (layer "B.Cu") (at 20 10)
-    (property "Reference" "R2")
-    (pad "1" smd rect (at -0.5 0) (size 0.6 0.5) (layers "B.Cu" "B.Paste" "B.Mask"))
-  )
-)"#;
-
-        let parsed = parse_kicad_pcb_str(pcb).expect("parse");
-        let mut world = parsed.world;
-
-        let ecs = world.ecs_mut();
-        let mut query = ecs.query::<(&RefDes, &Side)>();
-        let mut sides: Vec<(String, Side)> = query
-            .iter(ecs)
-            .map(|(refdes, side)| (refdes.as_str().to_string(), *side))
-            .collect();
-        sides.sort();
-
-        assert_eq!(
-            sides,
-            vec![
-                ("R1".to_string(), Side::Top),
-                ("R2".to_string(), Side::Bottom)
-            ]
-        );
-    }
-    use super::*;
-
-    #[test]
-    fn test_parse_layer_name() {
-        assert_eq!(parse_layer_name("F.Cu"), Some(Layer::TopCopper));
-        assert_eq!(parse_layer_name("B.Cu"), Some(Layer::BottomCopper));
-        assert_eq!(parse_layer_name("In1.Cu"), Some(Layer::Inner(1)));
-        assert_eq!(parse_layer_name("In2.Cu"), Some(Layer::Inner(2)));
-        assert_eq!(parse_layer_name("F.SilkS"), Some(Layer::TopSilk));
-        assert_eq!(parse_layer_name("B.SilkS"), Some(Layer::BottomSilk));
-        assert_eq!(parse_layer_name("F.Mask"), Some(Layer::TopMask));
-        assert_eq!(parse_layer_name("Edge.Cuts"), Some(Layer::Outline));
-        assert_eq!(parse_layer_name("Unknown"), None);
-    }
-
-    #[test]
-    fn test_empty_input_returns_error() {
-        let result = parse_kicad_pcb_str("");
-        match result {
-            Err(KicadPcbError::SexprParseError(_)) => {} // Expected
-            Err(other) => panic!("Expected SexprParseError, got {:?}", other),
-            Ok(_) => panic!("Expected error for empty input"),
-        }
-    }
-
-    #[test]
-    fn test_unsupported_version_returns_error() {
-        let input = r#"(kicad_pcb (version 1))"#;
-        let result = parse_kicad_pcb_str(input);
-        match result {
-            Err(KicadPcbError::UnsupportedVersion { version }) => {
-                assert_eq!(version, 1);
-            }
-            Err(other) => panic!("Expected UnsupportedVersion, got {:?}", other),
-            Ok(_) => panic!("Expected error for unsupported version"),
-        }
-    }
-}
-
 /// The board's outline as a ring of points, when Edge.Cuts describes one.
 ///
 /// A bounding box is enough to say how big a board is and wrong for saying
@@ -1353,4 +1226,131 @@ fn extract_board_ring(elements: &[Sexp]) -> Option<Vec<Point>> {
         return None;
     }
     Some(ring)
+}
+
+#[cfg(test)]
+mod tests {
+
+    #[test]
+    fn a_boards_edge_cuts_become_an_outline() {
+        // Four loose segments, written in an order that does not follow the
+        // ring, with one reversed - which is how a hand-edited board looks.
+        let pcb = r#"(kicad_pcb (version 20240108) (generator pcbnew)
+  (layers (0 "F.Cu" signal) (31 "B.Cu" signal))
+  (gr_line (start 50 30) (end 0 30) (layer "Edge.Cuts") (width 0.05))
+  (gr_line (start 0 0) (end 50 0) (layer "Edge.Cuts") (width 0.05))
+  (gr_line (start 0 0) (end 0 30) (layer "Edge.Cuts") (width 0.05))
+  (gr_line (start 50 0) (end 50 30) (layer "Edge.Cuts") (width 0.05))
+)"#;
+
+        let parsed = parse_kicad_pcb_str(pcb).expect("parse");
+        let world = parsed.world;
+        let board = world.board_entity().expect("board");
+
+        let outline = world
+            .ecs()
+            .get::<BoardOutline>(board)
+            .expect("edge cuts describe a ring, so the board has an outline");
+
+        assert_eq!(outline.points.len(), 4);
+        assert!(outline.contains(Point::from_mm(25.0, 15.0)));
+        assert!(!outline.contains(Point::from_mm(60.0, 15.0)));
+    }
+
+    #[test]
+    fn edge_cuts_that_do_not_close_yield_no_outline() {
+        // Three sides of a rectangle. A partial ring is worse than none: it
+        // would put an edge where the board has none.
+        let pcb = r#"(kicad_pcb (version 20240108) (generator pcbnew)
+  (layers (0 "F.Cu" signal) (31 "B.Cu" signal))
+  (gr_line (start 0 0) (end 50 0) (layer "Edge.Cuts") (width 0.05))
+  (gr_line (start 50 0) (end 50 30) (layer "Edge.Cuts") (width 0.05))
+  (gr_line (start 50 30) (end 0 30) (layer "Edge.Cuts") (width 0.05))
+)"#;
+
+        let parsed = parse_kicad_pcb_str(pcb).expect("parse");
+        let world = parsed.world;
+        let board = world.board_entity().expect("board");
+        assert!(world.ecs().get::<BoardOutline>(board).is_none());
+    }
+
+    #[test]
+    fn a_footprint_states_which_face_it_is_on() {
+        // `(layer "B.Cu")` on a footprint means the part is placed from the
+        // bottom. Everything else in the codebase has to guess this from where
+        // the copper is, which cannot tell a bottom-side through-hole part from
+        // a top-side one; here it is data.
+        let pcb = r#"(kicad_pcb (version 20240108) (generator pcbnew)
+  (general (thickness 1.6))
+  (layers (0 "F.Cu" signal) (31 "B.Cu" signal))
+  (gr_line (start 0 0) (end 50 0) (layer "Edge.Cuts") (width 0.05))
+  (gr_line (start 50 0) (end 50 30) (layer "Edge.Cuts") (width 0.05))
+  (gr_line (start 50 30) (end 0 30) (layer "Edge.Cuts") (width 0.05))
+  (gr_line (start 0 30) (end 0 0) (layer "Edge.Cuts") (width 0.05))
+  (footprint "R_0402" (layer "F.Cu") (at 10 10)
+    (property "Reference" "R1")
+    (pad "1" smd rect (at -0.5 0) (size 0.6 0.5) (layers "F.Cu" "F.Paste" "F.Mask"))
+  )
+  (footprint "R_0402" (layer "B.Cu") (at 20 10)
+    (property "Reference" "R2")
+    (pad "1" smd rect (at -0.5 0) (size 0.6 0.5) (layers "B.Cu" "B.Paste" "B.Mask"))
+  )
+)"#;
+
+        let parsed = parse_kicad_pcb_str(pcb).expect("parse");
+        let mut world = parsed.world;
+
+        let ecs = world.ecs_mut();
+        let mut query = ecs.query::<(&RefDes, &Side)>();
+        let mut sides: Vec<(String, Side)> = query
+            .iter(ecs)
+            .map(|(refdes, side)| (refdes.as_str().to_string(), *side))
+            .collect();
+        sides.sort();
+
+        assert_eq!(
+            sides,
+            vec![
+                ("R1".to_string(), Side::Top),
+                ("R2".to_string(), Side::Bottom)
+            ]
+        );
+    }
+    use super::*;
+
+    #[test]
+    fn test_parse_layer_name() {
+        assert_eq!(parse_layer_name("F.Cu"), Some(Layer::TopCopper));
+        assert_eq!(parse_layer_name("B.Cu"), Some(Layer::BottomCopper));
+        assert_eq!(parse_layer_name("In1.Cu"), Some(Layer::Inner(1)));
+        assert_eq!(parse_layer_name("In2.Cu"), Some(Layer::Inner(2)));
+        assert_eq!(parse_layer_name("F.SilkS"), Some(Layer::TopSilk));
+        assert_eq!(parse_layer_name("B.SilkS"), Some(Layer::BottomSilk));
+        assert_eq!(parse_layer_name("F.Mask"), Some(Layer::TopMask));
+        assert_eq!(parse_layer_name("Edge.Cuts"), Some(Layer::Outline));
+        assert_eq!(parse_layer_name("Unknown"), None);
+    }
+
+    #[test]
+    fn test_empty_input_returns_error() {
+        let result = parse_kicad_pcb_str("");
+        match result {
+            Err(KicadPcbError::SexprParseError(_)) => {} // Expected
+            Err(other) => panic!("Expected SexprParseError, got {:?}", other),
+            Ok(_) => panic!("Expected error for empty input"),
+        }
+    }
+
+    #[test]
+    fn test_unsupported_version_returns_error() {
+        let input = r#"(kicad_pcb (version 1))"#;
+        let result = parse_kicad_pcb_str(input);
+        match result {
+            Err(KicadPcbError::UnsupportedVersion { version }) => {
+                assert_eq!(version, 1);
+            }
+            Err(other) => panic!("Expected UnsupportedVersion, got {:?}", other),
+            Ok(_) => panic!("Expected error for unsupported version"),
+        }
+    }
 }

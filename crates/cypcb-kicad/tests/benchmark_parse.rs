@@ -54,7 +54,7 @@ fn test_parse_led_blink() {
     assert_eq!(m.via_count, 2, "Expected 2 vias");
 
     // Library must have entries
-    assert!(result.library.len() > 0, "Library must have footprints");
+    assert!(!result.library.is_empty(), "Library must have footprints");
 
     // World must have nets
     assert!(result.world.net_count() > 0, "World must have nets");
@@ -80,7 +80,7 @@ fn test_parse_stm32_breakout() {
     assert!(m.board_size_mm.1 > 0.0, "Board height must be non-zero");
 
     // Library and world
-    assert!(result.library.len() > 0, "Library must have footprints");
+    assert!(!result.library.is_empty(), "Library must have footprints");
     assert!(result.world.net_count() > 0, "World must have nets");
 
     // Reference routes present
@@ -120,7 +120,7 @@ fn test_parse_multi_ic() {
     );
 
     // Library and world
-    assert!(result.library.len() > 0, "Library must have footprints");
+    assert!(!result.library.is_empty(), "Library must have footprints");
     assert!(result.world.net_count() > 0, "World must have nets");
 
     // Reference routes present
@@ -129,8 +129,8 @@ fn test_parse_multi_ic() {
         "Expected reference routes"
     );
     let routes = result.reference_routes.as_ref().unwrap();
-    assert!(routes.routes.len() > 0, "Expected trace segments");
-    assert!(routes.vias.len() > 0, "Expected vias");
+    assert!(!routes.routes.is_empty(), "Expected trace segments");
+    assert!(!routes.vias.is_empty(), "Expected vias");
 }
 
 // ---------------------------------------------------------------------------
@@ -197,7 +197,7 @@ fn test_all_benchmarks_parse() {
 
         // Library has entries (parsed footprints registered)
         assert!(
-            result.library.len() > 0,
+            !result.library.is_empty(),
             "{}: Library must have footprints",
             bench.filename
         );

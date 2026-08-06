@@ -62,7 +62,7 @@ fn test_rules() -> PresetRuleSet {
 
 /// Route a board and apply routes, returning the world ready for scoring.
 fn route_and_apply(world: &mut BoardWorld) {
-    let mut library = FootprintLibrary::new();
+    let library = FootprintLibrary::new();
     let rules = test_rules();
     let config = AutorouteConfig::default();
 

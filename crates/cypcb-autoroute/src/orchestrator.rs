@@ -736,6 +736,21 @@ fn rotate_point(p: Point, degrees: f64) -> Point {
     )
 }
 
+/// Whether a pad is already connected by a copper pour of its own net.
+///
+/// The pour has to be on a layer the pad reaches - a ground plane on the bottom
+/// does not connect a top-side SMD pad - and has to contain the pad's centre.
+fn covered_by_pour(
+    pours: &[(NetId, cypcb_core::Rect, u32)],
+    net: NetId,
+    position: Point,
+    pad_layers: u32,
+) -> bool {
+    pours.iter().any(|(pour_net, bounds, pour_layers)| {
+        *pour_net == net && pour_layers & pad_layers != 0 && bounds.contains(position)
+    })
+}
+
 #[cfg(test)]
 mod tests {
 
@@ -1111,19 +1126,4 @@ mod tests {
         assert_eq!(ratsnest[0].net_name, "GND");
         assert_eq!(ratsnest[0].pads.len(), 3);
     }
-}
-
-/// Whether a pad is already connected by a copper pour of its own net.
-///
-/// The pour has to be on a layer the pad reaches - a ground plane on the bottom
-/// does not connect a top-side SMD pad - and has to contain the pad's centre.
-fn covered_by_pour(
-    pours: &[(NetId, cypcb_core::Rect, u32)],
-    net: NetId,
-    position: Point,
-    pad_layers: u32,
-) -> bool {
-    pours.iter().any(|(pour_net, bounds, pour_layers)| {
-        *pour_net == net && pour_layers & pad_layers != 0 && bounds.contains(position)
-    })
 }

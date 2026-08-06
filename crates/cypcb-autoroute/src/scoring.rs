@@ -717,7 +717,7 @@ mod tests {
         let smoothness = compute_smoothness(&traces);
         // Should not panic, and the valid bend (0° to 90°) should still be computed
         assert!(
-            smoothness >= 0.0 && smoothness <= 1.0,
+            (0.0..=1.0).contains(&smoothness),
             "Smoothness with zero-length segment should be in [0,1], got {smoothness}"
         );
     }

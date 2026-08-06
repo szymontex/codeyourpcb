@@ -24,7 +24,7 @@ echo ""
 
 # Stage 2: Clippy (strict, excluding desktop crates - they need system GTK/webkit)
 echo "[2/8] cargo clippy"
-if cargo clippy --workspace --exclude cypcb-desktop -- -D warnings 2>&1; then
+if cargo clippy --workspace --exclude cypcb-desktop --all-targets -- -D warnings 2>&1; then
   pass "cargo-clippy"
 else
   fail "cargo-clippy"
