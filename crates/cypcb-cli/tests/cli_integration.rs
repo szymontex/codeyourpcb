@@ -273,3 +273,27 @@ fn test_check_help() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("Check a .cypcb file"));
 }
+
+#[test]
+fn check_says_which_violations_are_copper_on_copper() {
+    // A count reads the same whether the board shorts or runs 0.01mm under
+    // spec, and those are different decisions: one board cannot work, the
+    // other is a yield risk a fab may still build. drc-test.cypcb has one
+    // clearance violation at 0.00mm among eight kinds of fault.
+    let example = examples_dir().join("drc-test.cypcb");
+    let output = Command::new(cypcb_binary())
+        .arg("check")
+        .arg(&example)
+        .output()
+        .expect("Failed to execute cypcb check");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("copper touching copper at 0.00mm: 1"),
+        "check should name the shorts apart from the rest, got:\n{stderr}"
+    );
+
+    // A board with violations still fails. The split is what they are, not
+    // permission to ship them.
+    assert!(!output.status.success(), "check must fail on a board with violations");
+}

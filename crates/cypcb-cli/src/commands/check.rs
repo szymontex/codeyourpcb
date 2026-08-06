@@ -125,6 +125,19 @@ impl CheckCommand {
             eprintln!("  {}: {}", kind, count);
         }
 
+        // A count on its own reads the same whether the board shorts or runs
+        // 0.01mm under spec. The first cannot work; the second is a yield risk
+        // a fab may still build, and a person deciding whether to send the
+        // files needs to know which they have.
+        let shorts = drc
+            .violations
+            .iter()
+            .filter(|violation| violation.actual == Some(cypcb_core::Nm::ZERO))
+            .count();
+        if shorts > 0 {
+            eprintln!("  copper touching copper at 0.00mm: {}", shorts);
+        }
+
         std::process::exit(1);
     }
 }

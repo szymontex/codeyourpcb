@@ -486,10 +486,23 @@ impl RouteCommand {
                 &mut world,
                 &DesignRules::from_constraints(&preset.constraints()),
             );
-            eprintln!(
-                "DRC on the routed board: {} violations",
-                report.violations.len()
-            );
+            let shorts = report
+                .violations
+                .iter()
+                .filter(|violation| violation.actual == Some(cypcb_core::Nm::ZERO))
+                .count();
+            if shorts > 0 {
+                eprintln!(
+                    "DRC on the routed board: {} violations, {} of them copper touching copper",
+                    report.violations.len(),
+                    shorts
+                );
+            } else {
+                eprintln!(
+                    "DRC on the routed board: {} violations, none of them touching",
+                    report.violations.len()
+                );
+            }
         }
 
         let traces = cypcb_world::dsl::traces_as_dsl(&mut world);
@@ -556,11 +569,12 @@ impl RouteCommand {
         // Ranked best first, so the list reads as the decision it made.
         for (rank, entry) in results.iter().enumerate() {
             eprintln!(
-                "  {}. {:<28} composite {:>10.1}, {} DRC violations, {} vias",
+                "  {}. {:<28} composite {:>10.1}, {} DRC violations ({} shorts), {} vias",
                 rank + 1,
                 entry.name,
                 entry.score.composite,
                 entry.score.drc_violations,
+                entry.score.shorts,
                 entry.score.via_count
             );
         }
