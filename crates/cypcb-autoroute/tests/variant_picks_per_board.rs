@@ -49,6 +49,24 @@ fn which_variant_each_board_picks() {
             elapsed.as_secs_f64()
         );
 
+        // The promise this feature makes: asking the board is never worse than
+        // picking for it. `PathFinder Default` is what a single run produces,
+        // so the winner has to be at least as good - and on every fixture
+        // measured so far it is strictly better on two of the three.
+        let winner = results.first().expect("at least one variant routed");
+        let default = results
+            .iter()
+            .find(|r| r.name == "PathFinder Default")
+            .expect("the baseline variant is in the list");
+        assert!(
+            winner.score.composite <= default.score.composite,
+            "best-of-{} scored worse than routing once on {}: {:.1} against {:.1}",
+            results.len(),
+            benchmark.filename,
+            winner.score.composite,
+            default.score.composite
+        );
+
         // generate_variants returns them ranked, best first, and applies the
         // winner to the world.
         for (rank, result) in results.iter().enumerate() {
