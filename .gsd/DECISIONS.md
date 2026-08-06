@@ -212,3 +212,37 @@
 | D-DRC-010 | 2026-03-21 | ui | DRC panel shows structured violation entries | Icon + title + detail + entity labels + coordinates per violation, click-to-zoom | Raw `[clearance] message` was unreadable. New format: ⚡ Copper clearance / "Items touching — need 0.15mm gap" / `trace 'VCC' ↔ pad on R1` / (x, y) mm. | No |
 | D-DRC-011 | 2026-03-21 | ui | Violation markers on board disabled | `drawViolation()` exists but not called from render loop | Red circles on board clutter the view and obscure copper geometry. DRC feedback via error badge + panel + click-to-zoom is sufficient. | Yes — revisit with better marker design |
 | D-DRC-012 | 2026-03-21 | arch | Courtyard entries in spatial index use layer_mask=0 | Component courtyard AABB has layer_mask=0, pad AABB has proper copper layer mask | Copper clearance check uses `layers_overlap()` filter — layer_mask=0 entries never match copper checks. Courtyard entries only used by CourtyardClearanceRule which filters for layer_mask==0. | No |
+
+### Status of the DRC decisions, read against the code on 2026-08-06
+
+The table above records what was decided. This records what is true, because
+four of the twelve are not, and one of them caused a rule to report nothing
+for months.
+
+- **D-DRC-001, per-pad ECS entities: not built.** The spatial index still holds
+  one courtyard box per component. What exists instead is a narrow phase that
+  resolves a component to its pad geometry inside `ClearanceRule`
+  (`component_pads` in `crates/cypcb-drc/src/rules/clearance.rs`), including
+  the per-pad net that D-DRC-001 wanted the entities for - so the behaviour the
+  decision was after is there, without the entities. See KNOWLEDGE.md K010.
+- **D-DRC-002, tight rotated AABB: half true.** The checker does it. The
+  router does not: `RoutingGrid::populate_pads` still marks every pad as a
+  circle of `max(w, h) / 2`. Replacing it was measured on its own and cost
+  more than it saved, so it waits for the rule that needs it. See K011.
+- **D-DRC-005, 12 rules with 2 stubs: superseded.** Fifteen rules are
+  registered and none is a stub -
+  `grep -c "Box::new(rules::" crates/cypcb-drc/src/lib.rs`. `via_drill`,
+  `trace_current` and `assertion` joined after this was written, and the two
+  stubs named here were implemented.
+- **D-DRC-006, silk clearance in JS not WASM: superseded.** There is a Rust
+  rule, `crates/cypcb-drc/src/rules/silk_clearance.rs`, and footprints carry
+  silk geometry in the ECS. The JS check still sees artwork that arrives with
+  an EasyEDA fetch, which the engine has no model for; that is the remaining
+  gap, not the whole decision.
+- **D-DRC-012, courtyard entries at `layer_mask = 0`: never implemented, and
+  it cost a rule.** Every index builder in the crate marks components
+  `0xFFFFFFFF`. `CourtyardClearanceRule` filtered the index for
+  `layer_mask == 0` exactly as this decision describes, matched nothing on
+  every board it ever ran against, and reported zero. It reads the components
+  directly now. A decision recorded and not implemented is worse than one
+  never made, because the code downstream trusts it.
