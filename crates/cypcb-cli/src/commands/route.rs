@@ -415,79 +415,6 @@ mod dirs {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_route_command_parses() {
-        // Test that command args parse correctly
-        use clap::Parser;
-
-        #[derive(Parser)]
-        struct TestCli {
-            #[command(flatten)]
-            route: RouteCommand,
-        }
-
-        let cli = TestCli::parse_from(["test", "design.cypcb"]);
-        assert_eq!(cli.route.file, PathBuf::from("design.cypcb"));
-        assert_eq!(cli.route.timeout, 300);
-        assert!(cli.route.output.is_none());
-    }
-
-    #[test]
-    fn test_route_command_with_options() {
-        use clap::Parser;
-
-        #[derive(Parser)]
-        struct TestCli {
-            #[command(flatten)]
-            route: RouteCommand,
-        }
-
-        let cli = TestCli::parse_from([
-            "test",
-            "design.cypcb",
-            "--output",
-            "custom.routes",
-            "--timeout",
-            "600",
-            "--max-passes",
-            "10",
-            "--dry-run",
-        ]);
-
-        assert_eq!(cli.route.output, Some(PathBuf::from("custom.routes")));
-        assert_eq!(cli.route.timeout, 600);
-        assert_eq!(cli.route.max_passes, Some(10));
-        assert!(cli.route.dry_run);
-    }
-
-    #[test]
-    fn test_route_command_freerouting_flag() {
-        use clap::Parser;
-
-        #[derive(Parser)]
-        struct TestCli {
-            #[command(flatten)]
-            route: RouteCommand,
-        }
-
-        let cli = TestCli::parse_from([
-            "test",
-            "design.cypcb",
-            "--freerouting",
-            "/path/to/freerouting.jar",
-        ]);
-
-        assert_eq!(
-            cli.route.freerouting,
-            Some(PathBuf::from("/path/to/freerouting.jar"))
-        );
-    }
-}
-
 impl RouteCommand {
     /// Route with the project's own autorouter and write the traces back as
     /// `.cypcb` source.
@@ -620,5 +547,78 @@ impl RouteCommand {
             best.routes.clone(),
             best.vias.clone(),
         ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_route_command_parses() {
+        // Test that command args parse correctly
+        use clap::Parser;
+
+        #[derive(Parser)]
+        struct TestCli {
+            #[command(flatten)]
+            route: RouteCommand,
+        }
+
+        let cli = TestCli::parse_from(["test", "design.cypcb"]);
+        assert_eq!(cli.route.file, PathBuf::from("design.cypcb"));
+        assert_eq!(cli.route.timeout, 300);
+        assert!(cli.route.output.is_none());
+    }
+
+    #[test]
+    fn test_route_command_with_options() {
+        use clap::Parser;
+
+        #[derive(Parser)]
+        struct TestCli {
+            #[command(flatten)]
+            route: RouteCommand,
+        }
+
+        let cli = TestCli::parse_from([
+            "test",
+            "design.cypcb",
+            "--output",
+            "custom.routes",
+            "--timeout",
+            "600",
+            "--max-passes",
+            "10",
+            "--dry-run",
+        ]);
+
+        assert_eq!(cli.route.output, Some(PathBuf::from("custom.routes")));
+        assert_eq!(cli.route.timeout, 600);
+        assert_eq!(cli.route.max_passes, Some(10));
+        assert!(cli.route.dry_run);
+    }
+
+    #[test]
+    fn test_route_command_freerouting_flag() {
+        use clap::Parser;
+
+        #[derive(Parser)]
+        struct TestCli {
+            #[command(flatten)]
+            route: RouteCommand,
+        }
+
+        let cli = TestCli::parse_from([
+            "test",
+            "design.cypcb",
+            "--freerouting",
+            "/path/to/freerouting.jar",
+        ]);
+
+        assert_eq!(
+            cli.route.freerouting,
+            Some(PathBuf::from("/path/to/freerouting.jar"))
+        );
     }
 }

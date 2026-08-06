@@ -15,7 +15,9 @@
 use cypcb_autoroute::{route_board, AutorouteConfig};
 use cypcb_export::coords::CoordinateFormat;
 use cypcb_export::excellon::export_excellon;
-use cypcb_export::gerber::{export_copper_layer, export_outline};
+use cypcb_export::gerber::{
+    export_copper_layer, export_outline, export_soldermask, MaskPasteConfig, Side,
+};
 use cypcb_router::apply_routes;
 use cypcb_rules::presets::{PresetRuleSet, RulesPreset};
 use cypcb_world::components::Layer;
@@ -232,10 +234,10 @@ component R1 resistor "0402" {
 
 #[test]
 fn the_fabricator_cuts_the_board_the_source_declared() {
-    let (mut world, library) = load(CUTOUT);
+    let (world, _library) = load(CUTOUT);
     let format = CoordinateFormat::FORMAT_MM_2_6;
 
-    let edge = export_outline(&mut world, &format).expect("board outline");
+    let edge = export_outline(&world, &format).expect("board outline");
 
     // Six corners and back to the first: one pen-up, six draws.
     let moves = edge.lines().filter(|line| line.contains("D02")).count();
@@ -265,4 +267,66 @@ fn the_fabricator_cuts_the_board_the_source_declared() {
             "the outline is missing the corner at X{x}: {xs:?}"
         );
     }
+}
+
+/// Every coordinate a layer flashes a pad at.
+///
+/// `D03` is a flash: the aperture is stamped once, which is what a pad is.
+fn flashes(gerber: &str) -> std::collections::BTreeSet<String> {
+    gerber
+        .lines()
+        .filter(|line| line.contains("D03"))
+        .map(|line| line.trim().to_string())
+        .collect()
+}
+
+/// The diameters of every circular aperture the layer defines, in millimetres.
+fn aperture_sizes(gerber: &str) -> Vec<f64> {
+    gerber
+        .lines()
+        .filter_map(|line| line.strip_prefix("%ADD"))
+        .filter_map(|rest| rest.split(',').nth(1))
+        .filter_map(|size| size.trim_end_matches("*%").split('X').next())
+        .filter_map(|value| value.parse::<f64>().ok())
+        .collect()
+}
+
+#[test]
+fn every_pad_gets_an_opening_in_the_soldermask() {
+    // Solder mask is what keeps solder off everything that is not a pad. A
+    // mask that does not match the copper produces a board that bridges when
+    // it is assembled, and nothing had ever compared the two files.
+    //
+    // CUTOUT carries one 0402 and no traces or vias, so every flash in the
+    // copper layer is a pad and the two sets have to be identical.
+    let (mut world, library) = load(CUTOUT);
+    let format = CoordinateFormat::FORMAT_MM_2_6;
+
+    let copper =
+        export_copper_layer(&mut world, &library, Layer::TopCopper, &format).expect("top copper");
+    let mask = export_soldermask(
+        &mut world,
+        &library,
+        Side::Top,
+        &format,
+        &MaskPasteConfig::default(),
+    )
+    .expect("top soldermask");
+
+    let pads = flashes(&copper);
+    assert_eq!(pads.len(), 2, "an 0402 has two pads:\n{copper}");
+    assert_eq!(
+        flashes(&mask),
+        pads,
+        "the mask openings do not sit where the pads do"
+    );
+
+    // And each opening has to be larger than the pad it uncovers, or the
+    // slightest misregistration covers copper the assembler needs.
+    let widest_pad = aperture_sizes(&copper).into_iter().fold(0.0f64, f64::max);
+    let widest_opening = aperture_sizes(&mask).into_iter().fold(0.0f64, f64::max);
+    assert!(
+        widest_opening > widest_pad,
+        "the mask opening ({widest_opening}mm) has to be wider than the pad ({widest_pad}mm)"
+    );
 }
