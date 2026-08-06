@@ -15,6 +15,27 @@ use crate::components::trace::{Trace, Via};
 use crate::components::Layer;
 use crate::world::BoardWorld;
 
+/// Split a trace's segments into runs that actually join end to end.
+///
+/// Returns one slice per chain. A segment whose start is not the previous
+/// segment's end begins a new one.
+fn contiguous_runs(
+    segments: &[crate::components::trace::TraceSegment],
+) -> Vec<&[crate::components::trace::TraceSegment]> {
+    let mut runs = Vec::new();
+    let mut start = 0usize;
+    for i in 1..segments.len() {
+        if segments[i].start != segments[i - 1].end {
+            runs.push(&segments[start..i]);
+            start = i;
+        }
+    }
+    if start < segments.len() {
+        runs.push(&segments[start..]);
+    }
+    runs
+}
+
 /// Format millimetres so a round trip is exact.
 ///
 /// Six decimal places is 1nm resolution, which guarantees nm -> mm string ->
@@ -105,21 +126,25 @@ pub fn traces_as_dsl(world: &mut BoardWorld) -> String {
                 let width_mm = trace.width.to_mm();
                 let _ = writeln!(output, "    width {}mm", format_mm(width_mm));
 
-                // Path — extract polyline from segments
-                if !trace.segments.is_empty() {
+                // Path - one polyline per contiguous run of segments.
+                //
+                // A `Trace` holds every segment a net has on a layer, and a net
+                // with more than two pads branches: the segment list is a set
+                // of chains, not one chain. Writing it as a single `path`
+                // draws a straight line from the end of one branch to the
+                // start of the next, which is copper that was never routed.
+                // Measured on examples/blink.cypcb: 2 DRC violations in the
+                // routed board, 13 in the file it was written to.
+                for run in contiguous_runs(&trace.segments) {
                     let _ = write!(output, "    path ");
-
-                    // First point
-                    let first = &trace.segments[0];
+                    let first = run[0];
                     let _ = write!(
                         output,
                         "{}mm,{}mm",
                         format_mm(first.start.x.to_mm()),
                         format_mm(first.start.y.to_mm())
                     );
-
-                    // Subsequent endpoints
-                    for seg in &trace.segments {
+                    for seg in run {
                         let _ = write!(
                             output,
                             " -> {}mm,{}mm",

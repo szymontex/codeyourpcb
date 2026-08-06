@@ -170,3 +170,62 @@ fn a_second_pass_writes_the_same_bytes() {
 
     assert_eq!(once, twice, "the writer is not idempotent");
 }
+
+#[test]
+fn a_branching_net_does_not_gain_copper_between_its_branches() {
+    // The router hands `apply_routes` every segment a net has, and it stores
+    // them as one `Trace` per (net, layer) - so a net with three pads holds two
+    // chains that do not join. Writing that as a single polyline draws a line
+    // from the end of one chain to the start of the next: copper nobody
+    // routed, and a short wherever it lands. Measured on examples/blink.cypcb
+    // before this was fixed, the routed board had 2 DRC violations and the
+    // file written from it had 13.
+    //
+    // Built by hand rather than parsed, because parsing two `trace` blocks
+    // makes two entities - only the router's own path produces the shape that
+    // breaks.
+    use cypcb_world::components::trace::{Trace, TraceSegment, TraceSource};
+    use cypcb_world::components::Layer;
+
+    let mut world = BoardWorld::new();
+    world.set_board(
+        "t".to_string(),
+        (cypcb_core::Nm::from_mm(40.0), cypcb_core::Nm::from_mm(20.0)),
+        2,
+    );
+    let net = world.intern_net("SIG");
+    world.spawn_entity((
+        Trace {
+            segments: vec![
+                TraceSegment::new(
+                    cypcb_core::Point::from_mm(10.5, 10.0),
+                    cypcb_core::Point::from_mm(19.5, 10.0),
+                ),
+                // A second chain, five millimetres away and not touching.
+                TraceSegment::new(
+                    cypcb_core::Point::from_mm(25.0, 15.0),
+                    cypcb_core::Point::from_mm(29.5, 15.0),
+                ),
+            ],
+            width: cypcb_core::Nm::from_mm(0.127),
+            layer: Layer::TopCopper,
+            net_id: net,
+            locked: false,
+            source: TraceSource::Autorouted,
+        },
+        net,
+    ));
+
+    let before = segments(&mut world);
+    assert_eq!(before.len(), 2, "two disjoint segments went in");
+
+    let header = ROUTED.split("trace SIG {").next().unwrap();
+    let written = traces_as_dsl(&mut world);
+    let mut second = load(&format!("{header}{written}"));
+
+    assert_eq!(
+        segments(&mut second),
+        before,
+        "writing a branching net and reading it back changed its copper"
+    );
+}

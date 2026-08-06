@@ -532,6 +532,20 @@ impl RouteCommand {
 
         apply_routes(&mut world, &result);
 
+        // What the checker will say about the file we are about to write. The
+        // scorer's number ranks candidates during the search; this one is the
+        // board, measured the way `cypcb check` measures it, and the two have
+        // disagreed by a factor of six.
+        {
+            use cypcb_drc::{run_drc, DesignRules};
+            world.rebuild_spatial_index_from_library(&library);
+            let report = run_drc(&mut world, &DesignRules::jlcpcb_2layer());
+            eprintln!(
+                "DRC on the routed board: {} violations",
+                report.violations.len()
+            );
+        }
+
         let traces = cypcb_world::dsl::traces_as_dsl(&mut world);
         if traces.is_empty() {
             return Err(miette::miette!("The router produced nothing to write"));
