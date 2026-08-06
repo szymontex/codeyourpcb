@@ -153,14 +153,27 @@ impl PcbEngine {
     ///
     /// Returns an empty string on success, or the deserialisation error.
     #[cfg(target_arch = "wasm32")]
-    pub fn register_footprint(&mut self, name: &str, pads_js: wasm_bindgen::JsValue) -> String {
-        match serde_wasm_bindgen::from_value::<Vec<PadInfo>>(pads_js) {
-            Ok(pads) => {
-                self.register_footprint_pads(name, &pads);
-                String::new()
+    pub fn register_footprint(
+        &mut self,
+        name: &str,
+        pads_js: wasm_bindgen::JsValue,
+        silk_js: wasm_bindgen::JsValue,
+    ) -> String {
+        let pads = match serde_wasm_bindgen::from_value::<Vec<PadInfo>>(pads_js) {
+            Ok(pads) => pads,
+            Err(e) => return format!("Failed to deserialize pads: {}", e),
+        };
+        // Silk is optional: a footprint may arrive with pads and no legend.
+        let silk = if silk_js.is_undefined() || silk_js.is_null() {
+            Vec::new()
+        } else {
+            match serde_wasm_bindgen::from_value::<Vec<SilkInfo>>(silk_js) {
+                Ok(silk) => silk,
+                Err(e) => return format!("Failed to deserialize silk: {}", e),
             }
-            Err(e) => format!("Failed to deserialize pads: {}", e),
-        }
+        };
+        self.register_footprint_pads(name, &pads, &silk);
+        String::new()
     }
 
     /// Register a footprint the host fetched at runtime (native version).
@@ -168,14 +181,21 @@ impl PcbEngine {
     /// Takes the pads as a JSON array. See the WASM counterpart for why this
     /// exists.
     #[cfg(not(target_arch = "wasm32"))]
-    pub fn register_footprint(&mut self, name: &str, pads_json: &str) -> String {
-        match serde_json::from_str::<Vec<PadInfo>>(pads_json) {
-            Ok(pads) => {
-                self.register_footprint_pads(name, &pads);
-                String::new()
+    pub fn register_footprint(&mut self, name: &str, pads_json: &str, silk_json: &str) -> String {
+        let pads = match serde_json::from_str::<Vec<PadInfo>>(pads_json) {
+            Ok(pads) => pads,
+            Err(e) => return format!("Failed to deserialize pads: {}", e),
+        };
+        let silk = if silk_json.trim().is_empty() {
+            Vec::new()
+        } else {
+            match serde_json::from_str::<Vec<SilkInfo>>(silk_json) {
+                Ok(silk) => silk,
+                Err(e) => return format!("Failed to deserialize silk: {}", e),
             }
-            Err(e) => format!("Failed to deserialize pads: {}", e),
-        }
+        };
+        self.register_footprint_pads(name, &pads, &silk);
+        String::new()
     }
 
     /// Minimum trace width for a current, in nanometers.
@@ -1332,8 +1352,9 @@ impl PcbEngine {
     #[allow(dead_code)] // Reserved for snapshot-based rendering path
     /// Put a host-supplied footprint into the library the parser resolves
     /// against.
-    fn register_footprint_pads(&mut self, name: &str, pads: &[PadInfo]) {
-        let footprint = self.footprint_from_pads(name, pads);
+    fn register_footprint_pads(&mut self, name: &str, pads: &[PadInfo], silk: &[SilkInfo]) {
+        let mut footprint = self.footprint_from_pads(name, pads);
+        footprint.silk = silk.iter().filter_map(SilkInfo::to_shape).collect();
         self.footprint_lib.register(footprint);
     }
 
@@ -1923,7 +1944,7 @@ mod tests {
         );
 
         let mut with = PcbEngine::new();
-        assert_eq!(with.register_footprint("XKCD-2", pads), "");
+        assert_eq!(with.register_footprint("XKCD-2", pads, ""), "");
         assert_eq!(
             with.load_source(source),
             "",
@@ -1945,7 +1966,7 @@ mod tests {
                       component U1 ic \"XKCD-1\" {\n    value \"part\"\n    at 10mm, 10mm\n}\n";
 
         let mut engine = PcbEngine::new();
-        assert_eq!(engine.register_footprint("XKCD-1", pads), "");
+        assert_eq!(engine.register_footprint("XKCD-1", pads, ""), "");
 
         // Every keystroke in the editor re-parses. The fetch happened once.
         for _ in 0..3 {
@@ -2040,9 +2061,50 @@ mod tests {
     }
 
     #[test]
+    fn a_fetched_footprint_can_bring_its_legend() {
+        // A supplier's footprint arrives with artwork as well as copper. Until
+        // the engine could take it, that artwork had nowhere to go.
+        let pads = r#"[{"number":"1","x_nm":0,"y_nm":0,"width_nm":300000,
+                        "height_nm":300000,"shape":"rect","layer_mask":1,"drill_nm":null}]"#;
+        let silk = r#"[
+            {"type":"segment","x1":-500000,"y1":0,"x2":500000,"y2":0,"width":150000},
+            {"type":"circle","cx":0,"cy":600000,"radius":100000,"width":150000},
+            {"type":"arc","cx":0,"cy":0,"radius":100000,"width":150000}
+        ]"#;
+
+        let mut engine = PcbEngine::new();
+        assert_eq!(engine.register_footprint("XKCD-3", pads, silk), "");
+
+        let stored = engine
+            .footprint_lib
+            .get("XKCD-3")
+            .expect("registered")
+            .silk
+            .clone();
+
+        assert_eq!(
+            stored.len(),
+            2,
+            "the segment and the circle survive; the arc has no shape in the model yet"
+        );
+    }
+
+    #[test]
+    fn malformed_silk_is_reported_not_swallowed() {
+        let pads = r#"[{"number":"1","x_nm":0,"y_nm":0,"width_nm":300000,
+                        "height_nm":300000,"shape":"rect","layer_mask":1,"drill_nm":null}]"#;
+        let mut engine = PcbEngine::new();
+        let error = engine.register_footprint("XKCD-4", pads, "not json");
+        assert!(
+            error.starts_with("Failed to deserialize silk"),
+            "got {error}"
+        );
+    }
+
+    #[test]
     fn malformed_pads_are_reported_not_swallowed() {
         let mut engine = PcbEngine::new();
-        let error = engine.register_footprint("BROKEN", "not json");
+        let error = engine.register_footprint("BROKEN", "not json", "");
         assert!(
             error.starts_with("Failed to deserialize pads"),
             "got {error}"

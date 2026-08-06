@@ -463,3 +463,82 @@ mod tests {
         assert!(json.contains("\"VCC\""));
     }
 }
+
+/// A piece of silkscreen artwork as the host describes it.
+///
+/// Mirrors the viewer's `SilkShape`: tagged by `type`, coordinates in
+/// nanometres, relative to the footprint's origin. Arcs are accepted and
+/// dropped rather than refused - the board model has no arc, and rejecting a
+/// whole footprint over a rounded corner would be worse than printing it
+/// without one. That trade is recorded in the tracker rather than hidden here.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(tag = "type", rename_all = "lowercase")]
+pub enum SilkInfo {
+    /// A straight line.
+    Segment {
+        /// Start X, relative to the footprint origin.
+        x1: i64,
+        /// Start Y.
+        y1: i64,
+        /// End X.
+        x2: i64,
+        /// End Y.
+        y2: i64,
+        /// Stroke width.
+        width: i64,
+    },
+    /// A circle outline.
+    Circle {
+        /// Centre X.
+        cx: i64,
+        /// Centre Y.
+        cy: i64,
+        /// Radius.
+        radius: i64,
+        /// Stroke width.
+        width: i64,
+    },
+    /// An arc. Parsed so a footprint carrying one still loads, then dropped.
+    Arc {
+        /// Centre X.
+        cx: i64,
+        /// Centre Y.
+        cy: i64,
+        /// Radius.
+        radius: i64,
+        /// Stroke width.
+        width: i64,
+    },
+}
+
+impl SilkInfo {
+    /// Convert to the board model's shape, if it has one.
+    pub fn to_shape(&self) -> Option<cypcb_world::footprint::SilkShape> {
+        use cypcb_core::{Nm, Point};
+        use cypcb_world::footprint::SilkShape;
+        match self {
+            SilkInfo::Segment {
+                x1,
+                y1,
+                x2,
+                y2,
+                width,
+            } => Some(SilkShape::Segment {
+                start: Point::new(Nm(*x1), Nm(*y1)),
+                end: Point::new(Nm(*x2), Nm(*y2)),
+                width: Nm(*width),
+            }),
+            SilkInfo::Circle {
+                cx,
+                cy,
+                radius,
+                width,
+            } => Some(SilkShape::Circle {
+                centre: Point::new(Nm(*cx), Nm(*cy)),
+                radius: Nm(*radius),
+                width: Nm(*width),
+            }),
+            SilkInfo::Arc { .. } => None,
+        }
+    }
+}
