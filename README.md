@@ -91,7 +91,7 @@ An LLM can generate this, review it, refactor it, and catch mistakes — just li
 | Net constraints — `[width 0.5mm]`, `[current 2A]` per net | Done |
 | IPC-2221 auto-width from current rating | Done |
 | DRC — clearance, drill, connectivity, trace width, hole-to-hole, solder mask, annular ring, edge, courtyard | Done |
-| DRC — silkscreen clearance | Stub, runs in the viewer's JavaScript only |
+| DRC — silkscreen clearance | Done — a Rust rule checks a footprint's own artwork against every other part's pads on the same side |
 | Gerber / Excellon / BOM / pick-and-place export | Done |
 | Monaco editor with context-aware completions | Done |
 | JLCPCB parts search & placement | Done |
@@ -116,15 +116,22 @@ An LLM can generate this, review it, refactor it, and catch mistakes — just li
 Routing quality on the bundled KiCad benchmarks, measured with
 `cargo test --release -p cypcb-autoroute -- benchmark_all_fixtures_drc --ignored`:
 
-| Board | Connections | DRC violations |
-|---|---|---|
-| led_blink | all routed | 0 |
-| stm32_breakout | all routed | 137 |
-| multi_ic | all routed | 64 |
+| Board | Connections | Violations before routing | After | Introduced by the router |
+|---|---|---|---|---|
+| led_blink | all routed | 0 | 2 | 2 |
+| stm32_breakout | all routed | 12 | 271 | 259 |
+| multi_ic | all routed | 60 | 210 | 150 |
 
-Every board routes to completion; the remaining violations are clearance
-conflicts the router accepts rather than leave a net unrouted. `cypcb check`
-reports them, and `docs/TRACKER.md` records what has been tried.
+Every board routes to completion. The numbers are higher than they were, and
+the board is not worse: the checker stopped merging several faults into one
+report, started measuring copper instead of part bodies, and began seeing
+footprints on imported boards at all. `docs/TRACKER.md` records each change
+with what it moved.
+
+`cypcb route --variants` routes several ways and keeps the best, because no
+one setting wins everywhere - measured across these three boards, the winner
+differs on each. It is 10x the wall clock of a single run and worth it on
+led_blink, where the chosen variant reaches zero.
 
 <p align="center">
   <img src="docs/images/board-view.png" alt="555 timer blink circuit — board view with routed traces" width="720">
@@ -165,9 +172,18 @@ npm run build:desktop # release installer
 ### CLI
 
 ```bash
-cargo run -p cypcb-cli -- check examples/blink.cypcb   # DRC
-cargo run -p cypcb-cli -- export examples/blink.cypcb  # Gerber + Excellon
+cargo run -p cypcb-cli -- check examples/blink.cypcb          # DRC, exit 1 on violations
+cargo run -p cypcb-cli -- route examples/blink.cypcb --variants   # route, keep the best
+cargo run -p cypcb-cli -- score examples/blink.routed.cypcb   # quality metrics as JSON
+cargo run -p cypcb-cli -- export examples/blink.cypcb         # 13 manufacturing files
+cargo run -p cypcb-cli -- parse examples/blink.cypcb          # the AST
+cargo run -p cypcb-cli -- parse-kicad board.kicad_pcb         # a KiCad board's metadata
 ```
+
+`check`, `route`, `score` and `export` all take `--preset` (jlcpcb, pcbway,
+oshpark and the rest - an unknown name prints the list). They use the same
+rules and agree on the same board: a file that `check --preset pcbway` calls
+28 violations is 28 to `score --preset pcbway` too.
 
 ### IDE workflow
 
@@ -251,7 +267,16 @@ Where CodeYourPCB differs: own rendering engine (no KiCad dependency), runs in b
 
 Experimental. The DSL and file format may change between versions.
 
-The core loop works: write `.cypcb` → see board → route traces → save → reload. Traces are deterministic (bit-exact round-trip). The main gaps are copper pour and the autorouter's toolbar button, which is hidden.
+The core loop works: write `.cypcb` → see board → route traces → save → reload
+→ export. Traces are deterministic and a saved board reads back as the board
+it was, which is checked end to end: routed copper reaches the Gerbers, the
+cut path matches the outline the source declares, the mask opens over every
+pad and the pick-and-place names the side each part is assembled on.
+
+The main gaps are copper pour (zones carry a net; filling them is not
+implemented), silkscreen text (the legend carries outlines and markers, not
+designators), and the autorouter's toolbar button, which is hidden while
+routing quality is worked on.
 
 PRs welcome.
 
