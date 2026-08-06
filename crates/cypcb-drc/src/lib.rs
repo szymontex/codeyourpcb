@@ -133,6 +133,7 @@ pub fn run_drc(world: &mut BoardWorld, rules: &DesignRules) -> DrcResult {
         Box::new(rules::SolderMaskBridgeRule),
         Box::new(rules::SilkClearanceRule),
         Box::new(rules::TraceCurrentRule),
+        Box::new(rules::ZoneOverlapRule),
         Box::new(rules::AssertionRule),
     ];
 

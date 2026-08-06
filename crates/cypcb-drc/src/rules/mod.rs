@@ -17,6 +17,7 @@ pub mod trace_current;
 pub mod trace_width;
 pub mod via_diameter;
 pub mod via_drill;
+pub mod zone_overlap;
 
 use cypcb_world::BoardWorld;
 
@@ -37,6 +38,7 @@ pub use trace_current::TraceCurrentRule;
 pub use trace_width::MinTraceWidthRule;
 pub use via_diameter::ViaDiameterRule;
 pub use via_drill::ViaDrillRule;
+pub use zone_overlap::ZoneOverlapRule;
 
 /// A single DRC rule that can be executed against a board.
 ///
