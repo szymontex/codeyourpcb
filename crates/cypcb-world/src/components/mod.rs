@@ -40,7 +40,7 @@ pub mod trace;
 pub mod zone;
 
 // Re-export all components
-pub use board::{Board, BoardSize, LayerStack};
+pub use board::{Board, BoardOutline, BoardSize, LayerStack};
 pub use electrical::{
     NetConnections, NetId, PadInstance, PinConnection, RefDes, TypedValue, Value,
 };

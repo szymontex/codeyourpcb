@@ -312,3 +312,62 @@ mod tests {
         assert_eq!(LayerStack::EIGHT_LAYER.count, 8);
     }
 }
+
+/// The board's real outline, when it is not a rectangle.
+///
+/// [`BoardSize`] is a width and a height, which is all a rectangular board
+/// needs and all this model could say until now. A board with a cutout, a
+/// slot or a rounded corner is not that shape, and measuring clearance to a
+/// bounding box passes copper that sits outside the actual edge.
+///
+/// Points are in board coordinates and the ring is closed implicitly: the last
+/// point joins the first. Absent means rectangular, and everything keeps
+/// using `BoardSize`.
+#[derive(Component, Debug, Clone, PartialEq)]
+pub struct BoardOutline {
+    /// The outline ring, in order.
+    pub points: Vec<cypcb_core::Point>,
+}
+
+impl BoardOutline {
+    /// Build an outline, rejecting anything that is not a ring.
+    ///
+    /// Fewer than three points cannot enclose an area, and a caller that hands
+    /// over two is describing a line rather than a board.
+    pub fn new(points: Vec<cypcb_core::Point>) -> Option<Self> {
+        if points.len() < 3 {
+            return None;
+        }
+        Some(BoardOutline { points })
+    }
+
+    /// The outline's edges, as point pairs, closing the ring.
+    pub fn edges(&self) -> impl Iterator<Item = (cypcb_core::Point, cypcb_core::Point)> + '_ {
+        self.points
+            .iter()
+            .zip(self.points.iter().cycle().skip(1))
+            .take(self.points.len())
+            .map(|(a, b)| (*a, *b))
+    }
+
+    /// Whether a point is inside the ring.
+    ///
+    /// Ray casting along +x, counting crossings. A point exactly on an edge
+    /// may fall either way, which is acceptable: a feature that close to the
+    /// edge is a clearance violation whichever side of the line it lands on.
+    pub fn contains(&self, point: cypcb_core::Point) -> bool {
+        let (x, y) = (point.x.raw() as f64, point.y.raw() as f64);
+        let mut inside = false;
+        for (a, b) in self.edges() {
+            let (ax, ay) = (a.x.raw() as f64, a.y.raw() as f64);
+            let (bx, by) = (b.x.raw() as f64, b.y.raw() as f64);
+            if (ay > y) != (by > y) {
+                let cross = ax + (y - ay) / (by - ay) * (bx - ax);
+                if x < cross {
+                    inside = !inside;
+                }
+            }
+        }
+        inside
+    }
+}

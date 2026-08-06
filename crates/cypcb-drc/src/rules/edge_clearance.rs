@@ -5,7 +5,7 @@
 //! copper exposure when the board is routed (cut to shape).
 
 use cypcb_core::{Nm, Point};
-use cypcb_world::components::BoardSize;
+use cypcb_world::components::{BoardOutline, BoardSize};
 use cypcb_world::BoardWorld;
 
 use super::DrcRule;
@@ -46,16 +46,20 @@ impl DrcRule for EdgeClearanceRule {
         let min_edge = rules.min_edge_clearance;
 
         // Get board size — if no board is defined, skip
-        let board_size = {
-            let entity = match world.board_entity() {
-                Some(e) => e,
-                None => return violations,
-            };
-            match world.ecs().get::<BoardSize>(entity) {
-                Some(bs) => *bs,
-                None => return violations,
-            }
+        let board_entity = match world.board_entity() {
+            Some(e) => e,
+            None => return violations,
         };
+        let board_size = match world.ecs().get::<BoardSize>(board_entity) {
+            Some(bs) => *bs,
+            None => return violations,
+        };
+
+        // The real edge when the board states one; otherwise the rectangle
+        // `BoardSize` describes. A cutout, a slot and a chamfer all live inside
+        // the same bounding box, so measuring against the box passes copper
+        // that sits outside the actual edge.
+        let outline = world.ecs().get::<BoardOutline>(board_entity).cloned();
 
         // Board edges are at x=0, x=width, y=0, y=height
         let board_w = board_size.width.0;
@@ -70,13 +74,17 @@ impl DrcRule for EdgeClearanceRule {
             let max_x = entry.envelope.upper()[0];
             let max_y = entry.envelope.upper()[1];
 
-            // Distance to each edge (negative means outside board)
-            let dist_left = min_x; // distance from left edge (x=0)
-            let dist_bottom = min_y; // distance from bottom edge (y=0)
-            let dist_right = board_w - max_x; // distance from right edge
-            let dist_top = board_h - max_y; // distance from top edge
-
-            let min_dist = dist_left.min(dist_bottom).min(dist_right).min(dist_top);
+            let min_dist = match &outline {
+                Some(outline) => distance_to_outline(outline, min_x, min_y, max_x, max_y),
+                None => {
+                    // Distance to each edge (negative means outside board)
+                    let dist_left = min_x; // distance from left edge (x=0)
+                    let dist_bottom = min_y; // distance from bottom edge (y=0)
+                    let dist_right = board_w - max_x; // distance from right edge
+                    let dist_top = board_h - max_y; // distance from top edge
+                    dist_left.min(dist_bottom).min(dist_right).min(dist_top)
+                }
+            };
 
             if min_dist < min_edge.0 {
                 let center = Point::new(Nm((min_x + max_x) / 2), Nm((min_y + max_y) / 2));
@@ -93,8 +101,98 @@ impl DrcRule for EdgeClearanceRule {
     }
 }
 
+/// How far a bounding box sits from the board's edge.
+///
+/// The box's own four sides are measured against every edge of the ring, which
+/// is exact for two convex shapes that do not overlap and gives zero when they
+/// do. A box whose centre falls outside the ring reads as zero rather than a
+/// positive distance: copper off the board is not "well clear of the edge".
+fn distance_to_outline(
+    outline: &BoardOutline,
+    min_x: i64,
+    min_y: i64,
+    max_x: i64,
+    max_y: i64,
+) -> i64 {
+    let centre = Point::new(Nm((min_x + max_x) / 2), Nm((min_y + max_y) / 2));
+    if !outline.contains(centre) {
+        return 0;
+    }
+
+    let box_edges = [
+        ([min_x, min_y], [max_x, min_y]),
+        ([max_x, min_y], [max_x, max_y]),
+        ([max_x, max_y], [min_x, max_y]),
+        ([min_x, max_y], [min_x, min_y]),
+    ];
+
+    let mut nearest = i64::MAX;
+    for (a, b) in outline.edges() {
+        let edge = ([a.x.raw(), a.y.raw()], [b.x.raw(), b.y.raw()]);
+        for (p, q) in &box_edges {
+            nearest = nearest.min(crate::rules::clearance::segment_distance(
+                *p, *q, edge.0, edge.1,
+            ));
+        }
+    }
+    nearest
+}
+
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn an_l_shaped_board_is_measured_against_its_own_edge() {
+        use cypcb_world::components::BoardOutline;
+
+        // An L: 40x40 with the top-right quarter removed. A pad at 30mm, 30mm
+        // sits inside the bounding box and outside the board.
+        let mut world = BoardWorld::new();
+        world.set_board("l".to_string(), (Nm::from_mm(40.0), Nm::from_mm(40.0)), 2);
+        let board = world.board_entity().unwrap();
+        let outline = BoardOutline::new(vec![
+            Point::from_mm(0.0, 0.0),
+            Point::from_mm(40.0, 0.0),
+            Point::from_mm(40.0, 20.0),
+            Point::from_mm(20.0, 20.0),
+            Point::from_mm(20.0, 40.0),
+            Point::from_mm(0.0, 40.0),
+        ])
+        .expect("a ring");
+        assert!(outline.contains(Point::from_mm(10.0, 10.0)));
+        assert!(!outline.contains(Point::from_mm(30.0, 30.0)));
+        world.ecs_mut().entity_mut(board).insert(outline);
+
+        let in_the_notch = world.ecs_mut().spawn(()).id();
+        let well_inside = world.ecs_mut().spawn(()).id();
+        world
+            .ecs_mut()
+            .resource_mut::<cypcb_world::SpatialIndex>()
+            .rebuild(vec![
+                SpatialEntry::new(
+                    in_the_notch,
+                    Point::from_mm(29.0, 29.0),
+                    Point::from_mm(31.0, 31.0),
+                    0b01,
+                ),
+                SpatialEntry::new(
+                    well_inside,
+                    Point::from_mm(9.0, 9.0),
+                    Point::from_mm(11.0, 11.0),
+                    0b01,
+                ),
+            ]);
+
+        let violations = EdgeClearanceRule.check(&mut world, &DesignRules::jlcpcb_2layer());
+
+        assert_eq!(
+            violations.len(),
+            1,
+            "only the pad in the removed corner is off the board: {violations:?}"
+        );
+        assert_eq!(violations[0].entity, in_the_notch);
+        assert_eq!(violations[0].kind, ViolationKind::EdgeClearance);
+    }
     use super::*;
     use crate::ViolationKind;
     use bevy_ecs::prelude::*;

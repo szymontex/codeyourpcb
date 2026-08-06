@@ -27,7 +27,7 @@ use std::path::Path;
 
 use cypcb_core::{Nm, Point, Rect};
 use cypcb_router::types::{RouteSegment, RoutingResult, RoutingStatus, ViaPlacement};
-use cypcb_world::components::{Layer, PadShape, Side};
+use cypcb_world::components::{BoardOutline, Layer, PadShape, Side};
 use cypcb_world::footprint::{Footprint, FootprintLibrary, PadDef};
 use cypcb_world::{
     BoardWorld, FootprintRef, NetConnections, NetId, PinConnection, Position, RefDes, Rotation,
@@ -278,7 +278,13 @@ pub fn parse_kicad_pcb_str(content: &str) -> Result<KicadPcbParseResult, KicadPc
     if let Some(ref bounds) = board_bounds {
         let width = Nm(bounds.max.x.0 - bounds.min.x.0);
         let height = Nm(bounds.max.y.0 - bounds.min.y.0);
-        world.set_board("KiCad PCB".to_string(), (width, height), layer_count);
+        let board = world.set_board("KiCad PCB".to_string(), (width, height), layer_count);
+
+        // The real edge, when Edge.Cuts describes one. The size above stays the
+        // bounding box, which is what everything that only needs "how big" uses.
+        if let Some(outline) = extract_board_ring(elements).and_then(BoardOutline::new) {
+            world.ecs_mut().entity_mut(board).insert(outline);
+        }
     }
 
     // 5. Extract footprints (handles both `footprint` and `module` keywords)
@@ -1115,6 +1121,49 @@ fn calculate_pad_bounds(pads: &[PadDef]) -> Rect {
 mod tests {
 
     #[test]
+    fn a_boards_edge_cuts_become_an_outline() {
+        // Four loose segments, written in an order that does not follow the
+        // ring, with one reversed - which is how a hand-edited board looks.
+        let pcb = r#"(kicad_pcb (version 20240108) (generator pcbnew)
+  (layers (0 "F.Cu" signal) (31 "B.Cu" signal))
+  (gr_line (start 50 30) (end 0 30) (layer "Edge.Cuts") (width 0.05))
+  (gr_line (start 0 0) (end 50 0) (layer "Edge.Cuts") (width 0.05))
+  (gr_line (start 0 0) (end 0 30) (layer "Edge.Cuts") (width 0.05))
+  (gr_line (start 50 0) (end 50 30) (layer "Edge.Cuts") (width 0.05))
+)"#;
+
+        let parsed = parse_kicad_pcb_str(pcb).expect("parse");
+        let mut world = parsed.world;
+        let board = world.board_entity().expect("board");
+
+        let outline = world
+            .ecs()
+            .get::<BoardOutline>(board)
+            .expect("edge cuts describe a ring, so the board has an outline");
+
+        assert_eq!(outline.points.len(), 4);
+        assert!(outline.contains(Point::from_mm(25.0, 15.0)));
+        assert!(!outline.contains(Point::from_mm(60.0, 15.0)));
+    }
+
+    #[test]
+    fn edge_cuts_that_do_not_close_yield_no_outline() {
+        // Three sides of a rectangle. A partial ring is worse than none: it
+        // would put an edge where the board has none.
+        let pcb = r#"(kicad_pcb (version 20240108) (generator pcbnew)
+  (layers (0 "F.Cu" signal) (31 "B.Cu" signal))
+  (gr_line (start 0 0) (end 50 0) (layer "Edge.Cuts") (width 0.05))
+  (gr_line (start 50 0) (end 50 30) (layer "Edge.Cuts") (width 0.05))
+  (gr_line (start 50 30) (end 0 30) (layer "Edge.Cuts") (width 0.05))
+)"#;
+
+        let parsed = parse_kicad_pcb_str(pcb).expect("parse");
+        let mut world = parsed.world;
+        let board = world.board_entity().expect("board");
+        assert!(world.ecs().get::<BoardOutline>(board).is_none());
+    }
+
+    #[test]
     fn a_footprint_states_which_face_it_is_on() {
         // `(layer "B.Cu")` on a footprint means the part is placed from the
         // bottom. Everything else in the codebase has to guess this from where
@@ -1193,4 +1242,105 @@ mod tests {
             Ok(_) => panic!("Expected error for unsupported version"),
         }
     }
+}
+
+/// The board's outline as a ring of points, when Edge.Cuts describes one.
+///
+/// A bounding box is enough to say how big a board is and wrong for saying
+/// where its edge runs. A cutout, a slot or a chamfer all live inside the same
+/// box, and clearance measured against the box passes copper that sits outside
+/// the actual edge.
+///
+/// `gr_poly` is already a ring and is taken as written. Loose `gr_line`
+/// segments are walked end to end into one; anything that does not close, or
+/// leaves segments over, yields nothing rather than a guess - a partial
+/// outline would be worse than the bounding box it replaces.
+fn extract_board_ring(elements: &[Sexp]) -> Option<Vec<Point>> {
+    // A polygon states the ring directly.
+    for elem in elements {
+        if list_name(elem).as_deref() != Some("gr_poly") || !is_on_edge_cuts(elem) {
+            continue;
+        }
+        let mut points = Vec::new();
+        if let Ok(list) = elem.list() {
+            for child in list {
+                if list_name(child).as_deref() != Some("pts") {
+                    continue;
+                }
+                let Ok(pts) = child.list() else { continue };
+                for pt in &pts[1..] {
+                    if list_name(pt).as_deref() != Some("xy") {
+                        continue;
+                    }
+                    let Ok(pt_list) = pt.list() else { continue };
+                    if pt_list.len() >= 3 {
+                        if let (Some(x), Some(y)) = (get_f64(&pt_list[1]), get_f64(&pt_list[2])) {
+                            points.push(Point::from_mm(x, y));
+                        }
+                    }
+                }
+            }
+        }
+        if points.len() >= 3 {
+            return Some(points);
+        }
+    }
+
+    // Otherwise, walk the loose segments into a ring.
+    let mut segments: Vec<(Point, Point)> = Vec::new();
+    for elem in elements {
+        if list_name(elem).as_deref() != Some("gr_line") || !is_on_edge_cuts(elem) {
+            continue;
+        }
+        if let (Some(start), Some(end)) = (find_xy_child(elem, "start"), find_xy_child(elem, "end"))
+        {
+            segments.push((
+                Point::from_mm(start.0, start.1),
+                Point::from_mm(end.0, end.1),
+            ));
+        }
+    }
+    if segments.len() < 3 {
+        return None;
+    }
+
+    // A micrometre: KiCad writes millimetres with enough decimals that two
+    // endpoints meant to touch land on the same nanometre, but not enough to
+    // rely on it.
+    const JOIN_TOLERANCE_NM: i64 = 1_000;
+    let touches = |a: Point, b: Point| -> bool {
+        (a.x.raw() - b.x.raw()).abs() <= JOIN_TOLERANCE_NM
+            && (a.y.raw() - b.y.raw()).abs() <= JOIN_TOLERANCE_NM
+    };
+
+    let mut used = vec![false; segments.len()];
+    let start = segments[0].0;
+    let mut cursor = segments[0].1;
+    let mut ring = vec![start];
+    used[0] = true;
+
+    for _ in 1..segments.len() {
+        ring.push(cursor);
+        let Some((index, next)) = segments.iter().enumerate().find_map(|(i, (a, b))| {
+            if used[i] {
+                return None;
+            }
+            if touches(*a, cursor) {
+                Some((i, *b))
+            } else if touches(*b, cursor) {
+                Some((i, *a))
+            } else {
+                None
+            }
+        }) else {
+            return None;
+        };
+        used[index] = true;
+        cursor = next;
+    }
+
+    if !touches(cursor, start) {
+        return None;
+    }
+    Some(ring)
 }
