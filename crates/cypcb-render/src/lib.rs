@@ -1206,7 +1206,7 @@ impl PcbEngine {
     /// against.
     fn register_footprint_pads(&mut self, name: &str, pads: &[PadInfo], silk: &[SilkInfo]) {
         let mut footprint = self.footprint_from_pads(name, pads);
-        footprint.silk = silk.iter().filter_map(SilkInfo::to_shape).collect();
+        footprint.silk = silk.iter().flat_map(SilkInfo::to_shapes).collect();
         self.footprint_lib.register(footprint);
     }
 
@@ -1924,10 +1924,21 @@ mod tests {
             .silk
             .clone();
 
+        // The segment and the circle survive as themselves. The arc has no
+        // shape in the model, so it arrives as ink: 32 segments to the turn,
+        // and this one states no angles, which means all the way round.
         assert_eq!(
             stored.len(),
-            2,
-            "the segment and the circle survive; the arc has no shape in the model yet"
+            2 + 32,
+            "the arc has to become segments rather than disappear"
+        );
+        assert_eq!(
+            stored
+                .iter()
+                .filter(|shape| matches!(shape, cypcb_world::footprint::SilkShape::Circle { .. }))
+                .count(),
+            1,
+            "the circle stays a circle - only the arc is approximated"
         );
     }
 

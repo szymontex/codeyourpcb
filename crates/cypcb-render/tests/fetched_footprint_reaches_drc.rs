@@ -106,3 +106,58 @@ fn a_board_using_an_unregistered_footprint_is_refused_rather_than_passed() {
         "the same board loads once the engine knows the part"
     );
 }
+
+#[test]
+fn a_fetched_arc_becomes_ink_instead_of_being_dropped() {
+    // A supplier's footprint often draws a rounded outline or a pin-one arc.
+    // The board model has no arc, so one used to be parsed and thrown away:
+    // the part arrived with its artwork and printed without it, silently. A
+    // legend is ink rather than geometry anything reasons about, so an arc
+    // becomes segments - which is what the exporter does with a circle anyway.
+    use cypcb_render::SilkInfo;
+    use cypcb_world::footprint::SilkShape;
+
+    let quarter = SilkInfo::Arc {
+        cx: 0,
+        cy: 0,
+        radius: 1_000_000,
+        width: 150_000,
+        start_angle: 0.0,
+        end_angle: 90.0,
+    };
+
+    let shapes = quarter.to_shapes();
+    assert_eq!(
+        shapes.len(),
+        8,
+        "a quarter turn at 32 segments to the circle is eight of them"
+    );
+    assert!(
+        shapes
+            .iter()
+            .all(|shape| matches!(shape, SilkShape::Segment { .. })),
+        "an arc becomes segments, not circles"
+    );
+
+    // It starts on the +X axis and ends on +Y, at the radius it was given.
+    let SilkShape::Segment { start, .. } = shapes[0] else {
+        panic!("the first shape is a segment");
+    };
+    assert_eq!((start.x.0, start.y.0), (1_000_000, 0));
+    let SilkShape::Segment { end, .. } = shapes[7] else {
+        panic!("the last shape is a segment");
+    };
+    assert_eq!((end.x.0, end.y.0), (0, 1_000_000));
+
+    // An arc that says nothing about its angles is a full circle, which is
+    // what the payloads written before arcs carried angles meant.
+    let whole = SilkInfo::Arc {
+        cx: 0,
+        cy: 0,
+        radius: 1_000_000,
+        width: 150_000,
+        start_angle: 0.0,
+        end_angle: 0.0,
+    };
+    assert_eq!(whole.to_shapes().len(), 32, "a full turn is 32 segments");
+}

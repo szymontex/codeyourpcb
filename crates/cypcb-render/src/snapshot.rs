@@ -498,7 +498,12 @@ pub enum SilkInfo {
         /// Stroke width.
         width: i64,
     },
-    /// An arc. Parsed so a footprint carrying one still loads, then dropped.
+    /// An arc, approximated as segments on the way into the board model.
+    ///
+    /// The model has no arc, and a legend is ink rather than geometry anything
+    /// reasons about - the exporter emits a circle as a 32-sided polygon for
+    /// the same reason. Dropping arcs instead meant a part fetched from a
+    /// supplier arrived with a rounded outline and lost it silently.
     Arc {
         /// Centre X.
         cx: i64,
@@ -508,11 +513,85 @@ pub enum SilkInfo {
         radius: i64,
         /// Stroke width.
         width: i64,
+        /// Where the arc starts, in degrees, counter-clockwise from +X.
+        ///
+        /// Defaulted so a payload written before arcs carried angles still
+        /// deserialises - as a full circle, which is what it meant.
+        #[serde(default)]
+        start_angle: f64,
+        /// Where it ends. Equal to the start means a full turn.
+        #[serde(default = "full_turn")]
+        end_angle: f64,
     },
 }
 
+/// The end angle of an arc that says nothing: all the way round.
+fn full_turn() -> f64 {
+    360.0
+}
+
 impl SilkInfo {
-    /// Convert to the board model's shape, if it has one.
+    /// How many segments approximate a full turn.
+    ///
+    /// Thirty-two is what the Gerber exporter already uses for a circle: at
+    /// the scale a legend is printed the polygon differs from the curve by
+    /// less than the width of the line drawing it.
+    const SEGMENTS_PER_TURN: usize = 32;
+
+    /// Convert to the board model's shapes.
+    ///
+    /// One shape for a segment or a circle, a chain of segments for an arc.
+    /// Empty only for an arc with no length.
+    pub fn to_shapes(&self) -> Vec<cypcb_world::footprint::SilkShape> {
+        use cypcb_core::{Nm, Point};
+        use cypcb_world::footprint::SilkShape;
+
+        if let SilkInfo::Arc {
+            cx,
+            cy,
+            radius,
+            width,
+            start_angle,
+            end_angle,
+        } = self
+        {
+            let sweep = {
+                let raw = end_angle - start_angle;
+                // A full turn is what an arc means when both angles agree.
+                if raw.abs() < f64::EPSILON {
+                    360.0
+                } else {
+                    raw
+                }
+            };
+            let steps = ((sweep.abs() / 360.0) * Self::SEGMENTS_PER_TURN as f64).ceil() as usize;
+            let steps = steps.max(1);
+
+            let point_at = |degrees: f64| {
+                let radians = degrees.to_radians();
+                Point::new(
+                    Nm(cx + (*radius as f64 * radians.cos()).round() as i64),
+                    Nm(cy + (*radius as f64 * radians.sin()).round() as i64),
+                )
+            };
+
+            return (0..steps)
+                .map(|i| {
+                    let a = start_angle + sweep * (i as f64 / steps as f64);
+                    let b = start_angle + sweep * ((i + 1) as f64 / steps as f64);
+                    SilkShape::Segment {
+                        start: point_at(a),
+                        end: point_at(b),
+                        width: Nm(*width),
+                    }
+                })
+                .collect();
+        }
+
+        self.to_shape().into_iter().collect()
+    }
+
+    /// Convert to the board model's shape, if it is a single one.
     pub fn to_shape(&self) -> Option<cypcb_world::footprint::SilkShape> {
         use cypcb_core::{Nm, Point};
         use cypcb_world::footprint::SilkShape;
