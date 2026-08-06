@@ -254,3 +254,57 @@ fn a_trace_meeting_the_pad_it_belongs_to_is_still_exempt() {
             .collect::<Vec<_>>()
     );
 }
+
+#[test]
+fn a_pour_hanging_off_the_board_is_reported() {
+    // A zone is copper. One that reaches past the board edge is copper the
+    // fabricator's router cuts through, and nothing reported it: zones are not
+    // in the spatial index, because a zone covers every pad inside it and
+    // indexing one would have the clearance rule fire on each.
+    use cypcb_drc::rules::EdgeClearanceRule;
+    use cypcb_world::components::zone::{Zone, ZoneKind};
+
+    let mut world = BoardWorld::new();
+    world.set_board("t".to_string(), (Nm::from_mm(20.0), Nm::from_mm(20.0)), 2);
+
+    // Well inside: nothing to say.
+    world.spawn_entity(Zone {
+        bounds: Rect::from_center_size(
+            Point::from_mm(10.0, 10.0),
+            (Nm::from_mm(10.0), Nm::from_mm(10.0)),
+        ),
+        kind: ZoneKind::CopperPour,
+        layer_mask: Layer::TopCopper.to_copper_mask(),
+        name: Some("INSIDE".to_string()),
+        net: Some(NetId::new(1)),
+    });
+
+    let rules = DesignRules::jlcpcb_2layer();
+    assert!(
+        EdgeClearanceRule.check(&mut world, &rules).is_empty(),
+        "a pour inside the board has nothing to report"
+    );
+
+    // Over the right-hand edge.
+    world.spawn_entity(Zone {
+        bounds: Rect::from_center_size(
+            Point::from_mm(19.0, 10.0),
+            (Nm::from_mm(6.0), Nm::from_mm(6.0)),
+        ),
+        kind: ZoneKind::CopperPour,
+        layer_mask: Layer::TopCopper.to_copper_mask(),
+        name: Some("OVERHANG".to_string()),
+        net: Some(NetId::new(1)),
+    });
+
+    let violations = EdgeClearanceRule.check(&mut world, &rules);
+    assert_eq!(
+        violations.len(),
+        1,
+        "a pour reaching past the edge is copper the router cuts through: {:?}",
+        violations
+            .iter()
+            .map(|v| v.message.clone())
+            .collect::<Vec<_>>()
+    );
+}

@@ -65,8 +65,26 @@ impl DrcRule for EdgeClearanceRule {
         let board_w = board_size.width.0;
         let board_h = board_size.height.0;
 
-        // Check each spatial entry against the four edges
-        let entries: Vec<_> = world.spatial().iter().cloned().collect();
+        // Check each spatial entry against the four edges.
+        //
+        // Copper pours are measured too, and they are not in the index: a zone
+        // covers every pad inside it, so indexing one would have the clearance
+        // rule report a violation against each. The edge is the one question a
+        // zone's own outline can answer, and a plane hanging off the board is
+        // copper the router will cut through - which nothing reported before,
+        // because nothing looked.
+        let mut entries: Vec<_> = world.spatial().iter().cloned().collect();
+        for (entity, zone) in world.zones() {
+            if zone.is_keepout() {
+                continue;
+            }
+            entries.push(cypcb_world::SpatialEntry::new(
+                entity,
+                zone.bounds.min,
+                zone.bounds.max,
+                zone.layer_mask,
+            ));
+        }
 
         for entry in &entries {
             let min_x = entry.envelope.lower()[0];
