@@ -95,6 +95,10 @@ pub mod copper;
 pub mod dsl;
 pub mod footprint;
 pub mod registry;
+
+/// The letters a legend prints, as strokes both the exporter and the checker
+/// read.
+pub mod silk_text;
 pub mod spatial;
 #[cfg(feature = "sync")]
 pub mod sync;

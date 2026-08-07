@@ -1,15 +1,15 @@
 //! Silkscreen layer Gerber export.
 //!
-//! Exports silkscreen layers (top/bottom) with component designator markers
-//! and courtyard outlines. Uses the Legend file function per X2 spec.
+//! Exports silkscreen layers (top/bottom) with part designators, footprint
+//! artwork and courtyard outlines. Uses the Legend file function per X2 spec.
 //!
-//! # MVP Limitations
+//! Designators print as strokes from `cypcb_world::silk_text`, which is also
+//! what the silkscreen clearance rule measures - the checker and the file
+//! cannot disagree about what is on the board. A part whose name this font
+//! cannot spell falls back to a position crosshair.
 //!
-//! - Designators rendered as simple crosshair marks (not full text)
-//! - Component outlines use courtyard bounds
-//!
-//! Full text rendering requires vector stroke fonts or bitmap fonts rendered
-//! as polylines, which is deferred to future implementation.
+//! A footprint that carries its own artwork prints that; one that does not
+//! prints its courtyard outline.
 
 use crate::apertures::{ApertureManager, ApertureShape};
 use crate::coords::{nm_to_gerber, CoordinateFormat};
@@ -55,16 +55,9 @@ impl Default for SilkConfig {
 
 /// Export silkscreen layer to Gerber format.
 ///
-/// Generates a complete Gerber file for the specified silkscreen layer,
-/// including component courtyard outlines and designator position markers.
-///
-/// # MVP Implementation
-///
-/// This MVP implementation renders:
-/// - Component courtyard rectangles
-/// - Designator position marks (crosshairs at component centers)
-///
-/// Full text rendering is deferred to future implementation.
+/// Generates a complete Gerber file for the specified silkscreen layer: each
+/// part's designator, its own artwork when the footprint carries any, and its
+/// courtyard outline when it does not.
 ///
 /// # Arguments
 ///
@@ -190,6 +183,7 @@ pub fn export_silkscreen(
                         position.0,
                         config.text_height,
                         config.line_width,
+                        cypcb_world::silk_text::artwork_rise(footprint, rotation.to_degrees()),
                         &mut drawing_commands,
                         format,
                     )
@@ -247,38 +241,40 @@ fn draw_text(
     text: &str,
     position: cypcb_core::Point,
     height: Nm,
-    _line_width: Nm,
+    line_width: Nm,
+    rise: Nm,
     output: &mut String,
     format: &CoordinateFormat,
 ) -> bool {
-    use super::font;
+    // The letters are laid out by the model, not here. The silkscreen
+    // clearance rule measures the same call, so what the checker passes is
+    // what this file prints.
+    let strokes =
+        cypcb_world::silk_text::designator_strokes(text, position, height, line_width, rise);
 
-    let glyph_width = height.0 as f32 * 0.6;
-    let advance = glyph_width * (1.0 + font::ADVANCE_GAP);
-    let total = font::width_in_glyphs(text) * glyph_width;
-    let start_x = position.x.0 as f32 - total / 2.0;
-    // Sat above the part's centre, where a courtyard outline leaves room.
-    let baseline_y = position.y.0 as f32 + height.0 as f32 * 0.6;
-
-    let mut drew = false;
-    for (index, c) in text.chars().enumerate() {
-        let Some(strokes) = font::glyph(c) else {
+    // The pen lifts only where the strokes stop joining, so a letter drawn as
+    // one polyline stays one polyline in the file.
+    let mut pen_at = None;
+    for shape in &strokes {
+        let cypcb_world::footprint::SilkShape::Segment { start, end, .. } = shape else {
             continue;
         };
-        let origin_x = start_x + index as f32 * advance;
-
-        for stroke in strokes {
-            for (point_index, (gx, gy)) in stroke.iter().enumerate() {
-                let x = nm_to_gerber((origin_x + gx * glyph_width) as i64, format);
-                let y = nm_to_gerber((baseline_y + gy * height.0 as f32) as i64, format);
-                let command = if point_index == 0 { "D02" } else { "D01" };
-                output.push_str(&format!("X{}Y{}{}*\n", x, y, command));
-                drew = true;
-            }
+        if pen_at != Some(*start) {
+            output.push_str(&format!(
+                "X{}Y{}D02*\n",
+                nm_to_gerber(start.x.0, format),
+                nm_to_gerber(start.y.0, format)
+            ));
         }
+        output.push_str(&format!(
+            "X{}Y{}D01*\n",
+            nm_to_gerber(end.x.0, format),
+            nm_to_gerber(end.y.0, format)
+        ));
+        pen_at = Some(*end);
     }
 
-    drew
+    !strokes.is_empty()
 }
 
 fn draw_crosshair(

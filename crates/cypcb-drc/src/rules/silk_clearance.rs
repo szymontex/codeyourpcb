@@ -5,13 +5,19 @@
 //! or reject the file.
 //!
 //! What the board actually prints is what `cypcb-export` puts on the legend
-//! layer, and for every component that is the outline of its courtyard - see
-//! `gerber::silk::export_silkscreen`. This rule checks exactly that artwork
-//! against every other component's pads on the same side.
+//! layer - see `gerber::silk::export_silkscreen`. For every component that is
+//! its artwork, or its courtyard outline when it has none, plus its designator
+//! drawn as strokes. This rule measures all of it.
 //!
-//! It deliberately does not check a component against its own pads. A
+//! The outline is checked against every *other* component's pads only. A
 //! footprint's courtyard is drawn around its own copper by construction, and
 //! flagging that would fire on every part on the board.
+//!
+//! The designator is checked against its own pads as well, because nothing
+//! guarantees it clears them: it is laid out from the part's origin by
+//! `cypcb_world::silk_text`, which knows the text height and nothing about the
+//! footprint under it. A name printed across a part's own pad starves that
+//! joint exactly as a neighbour's would.
 
 use cypcb_core::{Nm, Point};
 use cypcb_world::components::{FootprintRef, Position, RefDes, Rotation, Side};
@@ -31,6 +37,12 @@ use super::{rotate_point, DrcRule};
 /// checker passes a board the fabricator will not.
 const SILK_LINE_WIDTH: Nm = Nm(150_000);
 
+/// How tall a printed designator is, in nanometers.
+///
+/// Must match `SilkConfig::default().text_height` in `cypcb-export`, for the
+/// same reason as the line width above.
+const DESIGNATOR_HEIGHT: Nm = Nm(1_000_000);
+
 /// Rule for checking silkscreen to copper clearance.
 pub struct SilkClearanceRule;
 
@@ -40,8 +52,9 @@ impl DrcRule for SilkClearanceRule {
     }
 
     fn check(&self, world: &mut BoardWorld, rules: &DesignRules) -> Vec<DrcViolation> {
+        // One part is enough: its own name can land on its own pads.
         let placed = collect_placed(world);
-        if placed.len() < 2 {
+        if placed.is_empty() {
             return Vec::new();
         }
 
@@ -53,7 +66,11 @@ impl DrcRule for SilkClearanceRule {
             let Some(footprint) = library.get(&silk.footprint) else {
                 continue;
             };
-            let edges = silk_segments(footprint, silk);
+            // The name is checked against every part including this one; the
+            // outline only against the others.
+            let name = designator_edges(footprint, silk);
+            let mut edges = silk_segments(footprint, silk);
+            edges.extend_from_slice(&name);
             if edges.is_empty() {
                 continue;
             }
@@ -65,15 +82,20 @@ impl DrcRule for SilkClearanceRule {
                 .map_or_else(|| side_mask(footprint), |s| s.mask() as u8);
 
             for other in &placed {
-                if other.entity == silk.entity {
-                    continue;
-                }
                 let Some(other_footprint) = library.get(&other.footprint) else {
                     continue;
                 };
+                let against: &[(Point, Point)] = if other.entity == silk.entity {
+                    &name
+                } else {
+                    &edges
+                };
+                if against.is_empty() {
+                    continue;
+                }
 
                 if let Some(violation) = first_touch(
-                    &edges,
+                    against,
                     silk,
                     silk_side,
                     other,
@@ -173,6 +195,28 @@ fn silk_segments(footprint: &Footprint, placed: &Placed) -> Vec<(Point, Point)> 
         }
     }
     out
+}
+
+/// The strokes a part's printed name lays down, in board coordinates.
+///
+/// The same call the exporter makes, at the same default height, so what this
+/// rule measures is what the legend file draws. A default that drifts from
+/// `SilkConfig` here means the checker passes a board the fabricator will not,
+/// which is the same hazard `SILK_LINE_WIDTH` is written down for.
+fn designator_edges(footprint: &Footprint, placed: &Placed) -> Vec<(Point, Point)> {
+    cypcb_world::silk_text::designator_strokes(
+        &placed.refdes,
+        placed.position,
+        DESIGNATOR_HEIGHT,
+        SILK_LINE_WIDTH,
+        cypcb_world::silk_text::artwork_rise(footprint, placed.rotation_deg),
+    )
+    .into_iter()
+    .filter_map(|shape| match shape {
+        SilkShape::Segment { start, end, .. } => Some((start, end)),
+        SilkShape::Circle { .. } => None,
+    })
+    .collect()
 }
 
 fn courtyard_edges(footprint: &Footprint, placed: &Placed) -> Vec<(Point, Point)> {
