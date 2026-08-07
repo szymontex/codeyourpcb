@@ -464,3 +464,179 @@ fn excellon_holes(text: &str) -> Vec<(f64, f64, f64)> {
     }
     out
 }
+
+/// Every placed part on a board, as (refdes, x mm, y mm).
+fn placed_parts(world: &mut BoardWorld) -> Vec<(String, f64, f64)> {
+    use cypcb_world::components::{Position, RefDes};
+
+    let ecs = world.ecs_mut();
+    let mut query = ecs.query::<(&RefDes, &Position)>();
+    let mut parts: Vec<(String, f64, f64)> = query
+        .iter(ecs)
+        .map(|(refdes, position)| {
+            (
+                refdes.as_str().to_string(),
+                position.0.x.0 as f64 / 1_000_000.0,
+                position.0.y.0 as f64 / 1_000_000.0,
+            )
+        })
+        .collect();
+    // By reference designator: the coordinates are floats and the order only
+    // has to be stable for the report to read the same twice.
+    parts.sort_by(|a, b| a.0.cmp(&b.0));
+    parts
+}
+
+/// Split a CSV line, keeping quoted fields whole.
+///
+/// The BOM groups designators as `"C1,C2"`, so splitting on every comma turns
+/// one part into two and the count comes out right for the wrong reason.
+fn csv_fields(line: &str) -> Vec<String> {
+    let mut fields = Vec::new();
+    let mut current = String::new();
+    let mut quoted = false;
+    for c in line.chars() {
+        match c {
+            '"' => quoted = !quoted,
+            ',' if !quoted => fields.push(std::mem::take(&mut current)),
+            _ => current.push(c),
+        }
+    }
+    fields.push(current);
+    fields
+}
+
+fn assembly_file(dir: &Path, suffix: &str, name: &str) -> String {
+    let path = files_under(dir)
+        .into_iter()
+        .find(|path| path.to_string_lossy().ends_with(suffix))
+        .unwrap_or_else(|| panic!("{name} exported no {suffix}"));
+    std::fs::read_to_string(path).expect("a readable assembly file")
+}
+
+#[test]
+fn the_pick_and_place_names_every_part_where_the_board_puts_it() {
+    // The CPL is what a machine follows. A board whose CPL is short by one part
+    // is assembled with a gap, and one whose coordinates drift is assembled
+    // wrong - neither shows in any Gerber.
+    let mut wrong: Vec<String> = Vec::new();
+    let mut parts_checked = 0usize;
+
+    for (name, mut world, library) in boards() {
+        let parts = placed_parts(&mut world);
+        if parts.is_empty() {
+            continue;
+        }
+
+        let dir = export_to_temp("cpl", &name, &mut world, &library);
+        let cpl = assembly_file(&dir, "CPL.csv", &name);
+
+        let rows: Vec<Vec<String>> = cpl
+            .lines()
+            .skip(1)
+            .filter(|line| !line.trim().is_empty())
+            .map(csv_fields)
+            .collect();
+
+        if rows.len() != parts.len() {
+            wrong.push(format!(
+                "{name}: {} parts on the board, {} rows in the CPL",
+                parts.len(),
+                rows.len()
+            ));
+        }
+
+        for (refdes, x, y) in &parts {
+            parts_checked += 1;
+            let Some(row) = rows.first().map(|_| ()).and_then(|_| {
+                rows.iter().find(|row| row.first().map(String::as_str) == Some(refdes))
+            }) else {
+                wrong.push(format!("{name}: {refdes} is on the board and not in the CPL"));
+                continue;
+            };
+
+            let read = |field: Option<&String>| -> Option<f64> {
+                field?.trim().trim_end_matches("mm").parse::<f64>().ok()
+            };
+            match (read(row.get(1)), read(row.get(2))) {
+                (Some(cx), Some(cy)) if (cx - x).abs() < 0.002 && (cy - y).abs() < 0.002 => {}
+                (Some(cx), Some(cy)) => wrong.push(format!(
+                    "{name}: {refdes} sits at ({x:.3}mm, {y:.3}mm) and the CPL says ({cx:.3}mm, {cy:.3}mm)"
+                )),
+                _ => wrong.push(format!("{name}: {refdes} has no readable position in the CPL")),
+            }
+        }
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    assert!(
+        wrong.is_empty(),
+        "the pick-and-place does not match the board:\n{}",
+        wrong.join("\n")
+    );
+    assert!(parts_checked >= 40, "only {parts_checked} parts were checked");
+    eprintln!("{parts_checked} parts found in the pick-and-place at the position the board holds");
+}
+
+#[test]
+fn the_bom_accounts_for_every_part_exactly_once() {
+    // A BOM that misses a part means one component nobody bought; a BOM that
+    // lists one twice means a part paid for and never fitted.
+    let mut wrong: Vec<String> = Vec::new();
+    let mut parts_counted = 0usize;
+
+    for (name, mut world, library) in boards() {
+        let parts = placed_parts(&mut world);
+        if parts.is_empty() {
+            continue;
+        }
+
+        let dir = export_to_temp("bom", &name, &mut world, &library);
+        let bom = assembly_file(&dir, "BOM.csv", &name);
+
+        let mut listed: Vec<String> = Vec::new();
+        let mut quantity_total = 0usize;
+        for line in bom.lines().skip(1).filter(|line| !line.trim().is_empty()) {
+            let fields = csv_fields(line);
+            for refdes in fields.first().map(String::as_str).unwrap_or("").split(',') {
+                let refdes = refdes.trim();
+                if !refdes.is_empty() {
+                    listed.push(refdes.to_string());
+                }
+            }
+            quantity_total += fields
+                .get(2)
+                .and_then(|q| q.trim().parse::<usize>().ok())
+                .unwrap_or(0);
+        }
+
+        listed.sort();
+        let unique: std::collections::BTreeSet<&String> = listed.iter().collect();
+        if unique.len() != listed.len() {
+            wrong.push(format!("{name}: a part is listed twice in the BOM"));
+        }
+        if quantity_total != parts.len() {
+            wrong.push(format!(
+                "{name}: {} parts on the board, {quantity_total} accounted for in the BOM",
+                parts.len()
+            ));
+        }
+        for (refdes, _, _) in &parts {
+            parts_counted += 1;
+            if !unique.contains(refdes) {
+                wrong.push(format!("{name}: {refdes} is on the board and not in the BOM"));
+            }
+        }
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    assert!(
+        wrong.is_empty(),
+        "the BOM does not account for the board:\n{}",
+        wrong.join("\n")
+    );
+    assert!(parts_counted >= 40, "only {parts_counted} parts were counted");
+    eprintln!("{parts_counted} parts accounted for exactly once in the bills of materials");
+}
