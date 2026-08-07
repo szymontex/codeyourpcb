@@ -11,7 +11,6 @@ use std::time::Instant;
 use clap::Args;
 use miette::{IntoDiagnostic, Result, WrapErr};
 
-use cypcb_parser::CypcbParser;
 use cypcb_router::{
     apply_routes, export_dsn, FreeRoutingRunner, RoutingConfig, RoutingError, RoutingProgress,
     RoutingResult,
@@ -87,8 +86,7 @@ impl RouteCommand {
         eprintln!("Parsing {}...", self.file.display());
 
         // Parse source
-        let mut parser = CypcbParser::new();
-        let result = parser.parse(&source);
+        let result = cypcb_parser::parse(&source);
 
         if result.has_errors() {
             for err in result.errors {

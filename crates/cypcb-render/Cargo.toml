@@ -11,8 +11,9 @@ crate-type = ["cdylib", "rlib"]
 
 [features]
 default = ["native"]
-# Native build: the tree-sitter parser, which needs a C compiler.
-native = ["cypcb-parser/tree-sitter-parser", "cypcb-world/sync"]
+# Native build. Same reader as the browser one; the difference left is what
+# else a native binary links.
+native = ["cypcb-parser/rust-parser", "cypcb-world/sync"]
 # Browser build: the Rust reader, which needs none, so the engine parses
 # `.cypcb` itself instead of being handed a snapshot the host parsed.
 wasm = ["cypcb-parser/rust-parser", "cypcb-world/sync"]

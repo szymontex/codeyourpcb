@@ -1,20 +1,25 @@
 //! CodeYourPCB Parser
 //!
-//! Tree-sitter based parser for the CodeYourPCB DSL.
-//! Provides incremental parsing with error recovery.
+//! Reads the CodeYourPCB DSL into a typed AST.
 //!
 //! # Overview
 //!
 //! This crate provides:
-//! - Tree-sitter grammar bindings for the CodeYourPCB DSL (requires `tree-sitter-parser` feature)
-//! - AST (Abstract Syntax Tree) type definitions
-//! - Tree-sitter CST to typed AST conversion (requires `tree-sitter-parser` feature)
-//! - Rich error reporting with miette integration
+//! - the AST every other crate works on
+//! - a reader written in Rust, which is what `parse` is
+//! - the tree-sitter grammar and its generated C parser, behind a feature, as
+//!   the thing the reader is checked against
+//! - rich error reporting with miette integration
 //!
 //! # Feature Flags
 //!
-//! - `tree-sitter-parser` (default): Enables tree-sitter parsing with C code compilation.
-//!   Disable this feature for WASM builds where C compilation is not available.
+//! - `rust-parser` (default): the reader. No C, so it compiles for
+//!   `wasm32-unknown-unknown` and the browser engine parses with it.
+//! - `tree-sitter-parser`: the grammar and its generated C parser, exported as
+//!   `tree_sitter_parse`. `tests/differential.rs` reads every example both
+//!   ways and compares the ASTs; `tests/error_parity.rs` checks they reject
+//!   the same files. Why there is one reader rather than two, and what the
+//!   other one cost, is in `docs/one-parser.md`.
 //!
 //! # Grammar
 //!
@@ -42,33 +47,22 @@
 //! # Quick Start
 //!
 //! ```rust
-//! use cypcb_parser::{parse, CypcbParser};
+//! use cypcb_parser::parse;
 //!
-//! // Convenience function
 //! let result = parse("version 1\nboard test { size 10mm x 10mm }");
 //! if result.is_ok() {
 //!     println!("Parsed {} definitions", result.value.definitions.len());
 //! }
-//!
-//! // Or use the parser struct for multiple parses
-//! let mut parser = CypcbParser::new();
-//! let result = parser.parse("board another { size 20mm x 20mm }");
 //! ```
 //!
-//! # Low-level Usage
-//!
-//! For direct access to the Tree-sitter parse tree:
+//! Errors are collected rather than fatal, so a file with one bad line still
+//! returns the rest of the board:
 //!
 //! ```rust
-//! use cypcb_parser::language;
-//! use tree_sitter::Parser;
+//! use cypcb_parser::parse;
 //!
-//! let mut parser = Parser::new();
-//! parser.set_language(&language()).unwrap();
-//!
-//! let source = "version 1\nboard test { size 10mm x 10mm }";
-//! let tree = parser.parse(source, None).unwrap();
-//! println!("{}", tree.root_node().to_sexp());
+//! let result = parse("version 1\nfrobnicate 3\n");
+//! assert!(!result.errors.is_empty());
 //! ```
 
 pub mod ast;
@@ -79,7 +73,10 @@ pub mod ast;
 pub mod errors;
 
 /// Resolving `import` statements against the filesystem.
-#[cfg(feature = "tree-sitter-parser")]
+///
+/// Works on the AST, so it needs whichever reader this build has rather than a
+/// particular one.
+#[cfg(feature = "rust-parser")]
 pub mod imports;
 
 // Tree-sitter parser module only available with the feature
@@ -92,8 +89,9 @@ pub mod lexer;
 
 /// The Rust reader: `.cypcb` to AST with no C behind it.
 ///
-/// Step one of `docs/one-parser.md`. Behind a feature until it covers the
-/// language; nothing in the shipping path calls it yet.
+/// This is what `parse` is, in every build that has it. The tree-sitter parser
+/// is kept behind `tree-sitter-parser` as `tree_sitter_parse`, which is what
+/// `tests/differential.rs` checks this one against.
 #[cfg(feature = "rust-parser")]
 pub mod reader;
 
@@ -109,12 +107,21 @@ pub use ast::{
 
 // Re-export error types (always available)
 pub use errors::{ParseError, ParseResult};
-#[cfg(feature = "tree-sitter-parser")]
+#[cfg(feature = "rust-parser")]
 pub use imports::{resolve_imports, ImportError};
 
-// Re-export parser types (only with feature)
+// The reader the project ships. `parse` is this one wherever it exists.
+#[cfg(feature = "rust-parser")]
+pub use reader::read as parse;
+
+// The parser being replaced, under a name of its own so both can be called in
+// the same test. See `docs/one-parser.md`.
 #[cfg(feature = "tree-sitter-parser")]
-pub use parser::{parse, CypcbParser};
+pub use parser::{parse as tree_sitter_parse, CypcbParser};
+
+// When only the tree-sitter parser is built, it is still `parse`.
+#[cfg(all(feature = "tree-sitter-parser", not(feature = "rust-parser")))]
+pub use parser::parse;
 
 // Link to the compiled Tree-sitter grammar (only with feature)
 #[cfg(feature = "tree-sitter-parser")]

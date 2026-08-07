@@ -5,7 +5,6 @@ use miette::{IntoDiagnostic, Result, WrapErr};
 use serde::Serialize;
 use std::path::PathBuf;
 
-use cypcb_parser::CypcbParser;
 use cypcb_world::components::trace::{Trace, Via};
 use cypcb_world::components::zone::Zone;
 use cypcb_world::components::{FootprintRef, NetConnections};
@@ -133,8 +132,7 @@ impl ParseCommand {
             .into_diagnostic()
             .wrap_err_with(|| format!("Failed to read {}", self.file.display()))?;
 
-        let mut parser = CypcbParser::new();
-        let result = parser.parse(&source);
+        let result = cypcb_parser::parse(&source);
 
         // Report parse errors
         if result.has_errors() {

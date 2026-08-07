@@ -6,7 +6,6 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use cypcb_drc::{run_drc, Preset};
-use cypcb_parser::CypcbParser;
 use cypcb_world::footprint::FootprintLibrary;
 use cypcb_world::sync_ast_to_world;
 use cypcb_world::BoardWorld;
@@ -34,8 +33,7 @@ impl CheckCommand {
             .into_diagnostic()
             .wrap_err_with(|| format!("Failed to read {}", self.file.display()))?;
 
-        let mut parser = CypcbParser::new();
-        let result = parser.parse(&source);
+        let result = cypcb_parser::parse(&source);
 
         // Report parse errors
         if result.has_errors() {

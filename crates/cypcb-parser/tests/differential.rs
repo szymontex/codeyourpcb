@@ -1,4 +1,4 @@
-#![cfg(feature = "rust-parser")]
+#![cfg(all(feature = "rust-parser", feature = "tree-sitter-parser"))]
 //! The Rust reader is checked against the parser it will replace.
 //!
 //! `cargo test -p cypcb-parser --features rust-parser --test differential`
@@ -16,7 +16,7 @@
 
 use std::path::{Path, PathBuf};
 
-use cypcb_parser::{parse, reader};
+use cypcb_parser::{reader, tree_sitter_parse as parse};
 
 fn examples_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))

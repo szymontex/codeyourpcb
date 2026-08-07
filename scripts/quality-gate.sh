@@ -33,12 +33,12 @@ echo ""
 
 # Stage 3: Rust tests
 echo "[3/8] cargo test"
-# The Rust reader is behind a feature until it covers the language, so the
-# plain run does not build it and its differential test never runs. Named
-# explicitly rather than left for later: a test nobody runs is not a test.
+# The Rust reader is what `parse` is now. The two tests that check it against
+# the tree-sitter parser need that parser as well, which the plain run does not
+# build - named explicitly, because a test nobody runs is not a test.
 if cargo test --workspace --exclude cypcb-desktop 2>&1 \
-  && cargo test -p cypcb-parser --features rust-parser --test differential 2>&1 \
-  && cargo test -p cypcb-parser --features rust-parser --test error_parity 2>&1 \
+  && cargo test -p cypcb-parser --features tree-sitter-parser --test differential 2>&1 \
+  && cargo test -p cypcb-parser --features tree-sitter-parser --test error_parity 2>&1 \
   && cargo test -p cypcb-render --no-default-features --features wasm \
        --test the_browser_build_reads_the_language 2>&1; then
   pass "cargo-test"

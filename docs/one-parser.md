@@ -99,11 +99,17 @@ Order of work, each step shippable on its own:
    test covers every example except the two written to fail parsing: 147
    definitions across 17 boards, identical. Error parity is pinned separately
    in `tests/error_parity.rs`.
-3. **Half done.** `cypcb-render`'s `wasm` feature carries the reader, the
-   browser engine parses, and the artifact imports nothing from `env`. What is
-   left is the native side: the CLI, the LSP and `cypcb-world::sync` still call
-   the tree-sitter parser, and until they move, `parser.rs`, the `cc` build and
-   the generated `parser.c` stay.
+3. ~~Flip the default feature~~ **Done.** `rust-parser` is `cypcb-parser`'s
+   default and `parse` is the reader everywhere: the CLI's five commands, the
+   LSP, `cypcb-world::sync`, and both builds of `cypcb-render`. Nothing in the
+   workspace depends on the `tree-sitter` crate any more -
+   `cargo tree --workspace -i tree-sitter` finds no such package - so a default
+   build compiles no C at all.
+
+   The grammar, `parser.rs` and the generated `parser.c` stay behind
+   `tree-sitter-parser`, because they are what the reader is checked against:
+   `differential.rs` and `error_parity.rs` need both parsers in one binary.
+   Deleting them would delete the evidence.
 4. ~~Delete `parseSource` and the drift test with it~~ **Done.** The viewer
    reads boards through the engine; the second reader, its helpers and the
    drift test are gone.

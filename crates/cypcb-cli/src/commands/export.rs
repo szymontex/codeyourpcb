@@ -9,7 +9,6 @@ use miette::{IntoDiagnostic, Result, WrapErr};
 
 use cypcb_export::presets::from_name;
 use cypcb_export::{run_export, ExportJob};
-use cypcb_parser::CypcbParser;
 use cypcb_world::footprint::FootprintLibrary;
 use cypcb_world::sync_ast_to_world;
 use cypcb_world::BoardWorld;
@@ -58,8 +57,7 @@ impl ExportCommand {
         eprintln!("Exporting {}...", self.input.display());
 
         // Parse source
-        let mut parser = CypcbParser::new();
-        let result = parser.parse(&source);
+        let result = cypcb_parser::parse(&source);
 
         if result.has_errors() {
             for err in result.errors {

@@ -1,4 +1,4 @@
-#![cfg(feature = "rust-parser")]
+#![cfg(all(feature = "rust-parser", feature = "tree-sitter-parser"))]
 //! Both readers have to reject the same files.
 //!
 //! `cargo test -p cypcb-parser --features rust-parser --test error_parity`
@@ -17,7 +17,7 @@
 //! against one. Pinning the counts equal would be pinning a recovery strategy,
 //! not a language.
 
-use cypcb_parser::{parse, reader};
+use cypcb_parser::{reader, tree_sitter_parse as parse};
 
 /// A source, and whether the language accepts it.
 struct Case {

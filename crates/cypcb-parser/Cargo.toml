@@ -6,11 +6,11 @@ license.workspace = true
 description = "Tree-sitter grammar and parser for CodeYourPCB DSL"
 
 [features]
-default = ["tree-sitter-parser"]
+default = ["rust-parser"]
 # Enable tree-sitter parsing (requires C compiler, not WASM compatible)
 tree-sitter-parser = ["dep:tree-sitter", "dep:cc"]
-# The Rust reader, which needs no C and therefore reaches wasm. Step one of
-# docs/one-parser.md: incomplete, checked against the tree-sitter parser.
+# The reader this project ships: Rust, no C, reaches wasm. docs/one-parser.md
+# has the measurement behind choosing it.
 rust-parser = []
 
 [dependencies]

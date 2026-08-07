@@ -18,7 +18,7 @@ server = ["dep:async-trait", "dep:tower-lsp", "dep:tokio", "dep:dashmap", "dep:s
 [dependencies]
 # Internal crates - always available for diagnostics/hover modules
 cypcb-core = { path = "../cypcb-core" }
-cypcb-parser = { path = "../cypcb-parser", features = ["tree-sitter-parser"] }
+cypcb-parser = { path = "../cypcb-parser" }
 cypcb-world = { path = "../cypcb-world", features = ["sync"] }
 cypcb-drc = { path = "../cypcb-drc" }
 cypcb-calc = { path = "../cypcb-calc" }

@@ -11,7 +11,6 @@ use std::path::PathBuf;
 use cypcb_autoroute::scoring::{score_board, ScoreWeights};
 use cypcb_autoroute::{route_board, AutorouteConfig};
 use cypcb_drc::DesignRules;
-use cypcb_parser::CypcbParser;
 use cypcb_router::apply_routes;
 use cypcb_rules::presets::{PresetRuleSet, RulesPreset};
 use cypcb_world::footprint::FootprintLibrary;
@@ -47,8 +46,7 @@ impl ScoreCommand {
             .wrap_err_with(|| format!("Failed to read {}", self.file.display()))?;
 
         // Parse source
-        let mut parser = CypcbParser::new();
-        let result = parser.parse(&source);
+        let result = cypcb_parser::parse(&source);
 
         if result.has_errors() {
             for err in result.errors {
