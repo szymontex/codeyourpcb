@@ -163,6 +163,14 @@ pub struct AutorouteConfig {
     /// Zero keeps the old behaviour.
     pub via_ring_penalty: f64,
 
+    /// What one cell of another net's pad inside a via's keepout costs.
+    ///
+    /// Separate from `via_foreign_copper_penalty` because the two are not the
+    /// same size of thing: a keepout disc covers many more pad cells than
+    /// trace cells on a dense board, and charging them the same took
+    /// stm32_breakout from 239 violations to 259.
+    pub via_foreign_pad_penalty: f64,
+
     /// What a layer change on a pad's copper costs the search.
     ///
     /// A via landing on somebody's pad is copper on copper. Priced rather than
@@ -263,6 +271,7 @@ impl Default for AutorouteConfig {
             strategy: StrategyKind::default(),
             params: AutorouteParams::default(),
             via_ring_penalty: 0.0,
+            via_foreign_pad_penalty: 0.0,
             pad_layer_change_penalty: crate::pathfinder_v2::PAD_LAYER_CHANGE_PENALTY,
             pad_zone_margin_cells: crate::orchestrator::DEFAULT_PAD_ZONE_MARGIN_CELLS,
             pad_zone_blocks_foreign_copper: false,

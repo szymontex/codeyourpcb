@@ -227,3 +227,65 @@ fn does_a_dearer_via_on_a_pad_close_the_last_fault() {
         }
     }
 }
+
+/// What a pad inside a via's keepout should cost.
+///
+/// `cargo test --release -p cypcb-autoroute --test pad_zone_margin_sweep -- --ignored what_a_pad_under --nocapture`
+///
+/// The first instrument in this vector that prices copper the search has never
+/// been able to see: `foreign_cells_in_via_keepout` counted routed copper only,
+/// so a via paid for landing its ring on another net's trace and nothing for
+/// landing it on another net's pad. Charging pads the 0.25 a trace cell costs
+/// was measured and lost, because the disc covers many more pad cells than
+/// trace cells. This sweeps a price of its own, at both pad openings.
+#[test]
+#[ignore = "diagnostic: sweeps the price of a pad inside a via keepout"]
+fn what_a_pad_under_a_via_should_cost() {
+    let drc_rules = DesignRules::jlcpcb_2layer();
+
+    for margin in [3u16, 2] {
+        for benchmark in BENCHMARKS {
+            eprintln!();
+            eprintln!("=== {} at margin {margin} ===", benchmark.filename);
+
+            for price in [0.0f64, 0.02, 0.05, 0.1] {
+                let parsed = parse_kicad_pcb(&fixture_path(benchmark.filename)).expect("the fixture");
+                let mut world = parsed.world;
+                let library = parsed.library;
+
+                // `after` is what this table reads, because the two openings
+                // change what the fixture's own faults look like; the
+                // introduced count is in the sweep above.
+                world.rebuild_spatial_index_from_library(&library);
+
+                let config = AutorouteConfig {
+                    pad_zone_margin_cells: margin,
+                    via_foreign_pad_penalty: price,
+                    ..AutorouteConfig::default()
+                };
+                let rules =
+                    PresetRuleSet::new(RulesPreset::from_name("jlcpcb").expect("the preset exists"));
+                let result = route_board(&mut world, &library, &rules, &config);
+                apply_routes(&mut world, &result);
+                world.rebuild_spatial_index_from_library(&library);
+                let drc = run_drc(&mut world, &drc_rules);
+
+                let after = drc.violations.len();
+                let shorts = drc
+                    .violations
+                    .iter()
+                    .filter(|v| v.actual == Some(cypcb_core::Nm::ZERO))
+                    .count();
+                let unrouted = match result.status {
+                    cypcb_router::types::RoutingStatus::Partial { unrouted_count } => unrouted_count,
+                    _ => 0,
+                };
+
+                eprintln!(
+                    "  price {:>5.2}: {:>4} after, {:>4} shorts, {:>4} segments, {:>3} vias, {} unrouted",
+                    price, after, shorts, result.route_count(), result.via_count(), unrouted
+                );
+            }
+        }
+    }
+}

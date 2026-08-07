@@ -197,7 +197,7 @@ numbers are introduced violations unless stated.
 | Weight the pad price by depth into the pad's disc, full on its copper and tapering across the clearance | multi_ic 267 -> 413 after at price 20 and 106 -> 242 shorts; stm32_breakout better at 5 and 50, worse at 20; no price where both improve |
 | Open a net's pad zone for the connection's own two pads instead of every pad the net has | stm32_breakout 239 -> 299 after and 136 -> 175 shorts, multi_ic 336 -> 398 and 166 -> 219, nothing left unrouted on either |
 | Charge a dearer layer change on a pad, to close the one short the narrower opening adds | the short survives every price to 1000 on led_blink, and stm32_breakout goes 216 -> 263 after at 150 |
-| Let the via keepout price count foreign **pads**, not only foreign routed copper | at the shipped price of 0.25: stm32_breakout 239 -> 259, multi_ic 336 -> 392 with 166 -> 216 shorts |
+| Let the via keepout price count foreign **pads**, not only foreign routed copper | at the shipped price of 0.25: stm32_breakout 239 -> 259, multi_ic 336 -> 392 with 166 -> 216 shorts. At a price of its own it works and still loses: see below |
 
 The pattern across all of them: **pricing copper that exists pays, blocking or
 pricing space somebody might want does not.** An empty congestion map is not
@@ -278,6 +278,28 @@ than as the default, and **stm32_breakout picks it in best-of-eight** at
 Zero is not the floor: with no margin at all stm32_breakout leaves a connection
 unrouted and takes seven times as long, because a route cannot always reach a
 pad through the clearance the grid bloated around it.
+
+### A pad under a via, priced separately (`via_foreign_pad_penalty`, default 0)
+
+The blind spot named below is real and closing it does exactly what the theory
+says. At the narrower opening, `led_blink`'s via-on-a-pad short disappears the
+moment a pad in the keepout costs anything at all - after / shorts:
+
+| price | led_blink | stm32_breakout | multi_ic |
+|---|---|---|---|
+| 0 (default) | 2 / 1 | 216 / 86 | 290 / 131 |
+| 0.02 | **1 / 0** | 272 / 147 | 277 / 121 |
+| 0.05 | **1 / 0** | 239 / 124 | 330 / 168 |
+| 0.10 | **1 / 0** | 242 / 108 | 339 / 180 |
+
+And at the shipped opening it moves stm32_breakout's shorts 136 -> 122 at 0.10
+while multi_ic goes 166 -> 206.
+
+It still ships at zero, because no price and opening together beat what each
+board already picks: stm32_breakout has 216 / 86 from `Tight Pads` at zero,
+multi_ic has 267 / 106 from `Pad Aware`, and led_blink has 1 / 0 from
+`High-Density`. The mechanism is confirmed and the knob is there; what is
+missing is a board that wants it, and none of these three does.
 
 The one fault that keeps two cells out of the defaults has a name:
 `D1 <-> via 'GND': 0.00mm` - a via whose ring lands on a part's pad. Two prices

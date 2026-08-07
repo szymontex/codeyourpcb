@@ -635,6 +635,7 @@ pub fn pathfinder_loop(
                     layer_preference: config.params.layer_preference,
                     block_foreign_copper: config.pad_zone_blocks_foreign_copper,
                     via_foreign_copper_penalty: config.via_foreign_copper_penalty,
+                    via_foreign_pad_penalty: config.via_foreign_pad_penalty,
                     foreign_pad_penalty: config.foreign_pad_penalty,
                     pad_layer_change_penalty: config.pad_layer_change_penalty,
                     yield_halo: false,
@@ -894,9 +895,10 @@ fn foreign_cells_in_via_keepout(
     layers: (u8, u8),
     net_id: u32,
     radius: u32,
-) -> u32 {
+) -> (u32, u32) {
     let r = radius as i64;
-    let mut count = 0;
+    let mut routed = 0;
+    let mut pads = 0;
     for &layer in &[layers.0, layers.1] {
         for dy in -r..=r {
             for dx in -r..=r {
@@ -908,23 +910,29 @@ fn foreign_cells_in_via_keepout(
                 if cx < 0 || cy < 0 {
                     continue;
                 }
-                // Routed copper only. A pad in the keepout costs nothing here,
-                // which is measured rather than assumed: counting pad cells at
-                // this same price took stm32_breakout from 239 violations to
-                // 259 and multi_ic from 336 to 392 with 50 more shorts,
-                // because the disc around a via covers many pad cells on a
-                // dense board. The blind spot is real; the price for it is not
-                // this one.
                 if matches!(
                     grid.net_at(cx as u32, cy as u32, layer as usize),
                     Some(owner) if owner != net_id
                 ) {
-                    count += 1;
+                    routed += 1;
+                } else if matches!(
+                    grid.pad_owner(cx as u32, cy as u32, layer as usize),
+                    Some(owner) if owner != net_id
+                ) {
+                    // Counted apart, and priced apart. A pad is copper the
+                    // search could not see at all until this existed - a via
+                    // paid for landing its ring on another net's trace and
+                    // nothing for landing it on another net's pad - and the
+                    // two cannot share a price: charging pads the 0.25 a trace
+                    // cell costs took stm32_breakout 239 -> 259 and multi_ic
+                    // 336 -> 392, because a keepout disc covers many more pad
+                    // cells than trace cells on a dense board.
+                    pads += 1;
                 }
             }
         }
     }
-    count
+    (routed, pads)
 }
 
 /// Everything the search charges for beyond distance, and the net it is
@@ -942,6 +950,8 @@ struct Search<'a> {
     layer_preference: f64,
     block_foreign_copper: bool,
     via_foreign_copper_penalty: f64,
+    /// What one cell of another net's **pad** inside a via's keepout costs.
+    via_foreign_pad_penalty: f64,
     foreign_pad_penalty: f64,
     /// What a layer change on a pad's copper costs.
     pad_layer_change_penalty: f64,
@@ -965,6 +975,7 @@ fn find_path_congestion_augmented(
         layer_preference,
         block_foreign_copper,
         via_foreign_copper_penalty,
+        via_foreign_pad_penalty,
         foreign_pad_penalty,
         pad_layer_change_penalty,
         yield_halo,
@@ -1136,15 +1147,16 @@ fn find_path_congestion_augmented(
                 // saying a veto during expansion costs more than it buys.
                 let pad_crossing = if on_pad { pad_layer_change_penalty } else { 0.0 };
                 let crowding = if via_keepout_cells > 0 {
-                    foreign_cells_in_via_keepout(
+                    let (routed, pads) = foreign_cells_in_via_keepout(
                         grid,
                         nx as u32,
                         ny as u32,
                         (nl, target_layer),
                         net_id,
                         via_keepout_cells,
-                    ) as f64
-                        * via_foreign_copper_penalty
+                    );
+                    routed as f64 * via_foreign_copper_penalty
+                        + pads as f64 * via_foreign_pad_penalty
                 } else {
                     0.0
                 };
@@ -1311,6 +1323,7 @@ mod tests {
             layer_preference: 0.0,
             block_foreign_copper: false,
             via_foreign_copper_penalty: 0.0,
+            via_foreign_pad_penalty: 0.0,
             foreign_pad_penalty: 0.0,
             pad_layer_change_penalty: PAD_LAYER_CHANGE_PENALTY,
             yield_halo: false,
