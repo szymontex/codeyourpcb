@@ -36,6 +36,15 @@ pub struct ExportCommand {
     /// Only list files that would be generated
     #[arg(long)]
     dry_run: bool,
+
+    /// Write the files even when the board has copper touching copper.
+    ///
+    /// A short is not a quality judgement - the board cannot work, and a
+    /// fabricator will make it anyway because the files say so. Every other
+    /// violation is a warning; this one stops the export until a person says
+    /// otherwise.
+    #[arg(long)]
+    force: bool,
 }
 
 impl ExportCommand {
@@ -182,10 +191,11 @@ impl ExportCommand {
         // What the checker says about the board before anyone makes it.
         //
         // `check` and `export` were two commands with nothing joining them, so
-        // a shorted board exported without a word. This does not refuse -
-        // whether to make a board with known faults is the designer's call,
-        // and a fabricator will make whatever the files say - but it refuses
-        // to be silent about it.
+        // a shorted board exported without a word. Most violations stay a
+        // warning: whether to make a board with a gap 0.01mm under spec is the
+        // designer's call, and a fab will make whatever the files say. Copper
+        // touching copper is not that call - the board cannot work - so it
+        // stops here until `--force` says otherwise.
         {
             use cypcb_drc::{run_drc, Preset as DrcPreset};
             // Named the same way `cypcb check` names it, so the two commands
@@ -196,6 +206,13 @@ impl ExportCommand {
                 .unwrap_or_else(cypcb_drc::DesignRules::jlcpcb_2layer);
             world.rebuild_spatial_index_from_library(&library);
             let report = run_drc(&mut world, &rules);
+
+            let shorts = report
+                .violations
+                .iter()
+                .filter(|violation| violation.actual == Some(cypcb_core::Nm::ZERO))
+                .count();
+
             if !report.violations.is_empty() {
                 eprintln!();
                 eprintln!(
@@ -203,6 +220,21 @@ impl ExportCommand {
                     report.violations.len(),
                     self.input.display()
                 );
+            }
+
+            if shorts > 0 {
+                if self.force {
+                    eprintln!(
+                        "Forcing: {} of them are copper touching copper, and the files are being written anyway.",
+                        shorts
+                    );
+                } else {
+                    return Err(miette::miette!(
+                        "{} of the violations are copper touching copper. \
+                         The board cannot work as drawn - fix them, or pass --force to write the files anyway.",
+                        shorts
+                    ));
+                }
             }
         }
 
@@ -263,6 +295,7 @@ mod tests {
             preset: "jlcpcb".to_string(),
             no_assembly: false,
             dry_run: false,
+            force: false,
         };
 
         assert_eq!(cmd.preset, "jlcpcb");

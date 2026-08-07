@@ -325,3 +325,62 @@ fn check_gives_a_pour_island_its_size_and_corners() {
         "and its corners, got:\n{stderr}"
     );
 }
+
+#[test]
+fn export_refuses_a_board_with_copper_touching_copper() {
+    // A gap under spec is the designer's call and a fab will build it. Copper
+    // on copper is not a call - the board cannot work - so the files are not
+    // written until someone says --force. drc-test.cypcb has one such short
+    // among its faults.
+    let example = examples_dir().join("drc-test.cypcb");
+    let out = std::env::temp_dir().join("cypcb-export-refuses");
+    let _ = std::fs::remove_dir_all(&out);
+
+    let output = Command::new(cypcb_binary())
+        .arg("export")
+        .arg(&example)
+        .arg("--output")
+        .arg(&out)
+        .output()
+        .expect("Failed to execute cypcb export");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!output.status.success(), "export should fail, got:\n{stderr}");
+    assert!(
+        stderr.contains("copper touching copper"),
+        "and say why, got:\n{stderr}"
+    );
+    assert!(
+        !out.exists(),
+        "nothing should be written for a board that cannot work"
+    );
+}
+
+#[test]
+fn export_writes_the_files_when_forced() {
+    let example = examples_dir().join("drc-test.cypcb");
+    let out = std::env::temp_dir().join("cypcb-export-forced");
+    let _ = std::fs::remove_dir_all(&out);
+
+    let output = Command::new(cypcb_binary())
+        .arg("export")
+        .arg(&example)
+        .arg("--output")
+        .arg(&out)
+        .arg("--force")
+        .output()
+        .expect("Failed to execute cypcb export");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "--force should export, got:\n{stderr}");
+    assert!(
+        stderr.contains("Forcing"),
+        "and say that it went ahead with a short on the board, got:\n{stderr}"
+    );
+    assert!(
+        std::fs::read_dir(&out).is_ok_and(|dir| dir.count() > 0),
+        "the files should be there"
+    );
+
+    let _ = std::fs::remove_dir_all(&out);
+}

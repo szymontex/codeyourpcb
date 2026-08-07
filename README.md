@@ -173,6 +173,7 @@ npm run build:desktop # release installer
 
 ```bash
 cargo run -p cypcb-cli -- check examples/blink.cypcb          # DRC, exit 1 on violations
+cargo run -p cypcb-cli -- export examples/blink.cypcb -o out    # refuses a shorted board unless --force
 cargo run -p cypcb-cli -- route examples/blink.cypcb --variants   # route, keep the best
 cargo run -p cypcb-cli -- score examples/blink.routed.cypcb   # quality metrics as JSON
 cargo run -p cypcb-cli -- export examples/blink.cypcb         # 13 manufacturing files
