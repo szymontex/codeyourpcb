@@ -27,8 +27,7 @@ use crate::congestion::CongestionMap;
 use crate::cost::RoutingCost;
 use crate::grid::{RoutingGrid, CELL_OBSTACLE, CELL_PAD};
 use crate::orchestrator::{
-    build_spanning_tree, extract_ratsnest, is_multi_layer, order_nets, pad_to_grid_node,
-    NetRoute,
+    build_spanning_tree, extract_ratsnest, is_multi_layer, order_nets, pad_to_grid_node, NetRoute,
 };
 use crate::pathfinder::{GridNode, PadZone};
 use crate::postprocess;
@@ -625,7 +624,6 @@ pub fn pathfinder_loop(
                 let end = pad_to_grid_node(grid, to_pad);
                 let any_end = is_multi_layer(to_pad.layer_mask);
 
-
                 // Route with congestion-augmented cost
                 let search = Search {
                     rules,
@@ -640,8 +638,14 @@ pub fn pathfinder_loop(
                     pad_layer_change_penalty: config.pad_layer_change_penalty,
                     yield_halo: false,
                 };
-                let mut path =
-                    find_path_congestion_augmented(grid, start, end, any_end, &congestion_map, &search);
+                let mut path = find_path_congestion_augmented(
+                    grid,
+                    start,
+                    end,
+                    any_end,
+                    &congestion_map,
+                    &search,
+                );
 
                 // A reservation that cannot be relaxed is a veto, and three
                 // measured experiments in this vector say a veto costs more
@@ -1097,10 +1101,7 @@ fn find_path_congestion_augmented(
                     Some(owner) if owner != net_id => foreign_pad_penalty,
                     _ => 0.0,
                 };
-                neighbors.push((
-                    target,
-                    float_to_int_cost(base + congestion + foreign_pad),
-                ));
+                neighbors.push((target, float_to_int_cost(base + congestion + foreign_pad)));
             }
         }
 
@@ -1145,7 +1146,11 @@ fn find_path_congestion_augmented(
                 // multi_ic from 140 violations to 375 by pushing the routing
                 // somewhere worse - and this vector has five other measurements
                 // saying a veto during expansion costs more than it buys.
-                let pad_crossing = if on_pad { pad_layer_change_penalty } else { 0.0 };
+                let pad_crossing = if on_pad {
+                    pad_layer_change_penalty
+                } else {
+                    0.0
+                };
                 let crowding = if via_keepout_cells > 0 {
                     let (routed, pads) = foreign_cells_in_via_keepout(
                         grid,

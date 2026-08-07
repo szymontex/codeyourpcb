@@ -276,7 +276,8 @@ fn how_many_pins_no_copper_reaches() {
     let drc_rules = DesignRules::jlcpcb_2layer();
 
     for benchmark in BENCHMARKS {
-        let parsed = parse_kicad_pcb(&fixture_path(benchmark.filename)).expect("the fixture parses");
+        let parsed =
+            parse_kicad_pcb(&fixture_path(benchmark.filename)).expect("the fixture parses");
         let mut world = parsed.world;
         let library = parsed.library;
         world.rebuild_spatial_index_from_library(&library);
@@ -349,10 +350,8 @@ fn how_many_pins_no_copper_reaches() {
             {
                 let library = world.footprints().clone();
                 let ecs = world.ecs_mut();
-                let mut query = ecs.query::<(
-                    &cypcb_world::RefDes,
-                    &cypcb_world::components::FootprintRef,
-                )>();
+                let mut query =
+                    ecs.query::<(&cypcb_world::RefDes, &cypcb_world::components::FootprintRef)>();
                 for (refdes, footprint_ref) in query.iter(ecs) {
                     let prefix = format!("{}.", refdes.as_str());
                     let Some(pin) = refdes_pin.strip_prefix(&prefix) else {

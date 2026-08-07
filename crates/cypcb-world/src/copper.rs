@@ -15,8 +15,8 @@
 use cypcb_core::pour::{self, PourOptions};
 use cypcb_core::{Nm, Point, Rect};
 
-use crate::components::zone::Zone;
 use crate::components::trace::{Trace, Via};
+use crate::components::zone::Zone;
 use crate::components::{Layer, NetId};
 use crate::footprint::FootprintLibrary;
 use crate::world::BoardWorld;
@@ -214,9 +214,9 @@ pub fn copper_on_layer(
 mod tests {
     use super::*;
     use crate::components::zone::{Zone, ZoneKind};
+    use crate::components::PinConnection;
     use crate::components::{FootprintRef, Layer, NetId, PadShape, Position, Rotation};
     use crate::footprint::{Footprint, PadDef};
-    use crate::components::PinConnection;
     use crate::{NetConnections, RefDes, Value};
 
     fn board_with_one_pad(pad_net: u32) -> (BoardWorld, FootprintLibrary) {
@@ -280,7 +280,10 @@ mod tests {
 
         // The pad sits in the middle of the zone, so cutting it leaves several
         // pieces and none of them may contain the pad's centre.
-        assert!(filled.pieces.len() > 1, "a hole in the middle splits a plane");
+        assert!(
+            filled.pieces.len() > 1,
+            "a hole in the middle splits a plane"
+        );
         let centre = Point::from_mm(10.0, 10.0);
         for piece in filled.all() {
             let inside = piece.min.x.0 <= centre.x.0

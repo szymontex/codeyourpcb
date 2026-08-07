@@ -41,7 +41,13 @@ fn only_trace(world: &mut BoardWorld) -> Trace {
 /// Where a pad of a part sits on the board, computed from the library rather
 /// than written down, so the test says what it means instead of repeating a
 /// number the footprint could change.
-fn pad_at(library: &FootprintLibrary, footprint: &str, pin: &str, at: Point, degrees: f64) -> Point {
+fn pad_at(
+    library: &FootprintLibrary,
+    footprint: &str,
+    pin: &str,
+    at: Point,
+    degrees: f64,
+) -> Point {
     let pad = library
         .get(footprint)
         .expect("the footprint is registered")

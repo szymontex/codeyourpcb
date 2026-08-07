@@ -62,7 +62,8 @@ fn which_variant_each_board_picks() {
         // measures the board that exists, and a net nobody routed leaves no
         // copper to charge for.
         assert_eq!(
-            winner.unrouted, 0,
+            winner.unrouted,
+            0,
             "best-of-{} on {} picked {} with {} unrouted connections",
             results.len(),
             benchmark.filename,

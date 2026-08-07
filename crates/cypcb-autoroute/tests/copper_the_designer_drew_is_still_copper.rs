@@ -5,8 +5,9 @@
 //! across it. `locked` means "do not rip this up"; unlocked copper is still
 //! copper.
 
-use cypcb_core::{Nm, Point};
 use cypcb_autoroute::{route_board, AutorouteConfig};
+use cypcb_core::Rect;
+use cypcb_core::{Nm, Point};
 use cypcb_drc::{run_drc, DesignRules, ViolationKind};
 use cypcb_router::apply_routes;
 use cypcb_rules::presets::{PresetRuleSet, RulesPreset};
@@ -14,7 +15,6 @@ use cypcb_world::components::trace::{Trace, TraceSegment, TraceSource};
 use cypcb_world::components::{FootprintRef, Layer, NetConnections, PadShape, PinConnection};
 use cypcb_world::footprint::{Footprint, PadDef};
 use cypcb_world::{BoardWorld, Position, RefDes, Rotation, Value};
-use cypcb_core::Rect;
 
 /// A board with one hand-drawn trace across the middle and a net that has to
 /// get past it.
@@ -360,7 +360,11 @@ fn a_ground_plane_connects_the_pins_that_sit_in_it() {
     world.set_footprints(library.clone());
 
     let gnd = world.intern_net("GND");
-    for (refdes, at) in [("J1", (8.0, 10.0)), ("J2", (15.0, 10.0)), ("J3", (22.0, 10.0))] {
+    for (refdes, at) in [
+        ("J1", (8.0, 10.0)),
+        ("J2", (15.0, 10.0)),
+        ("J3", (22.0, 10.0)),
+    ] {
         let mut connections = NetConnections::new();
         connections.add(PinConnection::new("1".to_string(), gnd));
         world.spawn_component(

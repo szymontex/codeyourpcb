@@ -36,7 +36,11 @@ fn examples() -> Vec<PathBuf> {
         .filter_map(|entry| entry.ok().map(|e| e.path()))
         .filter(|path| path.extension().is_some_and(|ext| ext == "cypcb"))
         .filter(|path| {
-            let name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+            let name = path
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string();
             !MEANT_TO_FAIL.contains(&name.as_str())
         })
         .collect();
@@ -106,7 +110,11 @@ fn named_things(ast: &SourceFile) -> Vec<(String, Span, &'static str)> {
                 }
             }
             Definition::Footprint(footprint) => {
-                found.push((footprint.name.value.clone(), footprint.name.span, "identifier"));
+                found.push((
+                    footprint.name.value.clone(),
+                    footprint.name.span,
+                    "identifier",
+                ));
             }
             Definition::Trace(trace) => {
                 found.push((trace.net.value.clone(), trace.net.span, "identifier"));
@@ -123,7 +131,11 @@ fn named_things(ast: &SourceFile) -> Vec<(String, Span, &'static str)> {
                     instance.module.span,
                     "identifier",
                 ));
-                found.push((instance.name.value.clone(), instance.name.span, "identifier"));
+                found.push((
+                    instance.name.value.clone(),
+                    instance.name.span,
+                    "identifier",
+                ));
                 for port in &instance.ports {
                     found.push((port.pin.value.clone(), port.pin.span, "identifier"));
                     found.push((port.net.value.clone(), port.net.span, "identifier"));
@@ -171,10 +183,18 @@ fn an_identifier_span_spells_the_identifier() {
     let mut wrong = Vec::new();
 
     for file in examples() {
-        let name = file.file_name().unwrap_or_default().to_string_lossy().to_string();
+        let name = file
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
         let source = std::fs::read_to_string(&file).expect("the example is readable");
         let ast = parse(&source);
-        assert!(ast.errors.is_empty(), "{name} should parse: {:?}", ast.errors);
+        assert!(
+            ast.errors.is_empty(),
+            "{name} should parse: {:?}",
+            ast.errors
+        );
 
         for (value, span, kind) in named_things(&ast.value) {
             let text = slice(&source, span);
@@ -183,7 +203,9 @@ fn an_identifier_span_spells_the_identifier() {
                 _ => text == value,
             };
             if !matches {
-                wrong.push(format!("{name}: {kind} `{value}` has a span holding `{text}`"));
+                wrong.push(format!(
+                    "{name}: {kind} `{value}` has a span holding `{text}`"
+                ));
             }
         }
     }
@@ -203,7 +225,11 @@ fn a_definition_span_starts_at_its_keyword() {
     let mut wrong = Vec::new();
 
     for file in examples() {
-        let name = file.file_name().unwrap_or_default().to_string_lossy().to_string();
+        let name = file
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
         let source = std::fs::read_to_string(&file).expect("the example is readable");
         let ast = parse(&source);
 
@@ -237,7 +263,11 @@ fn a_definition_span_ends_after_everything_inside_it() {
     let mut wrong = Vec::new();
 
     for file in examples() {
-        let name = file.file_name().unwrap_or_default().to_string_lossy().to_string();
+        let name = file
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
         let source = std::fs::read_to_string(&file).expect("the example is readable");
         let ast = parse(&source);
 
@@ -280,7 +310,11 @@ fn how_far_apart_the_two_parsers_put_a_definition() {
     let mut worst = 0usize;
 
     for file in examples() {
-        let name = file.file_name().unwrap_or_default().to_string_lossy().to_string();
+        let name = file
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
         let source = std::fs::read_to_string(&file).expect("the example is readable");
         let ours = parse(&source);
         let theirs = cypcb_parser::tree_sitter_parse(&source);

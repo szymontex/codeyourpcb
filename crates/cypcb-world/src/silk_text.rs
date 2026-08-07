@@ -225,6 +225,12 @@ fn cut(start: Point, end: Point, keepout: &Keepout) -> Vec<(Point, Point)> {
 }
 
 /// The strokes for one character, or `None` if this font cannot draw it.
+///
+/// One glyph per line, on purpose. This is a drawing held as a table, and the
+/// only way to check a letter by eye is to read its points in order across one
+/// line - rustfmt spreads each coordinate onto its own line and turns a
+/// hundred-line font into four hundred lines nobody can proofread.
+#[rustfmt::skip]
 pub fn glyph(c: char) -> Option<Strokes> {
     let upper = c.to_ascii_uppercase();
     Some(match upper {
@@ -504,7 +510,9 @@ mod tests {
         let centre = Point::new(Nm::from_mm(1.0), Nm::from_mm(1.0));
         let nothing = designator_strokes("##", centre, Nm::from_mm(1.0), Nm::from_mm(0.15), Nm(0));
         assert!(nothing.is_empty());
-        assert!(designator_strokes("", centre, Nm::from_mm(1.0), Nm::from_mm(0.15), Nm(0)).is_empty());
+        assert!(
+            designator_strokes("", centre, Nm::from_mm(1.0), Nm::from_mm(0.15), Nm(0)).is_empty()
+        );
     }
 
     #[test]

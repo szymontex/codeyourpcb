@@ -39,11 +39,11 @@ use cypcb_world::BoardWorld;
 use crate::bom::{export_bom_csv, export_bom_json};
 use crate::cpl::export_cpl;
 use crate::excellon::{export_excellon, DrillType};
+use crate::gerber::SilkWarning;
 use crate::gerber::{
     export_copper_layer, export_outline, export_silkscreen_reporting, export_soldermask,
     export_solderpaste, MaskPasteConfig, Side, SilkConfig,
 };
-use crate::gerber::SilkWarning;
 use crate::presets::ExportPreset;
 
 /// Export job configuration.

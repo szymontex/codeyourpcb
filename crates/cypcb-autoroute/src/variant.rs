@@ -442,8 +442,10 @@ mod tests {
             "a variant has to price a foreign pad: multi_ic picks it at 267/106 against 336/166"
         );
         assert!(
-            configs.iter().any(|c| c.pad_zone_margin_cells
-                < crate::orchestrator::DEFAULT_PAD_ZONE_MARGIN_CELLS),
+            configs
+                .iter()
+                .any(|c| c.pad_zone_margin_cells
+                    < crate::orchestrator::DEFAULT_PAD_ZONE_MARGIN_CELLS),
             "a variant has to narrow the pad opening: stm32_breakout picks it at 216/86"
         );
     }

@@ -266,7 +266,6 @@ impl PcbEngine {
             errors.push(format!("{}", e));
         }
 
-
         // Sync AST to world
         let sync_result = sync_ast_to_world(
             &parse_result.value,
@@ -1607,8 +1606,13 @@ impl PcbEngine {
                     continue;
                 }
                 let library = self.footprint_lib.clone();
-                let filled =
-                    cypcb_world::copper::fill_zone(&mut self.world, &library, layer, &zone, &options);
+                let filled = cypcb_world::copper::fill_zone(
+                    &mut self.world,
+                    &library,
+                    layer,
+                    &zone,
+                    &options,
+                );
                 let rects: Vec<[i64; 4]> = filled
                     .all()
                     .map(|r| [r.min.x.0, r.min.y.0, r.max.x.0, r.max.y.0])

@@ -71,7 +71,11 @@ fn boards() -> Vec<(String, BoardWorld, FootprintLibrary)> {
         out.push((name, world, library));
     }
 
-    assert!(out.len() >= 10, "expected the examples to be boards, got {}", out.len());
+    assert!(
+        out.len() >= 10,
+        "expected the examples to be boards, got {}",
+        out.len()
+    );
     out
 }
 
@@ -96,10 +100,7 @@ fn export_to_temp(
     };
     let result = run_export(&job, world, library)
         .unwrap_or_else(|e| panic!("{name} failed to export: {e:?}"));
-    assert!(
-        !result.files.is_empty(),
-        "{name} exported nothing at all"
-    );
+    assert!(!result.files.is_empty(), "{name} exported nothing at all");
     dir
 }
 
@@ -298,7 +299,10 @@ fn check_the_files(
         let text = std::fs::read_to_string(outline).expect("a readable outline");
         let (mut min_x, mut min_y) = (f64::MAX, f64::MAX);
         let (mut max_x, mut max_y) = (f64::MIN, f64::MIN);
-        for line in text.lines().filter(|l| l.contains("D01") || l.contains("D02")) {
+        for line in text
+            .lines()
+            .filter(|l| l.contains("D01") || l.contains("D02"))
+        {
             let Some((x, y)) = coordinates(line) else {
                 continue;
             };
@@ -309,7 +313,8 @@ fn check_the_files(
         }
         counts.outlines += 1;
         let (width, height) = (max_x - min_x, max_y - min_y);
-        if (width - size.width.to_mm()).abs() > 0.001 || (height - size.height.to_mm()).abs() > 0.001
+        if (width - size.width.to_mm()).abs() > 0.001
+            || (height - size.height.to_mm()).abs() > 0.001
         {
             wrong.push(format!(
                 "{name}: declares {:.3}mm x {:.3}mm, cuts {width:.3}mm x {height:.3}mm",
@@ -449,7 +454,9 @@ fn check_the_files(
                     .iter()
                     .find(|row| row.first().map(String::as_str) == Some(refdes))
                 else {
-                    wrong.push(format!("{name}: {refdes} is on the board and not in the CPL"));
+                    wrong.push(format!(
+                        "{name}: {refdes} is on the board and not in the CPL"
+                    ));
                     continue;
                 };
                 let read = |field: Option<&String>| -> Option<f64> {
@@ -493,7 +500,9 @@ fn check_the_files(
             for (refdes, _, _) in &parts {
                 counts.bom_parts += 1;
                 if !unique.contains(refdes) {
-                    wrong.push(format!("{name}: {refdes} is on the board and not in the BOM"));
+                    wrong.push(format!(
+                        "{name}: {refdes} is on the board and not in the BOM"
+                    ));
                 }
             }
         }
@@ -529,8 +538,16 @@ fn the_files_say_what_the_board_says() {
     assert!(counts.outlines >= 10, "only {} outlines", counts.outlines);
     assert!(counts.pads >= 40, "only {} pads", counts.pads);
     assert!(counts.holes > 0, "no drilled pads were checked");
-    assert!(counts.placements >= 40, "only {} placements", counts.placements);
-    assert!(counts.bom_parts >= 40, "only {} BOM parts", counts.bom_parts);
+    assert!(
+        counts.placements >= 40,
+        "only {} placements",
+        counts.placements
+    );
+    assert!(
+        counts.bom_parts >= 40,
+        "only {} BOM parts",
+        counts.bom_parts
+    );
 
     eprintln!(
         "{} layers, {} outlines, {} pads, {} holes, {} placements, {} BOM lines checked",
@@ -624,8 +641,8 @@ fn a_routed_board_reaches_the_files_too() {
     let top_strokes = read("F_Cu.gbr");
     let bottom_strokes = read("B_Cu.gbr");
 
-/// One end of a drawn line, in millimetres.
-type Point2 = (f64, f64);
+    /// One end of a drawn line, in millimetres.
+    type Point2 = (f64, f64);
 
     let routed: Vec<(cypcb_world::components::Layer, Point2, Point2)> = {
         let ecs = world.ecs_mut();
@@ -673,7 +690,10 @@ type Point2 = (f64, f64);
         "the copper does not follow the routing:\n{}",
         off_copper.join("\n")
     );
-    assert!(endpoints_checked >= 2 * segments, "only {endpoints_checked} endpoints checked");
+    assert!(
+        endpoints_checked >= 2 * segments,
+        "only {endpoints_checked} endpoints checked"
+    );
     eprintln!("{endpoints_checked} routed endpoints found on copper actually drawn");
     eprintln!(
         "{segments} routed segments, {draws} copper draws, {} pads and {} placements checked",

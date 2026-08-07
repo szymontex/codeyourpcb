@@ -70,38 +70,38 @@ fn report_drc_violations_per_fixture() {
     ];
 
     for (label, config) in &configs {
-    for benchmark in BENCHMARKS {
-        let parsed = parse_kicad_pcb(&fixture_path(benchmark.filename))
-            .unwrap_or_else(|e| panic!("Failed to parse {}: {:?}", benchmark.filename, e));
-        let mut world = parsed.world;
-        let library = parsed.library;
+        for benchmark in BENCHMARKS {
+            let parsed = parse_kicad_pcb(&fixture_path(benchmark.filename))
+                .unwrap_or_else(|e| panic!("Failed to parse {}: {:?}", benchmark.filename, e));
+            let mut world = parsed.world;
+            let library = parsed.library;
 
-        // What the fixture violates before the router has done anything.
-        world.rebuild_spatial_index_from_library(&library);
-        let before = run_drc(&mut world, &drc_rules);
-        let mut before_by_kind: BTreeMap<String, usize> = BTreeMap::new();
-        for violation in &before.violations {
-            *before_by_kind
-                .entry(violation.kind.to_string())
-                .or_insert(0) += 1;
-        }
-        let baseline: BTreeSet<String> = before.violations.iter().map(fingerprint).collect();
+            // What the fixture violates before the router has done anything.
+            world.rebuild_spatial_index_from_library(&library);
+            let before = run_drc(&mut world, &drc_rules);
+            let mut before_by_kind: BTreeMap<String, usize> = BTreeMap::new();
+            for violation in &before.violations {
+                *before_by_kind
+                    .entry(violation.kind.to_string())
+                    .or_insert(0) += 1;
+            }
+            let baseline: BTreeSet<String> = before.violations.iter().map(fingerprint).collect();
 
-        let result = route_board(&mut world, &library, &test_rules(), config);
-        apply_routes(&mut world, &result);
-        world.rebuild_spatial_index_from_library(&library);
+            let result = route_board(&mut world, &library, &test_rules(), config);
+            apply_routes(&mut world, &result);
+            world.rebuild_spatial_index_from_library(&library);
 
-        let drc = run_drc(&mut world, &drc_rules);
+            let drc = run_drc(&mut world, &drc_rules);
 
-        // A violation the fixture already had is not the router's doing.
-        let introduced: Vec<_> = drc
-            .violations
-            .iter()
-            .filter(|violation| !baseline.contains(&fingerprint(violation)))
-            .collect();
+            // A violation the fixture already had is not the router's doing.
+            let introduced: Vec<_> = drc
+                .violations
+                .iter()
+                .filter(|violation| !baseline.contains(&fingerprint(violation)))
+                .collect();
 
-        eprintln!();
-        eprintln!(
+            eprintln!();
+            eprintln!(
             "=== {} [{}] - {:?}, {} routes, {} violations before routing, {} after, {} introduced ===",
             benchmark.filename,
             label,
@@ -112,26 +112,26 @@ fn report_drc_violations_per_fixture() {
             introduced.len()
         );
 
-        for (kind, count) in &before_by_kind {
-            eprintln!("  before  {:<20} {}", kind, count);
-        }
+            for (kind, count) in &before_by_kind {
+                eprintln!("  before  {:<20} {}", kind, count);
+            }
 
-        let mut by_kind: BTreeMap<String, usize> = BTreeMap::new();
-        for violation in introduced {
-            *by_kind.entry(violation.kind.to_string()).or_insert(0) += 1;
-            eprintln!(
-                "  {:<20} ({:>8.3}mm, {:>8.3}mm)  {}",
-                violation.kind.to_string(),
-                violation.location.x.to_mm(),
-                violation.location.y.to_mm(),
-                violation.message
-            );
-        }
+            let mut by_kind: BTreeMap<String, usize> = BTreeMap::new();
+            for violation in introduced {
+                *by_kind.entry(violation.kind.to_string()).or_insert(0) += 1;
+                eprintln!(
+                    "  {:<20} ({:>8.3}mm, {:>8.3}mm)  {}",
+                    violation.kind.to_string(),
+                    violation.location.x.to_mm(),
+                    violation.location.y.to_mm(),
+                    violation.message
+                );
+            }
 
-        eprintln!("  ---");
-        for (kind, count) in &by_kind {
-            eprintln!("  {:<20} {}", kind, count);
+            eprintln!("  ---");
+            for (kind, count) in &by_kind {
+                eprintln!("  {:<20} {}", kind, count);
+            }
         }
-    }
     }
 }

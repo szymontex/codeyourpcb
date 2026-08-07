@@ -60,5 +60,8 @@ fn a_net_inside_a_zone_is_the_pour_net_and_not_a_new_net_block() {
         .count();
 
     assert_eq!(zones, 1, "one zone");
-    assert_eq!(nets, 0, "and no net definition - that `net` belongs to the zone");
+    assert_eq!(
+        nets, 0,
+        "and no net definition - that `net` belongs to the zone"
+    );
 }

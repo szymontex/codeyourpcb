@@ -122,14 +122,18 @@ pub fn tokenize(source: &str) -> Vec<Token> {
         }
 
         // Numbers, including a leading minus and one decimal point.
-        if c.is_ascii_digit() || (c == '-' && i + 1 < bytes.len() && bytes[i + 1].is_ascii_digit()) {
+        if c.is_ascii_digit() || (c == '-' && i + 1 < bytes.len() && bytes[i + 1].is_ascii_digit())
+        {
             i += 1;
             let mut seen_dot = false;
             while i < bytes.len() {
                 let ch = bytes[i] as char;
                 if ch.is_ascii_digit() {
                     i += 1;
-                } else if ch == '.' && !seen_dot && i + 1 < bytes.len() && bytes[i + 1].is_ascii_digit()
+                } else if ch == '.'
+                    && !seen_dot
+                    && i + 1 < bytes.len()
+                    && bytes[i + 1].is_ascii_digit()
                 {
                     seen_dot = true;
                     i += 1;

@@ -298,7 +298,10 @@ fn check_says_which_violations_are_copper_on_copper() {
 
     // A board with violations still fails. The split is what they are, not
     // permission to ship them.
-    assert!(!output.status.success(), "check must fail on a board with violations");
+    assert!(
+        !output.status.success(),
+        "check must fail on a board with violations"
+    );
 }
 
 #[test]
@@ -348,7 +351,10 @@ fn export_refuses_a_board_with_copper_touching_copper() {
         .expect("Failed to execute cypcb export");
 
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(!output.status.success(), "export should fail, got:\n{stderr}");
+    assert!(
+        !output.status.success(),
+        "export should fail, got:\n{stderr}"
+    );
     assert!(
         stderr.contains("copper touching copper"),
         "and say why, got:\n{stderr}"
@@ -375,7 +381,10 @@ fn export_writes_the_files_when_forced() {
         .expect("Failed to execute cypcb export");
 
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(output.status.success(), "--force should export, got:\n{stderr}");
+    assert!(
+        output.status.success(),
+        "--force should export, got:\n{stderr}"
+    );
     assert!(
         stderr.contains("Forcing"),
         "and say that it went ahead with a short on the board, got:\n{stderr}"
@@ -459,7 +468,10 @@ fn the_dry_run_lists_the_inner_layers_a_board_declares() {
         .expect("Failed to execute cypcb export");
 
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(output.status.success(), "the dry run should succeed:\n{stderr}");
+    assert!(
+        output.status.success(),
+        "the dry run should succeed:\n{stderr}"
+    );
     assert!(
         stderr.contains("Board stack: 4 copper layers (2 inner)"),
         "the stack should be stated beside the preset name, got:\n{stderr}"

@@ -92,7 +92,9 @@ fn every_built_in_footprint_leaves_the_ipc_excess_around_its_copper() {
             court.max.y.raw() - max_y,
         ];
         if gaps.iter().any(|gap| *gap < excess) {
-            tight.push(format!("{name}: gaps {gaps:?}, need {excess} on every side"));
+            tight.push(format!(
+                "{name}: gaps {gaps:?}, need {excess} on every side"
+            ));
         }
     }
 

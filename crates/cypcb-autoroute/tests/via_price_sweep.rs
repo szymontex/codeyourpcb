@@ -122,7 +122,10 @@ fn how_much_of_the_price_is_noise() {
     let drc_rules = DesignRules::jlcpcb_2layer();
     let prices = [0.22, 0.24, 0.25, 0.26, 0.28];
 
-    for benchmark in BENCHMARKS.iter().filter(|b| b.filename != "led_blink.kicad_pcb") {
+    for benchmark in BENCHMARKS
+        .iter()
+        .filter(|b| b.filename != "led_blink.kicad_pcb")
+    {
         eprintln!();
         eprintln!("=== {} ===", benchmark.filename);
 

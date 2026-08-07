@@ -59,9 +59,8 @@ fn a_via_that_states_a_pair_keeps_it() {
 #[test]
 fn the_span_survives_a_round_trip_through_the_writer() {
     // A design saved from the viewer and reloaded has to be the same board.
-    let source = format!(
-        "{BOARD}trace GND {{\n    via 10mm,10mm drill 0.2mm layers Top to Inner1\n}}\n"
-    );
+    let source =
+        format!("{BOARD}trace GND {{\n    via 10mm,10mm drill 0.2mm layers Top to Inner1\n}}\n");
     let mut world = load(&source);
 
     let written = traces_as_dsl(&mut world);

@@ -599,8 +599,13 @@ impl RouteCommand {
             .filter(|via| {
                 !matches!(
                     (via.start_layer, via.end_layer),
-                    (cypcb_world::Layer::TopCopper, cypcb_world::Layer::BottomCopper)
-                        | (cypcb_world::Layer::BottomCopper, cypcb_world::Layer::TopCopper)
+                    (
+                        cypcb_world::Layer::TopCopper,
+                        cypcb_world::Layer::BottomCopper
+                    ) | (
+                        cypcb_world::Layer::BottomCopper,
+                        cypcb_world::Layer::TopCopper
+                    )
                 )
             })
             .count();

@@ -222,22 +222,24 @@ fn board_model(world: &mut BoardWorld, library: &FootprintLibrary) -> BoardModel
         )>();
         let rows: Vec<_> = query
             .iter(world.ecs())
-            .map(|(refdes, value, position, rotation, footprint, connections)| {
-                (
-                    refdes.as_str().to_string(),
-                    value.as_str().to_string(),
-                    footprint.as_str().to_string(),
-                    position.0,
-                    rotation.to_degrees(),
-                    connections
-                        .map(|c| {
-                            c.iter()
-                                .map(|pin| (pin.pin.clone(), pin.net))
-                                .collect::<Vec<_>>()
-                        })
-                        .unwrap_or_default(),
-                )
-            })
+            .map(
+                |(refdes, value, position, rotation, footprint, connections)| {
+                    (
+                        refdes.as_str().to_string(),
+                        value.as_str().to_string(),
+                        footprint.as_str().to_string(),
+                        position.0,
+                        rotation.to_degrees(),
+                        connections
+                            .map(|c| {
+                                c.iter()
+                                    .map(|pin| (pin.pin.clone(), pin.net))
+                                    .collect::<Vec<_>>()
+                            })
+                            .unwrap_or_default(),
+                    )
+                },
+            )
             .collect();
 
         let mut components: Vec<ComponentModel> = rows

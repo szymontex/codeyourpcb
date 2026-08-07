@@ -144,7 +144,8 @@ fn how_much_of_the_pad_price_is_noise() {
             foreign_pad_penalty: price,
             ..AutorouteConfig::default()
         };
-        let rules = PresetRuleSet::new(RulesPreset::from_name("jlcpcb").expect("the preset exists"));
+        let rules =
+            PresetRuleSet::new(RulesPreset::from_name("jlcpcb").expect("the preset exists"));
         let result = route_board(&mut world, &library, &rules, &config);
 
         apply_routes(&mut world, &result);

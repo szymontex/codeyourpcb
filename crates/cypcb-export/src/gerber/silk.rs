@@ -354,7 +354,10 @@ fn emit(
 }
 
 /// A position mark, for a part whose name cannot be printed.
-fn crosshair(position: cypcb_core::Point, line_width: Nm) -> Vec<cypcb_world::footprint::SilkShape> {
+fn crosshair(
+    position: cypcb_core::Point,
+    line_width: Nm,
+) -> Vec<cypcb_world::footprint::SilkShape> {
     use cypcb_world::footprint::SilkShape;
 
     let half = Nm(line_width.0 * 2);

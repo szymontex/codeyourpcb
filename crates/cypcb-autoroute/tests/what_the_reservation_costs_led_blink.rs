@@ -59,7 +59,10 @@ fn route_and_break_down(reserve: bool) -> (BTreeMap<String, NetRoute>, Vec<Strin
         }
     }
     for via in &result.vias {
-        let name = world.net_name(via.net_id).unwrap_or("<unnamed>").to_string();
+        let name = world
+            .net_name(via.net_id)
+            .unwrap_or("<unnamed>")
+            .to_string();
         per_net.entry(name).or_default().vias += 1;
     }
 

@@ -48,7 +48,9 @@ fn legend_points(gerber: &str) -> Vec<(f64, f64)> {
         .filter_map(|line| {
             let line = line.strip_suffix('*')?;
             let (x, rest) = line.strip_prefix('X')?.split_once('Y')?;
-            let y = rest.strip_suffix("D01").or_else(|| rest.strip_suffix("D02"))?;
+            let y = rest
+                .strip_suffix("D01")
+                .or_else(|| rest.strip_suffix("D02"))?;
             // The exporter writes millimetres with an explicit decimal point.
             Some((x.parse::<f64>().ok()?, y.parse::<f64>().ok()?))
         })
@@ -124,11 +126,7 @@ fn a_name_that_would_cross_a_neighbours_pad_is_clipped_off_it() {
             return false;
         };
         [start, end].iter().any(|point| {
-            inside_a_keepout(
-                point.x.raw() as f64 / 1e6,
-                point.y.raw() as f64 / 1e6,
-                1e-9,
-            )
+            inside_a_keepout(point.x.raw() as f64 / 1e6, point.y.raw() as f64 / 1e6, 1e-9)
         })
     });
     assert!(

@@ -255,7 +255,13 @@ fn benchmark_all_fixtures_drc() {
             route_count,
             unrouted,
         ));
-        measured.push((label, score.drc_violations, score.shorts, unrouted, route_count));
+        measured.push((
+            label,
+            score.drc_violations,
+            score.shorts,
+            unrouted,
+            route_count,
+        ));
     }
     print_table_footer();
     eprintln!();
@@ -275,7 +281,9 @@ fn benchmark_all_fixtures_drc() {
         );
 
         if *unrouted != 0 {
-            failures.push(format!("{label}: {unrouted} unrouted connections, threshold 0"));
+            failures.push(format!(
+                "{label}: {unrouted} unrouted connections, threshold 0"
+            ));
         }
         if *route_count == 0 {
             failures.push(format!("{label}: routed nothing at all"));

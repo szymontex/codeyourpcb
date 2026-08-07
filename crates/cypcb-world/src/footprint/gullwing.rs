@@ -497,7 +497,6 @@ pub fn tqfp32() -> Footprint {
         pin_num += 1;
     }
 
-
     Footprint {
         name: "TQFP-32".into(),
         description: "Thin Quad Flat Package, 32 pins, 0.8mm pitch".into(),

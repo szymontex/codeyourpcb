@@ -45,11 +45,21 @@ fn trajectory(filename: &str, price: f64) -> (Vec<usize>, u32, bool) {
 
     let resolution = config.resolve_adaptive_grid_resolution(
         &rules,
-        world.board_info().expect("the fixture has a board").0.width.raw(),
-        world.board_info().expect("the fixture has a board").0.height.raw(),
+        world
+            .board_info()
+            .expect("the fixture has a board")
+            .0
+            .width
+            .raw(),
+        world
+            .board_info()
+            .expect("the fixture has a board")
+            .0
+            .height
+            .raw(),
     );
-    let mut grid = RoutingGrid::from_board(&mut world, &library, &rules, resolution)
-        .expect("the grid builds");
+    let mut grid =
+        RoutingGrid::from_board(&mut world, &library, &rules, resolution).expect("the grid builds");
 
     let ratsnest = extract_ratsnest(&mut world, &library);
     let order = order_nets(&ratsnest);
@@ -129,10 +139,19 @@ fn does_overuse_track_the_violations() {
         let baseline: BTreeSet<String> = run_drc(&mut world, &drc_rules)
             .violations
             .iter()
-            .map(|v| format!("{}|{}|{}|{}", v.kind, v.location.x.raw(), v.location.y.raw(), v.message))
+            .map(|v| {
+                format!(
+                    "{}|{}|{}|{}",
+                    v.kind,
+                    v.location.x.raw(),
+                    v.location.y.raw(),
+                    v.message
+                )
+            })
             .collect();
 
-        let rules = PresetRuleSet::new(RulesPreset::from_name("jlcpcb").expect("the preset exists"));
+        let rules =
+            PresetRuleSet::new(RulesPreset::from_name("jlcpcb").expect("the preset exists"));
         let config = AutorouteConfig {
             max_ripup_iterations: cap,
             ..AutorouteConfig::default()

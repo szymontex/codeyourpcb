@@ -66,7 +66,11 @@ fn example_files() -> Vec<PathBuf> {
 #[test]
 fn every_example_prints_a_board_model() {
     for file in example_files() {
-        let name = file.file_name().unwrap_or_default().to_string_lossy().to_string();
+        let name = file
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
         let model = parse(&file, "json").unwrap_or_else(|| panic!("{name} failed to parse"));
 
         for key in ["board", "components", "nets", "traces", "vias", "zones"] {
@@ -121,7 +125,11 @@ fn the_model_knows_what_an_import_brought_in() {
     }
 
     let nets = model["nets"].as_array().expect("nets");
-    assert_eq!(nets.len(), 7, "seven nets, counting the ones a module wires");
+    assert_eq!(
+        nets.len(),
+        7,
+        "seven nets, counting the ones a module wires"
+    );
 }
 
 #[test]

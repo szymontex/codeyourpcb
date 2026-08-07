@@ -38,7 +38,11 @@ fn covered_examples() -> Vec<PathBuf> {
         .filter_map(|entry| entry.ok().map(|e| e.path()))
         .filter(|path| path.extension().is_some_and(|ext| ext == "cypcb"))
         .filter(|path| {
-            let name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+            let name = path
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string();
             !NOT_YET.iter().any(|(skipped, _)| *skipped == name)
         })
         .collect();
@@ -82,7 +86,11 @@ fn the_two_readers_agree_on_every_board_the_new_one_claims() {
     let mut differences = Vec::new();
     let mut definitions_compared = 0usize;
     for file in files {
-        let name = file.file_name().unwrap_or_default().to_string_lossy().to_string();
+        let name = file
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
         let source = std::fs::read_to_string(&file).expect("the example is readable");
 
         let expected = parse(&source);
