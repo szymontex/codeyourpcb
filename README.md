@@ -159,7 +159,7 @@ npm install
 npm start          # builds WASM + starts dev server
 ```
 
-Open http://localhost:5173 — pick a template or open a `.cypcb` file.
+Open http://localhost:4321 — pick a template or open a `.cypcb` file.
 
 ### Desktop app (Tauri)
 
@@ -179,8 +179,9 @@ cargo run -p cypcb-cli -- export examples/blink.cypcb -o out    # refuses a shor
 cargo run -p cypcb-cli -- route examples/blink.cypcb --variants   # route, keep the best
 cargo run -p cypcb-cli -- score examples/blink.routed.cypcb   # quality metrics as JSON
 cargo run -p cypcb-cli -- export examples/blink.cypcb         # 13 manufacturing files
-cargo run -p cypcb-cli -- parse examples/blink.cypcb          # the AST
-cargo run -p cypcb-cli -- parse-kicad board.kicad_pcb         # a KiCad board's metadata
+cargo run -p cypcb-cli -- parse examples/blink.cypcb          # the board, as JSON
+cargo run -p cypcb-cli -- parse examples/blink.cypcb -o ast    # the AST instead
+cargo run -p cypcb-cli -- parse-kicad tests/fixtures/benchmark/led_blink.kicad_pcb   # a KiCad board
 ```
 
 `check`, `route`, `score` and `export` all take `--preset` (jlcpcb, pcbway,

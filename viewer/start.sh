@@ -35,7 +35,7 @@ echo "  - Vite dev server (frontend)"
 echo "  - WebSocket server (hot reload)"
 echo "  - Watching ../examples/*.cypcb"
 echo ""
-echo "Open http://localhost:5173 in your browser"
+echo "Open http://localhost:4321 in your browser"
 echo ""
 
 npx tsx server.ts "$@"

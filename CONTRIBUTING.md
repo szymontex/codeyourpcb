@@ -79,7 +79,7 @@ cd viewer
 npm run dev
 ```
 
-Visit http://localhost:5173 to see the PCB viewer.
+Visit http://localhost:4321 to see the PCB viewer.
 
 The dev server supports hot reload:
 - TypeScript changes rebuild automatically
