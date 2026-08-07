@@ -11,6 +11,16 @@ echo.
 
 cd viewer
 call npm run build:desktop
+if errorlevel 1 (
+    echo.
+    echo ============================================
+    echo Build FAILED
+    echo ============================================
+    echo.
+    echo Nothing was installed. Check the error above.
+    pause
+    exit /b 1
+)
 
 echo.
 echo ============================================

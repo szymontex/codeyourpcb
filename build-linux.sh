@@ -10,7 +10,16 @@ echo "NOTE: This may take 10-20 minutes on first build."
 echo ""
 
 cd viewer
-npm run build:desktop
+if ! npm run build:desktop; then
+    echo ""
+    echo "============================================"
+    echo "Build FAILED"
+    echo "============================================"
+    echo ""
+    echo "Nothing was installed. On a fresh Linux box the usual cause is the"
+    echo "system libraries Tauri links against - run ./setup-linux.sh first."
+    exit 1
+fi
 
 echo ""
 echo "============================================"

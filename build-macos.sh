@@ -10,7 +10,15 @@ echo "NOTE: This may take 10-20 minutes on first build."
 echo ""
 
 cd viewer
-npm run build:desktop
+if ! npm run build:desktop; then
+    echo ""
+    echo "============================================"
+    echo "Build FAILED"
+    echo "============================================"
+    echo ""
+    echo "Nothing was installed. Check the error above."
+    exit 1
+fi
 
 echo ""
 echo "============================================"
