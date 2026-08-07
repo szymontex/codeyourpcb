@@ -235,3 +235,109 @@ fn between(line: &str, marker: char) -> Option<f64> {
         .unwrap_or(rest.len());
     rest[..end].parse::<f64>().ok()
 }
+
+#[test]
+fn every_pad_is_flashed_where_its_footprint_puts_it() {
+    // The layers are read for completeness above; this reads them for content.
+    // A pad that never reaches copper is a part that cannot be soldered, and
+    // the file set looks perfectly well formed without it.
+    use cypcb_world::components::{FootprintRef, Layer, Position, Rotation};
+
+    let mut missing: Vec<String> = Vec::new();
+    let mut pads_checked = 0usize;
+
+    for (name, mut world, library) in boards() {
+        // Where every pad ends up, per copper layer, in board coordinates.
+        let placements: Vec<(cypcb_core::Point, f64, String)> = {
+            let ecs = world.ecs_mut();
+            let mut query = ecs.query::<(&Position, &Rotation, &FootprintRef)>();
+            query
+                .iter(ecs)
+                .map(|(position, rotation, footprint)| {
+                    (
+                        position.0,
+                        rotation.to_degrees(),
+                        footprint.as_str().to_string(),
+                    )
+                })
+                .collect()
+        };
+
+        let mut expected: Vec<(Layer, f64, f64)> = Vec::new();
+        for (position, degrees, footprint_name) in &placements {
+            let Some(footprint) = library.get(footprint_name) else {
+                continue;
+            };
+            let (sin, cos) = degrees.to_radians().sin_cos();
+            for pad in &footprint.pads {
+                let px = pad.position.x.0 as f64;
+                let py = pad.position.y.0 as f64;
+                let x = position.x.0 as f64 + px * cos - py * sin;
+                let y = position.y.0 as f64 + px * sin + py * cos;
+                for layer in &pad.layers {
+                    if matches!(layer, Layer::TopCopper | Layer::BottomCopper) {
+                        expected.push((*layer, x / 1_000_000.0, y / 1_000_000.0));
+                    }
+                }
+            }
+        }
+
+        if expected.is_empty() {
+            continue;
+        }
+
+        let dir = export_to_temp("pads", &name, &mut world, &library);
+        let files = files_under(&dir);
+        // The preset decides the names: JLCPCB writes `-F_Cu.gbr`, others
+        // write `.gtl`. Matching one spelling silently read an empty file and
+        // reported every pad as missing - which is how this test failed its
+        // first run, on itself rather than on the exporter.
+        let read_layer = |markers: &[&str]| -> String {
+            files
+                .iter()
+                .find(|path| {
+                    let name = path.to_string_lossy();
+                    markers.iter().any(|marker| name.ends_with(marker))
+                })
+                .map(|path| std::fs::read_to_string(path).expect("a readable layer"))
+                .unwrap_or_else(|| panic!("{name} exported no top or bottom copper: {files:?}"))
+        };
+        let top = flashes(&read_layer(&["F_Cu.gbr", ".gtl"]));
+        let bottom = flashes(&read_layer(&["B_Cu.gbr", ".gbl"]));
+
+        for (layer, x, y) in expected {
+            pads_checked += 1;
+            let candidates = match layer {
+                Layer::TopCopper => &top,
+                _ => &bottom,
+            };
+            let found = candidates
+                .iter()
+                .any(|(fx, fy)| (fx - x).abs() < 0.002 && (fy - y).abs() < 0.002);
+            if !found {
+                missing.push(format!(
+                    "{name}: no copper flashed at ({x:.3}mm, {y:.3}mm) on {layer:?}"
+                ));
+            }
+        }
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    assert!(
+        missing.is_empty(),
+        "pads that never reach copper:\n{}",
+        missing.join("\n")
+    );
+    assert!(pads_checked >= 40, "only {pads_checked} pads were checked");
+    eprintln!("{pads_checked} pads found in the copper their footprint puts them on");
+}
+
+/// Every flash coordinate in a layer, in millimetres.
+fn flashes(gerber: &str) -> Vec<(f64, f64)> {
+    gerber
+        .lines()
+        .filter(|line| line.contains("D03"))
+        .filter_map(coordinates)
+        .collect()
+}
