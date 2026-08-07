@@ -15,6 +15,7 @@
 //! ```
 
 use crate::coords::{CoordinateFormat, Unit};
+use cypcb_core::Nm;
 
 /// Export preset defining manufacturer-specific requirements.
 #[derive(Debug, Clone)]
@@ -29,6 +30,13 @@ pub struct ExportPreset {
     pub layers: ExportLayers,
     /// Include assembly files (BOM, CPL)
     pub assembly: bool,
+    /// How far this house's silkscreen must stay from solderable copper.
+    ///
+    /// The legend is clipped to it, so the number belongs to the fabricator
+    /// rather than to the exporter. It matches `min_clearance` of the same
+    /// house's design rules in `cypcb-drc`, which is what `cypcb check`
+    /// measures the clipped ink against.
+    pub silk_clearance: Nm,
 }
 
 /// File naming convention for exported files.
@@ -106,6 +114,7 @@ pub fn jlcpcb_2layer() -> ExportPreset {
             drill: true,
         },
         assembly: true,
+        silk_clearance: Nm::from_mm(0.127),
     }
 }
 
@@ -150,6 +159,7 @@ pub fn pcbway_standard() -> ExportPreset {
             drill: true,
         },
         assembly: true,
+        silk_clearance: Nm::from_mm(0.2),
     }
 }
 

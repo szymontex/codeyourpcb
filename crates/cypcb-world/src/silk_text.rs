@@ -26,6 +26,204 @@ use crate::footprint::{Footprint, SilkShape};
 /// A glyph as polylines over a unit box: x to the right, y up, both 0.0..1.0.
 type Strokes = &'static [&'static [(f32, f32)]];
 
+/// A square of board a legend must not print inside.
+///
+/// One per pad, centred on the pad and large enough that anything outside it
+/// is at least the required clearance from the pad's copper - see
+/// [`pad_keepouts`].
+#[derive(Debug, Clone, Copy)]
+pub struct Keepout {
+    /// Where the pad is, in board coordinates.
+    pub centre: Point,
+    /// Half the square's side.
+    pub half_size: Nm,
+}
+
+impl Keepout {
+    fn holds(&self, point: Point) -> bool {
+        (point.x.raw() - self.centre.x.raw()).abs() <= self.half_size.raw()
+            && (point.y.raw() - self.centre.y.raw()).abs() <= self.half_size.raw()
+    }
+}
+
+/// The squares a legend must stay out of, one per pad on the given face.
+///
+/// A board house clips silkscreen off solderable copper before it prints;
+/// shipping a legend that has to be clipped means shipping a file whose
+/// legend nobody has seen. The exporter does it here instead, so the Gerber
+/// that leaves is the Gerber that gets made.
+///
+/// The square is centred on the pad, with a half-side of half the pad's
+/// longer dimension plus `margin`. That is deliberately larger than the pad:
+/// anything outside a square of half-side `s` is further than `s` from its
+/// centre in the plane, so clipping to it satisfies a checker that treats the
+/// pad as a disc.
+///
+/// Pass `margin` as the fabricator's silk-to-copper clearance plus half the
+/// stroke width, because ink spreads half a stroke either side of its
+/// centreline.
+///
+/// A pad rotated by anything other than a right angle is enclosed by its
+/// bounding square, which is the conservative direction.
+pub fn pad_keepouts(
+    world: &mut crate::BoardWorld,
+    library: &crate::footprint::FootprintLibrary,
+    layer: crate::Layer,
+    margin: Nm,
+) -> Vec<Keepout> {
+    use crate::components::{FootprintRef, Position, Rotation};
+
+    let placed: Vec<(Point, String, f64)> = {
+        let ecs = world.ecs_mut();
+        let mut query = ecs.query::<(&Position, &FootprintRef, &Rotation)>();
+        query
+            .iter(ecs)
+            .map(|(position, footprint, rotation)| {
+                (position.0, footprint.0.clone(), rotation.to_degrees())
+            })
+            .collect()
+    };
+
+    let mut keepouts = Vec::new();
+    for (position, footprint_name, rotation_deg) in placed {
+        let Some(footprint) = library.get(&footprint_name) else {
+            continue;
+        };
+        let (sin, cos) = rotation_deg.to_radians().sin_cos();
+
+        for pad in &footprint.pads {
+            if !pad.layers.contains(&layer) {
+                continue;
+            }
+            let x = pad.position.x.raw() as f64;
+            let y = pad.position.y.raw() as f64;
+            let centre = Point::new(
+                Nm(position.x.raw() + (x * cos - y * sin).round() as i64),
+                Nm(position.y.raw() + (x * sin + y * cos).round() as i64),
+            );
+            let half_size = Nm(pad.size.0.raw().max(pad.size.1.raw()) / 2 + margin.raw());
+            keepouts.push(Keepout { centre, half_size });
+        }
+    }
+
+    keepouts
+}
+
+/// Cut every stroke where it enters a keepout, keeping the parts outside.
+///
+/// A letter crossing a pad comes back as the pieces of itself that print, or
+/// as nothing at all when the pad swallows it. Circles are left whole: nothing
+/// in the built-in library draws one over copper, and a clipped arc is a
+/// different shape rather than a shorter one.
+pub fn clip_strokes(strokes: Vec<SilkShape>, keepouts: &[Keepout]) -> Vec<SilkShape> {
+    if keepouts.is_empty() {
+        return strokes;
+    }
+
+    let mut out = Vec::with_capacity(strokes.len());
+    for shape in strokes {
+        let SilkShape::Segment { start, end, width } = shape else {
+            out.push(shape);
+            continue;
+        };
+
+        // Each keepout cuts the pieces the previous ones left.
+        let mut pieces = vec![(start, end)];
+        for keepout in keepouts {
+            let mut next = Vec::with_capacity(pieces.len());
+            for (from, to) in pieces {
+                next.extend(cut(from, to, keepout));
+            }
+            pieces = next;
+            if pieces.is_empty() {
+                break;
+            }
+        }
+
+        for (from, to) in pieces {
+            if from != to {
+                out.push(SilkShape::Segment {
+                    start: from,
+                    end: to,
+                    width,
+                });
+            }
+        }
+    }
+
+    out
+}
+
+/// The parts of a segment that lie outside one keepout.
+///
+/// Liang-Barsky against an axis-aligned square: find the interval of the
+/// segment that is inside, then hand back what is on either side of it.
+fn cut(start: Point, end: Point, keepout: &Keepout) -> Vec<(Point, Point)> {
+    let dx = (end.x.raw() - start.x.raw()) as f64;
+    let dy = (end.y.raw() - start.y.raw()) as f64;
+
+    if dx == 0.0 && dy == 0.0 {
+        return if keepout.holds(start) {
+            Vec::new()
+        } else {
+            vec![(start, end)]
+        };
+    }
+
+    let half = keepout.half_size.raw() as f64;
+    let min_x = keepout.centre.x.raw() as f64 - half;
+    let max_x = keepout.centre.x.raw() as f64 + half;
+    let min_y = keepout.centre.y.raw() as f64 - half;
+    let max_y = keepout.centre.y.raw() as f64 + half;
+
+    let mut enter: f64 = 0.0;
+    let mut leave: f64 = 1.0;
+    let x0 = start.x.raw() as f64;
+    let y0 = start.y.raw() as f64;
+
+    for (delta, from, low, high) in [(dx, x0, min_x, max_x), (dy, y0, min_y, max_y)] {
+        if delta == 0.0 {
+            if from < low || from > high {
+                // Parallel to this pair of edges and outside them: the segment
+                // never enters the square.
+                return vec![(start, end)];
+            }
+            continue;
+        }
+        let (near, far) = {
+            let a = (low - from) / delta;
+            let b = (high - from) / delta;
+            if a <= b {
+                (a, b)
+            } else {
+                (b, a)
+            }
+        };
+        enter = enter.max(near);
+        leave = leave.min(far);
+    }
+
+    if enter >= leave {
+        return vec![(start, end)];
+    }
+
+    let at = |t: f64| -> Point {
+        Point::new(
+            Nm((x0 + dx * t).round() as i64),
+            Nm((y0 + dy * t).round() as i64),
+        )
+    };
+
+    let mut pieces = Vec::new();
+    if enter > 0.0 {
+        pieces.push((start, at(enter)));
+    }
+    if leave < 1.0 {
+        pieces.push((at(leave), end));
+    }
+    pieces
+}
+
 /// The strokes for one character, or `None` if this font cannot draw it.
 pub fn glyph(c: char) -> Option<Strokes> {
     let upper = c.to_ascii_uppercase();

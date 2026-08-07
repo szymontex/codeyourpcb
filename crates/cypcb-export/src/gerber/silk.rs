@@ -40,6 +40,13 @@ pub struct SilkConfig {
     /// One millimetre is what a fabricator's own silkscreen minimum allows on
     /// a 0.15mm stroke, and what a person can read without a loupe.
     pub text_height: Nm,
+    /// How far the ink must stay from solderable copper.
+    ///
+    /// The legend is clipped to this, so it should be the clearance the
+    /// fabricator this board is for asks for - `DesignRules::min_clearance`
+    /// of the preset the user named. The default is JLCPCB's, which is what
+    /// every other default in this project is measured against.
+    pub clearance: Nm,
 }
 
 impl Default for SilkConfig {
@@ -49,8 +56,25 @@ impl Default for SilkConfig {
             show_courtyards: true,
             show_designator_marks: true,
             text_height: Nm::from_mm(1.0),
+            clearance: Nm::from_mm(0.13),
         }
     }
+}
+
+/// A part whose name the legend could not print in full.
+///
+/// The name crosses so much copper that clipping took most of it, so nobody
+/// holding the board can read which part it labels. Reported rather than
+/// silently drawn, because a half-eaten designator looks like a legend on
+/// screen and like nothing on the board.
+#[derive(Debug, Clone)]
+pub struct SilkWarning {
+    /// The part whose name was eaten.
+    pub refdes: String,
+    /// How many strokes survived the clipping.
+    pub strokes_drawn: usize,
+    /// How many the name is made of.
+    pub strokes_wanted: usize,
 }
 
 /// Export silkscreen layer to Gerber format.
@@ -98,6 +122,21 @@ pub fn export_silkscreen(
     format: &CoordinateFormat,
     config: &SilkConfig,
 ) -> Result<String, SilkError> {
+    export_silkscreen_reporting(world, library, side, format, config).map(|(gerber, _)| gerber)
+}
+
+/// The same export, plus the names it could not print in full.
+///
+/// Every caller that shows a user what was written should use this one: a
+/// designator eaten by clipping is a part nobody can identify on the board,
+/// and it is invisible in the file itself.
+pub fn export_silkscreen_reporting(
+    world: &mut BoardWorld,
+    library: &FootprintLibrary,
+    side: Side,
+    format: &CoordinateFormat,
+    config: &SilkConfig,
+) -> Result<(String, Vec<SilkWarning>), SilkError> {
     let mut output = String::new();
     let mut apertures = ApertureManager::new();
 
@@ -130,6 +169,24 @@ pub fn export_silkscreen(
         Side::Top => Layer::TopCopper,
         Side::Bottom => Layer::BottomCopper,
     };
+
+    // The copper this legend must not print on.
+    //
+    // A board house clips silkscreen off solderable copper before it prints,
+    // so a file that needs clipping is a file whose legend nobody has seen.
+    // Clipping here means the Gerber that leaves is the Gerber that gets made,
+    // and it is measured against the clearance the named fabricator asks for
+    // rather than a number this crate picked.
+    let keepouts = cypcb_world::silk_text::pad_keepouts(
+        world,
+        library,
+        target_layer,
+        Nm(config.clearance.0 + config.line_width.0 / 2),
+    );
+
+    // Everything this legend draws, in board coordinates, before clipping.
+    let mut shapes: Vec<cypcb_world::footprint::SilkShape> = Vec::new();
+    let mut unprintable_names = Vec::new();
 
     // Query all components with position and footprint
     let mut query = world.ecs_mut().query::<(
@@ -174,24 +231,36 @@ pub fn export_silkscreen(
         // or a name this font cannot spell, falls back to the crosshair that
         // used to be all there was.
         if config.show_designator_marks {
-            let printed = refdes
-                .map(|r| r.as_str())
-                .filter(|name| !name.is_empty())
+            let name = refdes.map(|r| r.as_str()).filter(|name| !name.is_empty());
+            let letters = name
                 .map(|name| {
-                    draw_text(
+                    cypcb_world::silk_text::designator_strokes(
                         name,
                         position.0,
                         config.text_height,
                         config.line_width,
                         cypcb_world::silk_text::artwork_rise(footprint, rotation.to_degrees()),
-                        &mut drawing_commands,
-                        format,
                     )
                 })
-                .unwrap_or(false);
+                .unwrap_or_default();
 
-            if !printed {
-                draw_crosshair(position.0, config.line_width, &mut drawing_commands, format);
+            if letters.is_empty() {
+                // No name, or a name this font cannot spell: the position mark
+                // that used to be all there was.
+                shapes.extend(crosshair(position.0, config.line_width));
+            } else {
+                // How much of the name survives the clipping decides whether
+                // an assembler can still read it, which the caller is told
+                // about rather than left to discover on the board.
+                let kept = cypcb_world::silk_text::clip_strokes(letters.clone(), &keepouts);
+                if kept.len() * 2 < letters.len() {
+                    unprintable_names.push(SilkWarning {
+                        refdes: name.unwrap_or("").to_string(),
+                        strokes_drawn: kept.len(),
+                        strokes_wanted: letters.len(),
+                    });
+                }
+                shapes.extend(letters);
             }
         }
 
@@ -199,22 +268,25 @@ pub fn export_silkscreen(
         // courtyard as well would put a box on the board that the footprint
         // never had.
         if !footprint.silk.is_empty() {
-            draw_artwork(
+            shapes.extend(place_artwork(
                 position.0,
                 &footprint.silk,
-                rotation.0,
-                &mut drawing_commands,
-                format,
-            );
+                rotation.to_degrees(),
+                config.line_width,
+            ));
         } else if config.show_courtyards {
-            draw_courtyard(
+            shapes.extend(courtyard_outline(
                 position.0,
                 &footprint.courtyard,
-                rotation.0,
-                &mut drawing_commands,
-                format,
-            );
+                rotation.to_degrees(),
+                config.line_width,
+            ));
         }
+    }
+
+    let mut pen = None;
+    for shape in cypcb_world::silk_text::clip_strokes(shapes, &keepouts) {
+        emit(&shape, &mut pen, &mut drawing_commands, format);
     }
 
     // Emit aperture definitions
@@ -226,194 +298,157 @@ pub fn export_silkscreen(
     // End of file
     output.push_str("M02*\n");
 
-    Ok(output)
+    Ok((output, unprintable_names))
 }
 
-/// Draw a crosshair mark at the given position.
+/// Write one shape as Gerber, lifting the pen only where strokes stop joining.
 ///
-/// Draws a simple + mark to indicate component location without full text rendering.
-/// Draw a name centred on `position`, as strokes.
-///
-/// Returns false when nothing was drawn - an empty name, or one made entirely
-/// of characters the font cannot spell - so the caller can fall back rather
-/// than print a part with no label at all.
-fn draw_text(
-    text: &str,
-    position: cypcb_core::Point,
-    height: Nm,
-    line_width: Nm,
-    rise: Nm,
-    output: &mut String,
-    format: &CoordinateFormat,
-) -> bool {
-    // The letters are laid out by the model, not here. The silkscreen
-    // clearance rule measures the same call, so what the checker passes is
-    // what this file prints.
-    let strokes =
-        cypcb_world::silk_text::designator_strokes(text, position, height, line_width, rise);
-
-    // The pen lifts only where the strokes stop joining, so a letter drawn as
-    // one polyline stays one polyline in the file.
-    let mut pen_at = None;
-    for shape in &strokes {
-        let cypcb_world::footprint::SilkShape::Segment { start, end, .. } = shape else {
-            continue;
-        };
-        if pen_at != Some(*start) {
-            output.push_str(&format!(
-                "X{}Y{}D02*\n",
-                nm_to_gerber(start.x.0, format),
-                nm_to_gerber(start.y.0, format)
-            ));
-        }
-        output.push_str(&format!(
-            "X{}Y{}D01*\n",
-            nm_to_gerber(end.x.0, format),
-            nm_to_gerber(end.y.0, format)
-        ));
-        pen_at = Some(*end);
-    }
-
-    !strokes.is_empty()
-}
-
-fn draw_crosshair(
-    position: cypcb_core::Point,
-    line_width: Nm,
-    output: &mut String,
-    format: &CoordinateFormat,
-) {
-    // Crosshair size: 2x line width for visibility
-    let half_size = line_width.0 * 2;
-
-    // Horizontal line: left to right
-    let x_left = nm_to_gerber(position.x.0 - half_size, format);
-    let y = nm_to_gerber(position.y.0, format);
-    output.push_str(&format!("X{}Y{}D02*\n", x_left, y)); // Move to left
-
-    let x_right = nm_to_gerber(position.x.0 + half_size, format);
-    output.push_str(&format!("X{}Y{}D01*\n", x_right, y)); // Draw to right
-
-    // Vertical line: bottom to top
-    let x = nm_to_gerber(position.x.0, format);
-    let y_bottom = nm_to_gerber(position.y.0 - half_size, format);
-    output.push_str(&format!("X{}Y{}D02*\n", x, y_bottom)); // Move to bottom
-
-    let y_top = nm_to_gerber(position.y.0 + half_size, format);
-    output.push_str(&format!("X{}Y{}D01*\n", x, y_top)); // Draw to top
-}
-
-/// Draw a footprint's own silkscreen artwork.
-///
-/// Placed and turned with the part. A circle is emitted as a polygon of 32
-/// sides, which at the scale a legend is printed differs from the curve by
-/// less than the width of the line drawing it.
-fn draw_artwork(
-    position: cypcb_core::Point,
-    shapes: &[cypcb_world::footprint::SilkShape],
-    rotation_millideg: i32,
+/// `pen` is where the last command left it. Clipping cuts polylines into
+/// pieces, and emitting a pen-up before every piece would write two commands
+/// where the artwork needs one - the legend for a small board grew by half
+/// before this was threaded through.
+fn emit(
+    shape: &cypcb_world::footprint::SilkShape,
+    pen: &mut Option<cypcb_core::Point>,
     output: &mut String,
     format: &CoordinateFormat,
 ) {
     use cypcb_world::footprint::SilkShape;
 
-    let radians = (rotation_millideg as f64 / 1000.0).to_radians();
-    let (sin, cos) = radians.sin_cos();
-    let place = |p: cypcb_core::Point| -> (i64, i64) {
-        let x = p.x.0 as f64;
-        let y = p.y.0 as f64;
-        (
-            position.x.0 + (x * cos - y * sin).round() as i64,
-            position.y.0 + (x * sin + y * cos).round() as i64,
-        )
-    };
-
-    let move_to = |x: i64, y: i64, output: &mut String| {
-        output.push_str(&format!(
-            "X{}Y{}D02*\n",
-            nm_to_gerber(x, format),
-            nm_to_gerber(y, format)
-        ));
-    };
-    let line_to = |x: i64, y: i64, output: &mut String| {
-        output.push_str(&format!(
-            "X{}Y{}D01*\n",
-            nm_to_gerber(x, format),
-            nm_to_gerber(y, format)
-        ));
-    };
-
-    for shape in shapes {
-        match shape {
-            SilkShape::Segment { start, end, .. } => {
-                let (sx, sy) = place(*start);
-                let (ex, ey) = place(*end);
-                move_to(sx, sy, output);
-                line_to(ex, ey, output);
+    match shape {
+        SilkShape::Segment { start, end, .. } => {
+            if *pen != Some(*start) {
+                output.push_str(&format!(
+                    "X{}Y{}D02*\n",
+                    nm_to_gerber(start.x.0, format),
+                    nm_to_gerber(start.y.0, format)
+                ));
             }
-            SilkShape::Circle { centre, radius, .. } => {
-                const STEPS: usize = 32;
-                let radius = radius.0 as f64;
-                for step in 0..=STEPS {
-                    let angle = step as f64 / STEPS as f64 * std::f64::consts::TAU;
-                    let point = cypcb_core::Point::new(
-                        cypcb_core::Nm(centre.x.0 + (radius * angle.cos()).round() as i64),
-                        cypcb_core::Nm(centre.y.0 + (radius * angle.sin()).round() as i64),
-                    );
-                    let (x, y) = place(point);
-                    if step == 0 {
-                        move_to(x, y, output);
-                    } else {
-                        line_to(x, y, output);
-                    }
-                }
+            output.push_str(&format!(
+                "X{}Y{}D01*\n",
+                nm_to_gerber(end.x.0, format),
+                nm_to_gerber(end.y.0, format)
+            ));
+            *pen = Some(*end);
+        }
+        SilkShape::Circle { centre, radius, .. } => {
+            const STEPS: usize = 32;
+            let radius = radius.0 as f64;
+            let mut last = (0, 0);
+            for step in 0..=STEPS {
+                let angle = step as f64 / STEPS as f64 * std::f64::consts::TAU;
+                let x = centre.x.0 + (radius * angle.cos()).round() as i64;
+                let y = centre.y.0 + (radius * angle.sin()).round() as i64;
+                let command = if step == 0 { "D02" } else { "D01" };
+                output.push_str(&format!(
+                    "X{}Y{}{}*\n",
+                    nm_to_gerber(x, format),
+                    nm_to_gerber(y, format),
+                    command
+                ));
+                last = (x, y);
             }
+            *pen = Some(cypcb_core::Point::new(Nm(last.0), Nm(last.1)));
         }
     }
 }
 
-/// Draw a courtyard outline rectangle.
+/// A position mark, for a part whose name cannot be printed.
+fn crosshair(position: cypcb_core::Point, line_width: Nm) -> Vec<cypcb_world::footprint::SilkShape> {
+    use cypcb_world::footprint::SilkShape;
+
+    let half = Nm(line_width.0 * 2);
+    vec![
+        SilkShape::Segment {
+            start: cypcb_core::Point::new(Nm(position.x.0 - half.0), position.y),
+            end: cypcb_core::Point::new(Nm(position.x.0 + half.0), position.y),
+            width: line_width,
+        },
+        SilkShape::Segment {
+            start: cypcb_core::Point::new(position.x, Nm(position.y.0 - half.0)),
+            end: cypcb_core::Point::new(position.x, Nm(position.y.0 + half.0)),
+            width: line_width,
+        },
+    ]
+}
+
+/// Turn a footprint's own artwork about its origin and put it on the board.
+fn place_artwork(
+    position: cypcb_core::Point,
+    shapes: &[cypcb_world::footprint::SilkShape],
+    rotation_deg: f64,
+    line_width: Nm,
+) -> Vec<cypcb_world::footprint::SilkShape> {
+    use cypcb_world::footprint::SilkShape;
+
+    let (sin, cos) = rotation_deg.to_radians().sin_cos();
+    let place = |p: cypcb_core::Point| -> cypcb_core::Point {
+        let x = p.x.0 as f64;
+        let y = p.y.0 as f64;
+        cypcb_core::Point::new(
+            Nm(position.x.0 + (x * cos - y * sin).round() as i64),
+            Nm(position.y.0 + (x * sin + y * cos).round() as i64),
+        )
+    };
+
+    shapes
+        .iter()
+        .map(|shape| match shape {
+            SilkShape::Segment { start, end, width } => SilkShape::Segment {
+                start: place(*start),
+                end: place(*end),
+                width: if width.0 > 0 { *width } else { line_width },
+            },
+            SilkShape::Circle {
+                centre,
+                radius,
+                width,
+            } => SilkShape::Circle {
+                centre: place(*centre),
+                radius: *radius,
+                width: if width.0 > 0 { *width } else { line_width },
+            },
+        })
+        .collect()
+}
+
+/// The courtyard outline a part prints when its footprint carries no artwork.
 ///
-/// Draws the footprint courtyard bounds as a rectangle outline.
-fn draw_courtyard(
+/// Rotated with the part. It was drawn axis-aligned whatever the rotation
+/// until 2026-08-07, while `silk-clearance` rotated the same corners before
+/// measuring them - so on any turned part the checker and the file disagreed
+/// about where the outline was.
+fn courtyard_outline(
     position: cypcb_core::Point,
     courtyard: &cypcb_core::Rect,
-    rotation_millideg: i32,
-    output: &mut String,
-    format: &CoordinateFormat,
-) {
-    // For MVP, draw axis-aligned rectangle at component position
-    // TODO: Handle rotation by rotating courtyard corners
+    rotation_deg: f64,
+    line_width: Nm,
+) -> Vec<cypcb_world::footprint::SilkShape> {
+    use cypcb_world::footprint::SilkShape;
 
-    // Calculate absolute courtyard corners
-    let min_x = position.x.0 + courtyard.min.x.0;
-    let min_y = position.y.0 + courtyard.min.y.0;
-    let max_x = position.x.0 + courtyard.max.x.0;
-    let max_y = position.y.0 + courtyard.max.y.0;
+    let (sin, cos) = rotation_deg.to_radians().sin_cos();
+    let place = |x: Nm, y: Nm| -> cypcb_core::Point {
+        let (x, y) = (x.0 as f64, y.0 as f64);
+        cypcb_core::Point::new(
+            Nm(position.x.0 + (x * cos - y * sin).round() as i64),
+            Nm(position.y.0 + (x * sin + y * cos).round() as i64),
+        )
+    };
 
-    // Draw rectangle: bottom-left -> bottom-right -> top-right -> top-left -> close
     let corners = [
-        (min_x, min_y), // Bottom-left
-        (max_x, min_y), // Bottom-right
-        (max_x, max_y), // Top-right
-        (min_x, max_y), // Top-left
-        (min_x, min_y), // Back to bottom-left (close)
+        place(courtyard.min.x, courtyard.min.y),
+        place(courtyard.max.x, courtyard.min.y),
+        place(courtyard.max.x, courtyard.max.y),
+        place(courtyard.min.x, courtyard.max.y),
     ];
 
-    // Move to first corner
-    let x = nm_to_gerber(corners[0].0, format);
-    let y = nm_to_gerber(corners[0].1, format);
-    output.push_str(&format!("X{}Y{}D02*\n", x, y));
-
-    // Draw to remaining corners
-    for corner in corners.iter().skip(1) {
-        let x = nm_to_gerber(corner.0, format);
-        let y = nm_to_gerber(corner.1, format);
-        output.push_str(&format!("X{}Y{}D01*\n", x, y));
-    }
-
-    // Suppress unused rotation warning - will be used when rotation is implemented
-    let _ = rotation_millideg;
+    (0..4)
+        .map(|index| SilkShape::Segment {
+            start: corners[index],
+            end: corners[(index + 1) % 4],
+            width: line_width,
+        })
+        .collect()
 }
 
 #[cfg(test)]

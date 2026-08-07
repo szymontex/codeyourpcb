@@ -40,9 +40,10 @@ use crate::bom::{export_bom_csv, export_bom_json};
 use crate::cpl::export_cpl;
 use crate::excellon::{export_excellon, DrillType};
 use crate::gerber::{
-    export_copper_layer, export_outline, export_silkscreen, export_soldermask, export_solderpaste,
-    MaskPasteConfig, Side, SilkConfig,
+    export_copper_layer, export_outline, export_silkscreen_reporting, export_soldermask,
+    export_solderpaste, MaskPasteConfig, Side, SilkConfig,
 };
+use crate::gerber::SilkWarning;
 use crate::presets::ExportPreset;
 
 /// Export job configuration.
@@ -258,8 +259,11 @@ pub fn run_export(
     if job.preset.layers.top_silk {
         let filename = format!("{}{}", job.board_name, job.preset.file_naming.top_silk);
         let path = gerber_dir.join(&filename);
-        let config = SilkConfig::default();
-        let content = export_silkscreen(
+        let config = SilkConfig {
+            clearance: job.preset.silk_clearance,
+            ..SilkConfig::default()
+        };
+        let (content, silk_warnings) = export_silkscreen_reporting(
             world,
             library,
             Side::Top,
@@ -269,13 +273,17 @@ pub fn run_export(
         .map_err(|e| ExportError::Export(format!("{:?}", e)))?;
         let file = write_export_file(&path, &content, "Top Silkscreen")?;
         files.push(file);
+        warnings.extend(describe_clipped_names(&silk_warnings, "top"));
     }
 
     if job.preset.layers.bottom_silk {
         let filename = format!("{}{}", job.board_name, job.preset.file_naming.bottom_silk);
         let path = gerber_dir.join(&filename);
-        let config = SilkConfig::default();
-        let content = export_silkscreen(
+        let config = SilkConfig {
+            clearance: job.preset.silk_clearance,
+            ..SilkConfig::default()
+        };
+        let (content, silk_warnings) = export_silkscreen_reporting(
             world,
             library,
             Side::Bottom,
@@ -285,6 +293,7 @@ pub fn run_export(
         .map_err(|e| ExportError::Export(format!("{:?}", e)))?;
         let file = write_export_file(&path, &content, "Bottom Silkscreen")?;
         files.push(file);
+        warnings.extend(describe_clipped_names(&silk_warnings, "bottom"));
     }
 
     if job.preset.layers.outline {
@@ -607,4 +616,26 @@ fn layer_tag(layer: Layer) -> String {
         Layer::Inner(n) => format!("In{}", n + 1),
         other => format!("{other:?}"),
     }
+}
+
+/// Turn clipped designators into sentences a user can act on.
+///
+/// A board house clips silkscreen off solderable copper, and this exporter
+/// does the clipping itself so the file is the file that gets made. That is
+/// only safe if the person sending it knows which labels it cost them: a
+/// designator eaten by the pads around it leaves a part nobody can identify
+/// on the board.
+fn describe_clipped_names(clipped: &[SilkWarning], side: &str) -> Vec<String> {
+    clipped
+        .iter()
+        .map(|warning| {
+            format!(
+                "{} is unreadable on the {side} legend: {} of its {} strokes were clipped off \
+                 copper. Move the part, shorten its name, or place its designator by hand.",
+                warning.refdes,
+                warning.strokes_wanted - warning.strokes_drawn,
+                warning.strokes_wanted,
+            )
+        })
+        .collect()
 }

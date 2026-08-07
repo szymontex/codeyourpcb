@@ -1,34 +1,42 @@
 //! The checker and the legend file have to be talking about the same ink.
 //!
 //! Silkscreen printed over a pad resists solder, so the joint under it is
-//! starved or open. `silk-clearance` exists to catch that, and for as long as
-//! designators were laid out inside `cypcb-export` the rule could not see
-//! them: it measured courtyard outlines while the exporter printed part names
-//! the rule had never heard of. Both read `cypcb_world::silk_text` now.
+//! starved or open. A board house clips the legend off solderable copper
+//! before it prints, which means a file that needs clipping is a file whose
+//! legend nobody has seen. The exporter clips it here instead, at the
+//! clearance of the fabricator it was told about, and `silk-clearance`
+//! measures what survives - so what is checked is what gets made.
 //!
-//! This is the test that says so, end to end and in the direction that
-//! matters. It does not compare two functions - it puts a name over a pad,
-//! asks the checker whether the board is fit to make, and then reads the
-//! Gerber to confirm the ink really is where the checker said it was.
+//! These tests run the whole way round: lay a name across a neighbour's pad,
+//! export, and read the Gerber back. None of them compares two functions to
+//! each other.
 
+use cypcb_core::{Nm, Point};
 use cypcb_drc::presets::DesignRules;
 use cypcb_drc::run_drc;
 use cypcb_export::coords::CoordinateFormat;
-use cypcb_export::gerber::silk::{export_silkscreen, SilkConfig};
+use cypcb_export::gerber::silk::{export_silkscreen_reporting, SilkConfig};
 use cypcb_export::gerber::Side;
-use cypcb_core::{Nm, Point};
 use cypcb_world::footprint::{FootprintLibrary, SilkShape};
 use cypcb_world::{sync_ast_to_world, BoardWorld};
 
 /// Build the world a source string describes, the way every command does.
 fn world_from(source: &str) -> (BoardWorld, FootprintLibrary) {
     let parsed = cypcb_parser::parse(source);
-    assert!(parsed.errors.is_empty(), "the board must parse: {:?}", parsed.errors);
+    assert!(
+        parsed.errors.is_empty(),
+        "the board must parse: {:?}",
+        parsed.errors
+    );
 
     let mut world = BoardWorld::new();
     let mut library = FootprintLibrary::new();
     let result = sync_ast_to_world(&parsed.value, source, &mut world, &mut library);
-    assert!(result.errors.is_empty(), "the board must sync: {:?}", result.errors);
+    assert!(
+        result.errors.is_empty(),
+        "the board must sync: {:?}",
+        result.errors
+    );
     world.rebuild_spatial_index_from_library(&library);
     (world, library)
 }
@@ -47,15 +55,24 @@ fn legend_points(gerber: &str) -> Vec<(f64, f64)> {
         .collect()
 }
 
-/// Two 0805 parts placed so that C1's *name* reaches C2's copper while C1's
-/// *courtyard* does not.
+/// The silk violations a board reports against a given house.
+fn silk_violations(world: &mut BoardWorld, rules: &DesignRules) -> Vec<String> {
+    run_drc(world, rules)
+        .violations
+        .into_iter()
+        .filter(|violation| violation.kind == cypcb_drc::violation::ViolationKind::SilkClearance)
+        .map(|violation| violation.message)
+        .collect()
+}
+
+/// Two 0805 parts placed so that C1's name reaches C2's copper while C1's
+/// courtyard does not.
 ///
-/// That gap is the whole point. An 0805 courtyard stops 0.875mm above the
-/// part's origin and the name is printed from 1.175mm to 2.175mm above it, so
-/// at 2.2mm apart C2's lower pad edge - 1.475mm above C1 - is under the text
-/// and clear of the outline. A test that only stacks the parts closer is
-/// passed by the courtyard check alone, which is what the first version of
-/// this file did.
+/// That gap is the point. An 0805 courtyard stops 0.975mm above the part's
+/// origin and the name is printed above that, so at 2.2mm apart C2's lower pad
+/// edge - 1.475mm above C1 - is under the text and clear of the outline. A
+/// fixture that only stacks the parts closer is satisfied by the courtyard
+/// check alone.
 const NAME_OVER_A_NEIGHBOURS_PAD: &str = r#"
 board silk {
     size 20mm x 20mm
@@ -73,31 +90,162 @@ component C2 capacitor "0805" {
 }
 "#;
 
-#[test]
-fn a_name_printed_over_a_neighbours_pad_is_reported() {
-    let (mut world, _library) = world_from(NAME_OVER_A_NEIGHBOURS_PAD);
-    let violations = run_drc(&mut world, &DesignRules::jlcpcb_2layer()).violations;
+/// C2's pads, as (centre, half-side of the square nothing may print inside at
+/// the exporter's default clearance).
+///
+/// 0805 pads are 1.0 x 1.45mm at x = 10 +/- 0.95. The keepout is a square of
+/// `max(width, height) / 2 + clearance + half a stroke`.
+fn c2_keepouts() -> Vec<((f64, f64), f64)> {
+    let half = 1.45 / 2.0 + 0.13 + 0.075;
+    vec![((9.05, 12.2), half), ((10.95, 12.2), half)]
+}
 
-    let silk: Vec<_> = violations
+fn inside_a_keepout(x: f64, y: f64, slack: f64) -> bool {
+    c2_keepouts()
         .iter()
-        .filter(|violation| violation.kind == cypcb_drc::violation::ViolationKind::SilkClearance)
-        .collect();
+        .any(|((px, py), half)| (x - px).abs() < half - slack && (y - py).abs() < half - slack)
+}
 
+#[test]
+fn a_name_that_would_cross_a_neighbours_pad_is_clipped_off_it() {
+    let (mut world, library) = world_from(NAME_OVER_A_NEIGHBOURS_PAD);
+
+    // The name, as it would be laid out with nothing in the way.
+    let footprint = library.get("0805").expect("the 0805 footprint is built in");
+    let unclipped = cypcb_world::silk_text::designator_strokes(
+        "C1",
+        Point::new(Nm::from_mm(10.0), Nm::from_mm(10.0)),
+        Nm::from_mm(1.0),
+        Nm::from_mm(0.15),
+        cypcb_world::silk_text::artwork_rise(footprint, 0.0),
+    );
+    let crosses = unclipped.iter().any(|shape| {
+        let SilkShape::Segment { start, end, .. } = shape else {
+            return false;
+        };
+        [start, end].iter().any(|point| {
+            inside_a_keepout(
+                point.x.raw() as f64 / 1e6,
+                point.y.raw() as f64 / 1e6,
+                1e-9,
+            )
+        })
+    });
     assert!(
-        silk.iter().any(|violation| violation.message.contains("C1 silkscreen over C2")),
-        "C1's name lands on C2's copper and the checker has to say so. Reported: {:?}",
-        violations.iter().map(|v| &v.message).collect::<Vec<_>>()
+        crosses,
+        "the fixture has to put C1's name on C2's copper, or it tests nothing"
+    );
+
+    // And the file draws none of it there.
+    let (gerber, warnings) = export_silkscreen_reporting(
+        &mut world,
+        &library,
+        Side::Top,
+        &CoordinateFormat::FORMAT_MM_2_6,
+        &SilkConfig::default(),
+    )
+    .expect("the legend exports");
+    let points = legend_points(&gerber);
+    let on_copper: Vec<_> = points
+        .iter()
+        .filter(|(x, y)| inside_a_keepout(*x, *y, 1e-9))
+        .collect();
+    assert!(
+        on_copper.is_empty(),
+        "the legend file still puts ink inside C2's keepout: {on_copper:?}"
+    );
+
+    // C2's pads swallow both glyphs of `C1` whole, so the label is gone rather
+    // than shortened - and the exporter says so instead of leaving a part
+    // nobody can identify.
+    assert!(
+        warnings.iter().any(|warning| warning.refdes == "C1"),
+        "a name the clipping removed entirely has to be reported"
+    );
+
+    // The rest of the legend survives: this clips artwork, it does not blank
+    // the layer.
+    assert!(
+        points.len() > 20,
+        "the whole legend went missing, {} points left",
+        points.len()
     );
 }
 
 #[test]
-fn the_ink_the_checker_measured_is_the_ink_the_file_draws() {
-    // The half of the claim a checker cannot make about itself: every stroke
-    // the model lays out has to be in the Gerber the board house receives. A
-    // second layout inside the exporter would pass a looser test and still
-    // print the name somewhere the rule never looked.
-    let (mut world, library) = world_from(NAME_OVER_A_NEIGHBOURS_PAD);
-    let gerber = export_silkscreen(
+fn the_checker_agrees_with_the_file_it_will_ship() {
+    let (mut world, _library) = world_from(NAME_OVER_A_NEIGHBOURS_PAD);
+    let silk = silk_violations(&mut world, &DesignRules::jlcpcb_2layer());
+
+    assert!(
+        silk.is_empty(),
+        "the ink is clipped off the copper, so the checker has nothing to report: {silk:?}"
+    );
+}
+
+/// The same two parts, with a name long enough that its strokes cross the
+/// edge of C2's keepout rather than falling wholly inside it.
+///
+/// Where a stroke is cut decides everything below: clipping leaves ink exactly
+/// on the keepout boundary, which is far enough for the house the file was
+/// clipped for and not for a stricter one. A short name whose glyphs happen to
+/// sit entirely inside the keepout is deleted instead, and leaves nothing to
+/// measure.
+const A_NAME_LONG_ENOUGH_TO_BE_CUT: &str = r#"
+board silk {
+    size 20mm x 20mm
+    layers 2
+}
+
+component C1234567 capacitor "0805" {
+    value "100nF"
+    at 10mm, 10mm
+}
+
+component C2 capacitor "0805" {
+    value "100nF"
+    at 10mm, 12.2mm
+}
+"#;
+
+#[test]
+fn a_legend_clipped_for_one_house_is_reported_when_sent_to_a_stricter_one() {
+    // The case that keeps this rule from being a formality. The exporter clips
+    // at the clearance it was told about; check the same board against a
+    // fabricator that asks for more and the ink that was fine is not.
+    let (mut world, _library) = world_from(A_NAME_LONG_ENOUGH_TO_BE_CUT);
+
+    let strict = DesignRules::pcbway_standard();
+    assert!(
+        strict.min_clearance > DesignRules::jlcpcb_2layer().min_clearance,
+        "this test needs a house stricter than the one the exporter clips for"
+    );
+
+    let silk = silk_violations(&mut world, &strict);
+    assert!(
+        !silk.is_empty(),
+        "a legend clipped to JLCPCB's clearance does not meet PCBWay's, and the checker has to \
+         say so"
+    );
+
+    // And the house it was clipped for is still happy with it, or the two
+    // numbers are not being used for what they claim.
+    let (mut world, _library) = world_from(A_NAME_LONG_ENOUGH_TO_BE_CUT);
+    let lenient = silk_violations(&mut world, &DesignRules::jlcpcb_2layer());
+    assert!(
+        lenient.is_empty(),
+        "the board was clipped for this house: {lenient:?}"
+    );
+}
+
+#[test]
+fn a_name_the_clipping_ate_is_reported_rather_than_left_on_the_board() {
+    // Clipping is only safe if the person sending the file knows what it cost
+    // them. A designator eaten by the pads around it leaves a part nobody can
+    // identify, and the file itself gives no sign of it.
+    let (mut world, library) = world_from(A_NAME_LONG_ENOUGH_TO_BE_CUT);
+
+    let (_gerber, warnings) = export_silkscreen_reporting(
         &mut world,
         &library,
         Side::Top,
@@ -106,48 +254,20 @@ fn the_ink_the_checker_measured_is_the_ink_the_file_draws() {
     )
     .expect("the legend exports");
 
-    let points = legend_points(&gerber);
-    assert!(!points.is_empty(), "the legend file has to draw something");
-
-    let footprint = library.get("0805").expect("the 0805 footprint is built in");
-    let expected = cypcb_world::silk_text::designator_strokes(
-        "C1",
-        Point::new(Nm::from_mm(10.0), Nm::from_mm(10.0)),
-        Nm::from_mm(1.0),
-        Nm::from_mm(0.15),
-        cypcb_world::silk_text::artwork_rise(footprint, 0.0),
-    );
-    assert!(!expected.is_empty(), "C1 has a name this font can spell");
-
-    let mut missing = Vec::new();
-    for shape in &expected {
-        let SilkShape::Segment { start, end, .. } = shape else {
-            continue;
-        };
-        for point in [start, end] {
-            let mm = (point.x.raw() as f64 / 1e6, point.y.raw() as f64 / 1e6);
-            let found = points
-                .iter()
-                .any(|(x, y)| (x - mm.0).abs() < 1e-6 && (y - mm.1).abs() < 1e-6);
-            if !found {
-                missing.push(mm);
-            }
-        }
-    }
+    let eaten = warnings
+        .iter()
+        .find(|warning| warning.refdes == "C1234567")
+        .expect("the long name loses most of itself to C2\'s pads");
 
     assert!(
-        missing.is_empty(),
-        "the model laid out strokes the legend file does not draw: {missing:?}"
+        eaten.strokes_drawn < eaten.strokes_wanted,
+        "a name reported as unreadable has to have lost strokes"
     );
-
-    // And the ink really is on C2's copper, which is what the checker said.
-    // C2's lower pads span y 11.475..12.925mm, x 8.55..9.55 and 10.45..11.45.
-    let on_c2_copper = points.iter().any(|(x, y)| {
-        (11.475..=12.925).contains(y) && ((8.55..=9.55).contains(x) || (10.45..=11.45).contains(x))
-    });
     assert!(
-        on_c2_copper,
-        "the checker reported ink on C2's pad; the legend file has to contain it"
+        eaten.strokes_drawn * 2 < eaten.strokes_wanted,
+        "the warning is for names that lost more than half of themselves, this one kept {} of {}",
+        eaten.strokes_drawn,
+        eaten.strokes_wanted
     );
 }
 
@@ -168,13 +288,7 @@ component R1 resistor "0805" {
 "#;
 
     let (mut world, _library) = world_from(source);
-    let violations = run_drc(&mut world, &DesignRules::jlcpcb_2layer()).violations;
-
-    let silk: Vec<_> = violations
-        .iter()
-        .filter(|violation| violation.kind == cypcb_drc::violation::ViolationKind::SilkClearance)
-        .map(|violation| violation.message.clone())
-        .collect();
+    let silk = silk_violations(&mut world, &DesignRules::jlcpcb_2layer());
 
     assert!(
         silk.is_empty(),

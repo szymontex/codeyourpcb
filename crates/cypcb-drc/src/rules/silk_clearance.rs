@@ -18,6 +18,16 @@
 //! `cypcb_world::silk_text`, which knows the text height and nothing about the
 //! footprint under it. A name printed across a part's own pad starves that
 //! joint exactly as a neighbour's would.
+//!
+//! # What "actually prints" means since the exporter started clipping
+//!
+//! `cypcb-export` cuts the legend off solderable copper the way a board house
+//! does, at the clearance of the fabricator it was told about. So this rule
+//! measures the clipped artwork, not the intent - it is a check on the file
+//! rather than on the layout. That is not a rule with nothing to do: it fires
+//! whenever the house the board is *checked* for wants more clearance than the
+//! one it was *clipped* for, which is a legend that looked fine on the way out
+//! and does not meet the spec of the shop it arrived at.
 
 use cypcb_core::{Nm, Point};
 use cypcb_world::components::{FootprintRef, Position, RefDes, Rotation, Side};
@@ -43,6 +53,38 @@ const SILK_LINE_WIDTH: Nm = Nm(150_000);
 /// same reason as the line width above.
 const DESIGNATOR_HEIGHT: Nm = Nm(1_000_000);
 
+/// The clearance the exporter clips the legend to, in nanometers.
+///
+/// Must match `SilkConfig::default().clearance`. This rule measures the ink
+/// that survives that clipping against the rules of the fabricator the board
+/// is *checked* for, so the two numbers differing is not a bug here - it is
+/// the case this rule exists to catch: a legend clipped for one house and sent
+/// to a stricter one.
+const EXPORT_CLEARANCE: Nm = Nm(130_000);
+
+/// What is left of some artwork after the legend is clipped off the copper.
+fn clipped(
+    edges: Vec<(Point, Point)>,
+    keepouts: &[cypcb_world::silk_text::Keepout],
+) -> Vec<(Point, Point)> {
+    let shapes = edges
+        .into_iter()
+        .map(|(start, end)| SilkShape::Segment {
+            start,
+            end,
+            width: SILK_LINE_WIDTH,
+        })
+        .collect();
+
+    cypcb_world::silk_text::clip_strokes(shapes, keepouts)
+        .into_iter()
+        .filter_map(|shape| match shape {
+            SilkShape::Segment { start, end, .. } => Some((start, end)),
+            SilkShape::Circle { .. } => None,
+        })
+        .collect()
+}
+
 /// Rule for checking silkscreen to copper clearance.
 pub struct SilkClearanceRule;
 
@@ -60,26 +102,50 @@ impl DrcRule for SilkClearanceRule {
 
         let library = world.footprints().clone();
         let half_silk = SILK_LINE_WIDTH.raw() / 2;
+
+        // What the exporter will actually print: it clips the legend off
+        // solderable copper the way a board house does, using the clearance of
+        // the fabricator it was told about. This rule measures what survives
+        // that, so it stays a check on the file rather than on the intent -
+        // and it fires when the two disagree, which is the case worth
+        // catching: a board clipped for one fabricator and checked against a
+        // stricter one.
+        let clip_margin = Nm(EXPORT_CLEARANCE.raw() + half_silk);
+        let top_keepouts =
+            cypcb_world::silk_text::pad_keepouts(world, &library, Layer::TopCopper, clip_margin);
+        let bottom_keepouts =
+            cypcb_world::silk_text::pad_keepouts(world, &library, Layer::BottomCopper, clip_margin);
+
         let mut violations = Vec::new();
 
         for silk in &placed {
             let Some(footprint) = library.get(&silk.footprint) else {
                 continue;
             };
-            // The name is checked against every part including this one; the
-            // outline only against the others.
-            let name = designator_edges(footprint, silk);
-            let mut edges = silk_segments(footprint, silk);
-            edges.extend_from_slice(&name);
-            if edges.is_empty() {
-                continue;
-            }
             // The part says which face it is on when the model knows; falling
             // back to its copper is a guess that cannot tell a bottom-side
             // through-hole part from a top-side one.
             let silk_side = silk
                 .side
                 .map_or_else(|| side_mask(footprint), |s| s.mask() as u8);
+
+            // The legend is clipped against the copper on the face it prints
+            // on, which is the face the exporter clips against too.
+            let clip_against: &[cypcb_world::silk_text::Keepout] = if silk_side & 2 != 0 {
+                &bottom_keepouts
+            } else {
+                &top_keepouts
+            };
+
+            // The name is checked against every part including this one; the
+            // outline only against the others. Both as printed, not as laid
+            // out.
+            let name = clipped(designator_edges(footprint, silk), clip_against);
+            let mut edges = clipped(silk_segments(footprint, silk), clip_against);
+            edges.extend_from_slice(&name);
+            if edges.is_empty() {
+                continue;
+            }
 
             for other in &placed {
                 let Some(other_footprint) = library.get(&other.footprint) else {
@@ -374,24 +440,42 @@ mod tests {
         world
     }
 
+    /// A house that wants far more clearance than the exporter clipped for.
+    ///
+    /// The rule measures the legend as it will be printed - clipped off the
+    /// copper at `EXPORT_CLEARANCE` - so at that clearance there is nothing
+    /// left to report. Check the same board against a stricter house and the
+    /// ink that was fine no longer is, which is what keeps this rule from
+    /// being a formality.
+    fn a_stricter_house() -> DesignRules {
+        DesignRules {
+            min_clearance: Nm::from_mm(0.5),
+            ..DesignRules::jlcpcb_2layer()
+        }
+    }
+
     #[test]
-    fn an_outline_landing_on_a_neighbours_pad_is_a_defect() {
+    fn an_outline_landing_on_a_neighbours_pad_is_clipped_and_then_measured() {
         // Ink sits on the courtyard outline, not inside it, so the spacing that
         // matters is the one that walks a neighbour's pad onto that line.
-        // Computed from the library rather than guessed: an 0402 courtyard is
-        // its body plus 0.5mm, and its pads sit half a span either side of
-        // centre.
+        // Computed from the library rather than guessed.
         let library = FootprintLibrary::new();
         let smd = library.get("0402").expect("built-in");
         let half_court = smd.courtyard.max.x.raw() as f64 / 1_000_000.0;
         let half_span = smd.pads[0].position.x.raw().abs() as f64 / 1_000_000.0;
 
         let mut world = board_with_two_parts(half_court + half_span);
-        let violations = SilkClearanceRule.check(&mut world, &DesignRules::jlcpcb_2layer());
+        assert!(
+            SilkClearanceRule
+                .check(&mut world, &DesignRules::jlcpcb_2layer())
+                .is_empty(),
+            "the exporter clips this ink off the pad, so there is nothing to report"
+        );
 
+        let violations = SilkClearanceRule.check(&mut world, &a_stricter_house());
         assert!(
             !violations.is_empty(),
-            "an outline printed over a neighbour's pad is a defect"
+            "a legend clipped for one house does not meet a stricter one"
         );
         assert_eq!(violations[0].kind, crate::ViolationKind::SilkClearance);
         assert!(
@@ -439,7 +523,7 @@ mod tests {
             NetConnections::new(),
         );
 
-        let violations = SilkClearanceRule.check(&mut world, &DesignRules::jlcpcb_2layer());
+        let violations = SilkClearanceRule.check(&mut world, &a_stricter_house());
         assert!(
             violations
                 .iter()
