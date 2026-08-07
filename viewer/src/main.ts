@@ -449,18 +449,41 @@ async function init(): Promise<void> {
   netLabelsCb.checked = showNetLabels;
   ratsnestCb.checked = getPreference('ratsnestVisible');
 
-  // Undo/Redo toolbar buttons
-  undoBtn.addEventListener('click', () => {
+  // Undo and redo, in one place.
+  //
+  // The body was written three times - the toolbar buttons, the keyboard
+  // handler, and nowhere for the desktop Edit menu, which is why clicking
+  // Edit > Undo did nothing. Two of the copies had already drifted: the
+  // toolbar forgot `interactionState.selectedTraceId`, so a trace selected
+  // for dragging stayed selected in the interaction layer after the entity
+  // it named was gone.
+  const performUndo = () => {
     undoStack.undo();
     selectedTraceId = null;
+    interactionState.selectedTraceId = null;
     labelPosition = null;
     dirty = true;
-  });
-  redoBtn.addEventListener('click', () => {
+  };
+  const performRedo = () => {
     undoStack.redo();
     selectedTraceId = null;
+    interactionState.selectedTraceId = null;
     labelPosition = null;
     dirty = true;
+  };
+
+  // Undo/Redo toolbar buttons
+  undoBtn.addEventListener('click', performUndo);
+  redoBtn.addEventListener('click', performRedo);
+
+  // The desktop build's Edit menu reaches the same two functions.
+  window.addEventListener('desktop:edit', (event: Event) => {
+    const detail = (event as CustomEvent).detail as { action?: string };
+    if (detail?.action === 'undo') {
+      performUndo();
+    } else if (detail?.action === 'redo') {
+      performRedo();
+    }
   });
 
   // Load WASM
@@ -2720,12 +2743,8 @@ async function init(): Promise<void> {
         (e.target as HTMLElement)?.closest('.monaco-editor') != null;
       if (!isEditorFocused) {
         e.preventDefault();
-        undoStack.undo();
-        // Deselect any trace since IDs may have changed
-        selectedTraceId = null;
-        interactionState.selectedTraceId = null;
-        labelPosition = null;
-        dirty = true;
+        // Deselects any trace too: the ids may have changed under it.
+        performUndo();
       }
       return;
     }
@@ -2735,11 +2754,7 @@ async function init(): Promise<void> {
         (e.target as HTMLElement)?.closest('.monaco-editor') != null;
       if (!isEditorFocused) {
         e.preventDefault();
-        undoStack.redo();
-        selectedTraceId = null;
-        interactionState.selectedTraceId = null;
-        labelPosition = null;
-        dirty = true;
+        performRedo();
       }
       return;
     }

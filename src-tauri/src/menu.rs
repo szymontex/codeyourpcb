@@ -18,15 +18,19 @@ pub fn create_app_menu() -> MenuBar {
                 .add_item(PlatformMenuItem::action("file.quit", "Quit").with_shortcut("Ctrl+Q")),
         )
         .add_menu(
+            // Cut, Copy and Paste were here and did nothing. Every id this
+            // menu declares is emitted as `menu-action` and handled by the
+            // frontend, and those three fell through its switch to a console
+            // line - a menu entry that looks like a control and is not. They
+            // belong to whatever has focus, and the code editor and every
+            // input already bind them themselves, so the honest thing is to
+            // stop offering them from the menu bar rather than to route a
+            // clipboard command at nothing.
             Menu::new("Edit")
                 .add_item(PlatformMenuItem::action("edit.undo", "Undo").with_shortcut("Ctrl+Z"))
                 .add_item(
                     PlatformMenuItem::action("edit.redo", "Redo").with_shortcut("Ctrl+Shift+Z"),
-                )
-                .separator()
-                .add_item(PlatformMenuItem::action("edit.cut", "Cut").with_shortcut("Ctrl+X"))
-                .add_item(PlatformMenuItem::action("edit.copy", "Copy").with_shortcut("Ctrl+C"))
-                .add_item(PlatformMenuItem::action("edit.paste", "Paste").with_shortcut("Ctrl+V")),
+                ),
         )
         .add_menu(
             Menu::new("View")

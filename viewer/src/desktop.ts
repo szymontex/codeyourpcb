@@ -83,6 +83,12 @@ function handleMenuAction(action: string): void {
     case 'file.save_as':
       handleSaveFileAs();
       break;
+    case 'edit.undo':
+      dispatchEditEvent('undo');
+      break;
+    case 'edit.redo':
+      dispatchEditEvent('redo');
+      break;
     case 'view.zoom_in':
       dispatchViewportEvent('zoom-in');
       break;
@@ -236,6 +242,19 @@ function getCurrentFileContent(): Promise<string | null> {
 /**
  * Dispatch a viewport action event.
  */
+/**
+ * Hand an Edit menu action to the app.
+ *
+ * Undo and redo are real features with one implementation, reached by
+ * `Ctrl+Z` since long before there was a menu. The menu item emitted an
+ * event nobody listened for, so clicking Edit > Undo did nothing while the
+ * shortcut worked - the kind of gap only somebody using the desktop build
+ * would find.
+ */
+function dispatchEditEvent(action: 'undo' | 'redo'): void {
+  window.dispatchEvent(new CustomEvent('desktop:edit', { detail: { action } }));
+}
+
 function dispatchViewportEvent(action: 'zoom-in' | 'zoom-out' | 'fit'): void {
   const event = new CustomEvent('desktop:viewport', {
     detail: { action },
