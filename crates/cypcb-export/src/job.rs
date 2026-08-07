@@ -309,6 +309,34 @@ pub fn run_export(
         .map_err(|e| ExportError::Export(format!("{:?}", e)))?;
         let file = write_export_file(&path, &content, "Drill PTH")?;
         files.push(file);
+
+        // Blind and buried vias join layers the through file cannot describe.
+        // A drill file with no stated pair means "through the whole board" to
+        // every fabricator, so these get one file per pair, named for it.
+        let spans = crate::excellon::non_through_spans(world, library)
+            .map_err(|e| ExportError::Export(format!("{:?}", e)))?;
+        for (start, end) in spans {
+            let pair = format!("{}-{}", layer_tag(start), layer_tag(end));
+            let suffix = job
+                .preset
+                .file_naming
+                .drill_pth
+                .rsplit_once('.')
+                .map(|(stem, extension)| format!("{stem}-{pair}.{extension}"))
+                .unwrap_or_else(|| format!("{}-{pair}", job.preset.file_naming.drill_pth));
+            let filename = format!("{}{}", job.board_name, suffix);
+            let path = drill_dir.join(&filename);
+            let content = crate::excellon::export_excellon_span(
+                world,
+                library,
+                &job.preset.coordinate_format,
+                Some(DrillType::Plated),
+                (start, end),
+            )
+            .map_err(|e| ExportError::Export(format!("{:?}", e)))?;
+            let file = write_export_file(&path, &content, &format!("Drill {pair}"))?;
+            files.push(file);
+        }
     }
 
     // Export assembly files
@@ -568,5 +596,15 @@ mod inner_layer_naming {
         assert_eq!(inner_layer_suffix("-F_Cu.gbr", 1), "-In1_Cu.gbr");
         assert_eq!(inner_layer_suffix("-F_Cu.gbr", 2), "-In2_Cu.gbr");
         assert_eq!(inner_layer_suffix("_top.gtl", 1), "_inner1.gtl");
+    }
+}
+
+/// A layer as a drill file name spells it.
+fn layer_tag(layer: Layer) -> String {
+    match layer {
+        Layer::TopCopper => "Top".to_string(),
+        Layer::BottomCopper => "Bottom".to_string(),
+        Layer::Inner(n) => format!("In{}", n + 1),
+        other => format!("{other:?}"),
     }
 }

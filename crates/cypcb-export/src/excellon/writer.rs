@@ -6,7 +6,7 @@ use std::collections::HashMap;
 
 use cypcb_core::{Nm, Point};
 use cypcb_world::components::trace::Via;
-use cypcb_world::components::{FootprintRef, Position, Rotation};
+use cypcb_world::components::{FootprintRef, Layer, Position, Rotation};
 use cypcb_world::footprint::FootprintLibrary;
 use cypcb_world::BoardWorld;
 
@@ -30,6 +30,13 @@ struct DrillHit {
     position: Point,
     drill_diameter: Nm,
     drill_type: DrillType,
+    /// The layers this hole joins.
+    ///
+    /// A drill file with no stated pair means "through the whole board" to
+    /// every fabricator. A blind or buried via belongs in a file of its own,
+    /// named for the pair it joins - putting it in the through file has the
+    /// board drilled from the outside, which is a board nobody can make.
+    span: (Layer, Layer),
 }
 
 /// Export Excellon drill file with optional drill type filtering.
@@ -79,8 +86,32 @@ pub fn export_excellon(
     format: &CoordinateFormat,
     drill_type_filter: Option<DrillType>,
 ) -> Result<String, ExportError> {
+    export_excellon_span(
+        world,
+        library,
+        format,
+        drill_type_filter,
+        (Layer::TopCopper, Layer::BottomCopper),
+    )
+}
+
+/// The holes that join one pair of layers, as their own Excellon file.
+///
+/// The through pair is what `export_excellon` writes. A blind or buried via
+/// joins some other pair and a fabricator expects it in a separate file: put
+/// it in the through file and the board is drilled from the outside.
+pub fn export_excellon_span(
+    world: &mut BoardWorld,
+    library: &FootprintLibrary,
+    format: &CoordinateFormat,
+    drill_type_filter: Option<DrillType>,
+    span: (Layer, Layer),
+) -> Result<String, ExportError> {
     // Collect all drill hits
-    let all_hits = collect_drill_hits(world, library)?;
+    let all_hits: Vec<DrillHit> = collect_drill_hits(world, library)?
+        .into_iter()
+        .filter(|hit| same_span(hit.span, span))
+        .collect();
 
     // Filter by drill type if requested
     let hits: Vec<&DrillHit> = if let Some(filter_type) = drill_type_filter {
@@ -187,6 +218,7 @@ fn collect_drill_hits(
                 let abs_pos = calculate_pad_position(position.0, pad.position, rotation.0);
 
                 hits.push(DrillHit {
+                    span: (Layer::TopCopper, Layer::BottomCopper),
                     position: abs_pos,
                     drill_diameter,
                     drill_type: DrillType::Plated, // Component pads are always plated
@@ -202,10 +234,39 @@ fn collect_drill_hits(
             position: via.position,
             drill_diameter: via.drill,
             drill_type: DrillType::Plated, // Vias are always plated
+            span: (via.start_layer, via.end_layer),
         });
     }
 
     Ok(hits)
+}
+
+/// Whether two layer pairs name the same hole, in either order.
+fn same_span(a: (Layer, Layer), b: (Layer, Layer)) -> bool {
+    (a.0 == b.0 && a.1 == b.1) || (a.0 == b.1 && a.1 == b.0)
+}
+
+/// Every layer pair the board's holes join, the through pair excluded.
+///
+/// Ordered so the file set comes out the same on every run.
+pub fn non_through_spans(
+    world: &mut BoardWorld,
+    library: &FootprintLibrary,
+) -> Result<Vec<(Layer, Layer)>, ExportError> {
+    let through = (Layer::TopCopper, Layer::BottomCopper);
+    let mut spans: Vec<(Layer, Layer)> = Vec::new();
+
+    for hit in collect_drill_hits(world, library)? {
+        if same_span(hit.span, through) {
+            continue;
+        }
+        if !spans.iter().any(|known| same_span(*known, hit.span)) {
+            spans.push(hit.span);
+        }
+    }
+
+    spans.sort_by_key(|(start, end)| (format!("{start:?}"), format!("{end:?}")));
+    Ok(spans)
 }
 
 /// Group drill hits by tool number.
@@ -375,11 +436,15 @@ mod tests {
                 position: Point::from_mm(0.0, 0.0),
                 drill_diameter: Nm::from_mm(0.3),
                 drill_type: DrillType::Plated,
+
+                span: (Layer::TopCopper, Layer::BottomCopper),
             },
             DrillHit {
                 position: Point::from_mm(1.0, 1.0),
                 drill_diameter: Nm::from_mm(0.3),
                 drill_type: DrillType::Plated,
+
+                span: (Layer::TopCopper, Layer::BottomCopper),
             },
         ];
         let mut tool_table = ToolTable::new();
@@ -398,16 +463,22 @@ mod tests {
                 position: Point::from_mm(0.0, 0.0),
                 drill_diameter: Nm::from_mm(0.3),
                 drill_type: DrillType::Plated,
+
+                span: (Layer::TopCopper, Layer::BottomCopper),
             },
             DrillHit {
                 position: Point::from_mm(1.0, 1.0),
                 drill_diameter: Nm::from_mm(0.8),
                 drill_type: DrillType::Plated,
+
+                span: (Layer::TopCopper, Layer::BottomCopper),
             },
             DrillHit {
                 position: Point::from_mm(2.0, 2.0),
                 drill_diameter: Nm::from_mm(0.3),
                 drill_type: DrillType::Plated,
+
+                span: (Layer::TopCopper, Layer::BottomCopper),
             },
         ];
         let mut tool_table = ToolTable::new();
