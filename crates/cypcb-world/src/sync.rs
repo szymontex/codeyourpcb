@@ -105,6 +105,26 @@ pub enum SyncError {
         span: miette::SourceSpan,
     },
 
+    /// A net names a pin the component's footprint does not have.
+    ///
+    /// Silent until 2026-08-08: `net SIG { R1.3 }` on a two-pad part stored a
+    /// connection to pin 3, the ratsnest had one end and nothing to route, and
+    /// the only thing reported was that R1.1 and R1.2 were unconnected - which
+    /// reads as the design's fault rather than a typo. The connection the user
+    /// asked for simply did not exist.
+    UnknownPin {
+        /// The component whose footprint was consulted.
+        component: String,
+        /// The pin the net asked for.
+        pin: String,
+        /// The pins the footprint does have, in order.
+        available: Vec<String>,
+        /// Source code for miette display.
+        src: String,
+        /// Source span of the pin reference.
+        span: miette::SourceSpan,
+    },
+
     /// A trace references an invalid pin.
     InvalidTracePin {
         /// The trace net name.
@@ -192,6 +212,18 @@ impl fmt::Display for SyncError {
             } => {
                 write!(f, "trace '{}': invalid pin {}.{}", net, component, pin)
             }
+            SyncError::UnknownPin {
+                component,
+                pin,
+                available,
+                ..
+            } => {
+                write!(
+                    f,
+                    "component '{component}' has no pin '{pin}'. It has: {}",
+                    available.join(", ")
+                )
+            }
             SyncError::MissingNet { net, .. } => {
                 write!(f, "trace references undefined net: '{}'", net)
             }
@@ -224,6 +256,7 @@ impl Diagnostic for SyncError {
             SyncError::DuplicateRefDes { .. } => Some(Box::new("cypcb::sync::duplicate_refdes")),
             SyncError::UnknownComponent { .. } => Some(Box::new("cypcb::sync::unknown_component")),
             SyncError::InvalidTracePin { .. } => Some(Box::new("cypcb::sync::invalid_trace_pin")),
+            SyncError::UnknownPin { .. } => Some(Box::new("cypcb::sync::unknown_pin")),
             SyncError::MissingNet { .. } => Some(Box::new("cypcb::sync::missing_net")),
             SyncError::UnknownModule { .. } => Some(Box::new("cypcb::sync::unknown_module")),
             SyncError::UnconnectedModulePin { .. } => {
@@ -245,6 +278,10 @@ impl Diagnostic for SyncError {
             SyncError::UnknownComponent { .. } => {
                 Some(Box::new("define the component before referencing it in a net"))
             }
+            SyncError::UnknownPin { available, .. } => Some(Box::new(format!(
+                "use one of the pins the footprint declares: {}",
+                available.join(", ")
+            ))),
             SyncError::InvalidTracePin { .. } => {
                 Some(Box::new("ensure the component and pin exist before defining a trace"))
             }
@@ -271,6 +308,7 @@ impl Diagnostic for SyncError {
             SyncError::UnknownFootprint { src, .. } => Some(src),
             SyncError::DuplicateRefDes { src, .. } => Some(src),
             SyncError::UnknownComponent { src, .. } => Some(src),
+            SyncError::UnknownPin { src, .. } => Some(src),
             SyncError::InvalidTracePin { src, .. } => Some(src),
             SyncError::MissingNet { src, .. } => Some(src),
             SyncError::UnknownModule { src, .. } => Some(src),
@@ -303,6 +341,12 @@ impl Diagnostic for SyncError {
             SyncError::UnknownComponent { span, .. } => Some(Box::new(std::iter::once(
                 LabeledSpan::new_with_span(Some("component not defined".to_string()), *span),
             ))),
+            SyncError::UnknownPin {
+                span, available, ..
+            } => Some(Box::new(std::iter::once(LabeledSpan::new_with_span(
+                Some(format!("this footprint has {} pins", available.len())),
+                *span,
+            )))),
             SyncError::InvalidTracePin { span, .. } => Some(Box::new(std::iter::once(
                 LabeledSpan::new_with_span(Some("invalid pin reference".to_string()), *span),
             ))),
@@ -472,7 +516,14 @@ pub fn sync_ast_to_world(
                 );
             }
             Definition::Net(net) => {
-                sync_net(net, source, world, &component_entities, &mut result);
+                sync_net(
+                    net,
+                    source,
+                    world,
+                    footprint_lib,
+                    &component_entities,
+                    &mut result,
+                );
             }
             Definition::Zone(zone) => {
                 sync_zone(zone, world, &mut result);
@@ -674,6 +725,7 @@ fn sync_net(
     net: &NetDef,
     source: &str,
     world: &mut BoardWorld,
+    footprint_lib: &FootprintLibrary,
     component_entities: &HashMap<String, Entity>,
     result: &mut SyncResult,
 ) {
@@ -713,6 +765,29 @@ fn sync_net(
                 AstPinId::Number(n) => n.to_string(),
                 AstPinId::Name(s) => normalize_pin_name(s),
             };
+
+            // The pin has to be one the part actually has.
+            //
+            // Only checked when the footprint is known: a part fetched from a
+            // supplier has no pads until its fetch lands, and erroring on those
+            // would refuse every board using one.
+            let footprint_name = world
+                .get::<FootprintRef>(entity)
+                .map(|f| f.as_str().to_string());
+            if let Some(footprint) = footprint_name.and_then(|name| footprint_lib.get(&name)) {
+                if !footprint.pads.is_empty()
+                    && !footprint.pads.iter().any(|pad| pad.number == pin_str)
+                {
+                    result.errors.push(SyncError::UnknownPin {
+                        component: comp_name.clone(),
+                        pin: pin_str.clone(),
+                        available: footprint.pads.iter().map(|p| p.number.clone()).collect(),
+                        src: source.to_string(),
+                        span: span_to_source_span(&pin_ref.component.span),
+                    });
+                    continue;
+                }
+            }
 
             // Get or create NetConnections component
             let ecs = world.ecs_mut();
