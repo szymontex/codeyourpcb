@@ -14,16 +14,14 @@
 //! carries have no syntax, so they are rebuilt from defaults on the way back
 //! in rather than read:
 //!
-//! - **which layers it joins.** `via x,y drill d` says nothing about span, so
-//!   a blind or buried via reloads as a through via. Nothing produces those
-//!   today - the router places through vias only - but a four-layer design
-//!   that gains them will lose them silently.
 //! - **its outer diameter.** Rebuilt as twice the drill, which is what both
 //!   the router and `sync` assume, so nothing is lost today and a via with a
-//!   deliberate ring would be.
+//!   deliberate ring would be. Proposed syntax when it matters:
+//!   `via 10mm,12mm drill 0.3mm diameter 0.6mm`.
 //!
-//! Proposed syntax when either matters: `via 10mm,12mm drill 0.3mm diameter
-//! 0.6mm layers Top-Inner1`, both parts optional.
+//! Which layers a via joins is written now - `layers Top to Inner1` - and left
+//! off when the via goes through, which is what a via with no stated pair
+//! means.
 
 use std::collections::BTreeMap;
 use std::fmt::Write;
@@ -194,10 +192,11 @@ pub fn traces_as_dsl(world: &mut BoardWorld) -> String {
                 let _ = writeln!(output, "trace {} {{", net_name);
                 let _ = writeln!(
                     output,
-                    "    via {}mm,{}mm drill {}mm",
+                    "    via {}mm,{}mm drill {}mm{}",
                     format_mm(via.position.x.to_mm()),
                     format_mm(via.position.y.to_mm()),
-                    format_mm(via.drill.to_mm())
+                    format_mm(via.drill.to_mm()),
+                    via_span_suffix(via)
                 );
                 if via.locked {
                     let _ = writeln!(output, "    locked");
@@ -236,5 +235,34 @@ mod tests {
                 "{text} did not come back as {nm:?}"
             );
         }
+    }
+}
+
+/// ` layers Top to Inner1`, or nothing at all for a via that goes through.
+///
+/// Written only when it says something: a through via with the pair spelled
+/// out is noise in every file, and its absence already means through.
+fn via_span_suffix(via: &crate::components::trace::Via) -> String {
+    use crate::components::Layer;
+
+    if via.start_layer == Layer::TopCopper && via.end_layer == Layer::BottomCopper {
+        return String::new();
+    }
+    format!(
+        " layers {} to {}",
+        layer_keyword(via.start_layer),
+        layer_keyword(via.end_layer)
+    )
+}
+
+/// A layer as a `trace` block writes it.
+fn layer_keyword(layer: crate::components::Layer) -> String {
+    use crate::components::Layer;
+
+    match layer {
+        Layer::TopCopper => "Top".to_string(),
+        Layer::BottomCopper => "Bottom".to_string(),
+        Layer::Inner(n) => format!("Inner{}", n + 1),
+        other => format!("{other:?}"),
     }
 }

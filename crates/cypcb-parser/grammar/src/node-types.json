@@ -1590,6 +1590,26 @@
           }
         ]
       },
+      "end_layer": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "trace_layer_name",
+            "named": true
+          }
+        ]
+      },
+      "start_layer": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "trace_layer_name",
+            "named": true
+          }
+        ]
+      },
       "x": {
         "multiple": false,
         "required": true,

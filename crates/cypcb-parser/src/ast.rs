@@ -864,13 +864,18 @@ pub struct TracePath {
 
 /// A via waypoint with optional drill diameter.
 ///
-/// In the DSL: `via 12mm,10mm drill 0.3mm`
+/// In the DSL: `via 12mm,10mm drill 0.3mm layers Top to Inner1`
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TraceVia {
     /// Via position.
     pub position: PositionExpr,
     /// Optional drill diameter.
     pub drill: Option<Dimension>,
+    /// The layers the via joins, as the DSL names them.
+    ///
+    /// `None` means through the board, which is what a via with no stated pair
+    /// has always been.
+    pub layers: Option<(String, String)>,
     /// Span covering the via statement.
     pub span: Span,
 }

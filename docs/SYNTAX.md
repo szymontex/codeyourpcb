@@ -272,7 +272,13 @@ trace VCC {
 **Properties:**
 - `from`: Starting pin reference
 - `to`: Ending pin reference
-- `via`: Waypoint coordinates for routing (optional, can repeat)
+- `via`: Waypoint coordinates for routing (optional, can repeat). Takes an
+  optional drill and an optional layer pair:
+  `via 12mm, 10mm drill 0.3mm layers Top to Inner1`. Without the pair a via
+  goes through the board. A pair that stops at an inner layer is a blind or
+  buried via: it gets its own Excellon file, the checker only measures it
+  against holes made in the same drill pass, and the 3D view draws it to that
+  depth.
 - `layer`: Copper layer (`Top`, `Bottom`, `Inner1`-`Inner4`, or the same names in lower case)
 - `width`: Trace width (optional, defaults to DRC minimum)
 - `locked`: Prevents autorouter from modifying this trace

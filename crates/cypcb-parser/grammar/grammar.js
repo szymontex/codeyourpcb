@@ -439,12 +439,24 @@ module.exports = grammar({
     ),
 
     // via 5mm, 8mm [drill 0.3mm] (waypoint position with optional drill size)
+    // via 12mm,10mm [drill 0.3mm] [layers Top to Inner1]
+    //
+    // Without a layer pair a via goes through the board, which is what every
+    // via written in this language was until the pair existed - the viewer,
+    // the drill export and the hole rule all read a span the DSL could not
+    // state.
     trace_via: $ => seq(
       'via',
       field('x', $.dimension),
       ',',
       field('y', $.dimension),
       optional(seq('drill', field('drill', $.dimension))),
+      optional(seq(
+        'layers',
+        field('start_layer', $.trace_layer_name),
+        'to',
+        field('end_layer', $.trace_layer_name),
+      )),
     ),
 
     // path 10mm,12mm -> 15mm,12mm -> 15mm,8mm (explicit polyline geometry)

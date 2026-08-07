@@ -1690,6 +1690,43 @@
               "type": "BLANK"
             }
           ]
+        },
+        {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SEQ",
+              "members": [
+                {
+                  "type": "STRING",
+                  "value": "layers"
+                },
+                {
+                  "type": "FIELD",
+                  "name": "start_layer",
+                  "content": {
+                    "type": "SYMBOL",
+                    "name": "trace_layer_name"
+                  }
+                },
+                {
+                  "type": "STRING",
+                  "value": "to"
+                },
+                {
+                  "type": "FIELD",
+                  "name": "end_layer",
+                  "content": {
+                    "type": "SYMBOL",
+                    "name": "trace_layer_name"
+                  }
+                }
+              ]
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
         }
       ]
     },

@@ -1072,6 +1072,16 @@ impl CypcbParser {
                         .and_then(|n| self.convert_dimension(source, &n, errors));
                     let drill = get_child_by_field(&child, "drill")
                         .and_then(|n| self.convert_dimension(source, &n, errors));
+                    let layers = match (
+                        get_child_by_field(&child, "start_layer"),
+                        get_child_by_field(&child, "end_layer"),
+                    ) {
+                        (Some(start), Some(end)) => Some((
+                            node_text(source, &start).to_string(),
+                            node_text(source, &end).to_string(),
+                        )),
+                        _ => None,
+                    };
 
                     if let (Some(x), Some(y)) = (x, y) {
                         let position = PositionExpr {
@@ -1089,6 +1099,7 @@ impl CypcbParser {
                         directives.push(TraceDirective::Via(TraceVia {
                             position,
                             drill,
+                            layers,
                             span: span_of(&child),
                         }));
                     }

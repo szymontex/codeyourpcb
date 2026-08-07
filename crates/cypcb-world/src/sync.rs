@@ -928,12 +928,21 @@ fn sync_trace(
                         .unwrap_or_else(|| Nm::from_mm(0.3));
                     let outer_diameter = Nm(drill.0 * 2); // 2x drill for annular ring
 
+                    // A via with no stated pair goes through the board.
+                    let (start_layer, end_layer) = via_def
+                        .layers
+                        .as_ref()
+                        .and_then(|(start, end)| {
+                            Some((parse_layer_name(start)?, parse_layer_name(end)?))
+                        })
+                        .unwrap_or((Layer::TopCopper, Layer::BottomCopper));
+
                     let via = Via {
                         position,
                         drill,
                         outer_diameter,
-                        start_layer: Layer::TopCopper,
-                        end_layer: Layer::BottomCopper,
+                        start_layer,
+                        end_layer,
                         net_id,
                         locked: trace_def.locked,
                     };
