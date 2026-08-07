@@ -440,7 +440,11 @@ Used by CLI for `--watch` mode. Not used in web/desktop (handled by Vite dev ser
   what the viewer has always done. Without either flag it exports DSN for
   FreeRouting.
 - `cypcb score <file>` - route and print quality metrics as JSON.
-- `cypcb parse` / `cypcb parse-kicad` - the AST, and KiCad board metadata.
+- `cypcb parse <file>` - the board model as JSON: the components with their
+  resolved footprints and nets, the nets with their constraints, the traces,
+  the vias and the zones, after every `import` is followed. `-o ast` prints the
+  raw syntax tree instead.
+- `cypcb parse-kicad <file>` - KiCad board metadata as JSON.
 
 **Dependencies**: `clap`, `cypcb-parser`, `cypcb-world`, `cypcb-export`,
 `cypcb-router`, `cypcb-autoroute`, `cypcb-drc`, `cypcb-rules`, `cypcb-kicad`

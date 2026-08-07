@@ -62,9 +62,12 @@ fn test_parse_valid_file() {
 
     assert!(output.status.success(), "Parse failed: {:?}", output);
     let stdout = String::from_utf8_lossy(&output.stdout);
-    // Output should be valid JSON
-    assert!(stdout.contains("\"version\": 1"));
-    assert!(stdout.contains("\"definitions\""));
+    // The default format is the board model, which is what the flag's help
+    // text has always said. This test asserted the AST's own keys until
+    // 2026-08-07, and passed while the documented format did not exist.
+    assert!(stdout.contains("\"components\""));
+    assert!(stdout.contains("\"nets\""));
+    assert!(!stdout.contains("\"definitions\""));
 }
 
 #[test]
