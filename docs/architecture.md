@@ -435,10 +435,9 @@ Used by CLI for `--watch` mode. Not used in web/desktop (handled by Vite dev ser
 - `cypcb export <file> --output <dir>` - Gerbers, drill, BOM and
   pick-and-place. 13 files.
 - `cypcb route <file>` - autorouter. `--in-house` uses the built-in
-  PathFinder and writes the result back as `.cypcb` trace blocks;
-  `--variants` routes several ways, scores each and keeps the best, which is
-  what the viewer has always done. Without either flag it exports DSN for
-  FreeRouting.
+  PathFinder, routes the board every measured way, keeps the best and writes
+  it back as `.cypcb` trace blocks; `--fast` routes once instead. Without
+  `--in-house` it exports DSN for FreeRouting, which needs Java and a jar.
 - `cypcb score <file>` - route and print quality metrics as JSON.
 - `cypcb parse <file>` - the board model as JSON: the components with their
   resolved footprints and nets, the nets with their constraints, the traces,

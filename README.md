@@ -128,10 +128,12 @@ report, started measuring copper instead of part bodies, and began seeing
 footprints on imported boards at all. `docs/TRACKER.md` records each change
 with what it moved.
 
-`cypcb route --variants` routes several ways and keeps the best, because no
-one setting wins everywhere - measured across these three boards, the winner
-differs on each. It is 10x the wall clock of a single run and worth it on
-led_blink, where the chosen variant reaches zero.
+`cypcb route --in-house` routes the board eight ways and keeps the best,
+because no one setting wins everywhere - measured across these three boards,
+the winner differs on each. It costs roughly eight times the wall clock of a
+single run and buys, on `examples/blink.cypcb`, 5 violations with 3 shorts
+against 9 with 6. `--fast` routes once when the wait matters more than the
+board.
 
 <p align="center">
   <img src="docs/images/board-view.png" alt="555 timer blink circuit — board view with routed traces" width="720">

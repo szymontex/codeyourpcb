@@ -65,12 +65,23 @@ pub struct RouteCommand {
 
     /// Route the board several ways, score each and keep the best.
     ///
-    /// Six routing settings have been measured on this project's benchmark
-    /// boards and none is best everywhere - the winner differs per board, so
-    /// the router asks the board instead of guessing. Costs roughly ten times
-    /// the wall clock of a single run. Implies `--in-house`.
+    /// This is what `--in-house` does anyway; the flag is kept because it
+    /// reads as an instruction and because it turns the in-house router on by
+    /// itself.
     #[arg(long)]
     pub variants: bool,
+
+    /// Route once, with the default settings, instead of keeping the best of
+    /// several.
+    ///
+    /// Eight routing settings have been measured on this project's benchmark
+    /// boards and none is best everywhere, so the router asks the board rather
+    /// than guessing - at roughly eight times the wall clock. On
+    /// `examples/blink.cypcb` that is 0.06s against 0.9s, and 9 violations
+    /// with 6 shorts against 5 with 3. Use this when the wait matters more
+    /// than the board.
+    #[arg(long)]
+    pub fast: bool,
 }
 
 impl RouteCommand {
@@ -454,11 +465,16 @@ impl RouteCommand {
         })?;
         let rules = PresetRuleSet::new(preset);
 
-        let result = if self.variants {
-            self.route_variants(&mut world, &library, &rules)?
-        } else {
+        // Best-of-N unless the caller asked for speed. Routing once was the
+        // default until 2026-08-07 and it is measurably not the best the
+        // router can do: on examples/blink.cypcb one run gives 9 violations
+        // with 6 shorts and best-of-eight gives 5 with 3, for 0.06s against
+        // 0.9s.
+        let result = if self.fast {
             eprintln!("Routing with the built-in autorouter...");
             route_board(&mut world, &library, &rules, &AutorouteConfig::default())
+        } else {
+            self.route_variants(&mut world, &library, &rules)?
         };
 
         match result.status {
