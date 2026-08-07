@@ -7,6 +7,7 @@
 //! cleanly to JavaScript numbers and strings.
 
 use cypcb_drc::DrcViolation;
+use cypcb_world::BoardWorld;
 use serde::{Deserialize, Serialize};
 
 /// Complete snapshot of the board state for rendering.
@@ -142,6 +143,16 @@ pub struct ViolationInfo {
     /// part of the plane.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub area: Option<[i64; 4]>,
+    /// 1-based line of the definition this is about, when the model knows it.
+    ///
+    /// A violation is discovered in board coordinates, not source ones, so
+    /// this comes from the offending entity's own span. Without it the editor
+    /// pins every DRC marker to line 1 - which it did until 2026-08-08.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub line: Option<u32>,
+    /// 1-based column, alongside `line`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub column: Option<u32>,
 }
 
 impl ViolationInfo {
@@ -174,7 +185,26 @@ impl ViolationInfo {
             area: v
                 .area
                 .map(|rect| [rect.min.x.0, rect.min.y.0, rect.max.x.0, rect.max.y.0]),
+            line: None,
+            column: None,
         }
+    }
+
+    /// The same, with the line the offending definition sits on.
+    ///
+    /// The rules never fill `DrcViolation::source_span` - all seventeen
+    /// construction sites pass `None` - so the route to a line is the entity
+    /// the violation names and the span sync attached to it. Its stored line
+    /// and column are placeholders (`1, 1` for components, `0, 0` for traces);
+    /// the byte offset beside them is real, and that is what this converts.
+    pub fn from_drc_located(v: &DrcViolation, world: &BoardWorld, source: &str) -> Self {
+        let mut info = Self::from_drc(v);
+        if let Some(span) = world.get::<cypcb_world::components::SourceSpan>(v.entity) {
+            let (line, column) = line_and_column(source, span.start_byte);
+            info.line = Some(line);
+            info.column = Some(column);
+        }
+        info
     }
 }
 
@@ -476,6 +506,8 @@ mod tests {
             y_nm: 10_000_000,
             message: "Clearance violation: 0.10mm actual, 0.15mm required".to_string(),
             area: None,
+            line: None,
+            column: None,
         };
 
         let json = serde_json::to_string(&violation).unwrap();

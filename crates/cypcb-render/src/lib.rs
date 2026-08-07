@@ -570,7 +570,7 @@ impl PcbEngine {
         let violations: Vec<ViolationInfo> = self
             .violations
             .iter()
-            .map(ViolationInfo::from_drc)
+            .map(|v| ViolationInfo::from_drc_located(v, &self.world, &self.source))
             .collect();
         serde_json::to_string(&violations).unwrap_or_else(|_| "[]".to_string())
     }
@@ -581,7 +581,7 @@ impl PcbEngine {
         let violations: Vec<ViolationInfo> = self
             .violations
             .iter()
-            .map(ViolationInfo::from_drc)
+            .map(|v| ViolationInfo::from_drc_located(v, &self.world, &self.source))
             .collect();
         serde_json::to_string(&violations).unwrap_or_else(|_| "[]".to_string())
     }
@@ -1568,7 +1568,7 @@ impl PcbEngine {
         let violations: Vec<ViolationInfo> = self
             .violations
             .iter()
-            .map(ViolationInfo::from_drc)
+            .map(|v| ViolationInfo::from_drc_located(v, &self.world, &self.source))
             .collect();
 
         // Build trace info

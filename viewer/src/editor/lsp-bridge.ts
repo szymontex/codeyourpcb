@@ -53,12 +53,19 @@ export function updateDiagnostics(
     });
   }
 
+  // A violation is found in board coordinates, so its line comes from the
+  // definition it is about - the entity's own span. Every one of these was
+  // pinned to line 1 until 2026-08-08, which put the whole DRC report on the
+  // `board` keyword.
   for (const v of violations) {
+    const line = v.line ? Math.max(1, Math.min(v.line, model.getLineCount())) : 1;
     markers.push({
       severity: monaco.MarkerSeverity.Warning,
       message: `[DRC ${v.kind}] ${v.message}`,
-      startLineNumber: 1, startColumn: 1,
-      endLineNumber: 1, endColumn: model.getLineMaxColumn(1),
+      startLineNumber: line,
+      startColumn: Math.max(1, v.column ?? 1),
+      endLineNumber: line,
+      endColumn: model.getLineMaxColumn(line),
     });
   }
 

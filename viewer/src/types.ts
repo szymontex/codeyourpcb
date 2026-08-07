@@ -62,6 +62,16 @@ export interface PourInfo {
 export interface ViolationInfo {
   /** Violation type: clearance, drill-size, unconnected-pin, etc. */
   kind: string;
+  /**
+   * 1-based line of the definition this is about, when the model knows it.
+   *
+   * A violation is discovered in board coordinates, not source ones, so this
+   * comes from the offending entity's own span. Absent for a violation the
+   * model cannot trace back to a definition.
+   */
+  line?: number;
+  /** 1-based column, alongside `line`. */
+  column?: number;
   /** X location in nanometers */
   x_nm: number;
   /** Y location in nanometers */

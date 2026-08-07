@@ -63,6 +63,28 @@ describe('the squiggle is on the line the engine named', () => {
     expect(set.markers[0].startLineNumber).toBeLessThanOrEqual(40);
   });
 
+  it('puts a DRC marker on the part it is about, not on line 1', () => {
+    // Violations are found in board coordinates, so the line comes from the
+    // definition they name. Every one of these was pinned to line 1 until
+    // 2026-08-08, which put the whole DRC report on the `board` keyword.
+    const { monaco, editor, set } = fakeMonaco();
+    updateDiagnostics(monaco, editor, [], [
+      { kind: 'courtyard-clearance', x_nm: 0, y_nm: 0, message: 'R1 <-> R2', line: 11, column: 1 },
+    ] as never);
+
+    expect(set.markers).toHaveLength(1);
+    expect(set.markers[0].startLineNumber).toBe(11);
+  });
+
+  it('falls back to line 1 for a violation the model cannot place', () => {
+    const { monaco, editor, set } = fakeMonaco();
+    updateDiagnostics(monaco, editor, [], [
+      { kind: 'clearance', x_nm: 0, y_nm: 0, message: 'somewhere' },
+    ] as never);
+
+    expect(set.markers[0].startLineNumber).toBe(1);
+  });
+
   it('says nothing when the engine found nothing', () => {
     const { monaco, editor, set } = fakeMonaco();
     updateDiagnostics(monaco, editor, [], []);
