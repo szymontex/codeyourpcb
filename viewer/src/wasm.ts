@@ -15,7 +15,7 @@
  * by parsing in JavaScript and calling load_snapshot() on the WASM engine.
  */
 
-import type { BoardSnapshot, ComponentInfo, PadInfo, NetInfo, PinRef, BoardInfo, TraceInfo, TraceSegmentInfo, ViaInfo, ViolationInfo, SilkShape } from './types';
+import type { ZoneInfo, BoardSnapshot, ComponentInfo, PadInfo, NetInfo, PinRef, BoardInfo, TraceInfo, TraceSegmentInfo, ViaInfo, ViolationInfo, SilkShape } from './types';
 import { pointToSegmentDistance } from './geometry';
 
 /**
@@ -595,7 +595,7 @@ function checkTraceCurrentViolations(snapshot: BoardSnapshot): ViolationInfo[] {
   return violations;
 }
 
-function parseSource(source: string): { snapshot: BoardSnapshot; errors: string[] } {
+export function parseSource(source: string): { snapshot: BoardSnapshot; errors: string[] } {
   const errors: string[] = [];
   const lines = source.split('\n');
 
@@ -616,7 +616,13 @@ function parseSource(source: string): { snapshot: BoardSnapshot; errors: string[
   let inNet = false;
   let inTrace = false;
   let inFootprint = false;
-  let inZone = false; // skip zone/keepout blocks gracefully
+  // A zone is parsed here and filled by the engine. The geometry - the
+  // outline minus every piece of foreign copper and its clearance - lives in
+  // Rust and is what the Gerber carries; duplicating it in JavaScript would
+  // put a second answer on the screen.
+  const zones: ZoneInfo[] = [];
+  let currentZone: { name: string; kind: string; layer_mask: number; net: string; bounds: [number, number, number, number] } | null = null;
+  let inZone = false;
   let traceIdCounter = 200_000;
 
   for (let lineNum = 0; lineNum < lines.length; lineNum++) {
@@ -686,8 +692,11 @@ function parseSource(source: string): { snapshot: BoardSnapshot; errors: string[
       continue;
     }
 
-    // Parse net definition (with optional constraints in square brackets)
-    const netMatch = line.match(/^net\s+(\w+)\s*(\[.*?\])?\s*{?$/);
+    // Parse net definition (with optional constraints in square brackets).
+    // Not inside a zone, where `net GND` names the net the pour is poured to
+    // rather than opening a net block - the same three words mean two things
+    // depending on where they sit.
+    const netMatch = inZone ? null : line.match(/^net\s+(\w+)\s*(\[.*?\])?\s*{?$/);
     if (netMatch) {
       const netConstraints: { width_nm?: number; clearance_nm?: number; current_ma?: number } = {};
       if (netMatch[2]) {
@@ -728,11 +737,45 @@ function parseSource(source: string): { snapshot: BoardSnapshot; errors: string[
     }
 
     // Parse zone/keepout (skip gracefully — renderer doesn't support yet)
-    const zoneMatch = line.match(/^(?:zone|keepout)\s+(\w+)\s*{?$/);
+    const zoneMatch = line.match(/^(zone|keepout)\s+(\w+)\s*{?$/);
     if (zoneMatch) {
+      currentZone = {
+        name: zoneMatch[2],
+        kind: zoneMatch[1] === 'zone' ? 'pour' : 'keepout',
+        // Both copper layers until the block says otherwise, which is what
+        // `layer all` means and what a zone with no layer line gets.
+        layer_mask: 0b11,
+        net: '',
+        bounds: [0, 0, 0, 0],
+      };
       inZone = true;
       braceDepth += openBraces;
       continue;
+    }
+
+    if (inZone && currentZone) {
+      const boundsMatch = line.match(
+        /^bounds\s+(-?\d+(?:\.\d+)?)(mm|mil|inch),\s*(-?\d+(?:\.\d+)?)(mm|mil|inch)\s+to\s+(-?\d+(?:\.\d+)?)(mm|mil|inch),\s*(-?\d+(?:\.\d+)?)(mm|mil|inch)$/,
+      );
+      if (boundsMatch) {
+        const x1 = parseUnit(parseFloat(boundsMatch[1]), boundsMatch[2]);
+        const y1 = parseUnit(parseFloat(boundsMatch[3]), boundsMatch[4]);
+        const x2 = parseUnit(parseFloat(boundsMatch[5]), boundsMatch[6]);
+        const y2 = parseUnit(parseFloat(boundsMatch[7]), boundsMatch[8]);
+        currentZone.bounds = [
+          Math.min(x1, x2), Math.min(y1, y2),
+          Math.max(x1, x2), Math.max(y1, y2),
+        ];
+      }
+      const layerMatch = line.match(/^layer\s+(top|bottom|all)$/i);
+      if (layerMatch) {
+        const layer = layerMatch[1].toLowerCase();
+        currentZone.layer_mask = layer === 'top' ? 0b01 : layer === 'bottom' ? 0b10 : 0b11;
+      }
+      const netMatch = line.match(/^net\s+(\w+)$/);
+      if (netMatch) {
+        currentZone.net = netMatch[1];
+      }
     }
 
     // Parse board properties
@@ -904,6 +947,18 @@ function parseSource(source: string): { snapshot: BoardSnapshot; errors: string[
           inFootprint = false;
         }
         if (inZone) {
+          // A zone with no outline is not a zone. Dropping it here keeps the
+          // engine from filling a rectangle of zero size.
+          if (currentZone && (currentZone.bounds[2] > currentZone.bounds[0])) {
+            zones.push({
+              name: currentZone.name,
+              kind: currentZone.kind,
+              layer_mask: currentZone.layer_mask,
+              net: currentZone.net,
+              bounds: currentZone.bounds,
+            });
+          }
+          currentZone = null;
           inZone = false;
         }
         braceDepth = 0;
@@ -932,7 +987,7 @@ function parseSource(source: string): { snapshot: BoardSnapshot; errors: string[
   }
 
   return {
-    snapshot: { board, components, nets: Array.from(nets.values()), violations: [], traces, vias, ratsnest: [] },
+    snapshot: { board, components, nets: Array.from(nets.values()), violations: [], traces, vias, ratsnest: [], zones },
     errors,
   };
 }
@@ -1198,6 +1253,22 @@ class WasmPcbEngineAdapter implements PcbEngine {
 
     // Store snapshot and load into WASM engine for queries
     const wasmError = this.wasmEngine.load_snapshot(snapshot);
+
+    // A zone is an outline until the engine fills it. Ask for the copper it
+    // computed - the same geometry the Gerber carries - rather than drawing
+    // the rectangle the designer typed, which would hide a plane swallowing a
+    // pad or an island cut off from its net.
+    if (snapshot.zones && snapshot.zones.length > 0) {
+      try {
+        const engineSnapshot = this.wasmEngine.get_snapshot() as BoardSnapshot | null;
+        if (engineSnapshot && engineSnapshot.pours) {
+          snapshot.pours = engineSnapshot.pours;
+        }
+      } catch {
+        // An engine that cannot fill them leaves the board without pours
+        // drawn, which is what happened before this existed.
+      }
+    }
     if (wasmError) {
       errors.push(wasmError);
     }

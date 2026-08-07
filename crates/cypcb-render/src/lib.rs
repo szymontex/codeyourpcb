@@ -119,6 +119,24 @@ impl PcbEngine {
         }
     }
 
+    /// Load a pre-parsed board snapshot from JSON (native mode).
+    ///
+    /// The browser hands the engine a snapshot as a `JsValue`; natively the
+    /// same thing arrives as JSON, so the path a viewer takes can be tested
+    /// without a browser. Without this the only proof that a zone sent in
+    /// comes back as filled copper would be someone opening the page.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn load_snapshot_json(&mut self, snapshot_json: &str) -> String {
+        match serde_json::from_str::<BoardSnapshot>(snapshot_json) {
+            Ok(snapshot) => {
+                self.populate_from_snapshot(&snapshot);
+                self.run_drc_internal();
+                String::new()
+            }
+            Err(e) => format!("Failed to deserialize snapshot: {}", e),
+        }
+    }
+
     /// Get a snapshot of the current board state for rendering (WASM version).
     ///
     /// Returns a JsValue that can be used directly in JavaScript.
@@ -1113,6 +1131,36 @@ impl PcbEngine {
             );
         }
 
+        // Zones the host parsed. Without these the engine has no idea a ground
+        // plane was declared, so it computes no copper for one and the screen
+        // shows a board nobody will be sent.
+        for zone in &snapshot.zones {
+            use cypcb_world::components::zone::{Zone, ZoneKind};
+            let net = if zone.net.is_empty() {
+                None
+            } else {
+                Some(self.world.intern_net(&zone.net))
+            };
+            self.world.spawn_entity(Zone {
+                bounds: cypcb_core::Rect {
+                    min: Point::new(Nm(zone.bounds[0]), Nm(zone.bounds[1])),
+                    max: Point::new(Nm(zone.bounds[2]), Nm(zone.bounds[3])),
+                },
+                kind: if zone.kind == "pour" {
+                    ZoneKind::CopperPour
+                } else {
+                    ZoneKind::Keepout
+                },
+                layer_mask: zone.layer_mask,
+                name: if zone.name.is_empty() {
+                    None
+                } else {
+                    Some(zone.name.clone())
+                },
+                net,
+            });
+        }
+
         // Build map of component.pin -> net_id from snapshot.nets
         // This is needed to populate NetConnections for each component (for DRC)
         let mut pin_to_net: std::collections::HashMap<String, NetId> =
@@ -1501,6 +1549,10 @@ impl PcbEngine {
         // Build the copper the pours actually become
         let pours = self.collect_pours();
 
+        // And the zones as written, so a host that sent them gets them back
+        // rather than losing them on the round trip.
+        let zones = self.collect_zones();
+
         BoardSnapshot {
             board,
             components,
@@ -1510,7 +1562,36 @@ impl PcbEngine {
             vias,
             ratsnest,
             pours,
+            zones,
         }
+    }
+
+    /// Collect the zones as the design states them.
+    fn collect_zones(&mut self) -> Vec<ZoneInfo> {
+        use cypcb_world::components::zone::ZoneKind;
+
+        self.world
+            .zones()
+            .into_iter()
+            .map(|(_, zone)| ZoneInfo {
+                name: zone.name.clone().unwrap_or_default(),
+                kind: match zone.kind {
+                    ZoneKind::CopperPour => "pour".to_string(),
+                    _ => "keepout".to_string(),
+                },
+                layer_mask: zone.layer_mask,
+                net: zone
+                    .net
+                    .and_then(|id| self.world.net_name(id).map(|n| n.to_string()))
+                    .unwrap_or_default(),
+                bounds: [
+                    zone.bounds.min.x.0,
+                    zone.bounds.min.y.0,
+                    zone.bounds.max.x.0,
+                    zone.bounds.max.y.0,
+                ],
+            })
+            .collect()
     }
 
     /// Collect every copper pour, as the copper it becomes.
@@ -2187,6 +2268,7 @@ mod tests {
             vias: vec![],
             ratsnest: vec![],
             pours: vec![],
+            zones: vec![],
         };
 
         let mut engine = PcbEngine::new();

@@ -32,6 +32,28 @@ pub struct BoardSnapshot {
     /// Copper pours, as the copper they become.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub pours: Vec<PourInfo>,
+    /// Zones as the design states them: an outline, a layer and a net.
+    ///
+    /// Carried separately from `pours`, which is what a zone becomes. The host
+    /// sends these in - it is the one holding the source text - and the engine
+    /// sends back the copper it computed from them.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub zones: Vec<ZoneInfo>,
+}
+
+/// A zone as written: a rectangle, a layer mask, and possibly a net.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ZoneInfo {
+    /// Name the design gave it, empty when it gave none.
+    pub name: String,
+    /// `"pour"` for copper, `"keepout"` for an area nothing may enter.
+    pub kind: String,
+    /// Layers it covers, as a layer mask.
+    pub layer_mask: u32,
+    /// Net name it pours to, empty when it names none.
+    pub net: String,
+    /// Its outline: min x, min y, max x, max y, in nanometres.
+    pub bounds: [i64; 4],
 }
 
 /// A copper pour, as the copper it actually becomes.
@@ -331,6 +353,7 @@ mod tests {
             vias: vec![],
             ratsnest: vec![],
             pours: vec![],
+            zones: vec![],
         };
 
         // Verify it can serialize to JSON (serde-wasm-bindgen uses serde)
@@ -485,6 +508,7 @@ mod tests {
             }],
             ratsnest: vec![],
             pours: vec![],
+            zones: vec![],
         };
 
         let json = serde_json::to_string(&snapshot).unwrap();

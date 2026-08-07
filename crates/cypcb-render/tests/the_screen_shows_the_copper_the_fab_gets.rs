@@ -115,3 +115,58 @@ fn the_viewer_and_the_gerber_are_given_the_same_rectangles() {
         "the screen draws {drawn} pieces of copper and the fabricator is sent {fabricated}"
     );
 }
+
+/// The path the viewer actually takes: the host parses, the engine fills.
+///
+/// `WasmPcbEngineAdapter.load_source` parses in JavaScript and hands the
+/// engine a snapshot, so a zone only reaches the engine if the snapshot
+/// carries it. This is that round trip, in the same shape the browser sends.
+#[test]
+fn a_zone_sent_in_a_snapshot_comes_back_as_filled_copper() {
+    let snapshot = serde_json::json!({
+        "board": {
+            "name": "t",
+            "width_nm": 20_000_000i64,
+            "height_nm": 20_000_000i64,
+            "layer_count": 2
+        },
+        "components": [],
+        "nets": [],
+        "violations": [],
+        "traces": [],
+        "vias": [],
+        "ratsnest": [],
+        "zones": [{
+            "name": "gnd",
+            "kind": "pour",
+            "layer_mask": 1,
+            "net": "GND",
+            "bounds": [5_000_000i64, 5_000_000i64, 15_000_000i64, 15_000_000i64]
+        }]
+    });
+
+    let mut engine = PcbEngine::new();
+    let errors = engine.load_snapshot_json(&snapshot.to_string());
+    assert!(errors.is_empty(), "the snapshot did not load: {errors}");
+
+    let back: serde_json::Value =
+        serde_json::from_str(&engine.get_snapshot()).expect("snapshot is JSON");
+
+    let zones = back["zones"].as_array().expect("the zones come back");
+    assert_eq!(zones.len(), 1, "a zone sent in must survive the round trip");
+    assert_eq!(zones[0]["net"], "GND");
+
+    let pours = back["pours"].as_array().expect("the pours are computed");
+    assert_eq!(pours.len(), 1, "one zone on one layer is one pour");
+    let rects = pours[0]["rects"].as_array().expect("rectangles");
+    assert_eq!(
+        rects.len(),
+        1,
+        "an empty board leaves the pour whole, got {rects:?}"
+    );
+    assert_eq!(
+        rects[0],
+        serde_json::json!([5_000_000i64, 5_000_000i64, 15_000_000i64, 15_000_000i64]),
+        "the copper is the zone itself when nothing is in its way"
+    );
+}

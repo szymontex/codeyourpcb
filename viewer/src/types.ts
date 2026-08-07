@@ -13,6 +13,29 @@ export interface BoardSnapshot {
   ratsnest: RatsnestInfo[];
   /** Copper pours, as the copper they become (absent from older snapshots) */
   pours?: PourInfo[];
+  /** Zones as the design states them, sent to the engine so it can fill them */
+  zones?: ZoneInfo[];
+}
+
+/**
+ * A zone as written: an outline, a layer and possibly a net.
+ *
+ * The host parses these because it holds the source text. What they become -
+ * copper cut around every pad and trace on the layer - is computed in the
+ * engine and comes back as `pours`, so the screen and the Gerber cannot
+ * disagree.
+ */
+export interface ZoneInfo {
+  /** Name the design gave it, empty when it gave none */
+  name: string;
+  /** "pour" for copper, "keepout" for an area nothing may enter */
+  kind: string;
+  /** Layers it covers, as a layer mask: bit 0 top, bit 1 bottom */
+  layer_mask: number;
+  /** Net name it pours to, empty when it names none */
+  net: string;
+  /** Its outline: [min x, min y, max x, max y] in nm */
+  bounds: [number, number, number, number];
 }
 
 /**
