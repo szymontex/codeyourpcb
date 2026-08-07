@@ -169,6 +169,10 @@ impl ParseCommand {
                     std::process::exit(1);
                 }
 
+                for warning in &sync_result.warnings {
+                    eprintln!("{:?}", miette::Report::new(warning.clone()));
+                }
+
                 let model = board_model(&mut world, &library);
                 let json = serde_json::to_string_pretty(&model).into_diagnostic()?;
                 println!("{}", json);

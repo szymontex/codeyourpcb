@@ -92,6 +92,14 @@ impl ExportCommand {
             return Err(miette::miette!("Semantic errors in design"));
         }
 
+        // Warnings are what the board did not say and what was assumed
+        // instead. Only `check` printed them until 2026-08-08, so a board whose
+        // size was assumed exported at that size in silence - and `export` is
+        // the command whose output goes to a fab.
+        for warning in &sync_result.warnings {
+            eprintln!("{:?}", miette::Report::new(warning.clone()));
+        }
+
         // Look up preset
         let mut preset = from_name(&self.preset).ok_or_else(|| {
             miette::miette!(

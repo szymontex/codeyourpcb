@@ -137,6 +137,11 @@ impl RouteCommand {
             return Err(miette::miette!("Semantic errors in design"));
         }
 
+        // The same warnings `check` prints: what the board did not say.
+        for warning in &sync_result.warnings {
+            eprintln!("{:?}", miette::Report::new(warning.clone()));
+        }
+
         if self.in_house || self.variants {
             return self.route_in_house(&source, world, library, start_time);
         }

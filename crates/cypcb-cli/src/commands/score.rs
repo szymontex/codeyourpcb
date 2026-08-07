@@ -81,6 +81,11 @@ impl ScoreCommand {
             ));
         }
 
+        // The same warnings `check` prints: what the board did not say.
+        for warning in &sync_result.warnings {
+            eprintln!("{:?}", miette::Report::new(warning.clone()));
+        }
+
         // Build rules (JLCPCB 2-layer default)
         let preset = RulesPreset::from_name(&self.preset).ok_or_else(|| {
             let available: Vec<&str> = RulesPreset::all().iter().map(|p| p.name()).collect();

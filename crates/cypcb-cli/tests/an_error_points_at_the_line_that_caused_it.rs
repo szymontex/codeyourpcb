@@ -27,20 +27,25 @@ fn cypcb_binary() -> std::path::PathBuf {
     path
 }
 
-/// Write a board to a temporary file and run `cypcb check` on it.
-fn check(name: &str, source: &str) -> String {
+/// Write a board to a temporary file and run a subcommand on it.
+fn run(name: &str, source: &str, args: &[&str]) -> String {
     let dir = std::env::temp_dir().join("cypcb-error-rendering");
     std::fs::create_dir_all(&dir).expect("a place to put the board");
     let path = dir.join(format!("{name}.cypcb"));
     std::fs::write(&path, source).expect("the board is writable");
 
     let output = Command::new(cypcb_binary())
-        .arg("check")
+        .args(args)
         .arg(&path)
         .output()
         .expect("the CLI runs");
 
     String::from_utf8_lossy(&output.stderr).to_string()
+}
+
+/// `cypcb check` on a board, which is what most of these ask about.
+fn check(name: &str, source: &str) -> String {
+    run(name, source, &["check"])
 }
 
 const A_PART: &str = r#"board demo {
@@ -123,5 +128,68 @@ fn a_duplicate_designator_shows_both_definitions() {
     assert!(
         report.contains("duplicate definition"),
         "both definitions have to be shown; got:\n{report}"
+    );
+}
+
+/// The board whose size is a bare number, which the grammar reads as
+/// millimetres without saying so.
+const A_SIZE_WITHOUT_A_UNIT: &str = "board demo {\n    size 20 x 20\n    layers 2\n}\n";
+
+#[test]
+fn every_command_that_builds_the_board_says_what_it_assumed() {
+    // Only `check` printed warnings until 2026-08-08. The others built the
+    // same board through the same `sync_ast_to_world` and dropped them - so a
+    // board whose size was assumed exported at that size in silence, and
+    // `export` is the command whose output goes to a fabricator.
+    let commands: [&[&str]; 4] = [&["check"], &["score"], &["parse"], &["export", "-o"]];
+
+    for args in commands {
+        let mut args = args.to_vec();
+        let out_dir = std::env::temp_dir().join("cypcb-warning-export");
+        if args.last() == Some(&"-o") {
+            args.push(out_dir.to_str().expect("a utf-8 temp path"));
+        }
+        let report = run("assumed-unit", A_SIZE_WITHOUT_A_UNIT, &args);
+
+        assert!(
+            report.contains("has no unit"),
+            "`cypcb {}` has to say what it assumed; got:\n{report}",
+            args[0]
+        );
+        assert!(
+            report.contains("assumed here"),
+            "`cypcb {}` has to point at the number; got:\n{report}",
+            args[0]
+        );
+    }
+}
+
+#[test]
+fn a_warning_does_not_reach_machine_readable_output() {
+    // `parse` writes JSON to stdout and something reads it. A warning on
+    // stdout would break that reader.
+    let dir = std::env::temp_dir().join("cypcb-error-rendering");
+    std::fs::create_dir_all(&dir).expect("a place to put the board");
+    let path = dir.join("stdout-clean.cypcb");
+    std::fs::write(&path, A_SIZE_WITHOUT_A_UNIT).expect("the board is writable");
+
+    let output = Command::new(cypcb_binary())
+        .arg("parse")
+        .arg(&path)
+        .output()
+        .expect("the CLI runs");
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        !stdout.contains("has no unit"),
+        "the warning belongs on stderr; stdout was:\n{stdout}"
+    );
+    serde_json::from_str::<serde_json::Value>(&stdout)
+        .expect("stdout is still the JSON document `parse` promises");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("has no unit"),
+        "and on stderr it is: {stderr}"
     );
 }
