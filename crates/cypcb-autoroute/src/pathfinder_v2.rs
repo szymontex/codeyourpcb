@@ -130,7 +130,8 @@ impl PathFinderStrategy {
         }
 
         // Extract ratsnest
-        let ratsnest = extract_ratsnest(world, library);
+        let mut ratsnest = extract_ratsnest(world, library);
+        drop_pads_existing_copper_already_joins(world, &mut ratsnest);
         if ratsnest.is_empty() {
             tracing::info!("No nets to route");
             return RoutingResult::complete(Vec::new(), Vec::new());
@@ -266,6 +267,81 @@ pub struct PathFinderLoopResult {
     /// vector is on - why a cost change of a hundredth moves the result by 28
     /// violations - is a question about the path, not the endpoint.
     pub overuse_per_iteration: Vec<usize>,
+}
+
+/// Take out the pads a trace already on the board connects.
+///
+/// The router asks for a spanning tree over every pad of a net, so a net a
+/// designer has already wired by hand is routed again and the board ends up
+/// with two copies of one connection. A pad sitting on existing copper of its
+/// own net is connected; only one pad per piece of copper needs a route to it.
+///
+/// Approximate on purpose: a pad counts as on a trace when its box overlaps a
+/// segment grown by half the trace width. Over-connecting would drop a route
+/// that is needed, so the test is the strict one - the pad has to touch.
+fn drop_pads_existing_copper_already_joins(world: &mut BoardWorld, ratsnest: &mut [NetRoute]) {
+    use cypcb_world::components::trace::Trace;
+
+    let traces: Vec<Trace> = {
+        let ecs = world.ecs_mut();
+        let mut query = ecs.query::<&Trace>();
+        query.iter(ecs).cloned().collect()
+    };
+    if traces.is_empty() {
+        return;
+    }
+
+    for net in ratsnest.iter_mut() {
+        // Which of this net's traces each pad sits on.
+        let mut on_trace: Vec<Option<usize>> = vec![None; net.pads.len()];
+        for (trace_index, trace) in traces.iter().enumerate() {
+            if trace.net_id != net.net_id {
+                continue;
+            }
+            let half = trace.width.0 / 2;
+            for (pad_index, pad) in net.pads.iter().enumerate() {
+                if on_trace[pad_index].is_some() {
+                    continue;
+                }
+                let touches = trace.segments.iter().any(|segment| {
+                    let min_x = segment.start.x.0.min(segment.end.x.0) - half;
+                    let max_x = segment.start.x.0.max(segment.end.x.0) + half;
+                    let min_y = segment.start.y.0.min(segment.end.y.0) - half;
+                    let max_y = segment.start.y.0.max(segment.end.y.0) + half;
+                    let (half_w, half_h) = (pad.pad_size.0 .0 / 2, pad.pad_size.1 .0 / 2);
+                    pad.position.x.0 + half_w >= min_x
+                        && pad.position.x.0 - half_w <= max_x
+                        && pad.position.y.0 + half_h >= min_y
+                        && pad.position.y.0 - half_h <= max_y
+                });
+                if touches {
+                    on_trace[pad_index] = Some(trace_index);
+                }
+            }
+        }
+
+        // One pad per piece of existing copper, plus every pad that touches
+        // none.
+        let mut kept_traces: Vec<usize> = Vec::new();
+        let mut pads = Vec::with_capacity(net.pads.len());
+        for (pad_index, pad) in net.pads.iter().enumerate() {
+            match on_trace[pad_index] {
+                Some(trace_index) if kept_traces.contains(&trace_index) => {
+                    tracing::debug!(
+                        net = %net.net_name,
+                        pin = %pad.pin,
+                        "pad already connected by copper on the board"
+                    );
+                }
+                Some(trace_index) => {
+                    kept_traces.push(trace_index);
+                    pads.push(pad.clone());
+                }
+                None => pads.push(pad.clone()),
+            }
+        }
+        net.pads = pads;
+    }
 }
 
 /// Run the PathFinder negotiated congestion iteration loop.

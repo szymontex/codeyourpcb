@@ -100,3 +100,68 @@ fn the_router_does_not_drive_through_an_unlocked_hand_trace() {
 fn and_it_never_did_through_a_locked_one() {
     assert_eq!(shorts_after_routing(true), 0);
 }
+
+#[test]
+fn a_net_a_hand_trace_already_joins_is_not_routed_again() {
+    // The router asks for a spanning tree over every pad of a net, so a net
+    // the designer wired by hand came out wired twice - two pieces of copper
+    // for one connection, and the second one taking space the rest of the
+    // board needs.
+    use cypcb_world::components::trace::Trace;
+
+    let mut world = BoardWorld::new();
+    world.set_board("t".to_string(), (Nm::from_mm(30.0), Nm::from_mm(20.0)), 2);
+
+    let mut library = cypcb_world::footprint::FootprintLibrary::new();
+    library.register(Footprint {
+        name: "PAD1".into(),
+        description: String::new(),
+        bounds: Rect::new(Point::ORIGIN, Point::ORIGIN),
+        courtyard: Rect::new(Point::ORIGIN, Point::ORIGIN),
+        silk: Vec::new(),
+        pads: vec![PadDef {
+            number: "1".into(),
+            shape: PadShape::Rect,
+            position: Point::ORIGIN,
+            size: (Nm::from_mm(1.0), Nm::from_mm(1.0)),
+            drill: None,
+            layers: vec![Layer::TopCopper],
+        }],
+    });
+    world.set_footprints(library.clone());
+
+    let net = world.intern_net("SIG");
+    for (refdes, at) in [("J1", (5.0, 10.0)), ("J2", (25.0, 10.0))] {
+        let mut connections = NetConnections::new();
+        connections.add(PinConnection::new("1".to_string(), net));
+        world.spawn_component(
+            RefDes::new(refdes),
+            Value::new(""),
+            Position(Point::from_mm(at.0, at.1)),
+            Rotation::ZERO,
+            FootprintRef::new("PAD1"),
+            connections,
+        );
+    }
+
+    // The designer's own wire, pad to pad.
+    let mut hand = Trace::new(net);
+    hand.layer = Layer::TopCopper;
+    hand.width = Nm::from_mm(0.2);
+    hand.source = TraceSource::Manual;
+    hand.add_segment(TraceSegment::new(
+        Point::from_mm(5.0, 10.0),
+        Point::from_mm(25.0, 10.0),
+    ));
+    world.ecs_mut().spawn((hand, net));
+    world.rebuild_spatial_index_from_library(&library);
+
+    let rules = PresetRuleSet::new(RulesPreset::from_name("jlcpcb").expect("the preset"));
+    let result = route_board(&mut world, &library, &rules, &AutorouteConfig::default());
+
+    assert_eq!(
+        result.route_count(),
+        0,
+        "the connection is already made, so there is nothing to route"
+    );
+}
