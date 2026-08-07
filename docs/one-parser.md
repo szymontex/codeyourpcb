@@ -114,6 +114,14 @@ Order of work, each step shippable on its own:
    reads boards through the engine; the second reader, its helpers and the
    drift test are gone.
 
+Spans were the open risk, because the LSP is built on them and the differential
+test strips them before comparing. They were then measured rather than assumed,
+in `tests/spans_point_at_the_source.rs`: every identifier's span spells the
+identifier and every string's span is the quoted literal, checked against the
+source text rather than against another parser; and the diagnostic in the same
+file reports **147 definitions with identical spans, none different, widest gap
+0 bytes**. The two parsers agree on boundaries exactly.
+
 What the browser build paid for it, measured on 2026-08-07:
 
 | | before | after |
