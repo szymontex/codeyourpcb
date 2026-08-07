@@ -258,3 +258,86 @@ fn which_layers_the_router_joins_with_a_via() {
         "every via should be accounted for"
     );
 }
+
+#[test]
+#[ignore = "diagnostic: counts pins no copper reaches, before and after routing"]
+fn how_many_pins_no_copper_reaches() {
+    // `UnconnectedPinRule` asks whether the schematic named a net for a pin.
+    // A pin listed in `net GND { U1.4 }` passes it whether or not anybody laid
+    // the copper, so a board with an open circuit checks clean. This counts
+    // what the other question answers.
+    use cypcb_drc::rules::{DrcRule, UnroutedPinRule};
+    use cypcb_drc::DesignRules;
+
+    let drc_rules = DesignRules::jlcpcb_2layer();
+
+    for benchmark in BENCHMARKS {
+        let parsed = parse_kicad_pcb(&fixture_path(benchmark.filename)).expect("the fixture parses");
+        let mut world = parsed.world;
+        let library = parsed.library;
+        world.rebuild_spatial_index_from_library(&library);
+
+        let before = UnroutedPinRule.check(&mut world, &drc_rules).len();
+
+        let rules = PresetRuleSet::new(RulesPreset::from_name("jlcpcb").expect("the preset"));
+        let routing = route_board(&mut world, &library, &rules, &AutorouteConfig::default());
+        apply_routes(&mut world, &routing);
+        world.rebuild_spatial_index_from_library(&library);
+
+        let after = UnroutedPinRule.check(&mut world, &drc_rules).len();
+
+        eprintln!(
+            "{}: {} pins unreached before routing, {} after",
+            benchmark.filename, before, after
+        );
+        // Same net only: copper of another net a hair away proves nothing, and
+        // the first version of this measurement compared against every trace
+        // on the board, which is how a false negative would have looked true.
+        let unreached = UnroutedPinRule.check(&mut world, &drc_rules);
+        for violation in unreached.iter().take(3) {
+            let refdes_pin = violation
+                .message
+                .split(' ')
+                .next()
+                .unwrap_or_default()
+                .to_string();
+            let net = {
+                let ecs = world.ecs_mut();
+                let mut query = ecs.query::<(
+                    &cypcb_world::RefDes,
+                    &cypcb_world::components::NetConnections,
+                )>();
+                let mut found = None;
+                for (refdes, nets) in query.iter(ecs) {
+                    let prefix = format!("{}.", refdes.as_str());
+                    if let Some(pin) = refdes_pin.strip_prefix(&prefix) {
+                        found = nets.pin_net(pin);
+                    }
+                }
+                found
+            };
+
+            let mut nearest = f64::MAX;
+            if let Some(net) = net {
+                let ecs = world.ecs_mut();
+                let mut query = ecs.query::<&cypcb_world::components::trace::Trace>();
+                for trace in query.iter(ecs) {
+                    if trace.net_id != net {
+                        continue;
+                    }
+                    for segment in &trace.segments {
+                        for point in [segment.start, segment.end] {
+                            let dx = (point.x.0 - violation.location.x.0) as f64 / 1_000_000.0;
+                            let dy = (point.y.0 - violation.location.y.0) as f64 / 1_000_000.0;
+                            nearest = nearest.min((dx * dx + dy * dy).sqrt());
+                        }
+                    }
+                }
+            }
+            eprintln!(
+                "    {} - nearest copper of its own net {:.3}mm away",
+                violation.message, nearest
+            );
+        }
+    }
+}

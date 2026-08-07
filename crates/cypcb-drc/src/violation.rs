@@ -75,6 +75,8 @@ pub enum ViolationKind {
     TraceCurrent,
     /// Copper in a pour that reaches no pad of its own net.
     PourIsland,
+    /// A pin the design connects to a net that no copper reaches.
+    UnroutedPin,
     /// A claim the design makes about itself does not hold.
     Assertion,
     /// Component courtyards overlap.
@@ -98,6 +100,7 @@ impl std::fmt::Display for ViolationKind {
             ViolationKind::SilkClearance => write!(f, "silk-clearance"),
             ViolationKind::TraceCurrent => write!(f, "trace-current"),
             ViolationKind::PourIsland => write!(f, "pour-island"),
+            ViolationKind::UnroutedPin => write!(f, "unrouted-pin"),
             ViolationKind::Assertion => write!(f, "assertion"),
             ViolationKind::CourtyardClearance => write!(f, "courtyard-clearance"),
         }
@@ -105,6 +108,25 @@ impl std::fmt::Display for ViolationKind {
 }
 
 impl DrcViolation {
+    /// Create a violation for a pin no copper reaches.
+    ///
+    /// The design says the pin is on a net; the board says nothing is joined
+    /// to it. `UnconnectedPinRule` asks whether the schematic named a net -
+    /// this asks whether anybody laid the copper.
+    pub fn unrouted_pin(component: Entity, pin: &str, refdes: &str, location: Point) -> Self {
+        DrcViolation {
+            kind: ViolationKind::UnroutedPin,
+            actual: None,
+            required: None,
+            area: None,
+            location,
+            entity: component,
+            other_entity: None,
+            source_span: None,
+            message: format!("{refdes}.{pin} is on a net that no copper reaches"),
+        }
+    }
+
     /// Create a violation for pour copper that connects to nothing.
     ///
     /// A plane cut into pieces by the copper it flows around can leave a piece
