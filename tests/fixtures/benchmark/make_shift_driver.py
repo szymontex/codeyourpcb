@@ -22,6 +22,8 @@ Run:  python3 tests/fixtures/benchmark/make_shift_driver.py
 
 from pathlib import Path
 
+from kicad_emit import chip, emit, header, report
+
 BOARD_W, BOARD_H = 68.0, 48.0
 ORIGIN_X, ORIGIN_Y = 100.0, 60.0
 
@@ -42,28 +44,15 @@ def dip16(x, y, ref, pins):
 
 
 def chip_0805(x, y, ref, value, net1, net2, rotate=0):
-    """A two-terminal 0805, pads 1.0 x 1.45mm at +/-0.95mm."""
-    if rotate:
-        offsets = [(0.0, -0.95), (0.0, 0.95)]
-        size = (1.45, 1.0)
-    else:
-        offsets = [(-0.95, 0.0), (0.95, 0.0)]
-        size = (1.0, 1.45)
-    pads = [
-        ("1", "smd", "roundrect", offsets[0][0], offsets[0][1], size[0], size[1], None, net1),
-        ("2", "smd", "roundrect", offsets[1][0], offsets[1][1], size[0], size[1], None, net2),
-    ]
-    return ("Resistor_SMD:R_0805_2012Metric", ref, value, x, y, pads)
+    """A two-terminal 0805: pads 1.0 x 1.45mm at +/-0.95mm."""
+    return chip("Resistor_SMD:R_0805_2012Metric", ref, value, x, y, net1, net2,
+                1.0, 1.45, 1.9, rotate=bool(rotate))
 
 
 def header_1x6(x, y, ref, nets):
-    pads = [
-        (str(i + 1), "thru_hole", "rect" if i == 0 else "oval",
-         0.0, i * 2.54, 1.7, 1.7, 1.0, nets[i])
-        for i in range(6)
-    ]
-    return ("Connector_PinHeader_2.54mm:PinHeader_1x06_P2.54mm_Vertical",
-            ref, "Ctrl", x, y, pads)
+    """Six through-hole pins on a 2.54mm pitch."""
+    return header("Connector_PinHeader_2.54mm:PinHeader_1x06_P2.54mm_Vertical",
+                  ref, "Ctrl", x, y, nets)
 
 
 def build():
@@ -120,68 +109,8 @@ def build():
     return nets, parts
 
 
-LAYER_BLOCK = """  (layers
-    (0 "F.Cu" signal)
-    (31 "B.Cu" signal)
-    (32 "B.Adhes" user "B.Adhesive")
-    (33 "F.Adhes" user "F.Adhesive")
-    (34 "B.Paste" user)
-    (35 "F.Paste" user)
-    (36 "B.SilkS" user "B.Silkscreen")
-    (37 "F.SilkS" user "F.Silkscreen")
-    (38 "B.Mask" user)
-    (39 "F.Mask" user)
-    (40 "Dwgs.User" user "User.Drawings")
-    (41 "Cmts.User" user "User.Comments")
-    (44 "Edge.Cuts" user)
-  )"""
-
-
-def emit(nets, parts):
-    index = {name: i for i, name in enumerate(nets)}
-    out = ['(kicad_pcb (version 20240108) (generator "pcbnew") (generator_version "8.0.0")', ""]
-    out += ["  (general", "    (thickness 1.6)", "    (legacy_teardrops no)", "  )", ""]
-    out += ['  (paper "A4")', "", LAYER_BLOCK, ""]
-    out += ["  (setup", "    (pad_to_mask_clearance 0)",
-            "    (allow_soldermask_bridges_in_footprints no)", "  )", ""]
-    for name in nets:
-        out.append(f'  (net {index[name]} "{name}")')
-    out.append("")
-    out.append(
-        f"  (gr_rect (start {ORIGIN_X} {ORIGIN_Y}) "
-        f"(end {ORIGIN_X + BOARD_W} {ORIGIN_Y + BOARD_H}) "
-        '(layer "Edge.Cuts") (width 0.05)'
-    )
-    out += ["    (stroke (width 0.05) (type default))", "  )", ""]
-
-    for library, ref, value, x, y, pads in parts:
-        at_x = ORIGIN_X + x
-        at_y = ORIGIN_Y + y
-        out.append(f'  (footprint "{library}"')
-        out.append('    (layer "F.Cu")')
-        out.append(f"    (at {at_x:.3f} {at_y:.3f})")
-        out.append(f'    (property "Reference" "{ref}")')
-        out.append(f'    (property "Value" "{value}")')
-        out.append(f'    (property "Footprint" "{library}")')
-        for number, kind, shape, px, py, sx, sy, drill, net in pads:
-            drill_part = f" (drill {drill})" if drill else ""
-            layers = '"*.Cu" "*.Mask"' if kind == "thru_hole" else '"F.Cu" "F.Paste" "F.Mask"'
-            net_part = f' (net {index[net]} "{net}")' if net else ""
-            out.append(
-                f'    (pad "{number}" {kind} {shape} (at {px} {py}) '
-                f"(size {sx} {sy}){drill_part} (layers {layers}){net_part})"
-            )
-        out.append("  )")
-        out.append("")
-
-    out.append(")")
-    return "\n".join(out) + "\n"
-
-
 if __name__ == "__main__":
     nets, parts = build()
     target = Path(__file__).with_name("shift_driver.kicad_pcb")
-    target.write_text(emit(nets, parts))
-    pads = sum(len(p[5]) for p in parts)
-    print(f"{target.name}: {len(parts)} parts, {pads} pads, {len(nets) - 1} nets, "
-          f"{BOARD_W}x{BOARD_H}mm")
+    target.write_text(emit(BOARD_W, BOARD_H, ORIGIN_X, ORIGIN_Y, nets, parts))
+    report(target, parts, nets, BOARD_W, BOARD_H)

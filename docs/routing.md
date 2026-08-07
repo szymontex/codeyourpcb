@@ -290,14 +290,34 @@ boards separate cleanly by routes per grid cell - 0.0011 against 0.0120 and
 0.0322, an order of magnitude. A threshold anywhere between would reproduce
 every board's own best.
 
-It is not implemented, because a two-regime rule fitted on three boards and
-tested on the same three boards is not a measurement, it is a restatement. The
-dropped table above is what real experiments look like: most of them lost. This
-one would win by construction.
+It was not implemented, because a two-regime rule fitted on three boards and
+tested on the same three boards is not a measurement, it is a restatement.
 
-**The prerequisite is more boards.** Until there is a fourth and a fifth
-benchmark that nobody tuned against, an adaptive margin cannot be told apart
-from a curve fit.
+**Two boards later, the rule that fit would have produced is wrong on both.**
+`shift_driver` and `qfp_fanout` were added and swept at every margin:
+
+| margin | led_blink | stm32_breakout | multi_ic | shift_driver | qfp_fanout |
+|---|---|---|---|---|---|
+| 0 cells | 1 / 1 | 250 / 91, 1 unrouted | 406 / 193 | 98 / 31 | 367 / **163** |
+| 1 cell | 2 / 1 | 233 / 82 | 305 / 113 | 92 / 38 | 369 / 169 |
+| 2 cells | 2 / 1 | **216 / 86** | **290 / 131** | 87 / 38 | 493 / 250 |
+| **3 cells (default)** | **2 / 0** | 239 / 136 | 336 / 166 | **81 / 33** | **343** / 183 |
+| 5 cells | 4 / 1 | 273 / 164 | 353 / 189 | 418 / 254 | 418 / 254 |
+
+`shift_driver` sits at 0.0039 routes per cell - between `led_blink`'s 0.0011 and
+`stm32_breakout`'s 0.0120, exactly where the threshold would have gone - and it
+wants **3**, the sparse board's answer. `qfp_fanout`, the densest fine-pitch
+board of the five, also wants 3. Only the two boards the rule was fitted on want
+2.
+
+So the density story was a coincidence of three samples, and the constant the
+project ships is the best answer on three boards out of five. The refusal to fit
+it is the finding: **eight instruments in the dropped table below lost after
+being built; this one lost before, for the price of two fixtures.**
+
+What the fifth board did not settle is the ranking - see above. Every rule picks
+the same variant on `qfp_fanout`, so four of the five boards agree under all
+seven rules and the question still rests on `shift_driver` alone.
 
 ## Instruments that were measured and dropped
 
