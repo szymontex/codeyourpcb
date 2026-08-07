@@ -114,10 +114,14 @@ pub fn read(source: &str) -> ParseResult<SourceFile> {
                 Some(def) => definitions.push(Definition::Assert(def)),
                 None => reader.skip_to_next_definition(),
             },
-            _ => {
-                // A construct step two adds. Skipping it keeps the reader
-                // usable on real files while it is incomplete, and the
-                // differential test only compares files it claims to cover.
+            other => {
+                // Every construct the language has is handled above, so a word
+                // here is one the language does not have. Saying so is the
+                // difference between a typo being reported and a part quietly
+                // missing from the board: until this was measured against the
+                // tree-sitter parser, `frobnicate 3` at the top level parsed
+                // clean.
+                reader.unexpected(&format!("a definition, not `{other}`"));
                 reader.skip_to_next_definition();
             }
         }

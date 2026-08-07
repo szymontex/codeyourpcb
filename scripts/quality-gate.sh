@@ -37,7 +37,8 @@ echo "[3/8] cargo test"
 # plain run does not build it and its differential test never runs. Named
 # explicitly rather than left for later: a test nobody runs is not a test.
 if cargo test --workspace --exclude cypcb-desktop 2>&1 \
-  && cargo test -p cypcb-parser --features rust-parser --test differential 2>&1; then
+  && cargo test -p cypcb-parser --features rust-parser --test differential 2>&1 \
+  && cargo test -p cypcb-parser --features rust-parser --test error_parity 2>&1; then
   pass "cargo-test"
 else
   fail "cargo-test"
