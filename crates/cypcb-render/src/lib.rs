@@ -1667,7 +1667,10 @@ impl PcbEngine {
             let layer_name = match trace.layer {
                 Layer::TopCopper => "Top".to_string(),
                 Layer::BottomCopper => "Bottom".to_string(),
-                Layer::Inner(n) => format!("Inner{}", n),
+                // The DSL calls the first inner layer `Inner1`, and this
+                // said `Inner0` for the same copper - the same layer with two
+                // names depending on which way it travelled.
+                Layer::Inner(n) => format!("Inner{}", n + 1),
                 _ => "Top".to_string(),
             };
 
@@ -1893,12 +1896,16 @@ fn parse_layer(layer_str: &str) -> Result<Layer, String> {
                 .map_err(|e| format!("Invalid inner layer: {}", e))?;
             Ok(Layer::Inner(num))
         }
+        // `Inner1` is the first inner layer, as the DSL writes it, and it is
+        // `Layer::Inner(0)` in the model. `Inner(0)` above is the debug form,
+        // which is already zero-based - both spellings arrive here from
+        // different callers.
         _ if layer_str.starts_with("Inner") => {
             let num_str = &layer_str[5..];
             let num: u8 = num_str
                 .parse()
                 .map_err(|e| format!("Invalid inner layer: {}", e))?;
-            Ok(Layer::Inner(num))
+            Ok(Layer::Inner(num.saturating_sub(1)))
         }
         _ => Err(format!("Unknown layer: {}", layer_str)),
     }

@@ -50,6 +50,14 @@ export const LAYER_MASK = {
 export interface LayerVisibility {
   topCopper: boolean;
   bottomCopper: boolean;
+  /**
+   * Whether the copper between the outer two is drawn.
+   *
+   * Optional so every existing caller keeps working: absent means visible,
+   * which is what a four-layer board was already getting - drawn, in one
+   * undifferentiated green, with no way to turn it off.
+   */
+  innerCopper?: boolean;
 }
 
 /**
@@ -59,6 +67,7 @@ export function createLayerVisibility(): LayerVisibility {
   return {
     topCopper: true,
     bottomCopper: true,
+    innerCopper: true,
   };
 }
 
@@ -195,10 +204,28 @@ export function getTraceColor(layer: string, visibility: LayerVisibility): strin
     case 'Bottom':
       return visibility.bottomCopper ? LAYER_COLORS.bottom_copper : null;
     default:
-      // Inner layers - show if any copper layer is visible
-      if (visibility.topCopper || visibility.bottomCopper) {
-        return '#2E8B2E'; // Forest green for inner layers
-      }
-      return null;
+      return innerLayerColor(layer, visibility);
   }
 }
+
+/**
+ * The colour an inner copper layer is drawn in.
+ *
+ * One green for every inner layer told a four-layer board's designer nothing:
+ * a trace on In1 and a trace on In2 cannot cross, and they looked identical.
+ * Each layer gets its own shade, and its visibility no longer rides on whether
+ * an outer layer happens to be on.
+ */
+export function innerLayerColor(layer: string, visibility: LayerVisibility): string | null {
+  if (visibility.innerCopper === false) return null;
+
+  const match = layer.match(/^Inner(\d+)$/);
+  if (!match) return null;
+
+  // Inner1 is the first inner layer, the way the DSL writes it.
+  const index = Math.max(0, parseInt(match[1], 10) - 1);
+  return INNER_LAYER_COLORS[index % INNER_LAYER_COLORS.length];
+}
+
+/** One shade per inner layer, in the order the stack goes down. */
+export const INNER_LAYER_COLORS = ['#2E8B2E', '#7A5CD1', '#C08A2E', '#2E8B8B'] as const;
