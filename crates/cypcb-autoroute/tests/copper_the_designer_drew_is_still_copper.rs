@@ -230,3 +230,86 @@ fn copper_on_another_layer_does_not_count_as_a_connection() {
         "the pads are on top and the copper is on the bottom, so the connection is still missing"
     );
 }
+
+#[test]
+fn a_via_joins_two_traces_into_one_piece_of_copper() {
+    // The designer wired a pin on top, dropped through a via, and came back on
+    // the bottom. Two traces and a via are one connection; without the via in
+    // the reckoning they read as two pieces and the router adds a link that is
+    // already there.
+    use cypcb_world::components::trace::{Trace, Via};
+
+    let mut world = BoardWorld::new();
+    world.set_board("t".to_string(), (Nm::from_mm(30.0), Nm::from_mm(20.0)), 2);
+
+    let mut library = cypcb_world::footprint::FootprintLibrary::new();
+    library.register(Footprint {
+        name: "PAD1".into(),
+        description: String::new(),
+        bounds: Rect::new(Point::ORIGIN, Point::ORIGIN),
+        courtyard: Rect::new(Point::ORIGIN, Point::ORIGIN),
+        silk: Vec::new(),
+        pads: vec![PadDef {
+            number: "1".into(),
+            shape: PadShape::Rect,
+            position: Point::ORIGIN,
+            size: (Nm::from_mm(1.0), Nm::from_mm(1.0)),
+            // Through-hole pins: the wire leaves on top and comes back on the
+            // bottom, which only connects if the pad is on both.
+            drill: Some(Nm::from_mm(0.3)),
+            layers: vec![Layer::TopCopper, Layer::BottomCopper],
+        }],
+    });
+    world.set_footprints(library.clone());
+
+    let net = world.intern_net("SIG");
+    for (refdes, at) in [("J1", (5.0, 10.0)), ("J2", (25.0, 10.0))] {
+        let mut connections = NetConnections::new();
+        connections.add(PinConnection::new("1".to_string(), net));
+        world.spawn_component(
+            RefDes::new(refdes),
+            Value::new(""),
+            Position(Point::from_mm(at.0, at.1)),
+            Rotation::ZERO,
+            FootprintRef::new("PAD1"),
+            connections,
+        );
+    }
+
+    // Top: from J1 to the middle. Bottom: from the middle to J2. A via joins
+    // them where they meet.
+    let mut top = Trace::new(net);
+    top.layer = Layer::TopCopper;
+    top.width = Nm::from_mm(0.2);
+    top.source = TraceSource::Manual;
+    top.add_segment(TraceSegment::new(
+        Point::from_mm(5.0, 10.0),
+        Point::from_mm(15.0, 10.0),
+    ));
+
+    let mut bottom = Trace::new(net);
+    bottom.layer = Layer::BottomCopper;
+    bottom.width = Nm::from_mm(0.2);
+    bottom.source = TraceSource::Manual;
+    bottom.add_segment(TraceSegment::new(
+        Point::from_mm(15.0, 10.0),
+        Point::from_mm(25.0, 10.0),
+    ));
+
+    let mut via = Via::new(Point::from_mm(15.0, 10.0), net);
+    via.locked = true;
+
+    world.ecs_mut().spawn((top, net));
+    world.ecs_mut().spawn((bottom, net));
+    world.ecs_mut().spawn((via, net));
+    world.rebuild_spatial_index_from_library(&library);
+
+    let rules = PresetRuleSet::new(RulesPreset::from_name("jlcpcb").expect("the preset"));
+    let result = route_board(&mut world, &library, &rules, &AutorouteConfig::default());
+
+    assert_eq!(
+        result.route_count(),
+        0,
+        "the pins are already joined through the via"
+    );
+}

@@ -280,7 +280,7 @@ pub struct PathFinderLoopResult {
 /// segment grown by half the trace width. Over-connecting would drop a route
 /// that is needed, so the test is the strict one - the pad has to touch.
 fn drop_pads_existing_copper_already_joins(world: &mut BoardWorld, ratsnest: &mut [NetRoute]) {
-    use cypcb_world::components::trace::Trace;
+    use cypcb_world::components::trace::{Trace, Via};
 
     let traces: Vec<Trace> = {
         let ecs = world.ecs_mut();
@@ -290,6 +290,12 @@ fn drop_pads_existing_copper_already_joins(world: &mut BoardWorld, ratsnest: &mu
     if traces.is_empty() {
         return;
     }
+
+    let vias: Vec<Via> = {
+        let ecs = world.ecs_mut();
+        let mut query = ecs.query::<&Via>();
+        query.iter(ecs).copied().collect()
+    };
 
     for net in ratsnest.iter_mut() {
         // Which of this net's traces each pad sits on.
@@ -331,12 +337,70 @@ fn drop_pads_existing_copper_already_joins(world: &mut BoardWorld, ratsnest: &mu
             }
         }
 
+        // A via is copper as well, and one the designer placed joins the
+        // traces it lands on into a single piece. Without this, two traces of
+        // a net that meet only through a via read as two pieces and the router
+        // adds a connection between them that already exists.
+        let mut piece: Vec<usize> = (0..traces.len()).collect();
+        fn find(piece: &mut Vec<usize>, index: usize) -> usize {
+            let mut root = index;
+            while piece[root] != root {
+                root = piece[root];
+            }
+            let mut walk = index;
+            while piece[walk] != root {
+                let next = piece[walk];
+                piece[walk] = root;
+                walk = next;
+            }
+            root
+        }
+
+        for via in &vias {
+            if via.net_id != net.net_id {
+                continue;
+            }
+            let reach = via.outer_diameter.0 / 2;
+            let mut touched: Vec<usize> = Vec::new();
+            for (trace_index, trace) in traces.iter().enumerate() {
+                if trace.net_id != net.net_id {
+                    continue;
+                }
+                // Only the layers the via joins: a via reaches its own span
+                // and nothing else.
+                if !via_reaches_layer(via, trace.layer) {
+                    continue;
+                }
+                let half = trace.width.0 / 2 + reach;
+                let lands = trace.segments.iter().any(|segment| {
+                    let min_x = segment.start.x.0.min(segment.end.x.0) - half;
+                    let max_x = segment.start.x.0.max(segment.end.x.0) + half;
+                    let min_y = segment.start.y.0.min(segment.end.y.0) - half;
+                    let max_y = segment.start.y.0.max(segment.end.y.0) + half;
+                    via.position.x.0 >= min_x
+                        && via.position.x.0 <= max_x
+                        && via.position.y.0 >= min_y
+                        && via.position.y.0 <= max_y
+                });
+                if lands {
+                    touched.push(trace_index);
+                }
+            }
+            for pair in touched.windows(2) {
+                let (a, b) = (find(&mut piece, pair[0]), find(&mut piece, pair[1]));
+                if a != b {
+                    piece[a] = b;
+                }
+            }
+        }
+
         // One pad per piece of existing copper, plus every pad that touches
         // none.
         let mut kept_traces: Vec<usize> = Vec::new();
         let mut pads = Vec::with_capacity(net.pads.len());
         for (pad_index, pad) in net.pads.iter().enumerate() {
-            match on_trace[pad_index] {
+            let group = on_trace[pad_index].map(|index| find(&mut piece, index));
+            match group {
                 Some(trace_index) if kept_traces.contains(&trace_index) => {
                     tracing::debug!(
                         net = %net.net_name,
@@ -353,6 +417,27 @@ fn drop_pads_existing_copper_already_joins(world: &mut BoardWorld, ratsnest: &mu
         }
         net.pads = pads;
     }
+}
+
+/// Whether a via reaches a given copper layer.
+///
+/// A through via reaches everything between the faces; a blind or buried one
+/// reaches only the layers of its own span.
+fn via_reaches_layer(via: &cypcb_world::components::trace::Via, layer: cypcb_world::Layer) -> bool {
+    use cypcb_world::Layer;
+
+    let depth = |layer: Layer| -> u16 {
+        match layer {
+            Layer::TopCopper => 0,
+            Layer::Inner(n) => n as u16 + 1,
+            _ => u16::MAX,
+        }
+    };
+
+    let (start, end) = (depth(via.start_layer), depth(via.end_layer));
+    let (low, high) = (start.min(end), start.max(end));
+    let target = depth(layer);
+    target >= low && target <= high
 }
 
 /// Run the PathFinder negotiated congestion iteration loop.
