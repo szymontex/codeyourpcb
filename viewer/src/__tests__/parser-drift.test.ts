@@ -50,6 +50,13 @@ function exampleFiles(): string[] {
     .sort();
 }
 
+/** One spelling for a layer, because the two sides print different ones. */
+function canonicalLayer(layer: string): string {
+  const inner = layer.match(/^Inner\((\d+)\)$/);
+  if (inner) return `Inner${Number(inner[1]) + 1}`;
+  return layer.replace(/Copper$/, '');
+}
+
 /** What both sides are reduced to before comparing. */
 interface Model {
   components: Array<{
@@ -62,7 +69,8 @@ interface Model {
   /** `NET/refdes.pin`, sorted - the connection list both sides can produce. */
   pins: string[];
   nets: string[];
-  traces: number;
+  /** Each trace as `NET|LAYER|width|x1,y1>x2,y2 ...`, sorted. */
+  traces: string[];
   vias: number;
   zones: Array<{ kind: string; net: string; bounds: [number, number, number, number] }>;
 }
@@ -96,7 +104,15 @@ function rustModel(file: string): Model {
     })),
     pins: pins.sort(),
     nets: model.nets.map((n: any) => n.name).sort(),
-    traces: model.traces.length,
+    traces: model.traces
+      .map(
+        (t: any) =>
+          `${t.net}|${canonicalLayer(t.layer)}|${t.width_nm}|` +
+          t.segments
+            .map((s: any) => `${s.start_x_nm},${s.start_y_nm}>${s.end_x_nm},${s.end_y_nm}`)
+            .join(' '),
+      )
+      .sort(),
     vias: model.vias.length,
     zones: model.zones
       .map((z: any) => ({
@@ -131,7 +147,13 @@ function viewerModel(file: string): Model {
       .sort((a, b) => a.refdes.localeCompare(b.refdes)),
     pins: pins.sort(),
     nets: snapshot.nets.map((n) => n.name).sort(),
-    traces: snapshot.traces.length,
+    traces: snapshot.traces
+      .map(
+        (t) =>
+          `${t.net_name}|${canonicalLayer(t.layer)}|${t.width}|` +
+          t.segments.map((s) => `${s.start_x},${s.start_y}>${s.end_x},${s.end_y}`).join(' '),
+      )
+      .sort(),
     vias: snapshot.vias.length,
     zones: (snapshot.zones ?? [])
       .map((z) => ({ kind: z.kind, net: z.net, bounds: z.bounds }))
@@ -163,18 +185,17 @@ const measured = exampleFiles().map((file) => ({
  * - `v2-interfaces.cypcb`: the mirror image - the viewer draws two parts and
  *   two nets from a module body that is never instantiated, where the CLI
  *   correctly draws nothing.
- * - the four trace files: a `trace NET { from A.1 to B.1 }` with no explicit
- *   geometry is copper in the CLI's model and in the Gerber, and invisible in
- *   the browser.
+ *
+ * Struck off on 2026-08-07: `trace NET { from A.1 to B.1 }` with no explicit
+ * geometry was copper in the CLI's model and in the Gerber and invisible in
+ * the browser, on four of these boards. Both sides now draw the same straight
+ * run between the same two pad centres, and this file compares the geometry
+ * rather than the count - net, layer, width and every endpoint in nanometres.
  */
 const KNOWN_DRIFT: Record<string, string[]> = {
   'v2-imports.cypcb': ['components', 'nets', 'pins'],
   'v2-modules.cypcb': ['components', 'nets', 'pins'],
   'v2-interfaces.cypcb': ['components', 'nets', 'pins'],
-  'four-layer.cypcb': ['traces'],
-  'pour-island.cypcb': ['traces'],
-  'syntax.cypcb': ['traces'],
-  'uat-routing-locked.cypcb': ['traces'],
 };
 
 function driftFor(rust: Model, viewer: Model): string[] {
@@ -182,7 +203,7 @@ function driftFor(rust: Model, viewer: Model): string[] {
   if (JSON.stringify(rust.components) !== JSON.stringify(viewer.components)) kinds.push('components');
   if (JSON.stringify(rust.nets) !== JSON.stringify(viewer.nets)) kinds.push('nets');
   if (JSON.stringify(rust.pins) !== JSON.stringify(viewer.pins)) kinds.push('pins');
-  if (rust.traces !== viewer.traces) kinds.push('traces');
+  if (JSON.stringify(rust.traces) !== JSON.stringify(viewer.traces)) kinds.push('traces');
   if (rust.vias !== viewer.vias) kinds.push('vias');
   if (JSON.stringify(rust.zones) !== JSON.stringify(viewer.zones)) kinds.push('zones');
   return kinds;
@@ -198,12 +219,12 @@ describe('the two parsers on the same file', () => {
     expect(measuredDrift).toEqual(KNOWN_DRIFT);
   });
 
-  it('agree on every board that uses neither modules nor a pin-to-pin trace', () => {
-    // The plain subset - a board, parts, nets and explicit geometry - is where
-    // the two implementations have always matched, and it is most of what
-    // anybody writes. Named separately so a regression there reads as one.
+  it('agree on every board that uses neither modules nor imports', () => {
+    // Everything except the module and import files: a board, parts, nets,
+    // traces both ways round and zones. Named separately so a regression there
+    // reads as one.
     const plain = measured.filter(({ file }) => !(file in KNOWN_DRIFT));
-    expect(plain.length).toBeGreaterThan(8);
+    expect(plain.length).toBe(exampleFiles().length - Object.keys(KNOWN_DRIFT).length);
     for (const { file, rust, viewer } of plain) {
       expect(driftFor(rust, viewer), `${file} drifted`).toEqual([]);
     }

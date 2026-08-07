@@ -607,7 +607,10 @@ export function parseSource(source: string): { snapshot: BoardSnapshot; errors: 
   const vias: ViaInfo[] = [];
   let currentComponent: Partial<ComponentInfo> | null = null;
   let currentNet: { name: string; pins: string[]; constraints: { width_nm?: number; clearance_nm?: number; current_ma?: number } } | null = null;
-  let currentTrace: { netName: string; layer: string; width: number; locked: boolean; segments: TraceSegmentInfo[] } | null = null;
+  let currentTrace: { netName: string; layer: string; width: number; locked: boolean; segments: TraceSegmentInfo[]; from?: PinRefText; to?: PinRefText } | null = null;
+  // Traces written as two pin references instead of geometry. Resolved after
+  // the whole file is read, so a trace may name a part written below it.
+  const pinToPinTraces: PendingPinTrace[] = [];
   let currentFootprint: { name: string; pads: PadInfo[] } | null = null;
   const customFootprints = new Map<string, PadInfo[]>();
   let braceDepth = 0;
@@ -858,6 +861,18 @@ export function parseSource(source: string): { snapshot: BoardSnapshot; errors: 
       if (line === 'locked') {
         currentTrace.locked = true;
       }
+      // `from R1.1` / `to C1.1`: the pins the copper runs between. The engine
+      // draws this as a straight run from one pad centre to the other, and
+      // until 2026-08-07 the viewer drew nothing at all - a trace that exports
+      // into the Gerber and was invisible on screen.
+      const fromMatch = line.match(/^from\s+(\w+)\.(\w+)$/);
+      if (fromMatch) {
+        currentTrace.from = { component: fromMatch[1], pin: normalizePinName(fromMatch[2]) };
+      }
+      const toMatch = line.match(/^to\s+(\w+)\.(\w+)$/);
+      if (toMatch) {
+        currentTrace.to = { component: toMatch[1], pin: normalizePinName(toMatch[2]) };
+      }
       // Parse path: path X1mm,Y1mm -> X2mm,Y2mm -> ...
       const pathMatch = line.match(/^path\s+(.+)$/);
       if (pathMatch) {
@@ -926,6 +941,16 @@ export function parseSource(source: string): { snapshot: BoardSnapshot; errors: 
           inNet = false;
         }
         if (inTrace && currentTrace) {
+          if (currentTrace.segments.length === 0 && currentTrace.from && currentTrace.to) {
+            pinToPinTraces.push({
+              netName: currentTrace.netName,
+              layer: currentTrace.layer,
+              width: currentTrace.width,
+              locked: currentTrace.locked,
+              from: currentTrace.from,
+              to: currentTrace.to,
+            });
+          }
           if (currentTrace.segments.length > 0) {
             traces.push({
               id: traceIdCounter++,
@@ -986,9 +1011,72 @@ export function parseSource(source: string): { snapshot: BoardSnapshot; errors: 
     }
   }
 
+  for (const pending of pinToPinTraces) {
+    const start = padWorldPosition(components, pending.from);
+    const end = padWorldPosition(components, pending.to);
+    if (!start || !end) {
+      // A part or a pin the file never declares. The engine reports that where
+      // the netlist is checked; drawing a trace to nowhere would be worse.
+      continue;
+    }
+    traces.push({
+      id: traceIdCounter++,
+      segments: [{ start_x: start.x, start_y: start.y, end_x: end.x, end_y: end.y }],
+      width: pending.width,
+      layer: pending.layer,
+      net_name: pending.netName,
+      locked: pending.locked,
+    });
+  }
+
   return {
     snapshot: { board, components, nets: Array.from(nets.values()), violations: [], traces, vias, ratsnest: [], zones },
     errors,
+  };
+}
+
+/** A pin as a trace names it: `R1.1`. */
+interface PinRefText {
+  component: string;
+  pin: string;
+}
+
+/** A trace written as two pins, waiting for the parts to be read. */
+interface PendingPinTrace {
+  netName: string;
+  layer: string;
+  width: number;
+  locked: boolean;
+  from: PinRefText;
+  to: PinRefText;
+}
+
+/**
+ * Where a named pad sits on the board: the footprint's offset, turned the way
+ * the part is turned, added to the part's own position.
+ *
+ * The same transform the engine uses in `cypcb-world`, so the screen and the
+ * Gerber put the copper in the same place.
+ */
+function padWorldPosition(
+  components: ComponentInfo[],
+  ref: PinRefText,
+): { x: number; y: number } | null {
+  const component = components.find((c) => c.refdes === ref.component);
+  if (!component) return null;
+  const pad = component.pads.find((p) => p.number === ref.pin);
+  if (!pad) {
+    // A part whose footprint has no such pin still gets copper, at its own
+    // position, which is what the engine does for the same case.
+    return { x: component.x_nm, y: component.y_nm };
+  }
+
+  const radians = ((component.rotation_mdeg || 0) / 1000) * (Math.PI / 180);
+  const cos = Math.cos(radians);
+  const sin = Math.sin(radians);
+  return {
+    x: component.x_nm + Math.round(pad.x_nm * cos - pad.y_nm * sin),
+    y: component.y_nm + Math.round(pad.x_nm * sin + pad.y_nm * cos),
   };
 }
 
