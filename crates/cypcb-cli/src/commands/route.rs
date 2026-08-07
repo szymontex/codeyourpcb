@@ -527,6 +527,28 @@ impl RouteCommand {
             .into_diagnostic()
             .wrap_err_with(|| format!("Failed to write {}", routed_path.display()))?;
 
+        // A blind or buried via costs several times what a through hole costs to
+        // make, and a four-layer board can collect them without anyone asking
+        // for one - measured on multi_ic, 14 of 26. The number belongs beside
+        // the via count, before the files are sent anywhere.
+        let buried = result
+            .vias
+            .iter()
+            .filter(|via| {
+                !matches!(
+                    (via.start_layer, via.end_layer),
+                    (cypcb_world::Layer::TopCopper, cypcb_world::Layer::BottomCopper)
+                        | (cypcb_world::Layer::BottomCopper, cypcb_world::Layer::TopCopper)
+                )
+            })
+            .count();
+        if buried > 0 {
+            eprintln!(
+                "{} of the vias are blind or buried: they join layers that are not the two faces, and cost more to make.",
+                buried
+            );
+        }
+
         eprintln!(
             "Wrote {} ({} segments, {} vias) in {:.2}s",
             routed_path.display(),

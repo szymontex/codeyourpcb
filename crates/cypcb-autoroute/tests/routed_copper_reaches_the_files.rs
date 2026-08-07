@@ -220,3 +220,41 @@ fn walk(dir: &Path) -> Vec<PathBuf> {
     }
     out
 }
+
+#[test]
+#[ignore = "diagnostic: routes the four-layer fixture and counts via spans"]
+fn which_layers_the_router_joins_with_a_via() {
+    // The claim on record was that the router places through vias only. The
+    // pieces say otherwise - `postprocess` builds each `ViaPlacement` from the
+    // layer transition that produced it, and `apply_routes` copies the pair
+    // onto the `Via` - so this counts what actually lands on a four-layer
+    // board rather than repeating the claim.
+    use std::collections::BTreeMap;
+
+    let parsed = parse_kicad_pcb(&fixture_path("multi_ic.kicad_pcb")).expect("the fixture parses");
+    let mut world = parsed.world;
+    let library = parsed.library;
+
+    let rules = PresetRuleSet::new(RulesPreset::from_name("jlcpcb").expect("the preset"));
+    let routing = route_board(&mut world, &library, &rules, &AutorouteConfig::default());
+    assert!(routing.via_count() > 0, "no vias to look at");
+
+    let mut spans: BTreeMap<String, usize> = BTreeMap::new();
+    for via in &routing.vias {
+        *spans
+            .entry(format!("{:?} to {:?}", via.start_layer, via.end_layer))
+            .or_default() += 1;
+    }
+
+    eprintln!();
+    eprintln!("=== multi_ic.kicad_pcb via spans ===");
+    for (span, count) in &spans {
+        eprintln!("  {count:>4}  {span}");
+    }
+
+    assert_eq!(
+        spans.values().sum::<usize>(),
+        routing.via_count(),
+        "every via should be accounted for"
+    );
+}

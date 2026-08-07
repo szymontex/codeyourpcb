@@ -466,3 +466,33 @@ fn the_dry_run_lists_the_inner_layers_a_board_declares() {
         "both inner layers should be listed, got:\n{stderr}"
     );
 }
+
+#[test]
+fn route_says_how_many_vias_are_blind_or_buried() {
+    // A blind or buried via costs several times what a through hole costs to
+    // make, and a four-layer board collects them without anyone asking - 14 of
+    // 26 on the multi_ic benchmark. The number belongs beside the via count,
+    // before the files are sent anywhere. A two-layer board can only have
+    // through vias, so it says nothing.
+    let example = examples_dir().join("blink.cypcb");
+    let out = std::env::temp_dir().join("cypcb-route-vias.cypcb");
+    let _ = std::fs::remove_file(&out);
+
+    let output = Command::new(cypcb_binary())
+        .arg("route")
+        .arg(&example)
+        .arg("--in-house")
+        .arg("--output")
+        .arg(&out)
+        .output()
+        .expect("Failed to execute cypcb route");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "routing should succeed:\n{stderr}");
+    assert!(
+        !stderr.contains("blind or buried"),
+        "a two-layer board has no such vias to report:\n{stderr}"
+    );
+
+    let _ = std::fs::remove_file(&out);
+}
