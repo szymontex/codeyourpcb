@@ -197,6 +197,17 @@ pub struct AutorouteConfig {
     /// which is the behaviour before this existed.
     pub via_foreign_copper_penalty: f64,
 
+    /// What crossing another net's pad copper costs the search, per cell.
+    ///
+    /// A net's pad zone opens every cell near any of its own pins so a route
+    /// can reach them, and the pin next door comes free with it: 109 of
+    /// stm32_breakout's 118 part-to-trace faults are routes taking that
+    /// opening. Refusing it was measured and cost six abandoned connections;
+    /// pricing it helps one board and hurts another - multi_ic 336 -> 267
+    /// violations at 20.0, stm32_breakout 239 -> 280 - so it is a variant
+    /// rather than a default. Zero is the router without it.
+    pub foreign_pad_penalty: f64,
+
     /// Whether to smooth the grid paths into diagonals before emitting them.
     ///
     /// On by default: raw grid output is a staircase, which is longer, uglier
@@ -241,6 +252,7 @@ impl Default for AutorouteConfig {
             pad_zone_blocks_foreign_copper: false,
             reserve_trace_footprint: true,
             via_foreign_copper_penalty: 0.25,
+            foreign_pad_penalty: 0.0,
             smoothing: true,
             stagnation_limit: 3,
             repair_passes: 0,

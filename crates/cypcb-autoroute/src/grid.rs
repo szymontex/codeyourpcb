@@ -85,6 +85,16 @@ pub struct RoutingGrid {
     /// Per-cell net ownership for dynamic route tracking.
     /// `net_map[layer_idx][y * width + x]` = net_id or u32::MAX if unowned.
     net_map: Vec<Vec<u32>>,
+
+    /// Which net's pad copper a cell carries, or `u32::MAX` for none.
+    ///
+    /// Kept apart from `net_map` because a rip-up clears that one: a pad is
+    /// not ripped up, and until this existed the grid knew a cell was
+    /// somebody's pad without knowing whose. That is what forced a net's pad
+    /// zone to open every cell near any of its pads, sibling pins included -
+    /// 109 of stm32_breakout's 118 part-to-trace faults sit in exactly those
+    /// cells.
+    pad_net: Vec<Vec<u32>>,
 }
 
 impl RoutingGrid {
@@ -149,6 +159,9 @@ impl RoutingGrid {
         let layers_vec: Vec<Vec<u8>> = (0..routing_layers)
             .map(|_| vec![CELL_FREE; cell_count])
             .collect();
+        let pad_net: Vec<Vec<u32>> = (0..routing_layers)
+            .map(|_| vec![u32::MAX; cell_count])
+            .collect();
         let net_map: Vec<Vec<u32>> = (0..routing_layers)
             .map(|_| vec![u32::MAX; cell_count])
             .collect();
@@ -162,6 +175,7 @@ impl RoutingGrid {
             layer_count: routing_layers,
             layers: layers_vec,
             net_map,
+            pad_net,
         };
 
         // Bloat obstacles by the clearance *plus half a trace*, because the
@@ -195,16 +209,26 @@ impl RoutingGrid {
         use cypcb_world::{FootprintRef, Position, Rotation};
 
         // Collect component data to avoid borrow conflict
-        let components: Vec<(Point, f64, String)> = {
+        let components: Vec<(Point, f64, String, Vec<(String, u32)>)> = {
             let ecs = world.ecs_mut();
-            let mut query = ecs.query::<(&Position, &Rotation, &FootprintRef)>();
+            let mut query = ecs.query::<(
+                &Position,
+                &Rotation,
+                &FootprintRef,
+                Option<&cypcb_world::components::NetConnections>,
+            )>();
             query
                 .iter(ecs)
-                .map(|(pos, rot, fp)| (pos.0, rot.to_degrees(), fp.as_str().to_string()))
+                .map(|(pos, rot, fp, nets)| {
+                    let pins: Vec<(String, u32)> = nets
+                        .map(|n| n.iter().map(|c| (c.pin.clone(), c.net.id())).collect())
+                        .unwrap_or_default();
+                    (pos.0, rot.to_degrees(), fp.as_str().to_string(), pins)
+                })
                 .collect()
         };
 
-        for (comp_pos, rotation_deg, fp_name) in &components {
+        for (comp_pos, rotation_deg, fp_name, pins) in &components {
             if let Some(footprint) = library.get(fp_name) {
                 for pad in &footprint.pads {
                     // Rotate pad position around component origin
@@ -228,6 +252,21 @@ impl RoutingGrid {
                                     pad_radius_cells + clearance_cells,
                                     CELL_PAD,
                                 );
+
+                                // Whose pad it is, so a net's own zone can be
+                                // opened for its own pin and not for the pin
+                                // beside it.
+                                if let Some((_, net)) =
+                                    pins.iter().find(|(pin, _)| *pin == pad.number)
+                                {
+                                    self.mark_pad_owner_at_nm(
+                                        abs_x,
+                                        abs_y,
+                                        li,
+                                        pad_radius_cells + clearance_cells,
+                                        *net,
+                                    );
+                                }
                             }
                         }
                     }
@@ -498,6 +537,49 @@ impl RoutingGrid {
         self.mark_obstacle(gx, gy, layer, radius_cells, flag);
     }
 
+    /// Record which net a pad's copper belongs to, over the same disc the
+    /// obstacle marking covers.
+    ///
+    /// A cell already claimed by another net's pad keeps its first owner: two
+    /// pads of different nets whose clearances overlap is a placement fault,
+    /// and the router should treat that copper as foreign either way.
+    fn mark_pad_owner_at_nm(&mut self, nm_x: i64, nm_y: i64, layer: usize, radius: u32, net: u32) {
+        let cx = self.nm_to_grid_x(nm_x) as i64;
+        let cy = self.nm_to_grid_y(nm_y) as i64;
+        let r = radius as i64;
+
+        for dy in -r..=r {
+            for dx in -r..=r {
+                if dx * dx + dy * dy > r * r {
+                    continue;
+                }
+                let (x, y) = (cx + dx, cy + dy);
+                if x < 0 || y < 0 || x >= self.width as i64 || y >= self.height as i64 {
+                    continue;
+                }
+                if layer >= self.pad_net.len() {
+                    continue;
+                }
+                let idx = y as usize * self.width as usize + x as usize;
+                if self.pad_net[layer][idx] == u32::MAX {
+                    self.pad_net[layer][idx] = net;
+                }
+            }
+        }
+    }
+
+    /// Which net's pad copper this cell carries, if any.
+    pub fn pad_owner(&self, x: u32, y: u32, layer: usize) -> Option<u32> {
+        if x >= self.width || y >= self.height || layer >= self.pad_net.len() {
+            return None;
+        }
+        let idx = (y as usize) * (self.width as usize) + (x as usize);
+        match self.pad_net[layer][idx] {
+            u32::MAX => None,
+            net => Some(net),
+        }
+    }
+
     /// Mark cells along a route for a specific net.
     pub fn mark_route(&mut self, x: u32, y: u32, layer: usize, net_id: u32) {
         if x >= self.width || y >= self.height || layer >= self.layers.len() {
@@ -756,6 +838,7 @@ pub fn make_test_grid(width: u32, height: u32, resolution_nm: i64, layers: u8) -
         layer_count: layers,
         layers: (0..layers).map(|_| vec![CELL_FREE; cell_count]).collect(),
         net_map: (0..layers).map(|_| vec![u32::MAX; cell_count]).collect(),
+        pad_net: (0..layers).map(|_| vec![u32::MAX; cell_count]).collect(),
     }
 }
 
@@ -775,6 +858,7 @@ mod tests {
             layer_count: layers,
             layers: (0..layers).map(|_| vec![CELL_FREE; cell_count]).collect(),
             net_map: (0..layers).map(|_| vec![u32::MAX; cell_count]).collect(),
+            pad_net: (0..layers).map(|_| vec![u32::MAX; cell_count]).collect(),
         }
     }
 

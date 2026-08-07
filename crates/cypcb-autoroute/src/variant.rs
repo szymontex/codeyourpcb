@@ -40,6 +40,8 @@ pub struct VariantConfig {
     /// Whether a routed trace reserves the copper it covers, not just its
     /// centre line.
     pub reserve_trace_footprint: bool,
+    /// What crossing another net's pad copper costs, per cell.
+    pub foreign_pad_penalty: f64,
 }
 
 impl VariantConfig {
@@ -55,6 +57,7 @@ impl VariantConfig {
             // router does now, and a variant that differs in one knob should
             // differ in that knob alone.
             reserve_trace_footprint: true,
+            foreign_pad_penalty: 0.0,
         }
     }
 }
@@ -124,6 +127,7 @@ pub fn default_variant_configs() -> Vec<VariantConfig> {
             via_ring_penalty: 3.0,
             pad_zone_blocks_foreign_copper: false,
             reserve_trace_footprint: true,
+            foreign_pad_penalty: 0.0,
         },
         VariantConfig {
             name: "PathFinder Guarded Pads".to_string(),
@@ -135,12 +139,26 @@ pub fn default_variant_configs() -> Vec<VariantConfig> {
             via_ring_penalty: 0.0,
             pad_zone_blocks_foreign_copper: true,
             reserve_trace_footprint: true,
+            foreign_pad_penalty: 0.0,
         },
         // Reserving a trace's copper is the default since it was measured
         // better on every fixture and both columns. This is the control: the
         // router as it was, marking only the centre line the search walked.
         // Kept because a board that does worse under the reservation should
         // still have somewhere to go.
+        // Crossing a neighbouring pin's copper priced rather than taken for
+        // free. Measured: multi_ic 336 -> 267 violations and 166 -> 106
+        // shorts, stm32_breakout 239 -> 280 - one board's gain and another's
+        // loss, which is what a variant is for.
+        VariantConfig {
+            name: "PathFinder Pad Aware".to_string(),
+            strategy: StrategyKind::PathFinder,
+            params: AutorouteParams::default(),
+            via_ring_penalty: 0.0,
+            pad_zone_blocks_foreign_copper: false,
+            reserve_trace_footprint: true,
+            foreign_pad_penalty: 20.0,
+        },
         VariantConfig {
             name: "PathFinder Bare Centre Line".to_string(),
             strategy: StrategyKind::PathFinder,
@@ -148,6 +166,7 @@ pub fn default_variant_configs() -> Vec<VariantConfig> {
             via_ring_penalty: 0.0,
             pad_zone_blocks_foreign_copper: false,
             reserve_trace_footprint: false,
+            foreign_pad_penalty: 0.0,
         },
     ]
 }
@@ -209,6 +228,7 @@ pub fn generate_variants(
             via_ring_penalty: config.via_ring_penalty,
             pad_zone_blocks_foreign_copper: config.pad_zone_blocks_foreign_copper,
             reserve_trace_footprint: config.reserve_trace_footprint,
+            foreign_pad_penalty: config.foreign_pad_penalty,
             // Variant exploration compares many routings; paying for repair on
             // each one triples the wall clock to rank candidates that are about
             // to be thrown away. The winner can be repaired afterwards.

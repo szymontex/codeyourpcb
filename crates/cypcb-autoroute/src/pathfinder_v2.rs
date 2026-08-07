@@ -38,6 +38,11 @@ use crate::strategy::RoutingStrategy;
 use crate::via_optimizer::optimize_vias;
 use crate::AutorouteConfig;
 
+/// What crossing another net's pad copper costs the search.
+///
+/// Priced rather than forbidden, for the reason written where it is used.
+const FOREIGN_PAD_PENALTY: f64 = 20.0;
+
 /// What a layer change on a pad's copper costs the search.
 ///
 /// Large enough that a route takes any reasonable detour instead, small enough
@@ -628,6 +633,7 @@ pub fn pathfinder_loop(
                     &congestion_map,
                     false,
                     config.via_foreign_copper_penalty,
+                    config.foreign_pad_penalty,
                 );
 
                 // A reservation that cannot be relaxed is a veto, and three
@@ -652,6 +658,7 @@ pub fn pathfinder_loop(
                         &congestion_map,
                         true,
                         config.via_foreign_copper_penalty,
+                        config.foreign_pad_penalty,
                     );
                 }
 
@@ -925,6 +932,7 @@ fn find_path_congestion_augmented(
     congestion_map: &CongestionMap,
     yield_halo: bool,
     via_foreign_copper_penalty: f64,
+    foreign_pad_penalty: f64,
 ) -> Option<Vec<GridNode>> {
     let grid_w = grid.width();
     let grid_h = grid.height();
@@ -1030,7 +1038,23 @@ fn find_path_congestion_augmented(
             {
                 let base = cost_fn.neighbor_cost(*node, target);
                 let congestion = congestion_map.congestion_cost(ux, uy, nl);
-                neighbors.push((target, float_to_int_cost(base + congestion)));
+
+                // Another net's pad copper, priced rather than forbidden. A
+                // net's pad zone opens every cell near any of its own pins so
+                // a route can reach them, and the pin next door came free with
+                // it: 109 of stm32_breakout's 118 part-to-trace faults are
+                // routes taking that opening. Refusing it was measured -
+                // stm32_breakout lost six connections and multi_ic gained 115
+                // violations - which is the seventh veto in this vector to
+                // cost more than it buys.
+                let foreign_pad = match grid.pad_owner(ux, uy, nl as usize) {
+                    Some(owner) if owner != net_id => foreign_pad_penalty,
+                    _ => 0.0,
+                };
+                neighbors.push((
+                    target,
+                    float_to_int_cost(base + congestion + foreign_pad),
+                ));
             }
         }
 
@@ -1164,6 +1188,7 @@ fn pad_zone_open(
     if !in_pad_zone(x as u16, y as u16, zones) {
         return false;
     }
+
     if !block_foreign_copper {
         return true;
     }
@@ -1256,6 +1281,7 @@ mod tests {
             false,
             &congestion,
             false,
+            0.0,
             0.0,
         );
 
