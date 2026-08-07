@@ -44,6 +44,10 @@ pub enum TokenKind {
     Equals,
     /// `->`
     Arrow,
+    /// An operator written from punctuation: `==`, `!=`, `>=`, `<=`, `>`,
+    /// `<`, `+/-` or `%`. Kept as text because the reader matches on the
+    /// spelling the grammar uses.
+    Op(String),
     /// Anything the language does not use, kept so the reader can complain
     /// about it with a position rather than skipping it.
     Unknown(char),
@@ -170,6 +174,29 @@ pub fn tokenize(source: &str) -> Vec<Token> {
             continue;
         }
 
+        // Operators, longest first so `>=` never reads as `>` then `=`.
+        for spelling in ["+/-", "==", "!=", ">=", "<="] {
+            if source[i..].starts_with(spelling) {
+                i += spelling.len();
+                tokens.push(Token {
+                    kind: TokenKind::Op(spelling.to_string()),
+                    span: Span::new(start, i),
+                });
+                break;
+            }
+        }
+        if i != start {
+            continue;
+        }
+        if c == '>' || c == '<' || c == '%' {
+            i += 1;
+            tokens.push(Token {
+                kind: TokenKind::Op(c.to_string()),
+                span: Span::new(start, i),
+            });
+            continue;
+        }
+
         let kind = match c {
             '{' => TokenKind::LBrace,
             '}' => TokenKind::RBrace,
@@ -240,6 +267,28 @@ mod tests {
                 TokenKind::Number(-2.0),
                 TokenKind::Arrow,
                 TokenKind::Number(3.0),
+            ]
+        );
+    }
+
+    #[test]
+    fn an_operator_is_taken_longest_first() {
+        // `>=` reading as `>` then `=` would turn an assertion into two
+        // tokens the reader cannot put back together.
+        assert_eq!(
+            kinds("a >= b"),
+            vec![
+                TokenKind::Ident("a".into()),
+                TokenKind::Op(">=".into()),
+                TokenKind::Ident("b".into()),
+            ]
+        );
+        assert_eq!(
+            kinds("+/- 5%"),
+            vec![
+                TokenKind::Op("+/-".into()),
+                TokenKind::Number(5.0),
+                TokenKind::Op("%".into()),
             ]
         );
     }

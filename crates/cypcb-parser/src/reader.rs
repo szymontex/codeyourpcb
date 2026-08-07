@@ -6,20 +6,23 @@
 //! reach the browser. Two readers means every construct lands twice and drifts
 //! in between; the measured cost is in that document.
 //!
-//! This covers every v1 construct: `version`, `board`, `component`, `net`,
-//! `netclass`, `trace`, `footprint`, `outline` and the two zone forms. The v2
-//! four - modules, imports, interfaces, assertions - are what is left, and
-//! until the reader is whole it sits behind the `rust-parser` feature with
-//! nothing in the shipping path calling it.
+//! This covers the whole language: every v1 construct - `version`, `board`,
+//! `component`, `net`, `netclass`, `trace`, `footprint`, `outline`, `zone` and
+//! `keepout` - and the v2 four: `module` with `use ... as`, `import`,
+//! `interface` and `assert`. It sits behind the `rust-parser` feature until
+//! its errors match the parser it replaces, so nothing in the shipping path
+//! calls it yet.
 //!
 //! It is checked against the parser it will replace rather than against
 //! hand-written expectations: `differential.rs` reads every example both ways
 //! and compares the ASTs.
 
 use crate::ast::{
-    BoardDef, ComponentDef, ComponentKind, Definition, Dimension, FootprintDef, Identifier,
-    NetAssignment, NetClassDef, NetConstraints, NetDef, OutlineDef, PadDef, PadShape, PinId,
-    PinRef, PositionExpr, RotationExpr, SilkDef, SizeProperty, SourceFile, Span, StringLit,
+    AssertDef, AssertExpression, AssertOperand, BoardDef, ComparisonOp, ComponentDef,
+    ComponentKind, Definition, Dimension, FootprintDef, Identifier, ImportDef, InterfaceDef,
+    ModuleDef, ModuleInstance, NetAssignment, NetClassDef, NetConstraints, NetDef, OutlineDef,
+    PadDef, PadShape, PhysicalValue, PinDeclaration, PinId, PinRef, PortConnection, PositionExpr,
+    RotationExpr, SilkDef, SizeProperty, SourceFile, Span, StringLit, Tolerance, ToleranceKind,
     TraceDef, TraceDirective, TracePath, TraceVia, ZoneDef, ZoneKind,
 };
 use crate::errors::{ParseError, ParseResult};
@@ -89,6 +92,26 @@ pub fn read(source: &str) -> ParseResult<SourceFile> {
             },
             "outline" => match reader.outline(start) {
                 Some(def) => definitions.push(Definition::Outline(def)),
+                None => reader.skip_to_next_definition(),
+            },
+            "import" => match reader.import(start) {
+                Some(def) => definitions.push(Definition::Import(def)),
+                None => reader.skip_to_next_definition(),
+            },
+            "module" => match reader.module(start) {
+                Some(def) => definitions.push(Definition::Module(def)),
+                None => reader.skip_to_next_definition(),
+            },
+            "use" => match reader.module_instance(start) {
+                Some(def) => definitions.push(Definition::ModuleInstance(def)),
+                None => reader.skip_to_next_definition(),
+            },
+            "interface" => match reader.interface(start) {
+                Some(def) => definitions.push(Definition::Interface(def)),
+                None => reader.skip_to_next_definition(),
+            },
+            "assert" => match reader.assertion(start) {
+                Some(def) => definitions.push(Definition::Assert(def)),
                 None => reader.skip_to_next_definition(),
             },
             _ => {
@@ -296,6 +319,7 @@ impl<'a> Reader<'a> {
             "zone",
             "footprint",
             "module",
+            "use",
             "interface",
             "import",
             "assert",
@@ -412,6 +436,7 @@ impl<'a> Reader<'a> {
         };
 
         let mut value = None;
+        let mut typed_value = None;
         let mut position = None;
         let mut rotation = None;
         let mut net_assignments = Vec::new();
@@ -424,9 +449,22 @@ impl<'a> Reader<'a> {
                         self.bump();
                         match self.string() {
                             Some(text) => value = Some(text),
-                            // `value 10kohm` is a typed value, step two.
                             None => {
-                                self.bump();
+                                // `value 10kohm`: a quantity rather than a
+                                // label. Both are kept - the typed one so a
+                                // rule can check it, and the text so anything
+                                // that only prints the value keeps working.
+                                match self.try_physical_value() {
+                                    Some(quantity) => {
+                                        value = Some(StringLit::new(
+                                            self.source[quantity.span.start..quantity.span.end]
+                                                .to_string(),
+                                            quantity.span,
+                                        ));
+                                        typed_value = Some(quantity);
+                                    }
+                                    None => self.unexpected("a value in quotes or a quantity"),
+                                }
                             }
                         }
                     }
@@ -486,7 +524,7 @@ impl<'a> Reader<'a> {
             kind,
             footprint,
             value,
-            typed_value: None,
+            typed_value,
             position,
             rotation,
             net_assignments,
@@ -1047,6 +1085,445 @@ impl<'a> Reader<'a> {
             points,
             span: Span::new(start, self.behind()),
         })
+    }
+
+    /// `import "path"` and `import Name, Other from "path"`.
+    fn import(&mut self, start: usize) -> Option<ImportDef> {
+        self.bump(); // `import`
+
+        // A string here means the whole file; a name list means `from` follows.
+        if let Some(path) = self.string() {
+            return Some(ImportDef {
+                names: Vec::new(),
+                path,
+                span: Span::new(start, self.behind()),
+            });
+        }
+
+        let mut names = Vec::new();
+        loop {
+            match self.identifier() {
+                Some(name) => names.push(name),
+                None => {
+                    self.unexpected("a name to import");
+                    return None;
+                }
+            }
+            if !self.eat(&TokenKind::Comma) {
+                break;
+            }
+        }
+        if !self.eat_word("from") {
+            self.unexpected("`from` after the names to import");
+            return None;
+        }
+        let path = match self.string() {
+            Some(path) => path,
+            None => {
+                self.unexpected("a path in quotes");
+                return None;
+            }
+        };
+
+        Some(ImportDef {
+            names,
+            path,
+            span: Span::new(start, self.behind()),
+        })
+    }
+
+    /// `module Name { component ...  net ...  pin OUT  use Other as X { ... } }`.
+    ///
+    /// A module body holds the same definitions a design does, plus the pins it
+    /// exposes, so this reads the same functions the top level does.
+    fn module(&mut self, start: usize) -> Option<ModuleDef> {
+        self.bump(); // `module`
+        let name = match self.identifier() {
+            Some(name) => name,
+            None => {
+                self.unexpected("a module name");
+                return None;
+            }
+        };
+        if !self.eat(&TokenKind::LBrace) {
+            self.unexpected("`{` after the module name");
+            return None;
+        }
+
+        let mut definitions = Vec::new();
+        let mut pins = Vec::new();
+
+        while !self.done() && !self.eat(&TokenKind::RBrace) {
+            let item_start = self.here();
+            match self.peek_ident() {
+                Some("component") => match self.component(item_start) {
+                    Some(def) => definitions.push(Definition::Component(def)),
+                    None => self.bump_past_block(),
+                },
+                Some("net") => match self.net(item_start) {
+                    Some(def) => definitions.push(Definition::Net(def)),
+                    None => self.bump_past_block(),
+                },
+                Some("use") => match self.module_instance(item_start) {
+                    Some(def) => definitions.push(Definition::ModuleInstance(def)),
+                    None => self.bump_past_block(),
+                },
+                Some("assert") => match self.assertion(item_start) {
+                    Some(def) => definitions.push(Definition::Assert(def)),
+                    None => self.bump_past_block(),
+                },
+                Some("pin") => {
+                    self.bump();
+                    match self.identifier() {
+                        Some(name) => pins.push(PinDeclaration {
+                            name,
+                            span: Span::new(item_start, self.behind()),
+                        }),
+                        None => self.unexpected("a pin name"),
+                    }
+                }
+                _ => {
+                    self.bump();
+                }
+            }
+        }
+
+        Some(ModuleDef {
+            name,
+            definitions,
+            pins,
+            span: Span::new(start, self.behind()),
+        })
+    }
+
+    /// `use Divider as DIV1 at 10mm, 10mm rotate 90 { IN = VIN, OUT = SENSE }`.
+    fn module_instance(&mut self, start: usize) -> Option<ModuleInstance> {
+        self.bump(); // `use`
+        let module = match self.identifier() {
+            Some(module) => module,
+            None => {
+                self.unexpected("a module name");
+                return None;
+            }
+        };
+        if !self.eat_word("as") {
+            self.unexpected("`as` and a name for the instance");
+            return None;
+        }
+        let name = match self.identifier() {
+            Some(name) => name,
+            None => {
+                self.unexpected("a name for the instance");
+                return None;
+            }
+        };
+
+        let mut position = None;
+        if self.peek_ident() == Some("at") {
+            let property_start = self.here();
+            self.bump();
+            let x = self.dimension();
+            self.eat(&TokenKind::Comma);
+            let y = self.dimension();
+            match x.zip(y) {
+                Some((x, y)) => {
+                    position = Some(PositionExpr {
+                        x,
+                        y,
+                        span: Span::new(property_start, self.behind()),
+                    })
+                }
+                None => self.unexpected("a position like `at 10mm, 8mm`"),
+            }
+        }
+
+        let mut rotation = None;
+        if self.peek_ident() == Some("rotate") {
+            let property_start = self.here();
+            self.bump();
+            match self.number() {
+                Some((angle, _)) => {
+                    self.eat_word("deg");
+                    rotation = Some(RotationExpr {
+                        angle,
+                        span: Span::new(property_start, self.behind()),
+                    });
+                }
+                None => self.unexpected("an angle"),
+            }
+        }
+
+        let mut ports = Vec::new();
+        if self.eat(&TokenKind::LBrace) {
+            while !self.done() && !self.eat(&TokenKind::RBrace) {
+                if self.eat(&TokenKind::Comma) {
+                    continue;
+                }
+                let port_start = self.here();
+                let pin = self.identifier();
+                let wired = self.eat(&TokenKind::Equals);
+                let net = self.identifier();
+                match (pin, wired, net) {
+                    (Some(pin), true, Some(net)) => ports.push(PortConnection {
+                        pin,
+                        net,
+                        span: Span::new(port_start, self.behind()),
+                    }),
+                    _ => {
+                        self.unexpected("a connection like `IN = VIN`");
+                        self.bump();
+                    }
+                }
+            }
+        }
+
+        Some(ModuleInstance {
+            module,
+            name,
+            position,
+            rotation,
+            ports,
+            span: Span::new(start, self.behind()),
+        })
+    }
+
+    /// `interface Name { pin SDA  pin SCL }`.
+    fn interface(&mut self, start: usize) -> Option<InterfaceDef> {
+        self.bump(); // `interface`
+        let name = match self.identifier() {
+            Some(name) => name,
+            None => {
+                self.unexpected("an interface name");
+                return None;
+            }
+        };
+        if !self.eat(&TokenKind::LBrace) {
+            self.unexpected("`{` after the interface name");
+            return None;
+        }
+
+        let mut pins = Vec::new();
+        while !self.done() && !self.eat(&TokenKind::RBrace) {
+            let pin_start = self.here();
+            if !self.eat_word("pin") {
+                self.unexpected("`pin` inside an interface");
+                self.bump();
+                continue;
+            }
+            match self.identifier() {
+                Some(name) => pins.push(PinDeclaration {
+                    name,
+                    span: Span::new(pin_start, self.behind()),
+                }),
+                None => self.unexpected("a pin name"),
+            }
+        }
+
+        Some(InterfaceDef {
+            name,
+            pins,
+            span: Span::new(start, self.behind()),
+        })
+    }
+
+    /// `assert R1.value >= 10kohm` and `assert C1.value within 100nF +/- 5%`.
+    fn assertion(&mut self, start: usize) -> Option<AssertDef> {
+        self.bump(); // `assert`
+        let left = self.assert_operand()?;
+
+        if self.eat_word("within") {
+            let target = self.physical_value()?;
+            let span = Span::new(start, self.behind());
+            return Some(AssertDef {
+                expression: AssertExpression::Within {
+                    left,
+                    target,
+                    span: Span::new(start + "assert ".len(), span.end),
+                },
+                span,
+            });
+        }
+
+        let op = match self.peek() {
+            Some(TokenKind::Op(spelling)) => match ComparisonOp::from_str(spelling) {
+                Some(op) => {
+                    self.bump();
+                    op
+                }
+                None => {
+                    self.unexpected("a comparison like `>=`");
+                    return None;
+                }
+            },
+            _ => {
+                self.unexpected("a comparison like `>=` or `within`");
+                return None;
+            }
+        };
+        let right = self.assert_operand()?;
+        let span = Span::new(start, self.behind());
+
+        Some(AssertDef {
+            expression: AssertExpression::Comparison {
+                left,
+                op,
+                right,
+                span: Span::new(start + "assert ".len(), span.end),
+            },
+            span,
+        })
+    }
+
+    /// One side of an assertion: `R1.value`, `10kohm`, `0.3mm` or a number.
+    fn assert_operand(&mut self) -> Option<AssertOperand> {
+        let start = self.here();
+        match self.peek() {
+            Some(TokenKind::Ident(_)) => {
+                let mut parts = vec![self.identifier()?.value];
+                while self.eat(&TokenKind::Dot) {
+                    match self.identifier() {
+                        Some(part) => parts.push(part.value),
+                        None => {
+                            self.unexpected("a name after `.`");
+                            return None;
+                        }
+                    }
+                }
+                Some(AssertOperand::QualifiedName {
+                    parts,
+                    span: Span::new(start, self.behind()),
+                })
+            }
+            Some(TokenKind::Number(_)) => {
+                // A number, then whichever unit follows it - a physical one, a
+                // length, or none at all.
+                if let Some(value) = self.try_physical_value() {
+                    return Some(AssertOperand::Physical(value));
+                }
+                let (value, span) = self.number()?;
+                match self.peek_ident() {
+                    Some("mm") | Some("mil") | Some("in") | Some("nm") => {
+                        self.at -= 1;
+                        self.dimension().map(AssertOperand::Dimension)
+                    }
+                    _ => Some(AssertOperand::Number { value, span }),
+                }
+            }
+            _ => {
+                self.unexpected("a value or a name like `R1.value`");
+                None
+            }
+        }
+    }
+
+    /// `10kohm`, optionally with a tolerance.
+    fn physical_value(&mut self) -> Option<PhysicalValue> {
+        match self.try_physical_value() {
+            Some(value) => Some(value),
+            None => {
+                self.unexpected("a value with an electrical unit, like `10kohm`");
+                None
+            }
+        }
+    }
+
+    /// The same, but leaves the cursor alone when the next tokens are not one.
+    fn try_physical_value(&mut self) -> Option<PhysicalValue> {
+        let mark = self.at;
+        let start = self.here();
+        let Some((value, _)) = self.number() else {
+            self.at = mark;
+            return None;
+        };
+        let Some(unit) = self
+            .peek_ident()
+            .and_then(|word| word.parse::<cypcb_core::PhysicalUnit>().ok())
+        else {
+            self.at = mark;
+            return None;
+        };
+        self.bump();
+
+        let tolerance = self.tolerance();
+
+        Some(PhysicalValue {
+            value,
+            unit,
+            tolerance,
+            span: Span::new(start, self.behind()),
+        })
+    }
+
+    /// `+/- 5%`, `+/- 0.1V` or `to 220nF`.
+    fn tolerance(&mut self) -> Option<Tolerance> {
+        let start = self.here();
+        if self.peek() == Some(&TokenKind::Op("+/-".to_string())) {
+            self.bump();
+            let (value, _) = self.number()?;
+            if self.peek() == Some(&TokenKind::Op("%".to_string())) {
+                self.bump();
+                return Some(Tolerance {
+                    kind: ToleranceKind::Percentage { value },
+                    span: Span::new(start, self.behind()),
+                });
+            }
+            let unit_start = self.here();
+            let unit = self
+                .peek_ident()
+                .and_then(|word| word.parse::<cypcb_core::PhysicalUnit>().ok())?;
+            self.bump();
+            return Some(Tolerance {
+                kind: ToleranceKind::Absolute(Box::new(PhysicalValue {
+                    value,
+                    unit,
+                    tolerance: None,
+                    span: Span::new(unit_start, self.behind()),
+                })),
+                span: Span::new(start, self.behind()),
+            });
+        }
+
+        if self.peek_ident() == Some("to") {
+            let mark = self.at;
+            self.bump();
+            match self.try_physical_value() {
+                Some(upper) => {
+                    return Some(Tolerance {
+                        kind: ToleranceKind::Range(Box::new(upper)),
+                        span: Span::new(start, self.behind()),
+                    })
+                }
+                None => {
+                    self.at = mark;
+                    return None;
+                }
+            }
+        }
+
+        None
+    }
+
+    /// Step over a definition inside a block that could not be read.
+    fn bump_past_block(&mut self) {
+        let mut depth = 0i32;
+        while self.at < self.tokens.len() {
+            match &self.tokens[self.at].kind {
+                TokenKind::LBrace => depth += 1,
+                TokenKind::RBrace => {
+                    if depth == 0 {
+                        return;
+                    }
+                    depth -= 1;
+                    self.at += 1;
+                    if depth == 0 {
+                        return;
+                    }
+                    continue;
+                }
+                _ => {}
+            }
+            self.at += 1;
+        }
     }
 
     /// Step past a property that could not be read, without leaving the block.

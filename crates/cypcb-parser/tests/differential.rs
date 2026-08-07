@@ -10,10 +10,9 @@
 //! shape rather than the language's meaning. Spans are step 1b, and the LSP is
 //! the thing that will demand them.
 //!
-//! Only the constructs the reader claims are compared. A file that uses a
-//! module, an import, an interface, a footprint, a zone, a netclass, an
-//! outline or an assertion is listed here and skipped, so the list is what is
-//! left to build.
+//! The skip list is down to the two boards written to fail parsing, where the
+//! open question is error parity rather than coverage: both readers reject
+//! them, and whether they say the same thing about them is step 1b.
 
 use std::path::{Path, PathBuf};
 
@@ -27,14 +26,10 @@ fn examples_dir() -> PathBuf {
         .join("examples")
 }
 
-/// Boards the reader does not claim yet, and why.
+/// Boards the reader does not claim, and why.
 const NOT_YET: &[(&str, &str)] = &[
     ("invalid.cypcb", "written to fail parsing"),
     ("unknown_keyword.cypcb", "written to fail parsing"),
-    ("v2-constraints.cypcb", "assertions and typed values"),
-    ("v2-imports.cypcb", "imports and modules"),
-    ("v2-interfaces.cypcb", "interfaces and modules"),
-    ("v2-modules.cypcb", "modules"),
 ];
 
 fn covered_examples() -> Vec<PathBuf> {
