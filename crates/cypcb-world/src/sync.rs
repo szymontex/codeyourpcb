@@ -478,7 +478,14 @@ pub fn sync_ast_to_world(
                 sync_zone(zone, world, &mut result);
             }
             Definition::Trace(trace) => {
-                sync_trace(trace, source, world, &component_entities, &mut result);
+                sync_trace(
+                    trace,
+                    source,
+                    world,
+                    footprint_lib,
+                    &component_entities,
+                    &mut result,
+                );
             }
             Definition::Footprint(_) => {
                 // Already handled in Phase 0 above
@@ -787,6 +794,7 @@ fn sync_trace(
     trace_def: &TraceDef,
     source: &str,
     world: &mut BoardWorld,
+    library: &FootprintLibrary,
     component_entities: &HashMap<String, Entity>,
     result: &mut SyncResult,
 ) {
@@ -831,6 +839,7 @@ fn sync_trace(
     let from_position = if let Some(ref pin_ref) = trace_def.from {
         get_pin_position(
             world,
+            library,
             component_entities,
             pin_ref,
             source,
@@ -844,6 +853,7 @@ fn sync_trace(
     let to_position = if let Some(ref pin_ref) = trace_def.to {
         get_pin_position(
             world,
+            library,
             component_entities,
             pin_ref,
             source,
@@ -1002,6 +1012,7 @@ fn sync_trace(
 /// Helper to get the position of a pin reference.
 fn get_pin_position(
     world: &BoardWorld,
+    library: &FootprintLibrary,
     component_entities: &HashMap<String, Entity>,
     pin_ref: &cypcb_parser::ast::PinRef,
     source: &str,
@@ -1034,17 +1045,46 @@ fn get_pin_position(
         }
     };
 
-    // For now, we return the component position.
-    // In a more complete implementation, we would look up the specific pad
-    // position within the footprint and add it to the component position.
-    // This requires:
-    // 1. Get the component's FootprintRef
-    // 2. Look up the footprint in the library
-    // 3. Find the pad with the matching number/name
-    // 4. Return component position + pad position (transformed by rotation)
-    //
-    // For the initial implementation, component position is a good approximation.
-    Some(position)
+    // The pad the reference names, turned the way the part is turned. Until
+    // 2026-08-07 this returned the component's own position with a comment
+    // calling it "a good approximation": a `trace VCC { from R1.1 to C1.1 }`
+    // came out as copper between two part centres, touching neither pad, and
+    // that copper is what the Gerber carries.
+    let pin = match &pin_ref.pin {
+        AstPinId::Number(n) => n.to_string(),
+        AstPinId::Name(name) => normalize_pin_name(name),
+    };
+
+    let pad_offset = world
+        .get::<crate::components::FootprintRef>(entity)
+        .and_then(|footprint| library.get(footprint.as_str()))
+        .and_then(|footprint| {
+            footprint
+                .pads
+                .iter()
+                .find(|pad| pad.number == pin)
+                .map(|pad| pad.position)
+        });
+
+    let Some(offset) = pad_offset else {
+        // A footprint nobody registered, or a pin the footprint does not have.
+        // The pin is already reported elsewhere when it is wired to a net; a
+        // trace endpoint falls back to the part's own position rather than
+        // dropping the copper.
+        return Some(position);
+    };
+
+    let degrees = world
+        .get::<crate::components::Rotation>(entity)
+        .map(|rotation| rotation.to_degrees())
+        .unwrap_or(0.0);
+    let (sin, cos) = degrees.to_radians().sin_cos();
+    let (px, py) = (offset.x.0 as f64, offset.y.0 as f64);
+
+    Some(Point::new(
+        Nm(position.x.0 + (px * cos - py * sin).round() as i64),
+        Nm(position.y.0 + (px * sin + py * cos).round() as i64),
+    ))
 }
 
 /// Parse a layer name string to a Layer enum.
