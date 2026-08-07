@@ -142,8 +142,8 @@ fn test_all_benchmarks_parse() {
     let benchmarks = get_benchmarks();
     assert_eq!(
         benchmarks.len(),
-        3,
-        "Expected 3 benchmark fixtures, got {}",
+        4,
+        "Expected 4 benchmark fixtures, got {}",
         benchmarks.len()
     );
 
@@ -214,7 +214,7 @@ fn test_all_benchmarks_parse() {
 #[test]
 fn test_benchmarks_constant_matches_files() {
     // Verify BENCHMARKS constant lists exactly the files that exist
-    assert_eq!(BENCHMARKS.len(), 3, "Expected 3 benchmark descriptors");
+    assert_eq!(BENCHMARKS.len(), 4, "Expected 4 benchmark descriptors");
 
     let benchmark_dir = workspace_root().join("tests/fixtures/benchmark");
     for bench in BENCHMARKS {
