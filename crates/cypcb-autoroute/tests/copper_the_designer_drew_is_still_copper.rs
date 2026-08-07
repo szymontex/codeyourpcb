@@ -313,3 +313,73 @@ fn a_via_joins_two_traces_into_one_piece_of_copper() {
         "the pins are already joined through the via"
     );
 }
+
+#[test]
+fn a_ground_plane_connects_the_pins_that_sit_in_it() {
+    // A pour is copper: every pad of its net inside it is joined to every
+    // other through the plane.
+    //
+    // This one passed the moment it was written - `extract_ratsnest` has
+    // dropped pads inside a pour of their own net since a zone learned its
+    // net, and the tracker's claim that the router still wired them was wrong.
+    // The test stays because nothing else held that behaviour in place: it was
+    // one line in the ratsnest with no test naming the board it protects.
+    use cypcb_core::Rect as CoreRect;
+    use cypcb_world::components::zone::{Zone, ZoneKind};
+
+    let mut world = BoardWorld::new();
+    world.set_board("t".to_string(), (Nm::from_mm(30.0), Nm::from_mm(20.0)), 2);
+
+    let mut library = cypcb_world::footprint::FootprintLibrary::new();
+    library.register(Footprint {
+        name: "PAD1".into(),
+        description: String::new(),
+        bounds: CoreRect::new(Point::ORIGIN, Point::ORIGIN),
+        courtyard: CoreRect::new(Point::ORIGIN, Point::ORIGIN),
+        silk: Vec::new(),
+        pads: vec![PadDef {
+            number: "1".into(),
+            shape: PadShape::Rect,
+            position: Point::ORIGIN,
+            size: (Nm::from_mm(1.0), Nm::from_mm(1.0)),
+            drill: None,
+            layers: vec![Layer::TopCopper],
+        }],
+    });
+    world.set_footprints(library.clone());
+
+    let gnd = world.intern_net("GND");
+    for (refdes, at) in [("J1", (8.0, 10.0)), ("J2", (15.0, 10.0)), ("J3", (22.0, 10.0))] {
+        let mut connections = NetConnections::new();
+        connections.add(PinConnection::new("1".to_string(), gnd));
+        world.spawn_component(
+            RefDes::new(refdes),
+            Value::new(""),
+            Position(Point::from_mm(at.0, at.1)),
+            Rotation::ZERO,
+            FootprintRef::new("PAD1"),
+            connections,
+        );
+    }
+
+    world.spawn_entity(Zone {
+        bounds: CoreRect {
+            min: Point::from_mm(5.0, 5.0),
+            max: Point::from_mm(25.0, 15.0),
+        },
+        kind: ZoneKind::CopperPour,
+        layer_mask: Layer::TopCopper.to_copper_mask(),
+        name: Some("gnd".to_string()),
+        net: Some(gnd),
+    });
+    world.rebuild_spatial_index_from_library(&library);
+
+    let rules = PresetRuleSet::new(RulesPreset::from_name("jlcpcb").expect("the preset"));
+    let result = route_board(&mut world, &library, &rules, &AutorouteConfig::default());
+
+    assert_eq!(
+        result.route_count(),
+        0,
+        "three ground pins in a ground plane need no wires between them"
+    );
+}
