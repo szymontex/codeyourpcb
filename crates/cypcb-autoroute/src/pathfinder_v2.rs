@@ -326,7 +326,17 @@ pub fn pathfinder_loop(
     let mut best_overused = usize::MAX;
     let mut iterations_without_progress = 0u32;
 
-    for iteration in 1..=MAX_PATHFINDER_ITERATIONS {
+    // `max_ripup_iterations` has been on `AutorouteConfig` all along and only
+    // the legacy orchestrator read it - this strategy ran to a private
+    // constant. Zero means the constant, so a caller that says nothing gets
+    // what it got before.
+    let iteration_cap = if config.max_ripup_iterations == 0 {
+        MAX_PATHFINDER_ITERATIONS
+    } else {
+        config.max_ripup_iterations.min(MAX_PATHFINDER_ITERATIONS)
+    };
+
+    for iteration in 1..=iteration_cap {
         final_iteration = iteration;
         let _iter_span = tracing::info_span!("pathfinder_iteration", iteration).entered();
 

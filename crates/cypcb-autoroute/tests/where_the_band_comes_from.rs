@@ -90,3 +90,91 @@ fn two_prices_a_hundredth_apart_take_different_paths() {
         eprintln!("  first iteration where they differ: {first_difference}");
     }
 }
+
+/// Whether the loop's own progress metric tracks board quality.
+///
+/// `cargo test --release -p cypcb-autoroute --test where_the_band_comes_from -- --ignored does_overuse --nocapture`
+///
+/// PathFinder stops when the overused set - cells two nets both occupy - has
+/// not shrunk for three iterations. Nothing has checked that a smaller
+/// overused set means a better board, and returning the iteration that had the
+/// smallest one made both dense fixtures worse. This routes the same board
+/// with the iteration cap set to each k in turn and reports the overuse the
+/// loop saw beside the violations the board actually has.
+#[test]
+#[ignore = "diagnostic: routes one fixture once per iteration cap"]
+fn does_overuse_track_the_violations() {
+    use cypcb_autoroute::route_board;
+    use cypcb_drc::{run_drc, DesignRules, ViolationKind};
+    use cypcb_router::apply_routes;
+    use std::collections::BTreeSet;
+
+    let filename = "stm32_breakout.kicad_pcb";
+    let drc_rules = DesignRules::jlcpcb_2layer();
+
+    // The full run first, for the overuse series to line the caps up against.
+    let (overuse, iterations, _) = trajectory(filename, 0.25);
+    eprintln!();
+    eprintln!("=== {filename} at price 0.25 ===");
+    eprintln!("  {iterations} iterations, overuse per iteration {overuse:?}");
+    eprintln!();
+    eprintln!("  cap  overuse-entering  violations  shorts  segments");
+
+    for cap in 1..=iterations {
+        let parsed = parse_kicad_pcb(&fixture_path(filename)).expect("the fixture parses");
+        let mut world = parsed.world;
+        let library = parsed.library;
+
+        world.rebuild_spatial_index_from_library(&library);
+        let baseline: BTreeSet<String> = run_drc(&mut world, &drc_rules)
+            .violations
+            .iter()
+            .map(|v| format!("{}|{}|{}|{}", v.kind, v.location.x.raw(), v.location.y.raw(), v.message))
+            .collect();
+
+        let rules = PresetRuleSet::new(RulesPreset::from_name("jlcpcb").expect("the preset exists"));
+        let config = AutorouteConfig {
+            max_ripup_iterations: cap,
+            ..AutorouteConfig::default()
+        };
+        let result = route_board(&mut world, &library, &rules, &config);
+
+        apply_routes(&mut world, &result);
+        world.rebuild_spatial_index_from_library(&library);
+        let drc = run_drc(&mut world, &drc_rules);
+        let introduced: Vec<_> = drc
+            .violations
+            .iter()
+            .filter(|v| {
+                !baseline.contains(&format!(
+                    "{}|{}|{}|{}",
+                    v.kind,
+                    v.location.x.raw(),
+                    v.location.y.raw(),
+                    v.message
+                ))
+            })
+            .collect();
+        let shorts = introduced
+            .iter()
+            .filter(|v| v.kind == ViolationKind::Clearance)
+            .filter(|v| v.actual == Some(cypcb_core::Nm::ZERO))
+            .count();
+
+        // The overused count the loop saw entering this iteration, which is
+        // what its stagnation test was reading.
+        let seen = overuse
+            .get(cap as usize - 1)
+            .map(|n| n.to_string())
+            .unwrap_or_else(|| "-".to_string());
+
+        eprintln!(
+            "  {:>3}  {:>16}  {:>10}  {:>6}  {:>8}",
+            cap,
+            seen,
+            introduced.len(),
+            shorts,
+            result.route_count()
+        );
+    }
+}

@@ -113,7 +113,12 @@ pub struct AutorouteConfig {
     /// Set to `None` to auto-derive from rules.
     pub grid_resolution_nm: Option<i64>,
 
-    /// Maximum rip-up-and-retry iterations before giving up on a net.
+    /// Maximum negotiated-congestion iterations before the router stops.
+    ///
+    /// Zero means the strategy's own cap, which is 50. PathFinder ignored this
+    /// field entirely until it was wired up - only the legacy orchestrator
+    /// read it - so the 10 it used to default to never applied to the router
+    /// that ships.
     pub max_ripup_iterations: u32,
 
     /// Cost multiplier for placing vias. Higher = fewer vias.
@@ -227,7 +232,7 @@ impl Default for AutorouteConfig {
     fn default() -> Self {
         Self {
             grid_resolution_nm: None,
-            max_ripup_iterations: 10,
+            max_ripup_iterations: 0,
             via_cost_multiplier: 1.0,
             prefer_top_layer: true,
             strategy: StrategyKind::default(),
