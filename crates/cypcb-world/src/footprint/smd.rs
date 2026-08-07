@@ -83,16 +83,10 @@ fn chip_footprint(
             },
         ],
         bounds: Rect::from_center_size(Point::ORIGIN, (body_width, body_height)),
-        // Courtyard: body + 0.25mm clearance per IPC-7351B
         silk: Vec::new(),
-        courtyard: Rect::from_center_size(
-            Point::ORIGIN,
-            (
-                body_width + Nm::from_mm(0.5),
-                body_height + Nm::from_mm(0.5),
-            ),
-        ),
+        courtyard: Rect::default(),
     }
+    .with_ipc_courtyard()
 }
 
 /// 0402 (1005 metric) chip resistor/capacitor footprint.

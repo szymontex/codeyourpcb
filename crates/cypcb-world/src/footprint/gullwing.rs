@@ -135,7 +135,6 @@ pub fn gullwing_footprint(
     }
 
     // Courtyard: body + 0.5mm margin (0.25mm each side per IPC-7351B)
-    let courtyard_margin = Nm::from_mm(0.5);
 
     Footprint {
         name: name.into(),
@@ -143,14 +142,9 @@ pub fn gullwing_footprint(
         pads,
         bounds: Rect::from_center_size(Point::ORIGIN, body_size),
         silk: Vec::new(),
-        courtyard: Rect::from_center_size(
-            Point::ORIGIN,
-            (
-                body_size.0 + courtyard_margin,
-                body_size.1 + courtyard_margin,
-            ),
-        ),
+        courtyard: Rect::default(),
     }
+    .with_ipc_courtyard()
 }
 
 /// SOIC-8 (150mil body width, 1.27mm pitch) footprint.
@@ -294,8 +288,9 @@ pub fn sot23() -> Footprint {
         ],
         bounds: Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(3.0), Nm::from_mm(2.5))),
         silk: Vec::new(),
-        courtyard: Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(3.5), Nm::from_mm(3.0))),
+        courtyard: Rect::default(),
     }
+    .with_ipc_courtyard()
 }
 
 /// SOT-23-5 (5-pin Small Outline Transistor) footprint.
@@ -387,8 +382,9 @@ pub fn sot23_5() -> Footprint {
         ],
         bounds: Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(3.0), Nm::from_mm(3.0))),
         silk: Vec::new(),
-        courtyard: Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(3.5), Nm::from_mm(3.5))),
+        courtyard: Rect::default(),
     }
+    .with_ipc_courtyard()
 }
 
 /// TQFP-32 (7x7mm body, 0.8mm pitch) footprint.
@@ -501,7 +497,6 @@ pub fn tqfp32() -> Footprint {
         pin_num += 1;
     }
 
-    let courtyard_margin = Nm::from_mm(0.5);
 
     Footprint {
         name: "TQFP-32".into(),
@@ -509,11 +504,9 @@ pub fn tqfp32() -> Footprint {
         pads,
         bounds: Rect::from_center_size(Point::ORIGIN, (body_size, body_size)),
         silk: Vec::new(),
-        courtyard: Rect::from_center_size(
-            Point::ORIGIN,
-            (body_size + courtyard_margin, body_size + courtyard_margin),
-        ),
+        courtyard: Rect::default(),
     }
+    .with_ipc_courtyard()
 }
 
 #[cfg(test)]
@@ -647,19 +640,30 @@ mod tests {
     }
 
     #[test]
-    fn test_courtyard_includes_margin() {
+    fn test_courtyard_clears_the_land_pattern_not_just_the_body() {
+        // This test used to demand courtyard == body + 0.5mm, which is what
+        // the builder did and what made every gull-wing courtyard narrower
+        // than its own copper: SOIC-8's pads reach 0.7mm past its body. The
+        // property that matters is the one IPC-7351 states - clear of
+        // everything the part occupies.
         let fp = soic8();
 
-        // Courtyard should be larger than bounds
         assert!(fp.courtyard.width() > fp.bounds.width());
         assert!(fp.courtyard.height() > fp.bounds.height());
 
-        // Margin should be 0.5mm (0.25mm each side)
-        let width_diff = fp.courtyard.width().0 - fp.bounds.width().0;
-        let height_diff = fp.courtyard.height().0 - fp.bounds.height().0;
-
-        assert_eq!(width_diff, Nm::from_mm(0.5).0);
-        assert_eq!(height_diff, Nm::from_mm(0.5).0);
+        let excess = super::super::library::IPC_COURTYARD_EXCESS.0;
+        for pad in &fp.pads {
+            let half_width = pad.size.0 .0 / 2;
+            let half_height = pad.size.1 .0 / 2;
+            assert!(
+                pad.position.x.0 - half_width - fp.courtyard.min.x.0 >= excess
+                    && fp.courtyard.max.x.0 - (pad.position.x.0 + half_width) >= excess
+                    && pad.position.y.0 - half_height - fp.courtyard.min.y.0 >= excess
+                    && fp.courtyard.max.y.0 - (pad.position.y.0 + half_height) >= excess,
+                "pad {} sits closer than the IPC excess to the courtyard edge",
+                pad.number
+            );
+        }
     }
 
     #[test]

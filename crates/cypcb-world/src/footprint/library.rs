@@ -136,7 +136,15 @@ pub struct Footprint {
     pub pads: Vec<PadDef>,
     /// Bounding box of the component body.
     pub bounds: Rect,
-    /// Assembly courtyard (clearance area).
+    /// Assembly courtyard: everything the placed part occupies, plus the
+    /// excess a placement machine needs to work.
+    ///
+    /// Per IPC-7351 that is the body **and the land pattern** - the pads are
+    /// part of what the part occupies. Build it with
+    /// [`Footprint::with_ipc_courtyard`] rather than by hand; a courtyard
+    /// derived from the body alone is smaller than the copper it is supposed
+    /// to enclose, and everything that reasons about the space a part takes
+    /// reads this rectangle.
     pub courtyard: Rect,
     /// Silkscreen artwork, in footprint coordinates.
     ///
@@ -146,7 +154,51 @@ pub struct Footprint {
     pub silk: Vec<SilkShape>,
 }
 
+/// Courtyard excess per side, per IPC-7351B nominal density.
+///
+/// The clearance a placement machine needs around everything the part
+/// occupies, measured from the outside of the land pattern rather than from
+/// the body.
+pub const IPC_COURTYARD_EXCESS: Nm = Nm(250_000);
+
 impl Footprint {
+    /// Set the courtyard to enclose the body and every pad, plus
+    /// [`IPC_COURTYARD_EXCESS`].
+    ///
+    /// The built-in footprints each derived their own courtyard from the body,
+    /// which is smaller than the land pattern on every two-terminal chip part
+    /// there is: an 0805's body is 2.0mm wide and its pads span 2.9mm, so the
+    /// courtyard stopped 0.2mm inside its own copper on each side. Two
+    /// consumers were reading that box and believing it - `courtyard-clearance`
+    /// as the space a part needs, and `silk_text` as the height a designator
+    /// has to clear - so both under-reported by the same 0.2mm.
+    ///
+    /// A footprint with no pads keeps a courtyard around its body alone, which
+    /// is all a mechanical part has.
+    #[must_use]
+    pub fn with_ipc_courtyard(mut self) -> Self {
+        let mut min_x = self.bounds.min.x.raw();
+        let mut min_y = self.bounds.min.y.raw();
+        let mut max_x = self.bounds.max.x.raw();
+        let mut max_y = self.bounds.max.y.raw();
+
+        for pad in &self.pads {
+            let half_width = pad.size.0.raw() / 2;
+            let half_height = pad.size.1.raw() / 2;
+            min_x = min_x.min(pad.position.x.raw() - half_width);
+            min_y = min_y.min(pad.position.y.raw() - half_height);
+            max_x = max_x.max(pad.position.x.raw() + half_width);
+            max_y = max_y.max(pad.position.y.raw() + half_height);
+        }
+
+        let excess = IPC_COURTYARD_EXCESS.raw();
+        self.courtyard = Rect::new(
+            Point::new(Nm(min_x - excess), Nm(min_y - excess)),
+            Point::new(Nm(max_x + excess), Nm(max_y + excess)),
+        );
+        self
+    }
+
     /// Get a pad by its number/name.
     pub fn get_pad(&self, number: &str) -> Option<&PadDef> {
         self.pads.iter().find(|p| p.number == number)

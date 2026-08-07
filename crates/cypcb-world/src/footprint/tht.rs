@@ -76,11 +76,9 @@ pub fn axial_300mil() -> Footprint {
         ],
         bounds: Rect::from_center_size(Point::ORIGIN, (lead_spacing + pad_size, Nm::from_mm(2.5))),
         silk: Vec::new(),
-        courtyard: Rect::from_center_size(
-            Point::ORIGIN,
-            (lead_spacing + pad_size + Nm::from_mm(0.5), Nm::from_mm(3.5)),
-        ),
+        courtyard: Rect::default(),
     }
+    .with_ipc_courtyard()
 }
 
 /// DIP-8 (Dual In-line Package, 8 pins) footprint.
@@ -156,14 +154,9 @@ pub fn dip8() -> Footprint {
         pads,
         bounds: Rect::from_center_size(Point::ORIGIN, (body_width, body_height)),
         silk: Vec::new(),
-        courtyard: Rect::from_center_size(
-            Point::ORIGIN,
-            (
-                body_width + Nm::from_mm(0.5),
-                body_height + Nm::from_mm(0.5),
-            ),
-        ),
+        courtyard: Rect::default(),
     }
+    .with_ipc_courtyard()
 }
 
 /// 1x2 pin header footprint.
@@ -203,11 +196,9 @@ pub fn pin_header_1x2() -> Footprint {
         ],
         bounds: Rect::from_center_size(Point::ORIGIN, (pin_pitch + pad_size, Nm::from_mm(2.54))),
         silk: Vec::new(),
-        courtyard: Rect::from_center_size(
-            Point::ORIGIN,
-            (pin_pitch + pad_size + Nm::from_mm(0.5), Nm::from_mm(3.5)),
-        ),
+        courtyard: Rect::default(),
     }
+    .with_ipc_courtyard()
 }
 
 #[cfg(test)]
