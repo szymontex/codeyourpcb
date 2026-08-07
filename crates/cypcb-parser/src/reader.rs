@@ -6,20 +6,21 @@
 //! reach the browser. Two readers means every construct lands twice and drifts
 //! in between; the measured cost is in that document.
 //!
-//! This covers the constructs both current readers already handle: `version`,
-//! `board`, `component`, `net` and `trace`. Modules, imports, interfaces,
-//! footprints, zones, netclasses, outlines and assertions are step two, and
-//! until then this reader is behind the `rust-parser` feature and nothing in
-//! the shipping path uses it.
+//! This covers every v1 construct: `version`, `board`, `component`, `net`,
+//! `netclass`, `trace`, `footprint`, `outline` and the two zone forms. The v2
+//! four - modules, imports, interfaces, assertions - are what is left, and
+//! until the reader is whole it sits behind the `rust-parser` feature with
+//! nothing in the shipping path calling it.
 //!
 //! It is checked against the parser it will replace rather than against
 //! hand-written expectations: `differential.rs` reads every example both ways
 //! and compares the ASTs.
 
 use crate::ast::{
-    BoardDef, ComponentDef, ComponentKind, Definition, Dimension, Identifier, NetAssignment,
-    NetConstraints, NetDef, PinId, PinRef, PositionExpr, RotationExpr, SizeProperty, SourceFile,
-    Span, StringLit, TraceDef, TraceDirective, TracePath, TraceVia,
+    BoardDef, ComponentDef, ComponentKind, Definition, Dimension, FootprintDef, Identifier,
+    NetAssignment, NetClassDef, NetConstraints, NetDef, OutlineDef, PadDef, PadShape, PinId,
+    PinRef, PositionExpr, RotationExpr, SilkDef, SizeProperty, SourceFile, Span, StringLit,
+    TraceDef, TraceDirective, TracePath, TraceVia, ZoneDef, ZoneKind,
 };
 use crate::errors::{ParseError, ParseResult};
 use crate::lexer::{tokenize, Token, TokenKind};
@@ -72,6 +73,22 @@ pub fn read(source: &str) -> ParseResult<SourceFile> {
             },
             "trace" => match reader.trace(start) {
                 Some(def) => definitions.push(Definition::Trace(def)),
+                None => reader.skip_to_next_definition(),
+            },
+            "footprint" => match reader.footprint(start) {
+                Some(def) => definitions.push(Definition::Footprint(def)),
+                None => reader.skip_to_next_definition(),
+            },
+            "zone" | "keepout" => match reader.zone(start) {
+                Some(def) => definitions.push(Definition::Zone(def)),
+                None => reader.skip_to_next_definition(),
+            },
+            "netclass" => match reader.netclass(start) {
+                Some(def) => definitions.push(Definition::NetClass(def)),
+                None => reader.skip_to_next_definition(),
+            },
+            "outline" => match reader.outline(start) {
+                Some(def) => definitions.push(Definition::Outline(def)),
                 None => reader.skip_to_next_definition(),
             },
             _ => {
@@ -708,5 +725,345 @@ impl<'a> Reader<'a> {
             directives,
             span: Span::new(start, self.behind()),
         })
+    }
+
+    /// `footprint NAME { description "..."  pad 1 rect at X, Y size W x H [drill D]  courtyard W x H  silk ... }`.
+    fn footprint(&mut self, start: usize) -> Option<FootprintDef> {
+        self.bump(); // `footprint`
+        let name = match self.identifier() {
+            Some(name) => name,
+            None => {
+                self.unexpected("a footprint name");
+                return None;
+            }
+        };
+        if !self.eat(&TokenKind::LBrace) {
+            self.unexpected("`{` after the footprint name");
+            return None;
+        }
+
+        let mut description = None;
+        let mut pads = Vec::new();
+        let mut courtyard = None;
+        let mut silk = Vec::new();
+
+        while !self.done() && !self.eat(&TokenKind::RBrace) {
+            let property_start = self.here();
+            match self.peek_ident() {
+                Some("description") => {
+                    self.bump();
+                    match self.string() {
+                        Some(text) => description = Some(text.value),
+                        None => self.unexpected("a description in quotes"),
+                    }
+                }
+                Some("courtyard") => {
+                    self.bump();
+                    let width = self.dimension();
+                    self.eat_word("x");
+                    let height = self.dimension();
+                    match width.zip(height) {
+                        Some(pair) => courtyard = Some(pair),
+                        None => self.unexpected("a courtyard like `2mm x 1mm`"),
+                    }
+                }
+                Some("pad") => match self.pad(property_start) {
+                    Some(pad) => pads.push(pad),
+                    None => self.skip_to_next_property(),
+                },
+                Some("silk") => match self.silk(property_start) {
+                    Some(shape) => silk.push(shape),
+                    None => self.skip_to_next_property(),
+                },
+                _ => {
+                    self.bump();
+                }
+            }
+        }
+
+        Some(FootprintDef {
+            name,
+            description,
+            pads,
+            courtyard,
+            silk,
+            span: Span::new(start, self.behind()),
+        })
+    }
+
+    /// `pad 1 rect at 0mm, 0mm size 1mm x 1mm [drill 0.3mm]`.
+    fn pad(&mut self, start: usize) -> Option<PadDef> {
+        self.bump(); // `pad`
+        let number = match self.number() {
+            Some((value, _)) => value as u32,
+            None => {
+                self.unexpected("a pad number");
+                return None;
+            }
+        };
+        let shape = match self.peek_ident().and_then(PadShape::from_str) {
+            Some(shape) => {
+                self.bump();
+                shape
+            }
+            None => {
+                self.unexpected("a pad shape: rect, circle, roundrect or oblong");
+                return None;
+            }
+        };
+        if !self.eat_word("at") {
+            self.unexpected("`at` before a pad position");
+            return None;
+        }
+        let x = self.dimension()?;
+        self.eat(&TokenKind::Comma);
+        let y = self.dimension()?;
+        if !self.eat_word("size") {
+            self.unexpected("`size` after a pad position");
+            return None;
+        }
+        let width = self.dimension()?;
+        self.eat_word("x");
+        let height = self.dimension()?;
+        let drill = if self.eat_word("drill") {
+            self.dimension()
+        } else {
+            None
+        };
+
+        Some(PadDef {
+            number,
+            shape,
+            x,
+            y,
+            width,
+            height,
+            drill,
+            span: Span::new(start, self.behind()),
+        })
+    }
+
+    /// `silk line X1, Y1 to X2, Y2 [width W]` and `silk circle CX, CY radius R [width W]`.
+    fn silk(&mut self, start: usize) -> Option<SilkDef> {
+        self.bump(); // `silk`
+        let kind = self.identifier()?;
+        match kind.value.as_str() {
+            "line" => {
+                let x1 = self.dimension()?;
+                self.eat(&TokenKind::Comma);
+                let y1 = self.dimension()?;
+                if !self.eat_word("to") {
+                    self.unexpected("`to` between the ends of a silk line");
+                    return None;
+                }
+                let x2 = self.dimension()?;
+                self.eat(&TokenKind::Comma);
+                let y2 = self.dimension()?;
+                let width = if self.eat_word("width") {
+                    self.dimension()
+                } else {
+                    None
+                };
+                Some(SilkDef::Line {
+                    start: (x1, y1),
+                    end: (x2, y2),
+                    width,
+                    span: Span::new(start, self.behind()),
+                })
+            }
+            "circle" => {
+                let cx = self.dimension()?;
+                self.eat(&TokenKind::Comma);
+                let cy = self.dimension()?;
+                if !self.eat_word("radius") {
+                    self.unexpected("`radius` after a silk circle's centre");
+                    return None;
+                }
+                let radius = self.dimension()?;
+                let width = if self.eat_word("width") {
+                    self.dimension()
+                } else {
+                    None
+                };
+                Some(SilkDef::Circle {
+                    centre: (cx, cy),
+                    radius,
+                    width,
+                    span: Span::new(start, self.behind()),
+                })
+            }
+            _ => {
+                self.unexpected("`line` or `circle` after `silk`");
+                None
+            }
+        }
+    }
+
+    /// `zone NAME { bounds X1, Y1 to X2, Y2  layer top  net GND }`, and the
+    /// `keepout` spelling, which is the same block with no net.
+    fn zone(&mut self, start: usize) -> Option<ZoneDef> {
+        let kind = match self.peek_ident() {
+            Some("keepout") => ZoneKind::Keepout,
+            _ => ZoneKind::CopperPour,
+        };
+        self.bump(); // `zone` or `keepout`
+
+        // The name is optional, so a `{` here means the zone is unnamed.
+        let name = if self.peek() == Some(&TokenKind::LBrace) {
+            None
+        } else {
+            self.identifier()
+        };
+
+        if !self.eat(&TokenKind::LBrace) {
+            self.unexpected("`{` after the zone");
+            return None;
+        }
+
+        let mut bounds = None;
+        let mut layer = None;
+        let mut net = None;
+
+        while !self.done() && !self.eat(&TokenKind::RBrace) {
+            match self.peek_ident() {
+                Some("bounds") => {
+                    self.bump();
+                    let min_x = self.dimension();
+                    self.eat(&TokenKind::Comma);
+                    let min_y = self.dimension();
+                    let has_to = self.eat_word("to");
+                    let max_x = self.dimension();
+                    self.eat(&TokenKind::Comma);
+                    let max_y = self.dimension();
+                    match (min_x, min_y, has_to, max_x, max_y) {
+                        (Some(min_x), Some(min_y), true, Some(max_x), Some(max_y)) => {
+                            bounds = Some((min_x, min_y, max_x, max_y))
+                        }
+                        _ => self.unexpected("bounds like `5mm, 5mm to 35mm, 35mm`"),
+                    }
+                }
+                Some("layer") => {
+                    self.bump();
+                    match self.identifier() {
+                        Some(name) => layer = Some(name.value),
+                        None => self.unexpected("a layer name"),
+                    }
+                }
+                Some("net") => {
+                    self.bump();
+                    match self.identifier() {
+                        Some(name) => net = Some(name),
+                        None => self.unexpected("a net name"),
+                    }
+                }
+                _ => {
+                    self.bump();
+                }
+            }
+        }
+
+        let Some(bounds) = bounds else {
+            self.unexpected("a zone with bounds");
+            return None;
+        };
+
+        Some(ZoneDef {
+            kind,
+            name,
+            bounds,
+            layer,
+            net,
+            span: Span::new(start, self.behind()),
+        })
+    }
+
+    /// `netclass Power [width 0.5mm] { VCC GND }`.
+    ///
+    /// The same constraint block a net carries, stated once for a group. A net
+    /// that says something itself keeps its own answer; this fills in the rest.
+    fn netclass(&mut self, start: usize) -> Option<NetClassDef> {
+        self.bump(); // `netclass`
+        let name = match self.identifier() {
+            Some(name) => name,
+            None => {
+                self.unexpected("a net class name");
+                return None;
+            }
+        };
+        let constraints = self.net_constraints();
+
+        let mut members = Vec::new();
+        if self.eat(&TokenKind::LBrace) {
+            while !self.done() && !self.eat(&TokenKind::RBrace) {
+                if self.eat(&TokenKind::Comma) {
+                    continue;
+                }
+                match self.identifier() {
+                    Some(member) => members.push(member),
+                    None => {
+                        self.unexpected("a net name");
+                        self.bump();
+                    }
+                }
+            }
+        }
+
+        Some(NetClassDef {
+            name,
+            constraints,
+            members,
+            span: Span::new(start, self.behind()),
+        })
+    }
+
+    /// `outline { point 0mm, 0mm  point 40mm, 0mm ... }`.
+    ///
+    /// The ring is closed implicitly, which is why the reader does not look
+    /// for a repeat of the first point.
+    fn outline(&mut self, start: usize) -> Option<OutlineDef> {
+        self.bump(); // `outline`
+        if !self.eat(&TokenKind::LBrace) {
+            self.unexpected("`{` after `outline`");
+            return None;
+        }
+
+        let mut points = Vec::new();
+        while !self.done() && !self.eat(&TokenKind::RBrace) {
+            if !self.eat_word("point") {
+                self.unexpected("`point` inside an outline");
+                self.bump();
+                continue;
+            }
+            let x = self.dimension();
+            self.eat(&TokenKind::Comma);
+            let y = self.dimension();
+            match x.zip(y) {
+                Some(point) => points.push(point),
+                None => self.unexpected("a point like `10mm, 0mm`"),
+            }
+        }
+
+        Some(OutlineDef {
+            points,
+            span: Span::new(start, self.behind()),
+        })
+    }
+
+    /// Step past a property that could not be read, without leaving the block.
+    fn skip_to_next_property(&mut self) {
+        while self.at < self.tokens.len() {
+            match &self.tokens[self.at].kind {
+                TokenKind::RBrace => return,
+                TokenKind::Ident(word)
+                    if matches!(
+                        word.as_str(),
+                        "pad" | "silk" | "description" | "courtyard" | "bounds" | "layer" | "net"
+                    ) =>
+                {
+                    return
+                }
+                _ => self.at += 1,
+            }
+        }
     }
 }

@@ -29,11 +29,7 @@ fn examples_dir() -> PathBuf {
 
 /// Boards the reader does not claim yet, and why.
 const NOT_YET: &[(&str, &str)] = &[
-    ("custom-footprint.cypcb", "footprint definitions"),
-    ("four-layer.cypcb", "stackup"),
     ("invalid.cypcb", "written to fail parsing"),
-    ("pour-island.cypcb", "zones"),
-    ("simple-psu.cypcb", "netclass"),
     ("unknown_keyword.cypcb", "written to fail parsing"),
     ("v2-constraints.cypcb", "assertions and typed values"),
     ("v2-imports.cypcb", "imports and modules"),
