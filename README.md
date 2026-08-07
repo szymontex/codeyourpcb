@@ -255,6 +255,7 @@ Where CodeYourPCB differs: own rendering engine (no KiCad dependency), runs in b
 - [Getting Started](docs/user-guide/getting-started.md)
 - [Language Syntax](docs/SYNTAX.md)
 - [Architecture](docs/architecture.md)
+- [Routing](docs/routing.md) - what the autorouter does, the two settings that pay, and the nine measured and dropped
 - [Project Structure](docs/user-guide/project-structure.md)
 - [Library Management](docs/user-guide/library-management.md)
 - [Platform Differences (Web vs Desktop)](docs/user-guide/platform-differences.md)
