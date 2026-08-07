@@ -78,8 +78,15 @@ pub struct RouteCommand {
     /// boards and none is best everywhere, so the router asks the board rather
     /// than guessing - at roughly eight times the wall clock. On
     /// `examples/blink.cypcb` that is 0.06s against 0.9s, and 9 violations
-    /// with 6 shorts against 5 with 3. Use this when the wait matters more
-    /// than the board.
+    /// with 6 shorts against 5 with 3.
+    ///
+    /// What it costs is worth stating, because the default is not a middling
+    /// setting by accident: ranked against the other seven it comes **fourth
+    /// on every benchmark board**, and the winner differs each time -
+    /// `led_blink` 1 violation against the default's 2, `stm32_breakout`
+    /// 216/86 against 239/136, `multi_ic` 248/106 against 317/166. This flag
+    /// buys wall clock with the fourth-best board. Use it when the wait
+    /// matters more than the copper.
     #[arg(long)]
     pub fast: bool,
 }

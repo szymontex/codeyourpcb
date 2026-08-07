@@ -177,6 +177,59 @@ Three facts follow, and they bound what is worth trying:
 Half the violations of a finished board are gone by iteration 4 (286 to 148 on
 stm32_breakout). The leverage is in the head, not the tail.
 
+## Where the violations actually are, and where the default sits
+
+Two measurements taken on 2026-08-08, neither of them a knob.
+
+**The default is fourth of eight on every board.** `variant_picks_per_board`,
+ranked as the router ranks them - complete first, then fewest shorts, then
+composite:
+
+| board | winner | the default's place | winner vs default |
+|---|---|---|---|
+| `led_blink` | `High-Density` | 4th | 1 / 0 against 2 / 0 |
+| `stm32_breakout` | `Tight Pads` | 4th | 216 / 86 against 239 / 136 |
+| `multi_ic` | `Pad Aware` | 4th | 248 / 106 against 317 / 166 |
+
+Three different winners, and the shipped default is mid-table on all three. It
+is not a bad setting so much as nobody's best. `cypcb route --in-house` routes
+best-of-eight and hands over the winner, so the command line is unaffected;
+what runs on the default is `--fast`, the viewer's single-shot path, and every
+ratchet in CI.
+
+**More than half of every introduced violation is a trace on a part's pad, in a
+cell the grid had marked as a pad.** `grid_vs_checker`, PathFinder, introduced
+clearance violations cross-tabbed by what the grid thought was in the cell:
+
+| board | total | on a pad cell | `part <-> trace` on a pad cell |
+|---|---|---|---|
+| `stm32_breakout` | 206 | 151 (73%) | **109 (53%)** |
+| `multi_ic` | 215 | 175 (81%) | **112 (52%)** |
+
+The grid knew. The cell was marked `pad` and the search routed through it
+anyway, because a pad zone switches every obstacle off within its radius so
+that a route can reach the pad it is heading for - and inside that radius a
+*foreign* part's pad is switched off with the rest. That is the mechanism
+behind half the defect count on both dense boards, and it is the same one the
+margin sweep above moves: at two cells instead of three, stm32_breakout loses
+50 shorts.
+
+### What that does not license
+
+The margin wants to be 3 on `led_blink` and 2 on the two dense boards, and the
+boards separate cleanly by routes per grid cell - 0.0011 against 0.0120 and
+0.0322, an order of magnitude. A threshold anywhere between would reproduce
+every board's own best.
+
+It is not implemented, because a two-regime rule fitted on three boards and
+tested on the same three boards is not a measurement, it is a restatement. The
+dropped table above is what real experiments look like: most of them lost. This
+one would win by construction.
+
+**The prerequisite is more boards.** Until there is a fourth and a fifth
+benchmark that nobody tuned against, an adaptive margin cannot be told apart
+from a curve fit.
+
 ## Instruments that were measured and dropped
 
 Each of these was built, measured on all three fixtures, and reverted. The
