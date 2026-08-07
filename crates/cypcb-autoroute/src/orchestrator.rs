@@ -691,16 +691,25 @@ pub fn pad_to_grid_node(grid: &RoutingGrid, pad: &PadTarget) -> GridNode {
 /// The zone radius covers the pad's physical extent plus one cell of margin,
 /// so that routes can enter and exit the pad even though it's marked as an obstacle.
 pub fn pad_to_zone(grid: &RoutingGrid, pad: &PadTarget) -> PadZone {
+    pad_to_zone_with_margin(grid, pad, DEFAULT_PAD_ZONE_MARGIN_CELLS)
+}
+
+/// How many cells beyond the pad's own copper the zone opens by default.
+///
+/// Three cells is 0.762mm on the 0.254mm grid the dense fixtures use, which is
+/// wider than the gap between the two pads of an 0402. What that costs is
+/// measured in `pad_zone_margin_sweep`.
+pub const DEFAULT_PAD_ZONE_MARGIN_CELLS: u16 = 3;
+
+/// The same, with the margin stated.
+pub fn pad_to_zone_with_margin(grid: &RoutingGrid, pad: &PadTarget, margin: u16) -> PadZone {
     let (gx, gy) = grid.nm_to_grid(pad.position);
     let pad_radius_nm = pad.pad_size.0.raw().max(pad.pad_size.1.raw()) / 2;
-    // Pad radius in grid cells, plus clearance bloat, plus 1 cell margin
     let pad_radius_cells = ((pad_radius_nm + grid.resolution() - 1) / grid.resolution()) as u16;
-    // Add clearance cells (approx same as during grid construction) + margin
-    let clearance_cells = 3u16; // Generous but safe
     PadZone {
         cx: gx as u16,
         cy: gy as u16,
-        radius: pad_radius_cells + clearance_cells,
+        radius: pad_radius_cells + margin,
     }
 }
 

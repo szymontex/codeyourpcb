@@ -249,13 +249,41 @@ The 5 that reads best on multi_ic is not a better value:
 257, 278, 276 after - **31 violations of spread, 21 of shorts**, which swallows
 the 10 that separates 5 from 20. The variant stays at 20.
 
+### The pad opening, swept (`pad_zone_margin_cells`)
+
+A pad zone switches off every obstacle within its radius so a route can reach
+the pad it is heading for. The radius was the pad's own copper plus a flat
+three cells, under a comment reading "generous but safe" - 0.762mm on the
+0.254mm grid, wider than the gap between the two pads of an 0402.
+`pad_zone_margin_sweep`, after / shorts:
+
+| margin | led_blink | stm32_breakout | multi_ic |
+|---|---|---|---|
+| 0 cells | 1 / 1 | 250 / 91, **1 unrouted** | 406 / 193 |
+| 1 cell | 2 / 1 | 233 / 82 | 305 / 113 |
+| **2 cells** | 2 / 1 | **216 / 86** | **290 / 131** |
+| 3 cells (default) | 2 / 0 | 239 / 136 | 336 / 166 |
+| 5 cells | 4 / 1 | 273 / 164 | 353 / 189 |
+
+Two cells is better than the shipped three on both dense boards and on both
+columns - stm32_breakout by 23 violations and **50 shorts**, multi_ic by 46 and
+35, all outside the noise bands measured above. led_blink goes the other way,
+trading two near misses for one short, which under this project's ranking is
+the wrong direction. So it ships as the `PathFinder Tight Pads` variant rather
+than as the default, and **stm32_breakout picks it in best-of-eight** at
+216 / 86 where its previous pick, `Low-Via`, gave 216 / 114.
+
+Zero is not the floor: with no margin at all stm32_breakout leaves a connection
+unrouted and takes seven times as long, because a route cannot always reach a
+pad through the clearance the grid bloated around it.
+
 Settings that help one board and hurt another are kept as variants rather than
 defaults, which is what `--variants` is for: `pad_zone_blocks_foreign_copper`
 (Guarded Pads), `via_ring_penalty` (Priced Via Rings) and `foreign_pad_penalty`
-(Pad Aware, which multi_ic picks in best-of-seven at 267 after / 106 shorts
-against the default's 336 / 166, and which stm32_breakout does not). `PathFinder
-Bare Centre Line` is the router without the copper reservation, kept as a
-control.
+(Pad Aware, which multi_ic picks in best-of-eight at 267 after / 106 shorts
+against the default's 336 / 166) and `pad_zone_margin_cells` (Tight Pads, which
+stm32_breakout picks at 216 / 86). `PathFinder Bare Centre Line` is the router
+without the copper reservation, kept as a control.
 
 ## Verification
 
@@ -280,6 +308,9 @@ cargo test --release -p cypcb-autoroute --test resolution_sweep -- --ignored --n
 
 # What a foreign pad should cost, and how much of that price is noise
 cargo test --release -p cypcb-autoroute --test pad_price_sweep -- --ignored --nocapture
+
+# How wide the opening around a pad should be
+cargo test --release -p cypcb-autoroute --test pad_zone_margin_sweep -- --ignored --nocapture
 
 # Which variant each board picks
 cargo test --release -p cypcb-autoroute --test variant_picks_per_board -- --ignored --nocapture

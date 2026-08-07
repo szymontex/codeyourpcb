@@ -163,6 +163,13 @@ pub struct AutorouteConfig {
     /// Zero keeps the old behaviour.
     pub via_ring_penalty: f64,
 
+    /// How many cells beyond a pad's own copper its zone opens.
+    ///
+    /// The zone is the opening a route needs to reach the pad it is heading
+    /// for. Every cell of margin also opens the copper around whatever else is
+    /// that close, which on a dense board is the pin next door.
+    pub pad_zone_margin_cells: u16,
+
     /// Whether a route may enter a pad's keepout that another net's copper
     /// already occupies.
     ///
@@ -249,6 +256,7 @@ impl Default for AutorouteConfig {
             strategy: StrategyKind::default(),
             params: AutorouteParams::default(),
             via_ring_penalty: 0.0,
+            pad_zone_margin_cells: crate::orchestrator::DEFAULT_PAD_ZONE_MARGIN_CELLS,
             pad_zone_blocks_foreign_copper: false,
             reserve_trace_footprint: true,
             via_foreign_copper_penalty: 0.25,

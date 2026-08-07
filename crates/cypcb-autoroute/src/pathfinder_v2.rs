@@ -28,7 +28,7 @@ use crate::cost::RoutingCost;
 use crate::grid::{RoutingGrid, CELL_OBSTACLE, CELL_PAD};
 use crate::orchestrator::{
     build_spanning_tree, extract_ratsnest, is_multi_layer, order_nets, pad_to_grid_node,
-    pad_to_zone, NetRoute,
+    NetRoute,
 };
 use crate::pathfinder::{GridNode, PadZone};
 use crate::postprocess;
@@ -483,7 +483,18 @@ pub fn pathfinder_loop(
     // Precompute pad zones per net
     let pad_zones_per_net: Vec<Vec<PadZone>> = ratsnest
         .iter()
-        .map(|net| net.pads.iter().map(|pad| pad_to_zone(grid, pad)).collect())
+        .map(|net| {
+            net.pads
+                .iter()
+                .map(|pad| {
+                    crate::orchestrator::pad_to_zone_with_margin(
+                        grid,
+                        pad,
+                        config.pad_zone_margin_cells,
+                    )
+                })
+                .collect()
+        })
         .collect();
 
     // History cost escalation: starts at 0.5, increases by 0.1 per iteration

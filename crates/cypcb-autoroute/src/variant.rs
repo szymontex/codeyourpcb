@@ -42,6 +42,9 @@ pub struct VariantConfig {
     pub reserve_trace_footprint: bool,
     /// What crossing another net's pad copper costs, per cell.
     pub foreign_pad_penalty: f64,
+
+    /// How many cells beyond a pad's copper its zone opens.
+    pub pad_zone_margin_cells: u16,
 }
 
 impl VariantConfig {
@@ -58,6 +61,7 @@ impl VariantConfig {
             // differ in that knob alone.
             reserve_trace_footprint: true,
             foreign_pad_penalty: 0.0,
+            pad_zone_margin_cells: cypcb_autoroute_default_margin(),
         }
     }
 }
@@ -128,6 +132,7 @@ pub fn default_variant_configs() -> Vec<VariantConfig> {
             pad_zone_blocks_foreign_copper: false,
             reserve_trace_footprint: true,
             foreign_pad_penalty: 0.0,
+            pad_zone_margin_cells: cypcb_autoroute_default_margin(),
         },
         VariantConfig {
             name: "PathFinder Guarded Pads".to_string(),
@@ -140,6 +145,7 @@ pub fn default_variant_configs() -> Vec<VariantConfig> {
             pad_zone_blocks_foreign_copper: true,
             reserve_trace_footprint: true,
             foreign_pad_penalty: 0.0,
+            pad_zone_margin_cells: cypcb_autoroute_default_margin(),
         },
         // Reserving a trace's copper is the default since it was measured
         // better on every fixture and both columns. This is the control: the
@@ -158,6 +164,7 @@ pub fn default_variant_configs() -> Vec<VariantConfig> {
             pad_zone_blocks_foreign_copper: false,
             reserve_trace_footprint: true,
             foreign_pad_penalty: 20.0,
+            pad_zone_margin_cells: cypcb_autoroute_default_margin(),
         },
         VariantConfig {
             name: "PathFinder Bare Centre Line".to_string(),
@@ -167,8 +174,30 @@ pub fn default_variant_configs() -> Vec<VariantConfig> {
             pad_zone_blocks_foreign_copper: false,
             reserve_trace_footprint: false,
             foreign_pad_penalty: 0.0,
+            pad_zone_margin_cells: cypcb_autoroute_default_margin(),
+        },
+        // The opening around a pad, one cell narrower than the default. Every
+        // cell of margin switches off obstacles that far from the pad, and on a
+        // dense board that is the pin next door: stm32_breakout 239 -> 216
+        // violations with 136 -> 86 shorts, multi_ic 336 -> 290 and 166 -> 131.
+        // led_blink trades two near misses for one short, which is why this is
+        // a variant rather than the default.
+        VariantConfig {
+            name: "PathFinder Tight Pads".to_string(),
+            strategy: StrategyKind::PathFinder,
+            params: AutorouteParams::default(),
+            via_ring_penalty: 0.0,
+            pad_zone_blocks_foreign_copper: false,
+            reserve_trace_footprint: true,
+            foreign_pad_penalty: 0.0,
+            pad_zone_margin_cells: 2,
         },
     ]
+}
+
+/// The default opening, so a variant that does not care about it says so once.
+fn cypcb_autoroute_default_margin() -> u16 {
+    crate::orchestrator::DEFAULT_PAD_ZONE_MARGIN_CELLS
 }
 
 /// Full variant configs including ImprovedAStar — for native benchmarks only.
@@ -229,6 +258,7 @@ pub fn generate_variants(
             pad_zone_blocks_foreign_copper: config.pad_zone_blocks_foreign_copper,
             reserve_trace_footprint: config.reserve_trace_footprint,
             foreign_pad_penalty: config.foreign_pad_penalty,
+            pad_zone_margin_cells: config.pad_zone_margin_cells,
             // Variant exploration compares many routings; paying for repair on
             // each one triples the wall clock to rank candidates that are about
             // to be thrown away. The winner can be repaired afterwards.
