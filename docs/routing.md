@@ -1,9 +1,9 @@
 # Routing: what the autorouter does, and what has been measured on it
 
 This is the record of a vector that has run about twenty experiments on one
-algorithm. Two of them are in the shipped defaults. Nine are not, and each is
-here with the numbers that killed it, so nobody spends a week re-discovering
-them.
+algorithm. Two of them are in the shipped defaults, three are variants a board
+can pick, and ten are here with the numbers that killed them, so nobody spends
+a week re-discovering them.
 
 Read this before changing anything in `crates/cypcb-autoroute`.
 
@@ -41,24 +41,37 @@ The pieces worth knowing when reading the code:
 
 ## What is measured
 
-Two numbers per board, and they are not interchangeable:
+Three numbers per board, and mixing them up has cost this project a day
+already. Two of them are called "violations" by something that prints them:
 
-- **Violations**: everything the DRC reports that the fixture did not already
-  have. Introduced, not total - the benchmark fixtures are KiCad boards with
-  faults of their own.
+- **After**: every violation the DRC reports on the routed board. This is what
+  `RoutingScore::drc_violations` holds - `violation_count()`, no subtraction -
+  and therefore what the `DRC_RATCHETS` in `benchmark_validation.rs` compare
+  against.
+- **Introduced**: what the routed board reports that the fixture did not
+  already report, matched violation by violation on kind, coordinate and
+  message. This is what the sweeps below print, and what a routing experiment
+  should be read on: the fixtures are KiCad boards with faults of their own,
+  and an unrouted fixture reports every pin as unrouted.
 - **Shorts**: the violations measured at exactly 0.00mm. Copper touching
   copper. A board with a short cannot work; a board with a 0.05mm gap where
   0.13mm was required is a yield risk a fab may still build. The scorer counts
   both, `cypcb check` prints the split, and variant ranking puts shorts ahead
   of the composite.
 
-Where the numbers come from:
+Introduced is not after minus before: routing removes faults too. Every
+unrouted pin the fixture starts with is a violation that a successful route
+retires.
 
-| board | what it is | violations / shorts today |
-|---|---|---|
-| `led_blink.kicad_pcb` | small, 18 segments in the default routing | 2 / 0 |
-| `stm32_breakout.kicad_pcb` | dense, 296x256 cells at 0.254mm | 133 / 58 |
-| `multi_ic.kicad_pcb` | large, 197x158 cells at 0.508mm | 140 / 37 |
+Where the numbers come from (`drc_report`, 2026-08-07):
+
+| board | what it is | before | after (the ratchet) | introduced |
+|---|---|---|---|---|
+| `led_blink.kicad_pcb` | small, 21 routes | 12 | **2** | 2 |
+| `stm32_breakout.kicad_pcb` | dense, 296x256 cells at 0.254mm, 908 routes | 144 | **239** | 221 |
+| `multi_ic.kicad_pcb` | large, 197x158 cells at 0.508mm, 1003 routes | 289 | **336** | 247 |
+
+Shorts today: 0, 136, 166.
 
 ## The two settings that pay
 
@@ -86,19 +99,29 @@ connections unrouted.
 A via pays for each foreign cell inside the keepout its ring needs. A price,
 not a veto - refusing such a via was measured and reverted.
 
-The value was swept, not chosen (`via_price_sweep::what_a_via_should_pay_for_crowding`):
+The value was swept, not chosen
+(`via_price_sweep::what_a_via_should_pay_for_crowding`, introduced / shorts,
+re-measured 2026-08-07 after the router stopped deleting vias):
 
 | price | led_blink | stm32_breakout | multi_ic | total |
 |---|---|---|---|---|
-| 0.00 | 3 / 0 | 168 / 82 | 61 / 29 | 232 / 111 |
-| **0.25** | 2 / 0 | 121 / 58 | 73 / 37 | **196 / 95** |
-| 0.50 | 2 / 0 | 159 / 91 | 87 / 54 | 248 / 145 |
-| 1.00 | 2 / 0 | 138 / 76 | 109 / 59 | 249 / 135 |
-| 2.00 | 2 / 0 | 147 / 84 | 164 / 105 | 313 / 189 |
+| 0.00 | 4 / 1 | 265 / 129 | 272 / 173 | 541 / 303 |
+| **0.25** | 2 / 0 | 221 / 136 | 247 / 166 | **470 / 302** |
+| 0.50 | 2 / 0 | 234 / 145 | 250 / 165 | 486 / 310 |
+| 1.00 | 2 / 0 | 205 / 125 | 237 / 150 | 444 / 275 |
+| 2.00 | 2 / 0 | 195 / 119 | 254 / 179 | 451 / 298 |
 
-The response is not monotone and the boards do not agree: multi_ic is happiest
-at zero, stm32_breakout has a floor at 0.25, and led_blink needs any price
-above zero to stop putting a via 0.05mm from a foreign trace.
+The response is still not monotone, and one thing about it changed when the
+vias stopped being deleted: **the boards now agree that a via should pay
+something.** In the pre-fix sweep multi_ic was happiest at zero and the price
+was a compromise; today zero is the worst column on all three fixtures, which
+is the expected shape - a price on a via only bites once the via survives to
+the output.
+
+What the table does not license is a re-tune. 1.00 reads 16 violations better
+than 0.25 on stm32_breakout and 10 on multi_ic, and both of those are inside
+the noise band measured below (38 and 30). The shipped value stays at 0.25
+until something moves a board further than the router moves it on its own.
 
 ## The noise band, and why the ratchets carry it
 
@@ -108,12 +131,12 @@ is what negotiated congestion does on its own
 
 | price | stm32_breakout | multi_ic |
 |---|---|---|
-| 0.22 | 145 / 74 | 92 / 54 |
-| 0.24 | 126 / 63 | 77 / 42 |
-| 0.25 | 121 / 58 | 73 / 37 |
-| 0.26 | 149 / 81 | 61 / 28 |
-| 0.28 | 138 / 66 | 75 / 44 |
-| **spread** | **28 violations** | **31 violations** |
+| 0.22 | 221 / 127 | 231 / 143 |
+| 0.24 | 207 / 115 | 261 / 163 |
+| 0.25 | 221 / 136 | 247 / 166 |
+| 0.26 | 245 / 147 | 258 / 166 |
+| 0.28 | 238 / 119 | 249 / 162 |
+| **spread** | **38 violations, 32 shorts** | **30 violations, 23 shorts** |
 
 That is the same size as the differences a sweep is choosing between. **A
 tuning value picked inside this band is noise with a decimal point.**
@@ -126,7 +149,9 @@ returned 2/0 at every price above zero.
 
 ## What the trajectory looks like
 
-`where_the_band_comes_from` prints the overused count per iteration:
+`where_the_band_comes_from` prints the overused count per iteration. The counts
+below were measured on 2026-08-06, before the router stopped deleting vias;
+what is claimed from them is the shape, and the shape is what bounds the work:
 
 ```
 stm32_breakout 0.24: 12 iterations, converged false, [695, 514, 340, 361, 377, 336, 297, 284, 289, 319, 304]
@@ -168,16 +193,25 @@ numbers are introduced violations unless stated.
 | Return the iteration with the fewest overused cells | stm32_breakout 133 -> 152, multi_ic 140 -> 174 |
 | Seed the congestion map from ratsnest density | stm32_breakout 121 -> 142, multi_ic 73 -> 112 at the lightest weight; multi_ic segments 706 -> 1188 |
 | Route the crowded nets first instead of the short ones | stm32_breakout 259 -> 302, multi_ic 143 -> 150; faster, which is not the objective |
+| Refuse a foreign net's pad inside the routing net's own pad zone | stm32_breakout 239 -> 250 after, and **six connections abandoned**; multi_ic 336 -> 451 |
 
 The pattern across all of them: **pricing copper that exists pays, blocking or
 pricing space somebody might want does not.** An empty congestion map is not
 blindness - it lets the first net take the cheap line and charges the rest for
 what it actually took.
 
-Two settings that help one board and hurt another are kept as variants rather
-than defaults, which is what `--variants` is for: `pad_zone_blocks_foreign_copper`
-(Guarded Pads) and `via_ring_penalty` (Priced Via Rings). `PathFinder Bare
-Centre Line` is the router without the copper reservation, kept as a control.
+The last row is the seventh veto tried in this vector and the seventh to lose,
+which is now a strong enough prior to state as a rule: **if the instrument you
+are about to write returns a bool, write it as an f64 instead and measure the
+price.** The same geometry, priced, is the `PathFinder Pad Aware` variant below.
+
+Settings that help one board and hurt another are kept as variants rather than
+defaults, which is what `--variants` is for: `pad_zone_blocks_foreign_copper`
+(Guarded Pads), `via_ring_penalty` (Priced Via Rings) and `foreign_pad_penalty`
+(Pad Aware, which multi_ic picks in best-of-seven at 267 after / 106 shorts
+against the default's 336 / 166, and which stm32_breakout does not). `PathFinder
+Bare Centre Line` is the router without the copper reservation, kept as a
+control.
 
 ## Verification
 
@@ -185,8 +219,11 @@ Every number above comes from one of these. All are `--ignored` diagnostics
 except the gate.
 
 ```sh
-# The gate: routes all three fixtures, holds both columns
+# The gate: routes all three fixtures, holds both columns. Prints "after".
 cargo test --release -p cypcb-autoroute --test benchmark_validation -- --ignored
+
+# Before, after and introduced per fixture, with the kinds behind each
+cargo test --release -p cypcb-autoroute --test drc_report -- --ignored --nocapture
 
 # The via price, and how much of it is noise
 cargo test --release -p cypcb-autoroute --test via_price_sweep -- --ignored --nocapture
