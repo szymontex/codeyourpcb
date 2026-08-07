@@ -5,6 +5,8 @@ import {
   innerVisibleFromUrlLayers,
   INNER_LAYER_COLORS,
   createLayerVisibility,
+  innerLayerIndex,
+  innerLayerDepth,
 } from '../layers';
 
 /**
@@ -52,5 +54,27 @@ describe('a shared link and the inner layers', () => {
 
   it('hides them only when the link says so', () => {
     expect(innerVisibleFromUrlLayers(['top', 'no-inner'])).toBe(false);
+  });
+});
+
+describe('where an inner layer sits', () => {
+  it('reads Inner1 as the first inner layer and an outer name as none', () => {
+    expect(innerLayerIndex('Inner1')).toBe(0);
+    expect(innerLayerIndex('Inner2')).toBe(1);
+    expect(innerLayerIndex('Top')).toBeNull();
+    expect(innerLayerIndex('Bottom')).toBeNull();
+    // The engine's zero-based name is gone; if it ever comes back it names no
+    // layer rather than silently meaning the first one.
+    expect(innerLayerIndex('Inner0')).toBeNull();
+  });
+
+  it('spaces two inner layers evenly through a 1.6mm board', () => {
+    // Faces at -0.8 and +0.8, so the pair sits a third of the way in from each.
+    expect(innerLayerDepth(0, 2, 1.6)).toBeCloseTo(-0.2667, 3);
+    expect(innerLayerDepth(1, 2, 1.6)).toBeCloseTo(0.2667, 3);
+  });
+
+  it('puts a single inner layer in the middle', () => {
+    expect(innerLayerDepth(0, 1, 1.6)).toBeCloseTo(0, 6);
   });
 });

@@ -15,7 +15,14 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { BoardSnapshot, TraceInfo, ViaInfo, ComponentInfo } from './types';
-import { LAYER_COLORS, LAYER_MASK, type LayerVisibility } from './layers';
+import {
+  LAYER_COLORS,
+  LAYER_MASK,
+  INNER_LAYER_COLORS,
+  innerLayerDepth,
+  innerLayerIndex,
+  type LayerVisibility,
+} from './layers';
 import { fetch3DModelByUuid } from './jlcpcb';
 import { parseEasyEdaOBJ } from './easyeda-obj-parser';
 
@@ -255,6 +262,19 @@ export class Renderer3D {
     const viaGroup = new THREE.Group();
     viaGroup.name = 'layer-vias';
 
+    // A four-layer board's middle. `buildTraces` used to ask "is this Top?"
+    // and put everything else on the bottom, so an inner trace was drawn as
+    // bottom copper - not missing, which would be honest, but wrong.
+    const innerCount = Math.max(0, (snapshot.board.layer_count ?? 2) - 2);
+    const innerGroups: THREE.Group[] = [];
+    for (let index = 0; index < innerCount; index++) {
+      const group = new THREE.Group();
+      group.name = `layer-inner-${index + 1}`;
+      this.boardGroup.add(group);
+      this.layerGroups.set(`inner${index + 1}`, group);
+      innerGroups.push(group);
+    }
+
     this.boardGroup.add(topGroup);
     this.boardGroup.add(bottomGroup);
     this.boardGroup.add(viaGroup);
@@ -264,7 +284,7 @@ export class Renderer3D {
     this.layerGroups.set('vias', viaGroup);
 
     // Build copper geometry (hidden under solder mask except at pads)
-    this.buildTraces(snapshot.traces || [], topGroup, bottomGroup);
+    this.buildTraces(snapshot.traces || [], topGroup, bottomGroup, innerGroups);
     this.buildPads(snapshot.components || [], topGroup, bottomGroup);
     this.buildVias(snapshot.vias || [], viaGroup);
 
@@ -313,6 +333,14 @@ export class Renderer3D {
 
     if (topGroup) topGroup.visible = layers.topCopper;
     if (bottomGroup) bottomGroup.visible = layers.bottomCopper;
+
+    // Absent means visible, the same reading the 2D view takes.
+    const innerVisible = layers.innerCopper !== false;
+    for (const [key, group] of this.layerGroups) {
+      if (key.startsWith('inner')) {
+        group.visible = innerVisible;
+      }
+    }
     // Vias visible when either copper layer is visible
     if (viaGroup) viaGroup.visible = layers.topCopper || layers.bottomCopper;
   }
@@ -599,11 +627,18 @@ export class Renderer3D {
    * Each trace segment → flat quad (4 verts, 2 tris) at the correct Z-height.
    * All segments on a layer are merged into one BufferGeometry for draw-call efficiency.
    */
-  private buildTraces(traces: TraceInfo[], topGroup: THREE.Group, bottomGroup: THREE.Group): void {
+  private buildTraces(
+    traces: TraceInfo[],
+    topGroup: THREE.Group,
+    bottomGroup: THREE.Group,
+    innerGroups: THREE.Group[] = [],
+  ): void {
     const topPositions: number[] = [];
     const bottomPositions: number[] = [];
+    const innerPositions: number[][] = innerGroups.map(() => []);
     let topSegCount = 0;
     let bottomSegCount = 0;
+    let innerSegCount = 0;
 
     const CAP_SEGMENTS = 8; // semicircle resolution for round caps
 
@@ -631,11 +666,30 @@ export class Renderer3D {
     for (const trace of traces) {
       const widthMm = trace.width * NM_TO_MM;
       const halfW = widthMm / 2;
+      const innerIndex = innerLayerIndex(trace.layer) ?? -1;
+      const isInner = innerIndex >= 0 && innerIndex < innerPositions.length;
       const isTop = trace.layer === 'Top';
-      const positions = isTop ? topPositions : bottomPositions;
+      const positions = isInner
+        ? innerPositions[innerIndex]
+        : isTop
+          ? topPositions
+          : bottomPositions;
 
-      const zBot = isTop ? F_COPPER_BOT_Z : B_COPPER_BOT_Z;
-      const zTop = isTop ? F_COPPER_TOP_Z : B_COPPER_TOP_Z;
+      // Inner copper sits inside the substrate, evenly spaced between the two
+      // faces, so which layer a trace is on can be read from the side.
+      const innerZ = isInner
+        ? innerLayerDepth(innerIndex, innerPositions.length, BOARD_THICKNESS_MM)
+        : 0;
+      const zBot = isInner
+        ? innerZ - COPPER_THICKNESS_MM / 2
+        : isTop
+          ? F_COPPER_BOT_Z
+          : B_COPPER_BOT_Z;
+      const zTop = isInner
+        ? innerZ + COPPER_THICKNESS_MM / 2
+        : isTop
+          ? F_COPPER_TOP_Z
+          : B_COPPER_TOP_Z;
 
       // Track endpoints for round caps (deduplicate shared points)
       const capPoints = new Set<string>();
@@ -689,15 +743,24 @@ export class Renderer3D {
           pushRoundCap(positions, ex, ey, halfW, zBot, zTop);
         }
 
-        if (isTop) topSegCount++;
+        if (isInner) innerSegCount++;
+        else if (isTop) topSegCount++;
         else bottomSegCount++;
       }
     }
 
     addCopperMesh(topPositions, LAYER_COLORS.top_copper, 'traces-top', topGroup);
     addCopperMesh(bottomPositions, LAYER_COLORS.bottom_copper, 'traces-bottom', bottomGroup);
+    innerPositions.forEach((positions, index) => {
+      addCopperMesh(
+        positions,
+        INNER_LAYER_COLORS[index % INNER_LAYER_COLORS.length],
+        `traces-inner-${index + 1}`,
+        innerGroups[index],
+      );
+    });
 
-    this._traceSegmentCount = topSegCount + bottomSegCount;
+    this._traceSegmentCount = topSegCount + bottomSegCount + innerSegCount;
   }
 
   /**

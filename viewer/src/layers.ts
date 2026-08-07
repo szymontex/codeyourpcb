@@ -240,3 +240,29 @@ export const INNER_LAYER_COLORS = ['#2E8B2E', '#7A5CD1', '#C08A2E', '#2E8B8B'] a
 export function innerVisibleFromUrlLayers(layers: string[]): boolean {
   return !layers.includes('no-inner');
 }
+
+/**
+ * Which inner layer a trace names, or `null` if it names an outer one.
+ *
+ * `Inner1` is the first inner layer, the way the DSL writes it and the way the
+ * engine now sends it. Both views ask this rather than matching the string
+ * twice.
+ */
+export function innerLayerIndex(layer: string): number | null {
+  const match = layer.match(/^Inner(\d+)$/);
+  if (!match) return null;
+  const number = parseInt(match[1], 10);
+  return number >= 1 ? number - 1 : null;
+}
+
+/**
+ * Where an inner layer sits through the thickness of the board, in mm from the
+ * board's centre.
+ *
+ * Evenly spaced between the two faces, so which layer a trace is on can be
+ * read from the side of a 3D view instead of guessed from its colour.
+ */
+export function innerLayerDepth(index: number, count: number, thicknessMm: number): number {
+  if (count <= 0) return 0;
+  return -thicknessMm / 2 + ((index + 1) * thicknessMm) / (count + 1);
+}
