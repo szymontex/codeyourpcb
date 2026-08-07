@@ -110,14 +110,23 @@ done
 **Purpose**: Foundation types used across the entire codebase
 
 **Key Types**:
-- `Length`, `Angle`, `Area` - Typed units with compile-time safety
-- `Point`, `Rect`, `Circle`, `Polygon` - 2D geometry primitives
-- `Layer` - PCB layer enumeration (F.Cu, B.Cu, F.Mask, etc.)
+- `Nm` - a length in nanometres, the one unit the whole codebase measures in
+- `Point`, `Rect` - the 2D geometry every other crate builds on
+- `pour` - what a copper zone becomes: rectangle subtraction with the fab's
+  clearance, thermal spokes, and the area arithmetic that checks it
+
+`Length`, `Angle`, `Area`, `Circle` and `Polygon` were listed here and none of
+them exist - the vocabulary is deliberately small. `Layer` lives in
+`cypcb-world`, not here, because it is part of the board model rather than of
+geometry.
 
 **Dependencies**: None (standalone)
 
 
-Core provides the vocabulary for all other crates. All measurements use typed units (no raw floats), preventing unit confusion bugs (mm vs mil vs inches).
+Core provides the vocabulary for all other crates. Every measurement is an
+integer of nanometres rather than a float, so a board cannot drift by rounding
+and mm-against-mil confusion cannot compile. The pour geometry sits here
+because both the exporter and the renderer need the same answer.
 
 ### cypcb-parser
 
@@ -144,9 +153,13 @@ Parsing happens differently on native vs WASM:
 **Purpose**: ECS-based board model (single source of truth for PCB state)
 
 **Key Types**:
-- `Board` - Bevy ECS world containing all entities
-- Components: `Component`, `Net`, `Zone`, `Track`, `Via`, `Text`
-- Systems: Query and update board state
+- `BoardWorld` - the Bevy ECS world holding every entity
+- Components: `RefDes`, `Position`, `Rotation`, `FootprintRef`, `NetConnections`,
+  `Trace`, `Via`, `Zone`, `Side`
+- `copper::fill_zone` - the copper a pour becomes on one layer, cut against
+  every other piece of copper there. The Gerber writer and the viewer's
+  snapshot both call it, so the screen and the fabrication files cannot
+  disagree
 
 **Dependencies**: `bevy_ecs`, `rstar` (spatial index), `cypcb-parser`, `cypcb-core`
 
@@ -164,11 +177,20 @@ The world uses Bevy ECS for performance and flexibility:
 
 **Purpose**: Design Rule Checking engine
 
-**Key Checks**:
-- Clearance violations (copper-to-copper spacing)
-- Net assignments (floating pins, net conflicts)
-- Annular ring violations (drill too large for pad)
-- Edge clearance (features too close to board edge)
+**Key Checks**: seventeen rules are registered. The list moves, so it ships as
+the command that answers it rather than as a copy that goes stale:
+
+```bash
+grep -c 'Box::new(rules::' crates/cypcb-drc/src/lib.rs   # how many run
+grep -oE 'Box::new\(rules::[A-Za-z]+\)' crates/cypcb-drc/src/lib.rs  # which
+```
+
+The ones worth knowing when reading the code: `ClearanceRule` measures pad
+copper per pad with per-pad nets and reports per offending segment;
+`CourtyardClearanceRule` keeps placement collisions visible now that clearance
+no longer measures part bodies; `ZoneOverlapRule` catches two planes on
+different nets over the same copper; and `PourIslandRule` fills every pour and
+reports the sheets no thermal spoke reaches - copper connected to nothing.
 
 **Dependencies**: `cypcb-world`, `cypcb-core`, `bevy_ecs`, `rstar`
 
@@ -176,7 +198,15 @@ The world uses Bevy ECS for performance and flexibility:
 **Features**:
 - `parallel` (optional): Use rayon for multi-threaded checks (not WASM compatible)
 
-DRC runs incrementally - only checks affected regions when board changes. Results stored as ECS entities, allowing visualization to query and highlight violations.
+`run_drc` runs every rule over the whole board and returns a `DrcResult`;
+violations are values in that report, not ECS entities. `PcbEngine::run_drc_incremental`
+in `cypcb-render` is a re-run under a name that promises less work than it
+does - the incremental path does not exist yet, and naming it here is cheaper
+than someone measuring a speed-up that was never implemented.
+
+A violation carries what it measured: `actual` and `required` distances, so a
+short at 0.00mm can be told from a gap under spec, and an `area` where the
+fault is a piece of copper rather than a point.
 
 ### cypcb-autoroute
 

@@ -90,7 +90,7 @@ An LLM can generate this, review it, refactor it, and catch mistakes — just li
 | Bidirectional sync — edit trace code ↔ board updates in real-time | Done |
 | Net constraints — `[width 0.5mm]`, `[current 2A]` per net | Done |
 | IPC-2221 auto-width from current rating | Done |
-| DRC — clearance, drill, connectivity, trace width, hole-to-hole, solder mask, annular ring, edge, courtyard | Done |
+| DRC — clearance, drill, connectivity, trace width, hole-to-hole, solder mask, annular ring, edge, courtyard, zone overlap, pour island | Done — sixteen rules; `cypcb check` prints copper-on-copper apart from a gap under spec, and gives an orphaned plane its size and corners |
 | DRC — silkscreen clearance | Done — a Rust rule checks a footprint's own artwork against every other part's pads on the same side |
 | Gerber / Excellon / BOM / pick-and-place export | Done |
 | Monaco editor with context-aware completions | Done |
@@ -104,7 +104,7 @@ An LLM can generate this, review it, refactor it, and catch mistakes — just li
 | KiCad component library import | Done |
 | KiCad `.kicad_pcb` import | Done — `cypcb parse-kicad`, used by the routing benchmarks |
 | KiCad `.kicad_pcb` export | Planned |
-| Copper pour / ground planes | Zones carry a net and the ratsnest treats a pad inside a pour as connected; filling the pour with copper is not implemented |
+| Copper pour / ground planes | Done — a zone is filled against the copper on its layer, with the fab's clearance to foreign copper and thermal spokes to its own pads. The same geometry reaches the Gerbers, the viewer and the checker, which reports two planes shorted together and copper the fill left connected to nothing. See `examples/pour-island.cypcb` |
 | Module system — reusable circuit blocks | Done — `module` defines one, `use M as N at 10mm, 5mm` places it, modules nest. See `examples/v2-modules.cypcb` |
 | `import` — block libraries across files | Done — resolved relative to the importing file; modules, footprints and interfaces cross, a design's own board and parts do not. See `examples/v2-imports.cypcb` |
 | `assert` — the design's own claims, checked | Done — `board.*`, `<part>.value` and `<net>.current/width/clearance`; anything else is reported as not checked rather than skipped |
@@ -274,9 +274,14 @@ it was, which is checked end to end: routed copper reaches the Gerbers, the
 cut path matches the outline the source declares, the mask opens over every
 pad and the pick-and-place names the side each part is assembled on.
 
-The main gaps are copper pour (zones carry a net; filling them is not
-implemented) and the autorouter's toolbar button, which is hidden while
-routing quality is worked on.
+A copper pour is filled by the engine and drawn from it: the viewer sends the
+zones it parsed and gets back the rectangles a fabricator receives, so the
+screen cannot disagree with the Gerber. Keepouts are outlined, and copper a
+pour left stranded is outlined too, because an island looks exactly like the
+rest of the plane.
+
+The main gaps are the autorouter's toolbar button, hidden while routing quality
+is worked on, and `interface`, which parses and does nothing.
 
 PRs welcome.
 
