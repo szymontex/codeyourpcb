@@ -607,14 +607,36 @@ pub struct Dimension {
     pub value: f64,
     /// Unit of measurement.
     pub unit: Unit,
+    /// Whether the source wrote the unit, or the grammar supplied it.
+    ///
+    /// A bare number is millimetres, which is the grammar's rule and is not
+    /// going to change - but it is an assumption, and the tool should be able
+    /// to say when it made one. Somebody thinking in mils who writes `200`
+    /// gets 200mm.
+    pub unit_written: bool,
     /// Span covering the dimension.
     pub span: Span,
 }
 
 impl Dimension {
-    /// Create a new dimension.
+    /// Create a new dimension, with the unit the source wrote.
     pub fn new(value: f64, unit: Unit, span: Span) -> Self {
-        Dimension { value, unit, span }
+        Dimension {
+            value,
+            unit,
+            unit_written: true,
+            span,
+        }
+    }
+
+    /// A bare number, which the grammar reads as millimetres.
+    pub fn implied_mm(value: f64, span: Span) -> Self {
+        Dimension {
+            value,
+            unit: Unit::Mm,
+            unit_written: false,
+            span,
+        }
     }
 
     /// Convert to nanometers using the core library.

@@ -392,11 +392,11 @@ mod tests {
     }
 
     fn mm(value: f64) -> AssertOperand {
-        AssertOperand::Dimension(AstDimension {
+        AssertOperand::Dimension(AstDimension::new(
             value,
-            unit: cypcb_core::Unit::Mm,
-            span: Span::new(0, 0),
-        })
+            cypcb_core::Unit::Mm,
+            Span::new(0, 0),
+        ))
     }
 
     fn count(value: f64) -> AssertOperand {

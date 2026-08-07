@@ -634,6 +634,18 @@ BottomCopper (25.527,10.033) -> (30.861,10.033)
 - **Eight instruments in the dropped table lost after being built; this one lost before, for the price of two fixtures.** That is what the refusal bought.
 - The ranking question is unchanged: every rule picks the same variant on `qfp_fanout`, so four of five boards agree under all seven rules and it still rests on `shift_driver` alone.
 - Both generators now share `tests/fixtures/benchmark/kicad_emit.py`. Proven safe rather than assumed: regenerating `shift_driver.kicad_pcb` through the extracted emitter leaves it **byte-identical** - `git diff --quiet` returns clean.
+- DONE: **warnings became diagnostics too, and the first real one is a silent unit assumption.** `SyncResult::warnings` was `Vec<String>` - a sentence with no line, printed straight after the errors that had just learned to point at one. It is `Vec<SyncWarning>` now: message, help, source and span, `miette::Severity::Warning`, rendered by `check` the same way errors are.
+- **A bare number is millimetres everywhere, and nothing said so.** Measured through `cypcb parse`: `size 20 x 20` gives `width_nm: 20000000`, `at 5, 10` gives `5000000, 10000000`, `[width 0.3]` gives `300000`. The grammar's rule, and not one that should change - but somebody thinking in mils who writes `size 800 x 600` asks for 800mm. The board size is where getting it wrong resizes everything, so that is where it warns:
+```
+  ⚠ board size 20 has no unit, read as 20mm
+   ╭─[2:10]
+ 2 │     size 20 x 20
+   ·          ─┬
+   ·           ╰── assumed here
+  help: write `20mm` to say so, or `20mil` if that is what you meant
+```
+- It cannot be noisy: **no example board omits a unit**, checked across all 19. Placements and widths carry the same silent default and are left alone for now - a placement grossly wrong lands off the board and `edge-clearance` reports it, which the board size does not.
+- `Dimension` gained `unit_written`, and **both parsers had to learn it**, which is what caught the sloppy edit: the tree-sitter path is behind a feature flag, so `cargo test --workspace` compiled none of it and passed while that file did not build. `differential` and `error_parity` are the tests that see it - 3 and 4 passed.
 - DONE: **every semantic error already carried its line, and nothing was showing it.** `SyncError` holds the source text, a span and a help string and implements `miette::Diagnostic`; the CLI printed it with `Display` - `Semantic error: unknown component: 'R9'`, no file, no line, no column, on a board that may be five hundred lines long. Parse errors, three lines earlier in the same command, went through `miette::Report` and rendered the offending line with a caret. Five call sites, one renderer each, changed to the report the errors were built for:
 ```
 cypcb::sync::unknown_pin

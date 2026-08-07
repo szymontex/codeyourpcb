@@ -377,6 +377,47 @@ impl Diagnostic for SyncError {
 
 /// Result of AST to ECS synchronization.
 ///
+/// Something the board did not say, and what was assumed instead.
+///
+/// Warnings were `String` until 2026-08-08 - a sentence with no line, printed
+/// after the errors that had just learned to point at one. A warning nobody can
+/// locate is a warning nobody acts on.
+#[derive(Debug, Clone, thiserror::Error)]
+#[error("{message}")]
+pub struct SyncWarning {
+    /// What was assumed.
+    pub message: String,
+    /// What to write instead, when there is something to write.
+    pub help: Option<String>,
+    /// Source code for miette display.
+    pub src: String,
+    /// The span the assumption was made at.
+    pub span: miette::SourceSpan,
+}
+
+impl miette::Diagnostic for SyncWarning {
+    fn severity(&self) -> Option<miette::Severity> {
+        Some(miette::Severity::Warning)
+    }
+
+    fn source_code(&self) -> Option<&dyn SourceCode> {
+        Some(&self.src)
+    }
+
+    fn labels(&self) -> Option<Box<dyn Iterator<Item = LabeledSpan> + '_>> {
+        Some(Box::new(std::iter::once(LabeledSpan::new_with_span(
+            Some("assumed here".to_string()),
+            self.span,
+        ))))
+    }
+
+    fn help<'a>(&'a self) -> Option<Box<dyn fmt::Display + 'a>> {
+        self.help
+            .as_ref()
+            .map(|h| Box::new(h) as Box<dyn fmt::Display>)
+    }
+}
+
 /// Contains any errors and warnings that occurred during the process.
 /// The synchronization continues even when errors occur, producing
 /// a partial world that can still be useful for error reporting.
@@ -385,7 +426,7 @@ pub struct SyncResult {
     /// Semantic errors encountered during sync.
     pub errors: Vec<SyncError>,
     /// Non-fatal warnings.
-    pub warnings: Vec<String>,
+    pub warnings: Vec<SyncWarning>,
 }
 
 impl SyncResult {
@@ -577,22 +618,50 @@ pub fn sync_ast_to_world(
 }
 
 /// Synchronize a board definition to the world.
-fn sync_board(board: &BoardDef, _source: &str, world: &mut BoardWorld, result: &mut SyncResult) {
+fn sync_board(board: &BoardDef, source: &str, world: &mut BoardWorld, result: &mut SyncResult) {
+    let at_the_board = span_to_source_span(&board.name.span);
+
     // Extract size, defaulting if not specified
     let (width, height) = if let Some(size) = &board.size {
+        // A bare number is millimetres - the grammar's rule, and not one that
+        // is going to change. It is still an assumption, and this is the one
+        // place where getting it wrong resizes the whole board: somebody
+        // thinking in mils who writes `size 800 x 600` asks for 800mm.
+        for dimension in [&size.width, &size.height] {
+            if !dimension.unit_written {
+                result.warnings.push(SyncWarning {
+                    message: format!(
+                        "board size {} has no unit, read as {}mm",
+                        dimension.value, dimension.value
+                    ),
+                    help: Some(format!(
+                        "write `{}mm` to say so, or `{}mil` if that is what you meant",
+                        dimension.value, dimension.value
+                    )),
+                    src: source.to_string(),
+                    span: span_to_source_span(&dimension.span),
+                });
+            }
+        }
         (size.width.to_nm(), size.height.to_nm())
     } else {
-        result
-            .warnings
-            .push("Board has no size, defaulting to 100mm x 100mm".into());
+        result.warnings.push(SyncWarning {
+            message: "board has no size, defaulting to 100mm x 100mm".into(),
+            help: Some("state one with `size 50mm x 40mm`".into()),
+            src: source.to_string(),
+            span: at_the_board,
+        });
         (Nm::from_mm(100.0), Nm::from_mm(100.0))
     };
 
     // Extract layer count, defaulting to 2
     let layers = board.layers.unwrap_or_else(|| {
-        result
-            .warnings
-            .push("Board has no layer count, defaulting to 2 layers".into());
+        result.warnings.push(SyncWarning {
+            message: "board has no layer count, defaulting to 2 layers".into(),
+            help: Some("state one with `layers 2`".into()),
+            src: source.to_string(),
+            span: at_the_board,
+        });
         2
     });
 
@@ -2822,16 +2891,18 @@ fn place_in_instance(component: &mut ComponentDef, origin: (i64, i64), angle_deg
         let rotated_x = x * cos - y * sin;
         let rotated_y = x * sin + y * cos;
 
-        position.x = AstDimension {
-            value: (origin.0 as f64 + rotated_x) / 1_000_000.0,
-            unit: cypcb_core::Unit::Mm,
-            span: position.x.span,
-        };
-        position.y = AstDimension {
-            value: (origin.1 as f64 + rotated_y) / 1_000_000.0,
-            unit: cypcb_core::Unit::Mm,
-            span: position.y.span,
-        };
+        // A placement this code computed, not one the source wrote - so the
+        // unit is stated rather than assumed, and nothing warns about it.
+        position.x = AstDimension::new(
+            (origin.0 as f64 + rotated_x) / 1_000_000.0,
+            cypcb_core::Unit::Mm,
+            position.x.span,
+        );
+        position.y = AstDimension::new(
+            (origin.1 as f64 + rotated_y) / 1_000_000.0,
+            cypcb_core::Unit::Mm,
+            position.y.span,
+        );
     }
 
     if angle_deg != 0.0 {

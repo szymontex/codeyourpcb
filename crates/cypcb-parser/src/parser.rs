@@ -764,6 +764,7 @@ impl CypcbParser {
             }
         };
 
+        let unit_present = get_child_by_field(node, "unit").is_some();
         let unit = if let Some(unit_node) = get_child_by_field(node, "unit") {
             let unit_text = node_text(source, &unit_node);
             match unit_text.parse::<Unit>() {
@@ -781,7 +782,11 @@ impl CypcbParser {
             Unit::Mm // Default unit
         };
 
-        Some(Dimension::new(value, unit, span_of(node)))
+        Some(if unit_present {
+            Dimension::new(value, unit, span_of(node))
+        } else {
+            Dimension::implied_mm(value, span_of(node))
+        })
     }
 
     /// Convert a string literal node (extracts value without quotes).

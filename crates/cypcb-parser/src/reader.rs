@@ -265,7 +265,7 @@ impl<'a> Reader<'a> {
                 self.at += 1;
                 Some(Dimension::new(value, unit, Span::new(span.start, end)))
             }
-            None => Some(Dimension::new(value, Unit::Mm, span)),
+            None => Some(Dimension::implied_mm(value, span)),
         }
     }
 

@@ -67,7 +67,7 @@ impl CheckCommand {
         }
 
         for warning in &sync_result.warnings {
-            eprintln!("Warning: {}", warning);
+            eprintln!("{:?}", miette::Report::new(warning.clone()));
         }
 
         if self.no_drc {
