@@ -7,6 +7,7 @@ import './theme/colors.css';
 import { themeManager } from './theme/theme-manager';
 import { loadWasm, isWasmLoaded, type PcbEngine } from './wasm';
 import type { BoardSnapshot, ViolationInfo } from './types';
+import type { SourceDiagnostic } from './editor/lsp-bridge';
 import { createViewport, fitBoard, screenToWorld } from './viewport';
 import { render, type RenderState } from './renderer';
 import { createDefaultRenderConfig, buildPadNetMap } from './render-config';
@@ -725,6 +726,20 @@ async function init(): Promise<void> {
   const { updateDiagnostics } = await import('./editor/lsp-bridge');
 
   /**
+   * The engine's own account of what is wrong and where.
+   *
+   * `load_source` hands back the messages as one blob of text; the line each
+   * belongs to comes from here, because a message does not carry one.
+   */
+  function readDiagnostics(engine: PcbEngine): SourceDiagnostic[] {
+    try {
+      return JSON.parse(engine.get_diagnostics_json()) as SourceDiagnostic[];
+    } catch {
+      return [];
+    }
+  }
+
+  /**
    * Setup editor-to-board sync with debounce
    * When editor content changes, parse and update the board viewer
    */
@@ -763,7 +778,7 @@ async function init(): Promise<void> {
         // Update inline diagnostics (LSP bridge)
         const monaco = getMonacoModule();
         if (monaco && editorInstance) {
-          updateDiagnostics(monaco, editorInstance, errors, snapshot!.violations || []);
+          updateDiagnostics(monaco, editorInstance, readDiagnostics(engine), snapshot!.violations || []);
         }
 
         // Update error badge
@@ -993,7 +1008,7 @@ async function init(): Promise<void> {
         editorInstance.setValue(source);
         suppressSync = false;
         const monaco = getMonacoModule();
-        if (monaco) updateDiagnostics(monaco, editorInstance, errors, snap.violations || []);
+        if (monaco) updateDiagnostics(monaco, editorInstance, readDiagnostics(engine), snap.violations || []);
       }
 
       if (snap.board) {
@@ -1031,7 +1046,7 @@ async function init(): Promise<void> {
         editorInstance.setValue(source);
         suppressSync = false;
         const monaco = getMonacoModule();
-        if (monaco) updateDiagnostics(monaco, editorInstance, errors, snap.violations || []);
+        if (monaco) updateDiagnostics(monaco, editorInstance, readDiagnostics(engine), snap.violations || []);
       }
 
       if (snap.board) {
@@ -1063,7 +1078,7 @@ async function init(): Promise<void> {
         editorInstance.setValue(source);
         suppressSync = false;
         const monaco = getMonacoModule();
-        if (monaco) updateDiagnostics(monaco, editorInstance, null, snap.violations || []);
+        if (monaco) updateDiagnostics(monaco, editorInstance, readDiagnostics(engine), snap.violations || []);
       }
 
       if (snap.board) {
@@ -1609,7 +1624,7 @@ async function init(): Promise<void> {
           // Update inline diagnostics
           const monaco = getMonacoModule();
           if (monaco) {
-            updateDiagnostics(monaco, editorInstance, errors, snap.violations || []);
+            updateDiagnostics(monaco, editorInstance, readDiagnostics(engine), snap.violations || []);
           }
         }
 
@@ -1711,7 +1726,7 @@ async function init(): Promise<void> {
         editorInstance.setValue(result.content);
         suppressSync = false;
         const monaco = getMonacoModule();
-        if (monaco) updateDiagnostics(monaco, editorInstance, errors, snap2.violations || []);
+        if (monaco) updateDiagnostics(monaco, editorInstance, readDiagnostics(engine), snap2.violations || []);
       }
 
       if (snap2.board) {
@@ -2104,7 +2119,7 @@ async function init(): Promise<void> {
       // Update inline diagnostics
       const monaco = getMonacoModule();
       if (monaco) {
-        updateDiagnostics(monaco, editorInstance, errors, reloadSnap.violations || []);
+        updateDiagnostics(monaco, editorInstance, readDiagnostics(engine), reloadSnap.violations || []);
       }
     }
 
@@ -2955,7 +2970,7 @@ async function init(): Promise<void> {
         // Update inline diagnostics
         const monaco = getMonacoModule();
         if (monaco) {
-          updateDiagnostics(monaco, editorInstance, errors, desktopSnap.violations || []);
+          updateDiagnostics(monaco, editorInstance, readDiagnostics(engine), desktopSnap.violations || []);
         }
       }
 
@@ -3070,7 +3085,7 @@ async function init(): Promise<void> {
         // Clear inline diagnostics
         const monaco = getMonacoModule();
         if (monaco) {
-          updateDiagnostics(monaco, editorInstance, null, []);
+          updateDiagnostics(monaco, editorInstance, readDiagnostics(engine), []);
         }
       }
 

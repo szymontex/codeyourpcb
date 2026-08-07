@@ -21,6 +21,7 @@ wasm = ["cypcb-parser/rust-parser", "cypcb-world/sync"]
 [dependencies]
 # Workspace dependencies
 cypcb-core = { workspace = true }
+miette = { workspace = true }
 cypcb-parser = { workspace = true }
 cypcb-world = { workspace = true, default-features = false }
 cypcb-drc = { path = "../cypcb-drc" }

@@ -25,6 +25,18 @@ mod snapshot;
 
 pub use snapshot::*;
 
+/// The byte range a diagnostic's first label covers, or the start of the file.
+///
+/// Both `ParseError` and `SyncError` carry their location as a miette label,
+/// and this is the one place that has to know it.
+fn first_label(diagnostic: &dyn miette::Diagnostic) -> (usize, usize) {
+    diagnostic
+        .labels()
+        .and_then(|mut labels| labels.next())
+        .map(|label| (label.offset(), label.offset() + label.len()))
+        .unwrap_or((0, 0))
+}
+
 use cypcb_core::{Nm, Point};
 use cypcb_drc::{run_drc, DesignRules, DrcViolation};
 use cypcb_world::footprint::FootprintLibrary;
@@ -68,6 +80,8 @@ pub struct PcbEngine {
     source: String,
     /// DRC violations from the last load.
     violations: Vec<DrcViolation>,
+    /// Parse and sync errors from the last load, with the line each is on.
+    diagnostics: Vec<SourceDiagnostic>,
     /// Time taken for last DRC run in milliseconds.
     drc_duration_ms: u64,
     /// Package name -> 3D model identifier, supplied by the host.
@@ -90,6 +104,7 @@ impl PcbEngine {
             footprint_lib: FootprintLibrary::new(),
             source: String::new(),
             violations: Vec::new(),
+            diagnostics: Vec::new(),
             drc_duration_ms: 0,
             #[cfg(any(feature = "native", feature = "wasm"))]
             model_3d: std::collections::HashMap::new(),
@@ -260,10 +275,21 @@ impl PcbEngine {
         // Parse the source
         let parse_result = parse_source_text(source);
 
-        // Collect parse errors
+        // Collect parse errors. The message goes to the caller as before; the
+        // span goes with it now, because the editor cannot recover a line from
+        // a sentence and used to guess line 1.
+        self.diagnostics.clear();
         let mut errors: Vec<String> = Vec::new();
         for e in &parse_result.errors {
-            errors.push(format!("{}", e));
+            let message = format!("{e}");
+            let (start, end) = first_label(e);
+            self.diagnostics.push(SourceDiagnostic::from_span(
+                message.clone(),
+                source,
+                start,
+                end,
+            ));
+            errors.push(message);
         }
 
         // Sync AST to world
@@ -274,9 +300,29 @@ impl PcbEngine {
             &mut self.footprint_lib,
         );
 
-        // Collect sync errors
+        // Collect sync errors, spans included.
         for err in &sync_result.errors {
-            errors.push(format!("{}", err));
+            let message = format!("{err}");
+            let (start, end) = first_label(err);
+            self.diagnostics.push(SourceDiagnostic::from_span(
+                message.clone(),
+                source,
+                start,
+                end,
+            ));
+            errors.push(message);
+        }
+
+        // And what the board did not say, which the browser never showed at
+        // all - the CLI learned to print these on 2026-08-08.
+        for warning in &sync_result.warnings {
+            let message = format!("{warning}");
+            let (start, end) = (
+                warning.span.offset(),
+                warning.span.offset() + warning.span.len(),
+            );
+            self.diagnostics
+                .push(SourceDiagnostic::from_span(message, source, start, end));
         }
 
         // Run DRC after sync (even if there were parse/sync errors, check what we have)
@@ -505,6 +551,17 @@ impl PcbEngine {
     /// Used by the JS routing engine to enforce clearance during interactive routing.
     pub fn get_min_clearance_nm(&self) -> i64 {
         DesignRules::default().min_clearance.0
+    }
+
+    /// Get the last load's diagnostics as JSON, with the line each one is on.
+    ///
+    /// `load_source` returns the messages as one string, and the editor used to
+    /// recover a line from them by scanning for the word "line" followed by a
+    /// number. No parse or sync error writes that - the location lives in a
+    /// span - so every squiggle landed on line 1 whatever line the fault was
+    /// on. The span is carried across as a line and column here instead.
+    pub fn get_diagnostics_json(&self) -> String {
+        serde_json::to_string(&self.diagnostics).unwrap_or_else(|_| "[]".to_string())
     }
 
     /// Get DRC violations as JSON string (WASM-friendly).

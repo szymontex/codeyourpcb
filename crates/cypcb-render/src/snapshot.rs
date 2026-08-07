@@ -76,6 +76,56 @@ pub struct PourInfo {
 ///
 /// This is a simplified representation of `cypcb_drc::DrcViolation`
 /// suitable for JavaScript serialization and rendering.
+///
+/// A parse or sync error, with the line and column it points at.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SourceDiagnostic {
+    /// What went wrong.
+    pub message: String,
+    /// 1-based line the span starts on.
+    pub line: u32,
+    /// 1-based column the span starts at.
+    pub column: u32,
+    /// 1-based line the span ends on.
+    pub end_line: u32,
+    /// 1-based column the span ends at.
+    pub end_column: u32,
+}
+
+/// Where in the source a diagnostic points.
+///
+/// Byte offsets are what the parser records; an editor wants lines and
+/// columns, and converting once here is cheaper and less error-prone than
+/// asking every consumer to walk the source.
+impl SourceDiagnostic {
+    /// Build one from a byte range over `source`.
+    pub fn from_span(message: String, source: &str, start: usize, end: usize) -> Self {
+        let (line, column) = line_and_column(source, start);
+        let (end_line, end_column) = line_and_column(source, end.max(start));
+        SourceDiagnostic {
+            message,
+            line,
+            column,
+            end_line,
+            end_column,
+        }
+    }
+}
+
+/// 1-based line and column of a byte offset, counting characters rather than
+/// bytes so a board with a non-ASCII comment still points at the right place.
+fn line_and_column(source: &str, offset: usize) -> (u32, u32) {
+    let offset = offset.min(source.len());
+    let before = &source[..offset];
+    let line = before.matches('\n').count() + 1;
+    let column = before
+        .rfind('\n')
+        .map(|nl| before[nl + 1..].chars().count())
+        .unwrap_or_else(|| before.chars().count())
+        + 1;
+    (line as u32, column as u32)
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ViolationInfo {
     /// Violation type (clearance, drill_size, unconnected_pin, etc.)

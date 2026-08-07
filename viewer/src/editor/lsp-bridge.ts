@@ -10,6 +10,15 @@
 
 import type { ViolationInfo } from '../types';
 
+/** A parse or sync message with the line and column the engine says it is on. */
+export interface SourceDiagnostic {
+  message: string;
+  line: number;
+  column: number;
+  end_line: number;
+  end_column: number;
+}
+
 // ============================================================================
 // Diagnostics (EDIT-03)
 // ============================================================================
@@ -17,7 +26,7 @@ import type { ViolationInfo } from '../types';
 export function updateDiagnostics(
   monaco: typeof import('monaco-editor'),
   editor: any,
-  parseErrors: string | null,
+  diagnostics: SourceDiagnostic[],
   violations: ViolationInfo[]
 ): void {
   const model = editor.getModel();
@@ -25,17 +34,23 @@ export function updateDiagnostics(
 
   const markers: any[] = [];
 
-  if (parseErrors && parseErrors.trim()) {
-    for (const errorMsg of parseErrors.split('\n').filter(l => l.trim())) {
-      const lineMatch = errorMsg.match(/[Ll]ine\s+(\d+)/);
-      const lineNum = Math.max(1, Math.min(lineMatch ? parseInt(lineMatch[1], 10) : 1, model.getLineCount()));
-      markers.push({
-        severity: monaco.MarkerSeverity.Error,
-        message: errorMsg,
-        startLineNumber: lineNum, startColumn: 1,
-        endLineNumber: lineNum, endColumn: model.getLineMaxColumn(lineNum),
-      });
-    }
+  // Where the engine says the fault is, not where a regex guessed.
+  //
+  // This read the line out of the message with /[Ll]ine\s+(\d+)/ and fell back
+  // to 1. No parse or sync message writes the word "line" - the location lives
+  // in a span the engine used to drop at the boundary - so every squiggle
+  // landed on line 1 whatever line the fault was on.
+  for (const d of diagnostics) {
+    const line = Math.max(1, Math.min(d.line, model.getLineCount()));
+    const endLine = Math.max(line, Math.min(d.end_line, model.getLineCount()));
+    markers.push({
+      severity: monaco.MarkerSeverity.Error,
+      message: d.message,
+      startLineNumber: line,
+      startColumn: Math.max(1, d.column),
+      endLineNumber: endLine,
+      endColumn: Math.max(d.column + 1, d.end_column),
+    });
   }
 
   for (const v of violations) {

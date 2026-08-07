@@ -84,6 +84,16 @@ export class PcbEngine {
      */
     export_traces_as_dsl(): string;
     /**
+     * Get the last load's diagnostics as JSON, with the line each one is on.
+     *
+     * `load_source` returns the messages as one string, and the editor used to
+     * recover a line from them by scanning for the word "line" followed by a
+     * number. No parse or sync error writes that - the location lives in a
+     * span - so every squiggle landed on line 1 whatever line the fault was
+     * on. The span is carried across as a line and column here instead.
+     */
+    get_diagnostics_json(): string;
+    /**
      * Get the minimum copper clearance in nanometers.
      *
      * Returns the clearance value from the active design rules (default preset).
@@ -223,6 +233,7 @@ export interface InitOutput {
     readonly pcbengine_auto_route_variants: (a: number, b: number) => void;
     readonly pcbengine_auto_route_with_params: (a: number, b: number, c: number, d: number) => void;
     readonly pcbengine_export_traces_as_dsl: (a: number, b: number) => void;
+    readonly pcbengine_get_diagnostics_json: (a: number, b: number) => void;
     readonly pcbengine_get_min_clearance_nm: (a: number) => bigint;
     readonly pcbengine_get_snapshot: (a: number) => number;
     readonly pcbengine_get_trace_at_point: (a: number, b: bigint, c: bigint, d: bigint) => number;

@@ -141,6 +141,14 @@ export interface PcbEngine {
    * Returns an empty string on success, an error message otherwise.
    */
   register_footprint(name: string, pads: PadInfo[], silk: SilkShape[]): string;
+  /**
+   * The last load's parse and sync messages, each with the line it is about.
+   *
+   * `load_source` returns them as one blob of text, and the editor used to
+   * recover a line by scanning that text for the word "line" followed by a
+   * number - which no message writes, so every squiggle landed on line 1.
+   */
+  get_diagnostics_json(): string;
   /** Load and parse a .cypcb source file, returns error message if failed */
   load_source(source: string): string;
   /** Load routing results from .ses file content */
@@ -558,6 +566,10 @@ export class WasmPcbEngineAdapter implements PcbEngine {
     return this.wasmEngine.register_footprint(name, JSON.stringify(pads), JSON.stringify(silk));
   }
 
+  get_diagnostics_json(): string {
+    return (this.wasmEngine as unknown as { get_diagnostics_json(): string }).get_diagnostics_json();
+  }
+
   load_source(source: string): string {
     // The engine parses. Until 2026-08-07 this line read `parseSource(source)`
     // - a second reader of the same language, written in TypeScript, which did
@@ -773,6 +785,12 @@ class MockPcbEngine implements PcbEngine {
   register_footprint(name: string, pads: PadInfo[], silk: SilkShape[]): string {
     this.registered.set(name, { pads, silk });
     return '';
+  }
+
+  get_diagnostics_json(): string {
+    // The fallback engine does not read the language, so it has nothing to
+    // say about a line of it.
+    return '[]';
   }
 
   load_source(_source: string): string {
