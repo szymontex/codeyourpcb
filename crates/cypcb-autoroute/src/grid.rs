@@ -32,6 +32,10 @@ pub const CELL_VIA: u8 = 1 << 3;
 /// Generic obstacle (clearance bloat, board edge, etc.)
 pub const CELL_OBSTACLE: u8 = 1 << 4;
 
+/// A component as `populate_pads` reads it: where it sits, how it is turned,
+/// which footprint it uses, and the net behind each of its pins.
+type ComponentPlacement = (Point, f64, String, Vec<(String, u32)>);
+
 /// Statistics about the routing grid.
 #[derive(Debug, Clone, Default)]
 pub struct GridStats {
@@ -209,7 +213,7 @@ impl RoutingGrid {
         use cypcb_world::{FootprintRef, Position, Rotation};
 
         // Collect component data to avoid borrow conflict
-        let components: Vec<(Point, f64, String, Vec<(String, u32)>)> = {
+        let components: Vec<ComponentPlacement> = {
             let ecs = world.ecs_mut();
             let mut query = ecs.query::<(
                 &Position,

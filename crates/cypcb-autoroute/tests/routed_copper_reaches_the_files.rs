@@ -16,6 +16,10 @@ use cypcb_router::apply_routes;
 use cypcb_rules::presets::{PresetRuleSet, RulesPreset};
 use cypcb_world::components::trace::Trace;
 use cypcb_world::components::Layer;
+/// A drawn line as a Gerber reports it: where it starts and where it ends.
+type Stroke = ((f64, f64), (f64, f64));
+/// One end of a stroke, in millimetres.
+type Point2 = (f64, f64);
 
 fn fixture_path(filename: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -126,7 +130,7 @@ fn what_the_router_lays_is_what_the_fabricator_gets() {
         let bottom = read("B_Cu.gbr");
         // A four-layer board routes on its inner pair, and those files exist
         // only since the exporter started reading the board's own stack.
-        let inner: Vec<Vec<((f64, f64), (f64, f64))>> = (1..=4)
+        let inner: Vec<Vec<Stroke>> = (1..=4)
             .map(|n| {
                 walk(&dir)
                     .into_iter()
@@ -136,7 +140,7 @@ fn what_the_router_lays_is_what_the_fabricator_gets() {
             })
             .collect();
 
-        let routed: Vec<(Layer, (f64, f64), (f64, f64))> = {
+        let routed: Vec<(Layer, Point2, Point2)> = {
             let ecs = world.ecs_mut();
             let mut query = ecs.query::<&Trace>();
             query

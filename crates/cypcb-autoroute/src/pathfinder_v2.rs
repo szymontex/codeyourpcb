@@ -38,11 +38,6 @@ use crate::strategy::RoutingStrategy;
 use crate::via_optimizer::optimize_vias;
 use crate::AutorouteConfig;
 
-/// What crossing another net's pad copper costs the search.
-///
-/// Priced rather than forbidden, for the reason written where it is used.
-const FOREIGN_PAD_PENALTY: f64 = 20.0;
-
 /// What a layer change on a pad's copper costs the search.
 ///
 /// Large enough that a route takes any reasonable detour instead, small enough
@@ -355,7 +350,7 @@ fn drop_pads_existing_copper_already_joins(world: &mut BoardWorld, ratsnest: &mu
         // a net that meet only through a via read as two pieces and the router
         // adds a connection between them that already exists.
         let mut piece: Vec<usize> = (0..traces.len()).collect();
-        fn find(piece: &mut Vec<usize>, index: usize) -> usize {
+        fn find(piece: &mut [usize], index: usize) -> usize {
             let mut root = index;
             while piece[root] != root {
                 root = piece[root];
@@ -619,22 +614,19 @@ pub fn pathfinder_loop(
                 let any_end = is_multi_layer(to_pad.layer_mask);
 
                 // Route with congestion-augmented cost
-                let mut path = find_path_congestion_augmented(
-                    grid,
-                    start,
-                    end,
+                let search = Search {
                     rules,
                     net_id,
-                    config.via_cost_multiplier,
-                    config.params.layer_preference,
-                    any_end,
-                    net_pad_zones,
-                    config.pad_zone_blocks_foreign_copper,
-                    &congestion_map,
-                    false,
-                    config.via_foreign_copper_penalty,
-                    config.foreign_pad_penalty,
-                );
+                    pad_zones: net_pad_zones,
+                    via_cost_multiplier: config.via_cost_multiplier,
+                    layer_preference: config.params.layer_preference,
+                    block_foreign_copper: config.pad_zone_blocks_foreign_copper,
+                    via_foreign_copper_penalty: config.via_foreign_copper_penalty,
+                    foreign_pad_penalty: config.foreign_pad_penalty,
+                    yield_halo: false,
+                };
+                let mut path =
+                    find_path_congestion_augmented(grid, start, end, any_end, &congestion_map, &search);
 
                 // A reservation that cannot be relaxed is a veto, and three
                 // measured experiments in this vector say a veto costs more
@@ -644,21 +636,17 @@ pub fn pathfinder_loop(
                 // connection is a board that does not work; a tight gap is a
                 // violation the checker will name.
                 if path.is_none() && config.reserve_trace_footprint {
+                    let relaxed = Search {
+                        yield_halo: true,
+                        ..search
+                    };
                     path = find_path_congestion_augmented(
                         grid,
                         start,
                         end,
-                        rules,
-                        net_id,
-                        config.via_cost_multiplier,
-                        config.params.layer_preference,
                         any_end,
-                        net_pad_zones,
-                        config.pad_zone_blocks_foreign_copper,
                         &congestion_map,
-                        true,
-                        config.via_foreign_copper_penalty,
-                        config.foreign_pad_penalty,
+                        &relaxed,
                     );
                 }
 
@@ -918,22 +906,45 @@ fn foreign_cells_in_via_keepout(
     count
 }
 
+/// Everything the search charges for beyond distance, and the net it is
+/// charging on behalf of.
+///
+/// Gathered into one argument because the list had grown to fourteen: each
+/// experiment in this vector that survived measurement left a knob behind, and
+/// a fourteen-argument call is a place for two of them to be swapped by
+/// accident.
+struct Search<'a> {
+    rules: &'a dyn RoutingRuleSet,
+    net_id: u32,
+    pad_zones: &'a [PadZone],
+    via_cost_multiplier: f64,
+    layer_preference: f64,
+    block_foreign_copper: bool,
+    via_foreign_copper_penalty: f64,
+    foreign_pad_penalty: f64,
+    /// Whether a net with nowhere else to go may cross reserved copper.
+    yield_halo: bool,
+}
+
 fn find_path_congestion_augmented(
     grid: &mut RoutingGrid,
     start: GridNode,
     end: GridNode,
-    rules: &dyn RoutingRuleSet,
-    net_id: u32,
-    via_cost_multiplier: f64,
-    layer_preference: f64,
     any_end_layer: bool,
-    pad_zones: &[PadZone],
-    block_foreign_copper: bool,
     congestion_map: &CongestionMap,
-    yield_halo: bool,
-    via_foreign_copper_penalty: f64,
-    foreign_pad_penalty: f64,
+    search: &Search<'_>,
 ) -> Option<Vec<GridNode>> {
+    let Search {
+        rules,
+        net_id,
+        pad_zones,
+        via_cost_multiplier,
+        layer_preference,
+        block_foreign_copper,
+        via_foreign_copper_penalty,
+        foreign_pad_penalty,
+        yield_halo,
+    } = *search;
     let grid_w = grid.width();
     let grid_h = grid.height();
     let layer_count = grid.layer_count();
@@ -1268,21 +1279,24 @@ mod tests {
         let rules = TestRules::new();
         let congestion = CongestionMap::new(20, 20, 1);
 
+        let search = Search {
+            rules: &rules,
+            net_id: 1,
+            pad_zones: &[],
+            via_cost_multiplier: 1.0,
+            layer_preference: 0.0,
+            block_foreign_copper: false,
+            via_foreign_copper_penalty: 0.0,
+            foreign_pad_penalty: 0.0,
+            yield_halo: false,
+        };
         let path = find_path_congestion_augmented(
             &mut grid,
             (0, 0, 0),
             (19, 19, 0),
-            &rules,
-            1,
-            1.0,
-            0.0,
-            false,
-            &[],
             false,
             &congestion,
-            false,
-            0.0,
-            0.0,
+            &search,
         );
 
         assert!(path.is_some(), "Should find path on empty grid");

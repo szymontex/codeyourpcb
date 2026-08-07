@@ -78,7 +78,7 @@ impl DrcRule for PourIslandRule {
 fn unconnected_islands(pieces: &[Rect], spokes: &[Rect]) -> Vec<Rect> {
     let mut parent: Vec<usize> = (0..pieces.len()).collect();
 
-    fn find(parent: &mut Vec<usize>, index: usize) -> usize {
+    fn find(parent: &mut [usize], index: usize) -> usize {
         let mut root = index;
         while parent[root] != root {
             root = parent[root];

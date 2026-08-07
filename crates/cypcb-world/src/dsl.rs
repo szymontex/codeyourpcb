@@ -217,27 +217,6 @@ pub fn traces_as_dsl(world: &mut BoardWorld) -> String {
     output
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use cypcb_core::Nm;
-
-    #[test]
-    fn millimetres_round_trip_exactly() {
-        // The DSL is the storage format, so a value written out and read back
-        // has to be the value that went in - at 1nm resolution, six decimals.
-        for nm in [Nm(1), Nm(127_000), Nm(1_000_000), Nm(99_999_999)] {
-            let text = format_mm(nm.to_mm());
-            let parsed: f64 = text.parse().expect("a number");
-            assert_eq!(
-                Nm((parsed * 1_000_000.0).round() as i64),
-                nm,
-                "{text} did not come back as {nm:?}"
-            );
-        }
-    }
-}
-
 /// ` layers Top to Inner1`, or nothing at all for a via that goes through.
 ///
 /// Written only when it says something: a through via with the pair spelled
@@ -264,5 +243,26 @@ fn layer_keyword(layer: crate::components::Layer) -> String {
         Layer::BottomCopper => "Bottom".to_string(),
         Layer::Inner(n) => format!("Inner{}", n + 1),
         other => format!("{other:?}"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use cypcb_core::Nm;
+
+    #[test]
+    fn millimetres_round_trip_exactly() {
+        // The DSL is the storage format, so a value written out and read back
+        // has to be the value that went in - at 1nm resolution, six decimals.
+        for nm in [Nm(1), Nm(127_000), Nm(1_000_000), Nm(99_999_999)] {
+            let text = format_mm(nm.to_mm());
+            let parsed: f64 = text.parse().expect("a number");
+            assert_eq!(
+                Nm((parsed * 1_000_000.0).round() as i64),
+                nm,
+                "{text} did not come back as {nm:?}"
+            );
+        }
     }
 }

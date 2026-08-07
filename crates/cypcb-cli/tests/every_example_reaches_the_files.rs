@@ -427,7 +427,7 @@ fn check_the_files(
         // from. A board whose CPL is short by one part is assembled with a gap.
         let parts = placed_parts(world);
         if !parts.is_empty() {
-            let cpl = assembly_file(&dir, "CPL.csv", &name);
+            let cpl = assembly_file(&dir, "CPL.csv", name);
             let rows: Vec<Vec<String>> = cpl
                 .lines()
                 .skip(1)
@@ -464,7 +464,7 @@ fn check_the_files(
                 }
             }
 
-            let bom = assembly_file(&dir, "BOM.csv", &name);
+            let bom = assembly_file(&dir, "BOM.csv", name);
             let mut listed: Vec<String> = Vec::new();
             let mut quantity_total = 0usize;
             for line in bom.lines().skip(1).filter(|line| !line.trim().is_empty()) {
@@ -624,7 +624,10 @@ fn a_routed_board_reaches_the_files_too() {
     let top_strokes = read("F_Cu.gbr");
     let bottom_strokes = read("B_Cu.gbr");
 
-    let routed: Vec<(cypcb_world::components::Layer, (f64, f64), (f64, f64))> = {
+/// One end of a drawn line, in millimetres.
+type Point2 = (f64, f64);
+
+    let routed: Vec<(cypcb_world::components::Layer, Point2, Point2)> = {
         let ecs = world.ecs_mut();
         let mut query = ecs.query::<&Trace>();
         query

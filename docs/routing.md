@@ -194,6 +194,7 @@ numbers are introduced violations unless stated.
 | Seed the congestion map from ratsnest density | stm32_breakout 121 -> 142, multi_ic 73 -> 112 at the lightest weight; multi_ic segments 706 -> 1188 |
 | Route the crowded nets first instead of the short ones | stm32_breakout 259 -> 302, multi_ic 143 -> 150; faster, which is not the objective |
 | Refuse a foreign net's pad inside the routing net's own pad zone | stm32_breakout 239 -> 250 after, and **six connections abandoned**; multi_ic 336 -> 451 |
+| Weight the pad price by depth into the pad's disc, full on its copper and tapering across the clearance | multi_ic 267 -> 413 after at price 20 and 106 -> 242 shorts; stm32_breakout better at 5 and 50, worse at 20; no price where both improve |
 
 The pattern across all of them: **pricing copper that exists pays, blocking or
 pricing space somebody might want does not.** An empty congestion map is not
@@ -204,6 +205,37 @@ The last row is the seventh veto tried in this vector and the seventh to lose,
 which is now a strong enough prior to state as a rule: **if the instrument you
 are about to write returns a bool, write it as an f64 instead and measure the
 price.** The same geometry, priced, is the `PathFinder Pad Aware` variant below.
+
+### The pad price, swept (`foreign_pad_penalty`)
+
+A net's pad zone opens every cell near any of its own pins so a route can reach
+them, and the pin next door comes free with it: 109 of stm32_breakout's 118
+part-to-trace faults are routes taking that opening. The price shipped at 20 on
+one measured point, which is the mistake the via price made before it was
+swept. `pad_price_sweep::what_a_foreign_pad_should_cost`, after / shorts:
+
+| price | led_blink | stm32_breakout | multi_ic |
+|---|---|---|---|
+| 0 (default) | 2 / 0 | 239 / 136 | 336 / 166 |
+| 5 | 1 / 1 | 313 / 175 | 257 / 102 |
+| **20 (Pad Aware)** | 1 / 1 | 280 / 141 | **267 / 106** |
+| 50 | 1 / 1 | 318 / 178 | 466 / 249 |
+| 100 | 1 / 1 | 332 / 166 | 573 / 299 |
+
+Three readings, and only one of them is a result:
+
+1. **multi_ic wants the price** - 336 to 257-267 after, 166 to about 105
+   shorts, far outside any noise band measured on this board.
+2. **stm32_breakout does not.** Every price makes it worse; it picks `Low-Via`
+   in best-of-seven and never sees this one.
+3. **led_blink trades the wrong way.** Two near misses become one short at
+   every price above zero, which is backwards under this project's own
+   ranking, and is why it keeps `High-Density`.
+
+The 5 that reads best on multi_ic is not a better value:
+`how_much_of_the_pad_price_is_noise` routes it at 4, 5, 6 and 7 and gets 288,
+257, 278, 276 after - **31 violations of spread, 21 of shorts**, which swallows
+the 10 that separates 5 from 20. The variant stays at 20.
 
 Settings that help one board and hurt another are kept as variants rather than
 defaults, which is what `--variants` is for: `pad_zone_blocks_foreign_copper`
@@ -233,6 +265,9 @@ cargo test --release -p cypcb-autoroute --test where_the_band_comes_from -- --ig
 
 # What a finer grid costs
 cargo test --release -p cypcb-autoroute --test resolution_sweep -- --ignored --nocapture
+
+# What a foreign pad should cost, and how much of that price is noise
+cargo test --release -p cypcb-autoroute --test pad_price_sweep -- --ignored --nocapture
 
 # Which variant each board picks
 cargo test --release -p cypcb-autoroute --test variant_picks_per_board -- --ignored --nocapture
