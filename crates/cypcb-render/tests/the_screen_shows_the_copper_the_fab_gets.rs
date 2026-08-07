@@ -170,3 +170,73 @@ fn a_zone_sent_in_a_snapshot_comes_back_as_filled_copper() {
         "the copper is the zone itself when nothing is in its way"
     );
 }
+
+/// Two planes on different nets over the same copper have to reach the panel.
+///
+/// The viewer takes its violations from the engine on every `get_snapshot`, so
+/// a zone rule that fires in Rust should be on screen without anything else
+/// being wired. This is the check that it is - the pour is drawn now, and a
+/// drawing with no warning beside it is worse than no drawing.
+#[test]
+fn overlapping_planes_are_reported_to_whoever_holds_the_snapshot() {
+    let snapshot = serde_json::json!({
+        "board": {
+            "name": "t",
+            "width_nm": 40_000_000i64,
+            "height_nm": 40_000_000i64,
+            "layer_count": 2
+        },
+        "components": [],
+        "nets": [],
+        "violations": [],
+        "traces": [],
+        "vias": [],
+        "ratsnest": [],
+        "zones": [
+            {
+                "name": "gnd",
+                "kind": "pour",
+                "layer_mask": 1,
+                "net": "GND",
+                "bounds": [5_000_000i64, 5_000_000i64, 20_000_000i64, 20_000_000i64]
+            },
+            {
+                "name": "vcc",
+                "kind": "pour",
+                "layer_mask": 1,
+                "net": "VCC",
+                "bounds": [15_000_000i64, 5_000_000i64, 30_000_000i64, 20_000_000i64]
+            }
+        ]
+    });
+
+    let mut engine = PcbEngine::new();
+    assert!(engine.load_snapshot_json(&snapshot.to_string()).is_empty());
+
+    let back: serde_json::Value =
+        serde_json::from_str(&engine.get_snapshot()).expect("snapshot is JSON");
+    let violations = back["violations"].as_array().expect("violations come back");
+
+    assert!(
+        !violations.is_empty(),
+        "a ground plane over a supply plane is a short and nothing said so"
+    );
+
+    // And the control, so this is not a test that passes on any board: the
+    // same two planes moved apart say nothing.
+    let apart = snapshot.to_string().replace(
+        "[15000000,5000000,30000000,20000000]",
+        "[25000000,5000000,30000000,20000000]",
+    );
+    let mut engine = PcbEngine::new();
+    assert!(engine.load_snapshot_json(&apart).is_empty());
+    let back: serde_json::Value =
+        serde_json::from_str(&engine.get_snapshot()).expect("snapshot is JSON");
+    assert!(
+        back["violations"]
+            .as_array()
+            .expect("violations come back")
+            .is_empty(),
+        "two planes that do not touch are not a fault"
+    );
+}
