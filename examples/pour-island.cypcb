@@ -1,0 +1,55 @@
+// A ground plane cut in two by a signal trace.
+//
+// The pour's only ground pad sits below the trace, so every piece of copper
+// above it is ground that cannot reach ground - dead copper that looks exactly
+// like the rest of the plane in a Gerber preview. `cypcb check` names it and
+// gives its size and corners.
+
+board island_demo {
+    size 40mm x 40mm
+    layers 2
+}
+
+footprint PAD1 {
+    description "one square pad"
+    courtyard 2mm x 2mm
+
+    pad 1 rect at 0mm, 0mm size 1mm x 1mm
+}
+
+component J1 connector "PAD1" {
+    value "gnd"
+    at 20mm, 10mm
+}
+
+component J2 connector "PAD1" {
+    value "in"
+    at 2mm, 20mm
+}
+
+component J3 connector "PAD1" {
+    value "out"
+    at 38mm, 20mm
+}
+
+net GND {
+    J1.1
+}
+
+net SIG {
+    J2.1
+    J3.1
+}
+
+trace SIG {
+    from J2.1
+    to J3.1
+    layer Top
+    width 0.2mm
+}
+
+zone gnd_pour {
+    bounds 5mm, 5mm to 35mm, 35mm
+    layer top
+    net GND
+}

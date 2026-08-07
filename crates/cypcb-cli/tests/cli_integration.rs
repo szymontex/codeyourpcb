@@ -297,3 +297,31 @@ fn check_says_which_violations_are_copper_on_copper() {
     // permission to ship them.
     assert!(!output.status.success(), "check must fail on a board with violations");
 }
+
+#[test]
+fn check_gives_a_pour_island_its_size_and_corners() {
+    // A coordinate in the middle of a plane tells a person nothing: the copper
+    // there looks like every other part of the plane. examples/pour-island.cypcb
+    // is a ground pour whose only ground pad sits below a signal trace that
+    // crosses it, so the half above the trace reaches nothing.
+    let example = examples_dir().join("pour-island.cypcb");
+    let output = Command::new(cypcb_binary())
+        .arg("check")
+        .arg(&example)
+        .output()
+        .expect("Failed to execute cypcb check");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("pour-island"),
+        "the island should be reported, got:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("copper 30.000mm x 14.773mm"),
+        "the report should carry the size of the stranded sheet, got:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("from (5.000mm, 20.227mm) to (35.000mm, 35.000mm)"),
+        "and its corners, got:\n{stderr}"
+    );
+}

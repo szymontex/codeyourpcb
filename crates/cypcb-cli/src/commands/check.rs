@@ -118,6 +118,22 @@ impl CheckCommand {
                 violation.location.y.to_mm(),
                 violation.message
             );
+
+            // Some faults are a place and some are a piece of copper. A pour
+            // island reported as a coordinate points at the middle of a plane,
+            // which looks like every other part of the plane - the size and
+            // the corners are what a person can act on.
+            if let Some(area) = violation.area {
+                eprintln!(
+                    "      copper {:.3}mm x {:.3}mm, from ({:.3}mm, {:.3}mm) to ({:.3}mm, {:.3}mm)",
+                    (area.max.x - area.min.x).to_mm(),
+                    (area.max.y - area.min.y).to_mm(),
+                    area.min.x.to_mm(),
+                    area.min.y.to_mm(),
+                    area.max.x.to_mm(),
+                    area.max.y.to_mm(),
+                );
+            }
         }
 
         eprintln!("Summary:");
