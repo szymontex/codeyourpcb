@@ -67,13 +67,26 @@ echo ""
 
 # Stage 6: Playwright E2E
 #
+# The wasm bundle is rebuilt first, on purpose. `viewer/pkg` is a committed
+# artifact and nothing else in this gate regenerates it, so the browser suite
+# ran against whatever engine was compiled the last time somebody remembered -
+# on 2026-08-08 that was three fires of Rust changes out of date, and an E2E
+# test written to prove a silkscreen rule reached the browser passed against
+# the old rule and failed against the new one. A gate that tests a stale
+# artifact is a gate that lies.
+#
 # CI=1 turns off `reuseExistingServer` in playwright.config.ts. Without it the
 # suite silently attaches to whatever is already listening on 4321 - a dev
 # server someone left running from another checkout, or anything else at all -
 # and reports the result as if it had tested this tree. Proven by pointing a
 # bare `python3 -m http.server` at that port: the default run happily executed
 # the whole suite against it, while CI=1 stops with "already used".
-echo "[6/8] playwright"
+echo "[6/8] playwright (rebuilding viewer/pkg first)"
+if ./viewer/build-wasm.sh >/dev/null 2>&1; then
+  :
+else
+  fail "build-wasm"
+fi
 if (cd viewer && CI=1 npx playwright test) 2>&1; then
   pass "playwright"
 else

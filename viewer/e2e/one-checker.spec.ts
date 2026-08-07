@@ -74,14 +74,38 @@ async function violationsFor(page: import('@playwright/test').Page, source: stri
 }
 
 test.describe('one checker', () => {
-  test('the engine reports a silkscreen fault to the browser', async ({ page }) => {
+  test('the engine rules reach the browser and the deleted ones do not', async ({ page }) => {
     const violations = await violationsFor(page, A_BOARD_WITH_A_SILK_FAULT);
     test.skip(violations === null, 'the app exposes no engine handle in this build');
 
-    const silk = violations!.filter((v) => v.kind === 'silk-clearance');
-    expect(silk.length).toBeGreaterThan(0);
-    // The Rust rule's wording, not the TypeScript one's `silk <-> pad`.
-    expect(silk[0].message).toContain('silkscreen over');
+    // A rule that only ever existed in Rust, on a board that trips it: proof
+    // the engine's checker is what the screen shows.
+    expect(violations!.filter((v) => v.kind === 'courtyard-clearance').length).toBeGreaterThan(0);
+
+    // The deleted TypeScript silk check reported `R1 silk <-> R2.1`. Nothing
+    // says that now. The engine's own silk rule is quiet here on purpose: the
+    // exporter clips the legend off the copper, so there is no ink to report -
+    // which is exactly what `cypcb check` says about this board.
+    expect(violations!.filter((v) => v.message.includes(' silk '))).toHaveLength(0);
+  });
+
+  test('what a design states about a net reaches the browser', async ({ page }) => {
+    // The viewer picks the width of a trace the user is about to draw from
+    // `net.current_ma`. That field, and the net's width and clearance, were
+    // dropped on the way out of the engine - the browser saw a net's name, id
+    // and connections and nothing else.
+    await page.goto('/');
+    await page.waitForFunction(() => typeof (window as never as { __loadBoard?: unknown }).__loadBoard !== 'undefined');
+    await page.evaluate((src) => (window as never as { __loadBoard: (s: string) => void }).__loadBoard(src), A_BOARD_WITH_A_CURRENT_FAULT);
+    await page.waitForTimeout(500);
+
+    const vcc = await page.evaluate(() => {
+      const engine = (window as never as { __pcbEngine?: { get_snapshot(): { nets?: { name: string; current_ma?: number }[] } } }).__pcbEngine;
+      return engine ? (engine.get_snapshot().nets ?? []).find((n) => n.name === 'VCC') ?? null : null;
+    });
+    test.skip(vcc === null, 'the app exposes no engine handle in this build');
+
+    expect(vcc!.current_ma).toBe(3000);
   });
 
   test('the engine reports a trace too thin for its current', async ({ page }) => {

@@ -70,26 +70,12 @@ pub struct PcbEngine {
     violations: Vec<DrcViolation>,
     /// Time taken for last DRC run in milliseconds.
     drc_duration_ms: u64,
-    /// Cached net constraints from last parse (net_name → constraints).
-    #[cfg(any(feature = "native", feature = "wasm"))]
-    net_constraints: std::collections::HashMap<String, NetConstraintCache>,
     /// Package name -> 3D model identifier, supplied by the host.
     ///
     /// The same story as a fetched footprint: nothing in a `.cypcb` file says
     /// which 3D model a package has, and the viewer learns it from a supplier
     /// at runtime.
     model_3d: std::collections::HashMap<String, String>,
-}
-
-/// Cached net constraint data extracted during parsing.
-#[derive(Debug, Clone, Default)]
-pub struct NetConstraintCache {
-    /// Trace width in nm (from `[width ...]`).
-    pub width_nm: Option<i64>,
-    /// Clearance in nm (from `[clearance ...]`).
-    pub clearance_nm: Option<i64>,
-    /// Current in milliamps (from `[current ...]`).
-    pub current_ma: Option<f64>,
 }
 
 // WASM-exposed methods
@@ -106,7 +92,6 @@ impl PcbEngine {
             violations: Vec::new(),
             drc_duration_ms: 0,
             #[cfg(any(feature = "native", feature = "wasm"))]
-            net_constraints: std::collections::HashMap::new(),
             model_3d: std::collections::HashMap::new(),
         }
     }
@@ -271,7 +256,6 @@ impl PcbEngine {
         self.world.clear();
         self.violations.clear();
         self.drc_duration_ms = 0;
-        self.net_constraints.clear();
 
         // Parse the source
         let parse_result = parse_source_text(source);
@@ -282,25 +266,6 @@ impl PcbEngine {
             errors.push(format!("{}", e));
         }
 
-        // Extract net constraints from AST before sync
-        for def in &parse_result.value.definitions {
-            if let cypcb_parser::ast::Definition::Net(net_def) = def {
-                if let Some(ref constraints) = net_def.constraints {
-                    let mut cache = NetConstraintCache::default();
-                    if let Some(ref w) = constraints.width {
-                        cache.width_nm = Some(w.to_nm().0);
-                    }
-                    if let Some(ref c) = constraints.clearance {
-                        cache.clearance_nm = Some(c.to_nm().0);
-                    }
-                    if let Some(ref cur) = constraints.current {
-                        cache.current_ma = Some(cur.to_milliamps());
-                    }
-                    self.net_constraints
-                        .insert(net_def.name.value.clone(), cache);
-                }
-            }
-        }
 
         // Sync AST to world
         let sync_result = sync_ast_to_world(
@@ -1516,22 +1481,22 @@ impl PcbEngine {
                 }
             }
 
-            // Look up cached constraints for this net
-            #[cfg(feature = "native")]
-            let (width_nm, clearance_nm, current_ma) = {
-                let c = self.net_constraints.get(&net_name);
-                (
-                    c.and_then(|c| c.width_nm),
-                    c.and_then(|c| c.clearance_nm),
-                    c.and_then(|c| c.current_ma),
-                )
-            };
-            #[cfg(not(feature = "native"))]
-            let (width_nm, clearance_nm, current_ma): (
-                Option<i64>,
-                Option<i64>,
-                Option<f64>,
-            ) = (None, None, None);
+            // What the design says about this net, from the model rather than
+            // from a cache built by walking the AST.
+            //
+            // Until 2026-08-08 this read a side map that `load_source` filled
+            // and that only the native build looked at - the browser filled it
+            // and then hardcoded `(None, None, None)`, a one-word `cfg`
+            // mismatch. So the viewer never saw a net's width, clearance or
+            // current, and `interaction.ts` picked a routing width from
+            // `ipc2221MinWidthNm(net.current_ma)` on a field that was always
+            // absent. The world is the answer: `sync_ast_to_world` stores what
+            // a net declares and what its netclass fills in, which the AST walk
+            // could not see.
+            let constraints = self.world.net_constraints(net_id);
+            let width_nm = constraints.and_then(|c| c.width).map(|w| w.0);
+            let clearance_nm = constraints.and_then(|c| c.clearance).map(|c| c.0);
+            let current_ma = constraints.and_then(|c| c.current_ma);
 
             nets.push(NetInfo {
                 name: net_name,
