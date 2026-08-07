@@ -425,3 +425,61 @@ fn how_many_pins_no_copper_reaches() {
         }
     }
 }
+
+#[test]
+#[ignore = "diagnostic: prints the ratsnest one net was routed from"]
+fn what_the_router_was_asked_to_connect() {
+    // Three suspects are out: the end node is right, the success predicate
+    // requires it, and no layer change was ever made. What is left is the list
+    // the router worked from.
+    use cypcb_autoroute::orchestrator::{build_spanning_tree, extract_ratsnest};
+
+    let parsed = parse_kicad_pcb(&fixture_path("led_blink.kicad_pcb")).expect("the fixture parses");
+    let mut world = parsed.world;
+    let library = parsed.library;
+    world.rebuild_spatial_index_from_library(&library);
+
+    let ratsnest = extract_ratsnest(&mut world, &library);
+
+    for net in &ratsnest {
+        if net.net_name != "GND" {
+            continue;
+        }
+        eprintln!();
+        eprintln!("=== {} ===", net.net_name);
+        for (index, pad) in net.pads.iter().enumerate() {
+            eprintln!(
+                "  pad {index}: {} at ({:.3}mm, {:.3}mm), layer mask {:#04b}",
+                pad.pin,
+                pad.position.x.to_mm(),
+                pad.position.y.to_mm(),
+                pad.layer_mask
+            );
+        }
+        for connection in build_spanning_tree(&net.pads) {
+            eprintln!(
+                "  edge: pad {} -> pad {}",
+                connection.from_idx, connection.to_idx
+            );
+        }
+
+        // And what the router laid for it.
+        let rules = PresetRuleSet::new(RulesPreset::from_name("jlcpcb").expect("the preset"));
+        let routing = route_board(&mut world, &library, &rules, &AutorouteConfig::default());
+        eprintln!("  status: {:?}", routing.status);
+        for segment in routing
+            .routes
+            .iter()
+            .filter(|segment| segment.net_id == net.net_id)
+        {
+            eprintln!(
+                "  {:?} ({:.3},{:.3}) -> ({:.3},{:.3})",
+                segment.layer,
+                segment.start.x.to_mm(),
+                segment.start.y.to_mm(),
+                segment.end.x.to_mm(),
+                segment.end.y.to_mm()
+            );
+        }
+    }
+}
