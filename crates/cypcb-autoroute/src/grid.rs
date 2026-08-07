@@ -271,6 +271,12 @@ impl RoutingGrid {
     }
 
     /// Populate locked trace obstacles.
+    /// Copper already on the board, whether or not it is locked.
+    ///
+    /// Only locked traces used to be marked, so a trace the designer drew and
+    /// did not lock was invisible to the router - measured on a four-layer
+    /// board where a hand trace crossed a routed one at 0.00mm. `locked` means
+    /// "do not rip this up"; unlocked copper is still copper.
     fn populate_locked_traces(&mut self, world: &mut BoardWorld, clearance_cells: u32) {
         use cypcb_world::components::trace::Trace;
 
@@ -278,7 +284,7 @@ impl RoutingGrid {
         let traces: Vec<Trace> = {
             let ecs = world.ecs_mut();
             let mut query = ecs.query::<&Trace>();
-            query.iter(ecs).filter(|t| t.locked).cloned().collect()
+            query.iter(ecs).cloned().collect()
         };
 
         for trace in &traces {

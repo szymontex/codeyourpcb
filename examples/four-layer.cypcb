@@ -29,9 +29,27 @@ component J2 connector "PAD1" {
     at 25mm, 10mm
 }
 
+component J3 connector "PAD1" {
+    value "up"
+    at 15mm, 3mm
+}
+
+component J4 connector "PAD1" {
+    value "down"
+    at 15mm, 17mm
+}
+
 net SIG {
     J1.1
     J2.1
+}
+
+// Crosses SIG, so the router has to change layer and place vias to get past
+// it - which is how a four-layer board collects blind and buried vias without
+// anybody asking for one.
+net CROSS {
+    J3.1
+    J4.1
 }
 
 trace SIG {
