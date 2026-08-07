@@ -16,7 +16,7 @@ sync = []
 
 [dependencies]
 cypcb-core = { workspace = true }
-cypcb-parser = { workspace = true, default-features = false }
+cypcb-parser = { workspace = true }
 bevy_ecs = { workspace = true }
 rstar = { workspace = true }
 serde = { workspace = true }
