@@ -63,15 +63,25 @@ Introduced is not after minus before: routing removes faults too. Every
 unrouted pin the fixture starts with is a violation that a successful route
 retires.
 
-Where the numbers come from (`drc_report`, 2026-08-07):
+Where the numbers come from (`drc_report`, re-run 2026-08-08 on all five
+fixtures):
 
-| board | what it is | before | after (the ratchet) | introduced |
-|---|---|---|---|---|
-| `led_blink.kicad_pcb` | small, 21 routes | 12 | **2** | 2 |
-| `stm32_breakout.kicad_pcb` | dense, 296x256 cells at 0.254mm, 908 routes | 144 | **239** | 221 |
-| `multi_ic.kicad_pcb` | large, 197x158 cells at 0.508mm, 1003 routes | 289 | **336** | 247 |
+| board | what it is | before | after (the ratchet) | introduced | shorts |
+|---|---|---|---|---|---|
+| `led_blink.kicad_pcb` | small, 21 routes | 12 | **2** | 2 | 0 |
+| `stm32_breakout.kicad_pcb` | dense, 296x256 cells at 0.254mm, 908 routes | 144 | **239** | 221 | 136 |
+| `multi_ic.kicad_pcb` | large, 197x158 cells at 0.508mm, 1003 routes | 270 | **317** | 247 | 166 |
+| `shift_driver.kicad_pcb` | DIP and 0805, 2 layers, 700 routes | 159 | **81** | 72 | 33 |
+| `qfp_fanout.kicad_pcb` | LQFP-64 at 0.5mm on 2 layers, 1177 routes | 140 | **343** | 331 | 183 |
 
-Shorts today: 0, 136, 166.
+**`multi_ic` moved without the router changing.** The row above read 289 before
+and 336 after until this run; it is 270 and 317 now, with **introduced
+unchanged at 247**. The board is the same board and the routing is the same
+routing - what dropped is nineteen violations the fixture already had, and they
+went when the exporter started clipping the legend off solderable copper and
+the footprint courtyards started enclosing their own land pattern. `before` and
+`after` move whenever the *checker* changes; `introduced` is the column a
+routing experiment should be read on, which is why this file says so above.
 
 ## The two settings that pay
 
