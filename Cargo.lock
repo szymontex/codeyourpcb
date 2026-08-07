@@ -995,6 +995,7 @@ dependencies = [
  "bevy_ecs",
  "cypcb-core",
  "cypcb-drc",
+ "cypcb-export",
  "cypcb-kicad",
  "cypcb-parser",
  "cypcb-router",

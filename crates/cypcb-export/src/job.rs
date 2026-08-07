@@ -162,6 +162,35 @@ pub fn run_export(
         files.push(file);
     }
 
+    // Inner copper, driven by the board rather than by the preset.
+    //
+    // Both presets ship `inner_copper: vec![]`, so a four-layer design exported
+    // as though it were two-layer: every trace the router put on In1 or In2 was
+    // absent from the file set, silently. Measured on the multi_ic benchmark,
+    // which declares F.Cu, In1.Cu, In2.Cu and B.Cu - the router uses the inner
+    // pair and nothing carried it. The board's own stack is the truth here; a
+    // preset that lists inner layers can still add to it.
+    let inner_from_board = world
+        .board_info()
+        .map(|(_, stack)| stack.count.saturating_sub(2))
+        .unwrap_or(0);
+    let inner_count = inner_from_board.max(job.preset.layers.inner_copper.len() as u8);
+    for index in 0..inner_count {
+        let number = index + 1;
+        let suffix = inner_layer_suffix(job.preset.file_naming.top_copper, number);
+        let filename = format!("{}{}", job.board_name, suffix);
+        let path = gerber_dir.join(&filename);
+        let content = export_copper_layer(
+            world,
+            library,
+            Layer::Inner(index),
+            &job.preset.coordinate_format,
+        )
+        .map_err(|e| ExportError::Export(format!("{:?}", e)))?;
+        let file = write_export_file(&path, &content, &format!("Inner Copper {number}"))?;
+        files.push(file);
+    }
+
     if job.preset.layers.top_mask {
         let filename = format!("{}{}", job.board_name, job.preset.file_naming.top_mask);
         let path = gerber_dir.join(&filename);
@@ -514,5 +543,30 @@ mod tests {
 
         // Cleanup
         let _ = fs::remove_dir_all(temp_dir);
+    }
+}
+
+/// The file name an inner copper layer takes, in the preset's own style.
+///
+/// A preset that calls the top layer `-F_Cu.gbr` calls the first inner one
+/// `-In1_Cu.gbr`; one that calls it `_top.gtl` gets `_inner1.gtl`. Guessing
+/// from the top layer's name keeps the set looking like one set.
+fn inner_layer_suffix(top_copper: &str, number: u8) -> String {
+    if top_copper.contains("F_Cu") {
+        return top_copper.replace("F_Cu", &format!("In{number}_Cu"));
+    }
+    let extension = top_copper.rsplit_once('.').map(|(_, e)| e).unwrap_or("gbr");
+    format!("_inner{number}.{extension}")
+}
+
+#[cfg(test)]
+mod inner_layer_naming {
+    use super::inner_layer_suffix;
+
+    #[test]
+    fn an_inner_layer_is_named_the_way_the_preset_names_the_top_one() {
+        assert_eq!(inner_layer_suffix("-F_Cu.gbr", 1), "-In1_Cu.gbr");
+        assert_eq!(inner_layer_suffix("-F_Cu.gbr", 2), "-In2_Cu.gbr");
+        assert_eq!(inner_layer_suffix("_top.gtl", 1), "_inner1.gtl");
     }
 }

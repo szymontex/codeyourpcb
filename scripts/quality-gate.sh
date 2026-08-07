@@ -89,6 +89,14 @@ if cargo test --release -p cypcb-autoroute -- benchmark_all_fixtures_drc --ignor
 else
   fail "benchmark-all-fixtures-drc"
 fi
+# What the router lays has to arrive in the fabrication files. The fixtures are
+# already routed in this stage, so the check costs one export each.
+if cargo test --release -p cypcb-autoroute -- what_the_router_lays --ignored 2>&1; then
+  pass "routed-copper-reaches-the-files"
+else
+  fail "routed-copper-reaches-the-files"
+fi
+
 if cargo test --release -p cypcb-autoroute -- benchmark_500 --ignored 2>&1; then
   pass "benchmark-500"
 else

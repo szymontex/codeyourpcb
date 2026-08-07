@@ -22,6 +22,10 @@ getrandom_02 = { package = "getrandom", version = "0.2", features = ["js"] }
 getrandom_03 = { package = "getrandom", version = "0.3", features = ["wasm_js"] }
 
 [dev-dependencies]
+# Test-only: the benchmark fixtures are routed here, and the copper they get
+# has to reach the fabrication files. Exporting them in this crate spends the
+# routing time once instead of twice.
+cypcb-export = { path = "../cypcb-export" }
 cypcb-core = { workspace = true }
 cypcb-drc = { path = "../cypcb-drc" }
 cypcb-kicad = { path = "../cypcb-kicad" }
