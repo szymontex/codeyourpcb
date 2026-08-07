@@ -225,6 +225,12 @@ impl RouteCommand {
                 }
                 return Err(miette::miette!("Routing timed out"));
             }
+            // No Java is the second dead end, and the container this project
+            // builds in walks into it: the jar is there, the runtime is not.
+            // Say the same thing the missing-jar path says.
+            Err(RoutingError::JavaNotFound) => {
+                return Err(self.no_java_error());
+            }
             Err(e) => {
                 return Err(miette::miette!("Routing failed: {}", e));
             }
@@ -250,10 +256,7 @@ impl RouteCommand {
             if path.exists() {
                 return Ok(path.clone());
             }
-            return Err(miette::miette!(
-                "FreeRouting JAR not found at: {}\n\nTo install FreeRouting:\n  1. Download from https://github.com/freerouting/freerouting/releases\n  2. Set FREEROUTING_JAR environment variable or use --freerouting flag",
-                path.display()
-            ));
+            return Err(self.no_jar_error(Some(path)));
         }
 
         // Check environment variable (already parsed by clap, but check explicitly)
@@ -284,9 +287,54 @@ impl RouteCommand {
             }
         }
 
-        Err(miette::miette!(
-            "FreeRouting JAR not found.\n\nTo install FreeRouting:\n  1. Download from https://github.com/freerouting/freerouting/releases\n  2. Either:\n     - Set FREEROUTING_JAR environment variable\n     - Use --freerouting flag\n     - Place freerouting.jar in current directory"
-        ))
+        Err(self.no_jar_error(None))
+    }
+
+    /// The way out of every FreeRouting dead end: the router already in this
+    /// binary.
+    ///
+    /// `cypcb route` needs a Java runtime and a jar the project does not ship.
+    /// Miss either and the command used to hand back a download link, while
+    /// `--in-house` sat one flag away, compiled in, needing neither. Both dead
+    /// ends print this line first now.
+    fn in_house_way_out(&self) -> String {
+        format!(
+            "No jar and no Java needed - this binary has its own autorouter:\n  \
+             cypcb route {} --in-house",
+            self.file.display()
+        )
+    }
+
+    /// What to print when there is no jar to run.
+    ///
+    /// `looked_at` is the path the user named, when they named one.
+    fn no_jar_error(&self, looked_at: Option<&Path>) -> miette::Report {
+        let opening = match looked_at {
+            Some(path) => format!("FreeRouting JAR not found at: {}", path.display()),
+            None => "FreeRouting JAR not found.".to_string(),
+        };
+        let way_out = self.in_house_way_out();
+
+        miette::miette!(
+            "{opening}\n\n{way_out}\n\n\
+             To use FreeRouting instead:\n  \
+             1. Download from https://github.com/freerouting/freerouting/releases\n  \
+             2. Either:\n     \
+             - Set the FREEROUTING_JAR environment variable\n     \
+             - Use the --freerouting flag\n     \
+             - Place freerouting.jar in the current directory",
+        )
+    }
+
+    /// What to print when the jar is there but nothing can run it.
+    fn no_java_error(&self) -> miette::Report {
+        let way_out = self.in_house_way_out();
+
+        miette::miette!(
+            "Java not found, and FreeRouting is a Java program.\n\n{way_out}\n\n\
+             To use FreeRouting instead, install a Java 21+ runtime and put \
+             `java` on PATH.",
+        )
     }
 }
 
@@ -692,6 +740,48 @@ mod tests {
         assert_eq!(
             cli.route.freerouting,
             Some(PathBuf::from("/path/to/freerouting.jar"))
+        );
+    }
+
+    /// Neither missing piece is a dead end - every one of them names the way
+    /// out, and the way out is a command the reader can paste.
+    #[test]
+    fn every_freerouting_dead_end_names_the_router_that_needs_nothing() {
+        use clap::Parser;
+
+        #[derive(Parser)]
+        struct TestCli {
+            #[command(flatten)]
+            route: RouteCommand,
+        }
+
+        let cli = TestCli::parse_from(["test", "examples/blink.cypcb"]);
+
+        let dead_ends = [
+            ("no jar anywhere", cli.route.no_jar_error(None)),
+            (
+                "the jar the user named",
+                cli.route
+                    .no_jar_error(Some(Path::new("/nowhere/freerouting.jar"))),
+            ),
+            ("no Java", cli.route.no_java_error()),
+        ];
+
+        for (what_is_missing, report) in dead_ends {
+            let message = report.to_string();
+            assert!(
+                message.contains("cypcb route examples/blink.cypcb --in-house"),
+                "`{what_is_missing}` has to offer a command the reader can paste, got:\n{message}"
+            );
+        }
+
+        let named = cli
+            .route
+            .no_jar_error(Some(Path::new("/nowhere/freerouting.jar")))
+            .to_string();
+        assert!(
+            named.contains("/nowhere/freerouting.jar"),
+            "a named path still has to say where it looked, got:\n{named}"
         );
     }
 }
