@@ -1,6 +1,10 @@
 #!/bin/bash
 set -e
 
+# Run from the repo root whatever directory the user started us in - every
+# path below is relative to it.
+cd "$(dirname "$0")"
+
 echo "============================================"
 echo "CodeYourPCB Desktop - Linux (Ubuntu) Setup"
 echo "============================================"
@@ -98,12 +102,16 @@ if [ ! -f "src-tauri/Cargo.toml" ]; then
 fi
 
 echo "[INFO] Testing compilation (this may take a few minutes)..."
-cd /workspace/codeyourpcb
-cargo check -p cypcb-desktop
-if [ $? -eq 0 ]; then
+# `set -e` is on, so the failing branch has to be part of the condition. Written
+# as `cargo check; if [ $? -eq 0 ]` the shell exits on a failed check and the
+# advice below - the whole reason the branch exists - never printed, on exactly
+# the machine that needed it.
+if cargo check -p cypcb-desktop; then
     echo "[OK] Tauri project compiles successfully!"
 else
-    echo "[WARN] Compilation check failed - may need additional dependencies"
+    echo "[WARN] Compilation check failed - may need additional dependencies."
+    echo "       The errors above name what is missing; the apt list in"
+    echo "       DESKTOP-SETUP.md covers the usual ones."
 fi
 
 echo ""
