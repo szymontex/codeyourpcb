@@ -101,7 +101,7 @@ if cargo test --release -p cypcb-autoroute -- benchmark_regression 2>&1; then
 else
   fail "benchmark-regression"
 fi
-# DRC ratchets across all three fixtures. led_blink alone reported 3 violations
+# DRC ratchets across every fixture. led_blink alone reported 3 violations
 # while stm32_breakout sat at 312 and multi_ic at 383 - the gate could not see
 # the router's real output.
 if cargo test --release -p cypcb-autoroute -- benchmark_all_fixtures_drc --ignored 2>&1; then
@@ -115,6 +115,17 @@ if cargo test --release -p cypcb-autoroute -- what_the_router_lays --ignored 2>&
   pass "routed-copper-reaches-the-files"
 else
   fail "routed-copper-reaches-the-files"
+fi
+
+# Everything measured about the router assumes re-running gives the same
+# answer: fourteen dropped instruments, two sweeps and five ratchets are all
+# differences between single runs. Rust randomises HashMap iteration order per
+# process, so one map walked to order work would make every one of those
+# numbers a coin toss - and nothing else here would notice.
+if cargo test --release -p cypcb-autoroute -- the_same_board_routed_twice --ignored 2>&1; then
+  pass "router-is-repeatable"
+else
+  fail "router-is-repeatable"
 fi
 
 if cargo test --release -p cypcb-autoroute -- benchmark_500 --ignored 2>&1; then

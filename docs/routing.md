@@ -125,8 +125,18 @@ until something moves a board further than the router moves it on its own.
 
 ## The noise band, and why the ratchets carry it
 
-Prices a hundredth apart ask the router for the same trade. What they differ by
-is what negotiated congestion does on its own
+First, what it is not. **The router is deterministic**: routing each of the five
+fixtures three times with the same config gives identical violations, shorts,
+segments, vias and total copper down to the nanometre
+(`is_the_router_repeatable`). So every number in this file is reproducible and
+every comparison in it is between two real settings rather than two dice rolls.
+The gate runs that check, because Rust randomises `HashMap` iteration order per
+process and a single map walked to order work would turn all of it into noise
+without anything else noticing.
+
+What the band *is*, then, is the router's sensitivity to a price it ought to be
+insensitive to. Prices a hundredth apart ask for the same trade and get
+different boards
 (`via_price_sweep::how_much_of_the_price_is_noise`):
 
 | price | stm32_breakout | multi_ic |
@@ -139,7 +149,9 @@ is what negotiated congestion does on its own
 | **spread** | **38 violations, 32 shorts** | **30 violations, 23 shorts** |
 
 That is the same size as the differences a sweep is choosing between. **A
-tuning value picked inside this band is noise with a decimal point.**
+tuning value picked inside this band is noise with a decimal point** - not
+because the router wobbles, but because negotiated congestion amplifies a
+hundredth of a price into a different rip-up order and a different board.
 
 The two boards added on 2026-08-08 were measured the same way:
 
