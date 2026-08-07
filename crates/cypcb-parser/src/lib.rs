@@ -86,6 +86,17 @@ pub mod imports;
 #[cfg(feature = "tree-sitter-parser")]
 pub mod parser;
 
+/// Tokens for the Rust reader.
+#[cfg(feature = "rust-parser")]
+pub mod lexer;
+
+/// The Rust reader: `.cypcb` to AST with no C behind it.
+///
+/// Step one of `docs/one-parser.md`. Behind a feature until it covers the
+/// language; nothing in the shipping path calls it yet.
+#[cfg(feature = "rust-parser")]
+pub mod reader;
+
 #[cfg(feature = "tree-sitter-parser")]
 use tree_sitter::Language;
 

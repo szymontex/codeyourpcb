@@ -9,6 +9,9 @@ description = "Tree-sitter grammar and parser for CodeYourPCB DSL"
 default = ["tree-sitter-parser"]
 # Enable tree-sitter parsing (requires C compiler, not WASM compatible)
 tree-sitter-parser = ["dep:tree-sitter", "dep:cc"]
+# The Rust reader, which needs no C and therefore reaches wasm. Step one of
+# docs/one-parser.md: incomplete, checked against the tree-sitter parser.
+rust-parser = []
 
 [dependencies]
 cypcb-core = { workspace = true }
