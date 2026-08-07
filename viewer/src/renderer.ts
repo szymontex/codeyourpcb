@@ -4,7 +4,7 @@
  * component body outlines, pad pin numbers, net labels, and drill marks.
  */
 
-import type { BoardSnapshot, ComponentInfo, PadInfo, PourInfo, TraceInfo, ViaInfo, RatsnestInfo } from './types';
+import type { BoardSnapshot, ComponentInfo, PadInfo, PourInfo, TraceInfo, ViaInfo, RatsnestInfo, ZoneInfo } from './types';
 import type { Viewport } from './viewport';
 import type { RoutingState } from './routing';
 import type { DragEditState, RectSelectState } from './interaction';
@@ -118,6 +118,16 @@ export function render(ctx: CanvasRenderingContext2D, state: RenderState): void 
   // They clutter the professional PCB view
   if (state.activeResizeHandle) {
     drawResizeHandles(ctx, viewport, snapshot.board.width_nm, snapshot.board.height_nm, themeColors, state.activeResizeHandle ?? null);
+  }
+
+  // Keepouts before the copper: an area the design forbids is context for
+  // everything drawn on top of it.
+  if (snapshot.zones) {
+    for (const zone of snapshot.zones) {
+      if (zone.kind === 'keepout') {
+        drawKeepout(ctx, viewport, zone, layers);
+      }
+    }
   }
 
   // Draw copper pours under the traces: a plane is the bottom-most copper on
@@ -403,6 +413,42 @@ function tracePolyline(ctx: CanvasRenderingContext2D, vp: Viewport, trace: Trace
     const [endX, endY] = worldToScreen(vp, seg.end_x, seg.end_y);
     ctx.lineTo(endX, endY);
   }
+}
+
+/**
+ * Draw one keepout, as an outline.
+ *
+ * A keepout is an absence of copper, so filling it would say the opposite of
+ * what it means. The router already refuses to enter one and the checker
+ * already reports a part that sits in one - the board just never showed it,
+ * which left the designer to remember where they had put it.
+ *
+ * Exported for the test that fixes the shape of what it draws.
+ */
+export function drawKeepout(
+  ctx: CanvasRenderingContext2D, vp: Viewport, zone: ZoneInfo,
+  layers: LayerVisibility,
+): void {
+  // Bit 0 is top copper, bit 1 bottom - the same order the engine assigns.
+  // A keepout on a layer nobody is looking at stays out of the way.
+  const onTop = (zone.layer_mask & 0b01) !== 0;
+  const onBottom = (zone.layer_mask & 0b10) !== 0;
+  const visible = (onTop && layers.topCopper) || (onBottom && layers.bottomCopper);
+  if (!visible) return;
+
+  const [sx1, sy1] = worldToScreen(vp, zone.bounds[0], zone.bounds[1]);
+  const [sx2, sy2] = worldToScreen(vp, zone.bounds[2], zone.bounds[3]);
+  const x = Math.min(sx1, sx2);
+  const y = Math.min(sy1, sy2);
+  const width = Math.abs(sx2 - sx1);
+  const height = Math.abs(sy2 - sy1);
+
+  ctx.save();
+  ctx.strokeStyle = LAYER_COLORS.keepout;
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([6, 4]);
+  ctx.strokeRect(x, y, width, height);
+  ctx.restore();
 }
 
 /**

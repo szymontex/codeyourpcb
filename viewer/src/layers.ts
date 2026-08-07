@@ -7,6 +7,7 @@
 export const LAYER_COLORS = {
   top_copper: '#C41E1E',       // Brighter red (visible under solder mask)
   bottom_copper: '#1E1EC4',    // Brighter blue (visible under solder mask)
+  keepout: '#E05A5A',          // Dashed outline for an area nothing may enter
   top_silk: '#F0F0F0',         // Near-white silkscreen
   bottom_silk: '#A0A0A0',     // Medium gray
   drill: '#1A1A1A',            // Near-black drill holes
