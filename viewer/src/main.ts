@@ -13,7 +13,7 @@ import { createDefaultRenderConfig, buildPadNetMap } from './render-config';
 import { setupInteraction, type InteractionState } from './interaction';
 import { createRoutingState, type RoutingState } from './routing';
 import { UndoStack, AddTraceCommand, RemoveTraceCommand, RotateComponentCommand, ResizeBoardCommand, EditTraceCommand, installDebugSurface } from './undo';
-import { createLayerVisibility } from './layers';
+import { createLayerVisibility, innerVisibleFromUrlLayers } from './layers';
 import { createFilePicker, setupDropZone, readFileAsText } from './file-picker';
 import { openFile, saveFile } from './file-access';
 import { isDesktop, initDesktop } from './desktop';
@@ -183,6 +183,9 @@ async function init(): Promise<void> {
   const coordsEl = document.getElementById('coords')!;
   const topLayerCb = document.getElementById('layer-top') as HTMLInputElement;
   const bottomLayerCb = document.getElementById('layer-bottom') as HTMLInputElement;
+  // A four-layer board's middle: drawn since the renderer learned about it,
+  // and until this switch existed there was no way for a person to turn it off.
+  const innerLayerCb = document.getElementById('layer-inner') as HTMLInputElement;
   const ratsnestCb = document.getElementById('layer-ratsnest') as HTMLInputElement;
   const gridVisibleCb = document.getElementById('view-grid-visible') as HTMLInputElement;
   const netLabelsCb = document.getElementById('view-net-labels') as HTMLInputElement;
@@ -413,6 +416,13 @@ async function init(): Promise<void> {
   });
   bottomLayerCb.addEventListener('change', () => {
     layers = { ...layers, bottomCopper: bottomLayerCb.checked };
+    dirty = true;
+    if (is3DActive && renderer3d) {
+      renderer3d.updateLayerVisibility(layers);
+    }
+  });
+  innerLayerCb?.addEventListener('change', () => {
+    layers = { ...layers, innerCopper: innerLayerCb.checked };
     dirty = true;
     if (is3DActive && renderer3d) {
       renderer3d.updateLayerVisibility(layers);
@@ -875,9 +885,13 @@ async function init(): Promise<void> {
     topLayerCb.checked = layersFromUrl.includes('top');
     bottomLayerCb.checked = layersFromUrl.includes('bottom');
     ratsnestCb.checked = layersFromUrl.includes('ratsnest');
+    if (innerLayerCb) {
+      innerLayerCb.checked = innerVisibleFromUrlLayers(layersFromUrl);
+    }
     layers = {
       topCopper: topLayerCb.checked,
       bottomCopper: bottomLayerCb.checked,
+      innerCopper: innerLayerCb ? innerLayerCb.checked : true,
     };
     showRatsnest = ratsnestCb.checked;
 

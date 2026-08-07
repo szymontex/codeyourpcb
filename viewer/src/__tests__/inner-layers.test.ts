@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { getTraceColor, innerLayerColor, INNER_LAYER_COLORS, createLayerVisibility } from '../layers';
+import {
+  getTraceColor,
+  innerLayerColor,
+  innerVisibleFromUrlLayers,
+  INNER_LAYER_COLORS,
+  createLayerVisibility,
+} from '../layers';
 
 /**
  * A four-layer board was drawn as though it had no middle: every inner layer
@@ -36,5 +42,15 @@ describe('inner copper on screen', () => {
 
   it('says nothing about a layer name it does not recognise', () => {
     expect(innerLayerColor('Middle', visible)).toBeNull();
+  });
+});
+
+describe('a shared link and the inner layers', () => {
+  it('treats silence as visible, so an old link keeps the middle', () => {
+    expect(innerVisibleFromUrlLayers(['top', 'bottom', 'ratsnest'])).toBe(true);
+  });
+
+  it('hides them only when the link says so', () => {
+    expect(innerVisibleFromUrlLayers(['top', 'no-inner'])).toBe(false);
   });
 });

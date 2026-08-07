@@ -229,3 +229,14 @@ export function innerLayerColor(layer: string, visibility: LayerVisibility): str
 
 /** One shade per inner layer, in the order the stack goes down. */
 export const INNER_LAYER_COLORS = ['#2E8B2E', '#7A5CD1', '#C08A2E', '#2E8B8B'] as const;
+
+/**
+ * Whether a shared link asks for the inner copper to be hidden.
+ *
+ * Silence means visible. A link made before inner layers were drawn lists only
+ * `top` and `bottom`, and hiding the middle of a four-layer board because an
+ * old URL never mentioned it is the wrong reading of silence.
+ */
+export function innerVisibleFromUrlLayers(layers: string[]): boolean {
+  return !layers.includes('no-inner');
+}
