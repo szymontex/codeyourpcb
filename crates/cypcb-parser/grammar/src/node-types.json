@@ -1887,6 +1887,10 @@
     "named": false
   },
   {
+    "type": "All",
+    "named": false
+  },
+  {
     "type": "Bottom",
     "named": false
   },
@@ -2069,6 +2073,22 @@
   },
   {
     "type": "inductor",
+    "named": false
+  },
+  {
+    "type": "inner1",
+    "named": false
+  },
+  {
+    "type": "inner2",
+    "named": false
+  },
+  {
+    "type": "inner3",
+    "named": false
+  },
+  {
+    "type": "inner4",
     "named": false
   },
   {

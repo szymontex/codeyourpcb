@@ -1508,6 +1508,18 @@
         {
           "type": "STRING",
           "value": "all"
+        },
+        {
+          "type": "STRING",
+          "value": "Top"
+        },
+        {
+          "type": "STRING",
+          "value": "Bottom"
+        },
+        {
+          "type": "STRING",
+          "value": "All"
         }
       ]
     },
@@ -1778,6 +1790,30 @@
         {
           "type": "STRING",
           "value": "Inner4"
+        },
+        {
+          "type": "STRING",
+          "value": "top"
+        },
+        {
+          "type": "STRING",
+          "value": "bottom"
+        },
+        {
+          "type": "STRING",
+          "value": "inner1"
+        },
+        {
+          "type": "STRING",
+          "value": "inner2"
+        },
+        {
+          "type": "STRING",
+          "value": "inner3"
+        },
+        {
+          "type": "STRING",
+          "value": "inner4"
         }
       ]
     },

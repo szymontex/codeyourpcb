@@ -394,7 +394,11 @@ module.exports = grammar({
     // layer top | bottom | all
     zone_layer: $ => seq('layer', field('name', $.layer_name)),
 
-    layer_name: $ => choice('top', 'bottom', 'all'),
+    // Both spellings, in both blocks. A zone took `top` and a trace took
+    // `Top`, so the same property name was an error in one place and correct
+    // in the other depending on a capital letter - a trap the guide could
+    // document but not fix.
+    layer_name: $ => choice('top', 'bottom', 'all', 'Top', 'Bottom', 'All'),
 
     // net NETNAME (for copper pour zones)
     zone_net: $ => seq('net', field('net', $.identifier)),
@@ -462,7 +466,20 @@ module.exports = grammar({
       field('name', $.trace_layer_name),
     ),
 
-    trace_layer_name: $ => choice('Top', 'Bottom', 'Inner1', 'Inner2', 'Inner3', 'Inner4'),
+    trace_layer_name: $ => choice(
+      'Top',
+      'Bottom',
+      'Inner1',
+      'Inner2',
+      'Inner3',
+      'Inner4',
+      'top',
+      'bottom',
+      'inner1',
+      'inner2',
+      'inner3',
+      'inner4',
+    ),
 
     // width 0.3mm
     trace_width: $ => seq(

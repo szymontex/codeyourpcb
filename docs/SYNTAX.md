@@ -233,9 +233,14 @@ zone <name> {
 ```
 
 **Layers:**
-- `top`: Top copper layer
-- `bottom`: Bottom copper layer
-- `all`: All layers
+- `top` or `Top`: Top copper layer
+- `bottom` or `Bottom`: Bottom copper layer
+- `all` or `All`: All layers
+
+Either spelling is accepted here and in a `trace` block. They used to differ -
+a zone took `top` and a trace took `Top` - so one capital letter decided
+whether a line was correct or a syntax error depending on which block it sat
+in.
 
 ## Trace Definition
 
@@ -268,7 +273,7 @@ trace VCC {
 - `from`: Starting pin reference
 - `to`: Ending pin reference
 - `via`: Waypoint coordinates for routing (optional, can repeat)
-- `layer`: Copper layer (Top, Bottom, Inner1-4)
+- `layer`: Copper layer (`Top`, `Bottom`, `Inner1`-`Inner4`, or the same names in lower case)
 - `width`: Trace width (optional, defaults to DRC minimum)
 - `locked`: Prevents autorouter from modifying this trace
 

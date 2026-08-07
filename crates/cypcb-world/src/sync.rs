@@ -742,7 +742,15 @@ fn sync_zone(zone_def: &ZoneDef, world: &mut BoardWorld, _result: &mut SyncResul
     };
 
     // Parse layer to layer mask
-    let layer_mask = match zone_def.layer.as_deref() {
+    // Either spelling. The grammar takes `top` and `Top` in both a zone and a
+    // trace now, so the same word cannot be right in one block and an error in
+    // the next.
+    let layer_mask = match zone_def
+        .layer
+        .as_deref()
+        .map(|name| name.to_ascii_lowercase())
+        .as_deref()
+    {
         Some("top") => 0b01,              // Layer 0 (top copper)
         Some("bottom") => 0b10,           // Layer 1 (bottom copper)
         Some("all") | None => 0xFFFFFFFF, // All layers
@@ -1032,15 +1040,18 @@ fn get_pin_position(
 
 /// Parse a layer name string to a Layer enum.
 fn parse_layer_name(name: &str) -> Option<Layer> {
-    match name {
-        "Top" => Some(Layer::TopCopper),
-        "Bottom" => Some(Layer::BottomCopper),
-        "Inner1" => Some(Layer::Inner(0)),
-        "Inner2" => Some(Layer::Inner(1)),
-        "Inner3" => Some(Layer::Inner(2)),
-        "Inner4" => Some(Layer::Inner(3)),
-        "Inner5" => Some(Layer::Inner(4)),
-        "Inner6" => Some(Layer::Inner(5)),
+    // Case-insensitive, because a zone spelled its layers in lower case and a
+    // trace in title case, and a designer moving between the two blocks should
+    // not have to remember which.
+    match name.to_ascii_lowercase().as_str() {
+        "top" => Some(Layer::TopCopper),
+        "bottom" => Some(Layer::BottomCopper),
+        "inner1" => Some(Layer::Inner(0)),
+        "inner2" => Some(Layer::Inner(1)),
+        "inner3" => Some(Layer::Inner(2)),
+        "inner4" => Some(Layer::Inner(3)),
+        "inner5" => Some(Layer::Inner(4)),
+        "inner6" => Some(Layer::Inner(5)),
         _ => None,
     }
 }
