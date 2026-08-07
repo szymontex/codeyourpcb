@@ -3,7 +3,7 @@
 //! This module defines the types used to represent design rule violations.
 
 use bevy_ecs::entity::Entity;
-use cypcb_core::{Nm, Point};
+use cypcb_core::{Nm, Point, Rect};
 use cypcb_parser::ast::Span;
 
 /// A design rule violation.
@@ -34,6 +34,14 @@ pub struct DrcViolation {
     pub actual: Option<Nm>,
     /// What the rule demanded, where it demands a distance.
     pub required: Option<Nm>,
+    /// The copper the violation is about, where it is an area rather than a
+    /// point.
+    ///
+    /// A clearance fault happens at a place, and a coordinate is the whole
+    /// story. An orphaned pour island is a *sheet*: the designer has to see
+    /// which copper is stranded, and zooming to its centre shows a plane that
+    /// looks like every other part of the plane.
+    pub area: Option<Rect>,
 }
 
 /// Categories of design rule violations.
@@ -103,11 +111,16 @@ impl DrcViolation {
     /// no pad of its own net bridges to. It is not a short and it breaks no
     /// clearance - it is copper that does nothing, and it looks exactly like
     /// the rest of the plane in every preview.
-    pub fn pour_island(zone: Entity, location: Point) -> Self {
+    pub fn pour_island(zone: Entity, area: Rect) -> Self {
+        let location = Point::new(
+            Nm((area.min.x.0 + area.max.x.0) / 2),
+            Nm((area.min.y.0 + area.max.y.0) / 2),
+        );
         DrcViolation {
             kind: ViolationKind::PourIsland,
             actual: None,
             required: None,
+            area: Some(area),
             location,
             entity: zone,
             other_entity: None,
@@ -153,6 +166,7 @@ impl DrcViolation {
             kind: ViolationKind::Clearance,
             actual: Some(actual),
             required: Some(required),
+            area: None,
             location,
             entity,
             other_entity: Some(other),
@@ -194,6 +208,7 @@ impl DrcViolation {
             kind: ViolationKind::DrillSize,
             actual: None,
             required: None,
+            area: None,
             location,
             entity,
             other_entity: None,
@@ -235,6 +250,7 @@ impl DrcViolation {
             kind: ViolationKind::TraceWidth,
             actual: None,
             required: None,
+            area: None,
             location,
             entity,
             other_entity: None,
@@ -277,6 +293,7 @@ impl DrcViolation {
             kind: ViolationKind::UnconnectedPin,
             actual: None,
             required: None,
+            area: None,
             location,
             entity,
             other_entity: None,
@@ -326,6 +343,7 @@ impl DrcViolation {
             kind: ViolationKind::KeepoutViolation,
             actual: None,
             required: None,
+            area: None,
             location,
             entity,
             other_entity: Some(zone_entity),
@@ -363,6 +381,7 @@ impl DrcViolation {
             kind: ViolationKind::EdgeClearance,
             actual: None,
             required: None,
+            area: None,
             location,
             entity,
             other_entity: None,
@@ -404,6 +423,7 @@ impl DrcViolation {
             kind: ViolationKind::AnnularRing,
             actual: None,
             required: None,
+            area: None,
             location,
             entity,
             other_entity: None,
@@ -428,6 +448,7 @@ impl DrcViolation {
             kind: ViolationKind::HoleToHole,
             actual: None,
             required: None,
+            area: None,
             location,
             entity,
             other_entity: Some(other),
@@ -446,6 +467,7 @@ impl DrcViolation {
             kind: ViolationKind::ViaDiameter,
             actual: None,
             required: None,
+            area: None,
             location,
             entity,
             other_entity: None,
@@ -467,6 +489,7 @@ impl DrcViolation {
             kind: ViolationKind::ViaDrill,
             actual: None,
             required: None,
+            area: None,
             location,
             entity,
             other_entity: None,
@@ -491,6 +514,7 @@ impl DrcViolation {
             kind: ViolationKind::SolderMaskBridge,
             actual: None,
             required: None,
+            area: None,
             location,
             entity,
             other_entity: Some(other),
@@ -512,6 +536,7 @@ impl DrcViolation {
             kind: ViolationKind::Assertion,
             actual: None,
             required: None,
+            area: None,
             location,
             entity,
             other_entity: None,
@@ -530,6 +555,7 @@ impl DrcViolation {
             kind: ViolationKind::TraceCurrent,
             actual: None,
             required: None,
+            area: None,
             location,
             entity,
             other_entity: None,
@@ -548,6 +574,7 @@ impl DrcViolation {
             kind: ViolationKind::SilkClearance,
             actual: None,
             required: None,
+            area: None,
             location,
             entity,
             other_entity: None,
@@ -572,6 +599,7 @@ impl DrcViolation {
             kind: ViolationKind::CourtyardClearance,
             actual: None,
             required: None,
+            area: None,
             location,
             entity,
             other_entity: Some(other),

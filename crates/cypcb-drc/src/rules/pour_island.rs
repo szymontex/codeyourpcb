@@ -12,7 +12,9 @@
 //! two rectangles sharing an edge are one sheet of copper.
 
 use cypcb_core::pour::PourOptions;
-use cypcb_core::{Nm, Point, Rect};
+use cypcb_core::Rect;
+#[cfg(test)]
+use cypcb_core::{Nm, Point};
 use cypcb_world::components::Layer;
 use cypcb_world::BoardWorld;
 
@@ -62,7 +64,7 @@ impl DrcRule for PourIslandRule {
                 }
 
                 for island in unconnected_islands(&filled.pieces, &filled.spokes) {
-                    violations.push(DrcViolation::pour_island(entity, centre_of(&island)));
+                    violations.push(DrcViolation::pour_island(entity, island));
                 }
             }
         }
@@ -150,13 +152,6 @@ fn touches(a: &Rect, b: &Rect) -> bool {
         && b.min.x.0 <= a.max.x.0
         && a.min.y.0 <= b.max.y.0
         && b.min.y.0 <= a.max.y.0
-}
-
-fn centre_of(rect: &Rect) -> Point {
-    Point::new(
-        Nm((rect.min.x.0 + rect.max.x.0) / 2),
-        Nm((rect.min.y.0 + rect.max.y.0) / 2),
-    )
 }
 
 #[cfg(test)]

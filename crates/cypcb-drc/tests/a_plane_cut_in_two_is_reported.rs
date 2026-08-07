@@ -116,3 +116,31 @@ fn a_plane_whose_net_has_no_pad_under_it_is_reported_once() {
     let mut world = board_with_pour(Point::from_mm(38.0, 38.0), false);
     assert_eq!(islands(&mut world), 1);
 }
+
+#[test]
+fn the_violation_carries_the_sheet_and_not_only_its_centre() {
+    // Zooming to a point inside a plane shows copper that looks like every
+    // other part of the plane. The viewer needs the rectangle to outline.
+    let mut world = board_with_pour(Point::from_mm(20.0, 10.0), true);
+    let report = run_drc(&mut world, &DesignRules::jlcpcb_2layer());
+    let island = report
+        .violations
+        .iter()
+        .find(|v| v.kind == ViolationKind::PourIsland)
+        .expect("the island is reported");
+
+    let area = island.area.expect("an island is an area, not a point");
+    assert!(
+        area.max.x.0 > area.min.x.0 && area.max.y.0 > area.min.y.0,
+        "the sheet has to have a size, got {area:?}"
+    );
+    assert!(
+        area.min.y.0 > Nm::from_mm(20.0).0,
+        "the stranded copper is the half above the cut, got {area:?}"
+    );
+    assert_eq!(
+        island.location.x.0,
+        (area.min.x.0 + area.max.x.0) / 2,
+        "the point stays the middle of the sheet, for the zoom"
+    );
+}

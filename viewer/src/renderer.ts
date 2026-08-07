@@ -120,6 +120,17 @@ export function render(ctx: CanvasRenderingContext2D, state: RenderState): void 
     drawResizeHandles(ctx, viewport, snapshot.board.width_nm, snapshot.board.height_nm, themeColors, state.activeResizeHandle ?? null);
   }
 
+  // Copper the checker says reaches nothing, outlined on top of the pours it
+  // was cut from - an island looks exactly like the rest of the plane, which
+  // is the whole reason it needs marking.
+  if (snapshot.violations) {
+    for (const violation of snapshot.violations) {
+      if (violation.area) {
+        drawOrphanedCopper(ctx, viewport, violation.area);
+      }
+    }
+  }
+
   // Keepouts before the copper: an area the design forbids is context for
   // everything drawn on top of it.
   if (snapshot.zones) {
@@ -413,6 +424,33 @@ function tracePolyline(ctx: CanvasRenderingContext2D, vp: Viewport, trace: Trace
     const [endX, endY] = worldToScreen(vp, seg.end_x, seg.end_y);
     ctx.lineTo(endX, endY);
   }
+}
+
+/**
+ * Outline copper a violation says is stranded.
+ *
+ * Drawn as a hatched-looking dashed box rather than a fill: the copper is
+ * already painted underneath by the pour, and covering it would hide the thing
+ * being pointed at.
+ *
+ * Exported for the test that fixes what it draws.
+ */
+export function drawOrphanedCopper(
+  ctx: CanvasRenderingContext2D, vp: Viewport,
+  area: [number, number, number, number],
+): void {
+  const [sx1, sy1] = worldToScreen(vp, area[0], area[1]);
+  const [sx2, sy2] = worldToScreen(vp, area[2], area[3]);
+
+  ctx.save();
+  ctx.strokeStyle = LAYER_COLORS.orphaned_copper;
+  ctx.lineWidth = 2;
+  ctx.setLineDash([3, 3]);
+  ctx.strokeRect(
+    Math.min(sx1, sx2), Math.min(sy1, sy2),
+    Math.abs(sx2 - sx1), Math.abs(sy2 - sy1),
+  );
+  ctx.restore();
 }
 
 /**

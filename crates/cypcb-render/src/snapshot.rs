@@ -86,6 +86,12 @@ pub struct ViolationInfo {
     pub y_nm: i64,
     /// Human-readable message.
     pub message: String,
+    /// The copper this is about, where it is an area: min x, min y, max x,
+    /// max y in nanometres. A point is enough for a clearance fault; an
+    /// orphaned pour island is a sheet, and its centre looks like every other
+    /// part of the plane.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub area: Option<[i64; 4]>,
 }
 
 impl ViolationInfo {
@@ -115,6 +121,9 @@ impl ViolationInfo {
             x_nm: v.location.x.0,
             y_nm: v.location.y.0,
             message: v.message.clone(),
+            area: v
+                .area
+                .map(|rect| [rect.min.x.0, rect.min.y.0, rect.max.x.0, rect.max.y.0]),
         }
     }
 }
@@ -396,6 +405,7 @@ mod tests {
             x_nm: 5_000_000,
             y_nm: 10_000_000,
             message: "Clearance violation: 0.10mm actual, 0.15mm required".to_string(),
+            area: None,
         };
 
         let json = serde_json::to_string(&violation).unwrap();

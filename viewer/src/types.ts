@@ -68,6 +68,15 @@ export interface ViolationInfo {
   y_nm: number;
   /** Human-readable message */
   message: string;
+  /**
+   * The copper this is about, where it is an area rather than a point:
+   * [min x, min y, max x, max y] in nm.
+   *
+   * A clearance fault happens at a place. An orphaned pour island is a sheet,
+   * and zooming to its centre shows copper that looks like every other part of
+   * the plane.
+   */
+  area?: [number, number, number, number];
 }
 
 export interface BoardInfo {
