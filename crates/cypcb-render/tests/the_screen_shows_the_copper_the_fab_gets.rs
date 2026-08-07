@@ -215,10 +215,19 @@ fn overlapping_planes_are_reported_to_whoever_holds_the_snapshot() {
 
     let back: serde_json::Value =
         serde_json::from_str(&engine.get_snapshot()).expect("snapshot is JSON");
-    let violations = back["violations"].as_array().expect("violations come back");
+    // Only the overlap: a pour with no pad of its own net under it is also an
+    // island, correctly, and this test is about the overlap rule.
+    let overlaps = |value: &serde_json::Value| -> usize {
+        value["violations"]
+            .as_array()
+            .expect("violations come back")
+            .iter()
+            .filter(|v| v["kind"] == "clearance")
+            .count()
+    };
 
     assert!(
-        !violations.is_empty(),
+        overlaps(&back) > 0,
         "a ground plane over a supply plane is a short and nothing said so"
     );
 
@@ -232,11 +241,9 @@ fn overlapping_planes_are_reported_to_whoever_holds_the_snapshot() {
     assert!(engine.load_snapshot_json(&apart).is_empty());
     let back: serde_json::Value =
         serde_json::from_str(&engine.get_snapshot()).expect("snapshot is JSON");
-    assert!(
-        back["violations"]
-            .as_array()
-            .expect("violations come back")
-            .is_empty(),
-        "two planes that do not touch are not a fault"
+    assert_eq!(
+        overlaps(&back),
+        0,
+        "two planes that do not touch are not a short"
     );
 }

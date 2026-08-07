@@ -65,6 +65,8 @@ pub enum ViolationKind {
     SilkClearance,
     /// Trace is too narrow for the current its net declares.
     TraceCurrent,
+    /// Copper in a pour that reaches no pad of its own net.
+    PourIsland,
     /// A claim the design makes about itself does not hold.
     Assertion,
     /// Component courtyards overlap.
@@ -87,6 +89,7 @@ impl std::fmt::Display for ViolationKind {
             ViolationKind::SolderMaskBridge => write!(f, "solder-mask-bridge"),
             ViolationKind::SilkClearance => write!(f, "silk-clearance"),
             ViolationKind::TraceCurrent => write!(f, "trace-current"),
+            ViolationKind::PourIsland => write!(f, "pour-island"),
             ViolationKind::Assertion => write!(f, "assertion"),
             ViolationKind::CourtyardClearance => write!(f, "courtyard-clearance"),
         }
@@ -94,6 +97,25 @@ impl std::fmt::Display for ViolationKind {
 }
 
 impl DrcViolation {
+    /// Create a violation for pour copper that connects to nothing.
+    ///
+    /// A plane cut into pieces by the copper it flows around can leave a piece
+    /// no pad of its own net bridges to. It is not a short and it breaks no
+    /// clearance - it is copper that does nothing, and it looks exactly like
+    /// the rest of the plane in every preview.
+    pub fn pour_island(zone: Entity, location: Point) -> Self {
+        DrcViolation {
+            kind: ViolationKind::PourIsland,
+            actual: None,
+            required: None,
+            location,
+            entity: zone,
+            other_entity: None,
+            source_span: None,
+            message: "Pour island: this copper reaches no pad of its own net".to_string(),
+        }
+    }
+
     /// Create a clearance violation.
     ///
     /// # Arguments
