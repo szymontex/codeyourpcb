@@ -236,16 +236,46 @@ It disagreed with the variant ranking immediately:
 | 8 | `High-Density` | 130 | 59 |
 
 The ranking is lexicographic - complete, then fewest shorts, then composite -
-and it hands over the board with **109 violations because it has 5 fewer shorts
-than the default and 7 fewer than `Pad Aware`**. Seven shorts bought 34
-violations.
+so it hands over `Bare Centre Line` at 109 violations because it carries 28
+shorts against `Pad Aware`'s 35. On the three older fixtures every rule picks
+the same variant and this never showed.
 
-On the three older fixtures the two keys agree, so this never showed. It is not
-obviously wrong: copper on copper cannot work and a 0.05mm gap sometimes can.
-But a strict lexicographic order will always trade any amount of the second key
-for any amount of the first, and here that trade is 34 for 7. **Whether that is
-the trade this project wants is now an open question with numbers behind it**,
-and it wants its own sweep across all four boards rather than a guess.
+**It was written up here as a defect, and the sweep below says it is not one.**
+`Pad Aware` at 75/35 does not beat `Bare Centre Line` at 109/28: it is better on
+one axis and worse on the other. Both sit on the Pareto front, and what the
+fourth board actually revealed is that the front is **wide** - 34 violations
+across for 7 shorts - where on the older three it is a point. Which end of it to
+hand over is a judgement, not a bug.
+
+### Which end of the front to hand over
+
+`ranking_rule_sweep` scores seven rules against one routing pass per board -
+the shipped lexicographic order, and `violations + W x shorts` for W in
+0, 1, 2, 5, 10, 20. The criterion was written into the test before the numbers
+were seen: a rule is out if it ever picks a **dominated** board, meaning another
+complete variant has fewer violations *and* no more shorts; among the rest,
+prefer the fewest shorts, since that is what this project ranks first.
+
+| rule | led_blink | stm32_breakout | multi_ic | shift_driver | shorts | dominated |
+|---|---|---|---|---|---|---|
+| **lexicographic (shipped)** | 1/0 | 216/86 | 248/106 | 109/28 | **220** | 0 |
+| `+ 0 x shorts` | 1/0 | 216/86 | 248/106 | 75/35 | 227 | 0 |
+| `+ 1 x shorts` | 1/0 | 216/86 | 248/106 | 75/35 | 227 | 0 |
+| `+ 2 x shorts` | 1/0 | 216/86 | 248/106 | 82/31 | 223 | 0 |
+| `+ 5 x shorts` | 1/0 | 216/86 | 248/106 | 82/31 | 223 | 0 |
+| `+ 10 x shorts` | 1/0 | 216/86 | 248/106 | 109/28 | 220 | 0 |
+| `+ 20 x shorts` | 1/0 | 216/86 | 248/106 | 109/28 | 220 | 0 |
+
+**No rule picks a dominated board, and only one of the four fixtures separates
+them at all.** Three boards pick the same variant under every rule; the whole
+question rests on `shift_driver`, which is one board's opinion.
+
+The shipped rule wins the criterion it was judged against - no dominated picks,
+fewest shorts at 220 - so it stays. Recorded here rather than acted on, because
+the alternative is a documented rule overturned on a single board, and because
+the number that should decide it is not in this table: how much a fab's yield
+actually suffers from a 0.05mm gap against a short. Nobody here has that
+number.
 
 `variant_picks_per_board` no longer asserts that the winner also wins on
 composite - that was asserting the opposite of the documented rule, and it is

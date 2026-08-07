@@ -1139,6 +1139,107 @@ fn calculate_pad_bounds(pads: &[PadDef]) -> Rect {
     )
 }
 
+/// The board's outline as a ring of points, when Edge.Cuts describes one.
+///
+/// A bounding box is enough to say how big a board is and wrong for saying
+/// where its edge runs. A cutout, a slot or a chamfer all live inside the same
+/// box, and clearance measured against the box passes copper that sits outside
+/// the actual edge.
+///
+/// `gr_poly` is already a ring and is taken as written. Loose `gr_line`
+/// segments are walked end to end into one; anything that does not close, or
+/// leaves segments over, yields nothing rather than a guess - a partial
+/// outline would be worse than the bounding box it replaces.
+fn extract_board_ring(elements: &[Sexp]) -> Option<Vec<Point>> {
+    // A polygon states the ring directly.
+    for elem in elements {
+        if list_name(elem).as_deref() != Some("gr_poly") || !is_on_edge_cuts(elem) {
+            continue;
+        }
+        let mut points = Vec::new();
+        if let Ok(list) = elem.list() {
+            for child in list {
+                if list_name(child).as_deref() != Some("pts") {
+                    continue;
+                }
+                let Ok(pts) = child.list() else { continue };
+                for pt in &pts[1..] {
+                    if list_name(pt).as_deref() != Some("xy") {
+                        continue;
+                    }
+                    let Ok(pt_list) = pt.list() else { continue };
+                    if pt_list.len() >= 3 {
+                        if let (Some(x), Some(y)) = (get_f64(&pt_list[1]), get_f64(&pt_list[2])) {
+                            points.push(Point::from_mm(x, y));
+                        }
+                    }
+                }
+            }
+        }
+        if points.len() >= 3 {
+            return Some(points);
+        }
+    }
+
+    // Otherwise, walk the loose segments into a ring.
+    let mut segments: Vec<(Point, Point)> = Vec::new();
+    for elem in elements {
+        if list_name(elem).as_deref() != Some("gr_line") || !is_on_edge_cuts(elem) {
+            continue;
+        }
+        if let (Some(start), Some(end)) = (find_xy_child(elem, "start"), find_xy_child(elem, "end"))
+        {
+            segments.push((
+                Point::from_mm(start.0, start.1),
+                Point::from_mm(end.0, end.1),
+            ));
+        }
+    }
+    if segments.len() < 3 {
+        return None;
+    }
+
+    // A micrometre: KiCad writes millimetres with enough decimals that two
+    // endpoints meant to touch land on the same nanometre, but not enough to
+    // rely on it.
+    const JOIN_TOLERANCE_NM: i64 = 1_000;
+    let touches = |a: Point, b: Point| -> bool {
+        (a.x.raw() - b.x.raw()).abs() <= JOIN_TOLERANCE_NM
+            && (a.y.raw() - b.y.raw()).abs() <= JOIN_TOLERANCE_NM
+    };
+
+    let mut used = vec![false; segments.len()];
+    let start = segments[0].0;
+    let mut cursor = segments[0].1;
+    let mut ring = vec![start];
+    used[0] = true;
+
+    for _ in 1..segments.len() {
+        ring.push(cursor);
+        #[allow(clippy::question_mark)] // `?` would return None from the walk, not from this arm
+        let Some((index, next)) = segments.iter().enumerate().find_map(|(i, (a, b))| {
+            if used[i] {
+                return None;
+            }
+            if touches(*a, cursor) {
+                Some((i, *b))
+            } else if touches(*b, cursor) {
+                Some((i, *a))
+            } else {
+                None
+            }
+        }) else {
+            return None;
+        };
+        used[index] = true;
+        cursor = next;
+    }
+
+    if !touches(cursor, start) {
+        return None;
+    }
+    Some(ring)
+}
 #[cfg(test)]
 mod tests {
 
@@ -1264,106 +1365,4 @@ mod tests {
             Ok(_) => panic!("Expected error for unsupported version"),
         }
     }
-}
-
-/// The board's outline as a ring of points, when Edge.Cuts describes one.
-///
-/// A bounding box is enough to say how big a board is and wrong for saying
-/// where its edge runs. A cutout, a slot or a chamfer all live inside the same
-/// box, and clearance measured against the box passes copper that sits outside
-/// the actual edge.
-///
-/// `gr_poly` is already a ring and is taken as written. Loose `gr_line`
-/// segments are walked end to end into one; anything that does not close, or
-/// leaves segments over, yields nothing rather than a guess - a partial
-/// outline would be worse than the bounding box it replaces.
-fn extract_board_ring(elements: &[Sexp]) -> Option<Vec<Point>> {
-    // A polygon states the ring directly.
-    for elem in elements {
-        if list_name(elem).as_deref() != Some("gr_poly") || !is_on_edge_cuts(elem) {
-            continue;
-        }
-        let mut points = Vec::new();
-        if let Ok(list) = elem.list() {
-            for child in list {
-                if list_name(child).as_deref() != Some("pts") {
-                    continue;
-                }
-                let Ok(pts) = child.list() else { continue };
-                for pt in &pts[1..] {
-                    if list_name(pt).as_deref() != Some("xy") {
-                        continue;
-                    }
-                    let Ok(pt_list) = pt.list() else { continue };
-                    if pt_list.len() >= 3 {
-                        if let (Some(x), Some(y)) = (get_f64(&pt_list[1]), get_f64(&pt_list[2])) {
-                            points.push(Point::from_mm(x, y));
-                        }
-                    }
-                }
-            }
-        }
-        if points.len() >= 3 {
-            return Some(points);
-        }
-    }
-
-    // Otherwise, walk the loose segments into a ring.
-    let mut segments: Vec<(Point, Point)> = Vec::new();
-    for elem in elements {
-        if list_name(elem).as_deref() != Some("gr_line") || !is_on_edge_cuts(elem) {
-            continue;
-        }
-        if let (Some(start), Some(end)) = (find_xy_child(elem, "start"), find_xy_child(elem, "end"))
-        {
-            segments.push((
-                Point::from_mm(start.0, start.1),
-                Point::from_mm(end.0, end.1),
-            ));
-        }
-    }
-    if segments.len() < 3 {
-        return None;
-    }
-
-    // A micrometre: KiCad writes millimetres with enough decimals that two
-    // endpoints meant to touch land on the same nanometre, but not enough to
-    // rely on it.
-    const JOIN_TOLERANCE_NM: i64 = 1_000;
-    let touches = |a: Point, b: Point| -> bool {
-        (a.x.raw() - b.x.raw()).abs() <= JOIN_TOLERANCE_NM
-            && (a.y.raw() - b.y.raw()).abs() <= JOIN_TOLERANCE_NM
-    };
-
-    let mut used = vec![false; segments.len()];
-    let start = segments[0].0;
-    let mut cursor = segments[0].1;
-    let mut ring = vec![start];
-    used[0] = true;
-
-    for _ in 1..segments.len() {
-        ring.push(cursor);
-        #[allow(clippy::question_mark)] // `?` would return None from the walk, not from this arm
-        let Some((index, next)) = segments.iter().enumerate().find_map(|(i, (a, b))| {
-            if used[i] {
-                return None;
-            }
-            if touches(*a, cursor) {
-                Some((i, *b))
-            } else if touches(*b, cursor) {
-                Some((i, *a))
-            } else {
-                None
-            }
-        }) else {
-            return None;
-        };
-        used[index] = true;
-        cursor = next;
-    }
-
-    if !touches(cursor, start) {
-        return None;
-    }
-    Some(ring)
 }
