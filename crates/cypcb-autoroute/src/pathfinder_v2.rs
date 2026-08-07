@@ -259,6 +259,13 @@ pub struct PathFinderLoopResult {
     pub iterations: u32,
     /// Whether the algorithm converged (zero overused cells).
     pub converged: bool,
+    /// How many cells were overused at the end of each iteration.
+    ///
+    /// The trajectory, not just where it stopped. Two runs that end at the
+    /// same count can have got there in opposite ways, and the question this
+    /// vector is on - why a cost change of a hundredth moves the result by 28
+    /// violations - is a question about the path, not the endpoint.
+    pub overuse_per_iteration: Vec<usize>,
 }
 
 /// Run the PathFinder negotiated congestion iteration loop.
@@ -283,6 +290,7 @@ pub fn pathfinder_loop(
 
     // Initialize congestion map
     let mut congestion_map = CongestionMap::new(width, height, layers);
+    let mut overuse_per_iteration: Vec<usize> = Vec::new();
     congestion_map.set_ring_penalty(config.via_ring_penalty);
 
     // Per-net cell index: net_id -> cells occupied by this net.
@@ -329,6 +337,7 @@ pub fn pathfinder_loop(
         } else {
             // Subsequent: only nets passing through overused cells
             let overused = congestion_map.overused_cells();
+            overuse_per_iteration.push(overused.len());
             if overused.is_empty() {
                 converged = true;
                 tracing::info!(iteration, "PathFinder converged — zero overused cells");
@@ -666,6 +675,7 @@ pub fn pathfinder_loop(
         unrouted,
         iterations: final_iteration,
         converged,
+        overuse_per_iteration,
     }
 }
 
