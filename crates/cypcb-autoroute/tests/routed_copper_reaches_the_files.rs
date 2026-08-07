@@ -338,6 +338,68 @@ fn how_many_pins_no_copper_reaches() {
                 "    {} - nearest copper of its own net {:.3}mm away",
                 violation.message, nearest
             );
+
+            // What the ratsnest thought this pad's layers were. A pad the
+            // router believes is on both faces can be reached from either, and
+            // an SMD pad on top reached from the bottom is an open circuit.
+            {
+                let library = world.footprints().clone();
+                let ecs = world.ecs_mut();
+                let mut query = ecs.query::<(
+                    &cypcb_world::RefDes,
+                    &cypcb_world::components::FootprintRef,
+                )>();
+                for (refdes, footprint_ref) in query.iter(ecs) {
+                    let prefix = format!("{}.", refdes.as_str());
+                    let Some(pin) = refdes_pin.strip_prefix(&prefix) else {
+                        continue;
+                    };
+                    if let Some(footprint) = library.get(footprint_ref.as_str()) {
+                        for pad in &footprint.pads {
+                            if pad.number == pin {
+                                eprintln!("        pad layers: {:?}", pad.layers);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // The two paths that disagree, side by side: the pad box the rule
+            // built and the segment box it compared it against.
+            if let Some(net) = net {
+                let ecs = world.ecs_mut();
+                let mut query = ecs.query::<&cypcb_world::components::trace::Trace>();
+                for trace in query.iter(ecs) {
+                    if trace.net_id != net {
+                        continue;
+                    }
+                    for segment in &trace.segments {
+                        let grow = trace.width.0 / 2;
+                        let (min_x, max_x) = (
+                            segment.start.x.0.min(segment.end.x.0) - grow,
+                            segment.start.x.0.max(segment.end.x.0) + grow,
+                        );
+                        let (min_y, max_y) = (
+                            segment.start.y.0.min(segment.end.y.0) - grow,
+                            segment.start.y.0.max(segment.end.y.0) + grow,
+                        );
+                        let near = (min_x..=max_x).contains(&violation.location.x.0)
+                            || (min_y..=max_y).contains(&violation.location.y.0);
+                        if near {
+                            eprintln!(
+                                "        {:?} segment box ({:.3},{:.3})-({:.3},{:.3})mm against pad at ({:.3},{:.3})mm",
+                                trace.layer,
+                                min_x as f64 / 1e6,
+                                min_y as f64 / 1e6,
+                                max_x as f64 / 1e6,
+                                max_y as f64 / 1e6,
+                                violation.location.x.to_mm(),
+                                violation.location.y.to_mm()
+                            );
+                        }
+                    }
+                }
+            }
         }
     }
 }
