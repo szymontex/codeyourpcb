@@ -26,6 +26,15 @@ pub struct CheckCommand {
     pub no_drc: bool,
 }
 
+/// The 1-based line a byte offset falls on.
+///
+/// The span a component carries is a byte range - the line it sits on is not
+/// known where that span is built, so it is worked out here against the source
+/// that produced it.
+fn line_of(source: &str, offset: usize) -> usize {
+    source[..offset.min(source.len())].matches('\n').count() + 1
+}
+
 impl CheckCommand {
     /// Run the check command.
     pub fn run(&self) -> Result<()> {
@@ -109,8 +118,21 @@ impl CheckCommand {
         let mut counts: BTreeMap<String, usize> = BTreeMap::new();
         for violation in &drc.violations {
             *counts.entry(violation.kind.to_string()).or_insert(0) += 1;
+
+            // Where in the file, when the model can say. A violation is found
+            // in board coordinates, and a coordinate is not something a reader
+            // can search a text file for - the definition it belongs to is.
+            // `path:line:` is also what an editor and a terminal both know how
+            // to jump to.
+            let where_written = world
+                .get::<cypcb_world::components::SourceSpan>(violation.entity)
+                .map(|span| line_of(&source, span.start_byte))
+                .map(|line| format!("{}:{}: ", self.file.display(), line))
+                .unwrap_or_default();
+
             eprintln!(
-                "  {} at ({:.3}mm, {:.3}mm): {}",
+                "  {}{} at ({:.3}mm, {:.3}mm): {}",
+                where_written,
                 violation.kind,
                 violation.location.x.to_mm(),
                 violation.location.y.to_mm(),

@@ -193,3 +193,29 @@ fn a_warning_does_not_reach_machine_readable_output() {
         "and on stderr it is: {stderr}"
     );
 }
+
+#[test]
+fn a_drc_violation_names_the_line_of_the_part_it_is_about() {
+    // A violation is found in board coordinates, and `check` printed only
+    // those: `unconnected-pin at (14.050mm, 10.000mm)`. A millimetre is not
+    // something a reader can search a text file for. The definition it belongs
+    // to is, and `path:line:` is what an editor and a terminal both jump to.
+    let source = "board demo {\n    size 30mm x 30mm\n    layers 2\n}\n\ncomponent R1 resistor \"0805\" {\n    value \"10k\"\n    at 10mm, 10mm\n}\n\ncomponent C1 capacitor \"0805\" {\n    value \"100nF\"\n    at 20mm, 20mm\n}\n";
+
+    let report = check("violation-lines", source);
+
+    // R1 is defined on line 6 and C1 on line 11. Both are unconnected, so both
+    // report, and each has to name its own line.
+    assert!(
+        report.contains(":6: ") && report.contains("R1."),
+        "R1's violations have to point at line 6; got:\n{report}"
+    );
+    assert!(
+        report.contains(":11: ") && report.contains("C1."),
+        "C1's violations have to point at line 11; got:\n{report}"
+    );
+    assert!(
+        !report.contains(":1: "),
+        "nothing here is defined on line 1; got:\n{report}"
+    );
+}
