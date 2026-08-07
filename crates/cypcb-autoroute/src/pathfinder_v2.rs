@@ -613,6 +613,7 @@ pub fn pathfinder_loop(
                 let end = pad_to_grid_node(grid, to_pad);
                 let any_end = is_multi_layer(to_pad.layer_mask);
 
+
                 // Route with congestion-augmented cost
                 let search = Search {
                     rules,

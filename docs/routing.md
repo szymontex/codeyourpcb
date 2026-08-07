@@ -195,13 +195,25 @@ numbers are introduced violations unless stated.
 | Route the crowded nets first instead of the short ones | stm32_breakout 259 -> 302, multi_ic 143 -> 150; faster, which is not the objective |
 | Refuse a foreign net's pad inside the routing net's own pad zone | stm32_breakout 239 -> 250 after, and **six connections abandoned**; multi_ic 336 -> 451 |
 | Weight the pad price by depth into the pad's disc, full on its copper and tapering across the clearance | multi_ic 267 -> 413 after at price 20 and 106 -> 242 shorts; stm32_breakout better at 5 and 50, worse at 20; no price where both improve |
+| Open a net's pad zone for the connection's own two pads instead of every pad the net has | stm32_breakout 239 -> 299 after and 136 -> 175 shorts, multi_ic 336 -> 398 and 166 -> 219, nothing left unrouted on either |
 
 The pattern across all of them: **pricing copper that exists pays, blocking or
 pricing space somebody might want does not.** An empty congestion map is not
 blindness - it lets the first net take the cheap line and charges the rest for
 what it actually took.
 
-The last row is the seventh veto tried in this vector and the seventh to lose,
+The last row is worth reading twice, because it refutes the obvious reading of
+the cross-tab. Part-to-trace **on a cell the grid marked as a pad** is the
+largest group of introduced faults on both dense boards - 109 of
+stm32_breakout's 206 and 112 of multi_ic's 215 - and the obvious cause is that
+a net's pad zone opens every pad the net has rather than the two the connection
+runs between. Narrowing it to those two makes both boards **worse**, with
+nothing abandoned. So the router is not walking through pads it has no business
+near: it is inside its own pad's disc, colliding with a **neighbouring part's**
+pad that the disc happens to cover. The zone's radius is the suspect, not its
+scope.
+
+The row before it is the seventh veto tried in this vector and the seventh to lose,
 which is now a strong enough prior to state as a rule: **if the instrument you
 are about to write returns a bool, write it as an f64 instead and measure the
 price.** The same geometry, priced, is the `PathFinder Pad Aware` variant below.
