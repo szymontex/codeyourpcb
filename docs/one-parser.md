@@ -93,12 +93,33 @@ rewrite:
 
 Order of work, each step shippable on its own:
 
-1. Tokenizer plus the reader for the constructs `parseSource` already covers,
-   behind a feature flag, checked with (3) against the examples that use them.
-2. Modules, imports, interfaces and assertions - the rest of the AST.
-3. Flip the default feature, delete `parser.rs`'s tree-sitter path and the C
-   build, and check the wasm artifact still reports zero imports from `env`.
-4. Delete `parseSource` and the drift test with it.
+1. ~~Tokenizer plus the reader for the constructs `parseSource` already covers~~
+   **Done.** `src/lexer.rs` and `src/reader.rs`, behind `rust-parser`.
+2. ~~Modules, imports, interfaces and assertions~~ **Done.** The differential
+   test covers every example except the two written to fail parsing: 147
+   definitions across 17 boards, identical. Error parity is pinned separately
+   in `tests/error_parity.rs`.
+3. **Half done.** `cypcb-render`'s `wasm` feature carries the reader, the
+   browser engine parses, and the artifact imports nothing from `env`. What is
+   left is the native side: the CLI, the LSP and `cypcb-world::sync` still call
+   the tree-sitter parser, and until they move, `parser.rs`, the `cc` build and
+   the generated `parser.c` stay.
+4. ~~Delete `parseSource` and the drift test with it~~ **Done.** The viewer
+   reads boards through the engine; the second reader, its helpers and the
+   drift test are gone.
+
+What the browser build paid for it, measured on 2026-08-07:
+
+| | before | after |
+|---|---|---|
+| `cypcb_render_bg.wasm` | 751,995 | 1,044,164 |
+| the same, gzipped | 290,004 | 411,147 |
+| all JS in `viewer/dist` | 14,791,848 | 14,781,791 |
+
+**This is not a size win and should not be sold as one**: 292KB of wasm against
+10KB of JavaScript. What it buys is that a board using `module` or `import`
+draws on screen what the CLI exports, which is what the table at the top of
+this document says it did not.
 
 The grammar file stays regardless: it is what the editor's syntax highlighting
 and the LSP's future incremental parsing would use, and it is the readable
