@@ -364,6 +364,28 @@ fn how_many_pins_no_copper_reaches() {
                 }
             }
 
+            // Is there a via of this net at the pad? A route that changed
+            // layer and lost its last stub looks different from one that never
+            // came up at all.
+            if let Some(net) = net {
+                let ecs = world.ecs_mut();
+                let mut query = ecs.query::<&cypcb_world::components::trace::Via>();
+                let mut nearest_via = f64::MAX;
+                for via in query.iter(ecs) {
+                    if via.net_id != net {
+                        continue;
+                    }
+                    let dx = (via.position.x.0 - violation.location.x.0) as f64 / 1_000_000.0;
+                    let dy = (via.position.y.0 - violation.location.y.0) as f64 / 1_000_000.0;
+                    nearest_via = nearest_via.min((dx * dx + dy * dy).sqrt());
+                }
+                if nearest_via < f64::MAX {
+                    eprintln!("        nearest via of this net {nearest_via:.3}mm away");
+                } else {
+                    eprintln!("        this net has no vias at all");
+                }
+            }
+
             // The two paths that disagree, side by side: the pad box the rule
             // built and the segment box it compared it against.
             if let Some(net) = net {
