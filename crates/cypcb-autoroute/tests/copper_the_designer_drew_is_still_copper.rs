@@ -165,3 +165,68 @@ fn a_net_a_hand_trace_already_joins_is_not_routed_again() {
         "the connection is already made, so there is nothing to route"
     );
 }
+
+#[test]
+fn copper_on_another_layer_does_not_count_as_a_connection() {
+    // A bottom-layer trace crossing over a top-layer pad is two pieces of
+    // copper with the board between them. Counting that as a connection drops
+    // a route the board needs, and the board comes back with a pin wired to
+    // nothing.
+    use cypcb_world::components::trace::Trace;
+
+    let mut world = BoardWorld::new();
+    world.set_board("t".to_string(), (Nm::from_mm(30.0), Nm::from_mm(20.0)), 2);
+
+    let mut library = cypcb_world::footprint::FootprintLibrary::new();
+    library.register(Footprint {
+        name: "PAD1".into(),
+        description: String::new(),
+        bounds: Rect::new(Point::ORIGIN, Point::ORIGIN),
+        courtyard: Rect::new(Point::ORIGIN, Point::ORIGIN),
+        silk: Vec::new(),
+        pads: vec![PadDef {
+            number: "1".into(),
+            shape: PadShape::Rect,
+            position: Point::ORIGIN,
+            size: (Nm::from_mm(1.0), Nm::from_mm(1.0)),
+            drill: None,
+            // Top only: a surface-mount pad.
+            layers: vec![Layer::TopCopper],
+        }],
+    });
+    world.set_footprints(library.clone());
+
+    let net = world.intern_net("SIG");
+    for (refdes, at) in [("J1", (5.0, 10.0)), ("J2", (25.0, 10.0))] {
+        let mut connections = NetConnections::new();
+        connections.add(PinConnection::new("1".to_string(), net));
+        world.spawn_component(
+            RefDes::new(refdes),
+            Value::new(""),
+            Position(Point::from_mm(at.0, at.1)),
+            Rotation::ZERO,
+            FootprintRef::new("PAD1"),
+            connections,
+        );
+    }
+
+    // Copper of the same net, running under both pads on the wrong layer.
+    let mut under = Trace::new(net);
+    under.layer = Layer::BottomCopper;
+    under.width = Nm::from_mm(0.2);
+    under.source = TraceSource::Manual;
+    under.add_segment(TraceSegment::new(
+        Point::from_mm(5.0, 10.0),
+        Point::from_mm(25.0, 10.0),
+    ));
+    world.ecs_mut().spawn((under, net));
+    world.rebuild_spatial_index_from_library(&library);
+
+    let rules = PresetRuleSet::new(RulesPreset::from_name("jlcpcb").expect("the preset"));
+    let result = route_board(&mut world, &library, &rules, &AutorouteConfig::default());
+
+    assert!(
+        result.route_count() > 0,
+        "the pads are on top and the copper is on the bottom, so the connection is still missing"
+    );
+}

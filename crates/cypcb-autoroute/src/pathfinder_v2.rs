@@ -299,9 +299,20 @@ fn drop_pads_existing_copper_already_joins(world: &mut BoardWorld, ratsnest: &mu
                 continue;
             }
             let half = trace.width.0 / 2;
+            // Copper only connects on the layer it is on. A bottom-layer trace
+            // crossing over a top-layer pad is two pieces of copper with the
+            // board between them, and treating that as a connection would drop
+            // a route the board needs.
+            let trace_layer_bit = crate::grid::layer_to_index(trace.layer)
+                .filter(|index| *index < 32)
+                .map(|index| 1u32 << index);
             for (pad_index, pad) in net.pads.iter().enumerate() {
                 if on_trace[pad_index].is_some() {
                     continue;
+                }
+                match trace_layer_bit {
+                    Some(bit) if pad.layer_mask & bit != 0 => {}
+                    _ => continue,
                 }
                 let touches = trace.segments.iter().any(|segment| {
                     let min_x = segment.start.x.0.min(segment.end.x.0) - half;
