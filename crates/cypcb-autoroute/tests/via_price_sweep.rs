@@ -105,3 +105,81 @@ fn what_a_via_should_pay_for_crowding() {
         }
     }
 }
+
+/// How much of the difference between two prices is the price.
+///
+/// `cargo test --release -p cypcb-autoroute --test via_price_sweep -- --ignored how_much --nocapture`
+///
+/// stm32_breakout moved 121 -> 159 -> 138 introduced violations across 0.25,
+/// 0.5 and 1.0, which is not the shape of a knob doing one thing. Prices a
+/// fraction apart are the control: 0.24 and 0.26 ask the router for almost
+/// exactly the same trade, so whatever they differ by is what negotiated
+/// congestion does on its own. A tuning value chosen inside that spread is
+/// noise with a decimal point.
+#[test]
+#[ignore = "diagnostic: routes the dense fixtures at prices a hair apart"]
+fn how_much_of_the_price_is_noise() {
+    let drc_rules = DesignRules::jlcpcb_2layer();
+    let prices = [0.22, 0.24, 0.25, 0.26, 0.28];
+
+    for benchmark in BENCHMARKS.iter().filter(|b| b.filename != "led_blink.kicad_pcb") {
+        eprintln!();
+        eprintln!("=== {} ===", benchmark.filename);
+
+        let mut introduced_counts = Vec::new();
+        for price in prices {
+            let parsed = parse_kicad_pcb(&fixture_path(benchmark.filename))
+                .unwrap_or_else(|e| panic!("Failed to parse {}: {:?}", benchmark.filename, e));
+            let mut world = parsed.world;
+            let library = parsed.library;
+
+            world.rebuild_spatial_index_from_library(&library);
+            let baseline: BTreeSet<String> = run_drc(&mut world, &drc_rules)
+                .violations
+                .iter()
+                .map(fingerprint)
+                .collect();
+
+            let config = AutorouteConfig {
+                via_foreign_copper_penalty: price,
+                ..AutorouteConfig::default()
+            };
+            let rules =
+                PresetRuleSet::new(RulesPreset::from_name("jlcpcb").expect("the preset exists"));
+            let result = route_board(&mut world, &library, &rules, &config);
+
+            apply_routes(&mut world, &result);
+            world.rebuild_spatial_index_from_library(&library);
+            let drc = run_drc(&mut world, &drc_rules);
+            let introduced: Vec<_> = drc
+                .violations
+                .iter()
+                .filter(|v| !baseline.contains(&fingerprint(v)))
+                .collect();
+            let shorts = introduced
+                .iter()
+                .filter(|v| v.kind == ViolationKind::Clearance)
+                .filter(|v| v.actual == Some(cypcb_core::Nm::ZERO))
+                .count();
+
+            eprintln!(
+                "  price {:>4.2}: {:>4} introduced, {:>4} shorts, {:>4} segments, {:>3} vias",
+                price,
+                introduced.len(),
+                shorts,
+                result.route_count(),
+                result.via_count()
+            );
+            introduced_counts.push(introduced.len());
+        }
+
+        let lo = introduced_counts.iter().copied().min().unwrap_or(0);
+        let hi = introduced_counts.iter().copied().max().unwrap_or(0);
+        eprintln!(
+            "  spread across prices 0.22..0.28: {} to {}, {} violations wide",
+            lo,
+            hi,
+            hi - lo
+        );
+    }
+}

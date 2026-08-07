@@ -206,15 +206,27 @@ fn print_table_footer() {
 /// as better than two near misses, which is backwards, and it hid that
 /// reserving trace copper halves the shorts on both dense fixtures.
 /// Lowered on 2026-08-07: the router reserves the copper a trace covers and
-/// prices a via by the foreign copper inside its keepout. The price was swept
-/// rather than guessed - see `via_price_sweep` - and 0.25 beat the 0.5 it
-/// shipped at on both dense boards and both columns. Across the three moves
-/// that day: led_blink 2/1 -> 2/0, stm32_breakout 251/159 -> 133/58,
-/// multi_ic 191/75 -> 140/37.
+/// prices a via by the foreign copper inside its keepout. Across that day:
+/// led_blink 2/1 -> 2/0, stm32_breakout 251/159 -> 133/58, multi_ic
+/// 191/75 -> 140/37.
+///
+/// **The two dense fixtures carry a noise band, and it is not slack.** Prices
+/// a hair apart - 0.22 to 0.28, asking the router for the same trade - move
+/// stm32_breakout between 121 and 149 introduced violations and multi_ic
+/// between 61 and 92 (`via_price_sweep::how_much_of_the_price_is_noise`).
+/// Negotiated congestion does that on its own: a rip-up ordering that differs
+/// by one net cascades. A threshold set to a single measured run would fail on
+/// an unrelated change that only perturbs the ordering, so each dense fixture
+/// is allowed its measured value plus the spread measured beside it. A
+/// regression larger than what the router does to itself still fails.
+///
+/// led_blink has no band: it returned 2/0 at every price above zero.
 const DRC_RATCHETS: &[(&str, &str, u32, u32)] = &[
     ("led_blink.kicad_pcb", "led_blink", 2, 0),
-    ("stm32_breakout.kicad_pcb", "stm32_breakout", 133, 58),
-    ("multi_ic.kicad_pcb", "multi_ic", 140, 37),
+    // 133 + 28 spread, 58 + 23 spread
+    ("stm32_breakout.kicad_pcb", "stm32_breakout", 161, 81),
+    // 140 + 31 spread, 37 + 26 spread
+    ("multi_ic.kicad_pcb", "multi_ic", 171, 63),
 ];
 
 /// Routes every fixture and holds the line on completeness and DRC count.
