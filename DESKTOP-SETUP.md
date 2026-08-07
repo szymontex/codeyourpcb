@@ -63,17 +63,19 @@
 
 ## 📦 Co dostaniesz po build
 
+Nazwę pliku Tauri składa z `productName` i `version` z `src-tauri/tauri.conf.json`,
+więc podnosisz wersję - zmienia się nazwa. Katalogi są stałe, a skrypty budujące
+same wypisują to, co powstało:
+
 ### Windows
-- `src-tauri/target/release/bundle/msi/CodeYourPCB_0.1.0_x64_en-US.msi`
-- Instalator ~5-10MB
+- `src-tauri/target/release/bundle/msi/` - jeden plik `.msi`
 
 ### macOS
-- `src-tauri/target/release/bundle/dmg/CodeYourPCB_0.1.0_x64.dmg`
-- Disk image ~8-12MB
+- `src-tauri/target/release/bundle/dmg/` - jeden plik `.dmg`
 
 ### Linux
-- `src-tauri/target/release/bundle/appimage/code-your-pcb_0.1.0_amd64.AppImage` (portable)
-- `src-tauri/target/release/bundle/deb/code-your-pcb_0.1.0_amd64.deb` (instalacja systemowa)
+- `src-tauri/target/release/bundle/appimage/` - `.AppImage` (przenośny)
+- `src-tauri/target/release/bundle/deb/` - `.deb` (instalacja systemowa)
 
 ## 🔧 Jeśli coś nie działa
 
@@ -141,4 +143,4 @@ Jeśli coś nie działa:
 
 - **Pierwsze buildy są wolne** (10-20 min) - Rust kompiluje wszystko. Kolejne będą szybsze.
 - **Dev mode** (hot reload) - zmiana kodu → auto-refresh
-- **Production build** - zoptymalizowany, mały (5-10MB), szybki startup
+- **Production build** - zoptymalizowany i szybszy przy starcie niż dev mode

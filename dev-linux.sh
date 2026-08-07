@@ -7,5 +7,5 @@ echo "NOTE: This will start the Vite dev server and Tauri window."
 echo "Press Ctrl+C to stop."
 echo ""
 
-cd viewer
+cd viewer || exit 1
 npm run dev:desktop
