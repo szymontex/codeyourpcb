@@ -135,6 +135,11 @@ pub fn run_drc(world: &mut BoardWorld, rules: &DesignRules) -> DrcResult {
         Box::new(rules::TraceCurrentRule),
         Box::new(rules::ZoneOverlapRule),
         Box::new(rules::PourIslandRule),
+        // Registered on 2026-08-07, once the router stopped leaving routes in
+        // two halves. It asks the question `UnconnectedPinRule` cannot: the
+        // schematic naming a net for a pin says nothing about whether anybody
+        // laid the copper.
+        Box::new(rules::UnroutedPinRule),
         Box::new(rules::AssertionRule),
     ];
 

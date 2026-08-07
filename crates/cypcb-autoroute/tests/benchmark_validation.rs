@@ -205,28 +205,27 @@ fn print_table_footer() {
 /// spec is a yield risk a fab may still build. A single count treats one short
 /// as better than two near misses, which is backwards, and it hid that
 /// reserving trace copper halves the shorts on both dense fixtures.
-/// Lowered on 2026-08-07: the router reserves the copper a trace covers and
-/// prices a via by the foreign copper inside its keepout. Across that day:
-/// led_blink 2/1 -> 2/0, stm32_breakout 251/159 -> 133/58, multi_ic
-/// 191/75 -> 140/37.
+/// Raised on 2026-08-07, and not for a regression in the copper - for the
+/// opposite. `paths_to_output` deleted every via whose cell carried
+/// `CELL_PAD`, which covers a pad plus its clearance, so a route that changed
+/// layer near any pad lost the via that joined it and the board came back with
+/// two halves that never meet. Every check agreed it was fine: DRC saw no
+/// overlap because the copper was on different layers, and the unrouted count
+/// was zero because a path came back for every edge.
 ///
-/// **The two dense fixtures carry a noise band, and it is not slack.** Prices
-/// a hair apart - 0.22 to 0.28, asking the router for the same trade - move
-/// stm32_breakout between 121 and 149 introduced violations and multi_ic
-/// between 61 and 92 (`via_price_sweep::how_much_of_the_price_is_noise`).
-/// Negotiated congestion does that on its own: a rip-up ordering that differs
-/// by one net cascades. A threshold set to a single measured run would fail on
-/// an unrelated change that only perturbs the ordering, so each dense fixture
-/// is allowed its measured value plus the spread measured beside it. A
-/// regression larger than what the router does to itself still fails.
+/// The search refuses to change layer on a pad now and every via reaches the
+/// output. Pins no copper reaches - the measure that matters here - go
+/// led_blink 1 -> 0, stm32_breakout 21 -> 6, multi_ic 60 -> 23, and
+/// `UnroutedPinRule` is registered so the gate counts them.
 ///
-/// led_blink has no band: it returned 2/0 at every price above zero.
+/// The price is that vias which were being deleted are copper now, and the
+/// grid does not model a via's ring, so they land too close to things. That is
+/// the next piece of work and these numbers come down when it lands. Never
+/// raise them for a regression; lower them then.
 const DRC_RATCHETS: &[(&str, &str, u32, u32)] = &[
     ("led_blink.kicad_pcb", "led_blink", 2, 0),
-    // 133 + 28 spread, 58 + 23 spread
-    ("stm32_breakout.kicad_pcb", "stm32_breakout", 161, 81),
-    // 140 + 31 spread, 37 + 26 spread
-    ("multi_ic.kicad_pcb", "multi_ic", 171, 63),
+    ("stm32_breakout.kicad_pcb", "stm32_breakout", 250, 130),
+    ("multi_ic.kicad_pcb", "multi_ic", 375, 194),
 ];
 
 /// Routes every fixture and holds the line on completeness and DRC count.

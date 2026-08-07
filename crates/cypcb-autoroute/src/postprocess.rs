@@ -194,16 +194,13 @@ pub fn paths_to_output(
             convert_to_route_segments(&simplified, grid, net_id, rules, width_override);
         all_segments.extend(segs);
 
-        // Filter out vias at pad positions — THT pads already connect layers,
-        // so a via on a pad is redundant and visually confusing.
-        for via in vias {
-            let grid_pos = grid.nm_to_grid(via.position);
-            let is_on_pad = grid.cell(grid_pos.0, grid_pos.1, 0) & super::grid::CELL_PAD != 0
-                || grid.cell(grid_pos.0, grid_pos.1, 1) & super::grid::CELL_PAD != 0;
-            if !is_on_pad {
-                all_vias.push(via);
-            }
-        }
+        // Every via the path asked for is kept.
+        //
+        // Deleting the ones that landed on a pad left the two halves of a
+        // route on two layers with nothing joining them: the board came back
+        // open and every check agreed it was fine. The search refuses to
+        // change layer on a pad now, so there is nothing here to delete.
+        all_vias.extend(vias);
     }
 
     let filtered_count = raw_steps; // for logging

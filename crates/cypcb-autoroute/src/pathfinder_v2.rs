@@ -25,7 +25,7 @@ use cypcb_world::BoardWorld;
 
 use crate::congestion::CongestionMap;
 use crate::cost::RoutingCost;
-use crate::grid::{RoutingGrid, CELL_OBSTACLE};
+use crate::grid::{RoutingGrid, CELL_OBSTACLE, CELL_PAD};
 use crate::orchestrator::{
     build_spanning_tree, extract_ratsnest, is_multi_layer, order_nets, pad_to_grid_node,
     pad_to_zone, NetRoute,
@@ -1032,6 +1032,19 @@ fn find_path_congestion_augmented(
                 continue;
             }
             let target = (nx, ny, target_layer);
+
+            // A via may not be placed on a pad's copper or inside its
+            // clearance. `paths_to_output` used to delete such vias after the
+            // fact, which left the two halves of a route on two layers with
+            // nothing joining them - the board came back open and every check
+            // agreed it was fine. Refusing the transition here is the same
+            // rule applied where it can still be routed around.
+            let on_pad = grid.cell(nx as u32, ny as u32, nl as usize) & CELL_PAD != 0
+                || grid.cell(nx as u32, ny as u32, target_layer as usize) & CELL_PAD != 0;
+            if on_pad {
+                continue;
+            }
+
             let free = if yield_halo {
                 grid.is_free_ignoring_halo(nx as u32, ny as u32, target_layer as usize)
             } else {

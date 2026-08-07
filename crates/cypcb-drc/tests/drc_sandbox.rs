@@ -1123,11 +1123,15 @@ mod full_board {
 
         let result = run_drc(&mut world, &DesignRules::jlcpcb_2layer());
 
-        // Filter out unconnected-pin (depends on footprint library) and count real issues
+        // Filter out the two rules that ask about the netlist and the copper
+        // reaching it: this board is assembled by hand out of spatial entries,
+        // with no footprint library behind it, so both answer about the
+        // fixture rather than about the geometry under test.
         let real_violations: Vec<_> = result
             .violations
             .iter()
             .filter(|v| v.kind != ViolationKind::UnconnectedPin)
+            .filter(|v| v.kind != ViolationKind::UnroutedPin)
             .collect();
 
         assert!(
