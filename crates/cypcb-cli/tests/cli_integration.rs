@@ -384,3 +384,59 @@ fn export_writes_the_files_when_forced() {
 
     let _ = std::fs::remove_dir_all(&out);
 }
+
+#[test]
+fn export_resolves_imports_the_way_check_does() {
+    // A design built from a block library checked clean and could not be made:
+    // export was the one command that skipped import resolution, so every
+    // `use Divider ...` came back as `unknown module: 'Divider'`. The command
+    // that produces the deliverable was the one that could not read the file.
+    let example = examples_dir().join("v2-imports.cypcb");
+    let out = std::env::temp_dir().join("cypcb-export-imports");
+    let _ = std::fs::remove_dir_all(&out);
+
+    let output = Command::new(cypcb_binary())
+        .arg("export")
+        .arg(&example)
+        .arg("--output")
+        .arg(&out)
+        .output()
+        .expect("Failed to execute cypcb export");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        output.status.success(),
+        "a design that checks clean has to export, got:\n{stderr}"
+    );
+    assert!(
+        !stderr.contains("unknown module"),
+        "the imported modules should resolve, got:\n{stderr}"
+    );
+
+    let _ = std::fs::remove_dir_all(&out);
+}
+
+#[test]
+fn export_says_a_library_is_a_library() {
+    // examples/v2-interfaces.cypcb declares interfaces and no board. The
+    // exporter used to answer `NoBoardSize`, which reads like a missing
+    // setting rather than a file nobody meant to manufacture.
+    let example = examples_dir().join("v2-interfaces.cypcb");
+    let out = std::env::temp_dir().join("cypcb-export-library");
+    let _ = std::fs::remove_dir_all(&out);
+
+    let output = Command::new(cypcb_binary())
+        .arg("export")
+        .arg(&example)
+        .arg("--output")
+        .arg(&out)
+        .output()
+        .expect("Failed to execute cypcb export");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!output.status.success(), "a library cannot be exported");
+    assert!(
+        stderr.contains("declares no board"),
+        "and the message should say why, got:\n{stderr}"
+    );
+}

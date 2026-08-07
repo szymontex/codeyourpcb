@@ -70,6 +70,17 @@ impl ExportCommand {
 
         let ast = result.value;
 
+        // Bring in whatever the file imports, resolved against its own
+        // directory - the same way `check`, `route` and `score` do it. Export
+        // was the one command that skipped this, so a design built from a
+        // block library checked clean and then could not be made: every
+        // `use Divider ...` came back as `unknown module: 'Divider'`.
+        let mut import_errors = Vec::new();
+        let ast = cypcb_parser::resolve_imports(&ast, &self.input, &mut import_errors);
+        for error in &import_errors {
+            eprintln!("Import error: {error}");
+        }
+
         // Build world from AST
         eprintln!("Building board model...");
         let mut world = BoardWorld::new();
@@ -236,6 +247,19 @@ impl ExportCommand {
                     ));
                 }
             }
+        }
+
+        // A file with no board is a library, not a design. Saying so beats
+        // `NoBoardSize`, which is the error the exporter raises three layers
+        // down and which reads like a missing setting rather than a file that
+        // was never meant to be made.
+        if world.board_info().is_none() {
+            return Err(miette::miette!(
+                "{} declares no board, so there is nothing to make from it. \
+                 A file of modules, footprints or interfaces is a library - \
+                 import it from a design that has a `board` block.",
+                self.input.display()
+            ));
         }
 
         // Run export
