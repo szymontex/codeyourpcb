@@ -279,6 +279,26 @@ pub struct ViaInfo {
     pub outer_diameter: f64,
     /// Net name this via belongs to.
     pub net_name: String,
+    /// Layer the via starts on, as the DSL names it: `Top`, `Bottom`, `Inner1`.
+    ///
+    /// A via that stops at an inner layer - blind or buried - is a different
+    /// hole from one that goes through, and the viewer was drawing both the
+    /// same because the span never left the board model.
+    #[serde(default = "top_layer_name")]
+    pub start_layer: String,
+    /// Layer the via ends on.
+    #[serde(default = "bottom_layer_name")]
+    pub end_layer: String,
+}
+
+/// A via with no stated span goes through, which is what every via was before
+/// the span was carried.
+fn top_layer_name() -> String {
+    "Top".to_string()
+}
+
+fn bottom_layer_name() -> String {
+    "Bottom".to_string()
 }
 
 /// Ratsnest line information for rendering.
@@ -455,6 +475,8 @@ mod tests {
             drill: 300_000.0,          // 0.3mm
             outer_diameter: 600_000.0, // 0.6mm
             net_name: "GND".to_string(),
+            start_layer: "Top".to_string(),
+            end_layer: "Bottom".to_string(),
         };
 
         let json = serde_json::to_string(&via).unwrap();
@@ -515,6 +537,8 @@ mod tests {
                 drill: 300_000.0,
                 outer_diameter: 600_000.0,
                 net_name: "VCC".to_string(),
+                start_layer: "Top".to_string(),
+                end_layer: "Bottom".to_string(),
             }],
             ratsnest: vec![],
             pours: vec![],

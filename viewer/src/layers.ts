@@ -266,3 +266,31 @@ export function innerLayerDepth(index: number, count: number, thicknessMm: numbe
   if (count <= 0) return 0;
   return -thicknessMm / 2 + ((index + 1) * thicknessMm) / (count + 1);
 }
+
+/**
+ * Where a via's barrel starts and ends through the board, in mm from centre.
+ *
+ * A via that stops at an inner layer - blind from one face, or buried between
+ * two inner layers - is a different hole from one that goes through, and it
+ * was drawn going all the way through because the span never reached the
+ * viewer. `Top` and `Bottom` are the faces; `Inner1` and up sit where
+ * `innerLayerDepth` puts them.
+ */
+export function viaSpanDepths(
+  startLayer: string,
+  endLayer: string,
+  innerCount: number,
+  thicknessMm: number,
+): { bottom: number; top: number } {
+  const depth = (layer: string, fallback: number): number => {
+    if (layer === 'Top') return thicknessMm / 2;
+    if (layer === 'Bottom') return -thicknessMm / 2;
+    const index = innerLayerIndex(layer);
+    if (index === null || innerCount <= 0) return fallback;
+    return innerLayerDepth(Math.min(index, innerCount - 1), innerCount, thicknessMm);
+  };
+
+  const a = depth(startLayer, thicknessMm / 2);
+  const b = depth(endLayer, -thicknessMm / 2);
+  return { bottom: Math.min(a, b), top: Math.max(a, b) };
+}

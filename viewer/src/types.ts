@@ -182,6 +182,15 @@ export interface ViaInfo {
   drill: number;
   outer_diameter: number;
   net_name: string;
+  /**
+   * Layer the via starts on, named the way the DSL names it.
+   *
+   * Absent on snapshots made before the span was carried, and a via that says
+   * nothing goes through - which is what every via was until then.
+   */
+  start_layer?: string;
+  /** Layer the via ends on. */
+  end_layer?: string;
 }
 
 /**

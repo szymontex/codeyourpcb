@@ -21,6 +21,7 @@ import {
   INNER_LAYER_COLORS,
   innerLayerDepth,
   innerLayerIndex,
+  viaSpanDepths,
   type LayerVisibility,
 } from './layers';
 import { fetch3DModelByUuid } from './jlcpcb';
@@ -286,7 +287,7 @@ export class Renderer3D {
     // Build copper geometry (hidden under solder mask except at pads)
     this.buildTraces(snapshot.traces || [], topGroup, bottomGroup, innerGroups);
     this.buildPads(snapshot.components || [], topGroup, bottomGroup);
-    this.buildVias(snapshot.vias || [], viaGroup);
+    this.buildVias(snapshot.vias || [], viaGroup, innerCount);
 
     // Build solder mask — green layer covering copper with openings at pads
     this.buildSolderMask(widthMm, heightMm, snapshot.components || [], topGroup, bottomGroup);
@@ -1024,7 +1025,7 @@ export class Renderer3D {
    * Build via geometry using InstancedMesh for efficiency.
    * Vias are cylinders spanning full board thickness with a tube geometry (drilled hole).
    */
-  private buildVias(vias: ViaInfo[], viaGroup: THREE.Group): void {
+  private buildVias(vias: ViaInfo[], viaGroup: THREE.Group, innerCount = 0): void {
     if (vias.length === 0) {
       console.log('[3D] Built 0 vias (instanced)');
       return;
@@ -1071,7 +1072,19 @@ export class Renderer3D {
       const via = vias[i];
       const x = via.x * NM_TO_MM;
       const y = via.y * NM_TO_MM;
-      const z = 0; // board center at Z=0
+
+      // A blind or buried via stops at an inner layer. The template cylinder
+      // is a board thickness tall, so the span becomes a Z scale and the
+      // middle of the span becomes its position.
+      const span = viaSpanDepths(
+        via.start_layer ?? 'Top',
+        via.end_layer ?? 'Bottom',
+        innerCount,
+        BOARD_THICKNESS_MM,
+      );
+      const spanHeight = Math.max(span.top - span.bottom, COPPER_THICKNESS_MM);
+      const zScale = spanHeight / BOARD_THICKNESS_MM;
+      const z = (span.top + span.bottom) / 2;
 
       // Scale factor relative to reference via
       const thisOuterR = (via.outer_diameter * NM_TO_MM) / 2;
@@ -1080,12 +1093,12 @@ export class Renderer3D {
       const innerScale = refInnerR > 0 ? thisInnerR / refInnerR : 1;
 
       // Outer annular ring
-      matrix.makeScale(outerScale, outerScale, 1);
+      matrix.makeScale(outerScale, outerScale, zScale);
       matrix.setPosition(x, y, z);
       instancedMesh.setMatrixAt(i, matrix);
 
-      // Drill hole (slightly taller to punch through)
-      matrix.makeScale(innerScale, innerScale, 1);
+      // Drill hole (slightly taller to punch through what it passes)
+      matrix.makeScale(innerScale, innerScale, zScale);
       matrix.setPosition(x, y, z);
       drillInstancedMesh.setMatrixAt(i, matrix);
     }

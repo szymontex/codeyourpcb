@@ -7,6 +7,7 @@ import {
   createLayerVisibility,
   innerLayerIndex,
   innerLayerDepth,
+  viaSpanDepths,
 } from '../layers';
 
 /**
@@ -76,5 +77,31 @@ describe('where an inner layer sits', () => {
 
   it('puts a single inner layer in the middle', () => {
     expect(innerLayerDepth(0, 1, 1.6)).toBeCloseTo(0, 6);
+  });
+});
+
+describe('how deep a via goes', () => {
+  it('takes a through via from face to face', () => {
+    const span = viaSpanDepths('Top', 'Bottom', 2, 1.6);
+    expect(span.top).toBeCloseTo(0.8, 6);
+    expect(span.bottom).toBeCloseTo(-0.8, 6);
+  });
+
+  it('stops a blind via at the inner layer it reaches', () => {
+    // Top face down to the first inner layer of a four-layer stack.
+    const span = viaSpanDepths('Top', 'Inner1', 2, 1.6);
+    expect(span.top).toBeCloseTo(0.8, 6);
+    expect(span.bottom).toBeCloseTo(-0.2667, 3);
+  });
+
+  it('buries a via between two inner layers', () => {
+    const span = viaSpanDepths('Inner1', 'Inner2', 2, 1.6);
+    expect(span.bottom).toBeCloseTo(-0.2667, 3);
+    expect(span.top).toBeCloseTo(0.2667, 3);
+  });
+
+  it('treats a via that says nothing as going through', () => {
+    const span = viaSpanDepths('Top', 'Bottom', 0, 1.6);
+    expect(span.top - span.bottom).toBeCloseTo(1.6, 6);
   });
 });

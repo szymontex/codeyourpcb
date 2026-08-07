@@ -1732,6 +1732,8 @@ impl PcbEngine {
                 drill: via.drill.0 as f64,
                 outer_diameter: via.outer_diameter.0 as f64,
                 net_name,
+                start_layer: layer_name(via.start_layer),
+                end_layer: layer_name(via.end_layer),
             });
         }
 
@@ -1885,6 +1887,16 @@ fn pad_shape_to_string(shape: &PadShape) -> String {
 }
 
 /// Parse layer string from routes file format.
+/// A layer as the DSL writes it, which is what the viewer reads.
+fn layer_name(layer: Layer) -> String {
+    match layer {
+        Layer::TopCopper => "Top".to_string(),
+        Layer::BottomCopper => "Bottom".to_string(),
+        Layer::Inner(n) => format!("Inner{}", n + 1),
+        other => format!("{:?}", other),
+    }
+}
+
 fn parse_layer(layer_str: &str) -> Result<Layer, String> {
     match layer_str {
         "TopCopper" | "Top" => Ok(Layer::TopCopper),
