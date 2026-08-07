@@ -126,6 +126,19 @@ impl ExportCommand {
 
         // Dry run: list files that would be generated
         if self.dry_run {
+            // The preset's name is a fabricator's profile, not a count of the
+            // board's copper. "JLCPCB 2-Layer" over a four-layer board reads
+            // like a contradiction unless the stack is stated beside it.
+            if let Some((_, stack)) = world.board_info() {
+                if stack.count > 2 {
+                    eprintln!(
+                        "Board stack: {} copper layers ({} inner)",
+                        stack.count,
+                        stack.count - 2
+                    );
+                }
+            }
+
             eprintln!("\nFiles that would be generated:");
             eprintln!();
 
@@ -141,6 +154,23 @@ impl ExportCommand {
                     board_name, preset.file_naming.bottom_copper
                 );
             }
+            // Inner copper comes from the board, not the preset - the same
+            // rule the export itself follows. Listing the preset alone
+            // promised a two-layer set for a four-layer board, which is the
+            // sentence a person reads before spending money.
+            let inner_count = world
+                .board_info()
+                .map(|(_, stack)| stack.count.saturating_sub(2))
+                .unwrap_or(0)
+                .max(preset.layers.inner_copper.len() as u8);
+            for index in 0..inner_count {
+                eprintln!(
+                    "  output/gerber/{}{}",
+                    board_name,
+                    cypcb_export::inner_layer_suffix(preset.file_naming.top_copper, index + 1)
+                );
+            }
+
             if preset.layers.top_mask {
                 eprintln!(
                     "  output/gerber/{}{}",

@@ -1,0 +1,42 @@
+// A four-layer board, to keep the inner copper honest.
+//
+// Both export presets used to ship an empty inner-layer list, so a board like
+// this exported as though it had two: every trace on In1 or In2 was missing
+// from the file set and nothing said so. The exporter reads the stack the
+// board declares now, and this example is what keeps it doing that.
+//
+//   cypcb export examples/four-layer.cypcb --dry-run
+
+board four_layer {
+    size 30mm x 20mm
+    layers 4
+}
+
+footprint PAD1 {
+    description "one square pad"
+    courtyard 2mm x 2mm
+
+    pad 1 rect at 0mm, 0mm size 1mm x 1mm
+}
+
+component J1 connector "PAD1" {
+    value "in"
+    at 5mm, 10mm
+}
+
+component J2 connector "PAD1" {
+    value "out"
+    at 25mm, 10mm
+}
+
+net SIG {
+    J1.1
+    J2.1
+}
+
+trace SIG {
+    from J1.1
+    to J2.1
+    layer Inner1
+    width 0.2mm
+}

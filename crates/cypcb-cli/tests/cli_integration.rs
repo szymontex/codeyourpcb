@@ -440,3 +440,29 @@ fn export_says_a_library_is_a_library() {
         "and the message should say why, got:\n{stderr}"
     );
 }
+
+#[test]
+fn the_dry_run_lists_the_inner_layers_a_board_declares() {
+    // The dry run is what a person reads before spending money on a board.
+    // It listed the preset's file set, and both presets ship an empty
+    // inner-layer list - so it promised a two-layer set for a four-layer
+    // design, which is exactly the board that had its inner copper dropped.
+    let example = examples_dir().join("four-layer.cypcb");
+    let output = Command::new(cypcb_binary())
+        .arg("export")
+        .arg(&example)
+        .arg("--dry-run")
+        .output()
+        .expect("Failed to execute cypcb export");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "the dry run should succeed:\n{stderr}");
+    assert!(
+        stderr.contains("Board stack: 4 copper layers (2 inner)"),
+        "the stack should be stated beside the preset name, got:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("In1_Cu.gbr") && stderr.contains("In2_Cu.gbr"),
+        "both inner layers should be listed, got:\n{stderr}"
+    );
+}

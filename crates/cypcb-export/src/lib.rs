@@ -36,5 +36,7 @@ pub use coords::{gerber_format_string, nm_to_gerber, CoordinateFormat, Unit};
 pub use cpl::{CplConfig, CplEntry};
 pub use excellon::{export_excellon, DrillType, ToolTable};
 pub use gerber::{export_copper_layer, write_header, GerberFileFunction};
-pub use job::{run_export, ExportError, ExportJob, ExportResult, ExportedFile};
+pub use job::{
+    inner_layer_suffix, run_export, ExportError, ExportJob, ExportResult, ExportedFile,
+};
 pub use presets::{ExportLayers, ExportPreset, FileNaming};

@@ -551,7 +551,7 @@ mod tests {
 /// A preset that calls the top layer `-F_Cu.gbr` calls the first inner one
 /// `-In1_Cu.gbr`; one that calls it `_top.gtl` gets `_inner1.gtl`. Guessing
 /// from the top layer's name keeps the set looking like one set.
-fn inner_layer_suffix(top_copper: &str, number: u8) -> String {
+pub fn inner_layer_suffix(top_copper: &str, number: u8) -> String {
     if top_copper.contains("F_Cu") {
         return top_copper.replace("F_Cu", &format!("In{number}_Cu"));
     }
