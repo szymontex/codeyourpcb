@@ -23,14 +23,23 @@ fi
 # Work around TLS allocation issue on some Linux systems
 export GLIBC_TUNABLES=glibc.rtld.optional_static_tls=2048
 
-# Built without the tree-sitter parser: the viewer parses .cypcb in JavaScript
-# and hands the engine a snapshot.
+# The `wasm` feature carries the Rust reader, so this module parses .cypcb
+# itself and PcbEngine::load_source is exported to JS.
 #
-# The parser does build for wasm32 - the "not WASM compatible" note in
-# cypcb-parser/Cargo.toml is wrong - and switching to --features native exports
-# PcbEngine::load_source to JS for 804,520 bytes against 702,357 here, so about
-# 100KB buys deleting the duplicate JS parser in viewer/src/wasm.ts. Do both in
-# one step or the module carries the parser twice.
+# The note that used to sit here said the tree-sitter parser "does build for
+# wasm32" and quoted sizes for it. That was false: cc fell back to the host
+# compiler and the wasm linker skipped the wrong-architecture objects in
+# silence, which cypcb-parser/build.rs now refuses to let happen.
+#
+# What the reader costs, measured on this script's output:
+#
+#   parser        raw          gzipped
+#   none          751,995      290,004
+#   Rust reader   1,044,164    411,147
+#
+# The 292KB is repaid by deleting parseSource from viewer/src/wasm.ts, the
+# second reader that does not instantiate modules or follow imports. Until the
+# viewer calls load_source, the module carries a parser nobody uses.
 wasm-pack build crates/cypcb-render \
   --target web \
   --release \

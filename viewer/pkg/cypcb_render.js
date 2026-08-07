@@ -287,6 +287,37 @@ export class PcbEngine {
         }
     }
     /**
+     * Parse `.cypcb` source and load it into the board model.
+     *
+     * Available wherever the tree-sitter parser is compiled in, which includes
+     * wasm32 - the parser builds for that target and the resulting module is
+     * no larger than one that leaves parsing to JavaScript.
+     *
+     * Returns an empty string on success, or the collected parse and semantic
+     * errors joined by newlines. The board state is updated even when there are
+     * errors, so partial results stay visible. DRC runs afterwards either way.
+     * @param {string} source
+     * @returns {string}
+     */
+    load_source(source) {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            const ptr0 = passStringToWasm0(source, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            const len0 = WASM_VECTOR_LEN;
+            wasm.pcbengine_load_source(retptr, this.__wbg_ptr, ptr0, len0);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            deferred2_0 = r0;
+            deferred2_1 = r1;
+            return getStringFromWasm0(r0, r1);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            wasm.__wbindgen_export4(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
      * Minimum trace width for a current, in nanometers.
      *
      * IPC-2221 for an external layer, 10C rise, 1 oz copper - the same
@@ -369,16 +400,17 @@ export class PcbEngine {
      * Returns an empty string on success, or the deserialisation error.
      * @param {string} name
      * @param {any} pads_js
+     * @param {any} silk_js
      * @returns {string}
      */
-    register_footprint(name, pads_js) {
+    register_footprint(name, pads_js, silk_js) {
         let deferred2_0;
         let deferred2_1;
         try {
             const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
             const ptr0 = passStringToWasm0(name, wasm.__wbindgen_export, wasm.__wbindgen_export2);
             const len0 = WASM_VECTOR_LEN;
-            wasm.pcbengine_register_footprint(retptr, this.__wbg_ptr, ptr0, len0, addHeapObject(pads_js));
+            wasm.pcbengine_register_footprint(retptr, this.__wbg_ptr, ptr0, len0, addHeapObject(pads_js), addHeapObject(silk_js));
             var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
             var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
             deferred2_0 = r0;
@@ -497,6 +529,10 @@ function __wbg_get_imports() {
             const ret = typeof(getObject(arg0)) === 'function';
             return ret;
         },
+        __wbg___wbindgen_is_null_ac34f5003991759a: function(arg0) {
+            const ret = getObject(arg0) === null;
+            return ret;
+        },
         __wbg___wbindgen_is_object_5ae8e5880f2c1fbd: function(arg0) {
             const val = getObject(arg0);
             const ret = typeof(val) === 'object' && val !== null;
@@ -539,6 +575,10 @@ function __wbg_get_imports() {
             const ret = getObject(arg0).done;
             return ret;
         },
+        __wbg_entries_58c7934c745daac7: function(arg0) {
+            const ret = Object.entries(getObject(arg0));
+            return addHeapObject(ret);
+        },
         __wbg_error_7534b8e9a36f1ab4: function(arg0, arg1) {
             let deferred0_0;
             let deferred0_1;
@@ -569,6 +609,16 @@ function __wbg_get_imports() {
             let result;
             try {
                 result = getObject(arg0) instanceof ArrayBuffer;
+            } catch (_) {
+                result = false;
+            }
+            const ret = result;
+            return ret;
+        },
+        __wbg_instanceof_Map_53af74335dec57f4: function(arg0) {
+            let result;
+            try {
+                result = getObject(arg0) instanceof Map;
             } catch (_) {
                 result = false;
             }
@@ -662,6 +712,11 @@ function __wbg_get_imports() {
         __wbindgen_cast_0000000000000003: function(arg0, arg1) {
             // Cast intrinsic for `Ref(String) -> Externref`.
             const ret = getStringFromWasm0(arg0, arg1);
+            return addHeapObject(ret);
+        },
+        __wbindgen_cast_0000000000000004: function(arg0) {
+            // Cast intrinsic for `U64 -> Externref`.
+            const ret = BigInt.asUintN(64, arg0);
             return addHeapObject(ret);
         },
         __wbindgen_object_clone_ref: function(arg0) {

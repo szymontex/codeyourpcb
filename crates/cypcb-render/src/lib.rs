@@ -34,11 +34,24 @@ use cypcb_world::{
     PinConnection, Position, RefDes, Rotation, Value,
 };
 
-// Import sync and parse only in native mode
-#[cfg(feature = "native")]
-use cypcb_parser::parse;
-#[cfg(feature = "native")]
+// Both builds parse now. Native uses the tree-sitter parser; the browser build
+// uses the Rust reader, which needs no C and is checked against the other one
+// in `cypcb-parser/tests/differential.rs`.
+#[cfg(any(feature = "native", feature = "wasm"))]
 use cypcb_world::sync_ast_to_world;
+
+/// Read `.cypcb` with whichever parser this build has.
+#[cfg(any(feature = "native", feature = "wasm"))]
+fn parse_source_text(source: &str) -> cypcb_parser::ParseResult<cypcb_parser::SourceFile> {
+    #[cfg(feature = "native")]
+    {
+        cypcb_parser::parse(source)
+    }
+    #[cfg(all(not(feature = "native"), feature = "wasm"))]
+    {
+        cypcb_parser::reader::read(source)
+    }
+}
 
 // WASM-specific imports (only when targeting wasm32)
 #[cfg(target_arch = "wasm32")]
@@ -58,7 +71,7 @@ pub struct PcbEngine {
     /// Time taken for last DRC run in milliseconds.
     drc_duration_ms: u64,
     /// Cached net constraints from last parse (net_name → constraints).
-    #[cfg(feature = "native")]
+    #[cfg(any(feature = "native", feature = "wasm"))]
     net_constraints: std::collections::HashMap<String, NetConstraintCache>,
     /// Package name -> 3D model identifier, supplied by the host.
     ///
@@ -92,7 +105,7 @@ impl PcbEngine {
             source: String::new(),
             violations: Vec::new(),
             drc_duration_ms: 0,
-            #[cfg(feature = "native")]
+            #[cfg(any(feature = "native", feature = "wasm"))]
             net_constraints: std::collections::HashMap::new(),
             model_3d: std::collections::HashMap::new(),
         }
@@ -252,7 +265,7 @@ impl PcbEngine {
     /// Returns an empty string on success, or the collected parse and semantic
     /// errors joined by newlines. The board state is updated even when there are
     /// errors, so partial results stay visible. DRC runs afterwards either way.
-    #[cfg(feature = "native")]
+    #[cfg(any(feature = "native", feature = "wasm"))]
     pub fn load_source(&mut self, source: &str) -> String {
         self.source = source.to_string();
         self.world.clear();
@@ -261,7 +274,7 @@ impl PcbEngine {
         self.net_constraints.clear();
 
         // Parse the source
-        let parse_result = parse(source);
+        let parse_result = parse_source_text(source);
 
         // Collect parse errors
         let mut errors: Vec<String> = Vec::new();

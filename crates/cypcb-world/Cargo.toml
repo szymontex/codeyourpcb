@@ -7,8 +7,12 @@ description = "ECS-based board model for CodeYourPCB"
 
 [features]
 default = ["sync"]
-# Enable AST-to-ECS synchronization (requires cypcb-parser with tree-sitter)
-sync = ["cypcb-parser/tree-sitter-parser"]
+# Enable AST-to-ECS synchronization.
+#
+# It works on `cypcb_parser::ast`, which every build of that crate has, so this
+# used to pull in the tree-sitter parser for nothing - and that dependency is
+# what kept the browser build from turning a parsed file into a board.
+sync = []
 
 [dependencies]
 cypcb-core = { workspace = true }

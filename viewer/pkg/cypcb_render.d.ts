@@ -118,6 +118,18 @@ export class PcbEngine {
      */
     load_snapshot(snapshot_js: any): string;
     /**
+     * Parse `.cypcb` source and load it into the board model.
+     *
+     * Available wherever the tree-sitter parser is compiled in, which includes
+     * wasm32 - the parser builds for that target and the resulting module is
+     * no larger than one that leaves parsing to JavaScript.
+     *
+     * Returns an empty string on success, or the collected parse and semantic
+     * errors joined by newlines. The board state is updated even when there are
+     * errors, so partial results stay visible. DRC runs afterwards either way.
+     */
+    load_source(source: string): string;
+    /**
      * Minimum trace width for a current, in nanometers.
      *
      * IPC-2221 for an external layer, 10C rise, 1 oz copper - the same
@@ -166,7 +178,7 @@ export class PcbEngine {
      *
      * Returns an empty string on success, or the deserialisation error.
      */
-    register_footprint(name: string, pads_js: any): string;
+    register_footprint(name: string, pads_js: any, silk_js: any): string;
     /**
      * Remove a trace by entity index.
      *
@@ -216,11 +228,12 @@ export interface InitOutput {
     readonly pcbengine_get_trace_at_point: (a: number, b: bigint, c: bigint, d: bigint) => number;
     readonly pcbengine_get_violations_json: (a: number, b: number) => void;
     readonly pcbengine_load_snapshot: (a: number, b: number, c: number) => void;
+    readonly pcbengine_load_source: (a: number, b: number, c: number, d: number) => void;
     readonly pcbengine_min_trace_width_for_current_ma: (a: number, b: number) => number;
     readonly pcbengine_new: () => number;
     readonly pcbengine_query_point: (a: number, b: number, c: bigint, d: bigint) => void;
     readonly pcbengine_register_3d_model: (a: number, b: number, c: number, d: number, e: number) => void;
-    readonly pcbengine_register_footprint: (a: number, b: number, c: number, d: number, e: number) => void;
+    readonly pcbengine_register_footprint: (a: number, b: number, c: number, d: number, e: number, f: number) => void;
     readonly pcbengine_remove_trace: (a: number, b: number) => number;
     readonly pcbengine_rotate_component: (a: number, b: number, c: number, d: number) => number;
     readonly pcbengine_run_drc_incremental: (a: number) => number;
