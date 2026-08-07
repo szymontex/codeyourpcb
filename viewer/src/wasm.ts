@@ -18,7 +18,7 @@
  * once the engine could do it. See `docs/one-parser.md`.
  */
 
-import type { BoardSnapshot, ComponentInfo, PadInfo, TraceSegmentInfo, ViolationInfo, SilkShape } from './types';
+import type { BoardSnapshot, PadInfo, TraceSegmentInfo, ViolationInfo, SilkShape } from './types';
 import { pointToSegmentDistance } from './geometry';
 
 /**
@@ -35,134 +35,7 @@ function deepBigIntToNumber(obj: any): any {
   }
 }
 
-/** Sanitize a WASM-returned snapshot, converting all BigInt values to Number. */
-/**
- * JS-side silk clearance check.
- *
- * Silk shapes live only in JS (not in WASM ECS), so this check runs client-side.
- * For each silk segment/circle/arc on a component, checks if it overlaps any
- * copper pad of a DIFFERENT component on the same side. Reports violations
- * when the silk-to-pad distance is less than min_silk_clearance.
- */
-export function checkSilkClearance(snapshot: BoardSnapshot, minClearanceNm: number): ViolationInfo[] {
-  const violations: ViolationInfo[] = [];
-  if (!snapshot.components || snapshot.components.length === 0) return violations;
 
-  // Helper: ensure Number (WASM may return BigInt for nm values)
-  const N = (v: any): number => typeof v === 'bigint' ? Number(v) : (v as number);
-
-  // Build pad world positions for all components
-  const allPads: { comp: ComponentInfo; pad: PadInfo; wx: number; wy: number; side: 'top' | 'bottom' }[] = [];
-  for (const comp of snapshot.components) {
-    const rad = (N(comp.rotation_mdeg) / 1000) * (Math.PI / 180);
-    const cos = Math.cos(rad);
-    const sin = Math.sin(rad);
-    for (const pad of comp.pads) {
-      const px = N(pad.x_nm), py = N(pad.y_nm);
-      const rx = px * cos - py * sin;
-      const ry = px * sin + py * cos;
-      const side = (N(pad.layer_mask) & 1) ? 'top' as const : 'bottom' as const;
-      allPads.push({ comp, pad, wx: N(comp.x_nm) + rx, wy: N(comp.y_nm) + ry, side });
-    }
-  }
-
-  for (const comp of snapshot.components) {
-    if (!comp.silk || comp.silk.length === 0) continue;
-
-    const rad = (N(comp.rotation_mdeg) / 1000) * (Math.PI / 180);
-    const cos = Math.cos(rad);
-    const sin = Math.sin(rad);
-    const compX = N(comp.x_nm), compY = N(comp.y_nm);
-
-    // Which face this component's legend prints on.
-    //
-    // A shape may state a side - the EasyEDA parser sets one - and the engine
-    // does not: a footprint's artwork lives in footprint coordinates and the
-    // part decides where it goes. Reading only the shape meant every
-    // engine-supplied legend compared `undefined` against a pad's side, matched
-    // nothing, and skipped the check without saying so. The part's own pads are
-    // the fallback, because a legend prints on the face its copper is on.
-    const componentSide = comp.pads.some((pad) => N(pad.layer_mask) & 1)
-      ? ('top' as const)
-      : ('bottom' as const);
-
-    for (const shape of comp.silk) {
-      const silkSide = shape.layer ?? componentSide;
-
-      // Transform silk shape to world coordinates
-      if (shape.type === 'segment') {
-        const x1 = N(shape.x1), y1 = N(shape.y1), x2 = N(shape.x2), y2 = N(shape.y2);
-        const sx1 = compX + x1 * cos - y1 * sin;
-        const sy1 = compY + x1 * sin + y1 * cos;
-        const sx2 = compX + x2 * cos - y2 * sin;
-        const sy2 = compY + x2 * sin + y2 * cos;
-        const halfSilk = (N(shape.width) || 150_000) / 2;
-
-        // Check against pads of OTHER components on the same side
-        for (const p of allPads) {
-          if (p.comp.refdes === comp.refdes) continue; // Skip own pads
-          if (p.side !== silkSide) continue; // Different side
-
-          const padRadius = Math.max(N(p.pad.width_nm), N(p.pad.height_nm)) / 2;
-          const exclusion = padRadius + halfSilk + minClearanceNm;
-
-          if (segmentNearPoint(sx1, sy1, sx2, sy2, p.wx, p.wy, exclusion)) {
-            violations.push({
-              kind: 'silk-clearance',
-              x_nm: p.wx,
-              y_nm: p.wy,
-              message: `${comp.refdes} silk ↔ ${p.comp.refdes}.${p.pad.number}: Silk-to-pad clearance violation`,
-            });
-            break; // One violation per silk shape is enough
-          }
-        }
-      } else if (shape.type === 'circle') {
-        const scx = N(shape.cx), scy = N(shape.cy);
-        const cx = compX + scx * cos - scy * sin;
-        const cy = compY + scx * sin + scy * cos;
-        const halfSilk = (N(shape.width) || 150_000) / 2;
-        const outerRadius = N(shape.radius) + halfSilk;
-
-        for (const p of allPads) {
-          if (p.comp.refdes === comp.refdes) continue;
-          if (p.side !== silkSide) continue;
-
-          const padRadius = Math.max(N(p.pad.width_nm), N(p.pad.height_nm)) / 2;
-          const dist = Math.hypot(cx - p.wx, cy - p.wy);
-
-          if (dist < outerRadius + padRadius + minClearanceNm) {
-            violations.push({
-              kind: 'silk-clearance',
-              x_nm: p.wx,
-              y_nm: p.wy,
-              message: `${comp.refdes} silk ↔ ${p.comp.refdes}.${p.pad.number}: Silk-to-pad clearance violation`,
-            });
-            break;
-          }
-        }
-      }
-      // Arc shapes: skip for now (uncommon to overlap pads)
-    }
-  }
-
-  return violations;
-}
-
-/** Point-to-segment distance check (used by silk clearance). */
-function segmentNearPoint(
-  sx: number, sy: number, ex: number, ey: number,
-  px: number, py: number, radius: number,
-): boolean {
-  const dx = ex - sx;
-  const dy = ey - sy;
-  const lenSq = dx * dx + dy * dy;
-  if (lenSq < 1) return Math.hypot(px - sx, py - sy) <= radius;
-  let t = ((px - sx) * dx + (py - sy) * dy) / lenSq;
-  t = Math.max(0, Math.min(1, t));
-  const nearX = sx + t * dx;
-  const nearY = sy + t * dy;
-  return Math.hypot(px - nearX, py - nearY) <= radius;
-}
 
 function sanitizeSnapshot(snap: any): BoardSnapshot {
   return deepBigIntToNumber(snap) as BoardSnapshot;
@@ -445,50 +318,6 @@ export function ipc2221MinWidthNm(current_ma: number, tempRise = 10, copperOz = 
   return Math.round(widthMils * 25_400);
 }
 
-/**
- * Check traces against net current constraints using IPC-2221.
- * Returns violations for traces that are too narrow for the specified current.
- */
-function checkTraceCurrentViolations(snapshot: BoardSnapshot): ViolationInfo[] {
-  const violations: ViolationInfo[] = [];
-  if (!snapshot.nets || !snapshot.traces) return violations;
-
-  // Build net name → current constraint map
-  const netCurrentMa = new Map<string, number>();
-  const netWidthConstraint = new Map<string, number>();
-  for (const net of snapshot.nets) {
-    if (net.current_ma) netCurrentMa.set(net.name, net.current_ma);
-    if (net.width_nm) netWidthConstraint.set(net.name, net.width_nm);
-  }
-
-  for (const trace of snapshot.traces) {
-    const currentMa = netCurrentMa.get(trace.net_name);
-    if (!currentMa) continue;
-
-    const minWidthNm = ipc2221MinWidthNm(currentMa);
-    const traceWidthNm = Math.round(trace.width);
-
-    if (traceWidthNm < minWidthNm) {
-      // Find trace midpoint for violation marker
-      const midSeg = trace.segments[Math.floor(trace.segments.length / 2)];
-      const mx = (midSeg.start_x + midSeg.end_x) / 2;
-      const my = (midSeg.start_y + midSeg.end_y) / 2;
-
-      const traceWidthMm = (traceWidthNm / 1e6).toFixed(2);
-      const minWidthMm = (minWidthNm / 1e6).toFixed(2);
-      const currentStr = currentMa >= 1000 ? `${(currentMa / 1000).toFixed(1)}A` : `${currentMa}mA`;
-
-      violations.push({
-        kind: 'trace-width-current',
-        x_nm: Math.round(mx),
-        y_nm: Math.round(my),
-        message: `Trace ${trace.net_name}: width ${traceWidthMm}mm too thin for ${currentStr} — IPC-2221 recommends ≥${minWidthMm}mm`,
-      });
-    }
-  }
-
-  return violations;
-}
 
 /**
  * Parse FreeRouting .ses (session) file to extract routing results.
@@ -713,7 +542,7 @@ function buildTraceSegments(
   return { traceSegments, normalizedLayer };
 }
 
-class WasmPcbEngineAdapter implements PcbEngine {
+export class WasmPcbEngineAdapter implements PcbEngine {
   private wasmEngine: WasmPcbEngine;
   private cachedSnapshot: BoardSnapshot | null = null;
   /** Preserved net constraint data — survives cache invalidation */
@@ -769,15 +598,17 @@ class WasmPcbEngineAdapter implements PcbEngine {
     // The WASM engine's get_snapshot() would have empty traces since
     // we only populated components/board, not Trace entities
     if (this.cachedSnapshot) {
-      // Get DRC violations from WASM (computed in Rust)
+      // The engine is the checker. `silk-clearance` and `trace-current` used
+      // to be re-implemented here and appended to what Rust found, so a board
+      // that tripped either was told about it twice under two different names
+      // - `trace-current` from the rule and `trace-width-current` from this
+      // module - and the two copies had drifted: the Rust silk rule learned
+      // about printed designators and about clipping the legend off copper,
+      // and the TypeScript one knew about neither.
       const wasmSnapshot = sanitizeSnapshot(this.wasmEngine.get_snapshot());
-      const wasmViolations = wasmSnapshot.violations || [];
-      // Add JS-side violations (silk data + trace current check only exist in JS)
-      const silkViolations = checkSilkClearance(this.cachedSnapshot, Number(this.get_min_clearance_nm()));
-      const currentViolations = checkTraceCurrentViolations(this.cachedSnapshot);
       return {
         ...this.cachedSnapshot,
-        violations: [...wasmViolations, ...silkViolations, ...currentViolations],
+        violations: wasmSnapshot.violations || [],
       };
     }
     // Cache was invalidated — get fresh snapshot from WASM and restore net constraints
@@ -791,12 +622,6 @@ class WasmPcbEngineAdapter implements PcbEngine {
           net.current_ma = c.current_ma;
         }
       }
-    }
-    // Also run JS-side DRC (current violations)
-    const silkV = checkSilkClearance(wasmSnap, Number(this.get_min_clearance_nm()));
-    const currentV = checkTraceCurrentViolations(wasmSnap);
-    if (silkV.length > 0 || currentV.length > 0) {
-      wasmSnap.violations = [...(wasmSnap.violations || []), ...silkV, ...currentV];
     }
     return wasmSnap;
   }
@@ -1077,10 +902,10 @@ class MockPcbEngine implements PcbEngine {
       }
     }
 
-    // Add IPC-2221 current violations
-    const currentViolations = checkTraceCurrentViolations(this.snapshot);
-    violations.push(...currentViolations);
-
+    // The fallback engine checks clearance and nothing else. It exists for a
+    // browser where the WASM module failed to load, and a second copy of a
+    // rule is what this change removed - a fallback that answers differently
+    // from the engine is worse than one that answers less.
     this.snapshot.violations = violations;
     console.log(`[MockEngine] run_drc_incremental: ${violations.length} violations`);
     return violations.length;
