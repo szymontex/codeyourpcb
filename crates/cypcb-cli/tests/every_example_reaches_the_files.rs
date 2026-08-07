@@ -607,10 +607,117 @@ fn a_routed_board_reaches_the_files_too() {
         draws >= segments,
         "the router laid {segments} segments and the copper layers draw {draws} times"
     );
+
+    // A count cannot see copper that moved. `source_to_fabrication.rs` learned
+    // that once: a polyline replacing a short segment with a long one leaves
+    // the count unchanged and the board different. So every routed segment's
+    // endpoints have to lie on copper actually drawn in the layer that carries
+    // it - on a stroke, not merely equal to a vertex, because the smoother is
+    // allowed to merge collinear runs.
+    let read = |marker: &str| -> Vec<((f64, f64), (f64, f64))> {
+        files
+            .iter()
+            .find(|path| path.to_string_lossy().ends_with(marker))
+            .map(|path| drawn_strokes(&std::fs::read_to_string(path).expect("a layer")))
+            .unwrap_or_default()
+    };
+    let top_strokes = read("F_Cu.gbr");
+    let bottom_strokes = read("B_Cu.gbr");
+
+    let routed: Vec<(cypcb_world::components::Layer, (f64, f64), (f64, f64))> = {
+        let ecs = world.ecs_mut();
+        let mut query = ecs.query::<&Trace>();
+        query
+            .iter(ecs)
+            .flat_map(|trace| {
+                trace.segments.iter().map(move |segment| {
+                    (
+                        trace.layer,
+                        (
+                            segment.start.x.0 as f64 / 1_000_000.0,
+                            segment.start.y.0 as f64 / 1_000_000.0,
+                        ),
+                        (
+                            segment.end.x.0 as f64 / 1_000_000.0,
+                            segment.end.y.0 as f64 / 1_000_000.0,
+                        ),
+                    )
+                })
+            })
+            .collect()
+    };
+
+    let mut off_copper: Vec<String> = Vec::new();
+    let mut endpoints_checked = 0usize;
+    for (layer, start, end) in &routed {
+        let strokes = match layer {
+            cypcb_world::components::Layer::BottomCopper => &bottom_strokes,
+            _ => &top_strokes,
+        };
+        for point in [start, end] {
+            endpoints_checked += 1;
+            if !strokes.iter().any(|stroke| on_stroke(*point, *stroke)) {
+                off_copper.push(format!(
+                    "a routed end at ({:.3}mm, {:.3}mm) on {layer:?} has no copper under it",
+                    point.0, point.1
+                ));
+            }
+        }
+    }
+
+    assert!(
+        off_copper.is_empty(),
+        "the copper does not follow the routing:\n{}",
+        off_copper.join("\n")
+    );
+    assert!(endpoints_checked >= 2 * segments, "only {endpoints_checked} endpoints checked");
+    eprintln!("{endpoints_checked} routed endpoints found on copper actually drawn");
     eprintln!(
         "{segments} routed segments, {draws} copper draws, {} pads and {} placements checked",
         counts.pads, counts.placements
     );
 
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Every stroke a Gerber layer draws, as pairs of points in millimetres.
+///
+/// `D02` lifts the pen and moves; `D01` draws from wherever it is to the point
+/// given. Flashes (`D03`) are pads, not strokes.
+fn drawn_strokes(gerber: &str) -> Vec<((f64, f64), (f64, f64))> {
+    let mut strokes = Vec::new();
+    let mut pen: Option<(f64, f64)> = None;
+
+    for line in gerber.lines() {
+        let Some(point) = coordinates(line) else {
+            continue;
+        };
+        if line.contains("D02") {
+            pen = Some(point);
+        } else if line.contains("D01") {
+            if let Some(from) = pen {
+                strokes.push((from, point));
+            }
+            pen = Some(point);
+        }
+    }
+    strokes
+}
+
+/// Whether a point sits on a drawn stroke, within a tenth of the narrowest
+/// trace this project allows.
+fn on_stroke(point: (f64, f64), stroke: ((f64, f64), (f64, f64))) -> bool {
+    let ((x1, y1), (x2, y2)) = stroke;
+    let (dx, dy) = (x2 - x1, y2 - y1);
+    let length_squared = dx * dx + dy * dy;
+
+    let (nearest_x, nearest_y) = if length_squared < f64::EPSILON {
+        (x1, y1)
+    } else {
+        let t = (((point.0 - x1) * dx + (point.1 - y1) * dy) / length_squared).clamp(0.0, 1.0);
+        (x1 + t * dx, y1 + t * dy)
+    };
+
+    let (ex, ey) = (point.0 - nearest_x, point.1 - nearest_y);
+    (ex * ex + ey * ey).sqrt() < 0.0127
 }
