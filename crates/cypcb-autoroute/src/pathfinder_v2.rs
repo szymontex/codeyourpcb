@@ -38,6 +38,14 @@ use crate::strategy::RoutingStrategy;
 use crate::via_optimizer::optimize_vias;
 use crate::AutorouteConfig;
 
+/// What a layer change on a pad's copper costs the search.
+///
+/// Large enough that a route takes any reasonable detour instead, small enough
+/// that a net with nowhere else to go still gets through - the alternative is
+/// an abandoned connection, and this project has measured five vetoes that
+/// cost more than they bought.
+const PAD_LAYER_CHANGE_PENALTY: f64 = 50.0;
+
 /// Maximum number of PathFinder iterations before declaring non-convergence.
 pub const MAX_PATHFINDER_ITERATIONS: u32 = 50;
 
@@ -1041,9 +1049,6 @@ fn find_path_congestion_augmented(
             // rule applied where it can still be routed around.
             let on_pad = grid.cell(nx as u32, ny as u32, nl as usize) & CELL_PAD != 0
                 || grid.cell(nx as u32, ny as u32, target_layer as usize) & CELL_PAD != 0;
-            if on_pad {
-                continue;
-            }
 
             let free = if yield_halo {
                 grid.is_free_ignoring_halo(nx as u32, ny as u32, target_layer as usize)
@@ -1065,6 +1070,12 @@ fn find_path_congestion_augmented(
             {
                 let base = cost_fn.neighbor_cost(*node, target);
                 let congestion = congestion_map.congestion_cost(nx as u32, ny as u32, target_layer);
+                // A layer change on a pad's copper or inside its clearance is
+                // priced, not forbidden. Forbidding it was measured - it moved
+                // multi_ic from 140 violations to 375 by pushing the routing
+                // somewhere worse - and this vector has five other measurements
+                // saying a veto during expansion costs more than it buys.
+                let pad_crossing = if on_pad { PAD_LAYER_CHANGE_PENALTY } else { 0.0 };
                 let crowding = if via_keepout_cells > 0 {
                     foreign_cells_in_via_keepout(
                         grid,
@@ -1078,7 +1089,10 @@ fn find_path_congestion_augmented(
                 } else {
                     0.0
                 };
-                neighbors.push((target, float_to_int_cost(base + congestion + crowding)));
+                neighbors.push((
+                    target,
+                    float_to_int_cost(base + congestion + crowding + pad_crossing),
+                ));
             }
         }
 
