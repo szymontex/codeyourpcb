@@ -634,6 +634,20 @@ BottomCopper (25.527,10.033) -> (30.861,10.033)
 - **Eight instruments in the dropped table lost after being built; this one lost before, for the price of two fixtures.** That is what the refusal bought.
 - The ranking question is unchanged: every rule picks the same variant on `qfp_fanout`, so four of five boards agree under all seven rules and it still rests on `shift_driver` alone.
 - Both generators now share `tests/fixtures/benchmark/kicad_emit.py`. Proven safe rather than assumed: regenerating `shift_driver.kicad_pcb` through the extracted emitter leaves it **byte-identical** - `git diff --quiet` returns clean.
+- DONE: **every semantic error already carried its line, and nothing was showing it.** `SyncError` holds the source text, a span and a help string and implements `miette::Diagnostic`; the CLI printed it with `Display` - `Semantic error: unknown component: 'R9'`, no file, no line, no column, on a board that may be five hundred lines long. Parse errors, three lines earlier in the same command, went through `miette::Report` and rendered the offending line with a caret. Five call sites, one renderer each, changed to the report the errors were built for:
+```
+cypcb::sync::unknown_pin
+  × component 'R1' has no pin '3'. It has: 1, 2
+    ╭─[12:5]
+ 11 │ net SIG {
+ 12 │     R1.3
+    ·     ─┬
+    ·      ╰── this footprint has 2 pins
+ 13 │ }
+    ╰────
+  help: use one of the pins the footprint declares: 1, 2
+```
+- The duplicate-designator error has two spans and now shows both - `first defined here` and `duplicate definition` - which is the whole question that error asks. `crates/cypcb-cli/tests/an_error_points_at_the_line_that_caused_it.rs` runs the binary, because the defect was in which renderer a command chose and nothing below the command can see that. Mutation-checked: **all four fail on the previous commit.**
 - DONE: **a typo in a pin number cost a connection and said nothing.** Reading what the tool says for the five mistakes a user actually makes turned it up: `net SIG { R1.3 }` on a two-pad part stored a connection to pin 3, so the ratsnest had one end and nothing to route, and `cypcb check` reported only that R1.1 and R1.2 were unconnected - which reads as the design's own fault rather than as a three-character typo. Proven from the model: `cypcb parse` showed `pins: [('R1', [{'pin': '3', 'net': 'SIG'}])]`, a connection to a pin that does not exist. Now: `component 'R1' has no pin '3'. It has: 1, 2`, with the label `this footprint has 2 pins` and the help `use one of the pins the footprint declares: 1, 2`.
 - **The check is deliberately narrow and the narrowness is tested.** It fires only when the footprint is known: a supplier's part has no pads until its fetch lands, and erroring on those would refuse every board that uses one. An unknown footprint is still reported once, by `UnknownFootprint`, without every pin of it being reported as missing on top. All 19 example boards stay clean. Mutation-checked: the first of the three tests fails on the previous commit.
 - The other four mistakes read correctly today: `unknown component: 'R9'`, `unknown footprint: 'NOSUCH-99'`, `duplicate reference designator: 'R1'`. One is worth recording rather than fixing: **`size 20 x 20` with no unit is silently read as millimetres** and passes. That is a defensible default rather than a wrong answer, but nothing says it was assumed.

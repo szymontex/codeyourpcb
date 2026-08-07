@@ -164,7 +164,7 @@ impl ParseCommand {
                 let sync_result = sync_ast_to_world(&ast, &source, &mut world, &mut library);
                 if !sync_result.errors.is_empty() {
                     for err in &sync_result.errors {
-                        eprintln!("Semantic error: {}", err);
+                        eprintln!("{:?}", miette::Report::new(err.clone()));
                     }
                     std::process::exit(1);
                 }

@@ -73,7 +73,7 @@ impl ScoreCommand {
 
         if !sync_result.errors.is_empty() {
             for err in &sync_result.errors {
-                eprintln!("Semantic error: {}", err);
+                eprintln!("{:?}", miette::Report::new(err.clone()));
             }
             return Err(miette::miette!(
                 "Semantic errors in {}",
