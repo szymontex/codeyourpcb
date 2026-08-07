@@ -231,6 +231,18 @@ const DRC_RATCHETS: &[(&str, &str, u32, u32)] = &[
     ("led_blink.kicad_pcb", "led_blink", 2, 0),
     ("stm32_breakout.kicad_pcb", "stm32_breakout", 239, 136),
     ("multi_ic.kicad_pcb", "multi_ic", 336, 166),
+    // Measured 2026-08-08 at 81 / 33, plus the board's own band from
+    // `via_price_sweep::how_much_of_the_price_is_noise`: 62 to 74 across
+    // prices 0.22..0.28, 12 violations wide, and 27 to 34 shorts.
+    ("shift_driver.kicad_pcb", "shift_driver", 93, 40),
+    // Measured at 343 / 183. Its band is 298 to 400 - **102 violations wide,
+    // a third of the value it guards** - and 144 to 217 shorts. Negotiated
+    // congestion is least stable here, which is what a fine-pitch escape on
+    // two layers costs. The ratchet is therefore a weak guard on this board by
+    // construction: it catches a collapse, not a regression. Tightening it
+    // without first making the router repeatable would only produce a gate
+    // that cries wolf.
+    ("qfp_fanout.kicad_pcb", "qfp_fanout", 445, 256),
 ];
 
 /// Routes every fixture and holds the line on completeness and DRC count.
@@ -239,7 +251,7 @@ const DRC_RATCHETS: &[(&str, &str, u32, u32)] = &[
 /// it explicitly in the benchmark stage. About 100 seconds: the grid is a track
 /// pitch rather than half a clearance, and repair routes each board three times.
 #[test]
-#[ignore = "slow: routes all three fixtures"]
+#[ignore = "slow: routes every fixture"]
 fn benchmark_all_fixtures_drc() {
     let pathfinder = PathFinderStrategy;
 

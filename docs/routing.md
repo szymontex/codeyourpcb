@@ -141,6 +141,20 @@ is what negotiated congestion does on its own
 That is the same size as the differences a sweep is choosing between. **A
 tuning value picked inside this band is noise with a decimal point.**
 
+The two boards added on 2026-08-08 were measured the same way:
+
+| board | band across 0.22..0.28 | width |
+|---|---|---|
+| `shift_driver` | 62 to 74 | 12 violations |
+| `qfp_fanout` | 298 to 400 | **102 violations** |
+
+`qfp_fanout`'s band is a third of the value it guards. Negotiated congestion is
+least stable on a fine-pitch escape with only two layers, which is worth knowing
+before any number measured on that board is read as a result: **a 50-violation
+difference there is inside the noise.** Its ratchet catches a collapse, not a
+regression, and tightening it would need a repeatable router rather than a
+tighter threshold.
+
 `DRC_RATCHETS` in `benchmark_validation.rs` therefore holds each dense
 fixture's measured value plus its measured spread. This is not slack: a
 threshold set to one run fails on any unrelated change that perturbs rip-up
