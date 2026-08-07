@@ -163,6 +163,13 @@ pub struct AutorouteConfig {
     /// Zero keeps the old behaviour.
     pub via_ring_penalty: f64,
 
+    /// What a layer change on a pad's copper costs the search.
+    ///
+    /// A via landing on somebody's pad is copper on copper. Priced rather than
+    /// forbidden: forbidding it was measured and moved multi_ic from 140
+    /// violations to 375.
+    pub pad_layer_change_penalty: f64,
+
     /// How many cells beyond a pad's own copper its zone opens.
     ///
     /// The zone is the opening a route needs to reach the pad it is heading
@@ -256,6 +263,7 @@ impl Default for AutorouteConfig {
             strategy: StrategyKind::default(),
             params: AutorouteParams::default(),
             via_ring_penalty: 0.0,
+            pad_layer_change_penalty: crate::pathfinder_v2::PAD_LAYER_CHANGE_PENALTY,
             pad_zone_margin_cells: crate::orchestrator::DEFAULT_PAD_ZONE_MARGIN_CELLS,
             pad_zone_blocks_foreign_copper: false,
             reserve_trace_footprint: true,

@@ -196,6 +196,8 @@ numbers are introduced violations unless stated.
 | Refuse a foreign net's pad inside the routing net's own pad zone | stm32_breakout 239 -> 250 after, and **six connections abandoned**; multi_ic 336 -> 451 |
 | Weight the pad price by depth into the pad's disc, full on its copper and tapering across the clearance | multi_ic 267 -> 413 after at price 20 and 106 -> 242 shorts; stm32_breakout better at 5 and 50, worse at 20; no price where both improve |
 | Open a net's pad zone for the connection's own two pads instead of every pad the net has | stm32_breakout 239 -> 299 after and 136 -> 175 shorts, multi_ic 336 -> 398 and 166 -> 219, nothing left unrouted on either |
+| Charge a dearer layer change on a pad, to close the one short the narrower opening adds | the short survives every price to 1000 on led_blink, and stm32_breakout goes 216 -> 263 after at 150 |
+| Let the via keepout price count foreign **pads**, not only foreign routed copper | at the shipped price of 0.25: stm32_breakout 239 -> 259, multi_ic 336 -> 392 with 166 -> 216 shorts |
 
 The pattern across all of them: **pricing copper that exists pays, blocking or
 pricing space somebody might want does not.** An empty congestion map is not
@@ -276,6 +278,17 @@ than as the default, and **stm32_breakout picks it in best-of-eight** at
 Zero is not the floor: with no margin at all stm32_breakout leaves a connection
 unrouted and takes seven times as long, because a route cannot always reach a
 pad through the clearance the grid bloated around it.
+
+The one fault that keeps two cells out of the defaults has a name:
+`D1 <-> via 'GND': 0.00mm` - a via whose ring lands on a part's pad. Two prices
+were measured against it and both lost, and the second one found something
+worth writing down: **`foreign_cells_in_via_keepout` counts `net_at` only**,
+which is routed copper. A pad's net lives in `pad_net`, because a rip-up clears
+`net_map` and a pad is not ripped up. So a via pays for landing its ring on
+another net's trace and **nothing for landing it on another net's pad**. That
+blind spot is real; counting those cells at the shipped price of 0.25 is not
+the fix, because the disc around a via covers many pad cells on a dense board -
+stm32_breakout 239 -> 259 and multi_ic 336 -> 392 with 50 more shorts.
 
 Settings that help one board and hurt another are kept as variants rather than
 defaults, which is what `--variants` is for: `pad_zone_blocks_foreign_copper`

@@ -108,3 +108,122 @@ fn what_a_pad_opening_should_cost() {
         }
     }
 }
+
+/// What the small board's short at a narrower opening actually is.
+///
+/// `cargo test --release -p cypcb-autoroute --test pad_zone_margin_sweep -- --ignored what_led_blink --nocapture`
+///
+/// The sweep says two cells is better than three on both dense boards and
+/// worse on led_blink, which trades two near misses for one short. One board
+/// with one fault is a thing to read, not a number to weigh: this prints both
+/// boards' violations so the trade can be judged rather than summed.
+#[test]
+#[ignore = "diagnostic: names led_blink's violations at two pad openings"]
+fn what_led_blink_trades_when_the_opening_narrows() {
+    let drc_rules = DesignRules::jlcpcb_2layer();
+
+    for margin in [3u16, 2] {
+        let parsed = parse_kicad_pcb(&fixture_path("led_blink.kicad_pcb")).expect("the fixture");
+        let mut world = parsed.world;
+        let library = parsed.library;
+
+        world.rebuild_spatial_index_from_library(&library);
+        let baseline: BTreeSet<String> = run_drc(&mut world, &drc_rules)
+            .violations
+            .iter()
+            .map(fingerprint)
+            .collect();
+
+        let config = AutorouteConfig {
+            pad_zone_margin_cells: margin,
+            ..AutorouteConfig::default()
+        };
+        let rules = PresetRuleSet::new(RulesPreset::from_name("jlcpcb").expect("the preset exists"));
+        let result = route_board(&mut world, &library, &rules, &config);
+        apply_routes(&mut world, &result);
+        world.rebuild_spatial_index_from_library(&library);
+
+        eprintln!();
+        eprintln!("=== margin {margin} cells, {} segments ===", result.route_count());
+        for violation in run_drc(&mut world, &drc_rules)
+            .violations
+            .iter()
+            .filter(|v| !baseline.contains(&fingerprint(v)))
+        {
+            eprintln!(
+                "  {} at ({:.3}mm, {:.3}mm): {}",
+                violation.kind,
+                violation.location.x.raw() as f64 / 1e6,
+                violation.location.y.raw() as f64 / 1e6,
+                violation.message
+            );
+        }
+    }
+}
+
+/// Whether a dearer via-on-a-pad closes the one fault that keeps the narrower
+/// opening out of the defaults.
+///
+/// `cargo test --release -p cypcb-autoroute --test pad_zone_margin_sweep -- --ignored does_a_dearer --nocapture`
+///
+/// At two cells led_blink gains `D1 <-> via 'GND': 0.00mm` - a via placed on a
+/// part's pad. That is priced at 50 and evidently not dearly enough once the
+/// opening narrows. This sweeps the price at the narrower opening on all three
+/// fixtures: the fault has to go without the dense boards giving back what the
+/// narrower opening won.
+#[test]
+#[ignore = "diagnostic: sweeps the via-on-a-pad price at the narrower opening"]
+fn does_a_dearer_via_on_a_pad_close_the_last_fault() {
+    let drc_rules = DesignRules::jlcpcb_2layer();
+
+    for benchmark in BENCHMARKS {
+        eprintln!();
+        eprintln!("=== {} at margin 2 ===", benchmark.filename);
+
+        for price in [50.0f64, 150.0, 400.0, 1000.0] {
+            let parsed = parse_kicad_pcb(&fixture_path(benchmark.filename)).expect("the fixture");
+            let mut world = parsed.world;
+            let library = parsed.library;
+
+            world.rebuild_spatial_index_from_library(&library);
+            let baseline: BTreeSet<String> = run_drc(&mut world, &drc_rules)
+                .violations
+                .iter()
+                .map(fingerprint)
+                .collect();
+
+            let config = AutorouteConfig {
+                pad_zone_margin_cells: 2,
+                pad_layer_change_penalty: price,
+                ..AutorouteConfig::default()
+            };
+            let rules =
+                PresetRuleSet::new(RulesPreset::from_name("jlcpcb").expect("the preset exists"));
+            let result = route_board(&mut world, &library, &rules, &config);
+            apply_routes(&mut world, &result);
+            world.rebuild_spatial_index_from_library(&library);
+            let drc = run_drc(&mut world, &drc_rules);
+
+            let after = drc.violations.len();
+            let introduced = drc
+                .violations
+                .iter()
+                .filter(|v| !baseline.contains(&fingerprint(v)))
+                .count();
+            let shorts = drc
+                .violations
+                .iter()
+                .filter(|v| v.actual == Some(cypcb_core::Nm::ZERO))
+                .count();
+            let unrouted = match result.status {
+                cypcb_router::types::RoutingStatus::Partial { unrouted_count } => unrouted_count,
+                _ => 0,
+            };
+
+            eprintln!(
+                "  price {:>6.0}: {:>4} after, {:>4} introduced, {:>4} shorts, {:>3} vias, {} unrouted",
+                price, after, introduced, shorts, result.via_count(), unrouted
+            );
+        }
+    }
+}

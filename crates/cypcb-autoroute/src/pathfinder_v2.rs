@@ -38,13 +38,14 @@ use crate::strategy::RoutingStrategy;
 use crate::via_optimizer::optimize_vias;
 use crate::AutorouteConfig;
 
-/// What a layer change on a pad's copper costs the search.
+/// What a layer change on a pad's copper costs the search by default.
 ///
 /// Large enough that a route takes any reasonable detour instead, small enough
 /// that a net with nowhere else to go still gets through - the alternative is
 /// an abandoned connection, and this project has measured five vetoes that
-/// cost more than they bought.
-const PAD_LAYER_CHANGE_PENALTY: f64 = 50.0;
+/// cost more than they bought. `AutorouteConfig::pad_layer_change_penalty`
+/// carries the value; this is what it defaults to.
+pub const PAD_LAYER_CHANGE_PENALTY: f64 = 50.0;
 
 /// Maximum number of PathFinder iterations before declaring non-convergence.
 pub const MAX_PATHFINDER_ITERATIONS: u32 = 50;
@@ -635,6 +636,7 @@ pub fn pathfinder_loop(
                     block_foreign_copper: config.pad_zone_blocks_foreign_copper,
                     via_foreign_copper_penalty: config.via_foreign_copper_penalty,
                     foreign_pad_penalty: config.foreign_pad_penalty,
+                    pad_layer_change_penalty: config.pad_layer_change_penalty,
                     yield_halo: false,
                 };
                 let mut path =
@@ -906,6 +908,13 @@ fn foreign_cells_in_via_keepout(
                 if cx < 0 || cy < 0 {
                     continue;
                 }
+                // Routed copper only. A pad in the keepout costs nothing here,
+                // which is measured rather than assumed: counting pad cells at
+                // this same price took stm32_breakout from 239 violations to
+                // 259 and multi_ic from 336 to 392 with 50 more shorts,
+                // because the disc around a via covers many pad cells on a
+                // dense board. The blind spot is real; the price for it is not
+                // this one.
                 if matches!(
                     grid.net_at(cx as u32, cy as u32, layer as usize),
                     Some(owner) if owner != net_id
@@ -934,6 +943,8 @@ struct Search<'a> {
     block_foreign_copper: bool,
     via_foreign_copper_penalty: f64,
     foreign_pad_penalty: f64,
+    /// What a layer change on a pad's copper costs.
+    pad_layer_change_penalty: f64,
     /// Whether a net with nowhere else to go may cross reserved copper.
     yield_halo: bool,
 }
@@ -955,6 +966,7 @@ fn find_path_congestion_augmented(
         block_foreign_copper,
         via_foreign_copper_penalty,
         foreign_pad_penalty,
+        pad_layer_change_penalty,
         yield_halo,
     } = *search;
     let grid_w = grid.width();
@@ -1122,7 +1134,7 @@ fn find_path_congestion_augmented(
                 // multi_ic from 140 violations to 375 by pushing the routing
                 // somewhere worse - and this vector has five other measurements
                 // saying a veto during expansion costs more than it buys.
-                let pad_crossing = if on_pad { PAD_LAYER_CHANGE_PENALTY } else { 0.0 };
+                let pad_crossing = if on_pad { pad_layer_change_penalty } else { 0.0 };
                 let crowding = if via_keepout_cells > 0 {
                     foreign_cells_in_via_keepout(
                         grid,
@@ -1300,6 +1312,7 @@ mod tests {
             block_foreign_copper: false,
             via_foreign_copper_penalty: 0.0,
             foreign_pad_penalty: 0.0,
+            pad_layer_change_penalty: PAD_LAYER_CHANGE_PENALTY,
             yield_halo: false,
         };
         let path = find_path_congestion_augmented(
