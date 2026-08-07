@@ -239,18 +239,25 @@ struct Counts {
     bom_parts: usize,
 }
 
-#[test]
-fn the_files_say_what_the_board_says() {
+/// Export one board and hold its files to everything they can be held to.
+///
+/// Written once and called twice: for the examples as their designers drew
+/// them, and for a board the autorouter has been over. The router is what
+/// changes copper after the designer stops, and until this was reused nothing
+/// checked what it writes.
+fn check_the_files(
+    tag: &str,
+    name: &str,
+    world: &mut BoardWorld,
+    library: &FootprintLibrary,
+    counts: &mut Counts,
+) -> Vec<String> {
     use cypcb_world::components::{FootprintRef, Layer, Position, Rotation};
 
     let mut wrong: Vec<String> = Vec::new();
-    let mut counts = Counts::default();
 
-    for (name, mut world, library) in boards() {
-        // One export per board. Six tests each exporting every board again is
-        // six times the work for the same answer, and the cost grows with the
-        // directory.
-        let dir = export_to_temp("sweep", &name, &mut world, &library);
+    {
+        let dir = export_to_temp(tag, name, world, library);
         let files = files_under(&dir);
 
         // ---- every layer is a complete Gerber -------------------------------
@@ -418,7 +425,7 @@ fn the_files_say_what_the_board_says() {
         //
         // The CPL is what a machine follows and the BOM is what somebody buys
         // from. A board whose CPL is short by one part is assembled with a gap.
-        let parts = placed_parts(&mut world);
+        let parts = placed_parts(world);
         if !parts.is_empty() {
             let cpl = assembly_file(&dir, "CPL.csv", &name);
             let rows: Vec<Vec<String>> = cpl
@@ -494,6 +501,24 @@ fn the_files_say_what_the_board_says() {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    wrong
+}
+
+#[test]
+fn the_files_say_what_the_board_says() {
+    let mut wrong: Vec<String> = Vec::new();
+    let mut counts = Counts::default();
+
+    for (name, mut world, library) in boards() {
+        wrong.extend(check_the_files(
+            "sweep",
+            &name,
+            &mut world,
+            &library,
+            &mut counts,
+        ));
+    }
+
     assert!(
         wrong.is_empty(),
         "the files do not say what the board says:\n{}",
@@ -516,4 +541,76 @@ fn the_files_say_what_the_board_says() {
         counts.placements,
         counts.bom_parts
     );
+}
+
+#[test]
+fn a_routed_board_reaches_the_files_too() {
+    // Every example is checked as its designer drew it. The router is what
+    // changes copper after the designer stops, and nothing held what it writes
+    // to the same standard: a trace that reaches the board model and not the
+    // Gerber is a connection the fabricator never makes.
+    use cypcb_autoroute::{route_board, AutorouteConfig};
+    use cypcb_router::apply_routes;
+    use cypcb_rules::presets::{PresetRuleSet, RulesPreset};
+    use cypcb_world::components::trace::Trace;
+
+    let file = examples_dir().join("blink.cypcb");
+    let source = std::fs::read_to_string(&file).expect("the example is there");
+    let parsed = cypcb_parser::parse(&source);
+    assert!(parsed.errors.is_empty(), "{:?}", parsed.errors);
+
+    let mut world = BoardWorld::new();
+    let mut library = FootprintLibrary::new();
+    let result = sync_ast_to_world(&parsed.value, &source, &mut world, &mut library);
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+
+    let rules = PresetRuleSet::new(RulesPreset::from_name("jlcpcb").expect("the preset"));
+    let routing = route_board(&mut world, &library, &rules, &AutorouteConfig::default());
+    assert!(
+        routing.route_count() > 0,
+        "the router produced nothing to check: {:?}",
+        routing.status
+    );
+    apply_routes(&mut world, &routing);
+    world.rebuild_spatial_index_from_library(&library);
+
+    // Everything the drawn boards are held to.
+    let mut counts = Counts::default();
+    let wrong = check_the_files("routed", "blink-routed", &mut world, &library, &mut counts);
+    assert!(
+        wrong.is_empty(),
+        "a routed board does not reach its files:\n{}",
+        wrong.join("\n")
+    );
+
+    // And the part only a routed board has: the copper the router laid has to
+    // be in the layer files, not only in the model.
+    let dir = export_to_temp("routed-copper", "blink-routed", &mut world, &library);
+    let files = files_under(&dir);
+    let copper: String = files
+        .iter()
+        .filter(|path| {
+            let name = path.to_string_lossy();
+            name.ends_with("F_Cu.gbr") || name.ends_with("B_Cu.gbr")
+        })
+        .map(|path| std::fs::read_to_string(path).expect("a readable layer"))
+        .collect();
+    let draws = copper.lines().filter(|line| line.contains("D01")).count();
+
+    let segments: usize = {
+        let ecs = world.ecs_mut();
+        let mut query = ecs.query::<&Trace>();
+        query.iter(ecs).map(|trace| trace.segments.len()).sum()
+    };
+
+    assert!(
+        draws >= segments,
+        "the router laid {segments} segments and the copper layers draw {draws} times"
+    );
+    eprintln!(
+        "{segments} routed segments, {draws} copper draws, {} pads and {} placements checked",
+        counts.pads, counts.placements
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
 }
