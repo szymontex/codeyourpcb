@@ -341,3 +341,126 @@ fn flashes(gerber: &str) -> Vec<(f64, f64)> {
         .filter_map(coordinates)
         .collect()
 }
+
+#[test]
+fn every_drilled_pad_gets_a_hole_of_the_size_it_asked_for() {
+    // Copper without a hole is a through-hole part that cannot be fitted, and
+    // a hole of the wrong size is a lead that does not go in or a joint that
+    // never wets. Neither shows in a Gerber preview: the drill file is a
+    // separate format that most previews do not overlay.
+    use cypcb_world::components::{FootprintRef, Position, Rotation};
+
+    let mut wrong: Vec<String> = Vec::new();
+    let mut holes_checked = 0usize;
+
+    for (name, mut world, library) in boards() {
+        let placements: Vec<(cypcb_core::Point, f64, String)> = {
+            let ecs = world.ecs_mut();
+            let mut query = ecs.query::<(&Position, &Rotation, &FootprintRef)>();
+            query
+                .iter(ecs)
+                .map(|(position, rotation, footprint)| {
+                    (
+                        position.0,
+                        rotation.to_degrees(),
+                        footprint.as_str().to_string(),
+                    )
+                })
+                .collect()
+        };
+
+        // Where a hole has to be, and how wide, in millimetres.
+        let mut expected: Vec<(f64, f64, f64)> = Vec::new();
+        for (position, degrees, footprint_name) in &placements {
+            let Some(footprint) = library.get(footprint_name) else {
+                continue;
+            };
+            let (sin, cos) = degrees.to_radians().sin_cos();
+            for pad in &footprint.pads {
+                let Some(drill) = pad.drill else {
+                    continue;
+                };
+                let px = pad.position.x.0 as f64;
+                let py = pad.position.y.0 as f64;
+                expected.push((
+                    (position.x.0 as f64 + px * cos - py * sin) / 1_000_000.0,
+                    (position.y.0 as f64 + px * sin + py * cos) / 1_000_000.0,
+                    drill.0 as f64 / 1_000_000.0,
+                ));
+            }
+        }
+
+        if expected.is_empty() {
+            continue;
+        }
+
+        let dir = export_to_temp("drills", &name, &mut world, &library);
+        let drill_file = files_under(&dir)
+            .into_iter()
+            .find(|path| path.extension().and_then(|e| e.to_str()) == Some("drl"))
+            .unwrap_or_else(|| panic!("{name} has drilled pads and exported no drill file"));
+        let text = std::fs::read_to_string(&drill_file).expect("a readable drill file");
+        let holes = excellon_holes(&text);
+        assert!(
+            !holes.is_empty(),
+            "{name}: the drill file carries no holes at all:\n{text}"
+        );
+
+        for (x, y, diameter) in expected {
+            holes_checked += 1;
+            let hit = holes
+                .iter()
+                .find(|(hx, hy, _)| (hx - x).abs() < 0.002 && (hy - y).abs() < 0.002);
+            match hit {
+                None => wrong.push(format!("{name}: no hole at ({x:.3}mm, {y:.3}mm)")),
+                Some((_, _, drilled)) if (drilled - diameter).abs() > 0.002 => {
+                    wrong.push(format!(
+                        "{name}: hole at ({x:.3}mm, {y:.3}mm) is {drilled:.3}mm, the footprint asks for {diameter:.3}mm"
+                    ));
+                }
+                Some(_) => {}
+            }
+        }
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    assert!(
+        wrong.is_empty(),
+        "the drill file and the copper disagree:\n{}",
+        wrong.join("\n")
+    );
+    assert!(holes_checked > 0, "no drilled pads were found to check");
+    eprintln!("{holes_checked} drilled pads matched to holes of the size they asked for");
+}
+
+/// Every hole in an Excellon file, as (x mm, y mm, diameter mm).
+///
+/// The exporter writes metric decimals with a tool table: `T1C1.000000` sets
+/// the size, `T1` selects it, and the coordinates that follow use it.
+fn excellon_holes(text: &str) -> Vec<(f64, f64, f64)> {
+    let mut tools: std::collections::HashMap<String, f64> = std::collections::HashMap::new();
+    let mut current = 0.0;
+    let mut out = Vec::new();
+
+    for line in text.lines().map(str::trim) {
+        if let Some((tool, size)) = line.split_once('C') {
+            if tool.starts_with('T') && !tool.is_empty() {
+                if let Ok(diameter) = size.parse::<f64>() {
+                    tools.insert(tool.to_string(), diameter);
+                    continue;
+                }
+            }
+        }
+        if line.starts_with('T') && line.len() > 1 && !line.contains('C') {
+            current = tools.get(line).copied().unwrap_or(0.0);
+            continue;
+        }
+        if line.starts_with('X') {
+            if let Some((x, y)) = coordinates(line) {
+                out.push((x, y, current));
+            }
+        }
+    }
+    out
+}
