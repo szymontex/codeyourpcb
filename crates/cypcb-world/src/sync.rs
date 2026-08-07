@@ -725,7 +725,7 @@ fn sync_component(
     let kind = ast_kind_to_ecs_kind(comp.kind);
 
     // Create source span component
-    let ecs_span = EcsSourceSpan::new(comp.span.start, comp.span.end, 1, 1);
+    let ecs_span = EcsSourceSpan::new(comp.span.start, comp.span.end);
 
     // Spawn the component entity
     let entity = world.spawn_component_with_span(
@@ -1024,7 +1024,7 @@ fn sync_trace(
     if has_geometry {
         // Geometric mode: process ordered directives to create traces and vias
         let mut current_layer = layer;
-        let span = EcsSourceSpan::new(trace_def.span.start, trace_def.span.end, 0, 0);
+        let span = EcsSourceSpan::new(trace_def.span.start, trace_def.span.end);
 
         for directive in &trace_def.directives {
             match directive {
@@ -1141,7 +1141,7 @@ fn sync_trace(
         };
 
         // Add source span for error reporting
-        let span = EcsSourceSpan::new(trace_def.span.start, trace_def.span.end, 0, 0);
+        let span = EcsSourceSpan::new(trace_def.span.start, trace_def.span.end);
 
         // Spawn the trace entity
         // NetId has to be its own component, not just a field on Trace: DRC's

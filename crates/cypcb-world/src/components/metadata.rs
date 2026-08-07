@@ -54,18 +54,22 @@ impl From<String> for Name {
 /// Link back to source file location.
 ///
 /// Used for error reporting and "go to definition" functionality.
-/// Stores byte offsets and line/column for human-readable messages.
+///
+/// Byte offsets only. It carried `start_line` and `start_column` as well until
+/// 2026-08-08, and every caller passed a placeholder - `1, 1` for components,
+/// `0, 0` for traces - because the line is not known where the span is built.
+/// Nothing read them, which is the only reason nobody had been misled yet: a
+/// field that always lies is worse than one that is absent, and the way to a
+/// line is to convert the byte offset against the source that produced it.
 ///
 /// # Examples
 ///
 /// ```
 /// use cypcb_world::SourceSpan;
 ///
-/// let span = SourceSpan::new(100, 150, 10, 5);
+/// let span = SourceSpan::new(100, 150);
 /// assert_eq!(span.start_byte, 100);
 /// assert_eq!(span.end_byte, 150);
-/// assert_eq!(span.start_line, 10);
-/// assert_eq!(span.start_column, 5);
 /// ```
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct SourceSpan {
@@ -73,32 +77,24 @@ pub struct SourceSpan {
     pub start_byte: usize,
     /// Ending byte offset in the source file.
     pub end_byte: usize,
-    /// Starting line number (1-indexed).
-    pub start_line: u32,
-    /// Starting column number (1-indexed).
-    pub start_column: u32,
 }
 
 impl SourceSpan {
     /// Create a new source span.
     #[inline]
-    pub fn new(start_byte: usize, end_byte: usize, start_line: u32, start_column: u32) -> Self {
+    pub fn new(start_byte: usize, end_byte: usize) -> Self {
         SourceSpan {
             start_byte,
             end_byte,
-            start_line,
-            start_column,
         }
     }
 
     /// Create a span at a single point.
     #[inline]
-    pub fn point(byte: usize, line: u32, column: u32) -> Self {
+    pub fn point(byte: usize) -> Self {
         SourceSpan {
             start_byte: byte,
             end_byte: byte,
-            start_line: line,
-            start_column: column,
         }
     }
 
@@ -116,30 +112,28 @@ impl SourceSpan {
 
     /// Merge two spans to create a span covering both.
     pub fn merge(&self, other: &SourceSpan) -> SourceSpan {
-        let (start_span, _) = if self.start_byte <= other.start_byte {
-            (self, other)
-        } else {
-            (other, self)
-        };
-
         SourceSpan {
             start_byte: self.start_byte.min(other.start_byte),
             end_byte: self.end_byte.max(other.end_byte),
-            start_line: start_span.start_line,
-            start_column: start_span.start_column,
         }
     }
 }
 
 impl Default for SourceSpan {
     fn default() -> Self {
-        SourceSpan::new(0, 0, 1, 1)
+        SourceSpan::new(0, 0)
     }
 }
 
 impl std::fmt::Display for SourceSpan {
+    /// The byte range, which is what this actually knows.
+    ///
+    /// It printed `line:column` until 2026-08-08, from fields every caller
+    /// filled with a placeholder - so every component formatted as `1:1` and
+    /// every trace as `0:0`. A location that is always the same location is
+    /// not a location.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}:{}", self.start_line, self.start_column)
+        write!(f, "{}..{}", self.start_byte, self.end_byte)
     }
 }
 
@@ -283,21 +277,24 @@ mod tests {
 
     #[test]
     fn test_source_span() {
-        let span = SourceSpan::new(10, 50, 5, 3);
+        let span = SourceSpan::new(10, 50);
         assert_eq!(span.len(), 40);
         assert!(!span.is_empty());
     }
 
     #[test]
     fn test_source_span_merge() {
-        let span1 = SourceSpan::new(10, 20, 1, 10);
-        let span2 = SourceSpan::new(30, 50, 2, 5);
+        let span1 = SourceSpan::new(10, 20);
+        let span2 = SourceSpan::new(30, 50);
         let merged = span1.merge(&span2);
 
         assert_eq!(merged.start_byte, 10);
         assert_eq!(merged.end_byte, 50);
-        assert_eq!(merged.start_line, 1);
-        assert_eq!(merged.start_column, 10);
+
+        // Order does not matter: merging is about the range, and the range is
+        // all this carries.
+        let other_way = span2.merge(&span1);
+        assert_eq!(other_way, merged);
     }
 
     #[test]
