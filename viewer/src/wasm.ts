@@ -7,12 +7,15 @@
  *
  * Architecture note: The WASM build doesn't include tree-sitter (too complex for WASM),
  * so parsing is done in JavaScript. The WASM engine provides:
- * - load_snapshot(): Load a pre-parsed BoardSnapshot
+ * - load_source(): Read `.cypcb` in the engine and build the board from it
+ * - load_snapshot(): Load a board somebody else parsed
  * - get_snapshot(): Get the current board state
  * - query_point(): Query components at a point
  *
  * This module provides an adapter (WasmPcbEngineAdapter) that adds load_source()
- * by parsing in JavaScript and calling load_snapshot() on the WASM engine.
+ * by calling load_source() on the WASM engine, which carries the Rust reader.
+ * It used to parse in JavaScript and send a snapshot; `parseSource` below is
+ * what is left of that, and only the no-WASM fallback still uses it.
  */
 
 import type { ZoneInfo, BoardSnapshot, ComponentInfo, PadInfo, NetInfo, PinRef, BoardInfo, TraceInfo, TraceSegmentInfo, ViaInfo, ViolationInfo, SilkShape } from './types';
@@ -367,6 +370,9 @@ export interface PcbEngine {
  * Raw WASM PcbEngine interface (what Rust actually exports)
  */
 interface WasmPcbEngine {
+  /** Read `.cypcb` and build the board from it. Exported since the engine
+   *  carries the Rust reader; before that the host parsed and sent a snapshot. */
+  load_source(source: string): string;
   load_snapshot(snapshot: BoardSnapshot): string;
   get_snapshot(): BoardSnapshot;
   query_point(x_nm: bigint, y_nm: bigint): string[];
@@ -1281,7 +1287,7 @@ function segmentToSegmentDistance(
  * Adapter that wraps the raw WASM PcbEngine and provides the load_source() method.
  *
  * The WASM engine doesn't include tree-sitter, so parsing is done in JavaScript.
- * This adapter parses the source, then calls load_snapshot() on the WASM engine.
+ * This adapter hands the source to the engine and reads the board back.
  * Query operations use the WASM engine's spatial index for efficiency.
  */
 /**
@@ -1320,14 +1326,21 @@ class WasmPcbEngineAdapter implements PcbEngine {
   }
 
   load_source(source: string): string {
-    // Parse in JavaScript
-    const { snapshot, errors } = parseSource(source);
+    // The engine parses. Until 2026-08-07 this line read `parseSource(source)`
+    // - a second reader of the same language, written in TypeScript, which did
+    // not instantiate modules or follow imports, so a design using either drew
+    // differently on screen than it exported. The engine's reader is checked
+    // against the tree-sitter one board by board in
+    // `crates/cypcb-parser/tests/differential.rs`.
+    const errors = this.wasmEngine.load_source(source);
 
-    // Generate ratsnest for unrouted nets
-    regenerateRatsnest(snapshot);
-
-    // Cache snapshot + preserve net constraints separately (survives cache invalidation)
+    // The model now lives in Rust: components, nets, traces, vias, zones, the
+    // copper the pours became, the ratsnest and the DRC violations all come
+    // back from it. There is nothing left to replay into the engine, which is
+    // what the trace loop here used to do.
+    const snapshot = sanitizeSnapshot(this.wasmEngine.get_snapshot());
     this.cachedSnapshot = snapshot;
+
     this.cachedNetConstraints.clear();
     for (const net of snapshot.nets) {
       if (net.width_nm || net.clearance_nm || net.current_ma) {
@@ -1339,54 +1352,7 @@ class WasmPcbEngineAdapter implements PcbEngine {
       }
     }
 
-    // Store snapshot and load into WASM engine for queries
-    const wasmError = this.wasmEngine.load_snapshot(snapshot);
-
-    // A zone is an outline until the engine fills it. Ask for the copper it
-    // computed - the same geometry the Gerber carries - rather than drawing
-    // the rectangle the designer typed, which would hide a plane swallowing a
-    // pad or an island cut off from its net.
-    if (snapshot.zones && snapshot.zones.length > 0) {
-      try {
-        const engineSnapshot = this.wasmEngine.get_snapshot() as BoardSnapshot | null;
-        if (engineSnapshot && engineSnapshot.pours) {
-          snapshot.pours = engineSnapshot.pours;
-        }
-      } catch {
-        // An engine that cannot fill them leaves the board without pours
-        // drawn, which is what happened before this existed.
-      }
-    }
-    if (wasmError) {
-      errors.push(wasmError);
-    }
-
-    // Replay parsed traces into WASM engine so export_traces_as_dsl() can find them
-    // Update snapshot trace IDs to match WASM-assigned IDs
-    if (snapshot.traces.length > 0 && typeof this.wasmEngine.add_trace_json === 'function') {
-      for (const trace of snapshot.traces) {
-        const flatSegs: number[] = [];
-        for (const seg of trace.segments) {
-          flatSegs.push(
-            Math.round(seg.start_x), Math.round(seg.start_y),
-            Math.round(seg.end_x), Math.round(seg.end_y),
-          );
-        }
-        const wasmId = this.wasmEngine.add_trace_json(
-          trace.net_name,
-          trace.layer,
-          BigInt(Math.round(trace.width)),
-          JSON.stringify(flatSegs),
-        );
-        // Update the trace ID in snapshot to match WASM entity ID
-        if (wasmId !== 0xFFFFFFFF) {
-          trace.id = wasmId;
-        }
-      }
-      console.log(`[TracePersist] Replayed ${snapshot.traces.length} traces into WASM engine`);
-    }
-
-    return errors.join('\n');
+    return errors;
   }
 
   load_routes(sesContent: string): void {
