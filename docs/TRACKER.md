@@ -1129,6 +1129,23 @@ cypcb::sync::unknown_pin
 - QUEUED: `.gsd/REQUIREMENTS.md` never received the M005 status writeback - `STATE.md` counts "23 active, 0 validated" while REQUIREMENTS lists 14 as validated. Empty DRC checkers (`trace_width.rs:53`, `solder_mask_bridge.rs:27`, `silk_clearance.rs:26`, `hole_to_hole.rs:37`) count toward "12 checkers" while doing nothing.
 
 ### V7 - Performance (GP-002 discipline: measure, then optimize, publish before/after)
+- DONE: **best-of-eight says where the wait goes now, and the answer is one variant.** The ranking printed composite, violations, shorts and vias, and nothing about time, so a user waiting 92s for `multi_ic` could not tell whether that was eight fair shares or one runaway. `VariantResult` carries `elapsed_ms` and the ranking prints it. Measured, release build, `multi_ic.kicad_pcb`:
+
+  | rank | variant | violations / shorts | time |
+  |---|---|---|---|
+  | 1 | PathFinder Pad Aware | 165 / 86 | **32.2s** |
+  | 2 | PathFinder Tight Pads | 206 / 120 | 4.9s |
+  | 3 | PathFinder Low-Via | 265 / 159 | 8.8s |
+  | 4 | PathFinder Priced Via Rings | 281 / 175 | 5.5s |
+  | 5 | PathFinder High-Density | 324 / 180 | 11.4s |
+  | 6 | PathFinder Default | 291 / 187 | 6.1s |
+  | 7 | PathFinder Guarded Pads | 344 / 200 | 14.8s |
+  | 8 | PathFinder Bare Centre Line | 360 / 246 | 8.1s |
+
+  Sum 91.8s against a 91.9s wall clock, so the whole wait is inside the loop. **The winner is also the slowest by 6.6x**, and it alone is 35% of the run.
+- **What that measurement buys, before anything is optimized:** the eight run one after another on a twelve-core machine, and the loop mutates one `BoardWorld`, so nothing is shared and nothing is parallel. Perfect parallelism is bounded by the slowest variant - **32s against 92s, 2.9x** - and not by the core count. That bound is worth knowing before anybody writes a thread pool: the second half of the win has to come from `Pad Aware` itself, not from more cores.
+- Also measured and needing no action: `cypcb check` is **19ms** on the largest fixture unrouted and **52ms** on the same board routed with 945 segments. The design rule check was the obvious suspect for the slow variants and it is not the cost; the routing is.
+- NEXT-ACTION: **find out why `Pad Aware` costs 6.6x the fastest variant.** It is the setting that wins on this board and the one a user waits for. Parallelising the loop needs a `BoardWorld` per thread and the crate cannot build one - it takes a `&mut` and has no reader - so it is a design change across the CLI, the viewer and wasm32 (which has no threads), and worth doing only if the variant itself cannot be made cheaper.
 - DONE: first baseline, and it found a 28x. `benchmark_routing_time` reported blink.cypcb at **93,459ms**. A per-iteration probe showed PathFinder shrinking the overused set for three iterations, then re-routing the same four nets for the remaining 46 - never converging, always burning the full budget, with each iteration slower than the last as the history cost climbed. Stopping after three iterations without a new best: **93,459ms -> 3,366ms**, routing-test **8,459ms -> 274ms**, both with byte-identical output. Regression gate 21s -> 1.12s; whole autoroute suite 44s.
 - DONE: found why those four nets never separated - they were `DIS`, `TRG_THR`, `VCC`, `GND`, all multi-pin. `net_path_cells` gathers every connection of a net into one list and `mark_net` increments per entry, so a net's own junctions pushed occupancy to 2 against a capacity of 1 and stayed overused forever. The router was negotiating against itself. Deduplicating a net's cells before marking: blink **3,366ms -> 1,288ms**, routing-test **274ms -> 72ms**, output identical. Cumulative against the 2026-08-05 baseline: **93,459ms -> 1,288ms, 72x**.
 - DONE: measured both. blink.cypcb now **converges in 3 iterations** (overuse 19 -> 1 -> 0) where before it never converged and always burned all 50; the stagnation break is a safety net now, not the normal exit. led_blink.kicad_pcb converges on the **first** iteration - zero cells shared between nets - and still reports 3 clearance violations, which settles what they are: not grid contention but the physical overlap of neighbouring cells, since a trace is 0.127mm wide and cells sit 0.0635mm apart.

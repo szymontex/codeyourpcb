@@ -86,6 +86,13 @@ pub struct VariantResult {
     /// while leaving 3 connections unrouted, and the score said 162,588
     /// against 287,564 as though that were the better board.
     pub unrouted: usize,
+    /// How long this variant took, in milliseconds.
+    ///
+    /// Best-of-eight on `multi_ic` takes 86s in a release build against 5.9s
+    /// for one run, and until this was carried out of the loop nothing said
+    /// which of the eight the wait belonged to. Zero on wasm32, which has no
+    /// clock this code may read.
+    pub elapsed_ms: u64,
 }
 
 /// Return the default set of variant configurations.
@@ -243,6 +250,9 @@ pub fn generate_variants(
     let mut results: Vec<VariantResult> = Vec::with_capacity(configs.len());
 
     for config in configs {
+        #[cfg(not(target_arch = "wasm32"))]
+        let variant_start = std::time::Instant::now();
+
         let variant_span =
             tracing::info_span!("variant", name = %config.name, strategy = %config.strategy)
                 .entered();
@@ -309,6 +319,10 @@ pub fn generate_variants(
                 RoutingStatus::Partial { unrouted_count } => unrouted_count,
                 _ => 0,
             },
+            #[cfg(not(target_arch = "wasm32"))]
+            elapsed_ms: variant_start.elapsed().as_millis() as u64,
+            #[cfg(target_arch = "wasm32")]
+            elapsed_ms: 0,
         });
 
         drop(variant_span);
@@ -503,6 +517,7 @@ mod tests {
                 Nm::from_mm(0.3),
             )],
             unrouted: 0,
+            elapsed_ms: 0,
         };
 
         let json = serde_json::to_string(&result).expect("VariantResult should serialize");
@@ -530,6 +545,7 @@ mod tests {
                 routes: vec![],
                 vias: vec![],
                 unrouted: 0,
+                elapsed_ms: 0,
             },
             VariantResult {
                 name: "B".to_string(),
@@ -546,6 +562,7 @@ mod tests {
                 routes: vec![],
                 vias: vec![],
                 unrouted: 0,
+                elapsed_ms: 0,
             },
         ];
 
