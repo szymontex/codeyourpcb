@@ -1,20 +1,46 @@
 #!/bin/bash
 set -e
 
-# Build WASM module with wasm-pack
-# Output to viewer/pkg for Vite to find
+# Build the WASM module the viewer loads, into viewer/pkg for Vite to find.
+#
+# Three steps, each doing one thing: cargo compiles for wasm32, wasm-bindgen
+# writes the JavaScript bindings, wasm-opt shrinks the module.
+#
+# This was `wasm-pack build --release` until 2026-08-08. The release profile
+# now optimizes for speed, because the command-line router is what a release
+# build is for, and the browser's size build lives in `wasm-release`. wasm-pack
+# 0.14 cannot be told about a custom profile: `--profile wasm-release` makes it
+# ignore `[package.metadata.wasm-pack.profile.*]` entirely and run its own
+# plain `wasm-opt -O`, which refuses this module -
+#
+#   [wasm-validator error in function 0] Bulk memory operation
+#   Fatal: error validating input
+#
+# - because the module uses bulk memory and non-trapping float conversions.
+# Setting `wasm-opt = false` does not help either; the metadata is not read at
+# all for a custom profile. Doing the three steps here removes the guessing.
 
 cd "$(dirname "$0")/.."
 
 echo "Building WASM module..."
 
-# Check if wasm-pack is available
-if ! command -v wasm-pack &> /dev/null; then
-    echo "wasm-pack not found. Install with: cargo install wasm-pack"
+if ! command -v wasm-bindgen &> /dev/null; then
+    echo "wasm-bindgen not found. Install the CLI at the version the workspace"
+    echo "pins: cargo install wasm-bindgen-cli --version \$(grep -A1 '^name = \"wasm-bindgen\"' Cargo.lock | grep version | cut -d'\"' -f2)"
     exit 1
 fi
 
-# Check if wasm32 target is installed
+# wasm-opt is not optional. It used to be - the script warned and carried on,
+# which shipped an unoptimized module the moment binaryen was missing from the
+# machine, silently and a third larger.
+if ! command -v wasm-opt &> /dev/null; then
+    echo "wasm-opt not found, and this build needs it."
+    echo "  Debian/Ubuntu: apt-get install binaryen"
+    echo "  macOS:         brew install binaryen"
+    echo "  Or:            cargo install wasm-opt"
+    exit 1
+fi
+
 if ! rustup target list --installed | grep -q wasm32-unknown-unknown; then
     echo "Adding wasm32-unknown-unknown target..."
     rustup target add wasm32-unknown-unknown
@@ -38,33 +64,39 @@ export GLIBC_TUNABLES=glibc.rtld.optional_static_tls=2048
 #   Rust reader   1,044,164    411,147
 #
 # The 292KB is repaid by deleting parseSource from viewer/src/wasm.ts, the
-# second reader that does not instantiate modules or follow imports. Until the
-# viewer calls load_source, the module carries a parser nobody uses.
-wasm-pack build crates/cypcb-render \
-  --target web \
-  --release \
-  --out-dir ../../viewer/pkg \
-  --out-name cypcb_render \
+# second reader that does not instantiate modules or follow imports.
+#
+# `wasm-release` is the release profile with `opt-level = "z"`. Measured on
+# this module: 1,134,175 bytes at "z" against 1,460,669 at 3.
+echo "  cargo build --profile wasm-release --target wasm32-unknown-unknown"
+cargo build \
+  --profile wasm-release \
+  --target wasm32-unknown-unknown \
+  -p cypcb-render \
   --no-default-features \
   --features wasm
 
-# Post-build optimization with wasm-opt (if available)
-# Note: wasm-pack already runs wasm-opt, but we run it again with aggressive settings
-if command -v wasm-opt &> /dev/null; then
-  echo ""
-  echo "Running wasm-opt for additional size optimization..."
-  wasm-opt -O4 --converge \
-    --enable-bulk-memory \
-    --enable-nontrapping-float-to-int \
-    viewer/pkg/cypcb_render_bg.wasm \
-    -o viewer/pkg/cypcb_render_bg.wasm
-  echo "Optimized WASM size:"
-  ls -lh viewer/pkg/cypcb_render_bg.wasm
-else
-  echo ""
-  echo "wasm-opt not found, skipping additional optimization."
-  echo "Install binaryen for smaller builds: cargo install wasm-opt"
-fi
+echo "  wasm-bindgen"
+wasm-bindgen \
+  target/wasm32-unknown-unknown/wasm-release/cypcb_render.wasm \
+  --target web \
+  --out-dir viewer/pkg \
+  --out-name cypcb_render
+
+# Every feature rustc's wasm32 target emits for this module. Without the full
+# list wasm-opt refuses it - `all used features should be allowed` - and the
+# list is spelled out rather than passed as `--all-features` so that enabling a
+# feature browsers may not have is a decision somebody makes on purpose.
+echo "  wasm-opt -O4 --converge"
+wasm-opt -O4 --converge \
+  --enable-bulk-memory \
+  --enable-nontrapping-float-to-int \
+  --enable-sign-ext \
+  --enable-mutable-globals \
+  --enable-reference-types \
+  --enable-multivalue \
+  viewer/pkg/cypcb_render_bg.wasm \
+  -o viewer/pkg/cypcb_render_bg.wasm
 
 echo ""
 echo "WASM build complete!"

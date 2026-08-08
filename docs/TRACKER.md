@@ -1131,6 +1131,22 @@ cypcb::sync::unknown_pin
 - QUEUED: `.gsd/REQUIREMENTS.md` never received the M005 status writeback - `STATE.md` counts "23 active, 0 validated" while REQUIREMENTS lists 14 as validated. Empty DRC checkers (`trace_width.rs:53`, `solder_mask_bridge.rs:27`, `silk_clearance.rs:26`, `hole_to_hole.rs:37`) count toward "12 checkers" while doing nothing.
 
 ### V7 - Performance (GP-002 discipline: measure, then optimize, publish before/after)
+- DONE: **the whole workspace was compiled for size, and the router paid half again its wall clock for it.** `[profile.release]` carried `opt-level = "z"` with a comment calling itself "optimized for WASM size" - one profile serving a browser, where bytes are downloaded, and a command line, where the router is the point. Only `cypcb-autoroute` and `pathfinding` were exempt, and a search that spends its time in `cypcb-world`, `cypcb-core`, `cypcb-rules` and `rstar` does not care that its own crate is fast. Measured with `cypcb route <fixture> --fast`, release, best of two runs each, nothing else on the machine:
+
+  | fixture | opt-level "z" | opt-level 3 | |
+  |---|---|---|---|
+  | led_blink | 21ms | 14ms | 1.50x |
+  | stm32_breakout | 8452ms | 5556ms | 1.52x |
+  | multi_ic | 6267ms | 4167ms | 1.50x |
+  | qfp_fanout | 8295ms | 5671ms | 1.46x |
+  | shift_driver | 3012ms | 2118ms | 1.42x |
+  | plane_board | 423ms | 290ms | 1.46x |
+
+  **About 1.5x on every board.** The release profile optimizes for speed now; the browser's size build moved to `wasm-release`, and the bundle is unchanged by it: 1,134,384 bytes raw against 1,134,175 before, and **444,303 gzipped against 444,756** - 453 bytes smaller, measured with the same `gzip -9` on both.
+- **The wasm build no longer goes through wasm-pack.** wasm-pack 0.14 cannot be told about a custom profile: `--profile wasm-release` makes it ignore `[package.metadata.wasm-pack.profile.*]` entirely - proven by setting `wasm-opt = false` there and watching it run wasm-opt anyway - and its own plain `-O` refuses this module, which uses bulk memory and non-trapping float conversions. `viewer/build-wasm.sh` now does the three steps itself: `cargo build --profile wasm-release --target wasm32-unknown-unknown`, `wasm-bindgen`, then `wasm-opt -O4 --converge` with the six features rustc emits. **wasm-opt is required now** rather than optional - the script used to warn and carry on, which shipped an unoptimized module, silently and a third larger, on any machine without binaryen.
+- **Where the instructions actually go, measured with callgrind** (`valgrind --tool=callgrind`, `shift_driver`, release): **41,173,850,901 instructions** for one routing run, and the top of the profile is not routing code at all - `_int_free` 17.59%, `malloc` 12.00%, `free` 7.66%, `_int_malloc` 4.00%, `memcpy` 3.60%. **The allocator is 41% of the work.** A `[profile.profiling]` was added (release plus `debug = true`, `strip = false`) because `strip = true` is why every Rust frame in that profile read `???:0x00000000001ccead`.
+- Tooling installed in the build container for this: `valgrind` and `binaryen`. The build script names both in its own error messages.
+- NEXT-ACTION: **cut the allocation churn in the routing loop.** 41% of instructions in malloc/free is the largest single number this project has measured, and it is the shape of a search that allocates per node, per neighbour list, per iteration rather than reusing buffers. Build with `--profile profiling`, run callgrind again for named callers, and take the biggest allocator first.
 - DONE: **best-of-eight says where the wait goes now, and the answer is one variant.** The ranking printed composite, violations, shorts and vias, and nothing about time, so a user waiting 92s for `multi_ic` could not tell whether that was eight fair shares or one runaway. `VariantResult` carries `elapsed_ms` and the ranking prints it. Measured, release build, `multi_ic.kicad_pcb`:
 
   | rank | variant | violations / shorts | time |

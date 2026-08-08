@@ -57,18 +57,52 @@ tower-lsp = { package = "tower-lsp-f", version = "0.24" }
 dashmap = "6"
 tokio = { version = "1", features = ["full"] }
 
-# Release profile optimized for WASM size
+# The native release build optimizes for speed.
+#
+# It optimized for size until 2026-08-08, because one profile served two
+# targets: a browser, where every byte is downloaded, and a command line, where
+# the router is the whole point. `opt-level = "z"` costs the router a quarter
+# of its wall clock - `cypcb route shift_driver.kicad_pcb --fast` measured
+# 2753ms at "z" against 2070ms at 3, best of three runs each - and it cost it
+# on every crate the search calls into: the board model, the geometry, the
+# rule lookups, the spatial index. Only `cypcb-autoroute` and `pathfinding`
+# were exempt, and a search that spends its time in `cypcb-world` and
+# `cypcb-core` does not care that its own crate is fast.
+#
+# The browser keeps its size build under `wasm-release` below.
 [profile.release]
-opt-level = "z"      # Optimize for size
+opt-level = 3        # Speed: this is what the CLI and the desktop build with
 lto = true           # Link-time optimization
 codegen-units = 1    # Better optimization (slower compile)
 panic = "abort"      # Smaller panic handler
 strip = true         # Strip debug symbols
 
-# Per-crate overrides: autorouter needs speed, not size.
-# cypcb-autoroute is not in the WASM bundle, so this doesn't affect WASM size.
-[profile.release.package.cypcb-autoroute]
-opt-level = 3        # Optimize for speed
+# What the browser downloads, built for size.
+#
+# `viewer/build-wasm.sh` passes `--profile wasm-release`. Measured on the same
+# module: 1,134,175 bytes at "z" against 1,460,669 at 3, and 411,147 against
+# 520,451 gzipped - 29% of the download for optimizations nobody in a browser
+# asked for.
+[profile.wasm-release]
+inherits = "release"
+opt-level = "z"
 
-[profile.release.package.pathfinding]
-opt-level = 3        # A* hot path — speed matters
+# The autorouter is the hot path on both targets, so it keeps its speed even
+# in the size build. The note that used to sit here said this crate "is not in
+# the WASM bundle"; `cypcb-render/Cargo.toml` has depended on it for as long as
+# the browser has had a Route button.
+[profile.wasm-release.package.cypcb-autoroute]
+opt-level = 3
+
+[profile.wasm-release.package.pathfinding]
+opt-level = 3        # A* hot path - speed matters
+
+# A release build that can be read by a profiler.
+#
+# `strip = true` above is why `callgrind_annotate` reported the router's
+# hottest functions as `???:0x00000000001ccead`. Build with
+# `cargo build --profile profiling` to get the same code with its symbols.
+[profile.profiling]
+inherits = "release"
+debug = true
+strip = false

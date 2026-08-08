@@ -51,9 +51,19 @@ console_error_panic_hook = "0.1"
 getrandom_02 = { package = "getrandom", version = "0.2", features = ["js"] }
 getrandom_03 = { package = "getrandom", version = "0.3", features = ["wasm_js"] }
 
-# wasm-pack configuration for size optimization
+# wasm-pack must not optimize the module; `viewer/build-wasm.sh` does.
+#
+# The module uses bulk memory and non-trapping float conversions, so a plain
+# `-O` refuses it with `Fatal: error validating input`. Those flags can be
+# given here - and were - but wasm-pack reads this section for its own three
+# profile names only: building with `--profile wasm-release` ignores it and
+# runs its default `-O`, which is exactly the failure above. Optimizing in the
+# script instead means one place decides, whatever profile the build uses.
 [package.metadata.wasm-pack.profile.release]
-wasm-opt = ["-O4", "--enable-bulk-memory", "--enable-nontrapping-float-to-int"]
+wasm-opt = false
+
+[package.metadata.wasm-pack.profile.wasm-release]
+wasm-opt = false
 
 [dev-dependencies]
 # Test-only: proves the viewer and the Gerber get the same copper.
