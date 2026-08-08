@@ -7,9 +7,12 @@ footprint MY_CONNECTOR {
     description "Custom 3-pin connector"
     courtyard 6mm x 4mm
 
-    pad 1 rect at -2mm, 0mm size 1mm x 1.5mm drill 0.8mm
-    pad 2 circle at 0mm, 0mm size 1mm x 1mm drill 0.8mm
-    pad 3 rect at 2mm, 0mm size 1mm x 1.5mm drill 0.8mm
+    // 1.6mm of copper around a 0.8mm drill leaves a 0.4mm ring. At 1mm it
+    // left 0.1mm, under the 0.15mm a fabricator will make, so this example
+    // taught a footprint nobody can build.
+    pad 1 rect at -2mm, 0mm size 1.6mm x 1.8mm drill 0.8mm
+    pad 2 circle at 0mm, 0mm size 1.6mm x 1.6mm drill 0.8mm
+    pad 3 rect at 2mm, 0mm size 1.6mm x 1.8mm drill 0.8mm
 }
 
 board custom_footprint {

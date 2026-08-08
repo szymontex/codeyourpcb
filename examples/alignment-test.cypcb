@@ -31,7 +31,9 @@ component C1 capacitor "0805" {
 // Left edge, centered vertically
 component R3 resistor "1206" {
     value "1k"
-    at 2mm, 20mm
+    // 4mm in, not 2. A 1206 is 3.2mm long, so at 2mm its left pad reached the
+    // board edge - copper the router cuts through when it profiles the board.
+    at 4mm, 20mm
 }
 
 // Center — large IC footprint for JLCPCB test

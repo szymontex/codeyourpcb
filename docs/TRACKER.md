@@ -513,7 +513,20 @@ multi_ic        0.26: 13 iterations, converged false, [553, 339, 269, 270, 258, 
 - The sweep over all twenty examples also turned up things worth their own fires: `alignment-test` has copper 1 violation from the board edge, `custom-footprint` has 3 annular rings under minimum, `syntax.cypcb` - the syntax reference - has a clearance violation, and `v2-modules` has 2 courtyard overlaps. `drc-test` and `pour-island` are meant to be bad; those four are not.
 - **`v2-constraints`' three failing assertions are the tool being honest**, not a defect: `assertion not checked: within needs tolerances, which the board model does not carry yet`. It says what it cannot do rather than passing.
 - Workspace 108 suites, gate green 8/8.
-- NEXT-ACTION: **the four examples that ship real violations** - `alignment-test`, `custom-footprint`, `syntax.cypcb`, `v2-modules`. An example is a teaching artefact, and one that ships a defect teaches the defect. Same shape as the fixture repairs, and none of them feeds a measurement.
+- DONE: **five examples shipped faults somebody would copy, and each was the kind that teaches wrong.**
+
+| example | fault | fix |
+|---|---|---|
+| `syntax.cypcb` | `VCC` left R1's **left** pad heading right, straight across R1's own right pad at 0.00mm | net and trace use R1.2 |
+| `uat-routing-locked.cypcb` | the same thing, in the example that demonstrates locked traces | same |
+| `custom-footprint.cypcb` | taught how to declare a footprint, using a 0.8mm drill in a 1mm pad: 0.1mm of copper where a fabricator makes 0.15mm | pads 1.6mm, a 0.4mm ring |
+| `alignment-test.cypcb` | a 1206 at 2mm, so its left pad reached the board edge | moved to 4mm |
+| `v2-modules.cypcb` | a module whose own capacitors sat 0.20mm from the regulator's courtyard against 0.25 required | moved to 3.5mm |
+
+- **The fifth was found by the guard, not by me.** I read the sweep, listed four, and wrote the check; it failed on `uat-routing-locked.cypcb` immediately. A test written from a reading catches what the reading missed.
+- `every_example_is_a_board_worth_copying` now checks all twenty as a set. `unrouted-pin`, `unconnected-pin` and `assertion` are excluded because they say what an unrouted fragment *is*; `drc-test` and `pour-island` are listed as deliberately bad, and the test fails if either becomes clean, so nothing joins that list quietly.
+- Workspace 109 suites, gate green 8/8.
+- NEXT-ACTION: none pulled. Fixtures and examples are both clean and both guarded. `cypcb score` is still the one command nobody has read the output of - a fire could start by running it on a board and asking whether the number it prints means anything.
 - DONE: **components say which face they are on.** A `Side` component with the three questions a face answers - which copper its SMD pads take, which silkscreen it prints to, and its layer-mask bit. The KiCad importer reads `(layer "B.Cu")` from a footprint, which is the only place in the codebase where the side is data rather than inference; sync derives it from the footprint's copper and stores the answer so every rule reads the same one. The silkscreen rule takes it and falls back to the old guess only when nothing states it. Proven on a two-footprint board where one is `F.Cu` and one `B.Cu`: `[("R1", Top), ("R2", Bottom)]`.
 
 ### V2 - Autorouter and routing quality

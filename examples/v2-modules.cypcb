@@ -14,12 +14,12 @@ module PowerSupply {
 
     component C_IN capacitor "0402" {
         value 100nF
-        at -3mm, 0mm
+        at -3.5mm, 0mm
     }
 
     component C_OUT capacitor "0402" {
         value 10uF
-        at 3mm, 0mm
+        at 3.5mm, 0mm
     }
 
     // A net named after an exposed pin becomes the design's net when the

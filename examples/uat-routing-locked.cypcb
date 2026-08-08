@@ -21,12 +21,14 @@ component C1 capacitor "0402" {
 }
 
 net VCC {
-    R1.1
+    // R1.2, not R1.1. C1 is to the right, so a trace leaving the left pad runs
+    // straight across the right one - which is what this example shipped.
+    R1.2
     C1.1
 }
 
 net GND {
-    R1.2
+    R1.1
     R2.1
     C1.2
 }
@@ -36,7 +38,7 @@ net SIGNAL {
 }
 
 trace VCC {
-    from R1.1
+    from R1.2
     to C1.1
     layer Top
     locked

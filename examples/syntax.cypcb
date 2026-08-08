@@ -16,12 +16,12 @@ version 1
   }                                                                         
                                                                             
   net VCC {                                      
-      R1.1                                       
+      R1.2                                       
       C1.1                                                                  
   }                                                                         
                                                                             
   trace VCC {                                                               
-      from R1.1                                                             
+      from R1.2                                                             
       to C1.1                                                               
       layer Top                                                             
       width 0.3mm                                                           
