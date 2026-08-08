@@ -471,14 +471,48 @@ impl RoutingGrid {
     // Cell access
     // ========================================================================
 
+    /// The index of a cell whose coordinates have already been checked.
+    ///
+    /// Every caller of this checks `x`, `y` and `layer` against the grid's
+    /// own bounds first, which is what makes the unchecked reads below sound.
+    #[inline]
+    fn cell_index(&self, x: u32, y: u32, layer: usize) -> usize {
+        let idx = layer * self.plane + (y as usize) * (self.width as usize) + (x as usize);
+        debug_assert!(
+            idx < self.layers.len(),
+            "cell_index called without checking bounds: {x},{y} layer {layer}"
+        );
+        idx
+    }
+
+    /// The occupancy flags of a cell, or every flag set for one that is not
+    /// on the board.
+    ///
+    /// `u8::MAX` off the board is what lets the three readers below drop their
+    /// own bounds check: it is not `CELL_FREE`, it is not `CELL_HALO`, and it
+    /// is not `CELL_FREE` with the halo bit cleared, so each of them answers
+    /// exactly what it answered when it checked the bounds itself.
+    ///
+    /// The search reads this once per neighbour, eight to eleven times per
+    /// node expansion, millions of times per board. The bounds are checked
+    /// here, once, in a form the compiler can see; the read itself is
+    /// unchecked because the check above has already proved it.
+    #[inline]
+    fn occupancy(&self, x: u32, y: u32, layer: usize) -> u8 {
+        if x >= self.width || y >= self.height || layer >= self.layer_count as usize {
+            // Off the board reads as occupied: nothing may route there.
+            return u8::MAX;
+        }
+        let idx = self.cell_index(x, y, layer);
+        // SAFETY: x < width, y < height and layer < layer_count are all just
+        // checked, so `layer * plane + y * width + x` is inside the map.
+        unsafe { *self.layers.get_unchecked(idx) }
+    }
+
     /// Check if a cell is free (no obstacles) on the given layer.
     #[inline]
     pub fn is_free(&self, x: u32, y: u32, layer: usize) -> bool {
-        if x >= self.width || y >= self.height || layer >= self.layer_count as usize {
-            return false;
-        }
-        let idx = (y as usize) * (self.width as usize) + (x as usize);
-        self.layers[layer * self.plane + idx] == CELL_FREE
+        self.occupancy(x, y, layer) == CELL_FREE
     }
 
     /// Whether a cell is free once the copper a trace merely brushes is
@@ -490,21 +524,13 @@ impl RoutingGrid {
     /// attempt's test, never the first.
     #[inline]
     pub fn is_free_ignoring_halo(&self, x: u32, y: u32, layer: usize) -> bool {
-        if x >= self.width || y >= self.height || layer >= self.layer_count as usize {
-            return false;
-        }
-        let idx = (y as usize) * (self.width as usize) + (x as usize);
-        self.layers[layer * self.plane + idx] & !CELL_HALO == CELL_FREE
+        self.occupancy(x, y, layer) & !CELL_HALO == CELL_FREE
     }
 
     /// Whether this cell holds only the copper a neighbouring trace brushes.
     #[inline]
     pub fn is_halo_only(&self, x: u32, y: u32, layer: usize) -> bool {
-        if x >= self.width || y >= self.height || layer >= self.layer_count as usize {
-            return false;
-        }
-        let idx = (y as usize) * (self.width as usize) + (x as usize);
-        self.layers[layer * self.plane + idx] == CELL_HALO
+        self.occupancy(x, y, layer) == CELL_HALO
     }
 
     /// Get the occupancy flags for a cell.
@@ -602,8 +628,9 @@ impl RoutingGrid {
         if x >= self.width || y >= self.height || layer >= self.layer_count as usize {
             return None;
         }
-        let idx = (y as usize) * (self.width as usize) + (x as usize);
-        match self.pad_net[layer * self.plane + idx] {
+        let idx = self.cell_index(x, y, layer);
+        // SAFETY: as `net_at`, and the same guard three lines up.
+        match unsafe { *self.pad_net.get_unchecked(idx) } {
             u32::MAX => None,
             net => Some(net),
         }
@@ -801,8 +828,11 @@ impl RoutingGrid {
         if x >= self.width || y >= self.height || layer >= self.layer_count as usize {
             return None;
         }
-        let idx = (y as usize) * (self.width as usize) + (x as usize);
-        let net = self.net_map[layer * self.plane + idx];
+        let idx = self.cell_index(x, y, layer);
+        // SAFETY: the guard above proved x, y and layer are in range, so the
+        // index is inside the map. `debug_assert!` in `cell_index` keeps that
+        // proof honest in a debug build.
+        let net = unsafe { *self.net_map.get_unchecked(idx) };
         if net == u32::MAX {
             None
         } else {
