@@ -414,7 +414,20 @@ multi_ic        0.26: 13 iterations, converged false, [553, 339, 269, 270, 258, 
 - The copper a file already carries is applied on import. `led_blink.kicad_pcb` has three segments and two vias; dropping them would read as an unrouted board and report every pin it connects as unreached.
 - Zone refusals print as warnings on the way through, so a pour this importer will not approximate is said out loud by the command a person actually runs.
 - Three tests run the real binary, and **all three fail with the dispatch removed**. Workspace 105 suites, gate green 8/8.
-- NEXT-ACTION: **`route` still cannot take a KiCad board**, which is the headline use - import a board, route it, export it. It is the same dispatch in a third command, plus a decision the other two did not need: what `-o` means when the input was not `.cypcb`. Unblocked and small.
+- DONE: **the copper already in a KiCad file arrived offset by the whole board origin.** Every pad has its position taken relative to the board's own corner - `parse_footprint` subtracts `board_origin` - and `parse_segment` and `parse_via` did not, because neither was given it. KiCad lays boards out on a sheet, so that corner is almost never at the file's origin.
+- Found while looking at something else: `cypcb check led_blink.kicad_pcb` reported `edge-clearance: 5` on a board whose copper is nowhere near an edge. The traces were at 105-122mm on a 40 x 30mm board, because the file's outline starts at (95, 55) and its traces at (110, 62).
+
+| `cypcb check led_blink.kicad_pcb` | before | after |
+|---|---|---|
+| edge-clearance | 5 | **0** |
+| unrouted-pin | 12 | **8** |
+| clearance | 0 | 3, one of them a 0.00mm short |
+
+  The four pins that stopped being unreached are pins the file's own traces do connect. The three clearance violations are real facts about that hand-written fixture's copper, reported for the first time now that it is on the board.
+- **It stayed invisible because the importer's copper only ever fed benchmarks, and the benchmark harness routes from scratch.** It became visible the moment `check` and `export` started reading KiCad boards one fire ago - a feature exposing a defect in the code it was built on.
+- Two tests hold it: every imported trace and via is inside its board on all three fixtures that carry copper, and `led_blink`'s first segment lands at exactly (15, 7) to (20, 15), which is where (110, 62) to (115, 70) belongs once the corner is subtracted. Both fail with the subtraction removed.
+- No ratchet moved, workspace 105 suites, gate green 8/8.
+- NEXT-ACTION: **`route` still cannot take a KiCad board**, which is the headline use - import, route, export. The dispatch is the same as `check` and `export` got, but it needs a decision they did not: with no world-to-DSL writer in the project, `-o` cannot produce a self-contained `.cypcb` from a KiCad input. The honest answer is probably to write the routed copper back as `(segment ...)` and `(via ...)` into a copy of the original file, which is also what a KiCad user wants - the board back in KiCad.
 - DONE: **components say which face they are on.** A `Side` component with the three questions a face answers - which copper its SMD pads take, which silkscreen it prints to, and its layer-mask bit. The KiCad importer reads `(layer "B.Cu")` from a footprint, which is the only place in the codebase where the side is data rather than inference; sync derives it from the footprint's copper and stores the answer so every rule reads the same one. The silkscreen rule takes it and falls back to the old guess only when nothing states it. Proven on a two-footprint board where one is `F.Cu` and one `B.Cu`: `[("R1", Top), ("R2", Bottom)]`.
 
 ### V2 - Autorouter and routing quality

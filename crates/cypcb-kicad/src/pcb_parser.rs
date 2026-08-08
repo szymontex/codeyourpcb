@@ -361,7 +361,7 @@ pub fn parse_kicad_pcb_str(content: &str) -> Result<KicadPcbParseResult, KicadPc
     for elem in elements {
         if let Some(name) = list_name(elem) {
             if name == "segment" {
-                if let Some(seg) = parse_segment(elem, &kicad_net_map)? {
+                if let Some(seg) = parse_segment(elem, &kicad_net_map, board_origin)? {
                     route_segments.push(seg);
                 }
             }
@@ -373,7 +373,7 @@ pub fn parse_kicad_pcb_str(content: &str) -> Result<KicadPcbParseResult, KicadPc
     for elem in elements {
         if let Some(name) = list_name(elem) {
             if name == "via" {
-                if let Some(via) = parse_via(elem, &kicad_net_map)? {
+                if let Some(via) = parse_via(elem, &kicad_net_map, board_origin)? {
                     via_placements.push(via);
                 }
             }
@@ -1202,9 +1202,21 @@ fn axis_aligned_rectangle(points: &[(f64, f64)]) -> Option<Rect> {
     ))
 }
 
+/// Read one `(segment ...)`.
+///
+/// `origin` is the board's own corner in file coordinates, and it is
+/// subtracted here for the same reason it is subtracted from every pad: the
+/// model puts the board's corner at zero. It was not, so on any board whose
+/// outline does not start at the file's origin - which is every board KiCad
+/// writes, since it lays them out on a sheet - the copper already in the file
+/// arrived offset by the whole origin. `led_blink` has its outline at
+/// (95, 55) and its traces at (110, 62); they imported onto a 40 x 30mm board
+/// at 110mm, 62mm, which the checker reported as five pieces of copper
+/// hanging off the edge.
 fn parse_segment(
     sexp: &Sexp,
     kicad_net_map: &HashMap<i64, NetId>,
+    origin: (f64, f64),
 ) -> Result<Option<RouteSegment>, KicadPcbError> {
     let list = match sexp.list() {
         Ok(l) => l,
@@ -1225,7 +1237,7 @@ fn parse_segment(
                         if sub.len() >= 3 {
                             let x = coordinate(&sub[1], "segment start x")?;
                             let y = coordinate(&sub[2], "segment start y")?;
-                            start = Some(Point::from_mm(x, y));
+                            start = Some(Point::from_mm(x - origin.0, y - origin.1));
                         }
                     }
                 }
@@ -1234,7 +1246,7 @@ fn parse_segment(
                         if sub.len() >= 3 {
                             let x = coordinate(&sub[1], "segment end x")?;
                             let y = coordinate(&sub[2], "segment end y")?;
-                            end = Some(Point::from_mm(x, y));
+                            end = Some(Point::from_mm(x - origin.0, y - origin.1));
                         }
                     }
                 }
@@ -1279,9 +1291,12 @@ fn parse_segment(
 // Internal: via parsing
 // ---------------------------------------------------------------------------
 
+/// Read one `(via ...)`. `origin` is subtracted for the same reason as in
+/// [`parse_segment`].
 fn parse_via(
     sexp: &Sexp,
     kicad_net_map: &HashMap<i64, NetId>,
+    origin: (f64, f64),
 ) -> Result<Option<ViaPlacement>, KicadPcbError> {
     let list = match sexp.list() {
         Ok(l) => l,
@@ -1302,7 +1317,7 @@ fn parse_via(
                         if sub.len() >= 3 {
                             let x = coordinate(&sub[1], "via position x")?;
                             let y = coordinate(&sub[2], "via position y")?;
-                            position = Some(Point::from_mm(x, y));
+                            position = Some(Point::from_mm(x - origin.0, y - origin.1));
                         }
                     }
                 }
