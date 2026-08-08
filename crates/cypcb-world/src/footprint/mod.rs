@@ -35,6 +35,7 @@
 
 pub mod gullwing;
 mod library;
+pub mod mounting;
 mod smd;
 mod tht;
 

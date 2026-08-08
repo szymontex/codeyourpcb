@@ -111,6 +111,14 @@ pub fn export_cpl(
             .get(&footprint_ref.0)
             .ok_or_else(|| format!("Footprint not found: {}", footprint_ref.0))?;
 
+        // A pick-and-place machine cannot place a hole. Mechanical parts carry
+        // no copper, so there is nothing to solder and nothing to pick, and a
+        // line for one here is an instruction the assembler has to notice and
+        // ignore.
+        if footprint.is_mechanical() {
+            continue;
+        }
+
         // Which face the part is assembled on.
         //
         // The `Side` component is the answer when the design states one - the

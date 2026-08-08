@@ -87,8 +87,38 @@ property; the parser has never accepted it.
 - SMD resistors/capacitors: "0402", "0603", "0805", "1206"
 - ICs: "SOIC8", "SOIC14", "SOT23", "TQFP32"
 - Through-hole: "DIP-8", "PIN-HDR-1x2"
+- Mounting holes: "MOUNT-M2", "MOUNT-M2.5", "MOUNT-M3", "MOUNT-M4"
 
 See `examples/` directory for more component examples.
+
+### Mounting Holes
+
+A hole the board is screwed down by is a component like any other, placed with
+a footprint that has a drill and no copper:
+
+```
+component H1 generic "MOUNT-M3" {
+    value "M3"
+    at 5mm, 5mm
+}
+```
+
+The four sizes are named for the screw and drilled to its clearance hole -
+2.2mm for M2, 2.7 for M2.5, 3.2 for M3, 4.3 for M4. The number is the drill,
+not the screw: an M3 screw passes through a 3.2mm hole.
+
+Because the hole carries no copper, the whole chain treats it as what it is:
+
+- it goes in the **NPTH drill file**, so the fabricator does not plate it - a
+  plated hole comes back narrower than the screw and connected to any copper
+  it passes,
+- **no copper layer** flashes a pad there,
+- the **router** treats it as solid, on every layer,
+- it appears in **neither the bill of materials nor the placement file**.
+  Nobody buys a hole and no machine places one.
+
+This is not the same as `keepout mounting_hole` further down, which reserves a
+region and drills nothing.
 
 ## Net Definition
 

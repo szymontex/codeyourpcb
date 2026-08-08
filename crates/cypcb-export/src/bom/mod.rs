@@ -96,10 +96,24 @@ pub fn group_components(world: &mut BoardWorld) -> Vec<BomEntry> {
     // Map: (value, footprint) -> Vec<designator>
     let mut groups: HashMap<(String, String), Vec<String>> = HashMap::new();
 
+    // Which footprints are mechanical, asked before the query borrows the
+    // world. A mounting hole is a component like any other to the placement
+    // and the DRC, and it must not be one here: a bill of materials is a list
+    // of things somebody buys, and nobody buys a hole.
+    let mechanical: std::collections::HashSet<String> = world
+        .footprints()
+        .iter()
+        .filter(|(_, footprint)| footprint.is_mechanical())
+        .map(|(name, _)| name.to_string())
+        .collect();
+
     // Query all components
     let mut query = world.ecs_mut().query::<(&RefDes, &Value, &FootprintRef)>();
 
     for (refdes, value, footprint) in query.iter(world.ecs()) {
+        if mechanical.contains(&footprint.0) {
+            continue;
+        }
         let key = (value.0.clone(), footprint.0.clone());
         groups.entry(key).or_default().push(refdes.0.clone());
     }

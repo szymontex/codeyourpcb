@@ -91,6 +91,24 @@ impl PadDef {
     }
 }
 
+impl Footprint {
+    /// Whether this footprint is mechanical: a mounting hole, a tooling hole,
+    /// a fiducial-free bracket cutout - something the board carries but nobody
+    /// solders.
+    ///
+    /// True when it has no copper anywhere. Such a part must not reach a bill
+    /// of materials, where it becomes a line somebody is asked to buy, and
+    /// must not reach a placement file, where a machine is asked to put a hole
+    /// on the board.
+    pub fn is_mechanical(&self) -> bool {
+        !self.pads.is_empty()
+            && self
+                .pads
+                .iter()
+                .all(|pad| !pad.layers.iter().any(|layer| layer.is_copper()))
+    }
+}
+
 /// A piece of silkscreen artwork, in footprint coordinates.
 ///
 /// What a fabricator prints as the legend: outlines, polarity marks, pin-one
@@ -271,6 +289,7 @@ impl FootprintLibrary {
         lib.register_builtin_smd();
         lib.register_builtin_tht();
         lib.register_builtin_gullwing();
+        lib.register_builtin_mounting();
         lib
     }
 
@@ -378,6 +397,16 @@ impl FootprintLibrary {
         self.register(axial_300mil());
         self.register(dip8());
         self.register(pin_header_1x2());
+    }
+
+    /// Register the built-in mounting holes.
+    fn register_builtin_mounting(&mut self) {
+        use super::mounting::*;
+
+        self.register(mount_m2());
+        self.register(mount_m2_5());
+        self.register(mount_m3());
+        self.register(mount_m4());
     }
 
     /// Register all built-in gull-wing IC footprints.
