@@ -595,12 +595,28 @@ At 0.0 it reproduced the router exactly, every fixture byte for byte. Then:
 | 100 | 180 / 4 | 291 / 7 | 309 / 27 |
 
 Identical at every price, down to the route and via counts. A term that costs
-a hundred and changes nothing is a term that is never charged, and **why** was
-not established before the budget for this attempt ran out. The most likely
-reading is that a net's holes are marked only once all of its paths are
-committed, so the same-net stacking - which is most of these violations,
-`VCC_3V3` against `VCC_3V3` - cannot see itself. Whoever picks this up should
-verify that before rebuilding it.
+a hundred and changes nothing is a term that is never charged.
+
+**Two candidates for why, one of them now eliminated.** The first was config
+plumbing: `variant.rs` builds its `AutorouteConfig` by copying seven fields and
+ending `..AutorouteConfig::default()`, so anything else a caller sets is
+replaced. It is not the cause. `via_price_sweep` sets
+`via_foreign_copper_penalty` - which is not among those seven - calls
+`route_board` directly, and gets a spread of 33 to 42 introduced violations, so
+`route_board` reads fields outside that list. The sweep above used the same
+route. (The seven-field copy is also not a defect in itself: what it drops
+falls back to the shipped defaults, which are the measured values.)
+
+The second candidate stands untested: a net's rings are marked only once all of
+that net's paths are committed, and the holes were marked beside them, so
+same-net stacking - `VCC_3V3` against `VCC_3V3`, most of these violations -
+would not see itself. That does not explain the cross-net pairs, so it may not
+be the whole answer either.
+
+**The cause is not established.** Whoever picks this up should instrument
+before rebuilding: count how many holes the map holds at the moment each layer
+change is priced, on one fixture. If that count is always zero, the marking is
+in the wrong place and no price will ever matter.
 
 Reverted. A knob that provably does nothing is worse than no knob: it reads
 like a lever and moves nothing, and the next person spends their fire finding
