@@ -1208,7 +1208,6 @@ fn find_path_congestion_augmented(
                 ));
             }
         }
-
     };
 
     // Heuristic remains unadulterated for admissibility
@@ -1364,7 +1363,8 @@ mod tests {
             pad_layer_change_penalty: PAD_LAYER_CHANGE_PENALTY,
             yield_halo: false,
         };
-        let mut scratch = GridSearchScratch::for_grid(grid.width(), grid.height(), grid.layer_count() as usize);
+        let mut scratch =
+            GridSearchScratch::for_grid(grid.width(), grid.height(), grid.layer_count() as usize);
         let path = find_path_congestion_augmented(
             &mut grid,
             &mut scratch,

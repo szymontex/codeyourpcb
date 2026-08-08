@@ -84,11 +84,19 @@ pub struct RoutingGrid {
     origin_y: i64,
     /// Number of copper layers.
     layer_count: u8,
-    /// Per-layer occupancy grids: `layers[layer_idx][y * width + x]`.
-    layers: Vec<Vec<u8>>,
-    /// Per-cell net ownership for dynamic route tracking.
-    /// `net_map[layer_idx][y * width + x]` = net_id or u32::MAX if unowned.
-    net_map: Vec<Vec<u32>>,
+    /// How many cells one layer holds: `width * height`.
+    ///
+    /// The three grids below were `Vec<Vec<_>>` until 2026-08-08. Every read
+    /// was two bounds checks and a pointer chase - load the layer's `Vec`,
+    /// then load the cell - and the layers sat wherever the allocator put
+    /// them. They are one flat allocation each now, indexed
+    /// `layer * plane + y * width + x`, which is one bounds check, one load,
+    /// and a board that a cache line can walk.
+    plane: usize,
+    /// Occupancy, `layers[layer * plane + y * width + x]`.
+    layers: Vec<u8>,
+    /// Per-cell net ownership for dynamic route tracking, or `u32::MAX`.
+    net_map: Vec<u32>,
 
     /// Which net's pad copper a cell carries, or `u32::MAX` for none.
     ///
@@ -98,7 +106,7 @@ pub struct RoutingGrid {
     /// zone to open every cell near any of its pads, sibling pins included -
     /// 109 of stm32_breakout's 118 part-to-trace faults sit in exactly those
     /// cells.
-    pad_net: Vec<Vec<u32>>,
+    pad_net: Vec<u32>,
 }
 
 impl RoutingGrid {
@@ -160,15 +168,10 @@ impl RoutingGrid {
         );
 
         let cell_count = (grid_w as usize) * (grid_h as usize);
-        let layers_vec: Vec<Vec<u8>> = (0..routing_layers)
-            .map(|_| vec![CELL_FREE; cell_count])
-            .collect();
-        let pad_net: Vec<Vec<u32>> = (0..routing_layers)
-            .map(|_| vec![u32::MAX; cell_count])
-            .collect();
-        let net_map: Vec<Vec<u32>> = (0..routing_layers)
-            .map(|_| vec![u32::MAX; cell_count])
-            .collect();
+        let total = cell_count * routing_layers as usize;
+        let layers_vec: Vec<u8> = vec![CELL_FREE; total];
+        let pad_net: Vec<u32> = vec![u32::MAX; total];
+        let net_map: Vec<u32> = vec![u32::MAX; total];
 
         let mut grid = RoutingGrid {
             width: grid_w,
@@ -177,6 +180,7 @@ impl RoutingGrid {
             origin_x: 0,
             origin_y: 0,
             layer_count: routing_layers,
+            plane: cell_count,
             layers: layers_vec,
             net_map,
             pad_net,
@@ -470,11 +474,11 @@ impl RoutingGrid {
     /// Check if a cell is free (no obstacles) on the given layer.
     #[inline]
     pub fn is_free(&self, x: u32, y: u32, layer: usize) -> bool {
-        if x >= self.width || y >= self.height || layer >= self.layers.len() {
+        if x >= self.width || y >= self.height || layer >= self.layer_count as usize {
             return false;
         }
         let idx = (y as usize) * (self.width as usize) + (x as usize);
-        self.layers[layer][idx] == CELL_FREE
+        self.layers[layer * self.plane + idx] == CELL_FREE
     }
 
     /// Whether a cell is free once the copper a trace merely brushes is
@@ -486,46 +490,46 @@ impl RoutingGrid {
     /// attempt's test, never the first.
     #[inline]
     pub fn is_free_ignoring_halo(&self, x: u32, y: u32, layer: usize) -> bool {
-        if x >= self.width || y >= self.height || layer >= self.layers.len() {
+        if x >= self.width || y >= self.height || layer >= self.layer_count as usize {
             return false;
         }
         let idx = (y as usize) * (self.width as usize) + (x as usize);
-        self.layers[layer][idx] & !CELL_HALO == CELL_FREE
+        self.layers[layer * self.plane + idx] & !CELL_HALO == CELL_FREE
     }
 
     /// Whether this cell holds only the copper a neighbouring trace brushes.
     #[inline]
     pub fn is_halo_only(&self, x: u32, y: u32, layer: usize) -> bool {
-        if x >= self.width || y >= self.height || layer >= self.layers.len() {
+        if x >= self.width || y >= self.height || layer >= self.layer_count as usize {
             return false;
         }
         let idx = (y as usize) * (self.width as usize) + (x as usize);
-        self.layers[layer][idx] == CELL_HALO
+        self.layers[layer * self.plane + idx] == CELL_HALO
     }
 
     /// Get the occupancy flags for a cell.
     #[inline]
     pub fn cell(&self, x: u32, y: u32, layer: usize) -> u8 {
-        if x >= self.width || y >= self.height || layer >= self.layers.len() {
+        if x >= self.width || y >= self.height || layer >= self.layer_count as usize {
             return u8::MAX; // Out of bounds = fully blocked
         }
         let idx = (y as usize) * (self.width as usize) + (x as usize);
-        self.layers[layer][idx]
+        self.layers[layer * self.plane + idx]
     }
 
     /// Set an occupancy flag on a cell.
     #[inline]
     fn set_cell(&mut self, x: u32, y: u32, layer: usize, flag: u8) {
-        if x >= self.width || y >= self.height || layer >= self.layers.len() {
+        if x >= self.width || y >= self.height || layer >= self.layer_count as usize {
             return;
         }
         let idx = (y as usize) * (self.width as usize) + (x as usize);
-        self.layers[layer][idx] |= flag;
+        self.layers[layer * self.plane + idx] |= flag;
     }
 
     /// Mark a circular area around (cx, cy) as occupied on the given layer.
     pub fn mark_obstacle(&mut self, cx: u32, cy: u32, layer: usize, radius_cells: u32, flag: u8) {
-        if layer >= self.layers.len() {
+        if layer >= self.layer_count as usize {
             return;
         }
 
@@ -582,12 +586,12 @@ impl RoutingGrid {
                 if x < 0 || y < 0 || x >= self.width as i64 || y >= self.height as i64 {
                     continue;
                 }
-                if layer >= self.pad_net.len() {
+                if layer >= self.layer_count as usize {
                     continue;
                 }
                 let idx = y as usize * self.width as usize + x as usize;
-                if self.pad_net[layer][idx] == u32::MAX {
-                    self.pad_net[layer][idx] = net;
+                if self.pad_net[layer * self.plane + idx] == u32::MAX {
+                    self.pad_net[layer * self.plane + idx] = net;
                 }
             }
         }
@@ -595,11 +599,11 @@ impl RoutingGrid {
 
     /// Which net's pad copper this cell carries, if any.
     pub fn pad_owner(&self, x: u32, y: u32, layer: usize) -> Option<u32> {
-        if x >= self.width || y >= self.height || layer >= self.pad_net.len() {
+        if x >= self.width || y >= self.height || layer >= self.layer_count as usize {
             return None;
         }
         let idx = (y as usize) * (self.width as usize) + (x as usize);
-        match self.pad_net[layer][idx] {
+        match self.pad_net[layer * self.plane + idx] {
             u32::MAX => None,
             net => Some(net),
         }
@@ -607,12 +611,12 @@ impl RoutingGrid {
 
     /// Mark cells along a route for a specific net.
     pub fn mark_route(&mut self, x: u32, y: u32, layer: usize, net_id: u32) {
-        if x >= self.width || y >= self.height || layer >= self.layers.len() {
+        if x >= self.width || y >= self.height || layer >= self.layer_count as usize {
             return;
         }
         let idx = (y as usize) * (self.width as usize) + (x as usize);
-        self.layers[layer][idx] |= CELL_TRACE;
-        self.net_map[layer][idx] = net_id;
+        self.layers[layer * self.plane + idx] |= CELL_TRACE;
+        self.net_map[layer * self.plane + idx] = net_id;
     }
 
     /// Reserve the copper a routed path actually occupies.
@@ -637,7 +641,7 @@ impl RoutingGrid {
 
         for &(nx, ny, nl) in path {
             let layer = nl as usize;
-            if layer >= self.layers.len() {
+            if layer >= self.layer_count as usize {
                 continue;
             }
             let min_x = (nx as u32).saturating_sub(radius);
@@ -648,7 +652,7 @@ impl RoutingGrid {
             for cy in min_y..=max_y {
                 for cx in min_x..=max_x {
                     let idx = (cy as usize) * (self.width as usize) + (cx as usize);
-                    let owner = self.net_map[layer][idx];
+                    let owner = self.net_map[layer * self.plane + idx];
                     if owner != u32::MAX && owner != net_id {
                         continue; // Another net's copper - leave it alone
                     }
@@ -657,8 +661,8 @@ impl RoutingGrid {
                     } else {
                         CELL_HALO
                     };
-                    self.layers[layer][idx] |= flag;
-                    self.net_map[layer][idx] = net_id;
+                    self.layers[layer * self.plane + idx] |= flag;
+                    self.net_map[layer * self.plane + idx] = net_id;
                     marked.push((cx, cy, nl));
                 }
             }
@@ -688,7 +692,7 @@ impl RoutingGrid {
 
         for layer in [layers.0, layers.1] {
             let li = layer as usize;
-            if li >= self.layers.len() {
+            if li >= self.layer_count as usize {
                 continue;
             }
             let min_x = (x as i64 - r).max(0) as u32;
@@ -724,13 +728,13 @@ impl RoutingGrid {
     pub fn clear_cells(&mut self, cells: &[(u32, u32, u8)], net_id: u32) {
         for &(x, y, layer) in cells {
             let layer = layer as usize;
-            if x >= self.width || y >= self.height || layer >= self.layers.len() {
+            if x >= self.width || y >= self.height || layer >= self.layer_count as usize {
                 continue;
             }
             let idx = (y as usize) * (self.width as usize) + (x as usize);
-            if self.net_map[layer][idx] == net_id {
-                self.net_map[layer][idx] = u32::MAX;
-                self.layers[layer][idx] &= !(CELL_TRACE | CELL_HALO);
+            if self.net_map[layer * self.plane + idx] == net_id {
+                self.net_map[layer * self.plane + idx] = u32::MAX;
+                self.layers[layer * self.plane + idx] &= !(CELL_TRACE | CELL_HALO);
             }
         }
     }
@@ -741,10 +745,10 @@ impl RoutingGrid {
             let w = self.width as usize;
             let h = self.height as usize;
             for idx in 0..(w * h) {
-                if self.net_map[layer][idx] == net_id {
-                    self.net_map[layer][idx] = u32::MAX;
+                if self.net_map[layer * self.plane + idx] == net_id {
+                    self.net_map[layer * self.plane + idx] = u32::MAX;
                     // Clear the trace bits but keep other obstacle flags
-                    self.layers[layer][idx] &= !(CELL_TRACE | CELL_HALO);
+                    self.layers[layer * self.plane + idx] &= !(CELL_TRACE | CELL_HALO);
                 }
             }
         }
@@ -756,10 +760,7 @@ impl RoutingGrid {
 
     /// Get grid dimensions and obstacle statistics.
     pub fn stats(&self) -> GridStats {
-        let mut obstacle_count: u64 = 0;
-        for layer_data in &self.layers {
-            obstacle_count += layer_data.iter().filter(|&&c| c != CELL_FREE).count() as u64;
-        }
+        let obstacle_count = self.layers.iter().filter(|&&c| c != CELL_FREE).count() as u64;
 
         GridStats {
             width: self.width,
@@ -797,11 +798,11 @@ impl RoutingGrid {
     /// Get the net ID that owns a cell, or `None` if unowned.
     #[inline]
     pub fn net_at(&self, x: u32, y: u32, layer: usize) -> Option<u32> {
-        if x >= self.width || y >= self.height || layer >= self.net_map.len() {
+        if x >= self.width || y >= self.height || layer >= self.layer_count as usize {
             return None;
         }
         let idx = (y as usize) * (self.width as usize) + (x as usize);
-        let net = self.net_map[layer][idx];
+        let net = self.net_map[layer * self.plane + idx];
         if net == u32::MAX {
             None
         } else {
@@ -854,6 +855,7 @@ fn rotate_point(p: Point, degrees: f64) -> Point {
 /// Create a minimal grid for unit testing (no board needed).
 pub fn make_test_grid(width: u32, height: u32, resolution_nm: i64, layers: u8) -> RoutingGrid {
     let cell_count = (width as usize) * (height as usize);
+    let total = cell_count * layers as usize;
     RoutingGrid {
         width,
         height,
@@ -861,9 +863,10 @@ pub fn make_test_grid(width: u32, height: u32, resolution_nm: i64, layers: u8) -
         origin_x: 0,
         origin_y: 0,
         layer_count: layers,
-        layers: (0..layers).map(|_| vec![CELL_FREE; cell_count]).collect(),
-        net_map: (0..layers).map(|_| vec![u32::MAX; cell_count]).collect(),
-        pad_net: (0..layers).map(|_| vec![u32::MAX; cell_count]).collect(),
+        plane: cell_count,
+        layers: vec![CELL_FREE; total],
+        net_map: vec![u32::MAX; total],
+        pad_net: vec![u32::MAX; total],
     }
 }
 
@@ -872,19 +875,10 @@ mod tests {
     use super::*;
     use cypcb_core::Point;
 
+    /// The module already has one of these; this shadowed it with a copy that
+    /// had to be edited in step whenever the grid's shape changed.
     fn make_test_grid(width: u32, height: u32, resolution_nm: i64, layers: u8) -> RoutingGrid {
-        let cell_count = (width as usize) * (height as usize);
-        RoutingGrid {
-            width,
-            height,
-            resolution: resolution_nm,
-            origin_x: 0,
-            origin_y: 0,
-            layer_count: layers,
-            layers: (0..layers).map(|_| vec![CELL_FREE; cell_count]).collect(),
-            net_map: (0..layers).map(|_| vec![u32::MAX; cell_count]).collect(),
-            pad_net: (0..layers).map(|_| vec![u32::MAX; cell_count]).collect(),
-        }
+        super::make_test_grid(width, height, resolution_nm, layers)
     }
 
     #[test]
