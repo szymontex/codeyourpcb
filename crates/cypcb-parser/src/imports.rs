@@ -20,10 +20,64 @@
 //! `import "x.cypcb"` takes everything reusable; `import A, B from "x.cypcb"`
 //! takes only what it names, and says so when a name is not there.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use crate::ast::{Definition, SourceFile};
+
+/// Where the text behind an `import` comes from.
+///
+/// The command line and the language server read the disk. A browser tab has
+/// no disk: the viewer loads a design that imports a block library and the
+/// engine cannot open `lib/blocks.cypcb`, so the board arrives with every
+/// module missing. Both need the same resolution - relative paths, cycles,
+/// selective imports, a library built from libraries - and only differ in
+/// where the bytes come from, so that is the one thing this abstracts.
+pub trait ImportSource {
+    /// The text at this path, or a sentence saying why it could not be had.
+    fn read(&self, path: &Path) -> Result<String, String>;
+}
+
+/// Reads the filesystem. What the CLI and the language server use.
+pub struct FromDisk;
+
+impl ImportSource for FromDisk {
+    fn read(&self, path: &Path) -> Result<String, String> {
+        std::fs::read_to_string(path).map_err(|reason| reason.to_string())
+    }
+}
+
+/// Reads a set of files the host already has.
+///
+/// The keys are paths as an import writes them, normalised the same way the
+/// resolver normalises: `lib/blocks.cypcb`, not an absolute path, because the
+/// host that supplies them - a browser - has no notion of where the design
+/// lives on a disk.
+pub struct FromMemory {
+    files: HashMap<String, String>,
+}
+
+impl FromMemory {
+    /// Build a source from path-to-text pairs.
+    pub fn new(files: HashMap<String, String>) -> Self {
+        FromMemory { files }
+    }
+}
+
+impl ImportSource for FromMemory {
+    fn read(&self, path: &Path) -> Result<String, String> {
+        let key = path.to_string_lossy();
+        self.files.get(key.as_ref()).cloned().ok_or_else(|| {
+            let mut known: Vec<&str> = self.files.keys().map(String::as_str).collect();
+            known.sort_unstable();
+            if known.is_empty() {
+                "the host supplied no files".to_string()
+            } else {
+                format!("the host supplied: {}", known.join(", "))
+            }
+        })
+    }
+}
 
 /// Something that stopped an import from being resolved.
 #[derive(Debug, Clone, PartialEq)]
@@ -112,13 +166,29 @@ pub fn resolve_imports(
     origin: &Path,
     errors: &mut Vec<ImportError>,
 ) -> SourceFile {
+    resolve_imports_from(file, origin, &FromDisk, errors)
+}
+
+/// The same resolution, against text the caller supplies.
+///
+/// For a host with no filesystem. `origin` is still the path of the file being
+/// resolved - it is what relative imports are joined to - and for a design
+/// that lives nowhere, a bare file name is the honest answer: `lib/x.cypcb`
+/// then resolves to `lib/x.cypcb`.
+pub fn resolve_imports_from(
+    file: &SourceFile,
+    origin: &Path,
+    source: &dyn ImportSource,
+    errors: &mut Vec<ImportError>,
+) -> SourceFile {
     let mut visiting = Vec::new();
-    resolve_into(file, origin, &mut visiting, errors)
+    resolve_into(file, origin, source, &mut visiting, errors)
 }
 
 fn resolve_into(
     file: &SourceFile,
     origin: &Path,
+    source: &dyn ImportSource,
     visiting: &mut Vec<PathBuf>,
     errors: &mut Vec<ImportError>,
 ) -> SourceFile {
@@ -143,19 +213,19 @@ fn resolve_into(
             continue;
         }
 
-        let source = match std::fs::read_to_string(&resolved) {
-            Ok(source) => source,
+        let text = match source.read(&resolved) {
+            Ok(text) => text,
             Err(reason) => {
                 errors.push(ImportError::Unreadable {
                     path: written,
                     resolved,
-                    reason: reason.to_string(),
+                    reason,
                 });
                 continue;
             }
         };
 
-        let parsed = crate::parse(&source);
+        let parsed = crate::parse(&text);
         if let Some(first) = parsed.errors.first() {
             errors.push(ImportError::Unparsable {
                 path: written,
@@ -167,7 +237,7 @@ fn resolve_into(
         // Resolve the imported file's own imports before taking anything from
         // it, so a library may be built from libraries.
         visiting.push(resolved.clone());
-        let inner = resolve_into(&parsed.value, &resolved, visiting, errors);
+        let inner = resolve_into(&parsed.value, &resolved, source, visiting, errors);
         visiting.pop();
 
         let wanted: Option<HashSet<&str>> = if import.names.is_empty() {
@@ -186,6 +256,47 @@ fn resolve_into(
             }
             taken.insert(name.to_string());
             definitions.push(imported.clone());
+        }
+
+        // What the taken definitions need to work.
+        //
+        // `import Divider from "lib/blocks.cypcb"` used to take the module and
+        // nothing else, so a block whose parts use a footprint the same file
+        // declares arrived without it: `unknown footprint: 'TINY'` on a design
+        // that named no footprint at all. A library that cannot be used
+        // without knowing what is inside it is not a library, so a selective
+        // import takes the footprints, interfaces and modules that what it
+        // named depends on - and says nothing about them, because the design
+        // never asked for them by name.
+        if wanted.is_some() {
+            let mut needed: Vec<String> = Vec::new();
+            let mut frontier: Vec<String> = taken.iter().cloned().collect();
+            while let Some(name) = frontier.pop() {
+                let Some(definition) = inner
+                    .definitions
+                    .iter()
+                    .find(|d| reusable_name(d) == Some(name.as_str()))
+                else {
+                    continue;
+                };
+                for dependency in depends_on(definition) {
+                    if taken.contains(&dependency) || needed.contains(&dependency) {
+                        continue;
+                    }
+                    needed.push(dependency.clone());
+                    frontier.push(dependency);
+                }
+            }
+
+            for name in needed {
+                if let Some(definition) = inner
+                    .definitions
+                    .iter()
+                    .find(|d| reusable_name(d) == Some(name.as_str()))
+                {
+                    definitions.push(definition.clone());
+                }
+            }
         }
 
         if let Some(names) = wanted {
@@ -218,6 +329,30 @@ fn reusable_name(definition: &Definition) -> Option<&str> {
         Definition::Interface(interface) => Some(interface.name.value.as_str()),
         _ => None,
     }
+}
+
+/// The names a definition cannot work without.
+///
+/// A module needs the footprints its parts name, the interfaces it claims and
+/// the modules it instantiates. Anything else - a net, a value - is written
+/// out in full and needs nothing from the file it came from.
+fn depends_on(definition: &Definition) -> Vec<String> {
+    let Definition::Module(module) = definition else {
+        return Vec::new();
+    };
+
+    let mut names = Vec::new();
+    for claim in &module.implements {
+        names.push(claim.interface.value.clone());
+    }
+    for inner in &module.definitions {
+        match inner {
+            Definition::Component(component) => names.push(component.footprint.value.clone()),
+            Definition::ModuleInstance(instance) => names.push(instance.module.value.clone()),
+            _ => {}
+        }
+    }
+    names
 }
 
 /// Flatten `.` and `..` without touching the filesystem, so a cycle through
@@ -407,7 +542,7 @@ module Filter {
         let parsed = crate::parse(&source);
         let mut errors = Vec::new();
         let mut visiting = vec![normalise(&path)];
-        resolve_into(&parsed.value, &path, &mut visiting, &mut errors);
+        resolve_into(&parsed.value, &path, &FromDisk, &mut visiting, &mut errors);
 
         assert!(
             errors

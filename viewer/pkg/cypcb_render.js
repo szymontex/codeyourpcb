@@ -345,15 +345,6 @@ export class PcbEngine {
         }
     }
     /**
-     * Parse `.cypcb` source and load it into the board model.
-     *
-     * Available wherever the tree-sitter parser is compiled in, which includes
-     * wasm32 - the parser builds for that target and the resulting module is
-     * no larger than one that leaves parsing to JavaScript.
-     *
-     * Returns an empty string on success, or the collected parse and semantic
-     * errors joined by newlines. The board state is updated even when there are
-     * errors, so partial results stay visible. DRC runs afterwards either way.
      * @param {string} source
      * @returns {string}
      */
@@ -373,6 +364,54 @@ export class PcbEngine {
         } finally {
             wasm.__wbindgen_add_to_stack_pointer(16);
             wasm.__wbindgen_export4(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
+     * Parse `.cypcb` source and load it into the board model.
+     *
+     * Available wherever the tree-sitter parser is compiled in, which includes
+     * wasm32 - the parser builds for that target and the resulting module is
+     * no larger than one that leaves parsing to JavaScript.
+     *
+     * Returns an empty string on success, or the collected parse and semantic
+     * errors joined by newlines. The board state is updated even when there are
+     * errors, so partial results stay visible. DRC runs afterwards either way.
+     * Load a design whose imports the host has already fetched.
+     *
+     * `files_json` is a JSON object mapping each path an `import` writes to
+     * its text: `{"lib/blocks.cypcb": "module Divider { ... }"}`. A browser
+     * tab has no filesystem, so the engine cannot open `lib/blocks.cypcb`
+     * itself; before this, a design split across files loaded in the viewer
+     * as `unknown module` for every block it imports, while the same file
+     * checks on the command line.
+     *
+     * Paths are resolved the way they are on disk - relative to the importing
+     * file, cycles refused, `import A, B from` taking only what it names - so
+     * a library may be built from libraries as long as the host supplies each
+     * of them. Anything the host did not supply comes back as the same
+     * unreadable-import error, saying what it did supply.
+     * @param {string} source
+     * @param {string} files_json
+     * @returns {string}
+     */
+    load_source_with_imports(source, files_json) {
+        let deferred3_0;
+        let deferred3_1;
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            const ptr0 = passStringToWasm0(source, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            const len0 = WASM_VECTOR_LEN;
+            const ptr1 = passStringToWasm0(files_json, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            const len1 = WASM_VECTOR_LEN;
+            wasm.pcbengine_load_source_with_imports(retptr, this.__wbg_ptr, ptr0, len0, ptr1, len1);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            deferred3_0 = r0;
+            deferred3_1 = r1;
+            return getStringFromWasm0(r0, r1);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            wasm.__wbindgen_export4(deferred3_0, deferred3_1, 1);
         }
     }
     /**

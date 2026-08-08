@@ -52,6 +52,14 @@ use cypcb_world::{
 #[cfg(any(feature = "native", feature = "wasm"))]
 use cypcb_world::sync_ast_to_world;
 
+/// The name a design goes by when it has no path.
+///
+/// A browser tab has no filesystem, so an import is resolved against the
+/// design's own directory - which is nothing - and `lib/blocks.cypcb` stays
+/// `lib/blocks.cypcb`. That is the key the host is asked for.
+#[cfg(any(feature = "native", feature = "wasm"))]
+const DESIGN_ORIGIN: &str = "design.cypcb";
+
 /// Read `.cypcb` with whichever parser this build has.
 #[cfg(any(feature = "native", feature = "wasm"))]
 fn parse_source_text(source: &str) -> cypcb_parser::ParseResult<cypcb_parser::SourceFile> {
@@ -265,8 +273,51 @@ impl PcbEngine {
     /// Returns an empty string on success, or the collected parse and semantic
     /// errors joined by newlines. The board state is updated even when there are
     /// errors, so partial results stay visible. DRC runs afterwards either way.
+    /// Load a design whose imports the host has already fetched.
+    ///
+    /// `files_json` is a JSON object mapping each path an `import` writes to
+    /// its text: `{"lib/blocks.cypcb": "module Divider { ... }"}`. A browser
+    /// tab has no filesystem, so the engine cannot open `lib/blocks.cypcb`
+    /// itself; before this, a design split across files loaded in the viewer
+    /// as `unknown module` for every block it imports, while the same file
+    /// checks on the command line.
+    ///
+    /// Paths are resolved the way they are on disk - relative to the importing
+    /// file, cycles refused, `import A, B from` taking only what it names - so
+    /// a library may be built from libraries as long as the host supplies each
+    /// of them. Anything the host did not supply comes back as the same
+    /// unreadable-import error, saying what it did supply.
+    #[cfg(any(feature = "native", feature = "wasm"))]
+    pub fn load_source_with_imports(&mut self, source: &str, files_json: &str) -> String {
+        let files: std::collections::HashMap<String, String> =
+            match serde_json::from_str(files_json) {
+                Ok(files) => files,
+                Err(reason) => {
+                    return format!(
+                        "the imported files are not a JSON object of path to text: {reason}"
+                    );
+                }
+            };
+        self.load_source_resolving(source, &cypcb_parser::FromMemory::new(files))
+    }
+
     #[cfg(any(feature = "native", feature = "wasm"))]
     pub fn load_source(&mut self, source: &str) -> String {
+        // No host files: an import then reports that nothing was supplied,
+        // which is a truer answer than the `unknown module` the design used to
+        // come back with.
+        self.load_source_resolving(
+            source,
+            &cypcb_parser::FromMemory::new(std::collections::HashMap::new()),
+        )
+    }
+
+    #[cfg(any(feature = "native", feature = "wasm"))]
+    fn load_source_resolving(
+        &mut self,
+        source: &str,
+        imports: &dyn cypcb_parser::ImportSource,
+    ) -> String {
         self.source = source.to_string();
         self.world.clear();
         self.violations.clear();
@@ -292,18 +343,39 @@ impl PcbEngine {
             errors.push(message);
         }
 
-        // Sync AST to world
-        let sync_result = sync_ast_to_world(
+        // What this design imports, resolved against whatever the host could
+        // give us. A design that imports nothing costs one walk of its own
+        // definitions.
+        let mut import_errors = Vec::new();
+        let resolved = cypcb_parser::resolve_imports_from(
             &parse_result.value,
-            source,
-            &mut self.world,
-            &mut self.footprint_lib,
+            std::path::Path::new(DESIGN_ORIGIN),
+            imports,
+            &mut import_errors,
         );
+        for err in &import_errors {
+            let message = format!("{err}");
+            self.diagnostics
+                .push(SourceDiagnostic::from_span(message.clone(), source, 0, 0));
+            errors.push(message);
+        }
 
-        // Collect sync errors, spans included.
+        // Sync AST to world
+        let sync_result =
+            sync_ast_to_world(&resolved, source, &mut self.world, &mut self.footprint_lib);
+
+        // Collect sync errors, spans included. An error raised inside an
+        // imported file carries that file's offsets, which name nothing in the
+        // text on screen, so it is reported at the start of the design rather
+        // than at a position invented for it.
         for err in &sync_result.errors {
             let message = format!("{err}");
             let (start, end) = first_label(err);
+            let (start, end) = if end <= source.len() {
+                (start, end)
+            } else {
+                (0, 0)
+            };
             self.diagnostics.push(SourceDiagnostic::from_span(
                 message.clone(),
                 source,

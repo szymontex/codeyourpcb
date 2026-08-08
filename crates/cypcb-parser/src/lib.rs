@@ -108,7 +108,9 @@ pub use ast::{
 // Re-export error types (always available)
 pub use errors::{ParseError, ParseResult};
 #[cfg(feature = "rust-parser")]
-pub use imports::{resolve_imports, ImportError};
+pub use imports::{
+    resolve_imports, resolve_imports_from, FromDisk, FromMemory, ImportError, ImportSource,
+};
 
 // The reader the project ships. `parse` is this one wherever it exists.
 #[cfg(feature = "rust-parser")]

@@ -140,6 +140,7 @@ export class PcbEngine {
      * Returns an empty string on success, or an error message on failure.
      */
     load_snapshot(snapshot_js: any): string;
+    load_source(source: string): string;
     /**
      * Parse `.cypcb` source and load it into the board model.
      *
@@ -150,8 +151,22 @@ export class PcbEngine {
      * Returns an empty string on success, or the collected parse and semantic
      * errors joined by newlines. The board state is updated even when there are
      * errors, so partial results stay visible. DRC runs afterwards either way.
+     * Load a design whose imports the host has already fetched.
+     *
+     * `files_json` is a JSON object mapping each path an `import` writes to
+     * its text: `{"lib/blocks.cypcb": "module Divider { ... }"}`. A browser
+     * tab has no filesystem, so the engine cannot open `lib/blocks.cypcb`
+     * itself; before this, a design split across files loaded in the viewer
+     * as `unknown module` for every block it imports, while the same file
+     * checks on the command line.
+     *
+     * Paths are resolved the way they are on disk - relative to the importing
+     * file, cycles refused, `import A, B from` taking only what it names - so
+     * a library may be built from libraries as long as the host supplies each
+     * of them. Anything the host did not supply comes back as the same
+     * unreadable-import error, saying what it did supply.
      */
-    load_source(source: string): string;
+    load_source_with_imports(source: string, files_json: string): string;
     /**
      * Minimum trace width for a current, in nanometers.
      *
@@ -254,6 +269,7 @@ export interface InitOutput {
     readonly pcbengine_load_kicad: (a: number, b: number, c: number, d: number) => void;
     readonly pcbengine_load_snapshot: (a: number, b: number, c: number) => void;
     readonly pcbengine_load_source: (a: number, b: number, c: number, d: number) => void;
+    readonly pcbengine_load_source_with_imports: (a: number, b: number, c: number, d: number, e: number, f: number) => void;
     readonly pcbengine_min_trace_width_for_current_ma: (a: number, b: number) => number;
     readonly pcbengine_new: () => number;
     readonly pcbengine_query_point: (a: number, b: number, c: bigint, d: bigint) => void;

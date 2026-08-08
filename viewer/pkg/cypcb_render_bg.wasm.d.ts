@@ -17,6 +17,7 @@ export const pcbengine_get_violations_json: (a: number, b: number) => void;
 export const pcbengine_load_kicad: (a: number, b: number, c: number, d: number) => void;
 export const pcbengine_load_snapshot: (a: number, b: number, c: number) => void;
 export const pcbengine_load_source: (a: number, b: number, c: number, d: number) => void;
+export const pcbengine_load_source_with_imports: (a: number, b: number, c: number, d: number, e: number, f: number) => void;
 export const pcbengine_min_trace_width_for_current_ma: (a: number, b: number) => number;
 export const pcbengine_new: () => number;
 export const pcbengine_query_point: (a: number, b: number, c: bigint, d: bigint) => void;
