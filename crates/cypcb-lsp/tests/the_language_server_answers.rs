@@ -372,3 +372,164 @@ fn hovering_a_component_explains_it() {
         "and the value is the thing a reader is looking for: {result}"
     );
 }
+
+#[test]
+fn completion_works_on_the_half_typed_line_it_is_asked_about() {
+    // The moment completion is for: the user has typed `component R3 resistor "`
+    // and stopped. The file does not parse - it cannot, the string is open and
+    // the block is unclosed - and that is precisely when the list of footprints
+    // is worth having.
+    let uri = "file:///virtual/lsp-probe/typing.cypcb";
+    let mut typing = String::from(BOARD);
+    typing.push_str("\ncomponent R3 resistor \"");
+
+    let mut server = Server::start();
+    server.initialize();
+    server.open(uri, &typing);
+
+    let (line, character) = position_of(&typing, "component R3 resistor \"");
+    let result = server.request(
+        "textDocument/completion",
+        json!({
+            "textDocument": {"uri": uri},
+            "position": {
+                "line": line,
+                "character": character + "component R3 resistor \"".len() as u32,
+            },
+        }),
+    );
+
+    let labels: Vec<&str> = result
+        .pointer("/result")
+        .and_then(Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|item| item.get("label").and_then(Value::as_str))
+                .collect()
+        })
+        .unwrap_or_default();
+    assert!(
+        labels.contains(&"0402"),
+        "a footprint list is what the cursor is asking for here: {result}"
+    );
+}
+
+#[test]
+fn completion_inside_a_block_nobody_has_closed_yet_offers_its_properties() {
+    // The other half of the same defect: the block is open, so the parser has
+    // no component to return, so the cursor read as "after the last
+    // definition" and the editor offered `version` and `board` inside a
+    // component body.
+    let uri = "file:///virtual/lsp-probe/open-block.cypcb";
+    let mut typing = String::from(BOARD);
+    typing.push_str("\ncomponent R3 resistor \"0402\" {\n    ");
+
+    let mut server = Server::start();
+    server.initialize();
+    server.open(uri, &typing);
+
+    let line = typing.matches('\n').count() as u32;
+    let result = server.request(
+        "textDocument/completion",
+        json!({
+            "textDocument": {"uri": uri},
+            "position": {"line": line, "character": 4},
+        }),
+    );
+
+    let labels: Vec<&str> = result
+        .pointer("/result")
+        .and_then(Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|item| item.get("label").and_then(Value::as_str))
+                .collect()
+        })
+        .unwrap_or_default();
+    assert!(
+        labels.contains(&"value") && labels.contains(&"at"),
+        "inside a component body the properties are what to offer: {labels:?}"
+    );
+    assert!(
+        !labels.contains(&"board"),
+        "and `board` inside a component body pastes a board into it: {labels:?}"
+    );
+}
+
+#[test]
+fn going_to_a_definition_lands_on_the_part() {
+    let uri = "file:///virtual/lsp-probe/goto.cypcb";
+    let mut server = Server::start();
+    server.initialize();
+    server.open(uri, BOARD);
+
+    // Ctrl-click on `R1.2` inside the net block. The answer has to be where R1
+    // is declared, which is the whole point of the request.
+    let (line, character) = position_of(BOARD, "R1.2");
+    let result = server.request(
+        "textDocument/definition",
+        json!({
+            "textDocument": {"uri": uri},
+            "position": {"line": line, "character": character + 1},
+        }),
+    );
+
+    let (declared_line, _) = position_of(BOARD, "component R1");
+    assert_eq!(
+        result.pointer("/result/uri").and_then(Value::as_str),
+        Some(uri),
+        "the definition is in the same file: {result}"
+    );
+    assert_eq!(
+        result
+            .pointer("/result/range/start/line")
+            .and_then(Value::as_u64),
+        Some(u64::from(declared_line)),
+        "R1.2 has to lead to the line `component R1` is on: {result}"
+    );
+}
+
+#[test]
+fn completing_a_footprint_offers_the_library() {
+    let uri = "file:///virtual/lsp-probe/complete.cypcb";
+    let mut server = Server::start();
+    server.initialize();
+    server.open(uri, BOARD);
+
+    // Inside the quoted footprint of R1, where a user asks what they may type.
+    let (line, character) = position_of(BOARD, "0402\"");
+    let result = server.request(
+        "textDocument/completion",
+        json!({
+            "textDocument": {"uri": uri},
+            "position": {"line": line, "character": character},
+        }),
+    );
+
+    let items = result
+        .pointer("/result")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    assert!(
+        !items.is_empty(),
+        "the built-in footprint library is not empty, so neither is this: {result}"
+    );
+
+    let labels: Vec<&str> = items
+        .iter()
+        .filter_map(|item| item.get("label").and_then(Value::as_str))
+        .collect();
+    assert!(
+        labels.contains(&"0402"),
+        "the library ships a 0402 and the list has to carry it: {labels:?}"
+    );
+    assert!(
+        items
+            .iter()
+            .all(|item| item.get("kind").is_some() && item.get("detail").is_some()),
+        "an editor sorts by kind and shows the detail, so both have to be there: {items:?}"
+    );
+}

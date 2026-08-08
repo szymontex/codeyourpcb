@@ -117,11 +117,98 @@ pub enum PropertyContext {
 }
 
 /// Find the completion context at the given offset.
+///
+/// The answer comes from the AST where the AST has one, and from the text
+/// under the cursor where it cannot. A user asking for completion has usually
+/// just typed something incomplete - `component R3 resistor "` with the string
+/// still open - and a half-written definition is exactly what the parser
+/// cannot return. Reading the AST alone put that cursor "after the last
+/// definition" and answered with the top-level keywords, so the editor offered
+/// `version`, `board` and `net` inside a footprint string, where accepting one
+/// pastes a whole snippet into the string.
 pub fn find_completion_context(
     ast: &SourceFile,
     content: &str,
     offset: usize,
 ) -> CompletionContext {
+    let from_ast = context_from_ast(ast, content, offset);
+    if matches!(
+        from_ast,
+        CompletionContext::TopLevel | CompletionContext::Unknown
+    ) {
+        if let Some(from_text) = context_of_unfinished_text(content, offset) {
+            return from_text;
+        }
+    }
+    from_ast
+}
+
+/// What the unparseable text under the cursor is asking for, if anything.
+///
+/// Two shapes, both of which the parser refuses and both of which a user is in
+/// the middle of typing: a string that is still open, and a block that is not
+/// closed yet. Only consulted when the AST placed the cursor nowhere, so a file
+/// that parses keeps answering from its own model.
+fn context_of_unfinished_text(content: &str, offset: usize) -> Option<CompletionContext> {
+    let before = content.get(..offset)?;
+
+    // An odd number of quotes on this line means the cursor is inside one.
+    let line_start = before.rfind('\n').map_or(0, |index| index + 1);
+    let line = &before[line_start..];
+    if line.matches('"').count() % 2 == 1 {
+        return match first_word(line) {
+            // `component R3 resistor "` - the string being typed is a
+            // footprint name. Every other string in the language is a value
+            // somebody invents, and a list of guesses is worse than no list.
+            Some("component") => Some(CompletionContext::ComponentFootprint),
+            _ => None,
+        };
+    }
+
+    // Otherwise, is the cursor inside a block nobody has closed?
+    let opener = innermost_unclosed_block(before)?;
+    match first_word(opener) {
+        Some("component") => Some(CompletionContext::PropertyKey(PropertyContext::Component)),
+        Some("board") => Some(CompletionContext::PropertyKey(PropertyContext::Board)),
+        Some("net") => Some(CompletionContext::PropertyKey(PropertyContext::Net)),
+        Some("footprint") => Some(CompletionContext::PropertyKey(PropertyContext::Footprint)),
+        _ => None,
+    }
+}
+
+/// The first word of a line, which in this language is the keyword.
+fn first_word(line: &str) -> Option<&str> {
+    line.split_whitespace().next()
+}
+
+/// The line that opened the block the cursor is in, or `None` at top level.
+///
+/// Braces inside strings are skipped - a description may hold one - and the
+/// scan runs over the text before the cursor only, so an unclosed block is
+/// simply one that never got its `}`.
+fn innermost_unclosed_block(before: &str) -> Option<&str> {
+    let mut open_lines: Vec<usize> = Vec::new();
+    let mut line_start = 0usize;
+    let mut in_string = false;
+
+    for (index, ch) in before.char_indices() {
+        match ch {
+            '"' => in_string = !in_string,
+            '\n' if !in_string => line_start = index + 1,
+            '{' if !in_string => open_lines.push(line_start),
+            '}' if !in_string => {
+                open_lines.pop();
+            }
+            _ => {}
+        }
+    }
+
+    let start = open_lines.pop()?;
+    let line = &before[start..];
+    Some(line.split('\n').next().unwrap_or(line))
+}
+
+fn context_from_ast(ast: &SourceFile, content: &str, offset: usize) -> CompletionContext {
     // First check if we're at the start of the file or in whitespace at top level
     if ast.definitions.is_empty() {
         return CompletionContext::TopLevel;
