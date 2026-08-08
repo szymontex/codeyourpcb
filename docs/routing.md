@@ -375,6 +375,7 @@ numbers are introduced violations unless stated.
 | Weight the pad price by depth into the pad's disc, full on its copper and tapering across the clearance | multi_ic 267 -> 413 after at price 20 and 106 -> 242 shorts; stm32_breakout better at 5 and 50, worse at 20; no price where both improve |
 | Open a net's pad zone for the connection's own two pads instead of every pad the net has | stm32_breakout 239 -> 299 after and 136 -> 175 shorts, multi_ic 336 -> 398 and 166 -> 219, nothing left unrouted on either |
 | Charge a dearer layer change on a pad, to close the one short the narrower opening adds | the short survives every price to 1000 on led_blink, and stm32_breakout goes 216 -> 263 after at 150 |
+| Make the pad zone layer-aware, so a surface-mount pad stops opening the layer it has no copper on | stm32_breakout 239 -> 290 after, multi_ic 317 -> 382, qfp_fanout 343 -> 437; led_blink and shift_driver unchanged |
 | Let the via keepout price count foreign **pads**, not only foreign routed copper | at the shipped price of 0.25: stm32_breakout 239 -> 259, multi_ic 336 -> 392 with 166 -> 216 shorts. At a price of its own it works and still loses: see below |
 
 The pattern across all of them: **pricing copper that exists pays, blocking or
@@ -397,6 +398,34 @@ The row before it is the seventh veto tried in this vector and the seventh to lo
 which is now a strong enough prior to state as a rule: **if the instrument you
 are about to write returns a bool, write it as an f64 instead and measure the
 price.** The same geometry, priced, is the `PathFinder Pad Aware` variant below.
+
+### The layer the pad zone forgot, and why remembering it lost
+
+`PadZone` is a disc in x and y with no layer: `in_pad_zone(x, y, zones)`. A
+pad zone switches obstacles off so a route can reach the pad it is heading
+for, and it did that on **every** layer - so a surface-mount pad on the top
+made foreign copper invisible on the bottom too, where the pad it exists for
+has no copper at all. That reads like a plain modelling error, and it is the
+kind of thing this file exists to stop being fixed on faith.
+
+Giving `PadZone` the pad's own `layer_mask` and checking it costs:
+
+| board | after, before the change | after, with it |
+|---|---|---|
+| `led_blink` | 2 | 2 |
+| `stm32_breakout` | **239** | **290** |
+| `multi_ic` | **317** | **382** |
+| `shift_driver` | 81 | 81 |
+| `qfp_fanout` | **343** | **437** |
+
+Three boards worse by 51, 65 and 94 - all far outside their measured bands -
+and two unchanged. The route counts moved too (stm32_breakout 908 -> 1031,
+multi_ic 1003 -> 964), so the search really did take different paths.
+
+The mechanism is the one this table has recorded eight times before, wearing a
+new hat: **a restriction loses.** The blind opening was letting a route escape a
+crowded pad area by dropping to the other layer; closing that escape is
+correct about the copper and worse about the board. Reverted.
 
 ### The pad price, swept (`foreign_pad_penalty`)
 
