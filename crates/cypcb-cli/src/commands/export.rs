@@ -359,6 +359,17 @@ impl ExportCommand {
             );
         }
 
+        // What was already in the output directory and is not ours.
+        //
+        // Exporting a second board into a directory that still holds the first
+        // leaves both, and the whole directory is what gets zipped and sent.
+        // Measured: `four-layer` then `blink` into one directory gives 20
+        // Gerbers for two different boards, including In1 and In2 copper that
+        // belongs to neither the 2-layer board nor anything the fabricator was
+        // asked for. Overwriting the same board's own files is ordinary and
+        // stays silent; copper from a different board does not.
+        report_foreign_files(&export_result, &self.output);
+
         let total_size: u64 = export_result.files.iter().map(|f| f.size_bytes).sum();
         let total_size_kb = total_size as f64 / 1024.0;
 
@@ -382,6 +393,69 @@ impl ExportCommand {
 
         Ok(())
     }
+}
+
+/// Warn about fabrication files in the output directory that this export did
+/// not write.
+///
+/// The output directory is the unit somebody zips and sends, so a file left
+/// there by an earlier export of a different board travels with this one. This
+/// only looks at the directories the job wrote into, and only at the
+/// extensions a fabricator reads.
+fn report_foreign_files(result: &cypcb_export::ExportResult, output: &std::path::Path) {
+    use std::collections::BTreeSet;
+
+    let ours: BTreeSet<std::path::PathBuf> = result.files.iter().map(|f| f.path.clone()).collect();
+    let dirs: BTreeSet<std::path::PathBuf> = result
+        .files
+        .iter()
+        .filter_map(|f| f.path.parent().map(|p| p.to_path_buf()))
+        .collect();
+
+    let mut strangers: Vec<String> = Vec::new();
+    for dir in dirs {
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if ours.contains(&path) || !path.is_file() {
+                continue;
+            }
+            let is_fab_file = path
+                .extension()
+                .and_then(|e| e.to_str())
+                .is_some_and(|e| matches!(e, "gbr" | "drl" | "xln" | "csv" | "json" | "gm1"));
+            if is_fab_file {
+                strangers.push(
+                    path.strip_prefix(output)
+                        .unwrap_or(&path)
+                        .display()
+                        .to_string(),
+                );
+            }
+        }
+    }
+
+    if strangers.is_empty() {
+        return;
+    }
+    strangers.sort();
+
+    eprintln!();
+    eprintln!(
+        "Warning: {} file(s) in {} were not written by this export and will \
+         travel with it:",
+        strangers.len(),
+        output.display()
+    );
+    for name in strangers.iter().take(8) {
+        eprintln!("  {name}");
+    }
+    if strangers.len() > 8 {
+        eprintln!("  ... and {} more", strangers.len() - 8);
+    }
+    eprintln!("Delete them, or export into a directory of its own.");
 }
 
 #[cfg(test)]
