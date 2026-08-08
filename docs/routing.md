@@ -607,16 +607,31 @@ replaced. It is not the cause. `via_price_sweep` sets
 route. (The seven-field copy is also not a defect in itself: what it drops
 falls back to the shipped defaults, which are the measured values.)
 
-The second candidate stands untested: a net's rings are marked only once all of
-that net's paths are committed, and the holes were marked beside them, so
-same-net stacking - `VCC_3V3` against `VCC_3V3`, most of these violations -
-would not see itself. That does not explain the cross-net pairs, so it may not
-be the whole answer either.
+The second candidate was that a net's rings are marked only once all of that
+net's paths are committed, so the holes marked beside them would be invisible
+to the net placing them. **Measured, and it is not the cause either.**
+Instrumenting the via-transition branch to count how often it prices a layer
+change at a cell already covered by a via ring:
 
-**The cause is not established.** Whoever picks this up should instrument
-before rebuilding: count how many holes the map holds at the moment each layer
-change is priced, on one fixture. If that count is always zero, the marking is
-in the wrong place and no price will ever matter.
+| fixture | layer changes priced | on existing via copper | vias placed |
+|---|---|---|---|
+| multi_ic | 2,836,140 | 46,181 (1.63%) | 119 |
+| qfp_fanout | 1,783,840 | 49,376 (2.77%) | 186 |
+
+Tens of thousands of times per board, the search evaluates putting a via where
+one already is, **with that information in front of it**. The congestion map
+holds it at the right moment; the marking is not too late.
+
+**So the fourth attempt failed on its own wiring, not on the idea.** A price at
+this decision point can work, because the data it needs is demonstrably there.
+The fifth attempt should confirm the hole array is populated before trusting a
+sweep of it - the cheapest check is to assert a nonzero count after routing one
+fixture, which the fourth attempt never did.
+
+This also explains why pricing the ring did nothing for stacking while
+demonstrably changing the boards: it charges every one of those 46,181
+evaluations for *crossing* copper, which moves routes around, and charges
+nothing extra for the one thing being chased.
 
 Reverted. A knob that provably does nothing is worse than no knob: it reads
 like a lever and moves nothing, and the next person spends their fire finding
