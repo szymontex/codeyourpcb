@@ -525,6 +525,44 @@ What a real fix has to do is stop the search from putting a via where the board
 already has one, at any depth - which is a cost-model question, not a filter on
 the output.
 
+### The knob for that already exists, and it is the wrong lever
+
+`CongestionMap` tracks which cells each via's ring covers and charges
+`ring_penalty` per ring. The default is **0.0**: the search knows exactly where
+every hole is and pays nothing to put another on top of it. That looks like the
+whole answer.
+
+Swept on the three fixtures that stack holes, violations and hole-to-hole
+counts measured together in one run
+(`what_a_via_ring_should_cost`, `--ignored`):
+
+| ring price | stm32_breakout | multi_ic | qfp_fanout |
+|---|---|---|---|
+| 0 (default) | 180 / **4** | 291 / **7** | 309 / 27 |
+| 1 | 192 / 4 | 241 / 13 | 376 / **17** |
+| 3 | 243 / 4 | 281 / 8 | 367 / 21 |
+| 8 | **158** / **1** | 280 / 12 | 377 / 20 |
+
+Violations first, then hole-to-hole. Read against each board's own band - 59,
+65 and 57 - **no price wins on both counts and none wins on either
+consistently.** `stm32_breakout` improves at 8 on both, and the 22 violations
+it gains are inside its band anyway. `multi_ic` gets *worse* at stacking at
+every price tried, 7 becoming 13, 8 and 12. `qfp_fanout` halves its stacked
+holes at 1 and pays 67 violations for it, which is outside its band.
+
+The reason is in what the penalty charges for. A ring price makes the search
+avoid *crossing* copper around an existing via. It says nothing about *placing*
+a via on a cell that already has one, which is the fault being chased - and on
+a crowded board, pushing routes away from rings creates the congestion that
+makes another layer change attractive somewhere else. Dropped as the
+nineteenth instrument.
+
+Note on numbers: the 27 above and the 15 quoted in the table further up are the
+same board measured through different harnesses - this sweep checks against
+`DesignRules::jlcpcb_2layer` and `drc_report` against the `jlcpcb` preset rule
+set, which do not share a hole-to-hole minimum. Compare rows within one table,
+never across.
+
 ## Instruments that were measured and dropped
 
 Each of these was built, measured on all three fixtures, and reverted. The
