@@ -26,6 +26,10 @@ cypcb-parser = { workspace = true }
 cypcb-world = { workspace = true, default-features = false }
 cypcb-drc = { path = "../cypcb-drc" }
 cypcb-autoroute = { path = "../cypcb-autoroute" }
+# The browser has no filesystem, so the importer is used through its
+# string entry point. It is here so a KiCad board can be opened in the
+# viewer rather than only on the command line.
+cypcb-kicad = { path = "../cypcb-kicad" }
 cypcb-router = { path = "../cypcb-router" }
 cypcb-rules = { path = "../cypcb-rules" }
 cypcb-calc = { path = "../cypcb-calc" }

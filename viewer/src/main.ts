@@ -1349,8 +1349,14 @@ async function init(): Promise<void> {
   }
 
   // Expose board loader for E2E tests — loads source, pulls snapshot, fits board
-  (window as any).__loadBoard = (source: string) => {
-    engine.load_source(source);
+  // `kind` lets a test drive the KiCad path, which the file input reaches by
+  // extension and no test can otherwise get at.
+  (window as any).__loadBoard = (source: string, kind?: string) => {
+    if (kind === 'kicad_pcb') {
+      engine.load_kicad(source);
+    } else {
+      engine.load_source(source);
+    }
     const snap = pullSnapshot();
     if (snap.board) {
       viewport = fitBoard(viewport, snap.board.width_nm, snap.board.height_nm);
@@ -1602,9 +1608,14 @@ async function init(): Promise<void> {
     try {
       const content = await readFileAsText(file);
 
-      if (ext === 'cypcb') {
-        // Load new board
-        const errors = engine.load_source(content);
+      if (ext === 'cypcb' || ext === 'kicad_pcb') {
+        // A KiCad board goes to the importer and everything below is the same.
+        // The command line learned to read, check, route and write these; the
+        // viewer could open the project's own format and nothing else, so
+        // somebody with a `.kicad_pcb` had no way to look at it here.
+        const errors = ext === 'kicad_pcb'
+          ? engine.load_kicad(content)
+          : engine.load_source(content);
         if (errors) {
           console.warn('Parse errors:', errors);
         }

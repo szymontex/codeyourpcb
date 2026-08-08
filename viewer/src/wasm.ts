@@ -151,6 +151,14 @@ export interface PcbEngine {
   get_diagnostics_json(): string;
   /** Load and parse a .cypcb source file, returns error message if failed */
   load_source(source: string): string;
+
+  /**
+   * Read a `.kicad_pcb` and build the board from it.
+   *
+   * The command line learned to read, check, route and write KiCad boards
+   * before the viewer could open one at all.
+   */
+  load_kicad(source: string): string;
   /** Load routing results from .ses file content */
   load_routes(sesContent: string): void;
   /** Get the current board state as a snapshot */
@@ -254,6 +262,8 @@ interface WasmPcbEngine {
   /** Read `.cypcb` and build the board from it. Exported since the engine
    *  carries the Rust reader; before that the host parsed and sent a snapshot. */
   load_source(source: string): string;
+  /** Read a `.kicad_pcb` and build the board from it. */
+  load_kicad(source: string): string;
   load_snapshot(snapshot: BoardSnapshot): string;
   get_snapshot(): BoardSnapshot;
   query_point(x_nm: bigint, y_nm: bigint): string[];
@@ -600,6 +610,16 @@ export class WasmPcbEngineAdapter implements PcbEngine {
     return errors;
   }
 
+  load_kicad(source: string): string {
+    // Same shape as `load_source`: the engine reads, and everything the viewer
+    // draws comes back in the snapshot.
+    const errors = this.wasmEngine.load_kicad(source);
+    const snapshot = sanitizeSnapshot(this.wasmEngine.get_snapshot());
+    this.cachedSnapshot = snapshot;
+    this.cachedNetConstraints.clear();
+    return errors;
+  }
+
   load_routes(sesContent: string): void {
     if (!this.cachedSnapshot) return;
     applyRoutesToSnapshot(this.cachedSnapshot, sesContent);
@@ -800,6 +820,11 @@ class MockPcbEngine implements PcbEngine {
     // whole reason for `docs/one-parser.md`. A clear refusal beats a board
     // that looks right and is not.
     return 'This build has no engine: the WASM module failed to load, and .cypcb is read by the engine.';
+  }
+
+  load_kicad(_source: string): string {
+    // Same refusal, same reason: the KiCad reader is in the engine too.
+    return 'This build has no engine: the WASM module failed to load, and .kicad_pcb is read by the engine.';
   }
 
   load_routes(sesContent: string): void {

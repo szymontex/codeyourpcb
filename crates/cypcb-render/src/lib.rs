@@ -335,6 +335,57 @@ impl PcbEngine {
         }
     }
 
+    /// Load a KiCad board.
+    ///
+    /// The viewer could open the project's own `.cypcb` and nothing else,
+    /// while the command line learned to read, check, route and write KiCad
+    /// boards. A user with a `.kicad_pcb` had no way to look at it here.
+    ///
+    /// Returns an empty string on success and the reader's own message
+    /// otherwise. Anything the importer would not carry - a pour whose outline
+    /// it will not approximate - comes back as a diagnostic rather than
+    /// disappearing, the same way the CLI prints it.
+    #[cfg(any(feature = "native", feature = "wasm"))]
+    pub fn load_kicad(&mut self, source: &str) -> String {
+        self.source = source.to_string();
+        self.world.clear();
+        self.violations.clear();
+        self.diagnostics.clear();
+        self.drc_duration_ms = 0;
+
+        let parsed = match cypcb_kicad::pcb_parser::parse_kicad_pcb_str(source) {
+            Ok(parsed) => parsed,
+            Err(e) => {
+                let message = format!("{e}");
+                self.diagnostics
+                    .push(SourceDiagnostic::from_span(message.clone(), source, 0, 0));
+                return message;
+            }
+        };
+
+        for refusal in &parsed.metadata.zone_refusals {
+            self.diagnostics
+                .push(SourceDiagnostic::from_span(refusal.clone(), source, 0, 0));
+        }
+
+        self.world = parsed.world;
+        self.footprint_lib = parsed.library;
+        self.world.set_footprints(self.footprint_lib.clone());
+        self.world
+            .rebuild_spatial_index_from_library(&self.footprint_lib);
+
+        // The copper the file already carries. Without it a routed board opens
+        // as an unrouted one.
+        if let Some(routes) = parsed.reference_routes {
+            cypcb_router::apply_routes(&mut self.world, &routes);
+            self.world
+                .rebuild_spatial_index_from_library(&self.footprint_lib);
+        }
+
+        self.run_drc_internal();
+        String::new()
+    }
+
     /// Query components at a specific point.
     ///
     /// Returns reference designator strings.

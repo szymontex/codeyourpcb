@@ -1183,6 +1183,7 @@ dependencies = [
  "cypcb-core",
  "cypcb-drc",
  "cypcb-export",
+ "cypcb-kicad",
  "cypcb-parser",
  "cypcb-router",
  "cypcb-rules",

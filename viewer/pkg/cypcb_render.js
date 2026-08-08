@@ -287,6 +287,38 @@ export class PcbEngine {
         }
     }
     /**
+     * Load a KiCad board.
+     *
+     * The viewer could open the project's own `.cypcb` and nothing else,
+     * while the command line learned to read, check, route and write KiCad
+     * boards. A user with a `.kicad_pcb` had no way to look at it here.
+     *
+     * Returns an empty string on success and the reader's own message
+     * otherwise. Anything the importer would not carry - a pour whose outline
+     * it will not approximate - comes back as a diagnostic rather than
+     * disappearing, the same way the CLI prints it.
+     * @param {string} source
+     * @returns {string}
+     */
+    load_kicad(source) {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            const ptr0 = passStringToWasm0(source, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            const len0 = WASM_VECTOR_LEN;
+            wasm.pcbengine_load_kicad(retptr, this.__wbg_ptr, ptr0, len0);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            deferred2_0 = r0;
+            deferred2_1 = r1;
+            return getStringFromWasm0(r0, r1);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            wasm.__wbindgen_export4(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
      * Load a pre-parsed board snapshot (WASM mode).
      *
      * This method receives a BoardSnapshot that was parsed in JavaScript

@@ -73,6 +73,7 @@ export async function openFile(): Promise<OpenFileResult | null> {
             accept: {
               'application/x-cypcb': ['.cypcb'],
               'application/x-specctra-ses': ['.ses'],
+              'application/x-kicad-pcb': ['.kicad_pcb'],
             },
           },
         ],
@@ -101,7 +102,7 @@ export async function openFile(): Promise<OpenFileResult | null> {
     return new Promise((resolve) => {
       const input = document.createElement('input');
       input.type = 'file';
-      input.accept = '.cypcb,.ses';
+      input.accept = '.cypcb,.ses,.kicad_pcb';
 
       input.onchange = async () => {
         const file = input.files?.[0];

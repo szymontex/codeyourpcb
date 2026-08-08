@@ -119,6 +119,19 @@ export class PcbEngine {
      */
     get_violations_json(): string;
     /**
+     * Load a KiCad board.
+     *
+     * The viewer could open the project's own `.cypcb` and nothing else,
+     * while the command line learned to read, check, route and write KiCad
+     * boards. A user with a `.kicad_pcb` had no way to look at it here.
+     *
+     * Returns an empty string on success and the reader's own message
+     * otherwise. Anything the importer would not carry - a pour whose outline
+     * it will not approximate - comes back as a diagnostic rather than
+     * disappearing, the same way the CLI prints it.
+     */
+    load_kicad(source: string): string;
+    /**
      * Load a pre-parsed board snapshot (WASM mode).
      *
      * This method receives a BoardSnapshot that was parsed in JavaScript
@@ -238,6 +251,7 @@ export interface InitOutput {
     readonly pcbengine_get_snapshot: (a: number) => number;
     readonly pcbengine_get_trace_at_point: (a: number, b: bigint, c: bigint, d: bigint) => number;
     readonly pcbengine_get_violations_json: (a: number, b: number) => void;
+    readonly pcbengine_load_kicad: (a: number, b: number, c: number, d: number) => void;
     readonly pcbengine_load_snapshot: (a: number, b: number, c: number) => void;
     readonly pcbengine_load_source: (a: number, b: number, c: number, d: number) => void;
     readonly pcbengine_min_trace_width_for_current_ma: (a: number, b: number) => number;
