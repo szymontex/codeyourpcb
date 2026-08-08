@@ -64,7 +64,18 @@ def header(library, ref, value, x, y, nets, pitch=2.54, drill=1.0, pad=1.7,
     return (library, ref, value, x, y, pads)
 
 
-def emit(board_w, board_h, origin_x, origin_y, nets, parts):
+def pour(net, layer, x1, y1, x2, y2):
+    """A rectangular copper pour, in board coordinates.
+
+    Rectangular on purpose: the importer carries a pour whose outline is an
+    axis-aligned rectangle and refuses anything else by name rather than
+    flattening it to a bounding box. A generator that emitted an L here would
+    be writing a fixture the reader declines.
+    """
+    return (net, layer, x1, y1, x2, y2)
+
+
+def emit(board_w, board_h, origin_x, origin_y, nets, parts, pours=()):
     """The whole file, as a string."""
     index = {name: i for i, name in enumerate(nets)}
     out = ['(kicad_pcb (version 20240108) (generator "pcbnew") (generator_version "8.0.0")', ""]
@@ -97,6 +108,25 @@ def emit(board_w, board_h, origin_x, origin_y, nets, parts):
                 f'    (pad "{number}" {kind} {shape} (at {px} {py}) '
                 f"(size {sx} {sy}){drill_part} (layers {layers}){net_part})"
             )
+        out.append("  )")
+        out.append("")
+
+    for net, layer, x1, y1, x2, y2 in pours:
+        ax, ay = origin_x + x1, origin_y + y1
+        bx, by = origin_x + x2, origin_y + y2
+        out.append("  (zone")
+        out.append(f'    (net {index[net]})')
+        out.append(f'    (net_name "{net}")')
+        out.append(f'    (layer "{layer}")')
+        out.append("    (hatch edge 0.5)")
+        out.append("    (connect_pads (clearance 0.5))")
+        out.append("    (min_thickness 0.25)")
+        out.append("    (fill yes (thermal_gap 0.5) (thermal_bridge_width 0.5))")
+        out.append("    (polygon")
+        out.append(
+            f"      (pts (xy {ax} {ay}) (xy {bx} {ay}) (xy {bx} {by}) (xy {ax} {by}))"
+        )
+        out.append("    )")
         out.append("  )")
         out.append("")
 

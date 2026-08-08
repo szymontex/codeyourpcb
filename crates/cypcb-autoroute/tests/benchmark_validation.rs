@@ -251,6 +251,16 @@ const DRC_RATCHETS: &[(&str, &str, u32, u32)] = &[
     // still ran two headers down one edge, 336 now that the file and the model
     // agree.
     ("qfp_fanout.kicad_pcb", "qfp_fanout", 376, 260),
+    // The first fixture with a ground plane, measured 2026-08-08 at 40 / 18
+    // with 210 routes and nothing unrouted. Its own band from
+    // `via_price_sweep::how_much_of_the_price_is_noise` is 33 to 42 across
+    // prices 0.22..0.28 - 9 violations wide - and 15 to 20 shorts, so the
+    // ratchet is the measured value plus that band.
+    //
+    // The 25 vias on a 12-part board are the point of it: seven surface-mount
+    // ground pads sit on F.Cu and the plane is on B.Cu, so each needs a
+    // stitching via. No other fixture makes the router do that.
+    ("plane_board.kicad_pcb", "plane_board", 49, 23),
 ];
 
 /// Routes every fixture and holds the line on completeness and DRC count.
