@@ -375,6 +375,7 @@ numbers are introduced violations unless stated.
 | Weight the pad price by depth into the pad's disc, full on its copper and tapering across the clearance | multi_ic 267 -> 413 after at price 20 and 106 -> 242 shorts; stm32_breakout better at 5 and 50, worse at 20; no price where both improve |
 | Open a net's pad zone for the connection's own two pads instead of every pad the net has | stm32_breakout 239 -> 299 after and 136 -> 175 shorts, multi_ic 336 -> 398 and 166 -> 219, nothing left unrouted on either |
 | Charge a dearer layer change on a pad, to close the one short the narrower opening adds | the short survives every price to 1000 on led_blink, and stm32_breakout goes 216 -> 263 after at 150 |
+| Taper the foreign-pad price by distance to the target, so a route pays full price only far from the pin it is reaching | `Pad Aware` on stm32_breakout 280 -> 332 after, qfp_fanout 558 -> 568 with shorts 330 -> 353; multi_ic 248 -> 244, inside its band; led_blink and shift_driver unchanged |
 | Make the pad zone layer-aware, so a surface-mount pad stops opening the layer it has no copper on | stm32_breakout 239 -> 290 after, multi_ic 317 -> 382, qfp_fanout 343 -> 437; led_blink and shift_driver unchanged |
 | Let the via keepout price count foreign **pads**, not only foreign routed copper | at the shipped price of 0.25: stm32_breakout 239 -> 259, multi_ic 336 -> 392 with 166 -> 216 shorts. At a price of its own it works and still loses: see below |
 
@@ -398,6 +399,35 @@ The row before it is the seventh veto tried in this vector and the seventh to lo
 which is now a strong enough prior to state as a rule: **if the instrument you
 are about to write returns a bool, write it as an f64 instead and measure the
 price.** The same geometry, priced, is the `PathFinder Pad Aware` variant below.
+
+### When the pad zone is open, which was the last untested dimension
+
+**Which** pads a zone opens and **how wide** it opens them are both measured and
+in the table above. **When** was not: the zone is open for the whole search, so
+a route can cut through a stranger's pads on the far side of the board as
+easily as it can reach its own pin.
+
+Priced rather than forbidden, since eight vetoes have lost and a price
+sometimes wins: `foreign_pad_penalty` scaled by how far the node still is from
+its target, nothing at the pad and full price twenty cells away. It only moves
+`Pad Aware`, because the shipped price is 0.
+
+| board | `Pad Aware` today | with the taper |
+|---|---|---|
+| `led_blink` | 1 / 1 | 1 / 1 |
+| `stm32_breakout` | **280 / 141** | **332 / 153** |
+| `multi_ic` | 248 / 106 | **244 / 104** |
+| `shift_driver` | 75 / 35 | 75 / 35 |
+| `qfp_fanout` | 558 / 330 | 568 / **353** |
+
+One board better by 4 violations, which is inside its measured band of 30. One
+worse by 52, which is outside its band of 38. Reverted.
+
+Reading it with the fifteen before it: pricing *where* copper may go has now
+lost as a veto, as a flat price on a board that does not want it, as a taper by
+depth into a pad, and as a taper by distance to the goal. The lever that keeps
+working is the one that changes what the search *sees* - the trace footprint
+reservation and the via ring - not what it is charged for crossing.
 
 ### The layer the pad zone forgot, and why remembering it lost
 
