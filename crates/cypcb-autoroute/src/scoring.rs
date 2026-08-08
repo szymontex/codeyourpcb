@@ -247,62 +247,116 @@ pub(crate) fn angle_penalty(angle_rad: f64) -> f64 {
 
 /// Compute smoothness across all traces.
 ///
-/// For each trace, iterates consecutive segment pairs, computes the bend angle,
-/// and accumulates angle penalties. Returns 1.0 - (total_penalty / total_bends).
+/// Finds every point where two pieces of copper on the same net and layer
+/// meet, measures the turn there, and returns `1.0 - mean penalty`. A turn at
+/// a multiple of 45 degrees costs nothing; the penalty rises to 1.0 at 22.5
+/// degrees off one.
+///
+/// **This reads 1.0 on every board the in-house router produces, and that is
+/// now an answer rather than an accident.** The old version looked for bends
+/// inside a single trace entity, and `apply_routes` gives every entity exactly
+/// one segment, so it never examined a single corner. The value was the
+/// `total_bends == 0` default. Measuring properly gives 1.0 too, because the
+/// router works on a 45-degree grid - but it would stop being 1.0 the moment
+/// anything laid copper off that grid, which is what a metric is for.
 ///
 /// Edge cases:
 /// - Empty board (no traces) → 1.0 (perfect)
-/// - Traces with 0 or 1 segment (no bends) → 1.0 (perfect)
+/// - Copper on one net that never meets → not a bend, skipped
 /// - Zero-length segments (start == end) → skipped
 fn compute_smoothness(traces: &[TraceData]) -> f64 {
+    // Bends live between trace entities, not inside them.
+    //
+    // This walked `trace.segments.windows(2)` and skipped any trace with fewer
+    // than two segments. `apply_routes` builds one entity per route segment -
+    // `segments: vec![TraceSegment::new(..)]`, in all four places it does so -
+    // so every trace had exactly one segment, every trace was skipped,
+    // `total_bends` stayed 0, and the function returned its 1.0 default. It
+    // reported a perfectly smooth board for every board ever routed, on every
+    // fixture, in every table.
+    //
+    // A bend is where two pieces of copper on the same net and layer meet at a
+    // point. Grouped by net and layer first, because comparing every segment
+    // against every other would be quadratic in the whole board rather than in
+    // one net.
+    let mut by_net_and_layer: std::collections::HashMap<(NetId, Layer), Vec<&TraceSegment>> =
+        std::collections::HashMap::new();
+    for trace in traces {
+        for segment in &trace.segments {
+            by_net_and_layer
+                .entry((trace.net_id, trace.layer))
+                .or_default()
+                .push(segment);
+        }
+    }
+
     let mut total_penalty = 0.0;
     let mut total_bends = 0u32;
 
-    for trace in traces {
-        if trace.segments.len() < 2 {
-            continue;
-        }
+    for segments in by_net_and_layer.values() {
+        for (i, seg_a) in segments.iter().enumerate() {
+            for seg_b in &segments[i + 1..] {
+                let Some((from_a, joint, from_b)) = shared_corner(seg_a, seg_b) else {
+                    continue;
+                };
 
-        for window in trace.segments.windows(2) {
-            let seg_a = &window[0];
-            let seg_b = &window[1];
+                // Both directions measured *away from the joint*, which is the
+                // only way to read the turn. Using each segment's own
+                // start-to-end direction reads a straight run as a reversal
+                // whenever the router happened to emit the second segment
+                // pointing back at the first.
+                let a = (
+                    (from_a.x.0 - joint.x.0) as f64,
+                    (from_a.y.0 - joint.y.0) as f64,
+                );
+                let b = (
+                    (from_b.x.0 - joint.x.0) as f64,
+                    (from_b.y.0 - joint.y.0) as f64,
+                );
+                if (a.0 == 0.0 && a.1 == 0.0) || (b.0 == 0.0 && b.1 == 0.0) {
+                    continue;
+                }
 
-            // Skip zero-length segments
-            let dx_a = seg_a.end.x.0 - seg_a.start.x.0;
-            let dy_a = seg_a.end.y.0 - seg_a.start.y.0;
-            if dx_a == 0 && dy_a == 0 {
-                continue;
+                // Straight copper leaves the joint in opposite directions, so
+                // the angle between them is π and the bend is zero.
+                let between = (a.1.atan2(a.0) - b.1.atan2(b.0)).abs();
+                let between = if between > std::f64::consts::PI {
+                    2.0 * std::f64::consts::PI - between
+                } else {
+                    between
+                };
+                let bend = std::f64::consts::PI - between;
+
+                total_penalty += angle_penalty(bend);
+                total_bends += 1;
             }
-
-            let dx_b = seg_b.end.x.0 - seg_b.start.x.0;
-            let dy_b = seg_b.end.y.0 - seg_b.start.y.0;
-            if dx_b == 0 && dy_b == 0 {
-                continue;
-            }
-
-            // Compute bend angle between the two direction vectors
-            let angle_a = (dy_a as f64).atan2(dx_a as f64);
-            let angle_b = (dy_b as f64).atan2(dx_b as f64);
-            let bend = angle_b - angle_a;
-
-            // Normalize to [-π, π]
-            let bend = bend.rem_euclid(2.0 * std::f64::consts::PI);
-            let bend = if bend > std::f64::consts::PI {
-                bend - 2.0 * std::f64::consts::PI
-            } else {
-                bend
-            };
-
-            total_penalty += angle_penalty(bend);
-            total_bends += 1;
         }
     }
 
     if total_bends == 0 {
-        1.0
-    } else {
-        1.0 - (total_penalty / total_bends as f64)
+        return 1.0;
     }
+
+    1.0 - (total_penalty / total_bends as f64)
+}
+
+/// Where two segments meet, with the far end of each.
+///
+/// Returns `(far end of a, the joint, far end of b)`, or `None` when they do
+/// not touch - two runs of the same net that never meet are two runs, not a
+/// bend.
+fn shared_corner(
+    a: &TraceSegment,
+    b: &TraceSegment,
+) -> Option<(cypcb_core::Point, cypcb_core::Point, cypcb_core::Point)> {
+    for (joint_a, far_a) in [(a.start, a.end), (a.end, a.start)] {
+        for (joint_b, far_b) in [(b.start, b.end), (b.end, b.start)] {
+            if joint_a == joint_b {
+                return Some((far_a, joint_a, far_b));
+            }
+        }
+    }
+    None
 }
 
 // ============================================================================
