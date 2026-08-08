@@ -80,13 +80,18 @@ pub struct RouteCommand {
     /// `examples/blink.cypcb` that is 0.06s against 0.9s, and 9 violations
     /// with 6 shorts against 5 with 3.
     ///
-    /// What it costs is worth stating, because the default is not a middling
-    /// setting by accident: ranked against the other seven it comes **fourth
-    /// on every benchmark board**, and the winner differs each time -
-    /// `led_blink` 1 violation against the default's 2, `stm32_breakout`
-    /// 216/86 against 239/136, `multi_ic` 248/106 against 317/166. This flag
-    /// buys wall clock with the fourth-best board. Use it when the wait
-    /// matters more than the copper.
+    /// What it costs is worth stating. Re-measured on `multi_ic` on
+    /// 2026-08-08, release build: one default run gives **291 DRC violations
+    /// with 187 shorts** in 5.88s, best-of-eight gives **165 with 86** in
+    /// 86.03s, and `PathFinder Default` ranks **sixth of the eight** on that
+    /// board. This flag buys wall clock with copper - roughly twice the shorts
+    /// there. Use it when the wait matters more than the board.
+    ///
+    /// An earlier note here said the default came fourth on every benchmark
+    /// board and quoted `multi_ic` at 248/106 against 317/166. Those numbers
+    /// predate the fixture repairs - the comma that put two parts 50mm off the
+    /// board, and the header that ran past its edge - so they describe a board
+    /// that no longer exists.
     #[arg(long)]
     pub fast: bool,
 }
@@ -517,6 +522,8 @@ impl RouteCommand {
     /// inserted into a copy of the original file. Everything this project
     /// models loosely or not at all is carried through byte for byte.
     fn route_kicad(&self, start_time: Instant) -> Result<()> {
+        self.refuse_freerouting_only_flags("a .kicad_pcb board is always routed in-house")?;
+
         use cypcb_autoroute::{route_board, AutorouteConfig};
         use cypcb_rules::presets::{PresetRuleSet, RulesPreset};
 
@@ -586,6 +593,42 @@ impl RouteCommand {
         Ok(())
     }
 
+    /// Refuse options this run cannot honour, instead of swallowing them.
+    ///
+    /// `--dry-run` says "export DSN only, don't run FreeRouting". On a KiCad
+    /// board it routed the whole thing and wrote the board anyway; on a
+    /// `--in-house` run the same. `--freerouting` names a jar that is never
+    /// started, `--max-passes` a number never read. A flag that is accepted
+    /// and ignored is worse than one that does not exist: it reads as an
+    /// instruction the tool followed.
+    ///
+    /// `--timeout` is not in this list, and cannot be: it carries a default
+    /// value, so there is no way to tell a user who typed `--timeout 300` from
+    /// one who typed nothing.
+    fn refuse_freerouting_only_flags(&self, why: &str) -> Result<()> {
+        let mut named: Vec<&str> = Vec::new();
+        if self.dry_run {
+            named.push("--dry-run");
+        }
+        if self.freerouting.is_some() {
+            named.push("--freerouting");
+        }
+        if self.max_passes.is_some() {
+            named.push("--max-passes");
+        }
+        if named.is_empty() {
+            return Ok(());
+        }
+
+        Err(miette::miette!(
+            "{} {} only to routing through FreeRouting, and {why}. Drop the \
+             flag, or route a .cypcb board without --in-house to use \
+             FreeRouting.",
+            named.join(" and "),
+            if named.len() == 1 { "applies" } else { "apply" },
+        ))
+    }
+
     fn route_in_house(
         &self,
         source: &str,
@@ -593,6 +636,10 @@ impl RouteCommand {
         library: FootprintLibrary,
         start_time: Instant,
     ) -> Result<()> {
+        self.refuse_freerouting_only_flags(
+            "--in-house and --variants ask for the built-in router",
+        )?;
+
         use cypcb_autoroute::{route_board, AutorouteConfig};
         use cypcb_router::apply_routes;
         use cypcb_router::types::RoutingStatus;
