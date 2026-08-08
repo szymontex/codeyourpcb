@@ -6,14 +6,17 @@ This document describes the syntax of the CodeYourPCB domain-specific language (
 
 1. [Version Declaration](#version-declaration)
 2. [Board Definition](#board-definition)
-3. [Component Definition](#component-definition)
-4. [Net Definition](#net-definition)
-5. [Zone Definition](#zone-definition)
-6. [Trace Definition](#trace-definition)
-7. [Custom Footprint Definition](#custom-footprint-definition)
-8. [Modules and Interfaces](#modules-and-interfaces)
-9. [Comments](#comments)
-10. [Units](#units)
+3. [Board Outline](#board-outline)
+4. [Component Definition](#component-definition)
+5. [Net Definition](#net-definition)
+6. [Zone Definition](#zone-definition)
+7. [Trace Definition](#trace-definition)
+8. [Custom Footprint Definition](#custom-footprint-definition)
+9. [Modules and Interfaces](#modules-and-interfaces)
+10. [Assertions](#assertions)
+11. [Imports](#imports)
+12. [Comments](#comments)
+13. [Units](#units)
 
 ## Version Declaration
 
@@ -47,6 +50,27 @@ board my_circuit {
 **Properties:**
 - `size`: Board dimensions (width x height) with units
 - `layers`: Number of copper layers (2, 4, 6, etc.)
+
+## Board Outline
+
+A board is the rectangle its `size` describes unless it says otherwise. An
+outline is the real edge, as a ring of points - which is how a board gets a
+cutout, a slot or a chamfer:
+
+```
+outline {
+    point 0mm, 0mm
+    point 40mm, 0mm
+    point 40mm, 15mm
+    point 20mm, 15mm
+    point 20mm, 30mm
+    point 0mm, 30mm
+}
+```
+
+The ring closes itself: the last point joins the first. The outline is what the
+edge-cuts layer is drawn from on export, and what the checker measures edge
+clearance against.
 
 ## Component Definition
 
@@ -250,6 +274,22 @@ Pin identifiers can be numbers or names:
 - `U1.VCC`, `U1.GND` (IC named pins)
 
 See `examples/power-indicator.cypcb` for net constraint examples.
+
+### Net Classes
+
+A rule stated once for a group of nets, instead of repeated on each:
+
+```
+netclass Power [width 0.5mm clearance 0.3mm] {
+    VCC
+    GND
+}
+```
+
+Precedence is explicit: a class is applied first, and a net that states
+something of its own overwrites **only the field it states**. So with the class
+above, `net VCC [width 0.8mm]` is 0.8mm wide and still carries the class's
+0.3mm clearance.
 
 ## Zone Definition
 
@@ -464,6 +504,56 @@ Two things are errors, both reported with the line that caused them:
 
 An interface nobody implements is fine; it is a definition waiting for a
 module.
+
+## Assertions
+
+What a design claims about itself. The checker evaluates these with the design
+rules and reports any that do not hold:
+
+```
+assert board.width <= 100mm
+assert board.layers >= 2
+assert VBUS.width >= 0.5mm
+assert VBUS.current >= 1A
+```
+
+Readable today: `board.width`, `board.height`, `board.layers`, and a net's
+`width`, `clearance` and `current`. Operands are typed - a length is refused a
+comparison with a resistance rather than being quietly coerced into one.
+
+**An assertion the checker cannot evaluate is reported, not skipped.** Asking
+about something it cannot read comes back as "not something the checker can
+read yet", because a statement that quietly does nothing leaves the board
+looking checked.
+
+## Imports
+
+A file can use what another file defines:
+
+```
+import "lib/blocks.cypcb"
+import Divider, LedDriver from "lib/blocks.cypcb"
+```
+
+Plain `import` takes everything reusable; the second form takes only what it
+names, and says so if a name is not there.
+
+- **What comes across:** modules, footprints and interfaces. Not a board, not
+  components, not nets - importing a file must not place parts on the design.
+- **Where the path points:** relative to the file doing the importing. There is
+  no project root to configure and no search path to get wrong.
+- **What a named import brings with it:** whatever the named definitions need -
+  the footprints their components use, the interfaces they implement, the
+  modules they instantiate. A library you cannot use without knowing what is
+  inside it is not a library.
+- A file that imports itself, directly or through others, is reported rather
+  than followed.
+
+In the browser there is no filesystem to read, so the page fetches the files
+and hands them to the engine: a template's library is served beside it, and a
+design opened from the dev server's directory is read from there. A file opened
+through the browser's file picker has no directory to fetch from, and the
+import is reported as one that could not be followed.
 
 ## Comments
 
