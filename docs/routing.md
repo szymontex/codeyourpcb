@@ -557,6 +557,32 @@ a crowded board, pushing routes away from rings creates the congestion that
 makes another layer change attractive somewhere else. Dropped as the
 nineteenth instrument.
 
+### And the grid cannot be told, which is why `CELL_VIA` was never set
+
+The obvious next step is to have the grid remember where the holes are, so a
+cost term can ask. `CELL_VIA` has been defined in `grid.rs` since it was
+written and is set nowhere, which looks like an oversight.
+
+It is not. `is_free` reads
+
+```rust
+self.layers[layer][idx] == CELL_FREE
+```
+
+an equality against zero, so **any** bit set in a cell's byte is a hard veto.
+Marking a via cell for information blocks it. Measured: recording each via on
+the layers it spans, with nothing reading the flag, moved every board -
+`qfp_fanout` 309 violations to 383 and `plane_board` 28 to 29, both past their
+ratchets, while `multi_ic` went 291 to 222 and `shift_driver` 65 to 49. A
+change that only writes a note is not supposed to have a before and after at
+all.
+
+So the memory a via-price term needs cannot live in the occupancy byte. It
+belongs beside `CongestionMap`'s ring array, which already carries per-cell
+counts the search reads as cost rather than as permission. Anyone starting
+that work should start there, and should know that every veto this router has
+been given has lost.
+
 Note on numbers: the 27 above and the 15 quoted in the table further up are the
 same board measured through different harnesses - this sweep checks against
 `DesignRules::jlcpcb_2layer` and `drc_report` against the `jlcpcb` preset rule
