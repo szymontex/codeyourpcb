@@ -217,23 +217,34 @@ net VCC {
     }
 
     #[test]
-    fn test_goto_net_from_assignment() {
+    fn test_goto_net_from_a_trace() {
+        // This fixture used to write `pin.1 = VCC` inside the component, a
+        // shape the language has never had - the parser reads the line and
+        // drops it - so the test asked the server about text no design can
+        // contain. A trace names a net for real.
         let doc = make_doc(
             r#"
 net VCC {
     R1.1
+    R2.1
 }
 
 component R1 resistor "0402" {
-    pin.1 = VCC
+    at 1mm, 1mm
+}
+
+trace VCC {
+    from R1.1
+    to R2.1
+    layer Top
 }
 "#,
         );
 
-        // Position on "VCC" in the assignment
+        // Position on "VCC" in the trace's header
         let pos = Position {
-            line: 6,
-            character: 12,
+            line: 10,
+            character: 7,
         };
         let loc = goto_definition(&doc, &pos);
 

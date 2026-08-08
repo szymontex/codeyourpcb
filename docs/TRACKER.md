@@ -1135,9 +1135,30 @@ cypcb::sync::unknown_pin
 - Undo and redo are wired to the app's own undo stack. Cut, copy and paste are **removed from the menu** rather than routed somewhere: they belong to whatever has focus, the code editor and every input already bind them, and a clipboard command aimed at nothing is worse than no menu entry.
 - **Wiring them turned up a third copy of the same body and a drift between the first two.** Undo was written out at the toolbar button and again in the keyboard handler, and the toolbar copy forgot `interactionState.selectedTraceId` - so undoing from the button left a trace selected for dragging in the interaction layer after the entity it named was gone. One `performUndo` and one `performRedo` now, called from the toolbar, the keyboard and the desktop menu.
 - `viewer/src/__tests__/every-native-menu-item-does-something.test.ts` compares the ids `menu.rs` declares against the handlers on both sides, in both directions, without a compiler - which is the only kind of check this crate can have here. Mutation-checked on the previous commit: `menu entries that emit an event nobody handles: edit.undo, edit.redo, edit.cut, edit.copy, edit.paste`.
-- NEXT-ACTION: `interface` is the last v2 construct that parses and does nothing.
-- QUEUED: DSL v2's other constructs still parse and do nothing - `interface` and `import`.
-- QUEUED: DSL v2's other constructs still parse and do nothing - import resolution, interfaces, assertions.
+- DONE: **`interface` is a contract now, not a comment.** It was the last v2 construct that parsed and was read by nothing: `examples/v2-interfaces.cypcb` declared I2C, SPI, Power and UART, and two modules whose comments said "// I2C pins" and "// Power pins" - a claim no command could check and no user could rely on. A module signs an interface with `implements I2C`, written once per interface the way `pin` is written once per pin, and the checker holds it to every pin that interface declares.
+- Two errors, both reported with the line that caused them and both exiting 1: claiming an interface nobody defined (`module 'Sensor' implements 'SPI', which is not defined. Defined: I2C, Power`) and claiming one without its pins. The second reads, on a real file:
+
+```
+cypcb::sync::interface_not_satisfied
+  x module 'Sensor' implements 'I2C' without pin SDA
+   ,-[8:11]
+ 8 | interface I2C {
+   :           -+-
+   :            `-- declared here
+14 |     implements I2C
+   :     ------+-------
+   :           `-- this promises SDA
+   `----
+  help: add `pin SDA` to the module, or drop the claim
+```
+
+- **Checked over the definitions rather than over the instances**, because a module nobody instantiates is exactly the case this catches: a library file of blocks has no board and no `use`, and its promises still have to hold. `SyncError` is the right home - it already carries `UnknownModule` and `UnconnectedModulePin`, so a broken contract is refused where every other semantic error is, in every command that loads a board.
+- The construct had to be taught to **both** parsers - `grammar.js` plus a regenerated `parser.c`, and `reader.rs`, the hand-written one this project ships - and `tests/differential.rs` is what proves they agree: it compares the two ASTs of every example, and the example now uses `implements`.
+- Four tests in `cypcb-world`, mutation-checked: with `check_interface_contracts` returning early, `a_module_claiming_an_interface_without_its_pins_is_reported` and `a_module_claiming_an_interface_nobody_defined_is_reported` both fail. The satisfied case and the module that claims nothing pass either way, which is the point of having them: a module written before `implements` existed must keep working.
+- `language_conformance.rs` gained the construct, per its own rule that a feature added to the grammar without a line there is one nobody has checked reaches the board. `docs/SYNTAX.md` gained a **Modules and Interfaces** section - the guide documented none of the v2 constructs, and the two that are now fully enforced are written up with the errors they produce; `the_syntax_guide_parses` reads them, once `interface` was added to its list of top-level keywords.
+- **The language server offered a completion the language has never accepted.** Inside a component body it suggested `pin.${1:1} = ${2:NET}` - the same `pin.<N> = <NET>` shape that was removed from `docs/SYNTAX.md` as never having worked - so an editor user could accept it and get nothing. Removed, and a `goto.rs` fixture that was written in it now uses a trace. Module and interface bodies get real completions instead: `pin`, `implements`, `component`, `net`, `use`.
+- NEXT-ACTION: **an unknown property inside a block is silently dropped.** Measured on the CLI: a component body containing `zzz 5` and `rotat 90` - a typo for `rotate` - checks clean, rc=0, no message, and the part is not rotated. `pin.1 = VCC` behaves the same way, which is why it survived in the guide and the language server for so long. A reader that skips what it does not recognise cannot tell a typo from a comment, and this is the same failure class as the commands that used to report success on work they never did. Both parsers need it, and the shape of the fix is a diagnostic naming the property and the block it is in.
+- QUEUED: DSL v2's remaining construct is `import` - the path is parsed and nothing resolves it.
 - QUEUED: copper pour / ground planes - **the claim that no `Zone` type exists was wrong**, see M2 in the domain-model register; the gap is that a zone cannot name its net. KiCad `.kicad_pcb` export (import exists), parts engine, schematic generation, differential pairs, polygon board outline editing.
 
 ### V6 - Documentation truth

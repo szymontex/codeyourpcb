@@ -530,9 +530,22 @@ module.exports = grammar({
       $.component_definition,
       $.net_definition,
       $.pin_declaration,
+      // The module promises to expose an interface's pins.
+      $.implements_clause,
       $.assert_statement,
       // A module can be built from other modules.
       $.module_instance,
+    ),
+
+    // implements I2C
+    //
+    // A claim the checker holds the module to: every pin the interface
+    // declares has to be a pin the module exposes. Written one per line, the
+    // way `pin` is, so a module implementing two interfaces reads as two
+    // statements rather than a list.
+    implements_clause: $ => seq(
+      'implements',
+      field('interface', $.identifier),
     ),
 
     // use Module as Name [at X, Y] [rotate A] { PIN = net, ... }

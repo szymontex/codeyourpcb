@@ -19,11 +19,11 @@
 
 use crate::ast::{
     AssertDef, AssertExpression, AssertOperand, BoardDef, ComparisonOp, ComponentDef,
-    ComponentKind, Definition, Dimension, FootprintDef, Identifier, ImportDef, InterfaceDef,
-    ModuleDef, ModuleInstance, NetAssignment, NetClassDef, NetConstraints, NetDef, OutlineDef,
-    PadDef, PadShape, PhysicalValue, PinDeclaration, PinId, PinRef, PortConnection, PositionExpr,
-    RotationExpr, SilkDef, SizeProperty, SourceFile, Span, StringLit, Tolerance, ToleranceKind,
-    TraceDef, TraceDirective, TracePath, TraceVia, ZoneDef, ZoneKind,
+    ComponentKind, Definition, Dimension, FootprintDef, Identifier, ImplementsClause, ImportDef,
+    InterfaceDef, ModuleDef, ModuleInstance, NetAssignment, NetClassDef, NetConstraints, NetDef,
+    OutlineDef, PadDef, PadShape, PhysicalValue, PinDeclaration, PinId, PinRef, PortConnection,
+    PositionExpr, RotationExpr, SilkDef, SizeProperty, SourceFile, Span, StringLit, Tolerance,
+    ToleranceKind, TraceDef, TraceDirective, TracePath, TraceVia, ZoneDef, ZoneKind,
 };
 use crate::errors::{ParseError, ParseResult};
 use crate::lexer::{tokenize, Token, TokenKind};
@@ -1156,6 +1156,7 @@ impl<'a> Reader<'a> {
 
         let mut definitions = Vec::new();
         let mut pins = Vec::new();
+        let mut implements = Vec::new();
 
         while !self.done() && !self.eat(&TokenKind::RBrace) {
             let item_start = self.here();
@@ -1186,6 +1187,16 @@ impl<'a> Reader<'a> {
                         None => self.unexpected("a pin name"),
                     }
                 }
+                Some("implements") => {
+                    self.bump();
+                    match self.identifier() {
+                        Some(interface) => implements.push(ImplementsClause {
+                            interface,
+                            span: Span::new(item_start, self.behind()),
+                        }),
+                        None => self.unexpected("an interface name"),
+                    }
+                }
                 _ => {
                     self.bump();
                 }
@@ -1196,6 +1207,7 @@ impl<'a> Reader<'a> {
             name,
             definitions,
             pins,
+            implements,
             span: Span::new(start, self.behind()),
         })
     }

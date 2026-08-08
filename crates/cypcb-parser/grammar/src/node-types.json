@@ -454,6 +454,22 @@
     }
   },
   {
+    "type": "implements_clause",
+    "named": true,
+    "fields": {
+      "interface": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "import_name_list",
     "named": true,
     "fields": {},
@@ -566,6 +582,10 @@
         },
         {
           "type": "component_definition",
+          "named": true
+        },
+        {
+          "type": "implements_clause",
           "named": true
         },
         {
@@ -2082,6 +2102,10 @@
   {
     "type": "identifier",
     "named": true
+  },
+  {
+    "type": "implements",
+    "named": false
   },
   {
     "type": "import",

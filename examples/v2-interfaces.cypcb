@@ -1,7 +1,8 @@
 // v2-interfaces.cypcb — Interface definitions for typed pin groups
 //
-// Demonstrates declaring standard interfaces (I2C, SPI, Power) that can
-// be used to ensure modules expose the correct pins.
+// An interface is a contract: a named set of pins. A module signs it with
+// `implements`, and the checker holds the module to it - claim I2C without an
+// SDA and `cypcb check` says so, naming the pin and exiting 1.
 
 version 1
 
@@ -33,6 +34,9 @@ interface UART {
 
 // A sensor module exposing I2C and Power interfaces
 module TemperatureSensor {
+    implements I2C
+    implements Power
+
     component U1 ic "SOIC-8" {
         value "TMP102"
         at 0mm, 0mm
@@ -63,6 +67,9 @@ module TemperatureSensor {
 
 // A display module exposing SPI and Power interfaces
 module OledDisplay {
+    implements SPI
+    implements Power
+
     component U1 ic "SOIC-8" {
         value "SSD1306"
         at 0mm, 0mm

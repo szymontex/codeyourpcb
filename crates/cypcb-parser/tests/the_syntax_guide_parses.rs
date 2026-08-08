@@ -27,6 +27,7 @@ const TOP_LEVEL: &[&str] = &[
     "trace",
     "footprint",
     "module",
+    "interface",
     "use",
     "import",
     "assert",

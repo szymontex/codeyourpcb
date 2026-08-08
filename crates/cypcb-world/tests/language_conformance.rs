@@ -42,7 +42,13 @@ footprint MARKED {
     silk circle -1.2mm, 0mm radius 0.15mm
 }
 
+interface TwoPort {
+    pin IN
+    pin OUT
+}
+
 module Divider {
+    implements TwoPort
     pin IN
     pin OUT
 
@@ -293,5 +299,35 @@ fn assertions_arrive_for_the_checker() {
         world.assertions().len(),
         2,
         "both assert statements have to reach the model, or nothing checks them"
+    );
+}
+
+#[test]
+fn an_interface_contract_is_checked_rather_than_stored() {
+    // `interface` parsed and was read by nothing for as long as it existed.
+    // The fixture's module signs `TwoPort` and exposes both its pins, so a
+    // clean sync is the proof; the failing direction is checked in the sync
+    // crate's own tests, where the module is missing a pin.
+    let source = EVERYTHING;
+    let parsed = cypcb_parser::parse(source);
+    let mut world = BoardWorld::new();
+    let mut library = FootprintLibrary::new();
+    let result = sync_ast_to_world(&parsed.value, source, &mut world, &mut library);
+
+    let complaints: Vec<String> = result
+        .errors
+        .iter()
+        .filter(|e| {
+            matches!(
+                e,
+                cypcb_world::SyncError::InterfaceNotSatisfied { .. }
+                    | cypcb_world::SyncError::UnknownInterface { .. }
+            )
+        })
+        .map(|e| e.to_string())
+        .collect();
+    assert!(
+        complaints.is_empty(),
+        "the module exposes every pin TwoPort declares: {complaints:?}"
     );
 }

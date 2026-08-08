@@ -929,7 +929,26 @@ pub struct ModuleDef {
     pub definitions: Vec<Definition>,
     /// Exposed pins of the module.
     pub pins: Vec<PinDeclaration>,
+    /// Interfaces the module claims to implement.
+    ///
+    /// Each claim is checked: every pin the interface declares has to be a
+    /// pin the module exposes. Empty for a module that claims nothing, which
+    /// is every module written before `implements` existed.
+    #[serde(default)]
+    pub implements: Vec<ImplementsClause>,
     /// Source span.
+    pub span: Span,
+}
+
+/// A claim inside a module: `implements I2C`.
+///
+/// The interface is named, not inlined, so one definition can be held over
+/// every module that says it speaks that bus.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ImplementsClause {
+    /// Name of the interface being claimed.
+    pub interface: Identifier,
+    /// Source span of the whole clause.
     pub span: Span,
 }
 

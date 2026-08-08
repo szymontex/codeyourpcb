@@ -114,6 +114,10 @@ pub enum PropertyContext {
     Trace,
     /// Inside a zone definition.
     Zone,
+    /// Inside a module definition.
+    Module,
+    /// Inside an interface definition.
+    Interface,
 }
 
 /// Find the completion context at the given offset.
@@ -172,6 +176,8 @@ fn context_of_unfinished_text(content: &str, offset: usize) -> Option<Completion
         Some("board") => Some(CompletionContext::PropertyKey(PropertyContext::Board)),
         Some("net") => Some(CompletionContext::PropertyKey(PropertyContext::Net)),
         Some("footprint") => Some(CompletionContext::PropertyKey(PropertyContext::Footprint)),
+        Some("module") => Some(CompletionContext::PropertyKey(PropertyContext::Module)),
+        Some("interface") => Some(CompletionContext::PropertyKey(PropertyContext::Interface)),
         _ => None,
     }
 }
@@ -450,9 +456,6 @@ pub fn property_completions(context: &PropertyContext) -> Vec<CompletionItem> {
             CompletionItem::new("rotate", CompletionItemKind::Property)
                 .with_detail("Rotation angle")
                 .with_insert_text("rotate ${1:0}", true),
-            CompletionItem::new("pin", CompletionItemKind::Property)
-                .with_detail("Pin net assignment")
-                .with_insert_text("pin.${1:1} = ${2:NET}", true),
         ],
         PropertyContext::Net => vec![
             CompletionItem::new("width", CompletionItemKind::Property)
@@ -506,6 +509,31 @@ pub fn property_completions(context: &PropertyContext) -> Vec<CompletionItem> {
             CompletionItem::new("locked", CompletionItemKind::Property)
                 .with_detail("Prevent autorouter modification"),
         ],
+        PropertyContext::Module => vec![
+            CompletionItem::new("pin", CompletionItemKind::Property)
+                .with_detail("Pin the module exposes")
+                .with_insert_text("pin ${1:NAME}", true),
+            CompletionItem::new("implements", CompletionItemKind::Property)
+                .with_detail("Interface this module satisfies")
+                .with_insert_text("implements ${1:I2C}", true),
+            CompletionItem::new("component", CompletionItemKind::Property)
+                .with_detail("Component inside the module")
+                .with_insert_text(
+                    "component ${1:R1} ${2:resistor} \"${3:0402}\" {\n    $0\n}",
+                    true,
+                ),
+            CompletionItem::new("net", CompletionItemKind::Property)
+                .with_detail("Net inside the module")
+                .with_insert_text("net ${1:NAME} {\n    $0\n}", true),
+            CompletionItem::new("use", CompletionItemKind::Property)
+                .with_detail("Instantiate another module")
+                .with_insert_text("use ${1:Module} as ${2:NAME} {\n    $0\n}", true),
+        ],
+        PropertyContext::Interface => {
+            vec![CompletionItem::new("pin", CompletionItemKind::Property)
+                .with_detail("Pin the interface declares")
+                .with_insert_text("pin ${1:NAME}", true)]
+        }
         PropertyContext::Zone => vec![
             CompletionItem::new("bounds", CompletionItemKind::Property)
                 .with_detail("Zone bounds")

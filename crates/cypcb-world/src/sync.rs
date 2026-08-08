@@ -39,7 +39,7 @@
 //! }
 //! ```
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 
 use bevy_ecs::prelude::Entity;
@@ -171,6 +171,41 @@ pub enum SyncError {
         span: miette::SourceSpan,
     },
 
+    /// A module claims an interface nobody defined.
+    UnknownInterface {
+        /// The module making the claim.
+        module: String,
+        /// The interface it named.
+        interface: String,
+        /// The interfaces the file does define, in order.
+        available: Vec<String>,
+        /// Source code for miette display.
+        src: String,
+        /// Source span of the `implements` clause.
+        span: miette::SourceSpan,
+    },
+
+    /// A module claims an interface and does not expose all of its pins.
+    ///
+    /// This is the whole point of the construct: `interface I2C { pin SDA
+    /// pin SCL }` is a contract, and a module that says `implements I2C`
+    /// without an `SDA` cannot be wired to an I2C bus. Before this the
+    /// interface parsed, was stored in the AST and read by nothing.
+    InterfaceNotSatisfied {
+        /// The module making the claim.
+        module: String,
+        /// The interface it claims.
+        interface: String,
+        /// Pins the interface declares and the module does not expose.
+        missing: Vec<String>,
+        /// Source code for miette display.
+        src: String,
+        /// Source span of the `implements` clause.
+        span: miette::SourceSpan,
+        /// Source span of the interface definition.
+        declaration: miette::SourceSpan,
+    },
+
     /// A module instantiates itself, directly or through others.
     ModuleCycle {
         /// The chain of modules, from the outermost to the repeat.
@@ -237,6 +272,35 @@ impl fmt::Display for SyncError {
                     instance, pin
                 )
             }
+            SyncError::UnknownInterface {
+                module,
+                interface,
+                available,
+                ..
+            } => {
+                write!(
+                    f,
+                    "module '{module}' implements '{interface}', which is not defined. Defined: {}",
+                    if available.is_empty() {
+                        "none".to_string()
+                    } else {
+                        available.join(", ")
+                    }
+                )
+            }
+            SyncError::InterfaceNotSatisfied {
+                module,
+                interface,
+                missing,
+                ..
+            } => {
+                write!(
+                    f,
+                    "module '{module}' implements '{interface}' without pin{} {}",
+                    if missing.len() == 1 { "" } else { "s" },
+                    missing.join(", ")
+                )
+            }
             SyncError::ModuleCycle { chain, .. } => {
                 write!(f, "module instantiates itself: {}", chain)
             }
@@ -261,6 +325,10 @@ impl Diagnostic for SyncError {
             SyncError::UnknownModule { .. } => Some(Box::new("cypcb::sync::unknown_module")),
             SyncError::UnconnectedModulePin { .. } => {
                 Some(Box::new("cypcb::sync::unconnected_module_pin"))
+            }
+            SyncError::UnknownInterface { .. } => Some(Box::new("cypcb::sync::unknown_interface")),
+            SyncError::InterfaceNotSatisfied { .. } => {
+                Some(Box::new("cypcb::sync::interface_not_satisfied"))
             }
             SyncError::ModuleCycle { .. } => Some(Box::new("cypcb::sync::module_cycle")),
             SyncError::UnknownLayer { .. } => Some(Box::new("cypcb::sync::unknown_layer")),
@@ -294,6 +362,18 @@ impl Diagnostic for SyncError {
             SyncError::UnconnectedModulePin { .. } => Some(Box::new(
                 "give every pin the module declares a net: `use M as N { PIN = net }`",
             )),
+            SyncError::UnknownInterface { available, .. } => Some(Box::new(format!(
+                "define the interface before claiming it, or name one that exists: {}",
+                if available.is_empty() {
+                    "this file defines none".to_string()
+                } else {
+                    available.join(", ")
+                }
+            ))),
+            SyncError::InterfaceNotSatisfied { missing, .. } => Some(Box::new(format!(
+                "add `pin {}` to the module, or drop the claim",
+                missing.join("`, `pin ")
+            ))),
             SyncError::ModuleCycle { .. } => Some(Box::new(
                 "a module cannot contain itself; break the loop or inline one of the blocks",
             )),
@@ -313,6 +393,8 @@ impl Diagnostic for SyncError {
             SyncError::MissingNet { src, .. } => Some(src),
             SyncError::UnknownModule { src, .. } => Some(src),
             SyncError::UnconnectedModulePin { src, .. } => Some(src),
+            SyncError::UnknownInterface { src, .. } => Some(src),
+            SyncError::InterfaceNotSatisfied { src, .. } => Some(src),
             SyncError::ModuleCycle { src, .. } => Some(src),
             SyncError::UnknownLayer { src, .. } => Some(src),
         }
@@ -365,6 +447,24 @@ impl Diagnostic for SyncError {
                     *span,
                 ))))
             }
+            SyncError::UnknownInterface { span, .. } => Some(Box::new(std::iter::once(
+                LabeledSpan::new_with_span(Some("no interface with this name".to_string()), *span),
+            ))),
+            SyncError::InterfaceNotSatisfied {
+                span,
+                declaration,
+                missing,
+                ..
+            } => Some(Box::new(
+                vec![
+                    LabeledSpan::new_with_span(
+                        Some(format!("this promises {}", missing.join(", "))),
+                        *span,
+                    ),
+                    LabeledSpan::new_with_span(Some("declared here".to_string()), *declaration),
+                ]
+                .into_iter(),
+            )),
             SyncError::ModuleCycle { span, .. } => Some(Box::new(std::iter::once(
                 LabeledSpan::new_with_span(Some("this closes the loop".to_string()), *span),
             ))),
@@ -497,6 +597,11 @@ pub fn sync_ast_to_world(
     // available when components reference them. Registering into the caller's
     // library (rather than a local clone) is what lets export and rendering
     // resolve them afterwards.
+    // Hold each module to the interfaces it claims. Done before expansion,
+    // because the modules are still there to read and because a module nobody
+    // instantiates is bound by its promises too.
+    check_interface_contracts(ast, source, &mut result);
+
     // Expand module instances first, so every later pass sees plain
     // components and nets and none of them needs to know modules exist.
     let expanded = expand_module_instances(ast, source, &mut result);
@@ -1793,6 +1898,136 @@ use M as A {
         );
     }
 
+    /// Two interfaces, one module, and the pins it does and does not expose.
+    ///
+    /// `module` is the body written between the pins and the closing brace.
+    fn sync_module(body: &str) -> SyncResult {
+        let source = format!(
+            r#"version 1
+
+interface I2C {{
+    pin SDA
+    pin SCL
+}}
+
+interface Power {{
+    pin VCC
+    pin GND
+}}
+
+module Sensor {{
+{body}
+    component U1 ic "SOIC-8" {{
+        value "TMP102"
+        at 0mm, 0mm
+    }}
+}}
+"#
+        );
+        let parsed = cypcb_parser::parse(&source);
+        assert!(
+            parsed.errors.is_empty(),
+            "the fixture has to parse: {:?}",
+            parsed.errors
+        );
+        let mut world = BoardWorld::new();
+        let mut library = FootprintLibrary::new();
+        sync_ast_to_world(&parsed.value, &source, &mut world, &mut library)
+    }
+
+    #[test]
+    fn a_module_that_exposes_an_interfaces_pins_satisfies_it() {
+        let result = sync_module(
+            "    implements I2C
+    implements Power
+    pin SDA
+    pin SCL
+    pin VCC
+    pin GND
+",
+        );
+        assert!(
+            !result.errors.iter().any(|e| matches!(
+                e,
+                SyncError::InterfaceNotSatisfied { .. } | SyncError::UnknownInterface { .. }
+            )),
+            "every pin of both interfaces is exposed: {:?}",
+            result.errors
+        );
+    }
+
+    #[test]
+    fn a_module_claiming_an_interface_without_its_pins_is_reported() {
+        // The whole point of the construct: a module that says `implements
+        // I2C` and has no SDA cannot be wired to an I2C bus, and until this
+        // existed the claim was a comment the compiler never read.
+        let result = sync_module(
+            "    implements I2C
+    pin SCL
+",
+        );
+        let missing_pins = result.errors.iter().find_map(|e| match e {
+            SyncError::InterfaceNotSatisfied {
+                module,
+                interface,
+                missing,
+                ..
+            } => Some((module.clone(), interface.clone(), missing.clone())),
+            _ => None,
+        });
+        assert_eq!(
+            missing_pins,
+            Some((
+                "Sensor".to_string(),
+                "I2C".to_string(),
+                vec!["SDA".to_string()]
+            )),
+            "the missing pin has to be named: {:?}",
+            result.errors
+        );
+    }
+
+    #[test]
+    fn a_module_claiming_an_interface_nobody_defined_is_reported() {
+        let result = sync_module(
+            "    implements SPI
+    pin MOSI
+",
+        );
+        let named = result.errors.iter().find_map(|e| match e {
+            SyncError::UnknownInterface {
+                interface,
+                available,
+                ..
+            } => Some((interface.clone(), available.clone())),
+            _ => None,
+        });
+        assert_eq!(
+            named,
+            Some((
+                "SPI".to_string(),
+                vec!["I2C".to_string(), "Power".to_string()]
+            )),
+            "an undefined interface is an error, and the message says which are defined: {:?}",
+            result.errors
+        );
+    }
+
+    #[test]
+    fn a_module_that_claims_nothing_is_left_alone() {
+        // Every module written before `implements` existed says nothing, and
+        // has to keep synchronising without a word about interfaces.
+        let result = sync_module("    pin SDA\n");
+        assert!(
+            !result.errors.iter().any(|e| matches!(
+                e,
+                SyncError::InterfaceNotSatisfied { .. } | SyncError::UnknownInterface { .. }
+            )),
+            "a module making no claim cannot break one: {:?}",
+            result.errors
+        );
+    }
+
     #[test]
     fn a_trace_written_in_the_dsl_carries_its_net_as_a_component() {
         // DRC's same-net exemption and its message enrichment both query for a
@@ -2686,6 +2921,73 @@ fn side_of_footprint(footprint: &Footprint) -> crate::components::Side {
 /// Returns the design's own definitions with instances replaced in place, so
 /// every pass downstream works on components and nets and needs to know
 /// nothing about modules.
+/// Hold every module to the interfaces it claims.
+///
+/// `interface I2C { pin SDA pin SCL }` is a contract and `implements I2C` is a
+/// module signing it. Both halves parsed for a long time and nothing read
+/// either, so `examples/v2-interfaces.cypcb` could declare four interfaces,
+/// two modules whose comments said which pins belonged to which bus, and be
+/// wrong about it without a word from the checker.
+///
+/// Checked over the definitions rather than over the instances, because a
+/// module nobody instantiates is exactly the case this catches: a library file
+/// of blocks has no board and no `use`, and its promises still have to hold.
+fn check_interface_contracts(ast: &SourceFile, source: &str, result: &mut SyncResult) {
+    let interfaces: HashMap<&str, &cypcb_parser::ast::InterfaceDef> = ast
+        .definitions
+        .iter()
+        .filter_map(|def| match def {
+            Definition::Interface(iface) => Some((iface.name.value.as_str(), iface)),
+            _ => None,
+        })
+        .collect();
+
+    for def in &ast.definitions {
+        let Definition::Module(module) = def else {
+            continue;
+        };
+
+        for claim in &module.implements {
+            let Some(interface) = interfaces.get(claim.interface.value.as_str()) else {
+                let mut available: Vec<String> =
+                    interfaces.keys().map(|name| name.to_string()).collect();
+                available.sort();
+                result.errors.push(SyncError::UnknownInterface {
+                    module: module.name.value.clone(),
+                    interface: claim.interface.value.clone(),
+                    available,
+                    src: source.to_string(),
+                    span: span_to_source_span(&claim.span),
+                });
+                continue;
+            };
+
+            let exposed: HashSet<&str> = module
+                .pins
+                .iter()
+                .map(|pin| pin.name.value.as_str())
+                .collect();
+            let missing: Vec<String> = interface
+                .pins
+                .iter()
+                .filter(|pin| !exposed.contains(pin.name.value.as_str()))
+                .map(|pin| pin.name.value.clone())
+                .collect();
+
+            if !missing.is_empty() {
+                result.errors.push(SyncError::InterfaceNotSatisfied {
+                    module: module.name.value.clone(),
+                    interface: interface.name.value.clone(),
+                    missing,
+                    src: source.to_string(),
+                    span: span_to_source_span(&claim.span),
+                    declaration: span_to_source_span(&interface.name.span),
+                });
+            }
+        }
+    }
+}
+
 fn expand_module_instances(
     ast: &SourceFile,
     source: &str,

@@ -11,8 +11,9 @@ This document describes the syntax of the CodeYourPCB domain-specific language (
 5. [Zone Definition](#zone-definition)
 6. [Trace Definition](#trace-definition)
 7. [Custom Footprint Definition](#custom-footprint-definition)
-8. [Comments](#comments)
-9. [Units](#units)
+8. [Modules and Interfaces](#modules-and-interfaces)
+9. [Comments](#comments)
+10. [Units](#units)
 
 ## Version Declaration
 
@@ -349,6 +350,96 @@ footprint MY_CONNECTOR {
 **Drill:**
 - If `drill` is specified, pad is through-hole (THT)
 - Without `drill`, pad is surface-mount (SMD)
+
+## Modules and Interfaces
+
+A module is a circuit block: components, the nets between them, and the pins it
+exposes to whoever places it.
+
+```
+module <name> {
+    [implements <interface>]
+    pin <name>
+    ...
+
+    component ... { ... }
+    net ... { ... }
+}
+```
+
+**Example:**
+```
+module Divider {
+    pin IN
+    pin OUT
+
+    component RTOP resistor "0402" {
+        value 10kohm
+        at 0mm, 0mm
+    }
+
+    component RBOT resistor "0402" {
+        value 10kohm
+        at 0mm, 2mm
+    }
+
+    net IN {
+        RTOP.1
+    }
+
+    net OUT {
+        RTOP.2
+        RBOT.1
+    }
+}
+```
+
+Place one with `use`. Its components arrive under the instance name as a
+prefix - `SENSE_RTOP`, not a second `RTOP` - and each pin is wired to a net the
+design names:
+
+```
+use Divider as SENSE at 20mm, 10mm rotate 90 {
+    IN = VIN
+    OUT = MID
+}
+```
+
+Every pin the module declares has to be given a net. Leave one out and the
+checker names it.
+
+### Interfaces
+
+An interface is a contract: a named set of pins. A module signs it with
+`implements`, and the checker holds the module to it.
+
+```
+interface I2C {
+    pin SDA
+    pin SCL
+}
+
+module TemperatureSensor {
+    implements I2C
+    pin SDA
+    pin SCL
+
+    component U1 ic "SOIC-8" {
+        value "TMP102"
+        at 0mm, 0mm
+    }
+}
+```
+
+Write `implements` once per interface, the way `pin` is written once per pin.
+Two things are errors, both reported with the line that caused them:
+
+- claiming an interface nobody defined
+- claiming one and not exposing all of its pins - `implements I2C` without an
+  `SDA` gives `module 'X' implements 'I2C' without pin SDA`
+
+An interface nobody implements is fine; it is a definition waiting for a
+module.
 
 ## Comments
 

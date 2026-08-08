@@ -33,11 +33,11 @@
 use crate::ast::{
     AssertDef, AssertExpression, AssertOperand, BoardDef, ComparisonOp, ComponentDef,
     ComponentKind, CurrentUnit, CurrentValue, Definition, Dimension, FootprintDef, Identifier,
-    ImportDef, InterfaceDef, LayerType, ModuleDef, ModuleInstance, NetAssignment, NetClassDef,
-    NetConstraints, NetDef, OutlineDef, PadDef, PadShape, PhysicalValue, PinDeclaration, PinId,
-    PinRef, PortConnection, PositionExpr, RotationExpr, SilkDef, SizeProperty, SourceFile, Span,
-    StackupDef, StackupLayer, StringLit, Tolerance, ToleranceKind, TraceDef, TraceDirective,
-    TracePath, TraceVia, ZoneDef, ZoneKind,
+    ImplementsClause, ImportDef, InterfaceDef, LayerType, ModuleDef, ModuleInstance, NetAssignment,
+    NetClassDef, NetConstraints, NetDef, OutlineDef, PadDef, PadShape, PhysicalValue,
+    PinDeclaration, PinId, PinRef, PortConnection, PositionExpr, RotationExpr, SilkDef,
+    SizeProperty, SourceFile, Span, StackupDef, StackupLayer, StringLit, Tolerance, ToleranceKind,
+    TraceDef, TraceDirective, TracePath, TraceVia, ZoneDef, ZoneKind,
 };
 use crate::errors::{ParseError, ParseResult};
 use crate::node_kinds;
@@ -1323,6 +1323,7 @@ impl CypcbParser {
 
         let mut definitions = Vec::new();
         let mut pins = Vec::new();
+        let mut implements = Vec::new();
 
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
@@ -1330,6 +1331,11 @@ impl CypcbParser {
                 "component_definition" => {
                     if let Some(comp) = self.convert_component(source, &child, errors) {
                         definitions.push(Definition::Component(comp));
+                    }
+                }
+                "implements_clause" => {
+                    if let Some(clause) = self.convert_implements_clause(source, &child) {
+                        implements.push(clause);
                     }
                 }
                 "net_definition" => {
@@ -1361,6 +1367,16 @@ impl CypcbParser {
             name,
             definitions,
             pins,
+            implements,
+            span: span_of(node),
+        })
+    }
+
+    /// Convert an `implements Name` clause inside a module.
+    fn convert_implements_clause(&self, source: &str, node: &Node) -> Option<ImplementsClause> {
+        let name_node = get_child_by_field(node, "interface")?;
+        Some(ImplementsClause {
+            interface: Identifier::new(node_text(source, &name_node), span_of(&name_node)),
             span: span_of(node),
         })
     }
