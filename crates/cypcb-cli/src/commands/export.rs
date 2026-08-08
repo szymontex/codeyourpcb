@@ -47,12 +47,45 @@ pub struct ExportCommand {
 }
 
 impl ExportCommand {
+    /// The fabricator's file conventions, or an error that explains the two
+    /// lists.
+    ///
+    /// `--preset` means two different things in this project and they are not
+    /// interchangeable. `cypcb check` takes a **design-rule** preset - what a
+    /// house can etch - and knows eight of them. `cypcb export` takes a **file
+    /// convention** preset - what a house wants the Gerbers called, in what
+    /// coordinate format, with which layers - and only two of those have been
+    /// written down. A reader who checks a board against `oshpark` and then
+    /// cannot export for it deserves to be told why rather than just told no.
+    fn resolve_preset(&self) -> Result<cypcb_export::presets::ExportPreset> {
+        from_name(&self.preset).ok_or_else(|| {
+            miette::miette!(
+                "'{}' is not an export preset. Export presets say what a \
+                 fabricator wants the files called and in what format, and \
+                 there are two: jlcpcb, pcbway.\n\n\
+                 They are a different list from `cypcb check --preset`, which \
+                 takes design rules - what a house can etch - and knows more \
+                 names including oshpark. A board can be checked against a \
+                 house this command cannot yet write files for.\n\n\
+                 Export with `--preset jlcpcb` or `--preset pcbway`; the \
+                 copper is the same either way, only the file names and the \
+                 coordinate format differ.",
+                self.preset
+            )
+        })
+    }
+
     /// Run the export command.
     pub fn run(&self) -> Result<()> {
         // Read input file
         let source = std::fs::read_to_string(&self.input)
             .into_diagnostic()
             .wrap_err_with(|| format!("Failed to read {}", self.input.display()))?;
+
+        // Before anything else. Until 2026-08-08 this was checked after the
+        // file was read, parsed, imported, synced and warned about - so a
+        // mistyped preset spent the whole build to say one word.
+        self.resolve_preset()?;
 
         eprintln!("Exporting {}...", self.input.display());
 
@@ -100,13 +133,7 @@ impl ExportCommand {
             eprintln!("{:?}", miette::Report::new(warning.clone()));
         }
 
-        // Look up preset
-        let mut preset = from_name(&self.preset).ok_or_else(|| {
-            miette::miette!(
-                "Unknown preset '{}'. Available presets: jlcpcb, pcbway",
-                self.preset
-            )
-        })?;
+        let mut preset = self.resolve_preset()?;
 
         if self.no_assembly {
             preset.assembly = false;

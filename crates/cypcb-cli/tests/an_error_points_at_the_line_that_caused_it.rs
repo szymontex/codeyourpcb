@@ -219,3 +219,57 @@ fn a_drc_violation_names_the_line_of_the_part_it_is_about() {
         "nothing here is defined on line 1; got:\n{report}"
     );
 }
+
+#[test]
+fn a_preset_export_cannot_use_is_refused_with_the_reason() {
+    // `--preset` means two things. `check` takes design rules - what a house
+    // can etch - and knows eight names; `export` takes file conventions - what
+    // a house wants the Gerbers called - and knows two. A reader who checks a
+    // board against oshpark and then cannot export for it deserves the reason,
+    // not just a no.
+    let dir = std::env::temp_dir().join("cypcb-error-rendering");
+    std::fs::create_dir_all(&dir).expect("a place to put the board");
+    let path = dir.join("preset-gap.cypcb");
+    std::fs::write(&path, A_PART).expect("the board is writable");
+
+    let output = Command::new(cypcb_binary())
+        .args(["export", "--preset", "oshpark", "-o"])
+        .arg(dir.join("out"))
+        .arg(&path)
+        .output()
+        .expect("the CLI runs");
+
+    let report = String::from_utf8_lossy(&output.stderr);
+    assert!(!output.status.success(), "an unusable preset has to fail");
+    assert!(
+        report.contains("not an export preset"),
+        "the refusal has to name what kind of preset this is; got:\n{report}"
+    );
+    assert!(
+        report.contains("jlcpcb") && report.contains("pcbway"),
+        "and what it could have been; got:\n{report}"
+    );
+    assert!(
+        report.contains("check --preset"),
+        "and why the other command accepted it; got:\n{report}"
+    );
+
+    // And it refuses before doing the work. "Exporting..." is the first thing
+    // the command prints once it starts.
+    assert!(
+        !report.contains("Exporting"),
+        "a preset it cannot use should be caught before the build; got:\n{report}"
+    );
+}
+
+#[test]
+fn a_short_preset_name_says_which_rules_it_resolved_to() {
+    // `oshpark` is a short form. It is only safe because the header names the
+    // preset it became - a board checked against the wrong house, silently,
+    // is the failure this guards.
+    let report = run("short-preset", A_PART, &["check", "--preset", "oshpark"]);
+    assert!(
+        report.contains("oshpark_2layer"),
+        "the output has to name the rules it used; got:\n{report}"
+    );
+}

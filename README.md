@@ -184,10 +184,21 @@ cargo run -p cypcb-cli -- parse examples/blink.cypcb -o ast    # the AST instead
 cargo run -p cypcb-cli -- parse-kicad tests/fixtures/benchmark/led_blink.kicad_pcb   # a KiCad board
 ```
 
-`check`, `route`, `score` and `export` all take `--preset` (jlcpcb, pcbway,
-oshpark and the rest - an unknown name prints the list). They use the same
-rules and agree on the same board: a file that `check --preset pcbway` calls
-28 violations is 28 to `score --preset pcbway` too.
+`check`, `route`, `score` and `export` all take `--preset`, and an unknown
+name prints the list. They use the same rules and agree on the same board: a
+file that `check --preset pcbway` calls 28 violations is 28 to
+`score --preset pcbway` too.
+
+`--preset` means two things, though, and the lists are not the same length.
+`check`, `route` and `score` take a **design-rule** preset - what a house can
+etch - and know eight: `jlcpcb_2layer`, `jlcpcb_4layer`, the two advanced
+variants, `oshpark_2layer`, `oshpark_4layer`, `pcbway_standard` and
+`prototype`, with `jlcpcb`, `oshpark` and `pcbway` as short forms that name
+what they resolved to. `export` takes a **file convention** preset - what a
+house wants the Gerbers called and in what coordinate format - and only
+`jlcpcb` and `pcbway` have been written down. So a board can be checked
+against OSHPark and not yet exported for it; `cypcb export --preset oshpark`
+says exactly that.
 
 ### IDE workflow
 
