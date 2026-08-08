@@ -374,7 +374,24 @@ multi_ic        0.26: 13 iterations, converged false, [553, 339, 269, 270, 258, 
 - The mesh is a template cylinder scaled per hole, the construction the vias already use, spanning the board thickness plus a hair so the ends are never coplanar with the faces.
 - **Proven to reach the scene rather than only the counter**: a playwright case reads `padDrillCount` off the debug surface on blink and fails with the collector stubbed to return nothing - `blink carries through-hole pads and none of them was drilled`. Holes are also held at no more than the pad count, so nothing is drilled twice.
 - Gate green 8/8; viewer 231 tests.
-- NEXT-ACTION: none in this vector. Mounting holes and pad drills are closed from the language through to both views.
+- DONE: **the importer read no copper pours at all.** `(zone` appeared nowhere in `pcb_parser.rs` - it dispatched `footprint`, `segment`, `via` and the `gr_*` outline shapes and walked past every pour. A two-layer board with a ground plane, which is close to every two-layer board anybody makes, arrived with no plane: the router treated the poured area as free, the checker measured clearances against copper that was not in the model, and the exported Gerber shipped a board with no ground.
+- **What can be carried is carried exactly; the rest is refused by name.** This crate's `Zone` is a rectangle and KiCad's is a polygon, so a rectangular pour comes across as itself and anything else is reported rather than flattened. A bounding box is not a conservative reading of an L-shaped pour - it is copper where the designer deliberately left none, in exactly the places the shape was drawn to avoid.
+- Through the release CLI, on a board carrying one rectangular pour and one L-shaped one:
+
+```
+"zone_count": 1,
+"zone_refusals": [
+  "the zone on net GND is a 6-point outline; this importer carries rectangular
+   pours only, and a bounding box would put copper where the shape was drawn
+   to avoid it"
+]
+```
+
+  Before this commit neither field existed and both pours vanished without a word.
+- A KiCad rule area arrives as a `Keepout` rather than a pour, which matters the other way round: carrying it as a pour would fill the one region on the board that has to stay empty. A pour with no net is refused too - it cannot be filled or checked.
+- **Measured and worth recording separately: none of the five benchmark fixtures carries a zone**, so the autorouter has never been measured on a board with a plane. That is a gap in what the numbers in `docs/routing.md` cover, not a defect in this commit.
+- Workspace 103 suites ok, gate green 8/8.
+- NEXT-ACTION: **a benchmark fixture with a ground plane.** Every routing number this project publishes comes from boards without one, and a plane changes what the router is solving - GND stops being a net to route and becomes copper to avoid. Sizeable, unblocked, and it moves no existing ratchet because it adds a fixture rather than changing one.
 - DONE: **components say which face they are on.** A `Side` component with the three questions a face answers - which copper its SMD pads take, which silkscreen it prints to, and its layer-mask bit. The KiCad importer reads `(layer "B.Cu")` from a footprint, which is the only place in the codebase where the side is data rather than inference; sync derives it from the footprint's copper and stores the answer so every rule reads the same one. The silkscreen rule takes it and falls back to the old guess only when nothing states it. Proven on a two-footprint board where one is `F.Cu` and one `B.Cu`: `[("R1", Top), ("R2", Bottom)]`.
 
 ### V2 - Autorouter and routing quality

@@ -27,6 +27,7 @@ use std::path::Path;
 
 use cypcb_core::{Nm, Point, Rect};
 use cypcb_router::types::{RouteSegment, RoutingResult, RoutingStatus, ViaPlacement};
+use cypcb_world::components::zone::Zone;
 use cypcb_world::components::{BoardOutline, Layer, PadShape, Side};
 use cypcb_world::footprint::{Footprint, FootprintLibrary, PadDef};
 use cypcb_world::{
@@ -93,6 +94,13 @@ pub struct KicadPcbMetadata {
     pub board_size_mm: (f64, f64),
     /// Number of copper layers.
     pub layer_count: u8,
+    /// Copper pours and rule areas carried into the board.
+    pub zone_count: usize,
+    /// Zones the file carried and this importer would not approximate, each
+    /// with the reason. Reported rather than dropped in silence: a board that
+    /// arrives without its ground plane and says nothing is a board whose
+    /// Gerber ships without a ground plane.
+    pub zone_refusals: Vec<String>,
 }
 
 /// Complete result of parsing a KiCad PCB file.
@@ -358,6 +366,23 @@ pub fn parse_kicad_pcb_str(content: &str) -> Result<KicadPcbParseResult, KicadPc
         }
     }
 
+    // 8. Extract copper pours and rule areas
+    let mut zone_refusals: Vec<String> = Vec::new();
+    let mut zone_count = 0usize;
+    for elem in elements {
+        if list_name(elem).as_deref() != Some("zone") {
+            continue;
+        }
+        match parse_zone(elem, &kicad_net_map, board_origin)? {
+            ZoneImport::Carried(zone) => {
+                world.spawn_entity((zone,));
+                zone_count += 1;
+            }
+            ZoneImport::Refused(why) => zone_refusals.push(why),
+            ZoneImport::Skipped => {}
+        }
+    }
+
     // Build reference routes
     let trace_segment_count = route_segments.len();
     let via_count_val = via_placements.len();
@@ -381,6 +406,8 @@ pub fn parse_kicad_pcb_str(content: &str) -> Result<KicadPcbParseResult, KicadPc
     };
 
     let metadata = KicadPcbMetadata {
+        zone_count,
+        zone_refusals,
         version,
         component_count,
         net_count,
@@ -984,6 +1011,182 @@ fn parse_pad(
 // ---------------------------------------------------------------------------
 // Internal: segment parsing
 // ---------------------------------------------------------------------------
+
+/// Read a `(zone ...)` from a KiCad board.
+///
+/// A copper pour is the largest thing on a real two-layer board and the
+/// importer read none of them. A board with a ground plane arrived here with
+/// no plane: the router then treated the whole area as free, the checker
+/// measured clearances against copper that was not in the model, and the
+/// exported Gerber shipped a board whose ground was missing.
+///
+/// What can be carried is carried exactly. This crate's `Zone` is a rectangle,
+/// and KiCad's is a polygon, so a pour whose outline is an axis-aligned
+/// rectangle comes across as itself and anything else is refused by name
+/// rather than flattened to its bounding box. A bounding box is not a
+/// conservative approximation of an L-shaped pour - it is copper where the
+/// designer put none, and it would be wrong in exactly the places the shape
+/// was drawn to avoid.
+fn parse_zone(
+    elem: &Sexp,
+    net_map: &HashMap<i64, NetId>,
+    origin: (f64, f64),
+) -> Result<ZoneImport, KicadPcbError> {
+    let Ok(list) = elem.list() else {
+        return Ok(ZoneImport::Skipped);
+    };
+
+    let mut net_id: Option<NetId> = None;
+    let mut net_name = String::new();
+    let mut layer_mask: u32 = 0;
+    let mut points: Vec<(f64, f64)> = Vec::new();
+    let mut is_keepout = false;
+
+    for child in &list[1..] {
+        match list_name(child).as_deref() {
+            Some("net") => {
+                if let Ok(net_list) = child.list() {
+                    if net_list.len() >= 2 {
+                        if let Some(number) = get_i64(&net_list[1]) {
+                            net_id = net_map.get(&number).copied();
+                        }
+                    }
+                }
+            }
+            Some("net_name") => {
+                if let Ok(name_list) = child.list() {
+                    if name_list.len() >= 2 {
+                        net_name = get_string(&name_list[1]).unwrap_or_default();
+                    }
+                }
+            }
+            // `layer` for one, `layers` for a pour repeated down the stack.
+            Some("layer") | Some("layers") => {
+                if let Ok(layer_list) = child.list() {
+                    for layer_sexp in &layer_list[1..] {
+                        let mut layers = Vec::new();
+                        parse_layer_names(&get_string(layer_sexp).unwrap_or_default(), &mut layers);
+                        for layer in layers {
+                            layer_mask |= layer.to_copper_mask();
+                        }
+                    }
+                }
+            }
+            // A KiCad "rule area": copper is kept out rather than poured.
+            Some("keepout") => is_keepout = true,
+            Some("polygon") => {
+                if let Ok(poly) = child.list() {
+                    for pts in &poly[1..] {
+                        if list_name(pts).as_deref() != Some("pts") {
+                            continue;
+                        }
+                        let Ok(pts_list) = pts.list() else { continue };
+                        for pt in &pts_list[1..] {
+                            if list_name(pt).as_deref() != Some("xy") {
+                                continue;
+                            }
+                            let Ok(pt_list) = pt.list() else { continue };
+                            if pt_list.len() >= 3 {
+                                let x = coordinate(&pt_list[1], "zone outline x")?;
+                                let y = coordinate(&pt_list[2], "zone outline y")?;
+                                points.push((x - origin.0, y - origin.1));
+                            }
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    let label = if net_name.is_empty() {
+        "a zone".to_string()
+    } else {
+        format!("the zone on net {net_name}")
+    };
+
+    if layer_mask == 0 {
+        return Ok(ZoneImport::Refused(format!(
+            "{label} names no copper layer, so there is nothing to pour it on"
+        )));
+    }
+
+    let Some(bounds) = axis_aligned_rectangle(&points) else {
+        return Ok(ZoneImport::Refused(format!(
+            "{label} is a {}-point outline; this importer carries rectangular \
+             pours only, and a bounding box would put copper where the shape \
+             was drawn to avoid it",
+            points.len()
+        )));
+    };
+
+    if is_keepout {
+        return Ok(ZoneImport::Carried(Zone::keepout(bounds, layer_mask)));
+    }
+
+    match net_id {
+        Some(net) => Ok(ZoneImport::Carried(
+            Zone::copper_pour_for_net(bounds, layer_mask, net).with_name(net_name),
+        )),
+        // A pour with no net cannot be filled or checked, and KiCad does write
+        // them - an unassigned pour is a common half-finished state.
+        None => Ok(ZoneImport::Refused(format!(
+            "{label} is poured to no net, so nothing connects to it"
+        ))),
+    }
+}
+
+/// What became of one `(zone ...)`.
+pub enum ZoneImport {
+    /// Carried into the board.
+    Carried(Zone),
+    /// Not carried, and why - reported rather than dropped in silence.
+    Refused(String),
+    /// Not a zone worth a word.
+    Skipped,
+}
+
+/// The rectangle an outline describes, if it describes one.
+///
+/// KiCad closes a rectangle with four points; some writers repeat the first as
+/// a fifth. Anything else - a rounded corner, an L, a pour cut around a
+/// connector - is not a rectangle and is refused rather than approximated.
+fn axis_aligned_rectangle(points: &[(f64, f64)]) -> Option<Rect> {
+    let mut pts = points.to_vec();
+    if pts.len() == 5 && pts[0] == pts[4] {
+        pts.pop();
+    }
+    if pts.len() != 4 {
+        return None;
+    }
+
+    let xs: Vec<f64> = pts.iter().map(|p| p.0).collect();
+    let ys: Vec<f64> = pts.iter().map(|p| p.1).collect();
+    let (min_x, max_x) = (
+        xs.iter().cloned().fold(f64::MAX, f64::min),
+        xs.iter().cloned().fold(f64::MIN, f64::max),
+    );
+    let (min_y, max_y) = (
+        ys.iter().cloned().fold(f64::MAX, f64::min),
+        ys.iter().cloned().fold(f64::MIN, f64::max),
+    );
+
+    // Every corner has to sit on the rectangle's own corners, or the outline
+    // only happens to share its bounding box.
+    let on_corner = |p: &(f64, f64)| (p.0 - min_x).abs() < 1e-6 || (p.0 - max_x).abs() < 1e-6;
+    let on_edge = |p: &(f64, f64)| (p.1 - min_y).abs() < 1e-6 || (p.1 - max_y).abs() < 1e-6;
+    if !pts.iter().all(|p| on_corner(p) && on_edge(p)) {
+        return None;
+    }
+    if (max_x - min_x) < 1e-6 || (max_y - min_y) < 1e-6 {
+        return None;
+    }
+
+    Some(Rect::new(
+        Point::from_mm(min_x, min_y),
+        Point::from_mm(max_x, max_y),
+    ))
+}
 
 fn parse_segment(
     sexp: &Sexp,
