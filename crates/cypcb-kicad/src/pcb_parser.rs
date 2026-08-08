@@ -339,7 +339,7 @@ pub fn parse_kicad_pcb_str(content: &str) -> Result<KicadPcbParseResult, KicadPc
     for elem in elements {
         if let Some(name) = list_name(elem) {
             if name == "segment" {
-                if let Some(seg) = parse_segment(elem, &kicad_net_map) {
+                if let Some(seg) = parse_segment(elem, &kicad_net_map)? {
                     route_segments.push(seg);
                 }
             }
@@ -351,7 +351,7 @@ pub fn parse_kicad_pcb_str(content: &str) -> Result<KicadPcbParseResult, KicadPc
     for elem in elements {
         if let Some(name) = list_name(elem) {
             if name == "via" {
-                if let Some(via) = parse_via(elem, &kicad_net_map) {
+                if let Some(via) = parse_via(elem, &kicad_net_map)? {
                     via_placements.push(via);
                 }
             }
@@ -745,7 +745,7 @@ fn parse_footprint(
                 }
                 "pad" => {
                     if let Ok(list) = child.list() {
-                        if let Some(pad) = parse_pad(&list[1..], kicad_net_map) {
+                        if let Some(pad) = parse_pad(&list[1..], kicad_net_map)? {
                             pads.push(pad);
                         }
                     }
@@ -853,7 +853,10 @@ struct ParsedPad {
     net_id: Option<NetId>,
 }
 
-fn parse_pad(elements: &[Sexp], kicad_net_map: &HashMap<i64, NetId>) -> Option<ParsedPad> {
+fn parse_pad(
+    elements: &[Sexp],
+    kicad_net_map: &HashMap<i64, NetId>,
+) -> Result<Option<ParsedPad>, KicadPcbError> {
     // (pad "1" smd|thru_hole rect|circle|oval (at X Y) (size W H) (drill D) (layers ...) (net N "name"))
     // elements[0] = pad number
     // elements[1] = pad type (smd, thru_hole, np_thru_hole, connect)
@@ -861,7 +864,7 @@ fn parse_pad(elements: &[Sexp], kicad_net_map: &HashMap<i64, NetId>) -> Option<P
     // remaining = property lists
 
     if elements.len() < 3 {
-        return None;
+        return Ok(None);
     }
 
     let number = get_string(&elements[0]).unwrap_or_default();
@@ -890,8 +893,8 @@ fn parse_pad(elements: &[Sexp], kicad_net_map: &HashMap<i64, NetId>) -> Option<P
                 "at" => {
                     if let Ok(list) = prop.list() {
                         if list.len() >= 3 {
-                            let x = get_f64(&list[1]).unwrap_or(0.0);
-                            let y = get_f64(&list[2]).unwrap_or(0.0);
+                            let x = coordinate(&list[1], "pad position x")?;
+                            let y = coordinate(&list[2], "pad position y")?;
                             local_pos = Point::from_mm(x, y);
                         }
                     }
@@ -899,8 +902,8 @@ fn parse_pad(elements: &[Sexp], kicad_net_map: &HashMap<i64, NetId>) -> Option<P
                 "size" => {
                     if let Ok(list) = prop.list() {
                         if list.len() >= 3 {
-                            let w = get_f64(&list[1]).unwrap_or(1.0);
-                            let h = get_f64(&list[2]).unwrap_or(1.0);
+                            let w = coordinate(&list[1], "pad width")?;
+                            let h = coordinate(&list[2], "pad height")?;
                             size = (Nm::from_mm(w), Nm::from_mm(h));
                         }
                     }
@@ -908,7 +911,7 @@ fn parse_pad(elements: &[Sexp], kicad_net_map: &HashMap<i64, NetId>) -> Option<P
                 "drill" => {
                     if let Ok(list) = prop.list() {
                         if list.len() >= 2 {
-                            let d = get_f64(&list[1]).unwrap_or(0.0);
+                            let d = coordinate(&list[1], "pad drill")?;
                             if d > 0.0 {
                                 drill = Some(Nm::from_mm(d));
                             }
@@ -955,7 +958,7 @@ fn parse_pad(elements: &[Sexp], kicad_net_map: &HashMap<i64, NetId>) -> Option<P
         drill = Some(Nm::from_mm(0.8)); // Default drill size
     }
 
-    Some(ParsedPad {
+    Ok(Some(ParsedPad {
         number,
         shape,
         local_position: local_pos,
@@ -963,15 +966,21 @@ fn parse_pad(elements: &[Sexp], kicad_net_map: &HashMap<i64, NetId>) -> Option<P
         drill,
         layers,
         net_id,
-    })
+    }))
 }
 
 // ---------------------------------------------------------------------------
 // Internal: segment parsing
 // ---------------------------------------------------------------------------
 
-fn parse_segment(sexp: &Sexp, kicad_net_map: &HashMap<i64, NetId>) -> Option<RouteSegment> {
-    let list = sexp.list().ok()?;
+fn parse_segment(
+    sexp: &Sexp,
+    kicad_net_map: &HashMap<i64, NetId>,
+) -> Result<Option<RouteSegment>, KicadPcbError> {
+    let list = match sexp.list() {
+        Ok(l) => l,
+        Err(_) => return Ok(None),
+    };
 
     let mut start: Option<Point> = None;
     let mut end: Option<Point> = None;
@@ -985,8 +994,8 @@ fn parse_segment(sexp: &Sexp, kicad_net_map: &HashMap<i64, NetId>) -> Option<Rou
                 "start" => {
                     if let Ok(sub) = child.list() {
                         if sub.len() >= 3 {
-                            let x = get_f64(&sub[1]).unwrap_or(0.0);
-                            let y = get_f64(&sub[2]).unwrap_or(0.0);
+                            let x = coordinate(&sub[1], "segment start x")?;
+                            let y = coordinate(&sub[2], "segment start y")?;
                             start = Some(Point::from_mm(x, y));
                         }
                     }
@@ -994,8 +1003,8 @@ fn parse_segment(sexp: &Sexp, kicad_net_map: &HashMap<i64, NetId>) -> Option<Rou
                 "end" => {
                     if let Ok(sub) = child.list() {
                         if sub.len() >= 3 {
-                            let x = get_f64(&sub[1]).unwrap_or(0.0);
-                            let y = get_f64(&sub[2]).unwrap_or(0.0);
+                            let x = coordinate(&sub[1], "segment end x")?;
+                            let y = coordinate(&sub[2], "segment end y")?;
                             end = Some(Point::from_mm(x, y));
                         }
                     }
@@ -1031,18 +1040,24 @@ fn parse_segment(sexp: &Sexp, kicad_net_map: &HashMap<i64, NetId>) -> Option<Rou
         }
     }
 
-    match (start, end) {
+    Ok(match (start, end) {
         (Some(s), Some(e)) => Some(RouteSegment::new(net_id, layer, width, s, e)),
         _ => None,
-    }
+    })
 }
 
 // ---------------------------------------------------------------------------
 // Internal: via parsing
 // ---------------------------------------------------------------------------
 
-fn parse_via(sexp: &Sexp, kicad_net_map: &HashMap<i64, NetId>) -> Option<ViaPlacement> {
-    let list = sexp.list().ok()?;
+fn parse_via(
+    sexp: &Sexp,
+    kicad_net_map: &HashMap<i64, NetId>,
+) -> Result<Option<ViaPlacement>, KicadPcbError> {
+    let list = match sexp.list() {
+        Ok(l) => l,
+        Err(_) => return Ok(None),
+    };
 
     let mut position: Option<Point> = None;
     let mut drill = Nm::from_mm(0.3); // Default drill
@@ -1056,8 +1071,8 @@ fn parse_via(sexp: &Sexp, kicad_net_map: &HashMap<i64, NetId>) -> Option<ViaPlac
                 "at" => {
                     if let Ok(sub) = child.list() {
                         if sub.len() >= 3 {
-                            let x = get_f64(&sub[1]).unwrap_or(0.0);
-                            let y = get_f64(&sub[2]).unwrap_or(0.0);
+                            let x = coordinate(&sub[1], "via position x")?;
+                            let y = coordinate(&sub[2], "via position y")?;
                             position = Some(Point::from_mm(x, y));
                         }
                     }
@@ -1095,7 +1110,7 @@ fn parse_via(sexp: &Sexp, kicad_net_map: &HashMap<i64, NetId>) -> Option<ViaPlac
         }
     }
 
-    position.map(|pos| ViaPlacement::new(net_id, pos, drill, start_layer, end_layer))
+    Ok(position.map(|pos| ViaPlacement::new(net_id, pos, drill, start_layer, end_layer)))
 }
 
 // ---------------------------------------------------------------------------
