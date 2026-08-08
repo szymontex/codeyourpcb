@@ -976,7 +976,7 @@ function drawPadNumbers(
 // Single pad
 // ---------------------------------------------------------------------------
 
-function drawPad(
+export function drawPad(
   ctx: CanvasRenderingContext2D, vp: Viewport,
   compX: number, compY: number, rotationMdeg: number,
   pad: PadInfo, layers: LayerVisibility, isSelected: boolean,
@@ -986,8 +986,17 @@ function drawPad(
   padNetMap: Map<string, string>,
   _lodTier: LodTier,
 ): void {
-  let color = getPadColor(pad.layer_mask, layers);
-  if (!color) return;
+  // A mounting hole is a pad with a drill and no copper, so every decision
+  // that starts from the copper skips it: `getPadColor` returns null and this
+  // used to return with it. The board then showed bare laminate where a 3.2mm
+  // hole is, which is a hole somebody places a connector on top of.
+  const isMechanical = pad.layer_mask === 0 && !!pad.drill_nm;
+
+  const padColor = getPadColor(pad.layer_mask, layers);
+  if (!padColor && !isMechanical) return;
+  // Only the mechanical branch runs without a colour, and it returns before
+  // anything below needs one.
+  let color = padColor ?? LAYER_COLORS.drill;
 
   // Per-pad net highlighting
   if (highlightedNet != null) {
@@ -1041,6 +1050,28 @@ function drawPad(
           break;
       }
     }
+  }
+
+  // A mechanical hole has no copper to draw, only the hole. It is drawn
+  // whichever copper layers are shown, because it is on none of them and it
+  // is there regardless - that is the view somebody checks mechanical fit in.
+  if (isMechanical) {
+    const radius = Math.max(width, height) / 2;
+    ctx.fillStyle = LAYER_COLORS.drill;
+    ctx.beginPath();
+    ctx.arc(0, 0, radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // An outline rather than a plating ring: this hole is bare, and drawing
+    // it with the brass ring a plated hole gets would say the opposite.
+    ctx.strokeStyle = isSelected ? '#FF6600' : '#9AA0A6';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(0, 0, radius, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.restore();
+    return;
   }
 
   ctx.fillStyle = isSelected ? '#FF6600' : color;
