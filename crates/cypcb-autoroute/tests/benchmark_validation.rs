@@ -229,7 +229,17 @@ fn print_table_footer() {
 /// regression; lower them when the via ring reaches the grid.
 const DRC_RATCHETS: &[(&str, &str, u32, u32)] = &[
     ("led_blink.kicad_pcb", "led_blink", 2, 0),
-    ("stm32_breakout.kicad_pcb", "stm32_breakout", 239, 136),
+    // Re-measured 2026-08-08 at 180 / 93 on 899 routes, after two ten-pin
+    // headers whose last four pins ran 7.9mm past the top edge moved from
+    // y = 90 to y = 80. Pads off the board had been forcing the router into
+    // the edge region: violations fell 239 -> 180 and shorts 136 -> 93 for a
+    // placement change alone.
+    //
+    // Violations ratchet is the measured value plus this board's band of 30.
+    // The shorts ratchet stays at 136 rather than being tightened by a number
+    // nobody measured - no shorts band exists for this board - so it is looser
+    // than it could be and says so.
+    ("stm32_breakout.kicad_pcb", "stm32_breakout", 210, 136),
     // Re-measured 2026-08-08 at 318 / 177, after two of its parts stopped
     // sitting 50mm to the left of the board: the file carried `(at 105, 80)`
     // and `(at 140, 55)` and the importer read a malformed coordinate as zero
@@ -253,7 +263,12 @@ const DRC_RATCHETS: &[(&str, &str, u32, u32)] = &[
     // Measured 2026-08-08 at 81 / 33, plus the board's own band from
     // `via_price_sweep::how_much_of_the_price_is_noise`: 62 to 74 across
     // prices 0.22..0.28, 12 violations wide, and 27 to 34 shorts.
-    ("shift_driver.kicad_pcb", "shift_driver", 93, 40),
+    // Re-measured 2026-08-08 at 65 / 34 on 671 routes, after three bypass
+    // capacitors that sat 3.4mm above the board - placed there to clear a DIP
+    // courtyard - moved inside it. Violations ratchet is the measured value
+    // plus its band of 12; the shorts ratchet stays at 40, which is already
+    // tighter than measured-plus-band would give.
+    ("shift_driver.kicad_pcb", "shift_driver", 77, 40),
     // 336 / 179, band 296 to 336 across prices 0.22..0.28 - 40 violations
     // wide. This fixture has now been corrected twice: its headers ran past
     // the board outline, and then two of the four collapsed onto the geometry

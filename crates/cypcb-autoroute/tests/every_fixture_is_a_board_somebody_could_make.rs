@@ -82,23 +82,19 @@ fn pad_boxes(world: &mut BoardWorld, library: &FootprintLibrary) -> Vec<(String,
     boxes
 }
 
-/// The fixtures this does not hold for yet, with what they carry.
+/// Fixtures with copper outside their own outline.
 ///
-/// `stm32_breakout` runs two ten-pin headers past its 65mm height, and
-/// `shift_driver` has its bypass capacitors 3mm above the top edge, put there
-/// to clear a DIP courtyard. Fixing them moves every ratchet and every table
-/// in `docs/routing.md`, so it is a decision rather than a fire.
+/// Empty, and it took four repairs to get there. `qfp_fanout` ran two 21-pin
+/// headers along a 46mm board - 50.8mm of pins - and was rebuilt with four
+/// headers of twelve. `multi_ic` carried `(at 105, 80)` with a comma, which
+/// the importer read as zero and put two parts 50mm off the board.
+/// `stm32_breakout` had two ten-pin headers whose last four pins ran 7.9mm
+/// past its top edge, and they moved from y = 90 to y = 80. `shift_driver`
+/// had three bypass capacitors 3.4mm above the board, put there to clear a
+/// DIP courtyard, and they moved to y = 1.5 inside it.
 ///
-/// `multi_ic` was here with ten, and they were not a placement at all: the file
-/// carried `(at 105, 80)` and `(at 140, 55)` - one comma each - and the
-/// importer read a malformed coordinate as zero and said nothing, so a ferrite
-/// bead and an Ethernet transformer sat 50mm to the left of the board. The
-/// parser refuses a coordinate it cannot read now, and the file says what it
-/// meant.
-const KNOWN_OFF_BOARD: &[(&str, usize)] = &[
-    ("stm32_breakout.kicad_pcb", 8),
-    ("shift_driver.kicad_pcb", 6),
-];
+/// A new entry here is a new defect rather than an inheritance.
+const KNOWN_OFF_BOARD: &[(&str, usize)] = &[];
 
 #[test]
 fn no_fixture_has_copper_outside_its_own_board_outline() {

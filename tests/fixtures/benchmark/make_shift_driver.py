@@ -91,7 +91,14 @@ def build():
         parts.append(dip16(12.0 + reg * 18.0, 4.0, ref, pins))
 
         # Bypass capacitor beside every register.
-        parts.append(chip_0805(12.0 + reg * 18.0 + 3.8, -3.4, f"C{reg + 1}", "100nF",
+        #
+        # At y = 1.5, not -3.4. They sat 3.4mm above the top edge to clear the
+        # DIP courtyard, which put six pads outside the board outline - a
+        # fixture measuring the router on copper nobody can fabricate. The DIP
+        # starts at y = 4.0 and its first pad reaches down to about 2.9 with
+        # its courtyard, so 1.5 leaves an 0805 inside the board and clear of
+        # it.
+        parts.append(chip_0805(12.0 + reg * 18.0 + 3.8, 1.5, f"C{reg + 1}", "100nF",
                                "VCC", "GND"))
 
         # Eight resistor/LED pairs per register, in two columns below it.

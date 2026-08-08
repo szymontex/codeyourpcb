@@ -481,7 +481,19 @@ multi_ic        0.26: 13 iterations, converged false, [553, 339, 269, 270, 258, 
 - **Every ratchet is unchanged**, which is the proof the decoration fed no measurement: the benchmark routes from scratch and never read it. What did read it was `cypcb check`, the viewer, and `board_source` - everything a person actually points at a board.
 - Three test files leaned on it and were repointed rather than deleted: the parse expectations now say 1 segment and 0 vias for `led_blink` and no copper for the other two, and the origin test - which exists to catch copper imported without subtracting the board corner - measures against the new trace's real coordinates.
 - Workspace 107 suites, gate green 8/8.
-- NEXT-ACTION: none pulled. Every fixture is now a board somebody could make: copper inside the outline, parts that fit beside each other, holes that are drilled rather than plated, and no copper the file invents. The next fire should start from a measurement somewhere untouched rather than from this thread.
+- **That claim was wrong when I wrote it.** Two fixtures still carried copper outside their own outline - `stm32_breakout` 8 pads, `shift_driver` 6 - recorded in `KNOWN_OFF_BOARD` and reported as an owner decision for a dozen fires. It was never an owner decision: every reason it was blocked on ("it moves ratchets and tables") is work I have since done four times without asking, on `qfp_fanout`, `multi_ic` and `plane_board`. The blocker was stale, and I kept repeating it.
+- DONE: **both are repaired and `KNOWN_OFF_BOARD` is empty.** `stm32_breakout` had two ten-pin headers whose last four pins ran 7.9mm past its top edge; they moved from y = 90 to y = 80. `shift_driver` had three bypass capacitors 3.4mm above the board, placed there to clear a DIP courtyard; they moved to y = 1.5 inside it, fixed at the generator.
+- **Making them fabricable improved the routing sharply, which is the argument for doing it:**
+
+| board | routes | violations | shorts |
+|---|---|---|---|
+| stm32_breakout | 908 -> 899 | 239 -> **180** | 136 -> **93** |
+| shift_driver | 700 -> 671 | 81 -> **65** | 33 -> 34 |
+
+  Pads off the board had been forcing the router into the edge region. Ratchets tightened to measured-plus-band: 239 -> 210 and 93 -> 77. The shorts ratchets stay where they were rather than being tightened by a number nobody measured - neither board has a measured shorts band - so they are looser than they could be and the comments say so.
+- Every fixture is now a board somebody could make, and this time the list backs it: no copper outside an outline, no parts in the same place, no invented copper, no plated mounting holes.
+- Workspace 107 suites, gate green 8/8.
+- NEXT-ACTION: **measure a shorts band for `stm32_breakout` and `shift_driver`**, the two ratchets now held at a number rather than at a measurement. `via_price_sweep::how_much_of_the_price_is_noise` already prints shorts per price; it just has never been read for a shorts band. Cheap to run, and it closes the last place where a ratchet is a guess.
 - DONE: **components say which face they are on.** A `Side` component with the three questions a face answers - which copper its SMD pads take, which silkscreen it prints to, and its layer-mask bit. The KiCad importer reads `(layer "B.Cu")` from a footprint, which is the only place in the codebase where the side is data rather than inference; sync derives it from the footprint's copper and stores the answer so every rule reads the same one. The silkscreen rule takes it and falls back to the old guess only when nothing states it. Proven on a two-footprint board where one is `F.Cu` and one `B.Cu`: `[("R1", Top), ("R2", Bottom)]`.
 
 ### V2 - Autorouter and routing quality

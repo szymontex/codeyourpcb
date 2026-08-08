@@ -188,7 +188,7 @@
   ; -- GPIO header 1 (left side) --
   (footprint "Connector_PinHeader_2.54mm:PinHeader_1x10_P2.54mm_Vertical"
     (layer "F.Cu")
-    (at 85 90)
+    (at 85 80)
     (property "Reference" "J3")
     (property "Value" "GPIO_L")
     (property "Footprint" "Connector_PinHeader_2.54mm:PinHeader_1x10_P2.54mm_Vertical")
@@ -207,7 +207,7 @@
   ; -- GPIO header 2 (right side) --
   (footprint "Connector_PinHeader_2.54mm:PinHeader_1x10_P2.54mm_Vertical"
     (layer "F.Cu")
-    (at 145 90)
+    (at 145 80)
     (property "Reference" "J4")
     (property "Value" "GPIO_R")
     (property "Footprint" "Connector_PinHeader_2.54mm:PinHeader_1x10_P2.54mm_Vertical")

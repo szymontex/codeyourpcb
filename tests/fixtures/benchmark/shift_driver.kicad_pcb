@@ -129,7 +129,7 @@
 
   (footprint "Resistor_SMD:R_0805_2012Metric"
     (layer "F.Cu")
-    (at 115.800 56.600)
+    (at 115.800 61.500)
     (property "Reference" "C1")
     (property "Value" "100nF")
     (property "Footprint" "Resistor_SMD:R_0805_2012Metric")
@@ -323,7 +323,7 @@
 
   (footprint "Resistor_SMD:R_0805_2012Metric"
     (layer "F.Cu")
-    (at 133.800 56.600)
+    (at 133.800 61.500)
     (property "Reference" "C2")
     (property "Value" "100nF")
     (property "Footprint" "Resistor_SMD:R_0805_2012Metric")
@@ -517,7 +517,7 @@
 
   (footprint "Resistor_SMD:R_0805_2012Metric"
     (layer "F.Cu")
-    (at 151.800 56.600)
+    (at 151.800 61.500)
     (property "Reference" "C3")
     (property "Value" "100nF")
     (property "Footprint" "Resistor_SMD:R_0805_2012Metric")
