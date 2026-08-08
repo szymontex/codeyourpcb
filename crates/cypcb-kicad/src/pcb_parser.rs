@@ -603,6 +603,48 @@ fn update_bounds(
 // Internal: footprint parsing
 // ---------------------------------------------------------------------------
 
+/// The key to store this geometry under, given what the library already holds.
+///
+/// The plain library name when it is free or already holds exactly these pads;
+/// otherwise the name with a numbered suffix, so a second geometry sharing a
+/// name gets a home of its own rather than silently inheriting the first.
+///
+/// Pads are compared as written - number, shape, position, size, drill and
+/// layers - because those are what the router and the checker read. Two parts
+/// that differ only in rotation are the same footprint placed differently and
+/// share a key, which is what the `rotation` on the component is for.
+fn resolve_library_key(library: &FootprintLibrary, name: &str, pads: &[PadDef]) -> String {
+    let same = |existing: &Footprint| -> bool {
+        existing.pads.len() == pads.len()
+            && existing.pads.iter().zip(pads).all(|(a, b)| {
+                a.number == b.number
+                    && a.shape == b.shape
+                    && a.position == b.position
+                    && a.size == b.size
+                    && a.drill == b.drill
+                    && a.layers == b.layers
+            })
+    };
+
+    match library.get(name) {
+        None => name.to_string(),
+        Some(existing) if same(existing) => name.to_string(),
+        Some(_) => {
+            // A name in use by a different geometry. Walk the suffixes until
+            // one is free or one already holds this geometry.
+            for n in 2.. {
+                let candidate = format!("{name}#{n}");
+                match library.get(&candidate) {
+                    None => return candidate,
+                    Some(existing) if same(existing) => return candidate,
+                    Some(_) => continue,
+                }
+            }
+            unreachable!("the suffix search is unbounded")
+        }
+    }
+}
+
 fn parse_footprint(
     elements: &[Sexp],
     world: &mut BoardWorld,
@@ -693,20 +735,32 @@ fn parse_footprint(
         lib_link.clone()
     };
 
-    // Register footprint in library if not already present
-    if !library.contains(&library_key) {
-        let pad_defs: Vec<PadDef> = pads
-            .iter()
-            .map(|p| PadDef {
-                number: p.number.clone(),
-                shape: p.shape,
-                position: p.local_position,
-                size: p.size,
-                drill: p.drill,
-                layers: p.layers.clone(),
-            })
-            .collect();
+    let pad_defs: Vec<PadDef> = pads
+        .iter()
+        .map(|p| PadDef {
+            number: p.number.clone(),
+            shape: p.shape,
+            position: p.local_position,
+            size: p.size,
+            drill: p.drill,
+            layers: p.layers.clone(),
+        })
+        .collect();
 
+    // The key a footprint is stored under has to describe its geometry, not
+    // just its name.
+    //
+    // This registered the first part it saw under a library name and reused
+    // that geometry for every later part naming the same library:
+    // `if !library.contains(&library_key)`. A board carrying two variants of
+    // one library - a header laid along x beside the same header laid along y,
+    // a footprint someone edited in place - imported as two copies of
+    // whichever came first, and the model then disagreed with the file about
+    // where the copper is. Found on `qfp_fanout`, where two of four headers
+    // ran off the board in the model and nowhere near it in the file.
+    let library_key = resolve_library_key(library, &library_key, &pad_defs);
+
+    if !library.contains(&library_key) {
         let bounds = calculate_pad_bounds(&pad_defs);
         let margin = Nm::from_mm(0.5);
         let courtyard = Rect::from_points(
