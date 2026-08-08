@@ -112,3 +112,73 @@ fn the_via_becomes_a_hole_the_fabricator_will_drill() {
 
     assert!(drill.contains("M30"), "an Excellon file ends with M30");
 }
+
+/// A four-layer board with copper on each of its inner layers.
+fn four_layer_board() -> BoardWorld {
+    let mut world = BoardWorld::new();
+    world.set_board("t".to_string(), (Nm::from_mm(30.0), Nm::from_mm(20.0)), 4);
+    let net = world.intern_net("SIG");
+
+    let trace = |layer, from: (f64, f64), to: (f64, f64)| Trace {
+        segments: vec![TraceSegment::new(
+            Point::from_mm(from.0, from.1),
+            Point::from_mm(to.0, to.1),
+        )],
+        width: Nm::from_mm(0.2),
+        layer,
+        net_id: net,
+        locked: false,
+        source: TraceSource::Autorouted,
+    };
+
+    // One run per layer, each at its own height so a layer carrying another
+    // layer's copper is visible in the coordinates rather than only in a count.
+    world.spawn_entity((trace(Layer::TopCopper, (5.0, 5.0), (25.0, 5.0)), net));
+    world.spawn_entity((trace(Layer::Inner(1), (5.0, 8.0), (25.0, 8.0)), net));
+    world.spawn_entity((trace(Layer::Inner(2), (5.0, 11.0), (25.0, 11.0)), net));
+    world.spawn_entity((trace(Layer::BottomCopper, (5.0, 14.0), (25.0, 14.0)), net));
+    world
+}
+
+#[test]
+fn an_inner_layer_carries_its_own_copper_and_nobody_else_s() {
+    // The outer layers have had this test since the file was written. The
+    // inner ones never did: `cli_integration` checks that `In1_Cu.gbr` and
+    // `In2_Cu.gbr` are *named* in the export's output, which an empty file
+    // satisfies. A four-layer board is the case where losing a layer is
+    // hardest to notice and most expensive - the fabricator builds the stack
+    // from what arrives.
+    let mut world = four_layer_board();
+    let library = FootprintLibrary::new();
+    let format = CoordinateFormat::FORMAT_MM_2_6;
+
+    let layers = [
+        (Layer::TopCopper, "5000000", "top"),
+        (Layer::Inner(1), "8000000", "In1"),
+        (Layer::Inner(2), "11000000", "In2"),
+        (Layer::BottomCopper, "14000000", "bottom"),
+    ];
+
+    for (layer, own_y, name) in layers {
+        let gerber = export_copper_layer(&mut world, &library, layer, &format)
+            .unwrap_or_else(|e| panic!("{name} copper: {e:?}"));
+
+        assert!(
+            gerber.contains(&format!("X5000000Y{own_y}D02*")),
+            "{name} is missing the trace that belongs to it:\n{gerber}"
+        );
+
+        // And none of the others. A layer that carries every trace passes the
+        // check above while shipping three layers of copper the board does not
+        // have there.
+        for (_, other_y, other_name) in layers {
+            if other_y == own_y {
+                continue;
+            }
+            assert!(
+                !gerber.contains(&format!("X5000000Y{other_y}D02*")),
+                "{name} carries the trace that belongs to {other_name}:\n{gerber}"
+            );
+        }
+    }
+}
