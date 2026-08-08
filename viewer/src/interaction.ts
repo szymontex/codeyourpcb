@@ -6,7 +6,6 @@
 import type { Viewport } from './viewport';
 import type { BoardSnapshot, TraceSegmentInfo } from './types';
 import type { PcbEngine } from './wasm';
-import { ipc2221MinWidthNm } from './wasm';
 import type { RoutingState, PadHit } from './routing';
 import { checkRouteObstacles } from './routing';
 import { zoomAtPoint, pan, screenToWorld } from './viewport';
@@ -116,6 +115,22 @@ export interface RectSelectState {
  * - Left-click: select component at point
  * - Right-click: reserved (context menu prevented)
  */
+/**
+ * The narrowest trace that may carry a current, in nanometers.
+ *
+ * Asked of the engine rather than worked out here. The viewer used to hold its
+ * own copy of the IPC-2221 arithmetic - constants, exponents, the thickness of
+ * an ounce of copper - beside the one in `cypcb-calc` that the router and the
+ * language server go through. Two implementations of one rule stay equal until
+ * one of them is edited.
+ *
+ * Returns 0 when there is no engine, which is the fallback build that cannot
+ * read a board either; the caller keeps its default width.
+ */
+function minWidthForCurrent(state: InteractionState, currentMa: number): number {
+  return state.engine?.min_trace_width_for_current_ma(currentMa) ?? 0;
+}
+
 /**
  * Find a trace segment at a given world point (for trace snap completion).
  */
@@ -801,9 +816,11 @@ export function setupInteraction(
           state.routing = { ...state.routing, traceWidth: netInfo.width_nm };
           console.log(`[Route] Using net constraint width: ${(netInfo.width_nm / 1e6).toFixed(3)}mm for ${padHit.netName}`);
         } else if (netInfo?.current_ma) {
-          const widthNm = ipc2221MinWidthNm(netInfo.current_ma);
-          state.routing = { ...state.routing, traceWidth: widthNm };
-          console.log(`[Route] IPC-2221 auto-width for ${netInfo.current_ma}mA: ${(widthNm / 1e6).toFixed(3)}mm for ${padHit.netName}`);
+          const widthNm = minWidthForCurrent(state, netInfo.current_ma);
+          if (widthNm > 0) {
+            state.routing = { ...state.routing, traceWidth: widthNm };
+            console.log(`[Route] IPC-2221 auto-width for ${netInfo.current_ma}mA: ${(widthNm / 1e6).toFixed(3)}mm for ${padHit.netName}`);
+          }
         }
       }
       ensureDrcChecker();
@@ -1005,7 +1022,8 @@ export function setupInteraction(
       traceWidth: Number(hit.trace.width) || (state.snapshot?.nets?.find(n => n.name === hit.trace.net_name)?.width_nm) || (() => {
         const ni = state.snapshot?.nets?.find(n => n.name === hit.trace.net_name);
         if (ni?.current_ma) {
-          return ipc2221MinWidthNm(ni.current_ma);
+          const widthNm = minWidthForCurrent(state, ni.current_ma);
+          if (widthNm > 0) return widthNm;
         }
         return 250_000;
       })(),

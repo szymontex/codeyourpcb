@@ -12,12 +12,34 @@ Read this file first. It is the source of truth for what is in flight and what c
 
 ## Phase map
 
+Each box is checked against a command, not against memory. Three of them had
+been ticked off in the vectors below for weeks while the map still called P1
+current, which is how a fresh session was told to work on a phase that was over.
+
 - [x] P0 - Establish verified ground truth (2026-07-10 audit)
-- [ ] P1 - Stop the bleeding: crashes, lying commands, broken fresh clone  <- current
-- [ ] P2 - Green quality gate: clippy, fmt, all tests including WASM E2E
-- [ ] P3 - Structural: one parser, one width formula, no orphan crates
-- [ ] P4 - Roadmap features (copper pour, DSL v2 semantics, KiCad interop)
-- [ ] P5 - Optimization passes (measured, per GP-002)
+- [x] P1 - Stop the bleeding: crashes, lying commands, broken fresh clone.
+  Measured 2026-08-08: `git clone` into an empty directory, then
+  `cargo test --workspace --exclude cypcb-desktop` -> **119 suites, 1467
+  passed, 0 failed, 1m18s from cold**. The commands that lied - `check` on a
+  file with no board, `parse -o json` printing the AST, `score` guessing a
+  fabricator, three build scripts printing success over a failed build - are
+  each fixed with a test in V1 and V3 below.
+- [x] P2 - Green quality gate: clippy, fmt, all tests including WASM E2E.
+  `./scripts/quality-gate.sh` -> `=== All stages passed ===`, all eight stages,
+  playwright 100 passed / 17 skipped. First green on 2026-08-06 and green on
+  every run since.
+- [ ] P3 - Structural: one parser, one width formula, no orphan crates.  <- current
+  **One parser: done** - `parseSource` and its helpers are deleted, the Rust
+  reader is the only one, `docs/one-parser.md` carries the drift table.
+  **One width formula: done** - the viewer's copy of IPC-2221 is gone and
+  `viewer/src/__tests__/one-width-formula.test.ts` fails if it comes back.
+  **Orphan crates: blocked on D3**, which is the owner's call, not a fire's.
+- [ ] P4 - Roadmap features. Copper pour, KiCad in and out, modules, imports
+  and assertions are done and have tests; `interface` parses and builds
+  nothing, and what it should build is a question for the owner.
+- [ ] P5 - Optimization passes (measured, per GP-002). Seventeen routing
+  instruments measured and written up, two kept; the 3x grid pass measured and
+  kept. Nothing here is finished, and nothing here is guessed.
 
 ## Vectors (parallel branches - keep ALL moving)
 
@@ -731,6 +753,12 @@ multi_ic        0.26: 13 iterations, converged false, [553, 339, 269, 270, 258, 
 - DONE: **a fresh clone builds.** `crates/cypcb-parser/grammar/src/` was gitignored, so a clone arrived without `parser.c` and `build.rs` panicked before anything compiled - the project could not be built by anyone who had not generated the grammar first, which meant node, npm and the tree-sitter CLI just to compile a Rust workspace. The generated parser is committed now, which is what every tree-sitter grammar repository upstream does. Verified the only way that means anything: cloned the branch into a directory that has never seen node, `cargo build --release -p cypcb-cli` finished in 35s, and the binary checked two examples including the one that imports a module library.
 
 ### V4 - Architecture and deduplication
+- DONE: **the IPC-2221 trace width is computed in one place, and the phase map now says what is measured rather than what was planned in March.** The viewer held its own copy of the formula in `ipc2221MinWidthNm` - k, both exponents and the thickness of an ounce of copper written out again - beside `cypcb-calc`, which the router, `cypcb check` and the language server all go through. Measured against each other before deleting anything: 100mA **12542** viewer / **12541** calc, 250mA 44385 / 44385, 500mA 115465 / 115465, 1A 300376 / 300376, 2A **781411** / **781410**, 5A 2765426 / 2765426. Agreement to a nanometre, which is what a duplicate looks like until somebody edits one side - and this exact rule had already drifted once, when the language server used 1.37 mils for an ounce against 1.378 and quoted widths 0.58% off what the router draws.
+- `PcbEngine::min_trace_width_for_current_ma` was already exported to wasm and reached nobody: the TypeScript `PcbEngine` interface did not declare it. Plumbed through the raw wasm interface, the interface, the adapter and the fallback engine, and `interaction.ts` asks the engine at both places it picks a routing width. The fallback engine returns 0 rather than a second copy of the arithmetic - it is the build that cannot read a board either, and the caller keeps its default width.
+- `viewer/src/__tests__/one-width-formula.test.ts` holds it: no viewer source may carry two of the three constants in code, `interaction.ts` has to name the engine call, and the interface plus both implementations have to declare it. Mutation-checked against the pre-fix tree - all three fail, the first naming the offender: `expected [ 'wasm.ts: 0.048, 0.725, 1.378' ] to deeply equal []`.
+- **Two comments outliving their code came out with it**: a "shared parsing utilities" heading with nothing under it, and the doc comment of `parseSource`, deleted a day earlier.
+- Proof: `npx tsc --noEmit` and `npx eslint src/` silent; `npx vitest run` -> **28 files, 234 passed**; `./scripts/quality-gate.sh` -> `=== All stages passed ===`. The phase map at the top of this file was re-measured in the same commit: a fresh `git clone` plus `cargo test --workspace --exclude cypcb-desktop` gives 119 suites, 1467 passed, 0 failed in 1m18s from cold, which closes P1, and the gate closes P2. Both had been done for days while the map still said P1 was current.
+- NEXT-ACTION: none in this vector that is not owner-blocked. The remaining duplication is D3's orphan crates.
 - DONE: **the copper pour is computed in one place.** `cypcb_world::copper::fill_zone` is the only code that turns a zone into copper; the Gerber writer and the viewer's snapshot both call it. It was in `cypcb-export`, one crate away from the renderer that needed it, which is how a second implementation starts. See V5 for the measurements.
 - DONE: manufacturer rules had two copies that disagreed - the router routed JLCPCB to 0.127mm clearance while the checker demanded 0.15mm, so a correctly routed board failed its own DRC. `cypcb-drc` already depended on `cypcb-rules` without using it; the seven fab presets are now one line each on top of `DesignRules::from_constraints`, and `drc_presets_do_not_diverge_from_routing_constraints` walks every pair so they cannot drift again. Proof: `cargo test -p cypcb-drc` -> 113 + 31 + 23 passed, consumers green, gate clean.
 - DONE: settled the question the second parser rests on. `cypcb-parser`'s manifest says tree-sitter is "not WASM compatible"; it is - `cargo build -p cypcb-parser --target wasm32-unknown-unknown` succeeds, and so does the whole render crate with `--features native`. `PcbEngine::load_source` now lives in the wasm-bindgen impl, so the browser can reach it. Measured cost, wasm-pack release: 702,357 bytes with the parser absent against 804,520 with it exported, about 100KB.

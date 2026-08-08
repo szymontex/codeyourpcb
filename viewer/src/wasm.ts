@@ -213,6 +213,19 @@ export interface PcbEngine {
   get_min_clearance_nm(): number;
 
   /**
+   * Minimum trace width in nanometers for a current, per IPC-2221.
+   *
+   * The browser used to work this out itself, in `ipc2221MinWidthNm`, with the
+   * constants written out a second time. The engine computes it through
+   * `cypcb-calc`, which is what the router and the language server use, so
+   * asking the engine is the only way the width a user is handed while routing
+   * is the width the rest of the project would compute.
+   *
+   * Returns 0 for a current of zero or less: no constraint to apply.
+   */
+  min_trace_width_for_current_ma(current_ma: number): number;
+
+  /**
    * Rotate a component by delta millidegrees.
    * @param refdes Reference designator (e.g. "R1")
    * @param delta_mdeg Rotation delta in millidegrees (90° = 90000)
@@ -274,6 +287,7 @@ interface WasmPcbEngine {
   trace_count(): number;
   export_traces_as_dsl(): string;
   get_min_clearance_nm(): number;
+  min_trace_width_for_current_ma(current_ma: number): number;
   get_violations_json(): string;
   rotate_component(refdes: string, delta_mdeg: number): boolean;
   set_board_size(width_nm: bigint, height_nm: bigint): boolean;
@@ -288,53 +302,18 @@ interface WasmPcbEngine {
 let wasmModule: any = null;
 let engineInstance: PcbEngine | null = null;
 
-// ============================================================================
-// Shared parsing utilities (used by both Mock and WASM adapter)
-// ============================================================================
+// A heading for "shared parsing utilities" stood here with nothing under it,
+// and above it the doc comment of `parseSource` - the second reader of this
+// language, deleted on 2026-08-07. A comment that outlives its code tells the
+// next reader to look for something that is not there.
 
-
-
-
-/**
- * Parse .cypcb source code into a BoardSnapshot.
- * This is the JavaScript parser used when tree-sitter is not available (WASM mode).
- */
-
-/**
- * IPC-2221 minimum trace width calculation for external copper layers.
- * Formula: W = (I / (k * dT^b))^(1/c) where k=0.048, b=0.44, c=0.725
- * Returns width in nanometers.
- *
- * @param current_ma Current in milliamps
- * @param tempRise Temperature rise in °C (default 10°C)
- * @param copperOz Copper weight in oz/ft² (default 1oz)
- */
-/**
- * Minimum trace width in nanometers for a current, per IPC-2221.
- *
- * External layer, 10C rise, 1oz copper. The engine computes the same thing in
- * `PcbEngine::min_trace_width_for_current_ma`, via `cypcb-calc`, which is the
- * one implementation in the Rust workspace. This copy exists only until the
- * viewer stops owning the board model; until then it is the one JavaScript
- * copy, not the third.
- *
- * Exported because `interaction.ts` picks a routing width from the same rule
- * and used to inline the arithmetic twice.
- */
-export function ipc2221MinWidthNm(current_ma: number, tempRise = 10, copperOz = 1): number {
-  const currentA = current_ma / 1000;
-  if (currentA <= 0) return 0;
-  // Cross-sectional area in mils^2 (IPC-2221 external layer)
-  const k = 0.048;
-  const b = 0.44;
-  const c = 0.725;
-  const areaMils2 = Math.pow(currentA / (k * Math.pow(tempRise, b)), 1 / c);
-  // 1oz copper is 1.378 mils thick. The language server had 1.37 here, which
-  // quoted the user a width 0.58% off what the router would draw.
-  const thicknessMils = copperOz * 1.378;
-  const widthMils = areaMils2 / thicknessMils;
-  return Math.round(widthMils * 25_400);
-}
+// The IPC-2221 width formula used to be written out here as
+// `ipc2221MinWidthNm`, with its own copies of k, the exponents and the
+// thickness of an ounce of copper. It agreed with `cypcb-calc` to within 1nm
+// on every current measured - 12542 against 12541 at 100mA, exact at 250mA,
+// 500mA, 1A and 5A - which is what a second implementation looks like right up
+// until somebody changes one of them. `PcbEngine::min_trace_width_for_current_ma`
+// is the only implementation the viewer reaches now.
 
 
 /**
@@ -744,6 +723,10 @@ export class WasmPcbEngineAdapter implements PcbEngine {
     return 150_000; // Default 0.15mm fallback
   }
 
+  min_trace_width_for_current_ma(current_ma: number): number {
+    return this.wasmEngine.min_trace_width_for_current_ma(current_ma);
+  }
+
   rotate_component(refdes: string, delta_mdeg: number): boolean {
     const result = this.wasmEngine.rotate_component(refdes, delta_mdeg);
     if (result) {
@@ -964,6 +947,13 @@ class MockPcbEngine implements PcbEngine {
 
   get_min_clearance_nm(): number {
     return 150_000; // Mock: 0.15mm default
+  }
+
+  min_trace_width_for_current_ma(_current_ma: number): number {
+    // No engine, no IPC-2221. Writing the formula out here is how the viewer
+    // came to hold a second copy of it in the first place; 0 means "no
+    // constraint", and the caller keeps its default width.
+    return 0;
   }
 
   rotate_component(refdes: string, delta_mdeg: number): boolean {
