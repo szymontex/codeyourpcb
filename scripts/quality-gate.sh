@@ -49,7 +49,7 @@ echo ""
 
 # Stage 4: ESLint
 echo "[4/8] eslint"
-if (cd viewer && npx eslint src/) 2>&1; then
+if (cd viewer && npx eslint src/ e2e/) 2>&1; then
   pass "eslint"
 else
   fail "eslint"

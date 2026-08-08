@@ -15,7 +15,7 @@
     "dev:desktop": "cd .. && tauri dev",
     "build:desktop": "cd .. && tauri build",
     "test": "vitest run",
-    "lint": "eslint src/",
+    "lint": "eslint src/ e2e/",
     "e2e": "playwright test"
   },
   "dependencies": {
@@ -32,6 +32,7 @@
     "@typescript-eslint/parser": "^8.57.0",
     "chokidar": "^3.6.0",
     "eslint": "^10.0.3",
+    "eslint-plugin-playwright": "^2.11.0",
     "jscpd": "^4.0.8",
     "tsx": "^4.0.0",
     "typescript": "^5.3.3",

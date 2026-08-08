@@ -104,6 +104,22 @@ fi
 (cd viewer && npx --yes playwright install chromium)
 echo "[OK] chromium installed"
 
+# --------------------------------------------------------------- ownership --
+# Running this as root - which the apt steps above want - leaves npm's cache
+# owned by root, and the next `npm install` as a normal user stops with "Your
+# cache folder contains root-owned files". Measured on 2026-08-08 in this
+# project's container: `npm install -D eslint-plugin-playwright` as the
+# development user failed exactly that way after an earlier root run.
+if [ "$(id -u)" -eq 0 ]; then
+    OWNER=$(stat -c '%u:%g' .)
+    NPM_CACHE=$(npm config get cache 2>/dev/null)
+    if [ -n "$NPM_CACHE" ] && [ -d "$NPM_CACHE" ]; then
+        chown -R "$OWNER" "$NPM_CACHE"
+    fi
+    [ -d viewer/node_modules ] && chown -R "$OWNER" viewer/node_modules
+    echo "[OK] npm cache and node_modules belong to $OWNER, not root"
+fi
+
 echo ""
 echo "============================================"
 echo "Done. Now:"

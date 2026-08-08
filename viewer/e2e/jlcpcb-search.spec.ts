@@ -344,7 +344,7 @@ test.describe('JLCPCB Search Panel', () => {
     // twelve keystrokes must not fetch anything twice. Comparing against the
     // set of distinct URLs says that without pinning the category count.
     expect(requestedUrls.length).toBeGreaterThan(0);
-    expect(requestedUrls.length).toBe(new Set(requestedUrls).size);
+    expect(requestedUrls).toHaveLength(new Set(requestedUrls).size);
   });
 });
 

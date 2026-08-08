@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 
 /** Board with 2 components and a net — enough for routing to generate variants */
 const ROUTABLE_BOARD = `version 1
@@ -6,11 +6,11 @@ board test {
   size 50mm x 50mm
   layers 2
 }
-component R1 0402 "0402" {
+component R1 resistor "0402" {
   value "1k"
   at 10mm, 10mm
 }
-component R2 0402 "0402" {
+component R2 resistor "0402" {
   value "1k"
   at 30mm, 30mm
 }
@@ -19,17 +19,60 @@ net VCC {
   R2.1
 }`;
 
-// The Route split-button and its dropdown are hidden in index.html - see the
-// "Autorouter disabled - needs fundamental rewrite" comment on the
-// .tb-route-group wrapper. Nothing in this file can be driven from the UI until
-// that wrapper is visible again, so these run as skipped rather than as noise in
-// the gate. Delete the .skip the moment the button comes back.
+/** The `window.__variantPanel` surface `src/variant-panel.ts` publishes. */
+interface VariantDebug {
+  visible: boolean;
+  variantCount: number;
+  activeIndex: number;
+  hoveredIndex: number;
+  variants: Array<{ name: string; composite: number }>;
+}
+
+function variantDebug(page: Page): Promise<VariantDebug> {
+  return page.evaluate(() => (window as never as { __variantPanel: VariantDebug }).__variantPanel);
+}
+
+/**
+ * Route the board and wait until the panel holds a set of variants.
+ *
+ * Every test here used to click Route, sleep two seconds and then hedge -
+ * `if (debug.visible)`, or `test.skip()` when it was not - so a routing run
+ * that produced nothing left the test green. Two seconds is also a guess:
+ * routing this board takes what it takes. Waiting for the condition is both
+ * honest and faster, and it fails with a timeout naming what never happened.
+ */
+async function routeAndWaitForVariants(page: Page, minimum = 2): Promise<VariantDebug> {
+  await page.locator('#route-btn').click();
+  await page.waitForFunction(
+    n => ((window as never as { __variantPanel?: VariantDebug }).__variantPanel?.variantCount ?? 0) >= n,
+    minimum,
+    { timeout: 30_000 },
+  );
+  return variantDebug(page);
+}
+
+// Skipped, and the reason is worse than the one that used to be written here.
+//
+// The Route split-button is `display:none` in index.html pending D5, which is
+// why this was skipped. Rewriting these assertions and running them with the
+// wrapper unhidden showed the rest: **the panel has no code path that can show
+// it.** `showVariants()` in `src/variant-panel.ts` has no caller anywhere in
+// the viewer - `main.ts` imports `initVariantPanel`, `hideVariants` and
+// `isVariantPanelVisible`, and routes through `auto_route_with_params`, which
+// is a single run and produces no variants to show. The engine's
+// `auto_route_variants()` exists and `src/wasm.ts` declares it; nothing calls
+// it. Measured 2026-08-08: routing this board from the unhidden button gives
+// `[Routing] Routed 1 segments in 0s` and leaves `__variantPanel` at
+// `{visible: false, variantCount: 0}`.
+//
+// So unhiding the button is necessary and not sufficient. What is written
+// below is what the panel has to do the day somebody wires it up.
 test.describe.skip('Variant Panel', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
     await expect(page.locator('#status-text')).toContainText('Ready', { timeout: 15_000 });
     // Load a board and dismiss project manager
-    await page.evaluate((src) => (window as any).__loadBoard(src), ROUTABLE_BOARD);
+    await page.evaluate((src) => (window as never as { __loadBoard: (s: string) => void }).__loadBoard(src), ROUTABLE_BOARD);
   });
 
   test('variant panel is initially hidden', async ({ page }) => {
@@ -37,96 +80,62 @@ test.describe.skip('Variant Panel', () => {
     await expect(panel).toHaveClass(/hidden/);
 
     // Debug surface exists and shows hidden state
-    const debug = await page.evaluate(() => (window as any).__variantPanel);
+    const debug = await variantDebug(page);
     expect(debug).toBeDefined();
     expect(debug.visible).toBe(false);
     expect(debug.variantCount).toBe(0);
   });
 
   test('route button generates variants and shows panel', async ({ page }) => {
-    const routeBtn = page.locator('#route-btn');
-    await routeBtn.click();
+    const debug = await routeAndWaitForVariants(page);
 
-    // Wait for status to show variants generated (or error in mock mode)
-    await page.waitForTimeout(2000);
+    expect(debug.visible).toBe(true);
+    expect(debug.variantCount).toBeGreaterThanOrEqual(2);
+    expect(debug.variants).toHaveLength(debug.variantCount);
 
-    // Check debug surface for variant state
-    const debug = await page.evaluate(() => (window as any).__variantPanel);
-    expect(debug).toBeDefined();
-
-    // In WASM mode, variants should be generated; in mock mode, panel won't show
-    // We test both paths gracefully
-    if (debug.visible) {
-      expect(debug.variantCount).toBeGreaterThanOrEqual(2);
-      expect(debug.activeIndex).toBe(0);
-      expect(debug.variants.length).toBeGreaterThanOrEqual(2);
-
-      // Each variant has a name and composite score
-      for (const v of debug.variants) {
-        expect(typeof v.name).toBe('string');
-        expect(v.name.length).toBeGreaterThan(0);
-        expect(typeof v.composite).toBe('number');
-      }
-
-      // Panel DOM should be visible
-      const panel = page.locator('#variant-panel');
-      await expect(panel).not.toHaveClass(/hidden/);
-
-      // Variant rows should be present
-      const rows = page.locator('.variant-row');
-      const count = await rows.count();
-      expect(count).toBeGreaterThanOrEqual(2);
-
-      // First row should be active (best variant)
-      await expect(rows.first()).toHaveClass(/active/);
+    // Each variant has a name and composite score
+    for (const v of debug.variants) {
+      expect(typeof v.name).toBe('string');
+      expect(v.name.length).toBeGreaterThan(0);
+      expect(typeof v.composite).toBe('number');
     }
+
+    // Panel DOM should be visible, with a row per variant
+    await expect(page.locator('#variant-panel')).not.toHaveClass(/hidden/);
+    const rows = page.locator('.variant-row');
+    await expect(rows).toHaveCount(debug.variantCount);
+
+    // First row is active - the ranking puts its pick first
+    expect(debug.activeIndex).toBe(0);
+    await expect(rows.first()).toHaveClass(/active/);
   });
 
   test('hover on non-active variant triggers preview state', async ({ page }) => {
-    const routeBtn = page.locator('#route-btn');
-    await routeBtn.click();
-    await page.waitForTimeout(2000);
-
-    const debug = await page.evaluate(() => (window as any).__variantPanel);
-    if (!debug.visible || debug.variantCount < 2) {
-      test.skip();
-      return;
-    }
+    await routeAndWaitForVariants(page);
 
     // Hover on the second variant row (non-active)
     const rows = page.locator('.variant-row');
     await rows.nth(1).hover();
 
-    // Check debug surface shows hoveredIndex = 1
-    const hoverDebug = await page.evaluate(() => (window as any).__variantPanel);
-    expect(hoverDebug.hoveredIndex).toBe(1);
+    expect((await variantDebug(page)).hoveredIndex).toBe(1);
 
     // Move mouse away — hover clears
     await page.locator('#variant-panel-header').hover();
-    await page.waitForTimeout(100);
-
-    const afterDebug = await page.evaluate(() => (window as any).__variantPanel);
-    expect(afterDebug.hoveredIndex).toBe(-1);
+    await page.waitForFunction(
+      () => (window as never as { __variantPanel: VariantDebug }).__variantPanel.hoveredIndex === -1,
+      undefined,
+      { timeout: 5_000 },
+    );
   });
 
   test('clicking a variant makes it active', async ({ page }) => {
-    const routeBtn = page.locator('#route-btn');
-    await routeBtn.click();
-    await page.waitForTimeout(2000);
-
-    const debug = await page.evaluate(() => (window as any).__variantPanel);
-    if (!debug.visible || debug.variantCount < 2) {
-      test.skip();
-      return;
-    }
+    await routeAndWaitForVariants(page);
 
     // Click the second variant
     const rows = page.locator('.variant-row');
     await rows.nth(1).click();
 
-    // Active index should now be 1
-    const clickDebug = await page.evaluate(() => (window as any).__variantPanel);
-    expect(clickDebug.activeIndex).toBe(1);
+    expect((await variantDebug(page)).activeIndex).toBe(1);
 
     // Second row should have 'active' class
     await expect(rows.nth(1)).toHaveClass(/active/);
@@ -135,79 +144,63 @@ test.describe.skip('Variant Panel', () => {
   });
 
   test('variant panel clears on new Route click', async ({ page }) => {
-    const routeBtn = page.locator('#route-btn');
+    const first = await routeAndWaitForVariants(page);
+    expect(first.variantCount).toBeGreaterThanOrEqual(2);
 
-    // First route
-    await routeBtn.click();
-    await page.waitForTimeout(2000);
+    // A second route empties the panel before it fills it again. The old test
+    // sighed at this - "Either visible with fresh results or hidden if routing
+    // failed" - and asserted nothing. Both halves are checked here: the clear
+    // is synchronous with the click, the refill is what routing produces.
+    await page.locator('#route-btn').click();
+    await page.waitForFunction(
+      () => (window as never as { __variantPanel: VariantDebug }).__variantPanel.variantCount === 0,
+      undefined,
+      { timeout: 5_000 },
+    );
 
-    const firstDebug = await page.evaluate(() => (window as any).__variantPanel);
-    if (!firstDebug.visible) {
-      test.skip();
-      return;
-    }
-    expect(firstDebug.variantCount).toBeGreaterThanOrEqual(2);
-
-    // Second route — panel clears first, then repopulates
-    await routeBtn.click();
-    // Small delay for the clear to happen synchronously before async routing
-    await page.waitForTimeout(100);
-
-    // Wait for new routing to complete
-    await page.waitForTimeout(2000);
-
-    // Panel should show new results
-    const secondDebug = await page.evaluate(() => (window as any).__variantPanel);
-    expect(secondDebug).toBeDefined();
-    // Either visible with fresh results or hidden if routing failed
+    await page.waitForFunction(
+      () => (window as never as { __variantPanel: VariantDebug }).__variantPanel.variantCount >= 2,
+      undefined,
+      { timeout: 30_000 },
+    );
+    const second = await variantDebug(page);
+    expect(second.visible).toBe(true);
+    expect(second.activeIndex).toBe(0);
   });
 
   test('tuning slider re-route clears variant panel', async ({ page }) => {
-    const routeBtn = page.locator('#route-btn');
+    await routeAndWaitForVariants(page);
 
-    // Generate variants first
-    await routeBtn.click();
-    await page.waitForTimeout(2000);
-
-    const debug = await page.evaluate(() => (window as any).__variantPanel);
-    if (!debug.visible) {
-      test.skip();
-      return;
-    }
-
-    // Change tuning slider to trigger re-route
-    await page.click('#tuning-toggle');
+    // Change tuning slider to trigger re-route. The opener is `#route-menu-btn`
+    // - this clicked `#tuning-toggle`, which does not exist in index.html and
+    // never has, so the test could only ever have failed on a missing locator.
+    await page.locator('#route-menu-btn').click();
     await page.evaluate(() => {
       const slider = document.getElementById('tune-via-cost') as HTMLInputElement;
       slider.value = '3.0';
       slider.dispatchEvent(new Event('input', { bubbles: true }));
     });
 
-    // Wait for debounce + re-route
-    await page.waitForTimeout(600);
-
-    // Variant panel should be cleared
-    const afterTuning = await page.evaluate(() => (window as any).__variantPanel);
-    expect(afterTuning.visible).toBe(false);
-    expect(afterTuning.variantCount).toBe(0);
+    // The panel belongs to the results it was built from, so a re-route has to
+    // empty it rather than leave stale rows on screen.
+    await page.waitForFunction(
+      () => (window as never as { __variantPanel: VariantDebug }).__variantPanel.variantCount === 0,
+      undefined,
+      { timeout: 10_000 },
+    );
+    expect((await variantDebug(page)).visible).toBe(false);
   });
 
   test('debug surface reflects variant count and active index', async ({ page }) => {
     // Before routing
-    const beforeDebug = await page.evaluate(() => (window as any).__variantPanel);
-    expect(beforeDebug.visible).toBe(false);
-    expect(beforeDebug.variantCount).toBe(0);
-    expect(beforeDebug.activeIndex).toBe(0);
+    const before = await variantDebug(page);
+    expect(before.visible).toBe(false);
+    expect(before.variantCount).toBe(0);
+    expect(before.activeIndex).toBe(0);
 
-    // Route
-    await page.click('#route-btn');
-    await page.waitForTimeout(2000);
-
-    const afterDebug = await page.evaluate(() => (window as any).__variantPanel);
-    if (afterDebug.visible) {
-      expect(afterDebug.variantCount).toBeGreaterThanOrEqual(2);
-      expect(afterDebug.activeIndex).toBe(0);
-      expect(afterDebug.variants).toHaveLength(afterDebug.variantCount);
-    }
+    const after = await routeAndWaitForVariants(page);
+    expect(after.variantCount).toBeGreaterThanOrEqual(2);
+    expect(after.activeIndex).toBe(0);
+    expect(after.variants).toHaveLength(after.variantCount);
   });
 });

@@ -39,9 +39,9 @@ test.describe('UI Architecture — Toolbar Structure', () => {
     // The dropdown should be hidden by default
     await expect(page.locator('#view-menu-dropdown')).toHaveClass(/hidden/);
     // Layer checkboxes exist but are not visible (inside hidden dropdown)
-    await expect(page.locator('#layer-top')).not.toBeVisible();
-    await expect(page.locator('#layer-bottom')).not.toBeVisible();
-    await expect(page.locator('#layer-ratsnest')).not.toBeVisible();
+    await expect(page.locator('#layer-top')).toBeHidden();
+    await expect(page.locator('#layer-bottom')).toBeHidden();
+    await expect(page.locator('#layer-ratsnest')).toBeHidden();
   });
 });
 
@@ -184,9 +184,8 @@ test.describe('UI Architecture — Preferences Modal', () => {
     // Move mouse over canvas to trigger coords update
     const canvas = page.locator('#pcb-canvas');
     const box = await canvas.boundingBox();
-    if (box) {
-      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-    }
+    expect(box, 'the canvas is not on screen, so the pointer cannot be over it').not.toBeNull();
+    await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2);
 
     // Wait for coords to update
     await page.waitForTimeout(200);

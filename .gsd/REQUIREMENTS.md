@@ -362,7 +362,7 @@ in the viewer's tests fails if this list and the specs disagree.
 | Suite | Why it is skipped |
 |---|---|
 | `viewer/e2e/tuning-panel.spec.ts` | The Route split-button and its dropdown are `display:none` in `viewer/index.html`. D5. |
-| `viewer/e2e/variant-panel.spec.ts` | Same wrapper: the variant panel only appears after a routing run started from that button. D5. |
+| `viewer/e2e/variant-panel.spec.ts` | The panel has no code path that can show it. `showVariants()` in `src/variant-panel.ts` has no caller anywhere in the viewer - `main.ts` imports `initVariantPanel`, `hideVariants` and `isVariantPanelVisible` and routes through `auto_route_with_params`, a single run. The engine's `auto_route_variants()` exists and the bridge declares it; nothing calls it. Unhiding the button (D5) is necessary and not sufficient. |
 | `viewer/e2e/benchmark-screenshots.spec.ts` | Routes boards through the same hidden button. D5. |
 
 ## Coverage Summary

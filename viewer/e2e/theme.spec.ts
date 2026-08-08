@@ -13,8 +13,6 @@ test.describe('Theme Toggle & Persistence', () => {
   });
 
   test('theme shortcut cycles theme', async ({ page }) => {
-    const initialTheme = await page.getAttribute('html', 'data-theme');
-
     // #theme-toggle is display:none - theme moved into Preferences, and the
     // keyboard shortcut is the surviving direct path.
     await page.keyboard.press('Control+Shift+t');
@@ -86,8 +84,7 @@ test.describe('Theme Toggle & Persistence', () => {
     await btn.click();
 
     // Button label must change on every click (light→dark→auto→light cycle)
-    const afterLabel = await btn.textContent();
-    expect(afterLabel).not.toBe(initialLabel);
+    await expect(btn).not.toHaveText(initialLabel ?? '');
 
     // data-theme is still a valid resolved value
     const dataTheme = await page.getAttribute('html', 'data-theme');
@@ -99,9 +96,9 @@ test.describe('Theme Toggle & Persistence', () => {
   });
 
   test('theme icon reflects current state', async ({ page }) => {
-    const icon = page.locator('#theme-icon');
-    const text = await icon.textContent();
-    // Icon should be one of the theme emojis
-    expect(['☀️', '🌙', '🔄']).toContain(text?.trim());
+    // One of the three theme emojis, asserted through the locator so it is
+    // retried rather than read once - the icon is written after the theme
+    // manager resolves, which is not necessarily before this line runs.
+    await expect(page.locator('#theme-icon')).toHaveText(/^(☀️|🌙|🔄)$/);
   });
 });

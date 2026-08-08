@@ -36,13 +36,14 @@ const FIXTURES = [
 test.describe.skip('Benchmark Screenshots', () => {
   for (const fixture of FIXTURES) {
     const baseName = fixture.name.replace('.kicad_pcb', '');
+    // Per-fixture budgets, decided out here rather than inside the test: a
+    // branch in a test body means the run took one of two paths and the report
+    // does not say which.
+    const testTimeout = fixture.slow ? 60_000 : 30_000;
+    const routeTimeout = fixture.slow ? 45_000 : 15_000;
 
     test(`capture routed board: ${baseName}`, async ({ page }) => {
-      // Extended timeout for complex boards
-      if (fixture.slow) {
-        test.slow();
-        test.setTimeout(60_000);
-      }
+      test.setTimeout(testTimeout);
 
       // Collect page errors for assertion
       const pageErrors: Error[] = [];
@@ -64,25 +65,16 @@ test.describe.skip('Benchmark Screenshots', () => {
       await routeBtn.click();
 
       // Wait for routing to complete — watch for status change or timeout
-      // In mock/WASM mode routing may finish quickly or take a while
-      const timeout = fixture.slow ? 45_000 : 15_000;
       await page.waitForFunction(
         () => {
-          const status = document.getElementById('status-text');
-          if (!status) return false;
-          const text = status.textContent || '';
+          const text = document.getElementById('status-text')?.textContent ?? '';
           // Routing done when status shows result, variants, error, or returns to Ready
-          return (
-            text.includes('routed') ||
-            text.includes('variant') ||
-            text.includes('Variant') ||
-            text.includes('Ready') ||
-            text.includes('Error') ||
-            text.includes('error')
+          return ['routed', 'variant', 'Variant', 'Ready', 'Error', 'error'].some(word =>
+            text.includes(word),
           );
         },
         {},
-        { timeout },
+        { timeout: routeTimeout },
       );
 
       // Small settle time for canvas rendering
@@ -94,13 +86,14 @@ test.describe.skip('Benchmark Screenshots', () => {
         fullPage: true,
       });
 
-      // Capture canvas-only screenshot
+      // Capture canvas-only screenshot. The canvas is the application; if it
+      // is not on screen the screenshot below is not the thing this test is
+      // for, so that is a failure rather than a branch.
       const canvas = page.locator('#pcb-canvas');
-      if (await canvas.isVisible()) {
-        await canvas.screenshot({
-          path: path.join(SCREENSHOT_DIR, `${baseName}-canvas.png`),
-        });
-      }
+      await expect(canvas).toBeVisible();
+      await canvas.screenshot({
+        path: path.join(SCREENSHOT_DIR, `${baseName}-canvas.png`),
+      });
 
       // Assert no page errors occurred (screenshots are artifacts for human review)
       expect(pageErrors).toHaveLength(0);
