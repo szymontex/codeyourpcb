@@ -486,6 +486,45 @@ the other. Nothing has been retuned on this: the finding is recorded so the
 next person to touch `ScoreWeights` starts from it rather than from the
 assumption that six terms mean six independent things.
 
+## The stacked vias, and why the obvious fix is not one
+
+Routing leaves holes on top of each other. Measured after routing, with
+`drc_report`:
+
+| fixture | hole-to-hole |
+|---|---|
+| stm32_breakout | 4 |
+| multi_ic | 7 |
+| qfp_fanout | 15 |
+
+Most read as a net against itself:
+
+```
+hole-to-hole (12.446mm, 29.718mm): via 'VCC_3V3' <-> via 'VCC_3V3': 0.00mm actual, 0.50mm required
+hole-to-hole (56.134mm, 41.910mm): via 'USB_DP'  <-> via 'OSC_IN':  0.00mm actual, 0.50mm required
+```
+
+which invites an obvious fix: a net's paths are each converted to vias
+separately, so two paths that change layer at the same point would each ask for
+one. Dropping the exact repeats per net is four lines.
+
+**It is not the cause.** The drill files say so: at (56.134, 41.910) one via is
+written into the `Top-In1` pass and the other into the through pass, so the two
+have *different layer spans* and are not repeats of anything. Two holes at one
+point with different depths is a routing decision, not a bookkeeping slip.
+
+Measured anyway, because four lines is cheap: deduplicating by position and
+span changed `qfp_fanout` from 309 violations to 291 and left **every
+hole-to-hole count identical** - 4, 7 and 15 before and after. So it removes
+something, and that something is not what it was written for. Reverted: a
+change whose stated reason does not hold is a change nobody can maintain, and
+the 18 violations it happened to remove are not worth carrying an explanation
+that is false.
+
+What a real fix has to do is stop the search from putting a via where the board
+already has one, at any depth - which is a cost-model question, not a filter on
+the output.
+
 ## Instruments that were measured and dropped
 
 Each of these was built, measured on all three fixtures, and reverted. The
