@@ -44,11 +44,21 @@ def chip(library, ref, value, x, y, net1, net2, pad_w, pad_h, span, rotate=False
     return (library, ref, value, x, y, pads)
 
 
-def header(library, ref, value, x, y, nets, pitch=2.54, drill=1.0, pad=1.7):
-    """A single-row through-hole header running in +y."""
+def header(library, ref, value, x, y, nets, pitch=2.54, drill=1.0, pad=1.7,
+           along_x=False):
+    """A single-row through-hole header.
+
+    Runs in +y by default, or in +x with `along_x`. A board only has so much
+    height: a small square board with pins on two sides cannot take more of
+    them than its edges are long, and the honest fix is to use the other two
+    edges rather than to grow the board past the point the fixture was made to
+    test.
+    """
     pads = [
         (str(i + 1), "thru_hole", "rect" if i == 0 else "oval",
-         0.0, i * pitch, pad, pad, drill, net)
+         i * pitch if along_x else 0.0,
+         0.0 if along_x else i * pitch,
+         pad, pad, drill, net)
         for i, net in enumerate(nets)
     ]
     return (library, ref, value, x, y, pads)

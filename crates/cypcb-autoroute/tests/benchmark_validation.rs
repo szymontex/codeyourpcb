@@ -235,14 +235,15 @@ const DRC_RATCHETS: &[(&str, &str, u32, u32)] = &[
     // `via_price_sweep::how_much_of_the_price_is_noise`: 62 to 74 across
     // prices 0.22..0.28, 12 violations wide, and 27 to 34 shorts.
     ("shift_driver.kicad_pcb", "shift_driver", 93, 40),
-    // Measured at 343 / 183. Its band is 298 to 400 - **102 violations wide,
-    // a third of the value it guards** - and 144 to 217 shorts. Negotiated
-    // congestion is least stable here, which is what a fine-pitch escape on
-    // two layers costs. The ratchet is therefore a weak guard on this board by
-    // construction: it catches a collapse, not a regression. Tightening it
-    // without first making the router repeatable would only produce a gate
-    // that cries wolf.
-    ("qfp_fanout.kicad_pcb", "qfp_fanout", 445, 256),
+    // Re-measured 2026-08-08 at 676 / 424 after the fixture was fixed: its
+    // headers used to run 4.8mm past the board outline, so the router was
+    // being scored on a board nobody could make. With the pins on all four
+    // edges the escape is genuinely harder - 343 -> 676 - and the board is
+    // valid. Its band is 606 to 665 across prices 0.22..0.28, 59 violations
+    // wide, and 348 to 424 shorts; both narrower than the 102 the broken board
+    // showed. Still a weak guard by construction: it catches a collapse, not a
+    // regression.
+    ("qfp_fanout.kicad_pcb", "qfp_fanout", 735, 500),
 ];
 
 /// Routes every fixture and holds the line on completeness and DRC count.

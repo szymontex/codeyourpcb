@@ -183,9 +183,9 @@ pub const BENCHMARKS: &[KicadBenchmark] = &[
     // `tests/fixtures/benchmark/make_qfp_fanout.py`.
     KicadBenchmark {
         filename: "qfp_fanout.kicad_pcb",
-        description: "LQFP-64 at 0.5mm pitch escaping on two layers — 17 components, 46×46mm",
+        description: "LQFP-64 at 0.5mm pitch escaping on two layers — 19 components, 46×46mm",
         complexity: BenchmarkComplexity::Complex,
-        expected_component_count: 17,
+        expected_component_count: 19,
         expected_net_count: 50,
     },
 ];

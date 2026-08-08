@@ -111,13 +111,33 @@ def build():
     parts.append(chip("Resistor_SMD:R_0402_1005Metric", "R2", "10k",
                       CENTRE_X + 8.0, CENTRE_Y + 13.0, "BOOT", "GND", 0.6, 0.5, 1.0))
 
-    # Two headers down the sides, taking the GPIO off the board. Placed clear
-    # of the part's own ring so the escape has somewhere to go.
-    half = len(gpio_pins) // 2
-    parts.append(header("Connector_PinHeader_2.54mm:PinHeader_1x20_P2.54mm_Vertical",
-                        "J1", "GPIO-A", 3.0, 3.0, gpio_pins[:half] + ["VCC"]))
-    parts.append(header("Connector_PinHeader_2.54mm:PinHeader_1x20_P2.54mm_Vertical",
-                        "J2", "GPIO-B", BOARD_W - 3.0, 3.0, gpio_pins[half:] + ["GND"]))
+    # Headers around the edges, taking the GPIO off the board.
+    #
+    # Four of twelve, one per edge. The first version of this fixture used two
+    # of twenty-one down the sides: 50.8mm of pins on a 46mm board, so three
+    # pads per header sat past the board outline. That is not a board anybody
+    # could make, and the router was being measured on it - `J1 <-> trace`
+    # violations at y = 45.5 to 46.1 on a board 46mm tall were the giveaway.
+    #
+    # A 46mm edge holds fifteen pins at 2.54mm once margins are taken, so two
+    # sides cannot hold forty-eight. All four can.
+    per_header = 12
+    groups = [gpio_pins[i:i + per_header - 1] for i in range(0, len(gpio_pins), per_header - 1)]
+    assert len(groups) == 4, f"expected four headers, got {len(groups)}"
+    spare = ["VCC", "GND", "VCC", "GND"]
+    run = (per_header - 1) * 2.54
+    edge = 3.0
+    centred = (BOARD_W - run) / 2
+    placements = [
+        (edge, centred, False),
+        (BOARD_W - edge, centred, False),
+        (centred, edge, True),
+        (centred, BOARD_H - edge, True),
+    ]
+    for index, (pins, (x, y, along_x)) in enumerate(zip(groups, placements)):
+        parts.append(header("Connector_PinHeader_2.54mm:PinHeader_1x12_P2.54mm_Vertical",
+                            f"J{index + 1}", "GPIO", x, y, pins + [spare[index]],
+                            along_x=along_x))
 
     return nets, parts
 

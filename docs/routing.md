@@ -72,7 +72,7 @@ fixtures):
 | `stm32_breakout.kicad_pcb` | dense, 296x256 cells at 0.254mm, 908 routes | 144 | **239** | 221 | 136 |
 | `multi_ic.kicad_pcb` | large, 197x158 cells at 0.508mm, 1003 routes | 270 | **317** | 247 | 166 |
 | `shift_driver.kicad_pcb` | DIP and 0805, 2 layers, 700 routes | 159 | **81** | 72 | 33 |
-| `qfp_fanout.kicad_pcb` | LQFP-64 at 0.5mm on 2 layers, 1177 routes | 140 | **343** | 331 | 183 |
+| `qfp_fanout.kicad_pcb` | LQFP-64 at 0.5mm on 2 layers, 1971 routes | 141 | **676** | 665 | 424 |
 
 **`multi_ic` moved without the router changing.** The row above read 289 before
 and 336 after until this run; it is 270 and 317 now, with **introduced
@@ -168,12 +168,15 @@ The two boards added on 2026-08-08 were measured the same way:
 | board | band across 0.22..0.28 | width |
 |---|---|---|
 | `shift_driver` | 62 to 74 | 12 violations |
-| `qfp_fanout` | 298 to 400 | **102 violations** |
+| `qfp_fanout` | 606 to 665 | **59 violations** |
 
-`qfp_fanout`'s band is a third of the value it guards. Negotiated congestion is
-least stable on a fine-pitch escape with only two layers, which is worth knowing
-before any number measured on that board is read as a result: **a 50-violation
-difference there is inside the noise.** Its ratchet catches a collapse, not a
+`qfp_fanout`'s band is the widest of the five in absolute terms, though not the
+third of its value the broken version of the fixture showed - its headers used
+to run past the board outline, and the numbers above are the re-measurement
+after that was fixed. Negotiated congestion is least stable on a fine-pitch
+escape with only two layers, which is worth knowing before any number measured
+on that board is read as a result: **a 50-violation difference there is inside
+the noise.** Its ratchet catches a collapse, not a
 regression, and tightening it would need a repeatable router rather than a
 tighter threshold.
 
