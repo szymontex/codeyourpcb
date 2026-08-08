@@ -49,9 +49,16 @@ fn test_parse_led_blink() {
         m.board_size_mm.1
     );
 
-    // Traces and vias
-    assert_eq!(m.trace_segment_count, 3, "Expected 3 trace segments");
-    assert_eq!(m.via_count, 2, "Expected 2 vias");
+    // One trace and no vias.
+    //
+    // This board shipped three segments and two vias until 2026-08-08, and
+    // they were straight lines between part centres - the first ran from U4's
+    // origin through C1 to U1's - so they crossed every package on the way and
+    // shorted against the pads they passed. All three fixtures carried the
+    // same decoration. What is here now is one real trace: R1 pad 2 to D1
+    // pad 1, both on LED_ANODE, adjacent parts, nothing in between.
+    assert_eq!(m.trace_segment_count, 1, "Expected 1 trace segment");
+    assert_eq!(m.via_count, 0, "Expected no vias");
 
     // Library must have entries
     assert!(!result.library.is_empty(), "Library must have footprints");
@@ -83,10 +90,12 @@ fn test_parse_stm32_breakout() {
     assert!(!result.library.is_empty(), "Library must have footprints");
     assert!(result.world.net_count() > 0, "World must have nets");
 
-    // Reference routes present
+    // No reference routes: the decorative copper this board used to carry was
+    // removed, because it was drawn between part centres and shorted 13 times
+    // against the pads it crossed.
     assert!(
-        result.reference_routes.is_some(),
-        "Expected reference routes"
+        result.reference_routes.is_none(),
+        "this board carries no copper of its own"
     );
 }
 
@@ -123,14 +132,12 @@ fn test_parse_multi_ic() {
     assert!(!result.library.is_empty(), "Library must have footprints");
     assert!(result.world.net_count() > 0, "World must have nets");
 
-    // Reference routes present
+    // Same as `stm32_breakout`: its fifteen segments were lines between part
+    // centres and shorted 32 times before anything was routed.
     assert!(
-        result.reference_routes.is_some(),
-        "Expected reference routes"
+        result.reference_routes.is_none(),
+        "this board carries no copper of its own"
     );
-    let routes = result.reference_routes.as_ref().unwrap();
-    assert!(!routes.routes.is_empty(), "Expected trace segments");
-    assert!(!routes.vias.is_empty(), "Expected vias");
 }
 
 // ---------------------------------------------------------------------------

@@ -42,12 +42,12 @@ fn fixture(name: &str) -> PathBuf {
 
 #[test]
 fn every_imported_trace_and_via_is_inside_the_board() {
-    // Three fixtures carry copper in the file; the other three do not.
-    for name in [
-        "led_blink.kicad_pcb",
-        "stm32_breakout.kicad_pcb",
-        "multi_ic.kicad_pcb",
-    ] {
+    // One fixture carries copper in the file now. Three did until 2026-08-08,
+    // and what they carried was straight lines between part centres, crossing
+    // every package on the way - 1, 13 and 32 shorts before anything was
+    // routed. `led_blink` keeps one real trace instead: R1 pad 2 to D1 pad 1,
+    // both on LED_ANODE.
+    for name in ["led_blink.kicad_pcb"] {
         let parsed = parse_kicad_pcb(&fixture(name)).unwrap_or_else(|e| panic!("{name}: {e:?}"));
         let routes = parsed
             .reference_routes
@@ -89,18 +89,19 @@ fn every_imported_trace_and_via_is_inside_the_board() {
 fn imported_copper_sits_where_the_pads_it_joins_are() {
     // Inside the outline is necessary and not sufficient: copper shifted by
     // some other amount would still land on the board and connect nothing.
-    // `led_blink`'s first segment runs from (110, 62) to (115, 70) in a file
-    // whose board corner is at (95, 55), so it belongs at (15, 7) to (20, 15).
+    // `led_blink`'s trace runs from (120.48, 65) to (124.25, 65) in a file
+    // whose board corner is at (95, 55), so it belongs at (25.48, 10) to
+    // (29.25, 10).
     let parsed = parse_kicad_pcb(&fixture("led_blink.kicad_pcb")).expect("led_blink parses");
     let routes = parsed.reference_routes.expect("led_blink carries copper");
 
     let first = routes
         .routes
         .iter()
-        .find(|segment| (segment.start.x.to_mm() - 15.0).abs() < 0.001)
+        .find(|segment| (segment.start.x.to_mm() - 25.48).abs() < 0.001)
         .unwrap_or_else(|| {
             panic!(
-                "no segment starts at 15mm; got {:?}",
+                "no segment starts at 25.48mm; got {:?}",
                 routes
                     .routes
                     .iter()
@@ -109,7 +110,7 @@ fn imported_copper_sits_where_the_pads_it_joins_are() {
             )
         });
 
-    assert!((first.start.y.to_mm() - 7.0).abs() < 0.001, "{first:?}");
-    assert!((first.end.x.to_mm() - 20.0).abs() < 0.001, "{first:?}");
-    assert!((first.end.y.to_mm() - 15.0).abs() < 0.001, "{first:?}");
+    assert!((first.start.y.to_mm() - 10.0).abs() < 0.001, "{first:?}");
+    assert!((first.end.x.to_mm() - 29.25).abs() < 0.001, "{first:?}");
+    assert!((first.end.y.to_mm() - 10.0).abs() < 0.001, "{first:?}");
 }

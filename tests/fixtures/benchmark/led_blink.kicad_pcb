@@ -145,11 +145,9 @@
     )
   )
 
-  (segment (start 110 62) (end 115 70) (width 0.25) (layer "F.Cu") (net 1))
-  (segment (start 120 65) (end 125 65) (width 0.25) (layer "F.Cu") (net 3))
-  (segment (start 100 67.54) (end 110 78) (width 0.4) (layer "F.Cu") (net 2))
 
-  (via (at 115 75) (size 0.8) (drill 0.4) (layers "F.Cu" "B.Cu") (net 2))
-  (via (at 110 70) (size 0.8) (drill 0.4) (layers "F.Cu" "B.Cu") (net 1))
 
+
+  ; One real trace: R1 pad 2 to D1 pad 1, both on LED_ANODE.
+  (segment (start 120.48 65) (end 124.25 65) (width 0.25) (layer "F.Cu") (net 3))
 )
