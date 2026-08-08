@@ -452,6 +452,40 @@ What the fifth board did not settle is the ranking - see above. Every rule picks
 the same variant on `qfp_fanout`, so four of the five boards agree under all
 seven rules and the question still rests on `shift_driver` alone.
 
+## What the composite charges, and what it charges twice
+
+`compute_composite` adds six terms with the default weights all at 1.0:
+
+| term | charge |
+|---|---|
+| length | `total_length / board_diagonal` |
+| vias | `via_count` |
+| DRC | `drc_violations * 1000` |
+| smoothness | `(1 - smoothness) * 100` |
+| crossings | `crossings * 500` |
+| balance | `(1 - layer_balance) * 50` |
+
+Three of those were read for the first time on 2026-08-08, and two were not
+measuring what their names say:
+
+- **smoothness** scored 1.0 on every board ever routed without examining a
+  corner - it looked for bends inside a trace entity and `apply_routes` gives
+  every entity one segment. It measures real corners now and still reads 1.0,
+  because this router lays 45-degree turns and a 45-degree turn costs nothing.
+- **layer_balance** counted only the layers that carried copper, so a route
+  using one layer of two scored a perfect 1.0 while a route using both scored
+  0.200 on `led_blink`. It measures against the layers the board has now.
+- **crossings** was correct, and it is charged twice. Two traces crossing at
+  one point measure `crossings` 1, `drc_violations` 1, `shorts` 1: the
+  composite pays 500 for the crossing and 1000 for the same contact called a
+  short. The same two traces on opposite layers give zero for both.
+
+The double charge is not a defect - both numbers are right about what they
+measure - but the terms are not independent, and a weight tuned on one moves
+the other. Nothing has been retuned on this: the finding is recorded so the
+next person to touch `ScoreWeights` starts from it rather than from the
+assumption that six terms mean six independent things.
+
 ## Instruments that were measured and dropped
 
 Each of these was built, measured on all three fixtures, and reverted. The
