@@ -24,3 +24,6 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 miette = { workspace = true }
 thiserror = { workspace = true }
+# The crates below this binary carry 76 `tracing` calls and nothing was
+# listening to any of them.
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
