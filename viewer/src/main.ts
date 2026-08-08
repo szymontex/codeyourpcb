@@ -248,6 +248,15 @@ async function init(): Promise<void> {
   let debugOverlayStage: number = -1;
   let debugData: any = null;
   let lastLoadedSource: string | null = null;
+  /**
+   * Which reader the open board came from.
+   *
+   * The editor hands its content to `load_source` on every change, and
+   * `load_source` clears the world before parsing. With a `.kicad_pcb` in the
+   * editor - which is what opening one put there - the first character typed
+   * emptied the board.
+   */
+  let loadedKind: 'cypcb' | 'kicad_pcb' = 'cypcb';
   let showRatsnest = getPreference('ratsnestVisible');
   let gridVisible = getPreference('gridVisible');
   let showNetLabels = getPreference('netLabelsVisible');
@@ -761,8 +770,12 @@ async function init(): Promise<void> {
         const content = editor.getValue();
         console.log('[Editor] Content changed, reloading board...');
 
-        // Parse and update board
-        const errors = engine.load_source(content);
+        // Parse and update board, with the reader this board came from. A
+        // KiCad board handed to the DSL reader comes back as an empty world
+        // and a page of parse errors.
+        const errors = loadedKind === 'kicad_pcb'
+          ? engine.load_kicad(content)
+          : engine.load_source(content);
         if (errors) {
           console.warn('[Editor] Parse errors:', errors);
         }
@@ -1100,7 +1113,10 @@ async function init(): Promise<void> {
       if (currentFilePath && snapshot) {
         // Merge current traces into source so reopening preserves them
         const currentSource = (editorReady && editorInstance) ? editorInstance.getValue() : lastLoadedSource;
-        if (currentSource) {
+        // Only a `.cypcb` gets trace blocks merged into it. Splicing DSL into
+        // a `(kicad_pcb ...)` file would store something neither reader can
+        // open, under the name of a board the user still has.
+        if (currentSource && loadedKind === 'cypcb') {
           const exportedTraces = engine.export_traces_as_dsl();
           const mergedSource = mergeTracesIntoDsl(currentSource, exportedTraces);
           lastLoadedSource = mergedSource;
@@ -1352,6 +1368,7 @@ async function init(): Promise<void> {
   // `kind` lets a test drive the KiCad path, which the file input reaches by
   // extension and no test can otherwise get at.
   (window as any).__loadBoard = (source: string, kind?: string) => {
+    loadedKind = kind === 'kicad_pcb' ? 'kicad_pcb' : 'cypcb';
     if (kind === 'kicad_pcb') {
       engine.load_kicad(source);
     } else {
@@ -1565,6 +1582,11 @@ async function init(): Promise<void> {
   interactionReady = true;
 
   // Expose debug render state for programmatic inspection
+  // Which reader the open board came from. Exposed because the editor's
+  // debounce picks its reader from it, and a test cannot see that choice from
+  // outside any other way.
+  (window as any).__loadedKind = () => loadedKind;
+
   (window as any).__renderState = {
     get selectedTraceId() { return selectedTraceId; },
     get hoveredTraceId() { return hoveredTraceId; },
@@ -1613,7 +1635,8 @@ async function init(): Promise<void> {
         // The command line learned to read, check, route and write these; the
         // viewer could open the project's own format and nothing else, so
         // somebody with a `.kicad_pcb` had no way to look at it here.
-        const errors = ext === 'kicad_pcb'
+        loadedKind = ext === 'kicad_pcb' ? 'kicad_pcb' : 'cypcb';
+        const errors = loadedKind === 'kicad_pcb'
           ? engine.load_kicad(content)
           : engine.load_source(content);
         if (errors) {
