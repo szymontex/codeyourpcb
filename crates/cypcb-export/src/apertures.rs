@@ -4,7 +4,7 @@
 //! Each unique pad shape gets a D-code (D10, D11, etc.) that is defined
 //! once in the aperture section and reused throughout the file.
 
-use crate::coords::{nm_to_gerber, CoordinateFormat};
+use crate::coords::{nm_to_decimal, CoordinateFormat};
 use cypcb_world::components::PadShape as WorldPadShape;
 use cypcb_world::footprint::PadDef;
 use serde::{Deserialize, Serialize};
@@ -135,17 +135,17 @@ impl ApertureManager {
         for (shape, &dcode) in sorted_apertures {
             let definition = match shape {
                 ApertureShape::Circle { diameter } => {
-                    let d = nm_to_gerber(*diameter, format);
+                    let d = nm_to_decimal(*diameter, format);
                     format!("%ADD{}C,{}*%\n", dcode, d)
                 }
                 ApertureShape::Rectangle { width, height } => {
-                    let w = nm_to_gerber(*width, format);
-                    let h = nm_to_gerber(*height, format);
+                    let w = nm_to_decimal(*width, format);
+                    let h = nm_to_decimal(*height, format);
                     format!("%ADD{}R,{}X{}*%\n", dcode, w, h)
                 }
                 ApertureShape::Oblong { width, height } => {
-                    let w = nm_to_gerber(*width, format);
-                    let h = nm_to_gerber(*height, format);
+                    let w = nm_to_decimal(*width, format);
+                    let h = nm_to_decimal(*height, format);
                     format!("%ADD{}O,{}X{}*%\n", dcode, w, h)
                 }
                 ApertureShape::RoundRect {
@@ -155,8 +155,8 @@ impl ApertureManager {
                 } => {
                     // RoundRect is not a standard Gerber aperture type
                     // Fall back to rectangle for now (TODO: implement polygon approximation)
-                    let w = nm_to_gerber(*width, format);
-                    let h = nm_to_gerber(*height, format);
+                    let w = nm_to_decimal(*width, format);
+                    let h = nm_to_decimal(*height, format);
                     format!(
                         "%ADD{}R,{}X{}*% G04 RoundRect corner_ratio={}%\n",
                         dcode, w, h, corner_ratio

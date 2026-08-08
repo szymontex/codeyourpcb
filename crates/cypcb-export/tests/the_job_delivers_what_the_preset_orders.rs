@@ -365,14 +365,14 @@ fn a_pour_keeps_clear_of_other_nets_and_reaches_its_own() {
                 ));
             }
         } else if inside && line.starts_with('X') {
+            // 2.6 format: six implied decimals, so the integer read back off
+            // the file is nanometres-with-a-different-name and the scale has
+            // to be undone here. The file says so itself in `%FSLAX26Y26*%`.
             let rest = &line[1..];
             if let Some((x, tail)) = rest.split_once('Y') {
-                let y: String = tail
-                    .chars()
-                    .take_while(|c| c.is_ascii_digit() || *c == '.')
-                    .collect();
+                let y: String = tail.chars().take_while(|c| c.is_ascii_digit()).collect();
                 if let (Ok(x), Ok(y)) = (x.parse::<f64>(), y.parse::<f64>()) {
-                    corners.push((x, y));
+                    corners.push((x / 1_000_000.0, y / 1_000_000.0));
                 }
             }
         }

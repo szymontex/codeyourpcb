@@ -10,7 +10,7 @@ use cypcb_world::components::{FootprintRef, Layer, Position, Rotation};
 use cypcb_world::footprint::FootprintLibrary;
 use cypcb_world::BoardWorld;
 
-use crate::coords::{nm_to_gerber, CoordinateFormat};
+use crate::coords::{nm_to_decimal, CoordinateFormat};
 use crate::gerber::copper::ExportError;
 
 use super::tools::ToolTable;
@@ -163,8 +163,8 @@ pub fn export_excellon_span(
     for (tool_num, tool_hits) in grouped_hits {
         output.push_str(&format!("T{}\n", tool_num));
         for hit in tool_hits {
-            let x = nm_to_gerber(hit.position.x.0, format);
-            let y = nm_to_gerber(hit.position.y.0, format);
+            let x = nm_to_decimal(hit.position.x.0, format);
+            let y = nm_to_decimal(hit.position.y.0, format);
             output.push_str(&format!("X{}Y{}\n", x, y));
         }
     }

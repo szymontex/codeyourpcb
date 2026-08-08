@@ -32,11 +32,12 @@ fn fixture_path(filename: &str) -> PathBuf {
 ///
 /// `D02` lifts the pen and moves; `D01` draws from wherever it is.
 fn drawn_strokes(gerber: &str) -> Vec<((f64, f64), (f64, f64))> {
+    let decimals = decimal_places(gerber);
     let mut strokes = Vec::new();
     let mut pen: Option<(f64, f64)> = None;
 
     for line in gerber.lines() {
-        let Some(point) = coordinates(line) else {
+        let Some(point) = coordinates(line, decimals) else {
             continue;
         };
         if line.contains("D02") {
@@ -51,8 +52,27 @@ fn drawn_strokes(gerber: &str) -> Vec<((f64, f64), (f64, f64))> {
     strokes
 }
 
-fn coordinates(line: &str) -> Option<(f64, f64)> {
-    Some((between(line, 'X')?, between(line, 'Y')?))
+/// Millimetres, decoded the way the file's own `%FS` line says to.
+///
+/// Gerber coordinate data carries no decimal point - `%FSLAX26Y26*%` declares
+/// six implied decimals - so reading the digits as millimetres puts every
+/// point a million times too far out. Taking the scale from the declaration
+/// rather than from the data is also what makes this file able to notice if
+/// the two ever disagree again.
+fn coordinates(line: &str, decimals: u32) -> Option<(f64, f64)> {
+    let scale = 10f64.powi(decimals as i32);
+    Some((between(line, 'X')? / scale, between(line, 'Y')? / scale))
+}
+
+fn decimal_places(gerber: &str) -> u32 {
+    let line = gerber
+        .lines()
+        .find(|line| line.starts_with("%FS"))
+        .expect("a Gerber file states its coordinate format");
+    line.split_once('X')
+        .and_then(|(_, rest)| rest.get(1..2))
+        .and_then(|d| d.parse().ok())
+        .unwrap_or_else(|| panic!("unreadable coordinate format: {line}"))
 }
 
 fn between(line: &str, marker: char) -> Option<f64> {

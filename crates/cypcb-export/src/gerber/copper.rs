@@ -453,9 +453,8 @@ mod tests {
         assert!(gerber.contains("%ADD"));
         // Should have flash command (D03)
         assert!(gerber.contains("D03"));
-        // Should have coordinate at 10mm, 20mm
-        assert!(gerber.contains("10.000000"));
-        assert!(gerber.contains("20.000000"));
+        // 10mm and 20mm, in the 2.6 format the header declares.
+        assert!(gerber.contains("X10000000Y20000000"));
     }
 
     #[test]
@@ -508,9 +507,8 @@ mod tests {
         let gerber = result.unwrap();
         // Should flash via (D03)
         assert!(gerber.contains("D03"));
-        // Should have via position
-        assert!(gerber.contains("15.000000"));
-        assert!(gerber.contains("25.000000"));
+        // 15mm and 25mm, in the 2.6 format the header declares.
+        assert!(gerber.contains("X15000000Y25000000"));
     }
 
     #[test]

@@ -123,10 +123,36 @@ fn files_under(dir: &Path) -> Vec<PathBuf> {
     out
 }
 
-/// Pull `X`/`Y` out of a Gerber command in the 2.6 format the exporter writes.
-fn coordinates(line: &str) -> Option<(f64, f64)> {
-    let x = between(line, 'X')?;
-    let y = between(line, 'Y')?;
+/// Where a file's `%FS...%` line says the decimal point is.
+///
+/// This test used to read `X3.730000` with `parse::<f64>()` and take the
+/// answer as millimetres, which worked only because the exporter wrote a
+/// decimal point the header said would not be there. `%FSLAX26Y26*%` declares
+/// six implied decimals; a reader that ignores the declaration and trusts a
+/// point in the data is not reading Gerber, and neither was this test.
+///
+/// Reading the declaration is also the only way this file can catch the two
+/// disagreeing again: change the header to `X25` without changing the writer
+/// and every coordinate below comes out ten times too big.
+fn decimal_places(gerber: &str) -> u32 {
+    let line = gerber
+        .lines()
+        .find(|line| line.starts_with("%FS"))
+        .expect("a Gerber file states its coordinate format");
+    let digits = line
+        .split_once('X')
+        .and_then(|(_, rest)| rest.get(..2))
+        .expect("the format declaration carries an X field");
+    digits[1..2]
+        .parse()
+        .unwrap_or_else(|_| panic!("unreadable coordinate format: {line}"))
+}
+
+/// Pull `X`/`Y` out of a Gerber command, in millimetres.
+fn coordinates(line: &str, decimals: u32) -> Option<(f64, f64)> {
+    let scale = 10f64.powi(decimals as i32);
+    let x = between(line, 'X')? / scale;
+    let y = between(line, 'Y')? / scale;
     Some((x, y))
 }
 
@@ -141,10 +167,11 @@ fn between(line: &str, marker: char) -> Option<f64> {
 
 /// Every flash coordinate in a layer, in millimetres.
 fn flashes(gerber: &str) -> Vec<(f64, f64)> {
+    let decimals = decimal_places(gerber);
     gerber
         .lines()
         .filter(|line| line.contains("D03"))
-        .filter_map(coordinates)
+        .filter_map(|line| coordinates(line, decimals))
         .collect()
 }
 
@@ -171,7 +198,13 @@ fn excellon_holes(text: &str) -> Vec<(f64, f64, f64)> {
             continue;
         }
         if line.starts_with('X') {
-            if let Some((x, y)) = coordinates(line) {
+            // Zero, because a drill file carries its own decimal point: its
+            // `METRIC,TZ` header names no digit count, so the point has to be
+            // in the data. Gerber is the other way round. Reading a Gerber
+            // coordinate that still has a point in it now lands a thousandth
+            // of a millimetre from the pad and fails loudly, which is the
+            // point of taking the scale from the header instead of the data.
+            if let Some((x, y)) = coordinates(line, 0) {
                 out.push((x, y, current));
             }
         }
@@ -297,13 +330,14 @@ fn check_the_files(
             })
             .unwrap_or_else(|| panic!("{name} exported no outline"));
         let text = std::fs::read_to_string(outline).expect("a readable outline");
+        let decimals = decimal_places(&text);
         let (mut min_x, mut min_y) = (f64::MAX, f64::MAX);
         let (mut max_x, mut max_y) = (f64::MIN, f64::MIN);
         for line in text
             .lines()
             .filter(|l| l.contains("D01") || l.contains("D02"))
         {
-            let Some((x, y)) = coordinates(line) else {
+            let Some((x, y)) = coordinates(line, decimals) else {
                 continue;
             };
             min_x = min_x.min(x);
@@ -710,9 +744,10 @@ fn a_routed_board_reaches_the_files_too() {
 fn drawn_strokes(gerber: &str) -> Vec<((f64, f64), (f64, f64))> {
     let mut strokes = Vec::new();
     let mut pen: Option<(f64, f64)> = None;
+    let decimals = decimal_places(gerber);
 
     for line in gerber.lines() {
-        let Some(point) = coordinates(line) else {
+        let Some(point) = coordinates(line, decimals) else {
             continue;
         };
         if line.contains("D02") {

@@ -65,13 +65,14 @@ fn each_copper_layer_carries_the_trace_that_belongs_to_it() {
         .expect("bottom copper");
 
     // D02 moves the aperture, D01 draws to the next point: one segment is a
-    // move to its start and a draw to its end.
+    // move to its start and a draw to its end. Coordinates in the 2.6 format
+    // the header declares - 10.5mm is `10500000`, six implied decimals.
     assert!(
-        top.contains("X10.500000Y10.000000D02*") && top.contains("X15.000000Y10.000000D01*"),
+        top.contains("X10500000Y10000000D02*") && top.contains("X15000000Y10000000D01*"),
         "the top trace is missing from the top layer:\n{top}"
     );
     assert!(
-        bottom.contains("X15.000000Y10.000000D02*") && bottom.contains("X19.500000Y10.000000D01*"),
+        bottom.contains("X15000000Y10000000D02*") && bottom.contains("X19500000Y10000000D01*"),
         "the bottom trace is missing from the bottom layer:\n{bottom}"
     );
 

@@ -174,11 +174,11 @@ mod tests {
 
         // Should contain 5 coordinate pairs (4 corners + close path)
         // Move to (0,0), draw to (50,0), draw to (50,40), draw to (0,40), draw to (0,0)
-        assert!(gerber.contains("X0.000000Y0.000000D02*")); // Move to origin
-        assert!(gerber.contains("X50.000000Y0.000000D01*")); // Draw to bottom-right
-        assert!(gerber.contains("X50.000000Y40.000000D01*")); // Draw to top-right
-        assert!(gerber.contains("X0.000000Y40.000000D01*")); // Draw to top-left
-        assert!(gerber.contains("X0.000000Y0.000000D01*")); // Close path
+        assert!(gerber.contains("X0Y0D02*")); // Move to origin, leading zeros suppressed
+        assert!(gerber.contains("X50000000Y0D01*")); // Draw to bottom-right
+        assert!(gerber.contains("X50000000Y40000000D01*")); // Draw to top-right
+        assert!(gerber.contains("X0Y40000000D01*")); // Draw to top-left
+        assert!(gerber.contains("X0Y0D01*")); // Close path
     }
 
     #[test]

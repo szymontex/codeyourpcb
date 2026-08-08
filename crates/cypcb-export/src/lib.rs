@@ -12,8 +12,9 @@
 //! use cypcb_core::Nm;
 //!
 //! let format = CoordinateFormat::FORMAT_MM_2_6;
+//! // No decimal point: `%FSLAX26Y26*%` already said where it goes.
 //! let gerber_str = nm_to_gerber(Nm::from_mm(1.0).0, &format);
-//! assert_eq!(gerber_str, "1.000000");
+//! assert_eq!(gerber_str, "1000000");
 //! ```
 
 pub mod apertures;

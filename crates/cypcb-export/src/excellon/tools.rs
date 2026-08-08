@@ -6,7 +6,7 @@ use std::collections::HashMap;
 
 use cypcb_core::Nm;
 
-use crate::coords::{nm_to_gerber, CoordinateFormat};
+use crate::coords::{nm_to_decimal, CoordinateFormat};
 
 /// Common drill sizes as constants.
 /// Default via drill diameter (0.3mm).
@@ -138,7 +138,7 @@ impl ToolTable {
 
         let mut lines = Vec::new();
         for (drill_diameter, &tool_num) in tools {
-            let diameter_str = nm_to_gerber(drill_diameter.0, format);
+            let diameter_str = nm_to_decimal(drill_diameter.0, format);
             lines.push(format!("T{}C{}", tool_num, diameter_str));
         }
 

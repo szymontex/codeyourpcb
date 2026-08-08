@@ -262,7 +262,11 @@ fn the_fabricator_cuts_the_board_the_source_declared() {
         3,
         "a board with a cutout has three distinct X coordinates, a rectangle two:\n{edge}"
     );
-    for x in ["0.000000", "20.000000", "40.000000"] {
+    // Written the way `%FSLAX26Y26*%` declares: six implied decimals, no
+    // point. `0`, not `0.000000` - leading zeros are suppressed, which is what
+    // the `L` in the format declaration means.
+    for x in ["0", "20000000", "40000000"] {
+        // 0mm, 20mm, 40mm in 2.6
         assert!(
             xs.contains(x),
             "the outline is missing the corner at X{x}: {xs:?}"
@@ -555,20 +559,39 @@ fn the_legend_puts_each_part_on_the_side_it_is_assembled_on() {
 
     // R1 sits at 8mm, 8mm on top; R9 at 30mm, 20mm underneath. Each legend
     // draws around its own parts and not around the other side's.
+    //
+    // Asked as a distance rather than as `top.contains("X8.")`, which is how
+    // these four read before the exporter stopped writing a decimal point the
+    // format declaration said would not be there. A prefix match on a
+    // coordinate is a bad question in any case: `X8.` also matches 8.9mm, and
+    // misses 8mm written exactly.
+    fn draws_near(gerber: &str, x_mm: f64) -> bool {
+        gerber
+            .lines()
+            .filter(|line| line.contains("D01") || line.contains("D02"))
+            .filter_map(|line| {
+                let rest = line.strip_prefix('X')?;
+                let end = rest.find(|c: char| !c.is_ascii_digit() && c != '-')?;
+                // 2.6 format: six implied decimals.
+                Some(rest[..end].parse::<f64>().ok()? / 1_000_000.0)
+            })
+            .any(|x| (x - x_mm).abs() < 1.5)
+    }
+
     assert!(
-        top.contains("X8.") || top.contains("X7.") || top.contains("X9."),
+        draws_near(&top, 8.0),
         "the top legend has to draw around R1 at 8mm:\n{top}"
     );
     assert!(
-        !top.contains("X30.") && !top.contains("X29."),
+        !draws_near(&top, 30.0),
         "the top legend must not draw around a part assembled underneath:\n{top}"
     );
     assert!(
-        bottom.contains("X30.") || bottom.contains("X29.") || bottom.contains("X31."),
+        draws_near(&bottom, 30.0),
         "the bottom legend has to draw around R9 at 30mm:\n{bottom}"
     );
     assert!(
-        !bottom.contains("X8.") && !bottom.contains("X7."),
+        !draws_near(&bottom, 8.0),
         "the bottom legend must not draw around a top-side part:\n{bottom}"
     );
 }
