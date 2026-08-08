@@ -167,7 +167,13 @@ pub fn score_board(
     let crossings = compute_crossings(world, &traces);
 
     // 6. Layer balance
-    let layer_balance = compute_layer_balance(&traces);
+    let layer_balance = compute_layer_balance(
+        &traces,
+        world
+            .board_info()
+            .map(|(_, stack)| stack.count as usize)
+            .unwrap_or(2),
+    );
 
     // 7. Composite
     let board_diagonal = board_diagonal_nm(world);
@@ -477,27 +483,43 @@ fn compute_crossings(world: &mut BoardWorld, traces: &[TraceData]) -> u32 {
 /// Compute layer balance as min(counts) / max(counts).
 ///
 /// Returns 1.0 for single-layer boards or boards with no traces.
-fn compute_layer_balance(traces: &[TraceData]) -> f64 {
+fn compute_layer_balance(traces: &[TraceData], copper_layers: usize) -> f64 {
     if traces.is_empty() {
         return 1.0;
     }
 
-    let mut layer_counts: std::collections::HashMap<Layer, u32> = std::collections::HashMap::new();
+    // Measured against the layers the board has, not the ones it happened to
+    // use.
+    //
+    // This counted only the layers that carried copper, so a route that put
+    // everything on the top of a two-layer board had one entry in the map,
+    // min == max, and scored a perfect 1.0 - "single layer, balanced by
+    // definition". On `led_blink` that is not hypothetical: the `Low-Via`
+    // variant lays 0 vias and scores `balance 1.000`, while every variant that
+    // actually spreads across both layers scores 0.200. The term rewarded the
+    // opposite of its name in the one case where it varies most.
+    //
+    // Whether spreading is desirable at all is a separate question, and one
+    // the composite already answers elsewhere - it charges per via. This
+    // function's job is to say what it is named for.
+    let layers = copper_layers.max(1);
+    let mut counts: std::collections::HashMap<Layer, u32> = std::collections::HashMap::new();
     for trace in traces {
-        *layer_counts.entry(trace.layer).or_insert(0) += 1;
+        *counts.entry(trace.layer).or_insert(0) += 1;
     }
 
-    if layer_counts.len() <= 1 {
-        // Single layer — balanced by definition
-        return 1.0;
-    }
-
-    let min_count = *layer_counts.values().min().unwrap_or(&0);
-    let max_count = *layer_counts.values().max().unwrap_or(&1);
-
+    let max_count = *counts.values().max().unwrap_or(&0);
     if max_count == 0 {
         return 1.0;
     }
+
+    // Unused layers count as zero, which is what makes a single-layer route on
+    // a two-layer board score 0 rather than 1.
+    let min_count = if counts.len() < layers {
+        0
+    } else {
+        *counts.values().min().unwrap_or(&0)
+    };
 
     min_count as f64 / max_count as f64
 }
@@ -656,7 +678,7 @@ mod tests {
 
     #[test]
     fn test_layer_balance_empty() {
-        assert!((compute_layer_balance(&[]) - 1.0).abs() < 1e-10);
+        assert!((compute_layer_balance(&[], 2) - 1.0).abs() < 1e-10);
     }
 
     #[test]
@@ -666,9 +688,14 @@ mod tests {
             make_trace_data(Layer::TopCopper, 1),
             make_trace_data(Layer::TopCopper, 2),
         ];
+        // Was "Single layer should be 1.0". Three traces on the top of a
+        // two-layer board is the least balanced a board can be, and it scored
+        // the same as a perfect split - see
+        // `tests/layer_balance_means_what_it_says.rs` for what that did to the
+        // variant ranking on `led_blink`.
         assert!(
-            (compute_layer_balance(&traces) - 1.0).abs() < 1e-10,
-            "Single layer should be 1.0"
+            compute_layer_balance(&traces, 2).abs() < 1e-10,
+            "one layer of two is not balanced"
         );
     }
 
@@ -681,7 +708,7 @@ mod tests {
             make_trace_data(Layer::BottomCopper, 3),
         ];
         assert!(
-            (compute_layer_balance(&traces) - 1.0).abs() < 1e-10,
+            (compute_layer_balance(&traces, 2) - 1.0).abs() < 1e-10,
             "2+2 should be perfectly balanced"
         );
     }
@@ -696,7 +723,7 @@ mod tests {
             make_trace_data(Layer::BottomCopper, 4),
         ];
         // min=1, max=4 → balance = 0.25
-        let balance = compute_layer_balance(&traces);
+        let balance = compute_layer_balance(&traces, 2);
         assert!(
             (balance - 0.25).abs() < 1e-10,
             "4:1 should be 0.25, got {balance}"
@@ -978,8 +1005,10 @@ mod tests {
         assert_eq!(score.total_length, Nm::from_mm(20.0));
         assert_eq!(score.via_count, 0);
         assert!(score.smoothness > 0.0 && score.smoothness <= 1.0);
-        // Single layer → balance = 1.0
-        assert!((score.layer_balance - 1.0).abs() < 1e-10);
+        // Both traces are on the top of a two-layer board, so the bottom
+        // carries nothing and the balance is zero. This read `1.0` while the
+        // metric counted only the layers that had copper on them.
+        assert!(score.layer_balance.abs() < 1e-10);
         // Composite should be > 0 (we have length)
         assert!(score.composite > 0.0);
     }

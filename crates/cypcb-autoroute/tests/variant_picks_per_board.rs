@@ -57,7 +57,8 @@ fn which_variant_each_board_picks() {
         // winner to the world.
         for (rank, result) in results.iter().enumerate() {
             eprintln!(
-                "  {}. {:<32} composite {:>8.1}, drc {:>4} ({} shorts), vias {:>4}, {:.1}mm, {} unrouted",
+                "  {}. {:<32} composite {:>8.1}, drc {:>4} ({} shorts), vias {:>4}, \
+                 {:.1}mm, {} unrouted, smooth {:.3}, balance {:.3}",
                 rank + 1,
                 result.name,
                 result.score.composite,
@@ -66,6 +67,12 @@ fn which_variant_each_board_picks() {
                 result.score.via_count,
                 result.score.total_length.to_mm(),
                 result.unrouted,
+                // The two terms nobody had read. `composite` charges
+                // `(1 - smoothness) * 100` and `(1 - balance) * 50` against a
+                // DRC violation's 1000, so a diagnostic that hides them cannot
+                // answer whether either ever decides anything.
+                result.score.smoothness,
+                result.score.layer_balance,
             );
         }
 
