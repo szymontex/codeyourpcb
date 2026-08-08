@@ -247,6 +247,43 @@ pub fn default_variant_configs() -> Vec<VariantConfig> {
             pad_zone_margin_cells: cypcb_autoroute_default_margin(),
             heuristic_weight: 1.25,
         },
+        // The two knobs that pay, together.
+        //
+        // `weight_and_pad_price_sweep` crosses the heuristic weight with the
+        // foreign-pad price on all six fixtures, twelve points a board, and
+        // these two combinations each take a board no single-knob variant can
+        // reach. Violations and shorts, against the best any shipped variant
+        // had managed before:
+        //
+        //   Eager Pads   multi_ic     167 / 83  against Pad Aware's 180 / 101
+        //                plane_board   12 / 5   against 28 / 13
+        //   Eager Light  shift_driver  62 / 20  against 65 / 34
+        //
+        // Both are bad elsewhere - `Eager Pads` gives qfp_fanout 426 / 261
+        // against 309 / 147 - which is the whole reason they are variants and
+        // not defaults. The board picks.
+        VariantConfig {
+            name: "PathFinder Eager Pads".to_string(),
+            strategy: StrategyKind::PathFinder,
+            params: AutorouteParams::default(),
+            via_ring_penalty: 0.0,
+            pad_zone_blocks_foreign_copper: false,
+            reserve_trace_footprint: true,
+            foreign_pad_penalty: 20.0,
+            pad_zone_margin_cells: cypcb_autoroute_default_margin(),
+            heuristic_weight: 1.25,
+        },
+        VariantConfig {
+            name: "PathFinder Eager Light".to_string(),
+            strategy: StrategyKind::PathFinder,
+            params: AutorouteParams::default(),
+            via_ring_penalty: 0.0,
+            pad_zone_blocks_foreign_copper: false,
+            reserve_trace_footprint: true,
+            foreign_pad_penalty: 5.0,
+            pad_zone_margin_cells: cypcb_autoroute_default_margin(),
+            heuristic_weight: 1.1,
+        },
         VariantConfig {
             name: "PathFinder Tight Pads".to_string(),
             strategy: StrategyKind::PathFinder,

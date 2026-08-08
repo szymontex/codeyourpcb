@@ -1131,6 +1131,21 @@ cypcb::sync::unknown_pin
 - QUEUED: `.gsd/REQUIREMENTS.md` never received the M005 status writeback - `STATE.md` counts "23 active, 0 validated" while REQUIREMENTS lists 14 as validated. Empty DRC checkers (`trace_width.rs:53`, `solder_mask_bridge.rs:27`, `silk_clearance.rs:26`, `hole_to_hole.rs:37`) count toward "12 checkers" while doing nothing.
 
 ### V7 - Performance (GP-002 discipline: measure, then optimize, publish before/after)
+- DONE: **the two knobs that pay were swept together, and three boards have new best results.** `foreign_pad_penalty` and `heuristic_weight` had each been measured alone and shipped on that evidence; they are not independent, because the price changes what a path costs and the weight changes how hard the search looks for the cheap one. `weight_and_pad_price_sweep` crosses weights 1.0/1.1/1.25/1.5 with prices 0/5/20 on all six fixtures - twelve points a board - and ranks each board's points the way the variant ranking does: abandoned connections, then shorts, then violations.
+- Two combinations reach boards no single-knob variant can, and both ship as variants. Confirmed through `cypcb route` itself, not the sweep harness:
+
+  | fixture | winner | result | previous best |
+  |---|---|---|---|
+  | multi_ic | **PathFinder Eager Pads** (1.25, price 20) | **167 / 83** | Pad Aware 180 / 101 |
+  | plane_board | **PathFinder Eager Pads** | **12 / 5** | 28 / 13 |
+  | shift_driver | **PathFinder Eager Light** (1.1, price 5) | **62 / 20** | 65 / 34 |
+  | stm32_breakout | PathFinder Eager | 163 / 70 | unchanged |
+  | qfp_fanout | PathFinder Default | 309 / 147 | unchanged |
+  | led_blink | PathFinder High-Density | 1 / 0 | unchanged |
+
+  `plane_board` more than halves: **28 violations and 13 shorts down to 12 and 5**. Both new variants are bad elsewhere - `Eager Pads` gives `qfp_fanout` 426 / 261 against 309 / 147 - which is exactly why they are variants and not defaults.
+- Eleven variants now, and best-of-N costs what they take: `multi_ic` 9.70s, `stm32_breakout` 8.41s, `qfp_fanout` 7.01s, `shift_driver` 4.13s, `plane_board` 0.70s, `led_blink` 0.03s.
+- NEXT-ACTION: **the eleven variants are eleven guesses at one question.** Each is a point in a space of at least four knobs, chosen because somebody measured that point; nothing has ever searched the space. With a routing run down to under a second on most boards, a small search - hill-climbing from the best known point on the board in front of it - is now affordable and would replace the list with something that adapts. Measure first: how much better is the best point in the twelve-point grid than the best shipped variant, per board.
 - DONE: **a search that stops insisting on the cheapest path is not only faster, it routes better - and one board's best result in this project's history came out of it.** `AutorouteConfig::heuristic_weight` multiplies the search's estimate of the remaining distance. At 1.0 the estimate never overestimates, which is what makes A* optimal and what makes it explore so widely. `heuristic_weight_sweep` routes all six fixtures at 1.0, 1.1, 1.25 and 1.5; at **1.25**, against the shipped 1.0, violations and shorts:
 
   | fixture | 1.0 | 1.25 | |
