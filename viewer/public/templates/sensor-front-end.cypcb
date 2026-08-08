@@ -1,0 +1,37 @@
+// sensor-front-end.cypcb - a design built from a block library.
+//
+// `import` names a file beside this one. The blocks come from there; this file
+// places them and wires them. Open lib/blocks.cypcb to see what they are.
+
+version 1
+
+import Divider, LedDriver from "lib/blocks.cypcb"
+
+board sensor_front_end {
+    size 50mm x 30mm
+    layers 2
+}
+
+// Two dividers reading the same rail. Each instance brings its own copy of the
+// parts - DIV_A_RTOP and DIV_B_RTOP - so they never collide.
+use Divider as DIV_A at 10mm, 8mm {
+    IN = VIN
+    OUT = SENSE_A
+    GND = GND
+}
+
+use Divider as DIV_B at 25mm, 8mm {
+    IN = VIN
+    OUT = SENSE_B
+    GND = GND
+}
+
+// Turned a quarter turn: an instance rotates its parts about its own origin.
+use LedDriver as STATUS at 40mm, 8mm rotate 90 {
+    INPUT = SENSE_A
+    GND = GND
+}
+
+// What this design says about itself. The checker reports any that do not hold.
+assert board.width <= 100mm
+assert board.layers >= 2

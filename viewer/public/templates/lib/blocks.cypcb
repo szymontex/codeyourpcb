@@ -1,0 +1,65 @@
+// blocks.cypcb - a library of reusable blocks, with no board of its own.
+//
+// Imported by sensor-front-end.cypcb, which is the template you picked.
+// A library file declares modules and footprints; it places nothing.
+
+version 1
+
+// A two-resistor divider. Its pins are what a design wires to.
+module Divider {
+    pin IN
+    pin OUT
+    pin GND
+
+    component RTOP resistor "0402" {
+        value 10kohm
+        at 0mm, 0mm
+    }
+
+    component RBOT resistor "0402" {
+        value 10kohm
+        at 0mm, 2mm
+    }
+
+    net IN {
+        RTOP.1
+    }
+
+    net OUT {
+        RTOP.2
+        RBOT.1
+    }
+
+    net GND {
+        RBOT.2
+    }
+}
+
+// An indicator LED with its series resistor.
+module LedDriver {
+    pin INPUT
+    pin GND
+
+    component R1 resistor "0402" {
+        value 1kohm
+        at 0mm, 0mm
+    }
+
+    component D1 led "0805" {
+        value "red"
+        at 0mm, 2.5mm
+    }
+
+    net INPUT {
+        R1.1
+    }
+
+    net mid {
+        R1.2
+        D1.1
+    }
+
+    net GND {
+        D1.2
+    }
+}

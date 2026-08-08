@@ -15,6 +15,7 @@ import { setupInteraction, type InteractionState } from './interaction';
 import { createRoutingState, type RoutingState } from './routing';
 import { UndoStack, AddTraceCommand, RemoveTraceCommand, RotateComponentCommand, ResizeBoardCommand, EditTraceCommand, installDebugSurface } from './undo';
 import { createLayerVisibility, innerVisibleFromUrlLayers } from './layers';
+import { collectImportedFiles, importedPaths, readerForBaseUrl } from './imports';
 import { createFilePicker, setupDropZone, readFileAsText } from './file-picker';
 import { openFile, saveFile } from './file-access';
 import { isDesktop, initDesktop } from './desktop';
@@ -775,7 +776,7 @@ async function init(): Promise<void> {
         // and a page of parse errors.
         const errors = loadedKind === 'kicad_pcb'
           ? engine.load_kicad(content)
-          : engine.load_source(content);
+          : loadDesign(content);
         if (errors) {
           console.warn('[Editor] Parse errors:', errors);
         }
@@ -980,11 +981,82 @@ async function init(): Promise<void> {
   }
 
   /**
+   * Files the design imports, under the paths the engine asks for.
+   *
+   * The engine resolves `import "lib/blocks.cypcb"` and cannot read a file, so
+   * the host fetches and hands it these. Empty for a design that imports
+   * nothing, which is every board this viewer had until now.
+   */
+  const importedFiles: Record<string, string> = {};
+
+  /**
+   * Where imported files come from, or null when the design has no home.
+   *
+   * A template is served over HTTP, so its library is a fetch away. A file the
+   * user opened through the browser's file picker has no directory to fetch
+   * from, and the honest answer there is the error the engine already gives:
+   * it names the path it wanted and what the host supplied.
+   */
+  let importReader: ((path: string) => Promise<string | null>) | null = null;
+
+  /**
+   * Load a design, with whatever of its library is already in hand.
+   *
+   * Every path into the engine goes through here, so a design that imports
+   * gets its blocks whether it arrived from a template, the editor, a reload
+   * or the undo stack.
+   */
+  function loadDesign(source: string): string {
+    const errors = engine.load_source_with_imports(source, importedFiles);
+    void followImports(source);
+    return errors;
+  }
+
+  /**
+   * Fetch what the design imports and, if that is new, load it again.
+   *
+   * Asynchronous because fetching is: the first load draws what it can - a
+   * board with its own parts, and an error for each import - and this replaces
+   * it once the library arrives. Same shape as `reloadAfterLcscFetch` below,
+   * which does this for footprints fetched from LCSC.
+   */
+  async function followImports(source: string): Promise<void> {
+    const reader = importReader;
+    if (!reader || importedPaths(source).length === 0) return;
+
+    const fetched = await collectImportedFiles(source, async (path) => {
+      const held = importedFiles[path];
+      return held !== undefined ? held : reader(path);
+    });
+
+    let changed = false;
+    for (const [path, text] of Object.entries(fetched)) {
+      if (importedFiles[path] !== text) {
+        importedFiles[path] = text;
+        changed = true;
+      }
+    }
+    if (!changed) return;
+
+    const errors = engine.load_source_with_imports(source, importedFiles);
+    if (errors) console.warn('[Imports] After fetching the library:', errors);
+
+    const snap = pullSnapshot();
+    if (snap.board) {
+      viewport = fitBoard(viewport, snap.board.width_nm, snap.board.height_nm);
+      interactionState.viewport = viewport;
+    }
+    if (snap.violations) updateErrorBadge(snap.violations);
+    if (is3DActive && renderer3d) renderer3d.updateBoard(snap, layers);
+    forceRender2D();
+  }
+
+  /**
    * Re-parse + re-render after LCSC footprint fetch, updating the thumbnail.
    */
   function reloadAfterLcscFetch(source: string): void {
     console.log('[LCSC] reloadAfterLcscFetch — re-parsing source with registered footprints');
-    engine.load_source(source);
+    loadDesign(source);
     const updatedSnap = pullSnapshot();
     console.log('[LCSC] After re-parse: components =', updatedSnap.components?.length, 'pads on first =', updatedSnap.components?.[0]?.pads?.length);
     forceRender2D();
@@ -1009,7 +1081,11 @@ async function init(): Promise<void> {
       // Clear undo stack
       undoStack.clear();
 
-      const errors = engine.load_source(source);
+      // A template is served from `/templates/`, so anything it imports is a
+      // fetch away beside it.
+      importReader = readerForBaseUrl('/templates/');
+
+      const errors = loadDesign(source);
       if (errors) console.warn('[Template] Parse warnings:', errors);
 
       lastLoadedSource = source;
@@ -1046,9 +1122,14 @@ async function init(): Promise<void> {
     onLoadRecent: (source, name) => {
       undoStack.clear();
 
+      // A recent file is the design's own text out of localStorage; where it
+      // came from is not stored, so there is nowhere to fetch its library
+      // from. The engine says which import it could not follow.
+      importReader = null;
+
       console.log(`[TracePersist] onLoadRecent: name=${name}, source length=${source?.length}, has trace blocks=${source?.includes('trace ') && source?.includes('path ')}`);
 
-      const errors = engine.load_source(source);
+      const errors = loadDesign(source);
       if (errors) console.warn('[Recent] Parse warnings:', errors);
 
       lastLoadedSource = source;
@@ -1082,7 +1163,7 @@ async function init(): Promise<void> {
     },
     onNewBlank: (source) => {
       undoStack.clear();
-      engine.load_source(source);
+      loadDesign(source);
       lastLoadedSource = source;
       const snap = pullSnapshot();
 
@@ -1372,7 +1453,7 @@ async function init(): Promise<void> {
     if (kind === 'kicad_pcb') {
       engine.load_kicad(source);
     } else {
-      engine.load_source(source);
+      loadDesign(source);
     }
     const snap = pullSnapshot();
     if (snap.board) {
@@ -1646,7 +1727,7 @@ async function init(): Promise<void> {
         loadedKind = ext === 'kicad_pcb' ? 'kicad_pcb' : 'cypcb';
         const errors = loadedKind === 'kicad_pcb'
           ? engine.load_kicad(content)
-          : engine.load_source(content);
+          : loadDesign(content);
         if (errors) {
           console.warn('Parse errors:', errors);
         }
@@ -1757,7 +1838,7 @@ async function init(): Promise<void> {
     const ext = result.name.toLowerCase().split('.').pop();
 
     if (ext === 'cypcb') {
-      const errors = engine.load_source(result.content);
+      const errors = loadDesign(result.content);
       if (errors) console.warn('Parse errors:', errors);
 
       lastLoadedSource = result.content;
@@ -2162,7 +2243,7 @@ async function init(): Promise<void> {
     const savedSelection = selectedRefdes;
 
     // Parse new content
-    const errors = engine.load_source(content);
+    const errors = loadDesign(content);
     if (errors) {
       console.warn('[HotReload] Parse warnings:', errors);
     }
@@ -2332,7 +2413,7 @@ async function init(): Promise<void> {
         console.warn('[Routing] auto_route() failed:', routeErr);
         // Reload the board to reset WASM engine state after panic
         if (lastLoadedSource) {
-          engine.load_source(lastLoadedSource);
+          loadDesign(lastLoadedSource);
         }
         statusText.textContent = `Routing failed: ${routeErr}`;
         return;
@@ -3012,7 +3093,7 @@ async function init(): Promise<void> {
       console.log('[Desktop] Opening file:', path);
 
       // Load the content into the engine
-      const errors = engine.load_source(content);
+      const errors = loadDesign(content);
       if (errors) {
         console.warn('[Desktop] Parse warnings:', errors);
       }
@@ -3135,7 +3216,7 @@ async function init(): Promise<void> {
       console.log('[Desktop] New file');
 
       // Clear the design
-      engine.load_source('');
+      loadDesign('');
       pullSnapshot();
 
       // Clear editor content if initialized

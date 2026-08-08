@@ -153,6 +153,16 @@ export interface PcbEngine {
   load_source(source: string): string;
 
   /**
+   * The same, for a design whose `import` statements the host has fetched.
+   *
+   * `files` maps each path an import writes to its text. A browser tab has no
+   * filesystem, so the engine cannot open `lib/blocks.cypcb` itself: without
+   * this a design split across files loads as `unknown module` for every block
+   * it imports, while the same file checks on the command line.
+   */
+  load_source_with_imports(source: string, files: Record<string, string>): string;
+
+  /**
    * Read a `.kicad_pcb` and build the board from it.
    *
    * The command line learned to read, check, route and write KiCad boards
@@ -275,6 +285,8 @@ interface WasmPcbEngine {
   /** Read `.cypcb` and build the board from it. Exported since the engine
    *  carries the Rust reader; before that the host parsed and sent a snapshot. */
   load_source(source: string): string;
+  /** Read `.cypcb` whose imports the host has already fetched. */
+  load_source_with_imports(source: string, files_json: string): string;
   /** Read a `.kicad_pcb` and build the board from it. */
   load_kicad(source: string): string;
   load_snapshot(snapshot: BoardSnapshot): string;
@@ -559,6 +571,12 @@ export class WasmPcbEngineAdapter implements PcbEngine {
     return (this.wasmEngine as unknown as { get_diagnostics_json(): string }).get_diagnostics_json();
   }
 
+  load_source_with_imports(source: string, files: Record<string, string>): string {
+    return this.afterLoad(
+      this.wasmEngine.load_source_with_imports(source, JSON.stringify(files)),
+    );
+  }
+
   load_source(source: string): string {
     // The engine parses. Until 2026-08-07 this line read `parseSource(source)`
     // - a second reader of the same language, written in TypeScript, which did
@@ -566,12 +584,18 @@ export class WasmPcbEngineAdapter implements PcbEngine {
     // differently on screen than it exported. The engine's reader is checked
     // against the tree-sitter one board by board in
     // `crates/cypcb-parser/tests/differential.rs`.
-    const errors = this.wasmEngine.load_source(source);
+    return this.afterLoad(this.wasmEngine.load_source(source));
+  }
 
-    // The model now lives in Rust: components, nets, traces, vias, zones, the
-    // copper the pours became, the ratsnest and the DRC violations all come
-    // back from it. There is nothing left to replay into the engine, which is
-    // what the trace loop here used to do.
+  /**
+   * Pick up what a load left in the engine.
+   *
+   * The model now lives in Rust: components, nets, traces, vias, zones, the
+   * copper the pours became, the ratsnest and the DRC violations all come back
+   * from it. There is nothing left to replay into the engine, which is what
+   * the trace loop here used to do.
+   */
+  private afterLoad(errors: string): string {
     const snapshot = sanitizeSnapshot(this.wasmEngine.get_snapshot());
     this.cachedSnapshot = snapshot;
 
@@ -794,6 +818,10 @@ class MockPcbEngine implements PcbEngine {
     // The fallback engine does not read the language, so it has nothing to
     // say about a line of it.
     return '[]';
+  }
+
+  load_source_with_imports(source: string, _files: Record<string, string>): string {
+    return this.load_source(source);
   }
 
   load_source(_source: string): string {

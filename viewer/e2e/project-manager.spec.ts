@@ -35,10 +35,15 @@ test.describe('Project Manager', () => {
     const pm = page.locator('#project-manager');
     await expect(pm).toBeVisible();
 
-    // 4 bundled templates + the blank card
-    const cards = pm.locator('.pm-template-card');
-    await expect(cards).toHaveCount(5);
-    await expect(pm.locator('[data-template]')).toHaveCount(4);
+    // Every bundled template, plus the blank card. Counted against the
+    // registry rather than pinned to a number: this test was written when
+    // there were four and had to be edited to add a fifth, which is a test
+    // measuring the wrong thing.
+    const registered: number = await page.evaluate(
+      () => (window as any).__projectManager.templateCount,
+    );
+    await expect(pm.locator('[data-template]')).toHaveCount(registered);
+    await expect(pm.locator('.pm-template-card')).toHaveCount(registered + 1);
 
     // Verify template names
     await expect(pm.locator('[data-template="blink"] h3')).toHaveText('Blink LED');
@@ -57,7 +62,10 @@ test.describe('Project Manager', () => {
   test('debug surface exposes state', async ({ page }) => {
     const debug = await page.evaluate(() => (window as any).__projectManager);
     expect(debug.visible).toBe(true);
-    expect(debug.templateCount).toBe(4);
+    // The registry and the cards agree; `every-template-card-is-a-template`
+    // in the unit tests is what holds them together.
+    const cards = await page.locator('#project-manager [data-template]').count();
+    expect(debug.templateCount).toBe(cards);
     expect(debug.recentFiles).toHaveLength(0);
   });
 

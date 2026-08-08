@@ -55,6 +55,12 @@ const TEMPLATES: TemplateInfo[] = [
     description: 'Components at corners & edges — verify 3D model placement',
     file: 'alignment-test.cypcb',
   },
+  {
+    id: 'sensor-front-end',
+    name: 'Blocks from a library',
+    description: 'Two dividers and an indicator, imported from lib/blocks.cypcb',
+    file: 'sensor-front-end.cypcb',
+  },
 ];
 
 // ---------------------------------------------------------------------------
