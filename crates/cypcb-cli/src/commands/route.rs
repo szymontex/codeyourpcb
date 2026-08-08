@@ -96,6 +96,14 @@ impl RouteCommand {
     pub fn run(&self) -> Result<()> {
         let start_time = Instant::now();
 
+        // A KiCad board routes in-house and is written back as a KiCad board.
+        // The other route out of here appends `.cypcb` trace blocks to a copy
+        // of the source, and appending DSL to a `(kicad_pcb ...)` file would
+        // produce something neither reader can open.
+        if crate::board_source::is_kicad(&self.file) {
+            return self.route_kicad(start_time);
+        }
+
         // Read input file
         let source = std::fs::read_to_string(&self.file)
             .into_diagnostic()
@@ -501,6 +509,73 @@ impl RouteCommand {
     /// `route` shells out to a Java jar, and `score` routes only to print
     /// numbers. The output is a new file rather than an edit in place, because
     /// a router is not something to point at someone's source without asking.
+    /// Route a KiCad board and write it back as one.
+    ///
+    /// The loop a KiCad user has is: draw it in KiCad, route it, open it in
+    /// KiCad. The last step needed a writer, and what it writes is narrow on
+    /// purpose - the `(segment ...)` and `(via ...)` forms routing produces,
+    /// inserted into a copy of the original file. Everything this project
+    /// models loosely or not at all is carried through byte for byte.
+    fn route_kicad(&self, start_time: Instant) -> Result<()> {
+        use cypcb_autoroute::{route_board, AutorouteConfig};
+        use cypcb_rules::presets::{PresetRuleSet, RulesPreset};
+
+        let source = std::fs::read_to_string(&self.file)
+            .into_diagnostic()
+            .wrap_err_with(|| format!("Failed to read {}", self.file.display()))?;
+
+        let parsed = cypcb_kicad::parse_kicad_pcb(&self.file)
+            .map_err(|e| miette::miette!("{e}"))
+            .wrap_err_with(|| format!("Failed to read KiCad board {}", self.file.display()))?;
+        for refusal in &parsed.metadata.zone_refusals {
+            eprintln!("warning: {refusal}");
+        }
+
+        let library = parsed.library.clone();
+        let mut world = parsed.world;
+        world.set_footprints(library.clone());
+        world.rebuild_spatial_index_from_library(&library);
+
+        let preset = RulesPreset::from_name(&self.preset)
+            .ok_or_else(|| miette::miette!("Unknown routing preset '{}'", self.preset))?;
+        let rules = PresetRuleSet::new(preset);
+
+        eprintln!("Routing {}...", self.file.display());
+        let result = route_board(&mut world, &library, &rules, &AutorouteConfig::default());
+
+        if result.routes.is_empty() {
+            return Err(miette::miette!(
+                "The router produced nothing to write ({:?})",
+                result.status
+            ));
+        }
+
+        let routed = cypcb_kicad::writer::append_routing(
+            &source,
+            &result,
+            &parsed.net_numbers,
+            parsed.board_origin_mm,
+        )
+        .map_err(|e| miette::miette!("{e}"))?;
+
+        let out_path = self
+            .output
+            .clone()
+            .unwrap_or_else(|| self.file.with_extension("routed.kicad_pcb"));
+        std::fs::write(&out_path, &routed)
+            .into_diagnostic()
+            .wrap_err_with(|| format!("Failed to write {}", out_path.display()))?;
+
+        eprintln!(
+            "Wrote {} ({} segments, {} vias) in {:.2}s",
+            out_path.display(),
+            result.routes.len(),
+            result.vias.len(),
+            start_time.elapsed().as_secs_f64()
+        );
+        Ok(())
+    }
+
     fn route_in_house(
         &self,
         source: &str,

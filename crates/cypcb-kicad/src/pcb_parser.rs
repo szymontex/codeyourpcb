@@ -113,6 +113,17 @@ pub struct KicadPcbParseResult {
     pub reference_routes: Option<RoutingResult>,
     /// Parse metadata for inspection.
     pub metadata: KicadPcbMetadata,
+    /// This board's corner in the file's own coordinates.
+    ///
+    /// Every position in `world` is relative to it. Writing anything back into
+    /// the file means adding it again.
+    pub board_origin_mm: (f64, f64),
+    /// Which KiCad net number each interned net came from.
+    ///
+    /// A `(segment ...)` written back has to name the file's own net number,
+    /// not this crate's `NetId`. They agree by accident on a board whose nets
+    /// were declared in order and disagree on every other.
+    pub net_numbers: std::collections::HashMap<NetId, i64>,
 }
 
 /// Complexity tier for benchmark classification.
@@ -419,6 +430,11 @@ pub fn parse_kicad_pcb_str(content: &str) -> Result<KicadPcbParseResult, KicadPc
         (0.0, 0.0)
     };
 
+    let net_numbers = kicad_net_map
+        .iter()
+        .map(|(number, net_id)| (*net_id, *number))
+        .collect();
+
     let metadata = KicadPcbMetadata {
         zone_count,
         zone_refusals,
@@ -444,6 +460,8 @@ pub fn parse_kicad_pcb_str(content: &str) -> Result<KicadPcbParseResult, KicadPc
         library,
         reference_routes,
         metadata,
+        board_origin_mm: board_origin,
+        net_numbers,
     })
 }
 
