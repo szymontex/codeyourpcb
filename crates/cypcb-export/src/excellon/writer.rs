@@ -147,8 +147,16 @@ pub fn export_excellon_span(
         None => output.push_str("; All drill holes\n"),
     }
 
-    output.push_str("; FORMAT={2:4/ absolute / metric / suppress trailing zeros}\n");
-    output.push_str("METRIC,TZ\n"); // Metric units, trailing zero suppression
+    // The digit counts here have to be the ones actually written, and they
+    // were not: this line said `2:4` no matter what `format` held, while the
+    // body was written with six decimals. A drill file whose header describes
+    // a different format than its data is the same defect the Gerber writer
+    // had, one file over.
+    output.push_str(&format!(
+        "; FORMAT={{{}:{}/ absolute / metric / decimal}}\n",
+        format.integer_places, format.decimal_places
+    ));
+    output.push_str("METRIC,TZ\n"); // Metric units, leading zeros suppressed
 
     // Write tool definitions
     output.push_str(&tool_table.to_header(format));
@@ -221,7 +229,15 @@ fn collect_drill_hits(
                     span: (Layer::TopCopper, Layer::BottomCopper),
                     position: abs_pos,
                     drill_diameter,
-                    drill_type: DrillType::Plated, // Component pads are always plated
+                    // Not "component pads are always plated", which is what
+                    // stood here and put every mounting hole in the plated
+                    // file. A pad with copper is plated; a hole without is a
+                    // mounting hole and the fabricator must leave it bare.
+                    drill_type: if pad.is_non_plated() {
+                        DrillType::NonPlated
+                    } else {
+                        DrillType::Plated
+                    },
                 });
             }
         }

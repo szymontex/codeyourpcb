@@ -880,6 +880,12 @@ fn parse_pad(
     };
 
     let is_through_hole = pad_type_str == "thru_hole" || pad_type_str == "np_thru_hole";
+    // KiCad's word for a hole the fabricator must not plate: a mounting hole,
+    // a tooling hole. It writes them with copper layers all the same -
+    // `(layers "*.Cu" "*.Mask")` is what pcbnew emits for a stock
+    // `MountingHole_3.2mm` - so the layer list in the file cannot be trusted
+    // to say what the pad type already said.
+    let is_non_plated = pad_type_str == "np_thru_hole";
 
     let mut local_pos = Point::ORIGIN;
     let mut size = (Nm::from_mm(1.0), Nm::from_mm(1.0));
@@ -941,8 +947,14 @@ fn parse_pad(
         }
     }
 
+    // A hole with no copper is what non-plated means, so the copper the file
+    // listed comes off. Everything else it asked for - mask, paste - stays.
+    if is_non_plated {
+        layers.retain(|layer| !layer.is_copper());
+    }
+
     // If no layers parsed, use defaults based on pad type
-    if layers.is_empty() {
+    if layers.is_empty() && !is_non_plated {
         if is_through_hole {
             layers.push(Layer::TopCopper);
             layers.push(Layer::BottomCopper);

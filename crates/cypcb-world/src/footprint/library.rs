@@ -69,6 +69,26 @@ impl PadDef {
     pub fn is_through_hole(&self) -> bool {
         self.drill.is_some()
     }
+
+    /// A drilled hole with no copper on any layer: a mounting hole, a tooling
+    /// hole, a slot for a connector's latch.
+    ///
+    /// This is not a flag somebody has to remember to set. A hole with copper
+    /// around it is plated by definition and a hole without copper cannot be,
+    /// so the geometry already says which it is. KiCad calls it
+    /// `np_thru_hole`; the importer drops the copper layers off such a pad and
+    /// this reads the result back.
+    ///
+    /// It matters to three places that would otherwise get it wrong: the drill
+    /// file, which must list it separately or the fabricator plates it - an
+    /// M3 hole comes back a tenth of a millimetre narrower and shorted to
+    /// whatever copper it touches; the copper layers, which must not flash a
+    /// pad there; and the router, which must still treat it as solid, because
+    /// a hole with no copper is still a hole.
+    #[inline]
+    pub fn is_non_plated(&self) -> bool {
+        self.drill.is_some() && !self.layers.iter().any(|layer| layer.is_copper())
+    }
 }
 
 /// A piece of silkscreen artwork, in footprint coordinates.

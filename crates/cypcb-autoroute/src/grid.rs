@@ -245,6 +245,27 @@ impl RoutingGrid {
                     let pad_radius_cells =
                         ((pad_radius_nm + self.resolution - 1) / self.resolution) as u32;
 
+                    // A mounting hole has no copper, so the loop below would
+                    // walk an empty list and the search would route a trace
+                    // straight through it - and then across it on the other
+                    // layer too. The drill goes through the whole board, so it
+                    // blocks every layer.
+                    if pad.is_non_plated() {
+                        for li in 0..self.layer_count {
+                            // `CELL_OBSTACLE`, not `CELL_PAD`: a pad is
+                            // something a net may be let into, and there is no
+                            // net that belongs in a mounting hole.
+                            self.mark_obstacle_at_nm(
+                                abs_x,
+                                abs_y,
+                                li as usize,
+                                pad_radius_cells + clearance_cells,
+                                CELL_OBSTACLE,
+                            );
+                        }
+                        continue;
+                    }
+
                     // Mark on each layer the pad exists on
                     for layer in &pad.layers {
                         if let Some(li) = layer_to_index(*layer) {

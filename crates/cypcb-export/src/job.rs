@@ -319,6 +319,29 @@ pub fn run_export(
         let file = write_export_file(&path, &content, "Drill PTH")?;
         files.push(file);
 
+        // Every preset already names a file for holes that must not be plated
+        // - `-NPTH.drl` for JLCPCB, `_npth.xln` for PCBWay - and nothing ever
+        // wrote one. A mounting hole went into the plated file with the pads
+        // and came back plated: narrower than the screw it was drilled for,
+        // and connected to whatever copper it passes.
+        //
+        // Written only when the board has such a hole. An empty NPTH file is
+        // not neutral - a fabricator reading one has to decide whether it
+        // means "no mounting holes" or "the CAM step went wrong".
+        let npth = export_excellon(
+            world,
+            library,
+            &job.preset.coordinate_format,
+            Some(DrillType::NonPlated),
+        )
+        .map_err(|e| ExportError::Export(format!("{:?}", e)))?;
+        if npth.lines().any(|line| line.starts_with('X')) {
+            let filename = format!("{}{}", job.board_name, job.preset.file_naming.drill_npth);
+            let path = drill_dir.join(&filename);
+            let file = write_export_file(&path, &npth, "Drill NPTH")?;
+            files.push(file);
+        }
+
         // Blind and buried vias join layers the through file cannot describe.
         // A drill file with no stated pair means "through the whole board" to
         // every fabricator, so these get one file per pair, named for it.
