@@ -456,6 +456,9 @@ pub fn property_completions(context: &PropertyContext) -> Vec<CompletionItem> {
             CompletionItem::new("rotate", CompletionItemKind::Property)
                 .with_detail("Rotation angle")
                 .with_insert_text("rotate ${1:0}", true),
+            CompletionItem::new("pin", CompletionItemKind::Property)
+                .with_detail("Put a pin on a net")
+                .with_insert_text("pin.${1:1} = ${2:NET}", true),
         ],
         PropertyContext::Net => vec![
             CompletionItem::new("width", CompletionItemKind::Property)

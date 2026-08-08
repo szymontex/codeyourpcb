@@ -605,6 +605,9 @@ pub fn sync_ast_to_world(
     // Expand module instances first, so every later pass sees plain
     // components and nets and none of them needs to know modules exist.
     let expanded = expand_module_instances(ast, source, &mut result);
+    // Then fold `pin.1 = VCC` into the nets it names, so the rest of this
+    // function only ever reads `net` blocks.
+    let expanded = fold_pin_assignments_into_nets(expanded);
     let definitions = &expanded;
 
     // How many copper layers the board declares, read before the footprints
@@ -2202,6 +2205,104 @@ net VCC {
     }
 
     #[test]
+    fn a_pin_assignment_puts_the_pin_on_the_net_it_names() {
+        // `pin.1 = VCC` is a rule in the grammar, an arm in the reader, a field
+        // on the AST and something the language server reads - and the board
+        // model dropped it. Measured on this board before the fold: `cypcb
+        // parse` reported `"pins": []` for both parts and `cypcb check` gave
+        // four `unconnected-pin` violations for a file that names every
+        // connection it has.
+        let source = r#"
+version 1
+board test { size 20mm x 20mm layers 2 }
+component R1 resistor "0402" {
+    at 5mm, 5mm
+    pin.1 = VCC
+    pin.2 = OUT
+}
+component R2 resistor "0402" {
+    at 12mm, 5mm
+    pin.1 = OUT
+    pin.2 = GND
+}
+"#;
+        let parse_result = parse(source);
+        assert!(parse_result.is_ok(), "parse: {:?}", parse_result.errors);
+
+        let mut world = BoardWorld::new();
+        let mut lib = FootprintLibrary::new();
+        let result = sync_ast_to_world(&parse_result.value, source, &mut world, &mut lib);
+        assert!(result.is_ok(), "sync errors: {:?}", result.errors);
+
+        let out = world.get_net("OUT").expect("OUT is a net");
+        let r1 = world.find_by_refdes("R1").expect("R1 was spawned");
+        let r2 = world.find_by_refdes("R2").expect("R2 was spawned");
+
+        assert_eq!(
+            world.get::<NetConnections>(r1).unwrap().pin_net("2"),
+            Some(out),
+            "R1.2 says it is on OUT"
+        );
+        assert_eq!(
+            world.get::<NetConnections>(r2).unwrap().pin_net("1"),
+            Some(out),
+            "R2.1 says it is on OUT, and it is the same net"
+        );
+        assert!(
+            world.get_net("VCC").is_some() && world.get_net("GND").is_some(),
+            "a net named only by an assignment still exists"
+        );
+    }
+
+    #[test]
+    fn a_pin_assignment_joins_the_block_of_the_same_name() {
+        // One net, written from both ends: the block says what it is made of
+        // and how wide it has to be, the assignment adds a pin to it.
+        let source = r#"
+version 1
+board test { size 20mm x 20mm layers 2 }
+component R1 resistor "0402" {
+    at 5mm, 5mm
+}
+component R2 resistor "0402" {
+    at 12mm, 5mm
+    pin.1 = SIG
+}
+net SIG [width 0.5mm] {
+    R1.2
+}
+"#;
+        let parse_result = parse(source);
+        assert!(parse_result.is_ok(), "parse: {:?}", parse_result.errors);
+
+        let mut world = BoardWorld::new();
+        let mut lib = FootprintLibrary::new();
+        let result = sync_ast_to_world(&parse_result.value, source, &mut world, &mut lib);
+        assert!(result.is_ok(), "sync errors: {:?}", result.errors);
+
+        let sig = world.get_net("SIG").expect("SIG is a net");
+        let r1 = world.find_by_refdes("R1").unwrap();
+        let r2 = world.find_by_refdes("R2").unwrap();
+        assert_eq!(
+            world.get::<NetConnections>(r1).unwrap().pin_net("2"),
+            Some(sig)
+        );
+        assert_eq!(
+            world.get::<NetConnections>(r2).unwrap().pin_net("1"),
+            Some(sig)
+        );
+
+        let constraints = world
+            .net_constraints(sig)
+            .expect("the block's constraints survive the merge");
+        assert_eq!(
+            constraints.width,
+            Some(cypcb_core::Nm(500_000)),
+            "an assignment says who is connected, never how wide the copper is"
+        );
+    }
+
+    #[test]
     fn test_sync_unknown_footprint() {
         let source = r#"
 version 1
@@ -2921,6 +3022,76 @@ fn side_of_footprint(footprint: &Footprint) -> crate::components::Side {
 /// Returns the design's own definitions with instances replaced in place, so
 /// every pass downstream works on components and nets and needs to know
 /// nothing about modules.
+/// Turn `pin.1 = VCC` inside a component into a connection on net `VCC`.
+///
+/// The language has carried this since the beginning: it is a rule in
+/// `grammar.js`, an arm in `reader.rs`, a field on `ComponentDef`, and the
+/// language server reads it for hover and go-to-definition. The board model
+/// did not. A design that declared every connection this way came out with
+/// **no nets at all** - measured on a two-resistor board, `"pins": []` in
+/// `cypcb parse` and four `unconnected-pin` violations from `cypcb check`,
+/// for a file that says what is connected to what on every line.
+///
+/// Folding here rather than wiring it into the component pass is what keeps
+/// one path for nets: pin validation against the footprint, net constraints,
+/// classes and the ratsnest all run over `net` blocks, and an assignment is
+/// the same statement written at the other end. A net named by both a block
+/// and an assignment is one net, and the block's constraints stand - the
+/// assignment says who is connected, never how wide the copper is.
+///
+/// The folded blocks go at the **end** of the definitions, never into the
+/// block that shares their name. A net is synchronised in place and a net
+/// reaching for a component that has not been synchronised yet is
+/// `UnknownComponent`, so merging into a `net` block written above the parts
+/// reported the design's own components as undefined. Two blocks naming one
+/// net are already one net - the registry interns by name - so appending is
+/// both correct and the smaller change.
+fn fold_pin_assignments_into_nets(definitions: Vec<Definition>) -> Vec<Definition> {
+    // Name -> the connections its assignments contribute, in source order.
+    let mut assigned: Vec<(String, Vec<cypcb_parser::ast::PinRef>)> = Vec::new();
+    for def in &definitions {
+        let Definition::Component(component) = def else {
+            continue;
+        };
+        for assignment in &component.net_assignments {
+            let pin_ref = cypcb_parser::ast::PinRef {
+                component: component.refdes.clone(),
+                pin: assignment.pin.clone(),
+                span: assignment.span,
+            };
+            match assigned
+                .iter_mut()
+                .find(|(name, _)| *name == assignment.net.value)
+            {
+                Some((_, refs)) => refs.push(pin_ref),
+                None => assigned.push((assignment.net.value.clone(), vec![pin_ref])),
+            }
+        }
+    }
+
+    if assigned.is_empty() {
+        return definitions;
+    }
+
+    let mut out = definitions;
+    out.reserve(assigned.len());
+
+    for (name, connections) in assigned {
+        let span = connections
+            .first()
+            .map(|pin_ref| pin_ref.span)
+            .unwrap_or(cypcb_parser::ast::Span::new(0, 0));
+        out.push(Definition::Net(cypcb_parser::ast::NetDef {
+            name: cypcb_parser::ast::Identifier::new(name, span),
+            constraints: None,
+            connections,
+            span,
+        }));
+    }
+
+    out
+}
+
 /// Hold every module to the interfaces it claims.
 ///
 /// `interface I2C { pin SDA pin SCL }` is a contract and `implements I2C` is a

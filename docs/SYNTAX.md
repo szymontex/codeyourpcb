@@ -79,10 +79,34 @@ component R1 resistor "0402" {
 - `at`: Position in board coordinates (x, y)
 - `rotate`: Rotation angle in degrees (optional, defaults to 0)
 
-A component does not name its own nets. Connections are declared the other way
-round, in a `net` block that lists the pins it joins - see [Nets](#nets). An
-earlier version of this guide documented `pin.<N> = <NET>` as a component
-property; the parser has never accepted it.
+### Naming a component's nets in place
+
+A connection can be written at either end. The `net` block lists the pins it
+joins; `pin.<N> = <NET>` says the same thing from the component:
+
+```
+component R1 resistor "0402" {
+    value "10k"
+    at 5mm, 5mm
+    pin.1 = VCC
+    pin.2 = OUT
+}
+```
+
+Both forms make one net. A net named by a block and by an assignment is the
+same net, and the block's constraints stand - an assignment says who is
+connected, never how wide the copper is:
+
+```
+net SIG [width 0.5mm] {
+    R1.2
+}
+```
+
+An earlier version of this guide said the parser had never accepted
+`pin.<N> = <NET>`. It parsed it all along; what it did not do was put the pin
+on the net, so a design written this way came out with no nets and a report
+full of unconnected pins. It works now.
 
 **Footprint Examples:**
 - SMD resistors/capacitors: "0402", "0603", "0805", "1206"

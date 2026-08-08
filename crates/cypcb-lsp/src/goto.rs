@@ -218,10 +218,10 @@ net VCC {
 
     #[test]
     fn test_goto_net_from_a_trace() {
-        // This fixture used to write `pin.1 = VCC` inside the component, a
-        // shape the language has never had - the parser reads the line and
-        // drops it - so the test asked the server about text no design can
-        // contain. A trace names a net for real.
+        // A trace names a net, and so does `pin.1 = VCC` - the test below this
+        // one covers that path. Both are real; the second was parsed and
+        // dropped by the board model until the pin assignment was folded into
+        // the net it names.
         let doc = make_doc(
             r#"
 net VCC {
@@ -252,6 +252,32 @@ trace VCC {
         let loc = loc.unwrap();
         // VCC net should be on line 1
         assert_eq!(loc.start_line, 1);
+    }
+
+    #[test]
+    fn test_goto_net_from_a_pin_assignment() {
+        let doc = make_doc(
+            r#"
+net VCC {
+    R2.1
+}
+
+component R1 resistor "0402" {
+    at 1mm, 1mm
+    pin.1 = VCC
+}
+"#,
+        );
+
+        // Position on "VCC" in the assignment
+        let pos = Position {
+            line: 7,
+            character: 14,
+        };
+        let loc = goto_definition(&doc, &pos);
+
+        assert!(loc.is_some(), "Expected to find VCC net definition");
+        assert_eq!(loc.unwrap().start_line, 1);
     }
 
     #[test]
