@@ -280,7 +280,7 @@ Some crates have optional features:
 
 - **cypcb-library**: `jlcpcb` - Enable JLCPCB API integration (requires API key)
 - **cypcb-platform**: `native-dialogs` - Enable native file dialogs (requires system libraries)
-- **cypcb-lsp**: `server` - Build LSP server binary (disabled by default in dev due to proc-macro issues)
+- **cypcb-lsp**: `server` - Build the LSP server binary. **On by default.** It was off, with a note blaming proc-macro loading, and the cost was that `backend.rs` compiled nowhere and stopped compiling at all without anybody being told. Turn it off with `--no-default-features` if you only want the diagnostics and hover modules.
 - **cypcb-render**: `native` vs `wasm` - Build target (native includes tree-sitter parser)
 
 Build with specific features:

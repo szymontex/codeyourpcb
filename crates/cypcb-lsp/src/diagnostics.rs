@@ -3,8 +3,9 @@
 //! Converts parse errors and DRC violations into LSP diagnostics for
 //! display in the editor (squiggly underlines, problems panel).
 
-use cypcb_drc::DrcViolation;
+use cypcb_drc::{DrcViolation, ViolationKind};
 use cypcb_parser::ParseError;
+use cypcb_world::SourceSpan as WorldSourceSpan;
 use miette::SourceSpan;
 
 use crate::document::DocumentState;
@@ -151,6 +152,8 @@ fn error_code(error: &ParseError) -> String {
 fn violation_to_diagnostic(doc: &DocumentState, violation: &DrcViolation) -> Option<Diagnostic> {
     let (start_line, start_col, end_line, end_col) = if let Some(span) = &violation.source_span {
         span_to_positions(doc, &SourceSpan::from(*span))
+    } else if let Some(span) = declaration_span(doc, violation) {
+        span_to_positions(doc, &span)
     } else {
         (0, 0, 0, 0)
     };
@@ -160,11 +163,49 @@ fn violation_to_diagnostic(doc: &DocumentState, violation: &DrcViolation) -> Opt
         start_col,
         end_line,
         end_col,
-        severity: "error",
+        severity: severity_for(violation),
         code: format!("{}", violation.kind),
         source: "cypcb-drc",
         message: violation.message.clone(),
     })
+}
+
+/// Where the thing a violation is about was written.
+///
+/// `DrcViolation::source_span` is `Some` nowhere in `cypcb-drc` - every
+/// constructor sets it to `None` - so every design rule violation arrived in
+/// the editor at line 0, character 0. A file with twenty parts got twenty
+/// squiggles stacked on its first character, none of them pointing at the part
+/// they named.
+///
+/// The board model already knows: `sync_ast_to_world` spawns components and
+/// traces with a `SourceSpan`, so the entity the violation names carries the
+/// offsets of its own declaration. This reads them back.
+fn declaration_span(doc: &DocumentState, violation: &DrcViolation) -> Option<SourceSpan> {
+    let world = doc.world.as_ref()?;
+    let span = world
+        .get::<WorldSourceSpan>(violation.entity)
+        .or_else(|| violation.other_entity.and_then(|e| world.get(e)))?;
+    Some(SourceSpan::new(
+        span.start_byte.into(),
+        span.end_byte.saturating_sub(span.start_byte),
+    ))
+}
+
+/// How loudly the editor should draw a violation.
+///
+/// Everything the design rule check finds used to be an error, which makes an
+/// editor useless while a board is being written: a part exists before its net
+/// does, so "Unconnected pin" and "on a net that no copper reaches" are what a
+/// board in progress *is*, not what is wrong with it. Those two are warnings.
+/// Everything else - copper too close, a hole too small, an assertion the
+/// designer wrote and broke - stays an error, because each is a board that
+/// cannot be made.
+fn severity_for(violation: &DrcViolation) -> &'static str {
+    match violation.kind {
+        ViolationKind::UnconnectedPin | ViolationKind::UnroutedPin => "warning",
+        _ => "error",
+    }
 }
 
 fn span_to_positions(doc: &DocumentState, span: &SourceSpan) -> (u32, u32, u32, u32) {

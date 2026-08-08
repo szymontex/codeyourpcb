@@ -1127,7 +1127,6 @@ dependencies = [
 name = "cypcb-lsp"
 version = "0.1.0-beta"
 dependencies = [
- "async-trait",
  "cypcb-calc",
  "cypcb-core",
  "cypcb-drc",

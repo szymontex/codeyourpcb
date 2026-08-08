@@ -98,7 +98,6 @@ impl Backend {
     }
 }
 
-#[async_trait::async_trait]
 impl LanguageServer for Backend {
     async fn initialize(&self, _params: InitializeParams) -> Result<InitializeResult> {
         info!("CodeYourPCB LSP initializing");
@@ -297,7 +296,7 @@ impl LanguageServer for Backend {
                         detail: item.detail,
                         documentation: item
                             .documentation
-                            .map(|d| tower_lsp::lsp_types::Documentation::String(d)),
+                            .map(tower_lsp::lsp_types::Documentation::String),
                         insert_text: item.insert_text,
                         insert_text_format,
                         ..Default::default()

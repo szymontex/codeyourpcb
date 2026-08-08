@@ -10,10 +10,12 @@ name = "cypcb-lsp"
 path = "src/main.rs"
 
 [features]
-# Server feature requires async runtime - disabled by default due to
-# build environment issues with proc-macro loading
-default = []
-server = ["dep:async-trait", "dep:tower-lsp", "dep:tokio", "dep:dashmap", "dep:serde_json"]
+# The server was off by default, with a comment blaming proc-macro loading.
+# Whatever that was, it is not true of this toolchain - and the cost of the
+# exclusion was that `backend.rs` compiled nowhere and stopped compiling at
+# all. It is on by default so the build keeps reading it.
+default = ["server"]
+server = ["dep:tower-lsp", "dep:tokio", "dep:dashmap", "dep:serde_json"]
 
 [dependencies]
 # Internal crates - always available for diagnostics/hover modules
@@ -30,9 +32,9 @@ tracing.workspace = true
 # Server-only dependencies (optional)
 tower-lsp = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true }
-async-trait = { version = "0.1", optional = true }
 dashmap = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 
 [dev-dependencies]
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+serde_json.workspace = true
