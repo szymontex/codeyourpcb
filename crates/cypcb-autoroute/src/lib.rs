@@ -22,6 +22,7 @@
 //! let result = route_board(&world, &library, &rules, &config);
 //! ```
 
+pub mod astar_grid;
 pub mod astar_improved;
 pub mod congestion;
 pub mod cost;

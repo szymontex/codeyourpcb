@@ -23,8 +23,7 @@ use cypcb_rules::RoutingRuleSet;
 use cypcb_world::footprint::FootprintLibrary;
 use cypcb_world::BoardWorld;
 
-use smallvec::SmallVec;
-
+use crate::astar_grid::{astar_grid, GridSearchScratch};
 use crate::congestion::CongestionMap;
 use crate::cost::RoutingCost;
 use crate::grid::{RoutingGrid, CELL_OBSTACLE, CELL_PAD};
@@ -470,6 +469,12 @@ pub fn pathfinder_loop(
     let height = grid.height();
     let layers = grid.layer_count();
 
+    // The search's working memory, made once for this grid and handed to every
+    // connection routed on it. It used to be three collections allocated per
+    // connection inside `pathfinding::astar` - on a board with hundreds of
+    // connections and up to fifty iterations, tens of thousands of times.
+    let mut scratch = GridSearchScratch::for_grid(width, height, layers as usize);
+
     // Initialize congestion map
     let mut congestion_map = CongestionMap::new(width, height, layers);
     let mut overuse_per_iteration: Vec<usize> = Vec::new();
@@ -648,6 +653,7 @@ pub fn pathfinder_loop(
                 };
                 let mut path = find_path_congestion_augmented(
                     grid,
+                    &mut scratch,
                     start,
                     end,
                     any_end,
@@ -669,6 +675,7 @@ pub fn pathfinder_loop(
                     };
                     path = find_path_congestion_augmented(
                         grid,
+                        &mut scratch,
                         start,
                         end,
                         any_end,
@@ -982,6 +989,7 @@ struct Search<'a> {
 
 fn find_path_congestion_augmented(
     grid: &mut RoutingGrid,
+    scratch: &mut GridSearchScratch,
     start: GridNode,
     end: GridNode,
     any_end_layer: bool,
@@ -1032,7 +1040,7 @@ fn find_path_congestion_augmented(
 
     let cost_fn = RoutingCost::new(rules, net_id, via_cost_multiplier, layer_preference);
 
-    let success = |node: &GridNode| -> bool {
+    let success = |node: GridNode| -> bool {
         node.0 == end.0 && node.1 == end.1 && (any_end_layer || node.2 == end.2)
     };
 
@@ -1048,14 +1056,12 @@ fn find_path_congestion_augmented(
         (-1, -1),
     ];
 
-    // `SmallVec` rather than `Vec`: this closure runs once per node expansion,
-    // and a `Vec` meant a heap allocation and a free for every one of them.
-    // Callgrind put the allocator at 69.6% of the router's instructions before
-    // this. Twelve is one more than a four-layer board can produce - eight
-    // directions plus three layer changes - so nothing spills.
-    let successors = |node: &GridNode| -> SmallVec<[(GridNode, u64); 12]> {
-        let mut neighbors = SmallVec::<[(GridNode, u64); 12]>::new();
-        let (nx, ny, nl) = *node;
+    // The neighbours are written into a buffer the search owns and reuses, so
+    // expanding a node allocates nothing. This closure returned a `Vec` once,
+    // which was a malloc and a free per node expansion and put the allocator
+    // at 69.6% of the router's instructions.
+    let successors = |node: GridNode, neighbors: &mut Vec<(GridNode, u64)>| {
+        let (nx, ny, nl) = node;
 
         // 8-directional movement on same layer
         for &(dx, dy) in &DIRECTIONS {
@@ -1096,7 +1102,7 @@ fn find_path_congestion_augmented(
                 grid.is_free(ux, uy, nl as usize)
             };
             if free
-                || success(&target)
+                || success(target)
                 || pad_zone_open(
                     grid,
                     ux,
@@ -1108,7 +1114,7 @@ fn find_path_congestion_augmented(
                 )
                 || grid.net_at(ux, uy, nl as usize) == Some(net_id)
             {
-                let base = cost_fn.neighbor_cost(*node, target);
+                let base = cost_fn.neighbor_cost(node, target);
                 let congestion = congestion_map.congestion_cost(ux, uy, nl);
 
                 // Another net's pad copper, priced rather than forbidden. A
@@ -1149,7 +1155,7 @@ fn find_path_congestion_augmented(
                 grid.is_free(nx as u32, ny as u32, target_layer as usize)
             };
             if free
-                || success(&target)
+                || success(target)
                 || pad_zone_open(
                     grid,
                     nx as u32,
@@ -1161,7 +1167,7 @@ fn find_path_congestion_augmented(
                 )
                 || grid.net_at(nx as u32, ny as u32, target_layer as usize) == Some(net_id)
             {
-                let base = cost_fn.neighbor_cost(*node, target);
+                let base = cost_fn.neighbor_cost(node, target);
                 let congestion = congestion_map.congestion_cost(nx as u32, ny as u32, target_layer);
 
                 // A second hole where one already is. Charged here and nowhere
@@ -1203,24 +1209,18 @@ fn find_path_congestion_augmented(
             }
         }
 
-        neighbors
     };
 
     // Heuristic remains unadulterated for admissibility
-    let heuristic = |node: &GridNode| -> u64 { float_to_int_cost(cost_fn.heuristic(*node, end)) };
+    let heuristic = |node: GridNode| -> u64 { float_to_int_cost(cost_fn.heuristic(node, end)) };
 
-    let result = pathfinding::directed::astar::astar(&start, successors, heuristic, success);
+    let path = astar_grid(scratch, start, successors, heuristic, success)?.to_vec();
 
-    match result {
-        Some((path, _total_cost)) => {
-            // Mark path cells on grid
-            for node in &path {
-                grid.mark_route(node.0 as u32, node.1 as u32, node.2 as usize, net_id);
-            }
-            Some(path)
-        }
-        None => None,
+    // Mark path cells on grid
+    for node in &path {
+        grid.mark_route(node.0 as u32, node.1 as u32, node.2 as usize, net_id);
     }
+    Some(path)
 }
 
 /// Determine which nets need re-routing based on overused cells.
@@ -1364,8 +1364,10 @@ mod tests {
             pad_layer_change_penalty: PAD_LAYER_CHANGE_PENALTY,
             yield_halo: false,
         };
+        let mut scratch = GridSearchScratch::for_grid(grid.width(), grid.height(), grid.layer_count() as usize);
         let path = find_path_congestion_augmented(
             &mut grid,
+            &mut scratch,
             (0, 0, 0),
             (19, 19, 0),
             false,

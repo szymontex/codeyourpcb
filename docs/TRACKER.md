@@ -1131,6 +1131,21 @@ cypcb::sync::unknown_pin
 - QUEUED: `.gsd/REQUIREMENTS.md` never received the M005 status writeback - `STATE.md` counts "23 active, 0 validated" while REQUIREMENTS lists 14 as validated. Empty DRC checkers (`trace_width.rs:53`, `solder_mask_bridge.rs:27`, `silk_clearance.rs:26`, `hole_to_hole.rs:37`) count toward "12 checkers" while doing nothing.
 
 ### V7 - Performance (GP-002 discipline: measure, then optimize, publish before/after)
+- DONE: **the search owns its working memory, and the boards it produces are unchanged.** `pathfinding::directed::astar` is a fine general A* and allocates like one - two hash maps and a heap, built and dropped **per connection**, on a board with hundreds of connections and a loop that runs up to fifty iterations. A grid has what a general graph does not: every node is already a number. `crates/cypcb-autoroute/src/astar_grid.rs` indexes flat arrays instead of hashing, keeps one heap and one path buffer for the whole routing run, and **never clears the arrays**: each search bumps an epoch and stamps what it touches, so starting a search costs one increment rather than zeroing 296 x 256 x 4 cells.
+- **The tie-break is the whole story of whether this was a rewrite or a regression.** Two frontier entries with the same estimated total are equally promising; which one is taken first decides the path. Taking the smaller cost-so-far first routes *different* boards - `led_blink` 24 segments and 3 violations against 21 and 2, `plane_board` 209 and 30 against 181 and 28, both fixtures whose measured noise band is **zero**, so that is a real regression and not noise. Taking the larger first - the standard A* tie-break, the node nearer the goal - reproduces the old router exactly on all six fixtures: 899/99, 945/119, 1478/186, 671/60, 181/20 segments and vias, and 180, 291, 309, 65, 28 violations. That is the version that ships.
+- **Measured, `shift_driver`, callgrind:** 4,874,357,199 instructions -> **4,327,016,519**, 11% fewer on top of the 5.1x from the allocation work. Wall clock, best of two, release:
+
+  | fixture | pathfinding | in-house | |
+  |---|---|---|---|
+  | led_blink | 4ms | 3ms | |
+  | stm32_breakout | 999ms | 787ms | 1.27x |
+  | multi_ic | 733ms | 551ms | 1.33x |
+  | qfp_fanout | 1102ms | 843ms | 1.31x |
+  | shift_driver | 361ms | 295ms | 1.22x |
+  | plane_board | 56ms | 44ms | 1.27x |
+
+- Five unit tests in the new module, including the one that matters for the epoch trick - a second and third search over cells the first one wrote, which is what a single-search test cannot catch. Workspace **124 suites, 1491 passed, 0 failed**; `./scripts/quality-gate.sh` -> `=== All stages passed ===`.
+- NEXT-ACTION: **the profile's top two are now `astar_grid`'s own neighbour loop and `grid.rs`.** Between them they are a third of the run, and both are array indexing that Rust bounds-checks on every access. The next measurement is what those checks cost - `get_unchecked` behind a debug assertion, or an index type that cannot be out of range by construction.
 - DONE: **the router does the same work in a fifth of the instructions.** The allocator was 69.6% of the profile; two places were making it. Neither is in the search's logic - both are the same mistake, building something on the heap to read a number off it.
   - `RulesPreset::stackup()` builds the whole stackup - a `Vec` of layer descriptions - and `via_cost` and `layer_change_cost` called it **once per layer transition considered**, to read `copper_layer_count()`. `PresetRuleSet` reads it once at construction now. It cannot change while the rule set exists.
   - The A* successor closure returned `Vec<(GridNode, u64)>`, so every node expansion was a malloc and a free. It returns `SmallVec<[_; 12]>` - twelve is one more than a four-layer board can produce, eight directions plus three layer changes - and nothing spills.
