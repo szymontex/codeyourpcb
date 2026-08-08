@@ -118,6 +118,11 @@ pub fn repair_routes(
                 violations = count,
                 best = best_count,
                 blocked_cells = blockers.len(),
+                // How much copper the attempt actually carries. A pass that
+                // wins on violations while carrying a fraction of the routes
+                // has not repaired the board, it has emptied it.
+                routes = candidate.route_count(),
+                vias = candidate.via_count(),
                 "Repair attempt measured"
             );
 
