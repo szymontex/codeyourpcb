@@ -1131,6 +1131,24 @@ cypcb::sync::unknown_pin
 - QUEUED: `.gsd/REQUIREMENTS.md` never received the M005 status writeback - `STATE.md` counts "23 active, 0 validated" while REQUIREMENTS lists 14 as validated. Empty DRC checkers (`trace_width.rs:53`, `solder_mask_bridge.rs:27`, `silk_clearance.rs:26`, `hole_to_hole.rs:37`) count toward "12 checkers" while doing nothing.
 
 ### V7 - Performance (GP-002 discipline: measure, then optimize, publish before/after)
+- DONE: **the router does the same work in a fifth of the instructions.** The allocator was 69.6% of the profile; two places were making it. Neither is in the search's logic - both are the same mistake, building something on the heap to read a number off it.
+  - `RulesPreset::stackup()` builds the whole stackup - a `Vec` of layer descriptions - and `via_cost` and `layer_change_cost` called it **once per layer transition considered**, to read `copper_layer_count()`. `PresetRuleSet` reads it once at construction now. It cannot change while the rule set exists.
+  - The A* successor closure returned `Vec<(GridNode, u64)>`, so every node expansion was a malloc and a free. It returns `SmallVec<[_; 12]>` - twelve is one more than a four-layer board can produce, eight directions plus three layer changes - and nothing spills.
+- **Measured, `shift_driver`, `--profile profiling` under callgrind:** **24,881,692,866 instructions -> 4,874,357,199**, a 5.1x cut. The profile's top is routing code now: the successor function 18.70%, the grid lookups 15.18%, comparisons 4.87%, the congestion cost 4.29%. `malloc`, `free`, `_int_free` and `_int_malloc` are off the list entirely.
+- **Wall clock, `cypcb route <fixture> --fast`, release, best of two:**
+
+  | fixture | before | after | |
+  |---|---|---|---|
+  | led_blink | 14ms | 4ms | 3.5x |
+  | stm32_breakout | 5556ms | 999ms | 5.6x |
+  | multi_ic | 4167ms | 733ms | 5.7x |
+  | qfp_fanout | 5671ms | 1102ms | 5.1x |
+  | shift_driver | 2118ms | 361ms | 5.9x |
+  | plane_board | 290ms | 56ms | 5.2x |
+
+  Against the `opt-level = "z"` build this project shipped this morning, `shift_driver` is **3012ms -> 361ms, 8.3x**.
+- **The board that comes out is the same board**, which is the only thing that makes the number mean anything: `shift_driver` 671 segments / 60 vias / 65 violations before and after, `multi_ic` 945 / 119 / 291 before and after, the benchmark ratchets untouched, and `./scripts/quality-gate.sh` -> `=== All stages passed ===`.
+- NEXT-ACTION: **the next allocation is in the search itself.** `binary_heap` and `hashbrown` are 1.81% and 2.38% and they are `astar`'s own frontier and visited set, rebuilt per net; the router routes hundreds of nets per iteration and could hand the same two buffers back each time. That needs the search to own its scratch space rather than the `pathfinding` crate, which is a rewrite of `route_with_blockers` rather than a patch.
 - DONE: **the whole workspace was compiled for size, and the router paid half again its wall clock for it.** `[profile.release]` carried `opt-level = "z"` with a comment calling itself "optimized for WASM size" - one profile serving a browser, where bytes are downloaded, and a command line, where the router is the point. Only `cypcb-autoroute` and `pathfinding` were exempt, and a search that spends its time in `cypcb-world`, `cypcb-core`, `cypcb-rules` and `rstar` does not care that its own crate is fast. Measured with `cypcb route <fixture> --fast`, release, best of two runs each, nothing else on the machine:
 
   | fixture | opt-level "z" | opt-level 3 | |

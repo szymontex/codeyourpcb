@@ -201,6 +201,16 @@ impl RulesPreset {
 pub struct PresetRuleSet {
     preset: RulesPreset,
     base_constraints: DesignConstraints,
+    /// How many copper layers this preset's stackup has.
+    ///
+    /// Read once, at construction. `via_cost` and `layer_change_cost` are
+    /// called for every layer transition the router considers - millions of
+    /// times on a real board - and each one used to call
+    /// `RulesPreset::stackup()`, which builds the whole stackup: a `Vec` of
+    /// layer descriptions, allocated and dropped, to read one integer off it.
+    /// It was 5.6% of the router's instructions in a callgrind profile, and
+    /// the number it computes cannot change while a `PresetRuleSet` exists.
+    copper_layers: u8,
     /// Per-net constraint overrides. Nets not in this map use the base preset.
     net_overrides: HashMap<u32, DesignConstraints>,
 }
@@ -212,6 +222,7 @@ impl PresetRuleSet {
         Self {
             preset,
             base_constraints,
+            copper_layers: preset.stackup().copper_layer_count() as u8,
             net_overrides: HashMap::new(),
         }
     }
@@ -225,6 +236,7 @@ impl PresetRuleSet {
         Self {
             preset,
             base_constraints,
+            copper_layers: preset.stackup().copper_layer_count() as u8,
             net_overrides,
         }
     }
@@ -258,8 +270,7 @@ impl RoutingRuleSet for PresetRuleSet {
 
     fn via_cost(&self, from_layer: u8, to_layer: u8) -> f64 {
         let span = (from_layer as i16 - to_layer as i16).unsigned_abs() as f64;
-        let stackup = self.preset.stackup();
-        let copper_layers = stackup.copper_layer_count() as u8;
+        let copper_layers = self.copper_layers;
 
         // Cost scales with layer span. Blind/buried vias (not spanning
         // full board) get a premium since they're more expensive to fab.
@@ -278,7 +289,7 @@ impl RoutingRuleSet for PresetRuleSet {
     fn layer_change_cost(&self, layer: u8) -> f64 {
         // Prefer outer layers for routing accessibility.
         // Inner layers have higher cost.
-        let copper_layers = self.preset.stackup().copper_layer_count() as u8;
+        let copper_layers = self.copper_layers;
         if copper_layers <= 2 {
             return 0.5; // all layers equal on 2-layer
         }

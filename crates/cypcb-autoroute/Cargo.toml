@@ -13,6 +13,12 @@ cypcb-router = { path = "../cypcb-router" }
 cypcb-drc = { path = "../cypcb-drc" }
 bevy_ecs = { workspace = true }
 pathfinding = "4"
+# The A* successor function returns its neighbours by value, once per node
+# expansion - millions of times on a real board. On the heap that was a malloc
+# and a free each; twelve entries live on the stack instead, which is one more
+# than a four-layer board can produce (eight directions plus three layer
+# changes).
+smallvec = "1"
 serde = { workspace = true }
 tracing = { workspace = true }
 

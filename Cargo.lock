@@ -1006,6 +1006,7 @@ dependencies = [
  "pathfinding",
  "serde",
  "serde_json",
+ "smallvec",
  "tracing",
  "tracing-subscriber",
 ]
