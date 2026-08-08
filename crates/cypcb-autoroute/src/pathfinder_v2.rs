@@ -650,6 +650,7 @@ pub fn pathfinder_loop(
                     foreign_pad_penalty: config.foreign_pad_penalty,
                     pad_layer_change_penalty: config.pad_layer_change_penalty,
                     yield_halo: false,
+                    heuristic_weight: config.heuristic_weight,
                 };
                 let mut path = find_path_congestion_augmented(
                     grid,
@@ -985,6 +986,8 @@ struct Search<'a> {
     pad_layer_change_penalty: f64,
     /// Whether a net with nowhere else to go may cross reserved copper.
     yield_halo: bool,
+    /// What the search's estimate of the remaining distance is multiplied by.
+    heuristic_weight: f64,
 }
 
 fn find_path_congestion_augmented(
@@ -1008,6 +1011,7 @@ fn find_path_congestion_augmented(
         foreign_pad_penalty,
         pad_layer_change_penalty,
         yield_halo,
+        heuristic_weight,
     } = *search;
     let grid_w = grid.width();
     let grid_h = grid.height();
@@ -1038,12 +1042,13 @@ fn find_path_congestion_augmented(
         return None;
     }
 
-    let cost_fn = RoutingCost::new(
+    let cost_fn = RoutingCost::weighted(
         rules,
         net_id,
         via_cost_multiplier,
         layer_preference,
         grid.layer_count(),
+        heuristic_weight,
     );
 
     let success = |node: GridNode| -> bool {
@@ -1368,6 +1373,7 @@ mod tests {
             foreign_pad_penalty: 0.0,
             pad_layer_change_penalty: PAD_LAYER_CHANGE_PENALTY,
             yield_halo: false,
+            heuristic_weight: 1.0,
         };
         let mut scratch =
             GridSearchScratch::for_grid(grid.width(), grid.height(), grid.layer_count() as usize);

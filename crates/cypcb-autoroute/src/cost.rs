@@ -38,6 +38,8 @@ pub struct RoutingCost {
     bias: Vec<f64>,
     /// How many layers the tables above are sized for.
     layers: usize,
+    /// What the heuristic is multiplied by. 1.0 keeps A* optimal.
+    heuristic_weight: f64,
 }
 
 impl RoutingCost {
@@ -48,6 +50,25 @@ impl RoutingCost {
         via_cost_multiplier: f64,
         layer_preference: f64,
         layer_count: u8,
+    ) -> Self {
+        Self::weighted(
+            rules,
+            net_id,
+            via_cost_multiplier,
+            layer_preference,
+            layer_count,
+            1.0,
+        )
+    }
+
+    /// The same, with the search's estimate scaled by `heuristic_weight`.
+    pub fn weighted(
+        rules: &dyn RoutingRuleSet,
+        net_id: u32,
+        via_cost_multiplier: f64,
+        layer_preference: f64,
+        layer_count: u8,
+        heuristic_weight: f64,
     ) -> Self {
         // At least two, so a caller that knows nothing about the board still
         // gets a table with a layer change in it.
@@ -88,6 +109,7 @@ impl RoutingCost {
             via,
             bias,
             layers,
+            heuristic_weight,
         }
     }
 
@@ -154,7 +176,8 @@ impl RoutingCost {
         let dmax = dx.max(dy);
 
         // 2D octile distance + via cost for layer changes
-        dmax + (SQRT2 - 1.0) * dmin + self.min_via_cost * layer_diff
+        let estimate = dmax + (SQRT2 - 1.0) * dmin + self.min_via_cost * layer_diff;
+        estimate * self.heuristic_weight
     }
 
     /// Get the net ID this cost function is configured for.

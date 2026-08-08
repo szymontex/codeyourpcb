@@ -1131,6 +1131,20 @@ cypcb::sync::unknown_pin
 - QUEUED: `.gsd/REQUIREMENTS.md` never received the M005 status writeback - `STATE.md` counts "23 active, 0 validated" while REQUIREMENTS lists 14 as validated. Empty DRC checkers (`trace_width.rs:53`, `solder_mask_bridge.rs:27`, `silk_clearance.rs:26`, `hole_to_hole.rs:37`) count toward "12 checkers" while doing nothing.
 
 ### V7 - Performance (GP-002 discipline: measure, then optimize, publish before/after)
+- DONE: **a search that stops insisting on the cheapest path is not only faster, it routes better - and one board's best result in this project's history came out of it.** `AutorouteConfig::heuristic_weight` multiplies the search's estimate of the remaining distance. At 1.0 the estimate never overestimates, which is what makes A* optimal and what makes it explore so widely. `heuristic_weight_sweep` routes all six fixtures at 1.0, 1.1, 1.25 and 1.5; at **1.25**, against the shipped 1.0, violations and shorts:
+
+  | fixture | 1.0 | 1.25 | |
+  |---|---|---|---|
+  | led_blink | 2 / 0, 0.00s | 3 / 1, 0.00s | worse |
+  | stm32_breakout | 180 / 93, 0.74s | **163 / 70**, 0.46s | better |
+  | multi_ic | 291 / 187, 0.52s | **227 / 115**, 0.69s | better |
+  | shift_driver | 65 / 34, 0.28s | 69 / 29, 0.17s | fewer shorts |
+  | plane_board | 28 / 13, 0.04s | 28 / 11, 0.02s | fewer shorts |
+  | qfp_fanout | 309 / 147, 0.86s | 289 / 151, 0.37s | a wash |
+
+  The cheapest path by the cost function is not the path with the fewest shorts, which is why a greedier search wins: it commits to a direction and spends vias rather than threading gaps.
+- **Shipped as the ninth variant, `PathFinder Eager`, not as the default**, because `led_blink` goes from zero shorts to one and this project ranks shorts above everything but abandoned connections. The ranking then does its job: on `stm32_breakout` **Eager wins outright - 163 violations and 70 shorts against the previous best of 180 and 93**, the best that board has ever routed here; on `qfp_fanout` `Default` keeps it on shorts, 147 against 151, even though Eager has 20 fewer violations; on `multi_ic` `Pad Aware` still wins with 180 / 101. Best-of-N costs one more variant: 6.19s to 7.53s per board.
+- NEXT-ACTION: **sweep the weight per variant rather than per router.** Every one of the other eight variants is a different cost model, so the weight that suits each is a different number, and `Pad Aware` at 5 with a weight of 1.25 has never been measured. That is a two-dimensional sweep, sixteen points a board, and the machinery to run it is `heuristic_weight_sweep` plus `pad_price_sweep` in one loop.
 - **Instrument measured and dropped: hoisting the eight neighbour reads out of the loop.** A diagonal step checks the two cells beside it, and those are cardinal neighbours the same expansion already looks at - N and E lie beside NE - so reading all eight cells once should have turned up to twelve grid reads into eight. Both shapes cost more than they save:
   - flags and owner for all eight: 3,539,046,710 instructions -> **3,685,658,592**, 4.1% worse.
   - flags for all eight, owner only for the four cardinals that can be a diagonal's side: **3,656,126,157**, 3.3% worse.

@@ -45,6 +45,10 @@ pub struct VariantConfig {
 
     /// How many cells beyond a pad's copper its zone opens.
     pub pad_zone_margin_cells: u16,
+    /// What this variant multiplies the search's distance estimate by.
+    ///
+    /// 1.0 is the admissible heuristic that makes A* return the cheapest path.
+    pub heuristic_weight: f64,
 }
 
 impl VariantConfig {
@@ -62,6 +66,7 @@ impl VariantConfig {
             reserve_trace_footprint: true,
             foreign_pad_penalty: 0.0,
             pad_zone_margin_cells: cypcb_autoroute_default_margin(),
+            heuristic_weight: 1.0,
         }
     }
 }
@@ -140,6 +145,7 @@ pub fn default_variant_configs() -> Vec<VariantConfig> {
             reserve_trace_footprint: true,
             foreign_pad_penalty: 0.0,
             pad_zone_margin_cells: cypcb_autoroute_default_margin(),
+            heuristic_weight: 1.0,
         },
         VariantConfig {
             name: "PathFinder Guarded Pads".to_string(),
@@ -153,6 +159,7 @@ pub fn default_variant_configs() -> Vec<VariantConfig> {
             reserve_trace_footprint: true,
             foreign_pad_penalty: 0.0,
             pad_zone_margin_cells: cypcb_autoroute_default_margin(),
+            heuristic_weight: 1.0,
         },
         // Reserving a trace's copper is the default since it was measured
         // better on every fixture and both columns. This is the control: the
@@ -191,6 +198,7 @@ pub fn default_variant_configs() -> Vec<VariantConfig> {
             reserve_trace_footprint: true,
             foreign_pad_penalty: 5.0,
             pad_zone_margin_cells: cypcb_autoroute_default_margin(),
+            heuristic_weight: 1.0,
         },
         VariantConfig {
             name: "PathFinder Bare Centre Line".to_string(),
@@ -201,6 +209,7 @@ pub fn default_variant_configs() -> Vec<VariantConfig> {
             reserve_trace_footprint: false,
             foreign_pad_penalty: 0.0,
             pad_zone_margin_cells: cypcb_autoroute_default_margin(),
+            heuristic_weight: 1.0,
         },
         // The opening around a pad, one cell narrower than the default. Every
         // cell of margin switches off obstacles that far from the pad, and on a
@@ -208,6 +217,36 @@ pub fn default_variant_configs() -> Vec<VariantConfig> {
         // violations with 136 -> 86 shorts, multi_ic 336 -> 290 and 166 -> 131.
         // led_blink trades two near misses for one short, which is why this is
         // a variant rather than the default.
+        // A search that stops insisting on the cheapest path.
+        //
+        // The estimate of the remaining distance is multiplied by 1.25, so the
+        // search believes the goal is further than it is and follows the most
+        // promising direction harder. It is not only faster - it is *better*
+        // on the crowded boards, because the cheapest path by the cost
+        // function is not the path with the fewest shorts. Measured against
+        // the shipped weight of 1.0, violations and shorts:
+        //
+        //   led_blink        2 / 0  ->    3 / 1
+        //   stm32_breakout 180 / 93 ->  163 / 70
+        //   multi_ic       291 / 187 -> 227 / 115
+        //   shift_driver    65 / 34 ->   69 / 29
+        //   plane_board     28 / 13 ->   28 / 11
+        //   qfp_fanout     309 / 147 -> 289 / 151
+        //
+        // Three boards clearly better, one clearly worse, which is what a
+        // variant is for: `led_blink` keeps the optimal search because the
+        // ranking puts shorts before everything but abandoned connections.
+        VariantConfig {
+            name: "PathFinder Eager".to_string(),
+            strategy: StrategyKind::PathFinder,
+            params: AutorouteParams::default(),
+            via_ring_penalty: 0.0,
+            pad_zone_blocks_foreign_copper: false,
+            reserve_trace_footprint: true,
+            foreign_pad_penalty: 0.0,
+            pad_zone_margin_cells: cypcb_autoroute_default_margin(),
+            heuristic_weight: 1.25,
+        },
         VariantConfig {
             name: "PathFinder Tight Pads".to_string(),
             strategy: StrategyKind::PathFinder,
@@ -217,6 +256,7 @@ pub fn default_variant_configs() -> Vec<VariantConfig> {
             reserve_trace_footprint: true,
             foreign_pad_penalty: 0.0,
             pad_zone_margin_cells: 2,
+            heuristic_weight: 1.0,
         },
     ]
 }
@@ -288,6 +328,7 @@ pub fn generate_variants(
             reserve_trace_footprint: config.reserve_trace_footprint,
             foreign_pad_penalty: config.foreign_pad_penalty,
             pad_zone_margin_cells: config.pad_zone_margin_cells,
+            heuristic_weight: config.heuristic_weight,
             // Variant exploration compares many routings; paying for repair on
             // each one triples the wall clock to rank candidates that are about
             // to be thrown away. The winner can be repaired afterwards.

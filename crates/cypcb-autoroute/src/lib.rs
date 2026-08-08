@@ -125,6 +125,16 @@ pub struct AutorouteConfig {
     /// Cost multiplier for placing vias. Higher = fewer vias.
     pub via_cost_multiplier: f64,
 
+    /// What the search's estimate of the remaining distance is multiplied by.
+    ///
+    /// At 1.0 the heuristic never overestimates, which is what makes A*
+    /// return the cheapest path and what makes it explore so widely. Above
+    /// 1.0 the search believes the goal is further than it is, follows the
+    /// most promising direction harder, and returns a path that may cost up
+    /// to that factor more than the best one - the standard trade, and one
+    /// this project measures rather than assumes.
+    pub heuristic_weight: f64,
+
     /// Whether to prefer routing on the top layer when possible.
     pub prefer_top_layer: bool,
 
@@ -275,6 +285,7 @@ impl Default for AutorouteConfig {
             grid_resolution_nm: None,
             max_ripup_iterations: 0,
             via_cost_multiplier: 1.0,
+            heuristic_weight: 1.0,
             prefer_top_layer: true,
             strategy: StrategyKind::default(),
             params: AutorouteParams::default(),
