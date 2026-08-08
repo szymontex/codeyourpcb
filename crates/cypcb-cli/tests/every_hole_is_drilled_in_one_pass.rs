@@ -20,6 +20,10 @@
 
 use std::path::PathBuf;
 use std::process::Command;
+use std::sync::OnceLock;
+
+/// A drill directory and its files, each with the hits it carries.
+type DrillFiles = (PathBuf, Vec<(String, Vec<String>)>);
 
 fn cypcb() -> Command {
     Command::new(env!("CARGO_BIN_EXE_cypcb"))
@@ -35,12 +39,32 @@ fn repo_root() -> PathBuf {
 
 /// Route the four-layer fixture and export it, returning the drill directory.
 ///
-/// Named per test. Sharing one directory between tests that run in parallel
-/// means one deleting the files another is reading, and it presents as a
-/// failure of the thing under test - which cost a full diagnosis here before
-/// the pattern was recognised, for the fourth time in this repository.
-fn drill_files(who: &str) -> (PathBuf, Vec<(String, Vec<String>)>) {
-    let dir = std::env::temp_dir().join(format!("cypcb-drill-passes-{who}"));
+/// **Routed once for the whole file.** Both tests here read one board, and
+/// routing `multi_ic` in a debug build is the most expensive thing the test
+/// suite does: this file took **24.20s of the workspace's 47.6s** - half the
+/// wall clock of every test in the project - because each test routed and
+/// exported the same fixture from scratch.
+///
+/// The hazard that made it per-test is real and is not this: two tests each
+/// creating *and deleting* one shared directory means one wipes the files the
+/// other is reading, and it presents as a failure of the thing under test. It
+/// cost a full diagnosis here, for the fourth time in this repository. What is
+/// safe is building the directory exactly once and never removing it again,
+/// which is what `OnceLock` gives - the second test through waits for the
+/// first and reads the same finished files.
+///
+/// The name carries the process id so two `cargo test` runs at once do not
+/// meet in the same place, and neither test removes the directory when it
+/// finishes - the one that finished first would be deleting what the other
+/// is still reading. The leftovers are cleared by the next run that claims
+/// the same name.
+fn drill_files() -> &'static DrillFiles {
+    static ROUTED: OnceLock<DrillFiles> = OnceLock::new();
+    ROUTED.get_or_init(route_and_export)
+}
+
+fn route_and_export() -> DrillFiles {
+    let dir = std::env::temp_dir().join(format!("cypcb-drill-passes-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).expect("a place to work");
 
@@ -51,9 +75,13 @@ fn drill_files(who: &str) -> (PathBuf, Vec<(String, Vec<String>)>) {
     )
     .expect("the fixture is copyable");
 
+    // `--fast`: one routing run instead of the best of eight. What is under
+    // test is the drill split, which holds however the board is routed, and
+    // best-of-eight costs eight times the wall clock for a board this size.
     let route = cypcb()
         .arg("route")
         .arg(&board)
+        .arg("--fast")
         .output()
         .expect("the binary runs");
     assert!(
@@ -101,7 +129,7 @@ fn drill_files(who: &str) -> (PathBuf, Vec<(String, Vec<String>)>) {
 
 #[test]
 fn a_four_layer_board_gets_a_drill_file_per_layer_pair() {
-    let (dir, files) = drill_files("pairs");
+    let (_, files) = drill_files();
 
     let through = files
         .iter()
@@ -138,8 +166,6 @@ fn a_four_layer_board_gets_a_drill_file_per_layer_pair() {
             );
         }
     }
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -157,7 +183,7 @@ fn the_passes_between_them_drill_the_board_exactly_once() {
     // drilled once, so the hits across every pass sum to the board's drilled
     // pads plus its vias - 30 and 119 when this was written, 149 hits over
     // five files. A via written into two passes pushes the total above it.
-    let (dir, files) = drill_files("counts");
+    let (dir, files) = drill_files();
 
     let routed = std::fs::read_to_string(dir.join("multi_ic.routed.kicad_pcb"))
         .expect("the routed board is readable");
@@ -183,6 +209,4 @@ fn the_passes_between_them_drill_the_board_exactly_once() {
         hits,
         files.len()
     );
-
-    let _ = std::fs::remove_dir_all(&dir);
 }

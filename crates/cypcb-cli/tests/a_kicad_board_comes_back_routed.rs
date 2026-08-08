@@ -63,6 +63,10 @@ fn routing_a_kicad_board_writes_a_kicad_board() {
     let output = cypcb()
         .arg("route")
         .arg(&board)
+        // `--fast`: these tests are about a KiCad board coming back a KiCad
+        // board, not about which routing setting wins. Best-of-eight is the
+        // default and costs eight runs.
+        .arg("--fast")
         .output()
         .expect("the binary runs");
     let combined = format!(
@@ -129,6 +133,10 @@ fn the_board_that_comes_back_reads_as_routed() {
     let output = cypcb()
         .arg("route")
         .arg(&board)
+        // `--fast`: these tests are about a KiCad board coming back a KiCad
+        // board, not about which routing setting wins. Best-of-eight is the
+        // default and costs eight runs.
+        .arg("--fast")
         .output()
         .expect("the binary runs");
     assert!(output.status.success());

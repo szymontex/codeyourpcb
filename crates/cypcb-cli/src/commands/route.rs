@@ -540,8 +540,18 @@ impl RouteCommand {
             .ok_or_else(|| miette::miette!("Unknown routing preset '{}'", self.preset))?;
         let rules = PresetRuleSet::new(preset);
 
+        // Best-of-N unless the caller asked for speed, exactly as a `.cypcb`
+        // board is routed. This branch used to call `route_board` with
+        // `AutorouteConfig::default()` whatever the flags said, so `--variants`
+        // and `--fast` were accepted and ignored on every KiCad board, and the
+        // setting it always used is the one measured **fourth of eight on
+        // every benchmark board**. Two commands, one router, one behaviour.
         eprintln!("Routing {}...", self.file.display());
-        let result = route_board(&mut world, &library, &rules, &AutorouteConfig::default());
+        let result = if self.fast {
+            route_board(&mut world, &library, &rules, &AutorouteConfig::default())
+        } else {
+            self.route_variants(&mut world, &library, &rules)?
+        };
 
         if result.routes.is_empty() {
             return Err(miette::miette!(
