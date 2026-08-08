@@ -33,14 +33,29 @@ test.describe('Theme Toggle & Persistence', () => {
     expect(['light', 'dark']).toContain(afterSecond);
   });
 
-  test('Ctrl+Shift+T toggles theme', async ({ page }) => {
-    const initialTheme = await page.getAttribute('html', 'data-theme');
+  test('Ctrl+Shift+T advances the icon with the setting', async ({ page }) => {
+    // This asked only whether `#theme-icon` had any text in it, which it does
+    // before the key is pressed - so it passed on a shortcut that did nothing.
+    // The icon is one of three characters, one per setting (`updateThemeIcon`
+    // in `main.ts`), so a press that advances the cycle has to change it.
+    const ICON_FOR = { light: '☀️', dark: '🌙', auto: '🔄' } as const;
+
+    const before = await page.locator('#theme-icon').textContent();
 
     await page.keyboard.press('Control+Shift+t');
 
-    // Theme icon should update
-    const icon = await page.locator('#theme-icon').textContent();
-    expect(icon).toBeTruthy();
+    const after = await page.locator('#theme-icon').textContent();
+    expect(after?.trim(), 'the icon did not change, so the shortcut did nothing').not.toBe(
+      before?.trim(),
+    );
+
+    // And it is the icon for the setting that was actually stored, not just a
+    // different one - the icon and the theme cannot drift apart silently.
+    const stored = (await page.evaluate(() => localStorage.getItem('theme'))) as
+      | keyof typeof ICON_FOR
+      | null;
+    expect(stored, 'the shortcut changed the icon without storing a theme').not.toBeNull();
+    expect(after?.trim()).toBe(ICON_FOR[stored!]);
   });
 
   test('theme persists to localStorage', async ({ page }) => {

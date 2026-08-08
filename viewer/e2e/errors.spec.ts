@@ -66,22 +66,25 @@ test.describe('Error Display', () => {
     // Wait for debounce + DRC processing
     await page.waitForTimeout(1000);
 
-    // Check if error badge becomes visible (depends on engine producing violations)
-    const badgeVisible = await page.locator('#error-badge').isVisible();
-    if (badgeVisible) {
-      // Verify error count is shown
-      const count = await page.locator('#error-count').textContent();
-      expect(Number(count)).toBeGreaterThan(0);
+    // Two 0402 parts half a millimetre apart is a clearance violation on every
+    // preset this tool ships, so the badge has to appear. The previous version
+    // asked `if (badgeVisible)` and, when it was not, checked that the status
+    // bar did not say "WASM Error" - which passes on a checker that reports
+    // nothing at all, the one failure this test is named after.
+    await expect(
+      page.locator('#error-badge'),
+      'two parts 0.5mm apart produced no violation badge',
+    ).toBeVisible({ timeout: 5_000 });
 
-      // Click badge to open error panel
-      await page.click('#error-badge');
-      await expect(page.locator('#error-panel')).toBeVisible();
-    } else {
-      // Engine may not produce violations for this input —
-      // verify the engine at least processed it without crashing
-      const statusText = await page.locator('#status-text').textContent();
-      expect(statusText).not.toContain('WASM Error');
-    }
+    const count = await page.locator('#error-count').textContent();
+    expect(Number(count)).toBeGreaterThan(0);
+
+    // Click badge to open error panel
+    await page.click('#error-badge');
+    await expect(page.locator('#error-panel')).toBeVisible();
+
+    // The panel says what is wrong, not just that something is.
+    await expect(page.locator('#error-panel')).toContainText(/clearance/i);
   });
 
   test('error panel close button works', async ({ page }) => {

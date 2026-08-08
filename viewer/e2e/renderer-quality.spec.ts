@@ -20,6 +20,16 @@ async function loadBlink(page: import('@playwright/test').Page): Promise<void> {
   await page.waitForTimeout(500);
 }
 
+/** Helper: load any example from `examples/` the same way. */
+async function loadExample(page: import('@playwright/test').Page, name: string): Promise<void> {
+  const content = fs.readFileSync(path.resolve(__dirname, '../../examples', name), 'utf-8');
+  await page.evaluate((src) => {
+    const loader = (window as any).__loadBoard;
+    if (loader) loader(src);
+  }, content);
+  await page.waitForTimeout(500);
+}
+
 /**
  * Helper: zoom the canvas via wheel events.
  * Negative deltaY = zoom in, positive = zoom out.
@@ -135,7 +145,11 @@ test.describe('Renderer Quality — Professional Visuals', () => {
   });
 
   test('net highlight activates when clicking a trace', async ({ page }) => {
-    await loadBlink(page);
+    // `blink.cypcb` has nine components, seven nets and **no traces** - it is
+    // an unrouted board. This test loaded it, guarded its whole body behind
+    // `if (traceCount > 0)`, and has therefore never executed a single line of
+    // what it is named after. `uat-routing-locked` has copper on it.
+    await loadExample(page, 'uat-routing-locked.cypcb');
 
     // Fit board to see all traces (press F on document — no canvas click to avoid hitting a pad)
     await page.keyboard.press('f');
@@ -149,62 +163,52 @@ test.describe('Renderer Quality — Professional Visuals', () => {
     const diagBefore = await page.evaluate(() => (window as any).__renderDiag);
     expect(diagBefore.highlightedNet).toBeNull();
 
-    // We need to click on an actual trace. The board should have traces.
-    // First verify traces exist in the snapshot.
-    const traceCount = await page.evaluate(() => {
-      const engine = (window as any).__pcbEngine;
-      if (!engine) return 0;
-      const snap = engine.get_snapshot();
-      return snap?.traces?.length ?? 0;
+    // Where a trace actually is on screen. The previous version of this test
+    // read a segment midpoint out of the snapshot, threw it away, clicked the
+    // middle of the canvas and then only asserted anything `if` something had
+    // been highlighted - so it passed whether or not net highlighting worked at
+    // all. `main.ts` publishes the viewport for exactly this, and the transform
+    // is the one in `viewport.ts`.
+    const target = await page.evaluate(() => {
+      const snap = (window as any).__pcbEngine?.get_snapshot?.();
+      const trace = snap?.traces?.find((t: any) => t.segments?.length > 0);
+      if (!trace) return null;
+
+      const seg = trace.segments[0];
+      const worldX = (seg.start_x + seg.end_x) / 2;
+      const worldY = (seg.start_y + seg.end_y) / 2;
+
+      const vp = (window as any).__viewport;
+      const rect = (document.getElementById('pcb-canvas') as HTMLCanvasElement).getBoundingClientRect();
+      return {
+        netName: trace.net_name,
+        traceId: trace.id,
+        // worldToScreen, plus the canvas' own offset in the page
+        x: rect.x + (worldX - vp.centerX) * vp.scale + vp.width / 2,
+        y: rect.y + vp.height / 2 - (worldY - vp.centerY) * vp.scale,
+      };
     });
 
-    if (traceCount > 0) {
-      // Get the first trace's midpoint in screen coords to click on it
-      const traceScreenPos = await page.evaluate(() => {
-        const engine = (window as any).__pcbEngine;
-        if (!engine) return null;
-        const snap = engine.get_snapshot();
-        if (!snap?.traces?.length) return null;
+    expect(target, 'the board has no trace with segments, so there is nothing to click').not.toBeNull();
 
-        // Find a trace with segments
-        const trace = snap.traces.find((t: any) => t.segments && t.segments.length > 0);
-        if (!trace) return null;
+    await page.mouse.click(target!.x, target!.y);
+    await page.waitForTimeout(300);
 
-        // Get the first segment's midpoint in world coords
-        const seg = trace.segments[0];
-        const midX = (seg.start_x + seg.end_x) / 2;
-        const midY = (seg.start_y + seg.end_y) / 2;
-        return { worldX: midX, worldY: midY, netName: trace.net_name };
-      });
+    const diagAfter = await page.evaluate(() => (window as any).__renderDiag);
+    expect(
+      diagAfter.highlightedNet,
+      `clicked the midpoint of a segment of net ${target!.netName} and nothing was highlighted`,
+    ).toBe(target!.netName);
 
-      if (traceScreenPos) {
-        // Convert world coords to screen coords using the viewport
-        const screenCoords = await page.evaluate((world: any) => {
-          const canvas = document.getElementById('pcb-canvas') as HTMLCanvasElement;
-          const rect = canvas.getBoundingClientRect();
-          // Access viewport from the diagnostic or internal state
-          // We'll use a different approach: just click in the center area of the canvas
-          // where traces likely are after fit-to-board
-          return { canvasWidth: rect.width, canvasHeight: rect.height, rectX: rect.x, rectY: rect.y };
-        }, traceScreenPos);
+    // The same click selects the trace it hit - one click, both effects.
+    const selected = await page.evaluate(() => (window as any).__renderState?.selectedTraceId);
+    expect(selected).toBe(target!.traceId);
 
-        // Click in the center of the canvas (board is fit, traces should be here)
-        const cx = screenCoords.rectX + screenCoords.canvasWidth / 2;
-        const cy = screenCoords.rectY + screenCoords.canvasHeight / 2;
-        await page.mouse.click(cx, cy);
-        await page.waitForTimeout(300);
-
-        const diagAfterClick = await page.evaluate(() => (window as any).__renderDiag);
-        // If we hit a trace, highlightedNet should be set
-        // If we didn't hit (missed), it stays null — that's OK for a best-effort click
-        // The important thing is the mechanism works
-        if (diagAfterClick.highlightedNet !== null) {
-          expect(typeof diagAfterClick.highlightedNet).toBe('string');
-          expect(diagAfterClick.highlightedNet.length).toBeGreaterThan(0);
-        }
-        // Not asserting non-null because center-click may not hit a trace in headless
-      }
-    }
+    // And Escape gives the board back, which is the other half of the feature.
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(200);
+    const diagCleared = await page.evaluate(() => (window as any).__renderDiag);
+    expect(diagCleared.highlightedNet).toBeNull();
   });
 
   test('performance sanity — frame renders under 32ms at close zoom', async ({ page }) => {

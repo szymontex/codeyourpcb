@@ -6,6 +6,16 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const BLINK_PATH = path.resolve(__dirname, '../../examples/blink.cypcb');
 
+/** Load an example from `examples/` via the app's __loadBoard debug surface. */
+async function loadExample(page: import('@playwright/test').Page, name: string): Promise<void> {
+  const content = fs.readFileSync(path.resolve(__dirname, '../../examples', name), 'utf-8');
+  await page.evaluate((src) => {
+    const loader = (window as any).__loadBoard;
+    if (loader) loader(src);
+  }, content);
+  await page.waitForTimeout(500);
+}
+
 /** Load blink.cypcb via the app's __loadBoard debug surface. */
 async function loadBlink(page: import('@playwright/test').Page): Promise<void> {
   const content = fs.readFileSync(BLINK_PATH, 'utf-8');
@@ -154,23 +164,43 @@ test.describe('3D Geometry Verification', () => {
     expect(named).toBe(counts.padDrillCount);
   });
 
-  test('debug surface reports valid geometry counts', async ({ page }) => {
-    // Load board and toggle 3D
-    await loadBlink(page);
+  test('the 3D scene holds the board the engine holds', async ({ page }) => {
+    // This asserted `>= 0` on four counters, which is true of a scene that
+    // built nothing at all - the exact failure a 3D view has. Every counter is
+    // compared against the same board the 2D side draws instead, so a scene
+    // that silently drops components, pads or copper fails here.
+    //
+    // The board is `uat-routing-locked` rather than blink, because blink has
+    // no traces: comparing a segment count against it is 0 against 0, which is
+    // the same kind of assertion this test is being fixed for.
+    await loadExample(page, 'uat-routing-locked.cypcb');
     await activate3D(page);
 
     const counts = await getGeometryCounts(page);
+    const board = await page.evaluate(() => {
+      const snap = (window as any).__pcbEngine?.get_snapshot?.();
+      return {
+        components: snap?.components?.length ?? -1,
+        vias: snap?.vias?.length ?? -1,
+        segments: (snap?.traces ?? []).reduce(
+          (n: number, t: any) => n + (t.segments?.length ?? 0),
+          0,
+        ),
+      };
+    });
 
-    // All four counters must be numbers ≥ 0
-    expect(typeof counts.componentCount).toBe('number');
-    expect(typeof counts.traceSegmentCount).toBe('number');
-    expect(typeof counts.padCount).toBe('number');
-    expect(typeof counts.viaCount).toBe('number');
+    expect(board.components, 'the engine holds no board, so there is nothing to compare').toBeGreaterThan(0);
+    expect(board.segments, 'the fixture lost its copper, so the segment count proves nothing').toBeGreaterThan(0);
 
-    expect(counts.componentCount).toBeGreaterThanOrEqual(0);
-    expect(counts.traceSegmentCount).toBeGreaterThanOrEqual(0);
-    expect(counts.padCount).toBeGreaterThanOrEqual(0);
-    expect(counts.viaCount).toBeGreaterThanOrEqual(0);
+    expect(counts.componentCount).toBe(board.components);
+    expect(counts.traceSegmentCount).toBe(board.segments);
+    expect(counts.viaCount).toBe(board.vias);
+
+    // Pads are not in the snapshot as a count - they come from each part's
+    // footprint - so what can be said is that every part brought copper with
+    // it. A blink board of resistors, an LED and a header has more pads than
+    // parts, and a scene with fewer built some parts without any.
+    expect(counts.padCount).toBeGreaterThan(board.components);
   });
 
   test('3D toggle preserves geometry on re-toggle', async ({ page }) => {
