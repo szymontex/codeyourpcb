@@ -699,6 +699,17 @@ pub fn pad_to_zone(grid: &RoutingGrid, pad: &PadTarget) -> PadZone {
 /// Three cells is 0.762mm on the 0.254mm grid the dense fixtures use, which is
 /// wider than the gap between the two pads of an 0402. What that costs is
 /// measured in `pad_zone_margin_sweep`.
+///
+/// Two was tried and reverted, twice. The first time the sweep covered three
+/// boards; the second time it covered six, after the two broken fixtures were
+/// repaired, and the answer came out the same for a sharper reason: **the two
+/// boards that want 2 are the two the value would have been fitted on.**
+/// Every fixture added since prefers 3 once shorts are counted -
+/// `shift_driver` 33 against 38, `qfp_fanout` 147 against 186, `plane_board`
+/// 18 against 24 - and `led_blink` gains its first short at 2, a via touching
+/// a foreign pad at 0.00mm. `stm32_breakout` also becomes far less
+/// predictable: its spread across via prices widens from 30 violations to 77.
+/// The full before-and-after is in `docs/routing.md`.
 pub const DEFAULT_PAD_ZONE_MARGIN_CELLS: u16 = 3;
 
 /// The same, with the margin stated.

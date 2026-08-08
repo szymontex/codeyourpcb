@@ -381,6 +381,54 @@ The constant is unchanged in this commit. Changing it moves five ratchets and
 invalidates five measured bands, so it is its own piece of work with its own
 before-and-after, not a line edited while writing a table.
 
+### Margin 2 was then adopted, measured on all six, and reverted
+
+The table above says margin 2 costs nothing outside any board's band and gains
+`multi_ic` 89 violations. That was read on violation counts alone. The constant
+was set to 2, every fixture re-routed, and every band re-measured at the new
+value:
+
+| board | violations 3 -> 2 | shorts 3 -> 2 | band 3 -> 2 |
+|---|---|---|---|
+| led_blink | 2 -> 2 | **0 -> 1** | not measured |
+| stm32_breakout | 239 -> 216 | 136 -> 86 | 30 -> **77** |
+| multi_ic | 318 -> **229** | 177 -> **109** | 63 -> 17 |
+| shift_driver | 81 -> 87 | 33 -> 38 | 12 -> 11 |
+| qfp_fanout | 309 -> 326 | 147 -> **186** | 40 -> 27 |
+| plane_board | 40 -> 42 | 18 -> 24 | 9 -> 6 |
+
+Totalled, margin 2 wins: 87 fewer violations and 67 fewer shorts across the
+set. It was still reverted, for three reasons that only appear once the boards
+are read one at a time.
+
+**The gain sits entirely on the two boards the value would have been fitted
+on.** `stm32_breakout` and `multi_ic` are the two that wanted 2 in the original
+three-board sweep. Every fixture added since - `shift_driver`, `qfp_fanout`,
+`plane_board` - is worse on shorts at 2, and so is `led_blink`. Four boards
+against two, and the two are the ones that chose the value.
+
+**`led_blink` gains its first short**, and it is not a near miss:
+
+```
+D1 <-> via 'GND': Clearance violation: 0.00mm actual, 0.13mm required
+```
+
+A via touching a foreign pad on the simplest board this project has. By this
+document's own ranking - a short is a fault a fabricator builds, a 0.05mm
+clearance miss is one they usually absorb - that outweighs violation counts
+elsewhere.
+
+**`stm32_breakout` becomes far less predictable.** Its spread across via prices
+0.22..0.28 widens from 30 violations to 77. A board whose result moves by 77
+with a setting nobody intends to change is a board whose ratchet measures the
+weather.
+
+So the answer is the same as the first time and the reason is sharper: this is
+a value that reads well on the boards it was fitted to and badly on every board
+added afterwards. It is the second entry in the dropped table below to be
+dropped twice.
+
+
 What the fifth board did not settle is the ranking - see above. Every rule picks
 the same variant on `qfp_fanout`, so four of the five boards agree under all
 seven rules and the question still rests on `shift_driver` alone.
@@ -396,6 +444,7 @@ numbers are introduced violations unless stated.
 | Mark the via ring as owned copper | stm32_breakout 124 -> 154, multi_ic 42 -> 55 |
 | One extra cell of obstacle bloat | stm32_breakout 259 -> 285, multi_ic 143 -> 157 |
 | Refuse a via whose keepout holds foreign copper | led_blink 3 -> 2, but stm32_breakout 180 -> 215 and multi_ic 128 -> 245, shorts 29 -> 111 |
+| Pad opening at 2 cells instead of 3 (tried twice) | Totals better - 87 fewer violations, 67 fewer shorts - but the gain is entirely on the two boards the value was fitted on; led_blink gains a 0.00mm via-to-pad short and stm32_breakout's band widens 30 -> 77 |
 | Finer grid, 0.127mm instead of the track pitch | stm32_breakout 15.88 -> 39.46 violations per 100mm of copper, time doubled |
 | Best of N net orderings | identical results at 1, 3 and 5 attempts - every rotation of `order_nets` is worse, so the best-of always returns the unrotated one |
 | Return the iteration with the fewest overused cells | stm32_breakout 133 -> 152, multi_ic 140 -> 174 |
