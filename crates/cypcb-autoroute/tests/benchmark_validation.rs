@@ -230,7 +230,14 @@ fn print_table_footer() {
 const DRC_RATCHETS: &[(&str, &str, u32, u32)] = &[
     ("led_blink.kicad_pcb", "led_blink", 2, 0),
     ("stm32_breakout.kicad_pcb", "stm32_breakout", 239, 136),
-    ("multi_ic.kicad_pcb", "multi_ic", 336, 166),
+    // Re-measured 2026-08-08 at 318 / 177, after two of its parts stopped
+    // sitting 50mm to the left of the board: the file carried `(at 105, 80)`
+    // and `(at 140, 55)` and the importer read a malformed coordinate as zero
+    // without a word. Its band is 63 violations wide across prices
+    // 0.22..0.28, and the shorts range 33 - both wider than the 30 and 23
+    // measured when a ferrite bead and an Ethernet transformer were off the
+    // board and out of the way.
+    ("multi_ic.kicad_pcb", "multi_ic", 381, 210),
     // Measured 2026-08-08 at 81 / 33, plus the board's own band from
     // `via_price_sweep::how_much_of_the_price_is_noise`: 62 to 74 across
     // prices 0.22..0.28, 12 violations wide, and 27 to 34 shorts.

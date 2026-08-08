@@ -82,20 +82,21 @@ fn pad_boxes(world: &mut BoardWorld, library: &FootprintLibrary) -> Vec<(String,
     boxes
 }
 
-/// The three fixtures this does not hold for yet, with what they carry.
+/// The fixtures this does not hold for yet, with what they carry.
 ///
-/// `stm32_breakout` runs two ten-pin headers past its 65mm height; `multi_ic`
-/// places an inductor and an Ethernet transformer at negative x, 50mm to the
-/// left of the board; `shift_driver` has its bypass capacitors 3mm above the
-/// top edge, put there to clear a DIP courtyard. Every routing number this
-/// project has published rests on the first two.
+/// `stm32_breakout` runs two ten-pin headers past its 65mm height, and
+/// `shift_driver` has its bypass capacitors 3mm above the top edge, put there
+/// to clear a DIP courtyard. Fixing them moves every ratchet and every table
+/// in `docs/routing.md`, so it is a decision rather than a fire.
 ///
-/// Fixing them moves every ratchet and every table in `docs/routing.md`, so it
-/// is a decision rather than a fire, and until it is taken this test is a
-/// diagnostic rather than a gate.
+/// `multi_ic` was here with ten, and they were not a placement at all: the file
+/// carried `(at 105, 80)` and `(at 140, 55)` - one comma each - and the
+/// importer read a malformed coordinate as zero and said nothing, so a ferrite
+/// bead and an Ethernet transformer sat 50mm to the left of the board. The
+/// parser refuses a coordinate it cannot read now, and the file says what it
+/// meant.
 const KNOWN_OFF_BOARD: &[(&str, usize)] = &[
     ("stm32_breakout.kicad_pcb", 8),
-    ("multi_ic.kicad_pcb", 10),
     ("shift_driver.kicad_pcb", 6),
 ];
 

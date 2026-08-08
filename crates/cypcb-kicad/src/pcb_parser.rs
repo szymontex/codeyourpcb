@@ -603,6 +603,22 @@ fn update_bounds(
 // Internal: footprint parsing
 // ---------------------------------------------------------------------------
 
+/// A number that has to be there, or an error naming what was expected.
+///
+/// The importer read every coordinate with `unwrap_or(0.0)`, so a malformed
+/// one placed the part at the board origin in silence. That is the shape of
+/// mistake a board file actually carries - a stray comma, a truncated write -
+/// and putting a part 50mm from where the file says is worse than refusing to
+/// read the file at all.
+fn coordinate(value: &Sexp, what: &str) -> Result<f64, KicadPcbError> {
+    get_f64(value).ok_or_else(|| {
+        KicadPcbError::InvalidData(format!(
+            "{what} is not a number: {value:?}. A coordinate must be a plain \
+             decimal, so `(at 105, 80)` is one comma away from `(at 105 80)`."
+        ))
+    })
+}
+
 /// The key to store this geometry under, given what the library already holds.
 ///
 /// The plain library name when it is free or already holds exactly these pads;
@@ -686,11 +702,22 @@ fn parse_footprint(
                 "at" => {
                     if let Ok(list) = child.list() {
                         if list.len() >= 3 {
-                            pos_x = get_f64(&list[1]).unwrap_or(0.0);
-                            pos_y = get_f64(&list[2]).unwrap_or(0.0);
+                            // A coordinate that will not parse is an error, not
+                            // a zero.
+                            //
+                            // `unwrap_or(0.0)` put a part at the board's origin
+                            // and said nothing, and a board file is written by
+                            // machines and edited by people: `multi_ic.kicad_pcb`
+                            // carried `(at 105, 80)` - one comma - for as long as
+                            // it has existed, and imported with its ferrite bead
+                            // and its Ethernet transformer 50mm to the left of
+                            // the board. Every routing number ever measured on
+                            // that fixture was measured with them there.
+                            pos_x = coordinate(&list[1], "footprint position x")?;
+                            pos_y = coordinate(&list[2], "footprint position y")?;
                         }
                         if list.len() >= 4 {
-                            angle = get_f64(&list[3]).unwrap_or(0.0);
+                            angle = coordinate(&list[3], "footprint rotation")?;
                         }
                     }
                 }

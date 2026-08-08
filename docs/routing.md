@@ -70,7 +70,7 @@ fixtures):
 |---|---|---|---|---|---|
 | `led_blink.kicad_pcb` | small, 21 routes | 12 | **2** | 2 | 0 |
 | `stm32_breakout.kicad_pcb` | dense, 296x256 cells at 0.254mm, 908 routes | 144 | **239** | 221 | 136 |
-| `multi_ic.kicad_pcb` | large, 197x158 cells at 0.508mm, 1003 routes | 270 | **317** | 247 | 166 |
+| `multi_ic.kicad_pcb` | large, 197x158 cells at 0.508mm, 978 routes | 281 | **318** | 247 | 177 |
 | `shift_driver.kicad_pcb` | DIP and 0805, 2 layers, 700 routes | 159 | **81** | 72 | 33 |
 | `qfp_fanout.kicad_pcb` | LQFP-64 at 0.5mm on 2 layers, 1504 routes | 140 | **336** | 336 | 179 |
 
@@ -153,7 +153,7 @@ different boards
 |---|---|---|
 | 0.22 | 221 / 127 | 231 / 143 |
 | 0.24 | 207 / 115 | 261 / 163 |
-| 0.25 | 221 / 136 | 247 / 166 |
+| 0.25 | 221 / 136 | 247 / 175 |
 | 0.26 | 245 / 147 | 258 / 166 |
 | 0.28 | 238 / 119 | 249 / 162 |
 | **spread** | **38 violations, 32 shorts** | **30 violations, 23 shorts** |

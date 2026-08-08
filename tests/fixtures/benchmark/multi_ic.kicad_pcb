@@ -881,7 +881,7 @@
   ; -- FB1: Ferrite bead for VDDA --
   (footprint "Inductor_SMD:L_0402_1005Metric"
     (layer "F.Cu")
-    (at 105, 80)
+    (at 105 80)
     (property "Reference" "FB1")
     (property "Value" "600R@100MHz")
     (property "Footprint" "Inductor_SMD:L_0402_1005Metric")
@@ -905,7 +905,7 @@
   ; -- T1: Ethernet magnetics --
   (footprint "Transformer_SMD:Transformer_Ethernet_Wuerth_749010012A"
     (layer "F.Cu")
-    (at 140, 55)
+    (at 140 55)
     (property "Reference" "T1")
     (property "Value" "749010012A")
     (property "Footprint" "Transformer_SMD:Transformer_Ethernet_Wuerth_749010012A")
