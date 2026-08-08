@@ -275,7 +275,8 @@ Where CodeYourPCB differs: own rendering engine (no KiCad dependency), runs in b
 - [Project Structure](docs/user-guide/project-structure.md)
 - [Library Management](docs/user-guide/library-management.md)
 - [Platform Differences (Web vs Desktop)](docs/user-guide/platform-differences.md)
-- [LSP Server](docs/api/lsp-server.md)
+- [Language server](docs/language-server.md) - the `cypcb-lsp` binary: what it answers, what it does not, and how to point an editor at it
+- [Editor features in the browser](docs/api/lsp-server.md) - the WASM bridge that gives the built-in editor its diagnostics, without a server process
 - [Contributing](CONTRIBUTING.md)
 
 ---

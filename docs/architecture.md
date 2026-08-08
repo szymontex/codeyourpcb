@@ -296,20 +296,29 @@ WASM binary is aggressively optimized:
 **Purpose**: Language Server Protocol implementation
 
 **Key Features**:
-- Diagnostics (parse errors, DRC violations)
-- Auto-completion (keywords, properties, layers, units)
-- Hover documentation (tooltips for keywords)
-- Semantic tokens (syntax highlighting)
+- Diagnostics (parse errors, DRC violations), published on open, change and save
+- Auto-completion (footprints, nets, parts, properties, layers, keywords)
+- Hover documentation (parts, nets, footprints, board, zones, traces)
+- Go to definition (pin reference or net name to where it is declared)
+
+Semantic tokens were listed here and have never existed - the word `semantic`
+appears nowhere in the crate. Syntax highlighting in the browser comes from
+Monaco's own grammar, not from this server.
 
 **Dependencies**: `tower-lsp`, `tokio`, `dashmap`, `cypcb-parser`, `cypcb-world`, `cypcb-drc`
 
-
 **Features**:
-- `server` (optional): Build LSP server binary (disabled in dev due to proc-macro loading issues)
+- `server`: **on by default**. It was optional, with a note here blaming
+  proc-macro loading, and the cost was that `backend.rs` compiled nowhere and
+  stopped compiling at all.
 
 The LSP uses a two-level approach:
 - **WASM bridge**: Direct engine calls for web mode (no server needed)
-- **Server mode**: Stdio-based LSP server for desktop (future enhancement for goto-definition, find-references)
+- **Server mode**: Stdio-based LSP server for any editor that speaks the
+  protocol. Go-to-definition works; find-references does not exist.
+
+`docs/language-server.md` is the page for using it, and a test holds that page
+to what the server advertises.
 
 ### cypcb-library
 
