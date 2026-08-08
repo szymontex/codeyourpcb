@@ -88,5 +88,15 @@ viewer/circuitron/
 # every run, 42MB of it, and it made every test run show up as a dirty tree.
 viewer/test-results/
 
-# Router output: `cypcb route` writes these beside the design it read.
+# Router and exporter output: what the tools write beside the design they read.
+#
+# The `.dsn`, `.ses` and `.routes` files for three examples were tracked, and
+# running `route` on any of them rewrote the lot - so they arrived in whatever
+# commit came next, twice, one of which needed a commit of its own to put one
+# back. Nothing reads them; they are what the tool produces, not what it is
+# given.
 *.routed.cypcb
+*.dsn
+*.ses
+*.routes
+
