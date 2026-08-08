@@ -218,6 +218,67 @@ impl CheckCommand {
             eprintln!("  copper touching copper at 0.00mm: {}", shorts);
         }
 
+        report_rules_the_fab_never_stated(&preset, &drc.violations, &preset.rules());
+
         std::process::exit(1);
+    }
+}
+
+/// Say which of the reported rules the fab never stated.
+///
+/// Three assembly-side rules have no counterpart in a fab's routing table, so
+/// when the preset does not state one the checker derives it: a via pad is the
+/// drill plus two annular rings, silk clearance follows the silk width, and
+/// courtyard clearance takes a conservative IPC-style value. Every preset but
+/// `prototype` leaves all three unstated today.
+///
+/// A number this tool chose and a number the fab published read exactly the
+/// same in a violation - `0.25mm required` - and a person deciding whether to
+/// change their board deserves to know which they are looking at. Printed only
+/// for the rules that actually reported something, because a note on every run
+/// about rules nothing broke is noise nobody reads.
+fn report_rules_the_fab_never_stated(
+    preset: &Preset,
+    violations: &[cypcb_drc::DrcViolation],
+    rules: &cypcb_drc::DesignRules,
+) {
+    use cypcb_drc::ViolationKind;
+
+    let constraints = preset.constraints();
+    let derived: [(ViolationKind, &str, bool, cypcb_core::Nm); 3] = [
+        (
+            ViolationKind::ViaDiameter,
+            "via diameter",
+            constraints.min_via_diameter.is_none(),
+            rules.min_via_diameter,
+        ),
+        (
+            ViolationKind::SilkClearance,
+            "silkscreen clearance",
+            constraints.min_silk_clearance.is_none(),
+            rules.min_silk_clearance,
+        ),
+        (
+            ViolationKind::CourtyardClearance,
+            "courtyard clearance",
+            constraints.min_courtyard_clearance.is_none(),
+            rules.min_courtyard_clearance,
+        ),
+    ];
+
+    let mut said_anything = false;
+    for (kind, what, is_derived, value) in derived {
+        if !is_derived || !violations.iter().any(|v| v.kind == kind) {
+            continue;
+        }
+        if !said_anything {
+            eprintln!("Notes:");
+            said_anything = true;
+        }
+        eprintln!(
+            "  {} does not state a {what}. The {:.3}mm above is this tool's own value, not the fab's.",
+            preset.name(),
+            value.to_mm()
+        );
     }
 }
