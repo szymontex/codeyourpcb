@@ -127,11 +127,18 @@ impl DesignRules {
     /// JLCPCB router preset allowed 0.127mm clearance while the JLCPCB DRC
     /// preset demanded 0.15mm, so a correctly routed board failed its own check.
     ///
-    /// Four assembly-side rules have no counterpart in the routing constraints
-    /// and are derived or defaulted here: the via diameter comes from the drill
-    /// plus two annular rings, silk clearance follows the silk width, and
-    /// hole-to-hole and courtyard clearance take conservative IPC-style values
-    /// that a preset can override.
+    /// Three assembly-side rules have no counterpart in the routing constraints
+    /// and are derived here: the via diameter comes from the drill plus two
+    /// annular rings, silk clearance follows the silk width, and courtyard
+    /// clearance takes a conservative IPC-style value.
+    ///
+    /// Hole-to-hole used to be a fourth, pinned at 0.5mm for every fab while
+    /// the constraints carried the real number - so the checker allowed 0.5mm
+    /// between holes on OSHPark, which requires **0.635mm**, and a board that
+    /// passed `cypcb check --preset oshpark` could come back from the fab
+    /// refused. It demanded 0.5mm on JLCPCB's advanced process, which allows
+    /// 0.4mm, and failed boards that were fine. The value comes from the fab
+    /// now.
     pub fn from_constraints(c: &DesignConstraints) -> Self {
         DesignRules {
             min_clearance: c.min_clearance,
@@ -142,7 +149,7 @@ impl DesignRules {
             min_annular_ring: c.min_annular_ring,
             min_silk_width: c.min_silk_width,
             min_edge_clearance: c.min_edge_clearance,
-            min_hole_to_hole: Nm::from_mm(0.5),
+            min_hole_to_hole: c.min_hole_to_hole,
             min_solder_mask_bridge: c.min_solder_mask_bridge,
             solder_mask_expansion: c.solder_mask_expansion,
             min_silk_clearance: c.min_silk_width,
