@@ -20,14 +20,14 @@ use cypcb_world::BoardWorld;
 /// Score a routed .cypcb file — routes the board and prints quality metrics as JSON.
 #[derive(Args)]
 pub struct ScoreCommand {
-    /// Input .cypcb file
+    /// Input board: a `.cypcb` design or a `.kicad_pcb` file
     #[arg(value_name = "FILE")]
     pub file: PathBuf,
 
-    /// Use custom weights (future-proofing — currently uses equal defaults)
-    #[arg(long, hide = true)]
-    pub weights: Option<String>,
-
+    // `--weights` used to live here, hidden, documented as "future-proofing -
+    // currently uses equal defaults". It was read nowhere: the scoring call
+    // has always used `ScoreWeights::default()`. A hidden option that is
+    // accepted and ignored is a promise nobody can see and nothing keeps.
     /// Fabrication rules to score against.
     ///
     /// A score is a count of violations against somebody's rules, so which
@@ -40,6 +40,19 @@ pub struct ScoreCommand {
 impl ScoreCommand {
     /// Run the score command.
     pub fn run(&self) -> Result<()> {
+        // A KiCad board is a board. `check`, `export` and `route` have gone
+        // through `board_source` for a while; this command did not, so
+        // `cypcb score board.kicad_pcb` handed a `(kicad_pcb ...)` file to the
+        // DSL parser and printed thirty-five diagnostics about missing net
+        // names on lines of perfectly good KiCad. The benchmark fixtures this
+        // project measures the router with are all KiCad files - the one
+        // command whose whole job is to put a number on a routed board could
+        // not read any of them.
+        if crate::board_source::is_kicad(&self.file) {
+            let loaded = crate::board_source::load_kicad(&self.file)?;
+            return self.score_world(loaded.world, loaded.library);
+        }
+
         // Read input file
         let source = std::fs::read_to_string(&self.file)
             .into_diagnostic()
@@ -86,6 +99,11 @@ impl ScoreCommand {
             eprintln!("{:?}", miette::Report::new(warning.clone()));
         }
 
+        self.score_world(world, library)
+    }
+
+    /// Score a board that is already in the model, however it was read.
+    fn score_world(&self, mut world: BoardWorld, library: FootprintLibrary) -> Result<()> {
         // Build rules (JLCPCB 2-layer default)
         let preset = RulesPreset::from_name(&self.preset).ok_or_else(|| {
             let available: Vec<&str> = RulesPreset::all().iter().map(|p| p.name()).collect();
@@ -157,6 +175,9 @@ mod tests {
 
         let cli = TestCli::parse_from(["test", "design.cypcb"]);
         assert_eq!(cli.score.file, PathBuf::from("design.cypcb"));
-        assert!(cli.score.weights.is_none());
+        // The preset is what decides the number this command prints, so a
+        // default it does not carry is a command scoring against a fabricator
+        // nobody named.
+        assert_eq!(cli.score.preset, "jlcpcb");
     }
 }

@@ -128,6 +128,25 @@ struct ZoneModel {
 impl ParseCommand {
     /// Run the parse command.
     pub fn run(&self) -> Result<()> {
+        // A KiCad board handed to the DSL parser produced thirty-five
+        // diagnostics complaining about missing net names on lines like
+        // `(net 1 "VCC")`, which is exactly what a KiCad net looks like. The
+        // reader for that file is a different command, and saying so in one
+        // line beats burying it under a page of nonsense about a file that is
+        // not wrong.
+        if crate::board_source::is_kicad(&self.file) {
+            // The path goes last on purpose. With it in front, and again in
+            // the middle, the message was long enough that the terminal
+            // wrapped `parse-kicad` into `parse-` and `kicad` on two lines -
+            // a suggested command that does not work when it is copied.
+            return Err(miette::miette!(
+                "`parse` reads the .cypcb language and this is a KiCad board. \
+                 Use `cypcb parse-kicad` for it, or `cypcb check` and \
+                 `cypcb export`, which read both kinds. File: {}",
+                self.file.display(),
+            ));
+        }
+
         let source = std::fs::read_to_string(&self.file)
             .into_diagnostic()
             .wrap_err_with(|| format!("Failed to read {}", self.file.display()))?;
