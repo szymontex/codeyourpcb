@@ -235,15 +235,15 @@ const DRC_RATCHETS: &[(&str, &str, u32, u32)] = &[
     // `via_price_sweep::how_much_of_the_price_is_noise`: 62 to 74 across
     // prices 0.22..0.28, 12 violations wide, and 27 to 34 shorts.
     ("shift_driver.kicad_pcb", "shift_driver", 93, 40),
-    // Re-measured 2026-08-08 at 676 / 424 after the fixture was fixed: its
-    // headers used to run 4.8mm past the board outline, so the router was
-    // being scored on a board nobody could make. With the pins on all four
-    // edges the escape is genuinely harder - 343 -> 676 - and the board is
-    // valid. Its band is 606 to 665 across prices 0.22..0.28, 59 violations
-    // wide, and 348 to 424 shorts; both narrower than the 102 the broken board
-    // showed. Still a weak guard by construction: it catches a collapse, not a
-    // regression.
-    ("qfp_fanout.kicad_pcb", "qfp_fanout", 735, 500),
+    // 336 / 179, band 296 to 336 across prices 0.22..0.28 - 40 violations
+    // wide. This fixture has now been corrected twice: its headers ran past
+    // the board outline, and then two of the four collapsed onto the geometry
+    // of the first because the importer keys its footprint library by library
+    // name alone. Each correction moved the board the router sees, so each
+    // needed its own measurement: 343 on the invalid board, 676 when the model
+    // still ran two headers down one edge, 336 now that the file and the model
+    // agree.
+    ("qfp_fanout.kicad_pcb", "qfp_fanout", 376, 260),
 ];
 
 /// Routes every fixture and holds the line on completeness and DRC count.

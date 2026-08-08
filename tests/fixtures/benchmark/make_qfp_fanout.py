@@ -135,9 +135,20 @@ def build():
         (centred, BOARD_H - edge, True),
     ]
     for index, (pins, (x, y, along_x)) in enumerate(zip(groups, placements)):
-        parts.append(header("Connector_PinHeader_2.54mm:PinHeader_1x12_P2.54mm_Vertical",
-                            f"J{index + 1}", "GPIO", x, y, pins + [spare[index]],
-                            along_x=along_x))
+        # The horizontal pair gets a library name of its own. The importer
+        # keys its footprint library by library name and registers the first
+        # part it sees under that name - `if !library.contains(&library_key)` -
+        # so two headers sharing a name and differing in geometry collapse into
+        # whichever was read first. Both would have come out running in y, and
+        # the two along the top and bottom edges would have run off the board
+        # in the model while the file said otherwise.
+        library = (
+            "Connector_PinHeader_2.54mm:PinHeader_1x12_P2.54mm_Horizontal"
+            if along_x
+            else "Connector_PinHeader_2.54mm:PinHeader_1x12_P2.54mm_Vertical"
+        )
+        parts.append(header(library, f"J{index + 1}", "GPIO", x, y,
+                            pins + [spare[index]], along_x=along_x))
 
     return nets, parts
 

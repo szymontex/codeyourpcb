@@ -336,12 +336,12 @@
     (pad "12" thru_hole oval (at 0.0 27.94) (size 1.7 1.7) (drill 1.0) (layers "*.Cu" "*.Mask") (net 2 "GND"))
   )
 
-  (footprint "Connector_PinHeader_2.54mm:PinHeader_1x12_P2.54mm_Vertical"
+  (footprint "Connector_PinHeader_2.54mm:PinHeader_1x12_P2.54mm_Horizontal"
     (layer "F.Cu")
     (at 109.030 63.000)
     (property "Reference" "J3")
     (property "Value" "GPIO")
-    (property "Footprint" "Connector_PinHeader_2.54mm:PinHeader_1x12_P2.54mm_Vertical")
+    (property "Footprint" "Connector_PinHeader_2.54mm:PinHeader_1x12_P2.54mm_Horizontal")
     (pad "1" thru_hole rect (at 0.0 0.0) (size 1.7 1.7) (drill 1.0) (layers "*.Cu" "*.Mask") (net 29 "IO22"))
     (pad "2" thru_hole oval (at 2.54 0.0) (size 1.7 1.7) (drill 1.0) (layers "*.Cu" "*.Mask") (net 30 "IO23"))
     (pad "3" thru_hole oval (at 5.08 0.0) (size 1.7 1.7) (drill 1.0) (layers "*.Cu" "*.Mask") (net 31 "IO24"))
@@ -356,12 +356,12 @@
     (pad "12" thru_hole oval (at 27.94 0.0) (size 1.7 1.7) (drill 1.0) (layers "*.Cu" "*.Mask") (net 1 "VCC"))
   )
 
-  (footprint "Connector_PinHeader_2.54mm:PinHeader_1x12_P2.54mm_Vertical"
+  (footprint "Connector_PinHeader_2.54mm:PinHeader_1x12_P2.54mm_Horizontal"
     (layer "F.Cu")
     (at 109.030 103.000)
     (property "Reference" "J4")
     (property "Value" "GPIO")
-    (property "Footprint" "Connector_PinHeader_2.54mm:PinHeader_1x12_P2.54mm_Vertical")
+    (property "Footprint" "Connector_PinHeader_2.54mm:PinHeader_1x12_P2.54mm_Horizontal")
     (pad "1" thru_hole rect (at 0.0 0.0) (size 1.7 1.7) (drill 1.0) (layers "*.Cu" "*.Mask") (net 40 "IO33"))
     (pad "2" thru_hole oval (at 2.54 0.0) (size 1.7 1.7) (drill 1.0) (layers "*.Cu" "*.Mask") (net 41 "IO34"))
     (pad "3" thru_hole oval (at 5.08 0.0) (size 1.7 1.7) (drill 1.0) (layers "*.Cu" "*.Mask") (net 42 "IO35"))
