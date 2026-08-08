@@ -213,14 +213,23 @@ fn excellon_holes(text: &str) -> Vec<(f64, f64, f64)> {
 }
 
 /// Every placed part on a board, as (refdes, x mm, y mm).
-fn placed_parts(world: &mut BoardWorld) -> Vec<(String, f64, f64)> {
-    use cypcb_world::components::{Position, RefDes};
+fn placed_parts(world: &mut BoardWorld, library: &FootprintLibrary) -> Vec<(String, f64, f64)> {
+    use cypcb_world::components::{FootprintRef, Position, RefDes};
 
     let ecs = world.ecs_mut();
-    let mut query = ecs.query::<(&RefDes, &Position)>();
+    let mut query = ecs.query::<(&RefDes, &Position, &FootprintRef)>();
     let mut parts: Vec<(String, f64, f64)> = query
         .iter(ecs)
-        .map(|(refdes, position)| {
+        // A mounting hole is a part on the board and not a part anybody
+        // places: it has no copper, so there is nothing to solder and nothing
+        // for a machine to pick. The placement file leaves it out on purpose,
+        // and this counted it as missing.
+        .filter(|(_, _, footprint_ref)| {
+            library
+                .get(&footprint_ref.0)
+                .is_none_or(|footprint| !footprint.is_mechanical())
+        })
+        .map(|(refdes, position, _)| {
             (
                 refdes.as_str().to_string(),
                 position.0.x.0 as f64 / 1_000_000.0,
@@ -378,7 +387,7 @@ fn check_the_files(
         };
 
         let mut expected_pads: Vec<(Layer, f64, f64)> = Vec::new();
-        let mut expected_holes: Vec<(f64, f64, f64)> = Vec::new();
+        let mut expected_holes: Vec<(f64, f64, f64, bool)> = Vec::new();
         for (position, degrees, footprint_name) in &placements {
             let Some(footprint) = library.get(footprint_name) else {
                 continue;
@@ -395,7 +404,7 @@ fn check_the_files(
                     }
                 }
                 if let Some(drill) = pad.drill {
-                    expected_holes.push((x, y, drill.0 as f64 / 1_000_000.0));
+                    expected_holes.push((x, y, drill.0 as f64 / 1_000_000.0, pad.is_non_plated()));
                 }
             }
         }
@@ -436,26 +445,63 @@ fn check_the_files(
         }
 
         if !expected_holes.is_empty() {
-            let drill_file = files
-                .iter()
-                .find(|path| path.extension().and_then(|e| e.to_str()) == Some("drl"))
-                .unwrap_or_else(|| panic!("{name} has drilled pads and exported no drill file"));
-            let holes = excellon_holes(
-                &std::fs::read_to_string(drill_file).expect("a readable drill file"),
+            // Two drill files now, and which one a hole is in is the whole
+            // point of the split: a mounting hole in the plated file comes
+            // back narrower than its screw and shorted to the copper it
+            // passes. This used to take the first `.drl` it found, which
+            // sorts to `-NPTH.drl`, and then reported every plated pin as
+            // missing.
+            let read_drill = |ending: &str| -> Option<Vec<(f64, f64, f64)>> {
+                files
+                    .iter()
+                    .find(|path| {
+                        path.file_name()
+                            .is_some_and(|n| n.to_string_lossy().ends_with(ending))
+                    })
+                    .map(|path| {
+                        excellon_holes(
+                            &std::fs::read_to_string(path).expect("a readable drill file"),
+                        )
+                    })
+            };
+            let plated = read_drill("-PTH.drl").unwrap_or_default();
+            let unplated = read_drill("-NPTH.drl").unwrap_or_default();
+            assert!(
+                !plated.is_empty() || !unplated.is_empty(),
+                "{name} has drilled pads and exported no drill file with holes in it"
             );
-            assert!(!holes.is_empty(), "{name}: the drill file carries no holes");
 
-            for (x, y, diameter) in expected_holes {
+            for (x, y, diameter, is_non_plated) in expected_holes {
                 counts.holes += 1;
-                match holes
+                let (wanted, other, which) = if is_non_plated {
+                    (&unplated, &plated, "unplated")
+                } else {
+                    (&plated, &unplated, "plated")
+                };
+
+                match wanted
                     .iter()
                     .find(|(hx, hy, _)| (hx - x).abs() < 0.002 && (hy - y).abs() < 0.002)
                 {
-                    None => wrong.push(format!("{name}: no hole at ({x:.3}mm, {y:.3}mm)")),
+                    None => wrong.push(format!(
+                        "{name}: no hole at ({x:.3}mm, {y:.3}mm) in the {which} drill file"
+                    )),
                     Some((_, _, drilled)) if (drilled - diameter).abs() > 0.002 => wrong.push(
                         format!("{name}: hole at ({x:.3}mm, {y:.3}mm) is {drilled:.3}mm, the footprint asks for {diameter:.3}mm"),
                     ),
                     Some(_) => {}
+                }
+
+                // And not in the other file, which is the failure that costs
+                // real money: a hole in both is drilled twice, and a mounting
+                // hole in the plated file is plated.
+                if other
+                    .iter()
+                    .any(|(hx, hy, _)| (hx - x).abs() < 0.002 && (hy - y).abs() < 0.002)
+                {
+                    wrong.push(format!(
+                        "{name}: the hole at ({x:.3}mm, {y:.3}mm) is in both drill files"
+                    ));
                 }
             }
         }
@@ -464,7 +510,7 @@ fn check_the_files(
         //
         // The CPL is what a machine follows and the BOM is what somebody buys
         // from. A board whose CPL is short by one part is assembled with a gap.
-        let parts = placed_parts(world);
+        let parts = placed_parts(world, library);
         if !parts.is_empty() {
             let cpl = assembly_file(&dir, "CPL.csv", name);
             let rows: Vec<Vec<String>> = cpl

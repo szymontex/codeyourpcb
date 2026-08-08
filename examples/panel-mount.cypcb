@@ -1,0 +1,87 @@
+version 1
+
+// Panel-mounted status board
+//
+// The board this project could not describe until mounting holes existed: one
+// that gets screwed into an enclosure. Four M3 holes at the corners, an
+// indicator LED and a screw-terminal feed.
+//
+// A mounting hole is a component like any other, placed with a footprint that
+// has a drill and no copper. Because it carries no copper, the whole chain
+// treats it as what it is: it goes in the NPTH drill file so the fabricator
+// leaves it bare, no copper layer flashes a pad there, the router refuses to
+// cross it, and it appears in neither the bill of materials nor the placement
+// file. Nobody buys a hole and no machine places one.
+//
+// The clearance around each hole matters and is checked: `cypcb check`
+// reports copper closer to the hole wall than the fabricator's edge
+// clearance, because a plated-over or nicked hole shorts to the screw.
+
+board panel_mount {
+    size 40mm x 30mm
+    layers 2
+}
+
+// Mounting holes, 4mm in from each corner. M3 clearance drill is 3.2mm, so
+// the copper below has to stay 1.6mm plus the fab clearance away from each
+// centre.
+component H1 generic "MOUNT-M3" {
+    value "M3"
+    at 4mm, 4mm
+}
+
+component H2 generic "MOUNT-M3" {
+    value "M3"
+    at 36mm, 4mm
+}
+
+component H3 generic "MOUNT-M3" {
+    value "M3"
+    at 4mm, 26mm
+}
+
+component H4 generic "MOUNT-M3" {
+    value "M3"
+    at 36mm, 26mm
+}
+
+// Supply in, on the left between the two holes.
+component J1 connector "PIN-HDR-1x2" {
+    value "12V IN"
+    at 10mm, 15mm
+    rotate 90
+}
+
+// Current limiting resistor. 12V - 2V(LED) = 10V, 10V/1k = 10mA.
+component R1 resistor "0805" {
+    value "1k"
+    at 20mm, 15mm
+}
+
+component LED1 led "0805" {
+    value "GREEN"
+    at 27mm, 15mm
+}
+
+component C1 capacitor "0805" {
+    value "100nF"
+    at 20mm, 22mm
+    rotate 90
+}
+
+net VCC [current 100mA width 0.3mm] {
+    J1.1
+    R1.1
+    C1.1
+}
+
+net GND {
+    J1.2
+    LED1.2
+    C1.2
+}
+
+net LED_ANODE {
+    R1.2
+    LED1.1
+}

@@ -230,3 +230,68 @@ fn nobody_is_asked_to_buy_a_hole_or_to_place_one() {
 
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn the_example_board_still_has_its_holes() {
+    // `examples/panel-mount.cypcb` exists to show the feature working on a
+    // board somebody would actually build. An example that quietly loses the
+    // thing it demonstrates is worse than no example, because it reads as
+    // proof that the feature is covered.
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(|p| p.parent())
+        .expect("the crate sits two levels below the repo root")
+        .join("examples/panel-mount.cypcb");
+    let source = std::fs::read_to_string(&path).expect("the example is there");
+
+    let parsed = cypcb_parser::parse(&source);
+    assert!(parsed.errors.is_empty(), "{:?}", parsed.errors);
+
+    let mut world = BoardWorld::new();
+    let mut library = FootprintLibrary::new();
+    let result = sync_ast_to_world(&parsed.value, &source, &mut world, &mut library);
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+    world.set_footprints(library.clone());
+    world.rebuild_spatial_index_from_library(&library);
+
+    let preset = from_name("jlcpcb").expect("a known preset");
+    let output_dir = std::env::temp_dir().join("cypcb-example-panel-mount");
+    let _ = std::fs::remove_dir_all(&output_dir);
+    let job = ExportJob {
+        source_path: path.clone(),
+        output_dir: output_dir.clone(),
+        preset,
+        board_name: "panel-mount".to_string(),
+    };
+    let exported = run_export(&job, &mut world, &library).expect("the export runs");
+
+    let npth = exported
+        .files
+        .iter()
+        .find(|file| {
+            file.path
+                .file_name()
+                .is_some_and(|name| name.to_string_lossy().ends_with("-NPTH.drl"))
+        })
+        .expect("the example writes an unplated drill file");
+    let drill = std::fs::read_to_string(&npth.path).expect("the unplated file is readable");
+
+    // Four corners, 4mm in from each edge of a 40 x 30mm board.
+    for corner in [(4.0, 4.0), (36.0, 4.0), (4.0, 26.0), (36.0, 26.0)] {
+        assert!(
+            hits(&drill).iter().any(|hit| near(*hit, corner)),
+            "the example lost its mounting hole at {corner:?}:\n{drill}"
+        );
+    }
+    assert_eq!(
+        hits(&drill).len(),
+        4,
+        "four mounting holes and nothing else:\n{drill}"
+    );
+    assert!(
+        drill.contains("C3.200000"),
+        "the holes are drilled to the M3 clearance size:\n{drill}"
+    );
+
+    let _ = std::fs::remove_dir_all(&output_dir);
+}
