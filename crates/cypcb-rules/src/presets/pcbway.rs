@@ -66,6 +66,12 @@ pub fn standard() -> DesignConstraints {
         min_acid_trap: Nm::from_mm(0.15), // 6 mil
         max_copper_layers: 14,            // PCBWay supports up to 14 layers
         castellated_holes_allowed: true,
+
+        // The three assembly-side rules a routing table has no use for. None
+        // means this fab does not state one and the checker derives it.
+        min_via_diameter: None,
+        min_silk_clearance: None,
+        min_courtyard_clearance: None,
     }
 }
 

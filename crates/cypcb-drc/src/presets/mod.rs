@@ -23,7 +23,7 @@
 //! # Examples
 //!
 //! ```
-//! use cypcb_drc::presets::{DesignRules, Preset};
+//! use cypcb_drc::presets::{DesignRules, Preset, PresetRules};
 //!
 //! // Use preset enum for dynamic lookup
 //! let preset = Preset::from_name("jlcpcb").unwrap();
@@ -127,10 +127,12 @@ impl DesignRules {
     /// JLCPCB router preset allowed 0.127mm clearance while the JLCPCB DRC
     /// preset demanded 0.15mm, so a correctly routed board failed its own check.
     ///
-    /// Three assembly-side rules have no counterpart in the routing constraints
-    /// and are derived here: the via diameter comes from the drill plus two
+    /// Three assembly-side rules are the fab's when it states one and derived
+    /// when it does not: the via diameter comes from the drill plus two
     /// annular rings, silk clearance follows the silk width, and courtyard
-    /// clearance takes a conservative IPC-style value.
+    /// clearance takes a conservative IPC-style value. `prototype` states all
+    /// three, because a via pad big enough to solder by hand is the whole
+    /// point of that preset.
     ///
     /// Hole-to-hole used to be a fourth, pinned at 0.5mm for every fab while
     /// the constraints carried the real number - so the checker allowed 0.5mm
@@ -145,15 +147,17 @@ impl DesignRules {
             min_trace_width: c.min_trace_width,
             min_drill_size: c.min_drill_size,
             min_via_drill: c.min_via_drill,
-            min_via_diameter: Nm(c.min_via_drill.0 + 2 * c.min_via_annular_ring.0),
+            min_via_diameter: c
+                .min_via_diameter
+                .unwrap_or(Nm(c.min_via_drill.0 + 2 * c.min_via_annular_ring.0)),
             min_annular_ring: c.min_annular_ring,
             min_silk_width: c.min_silk_width,
             min_edge_clearance: c.min_edge_clearance,
             min_hole_to_hole: c.min_hole_to_hole,
             min_solder_mask_bridge: c.min_solder_mask_bridge,
             solder_mask_expansion: c.solder_mask_expansion,
-            min_silk_clearance: c.min_silk_width,
-            min_courtyard_clearance: Nm::from_mm(0.25),
+            min_silk_clearance: c.min_silk_clearance.unwrap_or(c.min_silk_width),
+            min_courtyard_clearance: c.min_courtyard_clearance.unwrap_or(Nm::from_mm(0.25)),
         }
     }
 }
@@ -168,164 +172,32 @@ impl Default for DesignRules {
     }
 }
 
-/// Manufacturer preset identifiers.
+/// Manufacturer presets, and the design rules each one implies.
 ///
-/// Use [`from_name`](Preset::from_name) for string-based lookup (useful for
-/// DSL parsing) or match directly on the enum variants.
+/// There used to be two of these. `cypcb_drc::Preset` listed eight fabs and
+/// `cypcb_rules::RulesPreset` ten, they spelled the same fab differently
+/// (`jlcpcb_2layer` against `jlcpcb_standard_2layer`), and each was missing
+/// what the other had: the checker had `prototype`, the router had IPC classes
+/// `ipc1`, `ipc2` and `ipc3` that every CLI command refused. The numbers were
+/// already shared - the checker's presets read `RulesPreset::constraints()` -
+/// so what the second enum bought was a way for the two to drift.
 ///
-/// # Examples
+/// One list now. Every name either table accepted still resolves.
+pub use cypcb_rules::presets::RulesPreset as Preset;
+
+/// The design rules a preset implies.
 ///
-/// ```
-/// use cypcb_drc::presets::Preset;
-///
-/// // From string (e.g., parsed from DSL)
-/// let preset = Preset::from_name("jlcpcb").unwrap();
-/// assert_eq!(preset, Preset::Jlcpcb2Layer);
-///
-/// // Get rules from preset
-/// let rules = preset.rules();
-/// ```
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Preset {
-    /// JLCPCB standard 2-layer board.
-    Jlcpcb2Layer,
-    /// JLCPCB 4-layer board with tighter tolerances.
-    Jlcpcb4Layer,
-    /// JLCPCB advanced 2-layer (tighter tolerances, higher cost).
-    JlcpcbAdvanced2Layer,
-    /// JLCPCB advanced 4-layer (tightest tolerances).
-    JlcpcbAdvanced4Layer,
-    /// OSHPark 2-layer (US-based, purple boards, ENIG).
-    OshPark2Layer,
-    /// OSHPark 4-layer (controlled impedance available).
-    OshPark4Layer,
-    /// PCBWay standard capabilities.
-    PcbwayStandard,
-    /// Relaxed rules for prototyping.
-    Prototype,
+/// An extension trait rather than a method, because the presets live in
+/// `cypcb-rules`, which knows how to describe a fab and nothing about
+/// checking a board.
+pub trait PresetRules {
+    /// The rules the checker enforces for this preset.
+    fn rules(self) -> DesignRules;
 }
 
-impl Preset {
-    /// Get the design rules for this preset.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use cypcb_drc::presets::Preset;
-    /// use cypcb_core::Nm;
-    ///
-    /// let rules = Preset::Jlcpcb2Layer.rules();
-    /// assert_eq!(rules.min_clearance, Nm::from_mm(0.127));
-    /// ```
-    pub fn rules(self) -> DesignRules {
-        match self {
-            Preset::Jlcpcb2Layer => DesignRules::jlcpcb_2layer(),
-            Preset::Jlcpcb4Layer => DesignRules::jlcpcb_4layer(),
-            Preset::JlcpcbAdvanced2Layer => DesignRules::jlcpcb_advanced_2layer(),
-            Preset::JlcpcbAdvanced4Layer => DesignRules::jlcpcb_advanced_4layer(),
-            Preset::OshPark2Layer => DesignRules::oshpark_2layer(),
-            Preset::OshPark4Layer => DesignRules::oshpark_4layer(),
-            Preset::PcbwayStandard => DesignRules::pcbway_standard(),
-            Preset::Prototype => DesignRules::prototype(),
-        }
-    }
-
-    /// Parse a preset from a string name.
-    ///
-    /// Accepts various aliases for convenience. Names are normalized:
-    /// lowercase, hyphens converted to underscores.
-    ///
-    /// | Input | Preset |
-    /// |-------|--------|
-    /// | `"jlcpcb"`, `"jlcpcb_2layer"` | `Jlcpcb2Layer` |
-    /// | `"jlcpcb_4layer"` | `Jlcpcb4Layer` |
-    /// | `"jlcpcb_advanced"`, `"jlcpcb_advanced_2layer"` | `JlcpcbAdvanced2Layer` |
-    /// | `"jlcpcb_advanced_4layer"` | `JlcpcbAdvanced4Layer` |
-    /// | `"oshpark"`, `"oshpark_2layer"` | `OshPark2Layer` |
-    /// | `"oshpark_4layer"` | `OshPark4Layer` |
-    /// | `"pcbway"`, `"pcbway_standard"` | `PcbwayStandard` |
-    /// | `"prototype"` | `Prototype` |
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use cypcb_drc::presets::Preset;
-    ///
-    /// assert_eq!(Preset::from_name("jlcpcb"), Some(Preset::Jlcpcb2Layer));
-    /// assert_eq!(Preset::from_name("oshpark"), Some(Preset::OshPark2Layer));
-    /// assert_eq!(Preset::from_name("jlcpcb_advanced"), Some(Preset::JlcpcbAdvanced2Layer));
-    /// assert_eq!(Preset::from_name("unknown"), None);
-    /// ```
-    pub fn from_name(name: &str) -> Option<Self> {
-        // Normalize: lowercase, hyphens to underscores
-        let normalized = name.to_lowercase().replace('-', "_");
-        match normalized.as_str() {
-            "jlcpcb" | "jlcpcb_2layer" => Some(Preset::Jlcpcb2Layer),
-            "jlcpcb_4layer" => Some(Preset::Jlcpcb4Layer),
-            "jlcpcb_advanced" | "jlcpcb_advanced_2layer" => Some(Preset::JlcpcbAdvanced2Layer),
-            "jlcpcb_advanced_4layer" => Some(Preset::JlcpcbAdvanced4Layer),
-            "oshpark" | "oshpark_2layer" => Some(Preset::OshPark2Layer),
-            "oshpark_4layer" => Some(Preset::OshPark4Layer),
-            "pcbway" | "pcbway_standard" => Some(Preset::PcbwayStandard),
-            "prototype" => Some(Preset::Prototype),
-            _ => None,
-        }
-    }
-
-    /// Get the canonical name for this preset.
-    ///
-    /// Returns the primary string identifier used in DSL files.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use cypcb_drc::presets::Preset;
-    ///
-    /// assert_eq!(Preset::Jlcpcb2Layer.name(), "jlcpcb_2layer");
-    /// assert_eq!(Preset::PcbwayStandard.name(), "pcbway_standard");
-    /// ```
-    pub fn name(self) -> &'static str {
-        match self {
-            Preset::Jlcpcb2Layer => "jlcpcb_2layer",
-            Preset::Jlcpcb4Layer => "jlcpcb_4layer",
-            Preset::JlcpcbAdvanced2Layer => "jlcpcb_advanced_2layer",
-            Preset::JlcpcbAdvanced4Layer => "jlcpcb_advanced_4layer",
-            Preset::OshPark2Layer => "oshpark_2layer",
-            Preset::OshPark4Layer => "oshpark_4layer",
-            Preset::PcbwayStandard => "pcbway_standard",
-            Preset::Prototype => "prototype",
-        }
-    }
-
-    /// Get all available presets.
-    ///
-    /// Useful for generating documentation or CLI help text.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use cypcb_drc::presets::Preset;
-    ///
-    /// let presets = Preset::all();
-    /// assert_eq!(presets.len(), 8);
-    /// ```
-    pub fn all() -> &'static [Preset] {
-        &[
-            Preset::Jlcpcb2Layer,
-            Preset::Jlcpcb4Layer,
-            Preset::JlcpcbAdvanced2Layer,
-            Preset::JlcpcbAdvanced4Layer,
-            Preset::OshPark2Layer,
-            Preset::OshPark4Layer,
-            Preset::PcbwayStandard,
-            Preset::Prototype,
-        ]
-    }
-}
-
-impl std::fmt::Display for Preset {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.name())
+impl PresetRules for Preset {
+    fn rules(self) -> DesignRules {
+        DesignRules::from_constraints(&self.constraints())
     }
 }
 
@@ -372,14 +244,17 @@ mod tests {
 
     #[test]
     fn test_preset_from_name() {
-        assert_eq!(Preset::from_name("jlcpcb"), Some(Preset::Jlcpcb2Layer));
+        assert_eq!(
+            Preset::from_name("jlcpcb"),
+            Some(Preset::JlcpcbStandard2Layer)
+        );
         assert_eq!(
             Preset::from_name("jlcpcb_2layer"),
-            Some(Preset::Jlcpcb2Layer)
+            Some(Preset::JlcpcbStandard2Layer)
         );
         assert_eq!(
             Preset::from_name("jlcpcb_4layer"),
-            Some(Preset::Jlcpcb4Layer)
+            Some(Preset::JlcpcbStandard4Layer)
         );
         assert_eq!(
             Preset::from_name("jlcpcb_advanced"),
@@ -402,10 +277,10 @@ mod tests {
             Preset::from_name("oshpark_4layer"),
             Some(Preset::OshPark4Layer)
         );
-        assert_eq!(Preset::from_name("pcbway"), Some(Preset::PcbwayStandard));
+        assert_eq!(Preset::from_name("pcbway"), Some(Preset::PcbWayStandard));
         assert_eq!(
             Preset::from_name("pcbway_standard"),
-            Some(Preset::PcbwayStandard)
+            Some(Preset::PcbWayStandard)
         );
         assert_eq!(Preset::from_name("prototype"), Some(Preset::Prototype));
         assert_eq!(Preset::from_name("unknown"), None);
@@ -413,7 +288,10 @@ mod tests {
 
     #[test]
     fn test_preset_from_name_case_insensitive() {
-        assert_eq!(Preset::from_name("JLCPCB"), Some(Preset::Jlcpcb2Layer));
+        assert_eq!(
+            Preset::from_name("JLCPCB"),
+            Some(Preset::JlcpcbStandard2Layer)
+        );
         assert_eq!(Preset::from_name("OshPark"), Some(Preset::OshPark2Layer));
         assert_eq!(
             Preset::from_name("OSHPARK_4LAYER"),
@@ -442,8 +320,14 @@ mod tests {
         use cypcb_rules::presets::RulesPreset;
 
         let pairs = [
-            (Preset::Jlcpcb2Layer, RulesPreset::JlcpcbStandard2Layer),
-            (Preset::Jlcpcb4Layer, RulesPreset::JlcpcbStandard4Layer),
+            (
+                Preset::JlcpcbStandard2Layer,
+                RulesPreset::JlcpcbStandard2Layer,
+            ),
+            (
+                Preset::JlcpcbStandard4Layer,
+                RulesPreset::JlcpcbStandard4Layer,
+            ),
             (
                 Preset::JlcpcbAdvanced2Layer,
                 RulesPreset::JlcpcbAdvanced2Layer,
@@ -454,7 +338,7 @@ mod tests {
             ),
             (Preset::OshPark2Layer, RulesPreset::OshPark2Layer),
             (Preset::OshPark4Layer, RulesPreset::OshPark4Layer),
-            (Preset::PcbwayStandard, RulesPreset::PcbWayStandard),
+            (Preset::PcbWayStandard, RulesPreset::PcbWayStandard),
         ];
 
         for (drc_preset, routing_preset) in pairs {
@@ -476,10 +360,10 @@ mod tests {
 
     #[test]
     fn test_preset_rules_accessor() {
-        let rules = Preset::Jlcpcb2Layer.rules();
+        let rules = Preset::JlcpcbStandard2Layer.rules();
         assert_eq!(rules.min_clearance, Nm::from_mm(0.127));
 
-        let rules = Preset::PcbwayStandard.rules();
+        let rules = Preset::PcbWayStandard.rules();
         assert_eq!(rules.min_drill_size, Nm::from_mm(0.2));
         assert_eq!(rules.min_silk_width, Nm::from_mm(0.22));
     }
@@ -502,8 +386,17 @@ mod tests {
 
     #[test]
     fn test_preset_name() {
-        assert_eq!(Preset::Jlcpcb2Layer.name(), "jlcpcb_2layer");
-        assert_eq!(Preset::Jlcpcb4Layer.name(), "jlcpcb_4layer");
+        // The canonical name is the rules crate's, which spells the process
+        // out; `jlcpcb_2layer` is still accepted as an alias, and the test
+        // below is what proves it.
+        assert_eq!(
+            Preset::JlcpcbStandard2Layer.name(),
+            "jlcpcb_standard_2layer"
+        );
+        assert_eq!(
+            Preset::JlcpcbStandard4Layer.name(),
+            "jlcpcb_standard_4layer"
+        );
         assert_eq!(
             Preset::JlcpcbAdvanced2Layer.name(),
             "jlcpcb_advanced_2layer"
@@ -514,28 +407,31 @@ mod tests {
         );
         assert_eq!(Preset::OshPark2Layer.name(), "oshpark_2layer");
         assert_eq!(Preset::OshPark4Layer.name(), "oshpark_4layer");
-        assert_eq!(Preset::PcbwayStandard.name(), "pcbway_standard");
+        assert_eq!(Preset::PcbWayStandard.name(), "pcbway_standard");
         assert_eq!(Preset::Prototype.name(), "prototype");
     }
 
     #[test]
     fn test_preset_display() {
-        assert_eq!(format!("{}", Preset::Jlcpcb2Layer), "jlcpcb_2layer");
-        assert_eq!(format!("{}", Preset::PcbwayStandard), "pcbway_standard");
+        assert_eq!(
+            format!("{}", Preset::JlcpcbStandard2Layer),
+            "jlcpcb_standard_2layer"
+        );
+        assert_eq!(format!("{}", Preset::PcbWayStandard), "pcbway_standard");
         assert_eq!(format!("{}", Preset::OshPark2Layer), "oshpark_2layer");
     }
 
     #[test]
     fn test_preset_all() {
         let all = Preset::all();
-        assert_eq!(all.len(), 8);
-        assert!(all.contains(&Preset::Jlcpcb2Layer));
-        assert!(all.contains(&Preset::Jlcpcb4Layer));
+        assert_eq!(all.len(), Preset::ALL.len());
+        assert!(all.contains(&Preset::JlcpcbStandard2Layer));
+        assert!(all.contains(&Preset::JlcpcbStandard4Layer));
         assert!(all.contains(&Preset::JlcpcbAdvanced2Layer));
         assert!(all.contains(&Preset::JlcpcbAdvanced4Layer));
         assert!(all.contains(&Preset::OshPark2Layer));
         assert!(all.contains(&Preset::OshPark4Layer));
-        assert!(all.contains(&Preset::PcbwayStandard));
+        assert!(all.contains(&Preset::PcbWayStandard));
         assert!(all.contains(&Preset::Prototype));
     }
 

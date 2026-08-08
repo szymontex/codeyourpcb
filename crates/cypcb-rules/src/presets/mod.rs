@@ -61,11 +61,13 @@ pub enum RulesPreset {
     IpcClass2,
     /// IPC Class 3 — high reliability (tight tolerances).
     IpcClass3,
+    /// Prototyping — bigger than any fab requires, for hand assembly.
+    Prototype,
 }
 
 impl RulesPreset {
     /// All preset variants in definition order.
-    pub const ALL: [RulesPreset; 10] = [
+    pub const ALL: [RulesPreset; 11] = [
         RulesPreset::JlcpcbStandard2Layer,
         RulesPreset::JlcpcbStandard4Layer,
         RulesPreset::JlcpcbAdvanced2Layer,
@@ -76,6 +78,7 @@ impl RulesPreset {
         RulesPreset::IpcClass1,
         RulesPreset::IpcClass2,
         RulesPreset::IpcClass3,
+        RulesPreset::Prototype,
     ];
 
     /// Returns all presets as a slice.
@@ -96,6 +99,7 @@ impl RulesPreset {
             Self::IpcClass1 => "ipc_class1",
             Self::IpcClass2 => "ipc_class2",
             Self::IpcClass3 => "ipc_class3",
+            Self::Prototype => "prototype",
         }
     }
 
@@ -117,6 +121,7 @@ impl RulesPreset {
     /// | `"ipc1"`, `"ipc_class1"`, `"ipc_class_1"` | `IpcClass1` |
     /// | `"ipc2"`, `"ipc_class2"`, `"ipc_class_2"` | `IpcClass2` |
     /// | `"ipc3"`, `"ipc_class3"`, `"ipc_class_3"` | `IpcClass3` |
+    /// | `"prototype"`, `"proto"` | `Prototype` |
     pub fn from_name(name: &str) -> Option<Self> {
         // Normalize: lowercase, replace hyphens with underscores
         let norm: String = name.to_ascii_lowercase().replace('-', "_");
@@ -143,6 +148,9 @@ impl RulesPreset {
             "ipc2" | "ipc_class2" | "ipc_class_2" => Some(Self::IpcClass2),
             "ipc3" | "ipc_class3" | "ipc_class_3" => Some(Self::IpcClass3),
 
+            // Not a fab
+            "prototype" | "proto" => Some(Self::Prototype),
+
             _ => None,
         }
     }
@@ -160,6 +168,7 @@ impl RulesPreset {
             Self::IpcClass1 => ipc::class1(),
             Self::IpcClass2 => ipc::class2(),
             Self::IpcClass3 => ipc::class3(),
+            Self::Prototype => ipc::prototype(),
         }
     }
 
@@ -176,7 +185,16 @@ impl RulesPreset {
             Self::IpcClass1 => ipc::class1_stackup(),
             Self::IpcClass2 => ipc::class2_stackup(),
             Self::IpcClass3 => ipc::class3_stackup(),
+            // A prototype is a two-layer consumer board; it borrows the one
+            // IPC Class 1 describes rather than claiming a stackup of its own.
+            Self::Prototype => ipc::class1_stackup(),
         }
+    }
+}
+
+impl std::fmt::Display for RulesPreset {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name())
     }
 }
 
@@ -317,8 +335,18 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_all_returns_10_presets() {
-        assert_eq!(RulesPreset::all().len(), 10);
+    fn every_preset_is_in_the_list_and_answers_to_its_name() {
+        // A count on its own goes stale the moment a preset is added and says
+        // nothing about whether the list is the enum. This walks the list.
+        assert_eq!(RulesPreset::all().len(), RulesPreset::ALL.len());
+        for preset in RulesPreset::all() {
+            assert_eq!(
+                RulesPreset::from_name(preset.name()),
+                Some(*preset),
+                "{} is in the list and its own name does not resolve to it",
+                preset.name()
+            );
+        }
     }
 
     #[test]

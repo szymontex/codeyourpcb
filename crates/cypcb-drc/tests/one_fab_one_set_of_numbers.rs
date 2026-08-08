@@ -19,18 +19,19 @@
 //! `min_silk_clearance`, `min_courtyard_clearance` - are what stands between
 //! this and one table. That is written up in docs/TRACKER.md under V4.
 
-use cypcb_drc::Preset;
+use cypcb_core::Nm;
+use cypcb_drc::{Preset, PresetRules};
 use cypcb_rules::presets::RulesPreset;
 
 /// The same fab, named by each table.
 const SAME_FAB: &[(Preset, RulesPreset, &str)] = &[
     (
-        Preset::Jlcpcb2Layer,
+        Preset::JlcpcbStandard2Layer,
         RulesPreset::JlcpcbStandard2Layer,
         "JLCPCB standard, 2 layers",
     ),
     (
-        Preset::Jlcpcb4Layer,
+        Preset::JlcpcbStandard4Layer,
         RulesPreset::JlcpcbStandard4Layer,
         "JLCPCB standard, 4 layers",
     ),
@@ -55,7 +56,7 @@ const SAME_FAB: &[(Preset, RulesPreset, &str)] = &[
         "OSHPark, 4 layers",
     ),
     (
-        Preset::PcbwayStandard,
+        Preset::PcbWayStandard,
         RulesPreset::PcbWayStandard,
         "PCBWay standard",
     ),
@@ -139,31 +140,58 @@ fn every_fab_both_tables_know_is_the_same_board() {
 }
 
 #[test]
-fn the_two_tables_still_disagree_about_which_fabs_exist() {
-    // Not a wish: a record of the state, so the day somebody merges the two
-    // registries this test fails and says what changed. The numbers here are
-    // what `Preset::all()` and `RulesPreset::all()` return today.
+fn there_is_one_list_of_presets() {
+    // This file used to record a split: two enums, eight fabs against ten,
+    // `prototype` known only to the checker and `ipc1`/`ipc2`/`ipc3` only to
+    // the router, which every CLI command refused. They are one list now, and
+    // this is what keeps them one - `cypcb_drc::Preset` is the same type, so
+    // the comparison above compares a preset with itself and every name either
+    // table ever accepted still resolves.
     assert_eq!(
-        Preset::all().len(),
-        8,
-        "the checker's table changed size; if the registries were merged, delete this test"
-    );
-    assert_eq!(
-        RulesPreset::all().len(),
-        10,
-        "the router's table changed size; if the registries were merged, delete this test"
+        std::any::TypeId::of::<Preset>(),
+        std::any::TypeId::of::<RulesPreset>(),
+        "the checker grew its own preset enum again"
     );
 
-    // The three the checker knows about and the router does not, and the other
-    // way round, by name.
-    assert!(
-        Preset::from_name("prototype").is_some() && RulesPreset::from_name("prototype").is_none(),
-        "`prototype` is the checker's alone"
-    );
-    for ipc in ["ipc1", "ipc2", "ipc3"] {
+    for name in [
+        "jlcpcb",
+        "jlcpcb_2layer",
+        "jlcpcb_standard_2layer",
+        "jlcpcb_4layer",
+        "jlcpcb_advanced",
+        "oshpark",
+        "oshpark_4layer",
+        "pcbway",
+        "prototype",
+        "ipc1",
+        "ipc2",
+        "ipc3",
+    ] {
         assert!(
-            RulesPreset::from_name(ipc).is_some() && Preset::from_name(ipc).is_none(),
-            "{ipc} is the router's alone, and every CLI command refuses it"
+            Preset::from_name(name).is_some(),
+            "`--preset {name}` used to work, or was documented and refused"
         );
     }
+}
+
+#[test]
+fn prototype_kept_every_number_it_had() {
+    // `prototype` is not a fab: it was thirteen hand-written numbers in the
+    // checker's own table, and the merge moved it into the shared one. Moving
+    // a preset must not change what it checks, so this is the whole table.
+    let rules = Preset::Prototype.rules();
+
+    assert_eq!(rules.min_clearance, Nm::from_mm(0.2));
+    assert_eq!(rules.min_trace_width, Nm::from_mm(0.25));
+    assert_eq!(rules.min_drill_size, Nm::from_mm(0.4));
+    assert_eq!(rules.min_via_drill, Nm::from_mm(0.3));
+    assert_eq!(rules.min_via_diameter, Nm::from_mm(0.8));
+    assert_eq!(rules.min_annular_ring, Nm::from_mm(0.2));
+    assert_eq!(rules.min_silk_width, Nm::from_mm(0.2));
+    assert_eq!(rules.min_edge_clearance, Nm::from_mm(0.5));
+    assert_eq!(rules.min_hole_to_hole, Nm::from_mm(0.6));
+    assert_eq!(rules.min_solder_mask_bridge, Nm::from_mm(0.15));
+    assert_eq!(rules.solder_mask_expansion, Nm::from_mm(0.075));
+    assert_eq!(rules.min_silk_clearance, Nm::from_mm(0.2));
+    assert_eq!(rules.min_courtyard_clearance, Nm::from_mm(0.5));
 }

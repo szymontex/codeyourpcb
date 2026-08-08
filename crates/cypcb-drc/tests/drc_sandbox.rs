@@ -11,7 +11,7 @@
 use bevy_ecs::entity::Entity;
 use cypcb_core::{Nm, Point, Rect};
 use cypcb_drc::presets::DesignRules;
-use cypcb_drc::{run_drc, ViolationKind};
+use cypcb_drc::{run_drc, PresetRules, ViolationKind};
 use cypcb_world::components::trace::{Trace, TraceSegment, TraceSource, Via};
 use cypcb_world::components::zone::{Zone, ZoneKind};
 use cypcb_world::components::{

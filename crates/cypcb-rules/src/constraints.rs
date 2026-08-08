@@ -101,6 +101,23 @@ pub struct DesignConstraints {
     pub board_thickness: Nm,
     /// Minimum hole-to-hole spacing (edge to edge).
     pub min_hole_to_hole: Nm,
+    /// Smallest via pad a fab states, when it states one.
+    ///
+    /// `None` means it does not, and the checker derives one: the drill plus
+    /// two annular rings. A fab that says nothing about a rule is not the same
+    /// as a fab that requires whatever this project happens to default to, so
+    /// the three assembly-side rules the checker needs and a routing table has
+    /// no use for are optional rather than invented here.
+    #[serde(default)]
+    pub min_via_diameter: Option<Nm>,
+    /// Smallest gap between silkscreen and copper a fab states, when it states
+    /// one. `None` means the checker follows the silk width.
+    #[serde(default)]
+    pub min_silk_clearance: Option<Nm>,
+    /// Smallest gap between two part courtyards a fab states, when it states
+    /// one. `None` means the checker uses a conservative IPC-style value.
+    #[serde(default)]
+    pub min_courtyard_clearance: Option<Nm>,
     /// Minimum hole-to-board-edge spacing.
     pub min_hole_to_edge: Nm,
     /// Whether blind vias are allowed in this design.
@@ -123,7 +140,7 @@ impl DesignConstraints {
     /// count is a regression. It said 35 while the struct had 34, because
     /// nothing checked it - `field_count_matches_the_struct` does now, and a
     /// field added or removed without touching this line fails to compile.
-    pub const FIELD_COUNT: usize = 34;
+    pub const FIELD_COUNT: usize = 37;
 }
 
 impl Default for DesignConstraints {
@@ -176,6 +193,12 @@ impl Default for DesignConstraints {
             min_acid_trap: Nm::from_mm(0.127), // 5 mil
             max_copper_layers: 2,
             castellated_holes_allowed: false,
+
+            // The three assembly-side rules a routing table has no use for. None
+            // means this fab does not state one and the checker derives it.
+            min_via_diameter: None,
+            min_silk_clearance: None,
+            min_courtyard_clearance: None,
         }
     }
 }
@@ -221,6 +244,9 @@ mod tests {
             min_trace_width: _,
             min_drill_size: _,
             min_via_drill: _,
+            min_via_diameter: _,
+            min_silk_clearance: _,
+            min_courtyard_clearance: _,
             min_annular_ring: _,
             min_silk_width: _,
             min_edge_clearance: _,
@@ -253,7 +279,7 @@ mod tests {
             copper_weight_oz_x10: _,
         } = DesignConstraints::default();
 
-        let named = 34;
+        let named = 37;
         assert_eq!(
             DesignConstraints::FIELD_COUNT,
             named,

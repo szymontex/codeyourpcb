@@ -67,6 +67,12 @@ pub fn two_layer() -> DesignConstraints {
         min_acid_trap: Nm::from_mm(0.15), // 6 mil
         max_copper_layers: 2,
         castellated_holes_allowed: false,
+
+        // The three assembly-side rules a routing table has no use for. None
+        // means this fab does not state one and the checker derives it.
+        min_via_diameter: None,
+        min_silk_clearance: None,
+        min_courtyard_clearance: None,
     }
 }
 
@@ -152,6 +158,12 @@ pub fn four_layer() -> DesignConstraints {
         min_acid_trap: Nm::from_mm(0.127), // 5 mil
         max_copper_layers: 4,
         castellated_holes_allowed: false,
+
+        // The three assembly-side rules a routing table has no use for. None
+        // means this fab does not state one and the checker derives it.
+        min_via_diameter: None,
+        min_silk_clearance: None,
+        min_courtyard_clearance: None,
     }
 }
 

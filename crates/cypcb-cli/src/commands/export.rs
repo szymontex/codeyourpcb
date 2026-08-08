@@ -285,7 +285,7 @@ impl ExportCommand {
         // touching copper is not that call - the board cannot work - so it
         // stops here until `--force` says otherwise.
         {
-            use cypcb_drc::{run_drc, Preset as DrcPreset};
+            use cypcb_drc::{run_drc, Preset as DrcPreset, PresetRules};
             // Named the same way `cypcb check` names it, so the two commands
             // measure the same board against the same rules. A preset the
             // checker does not know is not a reason to stop an export.

@@ -23,7 +23,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use cypcb_drc::{run_drc, Preset};
+use cypcb_drc::{run_drc, Preset, PresetRules};
 use cypcb_world::footprint::FootprintLibrary;
 use cypcb_world::{sync_ast_to_world, BoardWorld};
 

@@ -39,7 +39,7 @@ pub mod presets;
 pub mod rules;
 pub mod violation;
 
-pub use presets::{DesignRules, Preset};
+pub use presets::{DesignRules, Preset, PresetRules};
 pub use rules::DrcRule;
 pub use violation::{DrcViolation, ViolationKind};
 

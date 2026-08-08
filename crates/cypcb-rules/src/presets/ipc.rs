@@ -69,6 +69,12 @@ pub fn class1() -> DesignConstraints {
         min_acid_trap: Nm::from_mm(0.2), // 8 mil
         max_copper_layers: 6,
         castellated_holes_allowed: false,
+
+        // The three assembly-side rules a routing table has no use for. None
+        // means this fab does not state one and the checker derives it.
+        min_via_diameter: None,
+        min_silk_clearance: None,
+        min_courtyard_clearance: None,
     }
 }
 
@@ -129,6 +135,12 @@ pub fn class2() -> DesignConstraints {
         min_acid_trap: Nm::from_mm(0.15), // 6 mil
         max_copper_layers: 8,
         castellated_holes_allowed: false,
+
+        // The three assembly-side rules a routing table has no use for. None
+        // means this fab does not state one and the checker derives it.
+        min_via_diameter: None,
+        min_silk_clearance: None,
+        min_courtyard_clearance: None,
     }
 }
 
@@ -189,6 +201,12 @@ pub fn class3() -> DesignConstraints {
         min_acid_trap: Nm::from_mm(0.1), // 4 mil
         max_copper_layers: 12,
         castellated_holes_allowed: false,
+
+        // The three assembly-side rules a routing table has no use for. None
+        // means this fab does not state one and the checker derives it.
+        min_via_diameter: None,
+        min_silk_clearance: None,
+        min_courtyard_clearance: None,
     }
 }
 
@@ -220,6 +238,42 @@ fn generic_2layer_stackup(name: &str) -> Stackup {
         name: name.into(),
         layers,
         total_thickness: total,
+    }
+}
+
+/// Prototyping - bigger than any fab requires, on purpose.
+///
+/// Not a manufacturer: larger minimums for hand-soldering, beginner designs
+/// and cheap fabrication, where yield matters more than density. It lived in
+/// the checker's own preset table as thirteen hand-written numbers while the
+/// router's table had no such preset at all; those thirteen are kept here
+/// exactly, so a board checked against `prototype` is measured by the same
+/// rules it always was.
+///
+/// Everything a checker does not read - signal integrity, thermal, stackup -
+/// is IPC Class 1, because a prototype is a consumer-class board and inventing
+/// numbers for it would be worse than saying where they came from.
+pub fn prototype() -> DesignConstraints {
+    DesignConstraints {
+        // The thirteen the checker reads, from the table this preset had.
+        min_clearance: Nm::from_mm(0.2),    // 8 mil
+        min_trace_width: Nm::from_mm(0.25), // 10 mil
+        min_drill_size: Nm::from_mm(0.4),
+        min_via_drill: Nm::from_mm(0.3),
+        min_annular_ring: Nm::from_mm(0.2),
+        min_silk_width: Nm::from_mm(0.2),
+        min_edge_clearance: Nm::from_mm(0.5),
+        min_hole_to_hole: Nm::from_mm(0.6),
+        min_solder_mask_bridge: Nm::from_mm(0.15),
+        solder_mask_expansion: Nm::from_mm(0.075),
+        // Stated rather than derived: a via pad big enough to solder by hand
+        // is the point of this preset, and courtyard spacing to match.
+        min_via_diameter: Some(Nm::from_mm(0.8)),
+        min_silk_clearance: Some(Nm::from_mm(0.2)),
+        min_courtyard_clearance: Some(Nm::from_mm(0.5)),
+
+        // The rest is IPC Class 1.
+        ..class1()
     }
 }
 
