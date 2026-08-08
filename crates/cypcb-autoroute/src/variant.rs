@@ -163,6 +163,25 @@ pub fn default_variant_configs() -> Vec<VariantConfig> {
         // free. Measured: multi_ic 336 -> 267 violations and 166 -> 106
         // shorts, stm32_breakout 239 -> 280 - one board's gain and another's
         // loss, which is what a variant is for.
+        //
+        // **The price is 5, not the 20 it shipped at, and the reason is time.**
+        // This variant wins `multi_ic` and was the slowest of the eight by
+        // 6.6x - 32.2s of a 92s best-of-eight run. Swept on all six fixtures
+        // (`pad_price_sweep`, release, 2026-08-08), price 5 against price 20,
+        // as violations / shorts and seconds:
+        //
+        //   led_blink        1 / 1   0.0s      1 / 1    0.0s
+        //   stm32_breakout 196 / 107 14.2s   248 / 147   8.9s
+        //   multi_ic       180 / 101  8.6s   165 /  86  33.3s
+        //   shift_driver    59 / 36   3.2s    59 /  36   3.1s
+        //   plane_board     22 / 14   0.5s    22 /  14   0.5s
+        //   qfp_fanout     448 / 265  4.6s   440 / 274   5.6s
+        //
+        // Read against each board's own noise band, 20 buys nothing: it is 15
+        // violations better on `multi_ic` inside a band of 65, 52 *worse* on
+        // `stm32_breakout` with 40 more shorts, identical on two boards and a
+        // wash on `qfp_fanout`. What it costs is 24.7s on the one board where
+        // this variant is chosen.
         VariantConfig {
             name: "PathFinder Pad Aware".to_string(),
             strategy: StrategyKind::PathFinder,
@@ -170,7 +189,7 @@ pub fn default_variant_configs() -> Vec<VariantConfig> {
             via_ring_penalty: 0.0,
             pad_zone_blocks_foreign_copper: false,
             reserve_trace_footprint: true,
-            foreign_pad_penalty: 20.0,
+            foreign_pad_penalty: 5.0,
             pad_zone_margin_cells: cypcb_autoroute_default_margin(),
         },
         VariantConfig {
