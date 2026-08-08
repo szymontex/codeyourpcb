@@ -577,6 +577,35 @@ ratchets, while `multi_ic` went 291 to 222 and `shift_driver` 65 to 49. A
 change that only writes a note is not supposed to have a before and after at
 all.
 
+### The fourth attempt: a hole count in the congestion map
+
+Built where the third attempt said it had to go. `CongestionMap` gained a
+`holes` array beside `ring` - how many vias pass through each cell, per layer -
+marked when a net's path is committed, unmarked when it is ripped up, and read
+by the search as `via_stack_penalty` per hole at the moment it decides to
+change layer. Nowhere else: that is the only place a via is *placed*.
+
+At 0.0 it reproduced the router exactly, every fixture byte for byte. Then:
+
+| stack price | stm32_breakout | multi_ic | qfp_fanout |
+|---|---|---|---|
+| 0 | 180 / 4 | 291 / 7 | 309 / 27 |
+| 5 | 180 / 4 | 291 / 7 | 309 / 27 |
+| 20 | 180 / 4 | 291 / 7 | 309 / 27 |
+| 100 | 180 / 4 | 291 / 7 | 309 / 27 |
+
+Identical at every price, down to the route and via counts. A term that costs
+a hundred and changes nothing is a term that is never charged, and **why** was
+not established before the budget for this attempt ran out. The most likely
+reading is that a net's holes are marked only once all of its paths are
+committed, so the same-net stacking - which is most of these violations,
+`VCC_3V3` against `VCC_3V3` - cannot see itself. Whoever picks this up should
+verify that before rebuilding it.
+
+Reverted. A knob that provably does nothing is worse than no knob: it reads
+like a lever and moves nothing, and the next person spends their fire finding
+that out again.
+
 So the memory a via-price term needs cannot live in the occupancy byte. It
 belongs beside `CongestionMap`'s ring array, which already carries per-cell
 counts the search reads as cost rather than as permission. Anyone starting
