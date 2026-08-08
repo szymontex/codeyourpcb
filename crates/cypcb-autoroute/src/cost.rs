@@ -12,54 +12,82 @@ const SQRT2: f64 = std::f64::consts::SQRT_2;
 
 /// PCB-aware cost calculator for A* search.
 ///
-/// Holds a reference to the design rules and the net currently being routed.
+/// Holds the net being routed and the answers the design rules gave for this
+/// board, read once at construction. It borrows nothing: every question the
+/// search asks is a table lookup, and the rule set is consulted only while
+/// this is being built.
 /// All cost methods are pure functions of the node positions and rules — the
 /// grid itself is not consulted here (that's the pathfinder's job when
 /// generating successors).
-pub struct RoutingCost<'a> {
-    /// Design rules for via cost, layer preference, clearance values.
-    rules: &'a dyn RoutingRuleSet,
+pub struct RoutingCost {
     /// The net being routed — used for net-specific constraint lookup.
     net_id: u32,
     /// Precomputed minimum via cost across all layer pairs (for heuristic).
     min_via_cost: f64,
-    /// Config-driven multiplier for via cost.
-    via_cost_multiplier: f64,
-    /// Layer preference bias: -1.0=bottom-heavy, 0.0=balanced, 1.0=top-heavy.
-    layer_preference: f64,
+    /// What a layer change from one layer to another costs, already
+    /// multiplied: `via[from * layers + to]`.
+    ///
+    /// `neighbor_cost` runs once per neighbour - eight to eleven times per
+    /// node expansion, millions of times per board - and it used to call
+    /// `rules.via_cost` and `rules.layer_change_cost` through a trait object
+    /// every time, for an answer that depends on nothing but two small
+    /// integers. A four-layer board has sixteen of those answers; they are
+    /// computed once here.
+    via: Vec<f64>,
+    /// The layer-preference bias per destination layer, already scaled.
+    bias: Vec<f64>,
+    /// How many layers the tables above are sized for.
+    layers: usize,
 }
 
-impl<'a> RoutingCost<'a> {
+impl RoutingCost {
     /// Create a new cost calculator for routing a specific net.
     pub fn new(
-        rules: &'a dyn RoutingRuleSet,
+        rules: &dyn RoutingRuleSet,
         net_id: u32,
         via_cost_multiplier: f64,
         layer_preference: f64,
+        layer_count: u8,
     ) -> Self {
-        // Precompute the minimum via cost for admissible heuristic.
-        // Sample a few common layer pairs.
+        // At least two, so a caller that knows nothing about the board still
+        // gets a table with a layer change in it.
+        let layers = (layer_count as usize).max(2);
+
+        let mut via = vec![0.0; layers * layers];
         let mut min_via = f64::MAX;
-        for from in 0..4u8 {
-            for to in 0..4u8 {
-                if from != to {
-                    let c = rules.via_cost(from, to);
-                    if c < min_via {
-                        min_via = c;
-                    }
+        for from in 0..layers {
+            for to in 0..layers {
+                let cost = rules.via_cost(from as u8, to as u8) * via_cost_multiplier;
+                via[from * layers + to] = cost;
+                if from != to && cost < min_via {
+                    min_via = cost;
                 }
             }
         }
         if min_via == f64::MAX {
-            min_via = 1.0; // fallback
+            min_via = via_cost_multiplier; // fallback
         }
 
+        // The bias a destination layer carries, with the asymmetry already
+        // applied: layer 0 is the top, everything else is towards the bottom.
+        let bias = (0..layers)
+            .map(|layer| {
+                let base = rules.layer_change_cost(layer as u8) * 0.1;
+                if layer_preference.abs() < f64::EPSILON {
+                    base
+                } else {
+                    let direction = if layer == 0 { -1.0 } else { 1.0 };
+                    base * (1.0 + layer_preference * direction)
+                }
+            })
+            .collect();
+
         Self {
-            rules,
             net_id,
-            min_via_cost: min_via * via_cost_multiplier,
-            via_cost_multiplier,
-            layer_preference,
+            min_via_cost: min_via,
+            via,
+            bias,
+            layers,
         }
     }
 
@@ -76,9 +104,9 @@ impl<'a> RoutingCost<'a> {
         let dx = (from.0 as i32 - to.0 as i32).unsigned_abs();
         let dy = (from.1 as i32 - to.1 as i32).unsigned_abs();
 
-        let mut cost = if from.2 != to.2 {
+        let cost = if from.2 != to.2 {
             // Layer transition (via) — position is same, only layer changes
-            self.rules.via_cost(from.2, to.2) * self.via_cost_multiplier
+            self.via_cost(from.2, to.2)
         } else if dx == 1 && dy == 1 {
             // Diagonal move
             SQRT2
@@ -87,20 +115,28 @@ impl<'a> RoutingCost<'a> {
             1.0
         };
 
-        // Add a layer-preference bias on the destination layer.
-        // When layer_preference > 0 (top-heavy), top layer (0) cost is reduced,
-        // bottom layer cost is increased. When < 0 (bottom-heavy), reversed.
-        let layer_bias = if self.layer_preference.abs() < f64::EPSILON {
-            // Balanced: use the old fixed bias
-            self.rules.layer_change_cost(to.2) * 0.1
-        } else {
-            // Asymmetric: layer 0 = top, others = bottom
-            let direction = if to.2 == 0 { -1.0 } else { 1.0 };
-            self.rules.layer_change_cost(to.2) * 0.1 * (1.0 + self.layer_preference * direction)
-        };
-        cost += layer_bias;
+        cost + self.layer_bias(to.2)
+    }
 
-        cost
+    /// What a layer change costs, from the table built for this board.
+    ///
+    /// A layer the table does not cover cannot be reached by the search that
+    /// built it; answering with the largest cost in the table keeps such a
+    /// move from looking cheap.
+    #[inline]
+    fn via_cost(&self, from: u8, to: u8) -> f64 {
+        let (from, to) = (from as usize, to as usize);
+        if from < self.layers && to < self.layers {
+            self.via[from * self.layers + to]
+        } else {
+            self.min_via_cost
+        }
+    }
+
+    /// The layer-preference bias for a destination layer.
+    #[inline]
+    fn layer_bias(&self, layer: u8) -> f64 {
+        self.bias.get(layer as usize).copied().unwrap_or(0.0)
     }
 
     /// Admissible heuristic: 3D octile distance.
@@ -173,7 +209,7 @@ mod tests {
     #[test]
     fn cardinal_move_costs_one() {
         let rules = TestRules::new();
-        let cost = RoutingCost::new(&rules, 0, 1.0, 0.0);
+        let cost = RoutingCost::new(&rules, 0, 1.0, 0.0, 4);
         let from: GridNode = (5, 5, 0);
         let to: GridNode = (6, 5, 0);
         let c = cost.neighbor_cost(from, to);
@@ -184,7 +220,7 @@ mod tests {
     #[test]
     fn diagonal_move_costs_sqrt2() {
         let rules = TestRules::new();
-        let cost = RoutingCost::new(&rules, 0, 1.0, 0.0);
+        let cost = RoutingCost::new(&rules, 0, 1.0, 0.0, 4);
         let from: GridNode = (5, 5, 0);
         let to: GridNode = (6, 6, 0);
         let c = cost.neighbor_cost(from, to);
@@ -194,7 +230,7 @@ mod tests {
     #[test]
     fn via_transition_costs_more_than_movement() {
         let rules = TestRules::new();
-        let cost = RoutingCost::new(&rules, 0, 1.0, 0.0);
+        let cost = RoutingCost::new(&rules, 0, 1.0, 0.0, 4);
         let cardinal = cost.neighbor_cost((5, 5, 0), (6, 5, 0));
         let via = cost.neighbor_cost((5, 5, 0), (5, 5, 1));
         assert!(
@@ -206,7 +242,7 @@ mod tests {
     #[test]
     fn heuristic_is_admissible_straight_line() {
         let rules = TestRules::new();
-        let cost = RoutingCost::new(&rules, 0, 1.0, 0.0);
+        let cost = RoutingCost::new(&rules, 0, 1.0, 0.0, 4);
         // Straight 10-cell path on same layer
         let h = cost.heuristic((0, 0, 0), (10, 0, 0));
         // Heuristic should be <= actual path cost (10 cardinal moves = 10.0)
@@ -216,7 +252,7 @@ mod tests {
     #[test]
     fn heuristic_diagonal_path() {
         let rules = TestRules::new();
-        let cost = RoutingCost::new(&rules, 0, 1.0, 0.0);
+        let cost = RoutingCost::new(&rules, 0, 1.0, 0.0, 4);
         // Diagonal 5-cell path
         let h = cost.heuristic((0, 0, 0), (5, 5, 0));
         // Pure diagonal: 5 * √2 ≈ 7.07
@@ -230,7 +266,7 @@ mod tests {
     #[test]
     fn heuristic_includes_layer_cost() {
         let rules = TestRules::new();
-        let cost = RoutingCost::new(&rules, 0, 1.0, 0.0);
+        let cost = RoutingCost::new(&rules, 0, 1.0, 0.0, 4);
         let same_layer = cost.heuristic((0, 0, 0), (5, 0, 0));
         let diff_layer = cost.heuristic((0, 0, 0), (5, 0, 1));
         assert!(
@@ -242,7 +278,7 @@ mod tests {
     #[test]
     fn straight_path_cheaper_than_zigzag() {
         let rules = TestRules::new();
-        let cost = RoutingCost::new(&rules, 0, 1.0, 0.0);
+        let cost = RoutingCost::new(&rules, 0, 1.0, 0.0, 4);
 
         // Straight path: (0,0) -> (1,0) -> (2,0) -> (3,0) -> (4,0)
         let straight_cost: f64 = [(0u16, 0u16), (1, 0), (2, 0), (3, 0)]

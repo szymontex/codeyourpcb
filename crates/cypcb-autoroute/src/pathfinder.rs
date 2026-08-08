@@ -308,7 +308,7 @@ mod tests {
     fn route_on_empty_grid() {
         let mut grid = make_test_grid(20, 20, 100_000, 1);
         let rules = TestRules::new();
-        let cost = RoutingCost::new(&rules, 1, 1.0, 0.0);
+        let cost = RoutingCost::new(&rules, 1, 1.0, 0.0, 2);
 
         let path = find_path(&mut grid, (0, 0, 0), (19, 19, 0), &cost, false);
         assert!(path.is_some(), "Should find path on empty grid");
@@ -343,7 +343,7 @@ mod tests {
     fn route_around_l_shaped_obstacle() {
         let mut grid = make_test_grid(20, 20, 100_000, 1);
         let rules = TestRules::new();
-        let cost = RoutingCost::new(&rules, 1, 1.0, 0.0);
+        let cost = RoutingCost::new(&rules, 1, 1.0, 0.0, 2);
 
         // Create L-shaped obstacle blocking the direct path from (2,2) to (17,17)
         // Vertical wall from (10, 0) to (10, 14)
@@ -373,7 +373,7 @@ mod tests {
     fn route_with_via_between_layers() {
         let mut grid = make_test_grid(20, 20, 100_000, 2);
         let rules = TestRules::new();
-        let cost = RoutingCost::new(&rules, 1, 1.0, 0.0);
+        let cost = RoutingCost::new(&rules, 1, 1.0, 0.0, 2);
 
         // Block the direct path on layer 0 with a wall
         for x in 0..20u32 {
@@ -403,7 +403,7 @@ mod tests {
     fn route_impossible_returns_none() {
         let mut grid = make_test_grid(10, 10, 100_000, 1);
         let rules = TestRules::new();
-        let cost = RoutingCost::new(&rules, 1, 1.0, 0.0);
+        let cost = RoutingCost::new(&rules, 1, 1.0, 0.0, 2);
 
         // Completely surround the target with obstacles
         let target = (7u32, 7u32);
@@ -434,7 +434,7 @@ mod tests {
     fn path_cells_marked_as_occupied() {
         let mut grid = make_test_grid(10, 10, 100_000, 1);
         let rules = TestRules::new();
-        let cost = RoutingCost::new(&rules, 42, 1.0, 0.0);
+        let cost = RoutingCost::new(&rules, 42, 1.0, 0.0, 2);
 
         let path = find_path(&mut grid, (0, 0, 0), (5, 0, 0), &cost, false);
         assert!(path.is_some());
@@ -454,7 +454,7 @@ mod tests {
     fn any_end_layer_mode() {
         let mut grid = make_test_grid(10, 10, 100_000, 2);
         let rules = TestRules::new();
-        let cost = RoutingCost::new(&rules, 1, 1.0, 0.0);
+        let cost = RoutingCost::new(&rules, 1, 1.0, 0.0, 2);
 
         // With any_end_layer = true, path can end on any layer
         let path = find_path(&mut grid, (0, 0, 0), (5, 5, 1), &cost, true);

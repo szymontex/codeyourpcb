@@ -383,6 +383,7 @@ pub fn route_all_nets(
                 net_id,
                 config.via_cost_multiplier,
                 config.params.layer_preference,
+                grid.layer_count(),
             );
 
             // Try to route directly
@@ -528,6 +529,7 @@ fn attempt_ripup_reroute(
             current_net_id,
             config.via_cost_multiplier,
             config.params.layer_preference,
+            grid.layer_count(),
         );
         if let Some(path) = find_path_with_zones(
             grid,
@@ -544,6 +546,7 @@ fn attempt_ripup_reroute(
                     victim_id,
                     config.via_cost_multiplier,
                     config.params.layer_preference,
+                    grid.layer_count(),
                 );
                 let mut victim_rerouted = Vec::new();
                 let mut victim_ok = true;
@@ -1010,7 +1013,7 @@ mod tests {
         };
 
         // Route net 1 horizontally through y=10 on layer 0
-        let cost1 = RoutingCost::new(&rules, 1, 1.0, 0.0);
+        let cost1 = RoutingCost::new(&rules, 1, 1.0, 0.0, 2);
         let path1 = find_path(&mut grid, (0, 10, 0), (29, 10, 0), &cost1, false);
         assert!(path1.is_some(), "Net 1 should route on empty grid");
 

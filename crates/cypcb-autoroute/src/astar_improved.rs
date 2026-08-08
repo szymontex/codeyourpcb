@@ -331,6 +331,7 @@ fn route_all_nets_improved(
                 net_id,
                 config.via_cost_multiplier,
                 config.params.layer_preference,
+                grid.layer_count(),
             );
 
             // Try direct routing first
@@ -478,6 +479,7 @@ fn attempt_multi_victim_ripup(
             current_net_id,
             config.via_cost_multiplier,
             config.params.layer_preference,
+            grid.layer_count(),
         );
         match find_path_with_zones(grid, start, end, &cost, any_end, pad_zones) {
             Some(path) => {
@@ -530,6 +532,7 @@ fn reroute_victim(
         victim_id,
         config.via_cost_multiplier,
         config.params.layer_preference,
+        grid.layer_count(),
     );
     let victim_pad_zones: Vec<PadZone> = victim_net
         .pads
@@ -777,7 +780,7 @@ mod tests {
         };
 
         // Route net 1 horizontally through y=10 on layer 0
-        let cost1 = RoutingCost::new(&rules, 1, 1.0, 0.0);
+        let cost1 = RoutingCost::new(&rules, 1, 1.0, 0.0, 2);
         let path1 = find_path(&mut grid, (0, 10, 0), (29, 10, 0), &cost1, false);
         assert!(path1.is_some(), "Net 1 should route on empty grid");
 

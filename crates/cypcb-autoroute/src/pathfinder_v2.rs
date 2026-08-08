@@ -1038,7 +1038,13 @@ fn find_path_congestion_augmented(
         return None;
     }
 
-    let cost_fn = RoutingCost::new(rules, net_id, via_cost_multiplier, layer_preference);
+    let cost_fn = RoutingCost::new(
+        rules,
+        net_id,
+        via_cost_multiplier,
+        layer_preference,
+        grid.layer_count(),
+    );
 
     let success = |node: GridNode| -> bool {
         node.0 == end.0 && node.1 == end.1 && (any_end_layer || node.2 == end.2)
