@@ -13,7 +13,7 @@ This file is the explicit capability and coverage contract for the project.
 - Primary owning slice: M004/S01
 - Supporting slices: none
 - Validation: 39 tests (unit + integration), CLI JSON output on 3 fixtures, ratsnest compatibility proof — M004/S01
-- Notes: Only need placement+netlist extraction (not full KiCad fidelity). Dimensions in mm, our model uses nm. Zones not yet extracted (no Zone type in ECS). Board outline is bounding-box only.
+- Notes: Only need placement+netlist extraction (not full KiCad fidelity). Dimensions in mm, our model uses nm. Board outline is bounding-box only. **The note that zones were not extracted because there is no `Zone` type in the ECS was true when it was written and is not now**: `cypcb-world` has `components::zone::Zone`, `cypcb-kicad`'s `parse_zone` builds a `ZoneImport`, and a pour that cannot be carried is refused by name rather than dropped.
 
 ### R102 — Benchmark Suite from Real KiCad Projects
 - Class: quality-attribute
@@ -106,13 +106,14 @@ This file is the explicit capability and coverage contract for the project.
 
 ### R110 — Realtime Tuning Parameters
 - Class: differentiator
-- Status: validated
+- Status: active
 - Description: User-facing sliders for: trace density/spacing preference, via cost (fewer vs more vias), corner rounding amount, layer preference (top-heavy vs balanced)
 - Why it matters: User wants autorouter to be "calkiem realtime" with interactive parameter control, not fire-and-forget
 - Source: user
 - Primary owning slice: M004/S05
 - Supporting slices: none
 - Validation: AutorouteParams struct with 4 fields (via_cost, layer_preference, roundness, density), WASM auto_route_with_params() entry point, collapsible tuning panel with 4 sliders, 300ms debounced re-routing, 8 unit + 4 integration + 7 E2E tests — M004/S05
+- **Not validated today**: the E2E tests this line counts are `test.describe.skip` in `viewer/e2e/tuning-panel.spec.ts`, because the Route split-button is `display:none` in `viewer/index.html`. The code exists and the engine answers; nothing in the shipped interface reaches it. Blocked on D5.
 - Notes: Parameters feed into routing cost function. Changing a slider triggers re-route.
 
 ### R111 — Reactive Re-Routing on Parameter Change
@@ -139,13 +140,14 @@ This file is the explicit capability and coverage contract for the project.
 
 ### R113 — Auto-Apply Best Variant with Hover Preview
 - Class: primary-user-loop
-- Status: validated
+- Status: active
 - Description: Route button auto-applies the highest-scored variant. Score panel shows all variants with metrics. Hovering an alternative variant previews it on canvas without applying.
 - Why it matters: "2 ale user może hoverować na inne rezultaty i je zobaczy na ekranie" — user picks with visual feedback
 - Source: user
 - Primary owning slice: M004/S06
 - Supporting slices: none
 - Validation: Route button calls auto_route_variants(), best variant auto-applied, panel shows ranked results with scores, hover renders cyan ghost overlay at 0.4 alpha with active traces dimmed. 7 E2E tests verify panel lifecycle, hover preview, click selection, and debug surface. — M004/S06
+- **Not validated today**: the E2E tests this line counts are `test.describe.skip` in `viewer/e2e/variant-panel.spec.ts`, because the Route split-button is `display:none` in `viewer/index.html`. The code exists and the engine answers; nothing in the shipped interface reaches it. Blocked on D5.
 - Notes: Canvas supports overlaying preview routes (different color/opacity) without mutating board state. Click-to-apply is display-only (doesn't re-route with clicked config).
 
 ### R114 — Benchmark Validation Against KiCad Reference Designs
@@ -161,13 +163,14 @@ This file is the explicit capability and coverage contract for the project.
 
 ### R115 — Visual Comparison of Routed Boards
 - Class: quality-attribute
-- Status: validated
+- Status: active
 - Description: Generate screenshots of autorouter output and reference designs for visual comparison. Store as benchmark artifacts.
 - Why it matters: "nawet obrazki możesz sobie po obrazkach porównywać" — metrics don't capture everything, visual diff catches layout quality issues
 - Source: user
 - Primary owning slice: M004/S07
 - Supporting slices: none
 - Validation: Playwright E2E captures 6 screenshots (full-page + canvas per fixture) to test-results/benchmark/ for human inspection — M004/S07
+- **Not validated today**: the E2E tests this line counts are `test.describe.skip` in `viewer/e2e/benchmark-screenshots.spec.ts`, because the Route split-button is `display:none` in `viewer/index.html`. The code exists and the engine answers; nothing in the shipped interface reaches it. Blocked on D5.
 - Notes: Uses existing 2D renderer. Full renderer upgrade is M005.
 
 ### R116 — Empirical Strategy Selection
@@ -350,9 +353,24 @@ This file is the explicit capability and coverage contract for the project.
 | R206 | quality-attribute | active | M005/S03 | none | unmapped |
 | R207 | core-capability | active | M005/S04 | none | unmapped |
 
+## Coverage gaps
+
+Test suites that do not run, and what that costs. A suite skipped without a
+line here is a coverage claim nobody can check; `the-requirements-name-every-skipped-suite`
+in the viewer's tests fails if this list and the specs disagree.
+
+| Suite | Why it is skipped |
+|---|---|
+| `viewer/e2e/tuning-panel.spec.ts` | The Route split-button and its dropdown are `display:none` in `viewer/index.html`. D5. |
+| `viewer/e2e/variant-panel.spec.ts` | Same wrapper: the variant panel only appears after a routing run started from that button. D5. |
+| `viewer/e2e/benchmark-screenshots.spec.ts` | Routes boards through the same hidden button. D5. |
+
 ## Coverage Summary
 
-- Active requirements: 9
+- Active requirements: 12
 - Mapped to slices: 21
-- Validated: 14
+- Validated: 11
 - Unmapped active requirements: 0
+- **Three requirements moved from validated to active on 2026-08-08**: R110,
+  R113 and R115 each cited E2E tests as their validation, and those suites are
+  skipped. A requirement is not validated by a test that does not run.
