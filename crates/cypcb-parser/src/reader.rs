@@ -20,10 +20,11 @@
 use crate::ast::{
     AssertDef, AssertExpression, AssertOperand, BoardDef, ComparisonOp, ComponentDef,
     ComponentKind, Definition, Dimension, FootprintDef, Identifier, ImplementsClause, ImportDef,
-    InterfaceDef, ModuleDef, ModuleInstance, NetAssignment, NetClassDef, NetConstraints, NetDef,
-    OutlineDef, PadDef, PadShape, PhysicalValue, PinDeclaration, PinId, PinRef, PortConnection,
-    PositionExpr, RotationExpr, SilkDef, SizeProperty, SourceFile, Span, StringLit, Tolerance,
-    ToleranceKind, TraceDef, TraceDirective, TracePath, TraceVia, ZoneDef, ZoneKind,
+    InterfaceDef, LayerType, ModuleDef, ModuleInstance, NetAssignment, NetClassDef, NetConstraints,
+    NetDef, OutlineDef, PadDef, PadShape, PhysicalValue, PinDeclaration, PinId, PinRef,
+    PortConnection, PositionExpr, RotationExpr, SilkDef, SizeProperty, SourceFile, Span,
+    StackupDef, StackupLayer, StringLit, Tolerance, ToleranceKind, TraceDef, TraceDirective,
+    TracePath, TraceVia, ZoneDef, ZoneKind,
 };
 use crate::errors::{ParseError, ParseResult};
 use crate::lexer::{tokenize, Token, TokenKind};
@@ -308,6 +309,104 @@ impl<'a> Reader<'a> {
         });
     }
 
+    /// A word inside a block that the block does not have.
+    ///
+    /// Every block body used to end in `_ => { self.bump(); }`, so `rotat 90`
+    /// in a component - one letter short of `rotate` - was read, dropped and
+    /// never mentioned: the part came out unrotated and `cypcb check` said the
+    /// board was fine. Measured against tree-sitter, which reported all six
+    /// blocks this reader stayed quiet about.
+    ///
+    /// One error per property, not per token: the offending word is named and
+    /// the rest of its line is skipped, so `zzz 5 6 7` is one complaint rather
+    /// than four.
+    fn unknown_property(&mut self, block: &str, known: &[&str]) {
+        let Some(token) = self.tokens.get(self.at) else {
+            self.unexpected(&format!("a property of `{block}`"));
+            return;
+        };
+        let span = token.span;
+        let found = self.source[span.start..span.end].to_string();
+        self.errors.push(ParseError::UnknownProperty {
+            block: block.to_string(),
+            found,
+            known: known.join(", "),
+            src: self.source.to_string(),
+            span: span.to_miette(),
+        });
+        self.skip_rest_of_line();
+    }
+
+    /// Skip to the next line, the closing brace, or the end of the file.
+    ///
+    /// Recovery for `unknown_property`. A property in this language is a line,
+    /// so the next token that starts on a new line is the next thing worth
+    /// reading.
+    fn skip_rest_of_line(&mut self) {
+        let Some(first) = self.tokens.get(self.at) else {
+            return;
+        };
+        let mut previous_end = first.span.end;
+        self.at += 1;
+
+        while let Some(token) = self.tokens.get(self.at) {
+            if token.kind == TokenKind::RBrace {
+                return;
+            }
+            if self.source[previous_end..token.span.start].contains('\n') {
+                return;
+            }
+            previous_end = token.span.end;
+            self.at += 1;
+        }
+    }
+
+    /// `stackup { copper 0.035mm  prepreg 0.2mm  core 1.2mm }` inside a board.
+    ///
+    /// Read because the board block refuses what it does not recognise now,
+    /// and tree-sitter has always accepted this. Nothing downstream consumes
+    /// `BoardDef::stackup`: the checker takes its stackup from the fab preset,
+    /// so this is read and held, which is exactly what the other reader does
+    /// with it.
+    fn stackup(&mut self) -> Option<StackupDef> {
+        let start = self.here();
+        self.bump(); // `stackup`
+        if !self.eat(&TokenKind::LBrace) {
+            self.unexpected("`{` after `stackup`");
+            return None;
+        }
+
+        let mut layers = Vec::new();
+        while !self.done() && !self.eat(&TokenKind::RBrace) {
+            let layer_start = self.here();
+            let Some(word) = self.peek_ident().map(str::to_string) else {
+                self.unknown_property("stackup", &["copper", "prepreg", "core", "mask", "silk"]);
+                continue;
+            };
+            let Some(layer_type) = LayerType::from_str(&word) else {
+                self.unknown_property("stackup", &["copper", "prepreg", "core", "mask", "silk"]);
+                continue;
+            };
+            self.bump();
+            // A thickness is optional, and the next line's layer name is not
+            // one, so only a number starts it.
+            let thickness = match self.peek() {
+                Some(TokenKind::Number(_)) => self.dimension(),
+                _ => None,
+            };
+            layers.push(StackupLayer {
+                layer_type,
+                thickness,
+                span: Span::new(layer_start, self.behind()),
+            });
+        }
+
+        Some(StackupDef {
+            layers,
+            span: Span::new(start, self.behind()),
+        })
+    }
+
     /// Walk to the start of the next top-level definition.
     ///
     /// Braces are counted so a bad line inside a block does not make the rest
@@ -367,6 +466,7 @@ impl<'a> Reader<'a> {
 
         let mut size = None;
         let mut layers = None;
+        let mut stackup = None;
 
         while !self.done() && !self.eat(&TokenKind::RBrace) {
             let property_start = self.here();
@@ -394,10 +494,8 @@ impl<'a> Reader<'a> {
                         None => self.unexpected("a layer count"),
                     }
                 }
-                _ => {
-                    // stackup and anything else: step two.
-                    self.bump();
-                }
+                Some("stackup") => stackup = self.stackup(),
+                _ => self.unknown_property("board", &["size", "layers", "stackup"]),
             }
         }
 
@@ -405,7 +503,7 @@ impl<'a> Reader<'a> {
             name,
             size,
             layers,
-            stackup: None,
+            stackup,
             span: Span::new(start, self.behind()),
         })
     }
@@ -516,9 +614,10 @@ impl<'a> Reader<'a> {
                             _ => self.unexpected("a net assignment like `pin.1 = VCC`"),
                         }
                     }
-                    _ => {
-                        self.bump();
-                    }
+                    _ => self.unknown_property(
+                        "component",
+                        &["value", "at", "rotate", "pin.<N> = <NET>"],
+                    ),
                 }
             }
         }
@@ -623,9 +722,7 @@ impl<'a> Reader<'a> {
                         None => self.unexpected("a current like `500mA`"),
                     }
                 }
-                _ => {
-                    self.bump();
-                }
+                _ => self.unknown_property("net constraint", &["width", "clearance", "current"]),
             }
         }
 
@@ -749,9 +846,10 @@ impl<'a> Reader<'a> {
                             span: Span::new(directive_start, self.behind()),
                         }));
                     }
-                    _ => {
-                        self.bump();
-                    }
+                    _ => self.unknown_property(
+                        "trace",
+                        &["from", "to", "path", "layer", "width", "via", "locked"],
+                    ),
                 }
             }
         }
@@ -818,7 +916,7 @@ impl<'a> Reader<'a> {
                     None => self.skip_to_next_property(),
                 },
                 _ => {
-                    self.bump();
+                    self.unknown_property("footprint", &["description", "courtyard", "pad", "silk"])
                 }
             }
         }
@@ -998,9 +1096,7 @@ impl<'a> Reader<'a> {
                         None => self.unexpected("a net name"),
                     }
                 }
-                _ => {
-                    self.bump();
-                }
+                _ => self.unknown_property("zone", &["bounds", "layer", "net"]),
             }
         }
 
@@ -1197,9 +1293,10 @@ impl<'a> Reader<'a> {
                         None => self.unexpected("an interface name"),
                     }
                 }
-                _ => {
-                    self.bump();
-                }
+                _ => self.unknown_property(
+                    "module",
+                    &["pin", "implements", "component", "net", "use", "assert"],
+                ),
             }
         }
 

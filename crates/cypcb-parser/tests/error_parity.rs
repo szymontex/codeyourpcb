@@ -46,6 +46,42 @@ const BAD: &[Case] = &[
         what: "a pad with no shape",
         source: "footprint F {\n    pad 1 at 0mm, 0mm size 1mm x 1mm\n}\n",
     },
+    // A word the block does not have. Each of these was accepted in silence by
+    // the Rust reader: every block body ended in `_ => { self.bump(); }`, so a
+    // typo was indistinguishable from a comment and the property it was meant
+    // to be simply did not happen.
+    Case {
+        what: "a word a board does not have",
+        source: "board t {\n    size 30mm x 20mm\n    layerz 2\n}\n",
+    },
+    Case {
+        what: "a word a component does not have",
+        source: "board t { layers 2 }\ncomponent R1 resistor \"0402\" {\n    at 1mm, 1mm\n    rotat 90\n}\n",
+    },
+    Case {
+        what: "a word a net does not have",
+        source: "board t { layers 2 }\ncomponent R1 resistor \"0402\" { at 1mm, 1mm }\nnet VCC {\n    zzz\n}\n",
+    },
+    Case {
+        what: "a word a trace does not have",
+        source: "board t { layers 2 }\ntrace VCC {\n    from R1.1\n    to R2.1\n    widht 0.3mm\n}\n",
+    },
+    Case {
+        what: "a word a footprint does not have",
+        source: "footprint F {\n    padd 1 rect at 0mm, 0mm size 1mm x 1mm\n}\n",
+    },
+    Case {
+        what: "a word a zone does not have",
+        source: "board t { layers 2 }\nzone GND {\n    layerr Top\n    bounds 0mm, 0mm to 10mm, 10mm\n}\n",
+    },
+    Case {
+        what: "a word a module does not have",
+        source: "board t { layers 2 }\nmodule M {\n    pinn IN\n}\n",
+    },
+    Case {
+        what: "a word an interface does not have",
+        source: "interface I2C {\n    pinn SDA\n}\n",
+    },
 ];
 
 const GOOD: &[Case] = &[
@@ -66,6 +102,14 @@ const GOOD: &[Case] = &[
         source: "board t { size 30mm x 20mm layers 2 }\n\
                  module Div {\n  component R1 resistor \"0402\" { at 1mm, 1mm }\n  pin OUT\n}\n\
                  use Div as D1 at 5mm, 5mm { OUT = SENSE }\n",
+    },
+    // A board block refuses what it does not recognise now, and this is the
+    // construct that made that dangerous: `stackup` is real, tree-sitter has
+    // always read it, and the Rust reader used to fall into the same silent
+    // arm that swallowed typos. It reads it now.
+    Case {
+        what: "a board with a stackup",
+        source: "board t {\n    size 30mm x 20mm\n    layers 4\n    stackup {\n        copper 0.035mm\n        prepreg 0.2mm\n        core 1.2mm\n        copper 0.035mm\n    }\n}\n",
     },
 ];
 
@@ -173,4 +217,41 @@ fn an_error_points_at_the_fault_rather_than_at_the_start_of_the_file() {
         "the two readers point {} bytes apart, which is not the same fault",
         offset.abs_diff(their_offset)
     );
+}
+
+/// The two readers have to agree on what a stackup *is*, not only that it is
+/// allowed. `differential.rs` compares whole ASTs, but only over `examples/`,
+/// and no example declares one.
+#[test]
+fn both_readers_read_the_same_stackup() {
+    let source = "board t {\n    size 30mm x 20mm\n    layers 4\n    stackup {\n        copper 0.035mm\n        prepreg 0.2mm\n        core 1.2mm\n        copper 0.035mm\n    }\n}\n";
+
+    let expected = parse(source);
+    let actual = reader::read(source);
+    assert!(
+        expected.errors.is_empty(),
+        "tree-sitter: {:?}",
+        expected.errors
+    );
+    assert!(actual.errors.is_empty(), "reader: {:?}", actual.errors);
+
+    let layers_of = |file: &cypcb_parser::SourceFile| -> Vec<String> {
+        file.definitions
+            .iter()
+            .filter_map(|def| match def {
+                cypcb_parser::ast::Definition::Board(board) => board.stackup.as_ref(),
+                _ => None,
+            })
+            .flat_map(|stackup| stackup.layers.iter())
+            .map(|layer| format!("{:?} {:?}", layer.layer_type, layer.thickness.is_some()))
+            .collect()
+    };
+
+    let from_tree_sitter = layers_of(&expected.value);
+    assert_eq!(
+        from_tree_sitter.len(),
+        4,
+        "the fixture declares four layers and tree-sitter has to see them"
+    );
+    assert_eq!(layers_of(&actual.value), from_tree_sitter);
 }

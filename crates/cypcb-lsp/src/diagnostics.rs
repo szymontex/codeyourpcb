@@ -113,6 +113,16 @@ fn parse_error_to_diagnostic(doc: &DocumentState, error: &ParseError) -> Option<
         ParseError::InvalidTolerance { message, span, .. } => {
             (format!("Invalid tolerance: {}", message), span)
         }
+        ParseError::UnknownProperty {
+            block,
+            found,
+            known,
+            span,
+            ..
+        } => (
+            format!("`{block}` has no property `{found}`. It takes: {known}"),
+            span,
+        ),
     };
 
     let (start_line, start_col, end_line, end_col) = span_to_positions(doc, span);
@@ -145,6 +155,7 @@ fn error_code(error: &ParseError) -> String {
         ParseError::InvalidAssert { .. } => "invalid-assert",
         ParseError::InvalidPhysicalUnit { .. } => "invalid-physical-unit",
         ParseError::InvalidTolerance { .. } => "invalid-tolerance",
+        ParseError::UnknownProperty { .. } => "unknown-property",
     }
     .to_string()
 }

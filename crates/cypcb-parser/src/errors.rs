@@ -36,6 +36,29 @@ pub enum ParseError {
         span: SourceSpan,
     },
 
+    /// A word inside a block that the block does not have.
+    ///
+    /// Every block body in the Rust reader used to end in a silent skip, so
+    /// `rotat 90` in a component - one letter short of `rotate` - was read,
+    /// dropped and never mentioned: the part came out unrotated and the
+    /// checker called the board fine.
+    #[error("`{block}` has no property `{found}`")]
+    #[diagnostic(code(cypcb::parse::unknown_property), help("`{block}` takes: {known}"))]
+    UnknownProperty {
+        /// The block the word was written in.
+        block: String,
+        /// The word itself.
+        found: String,
+        /// The properties the block does take, comma separated.
+        known: String,
+        /// The source code being parsed.
+        #[source_code]
+        src: String,
+        /// Location of the word.
+        #[label("not a property of `{block}`")]
+        span: SourceSpan,
+    },
+
     /// An unknown component type was specified.
     #[error("Unknown component type: '{name}'")]
     #[diagnostic(
