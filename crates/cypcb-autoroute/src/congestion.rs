@@ -20,6 +20,22 @@
 /// Tracks per-cell occupancy (how many nets use each cell), present cost
 /// (derived from current overuse), and history cost (accumulated over
 /// iterations for persistently overused cells).
+/// What the map knows about one cell of one layer.
+///
+/// Sixteen bytes, so four of them share a cache line, and the three numbers
+/// `congestion_cost` needs arrive together.
+#[derive(Clone, Copy, Default)]
+struct Cell {
+    /// Accumulated cost from iterations where this cell was overused.
+    history: f64,
+    /// How many nets are on it now.
+    occupancy: u16,
+    /// How many via rings cover it.
+    ring: u16,
+    /// How many via holes are in it.
+    holes: u32,
+}
+
 pub struct CongestionMap {
     /// Width of the grid in cells.
     width: u32,
@@ -28,12 +44,17 @@ pub struct CongestionMap {
     /// Number of routing layers.
     layers: u8,
 
-    /// Historical congestion cost per cell: `[layer][y * width + x]`.
-    /// Accumulates over iterations for overused cells.
-    history_cost: Vec<Vec<f64>>,
+    /// Every cell of every layer, `cells[layer * plane + y * width + x]`.
+    ///
+    /// This was four `Vec<Vec<_>>` - history, occupancy, rings, holes - and
+    /// `congestion_cost` reads three of them at the same index on every
+    /// neighbour the search looks at. Three separate maps means three pointer
+    /// chases and three cache lines for one cell; one array of 16-byte cells
+    /// means one line, and four cells share it.
+    cells: Vec<Cell>,
 
-    /// Number of nets currently occupying each cell: `[layer][y * width + x]`.
-    occupancy: Vec<Vec<u16>>,
+    /// How many cells one layer holds: `width * height`.
+    plane: usize,
 
     /// Cell capacity (typically 1 for PCB routing — one net per cell).
     capacity: u16,
@@ -45,7 +66,6 @@ pub struct CongestionMap {
     /// cell occupied once costs nothing - the formula charges for overuse, not
     /// for presence - so a route could cross a ring for free until a later
     /// iteration built history on it.
-    ring: Vec<Vec<u16>>,
 
     /// What a cell costs per ring covering it.
     ///
@@ -58,7 +78,6 @@ pub struct CongestionMap {
     /// nothing in the search could tell that a cell already held one. Kept
     /// apart from `ring` because the two are charged for different acts:
     /// crossing a ring, against placing a second hole.
-    holes: Vec<Vec<u32>>,
 
     /// What it costs to change layer where a hole already is.
     stack_penalty: f64,
@@ -76,12 +95,10 @@ impl CongestionMap {
             width,
             height,
             layers,
-            history_cost: (0..layers).map(|_| vec![0.0; cell_count]).collect(),
-            occupancy: (0..layers).map(|_| vec![0u16; cell_count]).collect(),
+            cells: vec![Cell::default(); cell_count * layers as usize],
+            plane: cell_count,
             capacity: 1,
-            ring: (0..layers).map(|_| vec![0u16; cell_count]).collect(),
             ring_penalty: 0.0,
-            holes: vec![vec![0; (width as usize) * (height as usize)]; layers as usize],
             stack_penalty: 0.0,
         }
     }
@@ -100,7 +117,7 @@ impl CongestionMap {
     pub fn mark_holes(&mut self, cells: &[(u32, u32, u8)]) {
         for &(x, y, layer) in cells {
             if let Some(idx) = self.cell_index(x, y, layer) {
-                self.holes[layer as usize][idx] = self.holes[layer as usize][idx].saturating_add(1);
+                self.cells[idx].holes = self.cells[idx].holes.saturating_add(1);
             }
         }
     }
@@ -109,7 +126,7 @@ impl CongestionMap {
     pub fn unmark_holes(&mut self, cells: &[(u32, u32, u8)]) {
         for &(x, y, layer) in cells {
             if let Some(idx) = self.cell_index(x, y, layer) {
-                self.holes[layer as usize][idx] = self.holes[layer as usize][idx].saturating_sub(1);
+                self.cells[idx].holes = self.cells[idx].holes.saturating_sub(1);
             }
         }
     }
@@ -117,7 +134,7 @@ impl CongestionMap {
     /// What a via at this cell costs on top of everything else.
     pub fn stacking_cost(&self, x: u32, y: u32, layer: u8) -> f64 {
         match self.cell_index(x, y, layer) {
-            Some(idx) => self.stack_penalty * self.holes[layer as usize][idx] as f64,
+            Some(idx) => self.stack_penalty * self.cells[idx].holes as f64,
             None => 0.0,
         }
     }
@@ -129,17 +146,14 @@ impl CongestionMap {
     /// step, swept a knob that turned out never to be charged, and cost a
     /// fire to find out - see `docs/routing.md`.
     pub fn total_holes(&self) -> u64 {
-        self.holes
-            .iter()
-            .map(|layer| layer.iter().map(|&n| n as u64).sum::<u64>())
-            .sum()
+        self.cells.iter().map(|cell| cell.holes as u64).sum()
     }
 
     /// Record the cells a net's via rings cover.
     pub fn mark_rings(&mut self, cells: &[(u32, u32, u8)]) {
         for &(x, y, layer) in cells {
             if let Some(idx) = self.cell_index(x, y, layer) {
-                self.ring[layer as usize][idx] = self.ring[layer as usize][idx].saturating_add(1);
+                self.cells[idx].ring = self.cells[idx].ring.saturating_add(1);
             }
         }
     }
@@ -148,7 +162,7 @@ impl CongestionMap {
     pub fn unmark_rings(&mut self, cells: &[(u32, u32, u8)]) {
         for &(x, y, layer) in cells {
             if let Some(idx) = self.cell_index(x, y, layer) {
-                self.ring[layer as usize][idx] = self.ring[layer as usize][idx].saturating_sub(1);
+                self.cells[idx].ring = self.cells[idx].ring.saturating_sub(1);
             }
         }
     }
@@ -160,8 +174,7 @@ impl CongestionMap {
     pub fn mark_net(&mut self, cells: &[(u32, u32, u8)]) {
         for &(x, y, layer) in cells {
             if let Some(idx) = self.cell_index(x, y, layer) {
-                self.occupancy[layer as usize][idx] =
-                    self.occupancy[layer as usize][idx].saturating_add(1);
+                self.cells[idx].occupancy = self.cells[idx].occupancy.saturating_add(1);
             }
         }
     }
@@ -173,8 +186,7 @@ impl CongestionMap {
     pub fn unmark_net(&mut self, cells: &[(u32, u32, u8)]) {
         for &(x, y, layer) in cells {
             if let Some(idx) = self.cell_index(x, y, layer) {
-                self.occupancy[layer as usize][idx] =
-                    self.occupancy[layer as usize][idx].saturating_sub(1);
+                self.cells[idx].occupancy = self.cells[idx].occupancy.saturating_sub(1);
             }
         }
     }
@@ -185,12 +197,10 @@ impl CongestionMap {
     /// history cost. This prevents oscillation — cells that are repeatedly
     /// overused accumulate cost, discouraging future nets from using them.
     pub fn update_history(&mut self, alpha: f64) {
-        for layer in 0..self.layers as usize {
-            let cap = self.capacity;
-            for idx in 0..self.occupancy[layer].len() {
-                if self.occupancy[layer][idx] > cap {
-                    self.history_cost[layer][idx] += alpha;
-                }
+        let cap = self.capacity;
+        for cell in &mut self.cells {
+            if cell.occupancy > cap {
+                cell.history += alpha;
             }
         }
     }
@@ -206,27 +216,27 @@ impl CongestionMap {
             Some(i) => i,
             None => return 0.0,
         };
-        let li = layer as usize;
-        let history = self.history_cost[li][idx];
-        let occ = self.occupancy[li][idx];
-        let overuse = if occ > self.capacity {
-            (occ - self.capacity) as f64
+        // SAFETY: `cell_index` returned `Some`, which it does only after
+        // checking x, y and layer against this map's own bounds.
+        let cell = unsafe { *self.cells.get_unchecked(idx) };
+        let overuse = if cell.occupancy > self.capacity {
+            (cell.occupancy - self.capacity) as f64
         } else {
             0.0
         };
-        let rings = self.ring[li][idx] as f64;
-        (1.0 + history) * (1.0 + overuse) - 1.0 + self.ring_penalty * rings
+        (1.0 + cell.history) * (1.0 + overuse) - 1.0 + self.ring_penalty * cell.ring as f64
     }
 
     /// Return a list of all overused cells (occupancy > capacity).
     pub fn overused_cells(&self) -> Vec<(u32, u32, u8)> {
         let mut result = Vec::new();
         for layer in 0..self.layers {
-            let li = layer as usize;
             for y in 0..self.height {
                 for x in 0..self.width {
-                    let idx = (y as usize) * (self.width as usize) + (x as usize);
-                    if self.occupancy[li][idx] > self.capacity {
+                    let idx = layer as usize * self.plane
+                        + (y as usize) * (self.width as usize)
+                        + (x as usize);
+                    if self.cells[idx].occupancy > self.capacity {
                         result.push((x, y, layer));
                     }
                 }
@@ -243,10 +253,9 @@ impl CongestionMap {
     /// Count the number of overused cells.
     pub fn overuse_count(&self) -> usize {
         let cap = self.capacity;
-        self.occupancy
+        self.cells
             .iter()
-            .flat_map(|layer| layer.iter())
-            .filter(|&&occ| occ > cap)
+            .filter(|cell| cell.occupancy > cap)
             .count()
     }
 
@@ -256,7 +265,7 @@ impl CongestionMap {
         if x >= self.width || y >= self.height || layer >= self.layers {
             return None;
         }
-        Some((y as usize) * (self.width as usize) + (x as usize))
+        Some(layer as usize * self.plane + (y as usize) * (self.width as usize) + (x as usize))
     }
 }
 
