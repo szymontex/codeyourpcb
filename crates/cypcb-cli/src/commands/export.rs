@@ -77,6 +77,14 @@ impl ExportCommand {
 
     /// Run the export command.
     pub fn run(&self) -> Result<()> {
+        // A KiCad board goes to the importer. `export` is the command whose
+        // output goes to a fabricator, so a board this project can read is a
+        // board this project should be able to send.
+        if crate::board_source::is_kicad(&self.input) {
+            let loaded = crate::board_source::load_kicad(&self.input)?;
+            return self.export_board(loaded.world, loaded.library);
+        }
+
         // Read input file
         let source = std::fs::read_to_string(&self.input)
             .into_diagnostic()
@@ -133,6 +141,12 @@ impl ExportCommand {
             eprintln!("{:?}", miette::Report::new(warning.clone()));
         }
 
+        self.export_board(world, library)
+    }
+
+    /// Everything that happens once a board exists, whichever file it came
+    /// from.
+    fn export_board(&self, mut world: BoardWorld, library: FootprintLibrary) -> Result<()> {
         let mut preset = self.resolve_preset()?;
 
         if self.no_assembly {

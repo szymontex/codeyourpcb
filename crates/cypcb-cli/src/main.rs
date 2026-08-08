@@ -25,6 +25,7 @@
 use clap::{Parser, Subcommand};
 use miette::Result;
 
+mod board_source;
 mod commands;
 
 /// CodeYourPCB - Code-first PCB design

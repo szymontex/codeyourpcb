@@ -38,6 +38,15 @@ fn line_of(source: &str, offset: usize) -> usize {
 impl CheckCommand {
     /// Run the check command.
     pub fn run(&self) -> Result<()> {
+        // A KiCad board goes to the importer, and everything below this point
+        // is the same for both. Without this the file went to the DSL parser
+        // and came back with `Missing a definition` pointing at `(kicad_pcb`,
+        // which told the reader nothing about what was wrong.
+        if crate::board_source::is_kicad(&self.file) {
+            let loaded = crate::board_source::load_kicad(&self.file)?;
+            return self.check_board(loaded.world, &loaded.source);
+        }
+
         let source = std::fs::read_to_string(&self.file)
             .into_diagnostic()
             .wrap_err_with(|| format!("Failed to read {}", self.file.display()))?;
@@ -79,6 +88,12 @@ impl CheckCommand {
             eprintln!("{:?}", miette::Report::new(warning.clone()));
         }
 
+        self.check_board(world, &source)
+    }
+
+    /// Everything that happens once a board exists, whichever file it came
+    /// from.
+    fn check_board(&self, mut world: BoardWorld, source: &str) -> Result<()> {
         if self.no_drc {
             println!(
                 "OK: {} parsed and validated (DRC skipped)",
@@ -126,7 +141,7 @@ impl CheckCommand {
             // to jump to.
             let where_written = world
                 .get::<cypcb_world::components::SourceSpan>(violation.entity)
-                .map(|span| line_of(&source, span.start_byte))
+                .map(|span| line_of(source, span.start_byte))
                 .map(|line| format!("{}:{}: ", self.file.display(), line))
                 .unwrap_or_default();
 
