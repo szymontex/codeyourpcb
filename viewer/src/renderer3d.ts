@@ -110,6 +110,44 @@ function addCopperMesh(
   group.add(mesh);
 }
 
+/**
+ * Every drilled hole a board's pads carry, in millimetres, with the component
+ * rotation already applied.
+ *
+ * The 3D view built drilled cylinders for vias and nothing else, so a board
+ * full of through-hole parts came out solid: a connector's pins showed their
+ * copper on both faces with no hole between them, and a mounting hole - which
+ * has no copper at all - showed nothing whatsoever.
+ *
+ * Kept separate from the three.js work so the geometry decision can be
+ * checked without a WebGL context: what is drilled, where, and how wide.
+ */
+export function padDrills(
+  components: ComponentInfo[],
+): { x: number; y: number; diameter: number }[] {
+  const drills: { x: number; y: number; diameter: number }[] = [];
+
+  for (const comp of components) {
+    const radians = (comp.rotation_mdeg / 1000) * (Math.PI / 180);
+    const cosR = Math.cos(radians);
+    const sinR = Math.sin(radians);
+
+    for (const pad of comp.pads) {
+      if (!pad.drill_nm) continue;
+
+      const padXmm = pad.x_nm * NM_TO_MM;
+      const padYmm = pad.y_nm * NM_TO_MM;
+      drills.push({
+        x: comp.x_nm * NM_TO_MM + (padXmm * cosR - padYmm * sinR),
+        y: comp.y_nm * NM_TO_MM + (padXmm * sinR + padYmm * cosR),
+        diameter: pad.drill_nm * NM_TO_MM,
+      });
+    }
+  }
+
+  return drills;
+}
+
 export class Renderer3D {
   private renderer: THREE.WebGLRenderer | null = null;
   private scene: THREE.Scene | null = null;
@@ -134,6 +172,7 @@ export class Renderer3D {
   private _traceSegmentCount = 0;
   private _padCount = 0;
   private _viaCount = 0;
+  private _padDrillCount = 0;
 
   /** Loaded GLTF models: refdes → Group */
   private loadedModels: Map<string, THREE.Group> = new Map();
@@ -936,7 +975,47 @@ export class Renderer3D {
 
     this._padCount = padCount;
 
-    console.log(`[3D] Built ${padCount} pads`);
+    // The holes themselves. One template cylinder scaled per drill, the way
+    // the vias are done, and a board thickness plus a hair so the ends are
+    // never coplanar with the faces.
+    const drills = padDrills(components);
+    this._padDrillCount = drills.length;
+    if (drills.length > 0) {
+      const template = new THREE.CylinderGeometry(
+        0.5,
+        0.5,
+        BOARD_THICKNESS_MM + 0.02,
+        16,
+        1,
+        false,
+      );
+      template.rotateX(Math.PI / 2);
+
+      const drillMesh = new THREE.InstancedMesh(
+        template,
+        new THREE.MeshStandardMaterial({
+          color: 0x0a0a0a, // The same dark void a via's hole is drawn with.
+          metalness: 0.1,
+          roughness: 0.9,
+        }),
+        drills.length,
+      );
+      drillMesh.name = 'pad-drills';
+
+      const matrix = new THREE.Matrix4();
+      for (let i = 0; i < drills.length; i++) {
+        const drill = drills[i];
+        // The template is a unit-diameter cylinder, so the diameter is the
+        // scale. Z is left alone: a drilled hole goes through the board.
+        matrix.makeScale(drill.diameter, drill.diameter, 1);
+        matrix.setPosition(drill.x, drill.y, 0);
+        drillMesh.setMatrixAt(i, matrix);
+      }
+      drillMesh.instanceMatrix.needsUpdate = true;
+      topGroup.add(drillMesh);
+    }
+
+    console.log(`[3D] Built ${padCount} pads, ${drills.length} pad drills`);
   }
 
   /**
@@ -1532,6 +1611,7 @@ export class Renderer3D {
     this._traceSegmentCount = 0;
     this._padCount = 0;
     this._viaCount = 0;
+    this._padDrillCount = 0;
     this._objModelCount = 0;
   }
 
@@ -1564,6 +1644,7 @@ export class Renderer3D {
       get traceSegmentCount() { return self._traceSegmentCount; },
       get padCount() { return self._padCount; },
       get viaCount() { return self._viaCount; },
+      get padDrillCount() { return self._padDrillCount; },
       get objModelCount() { return self._objModelCount; },
     };
   }

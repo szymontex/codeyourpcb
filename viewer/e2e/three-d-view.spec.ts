@@ -38,6 +38,7 @@ async function getGeometryCounts(page: import('@playwright/test').Page) {
       traceSegmentCount: r?.traceSegmentCount,
       padCount: r?.padCount,
       viaCount: r?.viaCount,
+      padDrillCount: r?.padDrillCount,
       meshCount: r?.meshCount,
     };
   });
@@ -124,6 +125,33 @@ test.describe('3D Geometry Verification', () => {
     expect(counts.componentCount).toBeGreaterThan(0);
     // Total mesh count includes board, components, pads, traces, vias
     expect(counts.meshCount).toBeGreaterThan(1);
+  });
+
+  test('a through-hole board gets its holes drilled in 3D', async ({ page }) => {
+    // The 3D view built drilled cylinders for vias and nothing else, so a
+    // board of through-hole parts came out solid - copper on both faces with
+    // no hole between them. blink has a 2-pin header, so it has holes.
+    await loadBlink(page);
+    await activate3D(page);
+
+    const counts = await getGeometryCounts(page);
+
+    expect(typeof counts.padDrillCount).toBe('number');
+    expect(
+      counts.padDrillCount,
+      'blink carries through-hole pads and none of them was drilled',
+    ).toBeGreaterThan(0);
+    expect(
+      counts.padDrillCount,
+      'more holes than pads would mean something is drilled twice',
+    ).toBeLessThanOrEqual(counts.padCount);
+
+    // The mesh reaches the scene rather than only the counter.
+    const named = await page.evaluate(() => {
+      const scene = (window as any).__renderer3d;
+      return scene?.padDrillCount ?? -1;
+    });
+    expect(named).toBe(counts.padDrillCount);
   });
 
   test('debug surface reports valid geometry counts', async ({ page }) => {
