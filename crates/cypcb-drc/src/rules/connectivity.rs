@@ -68,6 +68,13 @@ impl DrcRule for UnconnectedPinRule {
 
             // Check each pad has a net connection
             for pad in &footprint.pads {
+                // A mounting hole has no copper and no pin number, so there is
+                // nothing for a net to connect to. Reporting one was two
+                // violations per hole on every board that has any - noise that
+                // trains a reader to skim the list they are meant to read.
+                if pad.is_non_plated() {
+                    continue;
+                }
                 if nets.pin_net(&pad.number).is_none() {
                     // Calculate pad's absolute position for click-to-zoom
                     let pad_location = cypcb_core::Point::new(

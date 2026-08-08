@@ -65,6 +65,12 @@ impl DrcRule for AnnularRingRule {
             };
 
             for pad in &footprint.pads {
+                // An annular ring is the copper around a hole, and a mounting
+                // hole has none by definition - measuring one reported every
+                // hole as 0.000mm against a 0.150mm minimum.
+                if pad.is_non_plated() {
+                    continue;
+                }
                 let Some(drill) = pad.drill else {
                     continue; // SMD pad — no drill, no annular ring check
                 };

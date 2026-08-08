@@ -127,6 +127,7 @@ pub fn run_drc(world: &mut BoardWorld, rules: &DesignRules) -> DrcResult {
         Box::new(rules::EdgeClearanceRule),
         Box::new(rules::AnnularRingRule),
         Box::new(rules::HoleToHoleRule),
+        Box::new(rules::MountingHoleClearanceRule),
         Box::new(rules::ViaDiameterRule),
         Box::new(rules::ViaDrillRule),
         Box::new(rules::CourtyardClearanceRule),
