@@ -102,8 +102,13 @@ def build():
                          {1: "VIN", 2: "GND", 3: "VIN", 4: "GND", 5: "VCC"}))
 
     # Decoupling, one per supply pin plus the regulator's pair.
+    # 4mm apart, not 3. An 0603 courtyard is about 3mm wide once the IPC
+    # excess is added either side, so two of them 3mm apart touch at exactly
+    # 0.00mm - which `cypcb check` reported on this fixture from the day it
+    # was generated. A fixture that claims to be a board somebody could make
+    # has to be one.
     parts.append(cap_0603(12.5, 30.0, "C1", "VIN", "GND"))
-    parts.append(cap_0603(15.5, 30.0, "C2", "VCC", "GND"))
+    parts.append(cap_0603(16.5, 30.0, "C2", "VCC", "GND"))
     parts.append(cap_0603(20.0, 12.0, "C3", "VCC", "GND"))
     parts.append(cap_0603(24.0, 26.0, "C4", "VCC", "GND", rotate=True))
 

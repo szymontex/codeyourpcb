@@ -96,7 +96,7 @@
 
   (footprint "Capacitor_SMD:C_0603_1608Metric"
     (layer "F.Cu")
-    (at 115.500 90.000)
+    (at 116.500 90.000)
     (property "Reference" "C2")
     (property "Value" "100nF")
     (property "Footprint" "Capacitor_SMD:C_0603_1608Metric")

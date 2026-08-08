@@ -184,3 +184,53 @@ fn every_fixture_states_a_size_and_a_layer_count() {
         );
     }
 }
+
+/// Parts that overlap each other, per fixture.
+///
+/// A courtyard is the room a part needs to be placed and soldered, so two that
+/// overlap are two parts that cannot both go on the board. Nothing asked this
+/// of a fixture until now, and the answer was not zero: `multi_ic` has 26 such
+/// pairs and `stm32_breakout` 2. Both predate this check by a long way and
+/// fixing either moves its ratchet and every table drawn from it, so they are
+/// recorded rather than silently tolerated.
+///
+/// `plane_board` had one - two 0603 capacitors 3mm apart, whose courtyards are
+/// each about 3mm wide, touching at exactly 0.00mm. That one was mine, it was
+/// four fires old, and it is fixed at the generator.
+const KNOWN_OVERLAPS: &[(&str, usize)] =
+    &[("multi_ic.kicad_pcb", 26), ("stm32_breakout.kicad_pcb", 2)];
+
+#[test]
+fn no_fixture_asks_for_two_parts_in_the_same_place() {
+    use cypcb_drc::presets::DesignRules;
+    use cypcb_drc::rules::{CourtyardClearanceRule, DrcRule};
+
+    for benchmark in BENCHMARKS {
+        let parsed = parse_kicad_pcb(&fixture_path(benchmark.filename))
+            .unwrap_or_else(|e| panic!("failed to parse {}: {e:?}", benchmark.filename));
+        let mut world = parsed.world;
+        world.rebuild_spatial_index_from_library(&parsed.library);
+
+        let violations = CourtyardClearanceRule.check(&mut world, &DesignRules::jlcpcb_2layer());
+        let known = KNOWN_OVERLAPS
+            .iter()
+            .find(|(name, _)| *name == benchmark.filename)
+            .map(|(_, count)| *count)
+            .unwrap_or(0);
+
+        assert_eq!(
+            violations.len(),
+            known,
+            "{}: {} pairs of parts overlap, {known} known. Two parts in the \
+             same place is not a board somebody could make, and every number \
+             measured on it is measured on a board nobody can build.\n{}",
+            benchmark.filename,
+            violations.len(),
+            violations
+                .iter()
+                .map(|v| v.message.clone())
+                .collect::<Vec<_>>()
+                .join("\n")
+        );
+    }
+}
