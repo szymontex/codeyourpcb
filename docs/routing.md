@@ -332,27 +332,54 @@ every board's own best.
 It was not implemented, because a two-regime rule fitted on three boards and
 tested on the same three boards is not a measurement, it is a restatement.
 
-**Two boards later, the rule that fit would have produced is wrong on both.**
-`shift_driver` and `qfp_fanout` were added and swept at every margin:
+**Two boards later, the rule that fit would have produced is wrong on both** -
+and the table that showed it was measured on two fixtures that were broken at
+the time. Re-measured 2026-08-08 on all six, after `multi_ic` stopped reading
+two malformed coordinates as zero and `qfp_fanout` stopped collapsing two of
+its four headers onto one geometry, and with `plane_board` added:
 
-| margin | led_blink | stm32_breakout | multi_ic | shift_driver | qfp_fanout |
+| margin | led_blink | stm32_breakout | multi_ic | shift_driver | qfp_fanout | plane_board |
+|---|---|---|---|---|---|---|
+| 0 cells | 1 / 1 | 250 / 91, 1 unrouted | 311 / 168 | 98 / 31 | 386 / 206 | **33** / 14 |
+| 1 cell | 2 / 1 | 233 / 82 | 261 / 119 | 92 / 38 | 341 / 172 | 39 / **12** |
+| 2 cells | 2 / 1 | **216** / 86 | **229** / **109** | 87 / 38 | 326 / 186 | 42 / 24 |
+| **3 cells (default)** | **2** / **0** | 239 / 136 | 318 / 177 | **81** / **33** | **309** / **147** | 40 / 18 |
+| 5 cells | 4 / 1 | 273 / 164 | 342 / 201 | 98 / 60 | 341 / 206 | 40 / 22 |
+
+Two rows of the previous table were wrong and are corrected here: `multi_ic`
+and `qfp_fanout` were measured on their broken selves, and `shift_driver` at
+margin 5 carried `qfp_fanout`'s numbers copied into its column.
+
+**Read against each board's own noise band, almost none of this is signal.**
+The bands are the ones measured by `via_price_sweep::how_much_of_the_price_is_noise`:
+
+| board | best margin | default (3) | difference | band | verdict |
 |---|---|---|---|---|---|
-| 0 cells | 1 / 1 | 250 / 91, 1 unrouted | 406 / 193 | 98 / 31 | 367 / **163** |
-| 1 cell | 2 / 1 | 233 / 82 | 305 / 113 | 92 / 38 | 369 / 169 |
-| 2 cells | 2 / 1 | **216 / 86** | **290 / 131** | 87 / 38 | 493 / 250 |
-| **3 cells (default)** | **2 / 0** | 239 / 136 | 336 / 166 | **81 / 33** | **343** / 183 |
-| 5 cells | 4 / 1 | 273 / 164 | 353 / 189 | 418 / 254 | 418 / 254 |
+| stm32_breakout | 216 at 2 | 239 | 23 | 30 | inside the band |
+| multi_ic | 229 at 2 | 318 | **89** | 63 | **outside - wants 2** |
+| shift_driver | 81 at 3 | 81 | 0 | 12 | the default is best |
+| qfp_fanout | 309 at 3 | 309 | 0 | 40 | the default is best |
+| plane_board | 33 at 0 | 40 | 7 | 9 | inside the band |
 
-`shift_driver` sits at 0.0039 routes per cell - between `led_blink`'s 0.0011 and
-`stm32_breakout`'s 0.0120, exactly where the threshold would have gone - and it
-wants **3**, the sparse board's answer. `qfp_fanout`, the densest fine-pitch
-board of the five, also wants 3. Only the two boards the rule was fitted on want
-2.
+So the sentence this section used to carry - "only the two boards the rule was
+fitted on want 2" - does not survive its own fixtures being repaired. On
+today's numbers **one board separates the margins by more than its own noise,
+and that board wants 2**; every other board is indifferent or prefers the
+default. The `qfp_fanout` case in particular collapsed: it read 493 against 343
+when its headers were stacked, and reads 326 against 309 now, which is well
+inside its band of 40.
 
-So the density story was a coincidence of three samples, and the constant the
-project ships is the best answer on three boards out of five. The refusal to fit
-it is the finding: **eight instruments in the dropped table below lost after
-being built; this one lost before, for the price of two fixtures.**
+**Shorts tell a different story from violation counts, and it is worth
+separating.** At the default the two dense boards short far more than at margin
+2 - `stm32_breakout` 136 against 86, `multi_ic` 177 against 109 - while
+`qfp_fanout` goes the other way, 147 against 186. A short is a fault a
+fabricator will build; a clearance violation at 0.05mm is a fault a fabricator
+will usually absorb. Anyone changing this constant should decide which of the
+two they are minimising before reading the table, not after.
+
+The constant is unchanged in this commit. Changing it moves five ratchets and
+invalidates five measured bands, so it is its own piece of work with its own
+before-and-after, not a line edited while writing a table.
 
 What the fifth board did not settle is the ranking - see above. Every rule picks
 the same variant on `qfp_fanout`, so four of the five boards agree under all
@@ -466,7 +493,11 @@ A net's pad zone opens every cell near any of its own pins so a route can reach
 them, and the pin next door comes free with it: 109 of stm32_breakout's 118
 part-to-trace faults are routes taking that opening. The price shipped at 20 on
 one measured point, which is the mistake the via price made before it was
-swept. `pad_price_sweep::what_a_foreign_pad_should_cost`, after / shorts:
+swept. `pad_price_sweep::what_a_foreign_pad_should_cost`, after / shorts. **Measured
+before `multi_ic` and `qfp_fanout` were repaired**, so its `multi_ic` column
+reads 336 / 166 where that board now routes at 318 / 177 by default; the
+readings below are about the shape of the curve, and the shape is what
+survived. Re-run the sweep before quoting a number from it:
 
 | price | led_blink | stm32_breakout | multi_ic |
 |---|---|---|---|
@@ -497,7 +528,10 @@ A pad zone switches off every obstacle within its radius so a route can reach
 the pad it is heading for. The radius was the pad's own copper plus a flat
 three cells, under a comment reading "generous but safe" - 0.762mm on the
 0.254mm grid, wider than the gap between the two pads of an 0402.
-`pad_zone_margin_sweep`, after / shorts:
+`pad_zone_margin_sweep`, after / shorts. **This is the first sweep, on three
+boards, before either fixture was repaired** - the current six-board table is
+under "What that does not license" above and disagrees with this one on
+`multi_ic`:
 
 | margin | led_blink | stm32_breakout | multi_ic |
 |---|---|---|---|
