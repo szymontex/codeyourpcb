@@ -163,6 +163,13 @@ pub struct AutorouteConfig {
     /// Zero keeps the old behaviour.
     pub via_ring_penalty: f64,
 
+    /// What it costs to change layer where a via already is.
+    ///
+    /// The congestion map counts how many vias pass through each cell, and
+    /// this is charged per hole at the moment the search decides to place one.
+    /// Zero reproduces the router before stacking was priced.
+    pub via_stack_penalty: f64,
+
     /// What one cell of another net's pad inside a via's keepout costs.
     ///
     /// Separate from `via_foreign_copper_penalty` because the two are not the
@@ -271,6 +278,7 @@ impl Default for AutorouteConfig {
             strategy: StrategyKind::default(),
             params: AutorouteParams::default(),
             via_ring_penalty: 0.0,
+            via_stack_penalty: 0.0,
             via_foreign_pad_penalty: 0.0,
             pad_layer_change_penalty: crate::pathfinder_v2::PAD_LAYER_CHANGE_PENALTY,
             pad_zone_margin_cells: crate::orchestrator::DEFAULT_PAD_ZONE_MARGIN_CELLS,

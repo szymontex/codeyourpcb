@@ -472,6 +472,7 @@ pub fn pathfinder_loop(
     let mut congestion_map = CongestionMap::new(width, height, layers);
     let mut overuse_per_iteration: Vec<usize> = Vec::new();
     congestion_map.set_ring_penalty(config.via_ring_penalty);
+    congestion_map.set_stack_penalty(config.via_stack_penalty);
 
     // Per-net cell index: net_id -> cells occupied by this net.
     // Enables O(path_length) rip-up instead of scanning the entire grid.
@@ -514,6 +515,7 @@ pub fn pathfinder_loop(
     let mut trace_cells: HashMap<u32, Vec<(u32, u32, u8)>> = HashMap::new();
     // Ring cells per net, so a rip-up takes its rings' price with it.
     let mut ring_cells: HashMap<u32, Vec<(u32, u32, u8)>> = HashMap::new();
+    let mut hole_cells: HashMap<u32, Vec<(u32, u32, u8)>> = HashMap::new();
     let mut best_overused = usize::MAX;
     let mut iterations_without_progress = 0u32;
 
@@ -578,6 +580,9 @@ pub fn pathfinder_loop(
             if let Some(rings) = ring_cells.remove(&net_id) {
                 congestion_map.unmark_rings(&rings);
             }
+            if let Some(holes) = hole_cells.remove(&net_id) {
+                congestion_map.unmark_holes(&holes);
+            }
             if let Some(cells) = net_cells.remove(&net_id) {
                 congestion_map.unmark_net(&cells);
                 grid.clear_cells(&cells, net_id);
@@ -614,6 +619,7 @@ pub fn pathfinder_loop(
             // is what made the overuse figure unreadable.
             let mut net_trace_cells: Vec<(u32, u32, u8)> = Vec::new();
             let mut net_ring_cells: Vec<(u32, u32, u8)> = Vec::new();
+            let mut net_hole_cells: Vec<(u32, u32, u8)> = Vec::new();
             let mut net_paths: Vec<Vec<GridNode>> = Vec::new();
             let mut net_ok = true;
 
@@ -696,6 +702,11 @@ pub fn pathfinder_loop(
                         for pair in p.windows(2) {
                             let (a, b) = (pair[0], pair[1]);
                             if a.2 != b.2 && a.0 == b.0 && a.1 == b.1 {
+                                let (lo, hi) = if a.2 <= b.2 { (a.2, b.2) } else { (b.2, a.2) };
+                                for layer in lo..=hi {
+                                    net_hole_cells.push((a.0 as u32, a.1 as u32, layer));
+                                }
+
                                 let ring = grid.via_footprint_cells(
                                     a.0 as u32,
                                     a.1 as u32,
@@ -765,12 +776,16 @@ pub fn pathfinder_loop(
             net_trace_cells.dedup();
             net_ring_cells.sort_unstable();
             net_ring_cells.dedup();
+            net_hole_cells.sort_unstable();
+            net_hole_cells.dedup();
 
             if net_ok && !connections.is_empty() {
                 // Update congestion map with this net's cells
                 congestion_map.mark_net(&net_path_cells);
                 congestion_map.mark_rings(&net_ring_cells);
                 ring_cells.insert(net_id, net_ring_cells);
+                congestion_map.mark_holes(&net_hole_cells);
+                hole_cells.insert(net_id, net_hole_cells);
                 trace_cells.insert(net_id, net_trace_cells);
                 net_cells.insert(net_id, net_path_cells);
                 routed_paths.insert(net_id, net_paths);
@@ -1141,6 +1156,15 @@ fn find_path_congestion_augmented(
             {
                 let base = cost_fn.neighbor_cost(*node, target);
                 let congestion = congestion_map.congestion_cost(nx as u32, ny as u32, target_layer);
+
+                // A second hole where one already is. Charged here and nowhere
+                // else, because this is the only place the search decides to
+                // *place* a via - the ring price charges for crossing the
+                // copper around one, which was measured against these
+                // violations and moved none of them.
+                let stacking = congestion_map.stacking_cost(nx as u32, ny as u32, nl)
+                    + congestion_map.stacking_cost(nx as u32, ny as u32, target_layer);
+
                 // A layer change on a pad's copper or inside its clearance is
                 // priced, not forbidden. Forbidding it was measured - it moved
                 // multi_ic from 140 violations to 375 by pushing the routing
@@ -1167,7 +1191,7 @@ fn find_path_congestion_augmented(
                 };
                 neighbors.push((
                     target,
-                    float_to_int_cost(base + congestion + crowding + pad_crossing),
+                    float_to_int_cost(base + congestion + crowding + pad_crossing + stacking),
                 ));
             }
         }

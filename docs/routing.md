@@ -622,6 +622,36 @@ Tens of thousands of times per board, the search evaluates putting a via where
 one already is, **with that information in front of it**. The congestion map
 holds it at the right moment; the marking is not too late.
 
+### The fifth attempt: the bug found, the price measured, and it still does not pay
+
+The fourth attempt's wiring bug was one line. `congestion_map.set_stack_penalty(..)`
+was never added beside `set_ring_penalty`, so the map's penalty stayed 0.0 and
+`stacking_cost` returned zero however high the knob was turned. That is why a
+price of 100 produced byte-identical boards.
+
+Rebuilt with the check first, which is the whole lesson of the fourth attempt:
+routing `multi_ic` leaves **364 holes recorded for 119 vias** - about three
+layers each - so the map is populated before any price is swept against it.
+
+| stack price | stm32_breakout | multi_ic | qfp_fanout |
+|---|---|---|---|
+| 0 (shipped) | 180 / 4 | 291 / 7 | 309 / 27 |
+| 5 | 208 / **0** | 245 / 15 | 368 / 31 |
+| 20 | 184 / 2 | **237** / 9 | 366 / 31 |
+| 100 | 203 / 1 | 237 / 9 | 371 / 30 |
+
+Violations first, then stacked holes. Read against the bands - 59, 65, 57 -
+**it does not pay.** `stm32_breakout` clears its stacking at a price of 5 and
+gives back 28 violations to do it; `multi_ic` gets 54 violations better at 20
+and *worse* at stacking, 7 becoming 9; `qfp_fanout` is worse on both counts at
+every price, and its 59 extra violations are at the edge of its band.
+
+**Kept at 0.0 rather than reverted**, unlike the fourth attempt. The difference
+is that this one demonstrably works: every nonzero price changes the boards, so
+a future sweep is one command rather than a week of archaeology, and the
+shipped default reproduces the router exactly. That is the same basis
+`via_ring_penalty` is kept on.
+
 **So the fourth attempt failed on its own wiring, not on the idea.** A price at
 this decision point can work, because the data it needs is demonstrably there.
 The fifth attempt should confirm the hole array is populated before trusting a

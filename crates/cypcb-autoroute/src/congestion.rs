@@ -51,6 +51,17 @@ pub struct CongestionMap {
     ///
     /// Zero reproduces the behaviour before rings were priced.
     ring_penalty: f64,
+
+    /// How many vias pass through each cell: `[layer][y * width + x]`.
+    ///
+    /// A hole, as against the copper around it. The router stacks vias and
+    /// nothing in the search could tell that a cell already held one. Kept
+    /// apart from `ring` because the two are charged for different acts:
+    /// crossing a ring, against placing a second hole.
+    holes: Vec<Vec<u32>>,
+
+    /// What it costs to change layer where a hole already is.
+    stack_penalty: f64,
 }
 
 impl CongestionMap {
@@ -70,12 +81,58 @@ impl CongestionMap {
             capacity: 1,
             ring: (0..layers).map(|_| vec![0u16; cell_count]).collect(),
             ring_penalty: 0.0,
+            holes: vec![vec![0; (width as usize) * (height as usize)]; layers as usize],
+            stack_penalty: 0.0,
         }
     }
 
     /// Set what a cell costs per via ring covering it.
     pub fn set_ring_penalty(&mut self, penalty: f64) {
         self.ring_penalty = penalty;
+    }
+
+    /// Set what it costs to change layer where a hole already is.
+    pub fn set_stack_penalty(&mut self, penalty: f64) {
+        self.stack_penalty = penalty;
+    }
+
+    /// Record the cells a net's vias pass through, one per layer spanned.
+    pub fn mark_holes(&mut self, cells: &[(u32, u32, u8)]) {
+        for &(x, y, layer) in cells {
+            if let Some(idx) = self.cell_index(x, y, layer) {
+                self.holes[layer as usize][idx] = self.holes[layer as usize][idx].saturating_add(1);
+            }
+        }
+    }
+
+    /// Forget a net's holes, before ripping it up.
+    pub fn unmark_holes(&mut self, cells: &[(u32, u32, u8)]) {
+        for &(x, y, layer) in cells {
+            if let Some(idx) = self.cell_index(x, y, layer) {
+                self.holes[layer as usize][idx] = self.holes[layer as usize][idx].saturating_sub(1);
+            }
+        }
+    }
+
+    /// What a via at this cell costs on top of everything else.
+    pub fn stacking_cost(&self, x: u32, y: u32, layer: u8) -> f64 {
+        match self.cell_index(x, y, layer) {
+            Some(idx) => self.stack_penalty * self.holes[layer as usize][idx] as f64,
+            None => 0.0,
+        }
+    }
+
+    /// Every hole currently recorded, summed over cells and layers.
+    ///
+    /// Exists so a test can assert the map is populated *before* anybody
+    /// sweeps a price against it. The fourth attempt at this skipped that
+    /// step, swept a knob that turned out never to be charged, and cost a
+    /// fire to find out - see `docs/routing.md`.
+    pub fn total_holes(&self) -> u64 {
+        self.holes
+            .iter()
+            .map(|layer| layer.iter().map(|&n| n as u64).sum::<u64>())
+            .sum()
     }
 
     /// Record the cells a net's via rings cover.

@@ -596,7 +596,20 @@ multi_ic        0.26: 13 iterations, converged false, [553, 339, 269, 270, 258, 
 - **The fourth attempt therefore failed on its own wiring, not on principle.** A price at that decision point can work; what it needs first is a check that the hole array is actually populated - one assertion after routing one fixture, which the fourth attempt never made before trusting its sweep.
 - It also explains the ring price: it charges all 46,181 of those evaluations for *crossing* copper, which is why it moved every board, and nothing extra for stacking, which is why it moved no stacked hole.
 - Probe reverted; no code change. Four attempts, two eliminated causes, and the question is now narrow enough to be worth a fifth.
-- NEXT-ACTION: **the fifth attempt, with the assertion first.** Re-add the hole count beside the rings, assert it is nonzero after routing `multi_ic` before sweeping anything, then price it. If the assertion fails the bug is in the marking and is now trivially findable; if it passes, the sweep means something.
+- DONE: **the fifth attempt found the bug, measured the price, and the price does not pay.**
+- **The fourth attempt's bug was one line.** `congestion_map.set_stack_penalty(..)` was never added beside `set_ring_penalty` - my edit had matched no text and I never checked - so the map's penalty stayed 0.0 and `stacking_cost` returned zero however high the knob went. A price of 100 producing byte-identical boards was exactly that.
+- Rebuilt with the check first, which is the lesson: routing `multi_ic` leaves **364 holes recorded for 119 vias**, about three layers each, so the map is populated *before* a price is swept against it.
+
+| stack price | stm32_breakout | multi_ic | qfp_fanout |
+|---|---|---|---|
+| 0 (shipped) | 180 / 4 | 291 / 7 | 309 / 27 |
+| 5 | 208 / **0** | 245 / 15 | 368 / 31 |
+| 20 | 184 / 2 | **237** / 9 | 366 / 31 |
+| 100 | 203 / 1 | 237 / 9 | 371 / 30 |
+
+- Violations then stacked holes, read against the bands 59, 65 and 57: `stm32_breakout` clears its stacking at 5 and gives back 28 violations; `multi_ic` is 54 violations better at 20 and *worse* at stacking; `qfp_fanout` is worse on both at every price. **No price wins.**
+- **Kept at 0.0 rather than reverted**, unlike the fourth attempt, and the difference is that this one demonstrably works - every nonzero price moves the boards, the shipped default reproduces the router exactly, and a future sweep is one command. Same basis `via_ring_penalty` is kept on.
+- NEXT-ACTION: none pulled. Five attempts, and the honest summary is that stacked holes are not reachable by pricing the placement either - the two boards that improve and the one that worsens disagree in a way no single constant resolves. That is the same shape as the pad-zone margin: a value that reads well on the boards it was fitted to. The next real move is a rule that varies with the board rather than another constant, and nothing in this vector has established what that rule would key on.
 - DONE: **components say which face they are on.** A `Side` component with the three questions a face answers - which copper its SMD pads take, which silkscreen it prints to, and its layer-mask bit. The KiCad importer reads `(layer "B.Cu")` from a footprint, which is the only place in the codebase where the side is data rather than inference; sync derives it from the footprint's copper and stores the answer so every rule reads the same one. The silkscreen rule takes it and falls back to the old guess only when nothing states it. Proven on a two-footprint board where one is `F.Cu` and one `B.Cu`: `[("R1", Top), ("R2", Bottom)]`.
 
 ### V2 - Autorouter and routing quality
