@@ -9,7 +9,7 @@
  */
 
 import { readFileSync, existsSync, readdirSync, writeFileSync } from 'fs';
-import { resolve, join, basename, dirname } from 'path';
+import { resolve, join, basename, dirname, sep } from 'path';
 import { fileURLToPath } from 'url';
 import { WebSocketServer, WebSocket } from 'ws';
 import * as chokidar from 'chokidar';
@@ -26,7 +26,11 @@ const CLI_DEBUG_PATH = resolve(__dirname, '../target/debug/cypcb');
 // FreeRouting JAR path
 const FREEROUTING_JAR = resolve(__dirname, '../freerouting.jar');
 
-const WS_PORT = 4322;
+// The port the browser connects to. Overridable so a test can take a free one:
+// with this pinned, a test spawning the server while a developer's own is
+// running silently talked to theirs - the new process failed to bind and the
+// probe connected to the old one, which is a green test measuring nothing.
+const WS_PORT = Number(process.env.CYPCB_WS_PORT ?? 4322);
 const WATCH_DIR = resolve(process.argv[2] || '../examples');
 
 // Track connected WebSocket clients
@@ -90,6 +94,25 @@ wss.on('listening', () => {
 /**
  * Get list of .cypcb files in watch directory
  */
+/**
+ * The file a client asked for, if it is really inside the watched directory.
+ *
+ * This server speaks WebSocket on localhost with no authentication and no
+ * origin check, so anything it will do, any page in the browser can ask it to
+ * do. It used to read whatever path a message named and write whatever a
+ * message named - `readFileSync(message.file)` and
+ * `writeFileSync(message.file, message.content)` with nothing in between - so
+ * a page could have read a developer's keys or written over their shell
+ * profile. Every path a client names goes through here now: relative paths
+ * are resolved against the watched directory and anything that climbs out of
+ * it with `..` or an absolute path is refused.
+ */
+function insideWatchDir(requested: string): string | null {
+  const root = resolve(WATCH_DIR);
+  const full = resolve(root, requested);
+  return full === root || full.startsWith(root + sep) ? full : null;
+}
+
 function getCypcbFiles(): string[] {
   if (!existsSync(WATCH_DIR)) {
     console.warn(`[Watch] Directory does not exist: ${WATCH_DIR}`);
@@ -173,25 +196,35 @@ watcher.on('error', (err) => {
   console.error('[Watch] Error:', err);
 });
 
-// Start Vite dev server as child process
-console.log('');
-console.log('[Vite] Starting development server...');
-console.log('-'.repeat(50));
+// Start Vite dev server as child process.
+//
+// `CYPCB_NO_VITE=1` runs the WebSocket half on its own, which is what a test
+// of this protocol wants: a second Vite on the same port would fight with the
+// one Playwright started, and the file requests do not need it.
+const vite = process.env.CYPCB_NO_VITE === '1' ? null : startVite();
 
-const vite = spawn('npx', ['vite'], {
-  stdio: 'inherit',
-  shell: true,
-  cwd: process.cwd(),
-});
+function startVite() {
+  console.log('');
+  console.log('[Vite] Starting development server...');
+  console.log('-'.repeat(50));
 
-vite.on('error', (err) => {
-  console.error('[Vite] Failed to start:', err);
-});
+  const child = spawn('npx', ['vite'], {
+    stdio: 'inherit',
+    shell: true,
+    cwd: process.cwd(),
+  });
 
-vite.on('exit', (code) => {
-  console.log(`[Vite] Exited with code ${code}`);
-  process.exit(code ?? 1);
-});
+  child.on('error', (err) => {
+    console.error('[Vite] Failed to start:', err);
+  });
+
+  child.on('exit', (code) => {
+    console.log(`[Vite] Exited with code ${code}`);
+    process.exit(code ?? 1);
+  });
+
+  return child;
+}
 
 // Clean shutdown
 function shutdown(): void {
@@ -203,8 +236,8 @@ function shutdown(): void {
   // Close file watcher
   watcher.close();
 
-  // Kill Vite
-  vite.kill();
+  // Kill Vite, when there is one
+  vite?.kill();
 
   process.exit(0);
 }
@@ -234,6 +267,9 @@ function handleClientMessage(ws: WebSocket, message: any): void {
       break;
     case 'open-file':
       handleOpenFileRequest(ws, message);
+      break;
+    case 'read-file':
+      handleReadFileRequest(ws, message);
       break;
     default:
       console.log(`[WS] Unknown message type: ${message.type}`);
@@ -349,6 +385,43 @@ function handleRouteRequest(ws: WebSocket, message: { file?: string; content?: s
 /**
  * Handle save request - saves content to file
  */
+/**
+ * Hand a file's text back, for a design that imports it.
+ *
+ * The engine resolves `import "lib/blocks.cypcb"` and cannot read a file: a
+ * browser tab has no disk. A design opened from this server's watched
+ * directory has its library beside it on the same disk, and this is the one
+ * request that lets the page fetch it. The path is relative to the watched
+ * directory and is checked, like every other path a client names.
+ */
+function handleReadFileRequest(ws: WebSocket, message: { path?: string }): void {
+  const requested = message.path;
+  if (!requested) {
+    ws.send(JSON.stringify({ type: 'file-content', path: '', error: 'No path specified' }));
+    return;
+  }
+
+  const filePath = insideWatchDir(requested);
+  if (!filePath || !existsSync(filePath)) {
+    ws.send(JSON.stringify({
+      type: 'file-content',
+      path: requested,
+      error: `Cannot read ${requested}`,
+    }));
+    return;
+  }
+
+  try {
+    ws.send(JSON.stringify({
+      type: 'file-content',
+      path: requested,
+      content: readFileSync(filePath, 'utf-8'),
+    }));
+  } catch (err: any) {
+    ws.send(JSON.stringify({ type: 'file-content', path: requested, error: err.message }));
+  }
+}
+
 function handleSaveRequest(ws: WebSocket, message: { file: string; content: string }): void {
   if (!message.file || !message.content) {
     ws.send(JSON.stringify({
@@ -358,12 +431,21 @@ function handleSaveRequest(ws: WebSocket, message: { file: string; content: stri
     return;
   }
 
+  const target = insideWatchDir(message.file);
+  if (!target) {
+    ws.send(JSON.stringify({
+      type: 'save-error',
+      error: `Refused: ${message.file} is outside the watched directory`,
+    }));
+    return;
+  }
+
   try {
-    writeFileSync(message.file, message.content, 'utf-8');
-    console.log(`[Save] Saved: ${message.file}`);
+    writeFileSync(target, message.content, 'utf-8');
+    console.log(`[Save] Saved: ${target}`);
     ws.send(JSON.stringify({
       type: 'save-complete',
-      file: message.file,
+      file: target,
     }));
   } catch (err: any) {
     console.error(`[Save] Error: ${err.message}`);
@@ -397,7 +479,14 @@ function handleOpenFileRequest(ws: WebSocket, message: { file?: string }): void 
     return;
   }
 
-  const filePath = message.file;
+  const filePath = insideWatchDir(message.file);
+  if (!filePath) {
+    ws.send(JSON.stringify({
+      type: 'route-error',
+      error: `Refused: ${message.file} is outside the watched directory`,
+    }));
+    return;
+  }
   if (!existsSync(filePath)) {
     ws.send(JSON.stringify({ type: 'route-error', error: `File not found: ${filePath}` }));
     return;

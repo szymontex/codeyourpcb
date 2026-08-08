@@ -58,6 +58,7 @@ interface WsMessage {
   routed?: number;
   unrouted?: number;
   files?: Array<{ path: string; name: string }>;
+  path?: string;
 }
 
 /**
@@ -66,6 +67,14 @@ interface WsMessage {
 interface WsConnection {
   send(message: object): void;
   isConnected(): boolean;
+  /**
+   * Ask the dev server for a file beside the design, for an `import`.
+   *
+   * Resolves with the text, or null when the server refuses or has no such
+   * file - it answers `file-content` either way, so a missing library is a
+   * null here rather than a promise nobody settles.
+   */
+  readFile(path: string): Promise<string | null>;
 }
 
 /**
@@ -89,6 +98,8 @@ function connectWebSocket(callbacks: WsCallbacks): WsConnection {
   let ws: WebSocket | null = null;
   let connected = false;
   let retries = 0;
+  /** `read-file` requests waiting for their answer, by the path they asked for. */
+  const pendingReads = new Map<string, (text: string | null) => void>();
   const MAX_RETRIES = 2; // Try 3 times total (initial + 2 retries), then give up silently
 
   function connect(): void {
@@ -132,6 +143,14 @@ function connectWebSocket(callbacks: WsCallbacks): WsConnection {
           case 'file-list':
             callbacks.onFileList?.(msg.files || []);
             break;
+          case 'file-content': {
+            const settle = pendingReads.get(msg.path || '');
+            if (settle) {
+              pendingReads.delete(msg.path || '');
+              settle(msg.content ?? null);
+            }
+            break;
+          }
         }
       } catch (err) {
         console.error('[WS] Message parse error:', err);
@@ -164,7 +183,25 @@ function connectWebSocket(callbacks: WsCallbacks): WsConnection {
     },
     isConnected(): boolean {
       return connected;
-    }
+    },
+    readFile(path: string): Promise<string | null> {
+      if (!ws || !connected) return Promise.resolve(null);
+      // One request per path in flight: the design and its libraries are
+      // walked breadth-first and a path is asked for once.
+      const waiting = pendingReads.get(path);
+      if (waiting) return Promise.resolve(null);
+
+      return new Promise((settle) => {
+        const timer = setTimeout(() => {
+          if (pendingReads.delete(path)) settle(null);
+        }, 5_000);
+        pendingReads.set(path, (text) => {
+          clearTimeout(timer);
+          settle(text);
+        });
+        ws!.send(JSON.stringify({ type: 'read-file', path }));
+      });
+    },
   };
 }
 
@@ -3051,6 +3088,15 @@ async function init(): Promise<void> {
 
         // Track current file for routing
         currentFilePath = file;
+
+        // This file came off the dev server's disk, so its library is beside
+        // it there. The engine asks for paths relative to the design; the
+        // server resolves them inside the directory it watches, and refuses
+        // anything that climbs out of it.
+        const directory = file.slice(0, file.lastIndexOf('/'));
+        importReader = (path: string) =>
+          wsConnection?.readFile(`${directory}/${path}`) ?? Promise.resolve(null);
+
         reload(content, file);
 
         // Hide project manager when a file is loaded
