@@ -533,3 +533,78 @@ fn completing_a_footprint_offers_the_library() {
         "an editor sorts by kind and shows the detail, so both have to be there: {items:?}"
     );
 }
+
+#[test]
+fn a_semantic_error_reaches_the_editor() {
+    // The editor was told about parse errors and DRC violations and nothing
+    // else. Everything `SyncError` reports - an unknown footprint, a duplicate
+    // refdes, a net naming a pin the part does not have, a module pin left
+    // unconnected, a broken interface contract - was collected by the sync and
+    // dropped on the floor, so `cypcb check` refused a file the editor called
+    // clean.
+    let mut server = Server::start();
+    server.initialize();
+
+    let uri = "file:///unknown-footprint.cypcb";
+    server.open(
+        uri,
+        "version 1\n\nboard b {\n    size 20mm x 20mm\n    layers 2\n}\n\ncomponent R1 resistor \"NOSUCHFOOTPRINT\" {\n    at 5mm, 5mm\n}\n",
+    );
+
+    let diagnostics = server.diagnostics_for(uri);
+    let messages: Vec<String> = diagnostics
+        .iter()
+        .filter_map(|d| d.get("message").and_then(Value::as_str))
+        .map(str::to_string)
+        .collect();
+
+    assert!(
+        messages.iter().any(|m| m.contains("NOSUCHFOOTPRINT")),
+        "the footprint does not exist and the editor said nothing about it: {messages:?}"
+    );
+}
+
+#[test]
+fn a_design_that_imports_its_blocks_is_understood() {
+    // `import Divider, LedDriver from "lib/blocks.cypcb"` is resolved by every
+    // CLI command and was resolved by nothing in the editor, because the
+    // document threw its own URI away - `DocumentState::new(_uri, ...)`. A
+    // design split across files came up empty in the editor while the same
+    // file checked fine on the command line.
+    let example = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(|p| p.parent())
+        .expect("the crate sits two levels below the repo root")
+        .join("examples/v2-imports.cypcb");
+    let text = std::fs::read_to_string(&example).expect("the example is there");
+    let uri = format!("file://{}", example.display());
+
+    let mut server = Server::start();
+    server.initialize();
+    server.open(&uri, &text);
+
+    let diagnostics = server.diagnostics_for(&uri);
+    let messages: Vec<String> = diagnostics
+        .iter()
+        .filter_map(|d| d.get("message").and_then(Value::as_str))
+        .map(str::to_string)
+        .collect();
+
+    let about_modules: Vec<&String> = messages
+        .iter()
+        .filter(|m| m.contains("unknown module") || m.contains("import"))
+        .collect();
+    assert!(
+        about_modules.is_empty(),
+        "the modules come from the imported file and the editor could not find them: {about_modules:?}"
+    );
+
+    // The positive half, and the one that fails without import resolution: the
+    // parts an imported module brings have to be in the model the editor
+    // checks. `cypcb check` on this file reports ten unrouted pins, every one
+    // of them named after an instance of an imported block.
+    assert!(
+        messages.iter().any(|m| m.contains("DIV_A_RTOP")),
+        "the imported blocks were never instantiated, so the editor is checking an empty board: {messages:?}"
+    );
+}

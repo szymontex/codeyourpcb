@@ -58,6 +58,21 @@ pub enum ImportError {
     },
 }
 
+impl ImportError {
+    /// The path as the source wrote it.
+    ///
+    /// What an editor needs to underline the `import` statement the error came
+    /// from rather than the first character of the file.
+    pub fn path(&self) -> &str {
+        match self {
+            ImportError::Unreadable { path, .. } => path,
+            ImportError::Unparsable { path, .. } => path,
+            ImportError::NotFound { path, .. } => path,
+            ImportError::Cycle { chain } => chain,
+        }
+    }
+}
+
 impl std::fmt::Display for ImportError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

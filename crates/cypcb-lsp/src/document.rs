@@ -2,16 +2,31 @@
 //!
 //! Tracks open documents, their content, parsed ASTs, and board worlds.
 
+use std::path::PathBuf;
+
 use cypcb_drc::DrcViolation;
 use cypcb_parser::ast::SourceFile;
-use cypcb_parser::ParseError;
-use cypcb_world::BoardWorld;
+use cypcb_parser::{ImportError, ParseError};
+use cypcb_world::{BoardWorld, SyncError};
 
 /// Position in a document (LSP-style, 0-indexed).
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Position {
     pub line: u32,
     pub character: u32,
+}
+
+/// The filesystem path a document URI names, when it names one.
+///
+/// Editors send `file:///home/x/board.cypcb`. Tests and the wasm host send
+/// things like `test://file`, which are not paths - those documents simply
+/// cannot resolve an import, and saying so with `None` is better than
+/// inventing a directory to resolve against.
+fn path_of(uri: &str) -> Option<PathBuf> {
+    let rest = uri.strip_prefix("file://")?;
+    // `file:///path` on unix, `file://host/path` is not something an editor
+    // sends for a local file.
+    Some(PathBuf::from(rest))
 }
 
 /// State of an open document.
@@ -31,13 +46,28 @@ pub struct DocumentState {
     pub parse_errors: Vec<ParseError>,
     /// DRC violations from the last check.
     pub drc_violations: Vec<DrcViolation>,
+    /// Semantic errors from building the board model.
+    ///
+    /// Collected and thrown away until now: the editor was told about parse
+    /// errors and DRC violations only, so an unknown footprint, a duplicate
+    /// refdes or a module pin left unconnected - every one of which makes
+    /// `cypcb check` exit 1 - drew no squiggle at all.
+    pub sync_errors: Vec<SyncError>,
+    /// Imports that could not be resolved.
+    pub import_errors: Vec<ImportError>,
+    /// Where this document lives, when it lives anywhere.
+    ///
+    /// `import "lib/blocks.cypcb"` resolves against the importing file's own
+    /// directory, so a document that does not know its own path cannot follow
+    /// one. This used to be `DocumentState::new(_uri, ...)` - the URI arrived
+    /// and was dropped - which is why a design split across files came up
+    /// empty in the editor and checked fine on the command line.
+    pub path: Option<PathBuf>,
 }
 
 impl DocumentState {
     /// Create a new document state.
-    ///
-    /// The URI is used for debugging but not stored (we key by URI in the map).
-    pub fn new(_uri: String, content: String, version: i32) -> Self {
+    pub fn new(uri: String, content: String, version: i32) -> Self {
         DocumentState {
             content,
             version,
@@ -45,6 +75,9 @@ impl DocumentState {
             world: None,
             parse_errors: Vec::new(),
             drc_violations: Vec::new(),
+            sync_errors: Vec::new(),
+            import_errors: Vec::new(),
+            path: path_of(&uri),
         }
     }
 
@@ -56,6 +89,8 @@ impl DocumentState {
         self.world = None;
         self.parse_errors.clear();
         self.drc_violations.clear();
+        self.sync_errors.clear();
+        self.import_errors.clear();
     }
 
     /// Parse the document content and update AST and errors.
@@ -75,23 +110,37 @@ impl DocumentState {
         use cypcb_world::footprint::FootprintLibrary;
         use cypcb_world::sync::sync_ast_to_world;
 
-        if let Some(ast) = &self.ast {
-            let mut world = BoardWorld::new();
-            let mut library = FootprintLibrary::new();
-            let sync_result = sync_ast_to_world(ast, &self.content, &mut world, &mut library);
-
-            // Run DRC on the built world
-            let rules = DesignRules::default();
-            let drc_result = run_drc(&mut world, &rules);
-            self.drc_violations = drc_result.violations;
-
-            self.world = Some(world);
-            sync_result.is_ok()
-        } else {
+        let Some(ast) = &self.ast else {
             self.world = None;
             self.drc_violations.clear();
-            false
-        }
+            self.sync_errors.clear();
+            self.import_errors.clear();
+            return false;
+        };
+
+        // What this file imports, resolved against its own directory, exactly
+        // as every CLI command resolves it. The resolved AST is used to build
+        // the model and never stored: hover, go-to-definition and completion
+        // read `self.ast`, whose spans point into this document's text, and an
+        // imported definition's span points into another file.
+        self.import_errors.clear();
+        let resolved = match &self.path {
+            Some(path) => cypcb_parser::resolve_imports(ast, path, &mut self.import_errors),
+            None => ast.clone(),
+        };
+
+        let mut world = BoardWorld::new();
+        let mut library = FootprintLibrary::new();
+        let sync_result = sync_ast_to_world(&resolved, &self.content, &mut world, &mut library);
+        self.sync_errors = sync_result.errors.clone();
+
+        // Run DRC on the built world
+        let rules = DesignRules::default();
+        let drc_result = run_drc(&mut world, &rules);
+        self.drc_violations = drc_result.violations;
+
+        self.world = Some(world);
+        sync_result.is_ok()
     }
 
     /// Convert a byte offset to a Position.

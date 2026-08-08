@@ -4,8 +4,9 @@
 //! display in the editor (squiggly underlines, problems panel).
 
 use cypcb_drc::{DrcViolation, ViolationKind};
-use cypcb_parser::ParseError;
+use cypcb_parser::{ImportError, ParseError};
 use cypcb_world::SourceSpan as WorldSourceSpan;
+use cypcb_world::SyncError;
 use miette::SourceSpan;
 
 use crate::document::DocumentState;
@@ -48,7 +49,17 @@ pub fn run_diagnostics(doc: &DocumentState) -> Vec<Diagnostic> {
         }
     }
 
-    // 2. Convert DRC violations (run during build_world)
+    // 2. Convert semantic errors from building the model
+    for error in &doc.sync_errors {
+        diagnostics.push(sync_error_to_diagnostic(doc, error));
+    }
+
+    // 3. Convert imports that could not be resolved
+    for error in &doc.import_errors {
+        diagnostics.push(import_error_to_diagnostic(doc, error));
+    }
+
+    // 4. Convert DRC violations (run during build_world)
     for violation in &doc.drc_violations {
         if let Some(diag) = violation_to_diagnostic(doc, violation) {
             diagnostics.push(diag);
@@ -73,6 +84,79 @@ pub fn run_diagnostics(doc: &DocumentState) -> Vec<Diagnostic> {
     }
 
     diagnostics
+}
+
+/// A semantic error, placed where it happened.
+///
+/// Read through miette's `Diagnostic` rather than matched variant by variant:
+/// every `SyncError` already carries the code, the message and the span the
+/// command line prints, and the editor should show the same words as `cypcb
+/// check` rather than a second wording that drifts from it.
+fn sync_error_to_diagnostic(doc: &DocumentState, error: &SyncError) -> Diagnostic {
+    use miette::Diagnostic as _;
+
+    let code = error
+        .code()
+        .map(|code| code.to_string())
+        .unwrap_or_else(|| "sync".to_string());
+
+    // The first label is the one the message is about. An error from an
+    // imported file carries that file's offsets, which mean nothing here, so
+    // anything past the end of this document is reported at its start rather
+    // than at a position invented for it.
+    let span = error
+        .labels()
+        .and_then(|mut labels| labels.next())
+        .map(|label| SourceSpan::new(label.offset().into(), label.len()))
+        .filter(|span| span.offset() + span.len() <= doc.content.len())
+        .unwrap_or_else(|| SourceSpan::new(0.into(), 0));
+
+    let (start_line, start_col, end_line, end_col) = span_to_positions(doc, &span);
+
+    Diagnostic {
+        start_line,
+        start_col,
+        end_line,
+        end_col,
+        severity: "error",
+        code,
+        source: "cypcb-world",
+        message: error.to_string(),
+    }
+}
+
+/// An import that could not be resolved, placed on the statement that wrote it.
+fn import_error_to_diagnostic(doc: &DocumentState, error: &ImportError) -> Diagnostic {
+    use cypcb_parser::ast::Definition;
+
+    // `ImportError` names the path as it was written, which is enough to find
+    // the statement it came from and underline that rather than the file's
+    // first character.
+    let wanted = error.path();
+    let span = doc
+        .ast
+        .as_ref()
+        .and_then(|ast| {
+            ast.definitions.iter().find_map(|def| match def {
+                Definition::Import(import) if import.path.value == wanted => Some(import.span),
+                _ => None,
+            })
+        })
+        .map(|span| SourceSpan::new(span.start.into(), span.end - span.start))
+        .unwrap_or_else(|| SourceSpan::new(0.into(), 0));
+
+    let (start_line, start_col, end_line, end_col) = span_to_positions(doc, &span);
+
+    Diagnostic {
+        start_line,
+        start_col,
+        end_line,
+        end_col,
+        severity: "error",
+        code: "import".to_string(),
+        source: "cypcb-parser",
+        message: error.to_string(),
+    }
 }
 
 fn parse_error_to_diagnostic(doc: &DocumentState, error: &ParseError) -> Option<Diagnostic> {
