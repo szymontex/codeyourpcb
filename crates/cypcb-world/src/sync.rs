@@ -502,10 +502,27 @@ pub fn sync_ast_to_world(
     let expanded = expand_module_instances(ast, source, &mut result);
     let definitions = &expanded;
 
+    // How many copper layers the board declares, read before the footprints
+    // because a drilled pad exists on every one of them.
+    //
+    // A through-hole pad used to be given `[TopCopper, BottomCopper]` whatever
+    // the board said, so on a four-layer board it did not exist on In1 or In2.
+    // A trace on an inner layer could not reach it, the checker could not see
+    // its copper there, and `examples/four-layer.cypcb` - whose whole subject
+    // is inner copper - shipped a trace on Inner1 joining two pads it could
+    // not touch, with `cypcb check` reporting all four pins unreached.
+    let copper_layers = definitions
+        .iter()
+        .find_map(|def| match def {
+            Definition::Board(board) => board.layers,
+            _ => None,
+        })
+        .unwrap_or(2);
+
     footprint_lib.clear_design();
     for def in definitions {
         if let Definition::Footprint(fp_def) = def {
-            footprint_lib.register_design(convert_footprint_def(fp_def));
+            footprint_lib.register_design(convert_footprint_def(fp_def, copper_layers));
         }
     }
 
@@ -1271,7 +1288,7 @@ fn ast_kind_to_ecs_kind(kind: cypcb_parser::ast::ComponentKind) -> ComponentKind
 }
 
 /// Convert an AST FootprintDef to a library Footprint.
-fn convert_footprint_def(fp_def: &FootprintDef) -> Footprint {
+fn convert_footprint_def(fp_def: &FootprintDef, copper_layers: u8) -> Footprint {
     let pads: Vec<FootprintPadDef> = fp_def
         .pads
         .iter()
@@ -1284,8 +1301,19 @@ fn convert_footprint_def(fp_def: &FootprintDef) -> Footprint {
                 size: (p.width.to_nm(), p.height.to_nm()),
                 drill: p.drill.as_ref().map(|d| d.to_nm()),
                 layers: if is_tht {
-                    // Through-hole pads span both copper layers
-                    vec![Layer::TopCopper, Layer::BottomCopper]
+                    // A drilled hole goes through the whole board, so its
+                    // copper is on every copper layer the board has - not just
+                    // the outer two.
+                    // Zero-based: `Layer::Inner(0)` is the first inner layer,
+                    // which `job.rs` names `In1` and the DSL spells `Inner1`.
+                    let mut layers = vec![Layer::TopCopper];
+                    for inner in 0..copper_layers.saturating_sub(2) {
+                        layers.push(Layer::Inner(inner));
+                    }
+                    if copper_layers > 1 {
+                        layers.push(Layer::BottomCopper);
+                    }
+                    layers
                 } else {
                     // SMD pads on top copper with paste and mask
                     vec![Layer::TopCopper, Layer::TopPaste, Layer::TopMask]

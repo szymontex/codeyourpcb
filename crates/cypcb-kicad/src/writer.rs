@@ -37,7 +37,9 @@ fn layer_name(layer: Layer) -> Result<String, KicadWriteError> {
     Ok(match layer {
         Layer::TopCopper => "F.Cu".to_string(),
         Layer::BottomCopper => "B.Cu".to_string(),
-        Layer::Inner(n) => format!("In{n}.Cu"),
+        // Zero-based inside, one-based in the file, the same way
+        // `cypcb-export`'s `layer_tag` does it.
+        Layer::Inner(n) => format!("In{}.Cu", n + 1),
         other => return Err(KicadWriteError::UnknownLayer(other)),
     })
 }

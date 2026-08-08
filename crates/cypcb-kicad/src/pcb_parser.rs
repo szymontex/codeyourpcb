@@ -1405,10 +1405,15 @@ pub fn parse_layer_name(name: &str) -> Option<Layer> {
         "Edge.Cuts" => Some(Layer::Outline),
         _ => {
             // Handle inner copper layers: In1.Cu, In2.Cu, ...
+            // `In1.Cu` is the first inner layer, and this project numbers
+            // those from zero - `job.rs` writes `Layer::Inner(n)` as
+            // `In{n + 1}` and the DSL reads `Inner1` as `Inner(0)`. Reading it
+            // as `Inner(1)` put every imported inner trace one layer deeper
+            // than the file said, and exported it under the next layer's name.
             if let Some(rest) = name.strip_prefix("In") {
                 if let Some(num_str) = rest.strip_suffix(".Cu") {
                     if let Ok(n) = num_str.parse::<u8>() {
-                        return Some(Layer::Inner(n));
+                        return n.checked_sub(1).map(Layer::Inner);
                     }
                 }
             }
@@ -1714,8 +1719,14 @@ mod tests {
     fn test_parse_layer_name() {
         assert_eq!(parse_layer_name("F.Cu"), Some(Layer::TopCopper));
         assert_eq!(parse_layer_name("B.Cu"), Some(Layer::BottomCopper));
-        assert_eq!(parse_layer_name("In1.Cu"), Some(Layer::Inner(1)));
-        assert_eq!(parse_layer_name("In2.Cu"), Some(Layer::Inner(2)));
+        // Zero-based inside, one-based in the file. `cypcb-export`'s
+        // `layer_tag` writes `Layer::Inner(n)` as `In{n + 1}`, and the DSL
+        // reads `Inner1` as `Inner(0)`; this read `In1.Cu` as `Inner(1)`, so
+        // an imported inner trace landed one layer deeper than the file said
+        // and exported under the next layer's name.
+        assert_eq!(parse_layer_name("In1.Cu"), Some(Layer::Inner(0)));
+        assert_eq!(parse_layer_name("In2.Cu"), Some(Layer::Inner(1)));
+        assert_eq!(parse_layer_name("In0.Cu"), None, "there is no In0 layer");
         assert_eq!(parse_layer_name("F.SilkS"), Some(Layer::TopSilk));
         assert_eq!(parse_layer_name("B.SilkS"), Some(Layer::BottomSilk));
         assert_eq!(parse_layer_name("F.Mask"), Some(Layer::TopMask));

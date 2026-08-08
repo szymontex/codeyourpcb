@@ -13,10 +13,14 @@ board four_layer {
 }
 
 footprint PAD1 {
-    description "one square pad"
+    description "one square pad, drilled so it reaches every layer"
     courtyard 2mm x 2mm
 
-    pad 1 rect at 0mm, 0mm size 1mm x 1mm
+    // Drilled on purpose. Without it the pad is surface copper on the top
+    // layer only, and the `SIG` trace below - which this example puts on
+    // Inner1 - joined two pads it could not reach. `cypcb check` said so all
+    // along: four pins, none of them reached by any copper.
+    pad 1 rect at 0mm, 0mm size 1.6mm x 1.6mm drill 0.8mm
 }
 
 component J1 connector "PAD1" {
