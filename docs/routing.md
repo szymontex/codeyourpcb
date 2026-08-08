@@ -149,14 +149,31 @@ insensitive to. Prices a hundredth apart ask for the same trade and get
 different boards
 (`via_price_sweep::how_much_of_the_price_is_noise`):
 
-| price | stm32_breakout | multi_ic |
-|---|---|---|
-| 0.22 | 221 / 127 | 231 / 143 |
-| 0.24 | 207 / 115 | 261 / 163 |
-| 0.25 | 221 / 136 | 247 / 175 |
-| 0.26 | 245 / 147 | 258 / 166 |
-| 0.28 | 238 / 119 | 249 / 162 |
-| **spread** | **38 violations, 32 shorts** | **30 violations, 23 shorts** |
+Re-measured 2026-08-08 across all five sweepable fixtures at once, on boards
+that are all fabricable for the first time - no copper outside an outline, no
+two parts in the same place, no copper the file invents. Introduced violations
+and shorts:
+
+| price | stm32_breakout | multi_ic | shift_driver | qfp_fanout | plane_board |
+|---|---|---|---|---|---|
+| 0.22 | 220 / 149 | 200 / 133 | 65 / 34 | 331 / 175 | 28 / 13 |
+| 0.24 | 231 / 154 | 265 / 189 | 66 / 35 | 366 / 191 | 28 / 13 |
+| 0.25 | 172 / 93 | 255 / 187 | 65 / 34 | 309 / 147 | 28 / 13 |
+| 0.26 | 188 / 112 | 236 / 171 | 67 / 34 | 312 / 166 | 28 / 13 |
+| 0.28 | 182 / 104 | 245 / 176 | 50 / 27 | 311 / 167 | 28 / 13 |
+| **spread** | **59 / 61** | **65 / 56** | **17 / 8** | **57 / 44** | **0 / 0** |
+
+`plane_board` is the exception that sharpens the rule: it routes identically at
+every price in the range, to the violation. A board with a ground plane has far
+fewer nets competing for the same cells, so the rip-up order it produces does
+not change when the price does. Every board that wobbles is a board where the
+negotiation has room to go differently.
+
+**The bands moved when the fixtures were repaired, and three of them widened.**
+`stm32_breakout` went from 38 to 59 and `qfp_fanout` from 40 to 57. Any ratchet
+set from an older band is now set inside its board's noise, which is a test
+that fails for reasons unrelated to the change being made - `benchmark_validation`
+carries the current numbers and the table it derives them from.
 
 That is the same size as the differences a sweep is choosing between. **A
 tuning value picked inside this band is noise with a decimal point** - not

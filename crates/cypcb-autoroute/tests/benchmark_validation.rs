@@ -228,73 +228,32 @@ fn print_table_footer() {
 /// open pins unchanged at 6 and one better at 22. Never raise these for a
 /// regression; lower them when the via ring reaches the grid.
 const DRC_RATCHETS: &[(&str, &str, u32, u32)] = &[
+    // Every entry re-measured 2026-08-08, and every band with it, on boards
+    // that are all fabricable for the first time: no copper outside an
+    // outline, no two parts in the same place, no copper the files invent.
+    //
+    // Each ratchet is the routed value plus that board's own band from
+    // `via_price_sweep::how_much_of_the_price_is_noise`, run at the same time
+    // as the values. Three of them widen rather than tighten, and that is the
+    // point: a ratchet set inside a board's measured noise fails for reasons
+    // that have nothing to do with the change being tested.
+    //
+    // board            routed      band   shorts band
+    // stm32_breakout   180 / 93    59     61
+    // multi_ic         291 / 187   65     56
+    // shift_driver     65 / 34     17     8
+    // qfp_fanout       309 / 147   57     44
+    // plane_board      28 / 13     0      0
     ("led_blink.kicad_pcb", "led_blink", 2, 0),
-    // Re-measured 2026-08-08 at 180 / 93 on 899 routes, after two ten-pin
-    // headers whose last four pins ran 7.9mm past the top edge moved from
-    // y = 90 to y = 80. Pads off the board had been forcing the router into
-    // the edge region: violations fell 239 -> 180 and shorts 136 -> 93 for a
-    // placement change alone.
-    //
-    // Violations ratchet is the measured value plus this board's band of 30.
-    // The shorts ratchet stays at 136 rather than being tightened by a number
-    // nobody measured - no shorts band exists for this board - so it is looser
-    // than it could be and says so.
-    ("stm32_breakout.kicad_pcb", "stm32_breakout", 210, 136),
-    // Re-measured 2026-08-08 at 318 / 177, after two of its parts stopped
-    // sitting 50mm to the left of the board: the file carried `(at 105, 80)`
-    // and `(at 140, 55)` and the importer read a malformed coordinate as zero
-    // without a word. Its band is 63 violations wide across prices
-    // 0.22..0.28, and the shorts range 33 - both wider than the 30 and 23
-    // measured when a ferrite bead and an Ethernet transformer were off the
-    // board and out of the way.
-    // Re-measured 2026-08-08 at 291 / 187 with 945 routes, after the twelve
-    // real courtyard overlaps left on this board were repaired: nine
-    // decoupling capacitors ringing U1 at 0.14mm where 0.25mm is required, an
-    // HC49 crystal 13.4mm wide sitting across its neighbours, and two parts
-    // against the Ethernet transformer. Violations fell 304 -> 291 and shorts
-    // rose 177 -> 187; a placement repair is not an optimisation, and the
-    // board is buildable now where it was not.
-    //
-    // Violations ratchet is the measured value plus the band of 63. Shorts
-    // stay at 210 rather than the 220 that measured-plus-band would give:
-    // 187 is comfortably under 210, and raising a ratchet to match a formula
-    // would loosen it for no reason.
-    ("multi_ic.kicad_pcb", "multi_ic", 354, 210),
-    // Measured 2026-08-08 at 81 / 33, plus the board's own band from
-    // `via_price_sweep::how_much_of_the_price_is_noise`: 62 to 74 across
-    // prices 0.22..0.28, 12 violations wide, and 27 to 34 shorts.
-    // Re-measured 2026-08-08 at 65 / 34 on 671 routes, after three bypass
-    // capacitors that sat 3.4mm above the board - placed there to clear a DIP
-    // courtyard - moved inside it. Violations ratchet is the measured value
-    // plus its band of 12; the shorts ratchet stays at 40, which is already
-    // tighter than measured-plus-band would give.
-    ("shift_driver.kicad_pcb", "shift_driver", 77, 40),
-    // 336 / 179, band 296 to 336 across prices 0.22..0.28 - 40 violations
-    // wide. This fixture has now been corrected twice: its headers ran past
-    // the board outline, and then two of the four collapsed onto the geometry
-    // of the first because the importer keys its footprint library by library
-    // name alone. Each correction moved the board the router sees, so each
-    // needed its own measurement: 343 on the invalid board, 676 when the model
-    // still ran two headers down one edge, 336 now that the file and the model
-    // agree.
-    ("qfp_fanout.kicad_pcb", "qfp_fanout", 376, 260),
-    // The first fixture with a ground plane. Re-measured 2026-08-08 at 28 / 13
-    // with 181 routes and nothing unrouted, after one of its decoupling
-    // capacitors moved 1mm: C1 and C2 sat 3mm apart and an 0603 courtyard is
-    // about 3mm wide, so they overlapped at exactly 0.00mm and the fixture was
-    // not a board anybody could assemble. Moving it also moved the routing -
-    // 210 routes became 181 and the count fell from 40.
-    //
-    // The band carried over is the one measured on the board before that move:
-    // 9 violations wide and 5 shorts, from
-    // `via_price_sweep::how_much_of_the_price_is_noise`. A 1mm move does not
-    // change how sensitive a board is to the via price, but it was not
-    // re-measured, and the ratchet only tightens either way.
-    //
-    // The vias on a 12-part board are the point of it: seven surface-mount
-    // ground pads sit on F.Cu and the plane is on B.Cu, so each needs a
-    // stitching via. No other fixture makes the router do that.
-    ("plane_board.kicad_pcb", "plane_board", 37, 18),
+    ("stm32_breakout.kicad_pcb", "stm32_breakout", 239, 154),
+    ("multi_ic.kicad_pcb", "multi_ic", 356, 243),
+    ("shift_driver.kicad_pcb", "shift_driver", 82, 42),
+    ("qfp_fanout.kicad_pcb", "qfp_fanout", 366, 191),
+    // A band of zero is not a rounding: this board routes identically at every
+    // via price from 0.22 to 0.28, 28 violations and 13 shorts each time. Its
+    // ratchet is the measured value exactly, so any movement at all is a real
+    // change rather than weather.
+    ("plane_board.kicad_pcb", "plane_board", 28, 13),
 ];
 
 /// Routes every fixture and holds the line on completeness and DRC count.

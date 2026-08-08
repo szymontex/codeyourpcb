@@ -493,7 +493,21 @@ multi_ic        0.26: 13 iterations, converged false, [553, 339, 269, 270, 258, 
   Pads off the board had been forcing the router into the edge region. Ratchets tightened to measured-plus-band: 239 -> 210 and 93 -> 77. The shorts ratchets stay where they were rather than being tightened by a number nobody measured - neither board has a measured shorts band - so they are looser than they could be and the comments say so.
 - Every fixture is now a board somebody could make, and this time the list backs it: no copper outside an outline, no parts in the same place, no invented copper, no plated mounting holes.
 - Workspace 107 suites, gate green 8/8.
-- NEXT-ACTION: **measure a shorts band for `stm32_breakout` and `shift_driver`**, the two ratchets now held at a number rather than at a measurement. `via_price_sweep::how_much_of_the_price_is_noise` already prints shorts per price; it just has never been read for a shorts band. Cheap to run, and it closes the last place where a ratchet is a guess.
+- DONE: **every ratchet and every band re-measured in one run, on boards that are all fabricable for the first time.** The shorts columns were being printed by the sweep all along and never read.
+
+| board | routed | band | shorts band | ratchet |
+|---|---|---|---|---|
+| stm32_breakout | 180 / 93 | 59 | 61 | 239 / 154 |
+| multi_ic | 291 / 187 | 65 | 56 | 356 / 243 |
+| shift_driver | 65 / 34 | 17 | 8 | 82 / 42 |
+| qfp_fanout | 309 / 147 | 57 | 44 | 366 / 191 |
+| plane_board | 28 / 13 | **0** | **0** | 28 / 13 |
+
+- **Three ratchets widen rather than tighten, and that is the correction.** The bands moved when the fixtures were repaired - `stm32_breakout` 38 -> 59, `qfp_fanout` 40 -> 57 - so the value I set last fire, 210 from a stale band of 30, sat *inside* that board's noise. A ratchet inside the noise is a test that fails for reasons unrelated to the change being made. `qfp_fanout` and `plane_board` tighten sharply for the same reason, 376 -> 366 and 49 -> 28.
+- **`plane_board` routes identically at every price from 0.22 to 0.28** - 28 violations and 13 shorts, five times over - so its ratchet is the measured value exactly and any movement at all is real. A board with a ground plane has far fewer nets competing for the same cells, so the rip-up order does not change when the price does. Every board that wobbles is one where the negotiation has room to go differently.
+- The band table in `docs/routing.md` is republished from this run, all five boards in one table with shorts, replacing a two-board table measured before any fixture was repaired.
+- Workspace 107 suites, gate green 8/8.
+- NEXT-ACTION: none pulled. Fixtures, ratchets and bands are all measured from the same repaired boards, and the documentation quotes that run. The next fire should start somewhere else entirely - `cypcb score` has never been read, and no fire has checked what the DSL examples say when checked as a set.
 - DONE: **components say which face they are on.** A `Side` component with the three questions a face answers - which copper its SMD pads take, which silkscreen it prints to, and its layer-mask bit. The KiCad importer reads `(layer "B.Cu")` from a footprint, which is the only place in the codebase where the side is data rather than inference; sync derives it from the footprint's copper and stores the answer so every rule reads the same one. The silkscreen rule takes it and falls back to the old guess only when nothing states it. Proven on a two-footprint board where one is `F.Cu` and one `B.Cu`: `[("R1", Top), ("R2", Bottom)]`.
 
 ### V2 - Autorouter and routing quality
