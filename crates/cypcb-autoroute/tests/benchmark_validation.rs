@@ -237,11 +237,19 @@ const DRC_RATCHETS: &[(&str, &str, u32, u32)] = &[
     // 0.22..0.28, and the shorts range 33 - both wider than the 30 and 23
     // measured when a ferrite bead and an Ethernet transformer were off the
     // board and out of the way.
-    // Re-measured 2026-08-08 at 304 / 177, down from 318 when the importer
-    // stopped deriving courtyards half a millimetre too generously: 14 of this
-    // board's courtyard overlaps were the reader's invention rather than the
-    // board's. Band unchanged at 63.
-    ("multi_ic.kicad_pcb", "multi_ic", 367, 210),
+    // Re-measured 2026-08-08 at 291 / 187 with 945 routes, after the twelve
+    // real courtyard overlaps left on this board were repaired: nine
+    // decoupling capacitors ringing U1 at 0.14mm where 0.25mm is required, an
+    // HC49 crystal 13.4mm wide sitting across its neighbours, and two parts
+    // against the Ethernet transformer. Violations fell 304 -> 291 and shorts
+    // rose 177 -> 187; a placement repair is not an optimisation, and the
+    // board is buildable now where it was not.
+    //
+    // Violations ratchet is the measured value plus the band of 63. Shorts
+    // stay at 210 rather than the 220 that measured-plus-band would give:
+    // 187 is comfortably under 210, and raising a ratchet to match a formula
+    // would loosen it for no reason.
+    ("multi_ic.kicad_pcb", "multi_ic", 354, 210),
     // Measured 2026-08-08 at 81 / 33, plus the board's own band from
     // `via_price_sweep::how_much_of_the_price_is_noise`: 62 to 74 across
     // prices 0.22..0.28, 12 violations wide, and 27 to 34 shorts.

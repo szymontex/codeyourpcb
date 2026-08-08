@@ -344,6 +344,8 @@ its four headers onto one geometry, and with `plane_board` added:
 | 1 cell | 2 / 1 | 233 / 82 | 261 / 119 | 92 / 38 | 341 / 172 | 39 / **12** |
 | 2 cells | 2 / 1 | **216** / 86 | **229** / **109** | 87 / 38 | 326 / 186 | 42 / 24 |
 | **3 cells (default)** | **2** / **0** | 239 / 136 | 318 / 177 | **81** / **33** | **309** / **147** | 40 / 18 |
+
+**`multi_ic` and `plane_board` moved again after this table was taken.** `multi_ic` had twelve real courtyard overlaps repaired - it routes at 291 / 187 on 945 routes now, against the 318 / 177 above - and `plane_board` had one, and routes at 28 / 13 on 181 routes against its 40 / 18. Both are placement repairs rather than router changes: the boards are buildable now and they were not. The shape of the margin comparison is unaffected, since every column moved for the same reason and none of them by a margin change, but re-run the sweep before quoting a cell from it.
 | 5 cells | 4 / 1 | 273 / 164 | 342 / 201 | 98 / 60 | 341 / 206 | 40 / 22 |
 
 Two rows of the previous table were wrong and are corrected here: `multi_ic`

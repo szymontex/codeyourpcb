@@ -197,11 +197,17 @@ fn every_fixture_states_a_size_and_a_layer_count() {
 /// so an imported board lost half a millimetre of apparent clearance between
 /// every neighbouring pair. Derived at the right excess: 12, 0 and 0.
 ///
-/// What is left on `multi_ic` is real placement, in a fixture written by hand.
-/// It predates this check by a long way and repairing it moves that fixture's
-/// ratchet, its band and the tables quoting it, so it is recorded rather than
-/// tolerated in silence.
-const KNOWN_OVERLAPS: &[(&str, usize)] = &[("multi_ic.kicad_pcb", 12)];
+/// The twelve left on `multi_ic` were real placement in a hand-written fixture
+/// and are repaired: nine decoupling capacitors ringing U1 at 0.14mm where
+/// 0.25mm is required, an HC49 crystal 13.4mm wide across its neighbours, and
+/// two parts against the Ethernet transformer. Its routed count moved 304 ->
+/// 291 violations with 187 shorts, and eight solder-mask bridges went with
+/// them.
+///
+/// Every fixture is now a board whose parts fit beside each other, so this
+/// list is empty and a new entry in it is a new defect rather than an
+/// inheritance.
+const KNOWN_OVERLAPS: &[(&str, usize)] = &[];
 
 #[test]
 fn no_fixture_asks_for_two_parts_in_the_same_place() {

@@ -437,7 +437,7 @@
   ; -- Y1: 8MHz crystal --
   (footprint "Crystal:Crystal_SMD_HC49-SD"
     (layer "F.Cu")
-    (at 85 60)
+    (at 81 61)
     (property "Reference" "Y1")
     (property "Value" "8MHz")
     (property "Footprint" "Crystal:Crystal_SMD_HC49-SD")
@@ -458,7 +458,7 @@
 
   (footprint "Capacitor_SMD:C_0402_1005Metric"
     (layer "F.Cu")
-    (at 90 62)
+    (at 89.5 62)
     (property "Reference" "C1")
     (property "Value" "100nF")
     (property "Footprint" "Capacitor_SMD:C_0402_1005Metric")
@@ -470,7 +470,7 @@
 
   (footprint "Capacitor_SMD:C_0402_1005Metric"
     (layer "F.Cu")
-    (at 90 65)
+    (at 89.5 65)
     (property "Reference" "C2")
     (property "Value" "100nF")
     (property "Footprint" "Capacitor_SMD:C_0402_1005Metric")
@@ -482,7 +482,7 @@
 
   (footprint "Capacitor_SMD:C_0402_1005Metric"
     (layer "F.Cu")
-    (at 90 68)
+    (at 89.5 68)
     (property "Reference" "C3")
     (property "Value" "100nF")
     (property "Footprint" "Capacitor_SMD:C_0402_1005Metric")
@@ -494,7 +494,7 @@
 
   (footprint "Capacitor_SMD:C_0402_1005Metric"
     (layer "F.Cu")
-    (at 90 71)
+    (at 89.5 71)
     (property "Reference" "C4")
     (property "Value" "100nF")
     (property "Footprint" "Capacitor_SMD:C_0402_1005Metric")
@@ -506,7 +506,7 @@
 
   (footprint "Capacitor_SMD:C_0402_1005Metric"
     (layer "F.Cu")
-    (at 90 74)
+    (at 89.5 74)
     (property "Reference" "C5")
     (property "Value" "100nF")
     (property "Footprint" "Capacitor_SMD:C_0402_1005Metric")
@@ -518,7 +518,7 @@
 
   (footprint "Capacitor_SMD:C_0402_1005Metric"
     (layer "F.Cu")
-    (at 110 62)
+    (at 110.5 62)
     (property "Reference" "C6")
     (property "Value" "100nF")
     (property "Footprint" "Capacitor_SMD:C_0402_1005Metric")
@@ -530,7 +530,7 @@
 
   (footprint "Capacitor_SMD:C_0402_1005Metric"
     (layer "F.Cu")
-    (at 110 65)
+    (at 110.5 65)
     (property "Reference" "C7")
     (property "Value" "100nF")
     (property "Footprint" "Capacitor_SMD:C_0402_1005Metric")
@@ -542,7 +542,7 @@
 
   (footprint "Capacitor_SMD:C_0402_1005Metric"
     (layer "F.Cu")
-    (at 110 68)
+    (at 110.5 68)
     (property "Reference" "C8")
     (property "Value" "100nF")
     (property "Footprint" "Capacitor_SMD:C_0402_1005Metric")
@@ -554,7 +554,7 @@
 
   (footprint "Capacitor_SMD:C_0402_1005Metric"
     (layer "F.Cu")
-    (at 110 71)
+    (at 110.5 71)
     (property "Reference" "C9")
     (property "Value" "100nF")
     (property "Footprint" "Capacitor_SMD:C_0402_1005Metric")
@@ -590,7 +590,7 @@
 
   (footprint "Capacitor_SMD:C_0402_1005Metric"
     (layer "F.Cu")
-    (at 135 55)
+    (at 132 55)
     (property "Reference" "C12")
     (property "Value" "100nF")
     (property "Footprint" "Capacitor_SMD:C_0402_1005Metric")
@@ -712,7 +712,7 @@
 
   (footprint "LED_SMD:LED_0603_1608Metric"
     (layer "F.Cu")
-    (at 145 53)
+    (at 145 62)
     (property "Reference" "D5")
     (property "Value" "Yellow")
     (property "Footprint" "LED_SMD:LED_0603_1608Metric")

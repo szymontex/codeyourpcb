@@ -461,7 +461,21 @@ multi_ic        0.26: 13 iterations, converged false, [553, 339, 269, 270, 258, 
 - `multi_ic` drops from 318 violations to **304** with the 14 phantom overlaps gone; every other ratchet is unchanged. Its ratchet tightens 381 -> 367, measured plus its band of 63.
 - The 12 left on `multi_ic` are real placement in a hand-written fixture. They stay recorded in `KNOWN_OVERLAPS` rather than tolerated in silence, and repairing them still moves that fixture's ratchet, band and tables.
 - Workspace 107 suites, gate green 8/8.
-- NEXT-ACTION: **the 12 real overlaps on `multi_ic`**, now that the phantom ones are gone and the number is honest. Same shape as the `qfp_fanout` repair: move parts in a hand-written fixture, re-measure its ratchet and band, and correct whatever in `docs/routing.md` quotes it.
+- DONE: **`multi_ic`'s twelve real overlaps are repaired, and every fixture is now a board whose parts fit beside each other.** Nine were decoupling capacitors ringing U1 at a uniform 0.14mm where 0.25mm is required - one ring placed slightly too tight, fixed by moving both columns 0.5mm outward. The other three were an HC49 crystal 13.4mm wide across its neighbours and two parts against the Ethernet transformer.
+- **The crystal took three attempts because I was guessing at its size.** Moved to two "empty" spots it collided with three more parts each time; measuring the footprint - pads at plus and minus 5.7mm, so 13.4mm with its courtyard - placed it correctly first time after that. Read the part before moving it.
+- Measured before and after on the unrouted board, so what the moves cost is visible rather than assumed:
+
+| | before | after |
+|---|---|---|
+| courtyard-clearance | 12 | **0** |
+| solder-mask-bridge | 28 | **20** |
+| clearance | 39 | 38 |
+| edge-clearance, unconnected-pin, unrouted-pin, shorts | 1, 2, 202, 32 | unchanged |
+
+- Routed: 978 routes -> 945, violations 304 -> 291, shorts 177 -> **187**. A placement repair is not an optimisation - the shorts rose - and the board is buildable now where it was not. Ratchet 367 -> **354**; the shorts ratchet stays at 210 rather than the 220 measured-plus-band would give, because raising one to match a formula loosens it for no reason.
+- `KNOWN_OVERLAPS` is empty. A new entry in it is now a new defect rather than an inheritance. The margin table in `docs/routing.md` is dated with the moved numbers.
+- Workspace 107 suites, gate green 8/8.
+- NEXT-ACTION: **`multi_ic` carries 32 pieces of copper touching copper at 0.00mm before anything is routed** - shorts in the traces the file itself ships, on the fixture most of `docs/routing.md` is measured against. Same class as the overlaps and the off-board pads: measured, visible, and nobody has looked.
 - DONE: **components say which face they are on.** A `Side` component with the three questions a face answers - which copper its SMD pads take, which silkscreen it prints to, and its layer-mask bit. The KiCad importer reads `(layer "B.Cu")` from a footprint, which is the only place in the codebase where the side is data rather than inference; sync derives it from the footprint's copper and stores the answer so every rule reads the same one. The silkscreen rule takes it and falls back to the old guess only when nothing states it. Proven on a two-footprint board where one is `F.Cu` and one `B.Cu`: `[("R1", Top), ("R2", Bottom)]`.
 
 ### V2 - Autorouter and routing quality
