@@ -1407,7 +1407,8 @@ cypcb::sync::unknown_pin
 | completeness | 5 unrouted on blink | 0 on every fixture |
 | autoroute suite runtime | 432s | 26s |
 - ~~QUEUED: routing stm32_breakout takes about two minutes~~ **Stale by two orders of magnitude.** One routing run is **0.4s** and the whole best-of-eleven is 8.41s, measured 2026-08-08 after the profile split, the allocation work, the in-house search and the flat grid.
-- QUEUED: render frame time on the largest example. The other two entries on this line are answered: the module is **1,132,772 bytes** today, not 702,357 - the Rust reader landed since - and the allocation question was answered by callgrind rather than by counting: the allocator was 69.6% of a routing run and is now off the profile entirely.
+- DONE: **the renderer's frame time is measured, and there is nothing to optimise.** It was a queued item for weeks, so nobody could say whether the viewer was fast or fast by accident. `main.ts` times the `render()` call and keeps the last hundred behind `window.__renderTiming`; two `performance.now()` calls on a frame that was going to redraw anyway. Measured in headless chromium, board fitted to the view, forty zoom events: **200 parts and 100 traces - median 0.70ms, p95 1.60ms**; **1000 parts and 500 traces - median 2.50ms, p95 4.10ms**. One frame at 60Hz is 16.7ms, so the renderer has an order of magnitude in hand at five times the size of anything this project ships as an example.
+- `viewer/e2e/renderer-frame-time.spec.ts` generates the board rather than loading one, because the largest example in `examples/` is ninety lines. It asserts a deliberately loose ceiling - a median under 50ms - because it runs on a shared build machine and a test that fails when the machine is busy is a test people learn to ignore. What it catches is the day the renderer gets an order of magnitude slower.
 
 ## Domain model - what a tool of this kind has to represent
 

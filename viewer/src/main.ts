@@ -1587,6 +1587,14 @@ async function init(): Promise<void> {
   // outside any other way.
   (window as any).__loadedKind = () => loadedKind;
 
+  (window as any).__renderTiming = {
+    /** Milliseconds each of the last frames spent inside `render()`. */
+    samples: () => [...frameTimes],
+    reset: () => {
+      frameTimes.length = 0;
+    },
+  };
+
   (window as any).__renderState = {
     get selectedTraceId() { return selectedTraceId; },
     get hoveredTraceId() { return hoveredTraceId; },
@@ -2036,6 +2044,24 @@ async function init(): Promise<void> {
     interactionState.dirty = true;
   }
 
+  /**
+   * How long the last frames took to draw, newest last.
+   *
+   * A renderer nobody can time is a renderer nobody can optimise: the frame
+   * budget on a big board had never been measured, only assumed. Two
+   * `performance.now()` calls on a frame that was going to redraw anyway, and
+   * a hundred numbers kept, is a cost small enough to leave on.
+   */
+  const frameTimes: number[] = [];
+  const FRAME_SAMPLES = 100;
+
+  function recordFrame(ms: number): void {
+    frameTimes.push(ms);
+    if (frameTimes.length > FRAME_SAMPLES) {
+      frameTimes.shift();
+    }
+  }
+
   // Render loop
   function frame(): void {
     // Skip 2D rendering when 3D mode is active
@@ -2067,7 +2093,9 @@ async function init(): Promise<void> {
         dragEdit: interactionState.dragEdit,
         rectSelect: interactionState.rectSelect,
       };
+      const renderStartedAt = performance.now();
       render(ctx, renderState);
+      recordFrame(performance.now() - renderStartedAt);
 
       // Debug routing overlay — draw selected net or all nets
       if (debugOverlayStage !== -1 && debugData?._activeStage) {
