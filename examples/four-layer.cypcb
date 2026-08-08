@@ -43,6 +43,20 @@ component J4 connector "PAD1" {
     at 15mm, 17mm
 }
 
+// A second pair, joined on the other inner layer. Without them In2 was a file
+// that existed and held pads, and nothing in the repository ever put copper
+// on it - which is how an off-by-one in the layer numbering survived: it
+// would have moved this trace into In2 and nobody would have looked.
+component J5 connector "PAD1" {
+    value "in2"
+    at 5mm, 5mm
+}
+
+component J6 connector "PAD1" {
+    value "out2"
+    at 25mm, 5mm
+}
+
 net SIG {
     J1.1
     J2.1
@@ -56,9 +70,21 @@ net CROSS {
     J4.1
 }
 
+net SIG2 {
+    J5.1
+    J6.1
+}
+
 trace SIG {
     from J1.1
     to J2.1
     layer Inner1
+    width 0.2mm
+}
+
+trace SIG2 {
+    from J5.1
+    to J6.1
+    layer Inner2
     width 0.2mm
 }

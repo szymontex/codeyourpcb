@@ -86,10 +86,6 @@ fn layer(dir: &std::path::Path, name: &str) -> String {
     std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
 }
 
-fn draws(gerber: &str) -> usize {
-    gerber.lines().filter(|line| line.contains("D01")).count()
-}
-
 fn flashes(gerber: &str) -> usize {
     gerber.lines().filter(|line| line.contains("D03")).count()
 }
@@ -114,6 +110,7 @@ fn a_drilled_pad_appears_on_every_copper_layer() {
     // The defect this catches: a through-hole pad given only the outer two
     // layers. Its copper has to be on all four, because the hole goes through
     // all four - and an inner trace has nothing to connect to otherwise.
+    // Six pads since the example gained a second inner-layer pair.
     let dir = routed_and_exported("pads");
 
     for name in ["F_Cu", "In1_Cu", "In2_Cu", "B_Cu"] {
@@ -121,8 +118,8 @@ fn a_drilled_pad_appears_on_every_copper_layer() {
         // At least four, not exactly four: a via flashes its ring on the
         // layers it spans, and the router is free to place one.
         assert!(
-            flashes(&gerber) >= 4,
-            "{name} carries {} flashes, and the board has four drilled pads \
+            flashes(&gerber) >= 6,
+            "{name} carries {} flashes, and the board has six drilled pads \
              that every copper layer passes through",
             flashes(&gerber)
         );
@@ -132,25 +129,39 @@ fn a_drilled_pad_appears_on_every_copper_layer() {
 }
 
 #[test]
-fn the_inner_trace_is_on_the_inner_layer_the_file_named() {
-    // `four-layer.cypcb` places one trace by hand, on Inner1. The DSL reads
-    // that as `Layer::Inner(0)` and the exporter names it `In1_Cu`. Reading it
-    // as `Inner(1)` instead - which the KiCad importer did - would put it in
-    // `In2_Cu`, one layer deeper than the file says.
+fn each_inner_trace_is_on_the_layer_the_file_named() {
+    // `four-layer.cypcb` places two traces by hand: `SIG` on Inner1 at y=10mm
+    // and `SIG2` on Inner2 at y=5mm. The DSL reads those as `Layer::Inner(0)`
+    // and `Inner(1)`, and the exporter names them `In1_Cu` and `In2_Cu`.
+    //
+    // The heights are what makes this a real check. Reading `Inner1` as
+    // `Inner(1)` - which the KiCad importer did until 2026-08-08 - moves the
+    // first trace into `In2_Cu`, where a count of draws would still look
+    // plausible. A coordinate does not.
     let dir = routed_and_exported("inner");
 
     let in1 = layer(&dir, "In1_Cu");
     let in2 = layer(&dir, "In2_Cu");
 
+    // 2.6 format: y=10mm is Y10000000, y=5mm is Y5000000.
     assert!(
-        draws(&in1) > 0,
-        "In1 carries no copper, and the file puts a trace there:\n{in1}"
+        in1.contains("Y10000000D01*"),
+        "In1 is missing the trace the file puts at y=10mm:\n{in1}"
     );
-    assert_eq!(
-        draws(&in2),
-        0,
-        "In2 carries copper the file never put there - the layer numbering is \
-         off by one"
+    assert!(
+        !in1.contains("Y5000000D01*"),
+        "In1 carries the trace the file puts on In2 at y=5mm:\n{in1}"
+    );
+
+    assert!(
+        in2.contains("Y5000000D01*"),
+        "In2 is missing the trace the file puts at y=5mm - until this example \
+         gained a second pair, In2 was a file that existed and held pads, and \
+         nothing in the repository ever put copper on it:\n{in2}"
+    );
+    assert!(
+        !in2.contains("Y10000000D01*"),
+        "In2 carries the trace the file puts on In1 at y=10mm:\n{in2}"
     );
 
     let _ = std::fs::remove_dir_all(&dir);
