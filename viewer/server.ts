@@ -46,7 +46,20 @@ console.log('');
 // Create WebSocket server (bind to 0.0.0.0 for external access)
 const wss = new WebSocketServer({ port: WS_PORT, host: '0.0.0.0' });
 
-wss.on('connection', (ws) => {
+wss.on('connection', (ws, request) => {
+  // A browser sends `Origin` and cannot be talked out of it; WebSocket is not
+  // subject to CORS, so any page a developer visits could open this socket and
+  // start naming files. Every path is checked against the watched directory,
+  // which bounds the damage - but a page could still overwrite the boards in
+  // it. Only a page served by the same host as this socket gets in, and a
+  // client with no `Origin` at all is not a browser.
+  const origin = request.headers.origin;
+  if (origin && !allowedOrigin(origin, request.headers.host)) {
+    console.warn(`[WS] Refused a connection from ${origin}`);
+    ws.close(1008, 'Only a page served locally may talk to this server');
+    return;
+  }
+
   console.log('[WS] Client connected');
   clients.add(ws);
 
@@ -94,6 +107,32 @@ wss.on('listening', () => {
 /**
  * Get list of .cypcb files in watch directory
  */
+/**
+ * Whether a page is allowed to talk to this server.
+ *
+ * The rule is same-host, not localhost: this server is reached over the LAN as
+ * well - a board is often looked at from another machine on `192.168.x.y:7001`
+ * - and a localhost-only rule would refuse the browser that is actually being
+ * used. A page served by the same host the socket was opened on is the page
+ * this project serves; anything else is somebody else's page reaching for a
+ * developer's disk.
+ */
+function allowedOrigin(origin: string, host: string | undefined): boolean {
+  let hostname: string;
+  try {
+    hostname = new URL(origin).hostname;
+  } catch {
+    return false;
+  }
+
+  if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]') return true;
+  if (!host) return false;
+
+  // `Host` is `name:port`, and an IPv6 literal keeps its brackets.
+  const bare = host.startsWith('[') ? host.slice(0, host.indexOf(']') + 1) : host.split(':')[0];
+  return hostname === bare;
+}
+
 /**
  * The file a client asked for, if it is really inside the watched directory.
  *
@@ -298,10 +337,22 @@ function handleRouteRequest(ws: WebSocket, message: { file?: string; content?: s
     return;
   }
 
-  // Determine file path
+  // Determine file path. The client names it, so it is checked like every
+  // other path a client names: routing runs a program with this as its
+  // argument and its directory as the working directory, and afterwards the
+  // handler reads `<file>.ses` and `<file>.routes` and sends them back - so an
+  // unchecked path here is both a write and a read of anywhere on the disk.
   let filePath: string;
-  if (message.file && existsSync(message.file)) {
-    filePath = message.file;
+  const named = message.file ? insideWatchDir(message.file) : null;
+  if (message.file && !named) {
+    ws.send(JSON.stringify({
+      type: 'route-error',
+      error: `Refused: ${message.file} is outside the watched directory`,
+    }));
+    return;
+  }
+  if (named && existsSync(named)) {
+    filePath = named;
   } else if (message.content) {
     // Save content to temp file
     filePath = join(WATCH_DIR, '_temp_route.cypcb');
@@ -423,7 +474,9 @@ function handleReadFileRequest(ws: WebSocket, message: { path?: string }): void 
 }
 
 function handleSaveRequest(ws: WebSocket, message: { file: string; content: string }): void {
-  if (!message.file || !message.content) {
+  // `content` may be empty: clearing a file is a save like any other, and
+  // `!message.content` refused it.
+  if (!message.file || message.content === undefined) {
     ws.send(JSON.stringify({
       type: 'save-error',
       error: 'Missing file path or content',

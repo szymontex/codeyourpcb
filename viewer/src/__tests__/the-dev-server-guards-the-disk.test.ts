@@ -95,6 +95,62 @@ afterAll(() => {
 });
 
 describe('the dev server guards the disk', () => {
+  it('refuses a browser page it does not serve', async () => {
+    // WebSocket is not subject to CORS: any page a developer visits can open
+    // this socket. A browser always sends `Origin` and cannot be talked out
+    // of it, so a page this project did not serve is refused at the door.
+    const socket = new WebSocket(`ws://127.0.0.1:${PORT}`, {
+      headers: { Origin: 'https://not-this-project.example' },
+    });
+
+    const closed = await new Promise<number>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('the socket stayed open')), 5_000);
+      socket.once('close', (code) => {
+        clearTimeout(timer);
+        resolve(code);
+      });
+      socket.once('error', () => {});
+    });
+
+    expect(closed).toBe(1008);
+  });
+
+  it('lets in a page served by the same host', async () => {
+    // Not a localhost-only rule: a board is often looked at from another
+    // machine on the network, and that browser's origin is the LAN address it
+    // loaded the page from - the same host it then opens this socket on.
+    const socket = new WebSocket(`ws://127.0.0.1:${PORT}`, {
+      headers: { Origin: 'http://127.0.0.1:4321' },
+    });
+    try {
+      await new Promise<void>((resolve, reject) => {
+        socket.once('open', () => resolve());
+        socket.once('error', reject);
+        socket.once('close', () => reject(new Error('refused a page it serves')));
+      });
+    } finally {
+      socket.close();
+    }
+  });
+
+  it('lets in a page loaded over the network from this machine', async () => {
+    // The case a localhost-only rule would have broken: the board is being
+    // looked at from another machine, so the page's origin is this machine's
+    // LAN address and the socket is opened on the same one.
+    const socket = new WebSocket(`ws://127.0.0.1:${PORT}`, {
+      headers: { Origin: 'http://192.168.0.10:7001', Host: '192.168.0.10:' + PORT },
+    });
+    try {
+      await new Promise<void>((resolve, reject) => {
+        socket.once('open', () => resolve());
+        socket.once('error', reject);
+        socket.once('close', () => reject(new Error('refused the browser actually in use')));
+      });
+    } finally {
+      socket.close();
+    }
+  });
+
   it('hands over a file inside the watched directory', async () => {
     // The request a design with an `import` makes: the engine cannot read a
     // file, so the page asks the server for the library beside the design.
@@ -139,6 +195,32 @@ describe('the dev server guards the disk', () => {
 
     expect(answer.type).toBe('save-error');
     expect(existsSync(target), 'a page must not be able to write here').toBe(false);
+  });
+
+  it('refuses to route a file outside it', async () => {
+    // Routing runs a program with this path as its argument and its directory
+    // as the working directory, then reads `<file>.ses` and `<file>.routes`
+    // beside it and sends them back - so an unchecked path here is a write and
+    // a read of anywhere on the disk.
+    const answer = await ask(
+      { type: 'route', file: join(outside, 'secrets.txt') },
+      (msg) => msg.type === 'route-start' || msg.type === 'route-error',
+    );
+
+    expect(answer.type).toBe('route-error');
+    expect(String(answer.error)).toContain('outside the watched directory');
+  });
+
+  it('saves a file the user emptied', async () => {
+    // `!message.content` refused an empty string, so clearing a board and
+    // saving it did nothing and said "Missing file path or content".
+    const answer = await ask(
+      { type: 'save', file: join(workspace, 'emptied.cypcb'), content: '' },
+      (msg) => msg.type === 'save-complete' || msg.type === 'save-error',
+    );
+
+    expect(answer.type).toBe('save-complete');
+    expect(readFileSync(join(workspace, 'emptied.cypcb'), 'utf8')).toBe('');
   });
 
   it('still saves inside it', async () => {
