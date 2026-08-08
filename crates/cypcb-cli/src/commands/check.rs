@@ -94,6 +94,35 @@ impl CheckCommand {
     /// Everything that happens once a board exists, whichever file it came
     /// from.
     fn check_board(&self, mut world: BoardWorld, source: &str) -> Result<()> {
+        // A file with no board is not a board that passed.
+        //
+        // `examples/v2-interfaces.cypcb` declares four interfaces and nothing
+        // else, and this command answered `OK: passed DRC against
+        // jlcpcb_2layer in 0ms`. Every rule skips quietly when there is no
+        // board size - `EdgeClearanceRule` says so in its own doc - so the
+        // checker ran, checked nothing, and reported a pass. A design whose
+        // board block failed to parse, or whose import did not resolve, got
+        // the same green line as a board that was actually checked.
+        if world.board_entity().is_none() {
+            let parts = {
+                let ecs = world.ecs_mut();
+                let mut query = ecs.query::<&cypcb_world::components::RefDes>();
+                query.iter(ecs).count()
+            };
+            if parts > 0 {
+                return Err(miette::miette!(
+                    "{} places {parts} component(s) and declares no board. \
+                     Nothing can be checked against a board that is not there.",
+                    self.file.display()
+                ));
+            }
+            println!(
+                "{} declares no board and places no components: nothing was checked.",
+                self.file.display()
+            );
+            return Ok(());
+        }
+
         if self.no_drc {
             println!(
                 "OK: {} parsed and validated (DRC skipped)",
