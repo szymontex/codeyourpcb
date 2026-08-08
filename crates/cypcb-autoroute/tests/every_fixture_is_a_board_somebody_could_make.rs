@@ -188,17 +188,20 @@ fn every_fixture_states_a_size_and_a_layer_count() {
 /// Parts that overlap each other, per fixture.
 ///
 /// A courtyard is the room a part needs to be placed and soldered, so two that
-/// overlap are two parts that cannot both go on the board. Nothing asked this
-/// of a fixture until now, and the answer was not zero: `multi_ic` has 26 such
-/// pairs and `stm32_breakout` 2. Both predate this check by a long way and
-/// fixing either moves its ratchet and every table drawn from it, so they are
-/// recorded rather than silently tolerated.
+/// overlap are two parts that cannot both go on the board.
 ///
-/// `plane_board` had one - two 0603 capacitors 3mm apart, whose courtyards are
-/// each about 3mm wide, touching at exactly 0.00mm. That one was mine, it was
-/// four fires old, and it is fixed at the generator.
-const KNOWN_OVERLAPS: &[(&str, usize)] =
-    &[("multi_ic.kicad_pcb", 26), ("stm32_breakout.kicad_pcb", 2)];
+/// The first count taken here was 26 on `multi_ic`, 2 on `stm32_breakout` and
+/// 1 on `plane_board`. **More than half of those were manufactured by the
+/// importer**, which derived a courtyard as the pad bounds plus a flat 0.5mm -
+/// twice `IPC_COURTYARD_EXCESS`, the excess this project uses everywhere else -
+/// so an imported board lost half a millimetre of apparent clearance between
+/// every neighbouring pair. Derived at the right excess: 12, 0 and 0.
+///
+/// What is left on `multi_ic` is real placement, in a fixture written by hand.
+/// It predates this check by a long way and repairing it moves that fixture's
+/// ratchet, its band and the tables quoting it, so it is recorded rather than
+/// tolerated in silence.
+const KNOWN_OVERLAPS: &[(&str, usize)] = &[("multi_ic.kicad_pcb", 12)];
 
 #[test]
 fn no_fixture_asks_for_two_parts_in_the_same_place() {

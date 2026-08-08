@@ -847,8 +847,17 @@ fn parse_footprint(
     let library_key = resolve_library_key(library, &library_key, &pad_defs);
 
     if !library.contains(&library_key) {
+        // The courtyard has to be derived: KiCad keeps it as `F.CrtYd`
+        // graphics inside the footprint and this reader carries pads only, so
+        // there is nothing to read - `multi_ic` has no `F.CrtYd` line at all.
+        //
+        // Derived at the excess this project uses everywhere else. It was a
+        // flat 0.5mm, twice `IPC_COURTYARD_EXCESS`, so an imported board lost
+        // half a millimetre of apparent clearance between every neighbouring
+        // pair and the checker invented overlaps the same board would not have
+        // if it had been written in this project's own language.
         let bounds = calculate_pad_bounds(&pad_defs);
-        let margin = Nm::from_mm(0.5);
+        let margin = cypcb_world::footprint::IPC_COURTYARD_EXCESS;
         let courtyard = Rect::from_points(
             Point::new(bounds.min.x - margin, bounds.min.y - margin),
             Point::new(bounds.max.x + margin, bounds.max.y + margin),

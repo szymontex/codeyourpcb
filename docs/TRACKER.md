@@ -448,7 +448,20 @@ multi_ic        0.26: 13 iterations, converged false, [553, 339, 269, 270, 258, 
 - `no_fixture_asks_for_two_parts_in_the_same_place` now asks it, holding each board against a known count the way the off-board-pad check does. The 26 and the 2 predate this by a long way and fixing either moves its ratchet and every table drawn from it, so they are recorded rather than tolerated in silence.
 - **I predicted this moves no ratchet and was wrong.** Moving one capacitor 1mm changed the routing: 210 routes became 181, violations 40 -> 28, shorts 18 -> 13. The ratchet is re-measured and tightened, 49/23 -> **37/18**. The band is carried over from the board before the move and the comment says so - a 1mm move does not change how sensitive a board is to the via price, but it was not re-measured, and the ratchet only tightens either way.
 - Workspace 107 suites, gate green 8/8.
-- NEXT-ACTION: **`multi_ic`'s 26 overlapping pairs.** It is the fixture most of `docs/routing.md` is measured on, and 26 pairs of parts that cannot both be placed means those numbers come from a board nobody can build - the same class as the off-board pads found on `qfp_fanout`, which moved its count by 340 when repaired. Sizeable: it moves that fixture's ratchet, its band, and the tables quoting it.
+- DONE: **more than half those overlaps were the importer's invention, not the boards'.** Before moving a single part, the question was where the courtyard comes from: KiCad keeps it as `F.CrtYd` graphics inside a footprint, this reader carries pads only - `multi_ic` has no `F.CrtYd` line at all - so it has to be derived. It was derived as the pad bounds plus a flat **0.5mm**, twice the `IPC_COURTYARD_EXCESS` this project uses everywhere else, sitting under a comment about something unrelated.
+- Every imported board therefore lost half a millimetre of apparent clearance between every neighbouring pair, and the checker invented overlaps the same board would not have if written in this project's own language.
+
+| fixture | overlaps at 0.5mm | at the project's 0.25mm |
+|---|---|---|
+| multi_ic | 26 | **12** |
+| stm32_breakout | 2 | **0** |
+| plane_board | 1 | **0** |
+| led_blink, shift_driver, qfp_fanout | 0 | 0 |
+
+- `multi_ic` drops from 318 violations to **304** with the 14 phantom overlaps gone; every other ratchet is unchanged. Its ratchet tightens 381 -> 367, measured plus its band of 63.
+- The 12 left on `multi_ic` are real placement in a hand-written fixture. They stay recorded in `KNOWN_OVERLAPS` rather than tolerated in silence, and repairing them still moves that fixture's ratchet, band and tables.
+- Workspace 107 suites, gate green 8/8.
+- NEXT-ACTION: **the 12 real overlaps on `multi_ic`**, now that the phantom ones are gone and the number is honest. Same shape as the `qfp_fanout` repair: move parts in a hand-written fixture, re-measure its ratchet and band, and correct whatever in `docs/routing.md` quotes it.
 - DONE: **components say which face they are on.** A `Side` component with the three questions a face answers - which copper its SMD pads take, which silkscreen it prints to, and its layer-mask bit. The KiCad importer reads `(layer "B.Cu")` from a footprint, which is the only place in the codebase where the side is data rather than inference; sync derives it from the footprint's copper and stores the answer so every rule reads the same one. The silkscreen rule takes it and falls back to the old guess only when nothing states it. Proven on a two-footprint board where one is `F.Cu` and one `B.Cu`: `[("R1", Top), ("R2", Bottom)]`.
 
 ### V2 - Autorouter and routing quality
