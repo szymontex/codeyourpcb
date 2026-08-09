@@ -21,18 +21,25 @@ import type * as monaco from 'monaco-editor';
  * - delimiter: Braces, parens, operators
  */
 export const cypcbLanguage: monaco.languages.IMonarchLanguage = {
+  // Every construct the language has. `the-editor-knows-every-keyword` reads
+  // the grammar and fails when this list falls behind it - which it had, by
+  // three whole constructs: `outline`, `netclass` and `diffpair` were written
+  // in plain text while `board` and `net` were coloured, so the editor said
+  // they were not part of the language.
   keywords: [
-    'version', 'board', 'component', 'net', 'footprint', 'trace',
-    'zone', 'keepout', 'resistor', 'capacitor', 'ic', 'connector',
+    'version', 'board', 'outline', 'component', 'net', 'netclass', 'diffpair',
+    'footprint', 'trace', 'zone', 'keepout',
+    'resistor', 'capacitor', 'ic', 'connector',
     'diode', 'transistor', 'led', 'crystal', 'inductor', 'generic',
     // v2 keywords
-    'module', 'interface', 'import', 'assert', 'within'
+    'module', 'use', 'interface', 'import', 'assert', 'within'
   ],
 
   properties: [
-    'size', 'layers', 'value', 'at', 'rotate', 'pin', 'width',
-    'clearance', 'current', 'from', 'to', 'via', 'layer', 'locked',
-    'bounds', 'stackup', 'description', 'pad', 'courtyard'
+    'size', 'layers', 'value', 'at', 'rotate', 'pin', 'lcsc', 'width',
+    'clearance', 'current', 'from', 'to', 'path', 'via', 'layer', 'locked',
+    'bounds', 'stackup', 'description', 'pad', 'courtyard', 'silk', 'point',
+    'implements', 'drill', 'radius', 'as'
   ],
 
   layerNames: ['Top', 'Bottom', 'Inner1', 'Inner2', 'Inner3', 'Inner4', 'all'],
