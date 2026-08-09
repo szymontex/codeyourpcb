@@ -708,6 +708,7 @@ impl PadShape {
 /// ```cypcb
 /// pad 1 rect at -2.7mm, -1.905mm size 1.5mm x 0.6mm
 /// pad 2 circle at 0mm, 0mm size 1.8mm x 1.8mm drill 1.0mm
+/// pad 3 oblong at 0mm, 3mm size 3.2mm x 1.8mm drill 2.4mm x 1.0mm
 /// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PadDef {
@@ -724,7 +725,20 @@ pub struct PadDef {
     /// Pad height.
     pub height: Dimension,
     /// Optional drill diameter for through-hole pads.
+    ///
+    /// For a slot this is the first of the two written dimensions, which is
+    /// its width in the pad's own frame - the same order `size W x H` uses.
     pub drill: Option<Dimension>,
+    /// The hole's second dimension, when the design wrote one.
+    ///
+    /// `drill 0.9mm` is a round hole and leaves this `None`; `drill 2.4mm x
+    /// 1.0mm` is a slot, milled along its length rather than drilled. A USB
+    /// connector, a barrel jack and a latching header all hold themselves to
+    /// the board through one, and until this existed a design written in this
+    /// language could not describe the hole its own parts need - slots reached
+    /// the model, the drill file, the KiCad file and the screen, from KiCad
+    /// imports only.
+    pub drill_height: Option<Dimension>,
     /// Source span.
     pub span: Span,
 }

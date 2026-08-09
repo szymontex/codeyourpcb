@@ -387,7 +387,15 @@ module.exports = grammar({
       optional(field('drill', $.drill_spec)),
     ),
 
-    drill_spec: $ => seq('drill', $.dimension),
+    // `drill 0.9mm` is a round hole; `drill 2.4mm x 1.0mm` is a slot, milled
+    // along its length rather than drilled. Every USB connector, barrel jack
+    // and latching header holds itself to the board through one, and until the
+    // second dimension existed a design written here could not describe it.
+    drill_spec: $ => seq(
+      'drill',
+      field('width', $.dimension),
+      optional(seq('x', field('height', $.dimension))),
+    ),
 
     pad_shape: $ => choice('rect', 'circle', 'roundrect', 'oblong'),
 

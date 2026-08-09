@@ -249,6 +249,10 @@
           "named": true
         },
         {
+          "type": "side_property",
+          "named": true
+        },
+        {
           "type": "value_property",
           "named": true
         }
@@ -424,16 +428,27 @@
   {
     "type": "drill_spec",
     "named": true,
-    "fields": {},
-    "children": {
-      "multiple": false,
-      "required": true,
-      "types": [
-        {
-          "type": "dimension",
-          "named": true
-        }
-      ]
+    "fields": {
+      "height": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "dimension",
+            "named": true
+          }
+        ]
+      },
+      "width": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "dimension",
+            "named": true
+          }
+        ]
+      }
     }
   },
   {
@@ -1201,6 +1216,26 @@
           },
           {
             "type": "degrees",
+            "named": false
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "side_property",
+    "named": true,
+    "fields": {
+      "face": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "bottom",
+            "named": false
+          },
+          {
+            "type": "top",
             "named": false
           }
         ]
@@ -2358,6 +2393,10 @@
   },
   {
     "type": "roundrect",
+    "named": false
+  },
+  {
+    "type": "side",
     "named": false
   },
   {

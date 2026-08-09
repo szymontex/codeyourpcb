@@ -1,0 +1,69 @@
+// A connector held down by slots, which is how most of them are held down.
+//
+// `drill 2.4mm x 1.0mm` is a slot: a hole milled along its length with a bit
+// the width of its narrow dimension. A USB connector, a barrel jack and any
+// latching header anchors itself through one, and the second number is the
+// whole difference between a part that fits and a board that is scrap.
+//
+// One number is still a round hole - J1's pins below are ordinary 0.9mm
+// drills - so nothing about an existing design changes.
+//
+
+//   cypcb check examples/slotted-connector.cypcb
+//   cypcb export examples/slotted-connector.cypcb --dry-run
+//
+// The drill file mills each slot from one end centre to the other, which
+// Excellon writes as `X..Y..G85X..Y..`. A file that gave only the first point
+// would order a 1mm round hole and the connector would not go in.
+
+version 1
+
+board slotted_connector {
+    size 30mm x 20mm
+    layers 2
+}
+
+footprint USB_ANCHOR {
+    description "the two shell tabs a USB receptacle is soldered down by"
+    courtyard 12mm x 6mm
+
+    // The shell anchors. Milled, not drilled, and soldered like any other
+    // through-hole pad - a USB shell is on ground.
+    pad 1 oblong at -4mm, 0mm size 3.2mm x 1.8mm drill 2.4mm x 1.0mm
+    pad 2 oblong at 4mm, 0mm size 3.2mm x 1.8mm drill 2.4mm x 1.0mm
+
+    // Two signal pins, drilled the ordinary way. One number, one round hole.
+    pad 3 circle at -1.27mm, 0mm size 1.6mm x 1.6mm drill 0.9mm
+    pad 4 circle at 1.27mm, 0mm size 1.6mm x 1.6mm drill 0.9mm
+}
+
+component J1 connector "USB_ANCHOR" {
+    value "USB-C receptacle"
+    at 15mm, 6mm
+}
+
+net VBUS {
+    J1.1
+    J1.3
+}
+
+net GND {
+    J1.2
+    J1.4
+}
+
+// Each pin joined to the anchor beside it, so every pad on the board is
+// reached by copper and the checker is silent.
+trace VBUS {
+    from J1.3
+    to J1.1
+    layer Top
+    width 0.4mm
+}
+
+trace GND {
+    from J1.4
+    to J1.2
+    layer Top
+    width 0.4mm
+}

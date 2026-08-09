@@ -966,17 +966,17 @@ impl CypcbParser {
         let height = get_child_by_field(node, "height")
             .and_then(|n| self.convert_dimension(source, &n, errors))?;
 
-        // Optional drill spec
-        let drill = get_child_by_field(node, "drill").and_then(|drill_spec| {
-            // drill_spec has a dimension child
-            let mut drill_cursor = drill_spec.walk();
-            for drill_child in drill_spec.children(&mut drill_cursor) {
-                if drill_child.kind() == "dimension" {
-                    return self.convert_dimension(source, &drill_child, errors);
-                }
-            }
-            None
-        });
+        // Optional drill spec. One dimension is a round hole; two are a slot,
+        // milled along its length.
+        let drill_spec = get_child_by_field(node, "drill");
+        let drill = drill_spec
+            .as_ref()
+            .and_then(|spec| get_child_by_field(spec, "width"))
+            .and_then(|n| self.convert_dimension(source, &n, errors));
+        let drill_height = drill_spec
+            .as_ref()
+            .and_then(|spec| get_child_by_field(spec, "height"))
+            .and_then(|n| self.convert_dimension(source, &n, errors));
 
         Some(PadDef {
             number,
@@ -986,6 +986,7 @@ impl CypcbParser {
             width,
             height,
             drill,
+            drill_height,
             span: span_of(node),
         })
     }

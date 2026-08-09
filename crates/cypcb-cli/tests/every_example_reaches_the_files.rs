@@ -204,8 +204,25 @@ fn excellon_holes(text: &str) -> Vec<(f64, f64, f64)> {
             // coordinate that still has a point in it now lands a thousandth
             // of a millimetre from the pad and fails loudly, which is the
             // point of taking the scale from the header instead of the data.
-            if let Some((x, y)) = coordinates(line, 0) {
-                out.push((x, y, current));
+            // A slot is one milled path, `X..Y..G85X..Y..`, between the two
+            // end centres of the bit's travel - so the hole itself is at their
+            // midpoint, which is where the pad is. Reading only the first pair
+            // puts every slot half its own length away from the pad it belongs
+            // to, which is what this guard reported the day slots reached the
+            // language.
+            match line.split_once("G85") {
+                Some((start, end)) => {
+                    if let (Some((x0, y0)), Some((x1, y1))) =
+                        (coordinates(start, 0), coordinates(end, 0))
+                    {
+                        out.push(((x0 + x1) / 2.0, (y0 + y1) / 2.0, current));
+                    }
+                }
+                None => {
+                    if let Some((x, y)) = coordinates(line, 0) {
+                        out.push((x, y, current));
+                    }
+                }
             }
         }
     }

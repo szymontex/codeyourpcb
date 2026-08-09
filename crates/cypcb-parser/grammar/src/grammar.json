@@ -441,7 +441,37 @@
         },
         {
           "type": "SYMBOL",
+          "name": "side_property"
+        },
+        {
+          "type": "SYMBOL",
           "name": "net_assignment"
+        }
+      ]
+    },
+    "side_property": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "STRING",
+          "value": "side"
+        },
+        {
+          "type": "FIELD",
+          "name": "face",
+          "content": {
+            "type": "CHOICE",
+            "members": [
+              {
+                "type": "STRING",
+                "value": "top"
+              },
+              {
+                "type": "STRING",
+                "value": "bottom"
+              }
+            ]
+          }
         }
       ]
     },
@@ -1365,8 +1395,37 @@
           "value": "drill"
         },
         {
-          "type": "SYMBOL",
-          "name": "dimension"
+          "type": "FIELD",
+          "name": "width",
+          "content": {
+            "type": "SYMBOL",
+            "name": "dimension"
+          }
+        },
+        {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SEQ",
+              "members": [
+                {
+                  "type": "STRING",
+                  "value": "x"
+                },
+                {
+                  "type": "FIELD",
+                  "name": "height",
+                  "content": {
+                    "type": "SYMBOL",
+                    "name": "dimension"
+                  }
+                }
+              ]
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
         }
       ]
     },

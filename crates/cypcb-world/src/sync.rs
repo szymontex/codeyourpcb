@@ -1486,41 +1486,58 @@ fn ast_kind_to_ecs_kind(kind: cypcb_parser::ast::ComponentKind) -> ComponentKind
 
 /// Convert an AST FootprintDef to a library Footprint.
 fn convert_footprint_def(fp_def: &FootprintDef, copper_layers: u8) -> Footprint {
-    let pads: Vec<FootprintPadDef> = fp_def
-        .pads
-        .iter()
-        .map(|p| {
-            let is_tht = p.drill.is_some();
-            FootprintPadDef {
-                number: p.number.to_string(),
-                shape: convert_pad_shape(p.shape),
-                position: Point::new(p.x.to_nm(), p.y.to_nm()),
-                size: (p.width.to_nm(), p.height.to_nm()),
-                drill: p.drill.as_ref().map(|d| d.to_nm()),
-                // The language has no way to write a slot yet, so a design
-                // written here has none. A board imported from KiCad can.
-                slot: None,
-                layers: if is_tht {
-                    // A drilled hole goes through the whole board, so its
-                    // copper is on every copper layer the board has - not just
-                    // the outer two.
-                    // Zero-based: `Layer::Inner(0)` is the first inner layer,
-                    // which `job.rs` names `In1` and the DSL spells `Inner1`.
-                    let mut layers = vec![Layer::TopCopper];
-                    for inner in 0..copper_layers.saturating_sub(2) {
-                        layers.push(Layer::Inner(inner));
-                    }
-                    if copper_layers > 1 {
-                        layers.push(Layer::BottomCopper);
-                    }
-                    layers
-                } else {
-                    // SMD pads on top copper with paste and mask
-                    vec![Layer::TopCopper, Layer::TopPaste, Layer::TopMask]
-                },
-            }
-        })
-        .collect();
+    let pads: Vec<FootprintPadDef> =
+        fp_def
+            .pads
+            .iter()
+            .map(|p| {
+                let is_tht = p.drill.is_some();
+                FootprintPadDef {
+                    number: p.number.to_string(),
+                    shape: convert_pad_shape(p.shape),
+                    position: Point::new(p.x.to_nm(), p.y.to_nm()),
+                    size: (p.width.to_nm(), p.height.to_nm()),
+                    // `drill 2.4mm x 1.0mm` is a slot; the narrow dimension is
+                    // what every rule about a drill means, so that is what the
+                    // model's `drill` carries and the pair goes beside it. A
+                    // design that wrote one number has a round hole and no slot.
+                    drill: p.drill.as_ref().map(|d| {
+                        let width = d.to_nm();
+                        match p.drill_height.as_ref().map(|h| h.to_nm()) {
+                            Some(height) => width.min(height),
+                            None => width,
+                        }
+                    }),
+                    slot: p.drill.as_ref().zip(p.drill_height.as_ref()).and_then(
+                        |(width, height)| {
+                            let (width, height) = (width.to_nm(), height.to_nm());
+                            // A pair that is equal describes a round hole written
+                            // the long way, and sending a milling path for a hole
+                            // one drill hit makes would be a slower board.
+                            (width != height).then_some((width, height))
+                        },
+                    ),
+                    layers: if is_tht {
+                        // A drilled hole goes through the whole board, so its
+                        // copper is on every copper layer the board has - not just
+                        // the outer two.
+                        // Zero-based: `Layer::Inner(0)` is the first inner layer,
+                        // which `job.rs` names `In1` and the DSL spells `Inner1`.
+                        let mut layers = vec![Layer::TopCopper];
+                        for inner in 0..copper_layers.saturating_sub(2) {
+                            layers.push(Layer::Inner(inner));
+                        }
+                        if copper_layers > 1 {
+                            layers.push(Layer::BottomCopper);
+                        }
+                        layers
+                    } else {
+                        // SMD pads on top copper with paste and mask
+                        vec![Layer::TopCopper, Layer::TopPaste, Layer::TopMask]
+                    },
+                }
+            })
+            .collect();
 
     // Calculate bounds from pad positions and sizes
     let bounds = calculate_footprint_bounds(&pads);

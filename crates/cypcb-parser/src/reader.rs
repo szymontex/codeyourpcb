@@ -954,7 +954,7 @@ impl<'a> Reader<'a> {
         })
     }
 
-    /// `pad 1 rect at 0mm, 0mm size 1mm x 1mm [drill 0.3mm]`.
+    /// `pad 1 rect at 0mm, 0mm size 1mm x 1mm [drill 0.3mm [x 0.2mm]]`.
     fn pad(&mut self, start: usize) -> Option<PadDef> {
         self.bump(); // `pad`
         let number = match self.number() {
@@ -988,10 +988,19 @@ impl<'a> Reader<'a> {
         let width = self.dimension()?;
         self.eat_word("x");
         let height = self.dimension()?;
-        let drill = if self.eat_word("drill") {
-            self.dimension()
+        // `drill 0.9mm` is a round hole. `drill 2.4mm x 1.0mm` is a slot,
+        // milled along its length - written the same way `size` is, because it
+        // is the same question asked of the hole rather than of the copper.
+        let (drill, drill_height) = if self.eat_word("drill") {
+            let width = self.dimension();
+            let height = if width.is_some() && self.eat_word("x") {
+                self.dimension()
+            } else {
+                None
+            };
+            (width, height)
         } else {
-            None
+            (None, None)
         };
 
         Some(PadDef {
@@ -1002,6 +1011,7 @@ impl<'a> Reader<'a> {
             width,
             height,
             drill,
+            drill_height,
             span: Span::new(start, self.behind()),
         })
     }
