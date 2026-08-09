@@ -315,6 +315,13 @@ fn check_the_files(
             if !extension.starts_with('g') && extension != "gbr" {
                 continue;
             }
+            // The job file sits beside the Gerbers and is not one: it is the
+            // JSON that describes them, so it has no `M02*` and no coordinate
+            // format. `gbrjob` starts with a g like every Gerber extension
+            // does, which is how it landed here.
+            if extension == "gbrjob" {
+                continue;
+            }
             let text = std::fs::read_to_string(path).expect("a readable layer");
             counts.layers += 1;
             let file = path.file_name().and_then(|n| n.to_str()).unwrap_or("?");

@@ -92,7 +92,7 @@ An LLM can generate this, review it, refactor it, and catch mistakes — just li
 | IPC-2221 auto-width from current rating | Done |
 | DRC — every rule in the registry: `grep -o 'Box::new(rules::[A-Za-z]*' crates/cypcb-drc/src/lib.rs` names them, because a list written here goes stale the next time one is added | Done — `grep -c 'Box::new(rules::' crates/cypcb-drc/src/lib.rs` counts them, because a number written here goes stale the next time one is added; `cypcb check` prints copper-on-copper apart from a gap under spec, gives an orphaned plane its size and corners, and says when a rule's number is this tool's own rather than the fab's |
 | DRC — silkscreen clearance | Done — a Rust rule checks a footprint's own artwork against every other part's pads on the same side |
-| Gerber / Excellon / BOM / pick-and-place export | Done |
+| Gerber / Excellon / BOM / pick-and-place export | Done — with a Gerber job file (`<board>-job.gbrjob`) naming every Gerber, its function and its polarity, plus the board size, layer count and, when the design declares a stackup, the material stackup and board thickness |
 | Monaco editor with context-aware completions | Done |
 | JLCPCB parts search & placement | Done |
 | Custom footprint definitions in DSL | Done |

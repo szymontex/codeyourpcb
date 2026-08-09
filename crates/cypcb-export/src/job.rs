@@ -467,6 +467,22 @@ pub fn run_export(
         }
     }
 
+    // The job file describes the set, so it is written last and reads the
+    // files rather than being told about them: what it claims about each one
+    // is what that file says about itself.
+    let gerbers: Vec<PathBuf> = files
+        .iter()
+        .filter(|file| file.path.extension().is_some_and(|ext| ext == "gbr"))
+        .map(|file| file.path.clone())
+        .collect();
+    if !gerbers.is_empty() {
+        let borrowed: Vec<&Path> = gerbers.iter().map(PathBuf::as_path).collect();
+        let content = crate::jobfile::build_job_file(world, &job.board_name, &borrowed);
+        let path = gerber_dir.join(format!("{}-job.gbrjob", job.board_name));
+        let file = write_export_file(&path, &content, "Gerber job file")?;
+        files.push(file);
+    }
+
     let duration_ms = start.elapsed().as_millis() as u64;
 
     Ok(ExportResult {
