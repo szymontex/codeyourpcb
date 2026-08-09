@@ -26,6 +26,7 @@ use cypcb_world::components::zone::{Zone, ZoneKind};
 use cypcb_world::components::{
     FootprintRef, Layer, NetConnections, PadShape, Position, RefDes, Rotation, Value,
 };
+use cypcb_world::footprint::SilkShape;
 use cypcb_world::BoardWorld;
 
 /// The KiCad name for a copper layer.
@@ -314,7 +315,77 @@ fn write_footprints(
             let _ = writeln!(out, ")");
         }
 
+        write_legend(footprint, silk_layer, out);
+
         let _ = writeln!(out, "  )");
+    }
+}
+
+/// The part's legend, by the same rule the Gerber writer uses.
+///
+/// A footprint with artwork prints its artwork; one without prints its
+/// courtyard outline, which is what tells a person where a part is when they
+/// look at the board. `gerber/silk.rs` has drawn it that way since the
+/// silkscreen was written, and the KiCad file carried **nothing** - measured on
+/// one example board, 38 stroked segments in `F_SilkS.gbr` against 0 `fp_line`
+/// in the `.kicad_pcb` for the same three parts.
+///
+/// The geometry is the footprint's own, unmirrored: a bottom part is written
+/// under `(layer "B.Cu")` with `B.SilkS` here, and KiCad mirrors both from the
+/// layer.
+fn write_legend(footprint: &cypcb_world::footprint::Footprint, layer: &str, out: &mut String) {
+    if !footprint.silk.is_empty() {
+        for shape in &footprint.silk {
+            match *shape {
+                SilkShape::Segment { start, end, width } => {
+                    let _ = writeln!(
+                        out,
+                        "    (fp_line (start {} {}) (end {} {}) (stroke (width {}) (type solid)) (layer \"{layer}\"))",
+                        mm(start.x),
+                        mm(start.y),
+                        mm(end.x),
+                        mm(end.y),
+                        mm(width)
+                    );
+                }
+                SilkShape::Circle {
+                    centre,
+                    radius,
+                    width,
+                } => {
+                    let _ = writeln!(
+                        out,
+                        "    (fp_circle (center {} {}) (end {} {}) (stroke (width {}) (type solid)) (fill none) (layer \"{layer}\"))",
+                        mm(centre.x),
+                        mm(centre.y),
+                        mm(cypcb_core::Nm(centre.x.0 + radius.0)),
+                        mm(centre.y),
+                        mm(width)
+                    );
+                }
+            }
+        }
+        return;
+    }
+
+    // The courtyard, drawn as four lines rather than a rectangle primitive,
+    // because that is what a footprint's outline is in a KiCad file.
+    let (min, max) = (footprint.courtyard.min, footprint.courtyard.max);
+    let corners = [
+        (min.x, min.y, max.x, min.y),
+        (max.x, min.y, max.x, max.y),
+        (max.x, max.y, min.x, max.y),
+        (min.x, max.y, min.x, min.y),
+    ];
+    for (x1, y1, x2, y2) in corners {
+        let _ = writeln!(
+            out,
+            "    (fp_line (start {} {}) (end {} {}) (stroke (width 0.12) (type solid)) (layer \"{layer}\"))",
+            mm(x1),
+            mm(y1),
+            mm(x2),
+            mm(y2)
+        );
     }
 }
 
