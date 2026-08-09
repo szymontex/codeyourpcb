@@ -19,5 +19,14 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src/**/*"]
+
+  /*
+   * The project's own TypeScript, all of it.
+   *
+   * This used to be src only, so server.ts - which reads and writes a
+   * developer's disk on request from a web page - and the Vite, Vitest and
+   * Playwright configs were never type-checked at all. The specs are here for
+   * the same reason: they are code.
+   */
+  "include": ["src/**/*", "e2e/**/*", "*.ts"]
 }

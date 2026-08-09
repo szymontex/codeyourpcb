@@ -49,7 +49,7 @@ echo ""
 
 # Stage 4: ESLint
 echo "[4/8] eslint"
-if (cd viewer && npx eslint src/ e2e/) 2>&1; then
+if (cd viewer && npx eslint src/ e2e/ *.ts) 2>&1; then
   pass "eslint"
 else
   fail "eslint"
@@ -87,11 +87,19 @@ if ./viewer/build-wasm.sh >/dev/null 2>&1; then
 else
   fail "build-wasm"
 fi
-if (cd viewer && CI=1 npx playwright test) 2>&1; then
+PLAYWRIGHT_LOG=$(mktemp)
+if (cd viewer && CI=1 npx playwright test 2>&1 | tee "$PLAYWRIGHT_LOG"); then
   pass "playwright"
 else
+  # Which spec. The stage used to end in a bare "playwright FAILED" while the
+  # names scrolled past in a hundred lines of progress output, and a flake seen
+  # twice still had no name to chase.
+  echo ""
+  echo "  failing specs:"
+  grep -E "^\s+[0-9]+\) |✘" "$PLAYWRIGHT_LOG" | head -20 || true
   fail "playwright"
 fi
+rm -f "$PLAYWRIGHT_LOG"
 echo ""
 
 # Stage 7: Autorouter benchmark — regression gate + performance benchmark

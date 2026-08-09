@@ -33,6 +33,35 @@ export default tseslint.config(
     },
   },
 
+  // The files that build and serve the project: the dev server, and the Vite,
+  // Vitest and Playwright configs.
+  //
+  // Nothing checked these at all - `tsconfig.json` included `src/**/*` and the
+  // gate linted `src/` and `e2e/` - and `server.ts` is the file that reads and
+  // writes a developer's disk on request from a web page. It is checked now.
+  {
+    files: ['*.ts'],
+    rules: {
+      '@typescript-eslint/no-unused-vars': ['error', {
+        argsIgnorePattern: '^_',
+        varsIgnorePattern: '^_',
+        caughtErrorsIgnorePattern: '^_',
+      }],
+      // A Vite plugin's `configure` hook is handed objects from `http-proxy`,
+      // which ships no types this project can name. `any` there describes
+      // somebody else's untyped surface; in `server.ts`, which is ours, it is
+      // an error like anywhere else.
+      '@typescript-eslint/no-explicit-any': 'off',
+    },
+  },
+
+  {
+    files: ['server.ts'],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'error',
+    },
+  },
+
   // End-to-end specs.
   //
   // These were outside the linted tree entirely: stage 4 of the gate ran

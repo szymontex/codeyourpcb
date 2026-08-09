@@ -69,7 +69,7 @@ wss.on('connection', (ws, request) => {
   });
 
   ws.on('error', (err) => {
-    console.error('[WS] Client error:', err.message);
+    console.error('[WS] Client error:', reason(err));
     clients.delete(ws);
   });
 
@@ -146,6 +146,16 @@ function allowedOrigin(origin: string, host: string | undefined): boolean {
  * are resolved against the watched directory and anything that climbs out of
  * it with `..` or an absolute path is refused.
  */
+/**
+ * What went wrong, out of whatever was thrown.
+ *
+ * `catch (err: any)` reads `err.message` off anything at all; an `Error` is
+ * only the usual case, not a guarantee.
+ */
+function reason(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
 function insideWatchDir(requested: string): string | null {
   const root = resolve(WATCH_DIR);
   const full = resolve(root, requested);
@@ -291,7 +301,21 @@ console.log('');
 /**
  * Handle messages from WebSocket clients
  */
-function handleClientMessage(ws: WebSocket, message: any): void {
+/**
+ * What a client can ask for.
+ *
+ * Every field is optional because it arrives as JSON from a browser: the
+ * handlers check what they need, and the ones that name a file put it through
+ * `insideWatchDir` before touching the disk.
+ */
+interface ClientMessage {
+  type?: string;
+  file?: string;
+  path?: string;
+  content?: string;
+}
+
+function handleClientMessage(ws: WebSocket, message: ClientMessage): void {
   console.log(`[WS] Received message: ${message.type}`);
 
   switch (message.type) {
@@ -428,7 +452,7 @@ function handleRouteRequest(ws: WebSocket, message: { file?: string; content?: s
     console.error(`[Route] Process error: ${err}`);
     ws.send(JSON.stringify({
       type: 'route-error',
-      error: `Failed to start routing: ${err.message}`,
+      error: `Failed to start routing: ${reason(err)}`,
     }));
   });
 }
@@ -468,12 +492,12 @@ function handleReadFileRequest(ws: WebSocket, message: { path?: string }): void 
       path: requested,
       content: readFileSync(filePath, 'utf-8'),
     }));
-  } catch (err: any) {
-    ws.send(JSON.stringify({ type: 'file-content', path: requested, error: err.message }));
+  } catch (err) {
+    ws.send(JSON.stringify({ type: 'file-content', path: requested, error: reason(err) }));
   }
 }
 
-function handleSaveRequest(ws: WebSocket, message: { file: string; content: string }): void {
+function handleSaveRequest(ws: WebSocket, message: ClientMessage): void {
   // `content` may be empty: clearing a file is a save like any other, and
   // `!message.content` refused it.
   if (!message.file || message.content === undefined) {
@@ -500,11 +524,11 @@ function handleSaveRequest(ws: WebSocket, message: { file: string; content: stri
       type: 'save-complete',
       file: target,
     }));
-  } catch (err: any) {
-    console.error(`[Save] Error: ${err.message}`);
+  } catch (err) {
+    console.error(`[Save] Error: ${reason(err)}`);
     ws.send(JSON.stringify({
       type: 'save-error',
-      error: err.message,
+      error: reason(err),
     }));
   }
 }
@@ -554,7 +578,7 @@ function handleOpenFileRequest(ws: WebSocket, message: { file?: string }): void 
       timestamp: Date.now(),
     }));
     console.log(`[Open] Sent file: ${basename(filePath)}`);
-  } catch (err: any) {
-    console.error(`[Open] Error reading file: ${err.message}`);
+  } catch (err) {
+    console.error(`[Open] Error reading file: ${reason(err)}`);
   }
 }

@@ -15,7 +15,7 @@
     "dev:desktop": "cd .. && tauri dev",
     "build:desktop": "cd .. && tauri build",
     "test": "vitest run",
-    "lint": "eslint src/ e2e/",
+    "lint": "eslint src/ e2e/ *.ts",
     "e2e": "playwright test"
   },
   "dependencies": {

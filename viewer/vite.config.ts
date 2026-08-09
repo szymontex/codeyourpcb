@@ -1,8 +1,11 @@
 import { defineConfig } from 'vite';
 import wasm from 'vite-plugin-wasm';
 import topLevelAwait from 'vite-plugin-top-level-await';
-// @ts-ignore - CommonJS module
 import monacoEditorPluginModule from 'vite-plugin-monaco-editor';
+// The plugin is CommonJS: under a bundler it arrives as the function itself,
+// under Node's ESM interop as `{ default: fn }`. Its types describe only the
+// first, so the fallback is the part the compiler cannot see.
+// @ts-expect-error - CommonJS interop the plugin's types do not describe
 const monacoEditorPlugin = monacoEditorPluginModule.default || monacoEditorPluginModule;
 
 export default defineConfig({
@@ -58,6 +61,10 @@ export default defineConfig({
             }
           });
         },
+        // `router` is an http-proxy option. Vite passes its proxy config
+        // straight through to http-proxy but types only the subset it
+        // documents, so this works and does not typecheck.
+        // @ts-expect-error - http-proxy option Vite's ProxyOptions omits
         router: (req: any) => {
           const reqUrl = new URL(req.url!, `http://${req.headers.host}`);
           const imgUrl = reqUrl.searchParams.get('url');
