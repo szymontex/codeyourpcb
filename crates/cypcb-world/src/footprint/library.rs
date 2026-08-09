@@ -484,6 +484,16 @@ pub fn bottom_name(name: &str) -> String {
     format!("{name}@bottom")
 }
 
+/// The footprint a derived bottom-side entry was made from.
+///
+/// The mirrored copy is this project's own arrangement. Anything writing a
+/// file for somebody else - a KiCad board, a library reference - wants the
+/// name the design asked for, and its own convention for saying which face the
+/// part is on.
+pub fn base_name(name: &str) -> &str {
+    name.strip_suffix("@bottom").unwrap_or(name)
+}
+
 /// Mirror about the footprint's own y axis.
 fn mirror_point(point: Point) -> Point {
     Point::new(Nm(-point.x.0), point.y)

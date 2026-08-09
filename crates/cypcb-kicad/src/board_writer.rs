@@ -174,14 +174,23 @@ fn write_footprints(
     out: &mut String,
 ) {
     let library = world.footprints().clone();
-    let mut parts: Vec<(
-        String,
-        String,
-        cypcb_core::Point,
-        i32,
-        String,
-        Option<NetConnections>,
-    )> = Vec::new();
+    /// One part, read out of the world before the file is written.
+    ///
+    /// A named struct rather than a seven-element tuple: the tuple had grown
+    /// to the point where the compiler complained about it, and a reader
+    /// counting commas to find out which `String` is the footprint is one
+    /// transposition away from a wrong board.
+    struct Placed {
+        refdes: String,
+        footprint: String,
+        position: cypcb_core::Point,
+        rotation: i32,
+        value: String,
+        connections: Option<NetConnections>,
+        on_bottom: bool,
+    }
+
+    let mut parts: Vec<Placed> = Vec::new();
     {
         let ecs = world.ecs_mut();
         let mut query = ecs.query::<(
@@ -191,47 +200,86 @@ fn write_footprints(
             &FootprintRef,
             Option<&Value>,
             Option<&NetConnections>,
+            Option<&cypcb_world::components::Side>,
         )>();
-        for (refdes, position, rotation, footprint, value, connections) in query.iter(ecs) {
-            parts.push((
-                refdes.0.clone(),
-                footprint.0.clone(),
-                position.0,
-                rotation.0,
-                value.map(|v| v.0.clone()).unwrap_or_default(),
-                connections.cloned(),
-            ));
+        for (refdes, position, rotation, footprint, value, connections, side) in query.iter(ecs) {
+            parts.push(Placed {
+                refdes: refdes.0.clone(),
+                footprint: footprint.0.clone(),
+                position: position.0,
+                rotation: rotation.0,
+                value: value.map(|v| v.0.clone()).unwrap_or_default(),
+                connections: connections.cloned(),
+                on_bottom: matches!(side, Some(cypcb_world::components::Side::Bottom)),
+            });
         }
     }
 
-    for (refdes, footprint_name, position, rotation, value, connections) in parts {
-        let Some(footprint) = library.get(&footprint_name) else {
+    for part in parts {
+        let Placed {
+            refdes,
+            footprint: footprint_name,
+            position,
+            rotation,
+            value,
+            connections,
+            on_bottom,
+        } = part;
+        // KiCad states the face on the footprint and mirrors the geometry
+        // itself, which is what this project's own KiCad reader relies on: a
+        // back-side footprint in a real board file carries `(layer "B.Cu")`
+        // and pad coordinates identical to a front-side one.
+        //
+        // So a bottom part is written from the footprint the design named,
+        // not from the mirrored copy the world holds - writing the mirror as
+        // well would flip it twice - and the layer names carry the side. It
+        // used to write the mirrored copy under `(layer "F.Cu")`, under the
+        // derived name `0402@bottom`, with its legend on the front: KiCad
+        // opened a front-side part whose pads were on the back.
+        let library_name = cypcb_world::footprint::base_name(&footprint_name).to_string();
+        let geometry_name = if on_bottom {
+            library_name.clone()
+        } else {
+            footprint_name.clone()
+        };
+        let Some(footprint) = library.get(&geometry_name) else {
             continue;
+        };
+
+        let (face, silk_layer, fab_layer) = if on_bottom {
+            ("B.Cu", "B.SilkS", "B.Fab")
+        } else {
+            ("F.Cu", "F.SilkS", "F.Fab")
         };
 
         let _ = writeln!(
             out,
-            "  (footprint \"cypcb:{footprint_name}\" (layer \"F.Cu\") (at {} {} {})",
+            "  (footprint \"cypcb:{library_name}\" (layer \"{face}\") (at {} {} {})",
             mm(position.x),
             mm(position.y),
             rotation as f64 / 1000.0
         );
         let _ = writeln!(
             out,
-            "    (fp_text reference \"{refdes}\" (at 0 -1) (layer \"F.SilkS\") (effects (font (size 1 1) (thickness 0.15))))"
+            "    (fp_text reference \"{refdes}\" (at 0 -1) (layer \"{silk_layer}\") (effects (font (size 1 1) (thickness 0.15))))"
         );
         let _ = writeln!(
             out,
-            "    (fp_text value \"{value}\" (at 0 1) (layer \"F.Fab\") (effects (font (size 1 1) (thickness 0.15))))"
+            "    (fp_text value \"{value}\" (at 0 1) (layer \"{fab_layer}\") (effects (font (size 1 1) (thickness 0.15))))"
         );
 
         for pad in &footprint.pads {
             let (shape, corner_ratio) = pad_shape(pad.shape);
             let kind = if pad.is_smd() { "smd" } else { "thru_hole" };
             let layers = if pad.is_smd() {
-                match pad.layers.first() {
-                    Some(Layer::BottomCopper) => "\"B.Cu\" \"B.Paste\" \"B.Mask\"".to_string(),
-                    _ => "\"F.Cu\" \"F.Paste\" \"F.Mask\"".to_string(),
+                // The part's own face decides, because the geometry above is
+                // the unmirrored footprint: its pads name front-side layers
+                // whichever way round the part is soldered.
+                let bottom = on_bottom || matches!(pad.layers.first(), Some(Layer::BottomCopper));
+                if bottom {
+                    "\"B.Cu\" \"B.Paste\" \"B.Mask\"".to_string()
+                } else {
+                    "\"F.Cu\" \"F.Paste\" \"F.Mask\"".to_string()
                 }
             } else {
                 "\"*.Cu\" \"*.Mask\"".to_string()
