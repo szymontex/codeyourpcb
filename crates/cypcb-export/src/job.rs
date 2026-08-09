@@ -41,7 +41,7 @@ use crate::cpl::export_cpl;
 use crate::excellon::{export_excellon, DrillType};
 use crate::gerber::SilkWarning;
 use crate::gerber::{
-    export_copper_layer, export_outline, export_silkscreen_reporting, export_soldermask,
+    export_copper_layer_with, export_outline, export_silkscreen_reporting, export_soldermask,
     export_solderpaste, MaskPasteConfig, Side, SilkConfig,
 };
 use crate::presets::ExportPreset;
@@ -97,6 +97,24 @@ pub enum ExportError {
     Export(String),
 }
 
+/// How a pour is filled for this job's fabricator.
+///
+/// `export_copper_layer`'s doc comment has said since it was written that
+/// `ExportJob` passes the fab's clearance through `export_copper_layer_with`.
+/// No caller ever did: every exported pour was filled with
+/// `PourOptions::default()`, whose 0.3mm is generous rather than published,
+/// so every plane shipped smaller on every edge than the house asked for.
+///
+/// The thermal numbers stay as the pour's own defaults, which are already the
+/// fabs' published figures; only the clearance is per-house data this preset
+/// carries.
+fn pour_options(job: &ExportJob) -> crate::pour::PourOptions {
+    crate::pour::PourOptions {
+        clearance: job.preset.pour_clearance,
+        ..Default::default()
+    }
+}
+
 /// Run export job, generating all manufacturing files.
 ///
 /// Creates output directory structure:
@@ -138,11 +156,12 @@ pub fn run_export(
     if job.preset.layers.top_copper {
         let filename = format!("{}{}", job.board_name, job.preset.file_naming.top_copper);
         let path = gerber_dir.join(&filename);
-        let content = export_copper_layer(
+        let content = export_copper_layer_with(
             world,
             library,
             Layer::TopCopper,
             &job.preset.coordinate_format,
+            &pour_options(job),
         )
         .map_err(|e| ExportError::Export(format!("{:?}", e)))?;
         let file = write_export_file(&path, &content, "Top Copper")?;
@@ -152,11 +171,12 @@ pub fn run_export(
     if job.preset.layers.bottom_copper {
         let filename = format!("{}{}", job.board_name, job.preset.file_naming.bottom_copper);
         let path = gerber_dir.join(&filename);
-        let content = export_copper_layer(
+        let content = export_copper_layer_with(
             world,
             library,
             Layer::BottomCopper,
             &job.preset.coordinate_format,
+            &pour_options(job),
         )
         .map_err(|e| ExportError::Export(format!("{:?}", e)))?;
         let file = write_export_file(&path, &content, "Bottom Copper")?;
@@ -181,11 +201,12 @@ pub fn run_export(
         let suffix = inner_layer_suffix(job.preset.file_naming.top_copper, number);
         let filename = format!("{}{}", job.board_name, suffix);
         let path = gerber_dir.join(&filename);
-        let content = export_copper_layer(
+        let content = export_copper_layer_with(
             world,
             library,
             Layer::Inner(index),
             &job.preset.coordinate_format,
+            &pour_options(job),
         )
         .map_err(|e| ExportError::Export(format!("{:?}", e)))?;
         let file = write_export_file(&path, &content, &format!("Inner Copper {number}"))?;

@@ -160,3 +160,29 @@ fn the_mask_opening_is_the_fabs_number_in_both_writers() {
         "and KiCad is told the same"
     );
 }
+
+#[test]
+fn the_pour_clearance_is_the_fabs_number_too() {
+    // The same cross-crate check the mask expansion gets: the export preset
+    // carries the number so the Gerber writer can reach it, the design rules
+    // carry it so the checker can, and they have to agree. This one had a
+    // third state until now - the exporter never read its own field, so the
+    // shipped plane used a generous default instead.
+    // Against the constraints table rather than `DesignRules`: the checker's
+    // own view does not carry a pour clearance, because no rule reads one.
+    // The fabricator publishes it and the exporter uses it, so that table is
+    // where the two have to agree.
+    use cypcb_rules::presets::RulesPreset;
+
+    for (export_name, rules_preset) in [
+        ("jlcpcb", RulesPreset::JlcpcbStandard2Layer),
+        ("pcbway", RulesPreset::PcbWayStandard),
+    ] {
+        let export = cypcb_export::presets::from_name(export_name).expect("the preset is there");
+        assert_eq!(
+            export.pour_clearance,
+            rules_preset.constraints().min_copper_pour_clearance,
+            "{export_name}: the exporter and the fab table disagree about the plane"
+        );
+    }
+}

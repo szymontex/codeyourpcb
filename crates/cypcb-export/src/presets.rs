@@ -37,6 +37,14 @@ pub struct ExportPreset {
     /// house's design rules in `cypcb-drc`, which is what `cypcb check`
     /// measures the clipped ink against.
     pub silk_clearance: Nm,
+    /// How far a copper pour keeps from copper on another net.
+    ///
+    /// `export_copper_layer`'s own comment said `ExportJob` passes this
+    /// through `export_copper_layer_with` - and no caller ever did, so every
+    /// exported pour was filled with `PourOptions::default()`. JLCPCB and
+    /// PCBWay both publish 0.254mm and the default is 0.3mm, so every plane
+    /// shipped 0.046mm smaller on every edge than the fab asked for.
+    pub pour_clearance: Nm,
     /// How far the solder mask opening extends beyond the pad, per side.
     ///
     /// Same discipline as `silk_clearance`: a number the fabricator publishes,
@@ -124,6 +132,7 @@ pub fn jlcpcb_2layer() -> ExportPreset {
         assembly: true,
         silk_clearance: Nm::from_mm(0.127),
         mask_expansion: Nm::from_mm(0.05),
+        pour_clearance: Nm::from_mm(0.254),
     }
 }
 
@@ -170,6 +179,7 @@ pub fn pcbway_standard() -> ExportPreset {
         assembly: true,
         silk_clearance: Nm::from_mm(0.2),
         mask_expansion: Nm::from_mm(0.05),
+        pour_clearance: Nm::from_mm(0.254),
     }
 }
 
