@@ -98,7 +98,12 @@ impl CplConfig {
         }
     }
 
-    /// Create a configuration with Y-axis flipped.
+    /// Create a configuration whose y runs down from the top-left corner.
+    ///
+    /// Some assembly houses take their origin there rather than at the
+    /// bottom-left. The flip is about the board's far edge, so a part stays on
+    /// the board; a design with no board at all is left alone, because there
+    /// is nothing to flip about.
     #[inline]
     pub fn with_flipped_y() -> Self {
         CplConfig {

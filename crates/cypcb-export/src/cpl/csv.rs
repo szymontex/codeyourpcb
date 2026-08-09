@@ -96,6 +96,11 @@ pub fn export_cpl(
     let config = config.unwrap_or(&default_config);
     let mut entries = Vec::new();
 
+    // Read before the query below borrows the world for its whole body.
+    let board_height_mm = world
+        .board_info()
+        .map(|(size, _)| size.height.0 as f64 / 1_000_000.0);
+
     // Query all components
     let mut query = world.ecs_mut().query::<(
         &RefDes,
@@ -149,10 +154,21 @@ pub fn export_cpl(
         let x_mm = position.0.x.0 as f64 / 1_000_000.0;
         let y_mm_raw = position.0.y.0 as f64 / 1_000_000.0;
 
-        // Apply Y-flip if configured
+        // Some assembly houses take the origin at the top-left corner with y
+        // running down the board, and this is where that is answered.
+        //
+        // It used to negate the coordinate, with a comment saying it would
+        // need the board height to do it properly: a part 10mm up a 20mm board
+        // was written at -10mm, which is off the board on every machine that
+        // reads it. The height is on the board entity, so the flip is about
+        // the far edge - `height - y` - and a part stays on the board it was
+        // placed on. Without a board there is nothing to flip about, and the
+        // coordinate is left alone rather than negated.
         let y_mm = if config.flip_y {
-            // Would need board height to flip correctly, for now just negate
-            -y_mm_raw
+            match board_height_mm {
+                Some(height) => height - y_mm_raw,
+                None => y_mm_raw,
+            }
         } else {
             y_mm_raw
         };
