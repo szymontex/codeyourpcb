@@ -16,7 +16,9 @@ pub enum CopperSide {
     Top,
     /// Bottom copper layer
     Bottom,
-    /// Inner copper layer (numbered 1, 2, 3...)
+    /// Inner copper layer, counted from the top and zero-based: `Inner(0)`
+    /// is the first inner layer, which is Gerber layer L2. Same convention
+    /// as `cypcb_world::Layer::Inner`, so the two cannot drift apart.
     Inner(u8),
 }
 
@@ -65,7 +67,10 @@ impl GerberFileFunction {
                 let layer_num = layer_num.unwrap_or_else(|| match side {
                     CopperSide::Top => 1,
                     CopperSide::Bottom => total_layers,
-                    CopperSide::Inner(n) => n + 1, // L2 for first inner layer
+                    // Zero-based inner index to a one-based Gerber layer
+                    // number: the first inner layer sits under the top
+                    // copper, so it is L2.
+                    CopperSide::Inner(n) => n + 2,
                 });
                 let side_str = match side {
                     CopperSide::Top => "Top",
@@ -198,8 +203,15 @@ mod tests {
 
     #[test]
     fn test_copper_inner_to_x2_attribute() {
-        let func = GerberFileFunction::Copper(CopperSide::Inner(1), Some(2));
+        let func = GerberFileFunction::Copper(CopperSide::Inner(0), Some(2));
         assert_eq!(func.to_x2_attribute(4), "Copper,L2,Inr");
+
+        // And the same layer without an explicit number, which is where the
+        // wrong formula lived.
+        let derived = GerberFileFunction::Copper(CopperSide::Inner(0), None);
+        assert_eq!(derived.to_x2_attribute(4), "Copper,L2,Inr");
+        let second = GerberFileFunction::Copper(CopperSide::Inner(1), None);
+        assert_eq!(second.to_x2_attribute(4), "Copper,L3,Inr");
     }
 
     #[test]

@@ -109,10 +109,11 @@ pub fn export_soldermask(
     };
 
     let function = GerberFileFunction::Soldermask(side);
-    let board_name = world
-        .board_info()
-        .map(|(_size, _)| "board")
-        .unwrap_or("board");
+    // The design's own name, the same one the silkscreen and outline files
+    // carry. This read the board's size and threw it away for a literal, so a
+    // fabricator matching files by project name saw two projects in one
+    // directory.
+    let board_name = world.board_name().unwrap_or("board");
     let total_layers = world.board_info().map(|(_, ls)| ls.count).unwrap_or(2);
 
     // Write header
@@ -201,10 +202,11 @@ pub fn export_solderpaste(
     };
 
     let function = GerberFileFunction::Solderpaste(side);
-    let board_name = world
-        .board_info()
-        .map(|(_size, _)| "board")
-        .unwrap_or("board");
+    // The design's own name, the same one the silkscreen and outline files
+    // carry. This read the board's size and threw it away for a literal, so a
+    // fabricator matching files by project name saw two projects in one
+    // directory.
+    let board_name = world.board_name().unwrap_or("board");
     let total_layers = world.board_info().map(|(_, ls)| ls.count).unwrap_or(2);
 
     // Write header

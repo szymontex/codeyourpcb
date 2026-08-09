@@ -105,7 +105,13 @@ pub enum Layer {
     TopCopper,
     /// Bottom copper layer (solder side).
     BottomCopper,
-    /// Inner copper layer (1-30 for 32-layer boards).
+    /// Inner copper layer, counted from the top and zero-based: `Inner(0)`
+    /// is the first inner layer, which a Gerber calls L2. Up to
+    /// `Inner(29)` on a 32-layer board.
+    ///
+    /// This line used to say "1-30", which contradicted `to_copper_mask`
+    /// below and the DSL reader above it, and the Gerber export took the
+    /// one-based reading and wrote two files claiming L1.
     Inner(u8),
     /// Top silkscreen layer.
     TopSilk,

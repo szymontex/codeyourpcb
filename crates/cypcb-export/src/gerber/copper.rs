@@ -99,15 +99,21 @@ pub fn export_copper_layer_with(
             let total_layers = world.board_info().map(|(_, ls)| ls.count).unwrap_or(2);
             (CopperSide::Bottom, Some(total_layers))
         }
-        Layer::Inner(n) => (CopperSide::Inner(n), Some(n + 1)), // L2 for first inner
+        // `Layer::Inner` is zero-based everywhere in this workspace - the DSL
+        // writes `inner1` and `sync.rs` reads it as `Inner(0)` - and a Gerber
+        // layer number is one-based from the top, so the first inner layer of
+        // a four-layer board is L2. This said `n + 1`, a formula written for a
+        // one-based index, and the file claimed L1 alongside the top copper.
+        Layer::Inner(n) => (CopperSide::Inner(n), Some(n + 2)),
         _ => unreachable!("Non-copper layer passed to export_copper_layer"),
     };
 
     let function = GerberFileFunction::Copper(copper_side, layer_num);
-    let board_name = world
-        .board_info()
-        .map(|(_size, _)| "board")
-        .unwrap_or("board");
+    // The design's own name, the same one the silkscreen and outline files
+    // carry. This read the board's size and threw it away for a literal, so a
+    // fabricator matching files by project name saw two projects in one
+    // directory.
+    let board_name = world.board_name().unwrap_or("board");
     let total_layers = world.board_info().map(|(_, ls)| ls.count).unwrap_or(2);
 
     // Write header
