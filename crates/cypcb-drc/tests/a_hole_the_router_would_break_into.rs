@@ -62,6 +62,7 @@ fn board_with_mounting_hole(x_mm: f64) -> BoardWorld {
             // nothing is soldered to it.
             size: (Nm::from_mm(3.2), Nm::from_mm(3.2)),
             drill: Some(Nm::from_mm(3.2)),
+            slot: None,
             layers: Vec::new(),
         }],
         ..base

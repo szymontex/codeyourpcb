@@ -35,6 +35,7 @@ fn board_with_pour(pad_at: Point, cut: bool) -> BoardWorld {
             position: Point::ORIGIN,
             size: (Nm::from_mm(1.0), Nm::from_mm(1.0)),
             drill: None,
+            slot: None,
             layers: vec![Layer::TopCopper],
         }],
     });

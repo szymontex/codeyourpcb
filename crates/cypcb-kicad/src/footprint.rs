@@ -150,16 +150,20 @@ fn convert_pad(pad: &Pad) -> Result<PadDef, KicadImportError> {
     let position = Point::from_mm(pad.at.x, pad.at.y);
     let size = (Nm::from_mm(pad.size.x), Nm::from_mm(pad.size.y));
 
-    // Determine drill from pad type and drill field
-    let drill = match pad.t {
-        PadType::Pth | PadType::NpPth => {
-            pad.drill.as_ref().map(|d| {
-                // Use width as drill diameter (height is for oval drills)
-                Nm::from_mm(d.width)
-            })
-        }
+    // A KiCad drill carries two dimensions, and they differ when the hole is
+    // a slot - milled along its length rather than drilled. Taking the width
+    // and calling the height "for oval drills", which is what stood here,
+    // turned the slot every USB connector and barrel jack holds itself down
+    // with into a round hole, silently, at import.
+    let hole = match pad.t {
+        PadType::Pth | PadType::NpPth => pad.drill.as_ref(),
         PadType::Smd => None,
     };
+    // The narrow dimension is what every rule about a drill means.
+    let drill = hole.map(|d| Nm::from_mm(d.width.min(d.height)));
+    let slot = hole
+        .filter(|d| d.width != d.height)
+        .map(|d| (Nm::from_mm(d.width), Nm::from_mm(d.height)));
 
     // Convert layers
     let layers = convert_layers(&pad.layers, &pad.t);
@@ -170,6 +174,7 @@ fn convert_pad(pad: &Pad) -> Result<PadDef, KicadImportError> {
         position,
         size,
         drill,
+        slot,
         layers,
     })
 }

@@ -203,6 +203,7 @@ impl ApertureManager {
 ///     position: Point::ORIGIN,
 ///     size: (Nm::from_mm(1.0), Nm::from_mm(1.0)),
 ///     drill: None,
+///     slot: None,
 ///     layers: vec![Layer::TopCopper],
 /// };
 ///
@@ -373,6 +374,7 @@ mod tests {
             position: Point::ORIGIN,
             size: (Nm::from_mm(1.0), Nm::from_mm(1.0)),
             drill: None,
+            slot: None,
             layers: vec![Layer::TopCopper],
         };
 
@@ -393,6 +395,7 @@ mod tests {
             position: Point::ORIGIN,
             size: (Nm::from_mm(1.2), Nm::from_mm(0.8)),
             drill: None,
+            slot: None,
             layers: vec![Layer::TopCopper],
         };
 
@@ -414,6 +417,7 @@ mod tests {
             position: Point::ORIGIN,
             size: (Nm::from_mm(1.5), Nm::from_mm(0.8)),
             drill: None,
+            slot: None,
             layers: vec![Layer::TopCopper],
         };
 
@@ -435,6 +439,7 @@ mod tests {
             position: Point::ORIGIN,
             size: (Nm::from_mm(1.0), Nm::from_mm(0.6)),
             drill: None,
+            slot: None,
             layers: vec![Layer::TopCopper],
         };
 

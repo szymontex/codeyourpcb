@@ -71,6 +71,7 @@ fn chip_footprint(
                 position: Point::new(-half_span, Nm::ZERO),
                 size: (pad_width, pad_height),
                 drill: None,
+                slot: None,
                 layers: smd_layers.clone(),
             },
             PadDef {
@@ -79,6 +80,7 @@ fn chip_footprint(
                 position: Point::new(half_span, Nm::ZERO),
                 size: (pad_width, pad_height),
                 drill: None,
+                slot: None,
                 layers: smd_layers,
             },
         ],

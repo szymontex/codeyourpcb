@@ -28,6 +28,7 @@ fn two_pad_footprint() -> Footprint {
         position: Point::from_mm(x, 0.0),
         size: (Nm::from_mm(0.6), Nm::from_mm(0.5)),
         drill: None,
+        slot: None,
         layers: vec![Layer::TopCopper],
     };
 

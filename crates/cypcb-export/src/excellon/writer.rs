@@ -29,6 +29,14 @@ pub enum DrillType {
 struct DrillHit {
     position: Point,
     drill_diameter: Nm,
+    /// The far end of a milled slot, when the hole is one.
+    ///
+    /// A slot is not drilled: a bit the width of its narrow dimension is put
+    /// in one end and driven to the other. Excellon says that with `G85`
+    /// between the two end centres, and a file that writes only the first
+    /// point orders a round hole - which is a connector that does not fit and
+    /// a board that is scrap.
+    slot_end: Option<Point>,
     drill_type: DrillType,
     /// The layers this hole joins.
     ///
@@ -183,7 +191,14 @@ pub fn export_excellon_span(
         for hit in tool_hits {
             let x = nm_to_decimal(hit.position.x.0, format);
             let y = nm_to_decimal(hit.position.y.0, format);
-            output.push_str(&format!("X{}Y{}\n", x, y));
+            match hit.slot_end {
+                Some(end) => {
+                    let end_x = nm_to_decimal(end.x.0, format);
+                    let end_y = nm_to_decimal(end.y.0, format);
+                    output.push_str(&format!("X{}Y{}G85X{}Y{}\n", x, y, end_x, end_y));
+                }
+                None => output.push_str(&format!("X{}Y{}\n", x, y)),
+            }
         }
     }
 
@@ -297,9 +312,27 @@ fn collect_drill_hits(
                 // Calculate absolute position (component position + rotated pad offset)
                 let abs_pos = calculate_pad_position(position.0, pad.position, rotation.0);
 
+                // A slot's two ends are two pad offsets, so the same rotation
+                // that places the pad places both of them.
+                let slot_end = slot_half_travel(pad).map(|half| {
+                    let start = Point::new(
+                        Nm(pad.position.x.0 - half.x.0),
+                        Nm(pad.position.y.0 - half.y.0),
+                    );
+                    let end = Point::new(
+                        Nm(pad.position.x.0 + half.x.0),
+                        Nm(pad.position.y.0 + half.y.0),
+                    );
+                    (
+                        calculate_pad_position(position.0, start, rotation.0),
+                        calculate_pad_position(position.0, end, rotation.0),
+                    )
+                });
+
                 hits.push(DrillHit {
                     span: (Layer::TopCopper, Layer::BottomCopper),
-                    position: abs_pos,
+                    position: slot_end.map_or(abs_pos, |(start, _)| start),
+                    slot_end: slot_end.map(|(_, end)| end),
                     drill_diameter,
                     // Not "component pads are always plated", which is what
                     // stood here and put every mounting hole in the plated
@@ -320,6 +353,7 @@ fn collect_drill_hits(
     for via in via_query.iter(world.ecs()) {
         hits.push(DrillHit {
             position: via.position,
+            slot_end: None, // A via is drilled, never milled.
             drill_diameter: via.drill,
             drill_type: DrillType::Plated, // Vias are always plated
             span: (via.start_layer, via.end_layer),
@@ -327,6 +361,25 @@ fn collect_drill_hits(
     }
 
     Ok(hits)
+}
+
+/// Half the distance a slot's milling bit travels, in the pad's own frame.
+///
+/// A slot `(w, h)` is cut with a bit the width of its narrow dimension moving
+/// along its long one, so the bit's centre stops half a bit short of each end
+/// and the travel is `long - narrow`. A pair that is square describes a round
+/// hole written the long way and yields nothing, because sending a routing
+/// path for a hole one drill hit makes is a slower board and a stranger file.
+fn slot_half_travel(pad: &cypcb_world::footprint::PadDef) -> Option<Point> {
+    let (width, height) = pad.slot?;
+    if width == height {
+        return None;
+    }
+    Some(if width > height {
+        Point::new(Nm((width.0 - height.0) / 2), Nm(0))
+    } else {
+        Point::new(Nm(0), Nm((height.0 - width.0) / 2))
+    })
 }
 
 /// Whether two layer pairs name the same hole, in either order.
@@ -524,14 +577,14 @@ mod tests {
                 position: Point::from_mm(0.0, 0.0),
                 drill_diameter: Nm::from_mm(0.3),
                 drill_type: DrillType::Plated,
-
+                slot_end: None,
                 span: (Layer::TopCopper, Layer::BottomCopper),
             },
             DrillHit {
                 position: Point::from_mm(1.0, 1.0),
                 drill_diameter: Nm::from_mm(0.3),
                 drill_type: DrillType::Plated,
-
+                slot_end: None,
                 span: (Layer::TopCopper, Layer::BottomCopper),
             },
         ];
@@ -551,21 +604,21 @@ mod tests {
                 position: Point::from_mm(0.0, 0.0),
                 drill_diameter: Nm::from_mm(0.3),
                 drill_type: DrillType::Plated,
-
+                slot_end: None,
                 span: (Layer::TopCopper, Layer::BottomCopper),
             },
             DrillHit {
                 position: Point::from_mm(1.0, 1.0),
                 drill_diameter: Nm::from_mm(0.8),
                 drill_type: DrillType::Plated,
-
+                slot_end: None,
                 span: (Layer::TopCopper, Layer::BottomCopper),
             },
             DrillHit {
                 position: Point::from_mm(2.0, 2.0),
                 drill_diameter: Nm::from_mm(0.3),
                 drill_type: DrillType::Plated,
-
+                slot_end: None,
                 span: (Layer::TopCopper, Layer::BottomCopper),
             },
         ];

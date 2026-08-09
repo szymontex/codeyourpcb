@@ -829,6 +829,7 @@ fn parse_footprint(
             position: p.local_position,
             size: p.size,
             drill: p.drill,
+            slot: p.slot,
             layers: p.layers.clone(),
         })
         .collect();
@@ -917,6 +918,8 @@ struct ParsedPad {
     local_position: Point,
     size: (Nm, Nm),
     drill: Option<Nm>,
+    /// The hole's full size when KiCad wrote `(drill oval W H)`.
+    slot: Option<(Nm, Nm)>,
     layers: Vec<Layer>,
     net_id: Option<NetId>,
 }
@@ -958,6 +961,7 @@ fn parse_pad(
     let mut local_pos = Point::ORIGIN;
     let mut size = (Nm::from_mm(1.0), Nm::from_mm(1.0));
     let mut drill: Option<Nm> = None;
+    let mut slot: Option<(Nm, Nm)> = None;
     let mut layers: Vec<Layer> = Vec::new();
     let mut net_id: Option<NetId> = None;
 
@@ -982,9 +986,29 @@ fn parse_pad(
                         }
                     }
                 }
+                // `(drill 0.9)` is a round hole and `(drill oval 2.4 1.0)` a
+                // slot, milled rather than drilled. Reading only the first
+                // form did not lose the slot - it refused the whole board,
+                // with a message about a stray comma. Every USB connector,
+                // barrel jack and latching header has one.
+                //
+                // Either form may carry `(offset x y)`, which moves the hole
+                // inside its pad. That is read where the pad is placed, not
+                // here.
                 "drill" => {
                     if let Ok(list) = prop.list() {
-                        if list.len() >= 2 {
+                        let is_oval = list.get(1).and_then(get_string).as_deref() == Some("oval");
+                        if is_oval && list.len() >= 4 {
+                            let w = coordinate(&list[2], "pad slot width")?;
+                            let h = coordinate(&list[3], "pad slot height")?;
+                            if w > 0.0 && h > 0.0 {
+                                slot = Some((Nm::from_mm(w), Nm::from_mm(h)));
+                                // Every rule about a drill means the narrow
+                                // dimension: the bit the fab has to own, the
+                                // width the plating reaches down.
+                                drill = Some(Nm::from_mm(w.min(h)));
+                            }
+                        } else if !is_oval && list.len() >= 2 {
                             let d = coordinate(&list[1], "pad drill")?;
                             if d > 0.0 {
                                 drill = Some(Nm::from_mm(d));
@@ -1044,6 +1068,7 @@ fn parse_pad(
         local_position: local_pos,
         size,
         drill,
+        slot,
         layers,
         net_id,
     }))

@@ -469,6 +469,7 @@ mod tests {
                 position: Point::ORIGIN,
                 size: (Nm::from_mm(1.0), Nm::from_mm(1.0)),
                 drill: None, // SMD pad
+                slot: None,
                 layers: vec![Layer::TopCopper],
             }],
         };
@@ -516,6 +517,7 @@ mod tests {
                 position: Point::ORIGIN,
                 size: (Nm::from_mm(1.0), Nm::from_mm(1.0)),
                 drill: Some(Nm::from_mm(0.6)), // THT pad with drill
+                slot: None,
                 layers: vec![Layer::TopCopper],
             }],
         };

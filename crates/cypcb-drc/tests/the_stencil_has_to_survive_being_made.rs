@@ -39,6 +39,7 @@ fn board_with_pad_gap(gap_mm: f64, drilled: bool) -> BoardWorld {
         position: Point::from_mm(x, 0.0),
         size: (Nm::from_mm(1.0), Nm::from_mm(1.0)),
         drill: drilled.then(|| Nm::from_mm(0.4)),
+        slot: None,
         layers: vec![Layer::TopCopper, Layer::TopMask, Layer::TopPaste],
     };
 

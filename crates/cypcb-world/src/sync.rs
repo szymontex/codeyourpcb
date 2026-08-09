@@ -1497,6 +1497,9 @@ fn convert_footprint_def(fp_def: &FootprintDef, copper_layers: u8) -> Footprint 
                 position: Point::new(p.x.to_nm(), p.y.to_nm()),
                 size: (p.width.to_nm(), p.height.to_nm()),
                 drill: p.drill.as_ref().map(|d| d.to_nm()),
+                // The language has no way to write a slot yet, so a design
+                // written here has none. A board imported from KiCad can.
+                slot: None,
                 layers: if is_tht {
                     // A drilled hole goes through the whole board, so its
                     // copper is on every copper layer the board has - not just

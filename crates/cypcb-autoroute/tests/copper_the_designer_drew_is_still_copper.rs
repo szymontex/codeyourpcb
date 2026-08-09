@@ -35,6 +35,7 @@ fn board(locked: bool) -> (BoardWorld, cypcb_world::footprint::FootprintLibrary)
             position: Point::ORIGIN,
             size: (Nm::from_mm(1.0), Nm::from_mm(1.0)),
             drill: None,
+            slot: None,
             layers: vec![Layer::TopCopper],
         }],
     });
@@ -136,6 +137,7 @@ fn a_net_a_hand_trace_already_joins_is_not_routed_again() {
             position: Point::ORIGIN,
             size: (Nm::from_mm(1.0), Nm::from_mm(1.0)),
             drill: None,
+            slot: None,
             layers: vec![Layer::TopCopper],
         }],
     });
@@ -201,6 +203,7 @@ fn copper_on_another_layer_does_not_count_as_a_connection() {
             position: Point::ORIGIN,
             size: (Nm::from_mm(1.0), Nm::from_mm(1.0)),
             drill: None,
+            slot: None,
             // Top only: a surface-mount pad.
             layers: vec![Layer::TopCopper],
         }],
@@ -268,6 +271,7 @@ fn a_via_joins_two_traces_into_one_piece_of_copper() {
             // Through-hole pins: the wire leaves on top and comes back on the
             // bottom, which only connects if the pad is on both.
             drill: Some(Nm::from_mm(0.3)),
+            slot: None,
             layers: vec![Layer::TopCopper, Layer::BottomCopper],
         }],
     });
@@ -354,6 +358,7 @@ fn a_ground_plane_connects_the_pins_that_sit_in_it() {
             position: Point::ORIGIN,
             size: (Nm::from_mm(1.0), Nm::from_mm(1.0)),
             drill: None,
+            slot: None,
             layers: vec![Layer::TopCopper],
         }],
     });

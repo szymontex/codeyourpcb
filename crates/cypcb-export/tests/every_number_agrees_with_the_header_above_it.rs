@@ -48,6 +48,7 @@ fn two_pin_header() -> Footprint {
         position: Point::from_mm(x, 0.0),
         size: (Nm::from_mm(1.7), Nm::from_mm(1.7)),
         drill: Some(Nm::from_mm(1.0)),
+        slot: None,
         layers: vec![Layer::TopCopper, Layer::BottomCopper],
     };
 

@@ -115,6 +115,7 @@ pub fn gullwing_footprint(
             position: Point::new(-half_span, y),
             size: (pad_length, pad_width), // Horizontal pad orientation
             drill: None,
+            slot: None,
             layers: layers.clone(),
         });
     }
@@ -130,6 +131,7 @@ pub fn gullwing_footprint(
             position: Point::new(half_span, y),
             size: (pad_length, pad_width),
             drill: None,
+            slot: None,
             layers: layers.clone(),
         });
     }
@@ -265,6 +267,7 @@ pub fn sot23() -> Footprint {
                 position: Point::new(Nm::from_mm(-0.95), Nm::from_mm(-1.0)),
                 size: (Nm::from_mm(0.6), Nm::from_mm(1.0)),
                 drill: None,
+                slot: None,
                 layers: layers.clone(),
             },
             // Pin 2: right side bottom
@@ -274,6 +277,7 @@ pub fn sot23() -> Footprint {
                 position: Point::new(Nm::from_mm(0.95), Nm::from_mm(-1.0)),
                 size: (Nm::from_mm(0.6), Nm::from_mm(1.0)),
                 drill: None,
+                slot: None,
                 layers: layers.clone(),
             },
             // Pin 3: top center
@@ -283,6 +287,7 @@ pub fn sot23() -> Footprint {
                 position: Point::new(Nm::ZERO, Nm::from_mm(1.0)),
                 size: (Nm::from_mm(0.6), Nm::from_mm(1.0)),
                 drill: None,
+                slot: None,
                 layers,
             },
         ],
@@ -344,6 +349,7 @@ pub fn sot23_5() -> Footprint {
                 position: Point::new(-half_span, -pitch),
                 size: (Nm::from_mm(1.0), Nm::from_mm(0.6)),
                 drill: None,
+                slot: None,
                 layers: layers.clone(),
             },
             PadDef {
@@ -352,6 +358,7 @@ pub fn sot23_5() -> Footprint {
                 position: Point::new(-half_span, Nm::ZERO),
                 size: (Nm::from_mm(1.0), Nm::from_mm(0.6)),
                 drill: None,
+                slot: None,
                 layers: layers.clone(),
             },
             PadDef {
@@ -360,6 +367,7 @@ pub fn sot23_5() -> Footprint {
                 position: Point::new(-half_span, pitch),
                 size: (Nm::from_mm(1.0), Nm::from_mm(0.6)),
                 drill: None,
+                slot: None,
                 layers: layers.clone(),
             },
             // Pins 4-5: right side, top to bottom
@@ -369,6 +377,7 @@ pub fn sot23_5() -> Footprint {
                 position: Point::new(half_span, pitch),
                 size: (Nm::from_mm(1.0), Nm::from_mm(0.6)),
                 drill: None,
+                slot: None,
                 layers: layers.clone(),
             },
             PadDef {
@@ -377,6 +386,7 @@ pub fn sot23_5() -> Footprint {
                 position: Point::new(half_span, -pitch),
                 size: (Nm::from_mm(1.0), Nm::from_mm(0.6)),
                 drill: None,
+                slot: None,
                 layers,
             },
         ],
@@ -450,6 +460,7 @@ pub fn tqfp32() -> Footprint {
             position: Point::new(x, -half_span),
             size: (pad_width, pad_length), // Vertical pad
             drill: None,
+            slot: None,
             layers: layers.clone(),
         });
         pin_num += 1;
@@ -464,6 +475,7 @@ pub fn tqfp32() -> Footprint {
             position: Point::new(half_span, y),
             size: (pad_length, pad_width), // Horizontal pad
             drill: None,
+            slot: None,
             layers: layers.clone(),
         });
         pin_num += 1;
@@ -478,6 +490,7 @@ pub fn tqfp32() -> Footprint {
             position: Point::new(x, half_span),
             size: (pad_width, pad_length), // Vertical pad
             drill: None,
+            slot: None,
             layers: layers.clone(),
         });
         pin_num += 1;
@@ -492,6 +505,7 @@ pub fn tqfp32() -> Footprint {
             position: Point::new(-half_span, y),
             size: (pad_length, pad_width), // Horizontal pad
             drill: None,
+            slot: None,
             layers: layers.clone(),
         });
         pin_num += 1;

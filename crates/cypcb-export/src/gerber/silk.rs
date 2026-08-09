@@ -470,6 +470,7 @@ mod tests {
             size: (Nm::from_mm(1.0), Nm::from_mm(1.0)),
             layers: vec![Layer::TopCopper],
             drill: None,
+            slot: None,
         };
 
         let pad2 = PadDef {
@@ -479,6 +480,7 @@ mod tests {
             size: (Nm::from_mm(1.0), Nm::from_mm(1.0)),
             layers: vec![Layer::TopCopper],
             drill: None,
+            slot: None,
         };
 
         Footprint {
@@ -603,6 +605,7 @@ mod tests {
             size: (Nm::from_mm(1.0), Nm::from_mm(1.0)),
             layers: vec![Layer::BottomCopper], // Bottom side only
             drill: None,
+            slot: None,
         };
 
         let footprint = Footprint {

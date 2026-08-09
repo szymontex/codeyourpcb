@@ -28,6 +28,7 @@ use crate::components::{Layer, PadShape};
 ///     position: Point::from_mm(-0.5, 0.0),
 ///     size: (Nm::from_mm(0.6), Nm::from_mm(0.5)),
 ///     drill: None,
+///     slot: None,
 ///     layers: vec![Layer::TopCopper, Layer::TopPaste, Layer::TopMask],
 /// };
 ///
@@ -38,6 +39,7 @@ use crate::components::{Layer, PadShape};
 ///     position: Point::from_mm(0.0, 0.0),
 ///     size: (Nm::from_mm(1.8), Nm::from_mm(1.8)),
 ///     drill: Some(Nm::from_mm(1.0)),
+///     slot: None,
 ///     layers: vec![Layer::TopCopper, Layer::BottomCopper],
 /// };
 /// ```
@@ -52,7 +54,24 @@ pub struct PadDef {
     /// Pad size as (width, height) in nanometers.
     pub size: (Nm, Nm),
     /// Drill diameter for through-hole pads (None for SMD).
+    ///
+    /// For a slot this is the narrow dimension, which is what every rule
+    /// about a drill means: the smallest bit the fab has to own, the width
+    /// the plating has to reach down, the wall a router bit can break into.
     pub drill: Option<Nm>,
+    /// The hole's full size when it is a slot rather than a round hole.
+    ///
+    /// `(width, height)` in the pad's own frame, exactly as KiCad writes
+    /// `(drill oval 2.4 1.0)`, so the pair survives a round trip. `None` is a
+    /// round hole, which is nearly every hole on nearly every board.
+    ///
+    /// A slot is milled rather than drilled, and it is not a detail: a USB
+    /// connector, a barrel jack and a latching header all hold themselves to
+    /// the board through one. A slot delivered as a round hole is a part that
+    /// does not fit and a board that is scrap, so nothing downstream may
+    /// quietly round it - the drill file writes the routed path and the KiCad
+    /// file writes the oval back.
+    pub slot: Option<(Nm, Nm)>,
     /// Layers this pad appears on.
     pub layers: Vec<Layer>,
 }
@@ -88,6 +107,16 @@ impl PadDef {
     #[inline]
     pub fn is_non_plated(&self) -> bool {
         self.drill.is_some() && !self.layers.iter().any(|layer| layer.is_copper())
+    }
+
+    /// Whether this hole is a slot: milled along its length, not drilled.
+    ///
+    /// A pair that is square is a round hole written the long way, so it is
+    /// not one - `(drill oval 1.0 1.0)` is a 1mm drill and saying otherwise
+    /// would send a routing path to the fab for a hole a bit makes in one hit.
+    #[inline]
+    pub fn is_slot(&self) -> bool {
+        matches!(self.slot, Some((width, height)) if width != height)
     }
 }
 
@@ -447,6 +476,7 @@ pub fn mirrored_to_bottom(footprint: &Footprint) -> Footprint {
                 position: mirror_point(pad.position),
                 size: pad.size,
                 drill: pad.drill,
+                slot: None,
                 layers: pad.layers.iter().map(|layer| flip(*layer)).collect(),
             })
             .collect(),
@@ -658,6 +688,7 @@ mod tests {
             position: Point::ORIGIN,
             size: (Nm::from_mm(0.5), Nm::from_mm(0.5)),
             drill: None,
+            slot: None,
             layers: vec![Layer::TopCopper],
         };
         assert!(smd.is_smd());
@@ -669,6 +700,7 @@ mod tests {
             position: Point::ORIGIN,
             size: (Nm::from_mm(1.5), Nm::from_mm(1.5)),
             drill: Some(Nm::from_mm(0.8)),
+            slot: None,
             layers: vec![Layer::TopCopper, Layer::BottomCopper],
         };
         assert!(!tht.is_smd());

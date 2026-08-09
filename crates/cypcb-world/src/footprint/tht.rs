@@ -63,6 +63,7 @@ pub fn axial_300mil() -> Footprint {
                 position: Point::new(-half_spacing, Nm::ZERO),
                 size: (pad_size, pad_size),
                 drill: Some(drill),
+                slot: None,
                 layers: tht_layers(),
             },
             PadDef {
@@ -71,6 +72,7 @@ pub fn axial_300mil() -> Footprint {
                 position: Point::new(half_spacing, Nm::ZERO),
                 size: (pad_size, pad_size),
                 drill: Some(drill),
+                slot: None,
                 layers: tht_layers(),
             },
         ],
@@ -127,6 +129,7 @@ pub fn dip8() -> Footprint {
             position: Point::new(-half_row, y_offset),
             size: (pad_width, pad_height),
             drill: Some(drill),
+            slot: None,
             layers: tht_layers(),
         });
     }
@@ -141,6 +144,7 @@ pub fn dip8() -> Footprint {
             position: Point::new(half_row, y_offset),
             size: (pad_width, pad_height),
             drill: Some(drill),
+            slot: None,
             layers: tht_layers(),
         });
     }
@@ -183,6 +187,7 @@ pub fn pin_header_1x2() -> Footprint {
                 position: Point::new(-half_pitch, Nm::ZERO),
                 size: (pad_size, pad_size),
                 drill: Some(drill),
+                slot: None,
                 layers: tht_layers(),
             },
             PadDef {
@@ -191,6 +196,7 @@ pub fn pin_header_1x2() -> Footprint {
                 position: Point::new(half_pitch, Nm::ZERO),
                 size: (pad_size, pad_size),
                 drill: Some(drill),
+                slot: None,
                 layers: tht_layers(),
             },
         ],

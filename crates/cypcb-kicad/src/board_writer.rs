@@ -378,8 +378,18 @@ fn write_footprints(
             if let Some(ratio) = corner_ratio {
                 let _ = write!(out, " (roundrect_rratio {})", ratio as f64 / 100.0);
             }
-            if let Some(drill) = pad.drill {
-                let _ = write!(out, " (drill {})", mm(drill));
+            // A slot is written the way KiCad writes one, with both of its
+            // dimensions. `(drill {narrow})` would hand back a round hole for
+            // the slot the board came in with, which is the part that stops
+            // fitting.
+            match (pad.slot, pad.drill) {
+                (Some((width, height)), _) if pad.is_slot() => {
+                    let _ = write!(out, " (drill oval {} {})", mm(width), mm(height));
+                }
+                (_, Some(drill)) => {
+                    let _ = write!(out, " (drill {})", mm(drill));
+                }
+                (_, None) => {}
             }
             if let Some((number, id)) = net {
                 let name = world.net_name(id).unwrap_or_default();

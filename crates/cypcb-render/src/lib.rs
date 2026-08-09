@@ -1457,6 +1457,7 @@ impl PcbEngine {
                 position: Point::new(Nm(pad.x_nm), Nm(pad.y_nm)),
                 size: (Nm(pad.width_nm), Nm(pad.height_nm)),
                 drill: pad.drill_nm.map(Nm),
+                slot: None,
                 layers,
             });
         }
