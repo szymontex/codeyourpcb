@@ -368,10 +368,11 @@ impl<'a> Reader<'a> {
     /// `stackup { copper 0.035mm  prepreg 0.2mm  core 1.2mm }` inside a board.
     ///
     /// Read because the board block refuses what it does not recognise now,
-    /// and tree-sitter has always accepted this. Nothing downstream consumes
-    /// `BoardDef::stackup`: the checker takes its stackup from the fab preset,
-    /// so this is read and held, which is exactly what the other reader does
-    /// with it.
+    /// and tree-sitter has always accepted this. What a design says here is
+    /// now what the rest of the tool believes: the checker grades the stackup
+    /// against the layer count, and the thickness it adds up to is the depth
+    /// every plated hole is drilled through, which decides whether the fab
+    /// can plate it at all.
     fn stackup(&mut self) -> Option<StackupDef> {
         let start = self.here();
         self.bump(); // `stackup`

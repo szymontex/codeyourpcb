@@ -89,6 +89,8 @@ pub enum ViolationKind {
     PasteClearance,
     /// A drilled hole sits too close to the routed board edge.
     HoleToEdge,
+    /// A hole too deep for its width for the plating to reach the middle.
+    DrillAspectRatio,
 }
 
 impl std::fmt::Display for ViolationKind {
@@ -115,8 +117,26 @@ impl std::fmt::Display for ViolationKind {
             ViolationKind::Stackup => write!(f, "stackup"),
             ViolationKind::PasteClearance => write!(f, "paste-clearance"),
             ViolationKind::HoleToEdge => write!(f, "hole-to-edge"),
+            ViolationKind::DrillAspectRatio => write!(f, "drill-aspect-ratio"),
         }
     }
+}
+
+/// The smallest hole a fab plates through a board of this thickness.
+///
+/// Aspect ratio is depth over width, so the smallest drill that still reaches
+/// the published ratio is the thickness divided by it. Rounded up: a hole one
+/// nanometre under the answer is over the ratio, and this is the number the
+/// violation tells a person to drill.
+///
+/// Returns zero when the fab published no ratio, which reads as "no limit" and
+/// keeps the rule silent rather than failing every hole on the board.
+pub(crate) fn smallest_platable_drill(thickness: Nm, max_ratio_x100: u32) -> Nm {
+    if max_ratio_x100 == 0 {
+        return Nm(0);
+    }
+    let ratio = i64::from(max_ratio_x100);
+    Nm((thickness.0 * 100 + ratio - 1) / ratio)
 }
 
 impl DrcViolation {
@@ -586,6 +606,40 @@ impl DrcViolation {
                 "Paste stencil web is {:.3}mm, {:.3}mm required",
                 actual.to_mm(),
                 required.to_mm(),
+            ),
+        }
+    }
+
+    /// A hole too deep for its width for the plating to reach the middle.
+    ///
+    /// `actual` is the drill the design asked for and `required` the smallest
+    /// one this fab plates through a board this thick, because widening the
+    /// hole is the fix a person can act on - the ratio itself is in the
+    /// message, where the two numbers it came from are named.
+    pub fn drill_aspect_ratio(
+        entity: Entity,
+        drill: Nm,
+        thickness: Nm,
+        max_ratio_x100: u32,
+        location: Point,
+    ) -> Self {
+        let smallest = smallest_platable_drill(thickness, max_ratio_x100);
+        DrcViolation {
+            kind: ViolationKind::DrillAspectRatio,
+            actual: Some(drill),
+            required: Some(smallest),
+            area: None,
+            location,
+            entity,
+            other_entity: None,
+            source_span: None,
+            message: format!(
+                "A {:.3}mm hole through a {:.2}mm board is {:.1}:1, more than the {:.1}:1 this fab plates - {:.3}mm is the smallest that reaches",
+                drill.to_mm(),
+                thickness.to_mm(),
+                thickness.0 as f64 / drill.0.max(1) as f64,
+                f64::from(max_ratio_x100) / 100.0,
+                smallest.to_mm(),
             ),
         }
     }

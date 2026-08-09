@@ -61,6 +61,8 @@ use cypcb_rules::DesignConstraints;
 /// - `min_silk_clearance`: Minimum silkscreen to copper clearance
 /// - `min_courtyard_clearance`: Minimum courtyard clearance between components
 /// - `max_diff_pair_skew`: How far apart the halves of a differential pair may end up
+/// - `max_drill_aspect_ratio`: Deepest hole the plating chemistry reaches, in hundredths
+/// - `board_thickness`: How thick the fab builds a board that does not say
 ///
 /// # Examples
 ///
@@ -91,6 +93,8 @@ use cypcb_rules::DesignConstraints;
 ///     min_courtyard_clearance: Nm::from_mm(0.25),
 ///     copper_weight_oz_x10: 10,
 ///     max_diff_pair_skew: Nm::from_mm(0.5),
+///     max_drill_aspect_ratio: 800,
+///     board_thickness: Nm::from_mm(1.6),
 /// };
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -149,6 +153,22 @@ pub struct DesignRules {
     /// between them: copper one half runs and the other does not is skew, and
     /// past this it is a signal problem the board cannot be talked out of.
     pub max_diff_pair_skew: Nm,
+    /// The deepest hole this fab's plating chemistry reaches, in hundredths.
+    ///
+    /// `800` is 8:1 - a hole may be up to eight times as deep as it is wide.
+    /// Plating a through hole means pulling copper down a barrel by chemistry,
+    /// and past some depth the solution no longer reaches the middle: the
+    /// board comes back with a barrel that is thin, or open, in a place no
+    /// inspection sees. Every fab publishes the number and nothing read it
+    /// until the stackup gave the checker a depth to divide by.
+    pub max_drill_aspect_ratio: u32,
+    /// How thick this fab builds a board that does not say how thick it is.
+    ///
+    /// A design that declares a `stackup` states its own thickness and that
+    /// one wins. This is the fallback, and it is the fab's own standard
+    /// rather than a constant, because the aspect ratio a hole reaches is the
+    /// thickness divided by the drill.
+    pub board_thickness: Nm,
 }
 
 impl DesignRules {
@@ -195,6 +215,8 @@ impl DesignRules {
             min_courtyard_clearance: c.min_courtyard_clearance.unwrap_or(Nm::from_mm(0.25)),
             copper_weight_oz_x10: c.copper_weight_oz_x10,
             max_diff_pair_skew: c.length_match_tolerance,
+            max_drill_aspect_ratio: c.max_drill_aspect_ratio,
+            board_thickness: c.board_thickness,
         }
     }
 }

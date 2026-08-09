@@ -146,6 +146,7 @@ pub fn run_drc(world: &mut BoardWorld, rules: &DesignRules) -> DrcResult {
         Box::new(rules::StackupRule),
         Box::new(rules::PasteClearanceRule),
         Box::new(rules::HoleToEdgeRule),
+        Box::new(rules::DrillAspectRatioRule),
     ];
 
     // Run each checker
