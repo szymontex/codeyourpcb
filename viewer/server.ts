@@ -46,6 +46,17 @@ console.log('');
 // Create WebSocket server (bind to 0.0.0.0 for external access)
 const wss = new WebSocketServer({ port: WS_PORT, host: '0.0.0.0' });
 
+// The port it really got, which is the only way to know when WS_PORT is 0.
+// A test that guesses a port talks to whatever is already listening on it -
+// measured on 2026-08-10, when 39 leftover servers had accumulated from
+// earlier runs and one of them answered a test's questions about a directory
+// it had never heard of, so the guard looked broken and was not.
+wss.on('listening', () => {
+  const address = wss.address();
+  const port = typeof address === 'object' && address ? address.port : WS_PORT;
+  console.log(`[WS] listening on ${port}`);
+});
+
 wss.on('connection', (ws, request) => {
   // A browser sends `Origin` and cannot be talked out of it; WebSocket is not
   // subject to CORS, so any page a developer visits could open this socket and

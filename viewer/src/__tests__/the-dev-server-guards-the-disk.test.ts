@@ -17,9 +17,12 @@ import { WebSocket } from 'ws';
  * in the path a message actually takes.
  */
 
-// Not 4322: that is the port a developer's own dev server sits on, and
-// spawning a second one there binds nothing and talks to theirs.
-const PORT = 4700 + Math.floor(Math.random() * 200);
+// The port the server actually bound, read from its own output. Guessing one -
+// even a random one - talks to whatever is already listening there: measured
+// with 39 leftover servers from earlier runs of this file, one of which
+// answered these questions about a directory it had never heard of, so the
+// guard looked broken and was not.
+let PORT = 0;
 let server: ChildProcess;
 let workspace: string;
 let outside: string;
@@ -64,32 +67,45 @@ beforeAll(async () => {
   writeFileSync(join(workspace, 'lib', 'blocks.cypcb'), 'version 1\nmodule Divider { pin IN }\n');
   writeFileSync(join(outside, 'secrets.txt'), 'the private key');
 
+  // `detached` so the whole group can be killed: `npx` is a wrapper, and
+  // signalling it leaves the `tsx server.ts` underneath alive. That is how 39
+  // of them accumulated.
   server = spawn('npx', ['tsx', 'server.ts', workspace], {
     cwd: join(__dirname, '..', '..'),
-    env: { ...process.env, CYPCB_NO_VITE: '1', CYPCB_WS_PORT: String(PORT) },
-    stdio: 'ignore',
+    env: { ...process.env, CYPCB_NO_VITE: '1', CYPCB_WS_PORT: '0' },
+    stdio: ['ignore', 'pipe', 'pipe'],
+    detached: true,
   });
 
-  // Wait for the port to answer rather than guessing at a delay.
-  const deadline = Date.now() + 20_000;
-  for (;;) {
-    try {
-      const probe = new WebSocket(`ws://127.0.0.1:${PORT}`);
-      await new Promise<void>((resolve, reject) => {
-        probe.once('open', () => resolve());
-        probe.once('error', reject);
-      });
-      probe.close();
-      break;
-    } catch {
-      if (Date.now() > deadline) throw new Error('the dev server never started');
-      await new Promise((r) => setTimeout(r, 250));
-    }
-  }
-}, 30_000);
+  PORT = await new Promise<number>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('the dev server never said which port')), 25_000);
+    let seen = '';
+    const read = (chunk: Buffer) => {
+      seen += chunk.toString();
+      const match = seen.match(/\[WS\] listening on (\d+)/);
+      if (match) {
+        clearTimeout(timer);
+        resolve(Number(match[1]));
+      }
+    };
+    server.stdout?.on('data', read);
+    server.stderr?.on('data', read);
+    server.once('exit', code => {
+      clearTimeout(timer);
+      reject(new Error(`the dev server exited with ${code} before listening:\n${seen}`));
+    });
+  });
+}, 40_000);
 
 afterAll(() => {
-  server?.kill('SIGTERM');
+  // The group, not the wrapper.
+  if (server?.pid) {
+    try {
+      process.kill(-server.pid, 'SIGTERM');
+    } catch {
+      server.kill('SIGTERM');
+    }
+  }
   rmSync(workspace, { recursive: true, force: true });
   rmSync(outside, { recursive: true, force: true });
 });

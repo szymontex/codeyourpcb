@@ -90,7 +90,7 @@ An LLM can generate this, review it, refactor it, and catch mistakes — just li
 | Bidirectional sync — edit trace code ↔ board updates in real-time | Done |
 | Net constraints — `[width 0.5mm]`, `[current 2A]` per net | Done |
 | IPC-2221 auto-width from current rating | Done |
-| DRC — clearance, drill, connectivity, trace width, hole-to-hole, solder mask, annular ring, edge, courtyard, zone overlap, pour island | Done — sixteen rules; `cypcb check` prints copper-on-copper apart from a gap under spec, and gives an orphaned plane its size and corners |
+| DRC — clearance, drill, connectivity, trace width, hole-to-hole, solder mask, annular ring, edge, courtyard, zone overlap, pour island, differential-pair skew | Done — `grep -c 'Box::new(rules::' crates/cypcb-drc/src/lib.rs` counts them, because a number written here goes stale the next time one is added; `cypcb check` prints copper-on-copper apart from a gap under spec, gives an orphaned plane its size and corners, and says when a rule's number is this tool's own rather than the fab's |
 | DRC — silkscreen clearance | Done — a Rust rule checks a footprint's own artwork against every other part's pads on the same side |
 | Gerber / Excellon / BOM / pick-and-place export | Done |
 | Monaco editor with context-aware completions | Done |
@@ -103,30 +103,36 @@ An LLM can generate this, review it, refactor it, and catch mistakes — just li
 | Autorouter — PathFinder negotiated congestion, multi-layer | Routes the benchmark boards complete; **the toolbar button is hidden** while routing quality is worked on |
 | KiCad component library import | Done |
 | KiCad `.kicad_pcb` import | Done — `cypcb parse-kicad`, used by the routing benchmarks |
-| KiCad `.kicad_pcb` export | Planned |
+| KiCad `.kicad_pcb` export | Done — `cypcb to-kicad` writes the outline, a footprint per part with its pads and nets, every trace and via, and the net list. Zones, silkscreen text and 3D models are not written; KiCad fills its own defaults for what a file leaves out |
 | Copper pour / ground planes | Done — a zone is filled against the copper on its layer, with the fab's clearance to foreign copper and thermal spokes to its own pads. The same geometry reaches the Gerbers, the viewer and the checker, which reports two planes shorted together and copper the fill left connected to nothing. See `examples/pour-island.cypcb` |
 | Module system — reusable circuit blocks | Done — `module` defines one, `use M as N at 10mm, 5mm` places it, modules nest. See `examples/v2-modules.cypcb` |
 | `import` — block libraries across files | Done — resolved relative to the importing file; modules, footprints and interfaces cross, a design's own board and parts do not. See `examples/v2-imports.cypcb` |
 | `assert` — the design's own claims, checked | Done — `board.*`, `<part>.value` and `<net>.current/width/clearance`; anything else is reported as not checked rather than skipped |
-| Parts engine — auto component picking from JLCPCB/LCSC | Planned |
+| Parts engine — auto component picking from JLCPCB/LCSC | Partly — a design names the part with `lcsc "C7593"`, the viewer fetches that part's real footprint, and the bill of materials carries it in JLCPCB's own `LCSC Part #` column. Picking a part for you is planned |
 | Schematic generation from `.cypcb` | Planned |
-| Differential pair routing | Planned |
+| Differential pairs | Declared and checked — `diffpair USB { USB_DP USB_DM }`, and the checker measures the skew between the halves against the fab's length-match tolerance. Routing them alongside each other, and the gap between them, are still planned |
 | CI/CD in GitHub Actions | Not planned — the quality gate is `scripts/quality-gate.sh`, run locally |
 
-Routing quality on the bundled KiCad benchmarks, measured with
-`cargo test --release -p cypcb-autoroute -- benchmark_all_fixtures_drc --ignored`:
+Routing quality on the six bundled KiCad benchmarks. The numbers move whenever
+the router or the checker changes, so they are not written down here - this
+prints them:
 
-| Board | Connections | Violations before routing | After | Introduced by the router |
-|---|---|---|---|---|
-| led_blink | all routed | 0 | 2 | 2 |
-| stm32_breakout | all routed | 12 | 271 | 259 |
-| multi_ic | all routed | 60 | 210 | 150 |
+```bash
+cargo test --release -p cypcb-autoroute --test benchmark_validation \
+    -- benchmark_all_fixtures_drc --ignored --nocapture
+```
 
-Every board routes to completion. The numbers are higher than they were, and
-the board is not worse: the checker stopped merging several faults into one
-report, started measuring copper instead of part bodies, and began seeing
-footprints on imported boards at all. `docs/TRACKER.md` records each change
-with what it moved.
+Each line reads `N routes, V violations against R, S shorts against T, U
+unrouted`, where `R` and `T` are ratchets: the values the board is not allowed
+to exceed, declared in `DRC_RATCHETS` in that test and lowered as the router
+improves. Every board routes to completion - `U` is 0 on all six, and that is
+asserted, not observed.
+
+A table of these numbers lived here and every row of it had gone stale: it
+listed three of the six boards and figures the checker had since moved twice,
+once by measuring copper instead of part bodies and once by seeing footprints
+on imported boards at all. `docs/TRACKER.md` records each change with what it
+moved.
 
 `cypcb route --in-house` routes the board eight ways and keeps the best,
 because no one setting wins everywhere - measured across these three boards,
