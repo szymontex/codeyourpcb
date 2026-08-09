@@ -87,6 +87,7 @@ use cypcb_rules::DesignConstraints;
 ///     solder_mask_expansion: Nm::from_mm(0.05),
 ///     min_silk_clearance: Nm::from_mm(0.15),
 ///     min_courtyard_clearance: Nm::from_mm(0.25),
+///     copper_weight_oz_x10: 10,
 ///     max_diff_pair_skew: Nm::from_mm(0.5),
 /// };
 /// ```
@@ -118,6 +119,15 @@ pub struct DesignRules {
     pub min_silk_clearance: Nm,
     /// Minimum courtyard clearance between components.
     pub min_courtyard_clearance: Nm,
+    /// How thick the copper is, in tenths of an ounce.
+    ///
+    /// The fab's number, and what IPC-2221 needs to say how wide a trace must
+    /// be for a current: thicker copper carries more in the same width. Every
+    /// preset says 1.0oz today, which is also the calculator's default - so
+    /// this changes no number, and it makes the one the checker prints
+    /// traceable to the table it came from rather than to a default nobody
+    /// mentions.
+    pub copper_weight_oz_x10: u32,
     /// How far apart the two halves of a differential pair may end up.
     ///
     /// The fab's number, from the same table the router is priced with. A pair
@@ -167,6 +177,7 @@ impl DesignRules {
             solder_mask_expansion: c.solder_mask_expansion,
             min_silk_clearance: c.min_silk_clearance.unwrap_or(c.min_silk_width),
             min_courtyard_clearance: c.min_courtyard_clearance.unwrap_or(Nm::from_mm(0.25)),
+            copper_weight_oz_x10: c.copper_weight_oz_x10,
             max_diff_pair_skew: c.length_match_tolerance,
         }
     }

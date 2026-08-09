@@ -27,7 +27,7 @@ impl DrcRule for TraceCurrentRule {
         "trace-current"
     }
 
-    fn check(&self, world: &mut BoardWorld, _rules: &DesignRules) -> Vec<DrcViolation> {
+    fn check(&self, world: &mut BoardWorld, rules: &DesignRules) -> Vec<DrcViolation> {
         // Collect first: the constraint lookup borrows the world immutably and
         // the query holds it mutably.
         let traces: Vec<(bevy_ecs::entity::Entity, NetId, Layer, Nm, Point)> = {
@@ -59,21 +59,34 @@ impl DrcRule for TraceCurrentRule {
                 continue;
             }
 
-            let required = cypcb_calc::TraceWidthCalculator::min_width_for_current(
-                current_ma / 1000.0,
-                is_external(layer),
-            );
+            // The fab's copper, not the calculator's default. IPC-2221 needs
+            // the thickness to answer at all, and a number the checker prints
+            // should be traceable to the table it came from - every preset
+            // says 1.0oz today, which is what the default was, so this moves
+            // no number and makes the one it prints explainable.
+            let copper_oz = rules.copper_weight_oz_x10 as f64 / 10.0;
+            let mut params =
+                cypcb_calc::TraceWidthParams::new(current_ma / 1000.0).with_copper_oz(copper_oz);
+            if !is_external(layer) {
+                params = params.internal();
+            }
+            let required = cypcb_calc::TraceWidthCalculator::calculate(&params).width;
 
             if width.raw() < required.raw() {
                 let net_name = world.net_name(net_id).unwrap_or("unnamed").to_string();
                 let mut violation = DrcViolation::trace_current(entity, width, required, at);
+                // What the number assumes, said out loud. `0.5mm` and
+                // `0.5mm at 2oz` are different claims, and a reader deciding
+                // whether to widen a trace cannot tell them apart.
                 violation.message = format!(
-                    "trace '{}' is {:.3}mm wide for {}: IPC-2221 wants {:.3}mm on an {} layer",
+                    "trace '{}' is {:.3}mm wide for {}: IPC-2221 wants {:.3}mm on an {} layer at {:.1}oz copper and a {:.0}C rise",
                     net_name,
                     width.raw() as f64 / 1_000_000.0,
                     format_current(current_ma),
                     required.raw() as f64 / 1_000_000.0,
                     if is_external(layer) { "outer" } else { "inner" },
+                    copper_oz,
+                    params.temp_rise_c,
                 );
                 violations.push(violation);
             }
