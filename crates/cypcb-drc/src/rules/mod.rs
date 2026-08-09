@@ -161,6 +161,216 @@ impl DrcRule for KeepoutRule {
     }
 }
 
+/// One hole in the board, as the shape the machine actually makes.
+///
+/// A drill leaves a circle. A slot is milled, so the bit travels and leaves a
+/// capsule: a segment with a radius. Every rule that measures a hole against
+/// something has to measure that shape, because a slot read as a circle of its
+/// narrow dimension is wrong by up to its whole length - two 2.4mm slots end
+/// to end with 0.3mm of laminate between them look 1.7mm apart if you only
+/// know their centres and their bits.
+///
+/// The three rules that ask about holes - hole to hole, hole to the routed
+/// edge, and how deep a hole is for its width - collected vias and drilled
+/// pads separately, three times, with the same twenty lines. They share this.
+pub(crate) struct Hole {
+    /// The component or via this hole belongs to.
+    pub entity: bevy_ecs::entity::Entity,
+    /// Where the bit goes down. Equal to `end` for a drilled hole.
+    pub start: cypcb_core::Point,
+    /// Where the bit comes up.
+    pub end: cypcb_core::Point,
+    /// Half the narrow dimension: the radius of the bit that makes it.
+    pub radius: i64,
+    /// The layers this hole joins, which says which drill pass makes it.
+    pub span: (
+        cypcb_world::components::Layer,
+        cypcb_world::components::Layer,
+    ),
+    /// Whether copper is plated down the barrel.
+    pub plated: bool,
+}
+
+impl Hole {
+    /// The diameter of the bit, which is what every fab number about a drill
+    /// is stated against.
+    #[inline]
+    pub fn diameter(&self) -> cypcb_core::Nm {
+        cypcb_core::Nm(self.radius * 2)
+    }
+
+    /// The middle of the hole, for saying where a violation is.
+    #[inline]
+    pub fn centre(&self) -> cypcb_core::Point {
+        cypcb_core::Point::new(
+            cypcb_core::Nm((self.start.x.0 + self.end.x.0) / 2),
+            cypcb_core::Nm((self.start.y.0 + self.end.y.0) / 2),
+        )
+    }
+
+    /// The box the hole occupies: `(min_x, min_y, max_x, max_y)`.
+    #[inline]
+    pub fn bounds(&self) -> (i64, i64, i64, i64) {
+        (
+            self.start.x.0.min(self.end.x.0) - self.radius,
+            self.start.y.0.min(self.end.y.0) - self.radius,
+            self.start.x.0.max(self.end.x.0) + self.radius,
+            self.start.y.0.max(self.end.y.0) + self.radius,
+        )
+    }
+
+    /// Laminate between this hole's wall and another's, which can be negative
+    /// when they overlap.
+    pub fn gap_to(&self, other: &Hole) -> i64 {
+        segment_distance(self.start, self.end, other.start, other.end) - self.radius - other.radius
+    }
+}
+
+/// The closest approach of two segments, in nanometres.
+///
+/// Either may be a single point, which is the common case: a drilled hole is a
+/// segment of zero length, and for two of those this is the plain distance
+/// between their centres.
+///
+/// Solved as the smallest of the four endpoint-to-segment distances, with
+/// crossing segments answering zero. The closed-form parametric solution is
+/// shorter and is wrong for the case this exists for: two parallel segments
+/// leave its denominator at zero, and the fallback branch pins one parameter
+/// at an endpoint - so two slots laid end to end in a row, which is exactly
+/// how a connector's two anchors sit, measured 2.8mm apart when their ends
+/// were 1.4mm apart.
+pub(crate) fn segment_distance(
+    a0: cypcb_core::Point,
+    a1: cypcb_core::Point,
+    b0: cypcb_core::Point,
+    b1: cypcb_core::Point,
+) -> i64 {
+    if segments_cross(a0, a1, b0, b1) {
+        return 0;
+    }
+    let candidates = [
+        point_to_segment(a0, b0, b1),
+        point_to_segment(a1, b0, b1),
+        point_to_segment(b0, a0, a1),
+        point_to_segment(b1, a0, a1),
+    ];
+    candidates
+        .into_iter()
+        .fold(f64::MAX, f64::min)
+        .round()
+        .max(0.0) as i64
+}
+
+/// Distance from a point to a segment, which is a segment of zero length away
+/// from a plain point-to-point distance.
+fn point_to_segment(p: cypcb_core::Point, s0: cypcb_core::Point, s1: cypcb_core::Point) -> f64 {
+    let (px, py) = (p.x.0 as f64, p.y.0 as f64);
+    let (sx, sy) = (s0.x.0 as f64, s0.y.0 as f64);
+    let (dx, dy) = ((s1.x.0 - s0.x.0) as f64, (s1.y.0 - s0.y.0) as f64);
+    let length_squared = dx * dx + dy * dy;
+    let t = if length_squared > 0.0 {
+        (((px - sx) * dx + (py - sy) * dy) / length_squared).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    let (nx, ny) = (sx + t * dx, sy + t * dy);
+    ((px - nx).powi(2) + (py - ny).powi(2)).sqrt()
+}
+
+/// Whether two segments touch or cross, which makes their distance zero.
+fn segments_cross(
+    a0: cypcb_core::Point,
+    a1: cypcb_core::Point,
+    b0: cypcb_core::Point,
+    b1: cypcb_core::Point,
+) -> bool {
+    let side = |p: cypcb_core::Point, q: cypcb_core::Point, r: cypcb_core::Point| -> f64 {
+        let (qx, qy) = ((q.x.0 - p.x.0) as f64, (q.y.0 - p.y.0) as f64);
+        let (rx, ry) = ((r.x.0 - p.x.0) as f64, (r.y.0 - p.y.0) as f64);
+        qx * ry - qy * rx
+    };
+    let (d1, d2) = (side(a0, a1, b0), side(a0, a1, b1));
+    let (d3, d4) = (side(b0, b1, a0), side(b0, b1, a1));
+    (d1 * d2 < 0.0) && (d3 * d4 < 0.0)
+}
+
+/// Every hole in the board: vias, and the pads that are drilled.
+///
+/// A via joins the layers it says; a drilled pad goes through the board.
+pub(crate) fn holes_of(world: &mut BoardWorld) -> Vec<Hole> {
+    use cypcb_core::{Nm, Point};
+    use cypcb_world::components::trace::Via;
+    use cypcb_world::components::{FootprintRef, Layer, Position, Rotation};
+
+    let mut holes: Vec<Hole> = {
+        let ecs = world.ecs_mut();
+        let mut query = ecs.query::<(bevy_ecs::entity::Entity, &Via)>();
+        query
+            .iter(ecs)
+            .map(|(entity, via)| Hole {
+                entity,
+                start: via.position,
+                end: via.position,
+                radius: via.drill.0 / 2,
+                span: (via.start_layer, via.end_layer),
+                // A via that is not plated joins nothing.
+                plated: true,
+            })
+            .collect()
+    };
+
+    let components: Vec<_> = {
+        let ecs = world.ecs_mut();
+        let mut query = ecs.query::<(
+            bevy_ecs::entity::Entity,
+            &FootprintRef,
+            &Position,
+            &Rotation,
+        )>();
+        query
+            .iter(ecs)
+            .map(|(e, f, p, r)| (e, f.clone(), *p, *r))
+            .collect()
+    };
+
+    // The board carries the table it was synced with, including any footprint
+    // the source defined inline; building a fresh one here would see the
+    // built-ins only.
+    let library = world.footprints();
+    for (entity, footprint_ref, position, rotation) in &components {
+        let Some(footprint) = library.get(footprint_ref.as_str()) else {
+            continue; // Unknown footprint - sync already reported it
+        };
+        let degrees = rotation.to_degrees();
+
+        for pad in &footprint.pads {
+            let Some(drill) = pad.drill else { continue };
+            let half = pad.slot_half_travel().unwrap_or(Point::ORIGIN);
+            let place = |dx: i64, dy: i64| {
+                let offset = rotate_point(
+                    Point::new(Nm(pad.position.x.0 + dx), Nm(pad.position.y.0 + dy)),
+                    degrees,
+                );
+                Point::new(
+                    Nm(position.0.x.0 + offset.x.0),
+                    Nm(position.0.y.0 + offset.y.0),
+                )
+            };
+            holes.push(Hole {
+                entity: *entity,
+                start: place(-half.x.0, -half.y.0),
+                end: place(half.x.0, half.y.0),
+                radius: drill.0 / 2,
+                // A drilled pad goes through the board.
+                span: (Layer::TopCopper, Layer::BottomCopper),
+                plated: !pad.is_non_plated(),
+            });
+        }
+    }
+
+    holes
+}
+
 /// Rotate a point about the origin by `degrees`, clockwise-positive to match
 /// the `Rotation` component.
 ///

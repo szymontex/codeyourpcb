@@ -17,16 +17,18 @@
 //! there is no plating in it to fail - `PadDef::is_non_plated` is the same
 //! question the drill file asks when it decides which file a hole belongs in.
 //!
+//! A slot is measured by its narrow dimension, which is the bit that makes it
+//! and the width the plating has to reach down. Its length is a milling
+//! distance, not a depth.
+//!
 //! `max_drill_aspect_ratio` and `board_thickness` are two of the fifteen
 //! numbers every fab preset published with nothing in the workspace reading
 //! them. This closes both.
 
-use cypcb_core::{Nm, Point};
-use cypcb_world::components::trace::Via;
-use cypcb_world::components::{FootprintRef, Position, Rotation};
+use cypcb_core::Nm;
 use cypcb_world::BoardWorld;
 
-use super::{rotate_point, DrcRule};
+use super::DrcRule;
 use crate::presets::DesignRules;
 use crate::violation::{smallest_platable_drill, DrcViolation};
 
@@ -53,68 +55,18 @@ impl DrcRule for DrillAspectRatioRule {
         }
 
         let mut violations = Vec::new();
-
-        // Vias. Every via is plated - a via that is not plated joins nothing.
-        {
-            let ecs = world.ecs_mut();
-            let mut query = ecs.query::<(bevy_ecs::entity::Entity, &Via)>();
-            for (entity, via) in query.iter(ecs) {
-                if via.drill < smallest {
-                    violations.push(DrcViolation::drill_aspect_ratio(
-                        entity,
-                        via.drill,
-                        thickness,
-                        rules.max_drill_aspect_ratio,
-                        via.position,
-                    ));
-                }
+        for hole in super::holes_of(world) {
+            // A bare hole has no plating to fail, however deep the board.
+            if !hole.plated || hole.diameter() >= smallest {
+                continue;
             }
-        }
-
-        // Drilled pads, placed the way every other rule places them.
-        let components: Vec<_> = {
-            let ecs = world.ecs_mut();
-            let mut query = ecs.query::<(
-                bevy_ecs::entity::Entity,
-                &FootprintRef,
-                &Position,
-                &Rotation,
-            )>();
-            query
-                .iter(ecs)
-                .map(|(e, f, p, r)| (e, f.clone(), *p, *r))
-                .collect()
-        };
-
-        let library = world.footprints();
-        for (entity, footprint_ref, position, rotation) in &components {
-            let Some(footprint) = library.get(footprint_ref.as_str()) else {
-                continue; // Unknown footprint - sync already reported it
-            };
-            let degrees = rotation.to_degrees();
-
-            for pad in &footprint.pads {
-                let Some(drill) = pad.drill else {
-                    continue;
-                };
-                if pad.is_non_plated() {
-                    continue; // A bare hole has no plating to fail.
-                }
-                if drill >= smallest {
-                    continue;
-                }
-                let offset = rotate_point(pad.position, degrees);
-                violations.push(DrcViolation::drill_aspect_ratio(
-                    *entity,
-                    drill,
-                    thickness,
-                    rules.max_drill_aspect_ratio,
-                    Point::new(
-                        Nm(position.0.x.0 + offset.x.0),
-                        Nm(position.0.y.0 + offset.y.0),
-                    ),
-                ));
-            }
+            violations.push(DrcViolation::drill_aspect_ratio(
+                hole.entity,
+                hole.diameter(),
+                thickness,
+                rules.max_drill_aspect_ratio,
+                hole.centre(),
+            ));
         }
 
         violations

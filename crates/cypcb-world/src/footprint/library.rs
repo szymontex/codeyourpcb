@@ -118,6 +118,30 @@ impl PadDef {
     pub fn is_slot(&self) -> bool {
         matches!(self.slot, Some((width, height)) if width != height)
     }
+
+    /// Half the distance the milling bit travels, in the pad's own frame.
+    ///
+    /// A slot `(w, h)` is cut with a bit the width of its narrow dimension
+    /// moving along the long one, so the bit's centre stops half a bit short
+    /// of each end and the travel is `long - narrow`. The two ends of the hole
+    /// are the pad's position plus and minus this.
+    ///
+    /// `None` for a round hole, whose two ends are the same point. It lives
+    /// here rather than in the drill writer because the checker needs the same
+    /// two ends: a hole measured at its centre is up to its own length wrong
+    /// about how close it is to anything.
+    #[inline]
+    pub fn slot_half_travel(&self) -> Option<Point> {
+        let (width, height) = self.slot?;
+        if width == height {
+            return None;
+        }
+        Some(if width > height {
+            Point::new(Nm((width.0 - height.0) / 2), Nm(0))
+        } else {
+            Point::new(Nm(0), Nm((height.0 - width.0) / 2))
+        })
+    }
 }
 
 impl Footprint {

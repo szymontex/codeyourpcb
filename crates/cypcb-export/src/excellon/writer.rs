@@ -314,7 +314,7 @@ fn collect_drill_hits(
 
                 // A slot's two ends are two pad offsets, so the same rotation
                 // that places the pad places both of them.
-                let slot_end = slot_half_travel(pad).map(|half| {
+                let slot_end = pad.slot_half_travel().map(|half| {
                     let start = Point::new(
                         Nm(pad.position.x.0 - half.x.0),
                         Nm(pad.position.y.0 - half.y.0),
@@ -361,25 +361,6 @@ fn collect_drill_hits(
     }
 
     Ok(hits)
-}
-
-/// Half the distance a slot's milling bit travels, in the pad's own frame.
-///
-/// A slot `(w, h)` is cut with a bit the width of its narrow dimension moving
-/// along its long one, so the bit's centre stops half a bit short of each end
-/// and the travel is `long - narrow`. A pair that is square describes a round
-/// hole written the long way and yields nothing, because sending a routing
-/// path for a hole one drill hit makes is a slower board and a stranger file.
-fn slot_half_travel(pad: &cypcb_world::footprint::PadDef) -> Option<Point> {
-    let (width, height) = pad.slot?;
-    if width == height {
-        return None;
-    }
-    Some(if width > height {
-        Point::new(Nm((width.0 - height.0) / 2), Nm(0))
-    } else {
-        Point::new(Nm(0), Nm((height.0 - width.0) / 2))
-    })
 }
 
 /// Whether two layer pairs name the same hole, in either order.
