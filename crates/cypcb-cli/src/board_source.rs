@@ -32,11 +32,44 @@ pub struct LoadedBoard {
     pub source: String,
 }
 
-/// Whether this path is a KiCad board rather than a `.cypcb` design.
+/// Whether this file is a KiCad board rather than a `.cypcb` design.
+///
+/// The name first, because that is what a user means when they type it. Then
+/// the file's own first line, because an extension is a claim and the contents
+/// are the fact: a KiCad board saved as `board.cypcb` used to be read by the
+/// DSL reader, which reported **1000 parse errors over 10,998 lines in 520ms**
+/// (one mistake answered with eleven thousand lines). A board is what it is,
+/// whatever it is called.
 pub fn is_kicad(path: &Path) -> bool {
-    path.extension()
+    if path
+        .extension()
         .and_then(|e| e.to_str())
         .is_some_and(|e| e.eq_ignore_ascii_case("kicad_pcb"))
+    {
+        return true;
+    }
+
+    looks_like_kicad(path)
+}
+
+/// Whether a file opens with the s-expression a KiCad board opens with.
+///
+/// Reads the first few hundred bytes rather than the file, so asking costs
+/// nothing on a board that is not one.
+fn looks_like_kicad(path: &Path) -> bool {
+    use std::io::Read as _;
+
+    let Ok(mut file) = std::fs::File::open(path) else {
+        return false;
+    };
+    let mut head = [0u8; 256];
+    let Ok(read) = file.read(&mut head) else {
+        return false;
+    };
+
+    String::from_utf8_lossy(&head[..read])
+        .trim_start()
+        .starts_with("(kicad_pcb")
 }
 
 /// Read a KiCad board into the same shape the DSL path produces.
