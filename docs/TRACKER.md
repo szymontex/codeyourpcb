@@ -1713,19 +1713,68 @@ this list whenever a piece of work runs into a missing concept.
 | M5 | ~~Net classes.~~ **Closed.** `netclass Power [width 0.5mm] { VCC GND }` states a rule once for a group; a net's own block overrides it field by field. | - | - |
 | M6 | ~~Silkscreen artwork per footprint.~~ **Closed.** Carried by `Footprint`, written in the DSL, accepted from a supplier, measured by the checker and printed by the gerber. | - | The viewer cannot call `register_footprint` - see the note under V4. |
 
-## Owner-decision queue (only the owner closes these)
+## Owner-decision queue - ALL SEVEN ANSWERED 2026-08-09
 
-| # | Decision | Options | Blocks |
-|---|---|---|---|
-| D1 | Autorouter direction | Rewrite in-house / bet on FreeRouting (needs Java 21 + external jar) / keep both | V2 beyond the clippy fix |
-| D2 | Tauri desktop | Keep and fix the build (needs GTK/webkit deps documented per distro) / freeze / drop | V3 scope, README truth |
-| D3 | Orphan crates | Delete `cypcb-calc`/most of `cypcb-platform` / keep as planned surface | V4 cleanup. **Narrowed by fact, not by decision:** `cypcb-watcher` has a caller since `cypcb watch <file>` shipped, so it is no longer an orphan and is off this list. `cypcb-calc` and `cypcb-platform` are the question that is left. |
-| D4 | Default fab preset | `jlcpcb` (current) / make it mandatory in the DSL board block | V1 polish |
-| D5 | Route UI hidden in the toolbar | Unhide it / keep it hidden until the router is rewritten | 13 E2E tests, and whether users can autoroute at all. It was hidden because results were poor. That premise has moved: PathFinder now completes led_blink with 0 unrouted, 45 segments and 3 DRC violations, against 5 unrouted and a board it gave up on. Worth a look before the next release. |
-| D7 | What `min_slot_clearance` governs | Slot to slot / slot to hole / copper of another net to a slot | Read literally as its own doc comment says - copper to slot - it fires on every slotted pad ever drawn, because a plated slot has its own annulus around it by construction. JLCPCB's published capability page carries no slot clearance figure at all: it states `Min. Plated Slots Width` (0.5mm two-layer, 0.35mm multi-layer), `Min. Non-Plated Slots` 1.0mm, a slot tolerance, and copper clearance from a routed edge (0.2mm) - nothing about slot spacing. Until the meaning is settled the number stays unread rather than guessed. |
-| D6 | What `min_pad_size` governs | Via lands / through-hole pads / SMD land width | One of fifteen fab numbers nothing reads. Read as SMD land width it reports 16 pads of a USB-C connector on `usb_joystick_routed.kicad_pcb` at 0.250mm against 0.500mm - a part JLCPCB builds daily, so that reading is wrong. Until the meaning is settled the number stays unread rather than guessed. |
+The owner answered the whole queue in one pass. What each answer means, and
+what it turns into, is below. Nothing here is blocked any more.
 
-Route development AROUND these. Never wait on them.
+| # | Answer | What it means here |
+|---|---|---|
+| D1 | **In-house router. FreeRouting is out.** "Nie jestem z niego happy, długa była walka." It is a must, and the owner expects roughly a month before it is beyond criticism. No approach preferred - that part is mine to propose. | V2 is unblocked and is now the largest workstream in the project. FreeRouting stops being an option, so every line about it in the docs is history rather than a plan. |
+| D2 | **The desktop must work on every platform, no discussion.** The owner will supply hardware of any type for testing on request. | V3 scope settled: keep `src-tauri`, fix the build, and it has to build and run on Linux, macOS and Windows. Ask for machines when the Linux build is green. |
+| D3 | **"Porządkuj co trzeba."** | Measured before touching anything, and the answer is that **there is nothing to delete**: `cypcb-calc` has three callers (`cypcb-drc`'s trace-current rule, `cypcb-lsp`'s hover, `cypcb-render`), `cypcb-platform` has one (`src-tauri/src/menu.rs`, which D2 just made a supported target), and `cypcb-watcher` got one when `cypcb watch` shipped. The orphan-crate question dissolved while nobody was looking. **D3 is closed with no deletions.** |
+| D4 | **"Zrób tak, żeby było dobrze."** | Mine to decide. **The default stays `jlcpcb` and the board block gains an optional `fab <name>`.** Mandatory is wrong: it breaks every existing board and every example, and a beginner should not have to choose a fabricator before drawing a rectangle. But today the fab exists **only as a command-line flag**, so `cypcb check --preset oshpark` and `cypcb export` with no flag grade the same board against different tables and neither says so. A design that states its fab settles that. |
+| D5 | **Keep the Route button hidden until the router is good.** | Closed, and tied to D1: it unhides when the in-house router is finished, not before. The 13 E2E tests stay parked. |
+| D6 | **"Ty mi powiedz."** | Answered below, from two published rows and a real board rather than a preference. **`min_pad_size` is a via land and through-hole pad minimum, not an SMD land.** |
+| D7 | **"Ty mi powiedz."** | Answered below. **`min_slot_clearance` is copper to a milled opening** - the same question `min_edge_clearance` asks of the board outline, asked of a slot. |
+
+### D6, settled: `min_pad_size` is not an SMD land
+
+JLCPCB publishes both numbers, and they are different rows:
+
+- `Min. Via hole size/diameter: 0.15mm / 0.25mm` - a hole paired with a
+  **diameter**, which is the via's land.
+- `Minimum SMD pad: 0.25mm x 0.25mm`.
+
+Our table carries `min_pad_size: 0.5mm` beside `min_via_drill: 0.3mm` - the
+same hole-and-land pairing as the first row, at the standard-process values.
+And the measurement that refuted the SMD reading lands exactly on the second:
+the 16 USB-C pads it flagged are **0.250mm**, which is JLCPCB's published SMD
+floor to the micrometre. The board was legal, the rule was reading the wrong
+row.
+
+So `min_pad_size` governs the **land around a hole** - a via's pad and a
+through-hole pad. The project already derives `min_via_diameter` as
+`drill + 2 * annular_ring` when a fab does not state one; a fab that states a
+land minimum should be believed instead of derived from.
+
+### D7, settled: `min_slot_clearance` is the routed-edge question, asked of a slot
+
+JLCPCB's capability page has no slot-spacing figure of any kind. What it does
+publish is copper clearance from a **routed** edge: `0.2mm`. A slot is a
+routed opening - the same mill, the same cut - so copper against a slot is the
+same physical question as copper against the board outline, which
+`min_edge_clearance` already answers and `EdgeClearanceRule` already measures.
+
+The objection that killed this last time was that a plated slot has its own
+annulus around it by construction, so a literal rule fires on every slotted
+pad. That is a rule-writing problem, not a meaning problem, and this checker
+already solves it twice: `HoleToHoleRule` skips two pads of the same
+component, and every clearance rule distinguishes foreign copper from a
+feature's own. The rule measures **other nets' copper** against the slot.
+
+### What each answer turns into
+
+- D1 -> a written plan for the in-house router before any code. A month of
+  work does not start from a heartbeat fire.
+- D2 -> get `src-tauri` building on Linux first, with the GTK/webkit
+  dependencies written down per distro, then ask the owner for a Mac and a
+  Windows machine.
+- D4 -> `fab <name>` in the board block, read by `check` and `export`, with
+  the command-line flag still winning when it is passed.
+- D6 -> believe a stated land minimum instead of deriving one, and apply it to
+  drilled pads as well as vias.
+- D7 -> `SlotClearanceRule`, measuring foreign copper against a milled opening.
 
 ## Background jobs
 
