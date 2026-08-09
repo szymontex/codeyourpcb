@@ -247,11 +247,15 @@ fn make_footprint_hover(footprint_name: &str) -> HoverInfo {
             lines.push("**Pads:**".to_string());
             for pad in &fp.pads {
                 let shape_str = format!("{:?}", pad.shape).to_lowercase();
-                let drill_str = if let Some(d) = pad.drill {
-                    let d_mm: f64 = d.to_mm();
-                    format!(", drill {:.2}mm", d_mm)
-                } else {
-                    String::new()
+                // A slot is milled along its length, so printing the drill
+                // alone - which is its narrow dimension - describes a round
+                // hole less than half the size of the one the part needs.
+                let drill_str = match (pad.slot, pad.drill) {
+                    (Some((width, height)), _) if pad.is_slot() => {
+                        format!(", slot {:.2}mm x {:.2}mm", width.to_mm(), height.to_mm())
+                    }
+                    (_, Some(d)) => format!(", drill {:.2}mm", d.to_mm()),
+                    (_, None) => String::new(),
                 };
                 let width_mm: f64 = pad.size.0.to_mm();
                 let height_mm: f64 = pad.size.1.to_mm();
@@ -363,6 +367,22 @@ fn calculate_trace_width(current_amps: f64) -> Option<f64> {
     Some(TraceWidthCalculator::min_width_for_current(current_amps, true).to_mm())
 }
 
+/// How a pad's hole reads on a hover card.
+///
+/// A slot is milled along its length, so naming its drill alone - which is the
+/// narrow dimension, the bit that mills it - describes a round hole under half
+/// the size of the one the part needs, stated with the same confidence as
+/// every other number on the card.
+fn hole_of(pad: &cypcb_parser::ast::PadDef) -> String {
+    match (&pad.drill, &pad.drill_height) {
+        (Some(width), Some(height)) if width.value != height.value => {
+            format!(", slot {width} x {height}")
+        }
+        (Some(drill), _) => format!(", drill {drill}"),
+        (None, _) => String::new(),
+    }
+}
+
 fn hover_for_footprint_def(
     _doc: &DocumentState,
     fp: &FootprintDef,
@@ -379,6 +399,29 @@ fn hover_for_footprint_def(
 
         if let Some((w, h)) = &fp.courtyard {
             lines.push(format!("Courtyard: {} x {}", w, h));
+        }
+
+        // The pads themselves, which the card left out entirely: hovering a
+        // footprint you wrote said how many pads it has and not one thing
+        // about any of them. The built-in library's card has listed them all
+        // along, so a designer got less about their own footprint than about
+        // an 0402.
+        //
+        // Held to the same eight-pad limit as the built-in card, so hovering a
+        // 64-pin QFP does not bury the screen.
+        if !fp.pads.is_empty() && fp.pads.len() <= 8 {
+            lines.push(String::new());
+            lines.push("**Pads:**".to_string());
+            for pad in &fp.pads {
+                lines.push(format!(
+                    "- {}: {} {} x {}{}",
+                    pad.number,
+                    format!("{:?}", pad.shape).to_lowercase(),
+                    pad.width,
+                    pad.height,
+                    hole_of(pad),
+                ));
+            }
         }
 
         return Some(HoverInfo {

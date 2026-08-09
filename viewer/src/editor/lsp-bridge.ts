@@ -305,6 +305,8 @@ const BLOCK_PROPERTIES: Record<string, { label: string; snippet: string; detail:
   footprint: [
     { label: 'description', snippet: 'description "${1:text}"', detail: 'Description' },
     { label: 'pad', snippet: 'pad ${1:1} ${2|rect,circle,roundrect,oblong|} at ${3:0}mm, ${4:0}mm size ${5:1}mm x ${6:1}mm', detail: 'Pad definition' },
+    { label: 'pad (through-hole)', snippet: 'pad ${1:1} circle at ${2:0}mm, ${3:0}mm size ${4:1.6}mm x ${5:1.6}mm drill ${6:0.9}mm', detail: 'Pad with a round hole' },
+    { label: 'pad (slot)', snippet: 'pad ${1:1} oblong at ${2:0}mm, ${3:0}mm size ${4:3.2}mm x ${5:1.8}mm drill ${6:2.4}mm x ${7:1.0}mm', detail: 'Pad with a milled slot' },
     { label: 'courtyard', snippet: 'courtyard ${1:5}mm x ${2:5}mm', detail: 'Courtyard boundary' },
   ],
   zone: [
@@ -503,11 +505,12 @@ const KEYWORD_DOCS: Record<string, string> = {
   from: 'Trace start pin.\n\nSyntax: `from <refdes>.<pin>`',
   to: 'Trace end pin.\n\nSyntax: `to <refdes>.<pin>`',
   via: 'Via.\n\nSyntax: `via <x>mm,<y>mm drill <d>mm`',
+  drill: 'The hole in a pad.\n\n`drill 0.9mm` is drilled and round. `drill 2.4mm x 1.0mm` is a slot: milled along its length with a bit the width of its narrow dimension.',
   path: 'Trace polyline.\n\nSyntax: `path <x1>mm,<y1>mm -> <x2>mm,<y2>mm [-> ...]`',
   layer: 'Copper layer.\n\nTrace: `layer Top` / `layer Bottom`\nZone: `layer top` / `layer bottom` / `layer all`',
   locked: 'Prevent autorouter modification.\n\nSyntax: `locked`',
   bounds: 'Zone boundary.\n\nSyntax: `bounds <x1>mm,<y1>mm to <x2>mm,<y2>mm`',
-  pad: 'Footprint pad.\n\nSyntax: `pad <n> <rect|circle|roundrect|oblong> at <x>mm,<y>mm size <w>mm x <h>mm`',
+  pad: 'Footprint pad.\n\nSyntax: `pad <n> <rect|circle|roundrect|oblong> at <x>mm,<y>mm size <w>mm x <h>mm [drill <d>mm]`\n\nTwo drill numbers make a slot, milled along its length rather than drilled: `drill 2.4mm x 1.0mm`. That is how a USB receptacle, a barrel jack or a latching header anchors itself.',
   courtyard: 'Courtyard.\n\nSyntax: `courtyard <w>mm x <h>mm`',
   description: 'Description.\n\nSyntax: `description "<text>"`',
   stackup: 'Layer stackup.\n\nSyntax: `stackup { copper ... prepreg ... }`',

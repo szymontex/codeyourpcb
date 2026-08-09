@@ -498,7 +498,7 @@ Define custom footprints inline:
 footprint <name> {
     description "<text>"
     courtyard <width> x <height>
-    pad <number> <shape> at <x>, <y> size <w> x <h> [drill <d>]
+    pad <number> <shape> at <x>, <y> size <w> x <h> [drill <d> [x <d2>]]
     ...
 }
 ```
@@ -514,6 +514,24 @@ footprint MY_CONNECTOR {
     pad 3 rect at 2mm, 0mm size 1mm x 1.5mm drill 0.8mm
 }
 ```
+
+**Holes: drilled or milled.** One drill number is a round hole. Two are a
+**slot**, milled along its length with a bit the width of its narrow
+dimension - which is how a USB receptacle, a barrel jack and any latching
+header anchors itself to the board:
+
+```
+pad 1 oblong at -4mm, 0mm size 3.2mm x 1.8mm drill 2.4mm x 1.0mm
+```
+
+The pair is read in the order written, the same order `size` uses, because
+which way the hole runs is what the fabricator mills along. Everything that
+asks about a drill - the minimum drill size, how deep the hole is for its
+width, how close it comes to another hole or to the routed edge - uses the
+narrow dimension, and everything that asks about the hole's extent uses both.
+The drill file mills a slot from one end centre to the other, which Excellon
+writes as `X..Y..G85X..Y..`; `examples/slotted-connector.cypcb` is a board
+with two of them.
 
 **Pad Shapes:**
 - `rect`: Rectangular pad
