@@ -136,3 +136,32 @@ fn a_board_with_nothing_on_it_is_still_a_board() {
     assert_eq!(read.metadata.component_count, 0);
     assert_eq!(read.metadata.board_size_mm, (20.0, 20.0));
 }
+
+#[test]
+fn a_board_that_is_not_a_rectangle_is_written_as_the_shape_it_is() {
+    // The Gerber exporter has honoured a declared outline all along. This
+    // wrote the rectangle the board's `size` describes whatever shape it
+    // really was, so the two files disagreed about the same board and the one
+    // a KiCad user opened was the wrong one.
+    let source = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .and_then(|p| p.parent())
+            .expect("the crate sits two levels below the repo root")
+            .join("examples/cutout.cypcb"),
+    )
+    .expect("the example is there");
+
+    let mut world = board_from(&source);
+    let written = cypcb_kicad::write_board(&mut world, "cypcb-test");
+
+    let edges = written.matches("(layer \"Edge.Cuts\")").count();
+    assert_eq!(
+        edges, 8,
+        "the outline has eight corners, so it is eight lines, not four:\n{written}"
+    );
+    assert!(
+        written.contains("(start 25 30) (end 25 10)"),
+        "the slot's wall is part of the board's edge:\n{written}"
+    );
+}

@@ -131,10 +131,23 @@ pub fn write_board(world: &mut BoardWorld, generator: &str) -> String {
         let _ = writeln!(out, "  (net {number} \"{name}\")");
     }
 
-    // The outline. A board that states no outline is the rectangle its size
-    // describes, which is what the checker measures edge clearance against.
-    let (w, h) = (size.width, size.height);
-    let corners = [(Nm(0), Nm(0)), (w, Nm(0)), (w, h), (Nm(0), h)];
+    // The outline the design states, or the rectangle its size describes when
+    // it states none. Writing the rectangle either way - which this did until
+    // 2026-08-09 - sends a board with a cutout to KiCad as a plain rectangle,
+    // and the Gerber exporter has honoured the real outline all along, so the
+    // two files disagreed about the shape of the same board.
+    let corners: Vec<(Nm, Nm)> = world
+        .board_entity()
+        .and_then(|entity| {
+            world
+                .ecs()
+                .get::<cypcb_world::components::BoardOutline>(entity)
+        })
+        .map(|outline| outline.points.iter().map(|p| (p.x, p.y)).collect())
+        .unwrap_or_else(|| {
+            let (w, h) = (size.width, size.height);
+            vec![(Nm(0), Nm(0)), (w, Nm(0)), (w, h), (Nm(0), h)]
+        });
     for index in 0..corners.len() {
         let (x1, y1) = corners[index];
         let (x2, y2) = corners[(index + 1) % corners.len()];

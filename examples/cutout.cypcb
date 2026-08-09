@@ -1,0 +1,56 @@
+// cutout.cypcb - a board that is not a rectangle.
+//
+// `size` says how big the board is; `outline` says what shape it is. Without
+// an outline a board is the rectangle its size describes, which cannot say
+// cutout, slot or chamfer.
+//
+// This one is a U: a slot cut down from the top edge, the way a board makes
+// room for a connector body or a fan. The checker measures edge clearance
+// against the real edge, so a part in the slot or copper crossing it is
+// reported - try moving R2 to 20mm, 20mm and running:
+//
+//   cypcb check examples/cutout.cypcb
+
+version 1
+
+board cutout {
+    size 40mm x 30mm
+    layers 2
+}
+
+outline {
+    point 0mm, 0mm
+    point 40mm, 0mm
+    point 40mm, 30mm
+    point 25mm, 30mm
+    point 25mm, 10mm
+    point 15mm, 10mm
+    point 15mm, 30mm
+    point 0mm, 30mm
+}
+
+// One part in each arm of the U.
+component R1 resistor "0402" {
+    value "10k"
+    at 7mm, 25mm
+}
+
+component R2 resistor "0402" {
+    value "10k"
+    at 33mm, 25mm
+}
+
+// A connector on the solid part below the slot.
+component J1 connector "PIN-HDR-1x2" {
+    at 20mm, 5mm
+}
+
+net SIG {
+    R1.1
+    R2.1
+}
+
+net GND {
+    R1.2
+    J1.1
+}
