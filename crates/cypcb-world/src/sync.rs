@@ -647,6 +647,16 @@ pub fn sync_ast_to_world(
     // Claims the design makes about itself. Collected here rather than acted
     // on: an assertion is about the finished board, so the checker evaluates
     // it once everything is placed.
+    world.set_diff_pairs(
+        definitions
+            .iter()
+            .filter_map(|def| match def {
+                Definition::DiffPair(pair) => Some(pair.clone()),
+                _ => None,
+            })
+            .collect(),
+    );
+
     world.set_assertions(
         definitions
             .iter()
@@ -722,6 +732,9 @@ pub fn sync_ast_to_world(
             | Definition::Interface(_)
             | Definition::Import(_)
             | Definition::Assert(_) => {}
+            // Rides onto the model beside the assertions, below: a pair is a
+            // claim about two nets, checked once the copper is in place.
+            Definition::DiffPair(_) => {}
         }
     }
 

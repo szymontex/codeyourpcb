@@ -32,12 +32,12 @@
 
 use crate::ast::{
     AssertDef, AssertExpression, AssertOperand, BoardDef, ComparisonOp, ComponentDef,
-    ComponentKind, CurrentUnit, CurrentValue, Definition, Dimension, FootprintDef, Identifier,
-    ImplementsClause, ImportDef, InterfaceDef, LayerType, ModuleDef, ModuleInstance, NetAssignment,
-    NetClassDef, NetConstraints, NetDef, OutlineDef, PadDef, PadShape, PhysicalValue,
-    PinDeclaration, PinId, PinRef, PortConnection, PositionExpr, RotationExpr, SilkDef,
-    SizeProperty, SourceFile, Span, StackupDef, StackupLayer, StringLit, Tolerance, ToleranceKind,
-    TraceDef, TraceDirective, TracePath, TraceVia, ZoneDef, ZoneKind,
+    ComponentKind, CurrentUnit, CurrentValue, Definition, DiffPairDef, Dimension, FootprintDef,
+    Identifier, ImplementsClause, ImportDef, InterfaceDef, LayerType, ModuleDef, ModuleInstance,
+    NetAssignment, NetClassDef, NetConstraints, NetDef, OutlineDef, PadDef, PadShape,
+    PhysicalValue, PinDeclaration, PinId, PinRef, PortConnection, PositionExpr, RotationExpr,
+    SilkDef, SizeProperty, SourceFile, Span, StackupDef, StackupLayer, StringLit, Tolerance,
+    ToleranceKind, TraceDef, TraceDirective, TracePath, TraceVia, ZoneDef, ZoneKind,
 };
 use crate::errors::{ParseError, ParseResult};
 use crate::node_kinds;
@@ -164,6 +164,11 @@ impl CypcbParser {
                 "netclass_definition" => {
                     if let Some(class) = self.convert_netclass(source, &child, errors) {
                         definitions.push(Definition::NetClass(class));
+                    }
+                }
+                "diffpair_definition" => {
+                    if let Some(pair) = self.convert_diffpair_definition(source, &child) {
+                        definitions.push(Definition::DiffPair(pair));
                     }
                 }
                 "interface_definition" => {
@@ -1368,6 +1373,19 @@ impl CypcbParser {
             definitions,
             pins,
             implements,
+            span: span_of(node),
+        })
+    }
+
+    /// Convert a `diffpair Name { P N }` definition.
+    fn convert_diffpair_definition(&self, source: &str, node: &Node) -> Option<DiffPairDef> {
+        let name_node = get_child_by_field(node, "name")?;
+        let positive = get_child_by_field(node, "positive")?;
+        let negative = get_child_by_field(node, "negative")?;
+        Some(DiffPairDef {
+            name: Identifier::new(node_text(source, &name_node), span_of(&name_node)),
+            positive: Identifier::new(node_text(source, &positive), span_of(&positive)),
+            negative: Identifier::new(node_text(source, &negative), span_of(&negative)),
             span: span_of(node),
         })
     }

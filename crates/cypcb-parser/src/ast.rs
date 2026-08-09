@@ -126,6 +126,8 @@ pub enum Definition {
     Outline(OutlineDef),
     /// An interface definition (v2).
     Interface(InterfaceDef),
+    /// A differential pair.
+    DiffPair(DiffPairDef),
     /// An import statement (v2).
     Import(ImportDef),
     /// An assert statement (v2).
@@ -147,6 +149,7 @@ impl Definition {
             Definition::NetClass(c) => c.span,
             Definition::Outline(o) => o.span,
             Definition::Interface(i) => i.span,
+            Definition::DiffPair(d) => d.span,
             Definition::Import(i) => i.span,
             Definition::Assert(a) => a.span,
         }
@@ -936,6 +939,24 @@ pub struct ModuleDef {
     /// is every module written before `implements` existed.
     #[serde(default)]
     pub implements: Vec<ImplementsClause>,
+    /// Source span.
+    pub span: Span,
+}
+
+/// A differential pair: `diffpair USB { USB_DP USB_DM }`.
+///
+/// Two nets that carry one signal between them. What makes them a pair rather
+/// than two nets is that they have to stay the same length - the receiver
+/// reads the difference, so copper one net runs and the other does not is
+/// skew, and skew is what the checker measures.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DiffPairDef {
+    /// Name of the pair.
+    pub name: Identifier,
+    /// The net carrying the positive half.
+    pub positive: Identifier,
+    /// The net carrying the negative half.
+    pub negative: Identifier,
     /// Source span.
     pub span: Span,
 }

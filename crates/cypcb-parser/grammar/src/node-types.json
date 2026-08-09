@@ -346,6 +346,42 @@
     }
   },
   {
+    "type": "diffpair_definition",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      },
+      "negative": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      },
+      "positive": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "dimension",
     "named": true,
     "fields": {
@@ -1301,6 +1337,10 @@
           "named": true
         },
         {
+          "type": "diffpair_definition",
+          "named": true
+        },
+        {
           "type": "footprint_definition",
           "named": true
         },
@@ -2073,6 +2113,10 @@
   },
   {
     "type": "description",
+    "named": false
+  },
+  {
+    "type": "diffpair",
     "named": false
   },
   {

@@ -142,6 +142,7 @@ pub fn run_drc(world: &mut BoardWorld, rules: &DesignRules) -> DrcResult {
         // laid the copper.
         Box::new(rules::UnroutedPinRule),
         Box::new(rules::AssertionRule),
+        Box::new(rules::DiffPairSkewRule),
     ];
 
     // Run each checker

@@ -69,6 +69,10 @@
         },
         {
           "type": "SYMBOL",
+          "name": "diffpair_definition"
+        },
+        {
+          "type": "SYMBOL",
           "name": "footprint_definition"
         },
         {
@@ -648,6 +652,47 @@
               "type": "SYMBOL",
               "name": "identifier"
             }
+          }
+        },
+        {
+          "type": "STRING",
+          "value": "}"
+        }
+      ]
+    },
+    "diffpair_definition": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "STRING",
+          "value": "diffpair"
+        },
+        {
+          "type": "FIELD",
+          "name": "name",
+          "content": {
+            "type": "SYMBOL",
+            "name": "identifier"
+          }
+        },
+        {
+          "type": "STRING",
+          "value": "{"
+        },
+        {
+          "type": "FIELD",
+          "name": "positive",
+          "content": {
+            "type": "SYMBOL",
+            "name": "identifier"
+          }
+        },
+        {
+          "type": "FIELD",
+          "name": "negative",
+          "content": {
+            "type": "SYMBOL",
+            "name": "identifier"
           }
         },
         {

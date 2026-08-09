@@ -291,6 +291,33 @@ something of its own overwrites **only the field it states**. So with the class
 above, `net VCC [width 0.8mm]` is 0.8mm wide and still carries the class's
 0.3mm clearance.
 
+### Differential Pairs
+
+Two nets that carry one signal between them:
+
+```
+diffpair USB {
+    USB_DP
+    USB_DM
+}
+```
+
+The receiver reads the difference between the two, so copper one half runs and
+the other does not arrives late. The checker measures that skew against the
+fab's length-match tolerance - 0.5mm on JLCPCB's standard process, 0.127mm on
+IPC Class 3 - and reports the pair with both lengths when it is exceeded:
+
+```
+diff-pair-skew: diffpair 'USB': USB_DP runs 30.000mm and USB_DM runs 40.000mm
+```
+
+A pair naming a net the board does not have is reported too, because a typo
+there would otherwise turn the check off without a word.
+
+Not checked yet: the gap between the two halves. That is the other half of a
+differential-pair rule and needs the router to place them alongside each other
+first.
+
 ## Zone Definition
 
 Define keepout areas or copper pour zones:

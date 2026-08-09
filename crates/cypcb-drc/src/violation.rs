@@ -81,6 +81,8 @@ pub enum ViolationKind {
     Assertion,
     /// Component courtyards overlap.
     CourtyardClearance,
+    /// The two halves of a differential pair are not the same length.
+    DiffPairSkew,
 }
 
 impl std::fmt::Display for ViolationKind {
@@ -103,6 +105,7 @@ impl std::fmt::Display for ViolationKind {
             ViolationKind::UnroutedPin => write!(f, "unrouted-pin"),
             ViolationKind::Assertion => write!(f, "assertion"),
             ViolationKind::CourtyardClearance => write!(f, "courtyard-clearance"),
+            ViolationKind::DiffPairSkew => write!(f, "diff-pair-skew"),
         }
     }
 }
@@ -553,6 +556,31 @@ impl DrcViolation {
     ///
     /// The message is written by the rule, which knows what was claimed and
     /// what the board actually is.
+    /// Create a differential-pair skew violation.
+    ///
+    /// `actual` is how far apart the two halves ended up and `required` is the
+    /// fab's length-match tolerance, so the message reads like every other
+    /// measured rule: what the board has against what it may have.
+    pub fn diff_pair_skew(
+        entity: Entity,
+        message: String,
+        actual: Option<Nm>,
+        required: Option<Nm>,
+        location: Point,
+    ) -> Self {
+        DrcViolation {
+            kind: ViolationKind::DiffPairSkew,
+            actual,
+            required,
+            area: None,
+            location,
+            entity,
+            other_entity: None,
+            source_span: None,
+            message,
+        }
+    }
+
     pub fn assertion(entity: Entity, location: Point) -> Self {
         DrcViolation {
             kind: ViolationKind::Assertion,

@@ -68,6 +68,7 @@ fn keyword(definition: &Definition) -> &'static [&'static str] {
         Definition::Interface(_) => &["interface"],
         Definition::Import(_) => &["import"],
         Definition::Assert(_) => &["assert"],
+        Definition::DiffPair(_) => &["diffpair"],
     }
 }
 
@@ -170,6 +171,19 @@ fn named_things(ast: &SourceFile) -> Vec<(String, Span, &'static str)> {
                 if let Some(net) = &zone.net {
                     found.push((net.value.clone(), net.span, "identifier"));
                 }
+            }
+            Definition::DiffPair(pair) => {
+                found.push((pair.name.value.clone(), pair.name.span, "identifier"));
+                found.push((
+                    pair.positive.value.clone(),
+                    pair.positive.span,
+                    "identifier",
+                ));
+                found.push((
+                    pair.negative.value.clone(),
+                    pair.negative.span,
+                    "identifier",
+                ));
             }
             Definition::Outline(_) | Definition::Assert(_) => {}
         }

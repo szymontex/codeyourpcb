@@ -267,7 +267,8 @@ fn find_context_in_definition(def: &Definition, content: &str, offset: usize) ->
         | Definition::Module(_)
         | Definition::Interface(_)
         | Definition::Import(_)
-        | Definition::Assert(_) => CompletionContext::TopLevel,
+        | Definition::Assert(_)
+        | Definition::DiffPair(_) => CompletionContext::TopLevel,
     }
 }
 

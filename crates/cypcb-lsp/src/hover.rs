@@ -61,6 +61,9 @@ fn hover_for_definition(doc: &DocumentState, def: &Definition, offset: usize) ->
         Definition::Interface(iface) => hover_for_interface(iface, offset),
         Definition::Import(import) => hover_for_import(import, offset),
         Definition::Assert(assert_def) => hover_for_assert(assert_def, offset),
+        // A pair is two net names; hovering either should explain the net,
+        // which the net hover already does.
+        Definition::DiffPair(_) => None,
     }
 }
 

@@ -9,7 +9,6 @@
 //! - <https://www.pcbway.com/capabilities.html>
 
 use super::DesignRules;
-use cypcb_core::Nm;
 use cypcb_rules::presets::RulesPreset;
 
 impl DesignRules {
@@ -74,27 +73,18 @@ impl DesignRules {
     /// assert_eq!(rules.min_trace_width, Nm::from_mm(0.25));
     /// ```
     pub fn prototype() -> Self {
-        DesignRules {
-            min_clearance: Nm::from_mm(0.2),    // 8 mil
-            min_trace_width: Nm::from_mm(0.25), // 10 mil
-            min_drill_size: Nm::from_mm(0.4),
-            min_via_drill: Nm::from_mm(0.3),
-            min_via_diameter: Nm::from_mm(0.8), // Large for hand soldering
-            min_annular_ring: Nm::from_mm(0.2),
-            min_silk_width: Nm::from_mm(0.2),
-            min_edge_clearance: Nm::from_mm(0.5),
-            min_hole_to_hole: Nm::from_mm(0.6),
-            min_solder_mask_bridge: Nm::from_mm(0.15),
-            solder_mask_expansion: Nm::from_mm(0.075),
-            min_silk_clearance: Nm::from_mm(0.2),
-            min_courtyard_clearance: Nm::from_mm(0.5),
-        }
+        // The last hand-written copy of a preset's numbers, and it is gone:
+        // `prototype` moved into the shared table when the two preset
+        // registries were merged, and `prototype_kept_every_number_it_had`
+        // proves the move changed nothing.
+        Self::from_constraints(&RulesPreset::Prototype.constraints())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use cypcb_core::Nm;
 
     #[test]
     fn test_pcbway_standard_values() {

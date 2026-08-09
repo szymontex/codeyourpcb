@@ -79,6 +79,7 @@ pub struct BoardWorld {
     board_entity: Option<Entity>,
     /// Claims the design makes about itself.
     assertions: Vec<cypcb_parser::ast::AssertDef>,
+    diff_pairs: Vec<cypcb_parser::ast::DiffPairDef>,
 }
 
 impl BoardWorld {
@@ -105,6 +106,7 @@ impl BoardWorld {
             world,
             board_entity: None,
             assertions: Vec::new(),
+            diff_pairs: Vec::new(),
         }
     }
 
@@ -488,6 +490,16 @@ impl BoardWorld {
     }
 
     /// Record the design's assertions.
+    /// The differential pairs the design declares.
+    pub fn diff_pairs(&self) -> &[cypcb_parser::ast::DiffPairDef] {
+        &self.diff_pairs
+    }
+
+    /// Record the design's differential pairs.
+    pub fn set_diff_pairs(&mut self, pairs: Vec<cypcb_parser::ast::DiffPairDef>) {
+        self.diff_pairs = pairs;
+    }
+
     pub fn set_assertions(&mut self, assertions: Vec<cypcb_parser::ast::AssertDef>) {
         self.assertions = assertions;
     }

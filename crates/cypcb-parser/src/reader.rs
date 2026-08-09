@@ -19,10 +19,10 @@
 
 use crate::ast::{
     AssertDef, AssertExpression, AssertOperand, BoardDef, ComparisonOp, ComponentDef,
-    ComponentKind, Definition, Dimension, FootprintDef, Identifier, ImplementsClause, ImportDef,
-    InterfaceDef, LayerType, ModuleDef, ModuleInstance, NetAssignment, NetClassDef, NetConstraints,
-    NetDef, OutlineDef, PadDef, PadShape, PhysicalValue, PinDeclaration, PinId, PinRef,
-    PortConnection, PositionExpr, RotationExpr, SilkDef, SizeProperty, SourceFile, Span,
+    ComponentKind, Definition, DiffPairDef, Dimension, FootprintDef, Identifier, ImplementsClause,
+    ImportDef, InterfaceDef, LayerType, ModuleDef, ModuleInstance, NetAssignment, NetClassDef,
+    NetConstraints, NetDef, OutlineDef, PadDef, PadShape, PhysicalValue, PinDeclaration, PinId,
+    PinRef, PortConnection, PositionExpr, RotationExpr, SilkDef, SizeProperty, SourceFile, Span,
     StackupDef, StackupLayer, StringLit, Tolerance, ToleranceKind, TraceDef, TraceDirective,
     TracePath, TraceVia, ZoneDef, ZoneKind,
 };
@@ -85,6 +85,10 @@ pub fn read(source: &str) -> ParseResult<SourceFile> {
             },
             "zone" | "keepout" => match reader.zone(start) {
                 Some(def) => definitions.push(Definition::Zone(def)),
+                None => reader.skip_to_next_definition(),
+            },
+            "diffpair" => match reader.diffpair(start) {
+                Some(def) => definitions.push(Definition::DiffPair(def)),
                 None => reader.skip_to_next_definition(),
             },
             "netclass" => match reader.netclass(start) {
@@ -1111,6 +1115,40 @@ impl<'a> Reader<'a> {
             bounds,
             layer,
             net,
+            span: Span::new(start, self.behind()),
+        })
+    }
+
+    /// `diffpair USB { USB_DP USB_DM }`.
+    fn diffpair(&mut self, start: usize) -> Option<DiffPairDef> {
+        self.bump(); // `diffpair`
+        let name = match self.identifier() {
+            Some(name) => name,
+            None => {
+                self.unexpected("a pair name");
+                return None;
+            }
+        };
+        if !self.eat(&TokenKind::LBrace) {
+            self.unexpected("`{` after the pair name");
+            return None;
+        }
+        let Some(positive) = self.identifier() else {
+            self.unexpected("the net carrying the positive half");
+            return None;
+        };
+        let Some(negative) = self.identifier() else {
+            self.unexpected("the net carrying the negative half");
+            return None;
+        };
+        if !self.eat(&TokenKind::RBrace) {
+            self.unexpected("`}` after the pair's two nets");
+            return None;
+        }
+        Some(DiffPairDef {
+            name,
+            positive,
+            negative,
             span: Span::new(start, self.behind()),
         })
     }

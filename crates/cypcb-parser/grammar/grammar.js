@@ -48,6 +48,7 @@ module.exports = grammar({
       $.component_definition,
       $.net_definition,
       $.netclass_definition,
+      $.diffpair_definition,
       $.footprint_definition,
       $.zone_definition,
       $.trace_definition,
@@ -196,6 +197,20 @@ module.exports = grammar({
       optional($.net_constraint_block),
       '{',
       repeat(field('member', $.identifier)),
+      '}',
+    ),
+
+    // diffpair USB { USB_DP USB_DM }
+    //
+    // Two nets that carry one signal between them. What makes them a pair is
+    // that they have to stay the same length: the receiver reads the
+    // difference, and copper one net runs and the other does not is skew.
+    diffpair_definition: $ => seq(
+      'diffpair',
+      field('name', $.identifier),
+      '{',
+      field('positive', $.identifier),
+      field('negative', $.identifier),
       '}',
     ),
 

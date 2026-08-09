@@ -60,6 +60,7 @@ use cypcb_rules::DesignConstraints;
 /// - `min_solder_mask_bridge`: Minimum solder mask web between pads
 /// - `min_silk_clearance`: Minimum silkscreen to copper clearance
 /// - `min_courtyard_clearance`: Minimum courtyard clearance between components
+/// - `max_diff_pair_skew`: How far apart the halves of a differential pair may end up
 ///
 /// # Examples
 ///
@@ -86,6 +87,7 @@ use cypcb_rules::DesignConstraints;
 ///     solder_mask_expansion: Nm::from_mm(0.05),
 ///     min_silk_clearance: Nm::from_mm(0.15),
 ///     min_courtyard_clearance: Nm::from_mm(0.25),
+///     max_diff_pair_skew: Nm::from_mm(0.5),
 /// };
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -116,6 +118,13 @@ pub struct DesignRules {
     pub min_silk_clearance: Nm,
     /// Minimum courtyard clearance between components.
     pub min_courtyard_clearance: Nm,
+    /// How far apart the two halves of a differential pair may end up.
+    ///
+    /// The fab's number, from the same table the router is priced with. A pair
+    /// is two nets carrying one signal, and the receiver reads the difference
+    /// between them: copper one half runs and the other does not is skew, and
+    /// past this it is a signal problem the board cannot be talked out of.
+    pub max_diff_pair_skew: Nm,
 }
 
 impl DesignRules {
@@ -158,6 +167,7 @@ impl DesignRules {
             solder_mask_expansion: c.solder_mask_expansion,
             min_silk_clearance: c.min_silk_clearance.unwrap_or(c.min_silk_width),
             min_courtyard_clearance: c.min_courtyard_clearance.unwrap_or(Nm::from_mm(0.25)),
+            max_diff_pair_skew: c.length_match_tolerance,
         }
     }
 }
