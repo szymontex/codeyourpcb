@@ -86,7 +86,34 @@ fn pad_shape(shape: PadShape) -> (&'static str, Option<u8>) {
 /// Write the board as a KiCad board file.
 ///
 /// `generator` is what KiCad shows as the program that wrote the file.
+/// The numbers KiCad checks a board against.
+///
+/// Passed in rather than derived here: which fabricator a board is for is the
+/// caller's knowledge, and this crate has no opinion about design rules. Every
+/// field is a number some fab published, which is why there is no `Default` -
+/// a rule set nobody chose is the thing this avoids.
+#[derive(Debug, Clone, Copy)]
+pub struct KicadDesignRules {
+    /// Minimum copper-to-copper gap.
+    pub clearance: Nm,
+    /// Narrowest trace the fab will make.
+    pub track_width: Nm,
+    /// Smallest finished via.
+    pub via_diameter: Nm,
+    /// Smallest via drill.
+    pub via_drill: Nm,
+}
+
+/// Write a board, optionally stating the rules it was checked against.
 pub fn write_board(world: &mut BoardWorld, generator: &str) -> String {
+    write_board_with_rules(world, generator, None)
+}
+
+pub fn write_board_with_rules(
+    world: &mut BoardWorld,
+    generator: &str,
+    rules: Option<KicadDesignRules>,
+) -> String {
     let (size, stack) = world
         .board_info()
         .unwrap_or((cypcb_world::BoardSize::default(), Default::default()));
@@ -123,6 +150,29 @@ pub fn write_board(world: &mut BoardWorld, generator: &str) -> String {
         .unwrap_or_else(|| "1.6".to_string());
     let _ = writeln!(out, "  (general (thickness {thickness}))");
     let _ = writeln!(out, "  (paper \"A4\")");
+
+    // What KiCad checks the board against.
+    //
+    // There was no `(setup ...)` block at all, so a board opened in KiCad was
+    // checked against KiCad's own defaults - numbers with nothing to do with
+    // the fabricator this design was checked for. Two tools disagreeing about
+    // whether a board passes is the most visible form of the same fault this
+    // export keeps turning up.
+    //
+    // Written only when the caller states a fab. `cypcb to-kicad` without
+    // `--preset` produces the file it always did: rules nobody chose are worse
+    // than no rules, because KiCad believes them.
+    if let Some(rules) = rules {
+        let _ = writeln!(out, "  (setup");
+        let _ = writeln!(out, "    (pad_to_mask_clearance 0)");
+        let _ = writeln!(out, "    (rules");
+        let _ = writeln!(out, "      (min_clearance {})", mm(rules.clearance));
+        let _ = writeln!(out, "      (min_track_width {})", mm(rules.track_width));
+        let _ = writeln!(out, "      (min_via_diameter {})", mm(rules.via_diameter));
+        let _ = writeln!(out, "      (min_through_hole {})", mm(rules.via_drill));
+        let _ = writeln!(out, "    )");
+        let _ = writeln!(out, "  )");
+    }
 
     // Layers. Copper first, in KiCad's order, then the technical layers every
     // board has.

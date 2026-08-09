@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use clap::Args;
 use miette::{IntoDiagnostic, Result, WrapErr};
 
+use cypcb_drc::{Preset, PresetRules};
 use cypcb_world::footprint::FootprintLibrary;
 use cypcb_world::sync_ast_to_world;
 use cypcb_world::BoardWorld;
@@ -23,6 +24,15 @@ pub struct ToKicadCommand {
     /// Where to write the board (default: the input file with a .kicad_pcb suffix)
     #[arg(short, long)]
     output: Option<PathBuf>,
+
+    /// Manufacturer preset whose design rules the board is written with.
+    ///
+    /// Without one the file states no rules at all and KiCad checks the board
+    /// against its own defaults - numbers with nothing to do with the fab this
+    /// design was checked for. This was the last command in the CLI that never
+    /// asked which fabricator a board is for.
+    #[arg(short, long)]
+    preset: Option<String>,
 }
 
 impl ToKicadCommand {
@@ -55,7 +65,31 @@ impl ToKicadCommand {
             std::process::exit(1);
         }
 
-        let board = cypcb_kicad::write_board(&mut world, "cypcb");
+        // The rules the board is written with are the ones a person can ask
+        // `cypcb check` for by the same name, so the two tools agree about
+        // whether the board passes.
+        let rules = match &self.preset {
+            Some(name) => {
+                let preset = Preset::from_name(name).ok_or_else(|| {
+                    let available: Vec<&str> = Preset::all().iter().map(|p| p.name()).collect();
+                    miette::miette!(
+                        "Unknown preset '{}'. Available presets: {}",
+                        name,
+                        available.join(", ")
+                    )
+                })?;
+                let rules = preset.rules();
+                Some(cypcb_kicad::KicadDesignRules {
+                    clearance: rules.min_clearance,
+                    track_width: rules.min_trace_width,
+                    via_diameter: rules.min_via_diameter,
+                    via_drill: rules.min_via_drill,
+                })
+            }
+            None => None,
+        };
+
+        let board = cypcb_kicad::write_board_with_rules(&mut world, "cypcb", rules);
 
         let output = self
             .output

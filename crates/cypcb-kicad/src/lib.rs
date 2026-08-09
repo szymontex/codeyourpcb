@@ -29,7 +29,7 @@ pub mod library;
 pub mod pcb_parser;
 pub mod writer;
 
-pub use board_writer::write_board;
+pub use board_writer::{write_board, write_board_with_rules, KicadDesignRules};
 pub use footprint::{import_footprint, import_footprint_from_str, KicadImportError};
 pub use library::{find_by_library, find_by_name, scan_libraries, scan_library, LibraryEntry};
 pub use pcb_parser::{
