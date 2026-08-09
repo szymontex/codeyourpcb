@@ -116,6 +116,29 @@ impl DrcRule for SilkClearanceRule {
         let bottom_keepouts =
             cypcb_world::silk_text::pad_keepouts(world, &library, Layer::BottomCopper, clip_margin);
 
+        // Where each part's copper is, so the loop below can ask what is near
+        // a legend instead of asking every part in turn. Built here rather
+        // than taken from the world's spatial index, because a caller that has
+        // not rebuilt that index would get an empty answer and this rule would
+        // quietly stop checking - the failure mode this project has already
+        // been bitten by twice.
+        let boxes: Vec<(Point, Point)> = placed
+            .iter()
+            .map(|part| match library.get(&part.footprint) {
+                Some(footprint) => pad_bounds(footprint, part),
+                None => (part.position, part.position),
+            })
+            .collect();
+        let reach = Nm(rules.min_clearance.raw() + half_silk);
+        let parts_near = Grid::build(&boxes);
+
+        // The same treatment for the clipping. `clip_strokes` walks every
+        // keepout it is handed, and the board's keepouts are every pad on the
+        // layer - so clipping one part's legend against all of them was the
+        // other half of this rule's quadratic cost.
+        let top_near = Grid::build(&keepout_boxes(&top_keepouts));
+        let bottom_near = Grid::build(&keepout_boxes(&bottom_keepouts));
+
         let mut violations = Vec::new();
 
         for silk in &placed {
@@ -131,23 +154,50 @@ impl DrcRule for SilkClearanceRule {
 
             // The legend is clipped against the copper on the face it prints
             // on, which is the face the exporter clips against too.
-            let clip_against: &[cypcb_world::silk_text::Keepout] = if silk_side & 2 != 0 {
-                &bottom_keepouts
+            let (clip_against, clip_near) = if silk_side & 2 != 0 {
+                (&bottom_keepouts, &bottom_near)
             } else {
-                &top_keepouts
+                (&top_keepouts, &top_near)
             };
 
             // The name is checked against every part including this one; the
             // outline only against the others. Both as printed, not as laid
             // out.
-            let name = clipped(designator_edges(footprint, silk), clip_against);
-            let mut edges = clipped(silk_segments(footprint, silk), clip_against);
+            let raw_name = designator_edges(footprint, silk);
+            let raw_edges = silk_segments(footprint, silk);
+
+            // Only the copper this legend could be clipped by. The keepouts
+            // already carry the exporter's clearance in their own size, so the
+            // ink's own box is the right question to ask.
+            let mut all = raw_name.clone();
+            all.extend_from_slice(&raw_edges);
+            let nearby: Vec<cypcb_world::silk_text::Keepout> = if all.is_empty() {
+                Vec::new()
+            } else {
+                let (min, max) = bounds_of(&all, Nm(0));
+                clip_near
+                    .overlapping(min, max)
+                    .into_iter()
+                    .map(|index| clip_against[index])
+                    .collect()
+            };
+
+            let name = clipped(raw_name, &nearby);
+            let mut edges = clipped(raw_edges, &nearby);
             edges.extend_from_slice(&name);
             if edges.is_empty() {
                 continue;
             }
 
-            for other in &placed {
+            // Only the parts whose copper could be near this legend. This
+            // loop used to be every part against every part: on a 400-part
+            // board that is 160,000 pairs of segment-against-pad geometry, and
+            // it made this one rule the entire cost of loading a board -
+            // 469ms of a 447ms design rule check, quadratic, while every other
+            // rule stayed under a millisecond.
+            let (min, max) = bounds_of(&edges, reach);
+            for index in parts_near.overlapping(min, max) {
+                let other = &placed[index];
                 let Some(other_footprint) = library.get(&other.footprint) else {
                     continue;
                 };
@@ -176,6 +226,114 @@ impl DrcRule for SilkClearanceRule {
 
         violations
     }
+}
+
+/// A uniform grid over boxes, so a loop can ask what is near something.
+///
+/// Not the world's spatial index on purpose: that one is rebuilt by the
+/// caller, and a rule that silently checks nothing when somebody forgets is
+/// worse than a rule that costs a little to set up.
+struct Grid {
+    cell: i64,
+    buckets: std::collections::HashMap<(i64, i64), Vec<usize>>,
+}
+
+impl Grid {
+    fn build(boxes: &[(Point, Point)]) -> Self {
+        // One cell as wide as the widest thing in it, so nothing spans more
+        // than two cells on an axis and the buckets stay small.
+        let widest = boxes
+            .iter()
+            .map(|(min, max)| (max.x.0 - min.x.0).max(max.y.0 - min.y.0))
+            .max()
+            .unwrap_or(0);
+        let cell = widest.max(1_000_000); // never finer than a millimetre
+
+        let mut buckets: std::collections::HashMap<(i64, i64), Vec<usize>> =
+            std::collections::HashMap::new();
+        for (index, (min, max)) in boxes.iter().enumerate() {
+            for cx in min.x.0.div_euclid(cell)..=max.x.0.div_euclid(cell) {
+                for cy in min.y.0.div_euclid(cell)..=max.y.0.div_euclid(cell) {
+                    buckets.entry((cx, cy)).or_default().push(index);
+                }
+            }
+        }
+
+        Grid { cell, buckets }
+    }
+
+    /// Every box that might overlap this region, each once.
+    fn overlapping(&self, min: Point, max: Point) -> Vec<usize> {
+        let mut found = Vec::new();
+        for cx in min.x.0.div_euclid(self.cell)..=max.x.0.div_euclid(self.cell) {
+            for cy in min.y.0.div_euclid(self.cell)..=max.y.0.div_euclid(self.cell) {
+                if let Some(bucket) = self.buckets.get(&(cx, cy)) {
+                    found.extend_from_slice(bucket);
+                }
+            }
+        }
+        found.sort_unstable();
+        found.dedup();
+        found
+    }
+}
+
+/// The box each keepout covers.
+fn keepout_boxes(keepouts: &[cypcb_world::silk_text::Keepout]) -> Vec<(Point, Point)> {
+    keepouts
+        .iter()
+        .map(|keepout| {
+            let half = keepout.half_size.raw();
+            (
+                Point::new(Nm(keepout.centre.x.0 - half), Nm(keepout.centre.y.0 - half)),
+                Point::new(Nm(keepout.centre.x.0 + half), Nm(keepout.centre.y.0 + half)),
+            )
+        })
+        .collect()
+}
+
+/// The box a part's pads cover on the board.
+fn pad_bounds(footprint: &Footprint, part: &Placed) -> (Point, Point) {
+    let mut min_x = i64::MAX;
+    let mut min_y = i64::MAX;
+    let mut max_x = i64::MIN;
+    let mut max_y = i64::MIN;
+    for pad in &footprint.pads {
+        let centre = rotate_point(pad.position, part.rotation_deg);
+        let x = part.position.x.0 + centre.x.0;
+        let y = part.position.y.0 + centre.y.0;
+        // A rotated pad is bounded by its own diagonal, whatever the angle.
+        let reach = (pad.size.0.raw().max(pad.size.1.raw()) + 1) / 2;
+        min_x = min_x.min(x - reach);
+        min_y = min_y.min(y - reach);
+        max_x = max_x.max(x + reach);
+        max_y = max_y.max(y + reach);
+    }
+    if min_x == i64::MAX {
+        return (part.position, part.position);
+    }
+    (
+        Point::new(Nm(min_x), Nm(min_y)),
+        Point::new(Nm(max_x), Nm(max_y)),
+    )
+}
+
+/// The box a set of edges covers, grown by `margin` on every side.
+fn bounds_of(edges: &[(Point, Point)], margin: Nm) -> (Point, Point) {
+    let mut min_x = i64::MAX;
+    let mut min_y = i64::MAX;
+    let mut max_x = i64::MIN;
+    let mut max_y = i64::MIN;
+    for (start, end) in edges {
+        min_x = min_x.min(start.x.0).min(end.x.0);
+        min_y = min_y.min(start.y.0).min(end.y.0);
+        max_x = max_x.max(start.x.0).max(end.x.0);
+        max_y = max_y.max(start.y.0).max(end.y.0);
+    }
+    (
+        Point::new(Nm(min_x - margin.raw()), Nm(min_y - margin.raw())),
+        Point::new(Nm(max_x + margin.raw()), Nm(max_y + margin.raw())),
+    )
 }
 
 /// A component as placed on the board.

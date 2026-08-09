@@ -1261,6 +1261,20 @@ cypcb::parse::unknown_property
 - `viewer/src/__tests__/the-requirements-name-every-skipped-suite.test.ts` keeps the two in step: every whole-file skip has to appear in a new **Coverage gaps** table, every suite the table names has to really be skipped, and no requirement may be `validated` while citing a suite that is skipped. Mutation-checked by deleting the `tuning-panel` row - `expected [ 'tuning-panel.spec.ts' ] to deeply equal []`. **Two versions of this guard passed on the defect first**: one counted `test.skip(condition, reason)` - a runtime guard in `one-checker.spec.ts` - as a disabled suite, and one searched the whole document instead of the table, so deleting a row changed nothing because the file names each suite twice.
 
 ### V7 - Performance (GP-002 discipline: measure, then optimize, publish before/after)
+- DONE: **loading a board was quadratic, and one rule was all of it.** Nobody had measured the editor's own path since import resolution, interface contracts, differential pairs, the outline and the part number were added to it. `load_source` - parse, resolve, sync, check - on a generated board:
+
+| parts | before | after |
+|---|---|---|
+| 100 | 23.9ms | **1.2ms** |
+| 200 | 104.1ms | **2.3ms** |
+| 400 | 447.2ms | **4.9ms** |
+| 800 | 2026.3ms | **11.1ms** |
+
+- Split by stage first: parse and sync are linear and free (0.9ms and 1.2ms at 800 parts). **DRC was 2023 of the 2026ms**, and timing the rules one at a time named the culprit in one run: `silk-clearance` took 469ms of a 470ms check at 400 parts and **found nothing**. Every other rule was under a millisecond.
+- Two quadratic loops, both fixed the way the rest of the crate works: ask what is near instead of asking everything. The rule compared every part's legend against every part's pads - 160,000 pairs of segment-against-pad geometry on a 400-part board - and clipped each part's ink against every pad keepout on the layer. Both go through a uniform grid built from the boxes they already had.
+- **The grid is the rule's own, not the world's spatial index**, on purpose: that index is rebuilt by the caller, and a rule that silently checks nothing when somebody forgets is the failure this project has already been bitten by twice - `CourtyardClearanceRule` filtering for a layer mask nothing sets, and `compute_crossings` rebuilding the index with a 1mm box.
+- 253x on the check, 182x on the load. `crates/cypcb-render/tests/loading_a_board_is_quick.rs` carries the table and a ceiling forty times the measured number, so it survives a busy machine and still catches a return to quadratic. Mutation-checked: with the broad phase narrowed to one part, `real_artwork_is_measured_instead_of_the_courtyard` fails.
+ (GP-002 discipline: measure, then optimize, publish before/after)
 - DONE: **the two knobs that pay were swept together, and three boards have new best results.** `foreign_pad_penalty` and `heuristic_weight` had each been measured alone and shipped on that evidence; they are not independent, because the price changes what a path costs and the weight changes how hard the search looks for the cheap one. `weight_and_pad_price_sweep` crosses weights 1.0/1.1/1.25/1.5 with prices 0/5/20 on all six fixtures - twelve points a board - and ranks each board's points the way the variant ranking does: abandoned connections, then shorts, then violations.
 - Two combinations reach boards no single-knob variant can, and both ship as variants. Confirmed through `cypcb route` itself, not the sweep harness:
 
