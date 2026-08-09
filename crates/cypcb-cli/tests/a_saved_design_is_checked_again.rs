@@ -29,16 +29,33 @@ component R1 resistor "0402" {
 }
 "#;
 
+/// How long to wait for the watcher to notice something.
+///
+/// Sized for a machine under load rather than an idle one. At 20s this test
+/// passed on its own in 0.41s and failed inside the full gate at 20.02s -
+/// exactly the deadline, with the rest of the workspace compiling and testing
+/// alongside it. The docstring above says a test that fails when the machine
+/// is busy teaches people to ignore it, and then it did that.
+///
+/// A generous deadline costs nothing when the watcher works: the loop returns
+/// as soon as the log says what it is waiting for, so the only run that takes
+/// a minute is a run that was going to fail anyway.
+const PATIENCE: Duration = Duration::from_secs(60);
+
 /// Read the log until it holds `count` checks, or give up.
 fn wait_for_checks(log: &std::path::Path, count: usize, what: &str) -> String {
-    let deadline = Instant::now() + Duration::from_secs(20);
+    let started = Instant::now();
+    let deadline = started + PATIENCE;
     loop {
         let text = std::fs::read_to_string(log).unwrap_or_default();
         if text.matches("DRC violation").count() + text.matches("passed DRC").count() >= count {
             return text;
         }
         if Instant::now() > deadline {
-            panic!("waited 20s for {what}; the log holds:\n{text}");
+            panic!(
+                "waited {:.1}s for {what}; the log holds:\n{text}",
+                started.elapsed().as_secs_f64()
+            );
         }
         std::thread::sleep(Duration::from_millis(200));
     }
