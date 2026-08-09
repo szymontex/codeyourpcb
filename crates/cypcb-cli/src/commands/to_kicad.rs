@@ -84,6 +84,7 @@ impl ToKicadCommand {
                     track_width: rules.min_trace_width,
                     via_diameter: rules.min_via_diameter,
                     via_drill: rules.min_via_drill,
+                    mask_expansion: rules.solder_mask_expansion,
                 })
             }
             None => None,

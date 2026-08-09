@@ -195,7 +195,11 @@ pub fn run_export(
     if job.preset.layers.top_mask {
         let filename = format!("{}{}", job.board_name, job.preset.file_naming.top_mask);
         let path = gerber_dir.join(&filename);
-        let config = MaskPasteConfig::default();
+        // The fab's own expansion rather than the constant the default
+        // carries: a house asking for 0.04mm got its openings drawn at
+        // 0.05mm, so the files disagreed with the rules the board was
+        // checked against. Paste below keeps its own shrink.
+        let config = MaskPasteConfig::default().with_mask_expansion(job.preset.mask_expansion);
         let content = export_soldermask(
             world,
             library,
@@ -211,7 +215,11 @@ pub fn run_export(
     if job.preset.layers.bottom_mask {
         let filename = format!("{}{}", job.board_name, job.preset.file_naming.bottom_mask);
         let path = gerber_dir.join(&filename);
-        let config = MaskPasteConfig::default();
+        // The fab's own expansion rather than the constant the default
+        // carries: a house asking for 0.04mm got its openings drawn at
+        // 0.05mm, so the files disagreed with the rules the board was
+        // checked against. Paste below keeps its own shrink.
+        let config = MaskPasteConfig::default().with_mask_expansion(job.preset.mask_expansion);
         let content = export_soldermask(
             world,
             library,

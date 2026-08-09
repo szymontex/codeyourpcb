@@ -124,3 +124,39 @@ fn an_unknown_fab_is_refused_by_name() {
         "it has to say what was asked for and what there is:\n{complaint}"
     );
 }
+
+#[test]
+fn the_mask_opening_is_the_fabs_number_in_both_writers() {
+    // Two tables in two crates: the export preset carries the mask expansion
+    // so the Gerber writer can reach it, and the design rules carry it so the
+    // checker can. They have to be the same number, or one of them is
+    // describing a different fabricator - and the KiCad file states it a third
+    // time as `pad_to_mask_clearance`, which was a literal 0 until now.
+    use cypcb_drc::{Preset, PresetRules};
+
+    for (export_name, rules_preset) in [
+        ("jlcpcb", Preset::JlcpcbStandard2Layer),
+        ("pcbway", Preset::PcbWayStandard),
+    ] {
+        let export = cypcb_export::presets::from_name(export_name).expect("the preset is there");
+        assert_eq!(
+            export.mask_expansion,
+            rules_preset.rules().solder_mask_expansion,
+            "{export_name}: the exporter and the checker disagree about the mask"
+        );
+    }
+
+    let text = exported("mask", Some("jlcpcb"));
+    let stated = rule(&text, "pad_to_mask_clearance");
+    assert_eq!(
+        stated,
+        format!(
+            "{}",
+            Preset::JlcpcbStandard2Layer
+                .rules()
+                .solder_mask_expansion
+                .to_mm()
+        ),
+        "and KiCad is told the same"
+    );
+}

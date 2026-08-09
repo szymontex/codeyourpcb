@@ -102,6 +102,8 @@ pub struct KicadDesignRules {
     pub via_diameter: Nm,
     /// Smallest via drill.
     pub via_drill: Nm,
+    /// How far the solder mask opening extends beyond the pad, per side.
+    pub mask_expansion: Nm,
 }
 
 /// Write a board, optionally stating the rules it was checked against.
@@ -164,7 +166,14 @@ pub fn write_board_with_rules(
     // than no rules, because KiCad believes them.
     if let Some(rules) = rules {
         let _ = writeln!(out, "  (setup");
-        let _ = writeln!(out, "    (pad_to_mask_clearance 0)");
+        // The fab's own mask expansion. This was a literal 0 - written one
+        // line under a comment about numbers KiCad believes, which is the
+        // shape of mistake that comment exists to prevent.
+        let _ = writeln!(
+            out,
+            "    (pad_to_mask_clearance {})",
+            mm(rules.mask_expansion)
+        );
         let _ = writeln!(out, "    (rules");
         let _ = writeln!(out, "      (min_clearance {})", mm(rules.clearance));
         let _ = writeln!(out, "      (min_track_width {})", mm(rules.track_width));

@@ -37,6 +37,14 @@ pub struct ExportPreset {
     /// house's design rules in `cypcb-drc`, which is what `cypcb check`
     /// measures the clipped ink against.
     pub silk_clearance: Nm,
+    /// How far the solder mask opening extends beyond the pad, per side.
+    ///
+    /// Same discipline as `silk_clearance`: a number the fabricator publishes,
+    /// matching `solder_mask_expansion` in that house's design rules. The mask
+    /// writer used `MaskPasteConfig::default()` - a hardcoded 0.05mm - so a
+    /// house asking for anything else got openings drawn to a constant, and
+    /// the files disagreed with the rules the board was checked against.
+    pub mask_expansion: Nm,
 }
 
 /// File naming convention for exported files.
@@ -115,6 +123,7 @@ pub fn jlcpcb_2layer() -> ExportPreset {
         },
         assembly: true,
         silk_clearance: Nm::from_mm(0.127),
+        mask_expansion: Nm::from_mm(0.05),
     }
 }
 
@@ -160,6 +169,7 @@ pub fn pcbway_standard() -> ExportPreset {
         },
         assembly: true,
         silk_clearance: Nm::from_mm(0.2),
+        mask_expansion: Nm::from_mm(0.05),
     }
 }
 
