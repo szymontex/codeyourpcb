@@ -421,6 +421,101 @@ impl FootprintLibrary {
     }
 }
 
+/// The same footprint, soldered to the other face of the board.
+///
+/// A part is flipped over, not moved: seen from above - which is how every
+/// coordinate in this project is written - its local x axis reverses, so a pad
+/// at +1mm ends up at -1mm, and every layer it touches moves to the matching
+/// layer on the other side. Nothing else changes; the pads keep their numbers,
+/// their sizes and their drills.
+///
+/// This exists so the flip happens once. The checker, the four Gerber writers,
+/// the drill file, the renderer and the pick-and-place list all read a
+/// footprint out of the library and place it themselves, and a mirror
+/// implemented six times is a board where the copper and the solder mask
+/// disagree about which side a part is on.
+pub fn mirrored_to_bottom(footprint: &Footprint) -> Footprint {
+    Footprint {
+        name: bottom_name(&footprint.name),
+        description: format!("{} (bottom side)", footprint.description),
+        pads: footprint
+            .pads
+            .iter()
+            .map(|pad| PadDef {
+                number: pad.number.clone(),
+                shape: pad.shape,
+                position: mirror_point(pad.position),
+                size: pad.size,
+                drill: pad.drill,
+                layers: pad.layers.iter().map(|layer| flip(*layer)).collect(),
+            })
+            .collect(),
+        bounds: mirror_rect(footprint.bounds),
+        courtyard: mirror_rect(footprint.courtyard),
+        silk: footprint
+            .silk
+            .iter()
+            .map(|shape| match *shape {
+                SilkShape::Segment { start, end, width } => SilkShape::Segment {
+                    start: mirror_point(start),
+                    end: mirror_point(end),
+                    width,
+                },
+                SilkShape::Circle {
+                    centre,
+                    radius,
+                    width,
+                } => SilkShape::Circle {
+                    centre: mirror_point(centre),
+                    radius,
+                    width,
+                },
+            })
+            .collect(),
+    }
+}
+
+/// What the flipped copy of a footprint is called in the library.
+///
+/// The suffix is not a legal footprint name a design could write, which is
+/// deliberate: these entries are derived, and a design naming one directly
+/// would be asking for a part whose mirroring nobody decided.
+pub fn bottom_name(name: &str) -> String {
+    format!("{name}@bottom")
+}
+
+/// Mirror about the footprint's own y axis.
+fn mirror_point(point: Point) -> Point {
+    Point::new(Nm(-point.x.0), point.y)
+}
+
+/// A rectangle mirrored is still a rectangle, with its corners swapped in x.
+fn mirror_rect(rect: Rect) -> Rect {
+    Rect::new(
+        Point::new(Nm(-rect.max.x.0), rect.min.y),
+        Point::new(Nm(-rect.min.x.0), rect.max.y),
+    )
+}
+
+/// The layer on the other face of the board.
+///
+/// Inner layers are untouched: a part has no pads on them, and a footprint
+/// that somehow named one is describing something this function has no opinion
+/// about.
+fn flip(layer: Layer) -> Layer {
+    match layer {
+        Layer::TopCopper => Layer::BottomCopper,
+        Layer::BottomCopper => Layer::TopCopper,
+        Layer::TopMask => Layer::BottomMask,
+        Layer::BottomMask => Layer::TopMask,
+        Layer::TopPaste => Layer::BottomPaste,
+        Layer::BottomPaste => Layer::TopPaste,
+        Layer::TopSilk => Layer::BottomSilk,
+        Layer::BottomSilk => Layer::TopSilk,
+        other => other,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

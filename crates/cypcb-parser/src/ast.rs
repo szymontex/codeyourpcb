@@ -260,6 +260,13 @@ pub struct ComponentDef {
     /// bill of materials.
     #[serde(default)]
     pub lcsc: Option<StringLit>,
+    /// Which face of the board the part is soldered to, when the design says.
+    ///
+    /// `side bottom` on a component. Absent means the top, except where the
+    /// footprint itself is bottom-only - the world decides that, because it is
+    /// the thing holding the footprints.
+    #[serde(default)]
+    pub side: Option<Identifier>,
     /// Position if specified.
     pub position: Option<PositionExpr>,
     /// Rotation in degrees if specified.

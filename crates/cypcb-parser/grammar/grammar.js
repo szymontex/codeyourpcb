@@ -148,7 +148,17 @@ module.exports = grammar({
       $.position_property,
       $.rotation_property,
       $.lcsc_property,
+      $.side_property,
       $.net_assignment,
+    ),
+
+    // side bottom
+    //
+    // Which face of the board the part is soldered to. Saying nothing means
+    // the top, unless the footprint itself is bottom-only.
+    side_property: $ => seq(
+      'side',
+      field('face', choice('top', 'bottom')),
     ),
 
     // lcsc "C7593"

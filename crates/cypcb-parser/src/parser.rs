@@ -443,6 +443,7 @@ impl CypcbParser {
         let mut net_assignments = Vec::new();
         let mut typed_value = None;
         let mut lcsc = None;
+        let mut side = None;
 
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
@@ -472,6 +473,18 @@ impl CypcbParser {
                         lcsc = Some(self.convert_string_literal(source, &part));
                     }
                 }
+                // `side top` / `side bottom`. The rule is in `grammar.js`; the
+                // generated `grammar/src/parser.c` in this repository predates
+                // it and cannot be rebuilt without the tree-sitter CLI, so this
+                // arm never fires until somebody regenerates it. It is written
+                // now rather than left as a hole for the same reason the rule
+                // was added to the grammar: the two parsers are supposed to
+                // read the same language.
+                "side_property" => {
+                    if let Some(face) = get_child_by_field(&child, "face") {
+                        side = Some(Identifier::new(node_text(source, &face), span_of(&face)));
+                    }
+                }
                 "net_assignment" => {
                     if let Some(assignment) = self.convert_net_assignment(source, &child, errors) {
                         net_assignments.push(assignment);
@@ -485,6 +498,7 @@ impl CypcbParser {
             refdes,
             kind,
             lcsc,
+            side,
             footprint,
             value,
             typed_value,

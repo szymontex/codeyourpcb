@@ -39,4 +39,7 @@ pub mod mounting;
 mod smd;
 mod tht;
 
-pub use library::{Footprint, FootprintLibrary, PadDef, SilkShape, IPC_COURTYARD_EXCESS};
+pub use library::{
+    bottom_name, mirrored_to_bottom, Footprint, FootprintLibrary, PadDef, SilkShape,
+    IPC_COURTYARD_EXCESS,
+};

@@ -635,6 +635,28 @@ pub fn sync_ast_to_world(
         }
     }
 
+    // A part on the bottom of the board is the same footprint flipped over, and
+    // the flip is registered once here rather than performed by each consumer.
+    // The checker, the four Gerber writers, the drill file, the renderer and
+    // the pick-and-place list all place a footprint themselves; a mirror
+    // written six times is a board whose copper and solder mask disagree about
+    // which side a part is on.
+    for def in definitions {
+        let Definition::Component(comp) = def else {
+            continue;
+        };
+        if comp.side.as_ref().map(|face| face.value.as_str()) != Some("bottom") {
+            continue;
+        }
+        let Some(footprint) = footprint_lib.get(&comp.footprint.value) else {
+            continue;
+        };
+        let flipped = crate::footprint::mirrored_to_bottom(footprint);
+        if footprint_lib.get(&flipped.name).is_none() {
+            footprint_lib.register_design(flipped);
+        }
+    }
+
     // Net classes first: a class states a rule for a group, and a net that
     // states something itself overwrites only the field it states. Applying
     // classes first is what makes that precedence work regardless of the order
@@ -872,6 +894,16 @@ fn sync_component(
         // Continue anyway - entity will be created but may not render correctly
     }
 
+    // A part on the bottom is placed as the flipped copy registered above. The
+    // error above names what the designer wrote, not the derived entry, because
+    // `0402@bottom` is not a footprint anybody asked for by name.
+    let on_bottom = comp.side.as_ref().map(|face| face.value.as_str()) == Some("bottom");
+    let placed_footprint = if on_bottom {
+        crate::footprint::bottom_name(footprint_name)
+    } else {
+        footprint_name.clone()
+    };
+
     // Convert position (default to origin if not specified)
     let position = if let Some(pos) = &comp.position {
         Position(Point::new(pos.x.to_nm(), pos.y.to_nm()))
@@ -901,7 +933,7 @@ fn sync_component(
         value,
         position,
         rotation,
-        FootprintRef::new(footprint_name),
+        FootprintRef::new(&placed_footprint),
         NetConnections::new(),
         ecs_span,
     );
@@ -930,14 +962,19 @@ fn sync_component(
             });
     }
 
-    // Which face the part sits on. The DSL has no word for this yet, so it is
-    // derived from where the footprint's copper is - a footprint whose pads are
-    // bottom-only is a bottom-side part. Storing the answer means every rule
-    // and every exporter reads the same one instead of each deriving its own.
-    let side = footprint_lib
-        .get(footprint_name)
-        .map(side_of_footprint)
-        .unwrap_or_default();
+    // Which face the part sits on. The design says with `side bottom`, and
+    // where it says nothing the answer is derived from the footprint's copper -
+    // a footprint whose pads are bottom-only is a bottom-side part. Storing the
+    // answer means every rule and every exporter reads the same one instead of
+    // each deriving its own.
+    let side = match comp.side.as_ref().map(|face| face.value.as_str()) {
+        Some("bottom") => crate::components::Side::Bottom,
+        Some("top") => crate::components::Side::Top,
+        _ => footprint_lib
+            .get(footprint_name)
+            .map(side_of_footprint)
+            .unwrap_or_default(),
+    };
     world.ecs_mut().entity_mut(entity).insert(side);
 
     // Track for net resolution

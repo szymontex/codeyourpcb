@@ -142,6 +142,28 @@ component R1 resistor "0402" {
 - `at`: Position in board coordinates (x, y)
 - `rotate`: Rotation angle in degrees (optional, defaults to 0)
 - `lcsc`: The catalogue part to buy (optional)
+- `side`: Which face of the board the part is soldered to, `top` or `bottom`
+  (optional, defaults to `top`)
+
+### Putting a part on the back of the board
+
+```
+component R1 resistor "0402" {
+    value "10k"
+    at 10mm, 10mm
+    side bottom
+}
+```
+
+The part is flipped over, not moved. Seen from above - which is how every
+coordinate in this language is written - its local x axis reverses, and every
+layer it touches moves to the matching layer on the other face: copper, solder
+mask, paste and silkscreen together. Its position and its net connections are
+unchanged.
+
+Saying nothing means the top, with one exception: a footprint whose pads are
+all on the bottom is a bottom-side part whatever the design says, because that
+is what the footprint describes.
 
 ### Naming the part to buy
 
