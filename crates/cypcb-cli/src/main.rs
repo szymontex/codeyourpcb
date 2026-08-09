@@ -67,6 +67,8 @@ enum Commands {
     Score(commands::ScoreCommand),
     /// Write a .cypcb design out as a KiCad .kicad_pcb board
     ToKicad(commands::ToKicadCommand),
+    /// Check a design, then check it again every time it changes
+    Watch(commands::WatchCommand),
 }
 
 /// Send the crates' `tracing` output somewhere a person can read it.
@@ -109,6 +111,7 @@ fn main() -> Result<()> {
         Commands::Export(cmd) => cmd.run(),
         Commands::ParseKicad(cmd) => cmd.run(),
         Commands::ToKicad(cmd) => cmd.run(),
+        Commands::Watch(cmd) => cmd.run(),
         Commands::Score(cmd) => cmd.run(),
     }
 }

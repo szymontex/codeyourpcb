@@ -182,18 +182,26 @@ cargo run -p cypcb-cli -- export examples/blink.cypcb         # 13 manufacturing
 cargo run -p cypcb-cli -- parse examples/blink.cypcb          # the board, as JSON
 cargo run -p cypcb-cli -- parse examples/blink.cypcb -o ast    # the AST instead
 cargo run -p cypcb-cli -- parse-kicad tests/fixtures/benchmark/led_blink.kicad_pcb   # a KiCad board
+cargo run -p cypcb-cli -- to-kicad examples/blink.cypcb       # the design as a KiCad board
+cargo run -p cypcb-cli -- watch examples/blink.cypcb          # check again on every save
 ```
 
 `check`, `route`, `score` and `export` all take `--preset`, and an unknown
 name prints the list. They use the same rules and agree on the same board: a
-file that `check --preset pcbway` calls 28 violations is 28 to
+routed file that `check --preset pcbway` calls 27 violations is 27 to
 `score --preset pcbway` too.
+
+On an **unrouted** file they will not agree, and that is not a disagreement
+about the rules. `score` routes the board before measuring it, so it reports
+what its own routing came to - `examples/blink.cypcb` is 24 violations to
+`check` and 12 to `score`, because the second one laid copper first.
 
 `--preset` means two things, though, and the lists are not the same length.
 `check`, `route` and `score` take a **design-rule** preset - what a house can
-etch - and know eight: `jlcpcb_2layer`, `jlcpcb_4layer`, the two advanced
-variants, `oshpark_2layer`, `oshpark_4layer`, `pcbway_standard` and
-`prototype`, with `jlcpcb`, `oshpark` and `pcbway` as short forms that name
+etch - and know eleven: `jlcpcb_standard_2layer`, `jlcpcb_standard_4layer`,
+the two advanced variants, `pcbway_standard`, `oshpark_2layer`,
+`oshpark_4layer`, `ipc_class1`, `ipc_class2`, `ipc_class3` and `prototype`,
+with `jlcpcb`, `oshpark`, `pcbway` and `ipc1`..`ipc3` as short forms that name
 what they resolved to. `export` takes a **file convention** preset - what a
 house wants the Gerbers called and in what coordinate format - and only
 `jlcpcb` and `pcbway` have been written down. So a board can be checked

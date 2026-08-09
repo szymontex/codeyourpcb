@@ -7,6 +7,7 @@ mod parse_kicad;
 mod route;
 mod score;
 mod to_kicad;
+mod watch;
 
 pub use check::CheckCommand;
 pub use export::ExportCommand;
@@ -15,3 +16,4 @@ pub use parse_kicad::ParseKicadCommand;
 pub use route::RouteCommand;
 pub use score::ScoreCommand;
 pub use to_kicad::ToKicadCommand;
+pub use watch::WatchCommand;

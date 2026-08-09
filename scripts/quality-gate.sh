@@ -58,11 +58,20 @@ echo ""
 
 # Stage 5: Vitest
 echo "[5/8] vitest"
-if (cd viewer && npx vitest run) 2>&1; then
+VITEST_LOG=$(mktemp)
+if (cd viewer && npx vitest run 2>&1 | tee "$VITEST_LOG"); then
   pass "vitest"
 else
+  # Which test. Two stages have now failed inside a full gate run and passed
+  # on their own, and neither left a name behind: a hundred lines of progress
+  # scroll past and the stage ends in a bare "FAILED". A flake nobody can name
+  # is a flake nobody can fix.
+  echo ""
+  echo "  failing tests:"
+  grep -E "FAIL |^\s+×" "$VITEST_LOG" | head -20 || true
   fail "vitest"
 fi
+rm -f "$VITEST_LOG"
 echo ""
 
 # Stage 6: Playwright E2E

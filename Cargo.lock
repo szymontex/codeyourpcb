@@ -1032,6 +1032,7 @@ dependencies = [
  "cypcb-parser",
  "cypcb-router",
  "cypcb-rules",
+ "cypcb-watcher",
  "cypcb-world",
  "miette",
  "serde",
