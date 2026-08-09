@@ -437,7 +437,28 @@
         },
         {
           "type": "SYMBOL",
+          "name": "lcsc_property"
+        },
+        {
+          "type": "SYMBOL",
           "name": "net_assignment"
+        }
+      ]
+    },
+    "lcsc_property": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "STRING",
+          "value": "lcsc"
+        },
+        {
+          "type": "FIELD",
+          "name": "part",
+          "content": {
+            "type": "SYMBOL",
+            "name": "string"
+          }
         }
       ]
     },

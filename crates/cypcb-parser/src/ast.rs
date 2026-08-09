@@ -253,6 +253,13 @@ pub struct ComponentDef {
     /// A string cannot be checked - "10k" is ten kilohms only if you already
     /// know the part is a resistor - so the type is kept rather than flattened.
     pub typed_value: Option<PhysicalValue>,
+    /// The catalogue part to buy, when the design names one: `lcsc "C7593"`.
+    ///
+    /// A footprint says what the pads look like; this says which part goes on
+    /// them. It is what an assembly house is given, so it rides through to the
+    /// bill of materials.
+    #[serde(default)]
+    pub lcsc: Option<StringLit>,
     /// Position if specified.
     pub position: Option<PositionExpr>,
     /// Rotation in degrees if specified.

@@ -442,6 +442,7 @@ impl CypcbParser {
         let mut rotation = None;
         let mut net_assignments = Vec::new();
         let mut typed_value = None;
+        let mut lcsc = None;
 
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
@@ -466,6 +467,11 @@ impl CypcbParser {
                 node_kinds::ROTATION_PROPERTY => {
                     rotation = self.convert_rotation(source, &child, errors);
                 }
+                "lcsc_property" => {
+                    if let Some(part) = get_child_by_field(&child, "part") {
+                        lcsc = Some(self.convert_string_literal(source, &part));
+                    }
+                }
                 "net_assignment" => {
                     if let Some(assignment) = self.convert_net_assignment(source, &child, errors) {
                         net_assignments.push(assignment);
@@ -478,6 +484,7 @@ impl CypcbParser {
         Some(ComponentDef {
             refdes,
             kind,
+            lcsc,
             footprint,
             value,
             typed_value,

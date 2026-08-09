@@ -543,6 +543,7 @@ impl<'a> Reader<'a> {
 
         let mut value = None;
         let mut typed_value = None;
+        let mut lcsc = None;
         let mut position = None;
         let mut rotation = None;
         let mut net_assignments = Vec::new();
@@ -603,6 +604,13 @@ impl<'a> Reader<'a> {
                             None => self.unexpected("an angle"),
                         }
                     }
+                    Some("lcsc") => {
+                        self.bump();
+                        match self.string() {
+                            Some(part) => lcsc = Some(part),
+                            None => self.unexpected("a part number in quotes"),
+                        }
+                    }
                     Some("pin") => {
                         self.bump();
                         self.eat(&TokenKind::Dot);
@@ -628,6 +636,7 @@ impl<'a> Reader<'a> {
 
         Some(ComponentDef {
             refdes,
+            lcsc,
             kind,
             footprint,
             value,

@@ -147,7 +147,17 @@ module.exports = grammar({
       $.value_property,
       $.position_property,
       $.rotation_property,
+      $.lcsc_property,
       $.net_assignment,
+    ),
+
+    // lcsc "C7593"
+    //
+    // The part to buy. A footprint says what the pads look like; this says
+    // which part goes on them, and it is what an assembly house is given.
+    lcsc_property: $ => seq(
+      'lcsc',
+      field('part', $.string),
     ),
 
     // value "330" or value 10kohm

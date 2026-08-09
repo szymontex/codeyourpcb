@@ -102,6 +102,28 @@ component R1 resistor "0402" {
 - `value`: Component value as string (e.g., "330", "100nF", "ATmega328P")
 - `at`: Position in board coordinates (x, y)
 - `rotate`: Rotation angle in degrees (optional, defaults to 0)
+- `lcsc`: The catalogue part to buy (optional)
+
+### Naming the part to buy
+
+A footprint says what the pads look like and a value says what is printed on
+the part. Neither says which part to order:
+
+```
+component U1 ic "SOIC-8" {
+    value "NE555"
+    lcsc "C7593"
+    at 10mm, 10mm
+}
+```
+
+The part number goes to the bill of materials, in the `LCSC Part #` column an
+assembly house fills in - so two parts with the same value and footprint and
+different part numbers are two lines to order, not one. A component that names
+none leaves the column empty, which is what the form expects.
+
+The viewer also uses it to fetch the real footprint for that part, so a design
+that names its parts draws them with the pads they actually have.
 
 ### Naming a component's nets in place
 

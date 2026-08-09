@@ -14,6 +14,7 @@ use serde::Serialize;
 /// - "Footprint": Footprint name (e.g., "0402")
 /// - "Quantity": Number of components
 /// - "Comment": Component value goes here per JLCPCB convention
+/// - "LCSC Part #": The catalogue part to buy, empty when the design names none
 #[derive(Debug, Serialize)]
 struct BomCsvRow {
     #[serde(rename = "Designator")]
@@ -27,6 +28,12 @@ struct BomCsvRow {
 
     #[serde(rename = "Comment")]
     comment: String,
+
+    /// JLCPCB's own column name for the catalogue part, spelled the way their
+    /// assembly form expects it. Empty for a part the design does not name,
+    /// which is what their form expects too.
+    #[serde(rename = "LCSC Part #")]
+    lcsc: String,
 }
 
 impl From<&BomEntry> for BomCsvRow {
@@ -36,13 +43,15 @@ impl From<&BomEntry> for BomCsvRow {
             footprint: entry.footprint.clone(),
             quantity: entry.quantity,
             comment: entry.comment.clone().unwrap_or_else(|| entry.value.clone()),
+            lcsc: entry.lcsc.clone().unwrap_or_default(),
         }
     }
 }
 
 /// Export BOM as CSV string in JLCPCB format.
 ///
-/// Generates a CSV file with headers: Designator, Footprint, Quantity, Comment.
+/// Generates a CSV file with headers: Designator, Footprint, Quantity, Comment,
+/// LCSC Part #.
 /// Components are grouped by value and footprint, with designators comma-separated.
 ///
 /// # Arguments
@@ -79,7 +88,7 @@ impl From<&BomEntry> for BomCsvRow {
 /// );
 ///
 /// let csv = export_bom_csv(&mut world).unwrap();
-/// assert!(csv.contains("Designator,Footprint,Quantity,Comment"));
+/// assert!(csv.contains("Designator,Footprint,Quantity,Comment,LCSC Part #"));
 /// assert!(csv.contains("R1,R2"));
 /// ```
 pub fn export_bom_csv(world: &mut BoardWorld) -> Result<String, Box<dyn std::error::Error>> {
@@ -224,6 +233,9 @@ mod tests {
         let lines: Vec<&str> = csv.lines().collect();
 
         // First line should be header
-        assert_eq!(lines[0], "Designator,Footprint,Quantity,Comment");
+        assert_eq!(
+            lines[0],
+            "Designator,Footprint,Quantity,Comment,LCSC Part #"
+        );
     }
 }

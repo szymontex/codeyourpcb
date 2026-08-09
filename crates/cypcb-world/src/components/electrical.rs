@@ -174,6 +174,14 @@ impl From<String> for RefDes {
 #[derive(Component, Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Value(pub String);
 
+/// The catalogue part a component is: `lcsc "C7593"`.
+///
+/// A footprint says what the pads look like and a value says what is written
+/// on the part; neither says which part to buy. An assembly house is given
+/// this, and without it a board can only be fabricated, not populated.
+#[derive(Component, Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct LcscPart(pub String);
+
 impl Value {
     /// Create a new value.
     #[inline]

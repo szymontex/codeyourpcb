@@ -233,6 +233,10 @@
       "required": false,
       "types": [
         {
+          "type": "lcsc_property",
+          "named": true
+        },
+        {
           "type": "net_assignment",
           "named": true
         },
@@ -587,6 +591,22 @@
         "types": [
           {
             "type": "number",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "lcsc_property",
+    "named": true,
+    "fields": {
+      "part": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "string",
             "named": true
           }
         ]
@@ -2205,6 +2225,10 @@
   },
   {
     "type": "layers",
+    "named": false
+  },
+  {
+    "type": "lcsc",
     "named": false
   },
   {

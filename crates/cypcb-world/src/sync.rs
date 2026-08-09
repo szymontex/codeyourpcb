@@ -879,6 +879,15 @@ fn sync_component(
     // Add component kind
     world.ecs_mut().entity_mut(entity).insert(kind);
 
+    // The part to buy, when the design names one. It reaches the bill of
+    // materials from here; nothing else on the board needs it.
+    if let Some(part) = &comp.lcsc {
+        world
+            .ecs_mut()
+            .entity_mut(entity)
+            .insert(crate::components::LcscPart(part.value.clone()));
+    }
+
     // A value written as a quantity stays one. Without this the checker sees
     // only the label and cannot tell ten kilohms from ten microfarads.
     if let Some(typed) = &comp.typed_value {

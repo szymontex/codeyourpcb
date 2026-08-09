@@ -9,7 +9,7 @@ pub mod json;
 pub use csv::export_bom_csv;
 pub use json::export_bom_json;
 
-use cypcb_world::components::{FootprintRef, RefDes, Value};
+use cypcb_world::components::{FootprintRef, LcscPart, RefDes, Value};
 use cypcb_world::BoardWorld;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -30,6 +30,7 @@ use std::collections::HashMap;
 ///     value: "10k".to_string(),
 ///     quantity: 3,
 ///     comment: None,
+///     lcsc: Some("C25804".to_string()),
 /// };
 ///
 /// assert_eq!(entry.quantity, 3);
@@ -46,6 +47,13 @@ pub struct BomEntry {
     pub quantity: u32,
     /// Optional comment or notes.
     pub comment: Option<String>,
+    /// The catalogue part to buy, when the design names one.
+    ///
+    /// A bill of materials without it says how many of something to buy and
+    /// not which something. An assembly house needs this column filled or the
+    /// board comes back bare.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lcsc: Option<String>,
 }
 
 /// Group components by value and footprint to create BOM entries.
@@ -93,8 +101,12 @@ pub struct BomEntry {
 /// assert_eq!(bom[0].designators, vec!["R1", "R2"]);
 /// ```
 pub fn group_components(world: &mut BoardWorld) -> Vec<BomEntry> {
-    // Map: (value, footprint) -> Vec<designator>
-    let mut groups: HashMap<(String, String), Vec<String>> = HashMap::new();
+    // Map: (value, footprint, part) -> Vec<designator>.
+    //
+    // The part number is part of the key: two 10k 0402s from different
+    // catalogue entries are two lines on the order, however alike they look on
+    // the board.
+    let mut groups: HashMap<(String, String, Option<String>), Vec<String>> = HashMap::new();
 
     // Which footprints are mechanical, asked before the query borrows the
     // world. A mounting hole is a component like any other to the placement
@@ -108,20 +120,26 @@ pub fn group_components(world: &mut BoardWorld) -> Vec<BomEntry> {
         .collect();
 
     // Query all components
-    let mut query = world.ecs_mut().query::<(&RefDes, &Value, &FootprintRef)>();
+    let mut query = world
+        .ecs_mut()
+        .query::<(&RefDes, &Value, &FootprintRef, Option<&LcscPart>)>();
 
-    for (refdes, value, footprint) in query.iter(world.ecs()) {
+    for (refdes, value, footprint, part) in query.iter(world.ecs()) {
         if mechanical.contains(&footprint.0) {
             continue;
         }
-        let key = (value.0.clone(), footprint.0.clone());
+        let key = (
+            value.0.clone(),
+            footprint.0.clone(),
+            part.map(|p| p.0.clone()),
+        );
         groups.entry(key).or_default().push(refdes.0.clone());
     }
 
     // Convert groups to BOM entries
     let mut bom: Vec<BomEntry> = groups
         .into_iter()
-        .map(|((value, footprint), mut designators)| {
+        .map(|((value, footprint, lcsc), mut designators)| {
             // Sort designators for consistent output
             designators.sort_by_key(|a| natural_sort_key(a));
 
@@ -133,6 +151,7 @@ pub fn group_components(world: &mut BoardWorld) -> Vec<BomEntry> {
                 value: value.clone(),
                 quantity,
                 comment: None,
+                lcsc,
             }
         })
         .collect();
@@ -142,6 +161,7 @@ pub fn group_components(world: &mut BoardWorld) -> Vec<BomEntry> {
         a.footprint
             .cmp(&b.footprint)
             .then_with(|| a.value.cmp(&b.value))
+            .then_with(|| a.lcsc.cmp(&b.lcsc))
     });
 
     bom
