@@ -889,6 +889,60 @@ against the default's 336 / 166) and `pad_zone_margin_cells` (Tight Pads, which
 stm32_breakout picks at 216 / 86). `PathFinder Bare Centre Line` is the router
 without the copper reservation, kept as a control.
 
+### The weighted heuristic, swept (`heuristic_weight`, default 1.0)
+
+A* explores widely because its estimate of the remaining distance never
+overestimates: that is what makes the path it returns the cheapest one.
+Multiplying the estimate makes the search believe the goal is further than it
+is, so it follows the most promising direction harder and settles for a path
+that may cost up to that factor more. It is the standard way to trade
+optimality for speed, and `AutorouteConfig::heuristic_weight` has been there
+the whole time at 1.0, unmeasured.
+
+All six fixtures at 1.0, 1.1, 1.25 and 1.5. The router is deterministic at a
+fixed weight - the sweep run twice gives identical counts on every board, so
+what follows is signal or it is nothing.
+
+| board | 1.0 | 1.1 | 1.25 | 1.5 | band |
+|---|---|---|---|---|---|
+| led_blink | 2 / 0 | 4 / 2 | 3 / 1 | 3 / 1 | 0 / 0 |
+| stm32_breakout | 184 / 97 | 218 / 129 | 167 / 74 | 192 / 111 | 59 / 61 |
+| multi_ic | 297 / 193 | 252 / 158 | 233 / 121 | 308 / 195 | 65 / 56 |
+| shift_driver | 65 / 34 | 66 / 21 | 69 / 29 | 99 / 25 | 17 / 8 |
+| plane_board | 28 / 13 | 30 / 15 | 28 / 11 | 29 / 13 | 0 / 0 |
+| qfp_fanout | 309 / 147 | 328 / 168 | 289 / 151 | 360 / 187 | 57 / 44 |
+
+Violations / shorts, and each board's own noise band from
+`via_price_sweep::how_much_of_the_price_is_noise` - the same bands the
+ratchets carry.
+
+**Read against those bands, 1.25 changes almost nothing.** Its totals look
+like a win - 885 violations down to 789 and 504 shorts down to 428 - but board
+by board every one of those movements is inside the board's own band except
+three:
+
+- multi_ic's shorts, 193 -> 121 against a band of 56: a real improvement.
+- plane_board's shorts, 13 -> 11 against a band of zero: a real improvement.
+- led_blink, 2 -> 3 violations and **0 -> 1 short**, against a band of zero on
+  both: a real regression, on the simplest board in the set.
+
+**What is not noise is the time.** Summed over the six boards, 2.44s at 1.0
+against 1.68s at 1.25 - 31% faster - and 0.99s at 1.5. That is the trade the
+instrument was built to make, and it makes it.
+
+**The default stays 1.0.** A short is the one fault a user notices without
+reading anything, and buying 31% off a run that already finishes in under a
+second per board by introducing one on the simplest fixture is the wrong way
+round. 1.1 is worse than both on almost every board and 1.5 is worse than 1.25
+everywhere but the clock.
+
+What this does *not* say is that the weight is worthless. Two of the three
+signals were improvements, both on the boards with the most copper, and the
+one regression is on the board with the least. A weight that varies with the
+board - or one swept per variant, since each of the eleven is a different cost
+model - is a different experiment from this one, and this is the measurement
+it would start from.
+
 ## Verification
 
 Every number above comes from one of these. All are `--ignored` diagnostics
@@ -919,8 +973,11 @@ cargo test --release -p cypcb-autoroute --test pad_zone_margin_sweep -- --ignore
 # Which variant each board picks
 cargo test --release -p cypcb-autoroute --test variant_picks_per_board -- --ignored --nocapture
 
+# What a weighted heuristic buys, and what it costs
+cargo test --release -p cypcb-autoroute --test heuristic_weight_sweep -- --ignored --nocapture
+
 # Every violation of every routed fixture, with coordinates
 cargo test --release -p cypcb-autoroute --test drc_report -- --ignored --nocapture
 ```
 
-Last verified: 2026-08-07.
+Last verified: 2026-08-09.
