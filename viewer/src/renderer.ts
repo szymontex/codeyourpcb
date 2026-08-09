@@ -112,7 +112,7 @@ export function render(ctx: CanvasRenderingContext2D, state: RenderState): void 
   }
 
   // Draw board outline
-  drawBoardOutline(ctx, viewport, snapshot.board.width_nm, snapshot.board.height_nm, themeColors);
+  drawBoardOutline(ctx, viewport, snapshot.board.width_nm, snapshot.board.height_nm, themeColors, snapshot.board.outline);
 
   // Draw resize handles only when hovering near board edge (not by default)
   // They clutter the professional PCB view
@@ -322,7 +322,36 @@ function drawGrid(ctx: CanvasRenderingContext2D, vp: Viewport, themeColors: Retu
 // Board outline + resize handles
 // ---------------------------------------------------------------------------
 
-function drawBoardOutline(ctx: CanvasRenderingContext2D, vp: Viewport, width: number, height: number, themeColors: ReturnType<typeof getThemeColors>): void {
+export function drawBoardOutline(
+  ctx: CanvasRenderingContext2D,
+  vp: Viewport,
+  width: number,
+  height: number,
+  themeColors: ReturnType<typeof getThemeColors>,
+  outline?: Array<[number, number]>,
+): void {
+  // The shape the design states, or the rectangle its size describes when it
+  // states none. Drawing the rectangle either way - which this did until the
+  // outline reached the snapshot - showed a board with a slot or a cutout as a
+  // plain rectangle, so the screen and the Gerbers disagreed about the shape of
+  // the same board.
+  if (outline && outline.length >= 3) {
+    ctx.beginPath();
+    outline.forEach(([x, y], index) => {
+      const [sx, sy] = worldToScreen(vp, x, y);
+      if (index === 0) ctx.moveTo(sx, sy);
+      else ctx.lineTo(sx, sy);
+    });
+    ctx.closePath();
+
+    ctx.fillStyle = LAYER_COLORS.board_substrate;
+    ctx.fill();
+    ctx.strokeStyle = themeColors.board_outline;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    return;
+  }
+
   const [x0, y0] = worldToScreen(vp, 0, 0);
   const [x1, y1] = worldToScreen(vp, width, height);
   const w = x1 - x0;

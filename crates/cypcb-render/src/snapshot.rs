@@ -219,6 +219,14 @@ pub struct BoardInfo {
     pub height_nm: i64,
     /// Number of copper layers.
     pub layer_count: u8,
+    /// The board's real edge, when the design states one.
+    ///
+    /// `[x, y]` pairs in nanometres, closing back on the first. `None` means
+    /// the board is the rectangle `width_nm` by `height_nm` describes - which
+    /// is what the screen drew for every board, whatever shape it was, until
+    /// this reached the snapshot.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outline: Option<Vec<[i64; 2]>>,
 }
 
 /// Component information for rendering.
@@ -411,6 +419,7 @@ mod tests {
                 width_nm: 100_000_000,
                 height_nm: 80_000_000,
                 layer_count: 2,
+                outline: None,
             }),
             components: vec![ComponentInfo {
                 refdes: "R1".to_string(),
@@ -595,6 +604,7 @@ mod tests {
                 width_nm: 50_000_000,
                 height_nm: 30_000_000,
                 layer_count: 2,
+                outline: None,
             }),
             components: vec![],
             nets: vec![],

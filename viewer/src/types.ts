@@ -94,6 +94,15 @@ export interface BoardInfo {
   width_nm: number;
   height_nm: number;
   layer_count: number;
+  /**
+   * The board's real edge, when the design states one.
+   *
+   * `[x, y]` pairs in nanometres, closing back on the first. Absent means the
+   * board is the rectangle `width_nm` by `height_nm` describes - which is what
+   * this screen drew for every board, whatever shape it was, until the outline
+   * reached the snapshot.
+   */
+  outline?: Array<[number, number]>;
 }
 
 export interface ComponentInfo {

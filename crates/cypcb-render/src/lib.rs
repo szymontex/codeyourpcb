@@ -1511,11 +1511,27 @@ impl PcbEngine {
         let board: Option<BoardInfo> = match self.world.board_info() {
             Some((size, layers)) => {
                 let name: String = self.world.board_name().unwrap_or("").to_string();
+                let outline = self
+                    .world
+                    .board_entity()
+                    .and_then(|entity| {
+                        self.world
+                            .ecs()
+                            .get::<cypcb_world::components::BoardOutline>(entity)
+                    })
+                    .map(|outline| {
+                        outline
+                            .points
+                            .iter()
+                            .map(|point| [point.x.0, point.y.0])
+                            .collect()
+                    });
                 Some(BoardInfo {
                     name,
                     width_nm: size.width.0,
                     height_nm: size.height.0,
                     layer_count: layers.count,
+                    outline,
                 })
             }
             None => None,
@@ -2414,6 +2430,7 @@ mod tests {
                 width_nm: 30_000_000,  // 30mm
                 height_nm: 30_000_000, // 30mm
                 layer_count: 2,
+                outline: None,
             }),
             components: vec![
                 ComponentInfo {
