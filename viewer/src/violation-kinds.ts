@@ -37,6 +37,7 @@ export const VIOLATION_KIND_META: Record<string, ViolationKindMeta> = {
   'assertion':           { icon: '📋', label: 'Design assertion failed' },
   'stackup':             { icon: '🥞', label: 'Stackup contradicts the board' },
   'paste-clearance':     { icon: '🩻', label: 'Paste stencil web too thin' },
+  'hole-to-edge':        { icon: '🪚', label: 'Hole too close to the board edge' },
 };
 
 /** The icon and name for a kind, falling back to the slug the engine sent. */

@@ -87,6 +87,8 @@ pub enum ViolationKind {
     Stackup,
     /// Two paste stencil openings leave a web too thin to hold.
     PasteClearance,
+    /// A drilled hole sits too close to the routed board edge.
+    HoleToEdge,
 }
 
 impl std::fmt::Display for ViolationKind {
@@ -112,6 +114,7 @@ impl std::fmt::Display for ViolationKind {
             ViolationKind::DiffPairSkew => write!(f, "diff-pair-skew"),
             ViolationKind::Stackup => write!(f, "stackup"),
             ViolationKind::PasteClearance => write!(f, "paste-clearance"),
+            ViolationKind::HoleToEdge => write!(f, "hole-to-edge"),
         }
     }
 }
@@ -581,6 +584,28 @@ impl DrcViolation {
             source_span: None,
             message: format!(
                 "Paste stencil web is {:.3}mm, {:.3}mm required",
+                actual.to_mm(),
+                required.to_mm(),
+            ),
+        }
+    }
+
+    /// A drilled hole too close to the routed board edge.
+    ///
+    /// The bit that cuts the board out of the panel follows the outline; a
+    /// hole nearer than the fab allows comes out open on one side.
+    pub fn hole_to_edge(entity: Entity, actual: Nm, required: Nm, location: Point) -> Self {
+        DrcViolation {
+            kind: ViolationKind::HoleToEdge,
+            actual: Some(actual),
+            required: Some(required),
+            area: None,
+            location,
+            entity,
+            other_entity: None,
+            source_span: None,
+            message: format!(
+                "Hole is {:.3}mm from the board edge, {:.3}mm required",
                 actual.to_mm(),
                 required.to_mm(),
             ),

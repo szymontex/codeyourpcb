@@ -125,7 +125,7 @@ impl DrcRule for EdgeClearanceRule {
 /// is exact for two convex shapes that do not overlap and gives zero when they
 /// do. A box whose centre falls outside the ring reads as zero rather than a
 /// positive distance: copper off the board is not "well clear of the edge".
-fn distance_to_outline(
+pub(crate) fn distance_to_outline(
     outline: &BoardOutline,
     min_x: i64,
     min_y: i64,

@@ -85,6 +85,7 @@ use cypcb_rules::DesignConstraints;
 ///     min_hole_to_hole: Nm::from_mm(0.5),
 ///     min_solder_mask_bridge: Nm::from_mm(0.1),
 ///     min_paste_clearance: Nm::from_mm(0.127),
+///     min_hole_to_edge: Nm::from_mm(0.3),
 ///     solder_mask_expansion: Nm::from_mm(0.05),
 ///     min_silk_clearance: Nm::from_mm(0.15),
 ///     min_courtyard_clearance: Nm::from_mm(0.25),
@@ -120,6 +121,12 @@ pub struct DesignRules {
     /// nothing read it: the number appeared thirteen times inside
     /// `cypcb-rules` and nowhere else in the workspace.
     pub min_paste_clearance: Nm,
+    /// How far a drilled hole must stay from the routed board edge.
+    ///
+    /// Not the same question as `min_edge_clearance`, which measures copper:
+    /// a pad's annulus can clear the edge while the hole inside it does not,
+    /// and it is the hole the router breaks into.
+    pub min_hole_to_edge: Nm,
     /// How far the mask opening extends beyond the pad on every side.
     pub solder_mask_expansion: Nm,
     /// Minimum silkscreen to copper pad clearance.
@@ -182,6 +189,7 @@ impl DesignRules {
             min_hole_to_hole: c.min_hole_to_hole,
             min_solder_mask_bridge: c.min_solder_mask_bridge,
             min_paste_clearance: c.min_paste_clearance,
+            min_hole_to_edge: c.min_hole_to_edge,
             solder_mask_expansion: c.solder_mask_expansion,
             min_silk_clearance: c.min_silk_clearance.unwrap_or(c.min_silk_width),
             min_courtyard_clearance: c.min_courtyard_clearance.unwrap_or(Nm::from_mm(0.25)),
