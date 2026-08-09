@@ -36,6 +36,7 @@ export const VIOLATION_KIND_META: Record<string, ViolationKindMeta> = {
   'pour-island':         { icon: '🏝️', label: 'Orphaned copper island' },
   'assertion':           { icon: '📋', label: 'Design assertion failed' },
   'stackup':             { icon: '🥞', label: 'Stackup contradicts the board' },
+  'paste-clearance':     { icon: '🩻', label: 'Paste stencil web too thin' },
 };
 
 /** The icon and name for a kind, falling back to the slug the engine sent. */

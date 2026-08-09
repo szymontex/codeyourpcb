@@ -209,10 +209,19 @@ impl CheckCommand {
         // 0.01mm under spec. The first cannot work; the second is a yield risk
         // a fab may still build, and a person deciding whether to send the
         // files needs to know which they have.
+        //
+        // Selected by what the number measures, not only by its value. The
+        // filter used to be "actual is zero", which caught the first rule that
+        // reported a different zero-width thing: a paste stencil web of 0.000mm
+        // is a torn stencil, not copper touching copper, and counting it here
+        // made the line say something untrue about the board.
         let shorts = drc
             .violations
             .iter()
-            .filter(|violation| violation.actual == Some(cypcb_core::Nm::ZERO))
+            .filter(|violation| {
+                matches!(violation.kind, cypcb_drc::ViolationKind::Clearance)
+                    && violation.actual == Some(cypcb_core::Nm::ZERO)
+            })
             .count();
         if shorts > 0 {
             eprintln!("  copper touching copper at 0.00mm: {}", shorts);

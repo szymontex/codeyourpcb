@@ -85,6 +85,8 @@ pub enum ViolationKind {
     DiffPairSkew,
     /// A declared stackup contradicts the rest of the design.
     Stackup,
+    /// Two paste stencil openings leave a web too thin to hold.
+    PasteClearance,
 }
 
 impl std::fmt::Display for ViolationKind {
@@ -109,6 +111,7 @@ impl std::fmt::Display for ViolationKind {
             ViolationKind::CourtyardClearance => write!(f, "courtyard-clearance"),
             ViolationKind::DiffPairSkew => write!(f, "diff-pair-skew"),
             ViolationKind::Stackup => write!(f, "stackup"),
+            ViolationKind::PasteClearance => write!(f, "paste-clearance"),
         }
     }
 }
@@ -549,6 +552,35 @@ impl DrcViolation {
             source_span: None,
             message: format!(
                 "Solder mask bridge violation: {:.2}mm actual, {:.2}mm required",
+                actual.to_mm(),
+                required.to_mm(),
+            ),
+        }
+    }
+
+    /// Two paste stencil openings with too little steel between them.
+    ///
+    /// The mask bridge rule's twin: same geometry, a different sheet. Where
+    /// the web tears the two openings become one and the pads bridge with
+    /// solder on reflow.
+    pub fn paste_clearance(
+        entity: Entity,
+        other: Entity,
+        actual: Nm,
+        required: Nm,
+        location: Point,
+    ) -> Self {
+        DrcViolation {
+            kind: ViolationKind::PasteClearance,
+            actual: Some(actual),
+            required: Some(required),
+            area: None,
+            location,
+            entity,
+            other_entity: Some(other),
+            source_span: None,
+            message: format!(
+                "Paste stencil web is {:.3}mm, {:.3}mm required",
                 actual.to_mm(),
                 required.to_mm(),
             ),

@@ -84,6 +84,7 @@ use cypcb_rules::DesignConstraints;
 ///     min_edge_clearance: Nm::from_mm(0.5),
 ///     min_hole_to_hole: Nm::from_mm(0.5),
 ///     min_solder_mask_bridge: Nm::from_mm(0.1),
+///     min_paste_clearance: Nm::from_mm(0.127),
 ///     solder_mask_expansion: Nm::from_mm(0.05),
 ///     min_silk_clearance: Nm::from_mm(0.15),
 ///     min_courtyard_clearance: Nm::from_mm(0.25),
@@ -113,6 +114,12 @@ pub struct DesignRules {
     pub min_hole_to_hole: Nm,
     /// Minimum solder mask bridge between pads.
     pub min_solder_mask_bridge: Nm,
+    /// Narrowest web the stencil can hold between two paste openings.
+    ///
+    /// Every fab preset has published one since the tables were written and
+    /// nothing read it: the number appeared thirteen times inside
+    /// `cypcb-rules` and nowhere else in the workspace.
+    pub min_paste_clearance: Nm,
     /// How far the mask opening extends beyond the pad on every side.
     pub solder_mask_expansion: Nm,
     /// Minimum silkscreen to copper pad clearance.
@@ -174,6 +181,7 @@ impl DesignRules {
             min_edge_clearance: c.min_edge_clearance,
             min_hole_to_hole: c.min_hole_to_hole,
             min_solder_mask_bridge: c.min_solder_mask_bridge,
+            min_paste_clearance: c.min_paste_clearance,
             solder_mask_expansion: c.solder_mask_expansion,
             min_silk_clearance: c.min_silk_clearance.unwrap_or(c.min_silk_width),
             min_courtyard_clearance: c.min_courtyard_clearance.unwrap_or(Nm::from_mm(0.25)),
