@@ -65,6 +65,8 @@ enum Commands {
     ParseKicad(commands::ParseKicadCommand),
     /// Score a routed .cypcb file — routes and prints quality metrics as JSON
     Score(commands::ScoreCommand),
+    /// Write a .cypcb design out as a KiCad .kicad_pcb board
+    ToKicad(commands::ToKicadCommand),
 }
 
 /// Send the crates' `tracing` output somewhere a person can read it.
@@ -106,6 +108,7 @@ fn main() -> Result<()> {
         Commands::Route(cmd) => cmd.run(),
         Commands::Export(cmd) => cmd.run(),
         Commands::ParseKicad(cmd) => cmd.run(),
+        Commands::ToKicad(cmd) => cmd.run(),
         Commands::Score(cmd) => cmd.run(),
     }
 }
