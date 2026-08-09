@@ -250,6 +250,14 @@ pub struct ComponentInfo {
     pub body_width_nm: i64,
     /// Component body height in nanometers (from footprint bounds).
     pub body_height_nm: i64,
+    /// The catalogue part the design names, when it names one.
+    ///
+    /// The browser used to read this out of the raw source text with a regular
+    /// expression, because the language did not have the property and the
+    /// model never saw it. It has both now, and a second reader of the
+    /// language is exactly what `docs/one-parser.md` exists to prevent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lcsc: Option<String>,
     /// Optional path/key to a GLB 3D model file (for future use).
     pub model_3d: Option<String>,
     /// The footprint's own silkscreen artwork, in footprint coordinates.
@@ -452,6 +460,7 @@ mod tests {
                 ],
                 body_width_nm: 1_000_000,
                 body_height_nm: 500_000,
+                lcsc: None,
                 model_3d: None,
                 silk: Vec::new(),
             }],

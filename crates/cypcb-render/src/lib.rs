@@ -1620,8 +1620,13 @@ impl PcbEngine {
                 .unwrap_or_default();
 
             let refdes_str: String = refdes.as_str().to_string();
+            let lcsc = self
+                .world
+                .get::<cypcb_world::components::LcscPart>(entity)
+                .map(|part| part.0.clone());
             components.push(ComponentInfo {
                 refdes: refdes_str,
+                lcsc,
                 silk,
                 value,
                 x_nm: position.0.x.0,
@@ -2443,6 +2448,7 @@ mod tests {
                     pads: vec![], // Empty - should use builtin library
                     body_width_nm: 0,
                     body_height_nm: 0,
+                    lcsc: None,
                     model_3d: None,
                     silk: Vec::new(),
                 },
@@ -2456,6 +2462,7 @@ mod tests {
                     pads: vec![], // Empty - should use builtin library
                     body_width_nm: 0,
                     body_height_nm: 0,
+                    lcsc: None,
                     model_3d: None,
                     silk: Vec::new(),
                 },

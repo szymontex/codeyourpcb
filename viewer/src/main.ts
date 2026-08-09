@@ -357,27 +357,32 @@ async function init(): Promise<void> {
   });
 
   /**
-   * Scan source for `lcsc "C..."` attributes and auto-fetch footprints
-   * from EasyEDA for any packages not yet in the dynamic registry.
-   * After fetching, re-parses the source so components get real pads.
+   * Fetch the real footprint for every part the design names.
+   *
+   * `lcsc "C7593"` is a property of the language, so the part number comes off
+   * the board model. It used to come from a regular expression over the raw
+   * source - a second reader of the language, which could not see a part in a
+   * module, missed any part number that was not `C` followed by digits, and
+   * gave up on a component block containing a nested brace.
+   *
+   * After fetching, the caller re-parses so components get their real pads.
    */
-  async function autoFetchLcscFootprints(source: string): Promise<boolean> {
-    // Find all component blocks with lcsc attributes
-    const compRegex = /component\s+\w+\s+\w+\s+"([^"]+)"\s*\{[^}]*lcsc\s+"C(\d+)"[^}]*\}/g;
+  async function autoFetchLcscFootprints(_source: string): Promise<boolean> {
+    const parts = (engine.get_snapshot().components ?? [])
+      .filter((component): component is typeof component & { lcsc: string } =>
+        typeof component.lcsc === 'string' && component.lcsc.length > 0,
+      );
+    if (parts.length === 0) return false;
+
     const toFetch: { pkg: string; lcscId: number }[] = [];
-    let hasAnyLcsc = false;
-
-    let match;
-    while ((match = compRegex.exec(source)) !== null) {
-      const pkg = match[1];
-      const lcscId = parseInt(match[2], 10);
-      hasAnyLcsc = true;
-      if (!hasDynamicFootprint(pkg) && !isNaN(lcscId)) {
-        toFetch.push({ pkg, lcscId });
-      }
+    const seen = new Set<string>();
+    for (const component of parts) {
+      const lcscId = parseInt(component.lcsc.replace(/^C/i, ''), 10);
+      if (isNaN(lcscId) || hasDynamicFootprint(component.footprint)) continue;
+      if (seen.has(component.footprint)) continue;
+      seen.add(component.footprint);
+      toFetch.push({ pkg: component.footprint, lcscId });
     }
-
-    if (!hasAnyLcsc) return false;
 
     // If everything is already cached, still signal re-parse needed
     if (toFetch.length === 0) return true;

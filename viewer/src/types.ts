@@ -117,6 +117,14 @@ export interface ComponentInfo {
   body_width_nm: number;
   /** Component body height in nanometers (from footprint bounds). */
   body_height_nm: number;
+  /**
+   * The catalogue part the design names, when it names one.
+   *
+   * Read from the model rather than out of the source text: this used to be a
+   * regular expression over the raw `.cypcb`, which is a second reader of the
+   * language and the thing `docs/one-parser.md` exists to prevent.
+   */
+  lcsc?: string;
   /** Optional path/key to a GLB 3D model file (null until populated). */
   model_3d: string | null;
   /** Silkscreen shapes (outlines, markers, text) relative to component origin */
