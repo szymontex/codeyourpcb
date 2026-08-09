@@ -77,7 +77,7 @@ fn hover_for_component(
     }
 
     if offset >= comp.footprint.span.start && offset < comp.footprint.span.end {
-        return Some(make_footprint_hover(&comp.footprint.value));
+        return Some(make_footprint_hover(doc, &comp.footprint.value));
     }
 
     if let Some(val) = &comp.value {
@@ -214,7 +214,18 @@ fn count_component_violations(doc: &DocumentState, refdes: &str) -> usize {
         .count()
 }
 
-fn make_footprint_hover(footprint_name: &str) -> HoverInfo {
+fn make_footprint_hover(doc: &DocumentState, footprint_name: &str) -> HoverInfo {
+    // The file first. This built a fresh library and looked the name up in it,
+    // so it only ever found built-in parts: a footprint you wrote gave you
+    // nothing while an 0402 gave you every pad, and the card said "may be a
+    // custom footprint defined in this file" while the parsed file sat in the
+    // document, unasked.
+    if let Some(fp) = footprint_def_named(doc, footprint_name) {
+        return HoverInfo {
+            content: footprint_def_card(fp),
+        };
+    }
+
     let lib = FootprintLibrary::new();
 
     if let Some(fp) = lib.get(footprint_name) {
@@ -270,10 +281,28 @@ fn make_footprint_hover(footprint_name: &str) -> HoverInfo {
             content: lines.join("\n"),
         }
     } else {
+        // Neither the library nor the file has it, and the file has been
+        // parsed - so this is a name nothing defines, which is usually a typo.
+        // Saying "may be a custom footprint defined in this file" here told a
+        // designer the opposite of what the document knows.
         HoverInfo {
-            content: format!("**Footprint: {}** (unknown)\n\nNot in built-in library. May be a custom footprint defined in this file.", footprint_name),
+            content: format!(
+                "**Footprint: {footprint_name}** (unknown)\n\nNo footprint of that name is built in, and this file does not define one. The board will be missing this part's pads."
+            ),
         }
     }
+}
+
+/// The footprint this file defines under that name, if it defines one.
+fn footprint_def_named<'a>(doc: &'a DocumentState, name: &str) -> Option<&'a FootprintDef> {
+    doc.ast
+        .as_ref()?
+        .definitions
+        .iter()
+        .find_map(|def| match def {
+            Definition::Footprint(fp) if fp.name.value == name => Some(fp),
+            _ => None,
+        })
 }
 
 fn hover_for_net(_doc: &DocumentState, net: &NetDef, offset: usize) -> Option<HoverInfo> {
@@ -389,47 +418,56 @@ fn hover_for_footprint_def(
     offset: usize,
 ) -> Option<HoverInfo> {
     if offset >= fp.span.start && offset < fp.span.end {
-        let mut lines = vec![format!("**Footprint Definition: {}**", fp.name.value)];
-
-        if let Some(desc) = &fp.description {
-            lines.push(format!("Description: {}", desc));
-        }
-
-        lines.push(format!("Pads: {}", fp.pads.len()));
-
-        if let Some((w, h)) = &fp.courtyard {
-            lines.push(format!("Courtyard: {} x {}", w, h));
-        }
-
-        // The pads themselves, which the card left out entirely: hovering a
-        // footprint you wrote said how many pads it has and not one thing
-        // about any of them. The built-in library's card has listed them all
-        // along, so a designer got less about their own footprint than about
-        // an 0402.
-        //
-        // Held to the same eight-pad limit as the built-in card, so hovering a
-        // 64-pin QFP does not bury the screen.
-        if !fp.pads.is_empty() && fp.pads.len() <= 8 {
-            lines.push(String::new());
-            lines.push("**Pads:**".to_string());
-            for pad in &fp.pads {
-                lines.push(format!(
-                    "- {}: {} {} x {}{}",
-                    pad.number,
-                    format!("{:?}", pad.shape).to_lowercase(),
-                    pad.width,
-                    pad.height,
-                    hole_of(pad),
-                ));
-            }
-        }
-
         return Some(HoverInfo {
-            content: lines.join("\n"),
+            content: footprint_def_card(fp),
         });
     }
 
     None
+}
+
+/// The card for a footprint this file defines, wherever it is hovered from.
+///
+/// One rendering, because the definition and every use of its name are the
+/// same footprint: hovering `USB_ANCHOR` in a component used to reach a
+/// different function that knew only built-in parts and told the reader this
+/// one might not exist.
+fn footprint_def_card(fp: &FootprintDef) -> String {
+    let mut lines = vec![format!("**Footprint Definition: {}**", fp.name.value)];
+
+    if let Some(desc) = &fp.description {
+        lines.push(format!("Description: {}", desc));
+    }
+
+    lines.push(format!("Pads: {}", fp.pads.len()));
+
+    if let Some((w, h)) = &fp.courtyard {
+        lines.push(format!("Courtyard: {} x {}", w, h));
+    }
+
+    // The pads themselves, which the card left out entirely: hovering a
+    // footprint you wrote said how many pads it has and not one thing about
+    // any of them. The built-in library's card has listed them all along, so a
+    // designer got less about their own footprint than about an 0402.
+    //
+    // Held to the same eight-pad limit as the built-in card, so hovering a
+    // 64-pin QFP does not bury the screen.
+    if !fp.pads.is_empty() && fp.pads.len() <= 8 {
+        lines.push(String::new());
+        lines.push("**Pads:**".to_string());
+        for pad in &fp.pads {
+            lines.push(format!(
+                "- {}: {} {} x {}{}",
+                pad.number,
+                format!("{:?}", pad.shape).to_lowercase(),
+                pad.width,
+                pad.height,
+                hole_of(pad),
+            ));
+        }
+    }
+
+    lines.join("\n")
 }
 
 fn hover_for_board(_doc: &DocumentState, board: &BoardDef, offset: usize) -> Option<HoverInfo> {
