@@ -8,6 +8,7 @@
 
 use crate::coords::CoordinateFormat;
 use chrono::Utc;
+use cypcb_world::components::Layer;
 
 /// Copper layer side designation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -20,6 +21,24 @@ pub enum CopperSide {
     /// is the first inner layer, which is Gerber layer L2. Same convention
     /// as `cypcb_world::Layer::Inner`, so the two cannot drift apart.
     Inner(u8),
+}
+
+/// Which Gerber layer a copper layer is, counting from the top.
+///
+/// One place, because two are how a four-layer board came to ship with two
+/// files claiming L1: `Layer::Inner` is zero-based and a Gerber layer number is
+/// one-based, so the first inner layer is L2, and any second copy of that
+/// arithmetic is a second chance to write it as `n + 1`. The drill files state
+/// their span with the same numbers.
+pub fn copper_layer_number(layer: Layer, total_layers: u8) -> u8 {
+    match layer {
+        Layer::TopCopper => 1,
+        Layer::BottomCopper => total_layers,
+        Layer::Inner(n) => n + 2,
+        // Not a copper layer; the callers all guard against this, and a number
+        // is still better than a panic in an export that is otherwise fine.
+        _ => 1,
+    }
 }
 
 /// Board side for non-copper layers.

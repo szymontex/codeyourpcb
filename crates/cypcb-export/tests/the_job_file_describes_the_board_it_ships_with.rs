@@ -60,7 +60,7 @@ fn exported(name: &str, world: &mut BoardWorld) -> (Value, PathBuf) {
     let library = FootprintLibrary::new();
     run_export(&job, world, &library).expect("the export runs");
 
-    let path = dir.join("gerber/sensor_hub-job.gbrjob");
+    let path = dir.join("sensor_hub-job.gbrjob");
     let text = std::fs::read_to_string(&path)
         .unwrap_or_else(|err| panic!("no job file at {}: {err}", path.display()));
     (
@@ -79,8 +79,27 @@ const FOUR_LAYER: &[(StackupLayerKind, Option<f64>)] = &[
     (Copper, Some(0.035)),
 ];
 
+/// Every manufacturing file in the output, as a path relative to its root.
+fn manufacturing_files(dir: &std::path::Path) -> Vec<String> {
+    let mut found: Vec<String> = ["gerber", "drill"]
+        .iter()
+        .flat_map(|sub| {
+            std::fs::read_dir(dir.join(sub))
+                .into_iter()
+                .flatten()
+                .filter_map(move |entry| {
+                    let name = entry.ok()?.file_name().to_string_lossy().to_string();
+                    (name.ends_with(".gbr") || name.ends_with(".drl") || name.ends_with(".xln"))
+                        .then(|| format!("{sub}/{name}"))
+                })
+        })
+        .collect();
+    found.sort();
+    found
+}
+
 #[test]
-fn every_gerber_written_is_named_in_the_job_file() {
+fn every_file_written_is_named_in_the_job_file() {
     let (job, dir) = exported("named", &mut board(Some(FOUR_LAYER)));
 
     let mut described: Vec<String> = job["FilesAttributes"]
@@ -91,19 +110,27 @@ fn every_gerber_written_is_named_in_the_job_file() {
         .collect();
     described.sort();
 
-    let mut on_disk: Vec<String> = std::fs::read_dir(dir.join("gerber"))
-        .expect("the gerber directory is there")
-        .filter_map(|entry| {
-            let name = entry.ok()?.file_name().to_string_lossy().to_string();
-            name.ends_with(".gbr").then_some(name)
-        })
-        .collect();
-    on_disk.sort();
-
     assert_eq!(
-        described, on_disk,
+        described,
+        manufacturing_files(&dir),
         "the job file has to name the files it ships with"
     );
+}
+
+#[test]
+fn every_path_it_names_resolves_from_where_the_job_file_sits() {
+    // The job file is at the root of the set and the files are in `gerber/`
+    // and `drill/`, so a bare file name would be unresolvable for half of
+    // them. A fabricator following these paths has to find every file.
+    let (job, dir) = exported("paths", &mut board(Some(FOUR_LAYER)));
+
+    for entry in job["FilesAttributes"].as_array().expect("an array") {
+        let named = entry["Path"].as_str().expect("a path");
+        assert!(
+            dir.join(named).is_file(),
+            "{named} is named in the job file and is not there"
+        );
+    }
 }
 
 #[test]
@@ -114,7 +141,7 @@ fn what_each_file_is_called_is_what_that_file_says_it_is() {
     let (job, dir) = exported("agrees", &mut board(Some(FOUR_LAYER)));
 
     for entry in job["FilesAttributes"].as_array().expect("an array") {
-        let path = dir.join("gerber").join(entry["Path"].as_str().unwrap());
+        let path = dir.join(entry["Path"].as_str().unwrap());
         let gerber = std::fs::read_to_string(&path).expect("the file is there");
         let stated = gerber
             .lines()
@@ -132,6 +159,46 @@ fn what_each_file_is_called_is_what_that_file_says_it_is() {
 }
 
 #[test]
+fn the_drill_file_is_in_the_set_the_fabricator_is_told_about() {
+    // Eleven Gerbers described and the drill file mentioned nowhere is a board
+    // with no holes. It states its own function now, so it is described the
+    // same way everything else is - by reading it.
+    let (job, _) = exported("drill", &mut board(Some(FOUR_LAYER)));
+
+    let drills: Vec<&Value> = job["FilesAttributes"]
+        .as_array()
+        .expect("an array")
+        .iter()
+        .filter(|entry| entry["FileFormat"] == "NC")
+        .collect();
+
+    assert_eq!(drills.len(), 1, "one plated through file: {drills:#?}");
+    assert_eq!(drills[0]["FileFunction"], "Plated,1,4,PTH");
+    assert!(
+        drills[0].get("FilePolarity").is_none(),
+        "a drill file images nothing, so it has no polarity: {:#?}",
+        drills[0]
+    );
+}
+
+#[test]
+fn every_entry_says_which_format_it_is_in() {
+    // The specification lists Gerber|XNC|NC|SM|IPC356|Other and puts Excellon
+    // under NC. A CAM system told a drill file is a Gerber reads it as one.
+    let (job, _) = exported("formats", &mut board(Some(FOUR_LAYER)));
+
+    for entry in job["FilesAttributes"].as_array().expect("an array") {
+        let format = entry["FileFormat"].as_str().unwrap_or("missing");
+        let expected = if entry["Path"].as_str().unwrap().ends_with(".gbr") {
+            "Gerber"
+        } else {
+            "NC"
+        };
+        assert_eq!(format, expected, "{}", entry["Path"]);
+    }
+}
+
+#[test]
 fn the_solder_mask_is_the_negative_it_draws() {
     // The exporter images the openings, so the mask files are negatives. The
     // specification's own example says the same. Getting this wrong is a board
@@ -140,7 +207,10 @@ fn the_solder_mask_is_the_negative_it_draws() {
 
     for entry in job["FilesAttributes"].as_array().expect("an array") {
         let function = entry["FileFunction"].as_str().unwrap();
-        let polarity = entry["FilePolarity"].as_str().unwrap();
+        // Drill files image nothing and carry no polarity at all.
+        let Some(polarity) = entry["FilePolarity"].as_str() else {
+            continue;
+        };
         let expected = if function.starts_with("Soldermask") {
             "Negative"
         } else {

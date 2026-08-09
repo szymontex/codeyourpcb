@@ -470,15 +470,28 @@ pub fn run_export(
     // The job file describes the set, so it is written last and reads the
     // files rather than being told about them: what it claims about each one
     // is what that file says about itself.
-    let gerbers: Vec<PathBuf> = files
+    //
+    // The drill files are in it too: they state their own function now, so a
+    // fabricator reading the job file no longer sees a board with no holes.
+    let described: Vec<PathBuf> = files
         .iter()
-        .filter(|file| file.path.extension().is_some_and(|ext| ext == "gbr"))
+        .filter(|file| {
+            file.path
+                .extension()
+                .is_some_and(|ext| ext == "gbr" || ext == "drl" || ext == "xln")
+        })
         .map(|file| file.path.clone())
         .collect();
-    if !gerbers.is_empty() {
-        let borrowed: Vec<&Path> = gerbers.iter().map(PathBuf::as_path).collect();
-        let content = crate::jobfile::build_job_file(world, &job.board_name, &borrowed);
-        let path = gerber_dir.join(format!("{}-job.gbrjob", job.board_name));
+    if !described.is_empty() {
+        let borrowed: Vec<&Path> = described.iter().map(PathBuf::as_path).collect();
+        let content =
+            crate::jobfile::build_job_file(world, &job.board_name, &borrowed, &job.output_dir);
+        // At the root of the set rather than inside `gerber/`: it describes
+        // the drill files too, and a path written from inside one subdirectory
+        // cannot name a file in another without climbing out of it.
+        let path = job
+            .output_dir
+            .join(format!("{}-job.gbrjob", job.board_name));
         let file = write_export_file(&path, &content, "Gerber job file")?;
         files.push(file);
     }

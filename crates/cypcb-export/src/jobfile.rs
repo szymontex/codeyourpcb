@@ -39,6 +39,12 @@ use serde_json::{json, Map, Value};
 struct FileEntry {
     path: String,
     function: String,
+    /// `Gerber` for an image, `NC` for an Excellon drill file.
+    ///
+    /// The specification lists `Gerber|XNC|NC|SM|IPC356|Other` and puts
+    /// Excellon under `NC`. It matters: a CAM system told a drill file is a
+    /// Gerber tries to read it as one.
+    format: &'static str,
 }
 
 /// The `TF.FileFunction` a Gerber states about itself.
@@ -151,14 +157,26 @@ fn complete_stackup(declared: Vec<Value>, stackup: &Stackup, files: &[FileEntry]
 /// `gerbers` are paths to files already on disk; each is read for the function
 /// it states about itself, and a file that states none is left out rather than
 /// described by a guess.
-pub fn build_job_file(world: &BoardWorld, board_name: &str, gerbers: &[&Path]) -> String {
-    let entries: Vec<FileEntry> = gerbers
+pub fn build_job_file(
+    world: &BoardWorld,
+    board_name: &str,
+    written: &[&Path],
+    output_dir: &Path,
+) -> String {
+    let entries: Vec<FileEntry> = written
         .iter()
         .filter_map(|path| {
             let content = std::fs::read_to_string(path).ok()?;
+            let is_gerber = path.extension().is_some_and(|ext| ext == "gbr");
+            // Relative to the job file, which sits at the root of the set:
+            // `gerber/board-F_Cu.gbr`, `drill/board-PTH.drl`. A bare file name
+            // would be unresolvable for anything outside the job file's own
+            // directory.
+            let relative = path.strip_prefix(output_dir).unwrap_or(path);
             Some(FileEntry {
-                path: path.file_name()?.to_string_lossy().to_string(),
+                path: relative.to_string_lossy().replace('\\', "/"),
                 function: stated_function(&content)?,
+                format: if is_gerber { "Gerber" } else { "NC" },
             })
         })
         .collect();
@@ -166,11 +184,17 @@ pub fn build_job_file(world: &BoardWorld, board_name: &str, gerbers: &[&Path]) -
     let files: Vec<Value> = entries
         .iter()
         .map(|entry| {
-            json!({
-                "Path": entry.path,
-                "FileFunction": entry.function,
-                "FilePolarity": polarity(&entry.function),
-            })
+            let mut file = Map::new();
+            file.insert("Path".to_string(), json!(entry.path));
+            file.insert("FileFunction".to_string(), json!(entry.function));
+            // A drill file images nothing, so it has no polarity - the
+            // specification's own drill entry has none either, and writing
+            // `Positive` there would describe an image that does not exist.
+            if entry.format == "Gerber" {
+                file.insert("FilePolarity".to_string(), json!(polarity(&entry.function)));
+            }
+            file.insert("FileFormat".to_string(), json!(entry.format));
+            Value::Object(file)
         })
         .collect();
 

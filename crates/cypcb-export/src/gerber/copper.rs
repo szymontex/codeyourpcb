@@ -92,21 +92,20 @@ pub fn export_copper_layer_with(
     let mut apertures = ApertureManager::new();
 
     // Determine file function based on layer
-    let (copper_side, layer_num) = match layer {
-        Layer::TopCopper => (CopperSide::Top, Some(1)),
-        Layer::BottomCopper => {
-            // Get total layers from board
-            let total_layers = world.board_info().map(|(_, ls)| ls.count).unwrap_or(2);
-            (CopperSide::Bottom, Some(total_layers))
-        }
-        // `Layer::Inner` is zero-based everywhere in this workspace - the DSL
-        // writes `inner1` and `sync.rs` reads it as `Inner(0)` - and a Gerber
-        // layer number is one-based from the top, so the first inner layer of
-        // a four-layer board is L2. This said `n + 1`, a formula written for a
-        // one-based index, and the file claimed L1 alongside the top copper.
-        Layer::Inner(n) => (CopperSide::Inner(n), Some(n + 2)),
+    let board_layers = world.board_info().map(|(_, ls)| ls.count).unwrap_or(2);
+    let copper_side = match layer {
+        Layer::TopCopper => CopperSide::Top,
+        Layer::BottomCopper => CopperSide::Bottom,
+        Layer::Inner(n) => CopperSide::Inner(n),
         _ => unreachable!("Non-copper layer passed to export_copper_layer"),
     };
+    // One place decides which Gerber layer this is, shared with the drill
+    // files, because two copies of that arithmetic is how the first inner
+    // layer came to claim L1 alongside the top copper.
+    let layer_num = Some(crate::gerber::header::copper_layer_number(
+        layer,
+        board_layers,
+    ));
 
     let function = GerberFileFunction::Copper(copper_side, layer_num);
     // The design's own name, the same one the silkscreen and outline files
