@@ -107,7 +107,21 @@ pub fn write_board(world: &mut BoardWorld, generator: &str) -> String {
         out,
         "(kicad_pcb (version 20221018) (generator \"{generator}\")"
     );
-    let _ = writeln!(out, "  (general (thickness 1.6))");
+    // How thick the board is. A design that states a stackup has already said,
+    // and the checker and the Gerber job file both read it - this line was a
+    // hardcoded 1.6, so one export produced a job file saying 1.570mm and a
+    // KiCad board saying 1.6 for the same design. Two files out of one command
+    // disagreeing about the board is worse than either number being wrong.
+    //
+    // A design that states no stackup keeps 1.6: that is the industry's
+    // ordinary two-layer build and what this line always claimed, and it is
+    // the one number here that is a default rather than a measurement.
+    let thickness = world
+        .stackup()
+        .and_then(|stackup| stackup.total_thickness())
+        .map(mm)
+        .unwrap_or_else(|| "1.6".to_string());
+    let _ = writeln!(out, "  (general (thickness {thickness}))");
     let _ = writeln!(out, "  (paper \"A4\")");
 
     // Layers. Copper first, in KiCad's order, then the technical layers every
