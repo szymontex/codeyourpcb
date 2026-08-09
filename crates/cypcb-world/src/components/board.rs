@@ -371,3 +371,116 @@ impl BoardOutline {
         inside
     }
 }
+
+/// What one layer of a stackup is made of.
+///
+/// The parser's `LayerType` with the spans left behind: a stackup in the world
+/// is a physical fact about the board, and the place in the file it was
+/// written is the parser's business.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum StackupLayerKind {
+    /// Copper foil - the layers traces live on.
+    Copper,
+    /// Prepreg: glass cloth and resin, cured in the press.
+    Prepreg,
+    /// Core: cured laminate, copper-clad on both faces.
+    Core,
+    /// Solder mask.
+    Mask,
+    /// Silkscreen.
+    Silk,
+}
+
+impl StackupLayerKind {
+    /// Whether this layer separates two copper layers electrically.
+    ///
+    /// Mask and silk sit on the outside of the board, so neither one can be
+    /// what keeps two copper layers apart.
+    #[inline]
+    pub const fn is_dielectric(self) -> bool {
+        matches!(self, StackupLayerKind::Prepreg | StackupLayerKind::Core)
+    }
+
+    /// The word a designer writes for this layer.
+    #[inline]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            StackupLayerKind::Copper => "copper",
+            StackupLayerKind::Prepreg => "prepreg",
+            StackupLayerKind::Core => "core",
+            StackupLayerKind::Mask => "mask",
+            StackupLayerKind::Silk => "silk",
+        }
+    }
+}
+
+/// One layer of the board, top to bottom.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct StackupLayer {
+    /// What the layer is made of.
+    pub kind: StackupLayerKind,
+    /// How thick it is, when the design says.
+    pub thickness: Option<Nm>,
+}
+
+/// The layers a fabricator presses together, in order from the top.
+///
+/// A design states this to say what it expects to be built - which is a claim
+/// that can disagree with the rest of the design, and did so silently for as
+/// long as this was parsed and dropped. It is deliberately not the same thing
+/// as [`LayerStack`], which counts copper layers and nothing else: a board can
+/// declare `layers 4` and then describe a stackup with two.
+#[derive(Component, Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct Stackup {
+    /// Every layer, top to bottom.
+    pub layers: Vec<StackupLayer>,
+}
+
+impl Stackup {
+    /// How many copper layers the stackup describes.
+    #[inline]
+    pub fn copper_count(&self) -> usize {
+        self.layers
+            .iter()
+            .filter(|layer| layer.kind == StackupLayerKind::Copper)
+            .count()
+    }
+
+    /// Total thickness, or `None` when any layer left it unsaid.
+    ///
+    /// Partial answers are worse than none here: a board reported as 0.2mm
+    /// thick because two of its five layers stated a thickness reads like a
+    /// measurement rather than like a gap in the design.
+    pub fn total_thickness(&self) -> Option<Nm> {
+        self.layers
+            .iter()
+            .try_fold(Nm(0), |total, layer| Some(total + layer.thickness?))
+    }
+
+    /// Pairs of adjacent copper layers with no dielectric between them.
+    ///
+    /// Returns the index of the first of each pair. Two copper foils pressed
+    /// together are one thicker foil, so a stackup written this way describes
+    /// a board whose layers are shorted to each other by construction.
+    pub fn copper_touching_copper(&self) -> Vec<usize> {
+        let mut found = Vec::new();
+        let mut previous_copper: Option<usize> = None;
+        for (index, layer) in self.layers.iter().enumerate() {
+            match layer.kind {
+                StackupLayerKind::Copper => {
+                    if let Some(previous) = previous_copper {
+                        found.push(previous);
+                    }
+                    previous_copper = Some(index);
+                }
+                kind if kind.is_dielectric() => previous_copper = None,
+                // Mask and silk are surface finishes: they sit on top of
+                // copper rather than between two copper layers, so they do not
+                // clear the pairing.
+                _ => {}
+            }
+        }
+        found
+    }
+}

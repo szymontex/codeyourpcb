@@ -90,7 +90,7 @@ An LLM can generate this, review it, refactor it, and catch mistakes — just li
 | Bidirectional sync — edit trace code ↔ board updates in real-time | Done |
 | Net constraints — `[width 0.5mm]`, `[current 2A]` per net | Done |
 | IPC-2221 auto-width from current rating | Done |
-| DRC — clearance, drill, connectivity, trace width, hole-to-hole, solder mask, annular ring, edge, courtyard, zone overlap, pour island, differential-pair skew | Done — `grep -c 'Box::new(rules::' crates/cypcb-drc/src/lib.rs` counts them, because a number written here goes stale the next time one is added; `cypcb check` prints copper-on-copper apart from a gap under spec, gives an orphaned plane its size and corners, and says when a rule's number is this tool's own rather than the fab's |
+| DRC — every rule in the registry: `grep -o 'Box::new(rules::[A-Za-z]*' crates/cypcb-drc/src/lib.rs` names them, because a list written here goes stale the next time one is added | Done — `grep -c 'Box::new(rules::' crates/cypcb-drc/src/lib.rs` counts them, because a number written here goes stale the next time one is added; `cypcb check` prints copper-on-copper apart from a gap under spec, gives an orphaned plane its size and corners, and says when a rule's number is this tool's own rather than the fab's |
 | DRC — silkscreen clearance | Done — a Rust rule checks a footprint's own artwork against every other part's pads on the same side |
 | Gerber / Excellon / BOM / pick-and-place export | Done |
 | Monaco editor with context-aware completions | Done |

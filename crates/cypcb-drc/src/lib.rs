@@ -143,6 +143,7 @@ pub fn run_drc(world: &mut BoardWorld, rules: &DesignRules) -> DrcResult {
         Box::new(rules::UnroutedPinRule),
         Box::new(rules::AssertionRule),
         Box::new(rules::DiffPairSkewRule),
+        Box::new(rules::StackupRule),
     ];
 
     // Run each checker

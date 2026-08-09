@@ -163,6 +163,25 @@ impl BoardWorld {
         }
     }
 
+    /// Record the layers a fabricator is expected to press together.
+    ///
+    /// Separate from `set_board` because a stackup is optional and most
+    /// designs do not state one - the checker asks the fab preset otherwise.
+    /// Returns false when there is no board to attach it to.
+    pub fn set_stackup(&mut self, stackup: crate::components::Stackup) -> bool {
+        let Some(entity) = self.board_entity else {
+            return false;
+        };
+        self.world.entity_mut(entity).insert(stackup);
+        true
+    }
+
+    /// The stackup the design declared, if it declared one.
+    pub fn stackup(&self) -> Option<&crate::components::Stackup> {
+        self.board_entity
+            .and_then(|entity| self.world.get::<crate::components::Stackup>(entity))
+    }
+
     /// Get the board entity ID if one has been set.
     pub fn board_entity(&self) -> Option<Entity> {
         self.board_entity

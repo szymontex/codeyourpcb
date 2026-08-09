@@ -83,6 +83,8 @@ pub enum ViolationKind {
     CourtyardClearance,
     /// The two halves of a differential pair are not the same length.
     DiffPairSkew,
+    /// A declared stackup contradicts the rest of the design.
+    Stackup,
 }
 
 impl std::fmt::Display for ViolationKind {
@@ -106,6 +108,7 @@ impl std::fmt::Display for ViolationKind {
             ViolationKind::Assertion => write!(f, "assertion"),
             ViolationKind::CourtyardClearance => write!(f, "courtyard-clearance"),
             ViolationKind::DiffPairSkew => write!(f, "diff-pair-skew"),
+            ViolationKind::Stackup => write!(f, "stackup"),
         }
     }
 }
@@ -572,6 +575,24 @@ impl DrcViolation {
             kind: ViolationKind::DiffPairSkew,
             actual,
             required,
+            area: None,
+            location,
+            entity,
+            other_entity: None,
+            source_span: None,
+            message,
+        }
+    }
+
+    /// A declared stackup that contradicts the rest of the design.
+    ///
+    /// No `actual`/`required` pair: what is wrong is a disagreement between
+    /// two statements the design makes, not a measurement against a limit.
+    pub fn stackup(entity: Entity, message: String, location: Point) -> Self {
+        DrcViolation {
+            kind: ViolationKind::Stackup,
+            actual: None,
+            required: None,
             area: None,
             location,
             entity,

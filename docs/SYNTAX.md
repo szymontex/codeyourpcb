@@ -50,6 +50,45 @@ board my_circuit {
 **Properties:**
 - `size`: Board dimensions (width x height) with units
 - `layers`: Number of copper layers (2, 4, 6, etc.)
+- `stackup`: What the fabricator presses together, top to bottom (optional)
+
+### Stackup
+
+Most designs say nothing here and take the fab's standard build. State one when
+the board needs a particular thickness or a particular dielectric between two
+layers - a controlled-impedance design, or one that has to fit a slot.
+
+```
+board four_layer {
+    size 50mm x 30mm
+    layers 4
+    stackup {
+        copper 0.035mm
+        prepreg 0.2mm
+        copper 0.035mm
+        core 1.2mm
+        copper 0.035mm
+        prepreg 0.2mm
+        copper 0.035mm
+    }
+}
+```
+
+Layer types are `copper`, `prepreg`, `core`, `mask` and `silk`. A thickness is
+optional on each.
+
+The checker reads the stackup against the rest of the design and reports two
+contradictions:
+
+- The stackup describes a different number of copper layers than `layers` does.
+  The Gerber count comes from `layers`, so the files and the build instructions
+  would disagree about what the board is.
+- Two copper layers sit against each other with no dielectric between them.
+  `mask` and `silk` are surface finishes and do not separate copper.
+
+It does not judge the total thickness: what a fab will press is fab data this
+tool does not have. The thickness is printed in the report instead, for
+somebody who does know.
 
 ## Board Outline
 

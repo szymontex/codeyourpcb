@@ -129,6 +129,10 @@ pub use components::{
     RefDes,
     Rotation,
     SourceSpan,
+    // Board stackup
+    Stackup,
+    StackupLayer,
+    StackupLayerKind,
     Value,
 };
 

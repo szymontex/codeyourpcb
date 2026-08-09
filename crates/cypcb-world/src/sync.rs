@@ -55,7 +55,8 @@ use cypcb_parser::ast::{
 use crate::components::{
     trace::{Trace, TraceSegment, TraceSource, Via},
     ComponentKind, FootprintRef, Layer, NetConnections, PadShape as EcsPadShape, PinConnection,
-    Position, RefDes, Rotation, SourceSpan as EcsSourceSpan, Value, Zone, ZoneKind as EcsZoneKind,
+    Position, RefDes, Rotation, SourceSpan as EcsSourceSpan, Stackup, StackupLayer,
+    StackupLayerKind, Value, Zone, ZoneKind as EcsZoneKind,
 };
 use crate::footprint::{Footprint, FootprintLibrary, PadDef as FootprintPadDef};
 use crate::world::BoardWorld;
@@ -804,6 +805,35 @@ fn sync_board(board: &BoardDef, source: &str, world: &mut BoardWorld, result: &m
     });
 
     world.set_board(board.name.value.clone(), (width, height), layers);
+
+    // A stackup is what the design expects to be built, and both parsers have
+    // read it since the board block started refusing what it does not
+    // recognise. Nothing consumed it until now, so a stackup that contradicted
+    // the layer count beside it was a fabrication order nobody checked.
+    if let Some(stackup) = &board.stackup {
+        world.set_stackup(Stackup {
+            layers: stackup
+                .layers
+                .iter()
+                .map(|layer| StackupLayer {
+                    kind: stackup_kind(layer.layer_type),
+                    thickness: layer.thickness.as_ref().map(|d| d.to_nm()),
+                })
+                .collect(),
+        });
+    }
+}
+
+/// The world's word for a parsed stackup layer.
+fn stackup_kind(layer_type: cypcb_parser::ast::LayerType) -> StackupLayerKind {
+    use cypcb_parser::ast::LayerType;
+    match layer_type {
+        LayerType::Copper => StackupLayerKind::Copper,
+        LayerType::Prepreg => StackupLayerKind::Prepreg,
+        LayerType::Core => StackupLayerKind::Core,
+        LayerType::Mask => StackupLayerKind::Mask,
+        LayerType::Silk => StackupLayerKind::Silk,
+    }
 }
 
 /// Synchronize a component definition to the world.
