@@ -12,6 +12,7 @@
 
 use cypcb_core::{Nm, Point};
 use cypcb_rules::RoutingRuleSet;
+use cypcb_world::components::rotate_about_origin;
 use cypcb_world::footprint::FootprintLibrary;
 use cypcb_world::{BoardWorld, Layer};
 
@@ -240,7 +241,7 @@ impl RoutingGrid {
             if let Some(footprint) = library.get(fp_name) {
                 for pad in &footprint.pads {
                     // Rotate pad position around component origin
-                    let pad_pos = rotate_point(pad.position, *rotation_deg);
+                    let pad_pos = rotate_about_origin(pad.position, *rotation_deg);
                     let abs_x = comp_pos.x.raw() + pad_pos.x.raw();
                     let abs_y = comp_pos.y.raw() + pad_pos.y.raw();
 
@@ -866,22 +867,6 @@ pub fn index_to_layer(index: usize) -> Layer {
     }
 }
 
-/// Rotate a point around the origin by the given angle in degrees.
-fn rotate_point(p: Point, degrees: f64) -> Point {
-    if degrees.abs() < 0.001 {
-        return p;
-    }
-    let rad = degrees.to_radians();
-    let cos = rad.cos();
-    let sin = rad.sin();
-    let x = p.x.raw() as f64;
-    let y = p.y.raw() as f64;
-    Point::new(
-        Nm::new((x * cos - y * sin).round() as i64),
-        Nm::new((x * sin + y * cos).round() as i64),
-    )
-}
-
 /// Create a minimal grid for unit testing (no board needed).
 pub fn make_test_grid(width: u32, height: u32, resolution_nm: i64, layers: u8) -> RoutingGrid {
     let cell_count = (width as usize) * (height as usize);
@@ -1122,7 +1107,7 @@ mod tests {
     #[test]
     fn rotate_point_90_degrees() {
         let p = Point::from_mm(1.0, 0.0);
-        let rotated = rotate_point(p, 90.0);
+        let rotated = rotate_about_origin(p, 90.0);
         // After 90° rotation: (1, 0) -> (0, 1)
         assert!(
             (rotated.x.raw()).abs() < 1000, // within 1µm
@@ -1139,7 +1124,7 @@ mod tests {
     #[test]
     fn rotate_point_zero_is_identity() {
         let p = Point::from_mm(3.5, 7.2);
-        let rotated = rotate_point(p, 0.0);
+        let rotated = rotate_about_origin(p, 0.0);
         assert_eq!(rotated.x.raw(), p.x.raw());
         assert_eq!(rotated.y.raw(), p.y.raw());
     }

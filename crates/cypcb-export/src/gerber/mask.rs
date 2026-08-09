@@ -5,7 +5,7 @@
 
 use crate::apertures::{aperture_for_pad, ApertureManager, ApertureShape};
 use crate::coords::{nm_to_gerber, CoordinateFormat};
-use crate::gerber::copper::{calculate_pad_position, ExportError};
+use crate::gerber::copper::{place_pad_millideg, ExportError};
 use crate::gerber::header::{write_header, GerberFileFunction, Side};
 use cypcb_core::Nm;
 use cypcb_world::components::{FootprintRef, Position, Rotation};
@@ -270,7 +270,7 @@ fn export_mask_openings(
             }
 
             // Calculate absolute position (component position + rotated pad offset)
-            let abs_pos = calculate_pad_position(position.0, pad.position, rotation.0);
+            let abs_pos = place_pad_millideg(position.0, pad.position, rotation.0);
 
             // Get base aperture shape for this pad
             let base_shape = aperture_for_pad(pad);
@@ -327,7 +327,7 @@ fn export_paste_openings(
             }
 
             // Calculate absolute position (component position + rotated pad offset)
-            let abs_pos = calculate_pad_position(position.0, pad.position, rotation.0);
+            let abs_pos = place_pad_millideg(position.0, pad.position, rotation.0);
 
             // Get base aperture shape for this pad
             let base_shape = aperture_for_pad(pad);

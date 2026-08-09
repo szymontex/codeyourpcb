@@ -11,7 +11,7 @@ use cypcb_world::footprint::FootprintLibrary;
 use cypcb_world::BoardWorld;
 
 use crate::coords::{nm_to_decimal, CoordinateFormat};
-use crate::gerber::copper::ExportError;
+use crate::gerber::copper::{place_pad_millideg, ExportError};
 
 use super::tools::ToolTable;
 
@@ -310,7 +310,7 @@ fn collect_drill_hits(
         for pad in &footprint.pads {
             if let Some(drill_diameter) = pad.drill {
                 // Calculate absolute position (component position + rotated pad offset)
-                let abs_pos = calculate_pad_position(position.0, pad.position, rotation.0);
+                let abs_pos = place_pad_millideg(position.0, pad.position, rotation.0);
 
                 // A slot's two ends are two pad offsets, so the same rotation
                 // that places the pad places both of them.
@@ -324,8 +324,8 @@ fn collect_drill_hits(
                         Nm(pad.position.y.0 + half.y.0),
                     );
                     (
-                        calculate_pad_position(position.0, start, rotation.0),
-                        calculate_pad_position(position.0, end, rotation.0),
+                        place_pad_millideg(position.0, start, rotation.0),
+                        place_pad_millideg(position.0, end, rotation.0),
                     )
                 });
 
@@ -434,45 +434,6 @@ fn group_hits_by_tool_refs<'a>(
     result
 }
 
-/// Calculate absolute pad position from component position, pad offset, and rotation.
-///
-/// This is the same calculation used in copper export. Rotation is applied to the
-/// pad offset, then added to the component position.
-///
-/// # Arguments
-///
-/// * `component_pos` - Component center position
-/// * `pad_offset` - Pad position relative to component center
-/// * `rotation_millideg` - Component rotation in millidegrees (0-359999)
-pub(crate) fn calculate_pad_position(
-    component_pos: Point,
-    pad_offset: Point,
-    rotation_millideg: i32,
-) -> Point {
-    if rotation_millideg == 0 {
-        // No rotation: simple addition
-        Point::new(
-            Nm(component_pos.x.0 + pad_offset.x.0),
-            Nm(component_pos.y.0 + pad_offset.y.0),
-        )
-    } else {
-        // Convert rotation to radians
-        let angle_rad = (rotation_millideg as f64) / 1000.0 * std::f64::consts::PI / 180.0;
-        let cos = angle_rad.cos();
-        let sin = angle_rad.sin();
-
-        // Rotate pad offset around origin
-        let rotated_x = pad_offset.x.0 as f64 * cos - pad_offset.y.0 as f64 * sin;
-        let rotated_y = pad_offset.x.0 as f64 * sin + pad_offset.y.0 as f64 * cos;
-
-        // Add to component position
-        Point::new(
-            Nm(component_pos.x.0 + rotated_x.round() as i64),
-            Nm(component_pos.y.0 + rotated_y.round() as i64),
-        )
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -507,22 +468,22 @@ mod tests {
     }
 
     #[test]
-    fn test_calculate_pad_position_no_rotation() {
+    fn test_place_pad_millideg_no_rotation() {
         let comp_pos = Point::from_mm(10.0, 20.0);
         let pad_offset = Point::from_mm(1.0, 2.0);
 
-        let result = calculate_pad_position(comp_pos, pad_offset, 0);
+        let result = place_pad_millideg(comp_pos, pad_offset, 0);
 
         assert_eq!(result, Point::from_mm(11.0, 22.0));
     }
 
     #[test]
-    fn test_calculate_pad_position_with_rotation() {
+    fn test_place_pad_millideg_with_rotation() {
         let comp_pos = Point::from_mm(10.0, 10.0);
         let pad_offset = Point::from_mm(1.0, 0.0);
 
         // 90 degree rotation (90,000 millidegrees)
-        let result = calculate_pad_position(comp_pos, pad_offset, 90_000);
+        let result = place_pad_millideg(comp_pos, pad_offset, 90_000);
 
         // Pad at (1, 0) rotated 90 degrees becomes (0, 1)
         // Component at (10, 10), so result should be (10, 11)

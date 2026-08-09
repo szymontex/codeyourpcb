@@ -3,7 +3,7 @@
 //! All coordinates use integer nanometers from cypcb-core for deterministic precision.
 
 use bevy_ecs::prelude::*;
-use cypcb_core::Point;
+use cypcb_core::{Nm, Point};
 use serde::{Deserialize, Serialize};
 
 /// Position in nanometers from board origin (bottom-left).
@@ -136,6 +136,46 @@ impl Rotation {
     pub fn is_orthogonal(&self) -> bool {
         self.0 % 90_000 == 0
     }
+}
+
+/// Turn a pad's own offset into where it sits on the board.
+///
+/// A footprint states its pads relative to the part's origin; a placed part
+/// states where that origin is and which way it faces. Every consumer of a
+/// board has to do this multiplication, and until now each did its own: two in
+/// `cypcb-autoroute`, one in `cypcb-drc`, and two in `cypcb-export` that had
+/// already drifted - the copper writer **truncated** the rotated offset toward
+/// zero where the drill writer rounded it, so the same pad's flash and its
+/// drill hit could land a nanometre apart, and asymmetrically about the
+/// origin. The bundled boards are all placed at multiples of 90 degrees, where
+/// the two agree exactly, which is why nothing caught it.
+///
+/// One definition. It rounds, because a coordinate half a nanometre from a
+/// grid point belongs at the nearer one and truncation is a bias, not a
+/// rounding rule.
+pub fn place_pad(component_pos: Point, pad_offset: Point, rotation: Rotation) -> Point {
+    let rotated = rotate_about_origin(pad_offset, rotation.to_degrees());
+    Point::new(
+        Nm(component_pos.x.0 + rotated.x.0),
+        Nm(component_pos.y.0 + rotated.y.0),
+    )
+}
+
+/// Rotate a point about the origin, clockwise-positive to match [`Rotation`].
+///
+/// Zero is returned unchanged rather than run through the trigonometry, which
+/// keeps an unrotated board's coordinates exactly as written.
+pub fn rotate_about_origin(p: Point, degrees: f64) -> Point {
+    if degrees.abs() < 0.001 {
+        return p;
+    }
+    let (sin, cos) = degrees.to_radians().sin_cos();
+    let x = p.x.0 as f64;
+    let y = p.y.0 as f64;
+    Point::new(
+        Nm((x * cos - y * sin).round() as i64),
+        Nm((x * sin + y * cos).round() as i64),
+    )
 }
 
 impl std::fmt::Display for Rotation {

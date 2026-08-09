@@ -6,9 +6,9 @@
 use crate::apertures::{aperture_for_pad, ApertureManager, ApertureShape};
 use crate::coords::{nm_to_gerber, CoordinateFormat};
 use crate::gerber::header::{write_header, CopperSide, GerberFileFunction};
-use cypcb_core::{Nm, Point};
+use cypcb_core::Point;
 use cypcb_world::components::trace::{Trace, Via};
-use cypcb_world::components::{FootprintRef, Position, Rotation};
+use cypcb_world::components::{place_pad, FootprintRef, Position, Rotation};
 use cypcb_world::footprint::FootprintLibrary;
 use cypcb_world::{BoardWorld, Layer};
 
@@ -181,7 +181,7 @@ fn export_pads(
             }
 
             // Calculate absolute position (component position + rotated pad offset)
-            let abs_pos = calculate_pad_position(position.0, pad.position, rotation.0);
+            let abs_pos = place_pad_millideg(position.0, pad.position, rotation.0);
 
             // Get or create aperture for this pad
             let aperture_shape = aperture_for_pad(pad);
@@ -289,36 +289,18 @@ fn export_vias(
     }
 }
 
-/// Calculate absolute pad position accounting for component rotation.
+/// Where a pad sits on the board, from the rotation an export carries.
 ///
-/// Rotates the pad offset around the component origin, then adds component position.
-pub(crate) fn calculate_pad_position(
+/// The exporters hold rotation in millidegrees while the model's own helper
+/// takes a [`Rotation`], so this is the one line between them. The arithmetic
+/// itself lives in `cypcb-world` beside the pads it places - there used to be
+/// five copies of it, and two disagreed about rounding.
+pub(crate) fn place_pad_millideg(
     component_pos: Point,
     pad_offset: Point,
     rotation_millideg: i32,
 ) -> Point {
-    if rotation_millideg == 0 {
-        // No rotation, simple addition
-        return Point::new(
-            Nm(component_pos.x.0 + pad_offset.x.0),
-            Nm(component_pos.y.0 + pad_offset.y.0),
-        );
-    }
-
-    // Convert millidegrees to radians
-    let angle_rad = (rotation_millideg as f64) / 1000.0 * std::f64::consts::PI / 180.0;
-    let cos_theta = angle_rad.cos();
-    let sin_theta = angle_rad.sin();
-
-    // Rotate pad offset around origin
-    let rotated_x = (pad_offset.x.0 as f64) * cos_theta - (pad_offset.y.0 as f64) * sin_theta;
-    let rotated_y = (pad_offset.x.0 as f64) * sin_theta + (pad_offset.y.0 as f64) * cos_theta;
-
-    // Add component position
-    Point::new(
-        Nm(component_pos.x.0 + (rotated_x as i64)),
-        Nm(component_pos.y.0 + (rotated_y as i64)),
-    )
+    place_pad(component_pos, pad_offset, Rotation(rotation_millideg))
 }
 
 /// Check if a via spans the specified copper layer.
@@ -393,6 +375,7 @@ fn emit_region(rect: cypcb_core::Rect, output: &mut String, format: &CoordinateF
 #[cfg(test)]
 mod tests {
     use super::*;
+    use cypcb_core::Nm;
     use cypcb_core::{Point, Rect};
     use cypcb_world::components::trace::TraceSegment;
     use cypcb_world::components::PadShape;
@@ -518,19 +501,19 @@ mod tests {
     }
 
     #[test]
-    fn test_calculate_pad_position_no_rotation() {
+    fn test_place_pad_millideg_no_rotation() {
         let comp_pos = Point::from_mm(10.0, 20.0);
         let pad_offset = Point::from_mm(1.0, 2.0);
-        let result = calculate_pad_position(comp_pos, pad_offset, 0);
+        let result = place_pad_millideg(comp_pos, pad_offset, 0);
         assert_eq!(result, Point::from_mm(11.0, 22.0));
     }
 
     #[test]
-    fn test_calculate_pad_position_with_rotation() {
+    fn test_place_pad_millideg_with_rotation() {
         let comp_pos = Point::from_mm(10.0, 20.0);
         let pad_offset = Point::from_mm(5.0, 0.0);
         // 90 degrees = 90,000 millidegrees
-        let result = calculate_pad_position(comp_pos, pad_offset, 90_000);
+        let result = place_pad_millideg(comp_pos, pad_offset, 90_000);
 
         // After 90° rotation: (5, 0) -> (0, 5)
         // Then add component position: (10, 20) + (0, 5) = (10, 25)

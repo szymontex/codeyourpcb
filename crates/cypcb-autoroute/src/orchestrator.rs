@@ -18,6 +18,7 @@ use crate::cost::RoutingCost;
 use crate::grid::{layer_to_index, RoutingGrid};
 use crate::pathfinder::{find_path_with_zones, GridNode, PadZone};
 use crate::AutorouteConfig;
+use cypcb_world::components::rotate_about_origin;
 
 /// A pad target for routing — the absolute position and layer info of a single pad.
 #[derive(Debug, Clone)]
@@ -115,7 +116,7 @@ pub fn extract_ratsnest(world: &mut BoardWorld, library: &FootprintLibrary) -> V
             };
 
             // Compute absolute pad position
-            let pad_pos = rotate_point(pad_def.position, *rotation_deg);
+            let pad_pos = rotate_about_origin(pad_def.position, *rotation_deg);
             let abs_pos = Point::new(
                 Nm::new(comp_pos.x.raw() + pad_pos.x.raw()),
                 Nm::new(comp_pos.y.raw() + pad_pos.y.raw()),
@@ -741,22 +742,6 @@ fn preferred_layer(layer_mask: u32) -> u8 {
 /// Check if a layer mask covers multiple copper layers (through-hole pad).
 pub fn is_multi_layer(layer_mask: u32) -> bool {
     layer_mask.count_ones() > 1
-}
-
-/// Rotate a point around the origin by the given angle in degrees.
-fn rotate_point(p: Point, degrees: f64) -> Point {
-    if degrees.abs() < 0.001 {
-        return p;
-    }
-    let rad = degrees.to_radians();
-    let cos = rad.cos();
-    let sin = rad.sin();
-    let x = p.x.raw() as f64;
-    let y = p.y.raw() as f64;
-    Point::new(
-        Nm::new((x * cos - y * sin).round() as i64),
-        Nm::new((x * sin + y * cos).round() as i64),
-    )
 }
 
 /// Whether a pad is already connected by a copper pour of its own net.
