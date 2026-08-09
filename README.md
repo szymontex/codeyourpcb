@@ -109,7 +109,7 @@ An LLM can generate this, review it, refactor it, and catch mistakes — just li
 | `import` — block libraries across files | Done — resolved relative to the importing file; modules, footprints and interfaces cross, a design's own board and parts do not. See `examples/v2-imports.cypcb` |
 | `assert` — the design's own claims, checked | Done — `board.*`, `<part>.value` and `<net>.current/width/clearance`; anything else is reported as not checked rather than skipped |
 | Parts engine — auto component picking from JLCPCB/LCSC | Partly — a design names the part with `lcsc "C7593"`, the viewer fetches that part's real footprint, and the bill of materials carries it in JLCPCB's own `LCSC Part #` column. Picking a part for you is planned |
-| Two-sided assembly | Partly — `side bottom` on a component flips it onto the back of the board: its copper, solder mask, paste and silkscreen all move with it and the pick-and-place list says `Bottom`. The browser still draws it as a top-side part |
+| Two-sided assembly | Partly — `side bottom` on a component flips it onto the back of the board: its copper, solder mask, paste and silkscreen all move with it and the pick-and-place list says `Bottom`. The browser draws its legend in the bottom silkscreen colour and its pads on the bottom copper |
 | Schematic generation from `.cypcb` | Planned |
 | Differential pairs | Declared and checked — `diffpair USB { USB_DP USB_DM }`, and the checker measures the skew between the halves against the fab's length-match tolerance. Routing them alongside each other, and the gap between them, are still planned |
 | CI/CD in GitHub Actions | Not planned — the quality gate is `scripts/quality-gate.sh`, run locally |

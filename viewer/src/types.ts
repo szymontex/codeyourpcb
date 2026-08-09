@@ -125,6 +125,17 @@ export interface ComponentInfo {
    * language and the thing `docs/one-parser.md` exists to prevent.
    */
   lcsc?: string;
+  /**
+   * Which face of the board the part is soldered to.
+   *
+   * The pads already say it - a bottom part's pads carry bottom-copper layer
+   * bits and mirrored coordinates - but its ink does not: silkscreen and the
+   * body outline come from a footprint that has no layer of its own, so
+   * without this the browser prints a bottom part's legend on the top of the
+   * board. Optional because a snapshot built by hand need not state it, and
+   * absent means the top.
+   */
+  side?: 'top' | 'bottom';
   /** Optional path/key to a GLB 3D model file (null until populated). */
   model_3d: string | null;
   /** Silkscreen shapes (outlines, markers, text) relative to component origin */

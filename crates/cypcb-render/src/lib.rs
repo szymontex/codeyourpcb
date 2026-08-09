@@ -1624,9 +1624,17 @@ impl PcbEngine {
                 .world
                 .get::<cypcb_world::components::LcscPart>(entity)
                 .map(|part| part.0.clone());
+            let side =
+                self.world
+                    .get::<cypcb_world::components::Side>(entity)
+                    .map(|side| match side {
+                        cypcb_world::components::Side::Bottom => "bottom".to_string(),
+                        cypcb_world::components::Side::Top => "top".to_string(),
+                    });
             components.push(ComponentInfo {
                 refdes: refdes_str,
                 lcsc,
+                side,
                 silk,
                 value,
                 x_nm: position.0.x.0,
@@ -2449,6 +2457,7 @@ mod tests {
                     body_width_nm: 0,
                     body_height_nm: 0,
                     lcsc: None,
+                    side: None,
                     model_3d: None,
                     silk: Vec::new(),
                 },
@@ -2463,6 +2472,7 @@ mod tests {
                     body_width_nm: 0,
                     body_height_nm: 0,
                     lcsc: None,
+                    side: None,
                     model_3d: None,
                     silk: Vec::new(),
                 },

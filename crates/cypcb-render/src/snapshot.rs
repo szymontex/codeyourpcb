@@ -258,6 +258,16 @@ pub struct ComponentInfo {
     /// language is exactly what `docs/one-parser.md` exists to prevent.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub lcsc: Option<String>,
+    /// Which face of the board the part is soldered to: `top` or `bottom`.
+    ///
+    /// The pads already say it - a bottom part's pads carry bottom-copper
+    /// layer bits and mirrored coordinates, because the world holds the
+    /// flipped footprint - but its ink does not. Silkscreen and the body
+    /// outline are drawn in one colour from a footprint that has no layer, so
+    /// without this the browser prints a bottom part's legend on the top of
+    /// the board.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub side: Option<String>,
     /// Optional path/key to a GLB 3D model file (for future use).
     pub model_3d: Option<String>,
     /// The footprint's own silkscreen artwork, in footprint coordinates.
@@ -461,6 +471,7 @@ mod tests {
                 body_width_nm: 1_000_000,
                 body_height_nm: 500_000,
                 lcsc: None,
+                side: None,
                 model_3d: None,
                 silk: Vec::new(),
             }],

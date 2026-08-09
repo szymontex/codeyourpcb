@@ -828,6 +828,22 @@ function drawRatsnest(
 // Components — pad drawing, body outlines, drill marks
 // ---------------------------------------------------------------------------
 
+/**
+ * The colour a part's legend is printed in.
+ *
+ * Silkscreen and the body outline come from a footprint, and a footprint has
+ * no side of its own - the part does. Until the snapshot carried one this drew
+ * every part's ink in the top silkscreen colour, so a part on the back of the
+ * board looked like a part on the front whose pads had gone to the wrong
+ * layer.
+ *
+ * Exported because that decision is the thing worth pinning, and the functions
+ * around it need a DOM to run.
+ */
+export function componentSilkColor(comp: ComponentInfo, config: RenderConfig): string {
+  return comp.side === 'bottom' ? LAYER_COLORS.bottom_silk : config.layerColors.silkscreen;
+}
+
 function drawComponent(
   ctx: CanvasRenderingContext2D, vp: Viewport, comp: ComponentInfo,
   layers: LayerVisibility, isSelected: boolean,
@@ -843,10 +859,16 @@ function drawComponent(
 
   // Silkscreen: draw real silk shapes or body outline fallback.
   // Silk is visible at all zoom levels (unlike refdes text which needs Medium LOD).
+  //
+  // A part on the back of the board prints its legend on the back, and until
+  // the snapshot carried a side this drew every part's ink in the top
+  // silkscreen colour - so a bottom part looked like a top part with its pads
+  // on the wrong layer.
+  const silkColor = componentSilkColor(comp, config);
   if (comp.silk && comp.silk.length > 0) {
-    drawSilkShapes(ctx, vp, comp, config);
+    drawSilkShapes(ctx, vp, comp, config, silkColor);
   } else if (lodTier >= LodTier.Medium && comp.body_width_nm > 0 && comp.body_height_nm > 0) {
-    drawBodyOutline(ctx, vp, comp, config);
+    drawBodyOutline(ctx, vp, comp, config, silkColor);
   }
 }
 
@@ -857,6 +879,7 @@ function drawComponent(
 function drawBodyOutline(
   ctx: CanvasRenderingContext2D, vp: Viewport,
   comp: ComponentInfo, config: RenderConfig,
+  color: string = config.layerColors.silkscreen,
 ): void {
   const [sx, sy] = worldToScreen(vp, comp.x_nm, comp.y_nm);
   const w = comp.body_width_nm * vp.scale;
@@ -866,7 +889,7 @@ function drawBodyOutline(
   ctx.save();
   ctx.translate(sx, sy);
   ctx.rotate(-radians); // screen Y-down
-  ctx.strokeStyle = config.layerColors.silkscreen;
+  ctx.strokeStyle = color;
   ctx.lineWidth = 1.5;
   ctx.setLineDash([4, 3]); // dashed to distinguish from copper
   ctx.strokeRect(-w / 2, -h / 2, w, h);
@@ -881,6 +904,7 @@ function drawBodyOutline(
 function drawSilkShapes(
   ctx: CanvasRenderingContext2D, vp: Viewport,
   comp: ComponentInfo, _config: RenderConfig,
+  color: string = '#FFFFFF',
 ): void {
   if (!comp.silk || comp.silk.length === 0) return;
 
@@ -889,7 +913,7 @@ function drawSilkShapes(
   const sinR = Math.sin(radians);
 
   ctx.save();
-  ctx.strokeStyle = '#FFFFFF';
+  ctx.strokeStyle = color;
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
 
