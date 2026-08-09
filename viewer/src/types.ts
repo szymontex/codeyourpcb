@@ -166,7 +166,10 @@ export interface PadInfo {
   height_nm: number;
   shape: string;
   layer_mask: number;
+  /** Narrow dimension of the hole, which for a round one is its diameter. */
   drill_nm: number | null;
+  /** `[width, height]` when the hole is a slot, milled rather than drilled. */
+  slot_nm?: [number, number] | null;
 }
 
 export interface NetInfo {

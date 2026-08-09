@@ -1150,23 +1150,43 @@ export function drawPad(
       ctx.fillRect(-width / 2, -height / 2, width, height);
   }
 
-  // Drill hole for through-hole pads
+  // Drill hole for through-hole pads.
+  //
+  // A slot is milled along its length rather than drilled, so it is drawn as
+  // the oblong it is. Drawing it as a circle of its narrow dimension - which
+  // is what happened until the model could tell the two apart - shows a
+  // designer a hole their connector does not fit, on a board whose files
+  // carry the slot correctly.
   if (pad.drill_nm) {
+    const slot = pad.slot_nm && pad.slot_nm[0] !== pad.slot_nm[1] ? pad.slot_nm : null;
     const drillRadius = pad.drill_nm * vp.scale / 2;
     if (drillRadius > 0.5) {
-      // Dark drill hole
       ctx.fillStyle = LAYER_COLORS.drill;
-      ctx.beginPath();
-      ctx.arc(0, 0, drillRadius, 0, Math.PI * 2);
-      ctx.fill();
+      if (slot) {
+        const holeWidth = slot[0] * vp.scale;
+        const holeHeight = slot[1] * vp.scale;
+        drawOblong(ctx, -holeWidth / 2, -holeHeight / 2, holeWidth, holeHeight);
+        ctx.fill();
+      } else {
+        ctx.beginPath();
+        ctx.arc(0, 0, drillRadius, 0, Math.PI * 2);
+        ctx.fill();
+      }
 
       // Plating ring
       if (drillRadius > 2) {
         ctx.strokeStyle = '#8A7A50';
         ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.arc(0, 0, drillRadius + 0.5, 0, Math.PI * 2);
-        ctx.stroke();
+        if (slot) {
+          const ringWidth = slot[0] * vp.scale + 1;
+          const ringHeight = slot[1] * vp.scale + 1;
+          drawOblong(ctx, -ringWidth / 2, -ringHeight / 2, ringWidth, ringHeight);
+          ctx.stroke();
+        } else {
+          ctx.beginPath();
+          ctx.arc(0, 0, drillRadius + 0.5, 0, Math.PI * 2);
+          ctx.stroke();
+        }
       }
     }
   }

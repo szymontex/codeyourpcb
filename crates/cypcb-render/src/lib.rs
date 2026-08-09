@@ -1457,7 +1457,7 @@ impl PcbEngine {
                 position: Point::new(Nm(pad.x_nm), Nm(pad.y_nm)),
                 size: (Nm(pad.width_nm), Nm(pad.height_nm)),
                 drill: pad.drill_nm.map(Nm),
-                slot: None,
+                slot: pad.slot_nm.map(|(w, h)| (Nm(w), Nm(h))),
                 layers,
             });
         }
@@ -1590,6 +1590,7 @@ impl PcbEngine {
                         shape: pad_shape_to_string(&pad.shape),
                         layer_mask,
                         drill_nm,
+                        slot_nm: pad.slot.map(|(w, h)| (w.0, h.0)),
                     });
                 }
             }

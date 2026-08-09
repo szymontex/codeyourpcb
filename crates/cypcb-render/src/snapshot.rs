@@ -300,7 +300,21 @@ pub struct PadInfo {
     /// Copper layer bit mask (bit 0 = top, bit 1 = bottom, bits 2-31 = inner).
     pub layer_mask: u32,
     /// Drill diameter in nanometers (None for SMD pads).
+    ///
+    /// For a slot this is the narrow dimension, the same number the drill
+    /// file's tool table carries.
     pub drill_nm: Option<i64>,
+    /// The hole's full size when it is a slot, `[width, height]` in nanometers.
+    ///
+    /// Absent for a round hole, which is nearly every hole on nearly every
+    /// board - and absent from the JSON entirely, so a snapshot written before
+    /// slots existed still reads.
+    ///
+    /// The screen is the last place a slot could still look like something it
+    /// is not: the files carry it, and a viewer drawing a 2.4x1.0mm slot as a
+    /// 1mm circle shows a designer a hole their connector will not fit.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub slot_nm: Option<(i64, i64)>,
 }
 
 /// Net information.
@@ -456,6 +470,7 @@ mod tests {
                         shape: "rect".to_string(),
                         layer_mask: 1,
                         drill_nm: None,
+                        slot_nm: None,
                     },
                     PadInfo {
                         number: "2".to_string(),
@@ -466,6 +481,7 @@ mod tests {
                         shape: "rect".to_string(),
                         layer_mask: 1,
                         drill_nm: None,
+                        slot_nm: None,
                     },
                 ],
                 body_width_nm: 1_000_000,
