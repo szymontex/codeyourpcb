@@ -390,6 +390,14 @@ Routing workflow:
 
 **Dependencies**: `async-trait`, `cfg-if`, platform-specific crates
 
+**How much of it is reachable**: one module of four. `src-tauri` is its only
+dependant and imports `Menu`, `MenuBar` and `MenuItem`; the file, storage and
+dialog modules - about 850 of its 1,300 lines - have no caller anywhere in the
+workspace, and the crate that would use them is the one nothing in this
+container compiles (it needs system GTK). What the viewer actually does for
+files and storage it does in TypeScript. This is the whole of what decision D3
+is about, measured rather than remembered.
+
 
 **Features**:
 - `desktop`: Tauri-specific features
@@ -411,13 +419,20 @@ WASM constraints:
 
 **Key Calculations**:
 - IPC-2221 trace width for current capacity
-- Microstrip/stripline impedance
-- Thermal resistance (junction to ambient)
+
+The list here used to name microstrip and stripline impedance and a thermal
+resistance calculation. The crate is `trace_width.rs` and a twenty-four line
+`lib.rs`; the word `impedance` appears once, in a comment saying it is future
+work. Both were features the document claimed and the code never had.
 
 **Dependencies**: `cypcb-core`
 
-
-Utility crate with no external dependencies beyond core types.
+**How much of it is reachable**: the checker, the language server and the
+engine all call one entry point, `TraceWidthCalculator::min_width_for_current`.
+The builder around it - temperature rise, ambient temperature, copper weight -
+is reachable only through `calculate`, which the design rule check started
+using on 2026-08-10 so it could read the fab's copper weight and say what the
+width it asks for assumed. The warning type it returns is read by nobody.
 
 ### cypcb-watcher
 
