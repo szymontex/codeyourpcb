@@ -22,6 +22,7 @@ use std::fmt::Write as _;
 
 use cypcb_core::Nm;
 use cypcb_world::components::trace::{Trace, Via};
+use cypcb_world::components::zone::{Zone, ZoneKind};
 use cypcb_world::components::{
     FootprintRef, Layer, NetConnections, PadShape, Position, RefDes, Rotation, Value,
 };
@@ -163,6 +164,7 @@ pub fn write_board(world: &mut BoardWorld, generator: &str) -> String {
 
     write_footprints(world, &net_number, &mut out);
     write_copper(world, &net_number, &mut out);
+    write_zones(world, &net_number, &mut out);
 
     let _ = writeln!(out, ")");
     out
@@ -314,6 +316,101 @@ fn write_footprints(
 
         let _ = writeln!(out, "  )");
     }
+}
+
+/// Copper pours and keepouts, as KiCad states them.
+///
+/// A ground plane is close to every two-layer board anybody makes, and this
+/// file carried none: a design with `zone gnd_pour { ... }` exported eight
+/// lines of geometry and no plane at all. The board opened in KiCad without
+/// its ground, which is the same silence the Gerber writer had before the
+/// pour was implemented.
+///
+/// The shape is the one this project's own KiCad reader accepts, and its
+/// fixture is the authority for it: a net number and name, a layer, a filled
+/// polygon of points. A zone spanning two layers becomes one `(zone ...)` per
+/// layer, which is how KiCad stores it - `(layers ...)` on a zone is for
+/// keepouts and rule areas rather than for a pour.
+fn write_zones(
+    world: &mut BoardWorld,
+    net_number: &std::collections::HashMap<cypcb_world::NetId, usize>,
+    out: &mut String,
+) {
+    let zones: Vec<Zone> = {
+        let ecs = world.ecs_mut();
+        let mut query = ecs.query::<&Zone>();
+        query.iter(ecs).cloned().collect()
+    };
+
+    for zone in zones {
+        let net = zone
+            .net
+            .and_then(|id| net_number.get(&id).copied())
+            .unwrap_or(0);
+        let net_name = zone
+            .net
+            .and_then(|id| world.net_name(id))
+            .unwrap_or_default();
+
+        for layer in copper_layers_of(zone.layer_mask) {
+            let keepout = matches!(zone.kind, ZoneKind::Keepout);
+            let _ = writeln!(out, "  (zone");
+            let _ = writeln!(out, "    (net {net})");
+            let _ = writeln!(out, "    (net_name \"{net_name}\")");
+            let _ = writeln!(out, "    (layer \"{layer}\")");
+            if let Some(name) = &zone.name {
+                let _ = writeln!(out, "    (name \"{name}\")");
+            }
+            let _ = writeln!(out, "    (hatch edge 0.5)");
+            if keepout {
+                // A keepout is an area rule rather than copper: KiCad calls it
+                // a zone with nothing allowed in it, and fills nothing.
+                let _ = writeln!(
+                    out,
+                    "    (keepout (tracks not_allowed) (vias not_allowed) (pads not_allowed) (copperpour not_allowed) (footprints not_allowed))"
+                );
+            } else {
+                let _ = writeln!(out, "    (connect_pads (clearance 0.5))");
+                let _ = writeln!(out, "    (min_thickness 0.25)");
+                let _ = writeln!(
+                    out,
+                    "    (fill yes (thermal_gap 0.5) (thermal_bridge_width 0.5))"
+                );
+            }
+            let _ = writeln!(out, "    (polygon");
+            let _ = writeln!(
+                out,
+                "      (pts (xy {} {}) (xy {} {}) (xy {} {}) (xy {} {}))",
+                mm(zone.bounds.min.x),
+                mm(zone.bounds.min.y),
+                mm(zone.bounds.max.x),
+                mm(zone.bounds.min.y),
+                mm(zone.bounds.max.x),
+                mm(zone.bounds.max.y),
+                mm(zone.bounds.min.x),
+                mm(zone.bounds.max.y),
+            );
+            let _ = writeln!(out, "    )");
+            let _ = writeln!(out, "  )");
+        }
+    }
+}
+
+/// The copper layers a zone's mask names, in order from the top.
+fn copper_layers_of(mask: u32) -> Vec<String> {
+    let mut layers = Vec::new();
+    if mask & 0b01 != 0 {
+        layers.push("F.Cu".to_string());
+    }
+    if mask & 0b10 != 0 {
+        layers.push("B.Cu".to_string());
+    }
+    for inner in 0..30u32 {
+        if mask & (1 << (2 + inner)) != 0 {
+            layers.push(format!("In{}.Cu", inner + 1));
+        }
+    }
+    layers
 }
 
 fn write_copper(
