@@ -31,6 +31,7 @@ import { registerDynamicFootprint, register3DModel, hasDynamicFootprint } from '
 import { initVariantPanel, hideVariants, isVariantPanelVisible, type VariantData } from './variant-panel';
 import type { VariantPreviewData } from './renderer';
 import { mergeTracesIntoDsl, syncTracesToEditor } from './trace-persist';
+import { describeViolationKind } from './violation-kinds';
 
 // WebSocket server URL for hot reload + FreeRouting.
 // Only used when `npm run start` (dev server with file watcher) is running.
@@ -1944,25 +1945,8 @@ async function init(): Promise<void> {
       return;
     }
 
-    // Human-readable descriptions and icons per violation kind
-    const kindMeta: Record<string, { icon: string; label: string }> = {
-      'clearance':           { icon: '⚡', label: 'Copper clearance' },
-      'edge-clearance':      { icon: '📐', label: 'Edge clearance' },
-      'trace-width':         { icon: '📏', label: 'Trace too narrow' },
-      'drill-size':          { icon: '🔩', label: 'Drill too small' },
-      'via-drill':           { icon: '🔩', label: 'Via drill too small' },
-      'via-diameter':        { icon: '⭕', label: 'Via too small' },
-      'annular-ring':        { icon: '🔘', label: 'Annular ring' },
-      'hole-to-hole':        { icon: '🕳️', label: 'Holes too close' },
-      'unconnected-pin':     { icon: '🔌', label: 'Unconnected pin' },
-      'keepout-violation':   { icon: '🚫', label: 'Keepout zone' },
-      'courtyard-clearance': { icon: '📦', label: 'Components overlap' },
-      'solder-mask-bridge':  { icon: '🩹', label: 'Solder mask bridge' },
-      'silk-clearance':      { icon: '🏷️', label: 'Silk over copper' },
-    };
-
     snapshot.violations.forEach((v) => {
-      const meta = kindMeta[v.kind] ?? { icon: '⚠️', label: v.kind };
+      const meta = describeViolationKind(v.kind);
 
       // Parse detail from the raw message
       const detail = formatViolationDetail(v);
