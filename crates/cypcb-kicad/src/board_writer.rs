@@ -8,15 +8,18 @@
 //! use this tool.
 //!
 //! What is written: the board outline on `Edge.Cuts`, one footprint per part
-//! with its pads and their nets, every trace as `(segment ...)`, every via as
-//! `(via ...)`, and the net list they refer to. Not written: zones, silkscreen
-//! text, 3D models, the setup block's dozens of fields. KiCad fills its own
-//! defaults for what a file leaves out, and inventing values for them here
-//! would be inventing a board.
+//! with its pads, its legend and their nets, every copper pour as a `(zone
+//! ...)`, every trace as `(segment ...)`, every via as `(via ...)`, and the net
+//! list they refer to. Not written: 3D models, and most of the setup block's
+//! dozens of fields. KiCad fills its own defaults for what a file leaves out,
+//! and inventing values for them here would be inventing a board.
 //!
-//! The file is checked the only way it can be without KiCad in the room: this
-//! project's own importer reads it back and the board that comes out is
-//! compared with the one that went in.
+//! The file is read back by this project's own importer and the board that
+//! comes out is compared with the one that went in. That is a closed loop, so
+//! it cannot catch a shape both halves agree on and KiCad does not - which is
+//! what real KiCad found on 2026-08-10: a board written here sat in the corner
+//! of the drawing sheet, and `--preset` wrote a `(setup (rules ...))` node
+//! pcbnew refuses to open at all.
 
 use std::fmt::Write as _;
 
@@ -49,6 +52,31 @@ fn mm(nm: Nm) -> String {
     } else {
         trimmed.to_string()
     }
+}
+
+/// The drawing sheet every file this writer produces says it is on.
+const SHEET_WIDTH: Nm = Nm(297_000_000);
+const SHEET_HEIGHT: Nm = Nm(210_000_000);
+
+/// Where the design's own origin lands on the drawing sheet.
+///
+/// A design counts from its own corner, and those numbers used to be written
+/// straight out - so every board opened in KiCad sat jammed into the top-left
+/// corner of an A4 sheet, with any silkscreen that overhangs the outline off
+/// the paper on negative coordinates. A board drawn in pcbnew sits on the
+/// sheet. Centre it, and keep a margin when the board is larger than the
+/// sheet rather than pushing it off the other side.
+fn sheet_origin(size: cypcb_world::BoardSize) -> cypcb_core::Point {
+    const MARGIN: i64 = 10_000_000;
+    cypcb_core::Point::new(
+        Nm(((SHEET_WIDTH.0 - size.width.0) / 2).max(MARGIN)),
+        Nm(((SHEET_HEIGHT.0 - size.height.0) / 2).max(MARGIN)),
+    )
+}
+
+/// A board coordinate, written where it lands on the sheet.
+fn on_sheet(origin: cypcb_core::Point, x: Nm, y: Nm) -> (String, String) {
+    (mm(Nm(origin.x.0 + x.0)), mm(Nm(origin.y.0 + y.0)))
 }
 
 /// Where a pad sits once its component's placement is applied.
@@ -120,6 +148,7 @@ pub fn write_board_with_rules(
         .board_info()
         .unwrap_or((cypcb_world::BoardSize::default(), Default::default()));
     let copper_layers = stack.count.max(2) as usize;
+    let origin = sheet_origin(size);
 
     // Nets, numbered the way KiCad numbers them: 0 is the unconnected net and
     // has to be there, or pcbnew refuses the file.
@@ -226,19 +255,17 @@ pub fn write_board_with_rules(
     for index in 0..corners.len() {
         let (x1, y1) = corners[index];
         let (x2, y2) = corners[(index + 1) % corners.len()];
+        let (sx1, sy1) = on_sheet(origin, x1, y1);
+        let (sx2, sy2) = on_sheet(origin, x2, y2);
         let _ = writeln!(
             out,
-            "  (gr_line (start {} {}) (end {} {}) (stroke (width 0.1) (type solid)) (layer \"Edge.Cuts\"))",
-            mm(x1),
-            mm(y1),
-            mm(x2),
-            mm(y2)
+            "  (gr_line (start {sx1} {sy1}) (end {sx2} {sy2}) (stroke (width 0.1) (type solid)) (layer \"Edge.Cuts\"))"
         );
     }
 
-    write_footprints(world, &net_number, &mut out);
-    write_copper(world, &net_number, &mut out);
-    write_zones(world, &net_number, &mut out);
+    write_footprints(world, origin, &net_number, &mut out);
+    write_copper(world, origin, &net_number, &mut out);
+    write_zones(world, origin, &net_number, &mut out);
 
     let _ = writeln!(out, ")");
     out
@@ -246,6 +273,7 @@ pub fn write_board_with_rules(
 
 fn write_footprints(
     world: &mut BoardWorld,
+    origin: cypcb_core::Point,
     net_number: &std::collections::HashMap<cypcb_world::NetId, usize>,
     out: &mut String,
 ) {
@@ -331,8 +359,8 @@ fn write_footprints(
         let _ = writeln!(
             out,
             "  (footprint \"cypcb:{library_name}\" (layer \"{face}\") (at {} {} {})",
-            mm(position.x),
-            mm(position.y),
+            on_sheet(origin, position.x, position.y).0,
+            on_sheet(origin, position.x, position.y).1,
             rotation as f64 / 1000.0
         );
         let _ = writeln!(
@@ -487,6 +515,7 @@ fn write_legend(footprint: &cypcb_world::footprint::Footprint, layer: &str, out:
 /// keepouts and rule areas rather than for a pour.
 fn write_zones(
     world: &mut BoardWorld,
+    origin: cypcb_core::Point,
     net_number: &std::collections::HashMap<cypcb_world::NetId, usize>,
     out: &mut String,
 ) {
@@ -535,14 +564,14 @@ fn write_zones(
             let _ = writeln!(
                 out,
                 "      (pts (xy {} {}) (xy {} {}) (xy {} {}) (xy {} {}))",
-                mm(zone.bounds.min.x),
-                mm(zone.bounds.min.y),
-                mm(zone.bounds.max.x),
-                mm(zone.bounds.min.y),
-                mm(zone.bounds.max.x),
-                mm(zone.bounds.max.y),
-                mm(zone.bounds.min.x),
-                mm(zone.bounds.max.y),
+                on_sheet(origin, zone.bounds.min.x, zone.bounds.min.y).0,
+                on_sheet(origin, zone.bounds.min.x, zone.bounds.min.y).1,
+                on_sheet(origin, zone.bounds.max.x, zone.bounds.min.y).0,
+                on_sheet(origin, zone.bounds.max.x, zone.bounds.min.y).1,
+                on_sheet(origin, zone.bounds.max.x, zone.bounds.max.y).0,
+                on_sheet(origin, zone.bounds.max.x, zone.bounds.max.y).1,
+                on_sheet(origin, zone.bounds.min.x, zone.bounds.max.y).0,
+                on_sheet(origin, zone.bounds.min.x, zone.bounds.max.y).1,
             );
             let _ = writeln!(out, "    )");
             let _ = writeln!(out, "  )");
@@ -569,6 +598,7 @@ fn copper_layers_of(mask: u32) -> Vec<String> {
 
 fn write_copper(
     world: &mut BoardWorld,
+    origin: cypcb_core::Point,
     net_number: &std::collections::HashMap<cypcb_world::NetId, usize>,
     out: &mut String,
 ) {
@@ -586,10 +616,10 @@ fn write_copper(
             let _ = writeln!(
                 out,
                 "  (segment (start {} {}) (end {} {}) (width {}) (layer \"{layer}\") (net {net}))",
-                mm(segment.start.x),
-                mm(segment.start.y),
-                mm(segment.end.x),
-                mm(segment.end.y),
+                on_sheet(origin, segment.start.x, segment.start.y).0,
+                on_sheet(origin, segment.start.x, segment.start.y).1,
+                on_sheet(origin, segment.end.x, segment.end.y).0,
+                on_sheet(origin, segment.end.x, segment.end.y).1,
                 mm(trace.width)
             );
         }
@@ -609,8 +639,8 @@ fn write_copper(
         let _ = writeln!(
             out,
             "  (via (at {} {}) (size {}) (drill {}) (layers \"{start}\" \"{end}\") (net {net}))",
-            mm(via.position.x),
-            mm(via.position.y),
+            on_sheet(origin, via.position.x, via.position.y).0,
+            on_sheet(origin, via.position.x, via.position.y).1,
             mm(via.outer_diameter),
             mm(via.drill)
         );

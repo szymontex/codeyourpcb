@@ -102,10 +102,14 @@ fn each_part_comes_back_on_the_face_it_left_on() {
 #[test]
 fn the_bottom_part_is_written_on_the_bottom_layer() {
     let text = written();
-    let line = text
-        .lines()
-        .find(|line| line.contains("(footprint") && line.contains("20 10"))
+    // Found by the reference it prints, not by its coordinates: a board is
+    // written where it lands on the drawing sheet, so the numbers in the file
+    // are not the numbers in the design.
+    let block = text
+        .split("  (footprint ")
+        .find(|block| block.contains("reference \"R2\""))
         .unwrap_or_else(|| panic!("R2 is not in the file:\n{text}"));
+    let line = block.lines().next().expect("a footprint has a first line");
 
     assert!(line.contains("(layer \"B.Cu\")"), "{line}");
 }

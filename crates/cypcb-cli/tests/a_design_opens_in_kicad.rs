@@ -99,13 +99,36 @@ fn a_rotated_part_keeps_its_angle() {
     let mut world = board_from(DESIGN);
     let written = cypcb_kicad::write_board(&mut world, "cypcb-test");
 
+    // Read out of the file rather than matched as a literal: a board is written
+    // where it lands on the drawing sheet, so what is fixed is the angle and
+    // the distance between the parts, not the numbers themselves.
+    let placements: Vec<(f64, f64, f64)> = written
+        .lines()
+        .filter(|line| line.contains("(footprint "))
+        .map(|line| {
+            let at = line.rsplit("(at ").next().expect("a footprint is placed");
+            let mut parts = at.trim_end_matches(')').split_whitespace();
+            let mut next = || {
+                parts
+                    .next()
+                    .and_then(|n| n.parse().ok())
+                    .unwrap_or(f64::NAN)
+            };
+            (next(), next(), next())
+        })
+        .collect();
+    assert_eq!(placements.len(), 2, "both parts are placed:\n{written}");
+
+    let (x1, y1, r1) = placements[0];
+    let (x2, y2, r2) = placements[1];
+    assert_eq!(r1, 0.0, "R1 is not turned:\n{written}");
+    assert_eq!(r2, 90.0, "R2 is turned a quarter turn:\n{written}");
     assert!(
-        written.contains("(at 30 20 90)"),
-        "R2 is placed at 30mm, 20mm turned 90 degrees:\n{written}"
-    );
-    assert!(
-        written.contains("(at 10 10 0)"),
-        "R1 is placed at 10mm, 10mm and not turned:\n{written}"
+        (x2 - x1 - 20.0).abs() < 0.001 && (y2 - y1 - 10.0).abs() < 0.001,
+        "the design puts R2 20mm right and 10mm below R1, and the file has \
+         {}mm and {}mm:\n{written}",
+        x2 - x1,
+        y2 - y1
     );
 }
 
@@ -155,13 +178,42 @@ fn a_board_that_is_not_a_rectangle_is_written_as_the_shape_it_is() {
     let mut world = board_from(&source);
     let written = cypcb_kicad::write_board(&mut world, "cypcb-test");
 
-    let edges = written.matches("(layer \"Edge.Cuts\")").count();
+    let edges: Vec<(f64, f64, f64, f64)> = written
+        .lines()
+        .filter(|line| line.contains("(layer \"Edge.Cuts\")"))
+        .map(|line| {
+            let numbers: Vec<f64> = line
+                .split(|c: char| !(c.is_ascii_digit() || c == '.' || c == '-'))
+                .filter(|token| !token.is_empty())
+                .filter_map(|token| token.parse().ok())
+                .collect();
+            (numbers[0], numbers[1], numbers[2], numbers[3])
+        })
+        .collect();
     assert_eq!(
-        edges, 8,
+        edges.len(),
+        8,
         "the outline has eight corners, so it is eight lines, not four:\n{written}"
     );
+
+    // The shape, read back where the design draws it: the board is written
+    // onto the drawing sheet, so its corner is not at 0,0 in the file.
+    let left = edges
+        .iter()
+        .flat_map(|(x1, _, x2, _)| [*x1, *x2])
+        .fold(f64::MAX, f64::min);
+    let top = edges
+        .iter()
+        .flat_map(|(_, y1, _, y2)| [*y1, *y2])
+        .fold(f64::MAX, f64::min);
+    let slot_wall = edges.iter().any(|(x1, y1, x2, y2)| {
+        (x1 - left - 25.0).abs() < 0.001
+            && (x2 - left - 25.0).abs() < 0.001
+            && (y1 - top - 30.0).abs() < 0.001
+            && (y2 - top - 10.0).abs() < 0.001
+    });
     assert!(
-        written.contains("(start 25 30) (end 25 10)"),
+        slot_wall,
         "the slot's wall is part of the board's edge:\n{written}"
     );
 }
