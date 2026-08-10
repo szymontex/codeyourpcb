@@ -52,6 +52,11 @@ export interface AppSettings {
   ratsnestVisible: boolean;
   /** Whether net labels are visible */
   netLabelsVisible: boolean;
+  /// Colour traces by the net they carry, rather than by the copper layer they
+  /// are on. Net colours say what is connected to what; layer colours say which
+  /// side of the board a trace is on, which is the question every other PCB
+  /// tool answers by colour and this one could not answer at all.
+  traceColorByNet: boolean;
   /** Layer color overrides */
   layerColors: LayerColors;
   /** Autorouter tuning parameters */
@@ -83,6 +88,7 @@ export const DEFAULT_SETTINGS: Readonly<AppSettings> = {
   gridVisible: true,
   ratsnestVisible: true,
   netLabelsVisible: true,
+  traceColorByNet: true,
   layerColors: {
     topCopper: LAYER_COLORS.top_copper,
     bottomCopper: LAYER_COLORS.bottom_copper,

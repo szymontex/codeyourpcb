@@ -549,7 +549,7 @@ function drawPour(
   }
 }
 
-function drawTrace(
+export function drawTrace(
   ctx: CanvasRenderingContext2D, vp: Viewport, trace: TraceInfo, layers: LayerVisibility,
   colorByNet: boolean, selectedTraceId: number | null, hoveredTraceId: number | null,
   highlightedNet: string | null,

@@ -227,6 +227,7 @@ async function init(): Promise<void> {
   // and until this switch existed there was no way for a person to turn it off.
   const innerLayerCb = document.getElementById('layer-inner') as HTMLInputElement;
   const ratsnestCb = document.getElementById('layer-ratsnest') as HTMLInputElement;
+  const colorByNetCb = document.getElementById('view-color-by-net') as HTMLInputElement;
   const gridVisibleCb = document.getElementById('view-grid-visible') as HTMLInputElement;
   const netLabelsCb = document.getElementById('view-net-labels') as HTMLInputElement;
   const viewMenuBtn = document.getElementById('view-menu-btn') as HTMLButtonElement;
@@ -299,7 +300,12 @@ async function init(): Promise<void> {
   let showRatsnest = getPreference('ratsnestVisible');
   let gridVisible = getPreference('gridVisible');
   let showNetLabels = getPreference('netLabelsVisible');
-  const colorByNet = true;
+  // Net colours say what is connected to what; layer colours say which side of
+  // the board a trace is on. This was a `const true` in three places, so the
+  // layer colours `getTraceColor` defines were unreachable for traces and the
+  // screen could not answer "which layer is this on" at all - the one question
+  // every other PCB tool answers by colour.
+  let colorByNet = getPreference('traceColorByNet');
   let selectedTraceId: number | null = null;
   let hoveredTraceId: number | null = null;
   let labelPosition: { x: number; y: number } | null = null;
@@ -497,11 +503,17 @@ async function init(): Promise<void> {
     setPreference('netLabelsVisible', netLabelsCb.checked);
     dirty = true;
   });
+  colorByNetCb.addEventListener('change', () => {
+    colorByNet = colorByNetCb.checked;
+    setPreference('traceColorByNet', colorByNetCb.checked);
+    dirty = true;
+  });
 
   // Initialize View menu checkboxes from settings
   gridVisibleCb.checked = gridVisible;
   netLabelsCb.checked = showNetLabels;
   ratsnestCb.checked = getPreference('ratsnestVisible');
+  colorByNetCb.checked = colorByNet;
 
   // Undo and redo, in one place.
   //
