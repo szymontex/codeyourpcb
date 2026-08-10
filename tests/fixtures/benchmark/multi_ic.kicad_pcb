@@ -134,7 +134,6 @@
     (stroke (width 0.05) (type default))
   )
 
-  ; -- U1: STM32F407VGT6 (LQFP-100) --
   (footprint "Package_QFP:LQFP-100_14x14mm_P0.5mm"
     (layer "F.Cu")
     (at 100 70 0)
@@ -243,7 +242,6 @@
     (pad "100" smd rect (at -6.0 -8.0) (size 0.3 1.2) (layers "F.Cu" "F.Paste" "F.Mask") (net 2 "GND"))
   )
 
-  ; -- U2: LAN8720A Ethernet PHY (QFN-24) --
   (footprint "Package_DFN_QFN:QFN-24-1EP_4x4mm_P0.5mm_EP2.6x2.6mm"
     (layer "F.Cu")
     (at 130 60)
@@ -277,7 +275,6 @@
     (pad "25" smd rect (at 0 0) (size 2.6 2.6) (layers "F.Cu" "F.Paste" "F.Mask") (net 2 "GND"))
   )
 
-  ; -- U3: W25Q32 SPI Flash (SOIC-8) --
   (footprint "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm"
     (layer "F.Cu")
     (at 130 85)
@@ -294,7 +291,6 @@
     (pad "8" smd rect (at 2.7 -1.905) (size 1.5 0.6) (layers "F.Cu" "F.Paste" "F.Mask") (net 1 "VCC_3V3"))
   )
 
-  ; -- U4: AMS1117-3.3 voltage regulator --
   (footprint "Package_TO_SOT_SMD:SOT-223-3_TabPin2"
     (layer "F.Cu")
     (at 65 45)
@@ -307,7 +303,6 @@
     (pad "4" smd rect (at 0 -3.15) (size 3.8 1.5) (layers "F.Cu" "F.Paste" "F.Mask") (net 1 "VCC_3V3"))
   )
 
-  ; -- U5: AP2112K-1.8 (1.8V LDO) --
   (footprint "Package_TO_SOT_SMD:SOT-23-5"
     (layer "F.Cu")
     (at 65 60)
@@ -321,7 +316,6 @@
     (pad "5" smd rect (at 1.1 0.95) (size 0.6 1.1) (layers "F.Cu" "F.Paste" "F.Mask") (net 4 "VCC_1V8"))
   )
 
-  ; -- U6: SN65HVD230 CAN transceiver --
   (footprint "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm"
     (layer "F.Cu")
     (at 65 85)
@@ -338,7 +332,6 @@
     (pad "8" smd rect (at 2.7 -1.905) (size 1.5 0.6) (layers "F.Cu" "F.Paste" "F.Mask") (net 1 "VCC_3V3"))
   )
 
-  ; -- U7: USBLC6-2SC6 USB ESD --
   (footprint "Package_TO_SOT_SMD:SOT-23-6"
     (layer "F.Cu")
     (at 75 90)
@@ -353,7 +346,6 @@
     (pad "6" smd rect (at 1.1 0.95) (size 0.6 1.2) (layers "F.Cu" "F.Paste" "F.Mask") (net 5 "USB_DP"))
   )
 
-  ; -- J1: USB-C connector --
   (footprint "Connector_USB:USB_C_Receptacle_HRO_TYPE-C-31-M-12"
     (layer "F.Cu")
     (at 55 90)
@@ -370,7 +362,6 @@
     (pad "S2" thru_hole oval (at 4.32 0) (size 1.0 1.0) (drill 0.65) (layers "*.Cu" "*.Mask") (net 2 "GND"))
   )
 
-  ; -- J2: RJ45 Ethernet Jack --
   (footprint "Connector_RJ:RJ45_Amphenol_54602-x08_Horizontal"
     (layer "F.Cu")
     (at 140 40)
@@ -389,7 +380,6 @@
     (pad "S2" thru_hole oval (at 7.62 6.0) (size 2.3 2.3) (drill 1.6) (layers "*.Cu" "*.Mask") (net 2 "GND"))
   )
 
-  ; -- J3: SWD Header --
   (footprint "Connector_PinHeader_1.27mm:PinHeader_2x05_P1.27mm_Vertical"
     (layer "F.Cu")
     (at 145 100)
@@ -408,7 +398,6 @@
     (pad "10" thru_hole oval (at 1.27 5.08) (size 0.85 0.85) (drill 0.5) (layers "*.Cu" "*.Mask") (net 7 "NRST"))
   )
 
-  ; -- J4: CAN Header --
   (footprint "Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical"
     (layer "F.Cu")
     (at 55 75)
@@ -421,7 +410,6 @@
     (pad "4" thru_hole oval (at 0 7.62) (size 1.7 1.7) (drill 1.0) (layers "*.Cu" "*.Mask") (net 94 "CAN_RX"))
   )
 
-  ; -- J5: UART1 Header --
   (footprint "Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical"
     (layer "F.Cu")
     (at 55 55)
@@ -434,7 +422,6 @@
     (pad "4" thru_hole oval (at 0 7.62) (size 1.7 1.7) (drill 1.0) (layers "*.Cu" "*.Mask") (net 83 "UART1_RX"))
   )
 
-  ; -- Y1: 8MHz crystal --
   (footprint "Crystal:Crystal_SMD_HC49-SD"
     (layer "F.Cu")
     (at 81 61)
@@ -445,7 +432,6 @@
     (pad "2" smd rect (at 5.7 0) (size 1.5 1.8) (layers "F.Cu" "F.Paste" "F.Mask") (net 92 "OSC_OUT"))
   )
 
-  ; -- Y2: 25MHz crystal for Ethernet --
   (footprint "Crystal:Crystal_SMD_2012-2Pin_2.0x1.2mm"
     (layer "F.Cu")
     (at 135 50)
@@ -636,7 +622,6 @@
       (roundrect_rratio 0.25) (net 2 "GND"))
   )
 
-  ; -- C16: Bulk input cap --
   (footprint "Capacitor_SMD:C_0805_2012Metric"
     (layer "F.Cu")
     (at 60 45)
@@ -649,7 +634,6 @@
       (roundrect_rratio 0.25) (net 2 "GND"))
   )
 
-  ; -- C17: Bulk output cap --
   (footprint "Capacitor_SMD:C_0805_2012Metric"
     (layer "F.Cu")
     (at 70 45)
@@ -878,7 +862,6 @@
       (roundrect_rratio 0.25) (net 2 "GND"))
   )
 
-  ; -- FB1: Ferrite bead for VDDA --
   (footprint "Inductor_SMD:L_0402_1005Metric"
     (layer "F.Cu")
     (at 105 80)
@@ -891,7 +874,6 @@
       (roundrect_rratio 0.25) (net 86 "VDDA"))
   )
 
-  ; -- SW1: Reset button --
   (footprint "Button_Switch_SMD:SW_SPST_B3U-1000P"
     (layer "F.Cu")
     (at 95 90)
@@ -902,7 +884,6 @@
     (pad "2" smd rect (at 1.7 0) (size 0.9 1.7) (layers "F.Cu" "F.Paste" "F.Mask") (net 2 "GND"))
   )
 
-  ; -- T1: Ethernet magnetics --
   (footprint "Transformer_SMD:Transformer_Ethernet_Wuerth_749010012A"
     (layer "F.Cu")
     (at 140 55)
@@ -919,7 +900,6 @@
     (pad "8" smd rect (at 5.0 -2.5) (size 0.8 1.4) (layers "F.Cu" "F.Paste" "F.Mask") (net 1 "VCC_3V3"))
   )
 
-  ; -- Reference routing --
 
 
 )

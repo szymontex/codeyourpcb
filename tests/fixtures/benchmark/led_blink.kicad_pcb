@@ -148,6 +148,5 @@
 
 
 
-  ; One real trace: R1 pad 2 to D1 pad 1, both on LED_ANODE.
   (segment (start 120.48 65) (end 124.25 65) (width 0.25) (layer "F.Cu") (net 3))
 )
