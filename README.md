@@ -80,7 +80,7 @@ An LLM can generate this, review it, refactor it, and catch mistakes — just li
 
 | Feature | Status |
 |---------|--------|
-| `.cypcb` DSL with Tree-sitter parser | Done |
+| `.cypcb` DSL, read by a hand-written Rust parser | Done — the default since the C parser stopped reaching WASM; `--features tree-sitter-parser` builds the grammar instead and a differential test reads every example with both and compares the ASTs. `docs/one-parser.md` has the measurement behind the choice |
 | Live preview — save file, board updates instantly | Done |
 | 2D renderer (KiCad-style) | Done |
 | 3D viewer — extruded copper, solder mask, round trace caps | Done |
@@ -99,11 +99,11 @@ An LLM can generate this, review it, refactor it, and catch mistakes — just li
 | Project manager with templates | Done |
 | Dark / Light theme | Done |
 | Web app (WASM) | Done |
-| Desktop app (Tauri v2) | Builds on macOS and Windows; the Linux build needs GTK/webkit dev packages and is excluded from CI |
+| Desktop app (Tauri v2) | Builds on macOS and Windows; the Linux build needs the GTK/webkit dev packages listed under Quick Start. Nothing here runs in CI, because there is none |
 | Autorouter — PathFinder negotiated congestion, multi-layer | Routes the benchmark boards complete; **the toolbar button is hidden** while routing quality is worked on |
 | KiCad component library import | Done |
-| KiCad `.kicad_pcb` import | Done — `cypcb parse-kicad`, used by the routing benchmarks |
-| KiCad `.kicad_pcb` export | Done — `cypcb to-kicad --preset <fab>` writes the outline, a footprint per part with its pads, nets and the face it is soldered to, every trace and via, the net list, every copper pour and keepout, the board thickness the design states, and a legend per part - its own artwork when the footprint has any, its courtyard outline when it does not, the same rule the Gerber writer follows. Free silkscreen text and 3D models are not written; KiCad fills its own defaults for what a file leaves out |
+| KiCad `.kicad_pcb` import | Done — `cypcb parse-kicad`, used by the routing benchmarks. Reads KiCad 5 through 10, including the tableless net form KiCad 10 introduced, where a pad names its net directly instead of pointing into a table |
+| KiCad `.kicad_pcb` export | Done — `cypcb to-kicad --preset <fab>` writes the outline, a footprint per part with its pads, nets and the face it is soldered to, every trace and via, the net list, every copper pour and keepout, the board thickness the design states, and a legend per part - its own artwork when the footprint has any, its courtyard outline when it does not, the same rule the Gerber writer follows. Free silkscreen text and 3D models are not written; KiCad fills its own defaults for what a file leaves out. With `--preset` it also writes the `.kicad_pro` beside the board, because that is where KiCad keeps design rules - a board file stating them is a board file pcbnew refuses to open. Open the board through that file and KiCad's own DRC measures it against the fab the design was checked for |
 | Copper pour / ground planes | Done — a zone is filled against the copper on its layer, with the fab's clearance to foreign copper and thermal spokes to its own pads. The same geometry reaches the Gerbers, the viewer and the checker, which reports two planes shorted together and copper the fill left connected to nothing. See `examples/pour-island.cypcb` |
 | Module system — reusable circuit blocks | Done — `module` defines one, `use M as N at 10mm, 5mm` places it, modules nest. See `examples/v2-modules.cypcb` |
 | `import` — block libraries across files | Done — resolved relative to the importing file; modules, footprints and interfaces cross, a design's own board and parts do not. See `examples/v2-imports.cypcb` |
@@ -135,10 +135,10 @@ once by measuring copper instead of part bodies and once by seeing footprints
 on imported boards at all. `docs/TRACKER.md` records each change with what it
 moved.
 
-`cypcb route --in-house` routes the board eight ways and keeps the best,
-because no one setting wins everywhere - measured across these three boards,
-the winner differs on each. It costs roughly eight times the wall clock of a
-single run and buys, on `examples/blink.cypcb`, 5 violations with 3 shorts
+`cypcb route --in-house` routes the board eleven ways and keeps the best,
+because no one setting wins everywhere - measured across the six benchmark
+boards, the winner differs between them. It costs roughly eleven times the wall
+clock of a single run and buys, on `examples/blink.cypcb`, 5 violations with 3 shorts
 against 9 with 6. `--fast` routes once when the wait matters more than the
 board.
 
@@ -185,7 +185,7 @@ cargo run -p cypcb-cli -- check examples/blink.cypcb          # DRC, exit 1 on v
 cargo run -p cypcb-cli -- export examples/blink.cypcb -o out    # refuses a shorted board unless --force
 cargo run -p cypcb-cli -- route examples/blink.cypcb --variants   # route, keep the best
 cargo run -p cypcb-cli -- score examples/blink.routed.cypcb   # quality metrics as JSON
-cargo run -p cypcb-cli -- export examples/blink.cypcb         # 13 manufacturing files
+cargo run -p cypcb-cli -- export examples/blink.cypcb         # 14 manufacturing files
 cargo run -p cypcb-cli -- parse examples/blink.cypcb          # the board, as JSON
 cargo run -p cypcb-cli -- parse examples/blink.cypcb -o ast    # the AST instead
 cargo run -p cypcb-cli -- parse-kicad tests/fixtures/benchmark/led_blink.kicad_pcb   # a KiCad board
@@ -201,7 +201,7 @@ routed file that `check --preset pcbway` calls 27 violations is 27 to
 On an **unrouted** file they will not agree, and that is not a disagreement
 about the rules. `score` routes the board before measuring it, so it reports
 what its own routing came to - `examples/blink.cypcb` is 24 violations to
-`check` and 12 to `score`, because the second one laid copper first.
+`check` and 9 to `score`, because the second one laid copper first.
 
 `--preset` means two things, though, and the lists are not the same length.
 `check`, `route` and `score` take a **design-rule** preset - what a house can
@@ -245,14 +245,14 @@ During trace routing: `F` flip layer, `/` flip posture, `Q` toggle corner mode, 
 codeyourpcb/
 ├── crates/
 │   ├── cypcb-core         # Types, coordinates, units
-│   ├── cypcb-parser       # Tree-sitter grammar + AST
-│   ├── cypcb-world        # ECS board state (hecs)
+│   ├── cypcb-parser       # Rust reader (default) + Tree-sitter grammar
+│   ├── cypcb-world        # ECS board state (bevy_ecs)
 │   ├── cypcb-drc          # Design rule checks
 │   ├── cypcb-autoroute    # A*-based autorouter (WIP)
-│   ├── cypcb-router       # FreeRouting DSN bridge
+│   ├── cypcb-router       # Route application, and the DSN/SES bridge
 │   ├── cypcb-calc         # Electrical calculations (IPC-2221)
 │   ├── cypcb-export       # Gerber / Excellon / CPL export
-│   ├── cypcb-kicad        # KiCad format import
+│   ├── cypcb-kicad        # KiCad format import and export
 │   ├── cypcb-library      # Component library (SQLite + FTS5)
 │   ├── cypcb-lsp          # Language server (tower-lsp)
 │   ├── cypcb-render       # Board engine (WASM)
@@ -285,7 +285,7 @@ Where CodeYourPCB differs: own rendering engine (no KiCad dependency), runs in b
 - [Getting Started](docs/user-guide/getting-started.md)
 - [Language Syntax](docs/SYNTAX.md)
 - [Architecture](docs/architecture.md)
-- [Routing](docs/routing.md) - what the autorouter does, the two settings that pay, and the ten measured and dropped
+- [Routing](docs/routing.md) - what the autorouter does, the settings that pay, and the seventeen measured and dropped
 - [One parser](docs/one-parser.md) - why the language is read twice, what each way of fixing that costs, and which one was chosen
 - [Project Structure](docs/user-guide/project-structure.md)
 - [Library Management](docs/user-guide/library-management.md)
@@ -312,8 +312,10 @@ screen cannot disagree with the Gerber. Keepouts are outlined, and copper a
 pour left stranded is outlined too, because an island looks exactly like the
 rest of the plane.
 
-The main gaps are the autorouter's toolbar button, hidden while routing quality
-is worked on, and `interface`, which parses and does nothing.
+The main gap is the autorouter: its toolbar button stays hidden while routing
+quality is worked on. `interface` is no longer one - a module that claims an
+interface nobody defined, or claims one and does not expose all of its pins, is
+reported by name.
 
 PRs welcome.
 

@@ -681,8 +681,10 @@ never across.
 
 ## Instruments that were measured and dropped
 
-Each of these was built, measured on all three fixtures, and reverted. The
-numbers are introduced violations unless stated.
+Each of these was built, measured and reverted. The fixture set grew from three
+boards to six while this table did, so a row names the boards it was measured
+on rather than claiming a set. The numbers are introduced violations unless
+stated.
 
 | instrument | result |
 |---|---|
