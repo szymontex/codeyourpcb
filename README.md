@@ -168,6 +168,11 @@ npm start          # builds WASM + starts dev server
 
 Open http://localhost:4321 — pick a template or open a `.cypcb` file.
 
+To reach that server from another machine, name the host it will answer to:
+`CYPCB_DEV_HOSTS=board.example.lan npm start`. Vite refuses a `Host` header it
+was not told about, and the list is empty by default, so without this you get a
+bare 403 from your own dev server.
+
 ### Desktop app (Tauri)
 
 ```bash

@@ -21,7 +21,12 @@ export default defineConfig({
     port: 4321,
     host: process.env.TAURI_DEV_HOST || '0.0.0.0',
     strictPort: true,
-    allowedHosts: ['dev1.flightcore.pl', 'dev2.flightcore.pl', 'dev3.flightcore.pl', 'dev4.flightcore.pl'],
+    // Hosts the dev server answers to, beyond localhost. A board is often
+    // looked at from another machine, and Vite refuses a Host header it was
+    // not told about - but whose machines those are is the operator's business
+    // and not something a public checkout should carry. Set
+    // CYPCB_DEV_HOSTS=host1,host2 to name them; empty by default.
+    allowedHosts: (process.env.CYPCB_DEV_HOSTS ?? '').split(',').filter(Boolean),
     watch: {
       // svg-pcb and circuitron are unbuilt reference checkouts that import
       // packages this project does not depend on; scanning them kills the dev
