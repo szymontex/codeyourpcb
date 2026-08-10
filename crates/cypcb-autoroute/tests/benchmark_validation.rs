@@ -238,12 +238,20 @@ const DRC_RATCHETS: &[(&str, &str, u32, u32)] = &[
     // point: a ratchet set inside a board's measured noise fails for reasons
     // that have nothing to do with the change being tested.
     //
-    // board            routed      band   shorts band
-    // stm32_breakout   180 / 93    59     61
-    // multi_ic         291 / 187   65     56
-    // shift_driver     65 / 34     17     8
-    // qfp_fanout       309 / 147   57     44
-    // plane_board      28 / 13     0      0
+    // Re-measured 2026-08-10, after the clearance rule started measuring a
+    // trace pair from both sides. Every ratchet still holds and none moved:
+    // what moved is the routed value, by at most 13 and always inside that
+    // board's own band. The two boards whose band is zero did not move at all,
+    // which is the check that matters - on a board the router is deterministic
+    // on, a checker that had started inventing contacts would show it here.
+    //
+    // board            routed      band   shorts band   2026-08-10
+    // stm32_breakout   180 / 93    59     61            187 / 99
+    // multi_ic         291 / 187   65     56            304 / 200
+    // shift_driver     65 / 34     17     8             65 / 34
+    // qfp_fanout       309 / 147   57     44            318 / 149
+    // plane_board      28 / 13     0      0             28 / 13
+    // led_blink        2 / 0       0      0             2 / 0
     ("led_blink.kicad_pcb", "led_blink", 2, 0),
     ("stm32_breakout.kicad_pcb", "stm32_breakout", 239, 154),
     ("multi_ic.kicad_pcb", "multi_ic", 356, 243),

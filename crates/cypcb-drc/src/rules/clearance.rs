@@ -255,13 +255,49 @@ impl DrcRule for ClearanceRule {
 
                 let mut no_copper_in_reach = false;
                 let contacts: Vec<(Point, i64)> = match (trace_a, trace_b) {
-                    // Both are traces: segment-to-segment distance minus both half-widths
-                    (Some(ta), Some(tb)) => per_segment_to_trace(ta, tb)
-                        .into_iter()
-                        .map(|(at, seg_dist)| {
-                            (at, (seg_dist - ta.half_width - tb.half_width).max(0))
-                        })
-                        .collect(),
+                    // Both are traces: segment-to-segment distance minus both
+                    // half-widths, measured from both sides.
+                    //
+                    // One side is not enough, and the asymmetry was visible as
+                    // two commands disagreeing about the same board. On
+                    // examples/blink.cypcb the router lays a GND run straight
+                    // up x=22.479 and VCC crosses it twice - once with a
+                    // horizontal segment at y=21.971 and once with a diagonal
+                    // at y=24.765. Measuring per segment of GND gives that one
+                    // segment one closest approach and so reports one short;
+                    // measuring per segment of VCC gives two, because they are
+                    // two segments. Two real shorts, and which number came out
+                    // depended on which entity the spatial index happened to
+                    // hand over first - so the same board scored 4 in memory
+                    // and 5 after being written to a file and read back.
+                    (Some(ta), Some(tb)) => {
+                        let mut both: Vec<(Point, i64)> = per_segment_to_trace(ta, tb)
+                            .into_iter()
+                            .chain(per_segment_to_trace(tb, ta))
+                            .map(|(at, seg_dist)| {
+                                (at, (seg_dist - ta.half_width - tb.half_width).max(0))
+                            })
+                            .collect();
+                        // The two passes find the same contact from both ends
+                        // and each names the point on its own segment, so one
+                        // gap arrives as two points a few micrometres apart.
+                        // Two contacts closer to each other than the copper is
+                        // wide are the same contact - that is the scale the
+                        // measurement is made at, rather than a tolerance
+                        // chosen to make this case come out right.
+                        let same_contact = ta.half_width + tb.half_width;
+                        both.sort_by_key(|(at, distance)| (at.x.0, at.y.0, *distance));
+                        both.dedup_by(|(later, later_distance), (kept, kept_distance)| {
+                            let apart = (later.x.0 - kept.x.0).abs() + (later.y.0 - kept.y.0).abs();
+                            if apart <= same_contact {
+                                *kept_distance = (*kept_distance).min(*later_distance);
+                                true
+                            } else {
+                                false
+                            }
+                        });
+                        both
+                    }
                     // One is a trace, the other is a via or a component
                     (Some(t), None) => {
                         let measured = match copper_of(b_idx, entry.layer_mask, net_a) {
