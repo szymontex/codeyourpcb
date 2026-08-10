@@ -132,6 +132,16 @@ pub struct KicadDesignRules {
     pub via_drill: Nm,
     /// How far the solder mask opening extends beyond the pad, per side.
     pub mask_expansion: Nm,
+    /// Smallest hole the fab will drill at all, via or through-hole pad.
+    pub drill_size: Nm,
+    /// Closest two holes may be, edge to edge.
+    pub hole_to_hole: Nm,
+    /// Closest copper may come to the routed board edge.
+    pub edge_clearance: Nm,
+    /// Closest silkscreen may come to exposed copper.
+    pub silk_clearance: Nm,
+    /// Narrowest ring of copper left around a drilled hole.
+    pub annular_ring: Nm,
 }
 
 /// Write a board, optionally stating the rules it was checked against.
@@ -182,33 +192,26 @@ pub fn write_board_with_rules(
     let _ = writeln!(out, "  (general (thickness {thickness}))");
     let _ = writeln!(out, "  (paper \"A4\")");
 
-    // What KiCad checks the board against.
+    // What KiCad checks the board against, as much of it as belongs in a board
+    // file: the fab's own mask expansion, which was a literal 0 before.
     //
-    // There was no `(setup ...)` block at all, so a board opened in KiCad was
-    // checked against KiCad's own defaults - numbers with nothing to do with
-    // the fabricator this design was checked for. Two tools disagreeing about
-    // whether a board passes is the most visible form of the same fault this
-    // export keeps turning up.
+    // The minimums do **not** live here. They were written as a
+    // `(setup (rules (min_clearance ...) ...))` node, which is not something
+    // pcbnew has: KiCad 10.0.5 refuses the whole file with
     //
-    // Written only when the caller states a fab. `cypcb to-kicad` without
-    // `--preset` produces the file it always did: rules nobody chose are worse
-    // than no rules, because KiCad believes them.
+    //   Failed to load board: Unexpected rules in 'x.kicad_pcb', line 6, offset 6.
+    //
+    // so `--preset` produced a board nobody could open, and the closed loop of
+    // reading it back with this project's own importer said it was fine. KiCad
+    // keeps those numbers in the project file beside the board; `project.rs`
+    // writes it.
     if let Some(rules) = rules {
         let _ = writeln!(out, "  (setup");
-        // The fab's own mask expansion. This was a literal 0 - written one
-        // line under a comment about numbers KiCad believes, which is the
-        // shape of mistake that comment exists to prevent.
         let _ = writeln!(
             out,
             "    (pad_to_mask_clearance {})",
             mm(rules.mask_expansion)
         );
-        let _ = writeln!(out, "    (rules");
-        let _ = writeln!(out, "      (min_clearance {})", mm(rules.clearance));
-        let _ = writeln!(out, "      (min_track_width {})", mm(rules.track_width));
-        let _ = writeln!(out, "      (min_via_diameter {})", mm(rules.via_diameter));
-        let _ = writeln!(out, "      (min_through_hole {})", mm(rules.via_drill));
-        let _ = writeln!(out, "    )");
         let _ = writeln!(out, "  )");
     }
 

@@ -62,7 +62,7 @@ pub enum KicadPcbError {
     },
 
     /// Unsupported KiCad file version.
-    #[error("Unsupported KiCad version {version} (supported: 20171130–20250101)")]
+    #[error("Unsupported KiCad version {version} (this reader understands 20171130 and newer)")]
     UnsupportedVersion {
         /// The version number found.
         version: i64,
@@ -297,8 +297,7 @@ pub fn parse_kicad_pcb_str(content: &str) -> Result<KicadPcbParseResult, KicadPc
 
     // 2. Extract nets — build KiCad net number → name mapping
     let mut world = BoardWorld::new();
-    let mut kicad_net_map: HashMap<i64, NetId> = HashMap::new();
-    let mut net_count = 0usize;
+    let mut kicad_net_map = NetIndex::default();
 
     for elem in elements {
         if let Some(name) = list_name(elem) {
@@ -309,14 +308,21 @@ pub fn parse_kicad_pcb_str(content: &str) -> Result<KicadPcbParseResult, KicadPc
                         let net_name = get_string(&list[2]).unwrap_or_default();
                         if net_num != 0 && !net_name.is_empty() {
                             let net_id = world.intern_net(&net_name);
-                            kicad_net_map.insert(net_num, net_id);
-                            net_count += 1;
+                            kicad_net_map.by_number.insert(net_num, net_id);
+                            kicad_net_map.by_name.insert(net_name, net_id);
                         }
                     }
                 }
             }
         }
     }
+    // KiCad 10 has no table, so the names have to come off the things that
+    // carry them. Only then: a board with a table has already named every net,
+    // and walking it again reads the `(net 1)` on each segment as a name.
+    if kicad_net_map.by_number.is_empty() {
+        collect_named_nets(elements, &mut world, &mut kicad_net_map);
+    }
+    let net_count = kicad_net_map.len();
 
     // 3. Extract copper layer count
     let layer_count = extract_layer_count(elements);
@@ -430,10 +436,7 @@ pub fn parse_kicad_pcb_str(content: &str) -> Result<KicadPcbParseResult, KicadPc
         (0.0, 0.0)
     };
 
-    let net_numbers = kicad_net_map
-        .iter()
-        .map(|(number, net_id)| (*net_id, *number))
-        .collect();
+    let net_numbers = kicad_net_map.numbers();
 
     let metadata = KicadPcbMetadata {
         zone_count,
@@ -469,9 +472,99 @@ pub fn parse_kicad_pcb_str(content: &str) -> Result<KicadPcbParseResult, KicadPc
 // Internal: version extraction
 // ---------------------------------------------------------------------------
 
-/// Supported KiCad version range.
+/// The nets a board names, in both spellings KiCad has used.
+///
+/// Through KiCad 9 a board carried a numbered table at the top and everything
+/// on it referred to that table by number: `(net 1 "VCC")` in the table,
+/// `(net 1 "VCC")` on the pad. KiCad 10 dropped the table and writes the name
+/// alone - `(net "VCC")`.
+///
+/// A reader that only knows the numbered form reads a KiCad 10 board as having
+/// no nets at all, and this one did. `parse-kicad` on a board KiCad had just
+/// saved reported `net_count: 0` on every one of three test boards, so an
+/// imported board arrived with its copper unconnected and nothing said why.
+#[derive(Default)]
+pub(crate) struct NetIndex {
+    by_number: HashMap<i64, NetId>,
+    by_name: HashMap<String, NetId>,
+}
+
+impl NetIndex {
+    /// The net a `(net ...)` node refers to, whichever spelling it uses.
+    ///
+    /// The number is tried first and the name second, rather than deciding
+    /// from the token's shape: a net may legitimately be *called* `5`, and on
+    /// a board with a numbered table that name has to lose to the table.
+    fn resolve(&self, node: &Sexp) -> Option<NetId> {
+        let list = node.list().ok()?;
+        let value = list.get(1)?;
+        if let Some(number) = get_i64(value) {
+            if let Some(id) = self.by_number.get(&number) {
+                return Some(*id);
+            }
+        }
+        self.by_name.get(&get_string(value)?).copied()
+    }
+
+    /// How many nets the board names, the unconnected net excluded.
+    fn len(&self) -> usize {
+        self.by_name.len()
+    }
+
+    /// The KiCad number each net had, for the callers that write one back out.
+    fn numbers(&self) -> HashMap<NetId, i64> {
+        self.by_number
+            .iter()
+            .map(|(number, net_id)| (*net_id, *number))
+            .collect()
+    }
+}
+
+/// Walk every `(net ...)` node in the tree and name the nets it finds.
+///
+/// Only for the tableless form, and the caller checks that before calling:
+/// a two-element `(net ...)` node means two different things depending on
+/// which it is. In KiCad 10 it is `(net "VBUS")`, the name. In every earlier
+/// version - and in what this project's own writer produces - a segment and a
+/// via carry `(net 1)`, the number, and reading that as a name interns a net
+/// called "1" for every piece of copper on the board.
+fn collect_named_nets(elements: &[Sexp], world: &mut BoardWorld, index: &mut NetIndex) {
+    for elem in elements {
+        if list_name(elem).as_deref() == Some("net") {
+            if let Ok(list) = elem.list() {
+                // Two elements and not a number: `(net "VBUS")`.
+                if list.len() == 2 && get_i64(&list[1]).is_none() {
+                    if let Some(name) = get_string(&list[1]) {
+                        if !name.is_empty() && !index.by_name.contains_key(&name) {
+                            let net_id = world.intern_net(&name);
+                            index.by_name.insert(name, net_id);
+                        }
+                    }
+                }
+            }
+        }
+        if let Ok(children) = elem.list() {
+            collect_named_nets(children, world, index);
+        }
+    }
+}
+
+/// The oldest board format this reader understands.
+///
+/// There used to be an upper bound of 20250101 beside this, and on 2026-08-10
+/// it refused a board KiCad 10.0.5 had just written:
+///
+/// ```text
+/// Unsupported KiCad version 20260206 (supported: 20171130-20250101)
+/// ```
+///
+/// The file parsed perfectly once the number was changed by hand, so the gate
+/// was not protecting the reader from anything - it was guessing which
+/// versions would exist and refusing the ones it had not heard of. A newer
+/// format either still carries the nodes this reader looks for, in which case
+/// refusing it is pure loss, or it does not, in which case the shape checks
+/// below are what report it. Guessing at a ceiling does neither.
 const MIN_VERSION: i64 = 20171130; // KiCad 5
-const MAX_VERSION: i64 = 20250101; // Future KiCad 9
 
 fn extract_version(elements: &[Sexp]) -> Result<i64, KicadPcbError> {
     for elem in elements {
@@ -483,7 +576,7 @@ fn extract_version(elements: &[Sexp]) -> Result<i64, KicadPcbError> {
                             field: "version number".to_string(),
                             context: "kicad_pcb".to_string(),
                         })?;
-                        if !(MIN_VERSION..=MAX_VERSION).contains(&v) {
+                        if v < MIN_VERSION {
                             return Err(KicadPcbError::UnsupportedVersion { version: v });
                         }
                         return Ok(v);
@@ -724,7 +817,7 @@ fn parse_footprint(
     elements: &[Sexp],
     world: &mut BoardWorld,
     library: &mut FootprintLibrary,
-    kicad_net_map: &HashMap<i64, NetId>,
+    kicad_net_map: &NetIndex,
     board_origin_mm: (f64, f64),
 ) -> Result<(), KicadPcbError> {
     // First element is the library link name (e.g., "Resistor_SMD:R_0402")
@@ -926,7 +1019,7 @@ struct ParsedPad {
 
 fn parse_pad(
     elements: &[Sexp],
-    kicad_net_map: &HashMap<i64, NetId>,
+    kicad_net_map: &NetIndex,
 ) -> Result<Option<ParsedPad>, KicadPcbError> {
     // (pad "1" smd|thru_hole rect|circle|oval (at X Y) (size W H) (drill D) (layers ...) (net N "name"))
     // elements[0] = pad number
@@ -1025,14 +1118,7 @@ fn parse_pad(
                     }
                 }
                 "net" => {
-                    if let Ok(list) = prop.list() {
-                        if list.len() >= 2 {
-                            let kicad_net_num = get_i64(&list[1]).unwrap_or(0);
-                            if kicad_net_num > 0 {
-                                net_id = kicad_net_map.get(&kicad_net_num).copied();
-                            }
-                        }
-                    }
+                    net_id = kicad_net_map.resolve(prop);
                 }
                 _ => {}
             }
@@ -1095,7 +1181,7 @@ fn parse_pad(
 /// was drawn to avoid.
 fn parse_zone(
     elem: &Sexp,
-    net_map: &HashMap<i64, NetId>,
+    net_map: &NetIndex,
     origin: (f64, f64),
 ) -> Result<ZoneImport, KicadPcbError> {
     let Ok(list) = elem.list() else {
@@ -1111,13 +1197,7 @@ fn parse_zone(
     for child in &list[1..] {
         match list_name(child).as_deref() {
             Some("net") => {
-                if let Ok(net_list) = child.list() {
-                    if net_list.len() >= 2 {
-                        if let Some(number) = get_i64(&net_list[1]) {
-                            net_id = net_map.get(&number).copied();
-                        }
-                    }
-                }
+                net_id = net_map.resolve(child);
             }
             Some("net_name") => {
                 if let Ok(name_list) = child.list() {
@@ -1267,7 +1347,7 @@ fn axis_aligned_rectangle(points: &[(f64, f64)]) -> Option<Rect> {
 /// hanging off the edge.
 fn parse_segment(
     sexp: &Sexp,
-    kicad_net_map: &HashMap<i64, NetId>,
+    kicad_net_map: &NetIndex,
     origin: (f64, f64),
 ) -> Result<Option<RouteSegment>, KicadPcbError> {
     let list = match sexp.list() {
@@ -1319,13 +1399,8 @@ fn parse_segment(
                     }
                 }
                 "net" => {
-                    if let Ok(sub) = child.list() {
-                        if sub.len() >= 2 {
-                            let kicad_num = get_i64(&sub[1]).unwrap_or(0);
-                            if let Some(&id) = kicad_net_map.get(&kicad_num) {
-                                net_id = id;
-                            }
-                        }
+                    if let Some(id) = kicad_net_map.resolve(child) {
+                        net_id = id;
                     }
                 }
                 _ => {}
@@ -1347,7 +1422,7 @@ fn parse_segment(
 /// [`parse_segment`].
 fn parse_via(
     sexp: &Sexp,
-    kicad_net_map: &HashMap<i64, NetId>,
+    kicad_net_map: &NetIndex,
     origin: (f64, f64),
 ) -> Result<Option<ViaPlacement>, KicadPcbError> {
     let list = match sexp.list() {
@@ -1392,13 +1467,8 @@ fn parse_via(
                     }
                 }
                 "net" => {
-                    if let Ok(sub) = child.list() {
-                        if sub.len() >= 2 {
-                            let kicad_num = get_i64(&sub[1]).unwrap_or(0);
-                            if let Some(&id) = kicad_net_map.get(&kicad_num) {
-                                net_id = id;
-                            }
-                        }
+                    if let Some(id) = kicad_net_map.resolve(child) {
+                        net_id = id;
                     }
                 }
                 _ => {}

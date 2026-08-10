@@ -27,6 +27,7 @@ pub mod board_writer;
 pub mod footprint;
 pub mod library;
 pub mod pcb_parser;
+pub mod project;
 pub mod writer;
 
 pub use board_writer::{write_board, write_board_with_rules, KicadDesignRules};
@@ -36,3 +37,4 @@ pub use pcb_parser::{
     parse_kicad_pcb, parse_kicad_pcb_str, BenchmarkComplexity, KicadBenchmark, KicadPcbError,
     KicadPcbMetadata, KicadPcbParseResult, BENCHMARKS,
 };
+pub use project::write_project;

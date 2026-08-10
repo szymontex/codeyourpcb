@@ -85,6 +85,11 @@ impl ToKicadCommand {
                     via_diameter: rules.min_via_diameter,
                     via_drill: rules.min_via_drill,
                     mask_expansion: rules.solder_mask_expansion,
+                    drill_size: rules.min_drill_size,
+                    hole_to_hole: rules.min_hole_to_hole,
+                    edge_clearance: rules.min_edge_clearance,
+                    silk_clearance: rules.min_silk_clearance,
+                    annular_ring: rules.min_annular_ring,
                 })
             }
             None => None,
@@ -100,6 +105,30 @@ impl ToKicadCommand {
             .wrap_err_with(|| format!("Failed to write {}", output.display()))?;
 
         println!("Wrote {} ({} bytes)", output.display(), board.len());
+
+        // The rules go in the project file beside the board, because that is
+        // where KiCad reads them from. A board file stating them is a board
+        // file KiCad refuses to open.
+        if let Some(rules) = rules {
+            let project = output.with_extension("kicad_pro");
+            let stem = project
+                .file_stem()
+                .and_then(|stem| stem.to_str())
+                .unwrap_or("board");
+            let text = cypcb_kicad::write_project(rules, stem);
+            std::fs::write(&project, &text)
+                .into_diagnostic()
+                .wrap_err_with(|| format!("Failed to write {}", project.display()))?;
+
+            println!(
+                "Wrote {} ({} bytes) - open the board through this file, or KiCad checks it \
+                 against its own defaults instead of {}'s",
+                project.display(),
+                text.len(),
+                self.preset.as_deref().unwrap_or("the fab")
+            );
+        }
+
         Ok(())
     }
 }

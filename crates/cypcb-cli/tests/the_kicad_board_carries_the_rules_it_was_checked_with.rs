@@ -9,12 +9,26 @@
 //! different answer than `cypcb check` on the source, and neither tool said
 //! why.
 //!
-//! `to-kicad` was also the last command in the CLI that never asked which
-//! fabricator a board is for. `check`, `route`, `score` and `export` all take
-//! `--preset`; this one wrote a board for nobody in particular.
+//! The first fix put the numbers in the board file, as
+//! `(setup (rules (min_clearance ...) ...))`. That is not a node pcbnew has,
+//! and it was written and shipped without a KiCad to try it on. Real KiCad
+//! 10.0.5, run on 2026-08-10:
 //!
-//! Without a preset it still writes no rules, and that is deliberate: rules
-//! nobody chose are worse than none, because KiCad believes them.
+//! ```text
+//! Failed to load board: Unexpected rules in 'jlc.kicad_pcb', line 6, offset 6.
+//! ```
+//!
+//! So the flag whose whole purpose was to make the two tools agree produced a
+//! board the other tool would not open at all - and every test here passed
+//! throughout, because they read the file this project wrote with the reader
+//! this project wrote.
+//!
+//! KiCad keeps design rules in the `.kicad_pro` beside the board, under
+//! `board.design_settings.rules`. That is where they go now, and these tests
+//! read the project file for them.
+//!
+//! Without a preset neither file states any rules, and that is deliberate:
+//! rules nobody chose are worse than none, because KiCad believes them.
 
 use std::path::PathBuf;
 use std::process::Command;
@@ -32,8 +46,9 @@ component R1 resistor "0402" {
 }
 "#;
 
-/// Write the board with the given flags and hand back the file.
-fn exported(name: &str, preset: Option<&str>) -> String {
+/// Write the board with the given flags and hand back both files: the board,
+/// then the project beside it - empty when no preset was asked for.
+fn exported_pair(name: &str, preset: Option<&str>) -> (String, String) {
     let dir = std::env::temp_dir().join("cypcb-kicad-rules");
     std::fs::create_dir_all(&dir).expect("a place to work");
     let source = dir.join(format!("{name}.cypcb"));
@@ -56,7 +71,22 @@ fn exported(name: &str, preset: Option<&str>) -> String {
         String::from_utf8_lossy(&output.stderr)
     );
 
-    std::fs::read_to_string(&out).expect("the board is there")
+    let board = std::fs::read_to_string(&out).expect("the board is there");
+    let project = std::fs::read_to_string(out.with_extension("kicad_pro")).unwrap_or_default();
+    (board, project)
+}
+
+/// Just the board file.
+fn exported(name: &str, preset: Option<&str>) -> String {
+    exported_pair(name, preset).0
+}
+
+/// One number out of the project file's rules block.
+fn project_rule(text: &str, name: &str) -> String {
+    text.lines()
+        .find_map(|line| line.trim().strip_prefix(&format!("\"{name}\": ")))
+        .map(|rest| rest.trim_end_matches(',').to_string())
+        .unwrap_or_else(|| panic!("no {name} in:\n{text}"))
 }
 
 /// One number out of the `(rules ...)` block.
@@ -72,34 +102,59 @@ fn rule(text: &str, name: &str) -> String {
 fn the_board_states_the_fabs_own_numbers() {
     // JLCPCB's published minimums, the same ones `cypcb check --preset jlcpcb`
     // measures against.
-    let text = exported("jlc", Some("jlcpcb"));
+    let (board, project) = exported_pair("jlc", Some("jlcpcb"));
 
-    assert_eq!(rule(&text, "min_clearance"), "0.127");
-    assert_eq!(rule(&text, "min_track_width"), "0.127");
-    assert_eq!(rule(&text, "min_through_hole"), "0.3");
+    assert_eq!(project_rule(&project, "min_clearance"), "0.127");
+    assert_eq!(project_rule(&project, "min_track_width"), "0.127");
+    assert_eq!(project_rule(&project, "min_through_hole_diameter"), "0.3");
+
+    // And the board itself carries no rules node, whatever it carries: that
+    // node is what pcbnew refuses.
+    assert!(
+        !board.contains("(rules"),
+        "pcbnew will not open a board with this in it:\n{board}"
+    );
+}
+
+#[test]
+fn the_editors_default_trace_is_the_fabs_number_too() {
+    // A project that passes DRC and then offers a 0.2mm trace on a 0.127mm fab
+    // is the same disagreement moved one dialog along.
+    let (_, project) = exported_pair("jlc-class", Some("jlcpcb"));
+    let class = project
+        .split("\"classes\"")
+        .nth(1)
+        .expect("the project states a net class");
+
+    assert!(class.contains("\"track_width\": 0.127"), "{class}");
+    assert!(class.contains("\"clearance\": 0.127"), "{class}");
 }
 
 #[test]
 fn a_different_fab_gives_different_numbers() {
     // The point of the flag: this is not one hardcoded rule set wearing a
     // preset's name.
-    let jlcpcb = exported("jlc2", Some("jlcpcb"));
-    let other = exported("other", Some("oshpark"));
+    let jlcpcb = exported_pair("jlc2", Some("jlcpcb")).1;
+    let other = exported_pair("other", Some("oshpark")).1;
 
     assert_ne!(
-        rule(&jlcpcb, "min_clearance"),
-        rule(&other, "min_clearance"),
+        project_rule(&jlcpcb, "min_clearance"),
+        project_rule(&other, "min_clearance"),
         "two fabs, one number"
     );
 }
 
 #[test]
-fn without_a_preset_the_file_states_no_rules() {
+fn without_a_preset_neither_file_states_any_rules() {
     // Rules nobody chose are worse than none: KiCad believes them.
-    let text = exported("silent", None);
+    let (board, project) = exported_pair("silent", None);
 
-    assert!(!text.contains("(setup"), "{text}");
-    assert!(!text.contains("min_clearance"), "{text}");
+    assert!(!board.contains("(setup"), "{board}");
+    assert!(!board.contains("min_clearance"), "{board}");
+    assert!(
+        project.is_empty(),
+        "a project file was written for a board nobody chose a fab for:\n{project}"
+    );
 }
 
 #[test]

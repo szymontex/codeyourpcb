@@ -1,0 +1,152 @@
+//! The project file that carries a board's design rules into KiCad.
+//!
+//! A `.kicad_pcb` holds the board. The numbers KiCad checks it against - the
+//! narrowest trace, the smallest gap, the smallest hole - live in the
+//! `.kicad_pro` beside it, under `board.design_settings.rules`. Nothing in the
+//! board file states them, and this project spent one commit believing
+//! otherwise: `--preset` wrote a `(setup (rules ...))` node into the board, and
+//! KiCad 10.0.5 answered
+//!
+//! ```text
+//! Failed to load board: Unexpected rules in 'blink.kicad_pcb', line 6, offset 6.
+//! ```
+//!
+//! so the flag whose whole purpose was to make the two tools agree produced a
+//! file the other tool would not open at all.
+//!
+//! Measured, on `routing-test` routed and exported: without a project file
+//! KiCad reports 8 `track_width` and 1 `clearance` violations against its own
+//! factory defaults of 0.2mm; with one carrying JLCPCB's published 0.127mm,
+//! it reports none of either. The remaining warnings are silkscreen overlap
+//! and unmatched library footprints, neither of which is a design rule.
+
+use cypcb_core::Nm;
+
+use crate::board_writer::KicadDesignRules;
+
+/// Millimetres as JSON writes them.
+fn mm(nm: Nm) -> String {
+    let value = nm.0 as f64 / 1_000_000.0;
+    let text = format!("{value:.6}");
+    let trimmed = text.trim_end_matches('0').trim_end_matches('.');
+    if trimmed.is_empty() || trimmed == "-" {
+        "0".to_string()
+    } else {
+        trimmed.to_string()
+    }
+}
+
+/// The `.kicad_pro` for a board written with `rules`.
+///
+/// `stem` is the file name without its extension - KiCad stores it in `meta`
+/// and expects it to match the file it is read from.
+///
+/// Two places carry the numbers, because KiCad reads them for two different
+/// questions. `board.design_settings.rules` is what the design rule check
+/// enforces; `net_settings.classes` is what the editor hands you when you draw
+/// a new trace. A project stating only the first passes DRC and then offers a
+/// default 0.2mm trace on a board whose fab tops out at 0.127mm.
+pub fn write_project(rules: KicadDesignRules, stem: &str) -> String {
+    format!(
+        r#"{{
+  "board": {{
+    "design_settings": {{
+      "rules": {{
+        "min_clearance": {clearance},
+        "min_track_width": {track_width},
+        "min_via_diameter": {via_diameter},
+        "min_through_hole_diameter": {drill_size},
+        "min_hole_to_hole": {hole_to_hole},
+        "min_copper_edge_clearance": {edge_clearance},
+        "min_silk_clearance": {silk_clearance},
+        "min_via_annular_width": {annular_ring}
+      }}
+    }}
+  }},
+  "net_settings": {{
+    "classes": [
+      {{
+        "name": "Default",
+        "clearance": {clearance},
+        "track_width": {track_width},
+        "via_diameter": {via_diameter},
+        "via_drill": {via_drill}
+      }}
+    ],
+    "meta": {{
+      "version": 5
+    }}
+  }},
+  "meta": {{
+    "filename": "{stem}.kicad_pro",
+    "version": 3
+  }}
+}}
+"#,
+        clearance = mm(rules.clearance),
+        track_width = mm(rules.track_width),
+        via_diameter = mm(rules.via_diameter),
+        via_drill = mm(rules.via_drill),
+        drill_size = mm(rules.drill_size),
+        hole_to_hole = mm(rules.hole_to_hole),
+        edge_clearance = mm(rules.edge_clearance),
+        silk_clearance = mm(rules.silk_clearance),
+        annular_ring = mm(rules.annular_ring),
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn jlcpcb_shaped() -> KicadDesignRules {
+        KicadDesignRules {
+            clearance: Nm::from_mm(0.127),
+            track_width: Nm::from_mm(0.127),
+            via_diameter: Nm::from_mm(0.45),
+            via_drill: Nm::from_mm(0.3),
+            mask_expansion: Nm::from_mm(0.05),
+            drill_size: Nm::from_mm(0.3),
+            hole_to_hole: Nm::from_mm(0.5),
+            edge_clearance: Nm::from_mm(0.2),
+            silk_clearance: Nm::from_mm(0.15),
+            annular_ring: Nm::from_mm(0.13),
+        }
+    }
+
+    #[test]
+    fn the_numbers_are_the_fabs_own() {
+        let text = write_project(jlcpcb_shaped(), "board");
+
+        assert!(text.contains("\"min_track_width\": 0.127"), "{text}");
+        assert!(text.contains("\"min_clearance\": 0.127"), "{text}");
+        assert!(text.contains("\"min_hole_to_hole\": 0.5"), "{text}");
+        assert!(
+            text.contains("\"min_copper_edge_clearance\": 0.2"),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn the_editors_default_trace_is_the_same_number() {
+        // A project that passes DRC and then hands you a trace the fab cannot
+        // make is the same disagreement in a different place.
+        let text = write_project(jlcpcb_shaped(), "board");
+        let class = text
+            .split("\"classes\"")
+            .nth(1)
+            .expect("the project states a net class");
+
+        assert!(class.contains("\"track_width\": 0.127"), "{class}");
+        assert!(class.contains("\"clearance\": 0.127"), "{class}");
+    }
+
+    #[test]
+    fn the_file_names_itself() {
+        let text = write_project(jlcpcb_shaped(), "my-board");
+        assert!(
+            text.contains("\"filename\": \"my-board.kicad_pro\""),
+            "{text}"
+        );
+    }
+}
