@@ -1184,7 +1184,14 @@ async function init(): Promise<void> {
 
       console.log(`[TracePersist] onLoadRecent: name=${name}, source length=${source?.length}, has trace blocks=${source?.includes('trace ') && source?.includes('path ')}`);
 
-      const errors = loadDesign(source);
+      // A recent file can be a KiCad board, because the import accepts one -
+      // and this handed every stored source to the DSL reader whatever it was,
+      // so reopening a `.kicad_pcb` from its own card fed `(kicad_pcb ...)` to
+      // a parser that has never seen an s-expression. The file says which it
+      // is in its first token; nothing else has to be stored to know.
+      const isKicad = source.trimStart().startsWith('(kicad_pcb');
+      loadedKind = isKicad ? 'kicad_pcb' : 'cypcb';
+      const errors = isKicad ? engine.load_kicad(source) : loadDesign(source);
       if (errors) console.warn('[Recent] Parse warnings:', errors);
 
       lastLoadedSource = source;
@@ -1257,7 +1264,20 @@ async function init(): Promise<void> {
           const mergedSource = mergeTracesIntoDsl(currentSource, exportedTraces);
           lastLoadedSource = mergedSource;
         }
-        addRecentFile(currentFilePath, snapshot, buildRenderStateForThumbnail(), lastLoadedSource);
+        // Never over the top of a good entry with nothing. This runs every
+        // time the project manager opens, so one refresh with no source in
+        // hand - which is the state after a load that did not finish - wrote
+        // `source: null` over a board that had been stored, and every refresh
+        // after it did the same. The card then listed a board it could not
+        // open, permanently, and the only clue was a console line.
+        if (lastLoadedSource) {
+          addRecentFile(currentFilePath, snapshot, buildRenderStateForThumbnail(), lastLoadedSource);
+        } else {
+          console.warn(
+            `[ProjectManager] Not refreshing ${currentFilePath}: there is no source in hand, ` +
+              'and writing one without it would lose what is stored.',
+          );
+        }
       }
     },
     onOpenProjectFile: (_path, _name) => {
@@ -1892,8 +1912,16 @@ async function init(): Promise<void> {
 
     const ext = result.name.toLowerCase().split('.').pop();
 
-    if (ext === 'cypcb') {
-      const errors = loadDesign(result.content);
+    if (ext === 'cypcb' || ext === 'kicad_pcb') {
+      // A KiCad board arrives here too, and used to fall past every branch to
+      // `Unknown file type: .kicad_pcb` - written to a status bar the project
+      // manager overlay was covering, so the button appeared to do nothing at
+      // all. Two code paths load a file, drag-and-drop and this one; the other
+      // learned to read a KiCad board and this one did not.
+      loadedKind = ext === 'kicad_pcb' ? 'kicad_pcb' : 'cypcb';
+      const errors = loadedKind === 'kicad_pcb'
+        ? engine.load_kicad(result.content)
+        : loadDesign(result.content);
       if (errors) console.warn('Parse errors:', errors);
 
       lastLoadedSource = result.content;
@@ -1935,7 +1963,13 @@ async function init(): Promise<void> {
       dirty = true;
 
     } else {
-      statusText.textContent = `Unknown file type: .${ext}`;
+      // Said out loud, because the status bar is behind the project manager
+      // overlay at the moment a file is picked - which is how a whole file
+      // type being unsupported looked exactly like a button that does nothing.
+      const said = `Unknown file type: .${ext}`;
+      statusText.textContent = said;
+      console.error(`[Open] ${said} - nothing was loaded.`);
+      alert(said);
     }
   }
 

@@ -7,7 +7,7 @@
  * Debug surface: `window.__projectManager` exposes state for E2E tests.
  */
 
-import { getPreference, setPreference, type RecentFileEntry } from './settings';
+import { storageError, getPreference, setPreference, type RecentFileEntry } from './settings';
 import { render, type RenderState } from './renderer';
 import { createViewport, fitBoard } from './viewport';
 import { createDefaultRenderConfig, buildPadNetMap } from './render-config';
@@ -364,8 +364,31 @@ function populateRecentFiles(): void {
     item.addEventListener('click', () => {
       if (entry.source && callbacks) {
         callbacks.onLoadRecent(entry.source, entry.name);
-      } else {
-        console.log(`[ProjectManager] Recent file has no stored source: ${entry.name}`);
+        return;
+      }
+      // A card that does nothing when clicked is the worst of both: the app
+      // says the board is here and then behaves as though it is not. The
+      // source goes missing when the settings write was refused - a board of
+      // half a megabyte plus its thumbnail can put the origin over quota - and
+      // the write used to swallow that, so this was the first place anybody
+      // could notice.
+      const reason = storageError();
+      console.warn(
+        `[ProjectManager] ${entry.name} was listed without its source. ` +
+          (reason
+            ? `The browser refused to store it: ${reason.message}`
+            : 'It was listed by an older build that did not store one.'),
+      );
+      const card = item.querySelector('.pm-recent-thumb, .pm-recent-thumb-placeholder');
+      if (card instanceof HTMLElement) {
+        card.title = 'This board is listed but not stored - open the file again';
+      }
+      const note = item.querySelector('.pm-recent-unstored');
+      if (!note) {
+        const said = document.createElement('div');
+        said.className = 'pm-recent-unstored';
+        said.textContent = 'Not stored - open the file again';
+        item.appendChild(said);
       }
     });
 

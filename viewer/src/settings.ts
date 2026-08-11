@@ -146,12 +146,50 @@ function loadFromStorage(): AppSettings {
   }
 }
 
-function saveToStorage(settings: AppSettings): void {
+/**
+ * Persist the settings, and say so when that could not be done.
+ *
+ * This used to swallow the failure under a comment reading "silently degrade",
+ * and the degrading was not silent to the user - it was invisible to them and
+ * silent to us. A board is stored here with its source and a thumbnail, which
+ * for a real KiCad import is over half a megabyte; when that pushes the origin
+ * past its quota the write throws, the settings in memory and the settings on
+ * disk part company, and the next thing the user sees is a project card that
+ * opens nothing. That is exactly what happened to a 482 KB board.
+ *
+ * Returns whether the write survived, so a caller that has just promised the
+ * user something can tell them it did not happen.
+ */
+function saveToStorage(settings: AppSettings): boolean {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-  } catch {
-    // Storage full or unavailable — silently degrade
+    return true;
+  } catch (error) {
+    // Quota is the expected failure and the one worth naming; anything else
+    // (private mode, storage disabled by policy) is worth naming too.
+    const size = (() => {
+      try {
+        return JSON.stringify(settings).length;
+      } catch {
+        return -1;
+      }
+    })();
+    console.error(
+      `[Settings] Could not save ${size} bytes of settings - they are held in ` +
+        `memory only and will be lost when this tab closes.`,
+      error,
+    );
+    lastStorageError = error instanceof Error ? error : new Error(String(error));
+    return false;
   }
+}
+
+/** The last write failure, for a caller that wants to tell the user. */
+let lastStorageError: Error | null = null;
+
+/** Whatever stopped the last save, or null if the last one went through. */
+export function storageError(): Error | null {
+  return lastStorageError;
 }
 
 // ---------------------------------------------------------------------------

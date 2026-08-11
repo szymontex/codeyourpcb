@@ -47,8 +47,9 @@ function trace(id: number, layer: string, net: string): TraceInfo {
     net_name: net,
     layer,
     width: 254_000,
+    locked: false,
     segments: [
-      { start: { x: 5_000_000, y: 10_000_000 }, end: { x: 15_000_000, y: 10_000_000 } },
+      { start_x: 5_000_000, start_y: 10_000_000, end_x: 15_000_000, end_y: 10_000_000 },
     ],
   } as TraceInfo;
 }
