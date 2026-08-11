@@ -1,0 +1,404 @@
+// mains-sequencer.cypcb - eight mains outlets, switched one at a time.
+//
+// A rack power sequencer: one 230 V inlet, eight independently switched
+// outlets, relays driven by a ULN2803A from an ESP32 on a 2x10 header. Studio
+// gear wants powering in order - sources first, amplifiers last - and
+// unpowering in reverse, or the monitors thump.
+//
+// ============================================================================
+// READ THIS BEFORE BUILDING IT
+// ============================================================================
+//
+// `cypcb check` does NOT check this board for mains safety. Its `min_clearance`
+// is 0.127mm, which is what the fabricator can etch - not what 230 V needs. A
+// clean DRC report on this file says the board can be MADE, and says nothing
+// about whether it can be TOUCHED.
+//
+// The separations below are built into the geometry by hand:
+//
+//   3.0mm   between live conductors of opposite polarity (L to N, L to PE)
+//   8.0mm   between the mains zone and the logic zone, as a strip of board
+//           with no copper on either layer - x from 330mm to 338mm
+//
+// Those figures are the ones this layout was drawn to for 230 V mains, basic
+// insulation between live parts and reinforced insulation to the SELV side.
+// They have NOT been checked against IEC 60664-1 in the session that produced
+// this file. Confirm them against the standard, and against whoever signs the
+// build off, before anybody plugs it in.
+//
+// The relay is what makes the barrier real: a G2RL-1-E isolates its coil from
+// its contacts internally, so the only thing crossing the 8mm strip is the
+// coil pair of each relay. Nothing else crosses. Keep it that way.
+//
+// ============================================================================
+// POWER BUDGET - the number that decides whether this works at all
+// ============================================================================
+//
+// A G2RL-1-E with a 5 V coil draws about 106 mA. Eight of them HELD on is
+// about 850 mA, and that is a steady load, not an inrush: a sequencer's whole
+// job is to leave outlets on.
+//
+// An HLK-PM01 is 3 W at 5 V - 600 mA. It does not carry eight relays. Size the
+// coil supply for 1 A at 5 V, or use 12 V coils (G2RL-1-E-DC12, ~33 mA each,
+// 264 mA for eight) and an HLK-PM12. This design states the requirement on the
+// net rather than assuming a part: `+5V_COIL` carries 1A.
+//
+// ============================================================================
+
+version 1
+
+board mains_sequencer {
+    size 400mm x 100mm
+    layers 2
+}
+
+// ---------------------------------------------------------------------------
+// Design rules for the copper that matters
+// ---------------------------------------------------------------------------
+
+// The mains conductors carry whatever the outlet draws. 10 A is a 16 A circuit
+// derated for a 2 oz board; the width comes from IPC-2221 rather than a guess,
+// which is why the current is stated and the width is not.
+netclass Mains [current 10A clearance 3mm] {
+    L_IN
+    L_OUT1
+    L_OUT2
+    L_OUT3
+    L_OUT4
+    L_OUT5
+    L_OUT6
+    L_OUT7
+    L_OUT8
+    N
+    PE
+}
+
+// Coil current, eight of them on one rail.
+netclass CoilPower [current 1A clearance 0.5mm] {
+    P5V_COIL
+}
+
+// ---------------------------------------------------------------------------
+// Footprints, with the pad geometry of the real parts
+// ---------------------------------------------------------------------------
+
+// Omron G2RL-1-E. The datasheet gives two holes per contact so the contact
+// current is shared; both are here and both are on the same net.
+//
+// Pad numbering is this design's own, because the language numbers pads and
+// the part names them:
+//
+//   1, 2   coil A1, A2          (the SELV side - +y)
+//   3, 4   COM, both holes      (pin 11)
+//   5, 6   NC, both holes       (pin 12 - unused here)
+//   7, 8   NO, both holes       (pin 14)
+//
+// Origin is the middle of the pin field. The coil is deliberately on the +y
+// side so a relay placed here straddles the isolation strip with its coil in
+// the logic zone and its contacts in the mains zone.
+footprint RELAY_G2RL {
+    description "Omron G2RL-1-E, SPDT 16A, coil on the +y side"
+    courtyard 14mm x 30mm
+
+    pad 1 rect   at -3.75mm, 12.5mm  size 2mm x 2mm drill 1.3mm
+    pad 2 circle at  3.75mm, 12.5mm  size 2mm x 2mm drill 1.3mm
+    pad 3 circle at -3.75mm, -2.5mm  size 2mm x 2mm drill 1.3mm
+    pad 4 circle at  3.75mm, -2.5mm  size 2mm x 2mm drill 1.3mm
+    pad 5 circle at -3.75mm, 2.5mm   size 2mm x 2mm drill 1.3mm
+    pad 6 circle at  3.75mm, 2.5mm   size 2mm x 2mm drill 1.3mm
+    pad 7 circle at -3.75mm, -7.5mm  size 2mm x 2mm drill 1.3mm
+    pad 8 circle at  3.75mm, -7.5mm  size 2mm x 2mm drill 1.3mm
+}
+
+// Phoenix MKDS-1,5-3-5.08, three ways at 5.08mm, wires enter from the edge.
+footprint TERM3 {
+    description "Phoenix MKDS-1,5-3-5.08 1x03 horizontal - L, N, PE"
+    courtyard 17mm x 12mm
+
+    pad 1 rect   at -5.08mm, 0mm size 2.6mm x 2.6mm drill 1.3mm
+    pad 2 circle at 0mm, 0mm     size 2.6mm x 2.6mm drill 1.3mm
+    pad 3 circle at 5.08mm, 0mm  size 2.6mm x 2.6mm drill 1.3mm
+}
+
+// ULN2803A in DIP-18: eight Darlington sinks, pin 1 drives pin 18.
+footprint DIP18 {
+    description "DIP-18, 7.62mm rows, 2.54mm pitch"
+    courtyard 12mm x 25mm
+
+    pad 1  rect   at -3.81mm, -10.16mm size 1.6mm x 1.6mm drill 0.8mm
+    pad 2  circle at -3.81mm, -7.62mm  size 1.6mm x 1.6mm drill 0.8mm
+    pad 3  circle at -3.81mm, -5.08mm  size 1.6mm x 1.6mm drill 0.8mm
+    pad 4  circle at -3.81mm, -2.54mm  size 1.6mm x 1.6mm drill 0.8mm
+    pad 5  circle at -3.81mm, 0mm      size 1.6mm x 1.6mm drill 0.8mm
+    pad 6  circle at -3.81mm, 2.54mm   size 1.6mm x 1.6mm drill 0.8mm
+    pad 7  circle at -3.81mm, 5.08mm   size 1.6mm x 1.6mm drill 0.8mm
+    pad 8  circle at -3.81mm, 7.62mm   size 1.6mm x 1.6mm drill 0.8mm
+    pad 9  circle at -3.81mm, 10.16mm  size 1.6mm x 1.6mm drill 0.8mm
+    pad 10 circle at 3.81mm, 10.16mm   size 1.6mm x 1.6mm drill 0.8mm
+    pad 11 circle at 3.81mm, 7.62mm    size 1.6mm x 1.6mm drill 0.8mm
+    pad 12 circle at 3.81mm, 5.08mm    size 1.6mm x 1.6mm drill 0.8mm
+    pad 13 circle at 3.81mm, 2.54mm    size 1.6mm x 1.6mm drill 0.8mm
+    pad 14 circle at 3.81mm, 0mm       size 1.6mm x 1.6mm drill 0.8mm
+    pad 15 circle at 3.81mm, -2.54mm   size 1.6mm x 1.6mm drill 0.8mm
+    pad 16 circle at 3.81mm, -5.08mm   size 1.6mm x 1.6mm drill 0.8mm
+    pad 17 circle at 3.81mm, -7.62mm   size 1.6mm x 1.6mm drill 0.8mm
+    pad 18 circle at 3.81mm, -10.16mm  size 1.6mm x 1.6mm drill 0.8mm
+}
+
+// Hi-Link HLK-PMxx. Mains on one end, DC on the other, which is what puts the
+// isolation inside the module rather than on the board.
+footprint HLK_PM {
+    description "Hi-Link HLK-PMxx AC-DC module - AC at -x, DC at +x"
+    courtyard 34mm x 20mm
+
+    pad 1 rect   at -14.54mm, -2.5mm size 1.7mm x 2mm drill 1mm
+    pad 2 oblong   at -14.54mm, 2.5mm  size 1.7mm x 2mm drill 1mm
+    pad 3 oblong   at 14.54mm, -7.5mm  size 1.7mm x 2mm drill 1mm
+    pad 4 oblong   at 14.54mm, 7.5mm   size 1.7mm x 2mm drill 1mm
+}
+
+// Schurter 0031.8201, 5x20mm cartridge, laid down.
+footprint FUSE_5X20 {
+    description "Schurter 0031.8201 horizontal 5x20mm fuseholder"
+    courtyard 28mm x 10mm
+
+    pad 1 circle at -11.25mm, 0mm size 3mm x 3mm drill 1.3mm
+    pad 2 circle at 11.25mm, 0mm  size 3mm x 3mm drill 1.3mm
+}
+
+// Disc varistor, 12mm body, 7.5mm lead pitch.
+footprint VARISTOR_D12 {
+    description "Disc varistor D12mm, 7.5mm pitch - S14K275 class"
+    courtyard 14mm x 8mm
+
+    pad 1 circle at -3.75mm, 0mm size 1.8mm x 1.8mm drill 0.8mm
+    pad 2 circle at 3.75mm, 0mm  size 1.8mm x 1.8mm drill 0.8mm
+}
+
+// One row of the controller socket.
+footprint HDR10 {
+    description "1x10 pin header, 2.54mm"
+    courtyard 5mm x 27mm
+
+    pad 1  rect   at 0mm, -11.43mm size 1.7mm x 1.7mm drill 1mm
+    pad 2  circle at 0mm, -8.89mm  size 1.7mm x 1.7mm drill 1mm
+    pad 3  circle at 0mm, -6.35mm  size 1.7mm x 1.7mm drill 1mm
+    pad 4  circle at 0mm, -3.81mm  size 1.7mm x 1.7mm drill 1mm
+    pad 5  circle at 0mm, -1.27mm  size 1.7mm x 1.7mm drill 1mm
+    pad 6  circle at 0mm, 1.27mm   size 1.7mm x 1.7mm drill 1mm
+    pad 7  circle at 0mm, 3.81mm   size 1.7mm x 1.7mm drill 1mm
+    pad 8  circle at 0mm, 6.35mm   size 1.7mm x 1.7mm drill 1mm
+    pad 9  circle at 0mm, 8.89mm   size 1.7mm x 1.7mm drill 1mm
+    pad 10 circle at 0mm, 11.43mm  size 1.7mm x 1.7mm drill 1mm
+}
+
+footprint CAP_RADIAL {
+    description "Radial electrolytic, 2.5mm pitch"
+    courtyard 7mm x 7mm
+
+    pad 1 rect   at -1.25mm, 0mm size 1.6mm x 1.6mm drill 0.8mm
+    pad 2 circle at 1.25mm, 0mm  size 1.6mm x 1.6mm drill 0.8mm
+}
+
+// ---------------------------------------------------------------------------
+// The mains inlet: fuse, then varistor, then the outlets
+// ---------------------------------------------------------------------------
+
+component J_MAINS connector "TERM3" {
+    value "230V IN - L/N/PE"
+    at 14mm, 86mm
+}
+
+component F1 generic "FUSE_5X20" {
+    value "T10A 250V"
+    at 52mm, 86mm
+}
+
+// After the fuse, so a failed varistor blows the fuse instead of the wiring.
+component RV1 generic "VARISTOR_D12" {
+    value "S14K275"
+    at 92mm, 86mm
+}
+
+component PS1 generic "HLK_PM" {
+    value "HLK-PM01 5V - see the power budget above"
+    at 140mm, 86mm
+}
+
+component C1 capacitor "CAP_RADIAL" {
+    value "470uF 10V"
+    at 180mm, 86mm
+}
+
+// ---------------------------------------------------------------------------
+// Eight switched outlets
+//
+// Each channel is an inlet terminal, an outlet terminal and the relay between
+// them. Channel pitch is 41mm; the relay sits below its pair with its coil
+// pins pointing at the logic zone.
+// ---------------------------------------------------------------------------
+
+component J_IN1 connector "TERM3" { value "CH1 in"  at 20mm, 10mm }
+component J_OUT1 connector "TERM3" { value "CH1 out" at 20mm, 28mm }
+component K1 generic "RELAY_G2RL" { value "G2RL-1-E 5VDC" at 20mm, 54mm }
+
+component J_IN2 connector "TERM3" { value "CH2 in"  at 61mm, 10mm }
+component J_OUT2 connector "TERM3" { value "CH2 out" at 61mm, 28mm }
+component K2 generic "RELAY_G2RL" { value "G2RL-1-E 5VDC" at 61mm, 54mm }
+
+component J_IN3 connector "TERM3" { value "CH3 in"  at 102mm, 10mm }
+component J_OUT3 connector "TERM3" { value "CH3 out" at 102mm, 28mm }
+component K3 generic "RELAY_G2RL" { value "G2RL-1-E 5VDC" at 102mm, 54mm }
+
+component J_IN4 connector "TERM3" { value "CH4 in"  at 143mm, 10mm }
+component J_OUT4 connector "TERM3" { value "CH4 out" at 143mm, 28mm }
+component K4 generic "RELAY_G2RL" { value "G2RL-1-E 5VDC" at 143mm, 54mm }
+
+component J_IN5 connector "TERM3" { value "CH5 in"  at 184mm, 10mm }
+component J_OUT5 connector "TERM3" { value "CH5 out" at 184mm, 28mm }
+component K5 generic "RELAY_G2RL" { value "G2RL-1-E 5VDC" at 184mm, 54mm }
+
+component J_IN6 connector "TERM3" { value "CH6 in"  at 225mm, 10mm }
+component J_OUT6 connector "TERM3" { value "CH6 out" at 225mm, 28mm }
+component K6 generic "RELAY_G2RL" { value "G2RL-1-E 5VDC" at 225mm, 54mm }
+
+component J_IN7 connector "TERM3" { value "CH7 in"  at 266mm, 10mm }
+component J_OUT7 connector "TERM3" { value "CH7 out" at 266mm, 28mm }
+component K7 generic "RELAY_G2RL" { value "G2RL-1-E 5VDC" at 266mm, 54mm }
+
+component J_IN8 connector "TERM3" { value "CH8 in"  at 307mm, 10mm }
+component J_OUT8 connector "TERM3" { value "CH8 out" at 307mm, 28mm }
+component K8 generic "RELAY_G2RL" { value "G2RL-1-E 5VDC" at 307mm, 54mm }
+
+// ---------------------------------------------------------------------------
+// Logic zone - everything from x = 338mm, past the 8mm strip with no copper
+// ---------------------------------------------------------------------------
+
+component U1 ic "DIP18" {
+    value "ULN2803A"
+    at 352mm, 24mm
+}
+
+component C2 capacitor "CAP_RADIAL" {
+    value "100nF"
+    at 352mm, 42mm
+}
+
+// The controller sits across these two rows.
+component J_EXT1 connector "HDR10" {
+    value "ESP32 - left row"
+    at 372mm, 22mm
+}
+
+component J_EXT2 connector "HDR10" {
+    value "ESP32 - right row"
+    at 388mm, 22mm
+}
+
+// ---------------------------------------------------------------------------
+// Mains nets
+//
+// One neutral and one earth bus rather than eight of each: they are the same
+// conductor at every outlet, and eight parallel copies of each would be eight
+// times the copper for no electrical difference. Only the line is switched -
+// a relay must never break the protective earth.
+// ---------------------------------------------------------------------------
+
+net L_IN {
+    J_MAINS.1
+    F1.1
+}
+
+net L_FUSED {
+    F1.2
+    RV1.1
+    PS1.1
+    K1.3  K1.4
+    K2.3  K2.4
+    K3.3  K3.4
+    K4.3  K4.4
+    K5.3  K5.4
+    K6.3  K6.4
+    K7.3  K7.4
+    K8.3  K8.4
+}
+
+net N {
+    J_MAINS.2
+    RV1.2
+    PS1.2
+    J_IN1.2  J_OUT1.2
+    J_IN2.2  J_OUT2.2
+    J_IN3.2  J_OUT3.2
+    J_IN4.2  J_OUT4.2
+    J_IN5.2  J_OUT5.2
+    J_IN6.2  J_OUT6.2
+    J_IN7.2  J_OUT7.2
+    J_IN8.2  J_OUT8.2
+}
+
+net PE {
+    J_MAINS.3
+    J_IN1.3  J_OUT1.3
+    J_IN2.3  J_OUT2.3
+    J_IN3.3  J_OUT3.3
+    J_IN4.3  J_OUT4.3
+    J_IN5.3  J_OUT5.3
+    J_IN6.3  J_OUT6.3
+    J_IN7.3  J_OUT7.3
+    J_IN8.3  J_OUT8.3
+}
+
+// Each outlet's line comes off its own relay's normally-open contact, so an
+// unpowered board is an unpowered rack.
+net L_OUT1 { K1.7  K1.8  J_OUT1.1  J_IN1.1 }
+net L_OUT2 { K2.7  K2.8  J_OUT2.1  J_IN2.1 }
+net L_OUT3 { K3.7  K3.8  J_OUT3.1  J_IN3.1 }
+net L_OUT4 { K4.7  K4.8  J_OUT4.1  J_IN4.1 }
+net L_OUT5 { K5.7  K5.8  J_OUT5.1  J_IN5.1 }
+net L_OUT6 { K6.7  K6.8  J_OUT6.1  J_IN6.1 }
+net L_OUT7 { K7.7  K7.8  J_OUT7.1  J_IN7.1 }
+net L_OUT8 { K8.7  K8.8  J_OUT8.1  J_IN8.1 }
+
+// ---------------------------------------------------------------------------
+// Logic nets
+//
+// ULN2803A: input n drives output (19 - n), pin 9 is ground and pin 10 is the
+// common cathode of the flyback diodes, which belongs on the coil rail.
+// ---------------------------------------------------------------------------
+
+net P5V_COIL {
+    PS1.3
+    C1.1
+    C2.1
+    U1.10
+    K1.1  K2.1  K3.1  K4.1  K5.1  K6.1  K7.1  K8.1
+    J_EXT1.1
+}
+
+net GND {
+    PS1.4
+    C1.2
+    C2.2
+    U1.9
+    J_EXT1.2
+    J_EXT2.10
+}
+
+net DRV1 { U1.18  K1.2 }
+net DRV2 { U1.17  K2.2 }
+net DRV3 { U1.16  K3.2 }
+net DRV4 { U1.15  K4.2 }
+net DRV5 { U1.14  K5.2 }
+net DRV6 { U1.13  K6.2 }
+net DRV7 { U1.12  K7.2 }
+net DRV8 { U1.11  K8.2 }
+
+net CTRL1 { J_EXT1.3  U1.1 }
+net CTRL2 { J_EXT1.4  U1.2 }
+net CTRL3 { J_EXT1.5  U1.3 }
+net CTRL4 { J_EXT1.6  U1.4 }
+net CTRL5 { J_EXT1.7  U1.5 }
+net CTRL6 { J_EXT1.8  U1.6 }
+net CTRL7 { J_EXT1.9  U1.7 }
+net CTRL8 { J_EXT1.10 U1.8 }
