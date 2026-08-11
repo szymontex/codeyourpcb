@@ -246,6 +246,357 @@ fn layer_keyword(layer: crate::components::Layer) -> String {
     }
 }
 
+/// The kind word the language wants for a part, taken from its reference.
+///
+/// KiCad does not record what a part *is*. A board file has a reference
+/// designator, a value and a footprint name, and nothing that says "resistor" -
+/// so an import either states a kind or the file it writes will not parse.
+///
+/// The reference designator prefix is where that lives, and it is a convention
+/// rather than a guess: `R` for resistors, `C` for capacitors, `U` for
+/// integrated circuits, and so on, the same letters every schematic has used
+/// for decades. Where the prefix is not one of them the answer is `generic`,
+/// which the language has for exactly this - a part whose kind nobody stated.
+/// Inventing one from the footprint name would be inventing a fact about the
+/// board.
+pub fn kind_from_refdes(refdes: &str) -> &'static str {
+    let letters: String = refdes
+        .chars()
+        .take_while(|c| c.is_ascii_alphabetic())
+        .flat_map(char::to_uppercase)
+        .collect();
+    match letters.as_str() {
+        "R" | "RN" | "RV" | "VR" => "resistor",
+        "C" | "CP" => "capacitor",
+        "L" | "FB" => "inductor",
+        "U" | "IC" => "ic",
+        "LED" | "DS" => "led",
+        "D" | "CR" => "diode",
+        "Q" | "T" => "transistor",
+        "J" | "P" | "CN" | "CON" => "connector",
+        "Y" | "X" | "XTAL" => "crystal",
+        _ => "generic",
+    }
+}
+
+/// Quote a string the way the language reads one back.
+fn quoted(text: &str) -> String {
+    format!("\"{}\"", text.replace('\\', "\\\\").replace('"', "\\\""))
+}
+
+/// Render a whole board as `.cypcb` source.
+///
+/// The counterpart to `cypcb to-kicad`, and the half that makes a KiCad board
+/// something you can edit rather than only something the tools will accept: a
+/// `BoardWorld` - whatever it was read from - becomes the text a person keeps
+/// under version control.
+///
+/// # What this writes, and what it cannot
+///
+/// Written: the board and its layer count, a declared outline when the board is
+/// not the rectangle its size describes, a `footprint` definition for every
+/// footprint the design uses that is not built in, one `component` per part
+/// with its value, placement, rotation and side, a `net` block per net listing
+/// the pins on it, and the routed copper through [`traces_as_dsl`].
+///
+/// Not written, because the language has no syntax for it: copper pours and
+/// keepouts. A board carrying them loses them here, and the writer says so in
+/// a comment at the top of the file rather than dropping them silently.
+pub fn board_as_dsl(world: &mut BoardWorld) -> String {
+    use crate::components::{
+        FootprintRef, NetConnections, Position, RefDes, Rotation, Side, Value,
+    };
+
+    let (size, stack) = world
+        .board_info()
+        .unwrap_or((crate::BoardSize::default(), Default::default()));
+
+    // The parts, read out before anything borrows the world again.
+    struct Part {
+        refdes: String,
+        footprint: String,
+        value: String,
+        position: cypcb_core::Point,
+        rotation: i32,
+        on_bottom: bool,
+        connections: Option<NetConnections>,
+    }
+    let mut parts: Vec<Part> = {
+        let ecs = world.ecs_mut();
+        let mut query = ecs.query::<(
+            &RefDes,
+            &Position,
+            &Rotation,
+            &FootprintRef,
+            Option<&Value>,
+            Option<&NetConnections>,
+            Option<&Side>,
+        )>();
+        query
+            .iter(ecs)
+            .map(
+                |(refdes, position, rotation, footprint, value, connections, side)| Part {
+                    refdes: refdes.0.clone(),
+                    footprint: footprint.0.clone(),
+                    value: value.map(|v| v.0.clone()).unwrap_or_default(),
+                    position: position.0,
+                    rotation: rotation.0,
+                    on_bottom: matches!(side, Some(Side::Bottom)),
+                    connections: connections.cloned(),
+                },
+            )
+            .collect()
+    };
+    // Written in the order a person reads them, not in whatever order the ECS
+    // happens to hold: a diff between two imports of the same board should be
+    // empty, and entity order is not a promise the ECS makes.
+    parts.sort_by(|a, b| a.refdes.cmp(&b.refdes));
+
+    let zone_count = {
+        let ecs = world.ecs_mut();
+        let mut query = ecs.query::<&crate::components::zone::Zone>();
+        query.iter(ecs).count()
+    };
+
+    let outline: Option<Vec<cypcb_core::Point>> = world
+        .board_entity()
+        .and_then(|entity| world.ecs().get::<crate::components::BoardOutline>(entity))
+        .map(|outline| outline.points.clone());
+
+    let name = world.board_name().unwrap_or("board").to_string();
+    let safe_name: String = name
+        .chars()
+        .map(|c| {
+            if c.is_alphanumeric() || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+
+    let mut out = String::new();
+    if zone_count > 0 {
+        let _ = writeln!(
+            out,
+            "// {zone_count} copper pour(s) on the source board are not written: the language\n\
+             // has no syntax for one yet, so they would be invented rather than kept."
+        );
+        let _ = writeln!(out);
+    }
+    let _ = writeln!(out, "version 1");
+    let _ = writeln!(out);
+    let _ = writeln!(out, "board {safe_name} {{");
+    let _ = writeln!(
+        out,
+        "    size {}mm x {}mm",
+        format_mm(size.width.0 as f64 / 1e6),
+        format_mm(size.height.0 as f64 / 1e6)
+    );
+    let _ = writeln!(out, "    layers {}", stack.count.max(2));
+    let _ = writeln!(out, "}}");
+
+    // An outline is only worth stating when the board is not the rectangle its
+    // size already describes.
+    if let Some(points) = outline {
+        let corners = [
+            cypcb_core::Point::new(cypcb_core::Nm(0), cypcb_core::Nm(0)),
+            cypcb_core::Point::new(size.width, cypcb_core::Nm(0)),
+            cypcb_core::Point::new(size.width, size.height),
+            cypcb_core::Point::new(cypcb_core::Nm(0), size.height),
+        ];
+        let is_plain_rectangle = points.len() == 4 && points.iter().all(|p| corners.contains(p));
+        if !is_plain_rectangle && points.len() >= 3 {
+            let _ = writeln!(out);
+            let _ = writeln!(out, "outline {{");
+            for point in &points {
+                let _ = writeln!(
+                    out,
+                    "    point {}mm, {}mm",
+                    format_mm(point.x.0 as f64 / 1e6),
+                    format_mm(point.y.0 as f64 / 1e6)
+                );
+            }
+            let _ = writeln!(out, "}}");
+        }
+    }
+
+    // Footprint definitions, for every footprint the board uses that a fresh
+    // library does not already have. A KiCad board names parts things like
+    // `Package_QFP:LQFP-48_7x7mm_P0.5mm`, which no built-in library has, so
+    // without this the file names pads nobody can resolve.
+    // A footprint definition takes a bare identifier - `footprint USB_ANCHOR {`
+    // - and a KiCad footprint is named `cypcb:USB_ANCHOR` or
+    // `Package_QFP:LQFP-48_7x7mm_P0.5mm`, which is neither bare nor an
+    // identifier. The library prefix goes, and anything the grammar will not
+    // take becomes an underscore. Names that collide after that are given a
+    // number rather than silently merged, because two footprints wearing one
+    // name is two parts with the wrong pads.
+    fn as_identifier(name: &str) -> String {
+        let bare = name.rsplit(':').next().unwrap_or(name);
+        let mut out: String = bare
+            .chars()
+            .map(|c| {
+                if c.is_ascii_alphanumeric() || c == '_' {
+                    c
+                } else {
+                    '_'
+                }
+            })
+            .collect();
+        if out.chars().next().is_some_and(|c| c.is_ascii_digit()) {
+            out.insert(0, '_');
+        }
+        if out.is_empty() {
+            out.push_str("FOOTPRINT");
+        }
+        out
+    }
+
+    let builtin = crate::footprint::FootprintLibrary::new();
+    let library = world.footprints().clone();
+    let mut used: Vec<String> = parts.iter().map(|p| p.footprint.clone()).collect();
+    used.sort();
+    used.dedup();
+    // What each footprint is called in the written file, so the components
+    // below name exactly what the definitions above declare.
+    let mut written_name: std::collections::HashMap<String, String> =
+        std::collections::HashMap::new();
+    let mut taken: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for name in &used {
+        if builtin.contains(name) {
+            written_name.insert(name.clone(), name.clone());
+            continue;
+        }
+        let Some(footprint) = library.get(name) else {
+            written_name.insert(name.clone(), name.clone());
+            continue;
+        };
+        let mut identifier = as_identifier(name);
+        if !taken.insert(identifier.clone()) {
+            let mut n = 2;
+            while !taken.insert(format!("{identifier}_{n}")) {
+                n += 1;
+            }
+            identifier = format!("{identifier}_{n}");
+        }
+        written_name.insert(name.clone(), identifier.clone());
+        let _ = writeln!(out);
+        let _ = writeln!(out, "footprint {identifier} {{");
+        let (cw, ch) = (footprint.courtyard.width(), footprint.courtyard.height());
+        let _ = writeln!(
+            out,
+            "    courtyard {}mm x {}mm",
+            format_mm(cw.0 as f64 / 1e6),
+            format_mm(ch.0 as f64 / 1e6)
+        );
+        for pad in &footprint.pads {
+            let shape = match pad.shape {
+                crate::components::PadShape::Circle => "circle",
+                crate::components::PadShape::Rect => "rect",
+                crate::components::PadShape::RoundRect { .. } => "roundrect",
+                crate::components::PadShape::Oblong => "oblong",
+            };
+            let _ = write!(
+                out,
+                "    pad {} {shape} at {}mm, {}mm size {}mm x {}mm",
+                pad.number,
+                format_mm(pad.position.x.0 as f64 / 1e6),
+                format_mm(pad.position.y.0 as f64 / 1e6),
+                format_mm(pad.size.0 .0 as f64 / 1e6),
+                format_mm(pad.size.1 .0 as f64 / 1e6)
+            );
+            if let Some(drill) = pad.drill {
+                match pad.slot {
+                    Some((w, h)) if w != h => {
+                        let _ = write!(
+                            out,
+                            " drill {}mm x {}mm",
+                            format_mm(w.0 as f64 / 1e6),
+                            format_mm(h.0 as f64 / 1e6)
+                        );
+                    }
+                    _ => {
+                        let _ = write!(out, " drill {}mm", format_mm(drill.0 as f64 / 1e6));
+                    }
+                }
+            }
+            let _ = writeln!(out);
+        }
+        let _ = writeln!(out, "}}");
+    }
+
+    for part in &parts {
+        let _ = writeln!(out);
+        let _ = writeln!(
+            out,
+            "component {} {} {} {{",
+            part.refdes,
+            kind_from_refdes(&part.refdes),
+            quoted(written_name.get(&part.footprint).unwrap_or(&part.footprint))
+        );
+        if !part.value.is_empty() {
+            let _ = writeln!(out, "    value {}", quoted(&part.value));
+        }
+        let _ = writeln!(
+            out,
+            "    at {}mm, {}mm",
+            format_mm(part.position.x.0 as f64 / 1e6),
+            format_mm(part.position.y.0 as f64 / 1e6)
+        );
+        if part.rotation != 0 {
+            let _ = writeln!(out, "    rotate {}", part.rotation as f64 / 1000.0);
+        }
+        if part.on_bottom {
+            let _ = writeln!(out, "    side bottom");
+        }
+        let _ = writeln!(out, "}}");
+    }
+
+    // Nets, each listing the pins on it. Read off the parts rather than out of
+    // the net table, because a net nothing connects to is a name with no
+    // meaning in this language and would write an empty block.
+    // Keyed by the raw id: `NetId` is not `Ord`, and the map is only ever a
+    // lookup here so the ordering it would give is not wanted either.
+    let net_names: std::collections::HashMap<u32, String> = world
+        .nets()
+        .map(|(id, name)| (id.0, name.to_string()))
+        .collect();
+    let mut pins_by_net: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    for part in &parts {
+        let Some(connections) = &part.connections else {
+            continue;
+        };
+        for connection in connections.iter() {
+            let Some(name) = net_names.get(&connection.net.0) else {
+                continue;
+            };
+            pins_by_net
+                .entry(name.clone())
+                .or_default()
+                .push(format!("{}.{}", part.refdes, connection.pin));
+        }
+    }
+    for (net, mut pins) in pins_by_net {
+        pins.sort();
+        pins.dedup();
+        let _ = writeln!(out);
+        let _ = writeln!(out, "net {net} {{");
+        for pin in pins {
+            let _ = writeln!(out, "    {pin}");
+        }
+        let _ = writeln!(out, "}}");
+    }
+
+    let traces = traces_as_dsl(world);
+    if !traces.is_empty() {
+        let _ = writeln!(out);
+        out.push_str(&traces);
+    }
+
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

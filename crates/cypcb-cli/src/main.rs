@@ -63,6 +63,9 @@ enum Commands {
     Export(commands::ExportCommand),
     /// Parse a KiCad .kicad_pcb file and output metadata as JSON
     ParseKicad(commands::ParseKicadCommand),
+
+    /// Write a KiCad .kicad_pcb board out as a .cypcb design
+    FromKicad(commands::FromKicadCommand),
     /// Score a routed .cypcb file — routes and prints quality metrics as JSON
     Score(commands::ScoreCommand),
     /// Write a .cypcb design out as a KiCad .kicad_pcb board
@@ -110,6 +113,7 @@ fn main() -> Result<()> {
         Commands::Route(cmd) => cmd.run(),
         Commands::Export(cmd) => cmd.run(),
         Commands::ParseKicad(cmd) => cmd.run(),
+        Commands::FromKicad(cmd) => cmd.run(),
         Commands::ToKicad(cmd) => cmd.run(),
         Commands::Watch(cmd) => cmd.run(),
         Commands::Score(cmd) => cmd.run(),
