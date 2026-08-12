@@ -149,6 +149,36 @@ fn another_parts_copper_beside_the_slot_is_reported() {
 }
 
 #[test]
+fn a_body_over_the_slot_with_its_copper_clear_is_not_reported() {
+    // A component sits in the spatial index as its **courtyard** - the
+    // assembly keepout over the whole part body - and this rule is about
+    // copper. A DIP-8's body reaches 1.3mm either side of its centre line
+    // while its pad columns sit 3.81mm apart, so the plastic can overhang a
+    // slot with every piece of copper well clear of it.
+    //
+    // Measured against the courtyard that reads as a violation the board does
+    // not have. This is the fault this rule shipped with, found by reading it
+    // rather than by a board failing, and written down before it was fixed.
+    let (mut world, library) = board_with_a_slot(10.0, 10.0);
+    world.spawn_component(
+        RefDes::new("U1"),
+        Value::new("NE555"),
+        // The gap between the two pad columns straddles the slot: the body
+        // covers it, the pads are 1.9mm either side of it.
+        Position::from_mm(10.0, 10.0),
+        Rotation::ZERO,
+        FootprintRef::new("DIP-8"),
+        NetConnections::new(),
+    );
+
+    let faults = slot_faults(&mut world, &library);
+    assert!(
+        faults.is_empty(),
+        "a body over a slot is an assembly question, not a copper one: {faults:?}"
+    );
+}
+
+#[test]
 fn the_same_copper_moved_clear_is_not_reported() {
     // The control, and the half that decides whether the rule measures
     // anything at all: the identical part 3mm away passes. Without this, a

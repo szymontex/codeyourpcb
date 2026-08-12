@@ -455,10 +455,10 @@ impl DrcRule for ClearanceRule {
 /// The net is per pad, not per component. A part with one GND pin does not
 /// make its other pads GND, and treating it that way exempts a trace from
 /// copper it can genuinely short.
-struct PadBox {
-    box_: AABB<[i64; 2]>,
-    layer_mask: u32,
-    net: Option<NetId>,
+pub(crate) struct PadBox {
+    pub(crate) box_: AABB<[i64; 2]>,
+    pub(crate) layer_mask: u32,
+    pub(crate) net: Option<NetId>,
 }
 
 /// Every component's pad copper, keyed by entity index.
@@ -468,7 +468,7 @@ struct PadBox {
 /// pad rotated off the axes is boxed by the extent of the rotated rectangle,
 /// which is never smaller than the copper - a checker may over-report, and may
 /// not under-report.
-fn component_pads(world: &mut BoardWorld) -> HashMap<u32, Vec<PadBox>> {
+pub(crate) fn component_pads(world: &mut BoardWorld) -> HashMap<u32, Vec<PadBox>> {
     use cypcb_world::components::{FootprintRef, Position, Rotation};
 
     // Which net each pin is on, per component. `PadDef::number` and

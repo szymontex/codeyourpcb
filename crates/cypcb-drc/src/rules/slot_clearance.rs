@@ -69,6 +69,18 @@ impl DrcRule for SlotClearanceRule {
                 .collect()
         };
 
+        // A component sits in the spatial index as its **courtyard** - the
+        // assembly keepout that covers the whole part body. This rule is about
+        // copper, and a body is not copper: measured against the courtyard, a
+        // part whose plastic overhangs a slot while its pads stay well clear
+        // reads as a violation the board does not have. `ClearanceRule` learned
+        // this the hard way and pre-collects per-pad copper for exactly this
+        // reason; the two now share the collector rather than each having one.
+        //
+        // Traces need no such refinement: they are indexed one entry per
+        // segment with the half-width already in the box, so a trace's entry is
+        // already close to the copper it stands for.
+        let pad_map = super::clearance::component_pads(world);
         let entries: Vec<_> = world.spatial().iter().cloned().collect();
 
         for slot in &slots {
@@ -98,10 +110,38 @@ impl DrcRule for SlotClearanceRule {
                     continue;
                 }
 
-                let min_x = entry.envelope.lower()[0];
-                let min_y = entry.envelope.lower()[1];
-                let max_x = entry.envelope.upper()[0];
-                let max_y = entry.envelope.upper()[1];
+                // The copper this entry stands for: a component's pads when the
+                // entry is a courtyard, the entry's own box otherwise.
+                let boxes: Vec<(i64, i64, i64, i64)> = match pad_map.get(&entry.entity.index()) {
+                    Some(pads) => pads
+                        .iter()
+                        .map(|pad| {
+                            (
+                                pad.box_.lower()[0],
+                                pad.box_.lower()[1],
+                                pad.box_.upper()[0],
+                                pad.box_.upper()[1],
+                            )
+                        })
+                        .collect(),
+                    None => vec![(
+                        entry.envelope.lower()[0],
+                        entry.envelope.lower()[1],
+                        entry.envelope.upper()[0],
+                        entry.envelope.upper()[1],
+                    )],
+                };
+
+                // The nearest piece of this entry's copper, and one report per
+                // entry rather than one per pad: a part too close to a slot is
+                // one fault, and naming it eight times is a checker somebody
+                // learns to ignore.
+                let Some(&(min_x, min_y, max_x, max_y)) = boxes
+                    .iter()
+                    .min_by_key(|(a, b, c, d)| box_to_slot_gap(slot, *a, *b, *c, *d))
+                else {
+                    continue;
+                };
 
                 let gap = box_to_slot_gap(slot, min_x, min_y, max_x, max_y);
                 if gap < required.0 {
@@ -134,6 +174,20 @@ fn box_to_slot_gap(slot: &Hole, min_x: i64, min_y: i64, max_x: i64, max_y: i64) 
         Point::new(Nm(max_x), Nm(max_y)),
         Point::new(Nm(min_x), Nm(max_y)),
     ];
+    // Edge-to-edge is only the answer for two shapes that do not overlap.
+    // A box that swallows the slot whole has every edge far from the axis, so
+    // the loop below returns a large positive number for copper sitting
+    // directly on top of the opening - which is the worst possible answer.
+    //
+    // Measured: a DIP-8's courtyard is 9.72 x 10.66mm, and a 2.4mm slot at its
+    // centre reads 3.9mm clear. This is not hypothetical; it is what the rule
+    // did when it shipped, and what made the courtyard test below pass against
+    // the code it was written to fail against.
+    let inside = |p: &Point| p.x.0 >= min_x && p.x.0 <= max_x && p.y.0 >= min_y && p.y.0 <= max_y;
+    if inside(&slot.start) || inside(&slot.end) {
+        return -slot.radius;
+    }
+
     let mut nearest = i64::MAX;
     for i in 0..4 {
         let a = corners[i];
@@ -207,6 +261,25 @@ mod tests {
         assert!(
             gap < 0,
             "copper over the slot must not read as clear: {gap}nm"
+        );
+    }
+
+    #[test]
+    fn a_box_that_swallows_the_slot_whole_does_not_read_as_clear() {
+        // The fault this rule shipped with. Every edge of a big box is far
+        // from the axis, so edge-to-edge alone reports copper lying directly
+        // over the opening as several millimetres clear. Measured on a real
+        // courtyard: a DIP-8 is 9.72 x 10.66mm and read 3.9mm.
+        let gap = box_to_slot_gap(
+            &slot((-0.7, 0.0), (0.7, 0.0)),
+            Nm::from_mm(-5.0).0,
+            Nm::from_mm(-5.0).0,
+            Nm::from_mm(5.0).0,
+            Nm::from_mm(5.0).0,
+        );
+        assert!(
+            gap < 0,
+            "copper covering the slot must not read as clear: {gap}nm"
         );
     }
 
