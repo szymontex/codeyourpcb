@@ -63,6 +63,28 @@ fn format_mm(mm: f64) -> String {
 ///
 /// Returns an empty string for a board with neither, so a caller can tell
 /// "nothing routed" from "here is the routing".
+/// Whether a name can be written into the language and read back out.
+///
+/// The grammar's `identifier` is `[a-zA-Z_][a-zA-Z0-9_]*` and there is no
+/// quoted form, so a net called `VBUS+`, `D+` or `D-` - which is every USB
+/// design there is - cannot be named at all. `from-kicad` interns whatever a
+/// KiCad file carries, so a world can hold such a net even though a designer
+/// could never have typed one.
+///
+/// Writing it anyway produces a file this project's own parser rejects, which
+/// on the viewer's save path means work the user cannot reopen. Until the
+/// grammar grows a quoted form, the writer omits what it cannot spell and says
+/// so in the file - the same choice already made for copper pours a few lines
+/// down, and for the same reason: a stated gap beats a silent one.
+pub(crate) fn is_writable_identifier(name: &str) -> bool {
+    let mut chars = name.chars();
+    match chars.next() {
+        Some(first) if first.is_ascii_alphabetic() || first == '_' => {}
+        _ => return false,
+    }
+    chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
+}
+
 pub fn traces_as_dsl(world: &mut BoardWorld) -> String {
     // Collect all traces grouped by net name
     let trace_data: Vec<Trace> = {
@@ -108,7 +130,28 @@ pub fn traces_as_dsl(world: &mut BoardWorld) -> String {
     }
     all_nets.sort();
 
+    // Nets the language cannot name. Their copper is left out rather than
+    // written into a file the parser would reject - see
+    // `is_writable_identifier` for why the choice is that way round.
+    let unwritable: Vec<String> = all_nets
+        .iter()
+        .filter(|net| !is_writable_identifier(net))
+        .cloned()
+        .collect();
+    all_nets.retain(|net| is_writable_identifier(net));
+
     let mut output = String::with_capacity(4096);
+
+    if !unwritable.is_empty() {
+        let _ = writeln!(
+            output,
+            "// {} net(s) carry copper that is not written here, because the language has\n\
+             // no way to name them: {}. A quoted form is what they need.",
+            unwritable.len(),
+            unwritable.join(", ")
+        );
+        let _ = writeln!(output);
+    }
 
     for net_name in &all_nets {
         let traces = net_traces.get(net_name);
@@ -577,7 +620,26 @@ pub fn board_as_dsl(world: &mut BoardWorld) -> String {
                 .push(format!("{}.{}", part.refdes, connection.pin));
         }
     }
+    let unnameable: Vec<String> = pins_by_net
+        .keys()
+        .filter(|net| !is_writable_identifier(net))
+        .cloned()
+        .collect();
+    if !unnameable.is_empty() {
+        let _ = writeln!(out);
+        let _ = writeln!(
+            out,
+            "// {} net(s) on the source board are not written, because the language has no\n\
+             // way to name them: {}. Their pins and copper are missing from this file.",
+            unnameable.len(),
+            unnameable.join(", ")
+        );
+    }
+
     for (net, mut pins) in pins_by_net {
+        if !is_writable_identifier(&net) {
+            continue;
+        }
         pins.sort();
         pins.dedup();
         let _ = writeln!(out);

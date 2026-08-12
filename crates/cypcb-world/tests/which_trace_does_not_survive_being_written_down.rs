@@ -235,9 +235,11 @@ fn a_trace_on_each_layer_keeps_its_layer() {
 }
 
 #[test]
-fn a_net_the_language_cannot_name_produces_a_file_that_does_not_parse() {
+fn a_net_the_language_cannot_name_is_left_out_and_said_out_loud() {
     // Written expecting the round trip to lose the copper. It does worse: the
-    // language has no way to name the net at all. `net "VBUS+" { ... }` is
+    // language has no way to name the net at all, and the writer used to emit
+    // it anyway - producing a file its own parser rejects, which on the
+    // viewer's save path is work the user cannot reopen. `net "VBUS+" { ... }` is
     // refused by the parser with `expected "a net name"`, and a bare `VBUS+`
     // is not an identifier either.
     //
@@ -265,13 +267,29 @@ fn a_net_the_language_cannot_name_produces_a_file_that_does_not_parse() {
     );
     assert_eq!(census(&mut world).get("VBUS+"), Some(&1), "the premise");
 
+    // The writer no longer emits a name it cannot read back. It leaves the
+    // net's copper out and says so in the file, which is the same choice made
+    // for copper pours: a stated gap beats a silent one, and beats a saved
+    // file the user cannot reopen.
     let text = board_as_dsl(&mut world);
     let written_back = cypcb_parser::parse(&text);
     assert!(
-        !written_back.errors.is_empty(),
-        "the writer produced a file that parses, so this defect is fixed and \
-         the assertion should become the opposite:\n{text}"
+        written_back.errors.is_empty(),
+        "the writer produced a file its own parser rejects:\n{text}\n{:?}",
+        written_back.errors
     );
+    assert!(
+        text.contains("VBUS+"),
+        "the file has to name what it could not write:\n{text}"
+    );
+    assert!(
+        text.contains("no way to name"),
+        "the omission has to be stated, not silent:\n{text}"
+    );
+
+    // And the copper really is absent rather than mangled onto another net.
+    let mut back = load(&text);
+    assert_eq!(census(&mut back).get("VBUS+"), None, "\n{text}");
 }
 
 #[test]
