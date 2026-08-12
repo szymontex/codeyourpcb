@@ -34,7 +34,7 @@ echo "============================================"
 
 # ---------------------------------------------------------------- rust ------
 echo ""
-echo "[1/5] Rust toolchain"
+echo "[1/6] Rust toolchain"
 if ! command -v cargo &> /dev/null; then
     echo "[ERROR] cargo not found. Install Rust: https://rustup.rs"
     exit 1
@@ -52,7 +52,7 @@ echo "[OK] wasm32-unknown-unknown"
 # not match the `wasm-bindgen` crate in Cargo.lock produces bindings the module
 # rejects at load time.
 echo ""
-echo "[2/5] wasm-bindgen CLI"
+echo "[2/6] wasm-bindgen CLI"
 PINNED=$(grep -A 1 '^name = "wasm-bindgen"$' Cargo.lock | grep '^version' | head -1 | cut -d'"' -f2)
 if [ -z "$PINNED" ]; then
     echo "[ERROR] Could not read the wasm-bindgen version from Cargo.lock"
@@ -69,7 +69,7 @@ echo "[OK] wasm-bindgen $(wasm-bindgen --version | awk '{print $2}') matches Car
 # `viewer/build-wasm.sh` optimizes the module itself and refuses to run without
 # this. It used to warn and carry on, which shipped a module a third larger.
 echo ""
-echo "[3/5] binaryen (wasm-opt)"
+echo "[3/6] binaryen (wasm-opt)"
 if ! command -v wasm-opt &> /dev/null; then
     if [ -n "$SUDO" ] || [ "$(id -u)" -eq 0 ]; then
         $SUDO apt-get update -qq
@@ -83,7 +83,7 @@ echo "[OK] $(wasm-opt --version)"
 
 # ------------------------------------------------------------------ node ----
 echo ""
-echo "[4/5] Viewer dependencies"
+echo "[4/6] Viewer dependencies"
 if ! command -v node &> /dev/null; then
     echo "[ERROR] node not found. The viewer, its tests and the gate all need it."
     exit 1
@@ -91,11 +91,44 @@ fi
 (cd viewer && npm install --no-audit --no-fund)
 echo "[OK] node $(node --version), viewer dependencies installed"
 
+# ------------------------------------------------------------- tauri deps --
+# `cypcb-desktop` links GTK and WebKit through pkg-config. Without these the
+# crate does not compile at all - the first error is "The pkg-config command
+# could not be found", before anything GTK is even looked for - and the gate
+# used to route around that by excluding the crate from clippy and from the
+# test run. It stopped excluding it on 2026-08-12, so these are now the gate's
+# dependencies rather than the desktop build's alone.
+#
+# The list is what was installed to make the crate compile on Ubuntu 24.04. It
+# is proven sufficient; whether every entry is necessary is not measured, and
+# `setup-linux.sh` carries the same set minus libxdo-dev and libssl-dev.
+echo ""
+echo "[5/6] Desktop (Tauri) system libraries"
+if pkg-config --exists gtk+-3.0 webkit2gtk-4.1 2>/dev/null; then
+    echo "[OK] GTK 3 and WebKit2GTK 4.1 are present"
+elif [ -n "$SUDO" ] || [ "$(id -u)" -eq 0 ]; then
+    $SUDO apt-get update -qq
+    $SUDO apt-get install -y \
+        pkg-config \
+        libwebkit2gtk-4.1-dev \
+        libgtk-3-dev \
+        libayatana-appindicator3-dev \
+        librsvg2-dev \
+        libxdo-dev \
+        libssl-dev
+    echo "[OK] Tauri system libraries installed"
+else
+    echo "[ERROR] cypcb-desktop needs GTK and WebKit and this cannot install them."
+    echo "        apt-get install -y pkg-config libwebkit2gtk-4.1-dev libgtk-3-dev \\"
+    echo "          libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev"
+    exit 1
+fi
+
 # ------------------------------------------------------------ playwright ----
 # Stage 6 of the gate. `install-deps` is the apt half - chromium needs
 # libnspr4 and friends - and `install chromium` is the browser itself.
 echo ""
-echo "[5/5] Playwright chromium"
+echo "[6/6] Playwright chromium"
 if [ -n "$SUDO" ] || [ "$(id -u)" -eq 0 ]; then
     (cd viewer && $SUDO npx --yes playwright install-deps chromium)
 else

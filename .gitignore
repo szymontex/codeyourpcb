@@ -32,6 +32,11 @@ crates/cypcb-parser/grammar/package-lock.json
 freerouting*.jar
 
 # Runtime / generated artifacts
+# `tauri::generate_context!` writes the ACL schemas here on every build of
+# cypcb-desktop. They are derived from tauri.conf.json and the capabilities
+# directory, both of which are tracked, so committing them would be committing
+# a build output that changes whenever the toolchain does.
+/src-tauri/gen/
 logs/
 output/
 export-test/

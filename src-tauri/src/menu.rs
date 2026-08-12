@@ -1,5 +1,7 @@
 use cypcb_platform::{Menu, MenuBar, MenuItem as PlatformMenuItem};
 use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
+// `emit` and `get_webview_window` both live on traits in Tauri 2.
+use tauri::{Emitter, Manager};
 
 /// Create the application menu structure using the platform MenuBar data model.
 pub fn create_app_menu() -> MenuBar {

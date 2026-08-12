@@ -22,9 +22,16 @@ else
 fi
 echo ""
 
-# Stage 2: Clippy (strict, excluding desktop crates - they need system GTK/webkit)
+# Stage 2: Clippy (strict, whole workspace)
+#
+# `cypcb-desktop` used to be excluded here and in stage 3 because it needs
+# system GTK and WebKit. Nothing installed those, so the crate went unbuilt for
+# long enough to rot: nine compile errors from the Tauri v1 to v2 move, plus an
+# icon the macro refused, all found the first time anybody ran it. The
+# dependencies are in `scripts/setup-dev.sh` now, so the exclusion has nothing
+# left to protect and a crate nobody compiles is a crate nobody maintains.
 echo "[2/8] cargo clippy"
-if cargo clippy --workspace --exclude cypcb-desktop --all-targets -- -D warnings 2>&1; then
+if cargo clippy --workspace --all-targets -- -D warnings 2>&1; then
   pass "cargo-clippy"
 else
   fail "cargo-clippy"
@@ -36,7 +43,7 @@ echo "[3/8] cargo test"
 # The Rust reader is what `parse` is now. The two tests that check it against
 # the tree-sitter parser need that parser as well, which the plain run does not
 # build - named explicitly, because a test nobody runs is not a test.
-if cargo test --workspace --exclude cypcb-desktop 2>&1 \
+if cargo test --workspace 2>&1 \
   && cargo test -p cypcb-parser --features tree-sitter-parser --test differential 2>&1 \
   && cargo test -p cypcb-parser --features tree-sitter-parser --test error_parity 2>&1 \
   && cargo test -p cypcb-render --no-default-features --features wasm \

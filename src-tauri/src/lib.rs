@@ -1,6 +1,12 @@
 pub mod commands;
 mod menu;
 
+// Tauri 2 moved `emit` off the app types and onto a trait. The compiler says
+// so plainly - "trait `Emitter` which provides `emit` is implemented but not
+// in scope" - and this crate had been excluded from every workspace test run,
+// so nobody read it.
+use tauri::Emitter;
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())

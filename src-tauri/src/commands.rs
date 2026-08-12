@@ -19,12 +19,20 @@ pub async fn open_file(app: tauri::AppHandle) -> Result<Option<FileContent>, Str
         .blocking_pick_file();
 
     match file {
-        Some(path) => {
-            let content = std::fs::read_to_string(path.path())
+        Some(picked) => {
+            // Tauri 2's picker hands back a `FilePath`, which is a path on a
+            // desktop and a content URI on Android. `into_path` is the one
+            // conversion that says so rather than assuming: it fails on a
+            // platform where the choice is not a file, instead of producing a
+            // path that is not one.
+            let path = picked.into_path().map_err(|e| {
+                format!("The file picker returned something that is not a path: {e}")
+            })?;
+            let content = std::fs::read_to_string(&path)
                 .map_err(|e| format!("Failed to read file: {}", e))?;
 
             Ok(Some(FileContent {
-                path: path.path().to_string_lossy().to_string(),
+                path: path.to_string_lossy().to_string(),
                 content,
             }))
         }
@@ -55,11 +63,13 @@ pub async fn save_file_as(
         .blocking_save_file();
 
     match file {
-        Some(path) => {
-            std::fs::write(path.path(), content)
-                .map_err(|e| format!("Failed to write file: {}", e))?;
+        Some(picked) => {
+            let path = picked.into_path().map_err(|e| {
+                format!("The file picker returned something that is not a path: {e}")
+            })?;
+            std::fs::write(&path, content).map_err(|e| format!("Failed to write file: {}", e))?;
 
-            Ok(Some(path.path().to_string_lossy().to_string()))
+            Ok(Some(path.to_string_lossy().to_string()))
         }
         None => Ok(None),
     }
