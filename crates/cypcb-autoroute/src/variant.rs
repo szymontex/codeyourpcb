@@ -49,6 +49,13 @@ pub struct VariantConfig {
     ///
     /// 1.0 is the admissible heuristic that makes A* return the cheapest path.
     pub heuristic_weight: f64,
+    /// What copper closer than the fab allows costs this variant.
+    ///
+    /// Zero everywhere but one variant. Step 4 of `docs/router-plan.md`
+    /// measured it as the largest single improvement this vector has produced
+    /// on one board and a regression of the same size on another, which is a
+    /// variant's question rather than a default's.
+    pub clearance_barrier: f64,
 }
 
 impl VariantConfig {
@@ -67,6 +74,7 @@ impl VariantConfig {
             foreign_pad_penalty: 0.0,
             pad_zone_margin_cells: cypcb_autoroute_default_margin(),
             heuristic_weight: 1.0,
+            clearance_barrier: 0.0,
         }
     }
 }
@@ -146,6 +154,7 @@ pub fn default_variant_configs() -> Vec<VariantConfig> {
             foreign_pad_penalty: 0.0,
             pad_zone_margin_cells: cypcb_autoroute_default_margin(),
             heuristic_weight: 1.0,
+            clearance_barrier: 0.0,
         },
         VariantConfig {
             name: "PathFinder Guarded Pads".to_string(),
@@ -160,6 +169,7 @@ pub fn default_variant_configs() -> Vec<VariantConfig> {
             foreign_pad_penalty: 0.0,
             pad_zone_margin_cells: cypcb_autoroute_default_margin(),
             heuristic_weight: 1.0,
+            clearance_barrier: 0.0,
         },
         // Reserving a trace's copper is the default since it was measured
         // better on every fixture and both columns. This is the control: the
@@ -199,6 +209,7 @@ pub fn default_variant_configs() -> Vec<VariantConfig> {
             foreign_pad_penalty: 5.0,
             pad_zone_margin_cells: cypcb_autoroute_default_margin(),
             heuristic_weight: 1.0,
+            clearance_barrier: 0.0,
         },
         VariantConfig {
             name: "PathFinder Bare Centre Line".to_string(),
@@ -210,6 +221,7 @@ pub fn default_variant_configs() -> Vec<VariantConfig> {
             foreign_pad_penalty: 0.0,
             pad_zone_margin_cells: cypcb_autoroute_default_margin(),
             heuristic_weight: 1.0,
+            clearance_barrier: 0.0,
         },
         // The opening around a pad, one cell narrower than the default. Every
         // cell of margin switches off obstacles that far from the pad, and on a
@@ -246,6 +258,7 @@ pub fn default_variant_configs() -> Vec<VariantConfig> {
             foreign_pad_penalty: 0.0,
             pad_zone_margin_cells: cypcb_autoroute_default_margin(),
             heuristic_weight: 1.25,
+            clearance_barrier: 0.0,
         },
         // The two knobs that pay, together.
         //
@@ -272,6 +285,7 @@ pub fn default_variant_configs() -> Vec<VariantConfig> {
             foreign_pad_penalty: 20.0,
             pad_zone_margin_cells: cypcb_autoroute_default_margin(),
             heuristic_weight: 1.25,
+            clearance_barrier: 0.0,
         },
         VariantConfig {
             name: "PathFinder Eager Light".to_string(),
@@ -283,6 +297,7 @@ pub fn default_variant_configs() -> Vec<VariantConfig> {
             foreign_pad_penalty: 5.0,
             pad_zone_margin_cells: cypcb_autoroute_default_margin(),
             heuristic_weight: 1.1,
+            clearance_barrier: 0.0,
         },
         VariantConfig {
             name: "PathFinder Tight Pads".to_string(),
@@ -294,6 +309,31 @@ pub fn default_variant_configs() -> Vec<VariantConfig> {
             foreign_pad_penalty: 0.0,
             pad_zone_margin_cells: 2,
             heuristic_weight: 1.0,
+            clearance_barrier: 0.0,
+        },
+        // The clearance barrier, priced. Step 4 of `docs/router-plan.md`
+        // measured k = 10 as the largest single improvement this vector has
+        // produced - `multi_ic` 262 / 194 to 123 / 85, against a band of
+        // 65 / 56 - and a regression of the same size on `qfp_fanout`,
+        // 318 / 149 to 424 / 269 against 57 / 44. Two boards, opposite
+        // answers, which is a variant's question and not a default's: the
+        // ranking picks per board and this gives it the point to pick.
+        //
+        // It is the only variant that costs the clearance field, which is
+        // built once per board and is why `multi_ic` takes 6.9s here against
+        // 0.5s elsewhere. Ranked complete-first like every other, so a slow
+        // variant that abandons nothing still has to earn its place on shorts.
+        VariantConfig {
+            name: "PathFinder Clearance Priced".to_string(),
+            strategy: StrategyKind::PathFinder,
+            params: AutorouteParams::default(),
+            via_ring_penalty: 0.0,
+            pad_zone_blocks_foreign_copper: false,
+            reserve_trace_footprint: true,
+            foreign_pad_penalty: 0.0,
+            pad_zone_margin_cells: cypcb_autoroute_default_margin(),
+            heuristic_weight: 1.0,
+            clearance_barrier: 10.0,
         },
     ]
 }
@@ -366,6 +406,7 @@ pub fn generate_variants(
             foreign_pad_penalty: config.foreign_pad_penalty,
             pad_zone_margin_cells: config.pad_zone_margin_cells,
             heuristic_weight: config.heuristic_weight,
+            clearance_barrier: config.clearance_barrier,
             // Variant exploration compares many routings; paying for repair on
             // each one triples the wall clock to rank candidates that are about
             // to be thrown away. The winner can be repaired afterwards.
