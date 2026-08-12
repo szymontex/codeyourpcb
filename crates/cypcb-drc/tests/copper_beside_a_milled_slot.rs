@@ -27,6 +27,11 @@ use cypcb_world::BoardWorld;
 /// with a 0.5mm radius: the bit centres sit 0.7mm either side of the pad and
 /// the wall is 1.2mm from it along the length, 0.5mm across.
 fn board_with_a_slot(x: f64, y: f64) -> (BoardWorld, FootprintLibrary) {
+    board_with_a_slot_rotated(x, y, Rotation::ZERO)
+}
+
+/// The same board, with the slotted part turned.
+fn board_with_a_slot_rotated(x: f64, y: f64, rotation: Rotation) -> (BoardWorld, FootprintLibrary) {
     let mut world = BoardWorld::new();
     world.set_board(
         "slotted".to_string(),
@@ -58,7 +63,7 @@ fn board_with_a_slot(x: f64, y: f64) -> (BoardWorld, FootprintLibrary) {
         RefDes::new("J1"),
         Value::new(""),
         Position::from_mm(x, y),
-        Rotation::ZERO,
+        rotation,
         FootprintRef::new("latch"),
         NetConnections::new(),
     );
@@ -188,4 +193,35 @@ fn the_same_copper_moved_clear_is_not_reported() {
 
     let faults = slot_faults(&mut world, &library);
     assert!(faults.is_empty(), "3mm away is clear: {faults:?}");
+}
+
+#[test]
+fn turning_the_part_turns_the_slot_the_checker_measures() {
+    // The slot is 2.4mm long and 1.0mm wide, so it reaches 1.2mm along its
+    // length and 0.5mm across it. Which of those points at a given piece of
+    // copper is the part's rotation, and nothing here exercised a non-zero
+    // one - the same gap that produced `a_rotated_part_keeps_its_angle` in
+    // cypcb-kicad after it shipped there.
+    //
+    // One 0402, 1.5mm above the slot's centre, measured twice. Unturned the
+    // slot runs left to right and the chip is well clear of its side. Turned
+    // 90 degrees the slot runs up and down, its end reaches to within 0.7mm of
+    // the chip, and JLCPCB's 0.3mm is gone.
+    let (mut flat, library) = board_with_a_slot_rotated(10.0, 10.0, Rotation::ZERO);
+    add_a_chip(&mut flat, "R1", 10.0, 11.5);
+    let flat_faults = slot_faults(&mut flat, &library);
+
+    let (mut turned, library) = board_with_a_slot_rotated(10.0, 10.0, Rotation::DEG_90);
+    add_a_chip(&mut turned, "R1", 10.0, 11.5);
+    let turned_faults = slot_faults(&mut turned, &library);
+
+    assert!(
+        flat_faults.is_empty(),
+        "the chip is beside the slot's long side, which is its narrow way: {flat_faults:?}"
+    );
+    assert_eq!(
+        turned_faults.len(),
+        1,
+        "turned 90 degrees the same slot points at the same chip: {turned_faults:?}"
+    );
 }
