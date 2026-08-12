@@ -1129,6 +1129,18 @@ async function init(): Promise<void> {
    */
   function loadDesign(source: string): string {
     const errors = engine.load_source_with_imports(source, importedFiles);
+
+    // The other half of the round trip, counted. `syncEditorTraces` already
+    // compares the engine against the editor; this compares the text against
+    // the world it became, which is where a trace the parser cannot rebuild
+    // goes missing. Together they cover the whole journey a hand-drawn trace
+    // makes: world -> DSL -> editor -> DSL -> world.
+    //
+    // Counted per net rather than in total, because the writer splits a net
+    // into one block per branch: a count that rises is that, and is not
+    // reported. Only a fall is.
+    reportLostTraces('parse back', source, engine.export_traces_as_dsl());
+
     void followImports(source);
     return errors;
   }
