@@ -189,6 +189,23 @@ pub struct AutorouteConfig {
     /// trace cells on a dense board, and charging them the same took
     /// stm32_breakout from 239 violations to 259.
     pub via_foreign_pad_penalty: f64,
+    /// What copper closer than the fab allows costs the search, as a barrier.
+    ///
+    /// Step 4 of `docs/router-plan.md`. Zero at legal clearance and rising as
+    /// the square of how far under it a node sits, so a short is the most
+    /// expensive thing the search can buy - which is what this project's own
+    /// ranking already says it should be. `required` is the same figure the
+    /// grid bloats obstacles by, `min_clearance + min_trace_width / 2`.
+    ///
+    /// Read from `ClearanceField`, which knows distances and not nets, so the
+    /// term is gated: outside the routing net's own pad zones it applies to
+    /// everything, and inside them only to cells whose `pad_owner` is a
+    /// different net. A route has to be free to reach its own pin.
+    ///
+    /// **Default 0.0**, which switches the whole thing off including the cost
+    /// of building the field. Nothing measured has earned a non-zero default
+    /// yet; `clearance_barrier_sweep` is where that is decided.
+    pub clearance_barrier: f64,
 
     /// What a layer change on a pad's copper costs the search.
     ///
@@ -293,6 +310,7 @@ impl Default for AutorouteConfig {
             via_ring_penalty: 0.0,
             via_stack_penalty: 0.0,
             via_foreign_pad_penalty: 0.0,
+            clearance_barrier: 0.0,
             pad_layer_change_penalty: crate::pathfinder_v2::PAD_LAYER_CHANGE_PENALTY,
             pad_zone_margin_cells: crate::orchestrator::DEFAULT_PAD_ZONE_MARGIN_CELLS,
             pad_zone_blocks_foreign_copper: false,

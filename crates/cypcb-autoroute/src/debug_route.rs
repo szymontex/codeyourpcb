@@ -153,7 +153,10 @@ pub fn route_with_debug(
     let order = order_nets(&ratsnest);
 
     // Stage 1: PathFinder loop (raw grid paths)
-    let loop_result = pathfinder_loop(&mut grid, &ratsnest, &order, rules, config);
+    // No clearance field: this walks the stages to explain a board, and the
+    // barrier is off by default anyway. If it ever ships on, this call is the
+    // one that has to learn to build the field too.
+    let loop_result = pathfinder_loop(&mut grid, &ratsnest, &order, rules, config, None);
 
     // Stage 2: Post-process (grid paths → segments)
     let mut raw_segments = Vec::new();

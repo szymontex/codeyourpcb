@@ -24,6 +24,7 @@ use cypcb_world::footprint::FootprintLibrary;
 use cypcb_world::BoardWorld;
 
 use crate::astar_grid::{astar_grid, GridSearchScratch};
+use crate::clearance_field::ClearanceField;
 use crate::congestion::CongestionMap;
 use crate::cost::RoutingCost;
 use crate::grid::{RoutingGrid, CELL_OBSTACLE, CELL_PAD};
@@ -127,6 +128,21 @@ impl PathFinderStrategy {
             }
         };
 
+        // Step 4 of `docs/router-plan.md`. Built only when something will read
+        // it, because the transform costs about twice what the grid does and a
+        // barrier of zero would pay that for nothing.
+        //
+        // Seeded from the board as it arrives - pads, keepouts, copper the
+        // designer drew - and not rebuilt as routing lays more. That is the
+        // documented limit of step 1 and it is the right half to price here:
+        // the cross-tab puts more than half of every introduced violation on a
+        // cell the grid marked as a pad, and a pad is in this field.
+        let field = if config.clearance_barrier > 0.0 {
+            Some(ClearanceField::from_board(world, library, &grid))
+        } else {
+            None
+        };
+
         // Forbid the cells a previous pass was caught violating.
         let layer_count = grid.layer_count() as usize;
         for blocker in blockers {
@@ -161,7 +177,8 @@ impl PathFinderStrategy {
             .collect();
 
         // Run PathFinder iteration loop
-        let loop_result = pathfinder_loop(&mut grid, &ratsnest, &order, rules, config);
+        let loop_result =
+            pathfinder_loop(&mut grid, &ratsnest, &order, rules, config, field.as_ref());
 
         // Post-process: convert grid paths to segments and vias
         let mut all_segments = Vec::new();
@@ -462,6 +479,7 @@ pub fn pathfinder_loop(
     order: &[usize],
     rules: &dyn RoutingRuleSet,
     config: &AutorouteConfig,
+    field: Option<&ClearanceField>,
 ) -> PathFinderLoopResult {
     let _span = tracing::info_span!("pathfinder_loop").entered();
 
@@ -651,6 +669,8 @@ pub fn pathfinder_loop(
                     pad_layer_change_penalty: config.pad_layer_change_penalty,
                     yield_halo: false,
                     heuristic_weight: config.heuristic_weight,
+                    field,
+                    clearance_barrier: config.clearance_barrier,
                 };
                 let mut path = find_path_congestion_augmented(
                     grid,
@@ -988,6 +1008,10 @@ struct Search<'a> {
     yield_halo: bool,
     /// What the search's estimate of the remaining distance is multiplied by.
     heuristic_weight: f64,
+    /// How far each cell is from the nearest copper, when anything reads it.
+    field: Option<&'a ClearanceField>,
+    /// What copper closer than the fab allows costs. Zero switches it off.
+    clearance_barrier: f64,
 }
 
 fn find_path_congestion_augmented(
@@ -1012,7 +1036,17 @@ fn find_path_congestion_augmented(
         pad_layer_change_penalty,
         yield_halo,
         heuristic_weight,
+        field,
+        clearance_barrier,
     } = *search;
+    // The same figure the grid bloats every obstacle by, and the one
+    // `cypcb-drc` measures a pair against: the fab's clearance plus the half
+    // trace whose centre line the search walks.
+    let required_clearance_nm = {
+        let c = rules.constraints_for_net(net_id);
+        c.min_clearance.raw() + c.min_trace_width.raw() / 2
+    };
+
     let grid_w = grid.width();
     let grid_h = grid.height();
     let layer_count = grid.layer_count();
@@ -1128,6 +1162,37 @@ fn find_path_congestion_augmented(
                 let base = cost_fn.neighbor_cost(node, target);
                 let congestion = congestion_map.congestion_cost(ux, uy, nl);
 
+                // Step 4 of `docs/router-plan.md`: what the checker will
+                // charge, charged here, as a barrier rather than a veto.
+                //
+                // The field knows distances and not nets, so it cannot be
+                // asked about a route's own pad - which is the one approach
+                // every route has to make. `in_pad_zone` is the gate: outside
+                // the routing net's own zones this applies to everything,
+                // inside them only to a cell a *different* net's pad owns.
+                // That keeps a route free to reach its own pin and still
+                // paying for a stranger's pad it is sitting on, which is where
+                // the cross-tab puts half of every introduced violation.
+                let barrier = match field {
+                    Some(field) if clearance_barrier > 0.0 => {
+                        let charged = if in_pad_zone(ux as u16, uy as u16, pad_zones) {
+                            matches!(grid.pad_owner(ux, uy, nl as usize), Some(o) if o != net_id)
+                        } else {
+                            true
+                        };
+                        if charged {
+                            clearance_penalty(
+                                field.distance_nm(ux, uy, nl as usize),
+                                required_clearance_nm,
+                                clearance_barrier,
+                            )
+                        } else {
+                            0.0
+                        }
+                    }
+                    _ => 0.0,
+                };
+
                 // Another net's pad copper, priced rather than forbidden. A
                 // net's pad zone opens every cell near any of its own pins so
                 // a route can reach them, and the pin next door came free with
@@ -1140,7 +1205,10 @@ fn find_path_congestion_augmented(
                     Some(owner) if owner != net_id => foreign_pad_penalty,
                     _ => 0.0,
                 };
-                neighbors.push((target, float_to_int_cost(base + congestion + foreign_pad)));
+                neighbors.push((
+                    target,
+                    float_to_int_cost(base + congestion + foreign_pad + barrier),
+                ));
             }
         }
 
@@ -1260,6 +1328,27 @@ fn nets_needing_reroute(
         .collect()
 }
 
+/// What a node closer to copper than the fab allows costs.
+///
+/// Zero in the legal region and rising as the square of how far under it the
+/// node sits, normalised by the requirement so `k` means the same thing on a
+/// board with a different clearance. Unbounded at contact, which is what makes
+/// a short the most expensive thing the search can buy.
+///
+/// `i64::MAX` is the field's answer for a layer carrying no copper at all -
+/// nothing is near, at any distance - and it costs nothing.
+#[inline]
+fn clearance_penalty(distance: Option<i64>, required_nm: i64, k: f64) -> f64 {
+    let Some(distance) = distance else {
+        return 0.0;
+    };
+    if distance == i64::MAX || distance >= required_nm || required_nm <= 0 {
+        return 0.0;
+    }
+    let short = (required_nm - distance) as f64 / required_nm as f64;
+    k * short * short
+}
+
 /// Check if a position is within any pad zone.
 #[inline]
 /// May this net use this cell on its way into one of its own pads?
@@ -1374,6 +1463,10 @@ mod tests {
             pad_layer_change_penalty: PAD_LAYER_CHANGE_PENALTY,
             yield_halo: false,
             heuristic_weight: 1.0,
+            // No field and no barrier: this checks the search's own geometry,
+            // and a term that defaults to off should not appear in it.
+            field: None,
+            clearance_barrier: 0.0,
         };
         let mut scratch =
             GridSearchScratch::for_grid(grid.width(), grid.height(), grid.layer_count() as usize);
@@ -1486,7 +1579,7 @@ mod tests {
         ];
 
         let order: Vec<usize> = (0..ratsnest.len()).collect();
-        let result = pathfinder_loop(&mut grid, &ratsnest, &order, &rules, &config);
+        let result = pathfinder_loop(&mut grid, &ratsnest, &order, &rules, &config, None);
 
         // What matters is that four mutually crossing nets all get routed.
         // Convergence to zero overuse is an implementation detail and no longer
@@ -1558,7 +1651,7 @@ mod tests {
         }];
 
         let order = vec![0];
-        let result = pathfinder_loop(&mut grid, &ratsnest, &order, &rules, &config);
+        let result = pathfinder_loop(&mut grid, &ratsnest, &order, &rules, &config, None);
 
         // Should handle gracefully — not crash, report as unrouted
         assert!(

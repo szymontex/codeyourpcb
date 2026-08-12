@@ -63,7 +63,7 @@ fn trajectory(filename: &str, price: f64) -> (Vec<usize>, u32, bool) {
 
     let ratsnest = extract_ratsnest(&mut world, &library);
     let order = order_nets(&ratsnest);
-    let result = pathfinder_loop(&mut grid, &ratsnest, &order, &rules, &config);
+    let result = pathfinder_loop(&mut grid, &ratsnest, &order, &rules, &config, None);
 
     (
         result.overuse_per_iteration,
