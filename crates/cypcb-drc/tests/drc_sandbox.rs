@@ -695,8 +695,14 @@ mod via_diameter {
     fn normal_via_ok() {
         let mut world = world_with_board();
         let net = world.intern_net("VCC");
-        // Via with 0.6mm outer — above the 0.554mm minimum
-        // (0.3mm drill + 2 x 0.127mm annular ring, from the JLCPCB constraints)
+        // Via with 0.6mm outer, above JLCPCB's published 0.5mm land.
+        //
+        // That figure used to be derived here as 0.3mm drill + 2 x 0.127mm
+        // annular ring = 0.554mm. D6 settled that a fab which states a land
+        // minimum is believed rather than derived from: the derived number is
+        // the land for the smallest hole the fab makes, not a floor under all
+        // of them. Per-via ring width is AnnularRingRule's question and is
+        // still asked of every via.
         spawn_via(&mut world, net, (25.0, 25.0), 0.3, 0.6);
         rebuild_spatial(&mut world, vec![]);
         assert_eq!(
@@ -711,12 +717,15 @@ mod via_diameter {
 
     #[test]
     fn multiple_vias_mixed() {
+        // The fourth via is exactly at JLCPCB's published 0.5mm land and is
+        // therefore legal. It read as a violation while the floor was derived
+        // at 0.554mm - see normal_via_ok above, and D6 in docs/TRACKER.md.
         let mut world = world_with_board();
         let net = world.intern_net("VCC");
         spawn_via(&mut world, net, (20.0, 25.0), 0.3, 0.6); // OK
         spawn_via(&mut world, net, (25.0, 25.0), 0.2, 0.3); // Too small
         spawn_via(&mut world, net, (30.0, 25.0), 0.2, 0.35); // Too small
-        spawn_via(&mut world, net, (35.0, 25.0), 0.3, 0.5); // Too small: min is 0.554mm
+        spawn_via(&mut world, net, (35.0, 25.0), 0.3, 0.5); // At the floor: OK
         rebuild_spatial(&mut world, vec![]);
         assert_eq!(
             count_violations(
@@ -724,7 +733,7 @@ mod via_diameter {
                 &DesignRules::jlcpcb_2layer(),
                 ViolationKind::ViaDiameter
             ),
-            3
+            2
         );
     }
 }

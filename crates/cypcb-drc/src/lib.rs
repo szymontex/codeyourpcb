@@ -147,6 +147,7 @@ pub fn run_drc(world: &mut BoardWorld, rules: &DesignRules) -> DrcResult {
         Box::new(rules::PasteClearanceRule),
         Box::new(rules::HoleToEdgeRule),
         Box::new(rules::SlotClearanceRule),
+        Box::new(rules::PadLandRule),
         Box::new(rules::DrillAspectRatioRule),
     ];
 

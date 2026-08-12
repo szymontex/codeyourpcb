@@ -87,6 +87,7 @@ use cypcb_rules::DesignConstraints;
 ///     min_hole_to_hole: Nm::from_mm(0.5),
 ///     min_solder_mask_bridge: Nm::from_mm(0.1),
 ///     min_paste_clearance: Nm::from_mm(0.127),
+///     min_pad_size: Nm::from_mm(0.5),
 ///     min_slot_clearance: Nm::from_mm(0.3),
 ///     min_hole_to_edge: Nm::from_mm(0.3),
 ///     solder_mask_expansion: Nm::from_mm(0.05),
@@ -126,6 +127,13 @@ pub struct DesignRules {
     /// nothing read it: the number appeared thirteen times inside
     /// `cypcb-rules` and nowhere else in the workspace.
     pub min_paste_clearance: Nm,
+    /// The smallest land a fab will put around a hole.
+    ///
+    /// D6: this is the pad paired with a drill in a fab's capability table -
+    /// JLCPCB publishes `Min. Via hole size/diameter: 0.15mm / 0.25mm` - and
+    /// not the SMD land, which it publishes separately. It governs a via's
+    /// pad and a through-hole pad; an SMD pad has no hole and no land.
+    pub min_pad_size: Nm,
     /// How far another net's copper must stay from a milled slot.
     ///
     /// D7: a slot is a routed opening made by the same mill that cuts the
@@ -207,15 +215,21 @@ impl DesignRules {
             min_trace_width: c.min_trace_width,
             min_drill_size: c.min_drill_size,
             min_via_drill: c.min_via_drill,
-            min_via_diameter: c
-                .min_via_diameter
-                .unwrap_or(Nm(c.min_via_drill.0 + 2 * c.min_via_annular_ring.0)),
+            // A fab that states a land minimum is believed; one that states
+            // none has it derived from its own smallest drill and ring. The
+            // derived figure over-constrains, because it is the land for the
+            // smallest hole the fab makes rather than a floor under all of
+            // them: JLCPCB derives 0.3 + 2 x 0.127 = 0.554mm and publishes
+            // 0.5mm. Per-via ring width is `AnnularRingRule`'s question, and
+            // it is asked of every via whatever this floor says.
+            min_via_diameter: c.min_via_diameter.unwrap_or(c.min_pad_size).max(Nm(0)),
             min_annular_ring: c.min_annular_ring,
             min_silk_width: c.min_silk_width,
             min_edge_clearance: c.min_edge_clearance,
             min_hole_to_hole: c.min_hole_to_hole,
             min_solder_mask_bridge: c.min_solder_mask_bridge,
             min_paste_clearance: c.min_paste_clearance,
+            min_pad_size: c.min_pad_size,
             min_slot_clearance: c.min_slot_clearance,
             min_hole_to_edge: c.min_hole_to_edge,
             solder_mask_expansion: c.solder_mask_expansion,

@@ -93,6 +93,8 @@ pub enum ViolationKind {
     DrillAspectRatio,
     /// Another net's copper too close to a milled slot.
     SlotClearance,
+    /// The land around a drilled hole is smaller than the fab will image.
+    PadLand,
 }
 
 impl std::fmt::Display for ViolationKind {
@@ -121,6 +123,7 @@ impl std::fmt::Display for ViolationKind {
             ViolationKind::HoleToEdge => write!(f, "hole-to-edge"),
             ViolationKind::DrillAspectRatio => write!(f, "drill-aspect-ratio"),
             ViolationKind::SlotClearance => write!(f, "slot-clearance"),
+            ViolationKind::PadLand => write!(f, "pad-land"),
         }
     }
 }
@@ -664,6 +667,37 @@ impl DrcViolation {
             message: format!(
                 "Hole is {:.3}mm from the board edge, {:.3}mm required",
                 actual.to_mm(),
+                required.to_mm(),
+            ),
+        }
+    }
+
+    /// The land around a drilled hole is smaller than the fab will image.
+    ///
+    /// D6. Distinct from the annular ring, which is `(land - drill) / 2` and
+    /// asks whether copper stays attached when the hole wanders; this asks
+    /// whether the land exists at all at the fab's smallest size.
+    pub fn pad_land(
+        entity: Entity,
+        pin: String,
+        actual: Nm,
+        drill: Nm,
+        required: Nm,
+        location: Point,
+    ) -> Self {
+        DrcViolation {
+            kind: ViolationKind::PadLand,
+            actual: Some(actual),
+            required: Some(required),
+            area: None,
+            location,
+            entity,
+            other_entity: None,
+            source_span: None,
+            message: format!(
+                "{pin}: land is {:.3}mm around a {:.3}mm hole, {:.3}mm required",
+                actual.to_mm(),
+                drill.to_mm(),
                 required.to_mm(),
             ),
         }
