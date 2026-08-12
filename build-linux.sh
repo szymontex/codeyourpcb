@@ -9,6 +9,23 @@ echo ""
 echo "NOTE: This may take 10-20 minutes on first build."
 echo ""
 
+# linuxdeploy, which Tauri downloads to build the AppImage, is itself an
+# AppImage - and an AppImage mounts itself with FUSE. A container usually has
+# no `/dev/fuse`, so it fails with `dlopen(): error loading libfuse.so.2` and
+# Tauri reports only `failed to run linuxdeploy`, which names the symptom and
+# not the cause. Measured in this project's own container on 2026-08-12: the
+# same binary answers `--version` normally once this is set, because the
+# variable makes an AppImage unpack itself to a temporary directory instead of
+# mounting.
+#
+# Set only when the device node is missing, so a machine that has FUSE keeps
+# the faster path.
+if [ ! -e /dev/fuse ]; then
+    echo "[INFO] /dev/fuse is missing, so AppImages cannot mount themselves."
+    echo "       Setting APPIMAGE_EXTRACT_AND_RUN=1 for the bundler."
+    export APPIMAGE_EXTRACT_AND_RUN=1
+fi
+
 cd viewer
 if ! npm run build:desktop; then
     echo ""
