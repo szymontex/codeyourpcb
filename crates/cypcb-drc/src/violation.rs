@@ -91,6 +91,8 @@ pub enum ViolationKind {
     HoleToEdge,
     /// A hole too deep for its width for the plating to reach the middle.
     DrillAspectRatio,
+    /// Another net's copper too close to a milled slot.
+    SlotClearance,
 }
 
 impl std::fmt::Display for ViolationKind {
@@ -118,6 +120,7 @@ impl std::fmt::Display for ViolationKind {
             ViolationKind::PasteClearance => write!(f, "paste-clearance"),
             ViolationKind::HoleToEdge => write!(f, "hole-to-edge"),
             ViolationKind::DrillAspectRatio => write!(f, "drill-aspect-ratio"),
+            ViolationKind::SlotClearance => write!(f, "slot-clearance"),
         }
     }
 }
@@ -660,6 +663,36 @@ impl DrcViolation {
             source_span: None,
             message: format!(
                 "Hole is {:.3}mm from the board edge, {:.3}mm required",
+                actual.to_mm(),
+                required.to_mm(),
+            ),
+        }
+    }
+
+    /// Another net's copper too close to a milled slot.
+    ///
+    /// The same physical question `edge_clearance` asks about the board
+    /// outline, asked of an opening cut inside it by the same mill. `entity`
+    /// is the copper; `other_entity` is the part the slot belongs to, so a
+    /// reader can name both sides the way every other pair rule does.
+    pub fn slot_clearance(
+        entity: Entity,
+        slot_owner: Entity,
+        actual: Nm,
+        required: Nm,
+        location: Point,
+    ) -> Self {
+        DrcViolation {
+            kind: ViolationKind::SlotClearance,
+            actual: Some(actual),
+            required: Some(required),
+            area: None,
+            location,
+            entity,
+            other_entity: Some(slot_owner),
+            source_span: None,
+            message: format!(
+                "Copper is {:.3}mm from a milled slot, {:.3}mm required",
                 actual.to_mm(),
                 required.to_mm(),
             ),
