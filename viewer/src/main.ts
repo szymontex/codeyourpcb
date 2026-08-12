@@ -31,6 +31,7 @@ import { registerDynamicFootprint, register3DModel, hasDynamicFootprint } from '
 import { initVariantPanel, hideVariants, isVariantPanelVisible, type VariantData } from './variant-panel';
 import type { VariantPreviewData } from './renderer';
 import { mergeTracesIntoDsl, syncTracesToEditor } from './trace-persist';
+import { reportLostTraces } from './trace-census';
 import { describeViolationKind } from './violation-kinds';
 
 // WebSocket server URL for hot reload + FreeRouting.
@@ -362,6 +363,19 @@ async function init(): Promise<void> {
     // Wrap suppressSync as ref object so syncTracesToEditor can toggle it
     const ref = { get value() { return suppressSync; }, set value(v: boolean) { suppressSync = v; } };
     syncTracesToEditor(editorInstance, exportedTraces, ref);
+
+    // The first half of the round trip, counted. The owner has twice seen a
+    // trace vanish when the next one was drawn, and the reason it has been
+    // hard to catch is that this journey is silent: the engine writes DSL, the
+    // editor takes it, a debounce parses it back, and nothing anywhere says
+    // how many traces went in against how many came out.
+    //
+    // This compares what the engine exported against what the editor now
+    // holds. It cannot see the parse back - that is the next instrument, and
+    // it needs a hook in the reload path rather than here - so a green
+    // reading is not an all-clear. What it does catch is copper the editor
+    // write dropped, which is one of the two halves and the cheaper one.
+    reportLostTraces('editor sync', exportedTraces, editorInstance.getModel()?.getValue() ?? '');
   }
 
   // Warn before closing with unsaved trace data
