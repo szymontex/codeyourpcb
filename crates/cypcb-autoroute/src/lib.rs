@@ -24,6 +24,7 @@
 
 pub mod astar_grid;
 pub mod astar_improved;
+pub mod clearance_field;
 pub mod congestion;
 pub mod cost;
 pub mod debug_route;
