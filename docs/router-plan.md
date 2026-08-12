@@ -220,6 +220,53 @@ band. **The plan explicitly does not predict which value wins.** If `k` cannot
 move any board outside its band, the term has failed and the honest outcome is
 a row in the dropped table.
 
+#### The question this section did not answer, and does now
+
+The field knows distances and not nets. A barrier over it charges a route for
+approaching **its own** pad, which is the one approach every route has to
+make - so as written above the term would price connecting a net at all. That
+gap held step 4 back for several fires and is the reason step 3 was deferred
+behind it.
+
+The search already carries the missing half. `pad_zones_per_net[net_idx]` is a
+list of `PadZone { cx, cy, radius }` - the discs belonging to the net being
+routed - built once per net and passed into the search as `&[PadZone]`, which
+already consults them. So:
+
+- **Outside the routing net's own pad zones**, the barrier applies. That is
+  where foreign copper is, and where a violation the checker reports comes
+  from.
+- **Inside them**, the barrier is suppressed. A route reaching its own pin is
+  not a fault and must not be priced as one.
+
+No new structure, no per-net field, nothing rebuilt: one lookup the search
+makes anyway.
+
+#### And the half that creates, which is why it is written down here
+
+Suppressing inside the zone re-creates the defect the cross-tab named. More
+than half of every introduced violation is `part <-> trace` **on a cell the
+grid marked as a pad** - 109 of stm32_breakout's 206, 112 of multi_ic's 215 -
+and the mechanism is that a net's own pad zone covers a *neighbouring part's*
+pad, which the zone switches off along with everything else. A barrier that
+goes quiet inside the zone goes quiet there too.
+
+The two structures answer different halves and the fix is to use each for what
+it knows:
+
+- the **field** gives a distance and no net, and is right outside the zone;
+- `pad_owner` gives a net and no distance, is already per-cell, and is right
+  inside it.
+
+So inside a pad zone the barrier is not switched off but narrowed: it applies
+to cells whose `pad_owner` is a **different** net, and to nothing else. That
+keeps a route free to reach its own pin, keeps it paying for a stranger's pad
+it is sitting on, and needs neither a new index nor a second field.
+
+Stated so it can fail: if that narrowing does not move the cross-tab's
+`part <-> trace on a pad cell` figure, the diagnosis behind this whole plan is
+wrong about where the violations come from, and step 4 dies with it.
+
 ### 2.3 The loop that terminates
 
 Only after the two above are measured. It is third for a reason: a convergence
@@ -328,7 +375,7 @@ number this step exists to move: 109 of 206 and 112 of 215 today.
 the outcome the last three attempts at this had, and this attempt differs from
 them only in having a real distance to work with.
 
-**Step 4 - the clearance term in the cost.**
+**Step 4 - the clearance term in the cost. Unblocked as of 2026-08-13.**
 Section 2.2, swept for `k`, per board, against the bands.
 *Shows:* which boards move outside their band, and whether any `k` moves more
 than one.
