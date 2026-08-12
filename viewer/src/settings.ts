@@ -57,6 +57,10 @@ export interface AppSettings {
   /// side of the board a trace is on, which is the question every other PCB
   /// tool answers by colour and this one could not answer at all.
   traceColorByNet: boolean;
+  /// The copper layer the next trace goes on. Remembered between sessions
+  /// because it is a working posture, not a view option: somebody wiring the
+  /// bottom of a board does not want to be put back on the top by a reload.
+  activeLayer: 'Top' | 'Bottom';
   /** Layer color overrides */
   layerColors: LayerColors;
   /** Autorouter tuning parameters */
@@ -89,6 +93,7 @@ export const DEFAULT_SETTINGS: Readonly<AppSettings> = {
   ratsnestVisible: true,
   netLabelsVisible: true,
   traceColorByNet: true,
+  activeLayer: 'Top',
   layerColors: {
     topCopper: LAYER_COLORS.top_copper,
     bottomCopper: LAYER_COLORS.bottom_copper,

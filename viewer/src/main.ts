@@ -12,7 +12,7 @@ import { createViewport, fitBoard, screenToWorld } from './viewport';
 import { render, type RenderState } from './renderer';
 import { createDefaultRenderConfig, buildPadNetMap } from './render-config';
 import { setupInteraction, type InteractionState } from './interaction';
-import { createRoutingState, type RoutingState } from './routing';
+import { createRoutingState, setActiveLayer, type RoutingState } from './routing';
 import { UndoStack, AddTraceCommand, RemoveTraceCommand, RotateComponentCommand, ResizeBoardCommand, EditTraceCommand, installDebugSurface } from './undo';
 import { createLayerVisibility, innerVisibleFromUrlLayers } from './layers';
 import { collectImportedFiles, importedPaths, readerForBaseUrl } from './imports';
@@ -221,6 +221,10 @@ async function init(): Promise<void> {
   const canvas = document.getElementById('pcb-canvas') as HTMLCanvasElement;
   const container = document.getElementById('canvas-container')!;
   const coordsEl = document.getElementById('coords')!;
+  const layerPickTop = document.getElementById('layer-pick-top') as HTMLButtonElement;
+  const layerPickBottom = document.getElementById('layer-pick-bottom') as HTMLButtonElement;
+  const layerSwatchTop = document.getElementById('layer-swatch-top')!;
+  const layerSwatchBottom = document.getElementById('layer-swatch-bottom')!;
   const topLayerCb = document.getElementById('layer-top') as HTMLInputElement;
   const bottomLayerCb = document.getElementById('layer-bottom') as HTMLInputElement;
   // A four-layer board's middle: drawn since the renderer learned about it,
@@ -309,7 +313,12 @@ async function init(): Promise<void> {
   let selectedTraceId: number | null = null;
   let hoveredTraceId: number | null = null;
   let labelPosition: { x: number; y: number } | null = null;
-  let routingState: RoutingState = createRoutingState();
+  // Seeded from the stored posture rather than always Top: see `activeLayer`
+  // in settings.ts for why this is remembered.
+  let routingState: RoutingState = setActiveLayer(
+    createRoutingState(),
+    getPreference('activeLayer'),
+  );
   let highlightedNet: string | null = null;
   const renderConfig = createDefaultRenderConfig();
   let padNetMap = new Map<string, string>();
@@ -466,10 +475,52 @@ async function init(): Promise<void> {
     }
   });
 
+  // Active copper layer picker.
+  //
+  // The layer used to live only inside a route: it was inferred from the start
+  // pad, flipped with F, and reported to the console. Nothing said which side
+  // of the board a trace would land on before it landed there, and there was
+  // no way to decide. It is editor state now, the picker shows it, and every
+  // route reads it.
+  function syncLayerPicker(): void {
+    const onTop = routingState.currentLayer === 'Top';
+    layerPickTop.setAttribute('aria-pressed', String(onTop));
+    layerPickBottom.setAttribute('aria-pressed', String(!onTop));
+    // The swatches follow the live layer colours, so recolouring a layer in
+    // preferences moves the picker with it rather than leaving it lying.
+    layerSwatchTop.style.background = renderConfig.layerColors.topCopper;
+    layerSwatchBottom.style.background = renderConfig.layerColors.bottomCopper;
+    // A layer the board cannot draw on is worth saying rather than hiding: a
+    // hidden layer stays selectable, but the user is told what they will not
+    // see. This is the one place the two ideas of "layer" meet.
+    layerPickTop.title = layers.topCopper
+      ? 'Draw on the top copper layer (L switches)'
+      : 'Draw on the top copper layer - currently hidden in View (L switches)';
+    layerPickBottom.title = layers.bottomCopper
+      ? 'Draw on the bottom copper layer (L switches)'
+      : 'Draw on the bottom copper layer - currently hidden in View (L switches)';
+  }
+
+  function applyActiveLayer(layer: string): void {
+    const next = setActiveLayer(routingState, layer);
+    if (next === routingState) return;
+    routingState = next;
+    interactionState.routing = routingState;
+    setPreference('activeLayer', layer as 'Top' | 'Bottom');
+    syncLayerPicker();
+    statusText.textContent = `Drawing on ${layer} copper`;
+    dirty = true;
+  }
+
+  layerPickTop.addEventListener('click', () => applyActiveLayer('Top'));
+  layerPickBottom.addEventListener('click', () => applyActiveLayer('Bottom'));
+  syncLayerPicker();
+
   // Layer checkbox handlers — update both 2D and 3D views
   topLayerCb.addEventListener('change', () => {
     layers = { ...layers, topCopper: topLayerCb.checked };
     dirty = true;
+    syncLayerPicker();
     if (is3DActive && renderer3d) {
       renderer3d.updateLayerVisibility(layers);
     }
@@ -477,6 +528,7 @@ async function init(): Promise<void> {
   bottomLayerCb.addEventListener('change', () => {
     layers = { ...layers, bottomCopper: bottomLayerCb.checked };
     dirty = true;
+    syncLayerPicker();
     if (is3DActive && renderer3d) {
       renderer3d.updateLayerVisibility(layers);
     }
@@ -1637,8 +1689,18 @@ async function init(): Promise<void> {
     routing: routingState,
     engine,
     onRoutingChange: (newRouting: RoutingState) => {
+      const layerChanged = newRouting.currentLayer !== routingState.currentLayer;
       routingState = newRouting;
       interactionState.routing = newRouting;
+      // F during routing goes through here, and so does the layer a start pad
+      // forces. Both have to reach the picker, or it says one thing while the
+      // copper goes somewhere else.
+      if (layerChanged) {
+        syncLayerPicker();
+        if (newRouting.mode === 'routing') {
+          statusText.textContent = `Routing ${newRouting.netName} on ${newRouting.currentLayer} copper`;
+        }
+      }
       // Update snapshot after mutations (route complete changes trace list)
       if (newRouting.mode === 'idle' && snapshot) {
         pullSnapshot();
@@ -3052,6 +3114,15 @@ async function init(): Promise<void> {
         fitBtn.click();
       }
       // During routing, interaction.ts handles F for flip layer
+    }
+    // L: switch the copper layer the next trace goes on. F is taken by "fit
+    // board" when idle, which is why the two ways to change layer do not share
+    // a key - the flip during routing stays on F where KiCad users expect it.
+    if ((e.key === 'l' || e.key === 'L') && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      if (routingState.mode !== 'routing') {
+        applyActiveLayer(routingState.currentLayer === 'Top' ? 'Bottom' : 'Top');
+        e.preventDefault();
+      }
     }
     // Ctrl+E to toggle editor
     if ((e.ctrlKey || e.metaKey) && e.key === 'e') {

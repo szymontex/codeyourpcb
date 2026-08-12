@@ -390,6 +390,56 @@
       font-weight: 700;
       letter-spacing: -0.02em;
     }
+    /* Active copper layer picker.
+       Every trace this editor creates is written onto one copper layer, and
+       until this existed the only thing that said which one was a console
+       log. It is a segmented control rather than a menu item because the
+       answer has to be readable without opening anything. */
+    #layer-picker {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      height: 28px;
+      border: 1px solid var(--border-secondary);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .layer-pick {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      height: 100%;
+      padding: 0 8px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      color: var(--text-secondary);
+      transition: background-color 0.12s, color 0.12s;
+    }
+    .layer-pick:hover {
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+    }
+    .layer-pick[aria-pressed="true"] {
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+    }
+    /* The swatch carries the same colour the renderer paints that layer in,
+       set from the live layer colours rather than hard-coded here, so a user
+       who recolours a layer in preferences sees the picker follow. */
+    .layer-swatch {
+      width: 9px;
+      height: 9px;
+      border-radius: 2px;
+      flex: 0 0 auto;
+      box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35) inset;
+    }
+    .layer-pick[aria-pressed="false"] .layer-swatch {
+      opacity: 0.4;
+    }
     #three-canvas {
       position: absolute;
       top: 0;
@@ -1408,6 +1458,20 @@
       <button id="view-3d-btn" class="tb-btn" title="Toggle 3D view (3)">3D</button>
     </div>
 
+    <!-- Active copper layer: which side the next trace goes on -->
+    <div class="tb-zone">
+      <div id="layer-picker" role="group" aria-label="Active copper layer">
+        <button type="button" id="layer-pick-top" class="layer-pick" aria-pressed="true"
+                title="Draw on the top copper layer (L switches)">
+          <span class="layer-swatch" id="layer-swatch-top"></span>Top
+        </button>
+        <button type="button" id="layer-pick-bottom" class="layer-pick" aria-pressed="false"
+                title="Draw on the bottom copper layer (L switches)">
+          <span class="layer-swatch" id="layer-swatch-bottom"></span>Bottom
+        </button>
+      </div>
+    </div>
+
     <!-- Route (centered primary action) -->
     <div class="tb-spacer"></div>
 
@@ -1537,6 +1601,7 @@
         <div class="help-row"><span class="help-desc">Undo</span><kbd>Ctrl+Z</kbd></div>
         <div class="help-row"><span class="help-desc">Redo</span><kbd>Ctrl+Shift+Z</kbd></div>
         <div class="help-row"><span class="help-desc">Fit board to view</span><kbd>F</kbd></div>
+        <div class="help-row"><span class="help-desc">Switch active copper layer (Top ↔ Bottom)</span><kbd>L</kbd></div>
         <div class="help-row"><span class="help-desc">Toggle editor</span><kbd>Ctrl+E</kbd></div>
         <div class="help-row"><span class="help-desc">Toggle 3D view</span><kbd>3</kbd></div>
         <div class="help-row"><span class="help-desc">Toggle theme</span><kbd>Ctrl+Shift+T</kbd></div>

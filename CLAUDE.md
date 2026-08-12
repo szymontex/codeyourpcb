@@ -67,6 +67,7 @@ When adding a new shortcut:
 | `Ctrl+Z` | Undo | Global (not in editor/input) | `main.ts` |
 | `Ctrl+Shift+Z` / `Ctrl+Y` | Redo | Global (not in editor/input) | `main.ts` |
 | `F` | Fit board to view | When not routing | `main.ts` |
+| `L` | Switch active copper layer (Top ↔ Bottom) | When not routing | `main.ts` |
 | `Ctrl+E` | Toggle code editor panel | Global | `main.ts` |
 | `3` | Toggle 3D view | Global (not in editor/input) | `main.ts` |
 | `Ctrl+Shift+T` | Toggle theme (Light/Dark) | Global | `main.ts` |

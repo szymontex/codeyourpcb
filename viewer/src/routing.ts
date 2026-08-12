@@ -19,6 +19,14 @@ import {
 } from './direction45';
 import { dodgeObstacles } from './dodge';
 
+/**
+ * The copper bits of a pad's layer mask, matching `Layer::to_copper_mask` in
+ * `cypcb-world`. Named rather than written as `0x01` and `0x02` at the call
+ * site, because the bug this replaced was a bare `& 0x02` that nobody read as
+ * "and this branch also catches every through-hole pad".
+ */
+export const LAYER_BIT = { TOP: 0x01, BOTTOM: 0x02 } as const;
+
 /** Recursively convert BigInt→Number in any object. Uses JSON round-trip
  *  which handles WASM proxy objects and prototype getters. */
 function deepSanitize(obj: any): any {
@@ -385,6 +393,29 @@ export function findNearestTargetPad(
 // ---------------------------------------------------------------------------
 
 /**
+ * Which copper layer a route leaving this pad has to start on.
+ *
+ * A pad with copper on one side only settles the question: there is nowhere
+ * else to attach, so a surface-mount pad on the top starts a top trace and one
+ * on the bottom starts a bottom trace, whatever the user picked.
+ *
+ * A pad with copper on both - every through-hole pad, whose mask is
+ * `TopCopper | BottomCopper` - does not settle it, and the user's choice is
+ * the only thing that can. This used to read
+ * `(layer_mask & 0x02) ? 'Bottom' : 'Top'`, which tests the bottom bit first,
+ * so **every route from a through-hole pad started on the bottom** and nothing
+ * on screen said so.
+ */
+export function layerForPad(pad: { layer_mask: number }, activeLayer: string): string {
+  const onTop = (pad.layer_mask & LAYER_BIT.TOP) !== 0;
+  const onBottom = (pad.layer_mask & LAYER_BIT.BOTTOM) !== 0;
+  if (onTop && !onBottom) return 'Top';
+  if (onBottom && !onTop) return 'Bottom';
+  // Both, or neither it could name: the active layer is the answer.
+  return activeLayer;
+}
+
+/**
  * Start a route from a pad click.
  * Takes snapshot to pre-compute targetPads for the net.
  * Returns updated state (caller should set highlightedNet from state.netName).
@@ -394,8 +425,9 @@ export function startRoute(
   padHit: PadHit,
   snapshot?: BoardSnapshot | null,
 ): RoutingState {
-  // Detect layer from pad's layer mask
-  const layer = (padHit.pad.layer_mask & 0x02) ? 'Bottom' : 'Top';
+  // The pad decides only when it has copper on one side; otherwise the layer
+  // the user is holding decides. See `layerForPad`.
+  const layer = layerForPad(padHit.pad, state.currentLayer);
 
   // Pre-compute target pads for magnetic snap
   const targets = snapshot
@@ -727,14 +759,33 @@ export function cancelRoute(state: RoutingState): RoutingState {
 }
 
 /**
- * Flip the active copper layer during routing (Top ↔ Bottom).
- * Called when the user presses 'F' while routing.
+ * Flip the active copper layer (Top ↔ Bottom).
+ *
+ * Bound to 'F' while routing and to 'L' when idle. It used to refuse to do
+ * anything unless a route was in progress, which made the layer a property of
+ * a route rather than of the editor - so there was no way to decide where the
+ * *next* trace would go, and no state a picker could show.
  */
 export function flipLayer(state: RoutingState): RoutingState {
-  if (state.mode !== 'routing') return state;
   const newLayer = state.currentLayer === 'Top' ? 'Bottom' : 'Top';
   console.log(`[Route] layer flip: ${state.currentLayer} → ${newLayer}`);
   return { ...state, currentLayer: newLayer };
+}
+
+/**
+ * Set the active copper layer outright, for the picker in the toolbar.
+ *
+ * Refuses an unknown name rather than storing it: `currentLayer` is written
+ * straight into every trace this editor creates, and a trace on a layer the
+ * board does not have is a parse error in a file the user has already saved.
+ */
+export function setActiveLayer(state: RoutingState, layer: string): RoutingState {
+  if (layer !== 'Top' && layer !== 'Bottom') {
+    console.warn(`[Route] refusing unknown layer '${layer}', staying on ${state.currentLayer}`);
+    return state;
+  }
+  if (layer === state.currentLayer) return state;
+  return { ...state, currentLayer: layer };
 }
 
 /**
