@@ -679,6 +679,58 @@ same board measured through different harnesses - this sweep checks against
 set, which do not share a hole-to-hole minimum. Compare rows within one table,
 never across.
 
+### The over-block is load-bearing, which was not what anybody expected
+
+`docs/router-plan.md` is built on a claim: that the seventeen instruments in
+the table below failed because a grid of whole cells cannot hold the quantity
+they were reaching for. The via keepout is the case whose arithmetic was
+already written down - `0.15 + 0.127 + 0.127 + 0.0635 = 0.4675mm`, which is
+1.84 cells at 0.254mm and becomes 2 after `ceil`, a disc of 0.508mm around a
+ring that is 0.277mm across. So the plan made it step 2, the narrowest possible
+first consumer, and said that if no board moved outside its own band there, the
+premise was weaker than the plan claimed.
+
+The premise did worse than that. Measured in nanometres instead of cells, the
+disc drops from 13 cells to 9 and **three boards get worse outside their own
+bands while none gets better outside its own**:
+
+| board | shipped | exact disc | band | reading |
+|---|---|---|---|---|
+| `led_blink` | 2 / 0 | **3 / 1** | 0 / 0 | regression, and a short on the simplest board |
+| `stm32_breakout` | 187 / 99 | 213 / 113 | 59 / 61 | inside its band |
+| `multi_ic` | 304 / 200 | 251 / 149 | 65 / 56 | inside its band |
+| `shift_driver` | 65 / 34 | 67 / 39 | 17 / 8 | inside its band |
+| `qfp_fanout` | 318 / 149 | 343 / **199** | 57 / 44 | shorts +50 against a band of 44 |
+| `plane_board` | 28 / 13 | **38 / 19** | 0 / 0 | regression on the board that never moves |
+
+`plane_board` is the one that settles it. It routes identically at every via
+price in the sweep range - that is why its band is zero - and it moved by ten
+violations and six shorts here. This is not the negotiation going differently;
+it is the board getting worse.
+
+**The obvious rescue was tried and lost.** The shipped price of 0.25 was tuned
+against a 13-cell disc, so a 9-cell disc collects 1.44 times less crowding for
+the same geometry, and 0.25 x 13/9 = 0.36 is the price that charges the same
+total. At 0.36: `plane_board` 45 / 26, worse than both; `qfp_fanout` 393 / 226,
+worse than both; `led_blink` still 3 / 1. Compensating the price does not
+recover the boards, so what the extra ring of cells was doing is not
+arithmetic that a coefficient can replace.
+
+What it was doing is the interesting part, and it is a hypothesis rather than a
+result: the over-block is a **margin**, and the search has been relying on it.
+A via priced only where its copper actually reaches will sit one cell closer to
+foreign copper, and one cell at this resolution is 0.254mm - more than the
+0.127mm the fab requires. The quantisation was buying a safety margin nobody
+wrote down, and taking it away leaves the price to do a job it was never
+measured doing.
+
+That does not refute the field, which measures what it says it measures. It
+refutes the assumption that the grid's roundings are only ever costs. Anything
+built on the field from here has to supply its own margin explicitly rather
+than inherit one by accident - and the next instrument to try is a barrier term
+that is non-zero *before* contact, which is what `docs/router-plan.md` step 4
+already describes.
+
 ## Instruments that were measured and dropped
 
 Each of these was built, measured and reverted. The fixture set grew from three
@@ -705,6 +757,7 @@ stated.
 | Taper the foreign-pad price by distance to the target, so a route pays full price only far from the pin it is reaching | `Pad Aware` on stm32_breakout 280 -> 332 after, qfp_fanout 558 -> 568 with shorts 330 -> 353; multi_ic 248 -> 244, inside its band; led_blink and shift_driver unchanged |
 | Make the pad zone layer-aware, so a surface-mount pad stops opening the layer it has no copper on | stm32_breakout 239 -> 290 after, multi_ic 317 -> 382, qfp_fanout 343 -> 437; led_blink and shift_driver unchanged |
 | Let the via keepout price count foreign **pads**, not only foreign routed copper | at the shipped price of 0.25: stm32_breakout 239 -> 259, multi_ic 336 -> 392 with 166 -> 216 shorts. At a price of its own it works and still loses: see below |
+| Measure the via keepout in nanometres instead of whole cells, removing the 83% over-block | three boards worse outside their own bands and none better outside its own: `led_blink` 2/0 -> 3/1 and `plane_board` 28/13 -> 38/19, both on a band of zero, and `qfp_fanout` shorts 149 -> 199 against a band of 44. Compensating the price for the smaller disc makes it worse again: see below |
 
 The pattern across all of them: **pricing copper that exists pays, blocking or
 pricing space somebody might want does not.** An empty congestion map is not

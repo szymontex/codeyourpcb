@@ -295,15 +295,28 @@ added time per board.
 *Falsifier:* any board's violation count moves at all. Nothing reads the field
 yet, so a movement means the transform perturbed something it must not touch.
 
-**Step 2 - the via keepout reads the field.**
+**Step 2 - the via keepout reads the field. RUN, AND THE FALSIFIER FIRED.**
 The narrowest possible first consumer, and the one whose arithmetic is already
-written down. Nothing else changes.
-*Shows:* whether removing an 83% over-block on via keepouts moves the three
-boards with vias, against their bands.
-*Falsifier:* no board moves outside its band. Then quantisation was not what
-was costing those violations, and the whole premise of section 2.1 is weaker
-than this document claims - which is worth knowing at step 2 rather than at
-step 5.
+written down. Nothing else changed.
+*Showed:* not "no movement" but movement the wrong way. Measured in nanometres
+instead of whole cells, the disc drops from 13 cells to 9 and **three boards
+get worse outside their own bands while none gets better outside its own** -
+`led_blink` 2/0 to 3/1 and `plane_board` 28/13 to 38/19, both on a band of
+zero, and `qfp_fanout` shorts 149 to 199 against a band of 44. Compensating the
+price for the smaller disc (0.25 x 13/9 = 0.36) makes it worse again. The full
+table and the mechanism are in `docs/routing.md` under "The over-block is
+load-bearing".
+*What it means for this plan:* section 2.1's premise - that the grid's
+rounding is a cost and only a cost - is refuted for this instrument. The
+over-block was also a **margin**, worth 0.254mm where the fab asks 0.127mm,
+and the search had been relying on it without anybody writing that down.
+*What survives:* the field measures what it says it measures, and step 1's
+numbers are unaffected. What does not survive is the idea that a consumer can
+simply take the rounding away and keep everything else. **Any reader of the
+field has to supply its own margin explicitly.** That is an argument for going
+to step 4 next rather than for retrying step 2: a barrier term is non-zero
+before contact, so it carries a margin by construction rather than by
+accident.
 
 **Step 3 - the pad zone reads the field.**
 The cross-tab says this is where 52-53% of introduced faults are. The radius
@@ -390,6 +403,21 @@ If that is right, step 2 moves boards outside their bands and steps 3 and 4
 compound it. If it is wrong, step 2 shows nothing and this document has cost a
 day rather than a month - which is the reason step 2 is the second step and not
 the fifth.
+
+**Step 2 ran, and the claim above is wrong as stated.** Three boards moved
+outside their bands the wrong way and none moved outside its band the right
+way; the numbers are in step 2 above and in `docs/routing.md`. What the
+measurement found is that the grid's rounding was not only a cost. It was also
+an unwritten margin - 0.254mm of it, where the fab asks 0.127mm - and the
+search had come to depend on it.
+
+The claim is therefore narrowed rather than abandoned, and the narrowed version
+is the one the rest of this plan should be read against: **a grid of whole
+cells cannot hold that quantity, and a consumer that takes the rounding away
+must put a margin back deliberately.** Steps 3 and 4 are still worth running
+under it - step 4 especially, since a barrier that is non-zero before contact
+carries its margin by construction. What is no longer available is the
+comfortable version, where each rounding removed is a violation saved.
 
 The alternative reading is also on the table and should be said out loud: that
 negotiated congestion on a fine-pitch two-layer escape is simply the wrong
