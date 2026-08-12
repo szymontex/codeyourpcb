@@ -14,10 +14,18 @@ import { dirname, join } from 'node:path';
  * Undo, Redo, Cut, Copy and Paste did: five entries that looked like the app's
  * own features and did nothing when clicked.
  *
- * The desktop crate cannot be compiled in this container - it needs system GTK
- * and webkit, which is why `cargo test --workspace` excludes it - so nothing
- * else in the project reads that file at all. This test does, as text, because
- * the wiring is a question about two lists and does not need a compiler.
+ * This reads `menu.rs` as text, because the wiring is a question about two
+ * lists and does not need a compiler. It used to say here that nothing else in
+ * the project could read that file, since the desktop crate needed system GTK
+ * and webkit that nothing installed and `cargo test --workspace` excluded it.
+ * That stopped being true on 2026-08-12: the dependencies are in
+ * `scripts/setup-dev.sh`, the gate covers the crate, and
+ * `src-tauri/tests/the_menu_handles_what_it_declares.rs` asks the same
+ * question of the data model `create_app_menu()` actually returns.
+ *
+ * Both are worth keeping. This one is the only half that can see
+ * `desktop.ts`'s switch; the Rust one is the only half that can see an id
+ * built rather than written as a literal.
  */
 
 const here = dirname(fileURLToPath(import.meta.url));

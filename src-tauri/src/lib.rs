@@ -1,5 +1,8 @@
 pub mod commands;
-mod menu;
+// Public so the menu can be read without a running app. `create_app_menu`
+// returns a plain data model and the crate's only tests walk it; a private
+// module would have left the menu checkable by regex and by nothing else.
+pub mod menu;
 
 // Tauri 2 moved `emit` off the app types and onto a trait. The compiler says
 // so plainly - "trait `Emitter` which provides `emit` is implemented but not
