@@ -68,14 +68,14 @@ więc podnosisz wersję - zmienia się nazwa. Katalogi są stałe, a skrypty bud
 same wypisują to, co powstało:
 
 ### Windows
-- `src-tauri/target/release/bundle/msi/` - jeden plik `.msi`
+- `target/release/bundle/msi/` - jeden plik `.msi`
 
 ### macOS
-- `src-tauri/target/release/bundle/dmg/` - jeden plik `.dmg`
+- `target/release/bundle/dmg/` - jeden plik `.dmg`
 
 ### Linux
-- `src-tauri/target/release/bundle/appimage/` - `.AppImage` (przenośny)
-- `src-tauri/target/release/bundle/deb/` - `.deb` (instalacja systemowa)
+- `target/release/bundle/appimage/` - `.AppImage` (przenośny)
+- `target/release/bundle/deb/` - `.deb` (instalacja systemowa)
 
 ## 🔧 Jeśli coś nie działa
 

@@ -107,7 +107,7 @@ cd viewer
 npm run build:desktop
 ```
 
-This creates platform-specific installers in `src-tauri/target/release/bundle/`.
+This creates platform-specific installers in `target/release/bundle/`.
 
 ## Running Tests
 
