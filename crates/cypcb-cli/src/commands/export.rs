@@ -24,7 +24,12 @@ pub struct ExportCommand {
     #[arg(short, long, default_value = "output")]
     output: PathBuf,
 
-    /// Manufacturer preset (jlcpcb, pcbway)
+    /// File-naming convention: what a fabricator wants the Gerbers called.
+    ///
+    /// Not design rules. `cypcb check --preset` names what a house can etch and
+    /// knows ten fabs; this names what a house wants the files called and knows
+    /// two. Which rules this board is checked against before export comes from
+    /// the board itself - `board b { fab oshpark }`.
     #[arg(short, long, default_value = "jlcpcb")]
     preset: String,
 
@@ -66,7 +71,9 @@ impl ExportCommand {
                  They are a different list from `cypcb check --preset`, which \
                  takes design rules - what a house can etch - and knows more \
                  names including oshpark. A board can be checked against a \
-                 house this command cannot yet write files for.\n\n\
+                 house this command cannot yet write files for, and it is the \
+                 board's own `fab` line that decides which rules it is checked \
+                 against here.\n\n\
                  Export with `--preset jlcpcb` or `--preset pcbway`; the \
                  copper is the same either way, only the file names and the \
                  coordinate format differ.",
@@ -285,13 +292,19 @@ impl ExportCommand {
         // touching copper is not that call - the board cannot work - so it
         // stops here until `--force` says otherwise.
         {
-            use cypcb_drc::{run_drc, Preset as DrcPreset, PresetRules};
-            // Named the same way `cypcb check` names it, so the two commands
-            // measure the same board against the same rules. A preset the
-            // checker does not know is not a reason to stop an export.
-            let rules = DrcPreset::from_name(&self.preset)
-                .map(|p| p.rules())
-                .unwrap_or_else(cypcb_drc::DesignRules::jlcpcb_2layer);
+            use cypcb_drc::{run_drc, PresetRules};
+            // The board decides, exactly as it does for `cypcb check`, so the
+            // two commands measure the same board against the same table.
+            //
+            // This used to read `--preset`, which on this command names a
+            // **file convention** and not a design rule set. The two lists
+            // overlap on `jlcpcb` and `pcbway` and nowhere else, so a board
+            // written for OSHPark was checked against JLCPCB on the way out
+            // however it was exported - `--preset oshpark` is refused by
+            // `resolve_preset` long before this line - and `--preset pcbway`
+            // silently changed which rules a board was measured against
+            // without anybody asking for that.
+            let rules = crate::preset_choice::resolve(None, &world)?.rules();
             world.rebuild_spatial_index_from_library(&library);
             let report = run_drc(&mut world, &rules);
 

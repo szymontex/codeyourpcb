@@ -74,6 +74,15 @@ The flag still wins when it is given, so a question about a specific fab is not
 overridden by the file. A board that names none is checked against JLCPCB, which
 is what this project has always defaulted to.
 
+`cypcb export` reads it always. Its own `--preset` answers a different question
+- what a fabricator wants the files called - so it has no say in which rules the
+board is checked against on the way out.
+
+The editor and the language server read it too, and neither can refuse a name it
+does not have, because both still have to show you the board. They fall back to
+JLCPCB and say so: the viewer as a diagnostic on the word, the server as a
+warning underlining it.
+
 Run `cypcb check --preset ?` against any board to see the names, or read them
 off a refusal: an unknown fab is reported with the full list, and the message
 says whether the name came from the file or the command line, because the two
