@@ -27,6 +27,28 @@ import { dodgeObstacles } from './dodge';
  */
 export const LAYER_BIT = { TOP: 0x01, BOTTOM: 0x02 } as const;
 
+/**
+ * The copper layers a board of `layerCount` has, in stack order.
+ *
+ * KiCad and this project both count inner layers from 1, and `Layer::Inner(n)`
+ * in `cypcb-world` takes bit `1 << (2 + n)` - so `Inner1` is bit 2. A
+ * two-layer board is `['Top', 'Bottom']`, which is what everything did before
+ * a board's own count reached the picker.
+ */
+export function copperLayerNames(layerCount: number): string[] {
+  const inner = Math.max(0, Math.floor(layerCount) - 2);
+  return ['Top', ...Array.from({ length: inner }, (_, i) => `Inner${i + 1}`), 'Bottom'];
+}
+
+/** The layer-mask bit a copper layer name occupies. */
+export function layerBit(name: string): number {
+  if (name === 'Top') return LAYER_BIT.TOP;
+  if (name === 'Bottom') return LAYER_BIT.BOTTOM;
+  const inner = /^Inner(\d+)$/.exec(name);
+  if (inner) return 1 << (2 + (Number(inner[1]) - 1));
+  return 0;
+}
+
 /** Recursively convert BigInt→Number in any object. Uses JSON round-trip
  *  which handles WASM proxy objects and prototype getters. */
 function deepSanitize(obj: any): any {
@@ -773,6 +795,9 @@ export function cancelRoute(state: RoutingState): RoutingState {
  * *next* trace would go, and no state a picker could show.
  */
 export function flipLayer(state: RoutingState): RoutingState {
+  // Top and bottom only, which is what F means while routing on any board:
+  // the far side, not the next one down. `nextLayer` is the one that walks
+  // the stack.
   const newLayer = state.currentLayer === 'Top' ? 'Bottom' : 'Top';
   console.log(`[Route] layer flip: ${state.currentLayer} → ${newLayer}`);
   return { ...state, currentLayer: newLayer };
@@ -785,13 +810,36 @@ export function flipLayer(state: RoutingState): RoutingState {
  * straight into every trace this editor creates, and a trace on a layer the
  * board does not have is a parse error in a file the user has already saved.
  */
-export function setActiveLayer(state: RoutingState, layer: string): RoutingState {
-  if (layer !== 'Top' && layer !== 'Bottom') {
-    console.warn(`[Route] refusing unknown layer '${layer}', staying on ${state.currentLayer}`);
+export function setActiveLayer(
+  state: RoutingState,
+  layer: string,
+  layerCount = 2,
+): RoutingState {
+  // Validated against the board rather than against a pair of literals. A
+  // four-layer board can be drawn since inner layers shipped, and until this
+  // the picker offered two of its four and `Inner1` was refused by name.
+  const allowed = copperLayerNames(layerCount);
+  if (!allowed.includes(layer)) {
+    console.warn(
+      `[Route] refusing layer '${layer}': this board has ${allowed.join(', ')}. ` +
+        `Staying on ${state.currentLayer}.`,
+    );
     return state;
   }
   if (layer === state.currentLayer) return state;
   return { ...state, currentLayer: layer };
+}
+
+/**
+ * The next copper layer down, wrapping at the bottom.
+ *
+ * `L` toggled between two names, which is a flip on a two-layer board and a
+ * dead end on a four-layer one.
+ */
+export function nextLayer(current: string, layerCount: number): string {
+  const order = copperLayerNames(layerCount);
+  const at = order.indexOf(current);
+  return order[(at < 0 ? 0 : at + 1) % order.length];
 }
 
 /**

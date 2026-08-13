@@ -12,7 +12,13 @@ import { createViewport, fitBoard, screenToWorld } from './viewport';
 import { render, type RenderState } from './renderer';
 import { createDefaultRenderConfig, buildPadNetMap } from './render-config';
 import { setupInteraction, type InteractionState } from './interaction';
-import { createRoutingState, setActiveLayer, type RoutingState } from './routing';
+import {
+  copperLayerNames,
+  createRoutingState,
+  nextLayer,
+  setActiveLayer,
+  type RoutingState,
+} from './routing';
 import { UndoStack, AddTraceCommand, RemoveTraceCommand, RotateComponentCommand, ResizeBoardCommand, EditTraceCommand, installDebugSurface } from './undo';
 import { createLayerVisibility, innerVisibleFromUrlLayers } from './layers';
 import { collectImportedFiles, importedPaths, readerForBaseUrl } from './imports';
@@ -222,10 +228,6 @@ async function init(): Promise<void> {
   const canvas = document.getElementById('pcb-canvas') as HTMLCanvasElement;
   const container = document.getElementById('canvas-container')!;
   const coordsEl = document.getElementById('coords')!;
-  const layerPickTop = document.getElementById('layer-pick-top') as HTMLButtonElement;
-  const layerPickBottom = document.getElementById('layer-pick-bottom') as HTMLButtonElement;
-  const layerSwatchTop = document.getElementById('layer-swatch-top')!;
-  const layerSwatchBottom = document.getElementById('layer-swatch-bottom')!;
   const topLayerCb = document.getElementById('layer-top') as HTMLInputElement;
   const bottomLayerCb = document.getElementById('layer-bottom') as HTMLInputElement;
   // A four-layer board's middle: drawn since the renderer learned about it,
@@ -496,27 +498,71 @@ async function init(): Promise<void> {
   // of the board a trace would land on before it landed there, and there was
   // no way to decide. It is editor state now, the picker shows it, and every
   // route reads it.
+  /** How many copper layers the board on screen has. Two until one says. */
+  function boardLayerCount(): number {
+    return snapshot?.board?.layer_count ?? 2;
+  }
+
+  /**
+   * Rebuild the picker from the board rather than from two fixed buttons.
+   *
+   * The markup ships with Top and Bottom because that is what a blank editor
+   * has. A four-layer board could always be drawn - `inner-layers.test.ts` and
+   * the View menu's own checkbox say so - and the picker still offered two of
+   * its four, with `Inner1` refused by name if anything asked for it.
+   */
   function syncLayerPicker(): void {
-    const onTop = routingState.currentLayer === 'Top';
-    layerPickTop.setAttribute('aria-pressed', String(onTop));
-    layerPickBottom.setAttribute('aria-pressed', String(!onTop));
-    // The swatches follow the live layer colours, so recolouring a layer in
-    // preferences moves the picker with it rather than leaving it lying.
-    layerSwatchTop.style.background = renderConfig.layerColors.topCopper;
-    layerSwatchBottom.style.background = renderConfig.layerColors.bottomCopper;
-    // A layer the board cannot draw on is worth saying rather than hiding: a
-    // hidden layer stays selectable, but the user is told what they will not
-    // see. This is the one place the two ideas of "layer" meet.
-    layerPickTop.title = layers.topCopper
-      ? 'Draw on the top copper layer (L switches)'
-      : 'Draw on the top copper layer - currently hidden in View (L switches)';
-    layerPickBottom.title = layers.bottomCopper
-      ? 'Draw on the bottom copper layer (L switches)'
-      : 'Draw on the bottom copper layer - currently hidden in View (L switches)';
+    const names = copperLayerNames(boardLayerCount());
+    const picker = document.getElementById('layer-picker')!;
+
+    // Rebuilt only when the stack changes, so a redraw does not throw away the
+    // buttons a user is about to click.
+    if (picker.dataset.layers !== names.join(',')) {
+      picker.dataset.layers = names.join(',');
+      picker.textContent = '';
+      for (const name of names) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'layer-pick';
+        button.id = `layer-pick-${name.toLowerCase()}`;
+        const swatch = document.createElement('span');
+        swatch.className = 'layer-swatch';
+        button.appendChild(swatch);
+        button.appendChild(document.createTextNode(name));
+        button.addEventListener('click', () => applyActiveLayer(name));
+        picker.appendChild(button);
+      }
+    }
+
+    for (const button of Array.from(picker.children) as HTMLElement[]) {
+      const name = button.textContent?.trim() ?? '';
+      button.setAttribute('aria-pressed', String(name === routingState.currentLayer));
+      const swatch = button.querySelector('.layer-swatch') as HTMLElement | null;
+      if (swatch) {
+        // The swatches follow the live layer colours, so recolouring a layer
+        // in preferences moves the picker with it. Inner copper has no colour
+        // of its own in the palette and takes the one the renderer draws it
+        // in, which is the honest answer rather than a made-up swatch.
+        swatch.style.background =
+          name === 'Top'
+            ? renderConfig.layerColors.topCopper
+            : name === 'Bottom'
+              ? renderConfig.layerColors.bottomCopper
+              : 'var(--pcb-inner-copper, #2f8f4f)';
+      }
+      // A layer the board cannot draw on is worth saying rather than hiding: a
+      // hidden layer stays selectable, but the user is told what they will not
+      // see. This is the one place the two ideas of "layer" meet.
+      const visible =
+        name === 'Top' ? layers.topCopper : name === 'Bottom' ? layers.bottomCopper : layers.innerCopper !== false;
+      button.title = visible
+        ? `Draw on the ${name} copper layer (L cycles)`
+        : `Draw on the ${name} copper layer - currently hidden in View (L cycles)`;
+    }
   }
 
   function applyActiveLayer(layer: string): void {
-    const next = setActiveLayer(routingState, layer);
+    const next = setActiveLayer(routingState, layer, boardLayerCount());
     if (next === routingState) return;
     routingState = next;
     interactionState.routing = routingState;
@@ -526,8 +572,9 @@ async function init(): Promise<void> {
     dirty = true;
   }
 
-  layerPickTop.addEventListener('click', () => applyActiveLayer('Top'));
-  layerPickBottom.addEventListener('click', () => applyActiveLayer('Bottom'));
+  // No listeners bound here: `syncLayerPicker` builds the buttons from the
+  // board and binds each as it makes it. The two in `index.html` are what a
+  // blank editor shows until a board says how many layers it has.
   syncLayerPicker();
 
   // Layer checkbox handlers — update both 2D and 3D views
@@ -3157,7 +3204,7 @@ async function init(): Promise<void> {
     // a key - the flip during routing stays on F where KiCad users expect it.
     if ((e.key === 'l' || e.key === 'L') && !e.ctrlKey && !e.metaKey && !e.altKey) {
       if (routingState.mode !== 'routing') {
-        applyActiveLayer(routingState.currentLayer === 'Top' ? 'Bottom' : 'Top');
+        applyActiveLayer(nextLayer(routingState.currentLayer, boardLayerCount()));
         e.preventDefault();
       }
     }

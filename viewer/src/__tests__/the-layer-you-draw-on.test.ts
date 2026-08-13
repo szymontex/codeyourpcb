@@ -2,7 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
+  copperLayerNames,
   createRoutingState,
+  nextLayer,
   startRoute,
   flipLayer,
   setActiveLayer,
@@ -155,5 +157,47 @@ describe('the picker exists where a user can see it', () => {
     // says one thing while the copper goes somewhere else, which is worse than
     // having no picker.
     expect(main).toMatch(/layerChanged[\s\S]{0,200}syncLayerPicker\(\)/);
+  });
+});
+
+describe('a board with more than two copper layers', () => {
+  it('names every copper layer in stack order', () => {
+    // KiCad and this project both count inner layers from 1, so a four-layer
+    // board is Top, Inner1, Inner2, Bottom - not Top and Bottom with two
+    // unnamed things in between, which is what the picker used to offer.
+    expect(copperLayerNames(2)).toEqual(['Top', 'Bottom']);
+    expect(copperLayerNames(4)).toEqual(['Top', 'Inner1', 'Inner2', 'Bottom']);
+    expect(copperLayerNames(6)).toEqual([
+      'Top',
+      'Inner1',
+      'Inner2',
+      'Inner3',
+      'Inner4',
+      'Bottom',
+    ]);
+  });
+
+  it('accepts an inner layer on a board that has one', () => {
+    const state = createRoutingState();
+    expect(setActiveLayer(state, 'Inner1', 4).currentLayer).toBe('Inner1');
+  });
+
+  it('refuses an inner layer on a board that does not', () => {
+    // The validation is against the board rather than a pair of literals, so
+    // the same name is right on one board and wrong on another.
+    const state = createRoutingState();
+    expect(setActiveLayer(state, 'Inner1', 2).currentLayer).toBe('Top');
+    expect(setActiveLayer(state, 'Inner3', 4).currentLayer).toBe('Top');
+  });
+
+  it('cycles down the stack and wraps, rather than toggling two', () => {
+    // `L` used to flip between two names, which is a flip on a two-layer board
+    // and a dead end on a four-layer one.
+    expect(nextLayer('Top', 4)).toBe('Inner1');
+    expect(nextLayer('Inner1', 4)).toBe('Inner2');
+    expect(nextLayer('Inner2', 4)).toBe('Bottom');
+    expect(nextLayer('Bottom', 4)).toBe('Top');
+    expect(nextLayer('Top', 2)).toBe('Bottom');
+    expect(nextLayer('Bottom', 2)).toBe('Top');
   });
 });
