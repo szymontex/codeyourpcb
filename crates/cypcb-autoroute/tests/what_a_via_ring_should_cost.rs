@@ -37,11 +37,15 @@ fn what_a_via_ring_should_cost() {
     let rules = PresetRuleSet::new(RulesPreset::from_name("jlcpcb").expect("a known preset"));
     let drc_rules = DesignRules::jlcpcb_2layer();
 
-    for name in [
-        "stm32_breakout.kicad_pcb",
-        "multi_ic.kicad_pcb",
-        "qfp_fanout.kicad_pcb",
-    ] {
+    // Three boards until 2026-08-13, and the three it left out were the ones
+    // that mattered. `is_the_best_variant_a_local_optimum` found `via_ring 1`
+    // beating the shipped pick on `plane_board` - a board this sweep had never
+    // run - and the tracker recorded, wrongly, that the price had been
+    // measured everywhere already. It had not: the sweep with "price" in its
+    // name measures `via_foreign_copper_penalty`, a different knob, and this
+    // one covered half the fixtures.
+    for benchmark in cypcb_kicad::BENCHMARKS {
+        let name = benchmark.filename;
         eprintln!();
         eprintln!("=== {name} ===");
 
