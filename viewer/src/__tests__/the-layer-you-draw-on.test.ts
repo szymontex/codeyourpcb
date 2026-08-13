@@ -177,6 +177,30 @@ describe('a board with more than two copper layers', () => {
     ]);
   });
 
+  it('starts a route on the only layer a buried pad has', () => {
+    // The gap the picker left open. A pad living only on Inner1 fell through
+    // to the active layer, so a click on it started a route on copper the pad
+    // does not have. `layerBit` was written for this comparison and had no
+    // caller until now.
+    const inner1 = 1 << 2;
+    expect(layerForPad({ layer_mask: inner1 }, 'Top', 4)).toBe('Inner1');
+    expect(layerForPad({ layer_mask: 1 << 3 }, 'Top', 4)).toBe('Inner2');
+  });
+
+  it('keeps the active layer for a buried pad that is on it', () => {
+    // Two inner layers and the user is holding one of them: their choice
+    // stands, the way it does for a through-hole pad.
+    const bothInner = (1 << 2) | (1 << 3);
+    expect(layerForPad({ layer_mask: bothInner }, 'Inner2', 4)).toBe('Inner2');
+  });
+
+  it('refuses to answer a layer the pad has no copper on', () => {
+    // The defect stated as a test: Top is active, the pad is buried, and the
+    // old code answered Top.
+    const bothInner = (1 << 2) | (1 << 3);
+    expect(layerForPad({ layer_mask: bothInner }, 'Top', 4)).toBe('Inner1');
+  });
+
   it('accepts an inner layer on a board that has one', () => {
     const state = createRoutingState();
     expect(setActiveLayer(state, 'Inner1', 4).currentLayer).toBe('Inner1');

@@ -428,12 +428,31 @@ export function findNearestTargetPad(
  * so **every route from a through-hole pad started on the bottom** and nothing
  * on screen said so.
  */
-export function layerForPad(pad: { layer_mask: number }, activeLayer: string): string {
-  const onTop = (pad.layer_mask & LAYER_BIT.TOP) !== 0;
-  const onBottom = (pad.layer_mask & LAYER_BIT.BOTTOM) !== 0;
-  if (onTop && !onBottom) return 'Top';
-  if (onBottom && !onTop) return 'Bottom';
-  // Both, or neither it could name: the active layer is the answer.
+export function layerForPad(
+  pad: { layer_mask: number },
+  activeLayer: string,
+  layerCount = 2,
+): string {
+  // Every copper layer this pad actually has, asked of the board's own stack
+  // rather than of two bits. `layerBit` was written for this comparison and
+  // had no caller until now: before it, a pad living only on `Inner1` fell
+  // through to the active layer, so a click on it started a route on copper
+  // the pad does not have.
+  const has = copperLayerNames(layerCount).filter(
+    (name) => (pad.layer_mask & layerBit(name)) !== 0,
+  );
+
+  // One layer settles it: there is nowhere else to attach.
+  if (has.length === 1) return has[0];
+
+  // Several, which is every through-hole pad: the user's choice decides, as
+  // long as the pad is actually on it. A buried pad on Inner1 and Inner2 with
+  // Top active would otherwise answer Top.
+  if (has.includes(activeLayer)) return activeLayer;
+  if (has.length > 1) return has[0];
+
+  // A mask naming nothing this board has. Keeping the active layer is the old
+  // behaviour and the only answer left; it is at least a layer that exists.
   return activeLayer;
 }
 
@@ -447,9 +466,11 @@ export function startRoute(
   padHit: PadHit,
   snapshot?: BoardSnapshot | null,
 ): RoutingState {
-  // The pad decides only when it has copper on one side; otherwise the layer
-  // the user is holding decides. See `layerForPad`.
-  const layer = layerForPad(padHit.pad, state.currentLayer);
+  // The pad decides only when it has copper on one layer; otherwise the layer
+  // the user is holding decides, as long as the pad is on it. See
+  // `layerForPad`. The board's own stack comes from the snapshot, so a buried
+  // pad on a four-layer board is read against four layers rather than two.
+  const layer = layerForPad(padHit.pad, state.currentLayer, snapshot?.board?.layer_count ?? 2);
 
   // Pre-compute target pads for magnetic snap
   const targets = snapshot
