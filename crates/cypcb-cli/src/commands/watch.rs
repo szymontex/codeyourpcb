@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use clap::Args;
 use miette::{IntoDiagnostic, Result, WrapErr};
 
-use cypcb_drc::{run_drc, Preset, PresetRules};
+use cypcb_drc::{run_drc, PresetRules};
 use cypcb_watcher::{FileWatcher, WatchEvent};
 
 /// Check a design, then check it again every time it changes.
@@ -20,22 +20,17 @@ pub struct WatchCommand {
     /// Input .cypcb file
     file: PathBuf,
 
-    /// Manufacturer preset for design rules
-    #[arg(short, long, default_value = "jlcpcb")]
-    preset: String,
+    /// Manufacturer preset for design rules.
+    ///
+    /// Absent means the board decides: `board b { fab oshpark }`. Read on
+    /// every pass rather than once at startup, because the file being watched
+    /// is the file that names it.
+    #[arg(short, long)]
+    preset: Option<String>,
 }
 
 impl WatchCommand {
     pub fn run(self) -> Result<()> {
-        let preset = Preset::from_name(&self.preset).ok_or_else(|| {
-            let available: Vec<&str> = Preset::all().iter().map(|p| p.name()).collect();
-            miette::miette!(
-                "Unknown preset '{}'. Available presets: {}",
-                self.preset,
-                available.join(", ")
-            )
-        })?;
-
         // The watcher takes a directory: an editor writes a save as a rename
         // over the file, which a watch on the file itself stops seeing after
         // the first one.
@@ -51,7 +46,7 @@ impl WatchCommand {
             .wrap_err_with(|| format!("Failed to read {}", self.file.display()))?;
 
         println!("Watching {} - press Ctrl+C to stop", self.file.display());
-        self.check_once(&preset);
+        self.check_once();
 
         let watcher = FileWatcher::new(&directory)
             .map_err(|e| miette::miette!("{e}"))
@@ -89,7 +84,7 @@ impl WatchCommand {
 
                     println!();
                     println!("--- {} changed", changed.display());
-                    self.check_once(&preset);
+                    self.check_once();
                 }
                 Ok(WatchEvent::Error(err)) => eprintln!("Watch error: {err}"),
                 Err(_) => break,
@@ -155,11 +150,21 @@ impl WatchCommand {
     ///
     /// Never exits the process - a watch that dies on the first bad save is a
     /// watch nobody leaves running.
-    fn check_once(&self, preset: &Preset) {
+    fn check_once(&self) {
         let mut world = match self.board() {
             Ok(world) => world,
             Err(message) => {
                 eprintln!("{message}");
+                return;
+            }
+        };
+        // Resolved here and not at startup: the file being watched is the file
+        // that names the fab, and an edit that changes it has to take effect
+        // on the next save like every other edit does.
+        let preset = match crate::preset_choice::resolve(self.preset.as_deref(), &world) {
+            Ok(preset) => preset,
+            Err(report) => {
+                eprintln!("{report}");
                 return;
             }
         };

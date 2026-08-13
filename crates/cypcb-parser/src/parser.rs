@@ -264,6 +264,7 @@ impl CypcbParser {
         let mut size = None;
         let mut layers = None;
         let mut stackup = None;
+        let mut fab = None;
 
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
@@ -287,6 +288,14 @@ impl CypcbParser {
                     "stackup_property" => {
                         stackup = self.convert_stackup(source, &prop, errors);
                     }
+                    node_kinds::FAB_PROPERTY => {
+                        if let Some(name_node) = get_child_by_field(&prop, "name") {
+                            fab = Some(Identifier::new(
+                                node_text(source, &name_node),
+                                span_of(&name_node),
+                            ));
+                        }
+                    }
                     _ => {}
                 }
             }
@@ -297,6 +306,7 @@ impl CypcbParser {
             size,
             layers,
             stackup,
+            fab,
             span: span_of(node),
         })
     }

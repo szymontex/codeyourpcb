@@ -41,7 +41,7 @@ pub mod zone;
 
 // Re-export all components
 pub use board::{
-    Board, BoardOutline, BoardSize, LayerStack, Stackup, StackupLayer, StackupLayerKind,
+    Board, BoardOutline, BoardSize, Fab, LayerStack, Stackup, StackupLayer, StackupLayerKind,
 };
 pub use electrical::{
     LcscPart, NetConnections, NetId, PadInstance, PinConnection, RefDes, TypedValue, Value,

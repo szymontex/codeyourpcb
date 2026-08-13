@@ -828,6 +828,13 @@ fn sync_board(board: &BoardDef, source: &str, world: &mut BoardWorld, result: &m
 
     world.set_board(board.name.value.clone(), (width, height), layers);
 
+    // The fabricator, as the design wrote it. Not checked against a table of
+    // fabs here - this crate has none - so a name nobody recognises reaches the
+    // caller that resolves it, which is the one that can name the alternatives.
+    if let Some(fab) = &board.fab {
+        world.set_fab(crate::components::Fab(fab.value.clone()));
+    }
+
     // A stackup is what the design expects to be built, and both parsers have
     // read it since the board block started refusing what it does not
     // recognise. Nothing consumed it until now, so a stackup that contradicted

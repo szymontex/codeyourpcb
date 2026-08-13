@@ -28,6 +28,17 @@ use serde::{Deserialize, Serialize};
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 pub struct Board;
 
+/// The fabricator a board is for: `fab jlcpcb`.
+///
+/// A name as the design wrote it, not a validated preset. This crate models
+/// boards and has no table of fabricators to check a name against; whoever
+/// resolves it to a rule set is the one that can say the name is not known.
+/// Absent means the design did not say, which is not the same as saying the
+/// project's default - a caller that needs a fab has to choose one and be
+/// able to tell the reader it chose.
+#[derive(Component, Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct Fab(pub String);
+
 /// Board dimensions.
 ///
 /// Defines the width and height of the PCB in nanometers.

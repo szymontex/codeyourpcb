@@ -204,6 +204,10 @@
         {
           "type": "SYMBOL",
           "name": "stackup_property"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "fab_property"
         }
       ]
     },
@@ -249,6 +253,23 @@
           "content": {
             "type": "SYMBOL",
             "name": "number"
+          }
+        }
+      ]
+    },
+    "fab_property": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "STRING",
+          "value": "fab"
+        },
+        {
+          "type": "FIELD",
+          "name": "name",
+          "content": {
+            "type": "SYMBOL",
+            "name": "identifier"
           }
         }
       ]

@@ -17,9 +17,12 @@ pub struct CheckCommand {
     #[arg(value_name = "FILE")]
     pub file: PathBuf,
 
-    /// Manufacturer preset for design rules
-    #[arg(short, long, default_value = "jlcpcb")]
-    pub preset: String,
+    /// Manufacturer preset for design rules.
+    ///
+    /// Absent means the board decides: `board b { fab oshpark }`. Absent from
+    /// both is JLCPCB, which is what it has always been.
+    #[arg(short, long)]
+    pub preset: Option<String>,
 
     /// Check syntax and semantics only, skip design rule check
     #[arg(long)]
@@ -132,14 +135,7 @@ impl CheckCommand {
         }
 
         // Design rule check
-        let preset = Preset::from_name(&self.preset).ok_or_else(|| {
-            let available: Vec<&str> = Preset::all().iter().map(|p| p.name()).collect();
-            miette::miette!(
-                "Unknown preset '{}'. Available presets: {}",
-                self.preset,
-                available.join(", ")
-            )
-        })?;
+        let preset = crate::preset_choice::resolve(self.preset.as_deref(), &world)?;
 
         let drc = run_drc(&mut world, &preset.rules());
 

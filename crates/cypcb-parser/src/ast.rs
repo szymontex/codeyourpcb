@@ -23,6 +23,7 @@
 //!             name: Identifier { value: "test", span: ... },
 //!             size: Some(SizeProperty { width: ..., height: ... }),
 //!             layers: None,
+//!             fab: None,
 //!             ...
 //!         })
 //!     ],
@@ -167,6 +168,12 @@ pub struct BoardDef {
     pub layers: Option<u8>,
     /// Stackup definition if specified.
     pub stackup: Option<StackupDef>,
+    /// The fabricator this board is for: `fab jlcpcb`.
+    ///
+    /// A name, not a validated preset - this crate reads the language and has
+    /// no table of fabs to check it against. Whoever resolves it to a rule set
+    /// says so when the name is not one they know.
+    pub fab: Option<Identifier>,
     /// Span covering the entire board definition.
     pub span: Span,
 }
@@ -1260,6 +1267,7 @@ mod tests {
                 }),
                 layers: Some(2),
                 stackup: None,
+                fab: None,
                 span: Span::new(0, 50),
             })],
             span: Span::new(0, 100),

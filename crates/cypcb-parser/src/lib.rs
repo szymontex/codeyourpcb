@@ -162,6 +162,8 @@ pub mod node_kinds {
     pub const NET_DEFINITION: &str = "net_definition";
     pub const SIZE_PROPERTY: &str = "size_property";
     pub const LAYERS_PROPERTY: &str = "layers_property";
+    /// `fab jlcpcb` inside a board block.
+    pub const FAB_PROPERTY: &str = "fab_property";
     pub const VALUE_PROPERTY: &str = "value_property";
     pub const POSITION_PROPERTY: &str = "position_property";
     pub const ROTATION_PROPERTY: &str = "rotation_property";

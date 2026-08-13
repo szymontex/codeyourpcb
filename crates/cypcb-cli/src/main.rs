@@ -27,6 +27,7 @@ use miette::Result;
 
 mod board_source;
 mod commands;
+mod preset_choice;
 
 /// CodeYourPCB - Code-first PCB design
 #[derive(Parser)]

@@ -472,6 +472,7 @@ impl<'a> Reader<'a> {
         let mut size = None;
         let mut layers = None;
         let mut stackup = None;
+        let mut fab = None;
 
         while !self.done() && !self.eat(&TokenKind::RBrace) {
             let property_start = self.here();
@@ -500,7 +501,14 @@ impl<'a> Reader<'a> {
                     }
                 }
                 Some("stackup") => stackup = self.stackup(),
-                _ => self.unknown_property("board", &["size", "layers", "stackup"]),
+                Some("fab") => {
+                    self.bump();
+                    match self.identifier() {
+                        Some(name) => fab = Some(name),
+                        None => self.unexpected("a fabricator name like `jlcpcb`"),
+                    }
+                }
+                _ => self.unknown_property("board", &["size", "layers", "stackup", "fab"]),
             }
         }
 
@@ -509,6 +517,7 @@ impl<'a> Reader<'a> {
             size,
             layers,
             stackup,
+            fab,
             span: Span::new(start, self.behind()),
         })
     }

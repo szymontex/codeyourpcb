@@ -36,6 +36,7 @@ Define the physical PCB properties:
 board <name> {
     size <width> x <height>
     layers <count>
+    fab <name>
 }
 ```
 
@@ -44,13 +45,39 @@ board <name> {
 board my_circuit {
     size 50mm x 30mm
     layers 2
+    fab oshpark
 }
 ```
 
 **Properties:**
 - `size`: Board dimensions (width x height) with units
 - `layers`: Number of copper layers (2, 4, 6, etc.)
+- `fab`: Which fabricator the board is for (optional)
 - `stackup`: What the fabricator presses together, top to bottom (optional)
+
+### Fab
+
+Every clearance the checker applies and every gap the router plans to comes from
+one fabricator's table. `fab` puts the choice in the design, beside the rest of
+the board's facts, instead of leaving it to whoever runs the command.
+
+```
+board mains_board {
+    size 100mm x 80mm
+    layers 2
+    fab oshpark
+}
+```
+
+`cypcb check`, `route`, `score` and `watch` read it when `--preset` is absent.
+The flag still wins when it is given, so a question about a specific fab is not
+overridden by the file. A board that names none is checked against JLCPCB, which
+is what this project has always defaulted to.
+
+Run `cypcb check --preset ?` against any board to see the names, or read them
+off a refusal: an unknown fab is reported with the full list, and the message
+says whether the name came from the file or the command line, because the two
+are fixed in different places.
 
 ### Stackup
 

@@ -158,6 +158,10 @@
       "required": true,
       "types": [
         {
+          "type": "fab_property",
+          "named": true
+        },
+        {
           "type": "layers_property",
           "named": true
         },
@@ -445,6 +449,22 @@
         "types": [
           {
             "type": "dimension",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "fab_property",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
             "named": true
           }
         ]
@@ -2180,6 +2200,10 @@
   },
   {
     "type": "drill",
+    "named": false
+  },
+  {
+    "type": "fab",
     "named": false
   },
   {

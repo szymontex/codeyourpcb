@@ -60,8 +60,8 @@ pub struct RouteCommand {
     /// The router and the DRC report both used JLCPCB whatever the design was
     /// for, so a board meant for another house was routed to the wrong
     /// clearances and then measured against them - two wrongs that agree.
-    #[arg(long, default_value = "jlcpcb")]
-    pub preset: String,
+    #[arg(long)]
+    pub preset: Option<String>,
 
     /// Route the board several ways, score each and keep the best.
     ///
@@ -525,7 +525,6 @@ impl RouteCommand {
         self.refuse_freerouting_only_flags("a .kicad_pcb board is always routed in-house")?;
 
         use cypcb_autoroute::{route_board, AutorouteConfig};
-        use cypcb_rules::presets::RulesPreset;
 
         let source = std::fs::read_to_string(&self.file)
             .into_diagnostic()
@@ -543,8 +542,7 @@ impl RouteCommand {
         world.set_footprints(library.clone());
         world.rebuild_spatial_index_from_library(&library);
 
-        let preset = RulesPreset::from_name(&self.preset)
-            .ok_or_else(|| miette::miette!("Unknown routing preset '{}'", self.preset))?;
+        let preset = crate::preset_choice::resolve(self.preset.as_deref(), &world)?;
         let rules = cypcb_drc::ruleset_for_world(preset, &world);
 
         // Best-of-N unless the caller asked for speed, exactly as a `.cypcb`
@@ -643,18 +641,8 @@ impl RouteCommand {
         use cypcb_autoroute::{route_board, AutorouteConfig};
         use cypcb_router::apply_routes;
         use cypcb_router::types::RoutingStatus;
-        use cypcb_rules::presets::RulesPreset;
 
-        let preset = RulesPreset::from_name(&self.preset).ok_or_else(|| {
-            // Listed from the presets themselves, so the message cannot go
-            // stale when one is added.
-            let available: Vec<&str> = RulesPreset::all().iter().map(|p| p.name()).collect();
-            miette::miette!(
-                "Unknown preset '{}'. Available presets: {}",
-                self.preset,
-                available.join(", ")
-            )
-        })?;
+        let preset = crate::preset_choice::resolve(self.preset.as_deref(), &world)?;
         let rules = cypcb_drc::ruleset_for_world(preset, &world);
 
         // Best-of-N unless the caller asked for speed. Routing once was the

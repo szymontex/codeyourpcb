@@ -176,6 +176,27 @@ impl BoardWorld {
         true
     }
 
+    /// Record which fabricator the design named.
+    ///
+    /// Separate from `set_board` for the reason a stackup is: most designs do
+    /// not state one, and a board that says nothing must stay distinguishable
+    /// from a board that named this project's default out loud. Returns false
+    /// when there is no board to attach it to.
+    pub fn set_fab(&mut self, fab: crate::components::Fab) -> bool {
+        let Some(entity) = self.board_entity else {
+            return false;
+        };
+        self.world.entity_mut(entity).insert(fab);
+        true
+    }
+
+    /// The fabricator the design named, if it named one.
+    pub fn fab(&self) -> Option<&str> {
+        self.board_entity
+            .and_then(|entity| self.world.get::<crate::components::Fab>(entity))
+            .map(|fab| fab.0.as_str())
+    }
+
     /// The stackup the design declared, if it declared one.
     pub fn stackup(&self) -> Option<&crate::components::Stackup> {
         self.board_entity

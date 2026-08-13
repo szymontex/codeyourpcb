@@ -12,7 +12,6 @@ use cypcb_autoroute::scoring::{score_board, ScoreWeights};
 use cypcb_autoroute::{route_board, AutorouteConfig};
 use cypcb_drc::DesignRules;
 use cypcb_router::apply_routes;
-use cypcb_rules::presets::RulesPreset;
 use cypcb_world::footprint::FootprintLibrary;
 use cypcb_world::sync_ast_to_world;
 use cypcb_world::BoardWorld;
@@ -33,8 +32,8 @@ pub struct ScoreCommand {
     /// A score is a count of violations against somebody's rules, so which
     /// rules decides the number. This used to be JLCPCB whatever the board was
     /// for.
-    #[arg(long, default_value = "jlcpcb")]
-    pub preset: String,
+    #[arg(long)]
+    pub preset: Option<String>,
 }
 
 impl ScoreCommand {
@@ -105,14 +104,7 @@ impl ScoreCommand {
     /// Score a board that is already in the model, however it was read.
     fn score_world(&self, mut world: BoardWorld, library: FootprintLibrary) -> Result<()> {
         // Build rules (JLCPCB 2-layer default)
-        let preset = RulesPreset::from_name(&self.preset).ok_or_else(|| {
-            let available: Vec<&str> = RulesPreset::all().iter().map(|p| p.name()).collect();
-            miette::miette!(
-                "Unknown preset '{}'. Available presets: {}",
-                self.preset,
-                available.join(", ")
-            )
-        })?;
+        let preset = crate::preset_choice::resolve(self.preset.as_deref(), &world)?;
         let rules = cypcb_drc::ruleset_for_world(preset, &world);
 
         // Score the board in front of us, and route only a board that has no
@@ -175,9 +167,11 @@ mod tests {
 
         let cli = TestCli::parse_from(["test", "design.cypcb"]);
         assert_eq!(cli.score.file, PathBuf::from("design.cypcb"));
-        // The preset is what decides the number this command prints, so a
-        // default it does not carry is a command scoring against a fabricator
-        // nobody named.
-        assert_eq!(cli.score.preset, "jlcpcb");
+        // The preset is what decides the number this command prints. The flag
+        // no longer carries a default, because a default in the flag cannot be
+        // told apart from a caller asking for JLCPCB - the board says which fab
+        // it is for, and `preset_choice::resolve` falls back to JLCPCB when
+        // neither the flag nor the board does.
+        assert_eq!(cli.score.preset, None);
     }
 }

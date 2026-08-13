@@ -406,6 +406,12 @@ pub fn board_as_dsl(world: &mut BoardWorld) -> String {
         .and_then(|entity| world.ecs().get::<crate::components::BoardOutline>(entity))
         .map(|outline| outline.points.clone());
 
+    // The fabricator the design named, carried straight back out. A board that
+    // named none writes none: this writer's job is to return what it was given,
+    // and inventing a fab here would make every round trip claim a choice the
+    // source never made.
+    let fab: Option<String> = world.fab().map(|fab| fab.to_string());
+
     let name = world.board_name().unwrap_or("board").to_string();
     let safe_name: String = name
         .chars()
@@ -437,6 +443,9 @@ pub fn board_as_dsl(world: &mut BoardWorld) -> String {
         format_mm(size.height.0 as f64 / 1e6)
     );
     let _ = writeln!(out, "    layers {}", stack.count.max(2));
+    if let Some(fab) = fab {
+        let _ = writeln!(out, "    fab {fab}");
+    }
     let _ = writeln!(out, "}}");
 
     // An outline is only worth stating when the board is not the rectangle its

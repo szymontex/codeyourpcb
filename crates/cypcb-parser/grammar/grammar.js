@@ -90,6 +90,7 @@ module.exports = grammar({
       $.size_property,
       $.layers_property,
       $.stackup_property,
+      $.fab_property,
     ),
 
     // size 30mm x 20mm
@@ -104,6 +105,17 @@ module.exports = grammar({
     layers_property: $ => seq(
       'layers',
       field('count', $.number),
+    ),
+
+    // fab jlcpcb
+    //
+    // Which fabricator the board is for. Every rule the checker applies and
+    // every clearance the router plans to comes from one of these tables, and
+    // until this existed the board could not say which - the CLI took it as a
+    // flag and the viewer hard-coded jlcpcb.
+    fab_property: $ => seq(
+      'fab',
+      field('name', $.identifier),
     ),
 
     // stackup { ... } (placeholder for future)
