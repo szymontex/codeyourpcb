@@ -12,7 +12,7 @@ use cypcb_autoroute::scoring::{score_board, ScoreWeights};
 use cypcb_autoroute::{route_board, AutorouteConfig};
 use cypcb_drc::DesignRules;
 use cypcb_router::apply_routes;
-use cypcb_rules::presets::{PresetRuleSet, RulesPreset};
+use cypcb_rules::presets::RulesPreset;
 use cypcb_world::footprint::FootprintLibrary;
 use cypcb_world::sync_ast_to_world;
 use cypcb_world::BoardWorld;
@@ -113,7 +113,7 @@ impl ScoreCommand {
                 available.join(", ")
             )
         })?;
-        let rules = PresetRuleSet::new(preset);
+        let rules = cypcb_drc::ruleset_for_world(preset, &world);
 
         // Score the board in front of us, and route only a board that has no
         // copper yet.

@@ -525,7 +525,7 @@ impl RouteCommand {
         self.refuse_freerouting_only_flags("a .kicad_pcb board is always routed in-house")?;
 
         use cypcb_autoroute::{route_board, AutorouteConfig};
-        use cypcb_rules::presets::{PresetRuleSet, RulesPreset};
+        use cypcb_rules::presets::RulesPreset;
 
         let source = std::fs::read_to_string(&self.file)
             .into_diagnostic()
@@ -545,7 +545,7 @@ impl RouteCommand {
 
         let preset = RulesPreset::from_name(&self.preset)
             .ok_or_else(|| miette::miette!("Unknown routing preset '{}'", self.preset))?;
-        let rules = PresetRuleSet::new(preset);
+        let rules = cypcb_drc::ruleset_for_world(preset, &world);
 
         // Best-of-N unless the caller asked for speed, exactly as a `.cypcb`
         // board is routed. This branch used to call `route_board` with
@@ -643,7 +643,7 @@ impl RouteCommand {
         use cypcb_autoroute::{route_board, AutorouteConfig};
         use cypcb_router::apply_routes;
         use cypcb_router::types::RoutingStatus;
-        use cypcb_rules::presets::{PresetRuleSet, RulesPreset};
+        use cypcb_rules::presets::RulesPreset;
 
         let preset = RulesPreset::from_name(&self.preset).ok_or_else(|| {
             // Listed from the presets themselves, so the message cannot go
@@ -655,7 +655,7 @@ impl RouteCommand {
                 available.join(", ")
             )
         })?;
-        let rules = PresetRuleSet::new(preset);
+        let rules = cypcb_drc::ruleset_for_world(preset, &world);
 
         // Best-of-N unless the caller asked for speed. Routing once was the
         // default until 2026-08-07 and it is measurably not the best the
@@ -788,11 +788,14 @@ impl RouteCommand {
         let configs = default_variant_configs();
         eprintln!("Routing {} variants and keeping the best...", configs.len());
 
-        // The same rules the router is using, so the score is measured
-        // against the fab the board is for.
-        let design_rules = DesignRules::from_constraints(
-            &cypcb_rules::RoutingRuleSet::constraints_for_net(rules, 0).clone(),
-        );
+        // The fab the board is for, which is what every variant is scored
+        // against. This used to read `constraints_for_net(rules, 0)` - net 0,
+        // whichever net that happens to be - as a stand-in for the preset,
+        // which was harmless only while no net had an override. It has one
+        // now: a design saying `netclass Mains [clearance 3mm]` would have
+        // scored every net on the board against 3mm because a mains net
+        // interned first. The preset is the preset, so ask it.
+        let design_rules = DesignRules::from_constraints(&rules.preset().constraints());
         let results = generate_variants(world, library, rules, &design_rules, &configs);
 
         let best = results
