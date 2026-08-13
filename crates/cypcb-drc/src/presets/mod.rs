@@ -186,6 +186,27 @@ pub struct DesignRules {
     pub board_thickness: Nm,
 }
 
+/// The land minimum this fab is held to: what it published, or what its own
+/// drill and ring imply when it published nothing.
+///
+/// A stated land is believed rather than derived from - that is what D6
+/// settled, and it is why a via at JLCPCB's published 0.5mm on a 0.3mm drill
+/// is legal where the derived 0.554mm would refuse it.
+fn land_minimum(c: &DesignConstraints) -> Nm {
+    c.min_pad_size.unwrap_or_else(|| derived_land(c))
+}
+
+/// The land a fab implies when it does not publish one.
+///
+/// The smallest hole it will drill plus a ring on each side. It over-constrains
+/// on purpose and the checker says so rather than passing it off as the fab's:
+/// this is the land for the *smallest* hole a house makes, not a floor under
+/// every hole, which is exactly the difference D6 found between JLCPCB's
+/// derived 0.554mm and the 0.5mm it publishes.
+fn derived_land(c: &DesignConstraints) -> Nm {
+    Nm(c.min_drill_size.raw() + 2 * c.min_annular_ring.raw())
+}
+
 impl DesignRules {
     /// Build DRC rules from a manufacturer's routing constraints.
     ///
@@ -222,14 +243,17 @@ impl DesignRules {
             // them: JLCPCB derives 0.3 + 2 x 0.127 = 0.554mm and publishes
             // 0.5mm. Per-via ring width is `AnnularRingRule`'s question, and
             // it is asked of every via whatever this floor says.
-            min_via_diameter: c.min_via_diameter.unwrap_or(c.min_pad_size).max(Nm(0)),
+            min_via_diameter: c
+                .min_via_diameter
+                .unwrap_or_else(|| land_minimum(c))
+                .max(Nm(0)),
             min_annular_ring: c.min_annular_ring,
             min_silk_width: c.min_silk_width,
             min_edge_clearance: c.min_edge_clearance,
             min_hole_to_hole: c.min_hole_to_hole,
             min_solder_mask_bridge: c.min_solder_mask_bridge,
             min_paste_clearance: c.min_paste_clearance,
-            min_pad_size: c.min_pad_size,
+            min_pad_size: land_minimum(c),
             min_slot_clearance: c.min_slot_clearance,
             min_hole_to_edge: c.min_hole_to_edge,
             solder_mask_expansion: c.solder_mask_expansion,

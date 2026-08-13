@@ -39,8 +39,9 @@ pub fn two_layer() -> DesignConstraints {
         min_solder_mask_bridge: Nm::from_mm(0.1), // 4 mil
         min_paste_clearance: Nm::from_mm(0.127),  // 5 mil
         solder_mask_expansion: Nm::from_mm(0.05), // 0.05mm
-        min_pad_size: Nm::from_mm(0.508),         // 20 mil
-        min_slot_clearance: Nm::from_mm(0.381),   // 15 mil
+        // OSH Park publishes an annular ring and no pad diameter. Derived.
+        min_pad_size: None,
+        min_slot_clearance: Nm::from_mm(0.381), // 15 mil
 
         // Signal integrity — basic (no controlled impedance on 2L)
         default_impedance_ohms_x100: 5000,
@@ -130,7 +131,8 @@ pub fn four_layer() -> DesignConstraints {
         min_solder_mask_bridge: Nm::from_mm(0.1), // 4 mil
         min_paste_clearance: Nm::from_mm(0.127),  // 5 mil
         solder_mask_expansion: Nm::from_mm(0.05),
-        min_pad_size: Nm::from_mm(0.45),        // 18 mil
+        // OSH Park publishes an annular ring and no pad diameter. Derived.
+        min_pad_size: None,
         min_slot_clearance: Nm::from_mm(0.381), // 15 mil
 
         // Signal integrity — controlled impedance available

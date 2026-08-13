@@ -63,7 +63,20 @@ pub struct DesignConstraints {
     /// Solder mask expansion beyond the pad.
     pub solder_mask_expansion: Nm,
     /// Minimum pad size (diameter for round, short axis for oblong).
-    pub min_pad_size: Nm,
+    /// Minimum pad size the fabricator publishes, if it publishes one.
+    ///
+    /// The land around a **hole** - a via's pad and a through-hole pad - which
+    /// is what D6 settled this field to mean. `None` says the fab did not
+    /// state one, and the checker derives it from the drill and the ring the
+    /// same way it derives `min_via_diameter`, naming the figure as its own.
+    ///
+    /// It used to be a bare `Nm` in every preset, and only JLCPCB's came off a
+    /// capability page: OSHPark publishes an annular ring and no pad diameter,
+    /// PCBWay the same, and the IPC classes are a design standard rather than
+    /// a fab. Each of those numbers was `min_drill_size + 2 * min_annular_ring`
+    /// rounded - a derived figure sitting in a field that had stopped being
+    /// derived, enforced by `PadLandRule` as a floor no fabricator published.
+    pub min_pad_size: Option<Nm>,
     /// Minimum copper-to-slot clearance.
     pub min_slot_clearance: Nm,
 
@@ -165,8 +178,9 @@ impl Default for DesignConstraints {
             min_solder_mask_bridge: Nm::from_mm(0.1), // 0.1mm
             min_paste_clearance: Nm::from_mm(0.127),  // 5 mil
             solder_mask_expansion: Nm::from_mm(0.05), // 0.05mm typical
-            min_pad_size: Nm::from_mm(0.5),           // 0.5mm min pad
-            min_slot_clearance: Nm::from_mm(0.3),     // 0.3mm
+            // No fab here to have published one. The checker derives it.
+            min_pad_size: None,
+            min_slot_clearance: Nm::from_mm(0.3), // 0.3mm
 
             // Signal integrity
             default_impedance_ohms_x100: 5000,        // 50.00 Ω

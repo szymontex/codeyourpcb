@@ -38,8 +38,9 @@ pub fn standard() -> DesignConstraints {
         min_solder_mask_bridge: Nm::from_mm(0.1), // 0.1mm
         min_paste_clearance: Nm::from_mm(0.127),  // 5 mil
         solder_mask_expansion: Nm::from_mm(0.05), // 0.05mm
-        min_pad_size: Nm::from_mm(0.5),           // 0.5mm
-        min_slot_clearance: Nm::from_mm(0.3),     // 0.3mm
+        // PCBWay publishes an annular ring and no pad diameter. Derived.
+        min_pad_size: None,
+        min_slot_clearance: Nm::from_mm(0.3), // 0.3mm
 
         // Signal integrity
         default_impedance_ohms_x100: 5000,        // 50 Ω

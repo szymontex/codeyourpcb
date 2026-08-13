@@ -250,7 +250,7 @@ fn report_rules_the_fab_never_stated(
     use cypcb_drc::ViolationKind;
 
     let constraints = preset.constraints();
-    let derived: [(ViolationKind, &str, bool, cypcb_core::Nm); 3] = [
+    let derived: [(ViolationKind, &str, bool, cypcb_core::Nm); 4] = [
         (
             ViolationKind::ViaDiameter,
             "via diameter",
@@ -268,6 +268,12 @@ fn report_rules_the_fab_never_stated(
             "courtyard clearance",
             constraints.min_courtyard_clearance.is_none(),
             rules.min_courtyard_clearance,
+        ),
+        (
+            ViolationKind::PadLand,
+            "minimum pad size",
+            constraints.min_pad_size.is_none(),
+            rules.min_pad_size,
         ),
     ];
 

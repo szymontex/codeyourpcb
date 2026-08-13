@@ -41,8 +41,9 @@ pub fn class1() -> DesignConstraints {
         min_solder_mask_bridge: Nm::from_mm(0.1),  // 4 mil
         min_paste_clearance: Nm::from_mm(0.15),    // 6 mil
         solder_mask_expansion: Nm::from_mm(0.075), // 0.075mm
-        min_pad_size: Nm::from_mm(0.6),            // 24 mil
-        min_slot_clearance: Nm::from_mm(0.3),      // 12 mil
+        // A design standard, not a fabricator. It specifies the ring. Derived.
+        min_pad_size: None,
+        min_slot_clearance: Nm::from_mm(0.3), // 12 mil
 
         // Signal integrity — not critical for Class 1
         default_impedance_ohms_x100: 5000,
@@ -107,8 +108,9 @@ pub fn class2() -> DesignConstraints {
         min_solder_mask_bridge: Nm::from_mm(0.1), // 4 mil
         min_paste_clearance: Nm::from_mm(0.127),  // 5 mil
         solder_mask_expansion: Nm::from_mm(0.05), // 0.05mm
-        min_pad_size: Nm::from_mm(0.5),           // 20 mil
-        min_slot_clearance: Nm::from_mm(0.25),    // 10 mil
+        // A design standard, not a fabricator. It specifies the ring. Derived.
+        min_pad_size: None,
+        min_slot_clearance: Nm::from_mm(0.25), // 10 mil
 
         // Signal integrity
         default_impedance_ohms_x100: 5000,
@@ -173,8 +175,9 @@ pub fn class3() -> DesignConstraints {
         min_solder_mask_bridge: Nm::from_mm(0.075), // 3 mil
         min_paste_clearance: Nm::from_mm(0.1),      // 4 mil
         solder_mask_expansion: Nm::from_mm(0.05),   // 0.05mm
-        min_pad_size: Nm::from_mm(0.45),            // 18 mil
-        min_slot_clearance: Nm::from_mm(0.25),      // 10 mil
+        // A design standard, not a fabricator. It specifies the ring. Derived.
+        min_pad_size: None,
+        min_slot_clearance: Nm::from_mm(0.25), // 10 mil
 
         // Signal integrity — controlled
         default_impedance_ohms_x100: 5000,

@@ -38,7 +38,7 @@ pub fn standard_2layer() -> DesignConstraints {
         min_solder_mask_bridge: Nm::from_mm(0.1), // 0.1mm
         min_paste_clearance: Nm::from_mm(0.127),  // 5 mil
         solder_mask_expansion: Nm::from_mm(0.05), // 0.05mm typical
-        min_pad_size: Nm::from_mm(0.5),           // 0.5mm min pad
+        min_pad_size: Some(Nm::from_mm(0.5)),     // 0.5mm min pad
         min_slot_clearance: Nm::from_mm(0.3),     // 0.3mm
 
         // Signal integrity
@@ -125,7 +125,7 @@ pub fn standard_4layer() -> DesignConstraints {
         min_solder_mask_bridge: Nm::from_mm(0.08), // 0.08mm
         min_paste_clearance: Nm::from_mm(0.1),     // 4 mil
         solder_mask_expansion: Nm::from_mm(0.05),  // 0.05mm
-        min_pad_size: Nm::from_mm(0.45),           // 0.45mm
+        min_pad_size: Some(Nm::from_mm(0.45)),     // 0.45mm
         min_slot_clearance: Nm::from_mm(0.25),     // 0.25mm
 
         // Signal integrity — impedance control available
@@ -221,7 +221,7 @@ pub fn advanced_2layer() -> DesignConstraints {
         min_solder_mask_bridge: Nm::from_mm(0.075), // 0.075mm (3 mil)
         min_paste_clearance: Nm::from_mm(0.09),     // 3.5 mil
         solder_mask_expansion: Nm::from_mm(0.04),   // 0.04mm
-        min_pad_size: Nm::from_mm(0.35),            // 0.35mm
+        min_pad_size: Some(Nm::from_mm(0.35)),      // 0.35mm
         min_slot_clearance: Nm::from_mm(0.2),       // 0.2mm
 
         // Signal integrity — controlled impedance standard
@@ -309,7 +309,7 @@ pub fn advanced_4layer() -> DesignConstraints {
         min_solder_mask_bridge: Nm::from_mm(0.075), // 0.075mm
         min_paste_clearance: Nm::from_mm(0.09),     // 3.5 mil
         solder_mask_expansion: Nm::from_mm(0.04),   // 0.04mm
-        min_pad_size: Nm::from_mm(0.35),            // 0.35mm
+        min_pad_size: Some(Nm::from_mm(0.35)),      // 0.35mm
         min_slot_clearance: Nm::from_mm(0.2),       // 0.2mm
 
         // Signal integrity

@@ -13,18 +13,28 @@
 //! falls under the stated ring, a board can pass one rule and fail the other
 //! while using nothing but the fab's own published numbers.
 //!
-//! This measures the gap for every preset and pins it. The point is not that a
-//! shortfall is a defect - two rows of a capability table are usually written
-//! about different processes - but that a user who hits it deserves to find it
-//! written down rather than discover it from two rules disagreeing about a
-//! board built to spec.
+//! This measures the gap for every preset that publishes a land and pins it.
+//! The point is not that a shortfall is a defect - two rows of a capability
+//! table are usually written about different processes - but that a user who
+//! hits it deserves to find it written down rather than discover it from two
+//! rules disagreeing about a board built to spec.
+//!
+//! Only JLCPCB publishes one. The first version of this test measured all ten
+//! presets and reported four with a tension; the other three were 2000nm each,
+//! and that turned out to be an artefact rather than a finding - their
+//! `min_pad_size` was `min_drill_size + 2 * min_annular_ring` rounded to two
+//! decimals, so the "shortfall" was the rounding step and nothing else. A
+//! derived land cannot disagree with the ring it was derived from.
 
 use cypcb_rules::presets::RulesPreset;
 
-/// The ring left when a via is built at the stated land on the stated drill.
-fn implied_ring_nm(preset: RulesPreset) -> i64 {
+/// The ring left when a via is built at the published land on the stated drill.
+///
+/// `None` where the fab published no land: there is no second number to
+/// disagree with the first, which is the whole question this file asks.
+fn implied_ring_nm(preset: RulesPreset) -> Option<i64> {
     let c = preset.constraints();
-    (c.min_pad_size.raw() - c.min_via_drill.raw()) / 2
+    Some((c.min_pad_size?.raw() - c.min_via_drill.raw()) / 2)
 }
 
 #[test]
@@ -37,14 +47,25 @@ fn the_land_and_the_ring_are_measured_against_each_other() {
     );
     for preset in RulesPreset::all() {
         let c = preset.constraints();
-        let implied = implied_ring_nm(*preset);
         let required = c.min_via_annular_ring.raw();
+        let Some(implied) = implied_ring_nm(*preset) else {
+            println!(
+                "{:<26} {:>8} {:>8} {:>8} {:>10} {:>10}",
+                format!("{preset:?}"),
+                "-",
+                c.min_via_drill.raw(),
+                required,
+                "-",
+                "derived"
+            );
+            continue;
+        };
         let shortfall = required - implied;
 
         println!(
             "{:<26} {:>8} {:>8} {:>8} {:>10} {:>10}",
             format!("{preset:?}"),
-            c.min_pad_size.raw(),
+            c.min_pad_size.expect("a land, or the branch above").raw(),
             c.min_via_drill.raw(),
             required,
             implied,
@@ -76,12 +97,7 @@ fn the_land_and_the_ring_are_measured_against_each_other() {
     named.sort();
     assert_eq!(
         named,
-        vec![
-            "IpcClass2 2000".to_string(),
-            "IpcClass3 2000".to_string(),
-            "JlcpcbStandard2Layer 27000".to_string(),
-            "OshPark4Layer 2000".to_string(),
-        ],
+        vec!["JlcpcbStandard2Layer 27000".to_string()],
         "which presets cannot satisfy both of their own numbers at once has \
          changed; if a table was corrected, update this list and say which"
     );
@@ -100,23 +116,40 @@ fn jlcpcb_standard_is_the_one_worth_knowing_about() {
     let preset = RulesPreset::JlcpcbStandard2Layer;
     let c = preset.constraints();
 
-    assert_eq!(c.min_pad_size.raw(), 500_000, "0.5mm land");
+    assert_eq!(
+        c.min_pad_size.map(|land| land.raw()),
+        Some(500_000),
+        "0.5mm land, published rather than derived - it is the only one"
+    );
     assert_eq!(c.min_via_drill.raw(), 300_000, "0.3mm drill");
     assert_eq!(c.min_via_annular_ring.raw(), 127_000, "0.127mm ring");
     assert_eq!(
         implied_ring_nm(preset),
-        100_000,
+        Some(100_000),
         "0.1mm of ring is what is left"
     );
 
-    // The other three are within 2000nm, which is a rounding of mils into
-    // millimetres rather than a disagreement.
+    // The three that used to appear beside it are gone, and their absence is
+    // the finding rather than a loosened test. Each carried a `min_pad_size`
+    // of `min_drill_size + 2 * min_annular_ring` rounded to two decimals, so
+    // the 2000nm they were short by was the rounding step. A land the checker
+    // derives is derived from the ring and cannot fall under it - computed
+    // here the way `DesignRules::from_constraints` computes it.
     for other in [
         RulesPreset::IpcClass2,
         RulesPreset::IpcClass3,
         RulesPreset::OshPark4Layer,
     ] {
-        let gap = other.constraints().min_via_annular_ring.raw() - implied_ring_nm(other);
-        assert_eq!(gap, 2_000, "{other:?} is a rounding, not a disagreement");
+        let c = other.constraints();
+        assert_eq!(
+            c.min_pad_size, None,
+            "{other:?} publishes no land; the number it used to carry was derived"
+        );
+        let derived = c.min_drill_size.raw() + 2 * c.min_annular_ring.raw();
+        assert_eq!(
+            (derived - c.min_drill_size.raw()) / 2,
+            c.min_annular_ring.raw(),
+            "{other:?}: a derived land leaves exactly the ring it was derived from"
+        );
     }
 }
