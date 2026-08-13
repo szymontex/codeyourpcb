@@ -863,9 +863,20 @@ async function init(): Promise<void> {
    * belongs to comes from here, because a message does not carry one.
    */
   function readDiagnostics(engine: PcbEngine): SourceDiagnostic[] {
+    const raw = engine.get_diagnostics_json();
     try {
-      return JSON.parse(engine.get_diagnostics_json()) as SourceDiagnostic[];
-    } catch {
+      return JSON.parse(raw) as SourceDiagnostic[];
+    } catch (error) {
+      // An empty list is how the error panel goes quiet, and it goes quiet
+      // exactly when the engine had something to say and could not spell it.
+      // The fallback is still an empty list - there is nothing better to
+      // return - but it is no longer indistinguishable from a clean board.
+      console.error(
+        '[diagnostics] the engine\'s diagnostics were not readable JSON, so the ' +
+          'error panel will show nothing for a board that may have faults:',
+        error,
+        raw,
+      );
       return [];
     }
   }

@@ -108,9 +108,16 @@ export function readerForBaseUrl(baseUrl: string): (path: string) => Promise<str
   return async (path: string) => {
     try {
       const response = await fetch(`${baseUrl}${path}`);
-      if (!response.ok) return null;
+      if (!response.ok) {
+        console.warn(`[imports] ${baseUrl}${path} answered ${response.status}`);
+        return null;
+      }
       return await response.text();
-    } catch {
+    } catch (error) {
+      // Null reaches the caller either way and the design reports the import
+      // as missing. What was lost is why - a 404 and a dead network read the
+      // same to a user staring at a board with no library.
+      console.warn(`[imports] ${baseUrl}${path} could not be fetched:`, error);
       return null;
     }
   };

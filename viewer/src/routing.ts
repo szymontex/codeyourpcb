@@ -485,7 +485,13 @@ export function updatePreview(
   if (snapshot) {
     try {
       snapshot = deepSanitize(snapshot) as BoardSnapshot;
-    } catch (_) { /* ignore */ }
+    } catch (error) {
+      // The snapshot keeps its BigInts, and every number read out of it after
+      // this point is a BigInt in arithmetic that expects a number - which
+      // throws somewhere else, or worse, does not. Ignoring it meant the
+      // second failure had no connection to the first.
+      console.error('[routing] the board snapshot could not be sanitised:', error);
+    }
   }
 
   // Apply grid snap first if enabled
