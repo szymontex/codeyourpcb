@@ -334,7 +334,7 @@ mod tests {
     #[test]
     fn test_pcbway_standard_values() {
         let rules = DesignRules::pcbway_standard();
-        assert_eq!(rules.min_clearance, Nm::from_mm(0.15));
+        assert_eq!(rules.min_clearance, Nm::from_mm(0.1));
         assert_eq!(rules.min_drill_size, Nm::from_mm(0.2));
         assert_eq!(rules.min_silk_width, Nm::from_mm(0.22));
     }

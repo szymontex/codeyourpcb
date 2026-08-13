@@ -19,8 +19,8 @@ impl DesignRules {
     ///
     /// | Parameter | Value | Notes |
     /// |-----------|-------|-------|
-    /// | Min clearance | 0.15mm (6 mil) | Standard |
-    /// | Min trace width | 0.15mm (6 mil) | Standard |
+    /// | Min clearance | 0.1524mm (6 mil) | Published |
+    /// | Min trace width | 0.1524mm (6 mil) | Published |
     /// | Min drill | 0.254mm (10 mil) | Larger than JLCPCB |
     /// | Min via drill | 0.254mm (10 mil) | Same as mechanical drill |
     /// | Min annular ring | 0.127mm (5 mil) | |
@@ -34,7 +34,7 @@ impl DesignRules {
     /// use cypcb_core::Nm;
     ///
     /// let rules = DesignRules::oshpark_2layer();
-    /// assert_eq!(rules.min_clearance, Nm::from_mm(0.15));
+    /// assert_eq!(rules.min_clearance, Nm::from_mil(6.0));
     /// assert_eq!(rules.min_drill_size, Nm::from_mm(0.254));
     /// ```
     pub fn oshpark_2layer() -> Self {
@@ -139,8 +139,11 @@ mod tests {
     #[test]
     fn test_oshpark_2layer_values() {
         let rules = DesignRules::oshpark_2layer();
-        assert_eq!(rules.min_clearance, Nm::from_mm(0.15));
-        assert_eq!(rules.min_trace_width, Nm::from_mm(0.15));
+        // 6mil, as OSH Park publishes it. These read 0.15mm until the table
+        // was checked against its own source: 6mil is 0.1524mm, and the
+        // comment beside the value had said "6 mil" all along.
+        assert_eq!(rules.min_clearance, Nm::from_mm(0.1524));
+        assert_eq!(rules.min_trace_width, Nm::from_mm(0.1524));
         assert_eq!(rules.min_drill_size, Nm::from_mm(0.254));
         assert_eq!(rules.min_via_drill, Nm::from_mm(0.254));
         assert_eq!(rules.min_annular_ring, Nm::from_mm(0.127));
@@ -154,7 +157,9 @@ mod tests {
         assert_eq!(rules.min_clearance, Nm::from_mm(0.127));
         assert_eq!(rules.min_trace_width, Nm::from_mm(0.127));
         assert_eq!(rules.min_drill_size, Nm::from_mm(0.254));
-        assert_eq!(rules.min_annular_ring, Nm::from_mm(0.1));
+        // 4mil is 0.1016mm. This read 0.1mm, which is looser than the figure
+        // its own comment named.
+        assert_eq!(rules.min_annular_ring, Nm::from_mm(0.1016));
     }
 
     #[test]

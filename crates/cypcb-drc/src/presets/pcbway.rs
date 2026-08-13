@@ -14,19 +14,25 @@ use cypcb_rules::presets::RulesPreset;
 impl DesignRules {
     /// PCBWay standard rules.
     ///
-    /// These rules represent PCBWay's recommended minimums for standard
-    /// pricing. While they can achieve 3mil in some cases, 6mil is recommended
-    /// for reliable results.
+    /// Taken from PCBWay's published capabilities page, read 2026-08-13.
+    ///
+    /// The paragraph that stood here said the table was PCBWay's recommended
+    /// minimums, that 3mil was achievable in some cases and that 6mil was the
+    /// figure to design to. None of that is on the page, and the table below
+    /// it disagreed with it: the page publishes 0.1mm/4mil as the minimum
+    /// trace and the minimum spacing. A capability table says what a house can
+    /// make; a margin on top of it is the designer's to choose, and belongs in
+    /// a `netclass` rather than in here.
     ///
     /// # Specifications
     ///
     /// | Parameter | Value | Notes |
     /// |-----------|-------|-------|
-    /// | Min clearance | 0.15mm (6 mil) | Recommended |
-    /// | Min trace width | 0.15mm (6 mil) | Recommended |
-    /// | Min drill | 0.2mm | Mechanical drilling |
-    /// | Min via drill | 0.2mm | Via holes |
-    /// | Min annular ring | 0.15mm (6 mil) | Copper around drill |
+    /// | Min clearance | 0.1mm (4 mil) | Published |
+    /// | Min trace width | 0.1mm (4 mil) | Published |
+    /// | Min drill | 0.2mm | Advanced normal process |
+    /// | Min via drill | 0.2mm | Advanced normal process |
+    /// | Min annular ring | 0.15mm (6 mil) | Published, vias and pads alike |
     /// | Min silk width | 0.22mm (8.66 mil) | Wider than JLCPCB |
     /// | Min edge clearance | 0.3mm | Copper to board edge |
     ///
@@ -37,7 +43,7 @@ impl DesignRules {
     /// use cypcb_core::Nm;
     ///
     /// let rules = DesignRules::pcbway_standard();
-    /// assert_eq!(rules.min_clearance, Nm::from_mm(0.15));
+    /// assert_eq!(rules.min_clearance, Nm::from_mm(0.1));
     /// assert_eq!(rules.min_drill_size, Nm::from_mm(0.2));
     /// ```
     pub fn pcbway_standard() -> Self {
@@ -89,8 +95,11 @@ mod tests {
     #[test]
     fn test_pcbway_standard_values() {
         let rules = DesignRules::pcbway_standard();
-        assert_eq!(rules.min_clearance, Nm::from_mm(0.15));
-        assert_eq!(rules.min_trace_width, Nm::from_mm(0.15));
+        // 0.1mm/4mil, which is what PCBWay publishes. These read 0.15mm and
+        // were commented "recommended" - an unsourced margin sitting in a
+        // table that says what a house can make.
+        assert_eq!(rules.min_clearance, Nm::from_mm(0.1));
+        assert_eq!(rules.min_trace_width, Nm::from_mm(0.1));
         assert_eq!(rules.min_drill_size, Nm::from_mm(0.2));
         assert_eq!(rules.min_via_drill, Nm::from_mm(0.2));
         assert_eq!(rules.min_annular_ring, Nm::from_mm(0.15));

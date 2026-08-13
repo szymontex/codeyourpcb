@@ -2168,8 +2168,10 @@ mod tests {
     ///
     /// Measured on `get_min_clearance_nm`, which is the number the interactive
     /// router in the browser enforces while a person drags a trace: JLCPCB
-    /// images 0.127mm and OSHPark 0.150mm, so the two answers cannot be
-    /// confused with each other.
+    /// images 0.127mm and OSHPark 6mil, so the two answers cannot be confused
+    /// with each other. OSHPark read 0.150mm here until its table was checked
+    /// against its own published page - 6mil is 0.1524mm, and the value had
+    /// been disagreeing with the comment beside it.
     #[test]
     fn the_editor_uses_the_fab_the_board_named() {
         fn engine_for(fab_line: &str) -> PcbEngine {
@@ -2186,8 +2188,8 @@ mod tests {
 
         assert_eq!(
             engine_for("    fab oshpark\n").get_min_clearance_nm(),
-            150_000,
-            "the board asked for OSHPark"
+            152_400,
+            "the board asked for OSHPark, which publishes 6mil"
         );
         assert_eq!(
             engine_for("").get_min_clearance_nm(),

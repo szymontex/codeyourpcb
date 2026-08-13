@@ -25,8 +25,10 @@ use crate::stackup::{LayerStackEntry, Stackup};
 pub fn two_layer() -> DesignConstraints {
     DesignConstraints {
         // Basic geometry
-        min_clearance: Nm::from_mm(0.15),       // 6 mil
-        min_trace_width: Nm::from_mm(0.15),     // 6 mil
+        // 6mil is 0.1524mm. These carried 0.15mm under a "6 mil" comment,
+        // which is the value disagreeing with the source beside it.
+        min_clearance: Nm::from_mm(0.1524),     // 6 mil, published
+        min_trace_width: Nm::from_mm(0.1524),   // 6 mil, published
         min_drill_size: Nm::from_mm(0.254),     // 10 mil
         min_via_drill: Nm::from_mm(0.254),      // 10 mil
         min_annular_ring: Nm::from_mm(0.127),   // 5 mil
@@ -117,19 +119,21 @@ pub fn two_layer_stackup() -> Stackup {
 pub fn four_layer() -> DesignConstraints {
     DesignConstraints {
         // Basic geometry — tighter than 2L
-        min_clearance: Nm::from_mm(0.127),      // 5 mil
-        min_trace_width: Nm::from_mm(0.127),    // 5 mil
-        min_drill_size: Nm::from_mm(0.254),     // 10 mil
-        min_via_drill: Nm::from_mm(0.254),      // 10 mil
-        min_annular_ring: Nm::from_mm(0.1),     // 4 mil
-        min_silk_width: Nm::from_mm(0.127),     // 5 mil
+        min_clearance: Nm::from_mm(0.127),   // 5 mil
+        min_trace_width: Nm::from_mm(0.127), // 5 mil
+        min_drill_size: Nm::from_mm(0.254),  // 10 mil
+        min_via_drill: Nm::from_mm(0.254),   // 10 mil
+        // 4mil is 0.1016mm. This carried 0.1mm, which is looser than the
+        // figure its own comment names.
+        min_annular_ring: Nm::from_mm(0.1016), // 4 mil, published
+        min_silk_width: Nm::from_mm(0.127),    // 5 mil
         min_edge_clearance: Nm::from_mm(0.381), // 15 mil
 
         // Advanced geometry
-        min_via_annular_ring: Nm::from_mm(0.1),   // 4 mil
-        max_drill_aspect_ratio: 1000,             // 10:1
-        min_solder_mask_bridge: Nm::from_mm(0.1), // 4 mil
-        min_paste_clearance: Nm::from_mm(0.127),  // 5 mil
+        min_via_annular_ring: Nm::from_mm(0.1016), // 4 mil, published
+        max_drill_aspect_ratio: 1000,              // 10:1
+        min_solder_mask_bridge: Nm::from_mm(0.1),  // 4 mil
+        min_paste_clearance: Nm::from_mm(0.127),   // 5 mil
         solder_mask_expansion: Nm::from_mm(0.05),
         // OSH Park publishes an annular ring and no pad diameter. Derived.
         min_pad_size: None,
@@ -210,9 +214,10 @@ mod tests {
 
     #[test]
     fn test_oshpark_2l_6mil() {
+        // The test is named for 6mil and asserted 0.15mm, which is not 6mil.
         let dc = two_layer();
-        assert_eq!(dc.min_trace_width, Nm::from_mm(0.15));
-        assert_eq!(dc.min_clearance, Nm::from_mm(0.15));
+        assert_eq!(dc.min_trace_width, Nm::from_mil(6.0));
+        assert_eq!(dc.min_clearance, Nm::from_mil(6.0));
     }
 
     #[test]

@@ -24,19 +24,35 @@ use crate::stackup::{LayerStackEntry, Stackup};
 pub fn standard() -> DesignConstraints {
     DesignConstraints {
         // Basic geometry
-        min_clearance: Nm::from_mm(0.15),     // 6 mil (recommended)
-        min_trace_width: Nm::from_mm(0.15),   // 6 mil
-        min_drill_size: Nm::from_mm(0.2),     // 0.2mm
-        min_via_drill: Nm::from_mm(0.2),      // 0.2mm
-        min_annular_ring: Nm::from_mm(0.15),  // 6 mil
-        min_silk_width: Nm::from_mm(0.22),    // 0.22mm (wider than JLCPCB)
+        // Read against the published capabilities page, 2026-08-13. The two
+        // figures below were 0.15mm each and commented "6 mil (recommended)".
+        // PCBWay publishes 0.1mm/4mil as its minimum trace and minimum
+        // spacing; the 0.15mm was somebody's comfort margin baked into a table
+        // that says what a house can make. A margin is the designer's to
+        // choose and belongs in a `netclass`, not in a fab's capabilities.
+        min_clearance: Nm::from_mm(0.1),   // 0.1mm/4mil, published
+        min_trace_width: Nm::from_mm(0.1), // 0.1mm/4mil, published
+        // The standard section publishes 0.15mm as the smallest hole drilled;
+        // the advanced section puts the normal process at 0.20mm and notes
+        // that holes under 0.2mm need special consideration. This table is the
+        // normal process, so 0.2mm - written down here so the next reader does
+        // not "correct" it to 0.15 without the row that pairs with it.
+        min_drill_size: Nm::from_mm(0.2), // 0.2mm, advanced normal process
+        min_via_drill: Nm::from_mm(0.2),  // 0.2mm, advanced normal process
+        min_annular_ring: Nm::from_mm(0.15), // 0.15mm/6mil, published
+        min_silk_width: Nm::from_mm(0.22), // 0.22mm (wider than JLCPCB)
         min_edge_clearance: Nm::from_mm(0.3), // 0.3mm
 
         // Advanced geometry
-        min_via_annular_ring: Nm::from_mm(0.127), // 5 mil
-        max_drill_aspect_ratio: 1000,             // 10:1
+        // PCBWay publishes one annular-ring minimum, 0.15mm/6mil, and does not
+        // distinguish a via's ring from a pad's. This was 0.127mm, which came
+        // from nowhere the page states and was **looser** than the published
+        // figure - so a board with a 0.13mm via ring passed `cypcb check
+        // --preset pcbway` and PCBWay's own page refuses it.
+        min_via_annular_ring: Nm::from_mm(0.15), // 0.15mm/6mil, published
+        max_drill_aspect_ratio: 1000,            // 10:1
         min_solder_mask_bridge: Nm::from_mm(0.1), // 0.1mm
-        min_paste_clearance: Nm::from_mm(0.127),  // 5 mil
+        min_paste_clearance: Nm::from_mm(0.127), // 5 mil
         solder_mask_expansion: Nm::from_mm(0.05), // 0.05mm
         // PCBWay publishes an annular ring and no pad diameter. Derived.
         min_pad_size: None,
@@ -107,10 +123,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_pcbway_6mil_traces() {
+    fn test_pcbway_4mil_traces() {
+        // Named for 6mil until the page was read: PCBWay publishes 0.1mm/4mil
+        // as its minimum trace and its minimum spacing. The 0.15mm this
+        // asserted was an unsourced margin, and 0.15mm is not 6mil either.
         let dc = standard();
-        assert_eq!(dc.min_trace_width, Nm::from_mm(0.15)); // 6 mil
-        assert_eq!(dc.min_clearance, Nm::from_mm(0.15)); // 6 mil
+        assert_eq!(dc.min_trace_width, Nm::from_mm(0.1));
+        assert_eq!(dc.min_clearance, Nm::from_mm(0.1));
     }
 
     #[test]

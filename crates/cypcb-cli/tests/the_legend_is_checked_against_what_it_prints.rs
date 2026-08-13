@@ -213,7 +213,13 @@ fn a_legend_clipped_for_one_house_is_reported_when_sent_to_a_stricter_one() {
     // fabricator that asks for more and the ink that was fine is not.
     let (mut world, _library) = world_from(A_NAME_LONG_ENOUGH_TO_BE_CUT);
 
-    let strict = DesignRules::pcbway_standard();
+    // OSH Park rather than PCBWay. This read `pcbway_standard()` until the
+    // tables were checked against their own published pages: PCBWay publishes
+    // 0.1mm as its minimum trace and spacing, which is **looser** than
+    // JLCPCB's 0.127mm, and the 0.15mm this preset used to carry was an
+    // unsourced margin. The guard below is what caught it - it is doing its
+    // job, and it stays.
+    let strict = DesignRules::oshpark_2layer();
     assert!(
         strict.min_clearance > DesignRules::jlcpcb_2layer().min_clearance,
         "this test needs a house stricter than the one the exporter clips for"
