@@ -37,6 +37,18 @@ fn first_label(diagnostic: &dyn miette::Diagnostic) -> (usize, usize) {
         .unwrap_or((0, 0))
 }
 
+/// Where a board block wrote its `fab`, so an unknown name is underlined on the
+/// line that wrote it rather than at the top of the file.
+fn fab_span(file: &cypcb_parser::ast::SourceFile) -> Option<(usize, usize)> {
+    file.definitions.iter().find_map(|definition| {
+        let cypcb_parser::ast::Definition::Board(board) = definition else {
+            return None;
+        };
+        let fab = board.fab.as_ref()?;
+        Some((fab.span.start, fab.span.end))
+    })
+}
+
 use cypcb_core::{Nm, Point};
 use cypcb_drc::{run_drc, DesignRules, DrcViolation};
 use cypcb_world::footprint::FootprintLibrary;
@@ -385,6 +397,28 @@ impl PcbEngine {
             errors.push(message);
         }
 
+        // A fab name this tool does not have. The CLI refuses one outright;
+        // the editor cannot, because it still has to draw the board - so it
+        // falls back to JLCPCB and says so here rather than grading the design
+        // against a table nobody asked for and looking correct while it does.
+        if let Some(named) = self.world.fab() {
+            if cypcb_rules::presets::RulesPreset::from_name(named).is_none() {
+                let available: Vec<&str> = cypcb_rules::presets::RulesPreset::all()
+                    .iter()
+                    .map(|preset| preset.name())
+                    .collect();
+                let message = format!(
+                    "The board asks for fab '{}', which is not a preset this tool has. \
+                     Checking against jlcpcb instead. Available presets: {}",
+                    named,
+                    available.join(", ")
+                );
+                let (start, end) = fab_span(&resolved).unwrap_or((0, 0));
+                self.diagnostics
+                    .push(SourceDiagnostic::from_span(message, source, start, end));
+            }
+        }
+
         // And what the board did not say, which the browser never showed at
         // all - the CLI learned to print these on 2026-08-08.
         for warning in &sync_result.warnings {
@@ -673,7 +707,7 @@ impl PcbEngine {
     /// Returns the clearance value from the active design rules (default preset).
     /// Used by the JS routing engine to enforce clearance during interactive routing.
     pub fn get_min_clearance_nm(&self) -> i64 {
-        DesignRules::default().min_clearance.0
+        self.preset().constraints().min_clearance.0
     }
 
     /// Get the last load's diagnostics as JSON, with the line each one is on.
@@ -719,12 +753,11 @@ impl PcbEngine {
     pub fn auto_route(&mut self) -> String {
         use cypcb_autoroute::{route_board, AutorouteConfig};
         use cypcb_router::apply_routes;
-        use cypcb_rules::presets::RulesPreset;
 
         // Clear existing autorouted traces first
         self.clear_autorouted_traces();
 
-        let preset = RulesPreset::from_name("jlcpcb").expect("jlcpcb preset must exist");
+        let preset = self.preset();
         let rules = cypcb_drc::ruleset_for_world(preset, &self.world);
         let config = AutorouteConfig::default();
 
@@ -771,7 +804,6 @@ impl PcbEngine {
     pub fn auto_route_with_params(&mut self, params_json: String) -> String {
         use cypcb_autoroute::{route_board, AutorouteConfig, AutorouteParams};
         use cypcb_router::apply_routes;
-        use cypcb_rules::presets::RulesPreset;
 
         // Deserialize params
         let params: AutorouteParams = match serde_json::from_str(&params_json) {
@@ -797,7 +829,7 @@ impl PcbEngine {
         // Clear existing autorouted traces first
         self.clear_autorouted_traces();
 
-        let preset = RulesPreset::from_name("jlcpcb").expect("jlcpcb preset must exist");
+        let preset = self.preset();
         let rules = cypcb_drc::ruleset_for_world(preset, &self.world);
         let config = AutorouteConfig {
             params,
@@ -839,12 +871,11 @@ impl PcbEngine {
     pub fn auto_route_debug(&mut self, params_json: String) -> String {
         use cypcb_autoroute::debug_route::route_with_debug;
         use cypcb_autoroute::AutorouteConfig;
-        use cypcb_rules::presets::RulesPreset;
 
         let params: cypcb_autoroute::AutorouteParams =
             serde_json::from_str(&params_json).unwrap_or_default();
 
-        let preset = RulesPreset::from_name("jlcpcb").expect("jlcpcb preset");
+        let preset = self.preset();
         let rules = cypcb_drc::ruleset_for_world(preset, &self.world);
         let mut config = AutorouteConfig::default();
         config.params = params.clamped();
@@ -864,17 +895,11 @@ impl PcbEngine {
     pub fn auto_route_variants(&mut self) -> String {
         use cypcb_autoroute::variant::{default_variant_configs, generate_variants};
         use cypcb_drc::DesignRules;
-        use cypcb_rules::presets::RulesPreset;
 
         // Clear existing autorouted traces first
         self.clear_autorouted_traces();
 
-        let preset = match RulesPreset::from_name("jlcpcb") {
-            Some(p) => p,
-            None => {
-                return r#"{"ok":false,"error":"jlcpcb preset not found"}"#.to_string();
-            }
-        };
+        let preset = self.preset();
         let rules = cypcb_drc::ruleset_for_world(preset, &self.world);
         // The fab this board is for, asked for rather than assumed.
         // `DesignRules::default()` is `jlcpcb_2layer`, which matched the preset
@@ -910,9 +935,28 @@ impl PcbEngine {
 
 // Internal methods (not exposed to WASM)
 impl PcbEngine {
-    /// Run DRC using default rules (JLCPCB 2-layer).
+    /// The fab table this board is checked and routed against.
+    ///
+    /// `board b { fab oshpark }` when the design names one, JLCPCB when it does
+    /// not. Four routing entry points and the checker used to reach for JLCPCB
+    /// by name, so the editor graded a board against a table the command line
+    /// had already stopped using - the same design, two answers, depending on
+    /// which of the two you opened it in.
+    ///
+    /// A name this tool does not have falls back rather than failing: the
+    /// editor has to keep drawing a board it cannot fully understand. The
+    /// fallback is not silent - `load_source` reports the unknown name as a
+    /// diagnostic on the line that wrote it.
+    fn preset(&self) -> cypcb_rules::presets::RulesPreset {
+        self.world
+            .fab()
+            .and_then(cypcb_rules::presets::RulesPreset::from_name)
+            .unwrap_or(cypcb_rules::presets::RulesPreset::JlcpcbStandard2Layer)
+    }
+
+    /// Run DRC against the fab the board named.
     fn run_drc_internal(&mut self) {
-        let rules = DesignRules::default();
+        let rules = DesignRules::from_constraints(&self.preset().constraints());
         let result = run_drc(&mut self.world, &rules);
         self.violations = result.violations;
         self.drc_duration_ms = result.duration_ms;
@@ -2123,6 +2167,64 @@ fn parse_layer(layer_str: &str) -> Result<Layer, String> {
 #[cfg(all(test, feature = "native"))]
 mod tests {
     use super::*;
+
+    /// A board that named a fab was still checked and routed against JLCPCB,
+    /// because five places in this file reached for that preset by name.
+    ///
+    /// Measured on `get_min_clearance_nm`, which is the number the interactive
+    /// router in the browser enforces while a person drags a trace: JLCPCB
+    /// images 0.127mm and OSHPark 0.150mm, so the two answers cannot be
+    /// confused with each other.
+    #[test]
+    fn the_editor_uses_the_fab_the_board_named() {
+        fn engine_for(fab_line: &str) -> PcbEngine {
+            let source = format!(
+                "version 1\n\n\
+                 board b {{\n    size 30mm x 20mm\n    layers 2\n{fab_line}}}\n\n\
+                 component R1 resistor \"0402\" {{\n    value \"10k\"\n    at 10mm, 10mm\n}}\n"
+            );
+            let mut engine = PcbEngine::new();
+            let report = engine.load_source(&source);
+            assert!(report.is_empty(), "the source has to parse: {report}");
+            engine
+        }
+
+        assert_eq!(
+            engine_for("    fab oshpark\n").get_min_clearance_nm(),
+            150_000,
+            "the board asked for OSHPark"
+        );
+        assert_eq!(
+            engine_for("").get_min_clearance_nm(),
+            127_000,
+            "a board naming no fab keeps the default this project has always had"
+        );
+    }
+
+    /// The CLI refuses a fab it does not know. The editor cannot - it still has
+    /// to draw the board - so it falls back and has to say that it did.
+    #[test]
+    fn a_fab_the_editor_does_not_know_is_reported_rather_than_ignored() {
+        let source = "version 1\n\n\
+                      board b {\n    size 30mm x 20mm\n    layers 2\n    fab jlpcb\n}\n";
+        let mut engine = PcbEngine::new();
+        engine.load_source(source);
+
+        let diagnostics = engine.get_diagnostics_json();
+        assert!(
+            diagnostics.contains("not a preset this tool has"),
+            "the fallback has to be visible: {diagnostics}"
+        );
+        assert!(
+            diagnostics.contains("oshpark_2layer"),
+            "and it has to list what this tool does have: {diagnostics}"
+        );
+        assert_eq!(
+            engine.get_min_clearance_nm(),
+            127_000,
+            "an unknown name falls back to the default rather than to nothing"
+        );
+    }
 
     /// The editor routes through `PcbEngine`, and until `ruleset_for_world`
     /// was wired in here it built the fab preset and nothing else - so a design

@@ -106,7 +106,7 @@ impl DocumentState {
     ///
     /// Returns true if the world was built successfully.
     pub fn build_world(&mut self) -> bool {
-        use cypcb_drc::{run_drc, DesignRules};
+        use cypcb_drc::{run_drc, PresetRules};
         use cypcb_world::footprint::FootprintLibrary;
         use cypcb_world::sync::sync_ast_to_world;
 
@@ -134,8 +134,20 @@ impl DocumentState {
         let sync_result = sync_ast_to_world(&resolved, &self.content, &mut world, &mut library);
         self.sync_errors = sync_result.errors.clone();
 
-        // Run DRC on the built world
-        let rules = DesignRules::default();
+        // Run DRC against the fab the board named, which is the same question
+        // `cypcb check` and the browser both ask. This was `DesignRules::default()`
+        // - JLCPCB - on every document, so a board written `fab oshpark` was
+        // underlined in the editor against a table it was never meant for.
+        //
+        // A name this tool does not have falls back rather than failing, the way
+        // the viewer does: a language server that stops reporting anything
+        // because one word is wrong is worse than one checking against the
+        // default. Unlike the viewer, nothing here says so yet - recorded.
+        let preset = world
+            .fab()
+            .and_then(cypcb_drc::Preset::from_name)
+            .unwrap_or(cypcb_drc::Preset::JlcpcbStandard2Layer);
+        let rules = preset.rules();
         let drc_result = run_drc(&mut world, &rules);
         self.drc_violations = drc_result.violations;
 
@@ -205,6 +217,62 @@ impl DocumentState {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Two traces 0.14mm apart: JLCPCB images that gap and OSHPark does not.
+    ///
+    /// A discriminator rather than a guess - `cypcb check --preset jlcpcb`
+    /// reports no clearance violation on this board and `--preset oshpark`
+    /// reports one, so which table the server used is readable off the count.
+    fn two_traces_a_hair_apart(fab_line: &str) -> String {
+        format!(
+            "version 1\n\n\
+             board t {{\n    size 20mm x 20mm\n    layers 2\n{fab_line}}}\n\n\
+             component R1 resistor \"0402\" {{\n    value \"10k\"\n    at 5mm, 5mm\n}}\n\n\
+             component R2 resistor \"0402\" {{\n    value \"10k\"\n    at 15mm, 5mm\n}}\n\n\
+             net A {{\n    R1.1\n    R2.1\n}}\n\n\
+             net B {{\n    R1.2\n    R2.2\n}}\n\n\
+             trace A {{\n    layer Top\n    width 0.127mm\n    path 5mm,10mm -> 15mm,10mm\n}}\n\n\
+             trace B {{\n    layer Top\n    width 0.127mm\n    path 5mm,10.267mm -> 15mm,10.267mm\n}}\n"
+        )
+    }
+
+    /// How many clearance violations the server would underline.
+    fn clearance_violations(source: String) -> usize {
+        let mut doc = DocumentState::new("test://file".into(), source, 1);
+        // `new` stores the text and nothing else - `test_document_state_new`
+        // asserts `ast.is_none()` right after it. Without this the world is
+        // empty, every count is zero, and the two zero-expecting cases below
+        // pass while proving nothing.
+        doc.parse();
+        assert!(doc.parse_errors.is_empty(), "{:?}", doc.parse_errors);
+        assert!(doc.build_world(), "{:?}", doc.sync_errors);
+        doc.drc_violations
+            .iter()
+            .filter(|violation| violation.kind.to_string() == "clearance")
+            .count()
+    }
+
+    /// The server checked every document against JLCPCB whatever the board
+    /// said, so a design written for OSHPark was underlined - or not - against
+    /// a table it was never meant for.
+    #[test]
+    fn the_server_checks_against_the_fab_the_board_named() {
+        assert_eq!(
+            clearance_violations(two_traces_a_hair_apart("    fab oshpark\n")),
+            1,
+            "OSHPark does not image a 0.14mm gap and the board asked for OSHPark"
+        );
+        assert_eq!(
+            clearance_violations(two_traces_a_hair_apart("")),
+            0,
+            "JLCPCB does image it, and a board naming no fab is checked against JLCPCB"
+        );
+        assert_eq!(
+            clearance_violations(two_traces_a_hair_apart("    fab jlpcb\n")),
+            0,
+            "a name this tool does not have falls back rather than reporting nothing at all"
+        );
+    }
 
     #[test]
     fn test_document_state_new() {
