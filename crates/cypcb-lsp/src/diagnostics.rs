@@ -59,7 +59,34 @@ pub fn run_diagnostics(doc: &DocumentState) -> Vec<Diagnostic> {
         diagnostics.push(import_error_to_diagnostic(doc, error));
     }
 
-    // 4. Convert DRC violations (run during build_world)
+    // 4. A fab name this tool does not have. The board is still checked -
+    //    against JLCPCB - so this is a warning rather than an error, and it
+    //    sits on the word that caused it because that is where the fix goes.
+    if let Some(unknown) = &doc.fab_fallback {
+        let available: Vec<&str> = cypcb_drc::Preset::all()
+            .iter()
+            .map(|preset| preset.name())
+            .collect();
+        let start = doc.offset_to_position(unknown.span.0);
+        let end = doc.offset_to_position(unknown.span.1);
+        diagnostics.push(Diagnostic {
+            start_line: start.line,
+            start_col: start.character,
+            end_line: end.line,
+            end_col: end.character,
+            severity: "warning",
+            code: "cypcb::unknown-fab".to_string(),
+            source: "cypcb",
+            message: format!(
+                "The board asks for fab '{}', which is not a preset this tool has. \
+                 Checking against jlcpcb instead. Available presets: {}",
+                unknown.named,
+                available.join(", ")
+            ),
+        });
+    }
+
+    // 5. Convert DRC violations (run during build_world)
     for violation in &doc.drc_violations {
         if let Some(diag) = violation_to_diagnostic(doc, violation) {
             diagnostics.push(diag);
@@ -318,6 +345,58 @@ mod tests {
         doc.parse();
         doc.build_world();
         doc
+    }
+
+    /// A board named a fab, the server did not have it, and nothing was said.
+    ///
+    /// The CLI refuses an unknown fab outright and the viewer draws the board
+    /// with a diagnostic on the word. The server checked against JLCPCB and
+    /// underlined nothing - on the surface where somebody is most likely to be
+    /// typing the name in the first place.
+    #[test]
+    fn an_unknown_fab_is_underlined_where_it_was_written() {
+        let source =
+            "version 1\n\nboard b {\n    size 20mm x 20mm\n    layers 2\n    fab jlpcb\n}\n";
+        let doc = make_doc(source);
+        let diagnostics = run_diagnostics(&doc);
+
+        let unknown: Vec<&Diagnostic> = diagnostics
+            .iter()
+            .filter(|diagnostic| diagnostic.code == "cypcb::unknown-fab")
+            .collect();
+        assert_eq!(unknown.len(), 1, "{diagnostics:?}");
+
+        let diagnostic = unknown[0];
+        assert_eq!(diagnostic.severity, "warning", "the board is still checked");
+        assert!(
+            diagnostic.message.contains("fab 'jlpcb'")
+                && diagnostic.message.contains("oshpark_2layer"),
+            "{}",
+            diagnostic.message
+        );
+
+        // Line 5, zero-based: the `fab jlpcb` line, not the top of the file.
+        assert_eq!(diagnostic.start_line, 5, "{diagnostic:?}");
+        let line = source.lines().nth(5).expect("the file has six lines");
+        let column = line.find("jlpcb").expect("the name is on that line") as u32;
+        assert_eq!(
+            diagnostic.start_col, column,
+            "the squiggle belongs under the name, not under the keyword"
+        );
+    }
+
+    /// A fab the tool does have says nothing at all.
+    #[test]
+    fn a_fab_the_tool_has_is_not_reported() {
+        let doc = make_doc(
+            "version 1\n\nboard b {\n    size 20mm x 20mm\n    layers 2\n    fab oshpark\n}\n",
+        );
+        assert!(
+            !run_diagnostics(&doc)
+                .iter()
+                .any(|diagnostic| diagnostic.code == "cypcb::unknown-fab"),
+            "oshpark is a preset this tool has"
+        );
     }
 
     #[test]

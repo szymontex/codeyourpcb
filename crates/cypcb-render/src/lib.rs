@@ -40,13 +40,8 @@ fn first_label(diagnostic: &dyn miette::Diagnostic) -> (usize, usize) {
 /// Where a board block wrote its `fab`, so an unknown name is underlined on the
 /// line that wrote it rather than at the top of the file.
 fn fab_span(file: &cypcb_parser::ast::SourceFile) -> Option<(usize, usize)> {
-    file.definitions.iter().find_map(|definition| {
-        let cypcb_parser::ast::Definition::Board(board) = definition else {
-            return None;
-        };
-        let fab = board.fab.as_ref()?;
-        Some((fab.span.start, fab.span.end))
-    })
+    let fab = file.board()?.fab.as_ref()?;
+    Some((fab.span.start, fab.span.end))
 }
 
 use cypcb_core::{Nm, Point};

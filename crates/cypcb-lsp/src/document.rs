@@ -55,6 +55,15 @@ pub struct DocumentState {
     pub sync_errors: Vec<SyncError>,
     /// Imports that could not be resolved.
     pub import_errors: Vec<ImportError>,
+    /// A `fab` name this tool does not have, and where the document wrote it.
+    ///
+    /// The CLI refuses an unknown fab outright and the viewer draws the board
+    /// anyway with a diagnostic on the word. A language server has to do what
+    /// the viewer does - a server that stops reporting because one word is
+    /// wrong is worse than one checking against the default - and this is what
+    /// it says while it does. Byte offsets, converted to a range when the
+    /// diagnostic is built.
+    pub fab_fallback: Option<UnknownFab>,
     /// Where this document lives, when it lives anywhere.
     ///
     /// `import "lib/blocks.cypcb"` resolves against the importing file's own
@@ -63,6 +72,15 @@ pub struct DocumentState {
     /// and was dropped - which is why a design split across files came up
     /// empty in the editor and checked fine on the command line.
     pub path: Option<PathBuf>,
+}
+
+/// A `fab` name the tool does not have, and where it was written.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnknownFab {
+    /// The name as the document wrote it.
+    pub named: String,
+    /// Byte offsets of that name in this document's text.
+    pub span: (usize, usize),
 }
 
 impl DocumentState {
@@ -77,6 +95,7 @@ impl DocumentState {
             drc_violations: Vec::new(),
             sync_errors: Vec::new(),
             import_errors: Vec::new(),
+            fab_fallback: None,
             path: path_of(&uri),
         }
     }
@@ -91,6 +110,7 @@ impl DocumentState {
         self.drc_violations.clear();
         self.sync_errors.clear();
         self.import_errors.clear();
+        self.fab_fallback = None;
     }
 
     /// Parse the document content and update AST and errors.
@@ -143,10 +163,21 @@ impl DocumentState {
         // the viewer does: a language server that stops reporting anything
         // because one word is wrong is worse than one checking against the
         // default. Unlike the viewer, nothing here says so yet - recorded.
-        let preset = world
-            .fab()
-            .and_then(cypcb_drc::Preset::from_name)
-            .unwrap_or(cypcb_drc::Preset::JlcpcbStandard2Layer);
+        self.fab_fallback = None;
+        let preset = match world.fab() {
+            Some(named) => cypcb_drc::Preset::from_name(named).unwrap_or_else(|| {
+                self.fab_fallback = Some(UnknownFab {
+                    named: named.to_string(),
+                    span: resolved
+                        .board()
+                        .and_then(|board| board.fab.as_ref())
+                        .map(|fab| (fab.span.start, fab.span.end))
+                        .unwrap_or((0, 0)),
+                });
+                cypcb_drc::Preset::JlcpcbStandard2Layer
+            }),
+            None => cypcb_drc::Preset::JlcpcbStandard2Layer,
+        };
         let rules = preset.rules();
         let drc_result = run_drc(&mut world, &rules);
         self.drc_violations = drc_result.violations;

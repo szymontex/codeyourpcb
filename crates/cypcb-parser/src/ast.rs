@@ -101,6 +101,22 @@ pub struct SourceFile {
     pub span: Span,
 }
 
+impl SourceFile {
+    /// The board this file describes, if it describes one.
+    ///
+    /// A file holds at most one board block in practice and the readers do not
+    /// enforce it, so this answers with the first - which is what every caller
+    /// asking "what size is it" or "which fab is it for" already meant.
+    pub fn board(&self) -> Option<&BoardDef> {
+        self.definitions
+            .iter()
+            .find_map(|definition| match definition {
+                Definition::Board(board) => Some(board),
+                _ => None,
+            })
+    }
+}
+
 /// A top-level definition in the source file.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
