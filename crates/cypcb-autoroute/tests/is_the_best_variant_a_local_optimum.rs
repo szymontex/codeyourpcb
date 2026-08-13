@@ -34,6 +34,26 @@ fn fixture_path(filename: &str) -> std::path::PathBuf {
         .join(filename)
 }
 
+/// Each board's measured noise band, violations and shorts, from
+/// `via_price_sweep::how_much_of_the_price_is_noise`.
+///
+/// The ranking and the band answer different questions and this file needs
+/// both. The ranking says which point the router would hand over; the band
+/// says whether the difference is the negotiation going differently. A
+/// neighbour the ranking prefers by less than the band is not an improvement,
+/// and a diagnostic that printed only the first would read as though it were.
+fn band(filename: &str) -> (i64, i64) {
+    match filename {
+        "led_blink.kicad_pcb" => (0, 0),
+        "stm32_breakout.kicad_pcb" => (59, 61),
+        "multi_ic.kicad_pcb" => (65, 56),
+        "shift_driver.kicad_pcb" => (17, 8),
+        "qfp_fanout.kicad_pcb" => (57, 44),
+        "plane_board.kicad_pcb" => (0, 0),
+        _ => (0, 0),
+    }
+}
+
 /// One-knob neighbours of a variant, named after what was changed.
 ///
 /// Deliberately one at a time: a neighbourhood that moves two knobs cannot say
@@ -169,8 +189,29 @@ fn does_a_one_knob_neighbour_beat_the_variant_the_board_picks() {
         if best.name == winner_name {
             eprintln!("  -> the shipped point is a local optimum on this neighbourhood");
         } else {
-            eprintln!("  -> BEATEN by `{}`", best.name);
-            improved.push(format!("{}: {}", benchmark.filename, best.name));
+            // The ranking preferred it. Whether that is an improvement is the
+            // band's question, and the two disagree often enough that printing
+            // only the first would invite the wrong conclusion.
+            let here = local
+                .iter()
+                .find(|r| r.name == winner_name)
+                .expect("the winner was handed in with its own neighbourhood");
+            let (bv, bs) = band(benchmark.filename);
+            let dv = best.score.drc_violations as i64 - here.score.drc_violations as i64;
+            let ds = best.score.shorts as i64 - here.score.shorts as i64;
+            let outside = dv.abs() > bv || ds.abs() > bs;
+
+            eprintln!(
+                "  -> the ranking prefers `{}` ({dv:+} violations, {ds:+} shorts, band {bv} / {bs})",
+                best.name
+            );
+            if outside {
+                eprintln!("     and the move is OUTSIDE the band: a real improvement");
+                improved.push(format!("{}: {}", benchmark.filename, best.name));
+            } else {
+                eprintln!("     but the move is inside the band: the negotiation going");
+                eprintln!("     differently, not a better setting");
+            }
         }
     }
 
