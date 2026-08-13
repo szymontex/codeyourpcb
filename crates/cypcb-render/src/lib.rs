@@ -719,13 +719,13 @@ impl PcbEngine {
     pub fn auto_route(&mut self) -> String {
         use cypcb_autoroute::{route_board, AutorouteConfig};
         use cypcb_router::apply_routes;
-        use cypcb_rules::presets::{PresetRuleSet, RulesPreset};
+        use cypcb_rules::presets::RulesPreset;
 
         // Clear existing autorouted traces first
         self.clear_autorouted_traces();
 
         let preset = RulesPreset::from_name("jlcpcb").expect("jlcpcb preset must exist");
-        let rules = PresetRuleSet::new(preset);
+        let rules = cypcb_drc::ruleset_for_world(preset, &self.world);
         let config = AutorouteConfig::default();
 
         let result = route_board(&mut self.world, &self.footprint_lib, &rules, &config);
@@ -771,7 +771,7 @@ impl PcbEngine {
     pub fn auto_route_with_params(&mut self, params_json: String) -> String {
         use cypcb_autoroute::{route_board, AutorouteConfig, AutorouteParams};
         use cypcb_router::apply_routes;
-        use cypcb_rules::presets::{PresetRuleSet, RulesPreset};
+        use cypcb_rules::presets::RulesPreset;
 
         // Deserialize params
         let params: AutorouteParams = match serde_json::from_str(&params_json) {
@@ -798,7 +798,7 @@ impl PcbEngine {
         self.clear_autorouted_traces();
 
         let preset = RulesPreset::from_name("jlcpcb").expect("jlcpcb preset must exist");
-        let rules = PresetRuleSet::new(preset);
+        let rules = cypcb_drc::ruleset_for_world(preset, &self.world);
         let config = AutorouteConfig {
             params,
             ..AutorouteConfig::default()
@@ -839,13 +839,13 @@ impl PcbEngine {
     pub fn auto_route_debug(&mut self, params_json: String) -> String {
         use cypcb_autoroute::debug_route::route_with_debug;
         use cypcb_autoroute::AutorouteConfig;
-        use cypcb_rules::presets::{PresetRuleSet, RulesPreset};
+        use cypcb_rules::presets::RulesPreset;
 
         let params: cypcb_autoroute::AutorouteParams =
             serde_json::from_str(&params_json).unwrap_or_default();
 
         let preset = RulesPreset::from_name("jlcpcb").expect("jlcpcb preset");
-        let rules = PresetRuleSet::new(preset);
+        let rules = cypcb_drc::ruleset_for_world(preset, &self.world);
         let mut config = AutorouteConfig::default();
         config.params = params.clamped();
         config.via_cost_multiplier = config.params.via_cost;
@@ -864,7 +864,7 @@ impl PcbEngine {
     pub fn auto_route_variants(&mut self) -> String {
         use cypcb_autoroute::variant::{default_variant_configs, generate_variants};
         use cypcb_drc::DesignRules;
-        use cypcb_rules::presets::{PresetRuleSet, RulesPreset};
+        use cypcb_rules::presets::RulesPreset;
 
         // Clear existing autorouted traces first
         self.clear_autorouted_traces();
@@ -875,8 +875,12 @@ impl PcbEngine {
                 return r#"{"ok":false,"error":"jlcpcb preset not found"}"#.to_string();
             }
         };
-        let rules = PresetRuleSet::new(preset);
-        let design_rules = DesignRules::default();
+        let rules = cypcb_drc::ruleset_for_world(preset, &self.world);
+        // The fab this board is for, asked for rather than assumed.
+        // `DesignRules::default()` is `jlcpcb_2layer`, which matched the preset
+        // above only because the preset above is hard-coded to jlcpcb. Two
+        // coincidences agreeing is not the same as one source.
+        let design_rules = DesignRules::from_constraints(&preset.constraints());
         let configs = default_variant_configs();
 
         let results = generate_variants(
@@ -2119,6 +2123,67 @@ fn parse_layer(layer_str: &str) -> Result<Layer, String> {
 #[cfg(all(test, feature = "native"))]
 mod tests {
     use super::*;
+
+    /// The editor routes through `PcbEngine`, and until `ruleset_for_world`
+    /// was wired in here it built the fab preset and nothing else - so a design
+    /// stating what a net needs was obeyed by `cypcb route` on the command line
+    /// and ignored by the same router inside the viewer.
+    ///
+    /// This measures **clearance** and not width on purpose. A stated width
+    /// reaches the emitted trace through `pathfinder_v2.rs:174`, which reads
+    /// the world directly and never consults the rule set - so a width
+    /// assertion here passes whether the wiring exists or not, which was
+    /// checked by writing one and watching the mutation survive. Clearance has
+    /// no such second path: the rule set is the only way it reaches the router.
+    #[test]
+    fn the_editor_routes_on_the_clearance_the_design_states() {
+        /// Two resistors to connect, and a third net in the way, with whatever
+        /// the caller wants said about the net being watched.
+        fn board(vcc_constraint: &str) -> String {
+            format!(
+                "version 1\n\n\
+                 board b {{\n    size 40mm x 20mm\n    layers 2\n}}\n\n\
+                 component R1 resistor \"0402\" {{\n    value \"10k\"\n    at 8mm, 10mm\n}}\n\n\
+                 component R2 resistor \"0402\" {{\n    value \"10k\"\n    at 32mm, 10mm\n}}\n\n\
+                 component R3 resistor \"0402\" {{\n    value \"10k\"\n    at 20mm, 10mm\n}}\n\n\
+                 net VCC{vcc_constraint} {{\n    R1.1\n    R2.1\n}}\n\n\
+                 net SIG {{\n    R3.1\n    R3.2\n}}\n"
+            )
+        }
+
+        /// How the router left the board: how many traces, and how much copper.
+        fn route_and_measure(source: &str) -> (usize, i64) {
+            use cypcb_world::components::trace::Trace as TraceComp;
+
+            let mut engine = PcbEngine::new();
+            assert_eq!(engine.load_source(source), "", "the source has to parse");
+            let status = engine.auto_route();
+            assert!(status.contains(r#""ok":true"#), "{status}");
+
+            let ecs = engine.world.ecs_mut();
+            let mut query = ecs.query::<&TraceComp>();
+            let mut count = 0;
+            let mut copper = 0i64;
+            for trace in query.iter(ecs) {
+                count += 1;
+                for segment in &trace.segments {
+                    let dx = segment.end.x.raw() - segment.start.x.raw();
+                    let dy = segment.end.y.raw() - segment.start.y.raw();
+                    copper += ((dx * dx + dy * dy) as f64).sqrt() as i64;
+                }
+            }
+            (count, copper)
+        }
+
+        let quiet = route_and_measure(&board(""));
+        let demanding = route_and_measure(&board(" [clearance 4mm]"));
+
+        assert_ne!(
+            quiet, demanding,
+            "a net demanding 4mm of space routed identically to one that said \
+             nothing, so the rule set the editor builds is not carrying it"
+        );
+    }
 
     #[test]
     fn test_engine_new() {
