@@ -278,6 +278,18 @@ fn report_rules_the_fab_never_stated(
     ];
 
     let mut said_anything = false;
+
+    // Whose table this is, before anything about individual rules. Seven of
+    // the eleven presets are a fabricator's own published page; three are this
+    // tool's reading of IPC, which is not a public document; one is this
+    // tool's own choice. A reader told a board is out of spec deserves to know
+    // which of those three said so.
+    if let Some(caveat) = preset.provenance().caveat(preset.name()) {
+        eprintln!("Notes:");
+        said_anything = true;
+        eprintln!("  {caveat}");
+    }
+
     for (kind, what, is_derived, value) in derived {
         if !is_derived || !violations.iter().any(|v| v.kind == kind) {
             continue;

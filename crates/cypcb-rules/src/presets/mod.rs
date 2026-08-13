@@ -65,6 +65,48 @@ pub enum RulesPreset {
     Prototype,
 }
 
+/// Where a preset's numbers came from, which decides how far to trust them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Provenance {
+    /// A fabricator's own capability page, read and dated in the source.
+    Published,
+    /// A reading of a design standard with no public page behind it.
+    ///
+    /// The IPC classes. IPC-2221 and IPC-6012 are not public documents, so
+    /// every figure in those three tables is this project's understanding of a
+    /// standard it cannot cite a line of. They may well be right; nothing here
+    /// can show that they are, and a checker that cannot show its source has
+    /// to say so instead.
+    Standard,
+    /// This project's own choice, answering to nobody's table.
+    ///
+    /// `prototype` is deliberately bigger than any fab requires - it exists so
+    /// a board can be hand-assembled, not so it can be quoted.
+    ThisTool,
+}
+
+impl Provenance {
+    /// What to tell a reader whose board was measured against this.
+    ///
+    /// `None` for a published table: a fab's own page needs no apology.
+    pub fn caveat(self, preset_name: &str) -> Option<String> {
+        match self {
+            Provenance::Published => None,
+            Provenance::Standard => Some(format!(
+                "{preset_name} is a design standard rather than a fabricator. \
+                 These figures are this tool's reading of IPC, which is not a \
+                 public document - check them against your own copy before \
+                 trusting a board to them."
+            )),
+            Provenance::ThisTool => Some(format!(
+                "{preset_name} is this tool's own table, not a fabricator's. \
+                 It is deliberately looser than any house requires, for hand \
+                 assembly rather than for quoting."
+            )),
+        }
+    }
+}
+
 impl RulesPreset {
     /// All preset variants in definition order.
     pub const ALL: [RulesPreset; 11] = [
@@ -156,6 +198,27 @@ impl RulesPreset {
     }
 
     /// Get the full design constraints for this preset.
+    /// Where this preset's numbers came from.
+    ///
+    /// Seven of the eleven are a fabricator's own published capability page,
+    /// read and dated. Three are a reading of a design standard that has no
+    /// public page to link to, and one is this project's own choice. A user
+    /// being told a board is out of spec deserves to know which of those three
+    /// is doing the telling.
+    pub fn provenance(self) -> Provenance {
+        match self {
+            Self::JlcpcbStandard2Layer
+            | Self::JlcpcbStandard4Layer
+            | Self::JlcpcbAdvanced2Layer
+            | Self::JlcpcbAdvanced4Layer
+            | Self::PcbWayStandard
+            | Self::OshPark2Layer
+            | Self::OshPark4Layer => Provenance::Published,
+            Self::IpcClass1 | Self::IpcClass2 | Self::IpcClass3 => Provenance::Standard,
+            Self::Prototype => Provenance::ThisTool,
+        }
+    }
+
     pub fn constraints(self) -> DesignConstraints {
         match self {
             Self::JlcpcbStandard2Layer => jlcpcb::standard_2layer(),
