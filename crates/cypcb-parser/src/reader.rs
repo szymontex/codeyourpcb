@@ -18,13 +18,13 @@
 //! and compares the ASTs.
 
 use crate::ast::{
-    AssertDef, AssertExpression, AssertOperand, BoardDef, ComparisonOp, ComponentDef,
-    ComponentKind, Definition, DiffPairDef, Dimension, FootprintDef, Identifier, ImplementsClause,
-    ImportDef, InterfaceDef, LayerType, ModuleDef, ModuleInstance, NetAssignment, NetClassDef,
-    NetConstraints, NetDef, OutlineDef, PadDef, PadShape, PhysicalValue, PinDeclaration, PinId,
-    PinRef, PortConnection, PositionExpr, RotationExpr, SilkDef, SizeProperty, SourceFile, Span,
-    StackupDef, StackupLayer, StringLit, Tolerance, ToleranceKind, TraceDef, TraceDirective,
-    TracePath, TraceVia, ZoneDef, ZoneKind,
+    format_pad_number, AssertDef, AssertExpression, AssertOperand, BoardDef, ComparisonOp,
+    ComponentDef, ComponentKind, Definition, DiffPairDef, Dimension, FootprintDef, Identifier,
+    ImplementsClause, ImportDef, InterfaceDef, LayerType, ModuleDef, ModuleInstance, NetAssignment,
+    NetClassDef, NetConstraints, NetDef, OutlineDef, PadDef, PadShape, PhysicalValue,
+    PinDeclaration, PinId, PinRef, PortConnection, PositionExpr, RotationExpr, SilkDef,
+    SizeProperty, SourceFile, Span, StackupDef, StackupLayer, StringLit, Tolerance, ToleranceKind,
+    TraceDef, TraceDirective, TracePath, TraceVia, ZoneDef, ZoneKind,
 };
 use crate::errors::{ParseError, ParseResult};
 use crate::lexer::{tokenize, Token, TokenKind};
@@ -964,12 +964,33 @@ impl<'a> Reader<'a> {
     }
 
     /// `pad 1 rect at 0mm, 0mm size 1mm x 1mm [drill 0.3mm [x 0.2mm]]`.
+    /// The three ways a design can write what a pad is called.
+    ///
+    /// Numbers keep the form they were written in: `1` stays `"1"` rather
+    /// than becoming `"1.0"`, because a pad called 1 and a pad called 1.0 are
+    /// not the same pad and the board model compares these by string.
+    fn pad_name(&mut self) -> Option<String> {
+        if let Some(literal) = self.string() {
+            return Some(literal.value);
+        }
+        if let Some(word) = self.peek_ident() {
+            let owned = word.to_string();
+            self.bump();
+            return Some(owned);
+        }
+        let (value, _) = self.number()?;
+        Some(format_pad_number(value))
+    }
+
     fn pad(&mut self, start: usize) -> Option<PadDef> {
         self.bump(); // `pad`
-        let number = match self.number() {
-            Some((value, _)) => value as u32,
+                     // A bare number, a bare identifier, or a quoted string - the last of
+                     // which is the only way to write a name the identifier rule refuses,
+                     // like `A1+` or one that starts with a digit and carries a letter.
+        let number = match self.pad_name() {
+            Some(name) => name,
             None => {
-                self.unexpected("a pad number");
+                self.unexpected("a pad name: 1, A1 or \"S1\"");
                 return None;
             }
         };

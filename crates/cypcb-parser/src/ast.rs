@@ -624,6 +624,21 @@ pub struct StringLit {
     pub span: Span,
 }
 
+/// A pad written as a bare number, as the string the model stores.
+///
+/// `1` has to come back as `"1"` and not `"1.0"`: a footprint's pads are
+/// matched against a net's pin references by string, so a trailing `.0` would
+/// stop `R1.1` finding the pad it names. A number that really does carry a
+/// fraction keeps it, because refusing to write down what somebody typed is
+/// worse than an odd-looking pad name.
+pub fn format_pad_number(value: f64) -> String {
+    if value.fract() == 0.0 && value.is_finite() {
+        format!("{}", value as i64)
+    } else {
+        format!("{value}")
+    }
+}
+
 impl StringLit {
     /// Create a new string literal.
     pub fn new(value: impl Into<String>, span: Span) -> Self {
@@ -735,8 +750,15 @@ impl PadShape {
 /// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PadDef {
-    /// Pad number (e.g., 1, 2, 3).
-    pub number: u32,
+    /// Pad name: `1`, `A1`, `S1`, whatever the datasheet calls it.
+    ///
+    /// A string, because a pad's name is a name and not a count. A USB-C
+    /// receptacle names its pads A1 and B4, a BGA by row and column, an edge
+    /// connector whatever it likes. `cypcb-world` has modelled this as a
+    /// `String` since it was written - its own doc comment names `"A1"` and
+    /// `"VCC"` - and only the parser insisted on a number, which is what kept
+    /// most boards worth importing out of this language.
+    pub number: String,
     /// Pad shape.
     pub shape: PadShape,
     /// X position relative to footprint origin.

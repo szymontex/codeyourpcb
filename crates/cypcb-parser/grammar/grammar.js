@@ -384,9 +384,16 @@ module.exports = grammar({
     ),
 
     // pad N shape at X, Y size W x H [drill D]
+    // pad 1 ... / pad A1 ... / pad "S1" ...
+    //
+    // A pad's name is a name, not a count. A USB-C receptacle names its pads
+    // A1 and B4, a BGA names them by row and column, and an edge connector
+    // names them whatever the datasheet says - none of which is a number, and
+    // all of which this grammar refused. The board model has held a pad name
+    // as a string since it was written; only the language insisted otherwise.
     pad_definition: $ => seq(
       'pad',
-      field('number', $.number),
+      field('number', choice($.number, $.identifier, $.string)),
       field('shape', $.pad_shape),
       'at',
       field('x', $.dimension),

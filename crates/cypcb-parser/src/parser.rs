@@ -31,13 +31,13 @@
 //! ```
 
 use crate::ast::{
-    AssertDef, AssertExpression, AssertOperand, BoardDef, ComparisonOp, ComponentDef,
-    ComponentKind, CurrentUnit, CurrentValue, Definition, DiffPairDef, Dimension, FootprintDef,
-    Identifier, ImplementsClause, ImportDef, InterfaceDef, LayerType, ModuleDef, ModuleInstance,
-    NetAssignment, NetClassDef, NetConstraints, NetDef, OutlineDef, PadDef, PadShape,
-    PhysicalValue, PinDeclaration, PinId, PinRef, PortConnection, PositionExpr, RotationExpr,
-    SilkDef, SizeProperty, SourceFile, Span, StackupDef, StackupLayer, StringLit, Tolerance,
-    ToleranceKind, TraceDef, TraceDirective, TracePath, TraceVia, ZoneDef, ZoneKind,
+    format_pad_number, AssertDef, AssertExpression, AssertOperand, BoardDef, ComparisonOp,
+    ComponentDef, ComponentKind, CurrentUnit, CurrentValue, Definition, DiffPairDef, Dimension,
+    FootprintDef, Identifier, ImplementsClause, ImportDef, InterfaceDef, LayerType, ModuleDef,
+    ModuleInstance, NetAssignment, NetClassDef, NetConstraints, NetDef, OutlineDef, PadDef,
+    PadShape, PhysicalValue, PinDeclaration, PinId, PinRef, PortConnection, PositionExpr,
+    RotationExpr, SilkDef, SizeProperty, SourceFile, Span, StackupDef, StackupLayer, StringLit,
+    Tolerance, ToleranceKind, TraceDef, TraceDirective, TracePath, TraceVia, ZoneDef, ZoneKind,
 };
 use crate::errors::{ParseError, ParseResult};
 use crate::node_kinds;
@@ -941,16 +941,16 @@ impl CypcbParser {
     ) -> Option<PadDef> {
         let number_node = get_child_by_field(node, "number")?;
         let number_text = node_text(source, &number_node);
-        let number = match number_text.parse::<u32>() {
-            Ok(n) => n,
-            Err(_) => {
-                errors.push(ParseError::invalid_number(
-                    number_text,
-                    source.to_string(),
-                    span_of(&number_node).to_miette(),
-                ));
-                return None;
-            }
+        // Three forms reach here: a bare number, a bare identifier, and a
+        // quoted string. Only the first needs converting, and it keeps the
+        // form it was written in - a pad called 1 must not become "1.0", or a
+        // net's `R1.1` stops finding the pad it names.
+        let number = if number_node.kind() == "string" {
+            number_text.trim_matches('"').to_string()
+        } else if let Ok(value) = number_text.parse::<f64>() {
+            format_pad_number(value)
+        } else {
+            number_text.to_string()
         };
 
         let shape_node = get_child_by_field(node, "shape")?;

@@ -85,6 +85,22 @@ pub(crate) fn is_writable_identifier(name: &str) -> bool {
     chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
 
+/// A pad name written so the readers get back what the model holds.
+///
+/// A bare number and a bare identifier are written as they are. Anything else
+/// needs quotes, which is the form the grammar accepts for exactly this case:
+/// `A1+`, a name starting with a digit and carrying a letter, a name with a
+/// space in it. Writing such a name bare would produce a file this project
+/// cannot read back, which is the round trip failing silently.
+pub(crate) fn pad_name_as_written(name: &str) -> String {
+    let bare_number = !name.is_empty() && name.chars().all(|c| c.is_ascii_digit());
+    if bare_number || is_writable_identifier(name) {
+        name.to_string()
+    } else {
+        format!("{:?}", name)
+    }
+}
+
 pub fn traces_as_dsl(world: &mut BoardWorld) -> String {
     // Collect all traces grouped by net name
     let trace_data: Vec<Trace> = {
@@ -552,7 +568,7 @@ pub fn board_as_dsl(world: &mut BoardWorld) -> String {
             let _ = write!(
                 out,
                 "    pad {} {shape} at {}mm, {}mm size {}mm x {}mm",
-                pad.number,
+                pad_name_as_written(&pad.number),
                 format_mm(pad.position.x.0 as f64 / 1e6),
                 format_mm(pad.position.y.0 as f64 / 1e6),
                 format_mm(pad.size.0 .0 as f64 / 1e6),
