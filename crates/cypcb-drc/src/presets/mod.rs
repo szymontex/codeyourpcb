@@ -317,7 +317,7 @@ mod tests {
         assert_eq!(rules.min_trace_width, Nm::from_mm(0.127));
         assert_eq!(rules.min_drill_size, Nm::from_mm(0.3));
         assert_eq!(rules.min_via_drill, Nm::from_mm(0.3));
-        assert_eq!(rules.min_annular_ring, Nm::from_mm(0.15));
+        assert_eq!(rules.min_annular_ring, Nm::from_mm(0.18));
         assert_eq!(rules.min_silk_width, Nm::from_mm(0.15));
         assert_eq!(rules.min_edge_clearance, Nm::from_mm(0.3));
     }
@@ -328,7 +328,7 @@ mod tests {
         assert_eq!(rules.min_clearance, Nm::from_mm(0.1));
         assert_eq!(rules.min_trace_width, Nm::from_mm(0.1));
         assert_eq!(rules.min_drill_size, Nm::from_mm(0.2));
-        assert_eq!(rules.min_annular_ring, Nm::from_mm(0.125));
+        assert_eq!(rules.min_annular_ring, Nm::from_mm(0.2));
     }
 
     #[test]

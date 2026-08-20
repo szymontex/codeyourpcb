@@ -168,9 +168,12 @@ mod tests {
         // The distinction this rule exists for. A 0.4mm land on a 0.1mm drill
         // has a 0.15mm ring, which `AnnularRingRule` is happy with - and the
         // land is still smaller than anything the fab will image.
-        let mut world = board_with_land(0.4, 0.1);
+        // 0.46mm on 0.06mm, not 0.4 on 0.1: JLCPCB's published 2-layer ring
+        // is 0.18mm, and the old pair left exactly 0.15mm, which stopped being
+        // a generous ring the moment the table was read against its page.
+        let mut world = board_with_land(0.46, 0.06);
         let rules = DesignRules::jlcpcb_2layer();
-        let ring = (Nm::from_mm(0.4).0 - Nm::from_mm(0.1).0) / 2;
+        let ring = (Nm::from_mm(0.46).0 - Nm::from_mm(0.06).0) / 2;
         assert!(
             Nm(ring) >= rules.min_annular_ring,
             "the premise of this test: {ring}nm of ring against {}nm required",

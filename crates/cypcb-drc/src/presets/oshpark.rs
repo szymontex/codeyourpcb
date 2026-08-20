@@ -195,7 +195,7 @@ mod tests {
         assert_eq!(rules.min_trace_width, Nm::from_mm(0.09));
         assert_eq!(rules.min_drill_size, Nm::from_mm(0.15));
         assert_eq!(rules.min_via_drill, Nm::from_mm(0.15));
-        assert_eq!(rules.min_annular_ring, Nm::from_mm(0.1));
+        assert_eq!(rules.min_annular_ring, Nm::from_mm(0.2));
         assert_eq!(rules.min_silk_width, Nm::from_mm(0.1));
         assert_eq!(rules.min_edge_clearance, Nm::from_mm(0.2));
     }
@@ -215,7 +215,12 @@ mod tests {
         assert!(adv.min_clearance < std.min_clearance);
         assert!(adv.min_trace_width < std.min_trace_width);
         assert!(adv.min_drill_size < std.min_drill_size);
-        assert!(adv.min_annular_ring < std.min_annular_ring);
         assert!(adv.min_edge_clearance < std.min_edge_clearance);
+
+        // Not the ring. JLCPCB publishes one PTH annular ring per layer count
+        // and copper weight, and no process tier under it - so the advanced
+        // table carries the same 0.20mm the multilayer standard does, which is
+        // larger than 2-layer's 0.18mm rather than smaller.
+        assert!(adv.min_annular_ring > std.min_annular_ring);
     }
 }

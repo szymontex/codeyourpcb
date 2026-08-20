@@ -24,12 +24,16 @@ use crate::stackup::{LayerStackEntry, Stackup};
 pub fn standard_2layer() -> DesignConstraints {
     DesignConstraints {
         // Basic geometry
-        min_clearance: Nm::from_mm(0.127),    // 5 mil
-        min_trace_width: Nm::from_mm(0.127),  // 5 mil
-        min_drill_size: Nm::from_mm(0.3),     // 0.3mm min mechanical drill
-        min_via_drill: Nm::from_mm(0.3),      // 0.3mm min via drill
-        min_annular_ring: Nm::from_mm(0.15),  // 0.15mm (6 mil)
-        min_silk_width: Nm::from_mm(0.15),    // 0.15mm
+        min_clearance: Nm::from_mm(0.127),   // 5 mil
+        min_trace_width: Nm::from_mm(0.127), // 5 mil
+        min_drill_size: Nm::from_mm(0.3),    // 0.3mm min mechanical drill
+        min_via_drill: Nm::from_mm(0.3),     // 0.3mm min via drill
+        // JLCPCB publishes, for a 2-layer board at 1oz, a recommended PTH
+        // annular ring of 0.25mm and an absolute minimum of 0.18mm. This read
+        // 0.15mm, which is under the figure the page calls absolute - the
+        // checker passing a ring the house refuses.
+        min_annular_ring: Nm::from_mm(0.18), // 0.18mm, published absolute minimum
+        min_silk_width: Nm::from_mm(0.15),   // 0.15mm
         min_edge_clearance: Nm::from_mm(0.3), // 0.3mm
 
         // Advanced geometry
@@ -111,11 +115,14 @@ pub fn standard_2layer_stackup() -> Stackup {
 pub fn standard_4layer() -> DesignConstraints {
     DesignConstraints {
         // Basic geometry — tighter than 2-layer
-        min_clearance: Nm::from_mm(0.1),       // 4 mil
-        min_trace_width: Nm::from_mm(0.1),     // 4 mil
-        min_drill_size: Nm::from_mm(0.2),      // 0.2mm
-        min_via_drill: Nm::from_mm(0.2),       // 0.2mm
-        min_annular_ring: Nm::from_mm(0.125),  // ~5 mil
+        min_clearance: Nm::from_mm(0.1),   // 4 mil
+        min_trace_width: Nm::from_mm(0.1), // 4 mil
+        min_drill_size: Nm::from_mm(0.2),  // 0.2mm
+        min_via_drill: Nm::from_mm(0.2),   // 0.2mm
+        // Multilayer at 1oz: the page publishes PTH annular ring >= 0.20mm.
+        // This read 0.125mm under a "~5 mil" comment, which is neither the
+        // published figure nor 5 mil.
+        min_annular_ring: Nm::from_mm(0.2),    // 0.20mm, published
         min_silk_width: Nm::from_mm(0.15),     // 0.15mm
         min_edge_clearance: Nm::from_mm(0.25), // 0.25mm
 
@@ -207,11 +214,12 @@ pub fn standard_4layer_stackup() -> Stackup {
 pub fn advanced_2layer() -> DesignConstraints {
     DesignConstraints {
         // Basic geometry — tightest 2-layer capabilities
-        min_clearance: Nm::from_mm(0.09),     // 3.5 mil
-        min_trace_width: Nm::from_mm(0.09),   // 3.5 mil
-        min_drill_size: Nm::from_mm(0.15),    // 0.15mm
-        min_via_drill: Nm::from_mm(0.15),     // 0.15mm micro via
-        min_annular_ring: Nm::from_mm(0.1),   // 4 mil
+        min_clearance: Nm::from_mm(0.09),   // 3.5 mil
+        min_trace_width: Nm::from_mm(0.09), // 3.5 mil
+        min_drill_size: Nm::from_mm(0.15),  // 0.15mm
+        min_via_drill: Nm::from_mm(0.15),   // 0.15mm micro via
+        // Same page, same 0.20mm: there is no published process tier under it.
+        min_annular_ring: Nm::from_mm(0.2),   // 0.20mm, published
         min_silk_width: Nm::from_mm(0.1),     // 0.1mm
         min_edge_clearance: Nm::from_mm(0.2), // 0.2mm
 
@@ -295,11 +303,12 @@ pub fn advanced_2layer_stackup() -> Stackup {
 pub fn advanced_4layer() -> DesignConstraints {
     DesignConstraints {
         // Basic geometry
-        min_clearance: Nm::from_mm(0.09),     // 3.5 mil
-        min_trace_width: Nm::from_mm(0.09),   // 3.5 mil
-        min_drill_size: Nm::from_mm(0.15),    // 0.15mm
-        min_via_drill: Nm::from_mm(0.15),     // 0.15mm
-        min_annular_ring: Nm::from_mm(0.1),   // 4 mil
+        min_clearance: Nm::from_mm(0.09),   // 3.5 mil
+        min_trace_width: Nm::from_mm(0.09), // 3.5 mil
+        min_drill_size: Nm::from_mm(0.15),  // 0.15mm
+        min_via_drill: Nm::from_mm(0.15),   // 0.15mm
+        // Same page, same 0.20mm: there is no published process tier under it.
+        min_annular_ring: Nm::from_mm(0.2),   // 0.20mm, published
         min_silk_width: Nm::from_mm(0.1),     // 0.1mm
         min_edge_clearance: Nm::from_mm(0.2), // 0.2mm
 

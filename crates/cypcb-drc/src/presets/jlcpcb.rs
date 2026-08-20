@@ -101,12 +101,18 @@ mod tests {
         let two = DesignRules::jlcpcb_2layer();
         let four = DesignRules::jlcpcb_4layer();
 
-        // 4-layer should have tighter (smaller) minimums
+        // 4-layer is tighter in what it can image and drill.
         assert!(four.min_clearance < two.min_clearance);
         assert!(four.min_trace_width < two.min_trace_width);
         assert!(four.min_drill_size < two.min_drill_size);
-        assert!(four.min_annular_ring < two.min_annular_ring);
         assert!(four.min_edge_clearance < two.min_edge_clearance);
+
+        // The ring goes the other way, and this asserted the opposite until the
+        // page was read. JLCPCB publishes a PTH annular ring of 0.20mm for
+        // multilayer at 1oz and an absolute minimum of 0.18mm for 2-layer, so
+        // more layers ask for *more* copper around a hole, not less. A finer
+        // process does not make a ring safer to shrink.
+        assert!(four.min_annular_ring > two.min_annular_ring);
     }
 
     #[test]
@@ -116,7 +122,7 @@ mod tests {
         assert_eq!(rules.min_trace_width, Nm::from_mm(0.127));
         assert_eq!(rules.min_drill_size, Nm::from_mm(0.3));
         assert_eq!(rules.min_via_drill, Nm::from_mm(0.3));
-        assert_eq!(rules.min_annular_ring, Nm::from_mm(0.15));
+        assert_eq!(rules.min_annular_ring, Nm::from_mm(0.18));
         assert_eq!(rules.min_silk_width, Nm::from_mm(0.15));
         assert_eq!(rules.min_edge_clearance, Nm::from_mm(0.3));
     }
@@ -128,7 +134,7 @@ mod tests {
         assert_eq!(rules.min_trace_width, Nm::from_mm(0.1));
         assert_eq!(rules.min_drill_size, Nm::from_mm(0.2));
         assert_eq!(rules.min_via_drill, Nm::from_mm(0.2));
-        assert_eq!(rules.min_annular_ring, Nm::from_mm(0.125));
+        assert_eq!(rules.min_annular_ring, Nm::from_mm(0.2));
         assert_eq!(rules.min_silk_width, Nm::from_mm(0.15));
         assert_eq!(rules.min_edge_clearance, Nm::from_mm(0.25));
     }
