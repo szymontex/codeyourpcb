@@ -630,6 +630,7 @@ export function updatePreview(
     state.clearanceNm,
     state.traceWidth,
     padNetMap,
+    state.currentLayer,
   );
 
   // Dodge obstacles: reroute around pads of other nets
@@ -649,7 +650,10 @@ export function updatePreview(
     }
     if (netMap.size > 0) {
       finalPath = dodgeObstacles(previewPath, snapshot, state.netName, state.clearanceNm, state.traceWidth, netMap);
-      const remaining = checkRouteObstacles(finalPath, snapshot, state.netName, state.clearanceNm, state.traceWidth, netMap);
+      const remaining = checkRouteObstacles(
+        finalPath, snapshot, state.netName, state.clearanceNm, state.traceWidth, netMap,
+        state.currentLayer,
+      );
       hasCollision = remaining.length > 0;
     }
   }
@@ -1015,8 +1019,17 @@ export function checkRouteObstacles(
   clearanceNm: number = 150_000,
   traceWidth: number = 250_000,
   padNetMap?: Map<string, string>,
+  routingLayer?: string,
 ): ObstacleInfo[] {
   if (!snapshot || path.length < 2) return [];
+
+  // Copper on another layer is not in the way. This whole function compared
+  // nets and never once asked which layer anything was on, so a trace being
+  // drawn on the top of the board refused to cross a trace on the bottom -
+  // two pieces of copper with a laminate between them. Absent means the old
+  // behaviour, so a caller that has no layer to offer is not silently told
+  // that everything is clear.
+  const layerBitOfRoute = routingLayer ? layerBit(routingLayer) : 0;
 
   const obstacles: ObstacleInfo[] = [];
   const halfTrace = Number(traceWidth) / 2;
@@ -1036,6 +1049,9 @@ export function checkRouteObstacles(
       if (padNet === netName) continue;
       // Skip pads with no net — unconnected pads
       if (!padNet) continue;
+      // A pad that has no copper on the layer being routed cannot be hit by
+      // it. A through-hole pad is on every layer and stays an obstacle.
+      if (layerBitOfRoute && (Number(pad.layer_mask) & layerBitOfRoute) === 0) continue;
 
       // Compute pad world position — Number() guards BigInt from WASM
       const pxn = Number(pad.x_nm), pyn = Number(pad.y_nm);
@@ -1086,6 +1102,8 @@ export function checkRouteObstacles(
     for (const trace of snapshot.traces) {
       if (trace.net_name === netName) continue;
       if (!trace.net_name) continue;
+      // The other half of the same blindness: copper on a different layer.
+      if (routingLayer && trace.layer !== routingLayer) continue;
 
       const traceHW = Number(trace.width) / 2;
 
