@@ -598,6 +598,18 @@
     .lp-row[data-visible="false"] .lp-swatch {
       opacity: 0.35;
     }
+    /* The weight slider takes the whole row width under the name, because a
+       208px panel has no room for it beside four other things and a control
+       nobody can grab is not a control. */
+    .lp-row { flex-wrap: wrap; }
+    .lp-weight {
+      flex: 1 0 100%;
+      margin: 3px 0 0 19px;
+      height: 3px;
+      accent-color: var(--accent, #2f6fed);
+      cursor: pointer;
+    }
+    .lp-row[data-visible="false"] .lp-weight { opacity: 0.3; }
     .lp-hint {
       margin-top: auto;
       padding: 8px 10px;

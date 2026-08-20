@@ -27,6 +27,8 @@ import {
   nextLayerFocus,
   isLayerVisible,
   toggleLayerVisible,
+  layerOpacity,
+  setLayerOpacity,
   NON_COPPER_LAYERS,
   innerLayerColor,
   LAYER_FOCUS_LABEL,
@@ -630,7 +632,25 @@ async function init(): Promise<void> {
         eye.type = 'button';
         eye.className = 'lp-eye';
 
-        row.append(swatch, label, key, eye);
+        // Per-layer weight, on the row it belongs to. `X` moves every
+        // inactive layer in one step; this is what says the layer directly
+        // under the one being routed is worth more than the one two below it.
+        const weight = document.createElement('input');
+        weight.type = 'range';
+        weight.className = 'lp-weight';
+        weight.min = '0';
+        weight.max = '100';
+        weight.step = '5';
+        weight.title = `How much of ${name} to draw`;
+        weight.addEventListener('input', () => {
+          layers = setLayerOpacity(layers, name, Number(weight.value) / 100);
+          if (is3DActive && renderer3d) renderer3d.updateLayerVisibility(layers);
+          dirty = true;
+        });
+        // Dragging the slider must not also pick the layer.
+        weight.addEventListener('click', (event) => event.stopPropagation());
+
+        row.append(swatch, label, key, eye, weight);
         row.addEventListener('click', () => applyActiveLayer(name));
         // The eye is a second question about the same row - hiding a layer is
         // not choosing it, and clicking one must not do the other.
@@ -668,6 +688,11 @@ async function init(): Promise<void> {
       if (eye) {
         eye.textContent = visible ? '\u25c9' : '\u25cb';
         eye.title = visible ? `Hide ${name}` : `Show ${name}`;
+      }
+
+      const weight = row.querySelector('.lp-weight') as HTMLInputElement | null;
+      if (weight && document.activeElement !== weight) {
+        weight.value = String(Math.round(layerOpacity(name, layers) * 100));
       }
     }
 

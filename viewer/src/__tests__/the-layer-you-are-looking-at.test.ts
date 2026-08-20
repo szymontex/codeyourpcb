@@ -16,6 +16,8 @@ import {
   nextLayerFocus,
   layerMaskBit,
   copperDrawOrder,
+  layerOpacity,
+  setLayerOpacity,
   GHOST_GREY,
   LAYER_COLORS,
   DIMMED_ALPHA,
@@ -134,6 +136,40 @@ describe('the layer you are looking at', () => {
     expect(copperDrawOrder(present, 'Inner1')).toEqual([
       'Bottom', 'Inner2', 'Top', 'Inner1',
     ]);
+  });
+
+  /**
+   * The per-layer half of the same idea `X` answers in one step.
+   *
+   * A dense four-layer board wants the layer directly under the one being
+   * routed heavier than the one two below it, and a single control cannot say
+   * that. KiCad ships the same pairing.
+   */
+  it('draws a layer at the weight it was given', () => {
+    const half = setLayerOpacity(view('Top'), 'Bottom', 0.5);
+    expect(getTraceColor('Top', half)).toBe(LAYER_COLORS.top_copper);
+    expect(getTraceColor('Bottom', half)).toBe(
+      colorWithAlpha(LAYER_COLORS.bottom_copper, 0.5),
+    );
+  });
+
+  it('leaves a layer nobody weighted at full strength', () => {
+    expect(layerOpacity('Bottom', view('Top'))).toBe(1);
+    expect(getTraceColor('Bottom', view('Top'))).toBe(LAYER_COLORS.bottom_copper);
+  });
+
+  /** Weight and focus answer different questions, so they multiply. */
+  it('combines a layer weight with the focus mode', () => {
+    const dimmedAndHalved = setLayerOpacity(view('Top', 'dim'), 'Bottom', 0.5);
+    expect(getTraceColor('Bottom', dimmedAndHalved)).toBe(
+      colorWithAlpha(LAYER_COLORS.bottom_copper, DIMMED_ALPHA * 0.5),
+    );
+  });
+
+  it('draws nothing at all at zero, and clamps what it is given', () => {
+    expect(getTraceColor('Bottom', setLayerOpacity(view('Top'), 'Bottom', 0))).toBeNull();
+    expect(layerOpacity('Bottom', setLayerOpacity(view('Top'), 'Bottom', 5))).toBe(1);
+    expect(layerOpacity('Bottom', setLayerOpacity(view('Top'), 'Bottom', -2))).toBe(0);
   });
 
   /** A layer that is not on the board cannot be promoted to the front. */

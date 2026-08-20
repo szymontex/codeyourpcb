@@ -138,6 +138,16 @@ export interface LayerVisibility {
    */
   hiddenLayers?: readonly string[];
   /**
+   * How much of each layer to draw, 0 to 1, by layer name.
+   *
+   * `focus` moves every inactive layer in one step; this is the per-layer
+   * half of the same idea, and it is what a dense four-layer board needs -
+   * the layer immediately under the one being routed is worth more than the
+   * one two below it, and one control cannot say that. KiCad ships the same
+   * pairing. A layer absent from this map is drawn in full.
+   */
+  opacity?: Record<string, number>;
+  /**
    * Whether the copper between the outer two is drawn.
    *
    * Optional so every existing caller keeps working: absent means visible,
@@ -203,8 +213,33 @@ export function getPadColor(layerMask: number, visibility: LayerVisibility): str
     return null;
   })();
 
-  return applyFocus(base, onActive, visibility.focus);
+  // The weight of the most visible layer this pad sits on. A through-hole pad
+  // is on every copper layer, so turning one layer down must not take it away
+  // - you cannot route to a hole you cannot see. An SMD pad is on exactly one
+  // layer and follows it.
+  const weight = COPPER_LAYER_NAMES_FOR_MASK.reduce(
+    (most, name) =>
+      (layerMask & layerMaskBit(name)) !== 0
+        ? Math.max(most, layerOpacity(name, visibility))
+        : most,
+    0,
+  );
+
+  return applyFocus(base, onActive, visibility.focus, weight === 0 ? 1 : weight);
 }
+
+/**
+ * The layer names a pad mask can name.
+ *
+ * Fixed rather than taken from the board, because `getPadColor` is handed a
+ * mask and no stack. Sixteen inner layers is past anything this project has
+ * had to draw, and a mask bit outside the list simply does not weight the pad.
+ */
+const COPPER_LAYER_NAMES_FOR_MASK: readonly string[] = [
+  'Top',
+  'Bottom',
+  ...Array.from({ length: 16 }, (_, index) => `Inner${index + 1}`),
+];
 
 /**
  * Check if a layer mask is on the top layer
@@ -302,8 +337,17 @@ export function colorWithAlpha(color: string, alpha: number): string {
     return `rgba(${r}, ${g}, ${b}, ${alpha})`;
   }
 
-  // Already an rgb()/rgba() string, or something this does not parse. Leaving
-  // it alone is the honest answer; inventing a conversion is not.
+  // An rgb()/rgba() string: replace whatever alpha it carries. This used to
+  // return such a colour untouched, which made the per-layer weight a no-op
+  // the moment a focus mode had already produced an rgba - the two controls
+  // multiply, so the second one has to be able to reach the first one's work.
+  const rgb = /^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)/.exec(color.trim());
+  if (rgb) {
+    return `rgba(${rgb[1]}, ${rgb[2]}, ${rgb[3]}, ${alpha})`;
+  }
+
+  // Something this does not parse. Leaving it alone is the honest answer;
+  // inventing a conversion is not.
   return color;
 }
 
@@ -377,7 +421,12 @@ export function getTraceColor(layer: string, visibility: LayerVisibility): strin
     }
   })();
 
-  return applyFocus(base, layer === visibility.activeLayer, visibility.focus);
+  return applyFocus(
+    base,
+    layer === visibility.activeLayer,
+    visibility.focus,
+    layerOpacity(layer, visibility),
+  );
 }
 
 /**
@@ -392,12 +441,53 @@ export function applyFocus(
   base: string | null,
   isActive: boolean,
   focus: LayerFocus | undefined,
+  opacity = 1,
 ): string | null {
   if (base === null) return null;
-  if (isActive || !focus || focus === 'all') return base;
-  if (focus === 'solo') return null;
-  if (focus === 'ghost') return GHOST_GREY;
-  return colorWithAlpha(base, DIMMED_ALPHA);
+  if (opacity <= 0) return null;
+
+  // Focus first, then the layer's own weight. The two answer different
+  // questions - focus is "what am I working on", opacity is "how much of this
+  // one do I want to see" - and multiplying the alphas is what lets a person
+  // set the layer above theirs heavier than the one two below it while a
+  // single key still pushes all of them back at once.
+  const focused = (() => {
+    if (isActive || !focus || focus === 'all') return base;
+    if (focus === 'solo') return null;
+    if (focus === 'ghost') return GHOST_GREY;
+    return colorWithAlpha(base, DIMMED_ALPHA);
+  })();
+  if (focused === null) return null;
+  if (opacity >= 1) return focused;
+
+  return colorWithAlpha(focused, alphaOf(focused) * opacity);
+}
+
+/** The alpha already carried by a colour, 1 when it carries none. */
+function alphaOf(color: string): number {
+  const rgba = /rgba\(\s*[\d.]+\s*,\s*[\d.]+\s*,\s*[\d.]+\s*,\s*([\d.]+)\s*\)/.exec(color);
+  if (rgba) return Number(rgba[1]);
+  const hsla = /hsla\([^,]+,[^,]+,[^,]+,\s*([\d.]+)\s*\)/.exec(color);
+  if (hsla) return Number(hsla[1]);
+  return 1;
+}
+
+/** How much of a layer a person asked to see. Silence means all of it. */
+export function layerOpacity(layer: string, visibility: LayerVisibility): number {
+  const stated = visibility.opacity?.[layer];
+  return stated === undefined ? 1 : Math.min(1, Math.max(0, stated));
+}
+
+/** The same view with one layer's weight set. */
+export function setLayerOpacity(
+  visibility: LayerVisibility,
+  layer: string,
+  value: number,
+): LayerVisibility {
+  return {
+    ...visibility,
+    opacity: { ...(visibility.opacity ?? {}), [layer]: Math.min(1, Math.max(0, value)) },
+  };
 }
 
 /**
