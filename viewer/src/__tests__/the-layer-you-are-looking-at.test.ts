@@ -15,6 +15,8 @@ import {
   colorWithAlpha,
   nextLayerFocus,
   layerMaskBit,
+  copperDrawOrder,
+  GHOST_GREY,
   LAYER_COLORS,
   DIMMED_ALPHA,
   type LayerVisibility,
@@ -86,11 +88,57 @@ describe('the layer you are looking at', () => {
     expect(getPadColor(topOnly, view('Bottom', 'solo'))).toBeNull();
   });
 
-  it('walks all, dim, solo and back', () => {
-    expect(nextLayerFocus(undefined)).toBe('dim');
-    expect(nextLayerFocus('all')).toBe('dim');
+  it('walks all, grey, dim, solo and back', () => {
+    expect(nextLayerFocus(undefined)).toBe('ghost');
+    expect(nextLayerFocus('all')).toBe('ghost');
+    expect(nextLayerFocus('ghost')).toBe('dim');
     expect(nextLayerFocus('dim')).toBe('solo');
     expect(nextLayerFocus('solo')).toBe('all');
+  });
+
+  /**
+   * Grey rather than faint, which is the difference between context and
+   * competition. A faint red trace still reads as top copper and pulls the
+   * eye; a grey one reads as something underneath. Altium calls this
+   * grey-scale mode and it is the answer to "show the other one differently".
+   */
+  it('draws the other layers in grey, keeping their shape', () => {
+    const v = view('Top', 'ghost');
+    expect(getTraceColor('Top', v)).toBe(LAYER_COLORS.top_copper);
+    expect(getTraceColor('Bottom', v)).toBe(GHOST_GREY);
+    expect(getTraceColor('Inner1', v)).toBe(GHOST_GREY);
+  });
+
+  /**
+   * The stack, then the active layer again on top.
+   *
+   * The renderer painted bottom, then top, then the inner layers - so on a
+   * four-layer board Inner1 covered both outer ones, the opposite of the stack
+   * it represents. And nothing gave the active layer priority, so drawing on
+   * the bottom meant watching top copper paint over the trace under the
+   * cursor.
+   */
+  it('paints the stack in order and the active layer last', () => {
+    const present = ['Top', 'Inner2', 'Bottom', 'Inner1'];
+
+    expect(copperDrawOrder(present, undefined)).toEqual([
+      'Bottom', 'Inner1', 'Inner2', 'Top',
+    ]);
+
+    // Drawing on the bottom: everything else first, the bottom last.
+    expect(copperDrawOrder(present, 'Bottom')).toEqual([
+      'Inner1', 'Inner2', 'Top', 'Bottom',
+    ]);
+
+    // And an inner layer is not buried by the outer ones any more.
+    expect(copperDrawOrder(present, 'Inner1')).toEqual([
+      'Bottom', 'Inner2', 'Top', 'Inner1',
+    ]);
+  });
+
+  /** A layer that is not on the board cannot be promoted to the front. */
+  it('ignores an active layer the board does not have', () => {
+    expect(copperDrawOrder(['Top', 'Bottom'], 'Inner3')).toEqual(['Bottom', 'Top']);
   });
 
   /**

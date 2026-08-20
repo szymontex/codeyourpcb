@@ -674,7 +674,8 @@ async function init(): Promise<void> {
     if (focus) {
       const mode = layers.focus ?? 'all';
       focus.dataset.focus = mode;
-      focus.textContent = mode === 'all' ? 'All' : mode === 'dim' ? 'Dim' : 'Solo';
+      focus.textContent =
+        mode === 'all' ? 'All' : mode === 'ghost' ? 'Grey' : mode === 'dim' ? 'Dim' : 'Solo';
       focus.title = `${LAYER_FOCUS_LABEL[mode]} - X cycles all / dim / solo`;
     }
   }

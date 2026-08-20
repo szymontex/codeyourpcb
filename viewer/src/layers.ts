@@ -57,17 +57,29 @@ export const LAYER_MASK = {
  * useful number - off, quieter, alone - because a fourth is one more press
  * between a person and the copper they are looking at.
  */
-export type LayerFocus = 'all' | 'dim' | 'solo';
+export type LayerFocus = 'all' | 'ghost' | 'dim' | 'solo';
 
 /** The order `X` walks, and the order the button cycles. */
-export const LAYER_FOCUS_ORDER: readonly LayerFocus[] = ['all', 'dim', 'solo'] as const;
+export const LAYER_FOCUS_ORDER: readonly LayerFocus[] = ['all', 'ghost', 'dim', 'solo'] as const;
 
 /** What each state is called where a person can read it. */
 export const LAYER_FOCUS_LABEL: Record<LayerFocus, string> = {
   all: 'All layers',
+  ghost: 'Others in grey',
   dim: 'Dim others',
   solo: 'Active only',
 };
+
+/**
+ * The grey an inactive layer is drawn in under `ghost`.
+ *
+ * Keeping the geometry and dropping the colour is the trick Altium calls
+ * grey-scale mode, and it beats transparency for the thing this is for: a
+ * faint red trace still reads as top copper and competes for the eye, while a
+ * grey one reads as context. The active layer is then the only coloured thing
+ * on screen, which is the whole point.
+ */
+export const GHOST_GREY = '#6b6b6b';
 
 /** The next state in the cycle, wrapping. */
 export function nextLayerFocus(focus: LayerFocus | undefined): LayerFocus {
@@ -361,7 +373,42 @@ export function applyFocus(
 ): string | null {
   if (base === null) return null;
   if (isActive || !focus || focus === 'all') return base;
-  return focus === 'solo' ? null : colorWithAlpha(base, DIMMED_ALPHA);
+  if (focus === 'solo') return null;
+  if (focus === 'ghost') return GHOST_GREY;
+  return colorWithAlpha(base, DIMMED_ALPHA);
+}
+
+/**
+ * The order copper is painted in, so the layer being worked on ends up on top.
+ *
+ * Two things were wrong with drawing it in a fixed order. The inner layers
+ * were painted last, so on a four-layer board `Inner1` covered both outer
+ * ones - the opposite of the stack it is meant to represent. And the active
+ * layer had no priority at all, so drawing on the bottom of a board meant
+ * watching the top copper paint over the trace under the cursor.
+ *
+ * Stack order first, which is what a board actually looks like from above,
+ * then the active layer again at the end. A person can always see what they
+ * are drawing.
+ */
+export function copperDrawOrder(
+  present: readonly string[],
+  activeLayer: string | undefined,
+): string[] {
+  const stack = [...present].sort(layerDepth);
+  if (!activeLayer || !stack.includes(activeLayer)) return stack;
+  return [...stack.filter((name) => name !== activeLayer), activeLayer];
+}
+
+/** Bottom first, then the inner layers deepest-last, then top. */
+function layerDepth(a: string, b: string): number {
+  const depth = (name: string): number => {
+    if (name === 'Bottom') return -1;
+    if (name === 'Top') return 1000;
+    const inner = /^Inner(\d+)$/.exec(name);
+    return inner ? Number(inner[1]) : 500;
+  };
+  return depth(a) - depth(b);
 }
 
 /**

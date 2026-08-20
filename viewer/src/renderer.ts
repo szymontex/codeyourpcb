@@ -11,7 +11,9 @@ import type { DragEditState, RectSelectState } from './interaction';
 import type { RenderConfig } from './render-config';
 import { LodTier, getLodTier, createDefaultRenderConfig } from './render-config';
 import { worldToScreen, screenToWorld } from './viewport';
-import { LAYER_COLORS, getPadColor, getTraceColor, getThemeColors, netColor, brightenColor, colorWithAlpha, type LayerVisibility } from './layers';
+import { LAYER_COLORS, getPadColor, getTraceColor, getThemeColors, netColor, brightenColor, colorWithAlpha, type LayerVisibility,
+  copperDrawOrder,
+} from './layers';
 import { formatDimension } from './units';
 import { getPreference } from './settings';
 
@@ -156,21 +158,19 @@ export function render(ctx: CanvasRenderingContext2D, state: RenderState): void 
     ctx.save();
     ctx.globalAlpha = traceAlpha;
     const { colorByNet, selectedTraceId, hoveredTraceId, highlightedNet } = state;
-    // Bottom traces first
-    for (const trace of snapshot.traces) {
-      if (trace.layer === 'Bottom' && layers.bottomCopper) {
-        drawTrace(ctx, viewport, trace, layers, colorByNet, selectedTraceId, hoveredTraceId, highlightedNet);
-      }
-    }
-    // Top traces on top
-    for (const trace of snapshot.traces) {
-      if (trace.layer === 'Top' && layers.topCopper) {
-        drawTrace(ctx, viewport, trace, layers, colorByNet, selectedTraceId, hoveredTraceId, highlightedNet);
-      }
-    }
-    // Inner layers
-    for (const trace of snapshot.traces) {
-      if (trace.layer !== 'Top' && trace.layer !== 'Bottom') {
+    // Stack order, with the active layer painted again at the end.
+    //
+    // This ran bottom, then top, then the inner layers - so on a four-layer
+    // board `Inner1` covered both outer ones, which is the opposite of the
+    // stack it represents. And nothing gave the active layer priority, so
+    // drawing on the bottom of a board meant watching the top copper paint
+    // over the trace under the cursor. `copperDrawOrder` answers both.
+    const present = Array.from(new Set(snapshot.traces.map((trace) => trace.layer)));
+    for (const layer of copperDrawOrder(present, layers.activeLayer)) {
+      for (const trace of snapshot.traces) {
+        if (trace.layer !== layer) continue;
+        // Visibility is `getTraceColor`'s question and it answers it for every
+        // layer, including the inner ones the old loop never asked about.
         drawTrace(ctx, viewport, trace, layers, colorByNet, selectedTraceId, hoveredTraceId, highlightedNet);
       }
     }
