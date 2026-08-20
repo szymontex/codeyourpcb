@@ -130,26 +130,45 @@ describe('the picker exists where a user can see it', () => {
   const html = readFileSync(resolve(root, 'viewer/index.html'), 'utf8');
   const main = readFileSync(resolve(root, 'viewer/src/main.ts'), 'utf8');
 
-  it('is in the toolbar, not behind a menu', () => {
+  it('is a panel on screen, not behind a menu', () => {
     // The View dropdown already had layer checkboxes and they answer a
     // different question - what is drawn, not what is drawn ON. The point of
     // this control is that the answer is readable without opening anything.
-    expect(html).toContain('id="layer-picker"');
-    expect(html).toContain('id="layer-pick-top"');
-    expect(html).toContain('id="layer-pick-bottom"');
-    const pickerAt = html.indexOf('id="layer-picker"');
+    //
+    // This used to assert a two-button picker in the toolbar. That picker was
+    // removed once the panel had duplicated it for five commits: it could not
+    // show a third layer, could not hide one, and had no weight or colour.
+    expect(html).toContain('id="layers-panel"');
+    expect(html).toContain('id="lp-copper"');
+
+    const panelAt = html.indexOf('id="layers-panel"');
     const dropdownAt = html.indexOf('id="view-menu-dropdown"');
-    expect(pickerAt).toBeGreaterThan(-1);
+    expect(panelAt).toBeGreaterThan(-1);
     expect(dropdownAt).toBeGreaterThan(-1);
-    // The picker markup must not be nested inside the dropdown.
+    // The panel must not be nested inside the dropdown.
     const dropdownEnd = html.indexOf('</div>', dropdownAt);
-    expect(pickerAt > dropdownAt && pickerAt < dropdownEnd).toBe(false);
+    expect(panelAt > dropdownAt && panelAt < dropdownEnd).toBe(false);
   });
 
-  it('states which of the two is active, for a screen reader as well as an eye', () => {
-    expect(html).toMatch(/id="layer-pick-top"[\s\S]{0,120}aria-pressed/);
-    expect(html).toMatch(/id="layer-pick-bottom"[\s\S]{0,120}aria-pressed/);
-    expect(main).toContain("setAttribute('aria-pressed'");
+  it('states which layer is active, for a screen reader as well as an eye', () => {
+    // A row per layer, and the selected one says so. `aria-selected` is the
+    // right word for a listbox where the old segmented control used
+    // `aria-pressed`.
+    expect(html).toMatch(/id="lp-copper"[\s\S]{0,120}role="listbox"/);
+    expect(main).toContain("row.setAttribute('aria-selected'");
+    expect(main).toContain("role', 'option'");
+  });
+
+  /**
+   * One control per question. The toolbar picker answered "which layer am I
+   * drawing on" and so does the panel, and two controls for one thing means
+   * one of them is wrong at some point.
+   */
+  it('does not leave the old toolbar picker behind', () => {
+    expect(html).not.toContain('id="layer-picker"');
+    expect(html).not.toContain('id="layer-pick-top"');
+    expect(html).not.toContain('id="layer-focus-chip"');
+    expect(main).not.toContain("getElementById('layer-picker')");
   });
 
   it('follows a layer flip made with the keyboard', () => {

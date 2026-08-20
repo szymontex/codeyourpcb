@@ -390,108 +390,6 @@
       font-weight: 700;
       letter-spacing: -0.02em;
     }
-    /* Active copper layer picker.
-       Every trace this editor creates is written onto one copper layer, and
-       until this existed the only thing that said which one was a console
-       log. It is a segmented control rather than a menu item because the
-       answer has to be readable without opening anything. */
-    #layer-picker {
-      display: flex;
-      align-items: center;
-      gap: 0;
-      height: 28px;
-      border: 1px solid var(--border-secondary);
-      border-radius: 4px;
-      overflow: hidden;
-    }
-    .layer-pick {
-      display: flex;
-      align-items: center;
-      gap: 5px;
-      background: none;
-      border: none;
-      cursor: pointer;
-      height: 100%;
-      padding: 0 8px;
-      font-size: 11px;
-      font-weight: 600;
-      letter-spacing: -0.01em;
-      color: var(--text-secondary);
-      transition: background-color 0.12s, color 0.12s;
-    }
-    .layer-pick:hover {
-      background: var(--bg-secondary);
-      color: var(--text-primary);
-    }
-    .layer-pick[aria-pressed="true"] {
-      background: var(--bg-tertiary);
-      color: var(--text-primary);
-    }
-    /* The swatch carries the same colour the renderer paints that layer in,
-       set from the live layer colours rather than hard-coded here, so a user
-       who recolours a layer in preferences sees the picker follow. */
-    .layer-swatch {
-      width: 9px;
-      height: 9px;
-      border-radius: 2px;
-      flex: 0 0 auto;
-      box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35) inset;
-    }
-    .layer-pick[aria-pressed="false"] .layer-swatch {
-      opacity: 0.4;
-    }
-    /* The active row is marked by a bar in its own layer colour, not by a
-       background alone: on a six-layer board four grey-on-grey buttons and
-       one slightly less grey one is not an answer to "which am I drawing on".
-       The bar sits under the row so it reads at a glance from across a
-       desk. */
-    .layer-pick {
-      position: relative;
-    }
-    .layer-pick[aria-pressed="true"]::after {
-      content: '';
-      position: absolute;
-      left: 4px;
-      right: 4px;
-      bottom: 0;
-      height: 2px;
-      border-radius: 1px;
-      background: currentColor;
-    }
-    /* How hard the other layers are pushed back, said where the layers are.
-       A mode with no on-screen state is a mode people press twice and give
-       up on. */
-    #layer-focus-chip {
-      margin-left: 6px;
-      height: 28px;
-      padding: 0 9px;
-      border: 1px solid var(--border-secondary);
-      border-radius: 4px;
-      background: none;
-      color: var(--text-secondary);
-      font-size: 11px;
-      font-weight: 600;
-      letter-spacing: -0.01em;
-      cursor: pointer;
-      white-space: nowrap;
-      transition: background-color 0.12s, color 0.12s, border-color 0.12s;
-    }
-    #layer-focus-chip:hover {
-      background: var(--bg-secondary);
-      color: var(--text-primary);
-    }
-    /* Off looks off. The two working states look like they are doing
-       something, and solo looks like it is doing more than dim. */
-    #layer-focus-chip[data-focus="dim"] {
-      background: var(--bg-tertiary);
-      color: var(--text-primary);
-      border-color: var(--border-primary, var(--border-secondary));
-    }
-    #layer-focus-chip[data-focus="solo"] {
-      background: var(--accent, #2f6fed);
-      border-color: var(--accent, #2f6fed);
-      color: #fff;
-    }
     /* The layers panel.
        Every serious board tool keeps this on screen rather than behind a
        menu, because "which layer am I on" and "why can I not see that trace"
@@ -1661,22 +1559,6 @@
         </div>
       </span>
       <button id="view-3d-btn" class="tb-btn" title="Toggle 3D view (3)">3D</button>
-    </div>
-
-    <!-- Active copper layer: which side the next trace goes on -->
-    <div class="tb-zone">
-      <div id="layer-picker" role="group" aria-label="Active copper layer">
-        <button type="button" id="layer-pick-top" class="layer-pick" aria-pressed="true"
-                title="Draw on the top copper layer (press 1, or L to cycle)">
-          <span class="layer-swatch" id="layer-swatch-top"></span>Top
-        </button>
-        <button type="button" id="layer-pick-bottom" class="layer-pick" aria-pressed="false"
-                title="Draw on the bottom copper layer (press 2, or L to cycle)">
-          <span class="layer-swatch" id="layer-swatch-bottom"></span>Bottom
-        </button>
-      </div>
-      <button type="button" id="layer-focus-chip" data-focus="all"
-              title="All layers - X cycles all / dim / solo">All layers</button>
     </div>
 
     <!-- Route (centered primary action) -->

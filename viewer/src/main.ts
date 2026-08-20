@@ -540,66 +540,7 @@ async function init(): Promise<void> {
    */
   function syncLayerPicker(): void {
     const names = copperLayerNames(boardLayerCount());
-    const picker = document.getElementById('layer-picker')!;
-
-    // Rebuilt only when the stack changes, so a redraw does not throw away the
-    // buttons a user is about to click.
-    if (picker.dataset.layers !== names.join(',')) {
-      picker.dataset.layers = names.join(',');
-      picker.textContent = '';
-      for (const name of names) {
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'layer-pick';
-        button.id = `layer-pick-${name.toLowerCase()}`;
-        const swatch = document.createElement('span');
-        swatch.className = 'layer-swatch';
-        button.appendChild(swatch);
-        button.appendChild(document.createTextNode(name));
-        button.addEventListener('click', () => applyActiveLayer(name));
-        picker.appendChild(button);
-      }
-    }
-
-    for (const button of Array.from(picker.children) as HTMLElement[]) {
-      const name = button.textContent?.trim() ?? '';
-      button.setAttribute('aria-pressed', String(name === routingState.currentLayer));
-      const swatch = button.querySelector('.layer-swatch') as HTMLElement | null;
-      if (swatch) {
-        // The swatches follow the live layer colours, so recolouring a layer
-        // in preferences moves the picker with it. Inner copper has no colour
-        // of its own in the palette and takes the one the renderer draws it
-        // in, which is the honest answer rather than a made-up swatch.
-        swatch.style.background =
-          name === 'Top'
-            ? renderConfig.layerColors.topCopper
-            : name === 'Bottom'
-              ? renderConfig.layerColors.bottomCopper
-              : 'var(--pcb-inner-copper, #2f8f4f)';
-      }
-      // A layer the board cannot draw on is worth saying rather than hiding: a
-      // hidden layer stays selectable, but the user is told what they will not
-      // see. This is the one place the two ideas of "layer" meet.
-      const visible =
-        name === 'Top' ? layers.topCopper : name === 'Bottom' ? layers.bottomCopper : layers.innerCopper !== false;
-      const slot = names.indexOf(name) + 1;
-      const reach = slot <= 9 ? `press ${slot}, or L to cycle` : 'L cycles';
-      button.title = visible
-        ? `Draw on the ${name} copper layer (${reach})`
-        : `Draw on the ${name} copper layer - currently hidden in View (${reach})`;
-    }
-
     syncLayerPanel(names);
-
-    // What the focus key is doing, where the layers are. A mode with no
-    // on-screen state is a mode people press twice and give up on.
-    const chip = document.getElementById('layer-focus-chip');
-    if (chip) {
-      const focus = layers.focus ?? 'all';
-      chip.textContent = LAYER_FOCUS_LABEL[focus];
-      chip.dataset.focus = focus;
-      chip.title = `${LAYER_FOCUS_LABEL[focus]} - X cycles all / dim / solo`;
-    }
   }
 
   /**
