@@ -67,7 +67,10 @@ When adding a new shortcut:
 | `Ctrl+Z` | Undo | Global (not in editor/input) | `main.ts` |
 | `Ctrl+Shift+Z` / `Ctrl+Y` | Redo | Global (not in editor/input) | `main.ts` |
 | `F` | Fit board to view | When not routing | `main.ts` |
-| `L` | Switch active copper layer (Top ↔ Bottom) | When not routing | `main.ts` |
+| `L` | Next copper layer down the stack | When not routing | `main.ts` |
+| `Shift+L` | Next copper layer up the stack | When not routing | `main.ts` |
+| `1`-`9` | Jump straight to that copper layer | When not routing | `main.ts` |
+| `X` | Cycle layer focus: all / dim others / active only | Global, routing included | `main.ts` |
 | `Ctrl+E` | Toggle code editor panel | Global | `main.ts` |
 | `3` | Toggle 3D view | Global (not in editor/input) | `main.ts` |
 | `Ctrl+Shift+T` | Toggle theme (Light/Dark) | Global | `main.ts` |

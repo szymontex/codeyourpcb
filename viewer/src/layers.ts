@@ -47,9 +47,84 @@ export const LAYER_MASK = {
   // Inner layers would be 0x00000004, 0x00000008, etc.
 } as const;
 
+/**
+ * How hard the editor pushes the layer you are working on to the front.
+ *
+ * A four-layer board drawn all at once is unreadable, which is the complaint
+ * this exists to answer. Every serious PCB editor has this control and calls
+ * it something different: Altium cycles hide/grey/monochrome with one key,
+ * KiCad dims the inactive layers by an opacity slider. Three states is the
+ * useful number - off, quieter, alone - because a fourth is one more press
+ * between a person and the copper they are looking at.
+ */
+export type LayerFocus = 'all' | 'dim' | 'solo';
+
+/** The order `X` walks, and the order the button cycles. */
+export const LAYER_FOCUS_ORDER: readonly LayerFocus[] = ['all', 'dim', 'solo'] as const;
+
+/** What each state is called where a person can read it. */
+export const LAYER_FOCUS_LABEL: Record<LayerFocus, string> = {
+  all: 'All layers',
+  dim: 'Dim others',
+  solo: 'Active only',
+};
+
+/** The next state in the cycle, wrapping. */
+export function nextLayerFocus(focus: LayerFocus | undefined): LayerFocus {
+  const at = LAYER_FOCUS_ORDER.indexOf(focus ?? 'all');
+  return LAYER_FOCUS_ORDER[(at + 1) % LAYER_FOCUS_ORDER.length];
+}
+
+/** How much of a colour survives being dimmed. */
+export const DIMMED_ALPHA = 0.16;
+
+/**
+ * The copper-mask bit a layer name stands for.
+ *
+ * Top is bit 0, Bottom is bit 1, and `Inner(n)` counts from bit 2 with n
+ * starting at 1 - the same arithmetic `Layer::to_copper_mask` does in Rust.
+ * Lives here because it is a fact about layers, and the router imports it
+ * rather than keeping a second copy.
+ */
+export function layerMaskBit(name: string): number {
+  if (name === 'Top') return 0x01;
+  if (name === 'Bottom') return 0x02;
+  const inner = /^Inner(\d+)$/.exec(name);
+  if (inner) return 1 << (2 + (Number(inner[1]) - 1));
+  return 0;
+}
+
 export interface LayerVisibility {
   topCopper: boolean;
   bottomCopper: boolean;
+  /**
+   * How much the layers other than the active one are pushed back.
+   *
+   * Absent means `all`, so every caller written before this keeps the
+   * behaviour it had.
+   */
+  focus?: LayerFocus;
+  /**
+   * The layer being drawn on, which is the one focus keeps.
+   *
+   * Absent means there is nothing to focus on and `focus` does nothing - a
+   * viewer with no active layer must not blank its own canvas.
+   */
+  activeLayer?: string;
+  /**
+   * Copper layers turned off one at a time, by name.
+   *
+   * `innerCopper` is a single switch for every layer between the outer two,
+   * so on a six-layer board there was no way to hide `Inner2` and keep
+   * `Inner1` - the two are drawn in different colours precisely because they
+   * are different layers, and the only control over them treated them as one
+   * thing. This is where a layer gets an identity of its own.
+   *
+   * Named rather than indexed, because a stack can change under a design and
+   * an index would then point at a different layer than the one somebody
+   * switched off.
+   */
+  hiddenLayers?: readonly string[];
   /**
    * Whether the copper between the outer two is drawn.
    *
@@ -86,26 +161,37 @@ export function toggleLayer(layers: LayerVisibility, layer: keyof LayerVisibilit
  * Returns null if the pad should not be drawn (layer hidden)
  */
 export function getPadColor(layerMask: number, visibility: LayerVisibility): string | null {
-  // Through-hole pads (on both layers)
-  if ((layerMask & LAYER_MASK.TOP_COPPER) && (layerMask & LAYER_MASK.BOTTOM_COPPER)) {
-    // Show if either layer visible
-    if (visibility.topCopper || visibility.bottomCopper) {
-      return LAYER_COLORS.pad_th; // Gold/brass for through-hole
+  // A pad counts as being on the active layer when its own mask names that
+  // layer. A through-hole pad is on every copper layer, so focus never takes
+  // one away - you cannot route to a hole you cannot see, and a board of
+  // headers would empty its own canvas the moment somebody pressed X.
+  const active = visibility.activeLayer;
+  const onActive = active ? (layerMask & layerMaskBit(active)) !== 0 : false;
+
+  const base = (() => {
+    // Through-hole pads (on both layers)
+    if ((layerMask & LAYER_MASK.TOP_COPPER) && (layerMask & LAYER_MASK.BOTTOM_COPPER)) {
+      // Show if either layer visible
+      if (isLayerVisible('Top', visibility) || isLayerVisible('Bottom', visibility)) {
+        return LAYER_COLORS.pad_th; // Gold/brass for through-hole
+      }
+      return null;
     }
+
+    // Top-only SMD
+    if (layerMask & LAYER_MASK.TOP_COPPER) {
+      return isLayerVisible('Top', visibility) ? LAYER_COLORS.pad_copper : null;
+    }
+
+    // Bottom-only SMD
+    if (layerMask & LAYER_MASK.BOTTOM_COPPER) {
+      return isLayerVisible('Bottom', visibility) ? LAYER_COLORS.pad_copper : null;
+    }
+
     return null;
-  }
+  })();
 
-  // Top-only SMD
-  if (layerMask & LAYER_MASK.TOP_COPPER) {
-    return visibility.topCopper ? LAYER_COLORS.pad_copper : null;
-  }
-
-  // Bottom-only SMD
-  if (layerMask & LAYER_MASK.BOTTOM_COPPER) {
-    return visibility.bottomCopper ? LAYER_COLORS.pad_copper : null;
-  }
-
-  return null;
+  return applyFocus(base, onActive, visibility.focus);
 }
 
 /**
@@ -189,7 +275,23 @@ export function colorWithAlpha(color: string, alpha: number): string {
   if (hslMatch) {
     return `hsla(${hslMatch[1]}, ${hslMatch[2]}%, ${hslMatch[3]}%, ${alpha})`;
   }
-  // Hex fallback — use canvas helper not available here, just return as-is
+
+  // Hex, which is what LAYER_COLORS actually holds. This branch used to
+  // return the colour untouched and say so in a comment, so every caller
+  // asking for transparency got none of it.
+  const hex = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(color.trim());
+  if (hex) {
+    const digits = hex[1].length === 3
+      ? hex[1].split('').map((d) => d + d).join('')
+      : hex[1];
+    const r = parseInt(digits.slice(0, 2), 16);
+    const g = parseInt(digits.slice(2, 4), 16);
+    const b = parseInt(digits.slice(4, 6), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+
+  // Already an rgb()/rgba() string, or something this does not parse. Leaving
+  // it alone is the honest answer; inventing a conversion is not.
   return color;
 }
 
@@ -197,15 +299,69 @@ export function colorWithAlpha(color: string, alpha: number): string {
  * Get color for a trace based on its layer name and visibility settings
  * Returns null if the layer is not visible
  */
+/**
+ * Whether a named copper layer is drawn at all.
+ *
+ * Three switches can turn one off and any of them is enough: the layer's own
+ * entry in `hiddenLayers`, the outer-layer checkbox it belongs to, or the
+ * group switch for the inner copper. Focus is not one of them - that decides
+ * how loudly a visible layer is drawn, not whether it exists.
+ */
+export function isLayerVisible(layer: string, visibility: LayerVisibility): boolean {
+  if (visibility.hiddenLayers?.includes(layer)) return false;
+  if (layer === 'Top') return visibility.topCopper;
+  if (layer === 'Bottom') return visibility.bottomCopper;
+  return visibility.innerCopper !== false && /^Inner\d+$/.test(layer);
+}
+
+/** The same list with one layer's visibility flipped. */
+export function toggleLayerVisible(
+  visibility: LayerVisibility,
+  layer: string,
+): LayerVisibility {
+  if (layer === 'Top') return { ...visibility, topCopper: !visibility.topCopper };
+  if (layer === 'Bottom') return { ...visibility, bottomCopper: !visibility.bottomCopper };
+
+  const hidden = visibility.hiddenLayers ?? [];
+  return {
+    ...visibility,
+    hiddenLayers: hidden.includes(layer)
+      ? hidden.filter((name) => name !== layer)
+      : [...hidden, layer],
+  };
+}
+
 export function getTraceColor(layer: string, visibility: LayerVisibility): string | null {
-  switch (layer) {
-    case 'Top':
-      return visibility.topCopper ? LAYER_COLORS.top_copper : null;
-    case 'Bottom':
-      return visibility.bottomCopper ? LAYER_COLORS.bottom_copper : null;
-    default:
-      return innerLayerColor(layer, visibility);
-  }
+  const base = (() => {
+    switch (layer) {
+      case 'Top':
+        return isLayerVisible('Top', visibility) ? LAYER_COLORS.top_copper : null;
+      case 'Bottom':
+        return isLayerVisible('Bottom', visibility) ? LAYER_COLORS.bottom_copper : null;
+      default:
+        return innerLayerColor(layer, visibility);
+    }
+  })();
+
+  return applyFocus(base, layer === visibility.activeLayer, visibility.focus);
+}
+
+/**
+ * What a colour becomes once the focus mode has had its say.
+ *
+ * Hiding wins over dimming and both leave the active layer alone. A caller
+ * that has already decided the layer is invisible stays invisible: focus
+ * decides how loudly something is drawn, never whether a hidden layer comes
+ * back.
+ */
+export function applyFocus(
+  base: string | null,
+  isActive: boolean,
+  focus: LayerFocus | undefined,
+): string | null {
+  if (base === null) return null;
+  if (isActive || !focus || focus === 'all') return base;
+  return focus === 'solo' ? null : colorWithAlpha(base, DIMMED_ALPHA);
 }
 
 /**
@@ -217,7 +373,7 @@ export function getTraceColor(layer: string, visibility: LayerVisibility): strin
  * an outer layer happens to be on.
  */
 export function innerLayerColor(layer: string, visibility: LayerVisibility): string | null {
-  if (visibility.innerCopper === false) return null;
+  if (!isLayerVisible(layer, visibility)) return null;
 
   const match = layer.match(/^Inner(\d+)$/);
   if (!match) return null;

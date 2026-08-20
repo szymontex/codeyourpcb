@@ -440,6 +440,172 @@
     .layer-pick[aria-pressed="false"] .layer-swatch {
       opacity: 0.4;
     }
+    /* The active row is marked by a bar in its own layer colour, not by a
+       background alone: on a six-layer board four grey-on-grey buttons and
+       one slightly less grey one is not an answer to "which am I drawing on".
+       The bar sits under the row so it reads at a glance from across a
+       desk. */
+    .layer-pick {
+      position: relative;
+    }
+    .layer-pick[aria-pressed="true"]::after {
+      content: '';
+      position: absolute;
+      left: 4px;
+      right: 4px;
+      bottom: 0;
+      height: 2px;
+      border-radius: 1px;
+      background: currentColor;
+    }
+    /* How hard the other layers are pushed back, said where the layers are.
+       A mode with no on-screen state is a mode people press twice and give
+       up on. */
+    #layer-focus-chip {
+      margin-left: 6px;
+      height: 28px;
+      padding: 0 9px;
+      border: 1px solid var(--border-secondary);
+      border-radius: 4px;
+      background: none;
+      color: var(--text-secondary);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background-color 0.12s, color 0.12s, border-color 0.12s;
+    }
+    #layer-focus-chip:hover {
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+    }
+    /* Off looks off. The two working states look like they are doing
+       something, and solo looks like it is doing more than dim. */
+    #layer-focus-chip[data-focus="dim"] {
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+      border-color: var(--border-primary, var(--border-secondary));
+    }
+    #layer-focus-chip[data-focus="solo"] {
+      background: var(--accent, #2f6fed);
+      border-color: var(--accent, #2f6fed);
+      color: #fff;
+    }
+    /* The layers panel.
+       Every serious board tool keeps this on screen rather than behind a
+       menu, because "which layer am I on" and "why can I not see that trace"
+       are asked constantly and answered by looking. KiCad docks it right,
+       Altium runs tabs along the bottom; the point either way is that it is
+       always there. Two buttons in a toolbar were not. */
+    #layers-panel {
+      width: 208px;
+      flex: 0 0 208px;
+      border-left: 1px solid var(--border-primary);
+      background: var(--bg-primary);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      order: 3;
+      font-size: 12px;
+    }
+    .lp-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 8px 10px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      border-bottom: 1px solid var(--border-secondary);
+      color: var(--text-primary);
+    }
+    #lp-focus {
+      border: 1px solid var(--border-secondary);
+      border-radius: 4px;
+      background: none;
+      color: var(--text-secondary);
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 8px;
+      cursor: pointer;
+    }
+    #lp-focus[data-focus="dim"] {
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+    }
+    #lp-focus[data-focus="solo"] {
+      background: var(--accent, #2f6fed);
+      border-color: var(--accent, #2f6fed);
+      color: #fff;
+    }
+    .lp-section {
+      padding: 8px 10px 4px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-tertiary);
+    }
+    /* One row per layer, and the active one is unmistakable: a bar in its own
+       colour down the left edge. Four grey rows and one slightly less grey
+       one is not an answer to "which am I drawing on". */
+    .lp-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 10px 5px 8px;
+      border-left: 3px solid transparent;
+      cursor: pointer;
+      color: var(--text-secondary);
+    }
+    .lp-row:hover {
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+    }
+    .lp-row[aria-selected="true"] {
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+      font-weight: 700;
+    }
+    .lp-swatch {
+      width: 11px;
+      height: 11px;
+      border-radius: 2px;
+      flex: 0 0 auto;
+      box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35) inset;
+    }
+    .lp-name { flex: 1 1 auto; }
+    /* The number that reaches this layer, shown rather than remembered. */
+    .lp-key {
+      font-size: 10px;
+      color: var(--text-tertiary);
+      font-variant-numeric: tabular-nums;
+    }
+    .lp-eye {
+      border: none;
+      background: none;
+      cursor: pointer;
+      padding: 0 2px;
+      font-size: 12px;
+      line-height: 1;
+      color: var(--text-secondary);
+    }
+    /* A hidden layer reads as hidden across the whole row, not just on the
+       icon - otherwise a glance at the panel does not answer "what am I not
+       being shown". */
+    .lp-row[data-visible="false"] .lp-name,
+    .lp-row[data-visible="false"] .lp-swatch {
+      opacity: 0.35;
+    }
+    .lp-hint {
+      margin-top: auto;
+      padding: 8px 10px;
+      font-size: 10px;
+      line-height: 1.45;
+      color: var(--text-tertiary);
+      border-top: 1px solid var(--border-secondary);
+    }
     #three-canvas {
       position: absolute;
       top: 0;
@@ -1462,14 +1628,16 @@
     <div class="tb-zone">
       <div id="layer-picker" role="group" aria-label="Active copper layer">
         <button type="button" id="layer-pick-top" class="layer-pick" aria-pressed="true"
-                title="Draw on the top copper layer (L switches)">
+                title="Draw on the top copper layer (press 1, or L to cycle)">
           <span class="layer-swatch" id="layer-swatch-top"></span>Top
         </button>
         <button type="button" id="layer-pick-bottom" class="layer-pick" aria-pressed="false"
-                title="Draw on the bottom copper layer (L switches)">
+                title="Draw on the bottom copper layer (press 2, or L to cycle)">
           <span class="layer-swatch" id="layer-swatch-bottom"></span>Bottom
         </button>
       </div>
+      <button type="button" id="layer-focus-chip" data-focus="all"
+              title="All layers - X cycles all / dim / solo">All layers</button>
     </div>
 
     <!-- Route (centered primary action) -->
@@ -1709,6 +1877,16 @@
       <!-- Monaco mounts here -->
     </div>
     <div id="divider" style="width: 4px; cursor: col-resize; background: var(--border-primary); display: none;"></div>
+    <aside id="layers-panel" aria-label="Layers">
+      <div class="lp-head">
+        <span>Layers</span>
+        <button type="button" id="lp-focus" data-focus="all"
+                title="How hard the other layers are pushed back - X cycles">All</button>
+      </div>
+      <div class="lp-section">Copper</div>
+      <div id="lp-copper" role="listbox" aria-label="Copper layers"></div>
+      <div class="lp-hint">Click a name to draw on it &middot; the eye hides it</div>
+    </aside>
     <div id="canvas-container" style="flex: 1; position: relative; overflow: hidden;">
       <canvas id="pcb-canvas"></canvas>
       <div id="drop-hint">Drop .cypcb or .ses file</div>

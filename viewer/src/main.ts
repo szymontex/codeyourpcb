@@ -16,11 +16,20 @@ import {
   copperLayerNames,
   createRoutingState,
   nextLayer,
+  prevLayer,
   setActiveLayer,
   type RoutingState,
 } from './routing';
 import { UndoStack, AddTraceCommand, RemoveTraceCommand, RotateComponentCommand, ResizeBoardCommand, EditTraceCommand, installDebugSurface } from './undo';
-import { createLayerVisibility, innerVisibleFromUrlLayers } from './layers';
+import {
+  createLayerVisibility,
+  innerVisibleFromUrlLayers,
+  nextLayerFocus,
+  isLayerVisible,
+  toggleLayerVisible,
+  innerLayerColor,
+  LAYER_FOCUS_LABEL,
+} from './layers';
 import { collectImportedFiles, importedPaths, readerForBaseUrl } from './imports';
 import { createFilePicker, setupDropZone, readFileAsText } from './file-picker';
 import { openFile, saveFile } from './file-access';
@@ -322,6 +331,12 @@ async function init(): Promise<void> {
     createRoutingState(),
     getPreference('activeLayer'),
   );
+
+  // Focus measures everything against the active layer, so the visibility
+  // object has to know it from the first frame. Without this the canvas comes
+  // up with a layer selected and nothing to keep, and the first press of X
+  // dims the board including the layer you are drawing on.
+  layers = { ...layers, activeLayer: routingState.currentLayer };
   let highlightedNet: string | null = null;
   const renderConfig = createDefaultRenderConfig();
   let padNetMap = new Map<string, string>();
@@ -555,10 +570,129 @@ async function init(): Promise<void> {
       // see. This is the one place the two ideas of "layer" meet.
       const visible =
         name === 'Top' ? layers.topCopper : name === 'Bottom' ? layers.bottomCopper : layers.innerCopper !== false;
+      const slot = names.indexOf(name) + 1;
+      const reach = slot <= 9 ? `press ${slot}, or L to cycle` : 'L cycles';
       button.title = visible
-        ? `Draw on the ${name} copper layer (L cycles)`
-        : `Draw on the ${name} copper layer - currently hidden in View (L cycles)`;
+        ? `Draw on the ${name} copper layer (${reach})`
+        : `Draw on the ${name} copper layer - currently hidden in View (${reach})`;
     }
+
+    syncLayerPanel(names);
+
+    // What the focus key is doing, where the layers are. A mode with no
+    // on-screen state is a mode people press twice and give up on.
+    const chip = document.getElementById('layer-focus-chip');
+    if (chip) {
+      const focus = layers.focus ?? 'all';
+      chip.textContent = LAYER_FOCUS_LABEL[focus];
+      chip.dataset.focus = focus;
+      chip.title = `${LAYER_FOCUS_LABEL[focus]} - X cycles all / dim / solo`;
+    }
+  }
+
+  /**
+   * The docked panel: one row per copper layer, always on screen.
+   *
+   * Two toolbar buttons could name two layers and had nowhere to put a third,
+   * no way to hide one, and no room to say which number reaches it. A board
+   * tool answers "which layer am I on" and "why can I not see that trace" by
+   * being looked at, which means the answer has to be somewhere a person can
+   * look without opening anything.
+   */
+  function syncLayerPanel(names: string[]): void {
+    const list = document.getElementById('lp-copper');
+    if (!list) return;
+
+    // Rebuilt only when the stack changes, so a redraw does not throw away a
+    // row mid-click.
+    if (list.dataset.layers !== names.join(',')) {
+      list.dataset.layers = names.join(',');
+      list.textContent = '';
+      names.forEach((name, index) => {
+        const row = document.createElement('div');
+        row.className = 'lp-row';
+        row.setAttribute('role', 'option');
+        row.dataset.layer = name;
+
+        const swatch = document.createElement('span');
+        swatch.className = 'lp-swatch';
+
+        const label = document.createElement('span');
+        label.className = 'lp-name';
+        label.textContent = name;
+
+        const key = document.createElement('span');
+        key.className = 'lp-key';
+        key.textContent = index < 9 ? String(index + 1) : '';
+
+        const eye = document.createElement('button');
+        eye.type = 'button';
+        eye.className = 'lp-eye';
+
+        row.append(swatch, label, key, eye);
+        row.addEventListener('click', () => applyActiveLayer(name));
+        // The eye is a second question about the same row - hiding a layer is
+        // not choosing it, and clicking one must not do the other.
+        eye.addEventListener('click', (event) => {
+          event.stopPropagation();
+          layers = toggleLayerVisible(layers, name);
+          if (is3DActive && renderer3d) renderer3d.updateLayerVisibility(layers);
+          syncLayerPicker();
+          dirty = true;
+        });
+        list.appendChild(row);
+      });
+    }
+
+    for (const row of Array.from(list.children) as HTMLElement[]) {
+      const name = row.dataset.layer ?? '';
+      const visible = isLayerVisible(name, layers);
+      row.setAttribute('aria-selected', String(name === routingState.currentLayer));
+      row.dataset.visible = String(visible);
+      row.title = `${name} copper - click to draw on it`;
+
+      const swatch = row.querySelector('.lp-swatch') as HTMLElement | null;
+      if (swatch) {
+        swatch.style.background =
+          name === 'Top'
+            ? renderConfig.layerColors.topCopper
+            : name === 'Bottom'
+              ? renderConfig.layerColors.bottomCopper
+              : innerLayerColor(name, { ...layers, hiddenLayers: [] }) ?? '#2f8f4f';
+      }
+      row.style.borderLeftColor =
+        name === routingState.currentLayer ? (swatch?.style.background || 'transparent') : 'transparent';
+
+      const eye = row.querySelector('.lp-eye') as HTMLElement | null;
+      if (eye) {
+        eye.textContent = visible ? '\u25c9' : '\u25cb';
+        eye.title = visible ? `Hide ${name}` : `Show ${name}`;
+      }
+    }
+
+    const focus = document.getElementById('lp-focus');
+    if (focus) {
+      const mode = layers.focus ?? 'all';
+      focus.dataset.focus = mode;
+      focus.textContent = mode === 'all' ? 'All' : mode === 'dim' ? 'Dim' : 'Solo';
+      focus.title = `${LAYER_FOCUS_LABEL[mode]} - X cycles all / dim / solo`;
+    }
+  }
+
+  /**
+   * Push the layers other than the active one back, or bring them forward.
+   *
+   * The complaint this answers is that a board with copper on every layer is
+   * unreadable while you work on one of them. Altium spends a key on the same
+   * idea and KiCad an opacity slider; this is one key with three stops.
+   */
+  function cycleLayerFocus(): void {
+    const focus = nextLayerFocus(layers.focus);
+    layers = { ...layers, focus, activeLayer: routingState.currentLayer };
+    if (is3DActive && renderer3d) renderer3d.updateLayerVisibility(layers);
+    syncLayerPicker();
+    statusText.textContent = `${LAYER_FOCUS_LABEL[focus]} (X cycles)`;
+    dirty = true;
   }
 
   function applyActiveLayer(layer: string): void {
@@ -567,6 +701,10 @@ async function init(): Promise<void> {
     routingState = next;
     interactionState.routing = routingState;
     setPreference('activeLayer', layer as 'Top' | 'Bottom');
+    // Focus is measured against this, so the two have to move together or the
+    // canvas dims the layer you just switched to.
+    layers = { ...layers, activeLayer: layer };
+    if (is3DActive && renderer3d) renderer3d.updateLayerVisibility(layers);
     syncLayerPicker();
     statusText.textContent = `Drawing on ${layer} copper`;
     dirty = true;
@@ -3192,6 +3330,30 @@ async function init(): Promise<void> {
         return;
       }
     }
+    // X: how hard the editor pushes the other layers back. Works while
+    // routing too - deciding you cannot see what you are doing is exactly the
+    // moment you need it, and every other layer key refuses mid-trace.
+    if ((e.key === 'x' || e.key === 'X') && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      cycleLayerFocus();
+      e.preventDefault();
+      return;
+    }
+
+    // The number row picks a layer outright. Games taught everyone that a
+    // number is a slot, and on a six-layer board a direct jump beats five
+    // presses of a cycle key.
+    if (/^[1-9]$/.test(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+      if (routingState.mode !== 'routing') {
+        const names = copperLayerNames(boardLayerCount());
+        const wanted = names[Number(e.key) - 1];
+        if (wanted) {
+          applyActiveLayer(wanted);
+          e.preventDefault();
+          return;
+        }
+      }
+    }
+
     // F: fit board to view when idle (routing F handled in interaction.ts)
     if (e.key === 'f' && !e.ctrlKey && !e.metaKey && !e.altKey) {
       if (routingState.mode !== 'routing') {
@@ -3204,7 +3366,13 @@ async function init(): Promise<void> {
     // a key - the flip during routing stays on F where KiCad users expect it.
     if ((e.key === 'l' || e.key === 'L') && !e.ctrlKey && !e.metaKey && !e.altKey) {
       if (routingState.mode !== 'routing') {
-        applyActiveLayer(nextLayer(routingState.currentLayer, boardLayerCount()));
+        // Shift walks back up the stack. A list you can only go forward
+        // through is four presses to reach the layer above you.
+        applyActiveLayer(
+          e.shiftKey
+            ? prevLayer(routingState.currentLayer, boardLayerCount())
+            : nextLayer(routingState.currentLayer, boardLayerCount()),
+        );
         e.preventDefault();
       }
     }

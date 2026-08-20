@@ -18,6 +18,7 @@ import {
   MouseTrailTracer,
 } from './direction45';
 import { dodgeObstacles } from './dodge';
+import { layerMaskBit as layerBit } from './layers';
 
 /**
  * The copper bits of a pad's layer mask, matching `Layer::to_copper_mask` in
@@ -41,13 +42,10 @@ export function copperLayerNames(layerCount: number): string[] {
 }
 
 /** The layer-mask bit a copper layer name occupies. */
-export function layerBit(name: string): number {
-  if (name === 'Top') return LAYER_BIT.TOP;
-  if (name === 'Bottom') return LAYER_BIT.BOTTOM;
-  const inner = /^Inner(\d+)$/.exec(name);
-  if (inner) return 1 << (2 + (Number(inner[1]) - 1));
-  return 0;
-}
+// One source for the mask arithmetic. `layers.ts` owns it because it is a
+// fact about layers; the router keeps the old name so its callers and tests
+// read the same as before.
+export { layerBit };
 
 /** Recursively convert BigInt→Number in any object. Uses JSON round-trip
  *  which handles WASM proxy objects and prototype getters. */
@@ -861,6 +859,21 @@ export function nextLayer(current: string, layerCount: number): string {
   const order = copperLayerNames(layerCount);
   const at = order.indexOf(current);
   return order[(at < 0 ? 0 : at + 1) % order.length];
+}
+
+/**
+ * The layer above the current one, wrapping at the top.
+ *
+ * `L` walks down the stack and had no opposite, so reaching Inner1 on a
+ * six-layer board from Bottom meant four presses in the only direction that
+ * existed. Shift+L is the way back up, which is the pairing every list of
+ * anything has.
+ */
+export function prevLayer(current: string, layerCount = 2): string {
+  const names = copperLayerNames(layerCount);
+  const at = names.indexOf(current);
+  if (at === -1) return names[0];
+  return names[(at - 1 + names.length) % names.length];
 }
 
 /**

@@ -1,0 +1,105 @@
+/**
+ * Pushing the other layers back, so a board you are working on is readable.
+ *
+ * The complaint this answers, in the owner's words: layers are a mess. A
+ * four-layer board draws every layer at once and the one being routed on
+ * looks like the three that are not. Altium spends a key on this and KiCad an
+ * opacity slider; here it is one key with three stops.
+ */
+
+import { describe, it, expect } from 'vitest';
+import {
+  createLayerVisibility,
+  getTraceColor,
+  getPadColor,
+  colorWithAlpha,
+  nextLayerFocus,
+  layerMaskBit,
+  LAYER_COLORS,
+  DIMMED_ALPHA,
+  type LayerVisibility,
+} from '../layers';
+
+/** A board with every layer on, drawing on `active`, focused as asked. */
+function view(active: string, focus?: LayerVisibility['focus']): LayerVisibility {
+  return { ...createLayerVisibility(), activeLayer: active, focus };
+}
+
+describe('the layer you are looking at', () => {
+  it('leaves every layer alone until asked', () => {
+    const v = view('Top');
+    expect(getTraceColor('Top', v)).toBe(LAYER_COLORS.top_copper);
+    expect(getTraceColor('Bottom', v)).toBe(LAYER_COLORS.bottom_copper);
+  });
+
+  it('dims the layers that are not the one being drawn on', () => {
+    const v = view('Top', 'dim');
+    expect(getTraceColor('Top', v)).toBe(LAYER_COLORS.top_copper);
+
+    const other = getTraceColor('Bottom', v);
+    expect(other).not.toBe(LAYER_COLORS.bottom_copper);
+    expect(other).toBe(colorWithAlpha(LAYER_COLORS.bottom_copper, DIMMED_ALPHA));
+  });
+
+  it('hides them outright on solo, and still draws the active one', () => {
+    const v = view('Bottom', 'solo');
+    expect(getTraceColor('Bottom', v)).toBe(LAYER_COLORS.bottom_copper);
+    expect(getTraceColor('Top', v)).toBeNull();
+    expect(getTraceColor('Inner1', v)).toBeNull();
+  });
+
+  /** An inner layer is the case the two-bit version of this could not reach. */
+  it('keeps an inner layer when that is the one being drawn on', () => {
+    const v = view('Inner2', 'solo');
+    expect(getTraceColor('Inner2', v)).not.toBeNull();
+    expect(getTraceColor('Inner1', v)).toBeNull();
+    expect(getTraceColor('Top', v)).toBeNull();
+  });
+
+  /**
+   * Focus decides how loudly a layer is drawn, never whether a hidden one
+   * comes back. The View menu is the only thing that answers that.
+   */
+  it('does not resurrect a layer the view menu turned off', () => {
+    const hidden: LayerVisibility = {
+      ...createLayerVisibility(),
+      bottomCopper: false,
+      activeLayer: 'Bottom',
+      focus: 'solo',
+    };
+    expect(getTraceColor('Bottom', hidden)).toBeNull();
+  });
+
+  /**
+   * A through-hole pad is on every copper layer, so solo never takes one
+   * away. A board of headers would otherwise blank its own canvas.
+   */
+  it('keeps a through-hole pad whatever layer is active', () => {
+    const both = layerMaskBit('Top') | layerMaskBit('Bottom');
+    expect(getPadColor(both, view('Top', 'solo'))).not.toBeNull();
+    expect(getPadColor(both, view('Bottom', 'solo'))).not.toBeNull();
+  });
+
+  it('hides an SMD pad that is not on the active layer', () => {
+    const topOnly = layerMaskBit('Top');
+    expect(getPadColor(topOnly, view('Top', 'solo'))).not.toBeNull();
+    expect(getPadColor(topOnly, view('Bottom', 'solo'))).toBeNull();
+  });
+
+  it('walks all, dim, solo and back', () => {
+    expect(nextLayerFocus(undefined)).toBe('dim');
+    expect(nextLayerFocus('all')).toBe('dim');
+    expect(nextLayerFocus('dim')).toBe('solo');
+    expect(nextLayerFocus('solo')).toBe('all');
+  });
+
+  /**
+   * `colorWithAlpha` returned a hex colour untouched and said so in a comment,
+   * which made every dimmed layer identical to an undimmed one. The palette is
+   * hex, so that branch was the only one that mattered.
+   */
+  it('actually makes a hex colour transparent', () => {
+    expect(colorWithAlpha('#C41E1E', 0.16)).toBe('rgba(196, 30, 30, 0.16)');
+    expect(colorWithAlpha('#abc', 0.5)).toBe('rgba(170, 187, 204, 0.5)');
+  });
+});
