@@ -20,10 +20,21 @@ import {
   setLayerOpacity,
   GHOST_GREY,
   INNER_LAYER_COLORS,
+  LAYER_PRESETS,
+  applyLayerPreset,
+  nextLayerPreset,
+  isLayerVisible,
   LAYER_COLORS,
   DIMMED_ALPHA,
   type LayerVisibility,
 } from '../layers';
+
+/** The preset with this id, so a test names one rather than indexing. */
+function byId(id: string) {
+  const preset = LAYER_PRESETS.find((entry) => entry.id === id);
+  if (!preset) throw new Error(`no preset ${id}`);
+  return preset;
+}
 
 /** A board with every layer on, drawing on `active`, focused as asked. */
 function view(active: string, focus?: LayerVisibility['focus']): LayerVisibility {
@@ -201,6 +212,59 @@ describe('the layer you are looking at', () => {
       innerColors: ['#112233', '#445566'],
     };
     expect(getTraceColor('Inner3', two)).toBe('#112233');
+  });
+
+  /**
+   * A named set of what is shown, switched to in one move.
+   *
+   * Looking at the front, checking the back, reading the copper with the
+   * legend out of the way - a person does this many times an hour, and doing
+   * it by hand means six clicks each way.
+   */
+  it('shows only the front, and only the back', () => {
+    const stack = ['Top', 'Inner1', 'Inner2', 'Bottom'];
+    const front = applyLayerPreset(view('Top'), byId('front'), stack);
+
+    expect(isLayerVisible('Top', front)).toBe(true);
+    expect(isLayerVisible('Bottom', front)).toBe(false);
+    expect(isLayerVisible('Inner1', front)).toBe(false);
+    expect(isLayerVisible('Silkscreen', front)).toBe(true);
+
+    const back = applyLayerPreset(view('Top'), byId('back'), stack);
+    expect(isLayerVisible('Bottom', back)).toBe(true);
+    expect(isLayerVisible('Top', back)).toBe(false);
+  });
+
+  it('keeps every copper layer and drops the rest for copper only', () => {
+    const stack = ['Top', 'Inner1', 'Bottom'];
+    const copper = applyLayerPreset(view('Top'), byId('copper'), stack);
+
+    for (const name of stack) expect(isLayerVisible(name, copper)).toBe(true);
+    expect(isLayerVisible('Silkscreen', copper)).toBe(false);
+    expect(isLayerVisible('SolderMask', copper)).toBe(false);
+  });
+
+  /**
+   * The active layer belongs to the person, not to the view. Changing how you
+   * are looking at a board must not move the layer you are drawing on.
+   */
+  it('does not move the layer being drawn on', () => {
+    const before = view('Inner1');
+    const after = applyLayerPreset(before, byId('back'), ['Top', 'Inner1', 'Bottom']);
+    expect(after.activeLayer).toBe('Inner1');
+  });
+
+  /** A preset that inherits weights does something different every time. */
+  it('clears the per-layer weights it did not set', () => {
+    const weighted = setLayerOpacity(view('Top'), 'Bottom', 0.2);
+    const after = applyLayerPreset(weighted, byId('all'), ['Top', 'Bottom']);
+    expect(layerOpacity('Bottom', after)).toBe(1);
+  });
+
+  it('walks the presets and wraps', () => {
+    expect(nextLayerPreset(undefined).id).toBe('front');
+    expect(nextLayerPreset('all').id).toBe('front');
+    expect(nextLayerPreset('copper').id).toBe('all');
   });
 
   /** A layer that is not on the board cannot be promoted to the front. */

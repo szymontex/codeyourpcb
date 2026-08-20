@@ -521,6 +521,90 @@ export function copperDrawOrder(
   return [...stack.filter((name) => name !== activeLayer), activeLayer];
 }
 
+/**
+ * A named set of what is shown, ready to switch to.
+ *
+ * The set of visibilities, weights and focus a person switches between many
+ * times an hour - looking at the front, checking the back, reading the copper
+ * with the silkscreen out of the way. KiCad puts these on Ctrl+Tab for the
+ * same reason. A preset says only what it means to change: the active layer
+ * belongs to the person, not to the view, and switching how you are looking
+ * at a board must not move the layer you are drawing on.
+ */
+export interface LayerPreset {
+  id: string;
+  label: string;
+  /** What this preset hides, given the board's copper stack. */
+  hides(stack: readonly string[]): string[];
+  focus: LayerFocus;
+}
+
+/** The presets every board gets. */
+export const LAYER_PRESETS: readonly LayerPreset[] = [
+  {
+    id: 'all',
+    label: 'Everything',
+    hides: () => [],
+    focus: 'all',
+  },
+  {
+    id: 'front',
+    label: 'Front',
+    // The board as it arrives from the fab, seen from the top: everything on
+    // the far side is noise, and the near side keeps its silkscreen.
+    hides: (stack) => stack.filter((name) => name !== 'Top'),
+    focus: 'all',
+  },
+  {
+    id: 'back',
+    label: 'Back',
+    hides: (stack) => stack.filter((name) => name !== 'Bottom'),
+    focus: 'all',
+  },
+  {
+    id: 'copper',
+    label: 'Copper only',
+    // Every copper layer, nothing else. What you want when you are reading
+    // where the current goes and the legend is in the way.
+    hides: () => NON_COPPER_LAYERS.map((entry) => entry.id),
+    focus: 'all',
+  },
+];
+
+/**
+ * The view a preset asks for, applied to the one in hand.
+ *
+ * Weights are cleared rather than carried: a preset that leaves a layer at 20%
+ * from the last one is a preset that does something different every time it is
+ * used, which is the opposite of what it is for.
+ */
+export function applyLayerPreset(
+  visibility: LayerVisibility,
+  preset: LayerPreset,
+  stack: readonly string[],
+): LayerVisibility {
+  const hidden = preset.hides(stack);
+  return {
+    ...visibility,
+    topCopper: !hidden.includes('Top'),
+    bottomCopper: !hidden.includes('Bottom'),
+    innerCopper: true,
+    hiddenLayers: hidden.filter((name) => name !== 'Top' && name !== 'Bottom'),
+    opacity: {},
+    focus: preset.focus,
+  };
+}
+
+/** The preset after this one, wrapping - what Ctrl+Tab walks. */
+export function nextLayerPreset(current: string | undefined): LayerPreset {
+  // Nothing chosen yet reads as the default view, which is the first entry -
+  // so the first press moves somewhere rather than announcing where you
+  // already are. `findIndex` returning -1 would have made it a no-op.
+  const at = LAYER_PRESETS.findIndex((preset) => preset.id === current);
+  const from = at === -1 ? 0 : at;
+  return LAYER_PRESETS[(from + 1) % LAYER_PRESETS.length];
+}
+
 /** Bottom first, then the inner layers deepest-last, then top. */
 function layerDepth(a: string, b: string): number {
   const depth = (name: string): number => {

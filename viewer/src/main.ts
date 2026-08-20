@@ -31,6 +31,10 @@ import {
   setLayerOpacity,
   INNER_LAYER_COLORS,
   NON_COPPER_LAYERS,
+  LAYER_PRESETS,
+  applyLayerPreset,
+  nextLayerPreset,
+  type LayerPreset,
   innerLayerColor,
   LAYER_FOCUS_LABEL,
 } from './layers';
@@ -670,6 +674,7 @@ async function init(): Promise<void> {
         // not choosing it, and clicking one must not do the other.
         eye.addEventListener('click', (event) => {
           event.stopPropagation();
+          activePreset = undefined;
           layers = toggleLayerVisible(layers, name);
           if (is3DActive && renderer3d) renderer3d.updateLayerVisibility(layers);
           syncLayerPicker();
@@ -707,6 +712,7 @@ async function init(): Promise<void> {
     }
 
     syncOtherLayers();
+    syncPresetPicker();
 
     const focus = document.getElementById('lp-focus');
     if (focus) {
@@ -716,6 +722,48 @@ async function init(): Promise<void> {
         mode === 'all' ? 'All' : mode === 'ghost' ? 'Grey' : mode === 'dim' ? 'Dim' : 'Solo';
       focus.title = `${LAYER_FOCUS_LABEL[mode]} - X cycles all / dim / solo`;
     }
+  }
+
+  /** The view the panel is showing, so Ctrl+Tab knows where it is. */
+  let activePreset: string | undefined;
+
+  /**
+   * Switch to a saved view.
+   *
+   * Front, back, copper only - the set of visibilities and weights a person
+   * moves between many times an hour, and doing it by hand is six clicks each
+   * way. The active layer is not part of it: how you are looking at a board
+   * and what you are drawing on are different questions.
+   */
+  function applyPreset(preset: LayerPreset): void {
+    layers = applyLayerPreset(layers, preset, copperLayerNames(boardLayerCount()));
+    activePreset = preset.id;
+    if (is3DActive && renderer3d) renderer3d.updateLayerVisibility(layers);
+    syncLayerPicker();
+    statusText.textContent = `${preset.label} (Ctrl+Tab walks the views)`;
+    dirty = true;
+  }
+
+  function syncPresetPicker(): void {
+    const select = document.getElementById('lp-preset') as HTMLSelectElement | null;
+    if (!select) return;
+    if (!select.dataset.built) {
+      select.dataset.built = 'yes';
+      for (const preset of LAYER_PRESETS) {
+        const option = document.createElement('option');
+        option.value = preset.id;
+        option.textContent = preset.label;
+        select.appendChild(option);
+      }
+      select.addEventListener('change', () => {
+        const chosen = LAYER_PRESETS.find((preset) => preset.id === select.value);
+        if (chosen) applyPreset(chosen);
+      });
+    }
+    // A hand-made change to one layer is no longer any saved view, and saying
+    // so beats a dropdown that claims you are looking at the front when you
+    // have just turned the back on.
+    select.value = activePreset ?? '';
   }
 
   /** The colour the renderer paints a copper layer in, as a plain hex string. */
@@ -795,6 +843,7 @@ async function init(): Promise<void> {
 
         row.append(swatch, label, eye);
         const flip = () => {
+          activePreset = undefined;
           layers = toggleLayerVisible(layers, entry.id);
           if (is3DActive && renderer3d) renderer3d.updateLayerVisibility(layers);
           syncLayerPicker();
@@ -3476,6 +3525,13 @@ async function init(): Promise<void> {
         return;
       }
     }
+    // Ctrl+Tab walks the saved views, which is the key KiCad puts them on.
+    if (e.key === 'Tab' && (e.ctrlKey || e.metaKey) && !e.altKey) {
+      applyPreset(nextLayerPreset(activePreset));
+      e.preventDefault();
+      return;
+    }
+
     // X: how hard the editor pushes the other layers back. Works while
     // routing too - deciding you cannot see what you are doing is exactly the
     // moment you need it, and every other layer key refuses mid-trace.
