@@ -16,6 +16,7 @@ import {
   nextLayerFocus,
   layerMaskBit,
   copperDrawOrder,
+  applyFocus,
   layerOpacity,
   setLayerOpacity,
   GHOST_GREY,
@@ -265,6 +266,37 @@ describe('the layer you are looking at', () => {
     expect(nextLayerPreset(undefined).id).toBe('front');
     expect(nextLayerPreset('all').id).toBe('front');
     expect(nextLayerPreset('copper').id).toBe('all');
+  });
+
+  /**
+   * Colouring by net must not switch the layer controls off.
+   *
+   * Reported by the owner as two things: a trace on the top layer drawn blue,
+   * and the focus modes dimming a component's pads while leaving its traces
+   * alone. One fault - `drawTrace` took `getTraceColor` as a yes/no visibility
+   * test, threw the answer away and used the net colour raw, so focus and
+   * weight reached pads through `getPadColor` and reached traces through
+   * nothing. `traceColorByNet` defaults to true, so this was the normal case
+   * rather than an option nobody used.
+   */
+  it('still dims and weighs a trace that is coloured by its net', () => {
+    const netBlue = '#1E6FC4';
+
+    // The active layer keeps the net's colour exactly.
+    expect(applyFocus(netBlue, true, 'dim', 1)).toBe(netBlue);
+
+    // An inactive one is pushed back, net colour and all.
+    expect(applyFocus(netBlue, false, 'dim', 1)).toBe(
+      colorWithAlpha(netBlue, DIMMED_ALPHA),
+    );
+
+    // And the layer's own weight still applies on top of that.
+    expect(applyFocus(netBlue, false, 'dim', 0.5)).toBe(
+      colorWithAlpha(netBlue, DIMMED_ALPHA * 0.5),
+    );
+
+    // Solo takes it away entirely, which is what solo means.
+    expect(applyFocus(netBlue, false, 'solo', 1)).toBeNull();
   });
 
   /** A layer that is not on the board cannot be promoted to the front. */

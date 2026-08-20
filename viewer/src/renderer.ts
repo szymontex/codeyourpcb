@@ -14,6 +14,8 @@ import { worldToScreen, screenToWorld } from './viewport';
 import { LAYER_COLORS, getPadColor, getTraceColor, getThemeColors, netColor, brightenColor, colorWithAlpha, type LayerVisibility,
   copperDrawOrder,
   isLayerVisible,
+  applyFocus,
+  layerOpacity,
 } from './layers';
 import { formatDimension } from './units';
 import { getPreference } from './settings';
@@ -566,9 +568,21 @@ export function drawTrace(
 
   let color: string | null;
   if (colorByNet && trace.net_name) {
-    const layerVisible = getTraceColor(trace.layer, layers) !== null;
-    if (!layerVisible) return;
-    color = netColor(trace.net_name);
+    // Colour by net, but still say which layer it is on and how far back it
+    // sits. This used to take `getTraceColor` as a yes/no visibility test and
+    // throw the answer away, so focus and per-layer weight reached a
+    // component's pads - which go through `getPadColor` - and never reached
+    // its traces. Same reason a trace on the top layer could come out blue:
+    // the net colour was the only thing deciding, and nothing on screen said
+    // which side of the board the copper was on.
+    const onLayer = getTraceColor(trace.layer, layers);
+    if (!onLayer) return;
+    color = applyFocus(
+      netColor(trace.net_name),
+      trace.layer === layers.activeLayer,
+      layers.focus,
+      layerOpacity(trace.layer, layers),
+    );
   } else {
     color = getTraceColor(trace.layer, layers);
   }
