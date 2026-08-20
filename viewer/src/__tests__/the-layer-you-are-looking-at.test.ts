@@ -19,6 +19,7 @@ import {
   layerOpacity,
   setLayerOpacity,
   GHOST_GREY,
+  INNER_LAYER_COLORS,
   LAYER_COLORS,
   DIMMED_ALPHA,
   type LayerVisibility,
@@ -170,6 +171,36 @@ describe('the layer you are looking at', () => {
     expect(getTraceColor('Bottom', setLayerOpacity(view('Top'), 'Bottom', 0))).toBeNull();
     expect(layerOpacity('Bottom', setLayerOpacity(view('Top'), 'Bottom', 5))).toBe(1);
     expect(layerOpacity('Bottom', setLayerOpacity(view('Top'), 'Bottom', -2))).toBe(0);
+  });
+
+  /**
+   * The middle of a four-layer board was the one part nobody could recolour.
+   *
+   * The outer two have had a preference key each since preferences existed;
+   * the inner ones came from a constant in this module, so a person who wanted
+   * Inner1 and Inner2 further apart had nowhere to say so - and telling two
+   * inner layers apart is exactly where colour earns its keep.
+   */
+  it('draws an inner layer in the colour the view carries', () => {
+    const recoloured: LayerVisibility = {
+      ...createLayerVisibility(),
+      innerColors: ['#112233', '#445566'],
+    };
+    expect(getTraceColor('Inner1', recoloured)).toBe('#112233');
+    expect(getTraceColor('Inner2', recoloured)).toBe('#445566');
+  });
+
+  it('falls back to the shipped palette when the view carries none', () => {
+    expect(getTraceColor('Inner1', createLayerVisibility())).toBe(INNER_LAYER_COLORS[0]);
+  });
+
+  /** More inner layers than colours wraps, which is what the renderer did. */
+  it('wraps a short palette rather than running out of colours', () => {
+    const two: LayerVisibility = {
+      ...createLayerVisibility(),
+      innerColors: ['#112233', '#445566'],
+    };
+    expect(getTraceColor('Inner3', two)).toBe('#112233');
   });
 
   /** A layer that is not on the board cannot be promoted to the front. */

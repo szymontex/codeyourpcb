@@ -148,6 +148,15 @@ export interface LayerVisibility {
    */
   opacity?: Record<string, number>;
   /**
+   * The colours the inner copper layers are drawn in, in stack order.
+   *
+   * Carried on the view rather than read from a module constant, so a person
+   * can recolour them - the outer two have been editable since preferences
+   * existed and the middle of a four-layer board was the one part nobody
+   * could change. Absent falls back to the shipped palette.
+   */
+  innerColors?: readonly string[];
+  /**
    * Whether the copper between the outer two is drawn.
    *
    * Optional so every existing caller keeps working: absent means visible,
@@ -539,7 +548,8 @@ export function innerLayerColor(layer: string, visibility: LayerVisibility): str
 
   // Inner1 is the first inner layer, the way the DSL writes it.
   const index = Math.max(0, parseInt(match[1], 10) - 1);
-  return INNER_LAYER_COLORS[index % INNER_LAYER_COLORS.length];
+  const palette = visibility.innerColors?.length ? visibility.innerColors : INNER_LAYER_COLORS;
+  return palette[index % palette.length];
 }
 
 /** One shade per inner layer, in the order the stack goes down. */

@@ -8,7 +8,7 @@
  * Debug surface: `window.__settings` exposes the current snapshot for E2E.
  */
 
-import { LAYER_COLORS } from './layers';
+import { LAYER_COLORS, INNER_LAYER_COLORS} from './layers';
 import type { DisplayUnit } from './units';
 
 // ---------------------------------------------------------------------------
@@ -28,6 +28,16 @@ export interface LayerColors {
   silkscreen: string;
   via: string;
   drill: string;
+  /**
+   * One colour per inner copper layer, in stack order.
+   *
+   * The outer two have been editable since preferences existed and the inner
+   * ones were a constant in `layers.ts` - so a four-layer board's middle was
+   * the one part of it nobody could recolour, which is also the part where
+   * telling two layers apart matters most. Shorter than the stack means the
+   * list wraps, which is what the renderer already did.
+   */
+  innerCopper: string[];
 }
 
 export interface AutorouteParams {
@@ -100,6 +110,7 @@ export const DEFAULT_SETTINGS: Readonly<AppSettings> = {
     silkscreen: LAYER_COLORS.top_silk,
     via: LAYER_COLORS.via,
     drill: LAYER_COLORS.drill,
+    innerCopper: [...INNER_LAYER_COLORS],
   },
   autorouteParams: {
     viaCost: 1.0,

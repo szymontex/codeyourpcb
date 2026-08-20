@@ -157,6 +157,7 @@ describe('settings', () => {
       silkscreen: '#0000FF',
       via: '#AAAAAA',
       drill: '#000000',
+      innerCopper: ['#112233', '#445566'],
     };
     setPreference('layerColors', newColors);
     expect(getPreference('layerColors')).toEqual(newColors);

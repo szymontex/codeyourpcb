@@ -29,6 +29,7 @@ import {
   toggleLayerVisible,
   layerOpacity,
   setLayerOpacity,
+  INNER_LAYER_COLORS,
   NON_COPPER_LAYERS,
   innerLayerColor,
   LAYER_FOCUS_LABEL,
@@ -339,7 +340,11 @@ async function init(): Promise<void> {
   // object has to know it from the first frame. Without this the canvas comes
   // up with a layer selected and nothing to keep, and the first press of X
   // dims the board including the layer you are drawing on.
-  layers = { ...layers, activeLayer: routingState.currentLayer };
+  layers = {
+    ...layers,
+    activeLayer: routingState.currentLayer,
+    innerColors: getPreference('layerColors').innerCopper,
+  };
   let highlightedNet: string | null = null;
   const renderConfig = createDefaultRenderConfig();
   let padNetMap = new Map<string, string>();
@@ -617,8 +622,17 @@ async function init(): Promise<void> {
         row.setAttribute('role', 'option');
         row.dataset.layer = name;
 
-        const swatch = document.createElement('span');
+        // The swatch edits the colour rather than only reporting it. The
+        // outer two layers have been editable in preferences since it existed
+        // and the inner ones were a constant in the source, so the middle of a
+        // four-layer board was the one part nobody could recolour - which is
+        // where telling two layers apart matters most.
+        const swatch = document.createElement('input');
+        swatch.type = 'color';
         swatch.className = 'lp-swatch';
+        swatch.title = `Colour of ${name}`;
+        swatch.addEventListener('click', (event) => event.stopPropagation());
+        swatch.addEventListener('input', () => setLayerColor(name, swatch.value));
 
         const label = document.createElement('span');
         label.className = 'lp-name';
@@ -672,17 +686,13 @@ async function init(): Promise<void> {
       row.dataset.visible = String(visible);
       row.title = `${name} copper - click to draw on it`;
 
-      const swatch = row.querySelector('.lp-swatch') as HTMLElement | null;
-      if (swatch) {
-        swatch.style.background =
-          name === 'Top'
-            ? renderConfig.layerColors.topCopper
-            : name === 'Bottom'
-              ? renderConfig.layerColors.bottomCopper
-              : innerLayerColor(name, { ...layers, hiddenLayers: [] }) ?? '#2f8f4f';
+      const swatch = row.querySelector('.lp-swatch') as HTMLInputElement | null;
+      const colour = layerColorOf(name);
+      if (swatch && document.activeElement !== swatch) {
+        swatch.value = colour;
       }
       row.style.borderLeftColor =
-        name === routingState.currentLayer ? (swatch?.style.background || 'transparent') : 'transparent';
+        name === routingState.currentLayer ? colour : 'transparent';
 
       const eye = row.querySelector('.lp-eye') as HTMLElement | null;
       if (eye) {
@@ -706,6 +716,46 @@ async function init(): Promise<void> {
         mode === 'all' ? 'All' : mode === 'ghost' ? 'Grey' : mode === 'dim' ? 'Dim' : 'Solo';
       focus.title = `${LAYER_FOCUS_LABEL[mode]} - X cycles all / dim / solo`;
     }
+  }
+
+  /** The colour the renderer paints a copper layer in, as a plain hex string. */
+  function layerColorOf(name: string): string {
+    if (name === 'Top') return renderConfig.layerColors.topCopper;
+    if (name === 'Bottom') return renderConfig.layerColors.bottomCopper;
+    return innerLayerColor(name, { ...layers, hiddenLayers: [] }) ?? '#2f8f4f';
+  }
+
+  /**
+   * Recolour a copper layer from the panel, and remember it.
+   *
+   * The two outer layers have a preference key each. The inner ones share a
+   * list, one entry per layer in stack order, which is grown as far as the
+   * layer being set - a board with more inner layers than the list has entries
+   * wraps, which is what the renderer already did.
+   */
+  function setLayerColor(name: string, hex: string): void {
+    if (!/^#[0-9a-f]{6}$/i.test(hex)) return;
+    const colors = getPreference('layerColors');
+
+    if (name === 'Top' || name === 'Bottom') {
+      const key = name === 'Top' ? 'topCopper' : 'bottomCopper';
+      colors[key] = hex;
+      renderConfig.layerColors[key] = hex;
+    } else {
+      const match = /^Inner(\d+)$/.exec(name);
+      if (!match) return;
+      const index = Number(match[1]) - 1;
+      const list = [...(colors.innerCopper ?? [])];
+      while (list.length <= index) list.push(INNER_LAYER_COLORS[list.length % INNER_LAYER_COLORS.length]);
+      list[index] = hex;
+      colors.innerCopper = list;
+      layers = { ...layers, innerColors: list };
+    }
+
+    setPreference('layerColors', colors);
+    if (is3DActive && renderer3d) renderer3d.updateLayerVisibility(layers);
+    syncLayerPicker();
+    dirty = true;
   }
 
   /**
@@ -1079,7 +1129,12 @@ async function init(): Promise<void> {
   });
 
   // Color pickers in prefs — map data-pref to layerColors keys
-  const colorInputMap: [string, keyof LayerColors][] = [
+  // Only the single-colour keys. `innerCopper` is a list, one entry per inner
+  // layer, and it is edited from the layers panel where the layer it belongs
+  // to is - not from a row of five pickers that cannot know how deep the
+  // stack is.
+  type SingleColorKey = Exclude<keyof LayerColors, 'innerCopper'>;
+  const colorInputMap: [string, SingleColorKey][] = [
     ['prefs-color-top', 'topCopper'],
     ['prefs-color-bottom', 'bottomCopper'],
     ['prefs-color-silk', 'silkscreen'],

@@ -568,13 +568,23 @@
       color: var(--text-primary);
       font-weight: 700;
     }
+    /* The swatch is a colour input, so it reports the layer's colour and
+       changes it in the same place. A native picker is the one control every
+       person already knows how to use, and it costs no panel width. */
     .lp-swatch {
-      width: 11px;
-      height: 11px;
+      width: 13px;
+      height: 13px;
+      padding: 0;
+      border: none;
       border-radius: 2px;
       flex: 0 0 auto;
+      cursor: pointer;
+      background: none;
       box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35) inset;
     }
+    .lp-swatch::-webkit-color-swatch-wrapper { padding: 0; }
+    .lp-swatch::-webkit-color-swatch { border: none; border-radius: 2px; }
+    .lp-swatch::-moz-color-swatch { border: none; border-radius: 2px; }
     .lp-name { flex: 1 1 auto; }
     /* The number that reaches this layer, shown rather than remembered. */
     .lp-key {
