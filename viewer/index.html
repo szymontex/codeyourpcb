@@ -393,117 +393,107 @@
     /* The layers panel.
        Every serious board tool keeps this on screen rather than behind a
        menu, because "which layer am I on" and "why can I not see that trace"
-       are asked constantly and answered by looking. KiCad docks it right,
-       Altium runs tabs along the bottom; the point either way is that it is
-       always there. Two buttons in a toolbar were not. */
+       are asked constantly and answered by looking. */
     #layers-panel {
-      width: 208px;
-      flex: 0 0 208px;
+      width: 264px;
+      flex: 0 0 264px;
       border-left: 1px solid var(--border-primary);
       background: var(--bg-primary);
       display: flex;
       flex-direction: column;
       overflow-y: auto;
       order: 3;
-      font-size: 12px;
+      /* The floor for everything in here. Nothing in this panel is fine
+         print: a layer name, the key that reaches it and the number beside it
+         are all things a person reads while working, not once at setup. */
+      font-size: 15px;
+      line-height: 1.35;
     }
     .lp-head {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 8px;
-      padding: 8px 10px;
-      font-weight: 700;
+      gap: 10px;
+      padding: 12px 14px 10px;
+      font-size: 17px;
+      font-weight: 650;
       letter-spacing: -0.01em;
-      border-bottom: 1px solid var(--border-secondary);
       color: var(--text-primary);
     }
+    /* Two sizes in this panel, not four: what you read, and the one title
+       above it. */
     #lp-focus {
       border: 1px solid var(--border-secondary);
-      border-radius: 4px;
+      border-radius: 6px;
       background: none;
       color: var(--text-secondary);
-      font-size: 11px;
-      font-weight: 600;
-      padding: 3px 8px;
+      font-size: 15px;
+      font-weight: 500;
+      padding: 3px 10px;
       cursor: pointer;
     }
-    #lp-focus[data-focus="dim"] {
-      background: var(--bg-tertiary);
+    #lp-focus:hover { color: var(--text-primary); background: var(--bg-secondary); }
+    #lp-focus[data-focus="ghost"],
+    #lp-focus[data-focus="dim"],
+    #lp-focus[data-focus="solo"] {
+      background: rgba(255, 255, 255, 0.09);
       color: var(--text-primary);
     }
-    #lp-focus[data-focus="solo"] {
-      background: var(--accent, #2f6fed);
-      border-color: var(--accent, #2f6fed);
-      color: #fff;
-    }
-    /* Saved views, at the top of the panel because switching between them is
-       the most frequent thing anybody does here. */
-    .lp-presets {
-      padding: 7px 10px 3px;
-      border-bottom: 1px solid var(--border-secondary);
-    }
+    .lp-presets { padding: 0 14px 12px; }
     #lp-preset {
       width: 100%;
-      height: 24px;
-      font-size: 11px;
-      font-weight: 600;
+      height: 34px;
+      padding: 0 8px;
+      font-size: 15px;
+      font-weight: 500;
       border: 1px solid var(--border-secondary);
-      border-radius: 4px;
+      border-radius: 6px;
       background: var(--bg-secondary);
       color: var(--text-primary);
       cursor: pointer;
     }
+    /* A section label is checked once and never read again, so it gets one
+       reinforcement rather than three - no uppercase, no tracking, no bold on
+       top of a colour change. It sits lighter than the rows it introduces. */
     .lp-section {
-      padding: 8px 10px 4px;
-      font-size: 10px;
-      font-weight: 700;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
+      padding: 10px 14px 4px;
+      font-size: 15px;
+      font-weight: 400;
       color: var(--text-tertiary);
     }
-    /* One row per layer, and the active one is unmistakable: a bar in its own
-       colour down the left edge. Four grey rows and one slightly less grey
-       one is not an answer to "which am I drawing on". */
+    /* A row is a click target, so it gets the space. The active one is marked
+       by its background - that reads instantly and nothing has to shout. */
     .lp-row {
       display: flex;
       align-items: center;
-      gap: 8px;
-      padding: 5px 10px 5px 8px;
-      border-left: 3px solid transparent;
+      gap: 10px;
+      padding: 7px 14px;
       cursor: pointer;
       color: var(--text-secondary);
     }
-    .lp-row:hover {
-      background: var(--bg-secondary);
-      color: var(--text-primary);
-    }
+    .lp-row:hover { background: rgba(255, 255, 255, 0.05); color: var(--text-primary); }
     .lp-row[aria-selected="true"] {
-      background: var(--bg-tertiary);
+      background: rgba(255, 255, 255, 0.09);
       color: var(--text-primary);
-      font-weight: 700;
+      font-weight: 600;
     }
-    /* The swatch is a colour input, so it reports the layer's colour and
-       changes it in the same place. A native picker is the one control every
-       person already knows how to use, and it costs no panel width. */
+    /* A ring rather than a shadow, so a near-black drill colour is still a
+       square on a dark panel instead of a hole in it. */
     .lp-swatch {
-      width: 13px;
-      height: 13px;
+      width: 16px;
+      height: 16px;
       padding: 0;
-      border: none;
-      border-radius: 2px;
+      border: 1px solid rgba(255, 255, 255, 0.35);
+      border-radius: 4px;
       flex: 0 0 auto;
       cursor: pointer;
       background: none;
-      box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35) inset;
     }
     .lp-swatch::-webkit-color-swatch-wrapper { padding: 0; }
-    .lp-swatch::-webkit-color-swatch { border: none; border-radius: 2px; }
-    .lp-swatch::-moz-color-swatch { border: none; border-radius: 2px; }
-    .lp-name { flex: 1 1 auto; }
-    /* The number that reaches this layer, shown rather than remembered. */
+    .lp-swatch::-webkit-color-swatch { border: none; border-radius: 3px; }
+    .lp-swatch::-moz-color-swatch { border: none; border-radius: 3px; }
+    .lp-name { flex: 1 1 auto; min-width: 0; }
     .lp-key {
-      font-size: 10px;
       color: var(--text-tertiary);
       font-variant-numeric: tabular-nums;
     }
@@ -512,36 +502,35 @@
       background: none;
       cursor: pointer;
       padding: 0 2px;
-      font-size: 12px;
+      font-size: 15px;
       line-height: 1;
-      color: var(--text-secondary);
+      color: var(--text-tertiary);
+      flex: 0 0 auto;
     }
-    /* A hidden layer reads as hidden across the whole row, not just on the
-       icon - otherwise a glance at the panel does not answer "what am I not
-       being shown". */
+    .lp-eye:hover { color: var(--text-primary); }
     .lp-row[data-visible="false"] .lp-name,
-    .lp-row[data-visible="false"] .lp-swatch {
-      opacity: 0.35;
-    }
-    /* The weight slider takes the whole row width under the name, because a
-       208px panel has no room for it beside four other things and a control
-       nobody can grab is not a control. */
-    .lp-row { flex-wrap: wrap; }
+    .lp-row[data-visible="false"] .lp-swatch { opacity: 0.4; }
+    /* The weight of one layer. Quiet by default and grey rather than accent -
+       there is one accent in this panel and it is not eight sliders. It sits
+       inside the row's own padding, which is what kept the thumb off the edge
+       of the panel before. */
     .lp-weight {
       flex: 1 0 100%;
-      margin: 3px 0 0 19px;
+      width: 100%;
+      margin: 2px 0 0;
       height: 3px;
-      accent-color: var(--accent, #2f6fed);
+      accent-color: var(--text-tertiary);
+      opacity: 0.55;
       cursor: pointer;
     }
-    .lp-row[data-visible="false"] .lp-weight { opacity: 0.3; }
+    .lp-row:hover .lp-weight,
+    .lp-row[aria-selected="true"] .lp-weight { opacity: 1; }
+    .lp-row[data-visible="false"] .lp-weight { opacity: 0.2; }
+    .lp-row { flex-wrap: wrap; }
     .lp-hint {
       margin-top: auto;
-      padding: 8px 10px;
-      font-size: 10px;
-      line-height: 1.45;
+      padding: 12px 14px;
       color: var(--text-tertiary);
-      border-top: 1px solid var(--border-secondary);
     }
     #three-canvas {
       position: absolute;
@@ -1811,7 +1800,7 @@
       <div id="lp-copper" role="listbox" aria-label="Copper layers"></div>
       <div class="lp-section">Board</div>
       <div id="lp-other" aria-label="Other layers"></div>
-      <div class="lp-hint">Click a copper name to draw on it &middot; the eye hides any layer</div>
+      <div class="lp-hint">Click a name to draw on it.</div>
     </aside>
     <div id="canvas-container" style="flex: 1; position: relative; overflow: hidden;">
       <canvas id="pcb-canvas"></canvas>
