@@ -323,8 +323,28 @@ export function isLayerVisible(layer: string, visibility: LayerVisibility): bool
   if (visibility.hiddenLayers?.includes(layer)) return false;
   if (layer === 'Top') return visibility.topCopper;
   if (layer === 'Bottom') return visibility.bottomCopper;
-  return visibility.innerCopper !== false && /^Inner\d+$/.test(layer);
+  if (/^Inner\d+$/.test(layer)) return visibility.innerCopper !== false;
+  // Everything that is not copper: silkscreen, solder mask, the drill holes,
+  // the board edge. They are visible unless somebody turned them off, which
+  // is the same answer the copper layers give and one fewer rule to know.
+  return NON_COPPER_LAYERS.some((entry) => entry.id === layer);
 }
+
+/**
+ * The layers a board has that are not copper.
+ *
+ * Listed here rather than in the panel because the renderer has to agree with
+ * the panel about what exists - a row for something nothing draws is worse
+ * than no row, and this project has found that defect three times already.
+ * Each of these is drawn today and was drawn unconditionally until it got an
+ * entry here.
+ */
+export const NON_COPPER_LAYERS: readonly { id: string; label: string; color: string }[] = [
+  { id: 'Silkscreen', label: 'Silkscreen', color: LAYER_COLORS.top_silk },
+  { id: 'SolderMask', label: 'Solder mask', color: '#0a6b0a' },
+  { id: 'Drill', label: 'Drill holes', color: LAYER_COLORS.drill },
+  { id: 'EdgeCuts', label: 'Board edge', color: '#cccc00' },
+];
 
 /** The same list with one layer's visibility flipped. */
 export function toggleLayerVisible(
@@ -333,6 +353,8 @@ export function toggleLayerVisible(
 ): LayerVisibility {
   if (layer === 'Top') return { ...visibility, topCopper: !visibility.topCopper };
   if (layer === 'Bottom') return { ...visibility, bottomCopper: !visibility.bottomCopper };
+  // Inner copper, silkscreen, mask, drill and the board edge all live in the
+  // one named list, so a row does not need to know which kind it is.
 
   const hidden = visibility.hiddenLayers ?? [];
   return {

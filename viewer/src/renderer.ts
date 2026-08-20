@@ -13,6 +13,7 @@ import { LodTier, getLodTier, createDefaultRenderConfig } from './render-config'
 import { worldToScreen, screenToWorld } from './viewport';
 import { LAYER_COLORS, getPadColor, getTraceColor, getThemeColors, netColor, brightenColor, colorWithAlpha, type LayerVisibility,
   copperDrawOrder,
+  isLayerVisible,
 } from './layers';
 import { formatDimension } from './units';
 import { getPreference } from './settings';
@@ -114,7 +115,9 @@ export function render(ctx: CanvasRenderingContext2D, state: RenderState): void 
   }
 
   // Draw board outline
-  drawBoardOutline(ctx, viewport, snapshot.board.width_nm, snapshot.board.height_nm, themeColors, snapshot.board.outline);
+  if (isLayerVisible('EdgeCuts', layers)) {
+    drawBoardOutline(ctx, viewport, snapshot.board.width_nm, snapshot.board.height_nm, themeColors, snapshot.board.outline);
+  }
 
   // Draw resize handles only when hovering near board edge (not by default)
   // They clutter the professional PCB view
@@ -180,7 +183,9 @@ export function render(ctx: CanvasRenderingContext2D, state: RenderState): void 
   // ---- SOLDER MASK OVERLAY ----
   // Draw semi-transparent green solder mask over the board area.
   // Solder mask goes on top of copper traces but before pad/via redraw.
-  drawSolderMask(ctx, viewport, snapshot, layers);
+  if (isLayerVisible('SolderMask', layers)) {
+    drawSolderMask(ctx, viewport, snapshot, layers);
+  }
 
   // Draw components (pads, body outlines, drill marks) — ON TOP of solder mask
   // Pads are "exposed copper" visible through solder mask openings
@@ -193,7 +198,7 @@ export function render(ctx: CanvasRenderingContext2D, state: RenderState): void 
   if (snapshot.vias) {
     for (const via of snapshot.vias) {
       if (layers.topCopper || layers.bottomCopper) {
-        drawVia(ctx, viewport, via, themeColors);
+        drawVia(ctx, viewport, via, themeColors, layers);
       }
     }
   }
@@ -756,7 +761,7 @@ function drawNetLabel(ctx: CanvasRenderingContext2D, screenX: number, screenY: n
 // Vias
 // ---------------------------------------------------------------------------
 
-function drawVia(ctx: CanvasRenderingContext2D, vp: Viewport, via: ViaInfo, _themeColors: ReturnType<typeof getThemeColors>): void {
+function drawVia(ctx: CanvasRenderingContext2D, vp: Viewport, via: ViaInfo, _themeColors: ReturnType<typeof getThemeColors>, layers: LayerVisibility): void {
   const [sx, sy] = worldToScreen(vp, via.x, via.y);
   const outerRadius = (via.outer_diameter * vp.scale) / 2;
   const drillRadius = (via.drill * vp.scale) / 2;
@@ -769,7 +774,7 @@ function drawVia(ctx: CanvasRenderingContext2D, vp: Viewport, via: ViaInfo, _the
   ctx.fill();
 
   // Drill hole (dark center)
-  if (drillRadius > 0.5) {
+  if (drillRadius > 0.5 && isLayerVisible('Drill', layers)) {
     ctx.beginPath();
     ctx.arc(sx, sy, drillRadius, 0, Math.PI * 2);
     ctx.fillStyle = LAYER_COLORS.via_hole;
@@ -865,10 +870,12 @@ function drawComponent(
   // silkscreen colour - so a bottom part looked like a top part with its pads
   // on the wrong layer.
   const silkColor = componentSilkColor(comp, config);
-  if (comp.silk && comp.silk.length > 0) {
-    drawSilkShapes(ctx, vp, comp, config, silkColor);
-  } else if (lodTier >= LodTier.Medium && comp.body_width_nm > 0 && comp.body_height_nm > 0) {
-    drawBodyOutline(ctx, vp, comp, config, silkColor);
+  if (isLayerVisible('Silkscreen', layers)) {
+    if (comp.silk && comp.silk.length > 0) {
+      drawSilkShapes(ctx, vp, comp, config, silkColor);
+    } else if (lodTier >= LodTier.Medium && comp.body_width_nm > 0 && comp.body_height_nm > 0) {
+      drawBodyOutline(ctx, vp, comp, config, silkColor);
+    }
   }
 }
 
@@ -1157,7 +1164,7 @@ export function drawPad(
   // is what happened until the model could tell the two apart - shows a
   // designer a hole their connector does not fit, on a board whose files
   // carry the slot correctly.
-  if (pad.drill_nm) {
+  if (pad.drill_nm && isLayerVisible('Drill', layers)) {
     const slot = pad.slot_nm && pad.slot_nm[0] !== pad.slot_nm[1] ? pad.slot_nm : null;
     const drillRadius = pad.drill_nm * vp.scale / 2;
     if (drillRadius > 0.5) {

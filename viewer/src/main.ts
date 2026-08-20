@@ -27,6 +27,7 @@ import {
   nextLayerFocus,
   isLayerVisible,
   toggleLayerVisible,
+  NON_COPPER_LAYERS,
   innerLayerColor,
   LAYER_FOCUS_LABEL,
 } from './layers';
@@ -670,6 +671,8 @@ async function init(): Promise<void> {
       }
     }
 
+    syncOtherLayers();
+
     const focus = document.getElementById('lp-focus');
     if (focus) {
       const mode = layers.focus ?? 'all';
@@ -677,6 +680,68 @@ async function init(): Promise<void> {
       focus.textContent =
         mode === 'all' ? 'All' : mode === 'ghost' ? 'Grey' : mode === 'dim' ? 'Dim' : 'Solo';
       focus.title = `${LAYER_FOCUS_LABEL[mode]} - X cycles all / dim / solo`;
+    }
+  }
+
+  /**
+   * The layers that are not copper: silkscreen, mask, drill, board edge.
+   *
+   * Each was drawn unconditionally until it got a row - the renderer asks
+   * `isLayerVisible` for all four now, so a row here really turns something
+   * off. A row for something nothing draws is worse than no row, and this
+   * project has found that defect three times already.
+   *
+   * No active-layer marking: you do not route on silkscreen, so clicking a
+   * name here would have to mean something else, and a control that means two
+   * things depending on which half of a panel it is in is not a control.
+   */
+  function syncOtherLayers(): void {
+    const list = document.getElementById('lp-other');
+    if (!list) return;
+
+    if (!list.dataset.built) {
+      list.dataset.built = 'yes';
+      for (const entry of NON_COPPER_LAYERS) {
+        const row = document.createElement('div');
+        row.className = 'lp-row lp-row-static';
+        row.dataset.layer = entry.id;
+
+        const swatch = document.createElement('span');
+        swatch.className = 'lp-swatch';
+        swatch.style.background = entry.color;
+
+        const label = document.createElement('span');
+        label.className = 'lp-name';
+        label.textContent = entry.label;
+
+        const eye = document.createElement('button');
+        eye.type = 'button';
+        eye.className = 'lp-eye';
+
+        row.append(swatch, label, eye);
+        const flip = () => {
+          layers = toggleLayerVisible(layers, entry.id);
+          if (is3DActive && renderer3d) renderer3d.updateLayerVisibility(layers);
+          syncLayerPicker();
+          dirty = true;
+        };
+        row.addEventListener('click', flip);
+        eye.addEventListener('click', (event) => {
+          event.stopPropagation();
+          flip();
+        });
+        list.appendChild(row);
+      }
+    }
+
+    for (const row of Array.from(list.children) as HTMLElement[]) {
+      const id = row.dataset.layer ?? '';
+      const entry = NON_COPPER_LAYERS.find((candidate) => candidate.id === id);
+      const visible = isLayerVisible(id, layers);
+      row.dataset.visible = String(visible);
+      row.title = visible ? `Hide ${entry?.label ?? id}` : `Show ${entry?.label ?? id}`;
+      const eye = row.querySelector('.lp-eye') as HTMLElement | null;
+      if (eye) eye.textContent = visible ? '\u25c9' : '\u25cb';
     }
   }
 
