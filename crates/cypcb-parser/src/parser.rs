@@ -578,7 +578,7 @@ impl CypcbParser {
         let net_node = get_child_by_field(node, "net")?;
 
         let pin = self.convert_pin_identifier(source, &pin_node);
-        let net = Identifier::new(node_text(source, &net_node), span_of(&net_node));
+        let net = net_name_of(source, &net_node);
 
         Some(NetAssignment {
             pin,
@@ -595,7 +595,7 @@ impl CypcbParser {
         errors: &mut Vec<ParseError>,
     ) -> Option<NetDef> {
         let name_node = get_child_by_field(node, "name")?;
-        let name = Identifier::new(node_text(source, &name_node), span_of(&name_node));
+        let name = net_name_of(source, &name_node);
 
         let mut constraints = None;
         let mut connections = Vec::new();
@@ -1084,7 +1084,7 @@ impl CypcbParser {
         errors: &mut Vec<ParseError>,
     ) -> Option<TraceDef> {
         let net_node = get_child_by_field(node, "net")?;
-        let net = Identifier::new(node_text(source, &net_node), span_of(&net_node));
+        let net = net_name_of(source, &net_node);
 
         let mut from: Option<PinRef> = None;
         let mut to: Option<PinRef> = None;
@@ -1288,12 +1288,12 @@ impl CypcbParser {
                 "net_constraint_block" => {
                     constraints = self.convert_net_constraints(source, &child, errors);
                 }
-                "identifier" => {
-                    let identifier = Identifier::new(node_text(source, &child), span_of(&child));
-                    // The first identifier is the class name, already taken.
-                    if identifier.span != name.span {
-                        members.push(identifier);
-                    }
+                // Members are `net_name` nodes and the class name is a plain
+                // identifier, so the two no longer need telling apart by span
+                // - this used to walk every identifier under the block and
+                // skip whichever one matched the name it had already taken.
+                "net_name" => {
+                    members.push(net_name_of(source, &child));
                 }
                 _ => {}
             }
@@ -1416,8 +1416,8 @@ impl CypcbParser {
         let negative = get_child_by_field(node, "negative")?;
         Some(DiffPairDef {
             name: Identifier::new(node_text(source, &name_node), span_of(&name_node)),
-            positive: Identifier::new(node_text(source, &positive), span_of(&positive)),
-            negative: Identifier::new(node_text(source, &negative), span_of(&negative)),
+            positive: net_name_of(source, &positive),
+            negative: net_name_of(source, &negative),
             span: span_of(node),
         })
     }
@@ -1789,6 +1789,21 @@ fn node_text<'a>(source: &'a str, node: &Node) -> &'a str {
 }
 
 /// Helper: get a child node by field name.
+/// A net's name as the model holds it, whichever way the design spelled it.
+///
+/// `net_name` wraps either an identifier or a string, so the text of the node
+/// itself carries the quotes when a design wrote `net "VBUS+"`. Stripping them
+/// here keeps every caller writing the same two lines it wrote before.
+fn net_name_of(source: &str, node: &Node) -> Identifier {
+    let text = node_text(source, node);
+    let unquoted = if text.starts_with('"') && text.ends_with('"') && text.len() >= 2 {
+        &text[1..text.len() - 1]
+    } else {
+        text
+    };
+    Identifier::new(unquoted, span_of(node))
+}
+
 fn get_child_by_field<'a>(node: &'a Node, name: &str) -> Option<Node<'a>> {
     node.child_by_field_name(name)
 }

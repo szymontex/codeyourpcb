@@ -101,6 +101,20 @@ pub(crate) fn pad_name_as_written(name: &str) -> String {
     }
 }
 
+/// A net name written so the readers get back what the model holds.
+///
+/// The same question a pad name asks, with one difference: a net is never a
+/// bare number, so an identifier is the only unquoted form. `VBUS+`, `3V3` and
+/// `D-` all come back quoted, which is what the grammar accepts and what
+/// `net_name` was added for.
+pub(crate) fn net_name_as_written(name: &str) -> String {
+    if is_writable_identifier(name) {
+        name.to_string()
+    } else {
+        format!("{:?}", name)
+    }
+}
+
 pub fn traces_as_dsl(world: &mut BoardWorld) -> String {
     // Collect all traces grouped by net name
     let trace_data: Vec<Trace> = {
@@ -146,28 +160,13 @@ pub fn traces_as_dsl(world: &mut BoardWorld) -> String {
     }
     all_nets.sort();
 
-    // Nets the language cannot name. Their copper is left out rather than
-    // written into a file the parser would reject - see
-    // `is_writable_identifier` for why the choice is that way round.
-    let unwritable: Vec<String> = all_nets
-        .iter()
-        .filter(|net| !is_writable_identifier(net))
-        .cloned()
-        .collect();
-    all_nets.retain(|net| is_writable_identifier(net));
+    // Every net is written. A name the identifier rule refuses is quoted
+    // rather than dropped: the language grew `net_name` for exactly this, so
+    // the copper on `VBUS+` no longer has to be left behind to keep the file
+    // readable. This used to filter those nets out and print a comment naming
+    // them, which was the honest answer while the grammar had no quoted form.
 
     let mut output = String::with_capacity(4096);
-
-    if !unwritable.is_empty() {
-        let _ = writeln!(
-            output,
-            "// {} net(s) carry copper that is not written here, because the language has\n\
-             // no way to name them: {}. A quoted form is what they need.",
-            unwritable.len(),
-            unwritable.join(", ")
-        );
-        let _ = writeln!(output);
-    }
 
     for net_name in &all_nets {
         let traces = net_traces.get(net_name);
@@ -180,7 +179,7 @@ pub fn traces_as_dsl(world: &mut BoardWorld) -> String {
         // For each trace on this net, emit a separate trace block
         if let Some(traces) = traces {
             for trace in traces {
-                let _ = writeln!(output, "trace {} {{", net_name);
+                let _ = writeln!(output, "trace {} {{", net_name_as_written(net_name));
 
                 // Layer
                 let layer_str = match trace.layer {
@@ -248,7 +247,7 @@ pub fn traces_as_dsl(world: &mut BoardWorld) -> String {
         // These get their own trace block
         if let Some(vias) = vias {
             for via in vias {
-                let _ = writeln!(output, "trace {} {{", net_name);
+                let _ = writeln!(output, "trace {} {{", net_name_as_written(net_name));
                 let _ = writeln!(
                     output,
                     "    via {}mm,{}mm drill {}mm{}",
@@ -645,30 +644,16 @@ pub fn board_as_dsl(world: &mut BoardWorld) -> String {
                 .push(format!("{}.{}", part.refdes, connection.pin));
         }
     }
-    let unnameable: Vec<String> = pins_by_net
-        .keys()
-        .filter(|net| !is_writable_identifier(net))
-        .cloned()
-        .collect();
-    if !unnameable.is_empty() {
-        let _ = writeln!(out);
-        let _ = writeln!(
-            out,
-            "// {} net(s) on the source board are not written, because the language has no\n\
-             // way to name them: {}. Their pins and copper are missing from this file.",
-            unnameable.len(),
-            unnameable.join(", ")
-        );
-    }
-
+    // The second of the two places that used to drop a net for want of a
+    // spelling. The trace writer was the other, and a fix to one alone left
+    // the file with `trace "VBUS+"` and no `net "VBUS+"` above it - which
+    // parses and then fails to sync with `MissingNet`, a worse outcome than
+    // either whole answer.
     for (net, mut pins) in pins_by_net {
-        if !is_writable_identifier(&net) {
-            continue;
-        }
         pins.sort();
         pins.dedup();
         let _ = writeln!(out);
-        let _ = writeln!(out, "net {net} {{");
+        let _ = writeln!(out, "net {} {{", net_name_as_written(&net));
         for pin in pins {
             let _ = writeln!(out, "    {pin}");
         }

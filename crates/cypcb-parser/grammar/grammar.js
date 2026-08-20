@@ -207,13 +207,22 @@ module.exports = grammar({
     net_assignment: $ => seq(
       field('pin', $.pin_identifier),
       '=',
-      field('net', $.identifier),
+      field('net', $.net_name),
     ),
 
     // net VCC { J1.1, R1.1 }
+    // Anywhere a net is named.
+    //
+    // A schematic names nets `VBUS+`, `3V3` and `D-`, none of which the
+    // identifier rule accepts, so a board carrying any of them could not be
+    // written down. Quoting is the way out and it has to be accepted at every
+    // site that names a net rather than only at the declaration - a net you
+    // can declare and cannot reference is not usable.
+    net_name: $ => choice($.identifier, $.string),
+
     net_definition: $ => seq(
       'net',
-      field('name', $.identifier),
+      field('name', $.net_name),
       optional($.net_constraint_block),
       '{',
       optional($.pin_ref_list),
@@ -228,7 +237,7 @@ module.exports = grammar({
       field('name', $.identifier),
       optional($.net_constraint_block),
       '{',
-      repeat(field('member', $.identifier)),
+      repeat(field('member', $.net_name)),
       '}',
     ),
 
@@ -241,8 +250,8 @@ module.exports = grammar({
       'diffpair',
       field('name', $.identifier),
       '{',
-      field('positive', $.identifier),
-      field('negative', $.identifier),
+      field('positive', $.net_name),
+      field('negative', $.net_name),
       '}',
     ),
 
@@ -472,7 +481,7 @@ module.exports = grammar({
     // trace NET_NAME { from PIN to PIN [via X, Y] [layer L] [width W] [locked] }
     trace_definition: $ => seq(
       'trace',
-      field('net', $.identifier),
+      field('net', $.net_name),
       '{',
       repeat($._trace_property),
       '}',

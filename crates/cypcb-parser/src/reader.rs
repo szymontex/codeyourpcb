@@ -634,7 +634,7 @@ impl<'a> Reader<'a> {
                         self.eat(&TokenKind::Dot);
                         let pin = self.pin_id();
                         let assigned = self.eat(&TokenKind::Equals);
-                        let net = self.identifier();
+                        let net = self.net_name();
                         match (pin, assigned, net) {
                             (Some(pin), true, Some(net)) => net_assignments.push(NetAssignment {
                                 pin,
@@ -668,9 +668,22 @@ impl<'a> Reader<'a> {
     }
 
     /// `net VCC [width 0.3mm] { R1.1  C1.1 }`.
+    /// A net's name, however the design chose to spell it.
+    ///
+    /// A bare identifier, or a quoted string for the names the identifier
+    /// rule refuses: `VBUS+`, `3V3`, `D-`. Accepted at every site that names a
+    /// net rather than only at the declaration, because a net you can declare
+    /// and cannot reference is not a net you can use.
+    fn net_name(&mut self) -> Option<Identifier> {
+        if let Some(literal) = self.string() {
+            return Some(Identifier::new(literal.value, literal.span));
+        }
+        self.identifier()
+    }
+
     fn net(&mut self, start: usize) -> Option<NetDef> {
         self.bump(); // `net`
-        let name = match self.identifier() {
+        let name = match self.net_name() {
             Some(name) => name,
             None => {
                 self.unexpected("a net name");
@@ -770,7 +783,7 @@ impl<'a> Reader<'a> {
     /// the geometric form with `path` and `via`.
     fn trace(&mut self, start: usize) -> Option<TraceDef> {
         self.bump(); // `trace`
-        let net = match self.identifier() {
+        let net = match self.net_name() {
             Some(net) => net,
             None => {
                 self.unexpected("a net name");
@@ -1192,11 +1205,11 @@ impl<'a> Reader<'a> {
             self.unexpected("`{` after the pair name");
             return None;
         }
-        let Some(positive) = self.identifier() else {
+        let Some(positive) = self.net_name() else {
             self.unexpected("the net carrying the positive half");
             return None;
         };
-        let Some(negative) = self.identifier() else {
+        let Some(negative) = self.net_name() else {
             self.unexpected("the net carrying the negative half");
             return None;
         };
@@ -1233,7 +1246,7 @@ impl<'a> Reader<'a> {
                 if self.eat(&TokenKind::Comma) {
                     continue;
                 }
-                match self.identifier() {
+                match self.net_name() {
                     Some(member) => members.push(member),
                     None => {
                         self.unexpected("a net name");

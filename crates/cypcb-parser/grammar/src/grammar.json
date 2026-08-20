@@ -630,8 +630,21 @@
           "name": "net",
           "content": {
             "type": "SYMBOL",
-            "name": "identifier"
+            "name": "net_name"
           }
+        }
+      ]
+    },
+    "net_name": {
+      "type": "CHOICE",
+      "members": [
+        {
+          "type": "SYMBOL",
+          "name": "identifier"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "string"
         }
       ]
     },
@@ -647,7 +660,7 @@
           "name": "name",
           "content": {
             "type": "SYMBOL",
-            "name": "identifier"
+            "name": "net_name"
           }
         },
         {
@@ -722,7 +735,7 @@
             "name": "member",
             "content": {
               "type": "SYMBOL",
-              "name": "identifier"
+              "name": "net_name"
             }
           }
         },
@@ -756,7 +769,7 @@
           "name": "positive",
           "content": {
             "type": "SYMBOL",
-            "name": "identifier"
+            "name": "net_name"
           }
         },
         {
@@ -764,7 +777,7 @@
           "name": "negative",
           "content": {
             "type": "SYMBOL",
-            "name": "identifier"
+            "name": "net_name"
           }
         },
         {
@@ -1711,7 +1724,7 @@
           "name": "net",
           "content": {
             "type": "SYMBOL",
-            "name": "identifier"
+            "name": "net_name"
           }
         },
         {

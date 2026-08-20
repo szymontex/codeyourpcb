@@ -235,30 +235,33 @@ fn a_trace_on_each_layer_keeps_its_layer() {
 }
 
 #[test]
-fn a_net_the_language_cannot_name_is_left_out_and_said_out_loud() {
-    // Written expecting the round trip to lose the copper. It does worse: the
-    // language has no way to name the net at all, and the writer used to emit
-    // it anyway - producing a file its own parser rejects, which on the
-    // viewer's save path is work the user cannot reopen. `net "VBUS+" { ... }` is
-    // refused by the parser with `expected "a net name"`, and a bare `VBUS+`
-    // is not an identifier either.
+fn a_net_the_language_could_not_name_now_round_trips_quoted() {
+    // This test used to be called `a_net_the_language_cannot_name_is_left_out_
+    // and_said_out_loud`, and it asserted that the writer dropped such a net's
+    // copper and printed a comment naming it. That was the honest answer while
+    // the grammar had no quoted form: emitting a bare `VBUS+` produced a file
+    // the parser rejects, which on the viewer's save path is work the user
+    // cannot reopen.
     //
-    // That matters beyond this test. `VBUS+`, `D+` and `D-` are on every USB
-    // design there is, and `from-kicad` interns whatever names a KiCad file
-    // carries - so a board imported with one of those nets becomes a world the
-    // writer will happily serialise into a file nothing can read back. The
-    // failure is silent at the point it is created and loud somewhere else.
+    // It carried a guard against its own premise - "the language accepts a
+    // quoted net name now; this test and the writer both need revisiting" -
+    // and that guard is what fired when `net_name` was added. `VBUS+`, `D+`
+    // and `D-` are on every USB design there is, so the copper on them being
+    // dropped was never a resting place.
     let quoted = base_board("\"VBUS+\"");
-    let refused = cypcb_parser::parse(&quoted);
+    let parsed = cypcb_parser::parse(&quoted);
     assert!(
-        !refused.errors.is_empty(),
-        "the language accepts a quoted net name now; this test and the writer \
-         both need revisiting"
+        parsed.errors.is_empty(),
+        "a quoted net name is legal now: {:?}",
+        parsed.errors
     );
 
-    // The half that is this file's subject: a world that holds such a net -
-    // which an import can produce - written out and read back.
-    let mut world = load(&base_board("SIG"));
+    // The board's own net is the awkward one, so it carries pins and gets a
+    // declaration. A trace on a net nothing connects to is a different gap -
+    // the writer emits the trace and no `net` block, and sync then reports
+    // `MissingNet` - and that one predates this change and is recorded rather
+    // than fixed here.
+    let mut world = load(&quoted);
     add_trace(
         &mut world,
         "VBUS+",
@@ -267,10 +270,6 @@ fn a_net_the_language_cannot_name_is_left_out_and_said_out_loud() {
     );
     assert_eq!(census(&mut world).get("VBUS+"), Some(&1), "the premise");
 
-    // The writer no longer emits a name it cannot read back. It leaves the
-    // net's copper out and says so in the file, which is the same choice made
-    // for copper pours: a stated gap beats a silent one, and beats a saved
-    // file the user cannot reopen.
     let text = board_as_dsl(&mut world);
     let written_back = cypcb_parser::parse(&text);
     assert!(
@@ -279,17 +278,17 @@ fn a_net_the_language_cannot_name_is_left_out_and_said_out_loud() {
         written_back.errors
     );
     assert!(
-        text.contains("VBUS+"),
-        "the file has to name what it could not write:\n{text}"
+        text.contains("trace \"VBUS+\""),
+        "a name the identifier rule refuses has to be quoted, not dropped:\n{text}"
     );
     assert!(
-        text.contains("no way to name"),
-        "the omission has to be stated, not silent:\n{text}"
+        !text.contains("no way to name"),
+        "nothing is being left out any more, so nothing should say it is:\n{text}"
     );
 
-    // And the copper really is absent rather than mangled onto another net.
+    // The copper arrives, on the net it left on.
     let mut back = load(&text);
-    assert_eq!(census(&mut back).get("VBUS+"), None, "\n{text}");
+    assert_eq!(census(&mut back).get("VBUS+"), Some(&1), "\n{text}");
 }
 
 #[test]
