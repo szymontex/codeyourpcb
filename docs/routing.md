@@ -910,34 +910,55 @@ A net's pad zone opens every cell near any of its own pins so a route can reach
 them, and the pin next door comes free with it: 109 of stm32_breakout's 118
 part-to-trace faults are routes taking that opening. The price shipped at 20 on
 one measured point, which is the mistake the via price made before it was
-swept. `pad_price_sweep::what_a_foreign_pad_should_cost`, after / shorts. **Measured
-before `multi_ic` and `qfp_fanout` were repaired**, so its `multi_ic` column
-reads 336 / 166 where that board now routes at 318 / 177 by default; the
-readings below are about the shape of the curve, and the shape is what
-survived. Re-run the sweep before quoting a number from it:
+swept. `pad_price_sweep::what_a_foreign_pad_should_cost`, after / shorts,
+re-measured 2026-08-21 on all six fixtures with each board graded on the fab
+table its own layer count asks for:
 
-| price | led_blink | stm32_breakout | multi_ic |
-|---|---|---|---|
-| 0 (default) | 2 / 0 | 239 / 136 | 336 / 166 |
-| 5 | 1 / 1 | 313 / 175 | 257 / 102 |
-| **20 (Pad Aware)** | 1 / 1 | 280 / 141 | **267 / 106** |
-| 50 | 1 / 1 | 318 / 178 | 466 / 249 |
-| 100 | 1 / 1 | 332 / 166 | 573 / 299 |
+| price | led_blink | stm32_breakout | multi_ic | shift_driver | plane_board | qfp_fanout |
+|---|---|---|---|---|---|---|
+| 0 (default) | 2 / 0 | 199 / 99 | 381 / 175 | 65 / 34 | 28 / 13 | 318 / 149 |
+| 5 | 1 / 1 | 211 / 111 | 366 / 174 | 59 / 36 | 22 / 14 | 451 / 269 |
+| **20 (Pad Aware)** | 1 / 1 | 262 / 152 | **348 / 129** | 59 / 36 | 22 / 14 | 442 / 276 |
+| 50 | 1 / 1 | 281 / 157 | 458 / 185 | 59 / 36 | 25 / 16 | 528 / 303 |
+| 100 | 1 / 1 | 330 / 174 | 563 / 224 | 59 / 36 | 27 / 17 | 525 / 287 |
 
-Three readings, and only one of them is a result:
+Bands from `cypcb_autoroute::noise_band`: `led_blink` 0 / 0, `stm32_breakout`
+59 / 61, `multi_ic` 34 / 49, `shift_driver` 17 / 8, `plane_board` 0 / 0,
+`qfp_fanout` 60 / 46.
 
-1. **multi_ic wants the price** - 336 to 257-267 after, 166 to about 105
-   shorts, far outside any noise band measured on this board.
-2. **stm32_breakout does not.** Every price makes it worse; it picks `Low-Via`
-   in best-of-seven and never sees this one.
-3. **led_blink trades the wrong way.** Two near misses become one short at
-   every price above zero, which is backwards under this project's own
-   ranking, and is why it keeps `High-Density`.
+**No board wants this price by a margin outside its own band, and that reverses
+what this section used to say.** The old table read `multi_ic` from 336 down to
+257 and called it "far outside any noise band measured on this board". Today the
+best row is 20, at 348 against 381 - a move of **33 against a band of 34**, and
+46 shorts against a band of 49. Both are inside. The reading that made this
+section is gone, and it did not survive the two things that changed under it:
+that board is graded on its own four-layer table now, and its noise band was
+re-measured from 65 / 56 to 34 / 49.
 
-The 5 that reads best on multi_ic is not a better value:
-`how_much_of_the_pad_price_is_noise` routes it at 4, 5, 6 and 7 and gets 288,
-257, 278, 276 after - **31 violations of spread, 21 of shorts**, which swallows
-the 10 that separates 5 from 20. The variant stays at 20.
+The board-by-board answers, each against its own band:
+
+1. **`multi_ic` is undecided, not a win.** 33 and 46 are inside 34 and 49.
+   `how_much_of_the_pad_price_is_noise` says it more directly: routing the same
+   board at 4, 5, 6 and 7 gives 323, 366, 360 and 367 after - **44 violations
+   of spread, 47 of shorts** on a knob moving by one unit, which is wider than
+   anything the price buys.
+2. **`stm32_breakout` does not want it.** 199 to 262 at 20 is 63, outside its
+   band of 59, and 50 and 100 are worse still. Only price 5 is inside.
+3. **`qfp_fanout` does not want it, by the largest margin here** - 318 to 451 at
+   price 5, and no row below 442.
+4. **`led_blink` and `plane_board` trade the wrong way.** Both have a band of
+   zero on both columns, so every movement on them is signal: `led_blink` turns
+   two near misses into one short, and `plane_board` gives up six violations to
+   gain one short. Under this project's own ranking - complete first, then
+   fewest shorts - that is backwards, and it is why `led_blink` keeps
+   `High-Density`.
+5. **`shift_driver` is noise.** Six fewer violations against a band of 17, two
+   more shorts against a band of 8.
+
+**The variant stays at 20 and this file no longer claims a measurement behind
+it.** `Pad Aware` is a point in the variant list, and the list is ranked per
+board by `variant_picks_per_board`; what is gone is the separate claim that 20
+is where the price *should* sit. Nothing here says it should sit anywhere.
 
 ### The pad opening, swept (`pad_zone_margin_cells`)
 

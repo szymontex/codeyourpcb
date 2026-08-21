@@ -39,7 +39,6 @@ const STILL_ON_A_FIXED_TABLE: &[&str] = &[
     "grid_vs_checker.rs",
     "heuristic_weight_sweep.rs",
     "is_the_router_repeatable.rs",
-    "pad_price_sweep.rs",
     "pad_zone_margin_sweep.rs",
     "ranking_rule_sweep.rs",
     "resolution_sweep.rs",

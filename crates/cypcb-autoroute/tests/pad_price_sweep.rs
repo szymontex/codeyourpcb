@@ -17,10 +17,10 @@ use std::collections::BTreeSet;
 use std::path::Path;
 
 use cypcb_autoroute::{route_board, AutorouteConfig};
-use cypcb_drc::{run_drc, DesignRules};
+use cypcb_drc::{preset_for_world, ruleset_for_world, run_drc, DesignRules};
 use cypcb_kicad::{parse_kicad_pcb, BENCHMARKS};
 use cypcb_router::apply_routes;
-use cypcb_rules::presets::{PresetRuleSet, RulesPreset};
+use cypcb_rules::presets::RulesPreset;
 
 fn fixture_path(filename: &str) -> std::path::PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -42,8 +42,6 @@ fn fingerprint(violation: &cypcb_drc::DrcViolation) -> String {
 #[test]
 #[ignore = "diagnostic: routes every fixture at several pad prices"]
 fn what_a_foreign_pad_should_cost() {
-    let drc_rules = DesignRules::jlcpcb_2layer();
-
     // Zero is the shipped default - the router without the price at all. 20 is
     // the value the flat version shipped at, and the rest bracket it.
     let prices = [0.0, 5.0, 20.0, 50.0, 100.0];
@@ -51,12 +49,24 @@ fn what_a_foreign_pad_should_cost() {
     for benchmark in BENCHMARKS {
         eprintln!();
         eprintln!("=== {} ===", benchmark.filename);
+        let mut table: Option<&'static str> = None;
 
         for price in prices {
             let parsed = parse_kicad_pcb(&fixture_path(benchmark.filename))
                 .unwrap_or_else(|e| panic!("Failed to parse {}: {:?}", benchmark.filename, e));
             let mut world = parsed.world;
             let library = parsed.library;
+
+            // The table this board would actually be graded against.
+            // `multi_ic` has four copper layers and a fixed two-layer table
+            // reports on a board nobody ships.
+            let preset = preset_for_world(RulesPreset::JlcpcbStandard2Layer, &world);
+            let drc_rules = DesignRules::from_constraints(&preset.constraints());
+            let rules = ruleset_for_world(preset, &world);
+            if table.is_none() {
+                eprintln!("  graded on {}", preset.name());
+                table = Some(preset.name());
+            }
 
             world.rebuild_spatial_index_from_library(&library);
             let baseline: BTreeSet<String> = run_drc(&mut world, &drc_rules)
@@ -69,9 +79,6 @@ fn what_a_foreign_pad_should_cost() {
                 foreign_pad_penalty: price,
                 ..AutorouteConfig::default()
             };
-            let rules =
-                PresetRuleSet::new(RulesPreset::from_name("jlcpcb").expect("the preset exists"));
-
             let started = std::time::Instant::now();
             let result = route_board(&mut world, &library, &rules, &config);
             let elapsed = started.elapsed();
@@ -125,9 +132,17 @@ fn what_a_foreign_pad_should_cost() {
 #[test]
 #[ignore = "diagnostic: routes multi_ic at pad prices a unit apart"]
 fn how_much_of_the_pad_price_is_noise() {
-    let drc_rules = DesignRules::jlcpcb_2layer();
     let prices = [4.0, 5.0, 6.0, 7.0];
     let filename = "multi_ic.kicad_pcb";
+    let mut table: Option<&'static str> = None;
+
+    // Every line this test prints is prefixed. Cargo runs the two tests in
+    // this file on separate threads, so without a prefix its rows land in the
+    // middle of the sweep's board headers and read as belonging to whichever
+    // board printed last - which is exactly how a reader ends up quoting a
+    // `multi_ic` number under `led_blink`.
+    eprintln!();
+    eprintln!("=== [pad price noise] {filename} at 4..7 ===");
 
     let mut afters: Vec<usize> = Vec::new();
     let mut shorts_seen: Vec<usize> = Vec::new();
@@ -138,14 +153,22 @@ fn how_much_of_the_pad_price_is_noise() {
         let mut world = parsed.world;
         let library = parsed.library;
 
+        // This test routes `multi_ic` alone, which is the four-layer board, so
+        // a fixed two-layer table was the whole reading.
+        let preset = preset_for_world(RulesPreset::JlcpcbStandard2Layer, &world);
+        let drc_rules = DesignRules::from_constraints(&preset.constraints());
+        let rules = ruleset_for_world(preset, &world);
+        if table.is_none() {
+            eprintln!("  [pad price noise] graded on {}", preset.name());
+            table = Some(preset.name());
+        }
+
         world.rebuild_spatial_index_from_library(&library);
 
         let config = AutorouteConfig {
             foreign_pad_penalty: price,
             ..AutorouteConfig::default()
         };
-        let rules =
-            PresetRuleSet::new(RulesPreset::from_name("jlcpcb").expect("the preset exists"));
         let result = route_board(&mut world, &library, &rules, &config);
 
         apply_routes(&mut world, &result);
@@ -161,13 +184,13 @@ fn how_much_of_the_pad_price_is_noise() {
         afters.push(after);
         shorts_seen.push(shorts);
 
-        eprintln!("  price {price:>5.1}: {after:>4} after, {shorts:>4} shorts");
+        eprintln!("  [pad price noise] price {price:>5.1}: {after:>4} after, {shorts:>4} shorts");
     }
 
     let spread = afters.iter().max().unwrap() - afters.iter().min().unwrap();
     let short_spread = shorts_seen.iter().max().unwrap() - shorts_seen.iter().min().unwrap();
     eprintln!(
-        "  spread across prices 4..7: {} violations, {} shorts",
+        "  [pad price noise] spread across prices 4..7: {} violations, {} shorts",
         spread, short_spread
     );
 }
