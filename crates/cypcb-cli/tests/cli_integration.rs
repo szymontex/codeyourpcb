@@ -430,10 +430,23 @@ fn export_resolves_imports_the_way_check_does() {
 
 #[test]
 fn export_says_a_library_is_a_library() {
-    // examples/v2-interfaces.cypcb declares interfaces and no board. The
-    // exporter used to answer `NoBoardSize`, which reads like a missing
-    // setting rather than a file nobody meant to manufacture.
-    let example = examples_dir().join("v2-interfaces.cypcb");
+    // The exporter used to answer `NoBoardSize` for a file with no board,
+    // which reads like a missing setting rather than a file nobody meant to
+    // manufacture.
+    //
+    // This used to point at examples/v2-interfaces.cypcb, which had no board
+    // at the time. That example has one now - it could not otherwise show the
+    // interface contracts being held, which is its subject - so this writes
+    // its own library instead. The message is what is under test, not which
+    // file happens to lack a board this month.
+    let dir = std::env::temp_dir().join("cypcb-export-library-src");
+    std::fs::create_dir_all(&dir).expect("a place to put the library");
+    let example = dir.join("blocks-only.cypcb");
+    std::fs::write(
+        &example,
+        "version 1\n\n         interface I2C {\n    pin SDA\n    pin SCL\n}\n",
+    )
+    .expect("the library is writable");
     let out = std::env::temp_dir().join("cypcb-export-library");
     let _ = std::fs::remove_dir_all(&out);
 
