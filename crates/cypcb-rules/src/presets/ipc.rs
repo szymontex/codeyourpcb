@@ -1,7 +1,11 @@
 //! IPC reliability class presets.
 //!
-//! Source: IPC-2221B "Generic Standard on Printed Board Design"
-//! Reference: <https://www.ipc.org/ipc-2221>
+//! IPC-2221B is "Generic Standard on Printed Board Design" and it is not a
+//! public document: <https://www.ipc.org/ipc-2221>. Nothing in this project
+//! has read it. What is public is the **class structure** - IPC defines three
+//! product classes and says what each is for - and that is what these presets
+//! borrow. The individual figures are this project's own table, chosen to sit
+//! where a reader of the standard would expect each class to sit.
 //!
 //! IPC defines three product classes with increasing reliability requirements:
 //! - **Class 1** — Consumer electronics (relaxed)
@@ -11,7 +15,16 @@
 //! These presets use generic 2-layer stackups. For specific layer counts,
 //! combine with a manufacturer preset or custom stackup.
 //!
-//! Values based on IPC-2221B Tables 6-1, 6-2, and IPC-2222 requirements.
+//! This file used to name two numbered tables of that standard, and each
+//! function used to carry a line pointing at the class's requirements as
+//! though they had been read off it. A numbered table is a citation, and a
+//! citation nobody here can produce is worse than none: it tells the next
+//! reader the figure was checked. `RulesPreset::provenance` has said the
+//! honest version to the **user** since it was written - "this tool's reading
+//! of IPC, which is not a public document" - and these comments contradicted
+//! it to the **developer**, which is the half nobody was reading.
+//!
+//! `the_ipc_tables_do_not_cite_a_clause_they_cannot_show` keeps it that way.
 
 use cypcb_core::Nm;
 
@@ -23,7 +36,8 @@ use crate::stackup::{LayerStackEntry, Stackup};
 /// Relaxed tolerances suitable for non-critical consumer products.
 /// Examples: toys, LED lighting, simple power supplies, hobby boards.
 ///
-/// Source: IPC-2221B Class 1 requirements
+/// Where this class sits: the loosest of the three. The figures are this
+/// project's, not a table anybody can open - see the note at the top.
 pub fn class1() -> DesignConstraints {
     DesignConstraints {
         // Basic geometry — relaxed
@@ -90,7 +104,8 @@ pub fn class1_stackup() -> Stackup {
 /// performance. Examples: industrial controls, telecommunications,
 /// commercial computing, automotive non-safety.
 ///
-/// Source: IPC-2221B Class 2 requirements
+/// Where this class sits: between the other two. The figures are this
+/// project's, not a table anybody can open - see the note at the top.
 pub fn class2() -> DesignConstraints {
     DesignConstraints {
         // Basic geometry — moderate
@@ -157,7 +172,8 @@ pub fn class2_stackup() -> Stackup {
 /// Examples: medical devices, military/aerospace, safety-critical automotive,
 /// life-support equipment, flight controls.
 ///
-/// Source: IPC-2221B Class 3 requirements
+/// Where this class sits: the tightest of the three. The figures are this
+/// project's, not a table anybody can open - see the note at the top.
 pub fn class3() -> DesignConstraints {
     DesignConstraints {
         // Basic geometry — tight
