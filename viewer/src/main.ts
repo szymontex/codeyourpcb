@@ -47,6 +47,7 @@ import { getSettings, getPreference, setPreference, subscribe as subscribeSettin
 import type { AppSettings, LayerColors, AutorouteParams } from './settings';
 import { formatDimension, parseUserDimension } from './units';
 import type { DisplayUnit } from './units';
+import { selectableTraceIds, selectionAfterClick, selectionAfterRect } from './selection';
 import { initProjectManager, showProjectManager, hideProjectManager, addRecentFile, updateProjectFiles } from './project-manager';
 import { initSearchPanel, hideSearchPanel, toggleSearchPanel, isSearchPanelVisible, buildComponentSnippet } from './jlcpcb-panel';
 import { fetch3DModel, fetchComponentFootprint } from './jlcpcb';
@@ -331,6 +332,16 @@ async function init(): Promise<void> {
   // every other PCB tool answers by colour.
   let colorByNet = getPreference('traceColorByNet');
   let selectedTraceId: number | null = null;
+  /**
+   * Every trace in the selection.
+   *
+   * `selectedTraceId` is the one a click landed on and stays the anchor for
+   * the label and the edit handles; this is the whole set. Before it, a
+   * rectangle over a board found every trace inside, kept the first, and
+   * printed "Selected 12 trace(s)" - the status line and the editor
+   * disagreed, and Delete could only ever remove one.
+   */
+  let selectedTraceIds = new Set<number>();
   let hoveredTraceId: number | null = null;
   let labelPosition: { x: number; y: number } | null = null;
   // Seeded from the stored posture rather than always Top: see `activeLayer`
@@ -2013,6 +2024,10 @@ async function init(): Promise<void> {
     },
     onTraceSelect: (traceId, screenX, screenY) => {
       selectedTraceId = traceId;
+      // A plain click replaces the selection. Keeping the set in step here is
+      // what stops a stale group surviving the next click and being deleted
+      // by somebody who thought they had one trace in hand.
+      selectedTraceIds = selectionAfterClick(selectedTraceIds, traceId, false);
       if (traceId != null) {
         // Blur Monaco editor so Delete/Backspace goes to trace handler, not editor
         if (document.activeElement && (document.activeElement as HTMLElement).closest?.('.monaco-editor')) {
@@ -2111,8 +2126,8 @@ async function init(): Promise<void> {
       syncEditorTraces();
     },
     onRectSelect: (traceIds: number[], componentRefdes: string[]) => {
-      // For now, select the first trace or component in the rectangle
       if (traceIds.length > 0) {
+        selectedTraceIds = selectionAfterRect(selectedTraceIds, traceIds, false);
         selectedTraceId = traceIds[0];
         interactionState.selectedTraceId = traceIds[0];
         const trace = snapshot?.traces?.find(t => t.id === traceIds[0]);
@@ -2678,6 +2693,7 @@ async function init(): Promise<void> {
       // `interactionState` is a `const` declared far below that function, so
       // assigning to it during init threw and the app never reached Ready.
       interactionState.layers = layers;
+      renderState.selectedTraceIds = selectedTraceIds;
       render(ctx, renderState);
       recordFrame(performance.now() - renderStartedAt);
 
@@ -3443,10 +3459,18 @@ async function init(): Promise<void> {
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement)?.closest('.monaco-editor')) {
         // Let the editor handle it
-      } else if (selectedTraceId != null) {
-        // Capture trace data for undo before removing
-        const trace = snapshot?.traces?.find(t => t.id === selectedTraceId);
-        if (trace) {
+      } else if (selectedTraceIds.size > 0 || selectedTraceId != null) {
+        // The whole selection, not just the trace a click landed on. This
+        // handled `selectedTraceId` alone, so a rectangle over twelve traces
+        // followed by Delete removed one of them and left eleven.
+        const doomed = selectedTraceIds.size > 0
+          ? [...selectedTraceIds]
+          : [selectedTraceId as number];
+
+        let removed = 0;
+        for (const id of doomed) {
+          const trace = snapshot?.traces?.find(t => t.id === id);
+          if (!trace) continue;
           const segments: number[] = [];
           for (const seg of trace.segments) {
             segments.push(
@@ -3456,19 +3480,24 @@ async function init(): Promise<void> {
           }
           const cmd = new RemoveTraceCommand(
             engine,
-            selectedTraceId,
+            id,
             { netName: trace.net_name, layer: trace.layer, width: trace.width, segments },
             refreshSnapshot,
           );
           undoStack.push(cmd);
+          removed += 1;
+        }
+        if (removed > 0) {
           markTracesUnsaved();
           syncEditorTraces();
         }
+
+        selectedTraceIds = new Set();
         selectedTraceId = null;
         interactionState.selectedTraceId = null;
         interactionState.onTraceSelect(null, 0, 0);
         labelPosition = null;
-        statusText.textContent = 'Trace deleted';
+        statusText.textContent = removed === 1 ? 'Trace deleted' : `${removed} traces deleted`;
         setTimeout(() => {
           statusText.textContent = usingWasm ? 'Ready (WASM)' : 'Ready (Mock)';
         }, 1500);
@@ -3477,6 +3506,26 @@ async function init(): Promise<void> {
         return;
       }
     }
+    // Ctrl+A takes every trace a person can act on. Layers decide it: what is
+    // hidden is not selected, because clearing the front of a board must not
+    // quietly take the back with it.
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'a' || e.key === 'A')) {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement)?.closest('.monaco-editor')) {
+        return;
+      }
+      const ids = selectableTraceIds(snapshot, layers);
+      selectedTraceIds = new Set(ids);
+      selectedTraceId = ids.length > 0 ? ids[0] : null;
+      interactionState.selectedTraceId = selectedTraceId;
+      labelPosition = null;
+      statusText.textContent =
+        ids.length > 0 ? `Selected ${ids.length} trace(s) - Delete removes them` : 'Nothing to select';
+      dirty = true;
+      e.preventDefault();
+      return;
+    }
+
     // Ctrl+Tab walks the saved views, which is the key KiCad puts them on.
     if (e.key === 'Tab' && (e.ctrlKey || e.metaKey) && !e.altKey) {
       applyPreset(nextLayerPreset(activePreset));

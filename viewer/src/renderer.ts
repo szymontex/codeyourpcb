@@ -29,6 +29,15 @@ export interface RenderState {
   showRatsnest: boolean;
   colorByNet: boolean;
   selectedTraceId: number | null;
+  /**
+   * Every trace in the selection, when there is more than one.
+   *
+   * `selectedTraceId` is the one a click landed on and stays the anchor for
+   * the label and the edit handles. This is what a rectangle or a select-all
+   * produced, and without it a person deleting twelve traces sees one
+   * highlighted and has to trust the status line.
+   */
+  selectedTraceIds?: ReadonlySet<number>;
   hoveredTraceId: number | null;
   /** Screen position for the net label tooltip (set by interaction layer) */
   labelPosition: { x: number; y: number } | null;
@@ -163,6 +172,7 @@ export function render(ctx: CanvasRenderingContext2D, state: RenderState): void 
     ctx.save();
     ctx.globalAlpha = traceAlpha;
     const { colorByNet, selectedTraceId, hoveredTraceId, highlightedNet } = state;
+    const selectedSet = state.selectedTraceIds;
     // Stack order, with the active layer painted again at the end.
     //
     // This ran bottom, then top, then the inner layers - so on a four-layer
@@ -176,7 +186,10 @@ export function render(ctx: CanvasRenderingContext2D, state: RenderState): void 
         if (trace.layer !== layer) continue;
         // Visibility is `getTraceColor`'s question and it answers it for every
         // layer, including the inner ones the old loop never asked about.
-        drawTrace(ctx, viewport, trace, layers, colorByNet, selectedTraceId, hoveredTraceId, highlightedNet);
+        // A trace in the set draws as selected whether or not it is the one
+        // the click landed on.
+        const marked = selectedSet?.has(trace.id) ? trace.id : selectedTraceId;
+        drawTrace(ctx, viewport, trace, layers, colorByNet, marked, hoveredTraceId, highlightedNet);
       }
     }
     ctx.restore();
