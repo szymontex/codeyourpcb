@@ -210,6 +210,25 @@ component R1 resistor "0402" {
 - `value`: Component value as string (e.g., "330", "100nF", "ATmega328P")
 - `at`: Position in board coordinates (x, y)
 - `rotate`: Rotation angle in degrees (optional, defaults to 0)
+- `spec`: Facts about the part that only its datasheet knows, as a block of
+  free names and quantities:
+
+  ```
+  component U1 ic "SOIC-8" {
+      at 10mm, 10mm
+      spec {
+          output 3.3V
+          quiescent 25mA
+      }
+  }
+  ```
+
+  The names are not fixed - that is the point. Everywhere else the component
+  block refuses a property it does not know, because a misspelt `at` is a
+  mistake; a datasheet fact is not something this tool can have a list of.
+  Nothing is derived from a spec. It is there so an `assert` has something to
+  read: `assert U1.output within 3.3V +/- 0.1V` is a question about the part,
+  and without a spec block nothing can answer it.
 - `lcsc`: The catalogue part to buy (optional)
 - `side`: Which face of the board the part is soldered to, `top` or `bottom`
   (optional, defaults to `top`)

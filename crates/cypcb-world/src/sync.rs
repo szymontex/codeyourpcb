@@ -974,6 +974,29 @@ fn sync_component(
             });
     }
 
+    // What the design said about the part itself. Kept as written: nothing
+    // derives anything from these, and a checker that reads one says which
+    // part stated it.
+    if !comp.spec.is_empty() {
+        let entries = comp
+            .spec
+            .iter()
+            .map(|entry| {
+                (
+                    entry.name.value.clone(),
+                    crate::components::TypedValue {
+                        value: entry.value.value,
+                        unit: entry.value.unit,
+                    },
+                )
+            })
+            .collect();
+        world
+            .ecs_mut()
+            .entity_mut(entity)
+            .insert(crate::components::PartSpec { entries });
+    }
+
     // Which face the part sits on. The design says with `side bottom`, and
     // where it says nothing the answer is derived from the footprint's copper -
     // a footprint whose pads are bottom-only is a bottom-side part. Storing the

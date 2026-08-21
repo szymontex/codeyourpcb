@@ -53,6 +53,21 @@ impl DrcRule for AssertionRule {
                 .map(|(refdes, value)| (refdes.as_str().to_string(), *value))
                 .collect()
         };
+        // What each part said about itself, keyed the way an assertion writes
+        // it: `U1.output`.
+        let specs: std::collections::HashMap<String, TypedValue> = {
+            let ecs = world.ecs_mut();
+            let mut query = ecs.query::<(&RefDes, &cypcb_world::components::PartSpec)>();
+            query
+                .iter(ecs)
+                .flat_map(|(refdes, spec)| {
+                    spec.entries
+                        .iter()
+                        .map(|(name, value)| (format!("{}.{name}", refdes.as_str()), *value))
+                        .collect::<Vec<_>>()
+                })
+                .collect()
+        };
         let at = cypcb_core::Point::new(cypcb_core::Nm(0), cypcb_core::Nm(0));
 
         let mut violations = Vec::new();
@@ -62,7 +77,7 @@ impl DrcRule for AssertionRule {
                 None => continue,
             };
 
-            match evaluate(&assertion.expression, board, &values, &nets) {
+            match evaluate(&assertion.expression, board, &values, &nets, &specs) {
                 Outcome::Held => {}
                 Outcome::Failed(message) | Outcome::Unevaluable(message) => {
                     let mut violation = DrcViolation::assertion(entity, at);
@@ -129,14 +144,15 @@ fn evaluate(
     board: Option<(cypcb_world::components::BoardSize, cypcb_world::LayerStack)>,
     values: &std::collections::HashMap<String, TypedValue>,
     nets: &std::collections::HashMap<String, cypcb_world::registry::NetConstraints>,
+    specs: &std::collections::HashMap<String, TypedValue>,
 ) -> Outcome {
     match expression {
         AssertExpression::Comparison {
             left, op, right, ..
         } => {
             let (left_value, right_value) = match (
-                resolve(left, board, values, nets),
-                resolve(right, board, values, nets),
+                resolve(left, board, values, nets, specs),
+                resolve(right, board, values, nets, specs),
             ) {
                 (Ok(l), Ok(r)) => (l, r),
                 (Err(why), _) | (_, Err(why)) => {
@@ -171,7 +187,7 @@ fn evaluate(
         // 5%` asks whether the value the design **states** falls in a band,
         // and the value and the band are both here.
         AssertExpression::Within { left, target, .. } => {
-            let left_value = match resolve(left, board, values, nets) {
+            let left_value = match resolve(left, board, values, nets, specs) {
                 Ok(value) => value,
                 Err(why) => return Outcome::Unevaluable(format!("assertion not checked: {why}")),
             };
@@ -252,6 +268,7 @@ fn resolve(
     board: Option<(cypcb_world::components::BoardSize, cypcb_world::LayerStack)>,
     values: &std::collections::HashMap<String, TypedValue>,
     nets: &std::collections::HashMap<String, cypcb_world::registry::NetConstraints>,
+    specs: &std::collections::HashMap<String, TypedValue>,
 ) -> Result<Value, String> {
     match operand {
         AssertOperand::Number { value, .. } => Ok(Value {
@@ -270,6 +287,16 @@ fn resolve(
             let path = parts.join(".");
 
             // `R1.value`, when the design wrote it as a quantity.
+            // What the part said about itself, before the fixed names below:
+            // a design that writes `spec { output 3.3V }` has answered
+            // `U1.output`, and nothing else in this function can.
+            if let Some(stated) = specs.get(&path) {
+                return Ok(Value {
+                    base: stated.base(),
+                    quantity: quantity_of(stated.unit),
+                });
+            }
+
             if let [refdes, "value"] = parts
                 .as_slice()
                 .iter()

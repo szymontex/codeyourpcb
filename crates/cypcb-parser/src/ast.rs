@@ -283,6 +283,17 @@ impl LayerType {
     }
 }
 
+/// One line of a component's `spec` block: `output 3.3V`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SpecEntry {
+    /// What the design called it.
+    pub name: Identifier,
+    /// The quantity it stated.
+    pub value: PhysicalValue,
+    /// Source span.
+    pub span: Span,
+}
+
 /// A component definition: `component R1 resistor "0402" { ... }`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ComponentDef {
@@ -310,6 +321,14 @@ pub struct ComponentDef {
     /// bill of materials.
     #[serde(default)]
     pub lcsc: Option<StringLit>,
+    /// Facts about the part that only its datasheet knows: `spec { output 3.3V }`.
+    ///
+    /// Free names on purpose. The component block itself refuses a property it
+    /// does not know, which is right for the ones the language defines; this
+    /// is where a design states something it has no keyword for, so an
+    /// `assert` has something to read.
+    #[serde(default)]
+    pub spec: Vec<SpecEntry>,
     /// Which face of the board the part is soldered to, when the design says.
     ///
     /// `side bottom` on a component. Absent means the top, except where the

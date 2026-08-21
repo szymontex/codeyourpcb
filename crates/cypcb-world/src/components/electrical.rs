@@ -416,3 +416,19 @@ impl TypedValue {
         self.unit.to_base_f64(self.value)
     }
 }
+
+/// Facts about a part that only its datasheet knows: `spec { output 3.3V }`.
+///
+/// Free names, on purpose. The component block refuses a property it does not
+/// know, which is right for the ones the language defines. This is where a
+/// design states something the language has no keyword for, so an `assert` has
+/// something to read - `assert U1.output within 3.3V +/- 0.1V` is a question
+/// about the part, and until now nothing could answer it.
+///
+/// Nothing derives anything from these. They are the design's own claims, kept
+/// as written, and a checker that reads one says which part said it.
+#[derive(Component, Debug, Clone, PartialEq, Default)]
+pub struct PartSpec {
+    /// What the design stated, by name, in the order a `BTreeMap` gives back.
+    pub entries: std::collections::BTreeMap<String, TypedValue>,
+}

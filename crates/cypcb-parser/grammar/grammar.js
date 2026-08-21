@@ -171,6 +171,25 @@ module.exports = grammar({
       $.lcsc_property,
       $.side_property,
       $.net_assignment,
+      $.spec_property,
+    ),
+
+    // spec { output 3.3V  quiescent 25mA }
+    //
+    // Facts about the part that only its datasheet knows. The component block
+    // itself stays strict - a misspelt property there is an error - and this
+    // is where a design says something the language has no keyword for, so an
+    // `assert` has something to read.
+    spec_property: $ => seq(
+      'spec',
+      '{',
+      repeat($.spec_entry),
+      '}',
+    ),
+
+    spec_entry: $ => seq(
+      field('name', $.identifier),
+      field('value', $.physical_value),
     ),
 
     // side bottom

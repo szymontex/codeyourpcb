@@ -609,6 +609,7 @@ impl<'a> Reader<'a> {
         let mut value = None;
         let mut typed_value = None;
         let mut lcsc = None;
+        let mut spec = Vec::new();
         let mut side = None;
         let mut position = None;
         let mut rotation = None;
@@ -618,6 +619,30 @@ impl<'a> Reader<'a> {
             while !self.done() && !self.eat(&TokenKind::RBrace) {
                 let property_start = self.here();
                 match self.peek_ident() {
+                    Some("spec") => {
+                        self.bump();
+                        if !self.eat(&TokenKind::LBrace) {
+                            self.unexpected("`{` after `spec`");
+                            continue;
+                        }
+                        while !self.done() && !self.eat(&TokenKind::RBrace) {
+                            let entry_start = self.here();
+                            let Some(name) = self.identifier() else {
+                                self.unexpected("a name like `output`");
+                                self.bump();
+                                continue;
+                            };
+                            let Some(value) = self.try_physical_value() else {
+                                self.unexpected("a quantity like `3.3V` after the name");
+                                continue;
+                            };
+                            spec.push(crate::ast::SpecEntry {
+                                name,
+                                value,
+                                span: Span::new(entry_start, self.behind()),
+                            });
+                        }
+                    }
                     Some("value") => {
                         self.bump();
                         match self.string() {
@@ -710,6 +735,7 @@ impl<'a> Reader<'a> {
         Some(ComponentDef {
             refdes,
             lcsc,
+            spec,
             side,
             kind,
             footprint,

@@ -45,7 +45,8 @@ pub use board::{
     StackupLayerKind,
 };
 pub use electrical::{
-    LcscPart, NetConnections, NetId, PadInstance, PinConnection, RefDes, TypedValue, Value,
+    LcscPart, NetConnections, NetId, PadInstance, PartSpec, PinConnection, RefDes, TypedValue,
+    Value,
 };
 pub use metadata::{ComponentKind, Name, SourceSpan};
 pub use physical::{FootprintRef, Layer, Pad, PadShape, Side};
