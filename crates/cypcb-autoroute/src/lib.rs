@@ -41,7 +41,7 @@ pub mod strategy;
 pub mod variant;
 pub mod via_optimizer;
 
-pub use noise_band::noise_band;
+pub use noise_band::{noise_band, stacked_hole_band};
 
 use cypcb_router::types::RoutingResult;
 use cypcb_rules::RoutingRuleSet;

@@ -44,9 +44,36 @@ pub fn noise_band(filename: &str) -> (i64, i64) {
     }
 }
 
+/// The measured noise band for one benchmark's stacked holes.
+///
+/// Holes the router leaves on top of each other, and the spread of that count
+/// across the same five via prices. `docs/routing.md` has a table pricing a
+/// stack penalty and read it against the *violation* band, which answers a
+/// different question: a knob that trades violations for stacking has to be
+/// read on both columns, and until 2026-08-21 only one of them had a band.
+///
+/// Measured 2026-08-21 by the same command as [`noise_band`], which prints it
+/// as `stacked-hole band: N (lo to hi across the five prices)`.
+///
+/// The two boards at zero really do route without stacking a hole at any of
+/// the five prices, so any movement on them is signal. `led_blink` is the
+/// board that sweep skips; it routes four vias and stacks none of them, which
+/// is an observation rather than a spread.
+pub fn stacked_hole_band(filename: &str) -> i64 {
+    match filename {
+        "led_blink.kicad_pcb" => 0,
+        "stm32_breakout.kicad_pcb" => 3,
+        "multi_ic.kicad_pcb" => 5,
+        "shift_driver.kicad_pcb" => 0,
+        "qfp_fanout.kicad_pcb" => 24,
+        "plane_board.kicad_pcb" => 0,
+        _ => 0,
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::noise_band;
+    use super::{noise_band, stacked_hole_band};
     use cypcb_kicad::BENCHMARKS;
 
     /// Every benchmark has a band, and none of them got it from the fallback.
@@ -99,6 +126,31 @@ mod tests {
             phantom.is_empty(),
             "these names are in KNOWN but `noise_band` has no arm for them, so \
              they get the fallback: {phantom:?}"
+        );
+    }
+
+    /// The same check for the stacking band, whose genuine zeros are a
+    /// different set of boards.
+    ///
+    /// Three of the six really do route without stacking a hole at any price,
+    /// so the two lists cannot be shared: a board that is a genuine zero here
+    /// is not one above, and reusing one list would excuse a missing arm.
+    #[test]
+    fn the_known_list_matches_the_stacking_arms() {
+        let genuinely_zero = [
+            "led_blink.kicad_pcb",
+            "plane_board.kicad_pcb",
+            "shift_driver.kicad_pcb",
+        ];
+        let phantom: Vec<&&str> = KNOWN
+            .iter()
+            .filter(|f| !genuinely_zero.contains(*f))
+            .filter(|f| stacked_hole_band(f) == 0)
+            .collect();
+        assert!(
+            phantom.is_empty(),
+            "these names are in KNOWN but `stacked_hole_band` has no arm for \
+             them, so they get the fallback: {phantom:?}"
         );
     }
 }

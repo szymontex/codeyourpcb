@@ -139,6 +139,7 @@ fn how_much_of_the_price_is_noise() {
 
         let mut introduced_counts = Vec::new();
         let mut short_counts = Vec::new();
+        let mut stacked_counts = Vec::new();
         for price in prices {
             let parsed = parse_kicad_pcb(&fixture_path(benchmark.filename))
                 .unwrap_or_else(|e| panic!("Failed to parse {}: {:?}", benchmark.filename, e));
@@ -183,23 +184,36 @@ fn how_much_of_the_price_is_noise() {
                 .filter(|v| v.kind == ViolationKind::Clearance)
                 .filter(|v| v.actual == Some(cypcb_core::Nm::ZERO))
                 .count();
+            // Holes the router put on top of each other. The stacked-hole
+            // price table in `docs/routing.md` is read against a band and
+            // there was none for this column: every band this project has is
+            // a spread of violations, and a conclusion about stacking cannot
+            // be drawn from one.
+            let stacked = introduced
+                .iter()
+                .filter(|v| v.kind == ViolationKind::HoleToHole)
+                .count();
 
             eprintln!(
-                "  price {:>4.2}: {:>4} introduced, {:>4} shorts, {:>4} segments, {:>3} vias",
+                "  price {:>4.2}: {:>4} introduced, {:>4} shorts, {:>3} stacked, {:>4} segments, {:>3} vias",
                 price,
                 introduced.len(),
                 shorts,
+                stacked,
                 result.route_count(),
                 result.via_count()
             );
             introduced_counts.push(introduced.len());
             short_counts.push(shorts);
+            stacked_counts.push(stacked);
         }
 
         let lo = introduced_counts.iter().copied().min().unwrap_or(0);
         let hi = introduced_counts.iter().copied().max().unwrap_or(0);
         let slo = short_counts.iter().copied().min().unwrap_or(0);
         let shi = short_counts.iter().copied().max().unwrap_or(0);
+        let klo = stacked_counts.iter().copied().min().unwrap_or(0);
+        let khi = stacked_counts.iter().copied().max().unwrap_or(0);
         eprintln!(
             "  spread across prices 0.22..0.28: {} to {}, {} violations wide",
             lo,
@@ -216,6 +230,12 @@ fn how_much_of_the_price_is_noise() {
             hi - lo,
             shi - slo,
             table.unwrap_or("no board")
+        );
+        eprintln!(
+            "  stacked-hole band: {} ({} to {} across the five prices)",
+            khi - klo,
+            klo,
+            khi
         );
     }
 }

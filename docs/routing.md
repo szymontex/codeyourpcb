@@ -685,19 +685,29 @@ the numbers this table carried before.
 | 20 | 208 / 2 | 394 / **3** | 389 / 31 |
 | 100 | 223 / 1 | 394 / **3** | 391 / 30 |
 
-Violations first, then stacked holes. Read against the bands from
-`cypcb_autoroute::noise_band` - 59, 34, 60 - **the answer is no longer one
-answer, and this file no longer claims it is.** `stm32_breakout` clears all four
-stacked holes at a price of 5 for 31 more violations, which is *inside* its band
-of 59. `multi_ic` drops 8 stacked holes to 3 at every nonzero price for 13 more
-violations, inside its band of 34. `qfp_fanout` is worse on both counts at every
-price and its 67 extra violations are *outside* its band of 60.
+Violations first, then stacked holes. Both columns now have a band:
+`cypcb_autoroute::noise_band` for the violations and
+`cypcb_autoroute::stacked_hole_band` for the holes, both measured as the spread
+across five via prices a hair apart. **The answer is one per board, not one.**
 
-**What is missing before that can be acted on is a band for the stacking column
-itself.** The violation band says a 13-violation move is noise; nothing has ever
-measured whether an 8-to-3 move in stacked holes is. Two of three boards
-improving on an unmeasured metric at a cost that is provably noise is a reason
-to measure it, not a reason to turn the knob.
+| board | violation band | stacking band | violations at price 5 | stacking at price 5 | verdict |
+|---|---|---|---|---|---|
+| `stm32_breakout` | 59 | 3 | +31, noise | 4 to **0**, outside | it pays |
+| `multi_ic` | 34 | 5 | +13, noise | 8 to 3, **at the band** | undecided |
+| `qfp_fanout` | 60 | 24 | +67, **outside** | 27 to 31, noise | it costs |
+
+`stm32_breakout` clears every stacked hole it has, and the 31 violations it
+gives back are well inside its own noise. `qfp_fanout` gets 67 violations worse,
+outside its band, and its stacking barely moves against a band of 24 - the
+widest here, and the reason nothing about that board's stacking can be concluded
+cheaply. `multi_ic` moves 5, which is exactly its band, so it is not evidence in
+either direction.
+
+**One board of three is not a default.** That is the shape this vector keeps
+arriving at - the same reason `Eager Pads` and `Eager Light` are variants rather
+than settings. The knob stays at 0.0 and stays measurable; what it is missing to
+become a variant is a board-picks mechanism for `AutorouteConfig` fields that
+the variant list does not already carry.
 
 **Kept at 0.0 rather than reverted**, unlike the fourth attempt. The difference
 is that this one demonstrably works: every nonzero price changes the boards, so
