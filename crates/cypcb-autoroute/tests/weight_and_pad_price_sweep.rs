@@ -17,10 +17,10 @@ use std::collections::BTreeSet;
 use std::path::Path;
 
 use cypcb_autoroute::{route_board, AutorouteConfig};
-use cypcb_drc::{run_drc, DesignRules};
+use cypcb_drc::{preset_for_world, ruleset_for_world, run_drc, DesignRules};
 use cypcb_kicad::{parse_kicad_pcb, BENCHMARKS};
 use cypcb_router::apply_routes;
-use cypcb_rules::presets::{PresetRuleSet, RulesPreset};
+use cypcb_rules::presets::RulesPreset;
 
 fn fixture_path(filename: &str) -> std::path::PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -52,8 +52,6 @@ struct Point {
 #[test]
 #[ignore = "diagnostic: routes every fixture at twelve knob combinations"]
 fn the_pad_price_and_the_heuristic_weight_together() {
-    let drc_rules = DesignRules::jlcpcb_2layer();
-
     // The weight that shipped as `PathFinder Eager`, the one that keeps A*
     // optimal, and one either side. The prices are the shipped default, the
     // one `PathFinder Pad Aware` uses, and the value it used to ship at.
@@ -63,6 +61,7 @@ fn the_pad_price_and_the_heuristic_weight_together() {
     for benchmark in BENCHMARKS {
         eprintln!();
         eprintln!("=== {} ===", benchmark.filename);
+        let mut table: Option<&'static str> = None;
         let mut points: Vec<Point> = Vec::new();
 
         for weight in weights {
@@ -70,6 +69,16 @@ fn the_pad_price_and_the_heuristic_weight_together() {
                 let parsed = parse_kicad_pcb(&fixture_path(benchmark.filename))
                     .unwrap_or_else(|e| panic!("Failed to parse {}: {:?}", benchmark.filename, e));
                 let mut world = parsed.world;
+                // The table this board would actually be graded against.
+                // `multi_ic` has four copper layers and a fixed two-layer
+                // table grades it as a board nobody ships.
+                let preset = preset_for_world(RulesPreset::JlcpcbStandard2Layer, &world);
+                let drc_rules = DesignRules::from_constraints(&preset.constraints());
+                let rules = ruleset_for_world(preset, &world);
+                if table.is_none() {
+                    eprintln!("  graded on {}", preset.name());
+                    table = Some(preset.name());
+                }
                 let library = parsed.library;
 
                 world.rebuild_spatial_index_from_library(&library);
@@ -84,10 +93,6 @@ fn the_pad_price_and_the_heuristic_weight_together() {
                     foreign_pad_penalty: price,
                     ..AutorouteConfig::default()
                 };
-                let rules = PresetRuleSet::new(
-                    RulesPreset::from_name("jlcpcb").expect("the preset exists"),
-                );
-
                 let started = std::time::Instant::now();
                 let result = route_board(&mut world, &library, &rules, &config);
                 let seconds = started.elapsed().as_secs_f64();

@@ -16,6 +16,11 @@
 //! cannot be converted at all without re-baselining every ratchet it holds. So
 //! the list below is the work that remains, and this test is what stops it
 //! growing: a file may leave the list, and no file may join it.
+//!
+//! The list is not a count in prose, which is the point - it is the count
+//! itself, and `cargo test -p cypcb-autoroute --test
+//! a_benchmark_is_graded_on_its_own_fab_table` reads it out of the source
+//! rather than out of a sentence somebody forgot to update.
 
 use std::fs;
 use std::path::Path;
@@ -31,23 +36,18 @@ use std::path::Path;
 /// in either direction.
 const STILL_ON_A_FIXED_TABLE: &[&str] = &[
     "benchmark_validation.rs",
-    "clearance_barrier_sweep.rs",
-    "convergence_sweep.rs",
     "drc_report.rs",
     "every_fixture_is_a_board_somebody_could_make.rs",
     "grid_vs_checker.rs",
     "heuristic_weight_sweep.rs",
     "is_the_router_repeatable.rs",
-    "pad_gate_sweep.rs",
     "pad_price_sweep.rs",
     "pad_zone_margin_sweep.rs",
     "ranking_rule_sweep.rs",
     "repair_report.rs",
     "resolution_sweep.rs",
     "routed_copper_reaches_the_files.rs",
-    "smoother_cost.rs",
     "strategy_comparison.rs",
-    "weight_and_pad_price_sweep.rs",
     "what_a_stacked_hole_should_cost.rs",
     "what_a_via_ring_should_cost.rs",
 ];

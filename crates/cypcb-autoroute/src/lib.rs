@@ -29,6 +29,7 @@ pub mod congestion;
 pub mod cost;
 pub mod debug_route;
 pub mod grid;
+pub mod noise_band;
 pub mod orchestrator;
 pub mod pathfinder;
 pub mod pathfinder_v2;
@@ -39,6 +40,8 @@ pub mod smoother;
 pub mod strategy;
 pub mod variant;
 pub mod via_optimizer;
+
+pub use noise_band::noise_band;
 
 use cypcb_router::types::RoutingResult;
 use cypcb_rules::RoutingRuleSet;

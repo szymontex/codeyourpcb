@@ -13,10 +13,11 @@ use std::collections::BTreeSet;
 use std::path::Path;
 
 use cypcb_autoroute::{route_board, AutorouteConfig};
-use cypcb_drc::{run_drc, DesignRules, ViolationKind};
+use cypcb_drc::{preset_for_world, ruleset_for_world, run_drc, DesignRules, ViolationKind};
 use cypcb_kicad::{parse_kicad_pcb, BENCHMARKS};
 use cypcb_router::apply_routes;
 use cypcb_rules::presets::{PresetRuleSet, RulesPreset};
+use cypcb_world::BoardWorld;
 
 fn fixture_path(filename: &str) -> std::path::PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -25,8 +26,19 @@ fn fixture_path(filename: &str) -> std::path::PathBuf {
         .join(filename)
 }
 
-fn test_rules() -> PresetRuleSet {
-    PresetRuleSet::new(RulesPreset::from_name("jlcpcb").unwrap())
+/// The fab table this board would actually be graded against, and the rule set
+/// the router gets for it.
+///
+/// `multi_ic` has four copper layers, so a fixed two-layer table grades it as
+/// a board nobody ships - `cypcb check` reads it against
+/// `jlcpcb_standard_4layer`.
+fn rules_for(world: &BoardWorld) -> (RulesPreset, PresetRuleSet, DesignRules) {
+    let preset = preset_for_world(RulesPreset::JlcpcbStandard2Layer, world);
+    (
+        preset,
+        ruleset_for_world(preset, world),
+        DesignRules::from_constraints(&preset.constraints()),
+    )
 }
 
 fn fingerprint(violation: &cypcb_drc::DrcViolation) -> String {
@@ -42,16 +54,20 @@ fn fingerprint(violation: &cypcb_drc::DrcViolation) -> String {
 #[test]
 #[ignore = "diagnostic: routes every fixture with and without the smoother"]
 fn what_the_smoother_costs() {
-    let drc_rules = DesignRules::jlcpcb_2layer();
-
     for benchmark in BENCHMARKS {
         eprintln!();
         eprintln!("=== {} ===", benchmark.filename);
+        let mut table: Option<&'static str> = None;
 
         for smoothing in [true, false] {
             let parsed = parse_kicad_pcb(&fixture_path(benchmark.filename))
                 .unwrap_or_else(|e| panic!("Failed to parse {}: {:?}", benchmark.filename, e));
             let mut world = parsed.world;
+            let (preset, rules, drc_rules) = rules_for(&world);
+            if table.is_none() {
+                eprintln!("  graded on {}", preset.name());
+                table = Some(preset.name());
+            }
             let library = parsed.library;
 
             world.rebuild_spatial_index_from_library(&library);
@@ -67,7 +83,7 @@ fn what_the_smoother_costs() {
             };
 
             let started = std::time::Instant::now();
-            let result = route_board(&mut world, &library, &test_rules(), &config);
+            let result = route_board(&mut world, &library, &rules, &config);
             let elapsed = started.elapsed();
 
             apply_routes(&mut world, &result);

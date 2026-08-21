@@ -22,6 +22,7 @@
 
 use std::path::Path;
 
+use cypcb_autoroute::noise_band;
 use cypcb_autoroute::variant::{default_variant_configs, generate_variants, VariantConfig};
 use cypcb_drc::{preset_for_world, ruleset_for_world, DesignRules};
 use cypcb_kicad::{parse_kicad_pcb, BENCHMARKS};
@@ -33,42 +34,6 @@ fn fixture_path(filename: &str) -> std::path::PathBuf {
         .join("../..")
         .join("tests/fixtures/benchmark")
         .join(filename)
-}
-
-/// Each board's measured noise band, violations and shorts.
-///
-/// The ranking and the band answer different questions and this file needs
-/// both. The ranking says which point the router would hand over; the band
-/// says whether the difference is the negotiation going differently. A
-/// neighbour the ranking prefers by less than the band is not an improvement,
-/// and a diagnostic that printed only the first would read as though it were.
-///
-/// Measured 2026-08-21 by `cargo test --release -p cypcb-autoroute --test
-/// via_price_sweep how_much_of_the_price_is_noise -- --ignored --nocapture`,
-/// which prints each pair on a line naming the table it used. `led_blink` is
-/// the one board that sweep skips, and it routes to one violation at every
-/// price, so its band is zero by observation rather than by measurement.
-///
-/// Two moved from the figures this table carried before. `multi_ic` went from
-/// 65 / 56 to 34 / 49 because it is the four-layer board and the old pair was
-/// measured on the two-layer table. `qfp_fanout` went from 57 / 44 to 60 / 46
-/// with nothing about its yardstick changed: `DesignRules::jlcpcb_2layer` is
-/// `from_constraints(&RulesPreset::JlcpcbStandard2Layer.constraints())`
-/// (`presets/jlcpcb.rs`), `from_name("jlcpcb")` returns that same variant
-/// (`presets/mod.rs`), and a board with no stated net constraints gets an
-/// empty override map. Its old pair had simply gone stale under a router that
-/// moved, which the other three two-layer boards reproducing to the digit is
-/// the evidence for.
-fn band(filename: &str) -> (i64, i64) {
-    match filename {
-        "led_blink.kicad_pcb" => (0, 0),
-        "stm32_breakout.kicad_pcb" => (59, 61),
-        "multi_ic.kicad_pcb" => (34, 49),
-        "shift_driver.kicad_pcb" => (17, 8),
-        "qfp_fanout.kicad_pcb" => (60, 46),
-        "plane_board.kicad_pcb" => (0, 0),
-        _ => (0, 0),
-    }
 }
 
 /// The fab table this board would actually be graded against.
@@ -259,7 +224,7 @@ fn does_a_one_knob_neighbour_beat_the_variant_the_board_picks() {
                 .iter()
                 .find(|r| r.name == winner_name)
                 .expect("the winner was handed in with its own neighbourhood");
-            let (bv, bs) = band(benchmark.filename);
+            let (bv, bs) = noise_band(benchmark.filename);
             let dv = best.score.drc_violations as i64 - here.score.drc_violations as i64;
             let ds = best.score.shorts as i64 - here.score.shorts as i64;
             let outside = dv.abs() > bv || ds.abs() > bs;

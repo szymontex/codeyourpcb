@@ -14,17 +14,11 @@
 //! the weighted-heuristic sweep looked like a 96-violation win on the total
 //! and was noise on five of six boards plus one real regression.
 //!
-//! Each board's band, from `via_price_sweep::how_much_of_the_price_is_noise`,
-//! printed beside its rows so the reading needs no second file:
-//!
-//! | board | band, violations / shorts |
-//! |---|---|
-//! | `led_blink` | 0 / 0 |
-//! | `stm32_breakout` | 59 / 61 |
-//! | `multi_ic` | 65 / 56 |
-//! | `shift_driver` | 17 / 8 |
-//! | `qfp_fanout` | 57 / 44 |
-//! | `plane_board` | 0 / 0 |
+//! Each board's band comes from `cypcb_autoroute::noise_band` and is printed
+//! beside that board's rows, so the reading needs no second file. It used to
+//! be copied into this file as a table, which is how it came to say 65 / 56
+//! for `multi_ic` after that pair had been re-measured as 34 / 49 - a band
+//! quoted in two places is a band that will disagree with itself.
 //!
 //! `led_blink` and `plane_board` have a band of zero, so any movement on
 //! either is signal in both directions. They are where step 2 showed its
@@ -33,11 +27,11 @@
 use std::collections::BTreeSet;
 use std::path::Path;
 
-use cypcb_autoroute::{route_board, AutorouteConfig};
-use cypcb_drc::{run_drc, DesignRules, ViolationKind};
+use cypcb_autoroute::{noise_band, route_board, AutorouteConfig};
+use cypcb_drc::{preset_for_world, ruleset_for_world, run_drc, DesignRules, ViolationKind};
 use cypcb_kicad::{parse_kicad_pcb, BENCHMARKS};
 use cypcb_router::apply_routes;
-use cypcb_rules::presets::{PresetRuleSet, RulesPreset};
+use cypcb_rules::presets::RulesPreset;
 
 fn fixture_path(filename: &str) -> std::path::PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -56,24 +50,9 @@ fn fingerprint(violation: &cypcb_drc::DrcViolation) -> String {
     )
 }
 
-/// Each board's measured noise band, violations and shorts.
-fn band(filename: &str) -> (i64, i64) {
-    match filename {
-        "led_blink.kicad_pcb" => (0, 0),
-        "stm32_breakout.kicad_pcb" => (59, 61),
-        "multi_ic.kicad_pcb" => (65, 56),
-        "shift_driver.kicad_pcb" => (17, 8),
-        "qfp_fanout.kicad_pcb" => (57, 44),
-        "plane_board.kicad_pcb" => (0, 0),
-        _ => (0, 0),
-    }
-}
-
 #[test]
 #[ignore = "diagnostic: routes every fixture at several barrier prices"]
 fn what_the_clearance_barrier_should_cost() {
-    let drc_rules = DesignRules::jlcpcb_2layer();
-
     // Zero is the shipped router, and is the row every other row is read
     // against. The rest span two orders of magnitude, because nothing in this
     // project has measured what a price on the checker's own metric is worth
@@ -81,13 +60,14 @@ fn what_the_clearance_barrier_should_cost() {
     let prices = [0.0, 1.0, 10.0, 100.0];
 
     for benchmark in BENCHMARKS {
-        let (band_violations, band_shorts) = band(benchmark.filename);
+        let (band_violations, band_shorts) = noise_band(benchmark.filename);
         eprintln!();
         eprintln!(
             "=== {} (band {} / {}) ===",
             benchmark.filename, band_violations, band_shorts
         );
 
+        let mut table: Option<&'static str> = None;
         let mut baseline_row: Option<(i64, i64)> = None;
 
         for price in prices {
@@ -95,6 +75,17 @@ fn what_the_clearance_barrier_should_cost() {
                 .unwrap_or_else(|e| panic!("Failed to parse {}: {:?}", benchmark.filename, e));
             let mut world = parsed.world;
             let library = parsed.library;
+
+            // The table this board would actually be graded against.
+            // `multi_ic` has four copper layers and a fixed two-layer table
+            // grades it as a board nobody ships.
+            let preset = preset_for_world(RulesPreset::JlcpcbStandard2Layer, &world);
+            let drc_rules = DesignRules::from_constraints(&preset.constraints());
+            let rules = ruleset_for_world(preset, &world);
+            if table.is_none() {
+                eprintln!("  graded on {}", preset.name());
+                table = Some(preset.name());
+            }
 
             world.rebuild_spatial_index_from_library(&library);
             let baseline: BTreeSet<String> = run_drc(&mut world, &drc_rules)
@@ -107,9 +98,6 @@ fn what_the_clearance_barrier_should_cost() {
                 clearance_barrier: price,
                 ..AutorouteConfig::default()
             };
-            let rules =
-                PresetRuleSet::new(RulesPreset::from_name("jlcpcb").expect("the preset exists"));
-
             let started = std::time::Instant::now();
             let result = route_board(&mut world, &library, &rules, &config);
             let elapsed = started.elapsed();
