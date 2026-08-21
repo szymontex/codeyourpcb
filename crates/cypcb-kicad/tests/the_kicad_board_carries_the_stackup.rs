@@ -238,3 +238,127 @@ fn a_paste_layer_takes_the_name_and_label_kicad_gives_it() {
         "\n{text}"
     );
 }
+
+/// Splice a hand-written stackup into a board this writer produced, so the
+/// rest of the file is known to parse and only the node under test is new.
+fn with_stackup_node(text: &str, body: &str) -> String {
+    let anchor = "  (paper \"A4\")\n";
+    assert!(text.contains(anchor), "no anchor to splice at:\n{text}");
+    text.replace(
+        anchor,
+        &format!("{anchor}  (setup\n    (stackup\n{body}    )\n  )\n"),
+    )
+}
+
+#[test]
+fn a_stackup_survives_the_trip_out_and_back() {
+    // The whole point of the pair. Before the importer read the node, a board
+    // this project exported and read back arrived with no stackup at all -
+    // the names and the laminate it had just been given were gone.
+    let named: &[Spec] = &[
+        (Silk, Some(0.01), None, None),
+        (Paste, Some(0.1), None, None),
+        (Mask, Some(0.02), None, None),
+        (Copper, Some(0.035), None, None),
+        (Prepreg, Some(0.2), None, Some("FR4")),
+        (Copper, Some(0.0175), None, None),
+        (Core, Some(1.095), None, Some("Isola 370HR")),
+        (Copper, Some(0.0175), None, None),
+        (Prepreg, Some(0.2), None, Some("FR4")),
+        (Copper, Some(0.035), None, None),
+        (Mask, Some(0.02), None, None),
+        (Paste, Some(0.1), None, None),
+        (Silk, Some(0.01), None, None),
+    ];
+    let mut world = board(named, 4);
+    let text = write_board(&mut world, "test");
+
+    let result = cypcb_kicad::pcb_parser::parse_kicad_pcb_str(&text).expect("the board parses");
+    let back = result.world.stackup().expect("a stackup came back");
+    assert!(
+        result.metadata.stackup_refusals.is_empty(),
+        "{:?}",
+        result.metadata.stackup_refusals
+    );
+
+    let kinds: Vec<&str> = back.layers.iter().map(|l| l.kind.as_str()).collect();
+    assert_eq!(
+        kinds,
+        vec![
+            "silk", "paste", "mask", "copper", "prepreg", "copper", "core", "copper", "prepreg",
+            "copper", "mask", "paste", "silk"
+        ],
+        "\n{text}"
+    );
+    assert_eq!(
+        back.total_thickness(),
+        world.stackup().unwrap().total_thickness()
+    );
+    assert_eq!(back.layers[6].material.as_deref(), Some("Isola 370HR"));
+    // The names are the ones the file carries, which is what a design that
+    // stated none is told its layers are called.
+    assert_eq!(back.layers[0].name.as_deref(), Some("F.SilkS"));
+    assert_eq!(back.layers[5].name.as_deref(), Some("In1.Cu"));
+    assert_eq!(back.layers[6].name.as_deref(), Some("dielectric 2"));
+}
+
+#[test]
+fn a_dielectric_written_as_two_atoms_is_read_as_one_name() {
+    // The file format's own grammar gives a layer's opening as `"NAME" |
+    // dielectric NUMBER`, so a file may carry the pair unquoted. Both spell
+    // the same layer.
+    let mut world = board(BARE, 4);
+    let plain = write_board(&mut world, "test");
+    let spliced = with_stackup_node(
+        &plain,
+        "      (layer \"F.Cu\" (type \"copper\") (thickness 0.035))\n\
+         \x20     (layer dielectric 1 (type \"core\") (thickness 1.53) (material \"FR4\"))\n\
+         \x20     (layer \"B.Cu\" (type \"copper\") (thickness 0.035))\n",
+    );
+
+    let result = cypcb_kicad::pcb_parser::parse_kicad_pcb_str(&spliced).expect("parses");
+    let back = result.world.stackup().expect("a stackup came back");
+    assert_eq!(back.layers.len(), 3, "\n{spliced}");
+    assert_eq!(back.layers[1].name.as_deref(), Some("dielectric 1"));
+    assert_eq!(back.layers[1].material.as_deref(), Some("FR4"));
+}
+
+#[test]
+fn a_layer_kind_with_no_word_here_is_reported_rather_than_skipped_in_silence() {
+    // The channel a KiCad release that adds a layer kind arrives through. A
+    // stackup two entries short is a different board, so the omission is
+    // stated the way a refused zone already is.
+    let mut world = board(BARE, 4);
+    let plain = write_board(&mut world, "test");
+    let spliced = with_stackup_node(
+        &plain,
+        "      (layer \"F.Cu\" (type \"copper\") (thickness 0.035))\n\
+         \x20     (layer \"F.Wonder\" (type \"wonderstuff\") (thickness 0.1))\n\
+         \x20     (layer \"B.Cu\" (type \"copper\") (thickness 0.035))\n",
+    );
+
+    let result = cypcb_kicad::pcb_parser::parse_kicad_pcb_str(&spliced).expect("parses");
+    let back = result.world.stackup().expect("the rest still comes back");
+    assert_eq!(back.layers.len(), 2, "\n{spliced}");
+    assert_eq!(
+        result.metadata.stackup_refusals,
+        vec!["`F.Wonder` is a `wonderstuff`, which has no word here".to_string()],
+        "the layer went missing without a word about it"
+    );
+}
+
+#[test]
+fn a_board_with_no_stackup_node_arrives_without_one() {
+    let mut world = board(BARE, 4);
+    let plain = write_board(&mut world, "test");
+    let stripped: String = plain
+        .lines()
+        .filter(|line| {
+            !line.contains("(layer \"") && !line.contains("(stackup") && *line != "  (setup"
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let result = cypcb_kicad::pcb_parser::parse_kicad_pcb_str(&stripped).expect("parses");
+    assert!(result.world.stackup().is_none(), "\n{stripped}");
+    assert!(result.metadata.stackup_refusals.is_empty());
+}

@@ -32,7 +32,7 @@ use cypcb_world::components::{BoardOutline, Layer, PadShape, Side};
 use cypcb_world::footprint::{Footprint, FootprintLibrary, PadDef};
 use cypcb_world::{
     BoardWorld, FootprintRef, NetConnections, NetId, PinConnection, Position, RefDes, Rotation,
-    Value,
+    Stackup, StackupLayer, StackupLayerKind, Value,
 };
 use symbolic_expressions::Sexp;
 use thiserror::Error;
@@ -101,6 +101,13 @@ pub struct KicadPcbMetadata {
     /// arrives without its ground plane and says nothing is a board whose
     /// Gerber ships without a ground plane.
     pub zone_refusals: Vec<String>,
+    /// Stackup entries whose `(type ...)` this importer has no word for.
+    ///
+    /// Same rule as `zone_refusals`, and the same reason: a stackup short two
+    /// entries is not a shorter description of the board, it is a different
+    /// one. This is also the channel a KiCad release that adds a layer kind
+    /// will arrive through.
+    pub stackup_refusals: Vec<String>,
 }
 
 /// Complete result of parsing a KiCad PCB file.
@@ -327,6 +334,11 @@ pub fn parse_kicad_pcb_str(content: &str) -> Result<KicadPcbParseResult, KicadPc
     // 3. Extract copper layer count
     let layer_count = extract_layer_count(elements);
 
+    // The stackup, which used to be dropped whole: a board exported by this
+    // project and read back lost the layer names and the laminate it had just
+    // been given.
+    let (stackup, stackup_refusals) = extract_stackup(elements);
+
     // 4. Extract board outline from Edge.Cuts
     let board_bounds = extract_board_outline(elements);
     // Board origin in KiCad coordinates — component positions are absolute,
@@ -349,6 +361,11 @@ pub fn parse_kicad_pcb_str(content: &str) -> Result<KicadPcbParseResult, KicadPc
         // bounding box, which is what everything that only needs "how big" uses.
         if let Some(outline) = extract_board_ring(elements).and_then(BoardOutline::new) {
             world.ecs_mut().entity_mut(board).insert(outline);
+        }
+
+        // After `set_board`, which is what a stackup attaches to.
+        if let Some(stackup) = stackup {
+            world.set_stackup(stackup);
         }
     }
 
@@ -441,6 +458,7 @@ pub fn parse_kicad_pcb_str(content: &str) -> Result<KicadPcbParseResult, KicadPc
     let metadata = KicadPcbMetadata {
         zone_count,
         zone_refusals,
+        stackup_refusals,
         version,
         component_count,
         net_count,
@@ -594,6 +612,113 @@ fn extract_version(elements: &[Sexp]) -> Result<i64, KicadPcbError> {
 // ---------------------------------------------------------------------------
 // Internal: layer count extraction
 // ---------------------------------------------------------------------------
+
+/// What a KiCad stackup entry's `(type ...)` means here.
+///
+/// Two spellings per surface finish, on purpose. `BuildDefaultStackupList`
+/// sets the human labels that every board pcbnew writes carries, and
+/// `BOARD_STACKUP_ITEM`'s constructor sets the bare keys underneath them - a
+/// file written by something other than pcbnew may well carry either.
+/// Accepting both on the way in cannot produce a wrong file; the writer beside
+/// this one stays exact.
+fn stackup_kind_of(type_name: &str) -> Option<StackupLayerKind> {
+    Some(match type_name {
+        "copper" => StackupLayerKind::Copper,
+        "core" => StackupLayerKind::Core,
+        "prepreg" => StackupLayerKind::Prepreg,
+        "Top Solder Mask" | "Bottom Solder Mask" | "soldermask" => StackupLayerKind::Mask,
+        "Top Silk Screen" | "Bottom Silk Screen" | "silkscreen" => StackupLayerKind::Silk,
+        "Top Solder Paste" | "Bottom Solder Paste" | "solderpaste" => StackupLayerKind::Paste,
+        _ => return None,
+    })
+}
+
+/// The stackup the file describes, and the entries this importer could not read.
+///
+/// `(setup (stackup (layer "F.Cu" (type "copper") (thickness 0.035)) ...))`.
+/// A dielectric may open either as a quoted `"dielectric 1"` or as the bare
+/// pair `dielectric 1`, so both are read and both come out as the same name.
+///
+/// A `(thickness ...)` may carry `locked` after the number, and everything the
+/// stackup states about itself that is not a layer - `copper_finish`,
+/// `edge_plating` and the rest - is passed over rather than guessed at.
+fn extract_stackup(elements: &[Sexp]) -> (Option<Stackup>, Vec<String>) {
+    let mut refusals = Vec::new();
+    let node = elements
+        .iter()
+        .filter(|elem| list_name(elem).as_deref() == Some("setup"))
+        .filter_map(|setup| setup.list().ok())
+        .flat_map(|list| list.iter())
+        .find(|elem| list_name(elem).as_deref() == Some("stackup"));
+    let Some(node) = node else {
+        return (None, refusals);
+    };
+    let Ok(entries) = node.list() else {
+        return (None, refusals);
+    };
+
+    let mut layers = Vec::new();
+    for entry in &entries[1..] {
+        if list_name(entry).as_deref() != Some("layer") {
+            continue;
+        }
+        let Ok(fields) = entry.list() else {
+            continue;
+        };
+        if fields.len() < 2 {
+            continue;
+        }
+
+        // `dielectric 1` is two atoms where every other name is one.
+        let (name, first_child) = match (get_string(&fields[1]), fields.get(2).and_then(get_i64)) {
+            (Some(word), Some(number)) if word == "dielectric" => {
+                (format!("dielectric {number}"), 3)
+            }
+            (Some(name), _) => (name, 2),
+            _ => continue,
+        };
+
+        let mut type_name = None;
+        let mut thickness = None;
+        let mut material = None;
+        for child in &fields[first_child..] {
+            let Ok(pair) = child.list() else {
+                continue;
+            };
+            if pair.len() < 2 {
+                continue;
+            }
+            match get_string(&pair[0]).as_deref() {
+                Some("type") => type_name = get_string(&pair[1]),
+                Some("thickness") => thickness = get_f64(&pair[1]).map(Nm::from_mm),
+                Some("material") => material = get_string(&pair[1]),
+                _ => {}
+            }
+        }
+
+        let Some(type_name) = type_name else {
+            refusals.push(format!("`{name}` states no type"));
+            continue;
+        };
+        let Some(kind) = stackup_kind_of(&type_name) else {
+            refusals.push(format!(
+                "`{name}` is a `{type_name}`, which has no word here"
+            ));
+            continue;
+        };
+        layers.push(StackupLayer {
+            kind,
+            name: Some(name),
+            thickness,
+            material,
+        });
+    }
+
+    if layers.is_empty() {
+        return (None, refusals);
+    }
+    (Some(Stackup { layers }), refusals)
+}
 
 fn extract_layer_count(elements: &[Sexp]) -> u8 {
     let mut copper_count = 0u8;
