@@ -18,9 +18,9 @@
 
 use cypcb_autoroute::{route_board, AutorouteConfig};
 use cypcb_drc::presets::DesignRules;
-use cypcb_drc::{run_drc, ViolationKind};
+use cypcb_drc::{preset_for_world, ruleset_for_world, run_drc, ViolationKind};
 use cypcb_kicad::parse_kicad_pcb;
-use cypcb_rules::presets::{PresetRuleSet, RulesPreset};
+use cypcb_rules::presets::RulesPreset;
 
 fn fixture(name: &str) -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -34,9 +34,6 @@ fn fixture(name: &str) -> std::path::PathBuf {
 #[test]
 #[ignore = "diagnostic: routes three fixtures at four prices"]
 fn what_a_via_ring_should_cost() {
-    let rules = PresetRuleSet::new(RulesPreset::from_name("jlcpcb").expect("a known preset"));
-    let drc_rules = DesignRules::jlcpcb_2layer();
-
     // Three boards until 2026-08-13, and the three it left out were the ones
     // that mattered. `is_the_best_variant_a_local_optimum` found `via_ring 1`
     // beating the shipped pick on `plane_board` - a board this sweep had never
@@ -48,10 +45,23 @@ fn what_a_via_ring_should_cost() {
         let name = benchmark.filename;
         eprintln!();
         eprintln!("=== {name} ===");
+        let mut table: Option<&'static str> = None;
 
         for penalty in [0.0, 1.0, 3.0, 8.0] {
             let parsed = parse_kicad_pcb(&fixture(name)).expect("the fixture parses");
             let mut world = parsed.world;
+
+            // The table this board would actually be graded against. On
+            // `multi_ic` the four-layer row is tighter, which moves the grid
+            // cell as well as the grading - 0.400mm against 0.508mm - so a
+            // fixed two-layer answer here is a different search.
+            let preset = preset_for_world(RulesPreset::JlcpcbStandard2Layer, &world);
+            let rules = ruleset_for_world(preset, &world);
+            let drc_rules = DesignRules::from_constraints(&preset.constraints());
+            if table.is_none() {
+                eprintln!("  graded on {}", preset.name());
+                table = Some(preset.name());
+            }
 
             let config = AutorouteConfig {
                 via_ring_penalty: penalty,

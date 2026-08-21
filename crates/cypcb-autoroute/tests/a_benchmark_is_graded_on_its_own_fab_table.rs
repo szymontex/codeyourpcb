@@ -38,7 +38,6 @@ const STILL_ON_A_FIXED_TABLE: &[&str] = &[
     "benchmark_validation.rs",
     "grid_vs_checker.rs",
     "ranking_rule_sweep.rs",
-    "what_a_via_ring_should_cost.rs",
 ];
 
 /// This file has to name the very things it forbids, so it cannot judge itself.

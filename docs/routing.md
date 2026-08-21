@@ -581,23 +581,41 @@ the output.
 every hole is and pays nothing to put another on top of it. That looks like the
 whole answer.
 
-Swept on the three fixtures that stack holes, violations and hole-to-hole
-counts measured together in one run
-(`what_a_via_ring_should_cost`, `--ignored`):
+Swept on all six fixtures, violations and hole-to-hole counts measured together
+in one run (`what_a_via_ring_should_cost`, `--ignored`), re-measured 2026-08-21
+with each board on the fab table its own layer count asks for:
 
-| ring price | stm32_breakout | multi_ic | qfp_fanout |
-|---|---|---|---|
-| 0 (default) | 180 / **4** | 291 / **7** | 309 / 27 |
-| 1 | 192 / 4 | 241 / 13 | 376 / **17** |
-| 3 | 243 / 4 | 281 / 8 | 367 / 21 |
-| 8 | **158** / **1** | 280 / 12 | 377 / 20 |
+| ring price | led_blink | stm32_breakout | multi_ic | shift_driver | plane_board | qfp_fanout |
+|---|---|---|---|---|---|---|
+| 0 (default) | 2 / 0 | 199 / 4 | 381 / 8 | 65 / 0 | **28 / 0** | **318 / 27** |
+| 1 | 2 / 0 | 210 / 4 | 390 / 12 | 64 / 0 | **28 / 0** | 385 / 17 |
+| 3 | 2 / 0 | 264 / 4 | 393 / **6** | 66 / 0 | 34 / 0 | 374 / 21 |
+| 8 | 2 / 0 | **171 / 1** | 396 / 11 | 66 / 0 | 34 / 0 | 384 / 20 |
 
-Violations first, then hole-to-hole. Read against each board's own band - 59,
-65 and 57 - **no price wins on both counts and none wins on either
-consistently.** `stm32_breakout` improves at 8 on both, and the 22 violations
-it gains are inside its band anyway. `multi_ic` gets *worse* at stacking at
-every price tried, 7 becoming 13, 8 and 12. `qfp_fanout` halves its stacked
-holes at 1 and pays 67 violations for it, which is outside its band.
+Violations first, then hole-to-hole. Both columns now have a band:
+`cypcb_autoroute::noise_band` gives 0, 59, 34, 17, 0, 60 for the violations and
+`stacked_hole_band` gives 0, 3, 5, 0, 0, 24 for the holes.
+
+**No price moves any board outside a band on either count, so the instrument is
+still dropped and the reasons are now cleaner than they were.**
+
+- `stm32_breakout` at 8 reads best on both columns - 171 against 199, one
+  stacked hole against four - and neither move clears its band: 28 against 59,
+  and 3 against 3, which is at it rather than past it.
+- `multi_ic` is worse on violations at every price, by 9, 12 and 15 against a
+  band of 34. Its stacking goes 12, 6, 11 against 8, all inside a band of 5.
+  This file used to record it as *worse at stacking at every price tried*; one
+  price improves it, and none of the four movements is distinguishable from
+  noise.
+- **`qfp_fanout` does not halve its stacked holes.** That reading is retracted:
+  27 to 17 is 10, and this board's stacking band is **24** - the widest
+  measured anywhere - so the whole movement is inside it. The 67 violations it
+  pays at price 1 are real, being outside its band of 60. It is a cost with no
+  measured benefit, not a trade.
+- `plane_board` has a band of zero on both columns and prefers 0 or 1, which tie
+  exactly at 28 / 0; 3 and 8 cost it 6 violations, and on that board 6 is
+  signal.
+- `shift_driver` and `led_blink` do not move at all outside noise.
 
 The reason is in what the penalty charges for. A ring price makes the search
 avoid *crossing* copper around an existing via. It says nothing about *placing*
