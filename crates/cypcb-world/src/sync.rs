@@ -1035,15 +1035,31 @@ fn sync_net(
         if !carried.is_empty() {
             // Merge rather than replace: whatever a net class already put here
             // stays for the fields this net says nothing about.
+            //
+            // Destructured on purpose. This list used to name three fields and
+            // a fourth was added upstream without it; the constraint reached
+            // the world through a `netclass` and was dropped on the way
+            // through a net's own block, silently, because nothing here had to
+            // mention it. Destructuring makes the next field a compile error
+            // instead of a missing feature.
+            let crate::registry::NetConstraints {
+                width,
+                clearance,
+                current_ma,
+                impedance_ohms_x100,
+            } = carried;
             let mut merged = world.net_constraints(net_id).unwrap_or_default();
-            if carried.width.is_some() {
-                merged.width = carried.width;
+            if width.is_some() {
+                merged.width = width;
             }
-            if carried.clearance.is_some() {
-                merged.clearance = carried.clearance;
+            if clearance.is_some() {
+                merged.clearance = clearance;
             }
-            if carried.current_ma.is_some() {
-                merged.current_ma = carried.current_ma;
+            if current_ma.is_some() {
+                merged.current_ma = current_ma;
+            }
+            if impedance_ohms_x100.is_some() {
+                merged.impedance_ohms_x100 = impedance_ohms_x100;
             }
             world.set_net_constraints(net_id, merged);
         }
@@ -3099,6 +3115,9 @@ fn cypcb_world_net_constraints(
         width: constraints.width.as_ref().map(|w| w.to_nm()),
         clearance: constraints.clearance.as_ref().map(|c| c.to_nm()),
         current_ma: constraints.current.as_ref().map(|c| c.to_milliamps()),
+        impedance_ohms_x100: constraints
+            .impedance_ohms
+            .map(|ohms| (ohms * 100.0).round() as u32),
     }
 }
 

@@ -443,6 +443,21 @@ something of its own overwrites **only the field it states**. So with the class
 above, `net VCC [width 0.8mm]` is 0.8mm wide and still carries the class's
 0.3mm clearance.
 
+A constraint block takes `width`, `clearance`, `current` and `impedance`:
+
+```
+netclass USB [width 0.2mm impedance 90ohm] {
+    USB_DP
+    USB_DM
+}
+```
+
+`impedance` is what the net should present to the signal on it, and the `ohm`
+is compulsory - a bare number after `impedance` reads like a width to anyone
+scanning the line. It is a target rather than a measurement: what a stack
+actually delivers depends on the dielectric under the trace, which is what the
+`dk` in `stackup` states and what `cypcb-calc` computes from it.
+
 ### Differential Pairs
 
 Two nets that carry one signal between them:

@@ -652,6 +652,7 @@ impl CypcbParser {
         let mut width = None;
         let mut clearance = None;
         let mut current = None;
+        let mut impedance_ohms = None;
 
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
@@ -679,6 +680,14 @@ impl CypcbParser {
                             current = self.convert_current_value(source, &val_node, errors);
                         }
                     }
+                    "impedance_constraint" => {
+                        if let Some(val_node) = get_child_by_field(&constraint, "value") {
+                            impedance_ohms = node_text(source, &val_node)
+                                .parse::<f64>()
+                                .ok()
+                                .filter(|value| value.is_finite() && *value > 0.0);
+                        }
+                    }
                     _ => {}
                 }
             }
@@ -688,6 +697,7 @@ impl CypcbParser {
             width,
             clearance,
             current,
+            impedance_ohms,
             span: span_of(node),
         })
     }

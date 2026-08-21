@@ -73,13 +73,22 @@ pub struct NetConstraints {
     pub clearance: Option<Nm>,
     /// Current the net has to carry, in milliamps.
     pub current_ma: Option<f64>,
+    /// Target characteristic impedance, in hundredths of an ohm.
+    ///
+    /// Hundredths to match `DesignConstraints::default_impedance_ohms_x100`
+    /// and what `cypcb-calc` returns, so the target and the computed figure
+    /// are the same kind of number on both sides of the comparison.
+    pub impedance_ohms_x100: Option<u32>,
 }
 
 impl NetConstraints {
     /// Whether the design said anything at all about this net.
     #[inline]
     pub fn is_empty(&self) -> bool {
-        self.width.is_none() && self.clearance.is_none() && self.current_ma.is_none()
+        self.width.is_none()
+            && self.clearance.is_none()
+            && self.current_ma.is_none()
+            && self.impedance_ohms_x100.is_none()
     }
 }
 

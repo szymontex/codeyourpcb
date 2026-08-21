@@ -915,6 +915,10 @@
         {
           "type": "SYMBOL",
           "name": "current_constraint"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "impedance_constraint"
         }
       ]
     },
@@ -1000,6 +1004,27 @@
         {
           "type": "STRING",
           "value": "A"
+        }
+      ]
+    },
+    "impedance_constraint": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "STRING",
+          "value": "impedance"
+        },
+        {
+          "type": "FIELD",
+          "name": "value",
+          "content": {
+            "type": "SYMBOL",
+            "name": "number"
+          }
+        },
+        {
+          "type": "STRING",
+          "value": "ohm"
         }
       ]
     },

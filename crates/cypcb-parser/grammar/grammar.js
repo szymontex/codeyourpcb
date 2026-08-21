@@ -275,6 +275,7 @@ module.exports = grammar({
       $.width_constraint,
       $.clearance_constraint,
       $.current_constraint,
+      $.impedance_constraint,
     ),
 
     // width 0.3mm
@@ -302,6 +303,16 @@ module.exports = grammar({
     ),
 
     current_unit: $ => choice('mA', 'A'),
+
+    // impedance 90ohm
+    //
+    // What the net is meant to present to the signal on it. The unit is
+    // written out because a bare number here would read as a width.
+    impedance_constraint: $ => seq(
+      'impedance',
+      field('value', $.number),
+      'ohm',
+    ),
 
     // Comma-separated list of pin references
     pin_ref_list: $ => seq(

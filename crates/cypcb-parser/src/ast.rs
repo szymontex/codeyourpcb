@@ -500,6 +500,11 @@ pub struct NetConstraints {
     pub clearance: Option<Dimension>,
     /// Current carrying requirement (for IPC-2221 calculation).
     pub current: Option<CurrentValue>,
+    /// Target characteristic impedance in ohms, as written: `impedance 90ohm`.
+    ///
+    /// A plain number rather than a value type, because there is one unit and
+    /// the grammar makes writing it compulsory.
+    pub impedance_ohms: Option<f64>,
     /// Span covering the constraint block.
     pub span: Span,
 }

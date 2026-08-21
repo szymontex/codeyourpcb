@@ -772,6 +772,29 @@ impl<'a> Reader<'a> {
         })
     }
 
+    /// `impedance 90ohm` inside a net constraint block.
+    ///
+    /// The unit is compulsory: a bare number after `impedance` would read like
+    /// a width to anyone scanning the line, and every other constraint in this
+    /// block carries one. Zero and below are refused rather than stored - a
+    /// net with no impedance is not a net, and a nonsense figure kept in the
+    /// model reads later as a target somebody chose.
+    fn impedance(&mut self) -> Option<f64> {
+        let Some((value, _)) = self.number() else {
+            self.unexpected("an impedance like `90ohm`");
+            return None;
+        };
+        if !self.eat_word("ohm") {
+            self.unexpected("`ohm` after the number, as in `90ohm`");
+            return None;
+        }
+        if !value.is_finite() || value <= 0.0 {
+            self.unexpected("a positive impedance");
+            return None;
+        }
+        Some(value)
+    }
+
     /// `[width 0.3mm, clearance 0.2mm, current 500mA]`, when there is one.
     fn net_constraints(&mut self) -> Option<NetConstraints> {
         let start = self.here();
@@ -782,6 +805,7 @@ impl<'a> Reader<'a> {
         let mut width = None;
         let mut clearance = None;
         let mut current = None;
+        let mut impedance_ohms = None;
 
         while !self.done() && !self.eat(&TokenKind::RBracket) {
             if self.eat(&TokenKind::Comma) {
@@ -822,7 +846,14 @@ impl<'a> Reader<'a> {
                         None => self.unexpected("a current like `500mA`"),
                     }
                 }
-                _ => self.unknown_property("net constraint", &["width", "clearance", "current"]),
+                Some("impedance") => {
+                    self.bump();
+                    impedance_ohms = self.impedance();
+                }
+                _ => self.unknown_property(
+                    "net constraint",
+                    &["width", "clearance", "current", "impedance"],
+                ),
             }
         }
 
@@ -830,6 +861,7 @@ impl<'a> Reader<'a> {
             width,
             clearance,
             current,
+            impedance_ohms,
             span: Span::new(start, self.behind()),
         })
     }
