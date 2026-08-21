@@ -63,25 +63,44 @@ Introduced is not after minus before: routing removes faults too. Every
 unrouted pin the fixture starts with is a violation that a successful route
 retires.
 
-Where the numbers come from (`drc_report`, re-run 2026-08-08 on all five
-fixtures):
+Where the numbers come from (`drc_report`, re-run 2026-08-21 on all six
+fixtures). Each board is graded against the fab table its own layer count asks
+for, which the harness prints per row, so `multi_ic` is read against
+`jlcpcb_standard_4layer` and the rest against `jlcpcb_standard_2layer`:
 
-| board | what it is | before | after (the ratchet) | introduced | shorts |
-|---|---|---|---|---|---|
-| `led_blink.kicad_pcb` | small, 21 routes | 12 | **2** | 2 | 0 |
-| `stm32_breakout.kicad_pcb` | dense, 296x256 cells at 0.254mm, 908 routes | 144 | **239** | 221 | 136 |
-| `multi_ic.kicad_pcb` | large, 197x158 cells at 0.508mm, 978 routes | 281 | **318** | 247 | 177 |
-| `shift_driver.kicad_pcb` | DIP and 0805, 2 layers, 700 routes | 159 | **81** | 72 | 33 |
-| `qfp_fanout.kicad_pcb` | LQFP-64 at 0.5mm on 2 layers, 1504 routes | 140 | **336** | 336 | 179 |
+| board | what it is | table | before | after (the ratchet) | introduced | shorts |
+|---|---|---|---|---|---|---|
+| `led_blink.kicad_pcb` | small, 21 routes | 2layer | 12 | **2** | 2 | 0 |
+| `stm32_breakout.kicad_pcb` | dense, 899 routes | 2layer | 156 | **199** | 175 | 95 |
+| `multi_ic.kicad_pcb` | large, four copper layers, 970 routes | 4layer | 263 | **381** | 336 | 169 |
+| `shift_driver.kicad_pcb` | DIP and 0805, 2 layers, 671 routes | 2layer | 156 | **65** | 65 | 34 |
+| `plane_board.kicad_pcb` | poured GND plane, 181 routes | 2layer | 46 | **28** | 28 | 13 |
+| `qfp_fanout.kicad_pcb` | LQFP-64 at 0.5mm on 2 layers, 1478 routes | 2layer | 140 | **318** | 318 | 149 |
 
-**`multi_ic` moved without the router changing.** The row above read 289 before
-and 336 after until this run; it is 270 and 317 now, with **introduced
-unchanged at 247**. The board is the same board and the routing is the same
-routing - what dropped is nineteen violations the fixture already had, and they
-went when the exporter started clipping the legend off solderable copper and
-the footprint courtyards started enclosing their own land pattern. `before` and
-`after` move whenever the *checker* changes; `introduced` is the column a
+**`multi_ic` moved because its yardstick did, and that is separated from
+everything else that moved rather than asserted.** The harness graded all six
+boards on the two-layer table until 2026-08-21; `multi_ic` has four copper
+layers, so `cypcb check` reads it against the four-layer row and the harness did
+not. Running the file both ways on the same commit isolates it: on the two-layer
+table `multi_ic` gives 945 routes, 263 before, 316 after, 262 introduced, 7
+hole-to-hole; on its own table, 970 / 263 / 381 / 336 / 8. **Every other board
+is identical between the two runs.** The four-layer row is tighter on trace and
+space and larger on the ring, so the router is solving a different problem and
+the checker is marking a stricter one. A rule getting stricter is not a router
+regression.
+
+**The other four rows had already drifted, and this run does not say why.** The
+table above was measured on 2026-08-08 and none of the rows except `led_blink`
+reproduced today even on the old two-layer table - `stm32_breakout` read
+144 / 239 / 221 and measures 156 / 199 / 175, `shift_driver` read 159 / 81 / 72
+and measures 156 / 65 / 65, `qfp_fanout` read 140 / 336 / 336 and measures
+140 / 318 / 318. Two weeks of checker and router changes sit between the two
+dates and this file does not attribute the difference to any of them. `before`
+and `after` move whenever the *checker* changes; `introduced` is the column a
 routing experiment should be read on, which is why this file says so above.
+
+`plane_board` was missing from this table entirely: it was added as a fixture
+on 2026-08-08 and the table was written the same day.
 
 ## The two settings that pay
 
@@ -103,6 +122,25 @@ cross them. It never crosses another net's centre line, which is a short.
 Measured when it landed: multi_ic 143 introduced violations to 64, copper
 unchanged; stm32_breakout reached `Complete` where the strict version left 3
 connections unrouted.
+
+Re-measured 2026-08-21 with `drc_report`, whose second row is the *off* case
+now - it had been set to `true`, which is the default, so the file ran the same
+config twice under two labels and printed two identical halves. On today's
+router the setting wins introduced violations on **all six** boards:
+
+| board | on (shipped) | off |
+|---|---|---|
+| `led_blink` | 2 / 0 shorts | 4 / 2 |
+| `stm32_breakout` | 175 / 95 | 265 / 181 |
+| `multi_ic` | 336 / 169 | 401 / 272 |
+| `shift_driver` | 65 / 34 | 95 / 27 |
+| `plane_board` | 28 / 13 | 45 / 17 |
+| `qfp_fanout` | 318 / 149 | 523 / 339 |
+
+`shift_driver` is the one board that trades: 30 fewer introduced violations for
+7 more shorts. Every other board is better on both columns, and the two that
+this file used to say it cost - the small board's two violations - are on the
+other side now.
 
 ### `via_foreign_copper_penalty` (default 0.25)
 
@@ -630,21 +668,36 @@ was never added beside `set_ring_penalty`, so the map's penalty stayed 0.0 and
 price of 100 produced byte-identical boards.
 
 Rebuilt with the check first, which is the whole lesson of the fourth attempt:
-routing `multi_ic` leaves **364 holes recorded for 119 vias** - about three
-layers each - so the map is populated before any price is swept against it.
+routing `multi_ic` left **364 holes recorded for 119 vias** when this was
+written - about three layers each - so the map is populated before any price is
+swept against it. The via count has moved since; the check is that the array is
+non-empty, and it is.
+
+Re-measured 2026-08-21, after the harness started grading each board on its own
+fab table. `multi_ic` is read against `jlcpcb_standard_4layer` here; the rows
+below are all measured that way, so they compare with each other and not with
+the numbers this table carried before.
 
 | stack price | stm32_breakout | multi_ic | qfp_fanout |
 |---|---|---|---|
-| 0 (shipped) | 180 / 4 | 291 / 7 | 309 / 27 |
-| 5 | 208 / **0** | 245 / 15 | 368 / 31 |
-| 20 | 184 / 2 | **237** / 9 | 366 / 31 |
-| 100 | 203 / 1 | 237 / 9 | 371 / 30 |
+| 0 (shipped) | 199 / 4 | 381 / 8 | 318 / 27 |
+| 5 | 230 / **0** | 394 / **3** | 385 / 31 |
+| 20 | 208 / 2 | 394 / **3** | 389 / 31 |
+| 100 | 223 / 1 | 394 / **3** | 391 / 30 |
 
-Violations first, then stacked holes. Read against the bands - 59, 65, 57 -
-**it does not pay.** `stm32_breakout` clears its stacking at a price of 5 and
-gives back 28 violations to do it; `multi_ic` gets 54 violations better at 20
-and *worse* at stacking, 7 becoming 9; `qfp_fanout` is worse on both counts at
-every price, and its 59 extra violations are at the edge of its band.
+Violations first, then stacked holes. Read against the bands from
+`cypcb_autoroute::noise_band` - 59, 34, 60 - **the answer is no longer one
+answer, and this file no longer claims it is.** `stm32_breakout` clears all four
+stacked holes at a price of 5 for 31 more violations, which is *inside* its band
+of 59. `multi_ic` drops 8 stacked holes to 3 at every nonzero price for 13 more
+violations, inside its band of 34. `qfp_fanout` is worse on both counts at every
+price and its 67 extra violations are *outside* its band of 60.
+
+**What is missing before that can be acted on is a band for the stacking column
+itself.** The violation band says a 13-violation move is noise; nothing has ever
+measured whether an 8-to-3 move in stacked holes is. Two of three boards
+improving on an unmeasured metric at a cost that is provably noise is a reason
+to measure it, not a reason to turn the knob.
 
 **Kept at 0.0 rather than reverted**, unlike the fourth attempt. The difference
 is that this one demonstrably works: every nonzero price changes the boards, so
@@ -673,11 +726,15 @@ counts the search reads as cost rather than as permission. Anyone starting
 that work should start there, and should know that every veto this router has
 been given has lost.
 
-Note on numbers: the 27 above and the 15 quoted in the table further up are the
-same board measured through different harnesses - this sweep checks against
-`DesignRules::jlcpcb_2layer` and `drc_report` against the `jlcpcb` preset rule
-set, which do not share a hole-to-hole minimum. Compare rows within one table,
-never across.
+Note on numbers: this file used to record that `qfp_fanout` read 27 stacked
+holes here and 15 in `drc_report`, and blamed two rule sets that do not share a
+hole-to-hole minimum. **That reason was wrong and the gap is gone.** Both
+harnesses ran their DRC through `DesignRules::jlcpcb_2layer`, which is one
+constructor, so they could not have differed for the stated reason; and both
+report 27 today. The 15 was a stale figure, not a second measurement. The advice
+under it still holds for a different reason: rows measured on different fab
+tables or on different dates do not compare, so compare within one table and
+check the date it carries.
 
 ### The over-block is load-bearing, which was not what anybody expected
 
@@ -1035,4 +1092,6 @@ cargo test --release -p cypcb-autoroute --test heuristic_weight_sweep -- --ignor
 cargo test --release -p cypcb-autoroute --test drc_report -- --ignored --nocapture
 ```
 
-Last verified: 2026-08-09.
+Last verified: 2026-08-21, for the two tables `drc_report` and
+`what_a_stacked_hole_should_cost` feed. The rest of this file carries its own
+dates; where a section does not, it has not been re-measured since 2026-08-09.

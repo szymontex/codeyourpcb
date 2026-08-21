@@ -36,7 +36,6 @@ use std::path::Path;
 /// in either direction.
 const STILL_ON_A_FIXED_TABLE: &[&str] = &[
     "benchmark_validation.rs",
-    "drc_report.rs",
     "grid_vs_checker.rs",
     "heuristic_weight_sweep.rs",
     "is_the_router_repeatable.rs",
