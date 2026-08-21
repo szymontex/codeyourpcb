@@ -1,0 +1,15 @@
+import { chromium } from 'playwright';
+const B=process.env.BAZA, C=process.env.CIACHO;
+const b=await chromium.launch();
+const c=await b.newContext({viewport:{width:1400,height:1000}});
+await c.addCookies([{name:'sb-api-auth-token',value:C,domain:new URL(B).hostname,path:'/'}]);
+const p=await c.newPage();
+await p.goto(`${B}/home`,{waitUntil:'domcontentloaded',timeout:60000});
+await p.waitForTimeout(2000);
+const t=await p.evaluate(()=>document.body.innerText);
+console.log('baner makiety :', t.includes('Tryb Mockup') ? 'WIDOCZNY - zle' : 'schowany - dobrze');
+console.log('zaslepka GCal :', t.includes('128 event') ? 'WIDOCZNA - zle' : 'schowana - dobrze');
+console.log('zaszyta data  :', t.includes('13 maja 2026') ? 'WIDOCZNA - zle' : 'schowana - dobrze');
+console.log('karty akcji   :', t.includes('Dostępność') && t.includes('Moje sesje') ? 'widoczne - dobrze' : 'BRAK - zle');
+console.log('dlugosc tresci:', t.length);
+await b.close();

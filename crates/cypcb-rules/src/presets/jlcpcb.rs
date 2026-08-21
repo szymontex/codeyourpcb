@@ -127,13 +127,14 @@ pub fn standard_4layer() -> DesignConstraints {
         min_edge_clearance: Nm::from_mm(0.25), // 0.25mm
 
         // Advanced geometry
-        min_via_annular_ring: Nm::from_mm(0.1),    // 4 mil
-        max_drill_aspect_ratio: 1000,              // 10:1 for thicker boards
-        min_solder_mask_bridge: Nm::from_mm(0.08), // 0.08mm
-        min_paste_clearance: Nm::from_mm(0.1),     // 4 mil
-        solder_mask_expansion: Nm::from_mm(0.05),  // 0.05mm
-        min_pad_size: Some(Nm::from_mm(0.45)),     // 0.45mm
-        min_slot_clearance: Nm::from_mm(0.25),     // 0.25mm
+        min_via_annular_ring: Nm::from_mm(0.1), // 4 mil
+        max_drill_aspect_ratio: 1000,           // 10:1 for thicker boards
+        // 0.10mm, published as the minimum pad spacing a mask dam needs.
+        min_solder_mask_bridge: Nm::from_mm(0.1),
+        min_paste_clearance: Nm::from_mm(0.1),    // 4 mil
+        solder_mask_expansion: Nm::from_mm(0.05), // 0.05mm
+        min_pad_size: Some(Nm::from_mm(0.45)),    // 0.45mm
+        min_slot_clearance: Nm::from_mm(0.25),    // 0.25mm
 
         // Signal integrity — impedance control available
         default_impedance_ohms_x100: 5000, // 50 Ω (controlled impedance available)
@@ -214,23 +215,27 @@ pub fn standard_4layer_stackup() -> Stackup {
 pub fn advanced_2layer() -> DesignConstraints {
     DesignConstraints {
         // Basic geometry — tightest 2-layer capabilities
-        min_clearance: Nm::from_mm(0.09),   // 3.5 mil
-        min_trace_width: Nm::from_mm(0.09), // 3.5 mil
-        min_drill_size: Nm::from_mm(0.15),  // 0.15mm
-        min_via_drill: Nm::from_mm(0.15),   // 0.15mm micro via
+        // 0.10mm, published. The page gives 3.5mil for **multilayer** at 1oz
+        // and 4mil for one and two layers; this table carried the multilayer
+        // figure on a two-layer board, which passes a trace JLCPCB does not
+        // make at this layer count.
+        min_clearance: Nm::from_mm(0.1),
+        min_trace_width: Nm::from_mm(0.1),
+        min_drill_size: Nm::from_mm(0.15), // 0.15mm
+        min_via_drill: Nm::from_mm(0.15),  // 0.15mm micro via
         // Same page, same 0.20mm: there is no published process tier under it.
         min_annular_ring: Nm::from_mm(0.2),   // 0.20mm, published
-        min_silk_width: Nm::from_mm(0.1),     // 0.1mm
+        min_silk_width: Nm::from_mm(0.15),    // 0.15mm, published
         min_edge_clearance: Nm::from_mm(0.2), // 0.2mm
 
         // Advanced geometry
-        min_via_annular_ring: Nm::from_mm(0.1),     // 4 mil
-        max_drill_aspect_ratio: 1000,               // 10:1
-        min_solder_mask_bridge: Nm::from_mm(0.075), // 0.075mm (3 mil)
-        min_paste_clearance: Nm::from_mm(0.09),     // 3.5 mil
-        solder_mask_expansion: Nm::from_mm(0.04),   // 0.04mm
-        min_pad_size: Some(Nm::from_mm(0.35)),      // 0.35mm
-        min_slot_clearance: Nm::from_mm(0.2),       // 0.2mm
+        min_via_annular_ring: Nm::from_mm(0.1),   // 4 mil
+        max_drill_aspect_ratio: 1000,             // 10:1
+        min_solder_mask_bridge: Nm::from_mm(0.1), // 0.10mm, published
+        min_paste_clearance: Nm::from_mm(0.09),   // 3.5 mil
+        solder_mask_expansion: Nm::from_mm(0.04), // 0.04mm
+        min_pad_size: Some(Nm::from_mm(0.35)),    // 0.35mm
+        min_slot_clearance: Nm::from_mm(0.2),     // 0.2mm
 
         // Signal integrity — controlled impedance standard
         default_impedance_ohms_x100: 5000,       // 50 Ω controlled
@@ -309,17 +314,17 @@ pub fn advanced_4layer() -> DesignConstraints {
         min_via_drill: Nm::from_mm(0.15),   // 0.15mm
         // Same page, same 0.20mm: there is no published process tier under it.
         min_annular_ring: Nm::from_mm(0.2),   // 0.20mm, published
-        min_silk_width: Nm::from_mm(0.1),     // 0.1mm
+        min_silk_width: Nm::from_mm(0.15),    // 0.15mm, published
         min_edge_clearance: Nm::from_mm(0.2), // 0.2mm
 
         // Advanced geometry
-        min_via_annular_ring: Nm::from_mm(0.1),     // 4 mil
-        max_drill_aspect_ratio: 1200,               // 12:1
-        min_solder_mask_bridge: Nm::from_mm(0.075), // 0.075mm
-        min_paste_clearance: Nm::from_mm(0.09),     // 3.5 mil
-        solder_mask_expansion: Nm::from_mm(0.04),   // 0.04mm
-        min_pad_size: Some(Nm::from_mm(0.35)),      // 0.35mm
-        min_slot_clearance: Nm::from_mm(0.2),       // 0.2mm
+        min_via_annular_ring: Nm::from_mm(0.1),   // 4 mil
+        max_drill_aspect_ratio: 1200,             // 12:1
+        min_solder_mask_bridge: Nm::from_mm(0.1), // 0.10mm, published
+        min_paste_clearance: Nm::from_mm(0.09),   // 3.5 mil
+        solder_mask_expansion: Nm::from_mm(0.04), // 0.04mm
+        min_pad_size: Some(Nm::from_mm(0.35)),    // 0.35mm
+        min_slot_clearance: Nm::from_mm(0.2),     // 0.2mm
 
         // Signal integrity
         default_impedance_ohms_x100: 5000,
