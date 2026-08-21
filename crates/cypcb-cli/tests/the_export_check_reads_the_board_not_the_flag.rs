@@ -38,7 +38,7 @@ fn violations_reported(case: &str, fab_line: &str, flag: &str) -> usize {
     std::fs::write(&board, design(fab_line)).expect("the board is written");
 
     let output = Command::new(env!("CARGO_BIN_EXE_cypcb"))
-        .args(["export", "--preset", flag, "-o"])
+        .args(["export", "--house", flag, "-o"])
         .arg(dir.join("out"))
         .arg(&board)
         .output()

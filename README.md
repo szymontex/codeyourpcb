@@ -200,7 +200,7 @@ cargo run -p cypcb-cli -- from-kicad board.kicad_pcb          # a KiCad board as
 cargo run -p cypcb-cli -- watch examples/blink.cypcb          # check again on every save
 ```
 
-`check`, `route`, `score` and `export` all take `--preset`, and an unknown
+`check`, `route` and `score` all take `--preset`, and an unknown
 name prints the list. They use the same rules and agree on the same board: a
 routed file that `check --preset pcbway` calls 27 violations is 27 to
 `score --preset pcbway` too.
@@ -219,7 +219,7 @@ with `jlcpcb`, `oshpark`, `pcbway` and `ipc1`..`ipc3` as short forms that name
 what they resolved to. `export` takes a **file convention** preset - what a
 house wants the Gerbers called and in what coordinate format - and only
 `jlcpcb` and `pcbway` have been written down. So a board can be checked
-against OSHPark and not yet exported for it; `cypcb export --preset oshpark`
+against OSHPark and not yet exported for it; `cypcb export --house oshpark`
 says exactly that.
 
 ### IDE workflow

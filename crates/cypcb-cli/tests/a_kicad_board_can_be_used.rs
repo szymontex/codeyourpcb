@@ -112,7 +112,7 @@ fn a_kicad_board_exports_to_fabrication_files() {
         .arg(fixture("plane_board.kicad_pcb"))
         .arg("-o")
         .arg(&out_dir)
-        .arg("--preset")
+        .arg("--house")
         .arg("jlcpcb")
         .output()
         .expect("the binary runs");

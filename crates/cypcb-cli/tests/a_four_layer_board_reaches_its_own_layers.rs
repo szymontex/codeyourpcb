@@ -62,7 +62,7 @@ fn routed_and_exported(who: &str) -> PathBuf {
         .arg(&routed)
         .arg("-o")
         .arg(&dir)
-        .arg("--preset")
+        .arg("--house")
         .arg("jlcpcb")
         .output()
         .expect("the binary runs");

@@ -221,29 +221,29 @@ fn a_drc_violation_names_the_line_of_the_part_it_is_about() {
 }
 
 #[test]
-fn a_preset_export_cannot_use_is_refused_with_the_reason() {
-    // `--preset` means two things. `check` takes design rules - what a house
-    // can etch - and knows eight names; `export` takes file conventions - what
-    // a house wants the Gerbers called - and knows two. A reader who checks a
-    // board against oshpark and then cannot export for it deserves the reason,
-    // not just a no.
+fn a_house_export_cannot_cut_for_is_refused_with_the_reason() {
+    // These were one flag spelled `--preset` on both commands. `check` takes
+    // design rules - what a house can etch - and knows ten names; `export`
+    // takes file conventions - what a house wants the Gerbers called - and
+    // knows two. A reader who checks a board against oshpark and then cannot
+    // export for it deserves the reason, not just a no.
     let dir = std::env::temp_dir().join("cypcb-error-rendering");
     std::fs::create_dir_all(&dir).expect("a place to put the board");
     let path = dir.join("preset-gap.cypcb");
     std::fs::write(&path, A_PART).expect("the board is writable");
 
     let output = Command::new(cypcb_binary())
-        .args(["export", "--preset", "oshpark", "-o"])
+        .args(["export", "--house", "oshpark", "-o"])
         .arg(dir.join("out"))
         .arg(&path)
         .output()
         .expect("the CLI runs");
 
     let report = String::from_utf8_lossy(&output.stderr);
-    assert!(!output.status.success(), "an unusable preset has to fail");
+    assert!(!output.status.success(), "an unusable house has to fail");
     assert!(
-        report.contains("not an export preset"),
-        "the refusal has to name what kind of preset this is; got:\n{report}"
+        report.contains("not a house this command can cut files for"),
+        "the refusal has to say which of the two lists this is; got:\n{report}"
     );
     assert!(
         report.contains("jlcpcb") && report.contains("pcbway"),
@@ -258,7 +258,7 @@ fn a_preset_export_cannot_use_is_refused_with_the_reason() {
     // the command prints once it starts.
     assert!(
         !report.contains("Exporting"),
-        "a preset it cannot use should be caught before the build; got:\n{report}"
+        "a house it cannot cut for should be caught before the build; got:\n{report}"
     );
 }
 
@@ -272,4 +272,53 @@ fn a_short_preset_name_says_which_rules_it_resolved_to() {
         report.contains("oshpark_2layer"),
         "the output has to name the rules it used; got:\n{report}"
     );
+}
+
+#[test]
+fn one_flag_name_does_not_answer_two_questions() {
+    // `one_word_one_meaning.rs` exists in the parser crate because `layer top`
+    // and `layer Top` meant different things in two blocks. This is the same
+    // fault one level up: `--preset` named a design-rule table on four
+    // subcommands and a file convention on a fifth, in one binary. The guard
+    // is that the two spellings stay apart.
+    // Only the option lines count. `export --help` explains the difference in
+    // prose and names the other flag while doing it, which is the point of the
+    // prose rather than a violation of the rule.
+    fn offers(help: &str, flag: &str) -> bool {
+        help.lines().any(|line| line.trim_start().starts_with(flag))
+    }
+
+    let export_help = Command::new(cypcb_binary())
+        .args(["export", "--help"])
+        .output()
+        .expect("the CLI runs");
+    let export_help = String::from_utf8_lossy(&export_help.stdout);
+    assert!(
+        offers(&export_help, "--house"),
+        "export names the house it cuts for; got:\n{export_help}"
+    );
+    assert!(
+        !offers(&export_help, "--preset"),
+        "and it must not offer a flag that means something else elsewhere; got:\n{export_help}"
+    );
+    assert!(
+        !offers(&export_help, "-p,"),
+        "nor the short form it used to answer to; got:\n{export_help}"
+    );
+
+    for command in ["check", "route", "score"] {
+        let help = Command::new(cypcb_binary())
+            .args([command, "--help"])
+            .output()
+            .expect("the CLI runs");
+        let help = String::from_utf8_lossy(&help.stdout);
+        assert!(
+            offers(&help, "--preset") || offers(&help, "-p,"),
+            "{command} still takes the design-rule table by that name; got:\n{help}"
+        );
+        assert!(
+            !offers(&help, "--house"),
+            "{command} does not cut files, so it has no house; got:\n{help}"
+        );
+    }
 }

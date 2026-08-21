@@ -24,14 +24,19 @@ pub struct ExportCommand {
     #[arg(short, long, default_value = "output")]
     output: PathBuf,
 
-    /// File-naming convention: what a fabricator wants the Gerbers called.
+    /// Which house the files are cut for: what it wants them called, in what
+    /// format, with which layers.
     ///
-    /// Not design rules. `cypcb check --preset` names what a house can etch and
-    /// knows ten fabs; this names what a house wants the files called and knows
-    /// two. Which rules this board is checked against before export comes from
-    /// the board itself - `board b { fab oshpark }`.
-    #[arg(short, long, default_value = "jlcpcb")]
-    preset: String,
+    /// Not design rules, and no longer spelled `--preset` for that reason.
+    /// `cypcb check --preset` names what a house can **etch** and knows ten
+    /// fabs; this names what a house wants **shipped** and knows two. Which
+    /// rules the board is checked against on the way out comes from the board
+    /// itself - `board b { fab oshpark }` - and never from this flag.
+    ///
+    /// No short form: `-h` is help, and `-p` reading as `--preset` on one
+    /// subcommand and as this on another is the confusion the rename removes.
+    #[arg(long, default_value = "jlcpcb")]
+    house: String,
 
     /// Skip assembly files (BOM, CPL)
     #[arg(long)]
@@ -52,32 +57,31 @@ pub struct ExportCommand {
 }
 
 impl ExportCommand {
-    /// The fabricator's file conventions, or an error that explains the two
-    /// lists.
+    /// The house's file conventions, or an error that explains the two lists.
     ///
-    /// `--preset` means two different things in this project and they are not
-    /// interchangeable. `cypcb check` takes a **design-rule** preset - what a
-    /// house can etch - and knows eight of them. `cypcb export` takes a **file
-    /// convention** preset - what a house wants the Gerbers called, in what
-    /// coordinate format, with which layers - and only two of those have been
+    /// These were both called `--preset` until the flag was renamed, and the
+    /// two lists are still different lengths: `cypcb check --preset` takes a
+    /// **design-rule** table - what a house can etch - and knows ten. This
+    /// takes a **file convention** - what a house wants the Gerbers called, in
+    /// what coordinate format, with which layers - and only two have been
     /// written down. A reader who checks a board against `oshpark` and then
     /// cannot export for it deserves to be told why rather than just told no.
-    fn resolve_preset(&self) -> Result<cypcb_export::presets::ExportPreset> {
-        from_name(&self.preset).ok_or_else(|| {
+    fn resolve_house(&self) -> Result<cypcb_export::presets::ExportPreset> {
+        from_name(&self.house).ok_or_else(|| {
             miette::miette!(
-                "'{}' is not an export preset. Export presets say what a \
-                 fabricator wants the files called and in what format, and \
-                 there are two: jlcpcb, pcbway.\n\n\
-                 They are a different list from `cypcb check --preset`, which \
+                "'{}' is not a house this command can cut files for. Two are \
+                 written down: jlcpcb, pcbway. They say what a fabricator \
+                 wants the files called and in what format.\n\n\
+                 That is a different list from `cypcb check --preset`, which \
                  takes design rules - what a house can etch - and knows more \
                  names including oshpark. A board can be checked against a \
                  house this command cannot yet write files for, and it is the \
                  board's own `fab` line that decides which rules it is checked \
                  against here.\n\n\
-                 Export with `--preset jlcpcb` or `--preset pcbway`; the \
-                 copper is the same either way, only the file names and the \
+                 Export with `--house jlcpcb` or `--house pcbway`; the copper \
+                 is the same either way, only the file names and the \
                  coordinate format differ.",
-                self.preset
+                self.house
             )
         })
     }
@@ -100,7 +104,7 @@ impl ExportCommand {
         // Before anything else. Until 2026-08-08 this was checked after the
         // file was read, parsed, imported, synced and warned about - so a
         // mistyped preset spent the whole build to say one word.
-        self.resolve_preset()?;
+        self.resolve_house()?;
 
         eprintln!("Exporting {}...", self.input.display());
 
@@ -154,7 +158,7 @@ impl ExportCommand {
     /// Everything that happens once a board exists, whichever file it came
     /// from.
     fn export_board(&self, mut world: BoardWorld, library: FootprintLibrary) -> Result<()> {
-        let mut preset = self.resolve_preset()?;
+        let mut preset = self.resolve_house()?;
 
         if self.no_assembly {
             preset.assembly = false;
@@ -480,13 +484,13 @@ mod tests {
         let cmd = ExportCommand {
             input: PathBuf::from("test.cypcb"),
             output: PathBuf::from("output"),
-            preset: "jlcpcb".to_string(),
+            house: "jlcpcb".to_string(),
             no_assembly: false,
             dry_run: false,
             force: false,
         };
 
-        assert_eq!(cmd.preset, "jlcpcb");
+        assert_eq!(cmd.house, "jlcpcb");
         assert!(!cmd.no_assembly);
     }
 

@@ -98,7 +98,7 @@ fn route_and_export() -> DrillFiles {
         .arg(dir.join("multi_ic.routed.kicad_pcb"))
         .arg("-o")
         .arg(&dir)
-        .arg("--preset")
+        .arg("--house")
         .arg("jlcpcb")
         .arg("--force")
         .output()

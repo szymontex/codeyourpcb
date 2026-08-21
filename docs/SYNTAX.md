@@ -74,7 +74,7 @@ The flag still wins when it is given, so a question about a specific fab is not
 overridden by the file. A board that names none is checked against JLCPCB, which
 is what this project has always defaulted to.
 
-`cypcb export` reads it always. Its own `--preset` answers a different question
+`cypcb export` reads it always. Its own `--house` answers a different question
 - what a fabricator wants the files called - so it has no say in which rules the
 board is checked against on the way out.
 

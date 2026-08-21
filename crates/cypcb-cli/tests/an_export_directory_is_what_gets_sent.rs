@@ -35,7 +35,7 @@ fn export_into(board: &str, dir: &PathBuf) -> String {
         .arg(example(board))
         .arg("-o")
         .arg(dir)
-        .arg("--preset")
+        .arg("--house")
         .arg("jlcpcb")
         .output()
         .expect("the binary runs");
