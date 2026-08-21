@@ -7,6 +7,7 @@ import type { BoardSnapshot, TraceInfo } from './types';
 import type { Viewport } from './viewport';
 import { screenToWorld } from './viewport';
 import { pointToSegmentDistance } from './geometry';
+import { isLayerVisible, type LayerVisibility } from './layers';
 
 export interface HitTestResult {
   trace: TraceInfo;
@@ -29,6 +30,7 @@ export function hitTestTrace(
   screenX: number,
   screenY: number,
   tolerancePx: number = 5,
+  layers?: LayerVisibility,
 ): HitTestResult | null {
   if (!snapshot?.traces || snapshot.traces.length === 0) return null;
 
@@ -39,8 +41,21 @@ export function hitTestTrace(
   let bestDist = Infinity;
   let bestTrace: TraceInfo | null = null;
   let bestSegIdx = 0;
+  let bestOnActive = false;
 
   for (const trace of snapshot.traces) {
+    // You cannot pick what you cannot see. This module did not contain the
+    // word "layer", so a trace on a hidden layer answered a click as readily
+    // as one in front of you - which is how a top trace gets edited while
+    // only the bottom is being shown.
+    if (layers && !isLayerVisible(trace.layer, layers)) continue;
+
+    // Where two layers cross, the one being worked on wins. Distance alone
+    // decides it otherwise, and at a crossing the distances are equal to
+    // within a rounding - so the answer was whichever trace the snapshot
+    // happened to list first.
+    const onActive = layers ? trace.layer === layers.activeLayer : false;
+
     // Total tolerance = pixel tolerance in nm + half the trace copper width
     const hitRadius = toleranceNm + trace.width / 2;
 
@@ -51,10 +66,14 @@ export function hitTestTrace(
         seg.start_x, seg.start_y,
         seg.end_x, seg.end_y,
       );
-      if (dist <= hitRadius && dist < bestDist) {
+      if (dist > hitRadius) continue;
+      const beatsOnLayer = onActive && !bestOnActive;
+      const beatsOnDistance = onActive === bestOnActive && dist < bestDist;
+      if (bestTrace === null || beatsOnLayer || beatsOnDistance) {
         bestDist = dist;
         bestTrace = trace;
         bestSegIdx = i;
+        bestOnActive = onActive;
       }
     }
   }

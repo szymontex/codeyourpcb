@@ -4,6 +4,7 @@
  */
 
 import type { Viewport } from './viewport';
+import { createLayerVisibility, type LayerVisibility } from './layers';
 import type { BoardSnapshot, TraceSegmentInfo } from './types';
 import type { PcbEngine } from './wasm';
 import type { RoutingState, PadHit } from './routing';
@@ -50,6 +51,14 @@ export interface InteractionState {
   onViewportChange: (vp: Viewport) => void;
   /** Current board snapshot for hit-testing */
   snapshot: BoardSnapshot | null;
+  /**
+   * What is shown, so a click can only pick what a person can see.
+   *
+   * Hit-testing did not know layers existed, which meant a trace on a hidden
+   * layer answered a click as readily as one in front of you. It also decides
+   * ties: where two layers cross, the one being worked on wins.
+   */
+  layers: LayerVisibility;
   /** Pad-to-net map for collision detection */
   padNetMap?: Map<string, string>;
   /** Currently selected trace entity ID */
@@ -736,7 +745,7 @@ export function setupInteraction(
         
         // Use snapped position if available, else raw click position
         
-        const traceHit = hitTestTrace(state.snapshot, state.viewport, screenX, screenY);
+        const traceHit = hitTestTrace(state.snapshot, state.viewport, screenX, screenY, 5, state.layers);
         
         if (isTraceSnap || (traceHit && traceHit.trace.net_name === state.routing.netName)) {
           // Get snap point: from magnetic snap or from trace hit
@@ -831,7 +840,7 @@ export function setupInteraction(
     }
 
     // Try trace hit-test — single click = SELECT, double click = start routing
-    const hit = hitTestTrace(state.snapshot, state.viewport, screenX, screenY);
+    const hit = hitTestTrace(state.snapshot, state.viewport, screenX, screenY, 5, state.layers);
     if (hit) {
       // Single click: just select the trace
       state.selectedTraceId = hit.trace.id;
@@ -893,7 +902,7 @@ export function setupInteraction(
       }
 
       // --- Normal hover for traces ---
-      const hit = hitTestTrace(state.snapshot, state.viewport, screenX, screenY);
+      const hit = hitTestTrace(state.snapshot, state.viewport, screenX, screenY, 5, state.layers);
       const newHovered = hit ? hit.trace.id : null;
 
       if (newHovered !== state.hoveredTraceId) {
@@ -1005,7 +1014,7 @@ export function setupInteraction(
     const screenY = e.clientY - rect.top;
     const [worldX, worldY] = screenToWorld(state.viewport, screenX, screenY);
 
-    const hit = hitTestTrace(state.snapshot, state.viewport, screenX, screenY);
+    const hit = hitTestTrace(state.snapshot, state.viewport, screenX, screenY, 5, state.layers);
     if (!hit || !hit.trace.net_name) return;
 
     const seg = hit.trace.segments[hit.segmentIndex];
@@ -1066,6 +1075,7 @@ export function createInteractionState(
     hoveredTraceId: null,
     onTraceSelect: () => {},
     onTraceHover: () => {},
+    layers: createLayerVisibility(),
     routing: createRoutingState(),
     engine: null,
     onRoutingChange: () => {},

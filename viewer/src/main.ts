@@ -831,6 +831,7 @@ async function init(): Promise<void> {
     if (next === routingState) return;
     routingState = next;
     interactionState.routing = routingState;
+    interactionState.layers = layers;
     setPreference('activeLayer', layer as 'Top' | 'Bottom');
     // Focus is measured against this, so the two have to move together or the
     // canvas dims the layer you just switched to.
@@ -1111,6 +1112,7 @@ async function init(): Promise<void> {
       // Update routing state grid spacing
       routingState = { ...routingState, gridSpacing: nm };
       interactionState.routing = routingState;
+    interactionState.layers = layers;
       dirty = true;
     } else {
       console.warn('[prefs] Invalid grid snap spacing, reverting');
@@ -1165,6 +1167,7 @@ async function init(): Promise<void> {
     if (routingState.gridSpacing !== settings.gridSnapSpacing) {
       routingState = { ...routingState, gridSpacing: settings.gridSnapSpacing };
       interactionState.routing = routingState;
+    interactionState.layers = layers;
     }
 
     dirty = true;
@@ -1979,6 +1982,7 @@ async function init(): Promise<void> {
   // Interaction setup (must be defined before handleFileLoad which uses it)
   const interactionState: InteractionState = {
     viewport,
+    layers,
     isPanning: false,
     lastX: 0,
     lastY: 0,
@@ -2667,6 +2671,13 @@ async function init(): Promise<void> {
         rectSelect: interactionState.rectSelect,
       };
       const renderStartedAt = performance.now();
+      // Hit-testing asks the interaction layer what a person can see, so the
+      // view is handed over on the way to drawing it. Every layer change ends
+      // in a frame, which makes this the one place that cannot go stale - and
+      // unlike `syncLayerPicker`, it only runs once the app is up:
+      // `interactionState` is a `const` declared far below that function, so
+      // assigning to it during init threw and the app never reached Ready.
+      interactionState.layers = layers;
       render(ctx, renderState);
       recordFrame(performance.now() - renderStartedAt);
 
