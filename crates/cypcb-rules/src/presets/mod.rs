@@ -145,6 +145,46 @@ impl RulesPreset {
         }
     }
 
+    /// The sibling of this preset that a board with this many copper layers
+    /// is built on.
+    ///
+    /// A house publishes one table per layer count and the difference is not
+    /// cosmetic: JLCPCB's 1-2 layer row is 0.10mm trace and space against
+    /// 0.09mm for multilayer, and its annular ring 0.18mm against 0.20mm. A
+    /// four-layer board measured against the two-layer table is checked too
+    /// loosely on the ring and too strictly on the copper, in the fab's name.
+    ///
+    /// Presets that publish one table for every layer count come back
+    /// unchanged, which is most of them - PCBWay and the IPC classes state no
+    /// layer split at all.
+    pub fn for_layer_count(self, copper_layers: u8) -> Self {
+        let four = copper_layers >= 4;
+        match self {
+            Self::JlcpcbStandard2Layer | Self::JlcpcbStandard4Layer => {
+                if four {
+                    Self::JlcpcbStandard4Layer
+                } else {
+                    Self::JlcpcbStandard2Layer
+                }
+            }
+            Self::JlcpcbAdvanced2Layer | Self::JlcpcbAdvanced4Layer => {
+                if four {
+                    Self::JlcpcbAdvanced4Layer
+                } else {
+                    Self::JlcpcbAdvanced2Layer
+                }
+            }
+            Self::OshPark2Layer | Self::OshPark4Layer => {
+                if four {
+                    Self::OshPark4Layer
+                } else {
+                    Self::OshPark2Layer
+                }
+            }
+            other => other,
+        }
+    }
+
     /// Lookup a preset by name, supporting aliases.
     ///
     /// Matching is case-insensitive. Hyphens and underscores are interchangeable.

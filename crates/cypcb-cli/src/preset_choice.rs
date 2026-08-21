@@ -25,12 +25,36 @@ use miette::Result;
 /// different places.
 pub fn resolve(flag: Option<&str>, world: &BoardWorld) -> Result<RulesPreset> {
     if let Some(name) = flag {
-        return by_name(name, Origin::Flag);
+        let chosen = by_name(name, Origin::Flag)?;
+        return Ok(for_this_board(chosen, name, world));
     }
     if let Some(name) = world.fab() {
-        return by_name(name, Origin::Design);
+        let chosen = by_name(name, Origin::Design)?;
+        return Ok(for_this_board(chosen, name, world));
     }
-    Ok(RulesPreset::JlcpcbStandard2Layer)
+    Ok(RulesPreset::JlcpcbStandard2Layer.for_layer_count(copper_layers(world)))
+}
+
+/// The layer-count sibling of a preset, unless the name asked for one.
+///
+/// `fab jlcpcb` names a house, and a house publishes one table per layer
+/// count: a four-layer board belongs on the four-layer table. `--preset
+/// jlcpcb_standard_2layer` names a table, and somebody who wrote that on a
+/// four-layer board is asking a specific question and is not overruled here -
+/// the same rule the flag already follows against the design.
+fn for_this_board(chosen: RulesPreset, written: &str, world: &BoardWorld) -> RulesPreset {
+    if written.to_ascii_lowercase().contains("layer") {
+        return chosen;
+    }
+    chosen.for_layer_count(copper_layers(world))
+}
+
+/// How many copper layers the board says it has.
+fn copper_layers(world: &BoardWorld) -> u8 {
+    world
+        .board_info()
+        .map(|(_, stack)| stack.count)
+        .unwrap_or(2)
 }
 
 /// Where a preset name was written.
