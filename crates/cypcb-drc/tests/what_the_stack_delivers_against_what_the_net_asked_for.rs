@@ -213,3 +213,32 @@ fn the_bottom_layer_is_measured_against_the_dielectric_on_its_own_side() {
         said[0]
     );
 }
+
+#[test]
+fn the_first_inner_layer_is_the_second_copper_entry() {
+    // `Layer::Inner` is zero-based - the language's `Inner1` is
+    // `Layer::Inner(0)` - and the stack's copper sequence is not, because its
+    // first entry is the top layer. So `Inner(0)` is copper entry 1.
+    //
+    // On the centred stack a 0.2mm trace on the first inner layer is a
+    // stripline: B = 0.4mm, T = 0.0175mm, so 0.8W + T = 0.1775, 4B/(0.67 pi *
+    // 0.1775) = 4.28226, ln = 1.45448, and 60/sqrt(4.6) = 27.97516 gives
+    // 40.69 ohm.
+    //
+    // Read as copper entry 0 it would be the **top** layer's microstrip -
+    // 0.2mm over 0.2mm with the top's 0.035mm foil - which is 64.37 ohm. The
+    // two are far enough apart that no rounding hides the difference.
+    let mut world = board(CENTRED, Layer::Inner(0), 0.2, Some(9_000));
+    let said = complaints(&mut world);
+    assert_eq!(said.len(), 1, "{said:?}");
+    assert!(
+        said[0].contains("gives 40.69ohm"),
+        "the first inner layer is a stripline between both prepregs: {}",
+        said[0]
+    );
+    assert!(
+        !said[0].contains("64.37ohm"),
+        "that is the top layer's answer: {}",
+        said[0]
+    );
+}

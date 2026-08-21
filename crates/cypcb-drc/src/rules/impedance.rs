@@ -131,14 +131,23 @@ impl DrcRule for ImpedanceRule {
 
 /// Which entry of the stack's copper sequence a layer is.
 ///
-/// `Inner(1)` is the first inner layer and the second copper entry, which is
-/// why the number is used as it stands rather than offset.
+/// **`Layer::Inner` is zero-based**: `sync.rs` maps the language's `Inner1` to
+/// `Layer::Inner(0)`, `job.rs` names that one `In1`, and the KiCad writer
+/// spells it `In1.Cu`. The stack's copper sequence is not - its first entry is
+/// the top layer - so the first inner layer is copper entry **1** and the
+/// number is offset rather than used as it stands.
+///
+/// This read `Inner(n)` as entry `n` when it was written, which put every
+/// trace on the first inner layer against the **top layer's** surroundings.
+/// It survived its own tests because a symmetric stack gives neighbouring
+/// layers the same answer - the third time that has hidden an index error in
+/// this project.
 fn copper_index(layer: Layer, copper_count: usize) -> Option<usize> {
     match layer {
         Layer::TopCopper => Some(0),
         Layer::BottomCopper => copper_count.checked_sub(1),
         Layer::Inner(n) => {
-            let index = usize::from(n);
+            let index = usize::from(n) + 1;
             (index < copper_count).then_some(index)
         }
         _ => None,
