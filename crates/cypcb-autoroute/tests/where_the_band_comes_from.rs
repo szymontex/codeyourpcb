@@ -22,8 +22,9 @@ use cypcb_autoroute::grid::RoutingGrid;
 use cypcb_autoroute::orchestrator::{extract_ratsnest, order_nets};
 use cypcb_autoroute::pathfinder_v2::pathfinder_loop;
 use cypcb_autoroute::AutorouteConfig;
+use cypcb_drc::{preset_for_world, ruleset_for_world};
 use cypcb_kicad::parse_kicad_pcb;
-use cypcb_rules::presets::{PresetRuleSet, RulesPreset};
+use cypcb_rules::presets::RulesPreset;
 
 fn fixture_path(filename: &str) -> std::path::PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -37,7 +38,13 @@ fn trajectory(filename: &str, price: f64) -> (Vec<usize>, u32, bool) {
     let mut world = parsed.world;
     let library = parsed.library;
 
-    let rules = PresetRuleSet::new(RulesPreset::from_name("jlcpcb").expect("the preset exists"));
+    // `multi_ic` has four copper layers, and the trajectory a board takes
+    // depends on the clearances it is routed at. Routing it at the two-layer
+    // preset traces a negotiation the tool never has.
+    let rules = ruleset_for_world(
+        preset_for_world(RulesPreset::JlcpcbStandard2Layer, &world),
+        &world,
+    );
     let config = AutorouteConfig {
         via_foreign_copper_penalty: price,
         ..AutorouteConfig::default()
@@ -120,7 +127,6 @@ fn does_overuse_track_the_violations() {
     use std::collections::BTreeSet;
 
     let filename = "stm32_breakout.kicad_pcb";
-    let drc_rules = DesignRules::jlcpcb_2layer();
 
     // The full run first, for the overuse series to line the caps up against.
     let (overuse, iterations, _) = trajectory(filename, 0.25);
@@ -134,6 +140,9 @@ fn does_overuse_track_the_violations() {
         let parsed = parse_kicad_pcb(&fixture_path(filename)).expect("the fixture parses");
         let mut world = parsed.world;
         let library = parsed.library;
+
+        let preset = preset_for_world(RulesPreset::JlcpcbStandard2Layer, &world);
+        let drc_rules = DesignRules::from_constraints(&preset.constraints());
 
         world.rebuild_spatial_index_from_library(&library);
         let baseline: BTreeSet<String> = run_drc(&mut world, &drc_rules)
@@ -150,8 +159,7 @@ fn does_overuse_track_the_violations() {
             })
             .collect();
 
-        let rules =
-            PresetRuleSet::new(RulesPreset::from_name("jlcpcb").expect("the preset exists"));
+        let rules = ruleset_for_world(preset, &world);
         let config = AutorouteConfig {
             max_ripup_iterations: cap,
             ..AutorouteConfig::default()

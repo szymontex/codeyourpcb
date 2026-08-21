@@ -12,10 +12,10 @@ use std::collections::BTreeSet;
 use std::path::Path;
 
 use cypcb_autoroute::{route_board, AutorouteConfig};
-use cypcb_drc::{run_drc, DesignRules, ViolationKind};
+use cypcb_drc::{preset_for_world, ruleset_for_world, run_drc, DesignRules, ViolationKind};
 use cypcb_kicad::{parse_kicad_pcb, BENCHMARKS};
 use cypcb_router::apply_routes;
-use cypcb_rules::presets::{PresetRuleSet, RulesPreset};
+use cypcb_rules::presets::RulesPreset;
 
 fn fixture_path(filename: &str) -> std::path::PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -37,8 +37,6 @@ fn fingerprint(violation: &cypcb_drc::DrcViolation) -> String {
 #[test]
 #[ignore = "diagnostic: routes every fixture at several via prices"]
 fn what_a_via_should_pay_for_crowding() {
-    let drc_rules = DesignRules::jlcpcb_2layer();
-
     // Zero is the router before the price existed; 2.0 is the point that
     // behaved like the veto. The three in between are the question.
     let prices = [0.0, 0.25, 0.5, 1.0, 2.0];
@@ -46,12 +44,25 @@ fn what_a_via_should_pay_for_crowding() {
     for benchmark in BENCHMARKS {
         eprintln!();
         eprintln!("=== {} ===", benchmark.filename);
+        let mut table_printed = false;
 
         for price in prices {
             let parsed = parse_kicad_pcb(&fixture_path(benchmark.filename))
                 .unwrap_or_else(|e| panic!("Failed to parse {}: {:?}", benchmark.filename, e));
             let mut world = parsed.world;
             let library = parsed.library;
+
+            // The table this board would actually be graded against, not a
+            // fixed two-layer one: `multi_ic` has four copper layers and
+            // `cypcb check` reads it against `jlcpcb_standard_4layer`. A band
+            // measured on the wrong table is a band about a board nobody ships.
+            let preset = preset_for_world(RulesPreset::JlcpcbStandard2Layer, &world);
+            let drc_rules = DesignRules::from_constraints(&preset.constraints());
+            let rules = ruleset_for_world(preset, &world);
+            if !table_printed {
+                eprintln!("  graded on {}", preset.name());
+                table_printed = true;
+            }
 
             world.rebuild_spatial_index_from_library(&library);
             let baseline: BTreeSet<String> = run_drc(&mut world, &drc_rules)
@@ -64,9 +75,6 @@ fn what_a_via_should_pay_for_crowding() {
                 via_foreign_copper_penalty: price,
                 ..AutorouteConfig::default()
             };
-            let rules =
-                PresetRuleSet::new(RulesPreset::from_name("jlcpcb").expect("the preset exists"));
-
             let started = std::time::Instant::now();
             let result = route_board(&mut world, &library, &rules, &config);
             let elapsed = started.elapsed();
@@ -119,7 +127,6 @@ fn what_a_via_should_pay_for_crowding() {
 #[test]
 #[ignore = "diagnostic: routes the dense fixtures at prices a hair apart"]
 fn how_much_of_the_price_is_noise() {
-    let drc_rules = DesignRules::jlcpcb_2layer();
     let prices = [0.22, 0.24, 0.25, 0.26, 0.28];
 
     for benchmark in BENCHMARKS
@@ -128,13 +135,27 @@ fn how_much_of_the_price_is_noise() {
     {
         eprintln!();
         eprintln!("=== {} ===", benchmark.filename);
+        let mut table: Option<&'static str> = None;
 
         let mut introduced_counts = Vec::new();
+        let mut short_counts = Vec::new();
         for price in prices {
             let parsed = parse_kicad_pcb(&fixture_path(benchmark.filename))
                 .unwrap_or_else(|e| panic!("Failed to parse {}: {:?}", benchmark.filename, e));
             let mut world = parsed.world;
             let library = parsed.library;
+
+            // The table this board would actually be graded against, not a
+            // fixed two-layer one: `multi_ic` has four copper layers and
+            // `cypcb check` reads it against `jlcpcb_standard_4layer`. A band
+            // measured on the wrong table is a band about a board nobody ships.
+            let preset = preset_for_world(RulesPreset::JlcpcbStandard2Layer, &world);
+            let drc_rules = DesignRules::from_constraints(&preset.constraints());
+            let rules = ruleset_for_world(preset, &world);
+            if table.is_none() {
+                eprintln!("  graded on {}", preset.name());
+                table = Some(preset.name());
+            }
 
             world.rebuild_spatial_index_from_library(&library);
             let baseline: BTreeSet<String> = run_drc(&mut world, &drc_rules)
@@ -147,8 +168,6 @@ fn how_much_of_the_price_is_noise() {
                 via_foreign_copper_penalty: price,
                 ..AutorouteConfig::default()
             };
-            let rules =
-                PresetRuleSet::new(RulesPreset::from_name("jlcpcb").expect("the preset exists"));
             let result = route_board(&mut world, &library, &rules, &config);
 
             apply_routes(&mut world, &result);
@@ -174,15 +193,29 @@ fn how_much_of_the_price_is_noise() {
                 result.via_count()
             );
             introduced_counts.push(introduced.len());
+            short_counts.push(shorts);
         }
 
         let lo = introduced_counts.iter().copied().min().unwrap_or(0);
         let hi = introduced_counts.iter().copied().max().unwrap_or(0);
+        let slo = short_counts.iter().copied().min().unwrap_or(0);
+        let shi = short_counts.iter().copied().max().unwrap_or(0);
         eprintln!(
             "  spread across prices 0.22..0.28: {} to {}, {} violations wide",
             lo,
             hi,
             hi - lo
+        );
+        // The band the probe in `is_the_best_variant_a_local_optimum` compares
+        // a neighbour against is a pair, so this prints the pair. It used to
+        // print only the violations half and the shorts half was worked out by
+        // hand off the per-price lines above, which is a number with nowhere
+        // to point when somebody asks where it came from.
+        eprintln!(
+            "  band for `is_the_best_variant_a_local_optimum`: ({}, {}) on {}",
+            hi - lo,
+            shi - slo,
+            table.unwrap_or("no board")
         );
     }
 }
