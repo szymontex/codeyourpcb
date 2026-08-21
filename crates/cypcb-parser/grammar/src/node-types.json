@@ -771,6 +771,32 @@
     }
   },
   {
+    "type": "neck_constraint",
+    "named": true,
+    "fields": {
+      "length": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "dimension",
+            "named": true
+          }
+        ]
+      },
+      "width": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "dimension",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "net_assignment",
     "named": true,
     "fields": {
@@ -814,6 +840,10 @@
         },
         {
           "type": "impedance_constraint",
+          "named": true
+        },
+        {
+          "type": "neck_constraint",
           "named": true
         },
         {

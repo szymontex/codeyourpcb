@@ -34,8 +34,8 @@ use crate::ast::{
     format_pad_number, AssertDef, AssertExpression, AssertOperand, BoardDef, ComparisonOp,
     ComponentDef, ComponentKind, CurrentUnit, CurrentValue, Definition, DiffPairDef, Dimension,
     FootprintDef, Identifier, ImplementsClause, ImportDef, InterfaceDef, LayerType, ModuleDef,
-    ModuleInstance, NetAssignment, NetClassDef, NetConstraints, NetDef, OutlineDef, PadDef,
-    PadShape, PhysicalValue, PinDeclaration, PinId, PinRef, PortConnection, PositionExpr,
+    ModuleInstance, NeckDef, NetAssignment, NetClassDef, NetConstraints, NetDef, OutlineDef,
+    PadDef, PadShape, PhysicalValue, PinDeclaration, PinId, PinRef, PortConnection, PositionExpr,
     RotationExpr, SilkDef, SizeProperty, SourceFile, Span, StackupDef, StackupLayer, StringLit,
     Tolerance, ToleranceKind, TraceDef, TraceDirective, TracePath, TraceVia, ZoneDef, ZoneKind,
 };
@@ -679,6 +679,7 @@ impl CypcbParser {
         let mut clearance = None;
         let mut current = None;
         let mut impedance_ohms = None;
+        let mut neck = None;
 
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
@@ -714,6 +715,21 @@ impl CypcbParser {
                                 .filter(|value| value.is_finite() && *value > 0.0);
                         }
                     }
+                    "neck_constraint" => {
+                        let width_node = get_child_by_field(&constraint, "width");
+                        let length_node = get_child_by_field(&constraint, "length");
+                        if let (Some(width_node), Some(length_node)) = (width_node, length_node) {
+                            let width = self.convert_dimension(source, &width_node, errors);
+                            let length = self.convert_dimension(source, &length_node, errors);
+                            if let (Some(width), Some(length)) = (width, length) {
+                                neck = Some(NeckDef {
+                                    width,
+                                    length,
+                                    span: span_of(&constraint),
+                                });
+                            }
+                        }
+                    }
                     _ => {}
                 }
             }
@@ -724,6 +740,7 @@ impl CypcbParser {
             clearance,
             current,
             impedance_ohms,
+            neck,
             span: span_of(node),
         })
     }

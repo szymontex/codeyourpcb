@@ -968,6 +968,39 @@
         {
           "type": "SYMBOL",
           "name": "impedance_constraint"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "neck_constraint"
+        }
+      ]
+    },
+    "neck_constraint": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "STRING",
+          "value": "neck"
+        },
+        {
+          "type": "FIELD",
+          "name": "width",
+          "content": {
+            "type": "SYMBOL",
+            "name": "dimension"
+          }
+        },
+        {
+          "type": "STRING",
+          "value": "for"
+        },
+        {
+          "type": "FIELD",
+          "name": "length",
+          "content": {
+            "type": "SYMBOL",
+            "name": "dimension"
+          }
         }
       ]
     },

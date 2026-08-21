@@ -524,6 +524,12 @@ pub struct NetConstraints {
     /// A plain number rather than a value type, because there is one unit and
     /// the grammar makes writing it compulsory.
     pub impedance_ohms: Option<f64>,
+    /// How narrow copper on this net may get on a pad approach, and how far.
+    ///
+    /// The same `NeckDef` a `trace` block carries, because it is the same
+    /// statement about the same copper - said once for the net instead of on
+    /// each trace of it.
+    pub neck: Option<NeckDef>,
     /// Span covering the constraint block.
     pub span: Span,
 }

@@ -805,6 +805,37 @@ impl<'a> Reader<'a> {
     /// block carries one. Zero and below are refused rather than stored - a
     /// net with no impedance is not a net, and a nonsense figure kept in the
     /// model reads later as a target somebody chose.
+    /// `0.8mm for 4mm`, after a `neck` keyword the caller has already eaten.
+    ///
+    /// One reader for the two places a neck can be written - a `trace` block
+    /// and a net's constraint list - because the statement is the same and a
+    /// second copy would drift on the first change to either.
+    fn neck_after_keyword(&mut self, start: usize) -> Option<crate::ast::NeckDef> {
+        let width = match self.dimension() {
+            Some(width) => width,
+            None => {
+                self.unexpected("a width like `0.8mm` after `neck`");
+                return None;
+            }
+        };
+        if !self.eat_word("for") {
+            self.unexpected("`for` and a length, as in `neck 0.8mm for 4mm`");
+            return None;
+        }
+        let length = match self.dimension() {
+            Some(length) => length,
+            None => {
+                self.unexpected("a length like `4mm` after `for`");
+                return None;
+            }
+        };
+        Some(crate::ast::NeckDef {
+            width,
+            length,
+            span: Span::new(start, self.behind()),
+        })
+    }
+
     fn impedance(&mut self) -> Option<f64> {
         let Some((value, _)) = self.number() else {
             self.unexpected("an impedance like `90ohm`");
@@ -832,6 +863,7 @@ impl<'a> Reader<'a> {
         let mut clearance = None;
         let mut current = None;
         let mut impedance_ohms = None;
+        let mut neck = None;
 
         while !self.done() && !self.eat(&TokenKind::RBracket) {
             if self.eat(&TokenKind::Comma) {
@@ -876,9 +908,14 @@ impl<'a> Reader<'a> {
                     self.bump();
                     impedance_ohms = self.impedance();
                 }
+                Some("neck") => {
+                    let neck_start = self.here();
+                    self.bump();
+                    neck = self.neck_after_keyword(neck_start);
+                }
                 _ => self.unknown_property(
                     "net constraint",
-                    &["width", "clearance", "current", "impedance"],
+                    &["width", "clearance", "current", "impedance", "neck"],
                 ),
             }
         }
@@ -888,6 +925,7 @@ impl<'a> Reader<'a> {
             clearance,
             current,
             impedance_ohms,
+            neck,
             span: Span::new(start, self.behind()),
         })
     }
@@ -944,24 +982,7 @@ impl<'a> Reader<'a> {
                     }
                     Some("neck") => {
                         self.bump();
-                        let neck_start = directive_start;
-                        let Some(width) = self.dimension() else {
-                            self.unexpected("a width like `0.8mm` after `neck`");
-                            continue;
-                        };
-                        if !self.eat_word("for") {
-                            self.unexpected("`for` and a length, as in `neck 0.8mm for 4mm`");
-                            continue;
-                        }
-                        let Some(length) = self.dimension() else {
-                            self.unexpected("a length like `4mm` after `for`");
-                            continue;
-                        };
-                        neck = Some(crate::ast::NeckDef {
-                            width,
-                            length,
-                            span: Span::new(neck_start, self.behind()),
-                        });
+                        neck = self.neck_after_keyword(directive_start);
                     }
                     Some("path") => {
                         self.bump();

@@ -295,6 +295,24 @@ module.exports = grammar({
       $.clearance_constraint,
       $.current_constraint,
       $.impedance_constraint,
+      $.neck_constraint,
+    ),
+
+    // neck 0.8mm for 4mm, on a net rather than on one trace
+    //
+    // The case this was asked for is a netclass: `netclass Mains [current
+    // 10A]` gives copper millimetres wide and a 2.54mm pad pitch has nowhere
+    // to put it. Saying it once on the net is the difference between a rule
+    // and a note repeated on every trace of it.
+    //
+    // Same shape as `trace_neck` and a separate rule on purpose: the two live
+    // in different blocks, and one rule reachable from both would let `neck`
+    // appear where the reader does not look for it.
+    neck_constraint: $ => seq(
+      'neck',
+      field('width', $.dimension),
+      'for',
+      field('length', $.dimension),
     ),
 
     // width 0.3mm

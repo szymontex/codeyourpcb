@@ -79,6 +79,11 @@ pub struct NetConstraints {
     /// and what `cypcb-calc` returns, so the target and the computed figure
     /// are the same kind of number on both sides of the comparison.
     pub impedance_ohms_x100: Option<u32>,
+    /// How narrow copper on this net may get on a pad approach, and how far.
+    ///
+    /// Both halves or neither: a width with no length is a second width, which
+    /// is the same reason the grammar makes the length compulsory.
+    pub neck: Option<crate::components::trace::TraceNeck>,
 }
 
 impl NetConstraints {
@@ -89,6 +94,7 @@ impl NetConstraints {
             && self.clearance.is_none()
             && self.current_ma.is_none()
             && self.impedance_ohms_x100.is_none()
+            && self.neck.is_none()
     }
 }
 

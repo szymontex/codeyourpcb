@@ -1070,6 +1070,7 @@ fn sync_net(
                 clearance,
                 current_ma,
                 impedance_ohms_x100,
+                neck,
             } = carried;
             let mut merged = world.net_constraints(net_id).unwrap_or_default();
             if width.is_some() {
@@ -1083,6 +1084,9 @@ fn sync_net(
             }
             if impedance_ohms_x100.is_some() {
                 merged.impedance_ohms_x100 = impedance_ohms_x100;
+            }
+            if neck.is_some() {
+                merged.neck = neck;
             }
             world.set_net_constraints(net_id, merged);
         }
@@ -3177,6 +3181,13 @@ fn cypcb_world_net_constraints(
         impedance_ohms_x100: constraints
             .impedance_ohms
             .map(|ohms| (ohms * 100.0).round() as u32),
+        neck: constraints
+            .neck
+            .as_ref()
+            .map(|neck| crate::components::trace::TraceNeck {
+                width: neck.width.to_nm(),
+                length: neck.length.to_nm(),
+            }),
     }
 }
 

@@ -879,7 +879,7 @@ mod tests {
 /// every EDA lets the last stretch before a pad run thin - a short length of
 /// copper does not have time to heat. Stating how far turns that from
 /// something a reader has to trust into something the checker can measure.
-#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct TraceNeck {
     /// The narrow width the trace may run at.
     pub width: Nm,
