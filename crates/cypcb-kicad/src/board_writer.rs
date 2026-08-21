@@ -27,7 +27,8 @@ use cypcb_core::Nm;
 use cypcb_world::components::trace::{Trace, Via};
 use cypcb_world::components::zone::{Zone, ZoneKind};
 use cypcb_world::components::{
-    FootprintRef, Layer, NetConnections, PadShape, Position, RefDes, Rotation, Value,
+    FootprintRef, Layer, NetConnections, PadShape, Position, RefDes, Rotation, Stackup,
+    StackupLayerKind, Value,
 };
 use cypcb_world::footprint::SilkShape;
 use cypcb_world::BoardWorld;
@@ -144,6 +145,118 @@ pub struct KicadDesignRules {
     pub annular_ring: Nm,
 }
 
+/// What KiCad calls each entry of a stackup, top to bottom.
+///
+/// Every layer line pcbnew writes carries a name, so a design that named none
+/// still needs one. The copper names follow the same rule the `(layers ...)`
+/// node above already uses - `F.Cu`, `In1.Cu`, `B.Cu` - the surface finishes
+/// take the side they sit on, and the dielectrics are numbered the way KiCad
+/// numbers them, which is what `dielectric 1` is.
+///
+/// A name the design stated wins: it is what the fabricator was told.
+fn stackup_layer_names(stackup: &Stackup, copper_layers: usize) -> Vec<String> {
+    let coppers: Vec<usize> = stackup
+        .layers
+        .iter()
+        .enumerate()
+        .filter(|(_, layer)| layer.kind == StackupLayerKind::Copper)
+        .map(|(index, _)| index)
+        .collect();
+    let first_copper = coppers.first().copied();
+    let last_copper = coppers.last().copied();
+
+    let mut dielectric = 0usize;
+    let mut inner = 0usize;
+    let mut names = Vec::with_capacity(stackup.layers.len());
+    for (index, layer) in stackup.layers.iter().enumerate() {
+        // Before the first copper is the front of the board and after the last
+        // is the back. A stackup with no copper at all has neither, and its
+        // surface finishes default to the front rather than to nothing.
+        let front = last_copper.is_none_or(|last| index < last);
+        let name = match layer.kind {
+            StackupLayerKind::Copper => {
+                if Some(index) == first_copper {
+                    "F.Cu".to_string()
+                } else if Some(index) == last_copper {
+                    "B.Cu".to_string()
+                } else {
+                    inner += 1;
+                    // A stackup that describes more copper than the board has
+                    // is a contradiction the checker reports; this writer still
+                    // has to name the layer, and naming it past the board's
+                    // count would produce a layer pcbnew has not been told
+                    // about.
+                    format!("In{}.Cu", inner.min(copper_layers.saturating_sub(1)))
+                }
+            }
+            StackupLayerKind::Mask => {
+                if front {
+                    "F.Mask".to_string()
+                } else {
+                    "B.Mask".to_string()
+                }
+            }
+            StackupLayerKind::Silk => {
+                if front {
+                    "F.SilkS".to_string()
+                } else {
+                    "B.SilkS".to_string()
+                }
+            }
+            StackupLayerKind::Core | StackupLayerKind::Prepreg => {
+                dielectric += 1;
+                format!("dielectric {dielectric}")
+            }
+        };
+        names.push(layer.name.clone().unwrap_or(name));
+    }
+    names
+}
+
+/// The word pcbnew writes in a stackup entry's `(type ...)`.
+///
+/// Read out of KiCad's own `BOARD_STACKUP_ITEM::GetTypeName` rather than
+/// guessed. The three dielectric and copper spellings are `KEY_COPPER`,
+/// `KEY_CORE` and `KEY_PREPREG` in `stackup_predefined_prms.h`; the two
+/// surface finishes are literals in `board_stackup.cpp`. Guessing here is the
+/// mistake the `(setup (rules ...))` note above records - a token pcbnew does
+/// not know makes the whole file unopenable, and this project's own importer
+/// reading it back happily is not evidence of anything.
+fn stackup_type_name(kind: StackupLayerKind) -> &'static str {
+    match kind {
+        StackupLayerKind::Copper => "copper",
+        StackupLayerKind::Core => "core",
+        StackupLayerKind::Prepreg => "prepreg",
+        StackupLayerKind::Mask => "soldermask",
+        StackupLayerKind::Silk => "silkscreen",
+    }
+}
+
+/// The stackup, in the order and the shape `FormatBoardStackup` writes it.
+///
+/// Fields in pcbnew's order - type, thickness, material - and each one omitted
+/// when the design did not state it. A thickness invented here would be a
+/// number the fabricator is quoted on that nobody chose.
+fn write_stackup(out: &mut String, stackup: &Stackup, copper_layers: usize) {
+    let names = stackup_layer_names(stackup, copper_layers);
+    let _ = writeln!(out, "    (stackup");
+    for (layer, name) in stackup.layers.iter().zip(names) {
+        let mut line = format!(
+            "      (layer \"{name}\" (type \"{}\")",
+            stackup_type_name(layer.kind)
+        );
+        if let Some(thickness) = layer.thickness {
+            let _ = write!(line, " (thickness {})", mm(thickness));
+        }
+        if let Some(material) = &layer.material {
+            let _ = write!(line, " (material \"{material}\")");
+        }
+        line.push(')');
+        let _ = writeln!(out, "{line}");
+    }
+    let _ = writeln!(out, "    )");
+}
+
 /// Write a board, optionally stating the rules it was checked against.
 pub fn write_board(world: &mut BoardWorld, generator: &str) -> String {
     write_board_with_rules(world, generator, None)
@@ -205,13 +318,19 @@ pub fn write_board_with_rules(
     // reading it back with this project's own importer said it was fine. KiCad
     // keeps those numbers in the project file beside the board; `project.rs`
     // writes it.
-    if let Some(rules) = rules {
+    let stackup = world.stackup().cloned();
+    if rules.is_some() || stackup.is_some() {
         let _ = writeln!(out, "  (setup");
-        let _ = writeln!(
-            out,
-            "    (pad_to_mask_clearance {})",
-            mm(rules.mask_expansion)
-        );
+        if let Some(rules) = rules {
+            let _ = writeln!(
+                out,
+                "    (pad_to_mask_clearance {})",
+                mm(rules.mask_expansion)
+            );
+        }
+        if let Some(stackup) = &stackup {
+            write_stackup(&mut out, stackup, copper_layers);
+        }
         let _ = writeln!(out, "  )");
     }
 
