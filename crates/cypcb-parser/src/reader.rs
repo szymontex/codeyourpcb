@@ -883,6 +883,7 @@ impl<'a> Reader<'a> {
         let mut layer = None;
         let mut width = None;
         let mut locked = false;
+        let mut neck = None;
         let mut directives = Vec::new();
 
         if self.eat(&TokenKind::LBrace) {
@@ -914,6 +915,27 @@ impl<'a> Reader<'a> {
                     Some("locked") => {
                         self.bump();
                         locked = true;
+                    }
+                    Some("neck") => {
+                        self.bump();
+                        let neck_start = directive_start;
+                        let Some(width) = self.dimension() else {
+                            self.unexpected("a width like `0.8mm` after `neck`");
+                            continue;
+                        };
+                        if !self.eat_word("for") {
+                            self.unexpected("`for` and a length, as in `neck 0.8mm for 4mm`");
+                            continue;
+                        }
+                        let Some(length) = self.dimension() else {
+                            self.unexpected("a length like `4mm` after `for`");
+                            continue;
+                        };
+                        neck = Some(crate::ast::NeckDef {
+                            width,
+                            length,
+                            span: Span::new(neck_start, self.behind()),
+                        });
                     }
                     Some("path") => {
                         self.bump();
@@ -994,6 +1016,7 @@ impl<'a> Reader<'a> {
             layer,
             width,
             locked,
+            neck,
             directives,
             span: Span::new(start, self.behind()),
         })

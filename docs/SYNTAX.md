@@ -559,6 +559,11 @@ trace VCC {
 ```
 
 **Properties:**
+- `neck`: How narrow the copper may get on a pad approach, and how far it may
+  run at that width: `neck 0.8mm for 4mm`. Both halves are compulsory - a width
+  with no length is a second width, and a neck is only safe because it is
+  short. The checker refuses a neck that is not narrower than its trace, one
+  under what the fabricator will etch, and one longer than the trace itself.
 - `from`: Starting pin reference
 - `to`: Ending pin reference
 - `via`: Waypoint coordinates for routing (optional, can repeat). Takes an

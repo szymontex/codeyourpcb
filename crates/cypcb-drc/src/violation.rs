@@ -76,6 +76,8 @@ pub enum ViolationKind {
     /// A net stated an impedance the stack does not deliver, or one this
     /// stack cannot be asked about at all.
     Impedance,
+    /// A declared neck that does not describe a neck.
+    NeckDown,
     /// Copper in a pour that reaches no pad of its own net.
     PourIsland,
     /// A pin the design connects to a net that no copper reaches.
@@ -117,6 +119,7 @@ impl std::fmt::Display for ViolationKind {
             ViolationKind::SilkClearance => write!(f, "silk-clearance"),
             ViolationKind::TraceCurrent => write!(f, "trace-current"),
             ViolationKind::Impedance => write!(f, "impedance"),
+            ViolationKind::NeckDown => write!(f, "neck-down"),
             ViolationKind::PourIsland => write!(f, "pour-island"),
             ViolationKind::UnroutedPin => write!(f, "unrouted-pin"),
             ViolationKind::Assertion => write!(f, "assertion"),
@@ -830,6 +833,25 @@ impl DrcViolation {
     pub fn impedance(entity: Entity, location: Point) -> Self {
         DrcViolation {
             kind: ViolationKind::Impedance,
+            actual: None,
+            required: None,
+            area: None,
+            location,
+            entity,
+            other_entity: None,
+            source_span: None,
+            message: String::new(),
+        }
+    }
+
+    /// Create a neck-down violation.
+    ///
+    /// The numbers stay in the message: a neck compares a width against a
+    /// width in one case and a length against a length in another, and one
+    /// pair of `actual`/`required` fields cannot say which.
+    pub fn neck_down(entity: Entity, location: Point) -> Self {
+        DrcViolation {
+            kind: ViolationKind::NeckDown,
             actual: None,
             required: None,
             area: None,

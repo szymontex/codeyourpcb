@@ -1118,6 +1118,7 @@ impl CypcbParser {
         let mut layer: Option<String> = None;
         let mut width: Option<Dimension> = None;
         let mut locked = false;
+        let mut neck = None;
         let mut directives: Vec<TraceDirective> = Vec::new();
 
         let mut cursor = node.walk();
@@ -1210,6 +1211,19 @@ impl CypcbParser {
                         width = self.convert_dimension(source, &val_node, errors);
                     }
                 }
+                "trace_neck" => {
+                    let width = get_child_by_field(&child, "width")
+                        .and_then(|n| self.convert_dimension(source, &n, errors));
+                    let length = get_child_by_field(&child, "length")
+                        .and_then(|n| self.convert_dimension(source, &n, errors));
+                    if let Some((width, length)) = width.zip(length) {
+                        neck = Some(crate::ast::NeckDef {
+                            width,
+                            length,
+                            span: span_of(&child),
+                        });
+                    }
+                }
                 "trace_locked" => {
                     locked = true;
                 }
@@ -1225,6 +1239,7 @@ impl CypcbParser {
             layer,
             width,
             locked,
+            neck,
             directives,
             span: span_of(node),
         })

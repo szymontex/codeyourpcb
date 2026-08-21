@@ -1716,6 +1716,10 @@
           "named": true
         },
         {
+          "type": "trace_neck",
+          "named": true
+        },
+        {
           "type": "trace_path",
           "named": true
         },
@@ -1770,6 +1774,32 @@
     "type": "trace_layer_name",
     "named": true,
     "fields": {}
+  },
+  {
+    "type": "trace_neck",
+    "named": true,
+    "fields": {
+      "length": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "dimension",
+            "named": true
+          }
+        ]
+      },
+      "width": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "dimension",
+            "named": true
+          }
+        ]
+      }
+    }
   },
   {
     "type": "trace_path",
@@ -2310,6 +2340,10 @@
     "named": false
   },
   {
+    "type": "for",
+    "named": false
+  },
+  {
     "type": "from",
     "named": false
   },
@@ -2452,6 +2486,10 @@
   },
   {
     "type": "nH",
+    "named": false
+  },
+  {
+    "type": "neck",
     "named": false
   },
   {

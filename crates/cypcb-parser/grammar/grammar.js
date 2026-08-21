@@ -515,6 +515,21 @@ module.exports = grammar({
       $.trace_layer,
       $.trace_width,
       $.trace_locked,
+      $.trace_neck,
+    ),
+
+    // neck 0.8mm for 4mm
+    //
+    // How narrow the copper may get on the way into a pad, and how far it may
+    // run at that width. A short length of thin copper does not have time to
+    // heat, which is why a trace carrying amps can still land on a 2.54mm
+    // pitch - and the length is stated so the checker can measure the claim
+    // rather than trust it.
+    trace_neck: $ => seq(
+      'neck',
+      field('width', $.dimension),
+      'for',
+      field('length', $.dimension),
     ),
 
     // from R1.1

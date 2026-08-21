@@ -1311,7 +1311,15 @@ fn sync_trace(
                         // it. The autorouted path learned this already (KNOWLEDGE.md
                         // K012); traces written in the DSL never did, so they collided
                         // with the pads they connect and reported as trace '?'.
-                        world.ecs_mut().spawn((trace, net_id, span));
+                        let entity = world.ecs_mut().spawn((trace, net_id, span)).id();
+                        if let Some(neck) = &trace_def.neck {
+                            world.ecs_mut().entity_mut(entity).insert(
+                                crate::components::trace::TraceNeck {
+                                    width: neck.width.to_nm(),
+                                    length: neck.length.to_nm(),
+                                },
+                            );
+                        }
                     }
                 }
                 TraceDirective::Via(via_def) => {
@@ -1391,7 +1399,16 @@ fn sync_trace(
         // it. The autorouted path learned this already (KNOWLEDGE.md
         // K012); traces written in the DSL never did, so they collided
         // with the pads they connect and reported as trace '?'.
-        world.ecs_mut().spawn((trace, net_id, span));
+        let entity = world.ecs_mut().spawn((trace, net_id, span)).id();
+        if let Some(neck) = &trace_def.neck {
+            world
+                .ecs_mut()
+                .entity_mut(entity)
+                .insert(crate::components::trace::TraceNeck {
+                    width: neck.width.to_nm(),
+                    length: neck.length.to_nm(),
+                });
+        }
     }
 }
 

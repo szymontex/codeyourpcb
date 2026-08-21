@@ -648,3 +648,22 @@ mod tests {
         assert_eq!(trace.source, TraceSource::Autorouted);
     }
 }
+
+/// How narrow a trace may get on the way into a pad, and for how far.
+///
+/// A separate component rather than a field on [`Trace`]: most traces do not
+/// have one, and every literal `Trace { .. }` in this workspace's tests would
+/// have to name it.
+///
+/// The length is what makes the width checkable. A trace carrying amps has to
+/// be millimetres wide, and a 2.54mm pad pitch has nowhere to put that, so
+/// every EDA lets the last stretch before a pad run thin - a short length of
+/// copper does not have time to heat. Stating how far turns that from
+/// something a reader has to trust into something the checker can measure.
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct TraceNeck {
+    /// The narrow width the trace may run at.
+    pub width: Nm,
+    /// How far it may run at that width.
+    pub length: Nm,
+}

@@ -960,9 +960,26 @@ pub struct TraceDef {
     pub width: Option<Dimension>,
     /// If true, autorouter should not modify this trace.
     pub locked: bool,
+    /// How narrow this trace may get on a pad approach, and for how far.
+    pub neck: Option<NeckDef>,
     /// Ordered directives for geometric (path-based) traces.
     /// When non-empty, these define the exact trace geometry.
     pub directives: Vec<TraceDirective>,
+    /// Source span.
+    pub span: Span,
+}
+
+/// `neck 0.8mm for 4mm` on a trace.
+///
+/// Both halves are compulsory. A width with no length is a second width, and
+/// the whole point of stating a neck is that its length is bounded - copper
+/// too thin for the current is only safe because it is short.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NeckDef {
+    /// The narrow width.
+    pub width: Dimension,
+    /// How far the trace may run at it.
+    pub length: Dimension,
     /// Source span.
     pub span: Span,
 }

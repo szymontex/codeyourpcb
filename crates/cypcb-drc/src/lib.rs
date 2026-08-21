@@ -137,6 +137,7 @@ pub fn run_drc(world: &mut BoardWorld, rules: &DesignRules) -> DrcResult {
         Box::new(rules::SilkClearanceRule),
         Box::new(rules::TraceCurrentRule),
         Box::new(rules::ImpedanceRule),
+        Box::new(rules::NeckDownRule),
         Box::new(rules::ZoneOverlapRule),
         Box::new(rules::PourIslandRule),
         // Registered on 2026-08-07, once the router stopped leaving routes in

@@ -1894,6 +1894,39 @@
         {
           "type": "SYMBOL",
           "name": "trace_locked"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "trace_neck"
+        }
+      ]
+    },
+    "trace_neck": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "STRING",
+          "value": "neck"
+        },
+        {
+          "type": "FIELD",
+          "name": "width",
+          "content": {
+            "type": "SYMBOL",
+            "name": "dimension"
+          }
+        },
+        {
+          "type": "STRING",
+          "value": "for"
+        },
+        {
+          "type": "FIELD",
+          "name": "length",
+          "content": {
+            "type": "SYMBOL",
+            "name": "dimension"
+          }
         }
       ]
     },
