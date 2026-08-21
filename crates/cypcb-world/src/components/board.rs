@@ -492,6 +492,29 @@ impl StackupLayer {
     }
 }
 
+/// Which impedance form a copper layer's surroundings call for, and with what.
+///
+/// Produced by [`Stackup::environment_of`] and consumed by `cypcb-calc`. The
+/// two variants are the two closed forms IPC-2141 states; a stack that is
+/// neither produces no variant rather than the nearer of the two.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum CopperEnvironment {
+    /// An outer layer over one reference plane.
+    Microstrip {
+        /// The dielectric between this copper and the next copper inward.
+        height: Nm,
+        /// That dielectric's constant, in thousandths.
+        dk_x1000: u32,
+    },
+    /// An inner layer centred between two reference planes.
+    Stripline {
+        /// The distance between the two planes, which is both dielectrics.
+        plate_separation: Nm,
+        /// Their shared dielectric constant, in thousandths.
+        dk_x1000: u32,
+    },
+}
+
 /// The layers a fabricator presses together, in order from the top.
 ///
 /// A design states this to say what it expects to be built - which is a claim
@@ -524,6 +547,77 @@ impl Stackup {
         self.layers
             .iter()
             .try_fold(Nm(0), |total, layer| Some(total + layer.thickness?))
+    }
+
+    /// Where a copper layer sits, as the impedance forms need it.
+    ///
+    /// `copper_index` counts copper entries from the top, so 0 is the outer
+    /// layer of the face the stackup starts on.
+    ///
+    /// Returns `None` when no form this project has applies. That is not the
+    /// same as "the answer is hard": each case below is a geometry the closed
+    /// forms in `cypcb-calc` are not written for, and a number produced for it
+    /// anyway would read like a measurement.
+    ///
+    /// - **An outer copper layer** gets [`CopperEnvironment::Microstrip`], with
+    ///   the height and the dielectric constant of the one dielectric between
+    ///   it and the next copper inward.
+    /// - **An inner copper layer** gets [`CopperEnvironment::Stripline`] only
+    ///   when it is genuinely centred: the dielectric above and the dielectric
+    ///   below have the **same thickness and the same `dk`**. The form is the
+    ///   *symmetric* stripline, and a trace nearer one plane than the other is
+    ///   an asymmetric stripline, which is a different equation this project
+    ///   does not have. Most four-layer stacks put prepreg on one side of an
+    ///   inner layer and core on the other, so most inner layers answer `None`
+    ///   here - correctly.
+    /// - A layer with no dielectric beside it, or a dielectric that states no
+    ///   thickness or no `dk`, answers `None` for the same reason.
+    pub fn environment_of(&self, copper_index: usize) -> Option<CopperEnvironment> {
+        let coppers: Vec<usize> = self
+            .layers
+            .iter()
+            .enumerate()
+            .filter(|(_, layer)| layer.kind == StackupLayerKind::Copper)
+            .map(|(index, _)| index)
+            .collect();
+        let at = *coppers.get(copper_index)?;
+
+        // The nearest dielectric on each side, and nothing but surface
+        // finishes allowed in between: a second copper layer between this one
+        // and the dielectric would mean the two are shorted, which
+        // `copper_touching_copper` reports rather than measures.
+        let above = self.layers[..at]
+            .iter()
+            .rev()
+            .take_while(|layer| layer.kind != StackupLayerKind::Copper)
+            .find(|layer| layer.kind.is_dielectric());
+        let below = self.layers[at + 1..]
+            .iter()
+            .take_while(|layer| layer.kind != StackupLayerKind::Copper)
+            .find(|layer| layer.kind.is_dielectric());
+
+        let outer = copper_index == 0 || copper_index + 1 == coppers.len();
+        if outer {
+            // The dielectric on the inward side: below for the top layer,
+            // above for the bottom one. A one-copper stack has no inward side.
+            let inward = if copper_index == 0 { below } else { above };
+            let inward = inward?;
+            return Some(CopperEnvironment::Microstrip {
+                height: inward.thickness?,
+                dk_x1000: inward.dk_x1000?,
+            });
+        }
+
+        let (above, below) = (above?, below?);
+        let (top, bottom) = (above.thickness?, below.thickness?);
+        let (top_dk, bottom_dk) = (above.dk_x1000?, below.dk_x1000?);
+        if top != bottom || top_dk != bottom_dk {
+            return None;
+        }
+        Some(CopperEnvironment::Stripline {
+            plate_separation: Nm(top.raw() + bottom.raw()),
+            dk_x1000: top_dk,
+        })
     }
 
     /// Pairs of adjacent copper layers with no dielectric between them.

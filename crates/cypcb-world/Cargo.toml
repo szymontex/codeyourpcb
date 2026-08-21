@@ -22,3 +22,6 @@ rstar = { workspace = true }
 serde = { workspace = true }
 miette = { workspace = true }
 thiserror = { workspace = true }
+
+[dev-dependencies]
+cypcb-calc = { path = "../cypcb-calc" }
