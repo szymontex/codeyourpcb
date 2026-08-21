@@ -21,6 +21,7 @@ export const VIOLATION_KIND_META: Record<string, ViolationKindMeta> = {
   'edge-clearance':      { icon: '📐', label: 'Edge clearance' },
   'trace-width':         { icon: '📏', label: 'Trace too narrow' },
   'trace-current':       { icon: '🔥', label: 'Trace too narrow for its current' },
+  'impedance':           { icon: '〰️', label: 'Impedance off target' },
   'drill-size':          { icon: '🔩', label: 'Drill too small' },
   'via-drill':           { icon: '🔩', label: 'Via drill too small' },
   'via-diameter':        { icon: '⭕', label: 'Via too small' },

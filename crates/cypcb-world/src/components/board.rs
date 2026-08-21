@@ -505,6 +505,8 @@ pub enum CopperEnvironment {
         height: Nm,
         /// That dielectric's constant, in thousandths.
         dk_x1000: u32,
+        /// This layer's own foil thickness, which both forms need as `T`.
+        copper: Nm,
     },
     /// An inner layer centred between two reference planes.
     Stripline {
@@ -512,6 +514,8 @@ pub enum CopperEnvironment {
         plate_separation: Nm,
         /// Their shared dielectric constant, in thousandths.
         dk_x1000: u32,
+        /// This layer's own foil thickness, which both forms need as `T`.
+        copper: Nm,
     },
 }
 
@@ -581,6 +585,9 @@ impl Stackup {
             .map(|(index, _)| index)
             .collect();
         let at = *coppers.get(copper_index)?;
+        // `T` in both equations. A stack that does not state its foil cannot
+        // answer either of them, for the same reason a missing `dk` cannot.
+        let copper = self.layers[at].thickness?;
 
         // The nearest dielectric on each side, and nothing but surface
         // finishes allowed in between: a second copper layer between this one
@@ -605,6 +612,7 @@ impl Stackup {
             return Some(CopperEnvironment::Microstrip {
                 height: inward.thickness?,
                 dk_x1000: inward.dk_x1000?,
+                copper,
             });
         }
 
@@ -617,6 +625,7 @@ impl Stackup {
         Some(CopperEnvironment::Stripline {
             plate_separation: Nm(top.raw() + bottom.raw()),
             dk_x1000: top_dk,
+            copper,
         })
     }
 

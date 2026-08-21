@@ -60,6 +60,7 @@ fn an_outer_layer_is_a_microstrip_over_the_dielectric_under_it() {
         Some(CopperEnvironment::Microstrip {
             height: Nm::from_mm(0.2),
             dk_x1000: 4_600,
+            copper: Nm::from_mm(0.035),
         })
     );
     // And the bottom one looks the other way, at the dielectric above it.
@@ -68,6 +69,7 @@ fn an_outer_layer_is_a_microstrip_over_the_dielectric_under_it() {
         Some(CopperEnvironment::Microstrip {
             height: Nm::from_mm(0.2),
             dk_x1000: 4_600,
+            copper: Nm::from_mm(0.035),
         })
     );
 }
@@ -82,6 +84,7 @@ fn a_centred_inner_layer_is_a_stripline_between_both_planes() {
         Some(CopperEnvironment::Stripline {
             plate_separation: Nm::from_mm(0.4),
             dk_x1000: 4_600,
+            copper: Nm::from_mm(0.0175),
         })
     );
     assert_eq!(stackup.environment_of(2), stackup.environment_of(1));
@@ -160,12 +163,16 @@ fn the_two_forms_agree_with_the_calculator_they_were_built_for() {
     // `cypcb-calc`. This is the join, and it is the only test here that knows
     // both sides.
     let stackup = stack(CENTRED);
-    let Some(CopperEnvironment::Microstrip { height, dk_x1000 }) = stackup.environment_of(0) else {
+    let Some(CopperEnvironment::Microstrip {
+        height,
+        dk_x1000,
+        copper,
+    }) = stackup.environment_of(0)
+    else {
         panic!("the top layer is a microstrip");
     };
-    let z =
-        cypcb_calc::microstrip_ohms_x100(Nm::from_mm(0.35), height, Nm::from_mm(0.035), dk_x1000)
-            .expect("a 0.35mm trace on 0.2mm of FR4 has an impedance");
+    let z = cypcb_calc::microstrip_ohms_x100(Nm::from_mm(0.35), height, copper, dk_x1000)
+        .expect("a 0.35mm trace on 0.2mm of FR4 has an impedance");
     assert!(
         (4_000..=5_500).contains(&z),
         "a 0.35mm outer trace on 0.2mm of 4.6 laminate should land near 50 ohm, got {z}"

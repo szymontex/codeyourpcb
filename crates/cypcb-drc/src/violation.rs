@@ -73,6 +73,9 @@ pub enum ViolationKind {
     SilkClearance,
     /// Trace is too narrow for the current its net declares.
     TraceCurrent,
+    /// A net stated an impedance the stack does not deliver, or one this
+    /// stack cannot be asked about at all.
+    Impedance,
     /// Copper in a pour that reaches no pad of its own net.
     PourIsland,
     /// A pin the design connects to a net that no copper reaches.
@@ -113,6 +116,7 @@ impl std::fmt::Display for ViolationKind {
             ViolationKind::SolderMaskBridge => write!(f, "solder-mask-bridge"),
             ViolationKind::SilkClearance => write!(f, "silk-clearance"),
             ViolationKind::TraceCurrent => write!(f, "trace-current"),
+            ViolationKind::Impedance => write!(f, "impedance"),
             ViolationKind::PourIsland => write!(f, "pour-island"),
             ViolationKind::UnroutedPin => write!(f, "unrouted-pin"),
             ViolationKind::Assertion => write!(f, "assertion"),
@@ -814,6 +818,26 @@ impl DrcViolation {
                 actual.0 as f64 / 1_000_000.0,
                 required.0 as f64 / 1_000_000.0
             ),
+        }
+    }
+
+    /// Create an impedance violation.
+    ///
+    /// Neither `actual` nor `required` is set: both are impedances in ohms and
+    /// every other field of this type is a length in nanometres. A reader
+    /// comparing them would be comparing two different quantities, so the
+    /// numbers stay in the message where their unit is written beside them.
+    pub fn impedance(entity: Entity, location: Point) -> Self {
+        DrcViolation {
+            kind: ViolationKind::Impedance,
+            actual: None,
+            required: None,
+            area: None,
+            location,
+            entity,
+            other_entity: None,
+            source_span: None,
+            message: String::new(),
         }
     }
 
