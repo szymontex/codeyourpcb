@@ -35,6 +35,13 @@ component C2 capacitor "0805" {
 component U1 ic "SOIC-8" {
     value "LDO-3V3"
     at 30mm, 15mm
+    // What the datasheet says. Without this the assertion below has nothing
+    // to read: the checker knows the board and the nets, and a regulator's
+    // output voltage is neither.
+    spec {
+        output 3.3V
+        quiescent 25mA
+    }
 }
 
 component L1 inductor "0805" {
