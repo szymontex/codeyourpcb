@@ -10,6 +10,7 @@
  */
 
 import { type Vec2, Dir45, buildInitialTrace } from './direction45';
+import { layerMaskBit } from './layers';
 import type { BoardSnapshot } from './types';
 import { padWorldPosition } from './routing';
 
@@ -35,6 +36,7 @@ export function buildPadRects(
   clearance: number,
   traceWidth: number,
   padNetMap: Map<string, string>,
+  routingLayer?: string,
 ): PadRect[] {
   const margin = N(clearance) + N(traceWidth) / 2;
   const rects: PadRect[] = [];
@@ -44,6 +46,11 @@ export function buildPadRects(
       const key = `${comp.refdes}.${pad.number}`;
       const net = padNetMap.get(key) ?? '';
       if (net === routingNet || !net) continue;
+      // Copper on another layer is not something to route around. Without
+      // this the path contorts to miss a pad on the far side of the board,
+      // which is the "it fiddles instead of routing better" the owner saw. A
+      // through-hole pad is on every layer and keeps deflecting.
+      if (routingLayer && (Number(pad.layer_mask) & layerMaskBit(routingLayer)) === 0) continue;
 
       const [px, py] = padWorldPosition(comp, pad);
       const hw = N(pad.width_nm) / 2 + margin;
@@ -202,8 +209,9 @@ export function dodgeObstacles(
   clearance: number,
   traceWidth: number,
   padNetMap: Map<string, string>,
+  routingLayer?: string,
 ): Vec2[] {
-  const rects = buildPadRects(snapshot, routingNet, clearance, traceWidth, padNetMap);
+  const rects = buildPadRects(snapshot, routingNet, clearance, traceWidth, padNetMap, routingLayer);
   if (rects.length === 0 || originalPath.length < 2) return originalPath;
 
   let path = originalPath;

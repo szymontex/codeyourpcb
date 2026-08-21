@@ -623,7 +623,7 @@ export function updatePreview(
     ]),
     ...previewPath,
   ];
-  const obstacles = checkRouteObstacles(
+  let obstacles = checkRouteObstacles(
     fullPath.length >= 2 ? fullPath : previewPath,
     snapshot ?? null,
     state.netName,
@@ -649,12 +649,20 @@ export function updatePreview(
       }
     }
     if (netMap.size > 0) {
-      finalPath = dodgeObstacles(previewPath, snapshot, state.netName, state.clearanceNm, state.traceWidth, netMap);
+      finalPath = dodgeObstacles(
+        previewPath, snapshot, state.netName, state.clearanceNm, state.traceWidth, netMap,
+        state.currentLayer,
+      );
       const remaining = checkRouteObstacles(
         finalPath, snapshot, state.netName, state.clearanceNm, state.traceWidth, netMap,
         state.currentLayer,
       );
       hasCollision = remaining.length > 0;
+      // What is still in the way, not what was in the way before the dodge.
+      // The pre-dodge list was returned and drawn, so the canvas marked
+      // obstacles the path had already been bent around - a route covered in
+      // refusals that the same function had just decided were fine.
+      obstacles = remaining;
     }
   }
 
