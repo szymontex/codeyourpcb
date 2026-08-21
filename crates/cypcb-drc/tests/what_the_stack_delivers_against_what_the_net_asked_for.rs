@@ -76,6 +76,7 @@ fn board(stack: &[Spec], layer: Layer, width_mm: f64, target_ohms_x100: Option<u
             segments: vec![TraceSegment {
                 start: Point::new(Nm::from_mm(5.0), Nm::from_mm(10.0)),
                 end: Point::new(Nm::from_mm(35.0), Nm::from_mm(10.0)),
+                width: None,
             }],
             width: Nm::from_mm(width_mm),
             layer,
@@ -278,6 +279,7 @@ fn every_layer_of_the_shared_fixture_reports_a_different_impedance() {
                 segments: vec![TraceSegment {
                     start: Point::new(Nm::from_mm(5.0), Nm::from_mm(10.0)),
                     end: Point::new(Nm::from_mm(35.0), Nm::from_mm(10.0)),
+                    width: None,
                 }],
                 width: Nm::from_mm(0.2),
                 layer,

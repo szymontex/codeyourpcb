@@ -153,6 +153,7 @@ fn run(x0: f64, y0: f64, x1: f64, y1: f64) -> TraceSegment {
     TraceSegment {
         start: Point::from_mm(x0, y0),
         end: Point::from_mm(x1, y1),
+        width: None,
     }
 }
 

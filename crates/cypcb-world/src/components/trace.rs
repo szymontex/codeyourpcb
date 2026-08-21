@@ -70,13 +70,55 @@ pub struct TraceSegment {
     pub start: Point,
     /// End point of the segment.
     pub end: Point,
+    /// The width this one segment runs at, when it is not the trace's.
+    ///
+    /// `None` means "whatever the trace says", which is what almost every
+    /// segment means and why this is an option rather than a required field:
+    /// a `Trace` that is one width end to end says so once.
+    ///
+    /// It exists because a real board is not one width end to end. A trace
+    /// carrying amps has to be millimetres wide and a 2.54mm pad pitch has
+    /// nowhere to put that, so the last stretch into a pad runs thin - which
+    /// the language can already state as `neck 0.8mm for 4mm` and nothing
+    /// could measure, because the copper's real geometry was not in the model.
+    /// KiCad has always written a width per `(segment ...)`; this is where
+    /// that survives being read.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub width: Option<Nm>,
 }
 
 impl TraceSegment {
     /// Create a new trace segment from start to end point.
     #[inline]
     pub fn new(start: Point, end: Point) -> Self {
-        TraceSegment { start, end }
+        TraceSegment {
+            start,
+            end,
+            width: None,
+        }
+    }
+
+    /// Create a segment that runs at its own width rather than the trace's.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use cypcb_world::components::trace::TraceSegment;
+    /// use cypcb_core::{Nm, Point};
+    ///
+    /// let neck = TraceSegment::new_with_width(
+    ///     Point::from_mm(0.0, 0.0),
+    ///     Point::from_mm(4.0, 0.0),
+    ///     Nm::from_mm(0.8),
+    /// );
+    /// assert_eq!(neck.width, Some(Nm::from_mm(0.8)));
+    /// ```
+    pub fn new_with_width(start: Point, end: Point, width: Nm) -> Self {
+        TraceSegment {
+            start,
+            end,
+            width: Some(width),
+        }
     }
 
     /// Calculate the length of this segment in nanometers.
@@ -224,6 +266,77 @@ impl Trace {
     /// assert!(trace.segments.is_empty());
     /// assert!(!trace.locked);
     /// ```
+    /// The width one of this trace's segments actually runs at.
+    ///
+    /// A segment that states nothing runs at the trace's width. Out-of-range
+    /// indices answer with the trace's width too, because a caller asking
+    /// about a segment that is not there has a bug the width cannot fix.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use cypcb_world::components::trace::{Trace, TraceSegment};
+    /// use cypcb_world::NetId;
+    /// use cypcb_core::{Nm, Point};
+    ///
+    /// let mut trace = Trace::new(NetId::new(0));
+    /// trace.width = Nm::from_mm(2.0);
+    /// trace.segments.push(TraceSegment::new(
+    ///     Point::from_mm(0.0, 0.0),
+    ///     Point::from_mm(10.0, 0.0),
+    /// ));
+    /// trace.segments.push(TraceSegment::new_with_width(
+    ///     Point::from_mm(10.0, 0.0),
+    ///     Point::from_mm(14.0, 0.0),
+    ///     Nm::from_mm(0.8),
+    /// ));
+    /// assert_eq!(trace.width_at(0), Nm::from_mm(2.0));
+    /// assert_eq!(trace.width_at(1), Nm::from_mm(0.8));
+    /// ```
+    pub fn width_at(&self, index: usize) -> Nm {
+        self.segments
+            .get(index)
+            .and_then(|segment| segment.width)
+            .unwrap_or(self.width)
+    }
+
+    /// How far this trace runs narrower than its own width.
+    ///
+    /// This is the number `neck 0.8mm for 4mm` is a claim about, and until
+    /// segments carried a width there was nothing to compare the claim
+    /// against. A segment wider than the trace is not a neck and is not
+    /// counted; a trace with no narrow segment answers zero.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use cypcb_world::components::trace::{Trace, TraceSegment};
+    /// use cypcb_world::NetId;
+    /// use cypcb_core::{Nm, Point};
+    ///
+    /// let mut trace = Trace::new(NetId::new(0));
+    /// trace.width = Nm::from_mm(2.0);
+    /// trace.segments.push(TraceSegment::new(
+    ///     Point::from_mm(0.0, 0.0),
+    ///     Point::from_mm(10.0, 0.0),
+    /// ));
+    /// trace.segments.push(TraceSegment::new_with_width(
+    ///     Point::from_mm(10.0, 0.0),
+    ///     Point::from_mm(14.0, 0.0),
+    ///     Nm::from_mm(0.8),
+    /// ));
+    /// assert_eq!(trace.necked_length(), Nm::from_mm(4.0));
+    /// ```
+    pub fn necked_length(&self) -> Nm {
+        let total: i64 = self
+            .segments
+            .iter()
+            .filter(|segment| segment.width.is_some_and(|w| w.raw() < self.width.raw()))
+            .map(|segment| segment.length().0)
+            .sum();
+        Nm(total)
+    }
+
     pub fn new(net_id: NetId) -> Self {
         Trace {
             segments: Vec::new(),

@@ -131,7 +131,11 @@ pub fn apply_routes(world: &mut BoardWorld, result: &RoutingResult) {
         traces_by_key
             .entry(key)
             .or_default()
-            .push(TraceSegment::new(segment.start, segment.end));
+            .push(TraceSegment::new_with_width(
+                segment.start,
+                segment.end,
+                segment.width,
+            ));
 
         trace_widths.entry(key).or_insert(segment.width);
     }
@@ -148,8 +152,23 @@ pub fn apply_routes(world: &mut BoardWorld, result: &RoutingResult) {
 
     for key in trace_keys {
         let (net_id, layer) = key;
-        let segments = traces_by_key.remove(&key).expect("key came from the map");
+        let mut segments = traces_by_key.remove(&key).expect("key came from the map");
         let width = trace_widths[&(net_id, layer)];
+
+        // One `Trace` per net and layer, and its segments do not all have to
+        // be the same width. Until segments carried one, this function kept
+        // the *first* width it saw for the group and dropped the rest: a
+        // KiCad board with a fattened power run or a neck into a pad came back
+        // uniform, and the editor showed copper the file does not have.
+        //
+        // The trace still states the group's width, so a board that really is
+        // one width end to end reads exactly as before - each segment drops
+        // its own copy and inherits.
+        for segment in &mut segments {
+            if segment.width == Some(width) {
+                segment.width = None;
+            }
+        }
 
         let trace = Trace {
             segments,

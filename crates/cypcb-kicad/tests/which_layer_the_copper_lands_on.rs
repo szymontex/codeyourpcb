@@ -197,6 +197,7 @@ fn a_board_written_here_comes_back_on_the_layers_it_left_on() {
                 segments: vec![TraceSegment {
                     start: Point::from_mm(4.0, y),
                     end: Point::from_mm(14.0, y),
+                    width: None,
                 }],
                 net_id: net,
                 locked: false,
