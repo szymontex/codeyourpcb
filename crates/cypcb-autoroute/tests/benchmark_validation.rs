@@ -16,11 +16,11 @@ use cypcb_autoroute::pathfinder_v2::PathFinderStrategy;
 use cypcb_autoroute::scoring::{score_board, RoutingScore, ScoreWeights};
 use cypcb_autoroute::strategy::RoutingStrategy;
 use cypcb_autoroute::{route_board, AutorouteConfig};
-use cypcb_drc::DesignRules;
+use cypcb_drc::{preset_for_world, ruleset_for_world, DesignRules};
 use cypcb_kicad::{parse_kicad_pcb, BENCHMARKS};
 use cypcb_router::apply_routes;
 use cypcb_router::types::RoutingStatus;
-use cypcb_rules::presets::{PresetRuleSet, RulesPreset};
+use cypcb_rules::presets::RulesPreset;
 
 // ============================================================================
 // Helpers
@@ -35,22 +35,24 @@ fn fixture_path(filename: &str) -> std::path::PathBuf {
         .join(filename)
 }
 
-/// Build JLCPCB 2-layer routing rules.
-fn test_rules() -> PresetRuleSet {
-    let preset = RulesPreset::from_name("jlcpcb").unwrap();
-    PresetRuleSet::new(preset)
-}
-
 /// Route a board with a given strategy and return (RoutingScore, route_count, unrouted).
 ///
 /// Always calls `rebuild_spatial_index_with_traces()` before scoring
-/// and uses `DesignRules::jlcpcb_2layer()` for DRC.
+/// and grades each board against the fab table its own layer count asks for.
+///
+/// That table was fixed at two layers until 2026-08-21. `multi_ic` has four
+/// copper layers, so its ratchets were recorded against the wrong row - and
+/// not only the wrong row: the adaptive rule derives the grid cell from the
+/// rule set, so the board searched a 0.508mm grid where the shipped tool
+/// searches 0.400mm. Its numbers below are a re-baseline, not a regression and
+/// not an improvement; neither word applies when the question changed.
 fn route_and_score(strategy: &dyn RoutingStrategy, fixture: &str) -> (RoutingScore, usize, usize) {
     let parsed = parse_kicad_pcb(&fixture_path(fixture))
         .unwrap_or_else(|e| panic!("Failed to parse {}: {:?}", fixture, e));
     let mut world = parsed.world;
     let library = parsed.library;
-    let rules = test_rules();
+    let preset = preset_for_world(RulesPreset::JlcpcbStandard2Layer, &world);
+    let rules = ruleset_for_world(preset, &world);
     let config = AutorouteConfig::default();
 
     // Route through the shipped entry point, not the bare strategy: repair is
@@ -73,7 +75,7 @@ fn route_and_score(strategy: &dyn RoutingStrategy, fixture: &str) -> (RoutingSco
     // Rebuild spatial index for accurate scoring
     world.rebuild_spatial_index_from_library(&library);
 
-    let drc_rules = DesignRules::jlcpcb_2layer();
+    let drc_rules = DesignRules::from_constraints(&preset.constraints());
     let score = score_board(&mut world, &drc_rules, &ScoreWeights::default());
 
     (score, route_count, unrouted)
@@ -252,9 +254,28 @@ const DRC_RATCHETS: &[(&str, &str, u32, u32)] = &[
     // qfp_fanout       309 / 147   57     44            318 / 149
     // plane_board      28 / 13     0      0             28 / 13
     // led_blink        2 / 0       0      0             2 / 0
+    //
+    // Re-baselined 2026-08-21, and only `multi_ic` moved. This harness graded
+    // every board on a fixed two-layer table until that date; `multi_ic` has
+    // four copper layers, so it was both marked against the wrong row and
+    // searched on the wrong grid - the adaptive rule derives the cell from the
+    // rule set, giving 0.508mm there against the 0.400mm the shipped tool
+    // uses. Its routed value goes 945 routes / 316 / 200 to 970 / 381 / 175.
+    // That is neither a regression nor an improvement: the question changed.
+    //
+    // The other five are unchanged to the digit across the conversion -
+    // led_blink 21 / 2 / 0, stm32_breakout 899 / 199 / 99, shift_driver
+    // 671 / 65 / 34, qfp_fanout 1478 / 318 / 149, plane_board 181 / 28 / 13 -
+    // which is the check that the conversion reached nothing it should not.
+    //
+    // `multi_ic`'s new ratchet is its routed value plus its own re-measured
+    // band from `cypcb_autoroute::noise_band`, 34 / 49: 381 + 34 = 415 and
+    // 175 + 49 = 224. The violation side loosens by 59 and the shorts side
+    // **tightens by 19**, because both the routed shorts and the band came
+    // down.
     ("led_blink.kicad_pcb", "led_blink", 2, 0),
     ("stm32_breakout.kicad_pcb", "stm32_breakout", 239, 154),
-    ("multi_ic.kicad_pcb", "multi_ic", 356, 243),
+    ("multi_ic.kicad_pcb", "multi_ic", 415, 224),
     ("shift_driver.kicad_pcb", "shift_driver", 82, 42),
     ("qfp_fanout.kicad_pcb", "qfp_fanout", 366, 191),
     // A band of zero is not a rounding: this board routes identically at every

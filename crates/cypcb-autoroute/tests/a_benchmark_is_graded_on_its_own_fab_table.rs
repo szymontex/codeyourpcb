@@ -27,14 +27,14 @@ use std::path::Path;
 
 /// Harnesses that still hand every benchmark one fixed table.
 ///
-/// This list shrinks and never grows. Most entries are simply not converted
-/// yet. `benchmark_validation.rs` is the one with a reason to stay: its
-/// thresholds were recorded against the two-layer table, so moving its
-/// yardstick moves every ratchet at once and wants a deliberate re-baseline
-/// rather than a drive-by. Whichever it is, converting a file means deleting
-/// its name here in the same commit - the test below fails if the two disagree
-/// in either direction.
-const STILL_ON_A_FIXED_TABLE: &[&str] = &["benchmark_validation.rs"];
+/// **Empty since 2026-08-21.** Twenty-two files were on it when it was
+/// written; the last, `benchmark_validation.rs`, came off with a deliberate
+/// re-baseline of `multi_ic`'s ratchets. The list shrinks and never grows, so
+/// an empty one means the test below is now a plain rule: no harness in this
+/// crate may hand every benchmark one fixed fab table. Adding a name back is
+/// the wrong fix - resolve the board's own table with
+/// `cypcb_drc::preset_for_world` instead.
+const STILL_ON_A_FIXED_TABLE: &[&str] = &[];
 
 /// This file has to name the very things it forbids, so it cannot judge itself.
 const SELF: &str = "a_benchmark_is_graded_on_its_own_fab_table.rs";

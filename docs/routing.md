@@ -247,7 +247,14 @@ regression, and tightening it would need a repeatable router rather than a
 tighter threshold.
 
 `DRC_RATCHETS` in `benchmark_validation.rs` therefore holds each dense
-fixture's measured value plus its measured spread. This is not slack: a
+fixture's measured value plus its measured spread. **`multi_ic`'s entry was
+re-taken on 2026-08-21 by the same method** - the harness had graded every
+board on a fixed two-layer table, and that board has four copper layers, so it
+was marked against the wrong row and searched on a 0.508mm grid where the
+shipped tool searches 0.400mm. Its routed value goes 316 / 200 to 381 / 175 and
+its ratchet 356 / 243 to 415 / 224, loosening 59 on violations and tightening 19
+on shorts. The other five are unchanged to the digit across that conversion,
+which is the check that it reached nothing it should not. This is not slack: a
 threshold set to one run fails on any unrelated change that perturbs rip-up
 ordering, and a gate that cries wolf gets ignored. led_blink has no band - it
 returned 2/0 at every price above zero.
