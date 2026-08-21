@@ -34,7 +34,7 @@ use std::path::Path;
 /// rather than a drive-by. Whichever it is, converting a file means deleting
 /// its name here in the same commit - the test below fails if the two disagree
 /// in either direction.
-const STILL_ON_A_FIXED_TABLE: &[&str] = &["benchmark_validation.rs", "grid_vs_checker.rs"];
+const STILL_ON_A_FIXED_TABLE: &[&str] = &["benchmark_validation.rs"];
 
 /// This file has to name the very things it forbids, so it cannot judge itself.
 const SELF: &str = "a_benchmark_is_graded_on_its_own_fab_table.rs";

@@ -284,40 +284,56 @@ stm32_breakout). The leverage is in the head, not the tail.
 
 ## Where the violations actually are, and where the default sits
 
-Two measurements taken on 2026-08-08, neither of them a knob.
+Two measurements, re-taken 2026-08-21 on six fixtures and thirteen variants,
+each board ranked and graded on the fab table its own layer count asks for.
+Neither is a knob.
 
-**The default is fourth of eight on every board.** `variant_picks_per_board`,
-ranked as the router ranks them - complete first, then fewest shorts, then
-composite:
+**The default is nobody's best on five boards of six, and first on the sixth.**
+`variant_picks_per_board`, ranked as the router ranks them - complete first,
+then fewest shorts, then composite:
 
 | board | winner | the default's place | winner vs default |
 |---|---|---|---|
-| `led_blink` | `High-Density` | 4th | 1 / 0 against 2 / 0 |
-| `stm32_breakout` | `Tight Pads` | 4th | 216 / 86 against 239 / 136 |
-| `multi_ic` | `Pad Aware` | 4th | 248 / 106 against 317 / 166 |
+| `led_blink` | `High-Density` | 2nd | 1 / 0 against 2 / 0 |
+| `stm32_breakout` | `Eager` | 2nd | 179 / 75 against 199 / 99 |
+| `multi_ic` | `Eager Pads` | 4th | 371 / 128 against 381 / 175 |
+| `shift_driver` | `Eager Light` | 7th | 62 / 20 against 65 / 34 |
+| `plane_board` | `Eager Pads Priced Ring` | 5th | 10 / 4 against 28 / 13 |
+| `qfp_fanout` | `Default` | **1st** | - |
 
-Three different winners, and the shipped default is mid-table on all three. It
-is not a bad setting so much as nobody's best. `cypcb route --in-house` routes
-best-of-eight and hands over the winner, so the command line is unaffected;
-what runs on the default is `--fast`, the viewer's single-shot path, and every
-ratchet in CI.
+Five different winners across six boards. This file used to say the default was
+"fourth of eight on every board", measured on three fixtures; on six it ranges
+from first to seventh, and the sentence it supported - that the default is not a
+bad setting so much as nobody's best - now has one board that disagrees with it.
+`cypcb route --in-house` routes best-of-N and hands over the winner, so the
+command line is unaffected; what runs on the default is `--fast`, the viewer's
+single-shot path, and every ratchet in CI.
 
-**More than half of every introduced violation is a trace on a part's pad, in a
-cell the grid had marked as a pad.** `grid_vs_checker`, PathFinder, introduced
-clearance violations cross-tabbed by what the grid thought was in the cell:
+**The majority of every introduced clearance violation sits in a cell the grid
+had marked as a pad.** `grid_vs_checker`, PathFinder, introduced clearance
+violations cross-tabbed by what the grid thought was in the cell:
 
 | board | total | on a pad cell | `part <-> trace` on a pad cell |
 |---|---|---|---|
-| `stm32_breakout` | 206 | 151 (73%) | **109 (53%)** |
-| `multi_ic` | 215 | 175 (81%) | **112 (52%)** |
+| `led_blink` | 2 | 2 (100%) | 2 (100%) |
+| `stm32_breakout` | 171 | **122 (71%)** | 85 (50%) |
+| `multi_ic` | 203 | **131 (65%)** | 93 (46%) |
+| `shift_driver` | 65 | **39 (60%)** | 19 (29%) |
+| `plane_board` | 27 | **19 (70%)** | 15 (56%) |
+| `qfp_fanout` | 291 | **161 (55%)** | 106 (36%) |
+
+This file used to claim the stronger form - that more than half of every
+introduced violation is specifically a `part <-> trace` fault on a pad cell,
+measured at 53% and 52% on two boards. On six it is 50%, 46%, 29%, 56% and 36%,
+so **that form is retracted**: what holds on every board is the pad cell, not
+the part-to-trace shape within it.
 
 The grid knew. The cell was marked `pad` and the search routed through it
 anyway, because a pad zone switches every obstacle off within its radius so
 that a route can reach the pad it is heading for - and inside that radius a
-*foreign* part's pad is switched off with the rest. That is the mechanism
-behind half the defect count on both dense boards, and it is the same one the
-margin sweep above moves: at two cells instead of three, stm32_breakout loses
-50 shorts.
+*foreign* part's pad is switched off with the rest. That mechanism accounts for
+between 55% and 71% of the introduced clearance faults on every dense board
+here.
 
 ### The fourth board, and what it found on its first run
 

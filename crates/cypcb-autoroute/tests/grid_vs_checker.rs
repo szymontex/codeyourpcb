@@ -19,11 +19,12 @@ use cypcb_autoroute::grid::{layer_to_index, RoutingGrid, CELL_PAD, CELL_TRACE, C
 use cypcb_autoroute::pathfinder_v2::PathFinderStrategy;
 use cypcb_autoroute::strategy::StrategyKind;
 use cypcb_autoroute::{route_board, AutorouteConfig};
-use cypcb_drc::{run_drc, DesignRules, ViolationKind};
+use cypcb_drc::{preset_for_world, ruleset_for_world, run_drc, DesignRules, ViolationKind};
 use cypcb_kicad::{parse_kicad_pcb, BENCHMARKS};
 use cypcb_router::apply_routes;
 use cypcb_rules::presets::{PresetRuleSet, RulesPreset};
 use cypcb_world::components::Layer;
+use cypcb_world::BoardWorld;
 
 fn fixture_path(filename: &str) -> std::path::PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -32,8 +33,20 @@ fn fixture_path(filename: &str) -> std::path::PathBuf {
         .join(filename)
 }
 
-fn test_rules() -> PresetRuleSet {
-    PresetRuleSet::new(RulesPreset::from_name("jlcpcb").unwrap())
+/// The fab table this board would actually be graded against, and the rule set
+/// the router gets for it.
+///
+/// This file builds the grid twice - once to inspect and once inside the
+/// router - so both have to come from the same rule set or the cross-tab is
+/// about a grid the router never had. `multi_ic` has four copper layers, and
+/// on its own table the adaptive cell is 0.400mm against 0.508mm.
+fn rules_for(world: &BoardWorld) -> (RulesPreset, PresetRuleSet, DesignRules) {
+    let preset = preset_for_world(RulesPreset::JlcpcbStandard2Layer, world);
+    (
+        preset,
+        ruleset_for_world(preset, world),
+        DesignRules::from_constraints(&preset.constraints()),
+    )
 }
 
 fn fingerprint(violation: &cypcb_drc::DrcViolation) -> String {
@@ -93,8 +106,6 @@ fn describe(cell: u8) -> &'static str {
 #[test]
 #[ignore = "diagnostic: compares the router's obstacle grid against DRC output"]
 fn what_the_grid_thought_was_there() {
-    let drc_rules = DesignRules::jlcpcb_2layer();
-
     for (strategy, label) in [
         (StrategyKind::PathFinder, "pathfinder"),
         (StrategyKind::ImprovedAStar, "improved-astar"),
@@ -108,6 +119,12 @@ fn what_the_grid_thought_was_there() {
                 .unwrap_or_else(|e| panic!("Failed to parse {}: {:?}", benchmark.filename, e));
             let mut world = parsed.world;
             let library = parsed.library;
+            let (preset, rules, drc_rules) = rules_for(&world);
+            eprintln!(
+                "{} [{label}] graded on {}",
+                benchmark.filename,
+                preset.name()
+            );
 
             world.rebuild_spatial_index_from_library(&library);
             let baseline: BTreeSet<String> = run_drc(&mut world, &drc_rules)
@@ -118,11 +135,11 @@ fn what_the_grid_thought_was_there() {
 
             // The grid the router will build, built the same way, before routing
             // changes the world underneath it.
-            let resolution = PathFinderStrategy::resolution_for(&mut world, &test_rules(), &config);
-            let grid = RoutingGrid::from_board(&mut world, &library, &test_rules(), resolution)
+            let resolution = PathFinderStrategy::resolution_for(&mut world, &rules, &config);
+            let grid = RoutingGrid::from_board(&mut world, &library, &rules, resolution)
                 .expect("a board to build a grid from");
 
-            let result = route_board(&mut world, &library, &test_rules(), &config);
+            let result = route_board(&mut world, &library, &rules, &config);
             apply_routes(&mut world, &result);
             world.rebuild_spatial_index_from_library(&library);
 
