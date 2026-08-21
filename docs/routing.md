@@ -1034,11 +1034,29 @@ and a loss on none.** `plane_board` has a band of zero on both columns and goes
 band of 8, which is outside it. Every other board's movement is inside its own
 band in one direction or the other, and no board gets worse outside its band.
 
-That is a stronger reading than this section carried before, and it is not yet a
-reason to change the default. What it has not been asked is the question the
-variant list answers: whether a variant carrying `via_foreign_pad_penalty: 0.02`
-would be picked by any board once it is ranked against the other thirteen. Until
-that is run, this stays at zero and the mechanism stays confirmed.
+That is a stronger reading than this section carried before, and it was still
+not a reason to ship anything. **The variant was built and ranked on 2026-08-21,
+and it does not earn its place.**
+
+A fourteenth point, `PathFinder Priced Pad Landing` - the default router with
+this price at 0.02 and nothing else changed - was added to
+`default_variant_configs` and ranked against the other thirteen on all six
+boards. One board picks it: `qfp_fanout`, at **293 / 147 against `Default`'s
+318 / 149**. That is 25 violations and **2 shorts**, against a band of 60 / 46.
+Inside it, on both columns. Under this file's own rule - a move inside the band
+is the negotiation going differently, not a better setting - that is not an
+adoption.
+
+The two boards where the price genuinely helped against the default config
+already have better variants than it produces. `plane_board` goes 28 / 13 to
+25 / 11 with the price, and picks `Eager Pads Priced Ring` at **10 / 4**.
+`shift_driver` goes 65 / 34 to 51 / 23, and picks `Eager Light` at 62 / 20 -
+fewer shorts, which is what the ranking sorts on before anything else.
+
+So the variant was reverted rather than kept, and the price stays at zero. The
+mechanism is still real and still uncosted; what this run establishes is that
+pricing it does not beat what any board already has. Anyone returning to it
+should start from a price other than 0.02, because 0.02 has now been ranked.
 
 The one fault that keeps two cells out of the defaults has a name:
 `D1 <-> via 'GND': 0.00mm` - a via whose ring lands on a part's pad. Two prices
