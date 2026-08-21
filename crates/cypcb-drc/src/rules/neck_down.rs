@@ -5,11 +5,14 @@
 //! mistake, but a claim nobody measures is no better than no claim - so this
 //! measures the three ways the statement itself can be wrong.
 //!
-//! What it does **not** do is decide whether the neck is thermally safe. That
-//! needs the copper's real geometry, and a trace in this model carries one
-//! width; the necked stretch is not in the segments yet. Until it is, the
-//! honest position is that the declaration is well formed, not that the board
-//! is.
+//! Since 2026-08-21 a segment can carry its own width, so there is a fourth
+//! thing to measure: **how far the copper actually runs thin**, against how
+//! far the declaration allows. A trace whose segments say nothing is still
+//! only checked for a well-formed declaration - there is no thin copper to
+//! measure - and the rule says so rather than passing it quietly.
+//!
+//! What it still does **not** do is decide whether the neck is thermally safe.
+//! That needs a current and a temperature rise this model does not carry.
 
 use cypcb_core::{Nm, Point};
 use cypcb_world::components::trace::{Trace, TraceNeck};
@@ -29,26 +32,36 @@ impl DrcRule for NeckDownRule {
     }
 
     fn check(&self, world: &mut BoardWorld, rules: &DesignRules) -> Vec<DrcViolation> {
-        let necked: Vec<(bevy_ecs::entity::Entity, Nm, Nm, Nm, Nm, Point)> = {
+        let necked: Vec<Measured> = {
             let ecs = world.ecs_mut();
             let mut query = ecs.query::<(bevy_ecs::entity::Entity, &Trace, &TraceNeck)>();
             query
                 .iter(ecs)
                 .filter_map(|(entity, trace, neck)| {
-                    Some((
+                    Some(Measured {
                         entity,
-                        neck.width,
-                        neck.length,
-                        trace.width,
-                        trace.total_length(),
-                        midpoint(trace)?,
-                    ))
+                        neck_width: neck.width,
+                        neck_length: neck.length,
+                        trace_width: trace.width,
+                        trace_length: trace.total_length(),
+                        run_thin: trace.necked_length(),
+                        at: midpoint(trace)?,
+                    })
                 })
                 .collect()
         };
 
         let mut violations = Vec::new();
-        for (entity, neck_width, neck_length, trace_width, trace_length, at) in necked {
+        for Measured {
+            entity,
+            neck_width,
+            neck_length,
+            trace_width,
+            trace_length,
+            run_thin,
+            at,
+        } in necked
+        {
             if neck_width >= trace_width {
                 let mut violation = DrcViolation::neck_down(entity, at);
                 violation.message = format!(
@@ -78,10 +91,39 @@ impl DrcRule for NeckDownRule {
                 );
                 violations.push(violation);
             }
+
+            // The copper against the claim. `run_thin` is the length of the
+            // segments that really are narrower than the trace, which is what
+            // `neck <width> for <length>` is a statement about and what
+            // nothing could measure until segments carried a width.
+            if run_thin > neck_length {
+                let mut violation = DrcViolation::neck_down(entity, at);
+                violation.message = format!(
+                    "the copper runs thin for {} where the neck allows {}: the declaration is not what was drawn",
+                    mm(run_thin),
+                    mm(neck_length)
+                );
+                violations.push(violation);
+            }
         }
 
         violations
     }
+}
+
+/// One declared neck and the trace under it, read out of the world in one pass.
+///
+/// A named struct rather than a tuple because the seventh field was the one
+/// that made a reader count commas to find out which `Nm` was which.
+struct Measured {
+    entity: bevy_ecs::entity::Entity,
+    neck_width: Nm,
+    neck_length: Nm,
+    trace_width: Nm,
+    trace_length: Nm,
+    /// How far the trace's own segments run narrower than the trace.
+    run_thin: Nm,
+    at: Point,
 }
 
 /// A point on the trace to report the violation at.

@@ -740,7 +740,14 @@ fn write_copper(
             continue;
         };
         let net = net_number.get(&trace.net_id).copied().unwrap_or(0);
-        for segment in &trace.segments {
+        // A width per segment, not per trace. KiCad has always written one
+        // `(width ...)` inside each `(segment ...)`, and this wrote the
+        // trace's for all of them - so a board that came in with a neck into a
+        // pad went out uniform, and the round trip quietly widened copper the
+        // designer had made thin on purpose. `width_at` answers the trace's
+        // width for every segment that states none, so a board that really is
+        // one width end to end is written exactly as before.
+        for (index, segment) in trace.segments.iter().enumerate() {
             let _ = writeln!(
                 out,
                 "  (segment (start {} {}) (end {} {}) (width {}) (layer \"{layer}\") (net {net}))",
@@ -748,7 +755,7 @@ fn write_copper(
                 on_sheet(origin, segment.start.x, segment.start.y).1,
                 on_sheet(origin, segment.end.x, segment.end.y).0,
                 on_sheet(origin, segment.end.x, segment.end.y).1,
-                mm(trace.width)
+                mm(trace.width_at(index))
             );
         }
     }

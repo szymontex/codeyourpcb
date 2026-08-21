@@ -8,10 +8,19 @@
 //! pad run thin, because a short length of copper does not have time to heat.
 //! `neck 0.8mm for 4mm` is how this language says it.
 //!
-//! This is the level that makes the statement legal and checkable. It does not
-//! decide whether the neck is thermally safe: a trace in this model carries one
-//! width and the necked stretch is not in the segments yet, so what is checked
-//! is that the declaration describes a neck at all.
+//! Three of the four checks are about the declaration: that it narrows, that
+//! it is etchable, that it fits on the trace. The fourth is about the copper -
+//! **how far the trace actually runs thin, against how far it said it would**.
+//! That one needs a width per segment, which arrived on 2026-08-21; before it
+//! the honest position was that the declaration is well formed, not the board.
+//!
+//! The language cannot yet draw a neck: a `trace` states one width and one
+//! neck, and the segments it syncs to all run at the trace's width. So the
+//! fourth check is exercised on copper built the way the router and the KiCad
+//! reader build it, which is where necked copper comes from today.
+//!
+//! None of this decides whether the neck is thermally safe. That needs a
+//! current and a temperature rise this model does not carry.
 
 use cypcb_core::Nm;
 use cypcb_drc::{run_drc, DesignRules};
@@ -140,4 +149,72 @@ fn the_neck_reaches_the_model_as_written() {
             length: Nm::from_mm(4.0),
         }]
     );
+}
+
+/// A trace whose copper runs thin for `thin_mm`, carrying a stated neck.
+///
+/// Built directly rather than through the language, because the language has
+/// no way to say which part of a trace is the thin part - the fourth check is
+/// about copper the router or the KiCad reader produced.
+fn drawn_neck(thin_mm: f64, declared_mm: f64) -> BoardWorld {
+    use cypcb_core::Point;
+    use cypcb_world::components::trace::{Trace, TraceNeck, TraceSegment, TraceSource};
+    use cypcb_world::components::Layer;
+
+    let mut world = BoardWorld::new();
+    world.set_board("t".to_string(), (Nm::from_mm(40.0), Nm::from_mm(20.0)), 2);
+    let net = world.intern_net("SIG");
+
+    world.ecs_mut().spawn((
+        Trace {
+            layer: Layer::TopCopper,
+            width: Nm::from_mm(2.0),
+            segments: vec![
+                TraceSegment::new(Point::from_mm(4.0, 10.0), Point::from_mm(14.0, 10.0)),
+                TraceSegment::new_with_width(
+                    Point::from_mm(14.0, 10.0),
+                    Point::from_mm(14.0 + thin_mm, 10.0),
+                    Nm::from_mm(0.8),
+                ),
+            ],
+            net_id: net,
+            locked: false,
+            source: TraceSource::Manual,
+        },
+        net,
+        TraceNeck {
+            width: Nm::from_mm(0.8),
+            length: Nm::from_mm(declared_mm),
+        },
+    ));
+    world
+}
+
+#[test]
+fn copper_that_runs_thin_no_further_than_it_said_is_accepted() {
+    let mut world = drawn_neck(4.0, 4.0);
+    assert_eq!(complaints(&mut world), Vec::<String>::new());
+}
+
+#[test]
+fn copper_that_runs_thin_further_than_it_said_is_reported() {
+    // 6mm of 0.8mm copper under a declaration allowing 4mm. Three checks pass
+    // - it narrows, it is etchable, it fits on the trace - and the fourth is
+    // the only one that can see the difference.
+    let mut world = drawn_neck(6.0, 4.0);
+    let complaints = complaints(&mut world);
+    assert_eq!(complaints.len(), 1, "got {complaints:?}");
+    assert!(
+        complaints[0].contains("runs thin for 6mm") && complaints[0].contains("allows 4mm"),
+        "the message has to name both lengths; got {complaints:?}"
+    );
+}
+
+#[test]
+fn a_declared_neck_with_no_thin_copper_is_not_reported() {
+    // What the language produces today: one width for the whole trace. There
+    // is no thin copper to measure, so the fourth check has nothing to say -
+    // and must not read zero thin millimetres as a trace that overran.
+    let mut world = board("2mm", Some("neck 0.8mm for 4mm"));
+    assert_eq!(complaints(&mut world), Vec::<String>::new());
 }
