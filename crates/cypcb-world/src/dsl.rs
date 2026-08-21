@@ -427,6 +427,14 @@ pub fn board_as_dsl(world: &mut BoardWorld) -> String {
     // source never made.
     let fab: Option<String> = world.fab().map(|fab| fab.to_string());
 
+    // The layers a fabricator is expected to press together, likewise carried
+    // straight back out. This block was read, checked against the layer count
+    // and then dropped on the way out, so a design that said how it wanted to
+    // be built lost that on its first save through the editor - and the number
+    // it feeds, `Stackup::total_thickness`, is the depth every plated hole is
+    // drilled through and the figure a fab quotes against.
+    let stackup: Option<crate::components::Stackup> = world.stackup().cloned();
+
     let name = world.board_name().unwrap_or("board").to_string();
     let safe_name: String = name
         .chars()
@@ -458,6 +466,28 @@ pub fn board_as_dsl(world: &mut BoardWorld) -> String {
         format_mm(size.height.0 as f64 / 1e6)
     );
     let _ = writeln!(out, "    layers {}", stack.count.max(2));
+    if let Some(stackup) = &stackup {
+        let _ = writeln!(out, "    stackup {{");
+        for layer in &stackup.layers {
+            // A layer that stated no thickness is written without one. The
+            // alternative - filling in a plausible foil or prepreg - would
+            // turn a gap in the design into a number the fab is quoted on.
+            match layer.thickness {
+                Some(thickness) => {
+                    let _ = writeln!(
+                        out,
+                        "        {} {}mm",
+                        layer.kind.as_str(),
+                        format_mm(thickness.0 as f64 / 1e6)
+                    );
+                }
+                None => {
+                    let _ = writeln!(out, "        {}", layer.kind.as_str());
+                }
+            }
+        }
+        let _ = writeln!(out, "    }}");
+    }
     if let Some(fab) = fab {
         let _ = writeln!(out, "    fab {fab}");
     }
