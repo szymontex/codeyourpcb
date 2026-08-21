@@ -95,11 +95,13 @@ the proof.
 
 ## Unblocked work, largest first
 
-1. **The allocator.** 41% of routing instructions are in malloc/free, measured
-   with callgrind - the largest single number this project has measured about
-   itself. The fix is named: rewrite `route_with_blockers` so the search owns
-   its scratch space instead of the `pathfinding` crate. A project rather than
-   a single pass, and now explicitly sanctioned by the licence above.
+1. ~~**The allocator.**~~ **Closed 2026-08-21 by measuring it.** The 41% does
+   not reproduce: callgrind on the same board and the same command gives
+   **16,527,748 of 3,567,992,341 instructions in libc's allocator, 0.46%**. The
+   rewrite this item asked for is `crates/cypcb-autoroute/src/astar_grid.rs`,
+   which has been in the tree since the run that took `shift_driver` from 41.2
+   billion instructions to 3.5 billion. The item was measured against the old
+   baseline and never re-read against the code.
 2. **Genuine KiCad fixtures as a re-baseline.** Every ratchet, every noise band
    and every table in `docs/routing.md` is measured against the current
    fixtures; converting them means re-measuring all of it in one commit.
@@ -139,12 +141,15 @@ does.
 
 ## Next step
 
-The owner's defect list is empty and the stack is blocked on his field list, so
-take **the allocator**: measure first with callgrind on `shift_driver` to
-confirm the 41% still stands, then rewrite `route_with_blockers` to reuse its
-frontier and visited set across nets. The acceptance bar is the one this vector
-already uses - a change counts only when it moves a board outside that board's
-own noise band, and the six ratchets in `benchmark_validation` must not move
-for a change that is meant to be pure speed.
+Measure before rewriting. The allocator was the largest item on this list and
+it took one callgrind run to close it - the fix had been written months of
+commits ago and nobody re-read the item against the code. Two earlier items in
+the same vector died the same way. **Anything on a list here that names a
+number is a claim, and a claim that has not been re-run is not evidence.**
 
-Ask the owner about the stack fields when he next appears.
+With the allocator gone, nothing left on the unblocked list is something the
+owner would notice. The tracker's remaining items are the project talking to
+itself: a re-baseline, a flag name, a parked panel. The owner found five real
+defects in one sitting by **using the editor**, and that is the method to
+repeat - lay a board out in the browser the way a designer would, and fix what
+gets in the way.
