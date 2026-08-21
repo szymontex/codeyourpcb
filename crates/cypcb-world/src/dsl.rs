@@ -117,10 +117,17 @@ pub(crate) fn net_name_as_written(name: &str) -> String {
 
 pub fn traces_as_dsl(world: &mut BoardWorld) -> String {
     // Collect all traces grouped by net name
-    let trace_data: Vec<Trace> = {
+    // The neck comes with the trace. It is a separate component, and reading
+    // the two in separate passes would pair them by iteration order - which is
+    // not an order this project relies on anywhere else and should not start
+    // relying on here.
+    let trace_data: Vec<(Trace, Option<crate::components::trace::TraceNeck>)> = {
         let ecs = world.ecs_mut();
-        let mut query = ecs.query::<&Trace>();
-        query.iter(ecs).cloned().collect()
+        let mut query = ecs.query::<(&Trace, Option<&crate::components::trace::TraceNeck>)>();
+        query
+            .iter(ecs)
+            .map(|(trace, neck)| (trace.clone(), neck.copied()))
+            .collect()
     };
 
     // Collect all vias grouped by net name
@@ -135,15 +142,16 @@ pub fn traces_as_dsl(world: &mut BoardWorld) -> String {
     }
 
     // Group traces by net name, using BTreeMap for deterministic ordering
-    let mut net_traces: BTreeMap<String, Vec<&Trace>> = BTreeMap::new();
+    type NeckedTrace<'a> = (&'a Trace, Option<crate::components::trace::TraceNeck>);
+    let mut net_traces: BTreeMap<String, Vec<NeckedTrace<'_>>> = BTreeMap::new();
     let mut net_vias: BTreeMap<String, Vec<&Via>> = BTreeMap::new();
 
-    for trace in &trace_data {
+    for (trace, neck) in &trace_data {
         let net_name = world
             .net_name(trace.net_id)
             .unwrap_or("unknown")
             .to_string();
-        net_traces.entry(net_name).or_default().push(trace);
+        net_traces.entry(net_name).or_default().push((trace, *neck));
     }
 
     for via in &via_data {
@@ -178,7 +186,7 @@ pub fn traces_as_dsl(world: &mut BoardWorld) -> String {
 
         // For each trace on this net, emit a separate trace block
         if let Some(traces) = traces {
-            for trace in traces {
+            for (trace, neck) in traces {
                 let _ = writeln!(output, "trace {} {{", net_name_as_written(net_name));
 
                 // Layer
@@ -231,6 +239,20 @@ pub fn traces_as_dsl(world: &mut BoardWorld) -> String {
                         );
                     }
                     let _ = writeln!(output);
+                }
+
+                // The neck, so a board written down can be read back as the
+                // board it was. Without this line a routed file lost the
+                // declaration and, on reload, the geometry: `apply_neck` draws
+                // the thin stretch from the declaration, and a file with the
+                // path but not the `neck` reloads as uniform copper.
+                if let Some(neck) = neck {
+                    let _ = writeln!(
+                        output,
+                        "    neck {}mm for {}mm",
+                        format_mm(neck.width.to_mm()),
+                        format_mm(neck.length.to_mm())
+                    );
                 }
 
                 // Locked
