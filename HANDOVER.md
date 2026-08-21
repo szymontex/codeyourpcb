@@ -1,155 +1,101 @@
-# HANDOVER - 2026-08-21 - CodeYourPCB, layers and the interactive editor
+# HANDOVER - 2026-08-21 - CodeYourPCB
 
 ## Goal
 
-Turn the viewer into something a professional can lay out a multi-layer board
-in. The owner's verdict that started this run: the editor was written as if a
-board were one plane.
+A PCB tool a professional can lay a board out in, and whose every number can
+be traced to where it came from.
 
 ## Where the work lives
 
-- **Container is the source of truth.** `ssh flightcore "docker exec -u abc code-server bash -lc 'export PATH=/config/.cargo/bin:$PATH; cd /workspace/codeyourpcb && <cmd>'"`
-- Local `~/szymontex/codeyourpcb` is stale (branch `main`). It is only a
-  scratch path for editing `docs/TRACKER.md`.
-- Branch `fix/cli-check-drc`, tracking origin, **61 commits ahead of main, all
-  pushed**, tree clean at `dc37137`.
+- **The container is the source of truth.** `ssh flightcore "docker exec -u abc code-server bash -lc 'export PATH=/config/.cargo/bin:$PATH; cd /workspace/codeyourpcb && <cmd>'"`
+- Local `~/szymontex/codeyourpcb` is stale. Do not read it.
+- Branch `fix/cli-check-drc`, tracking origin, **488 commits ahead of main, all
+  pushed**, tree clean at `f249844`.
 - `docs/TRACKER.md` in the container is the real record. Read it first.
 
 ## Editing rules that must not be broken
 
-- Fetch from the container, edit locally, `scp` back, check `md5sum` on both
-  sides.
-- **Cuts spanning more than one function go by line number, not string
-  offset.** Two regressions this run came from `s.index()` matching a call
-  inside a different function than the one being aimed at.
-- Every new test gets a mutation. A test a mutation does not kill is empty -
-  this caught four vacuous tests this run.
-- Verify before saying done. The command whose output proves the claim goes in
-  the commit message. Screenshots and DOM audits count; reasoning does not.
+- Fetch from the container, edit locally, `scp` back, check `md5sum` both sides.
+- **Anchor on a line, not on a substring.** Three separate regressions this
+  session came from the same mistake: `s.index()` matching inside a different
+  function, a markdown `## heading` match landing inside a `### heading`, and a
+  struct derive ending up on the wrong type. Cuts spanning more than one item
+  go by line number with both ends asserted.
+- **Every new test gets a mutation.** A test a mutation does not kill is empty.
+  A mutation that *survives* is a gap - one survived this session and the gap
+  it found was real.
+- **Verify before saying done.** The command whose output proves the claim goes
+  in the commit message. Running the binary counts; reasoning does not.
+- `./scripts/quality-gate.sh` before any commit. It caught a startup crash, a
+  clippy lint four separate times, a manual `% 100 == 0`, a tree-sitter-only
+  compile break and a viewer that had no name for a new violation kind. It is
+  not a formality.
+- New keyboard shortcuts must be listed in `CLAUDE.md` or the registry test
+  fails.
+- **Push after a green gate** - standing consent, 2026-08-20.
+- Stage named paths. `git add -A` swept two foreign files from another project
+  into commits this session; `viewer/pkg/*.wasm` is gitignored and needs
+  `git add -f`.
 
-## The pattern worth knowing before touching anything
+## Patterns worth knowing before touching anything
 
-**Three files needed the same fix this run**, and a fourth will:
-`checkRouteObstacles` in `routing.ts`, `hit-test.ts`, and `dodge.ts`. Each
-asked which **net** a piece of copper was on and never which **layer**. The
-Rust core has carried copper masks and a grid per layer since it was written;
-the TypeScript editor was not written with layers in mind at all. When
-something in the editor behaves as if the board were one plane, this is why.
+**A symmetric fixture cannot catch an index error.** Three shipped index bugs
+had one cause: neighbouring layers of a symmetric stack give the same answer,
+so a rule reading the wrong index produces the right number. `cypcb-fixtures`
+now holds a stack where all four copper layers answer differently. Use it for
+anything that reads a layer index.
 
-Rule that came out of it: a through-hole pad is on every layer and must never
-be skipped by a layer filter - it is a drilled hole, and copper cannot pass
-through it on any layer.
+**Re-measure before rewriting.** Four items on the tracker turned out to be
+already done or wrong when measured: the allocator "41% in malloc/free" was
+0.46%, a `get_unchecked` action was already in the code, a grid-packing suspect
+had been reverted, and `pad <name>` had shipped. Read the code against the
+action before acting on it.
 
-## State now
+**Provenance over silence.** Every fab number says where it came from - a
+published page, this tool's arithmetic on one, `UNSOURCED`, or a standard it
+cannot link to. Where a form cannot answer, the report says **not checked, not
+passed** rather than staying quiet.
 
-### The owner's five reported defects - all closed
+## What went in this session, newest first
 
-- `50fe549` copper on another layer is not an obstacle
-- `c61f7e6` a click picks what you can see, prefers the layer you are on
-- `7520c8f` + `f0a4edc` real multi-selection, `Ctrl+A`, delete-many, proven in
-  a browser on a fixture board
-- `c1010c6` net names printed once - an off-by-one drew every label twice, and
-  nothing compared placements across segments
-- `dc37137` the dodge avoids only copper it could hit, and reports what is
-  still in the way rather than what was in the way before it ran
+`f249844` examples keep their assertions, guarded by a test that runs the CLI ·
+`a0079a9` `spec { output 3.3V }` on a part · `5be584f` `within` evaluates ·
+`d4fa265` neck-down level 2 · `d069d9f` `cypcb-fixtures` · `37d201b` inner
+layer off-by-one · `6f7db5f` a board is checked against its own layer count's
+table · `325a108` the impedance rule · `59241a6` `impedance 90ohm` on a net ·
+`bba4619` `Stackup::environment_of` · `f99a5d8` IPC-2141 microstrip and
+stripline · `d060b5b` `export --house` · `a9e8c7a` variant panel deleted ·
+`14ec826` IPC presets stop citing an unreadable table · `44f867f` silk, mask
+and paste figures read against their pages
 
-### The layer system, built this run
+## Two things deliberately left closed, with reasons
 
-`1c3f7b2` saved views on `Ctrl+Tab` · `04608de` per-layer weight ·
-`899f6f1` colour editing including the inner layers · `8321786` stack draw
-order and a grey ghost mode · `9748360` silkscreen/mask/drill/edge rows ·
-`4080272` the duplicated toolbar picker removed · `7134755` the panel rebuilt
-against the design canon (0 elements under 15px, 0 overflowing)
+**The asymmetric stripline.** IPC-2141A computes it in several steps whose
+sub-equations were revised by an official errata, so the published form differs
+between issues of a document nobody here can read. That is not the microstrip's
+position - there the form is unambiguous and only a third-party cross-check was
+missing, which is why that one shipped with a caveat. Transcribing this one
+would be guessing which revision.
 
-### Language and fab tables, same run
-
-`df20311` `pad "A1"` · `68a08c5` `net "VBUS+"` - without these no USB-C, BGA or
-edge-connector board could be written down. `0b3a5d0`, `eb1b646`, `157495a` -
-every preset now says whether its numbers came off a published page, this
-tool's own arithmetic, or a standard it cannot cite.
-
-## Blocked on the owner
-
-**The board stack.** The language has `layers N` and a `stackup` block with a
-type and a thickness per layer. It has no name, material, copper weight or
-impedance. The owner asked for parity with Altium and KiCad board definition
-and **no promise was made**. The question put to him, still unanswered: which
-of those fields does his own work use? The field list decides whether this
-becomes a tool or a table nobody fills in. Do not guess it.
-
-## Licence to rewrite - stated by the owner 2026-08-21
-
-"jak trzeba zrobic rewrite to sie zrobi, bo ten projekt i tak nie ma ani jednej
-wersji stable a nawet alpha, tymbardziej beta."
-
-There is no released version, so **backward compatibility is not a
-constraint**. A file format change, a grammar change, a rewritten module or a
-rewritten crate are all on the table when the current shape is the thing in the
-way. This removes the usual reason to bolt a fix onto a structure that cannot
-hold it - and three files needing the same layer fix this run is exactly that
-kind of signal.
-
-What does not change: the work is still measured, tested and mutated before it
-is called done. A rewrite is licence to change the shape, not licence to skip
-the proof.
-
-## Unblocked work, largest first
-
-1. ~~**The allocator.**~~ **Closed 2026-08-21 by measuring it.** The 41% does
-   not reproduce: callgrind on the same board and the same command gives
-   **16,527,748 of 3,567,992,341 instructions in libc's allocator, 0.46%**. The
-   rewrite this item asked for is `crates/cypcb-autoroute/src/astar_grid.rs`,
-   which has been in the tree since the run that took `shift_driver` from 41.2
-   billion instructions to 3.5 billion. The item was measured against the old
-   baseline and never re-read against the code.
-2. **Genuine KiCad fixtures as a re-baseline.** Every ratchet, every noise band
-   and every table in `docs/routing.md` is measured against the current
-   fixtures; converting them means re-measuring all of it in one commit.
-3. **`cypcb export --preset`** names a file convention while the same flag on
-   every other command names a design-rule table.
-4. **The variant panel** is unwired and unwireable while the Route UI is hidden
-   behind D5. Wire, delete, or leave parked - the owner's call.
-
-## Running services from this session
-
-Vite dev server in the container on **5199**, tunnelled to the laptop:
-
-    ssh -f -N -L 5199:172.16.7.2:5199 flightcore
-    firefox http://localhost:5199/
-
-If the tunnel died, re-run that line. If the server died:
-`docker exec -u abc code-server bash -lc 'cd /workspace/codeyourpcb/viewer && npx vite --host 0.0.0.0 --port 5199'`
-
-No example this project ships carries routed copper - `grep -c '^trace ' examples/*.cypcb`
-returns 0 for all of them. To see copper in the app, load a fixture through
-`window.__loadBoard(src)`, the way `e2e/a-selection-can-be-deleted.spec.ts`
-does.
-
-## Active rules
-
-- Commit every material step: conventional commits, English, no AI
-  attribution, hyphens not em dashes. Move DONE/NEXT-ACTION in
-  `docs/TRACKER.md` in the **same** commit. Message via file: `scp msg.txt`,
-  `git commit -F`.
-- **Push after a green gate** - standing consent given 2026-08-20.
-- `./scripts/quality-gate.sh` before any commit touching build, viewer or
-  scripts. It has caught a startup crash, a clippy doc lint and an undocumented
-  shortcut this run - it is not a formality.
-- New keyboard shortcuts must be listed in `CLAUDE.md` or the shortcut registry
-  test fails.
-- Report in Polish: result, next step, blocker.
+**A third-party reference value for the impedance forms.** Four attempts
+failed: two timeouts on the Analog Devices tutorial, a calculator page that
+renders its formula as an image, and KiCad's own microstrip calculator carrying
+an open issue saying it may be more than 20% out. Both anchors in the tests
+were instead worked out **on paper before the code was run**, which is what
+makes them evidence.
 
 ## Next step
 
-Measure before rewriting. The allocator was the largest item on this list and
-it took one callgrind run to close it - the fix had been written months of
-commits ago and nobody re-read the item against the code. Two earlier items in
-the same vector died the same way. **Anything on a list here that names a
-number is a claim, and a claim that has not been re-run is not evidence.**
+`docs/TRACKER.md`, V6: **the same guard for the other promise examples make -
+that their commands work.** Several carry a `// Check it with: cypcb check ...`
+header, one carries `cypcb route` and `cypcb export`, and nothing runs them.
+The by-hand sweep this session found two real defects; the only reason it is
+not still finding them is that it was run once, by a person, on one day.
 
-With the allocator gone, nothing left on the unblocked list is something the
-owner would notice. The tracker's remaining items are the project talking to
-itself: a re-baseline, a flag name, a parked panel. The owner found five real
-defects in one sitting by **using the editor**, and that is the method to
-repeat - lay a board out in the browser the way a designer would, and fix what
-gets in the way.
+After that, the largest live item is **per-segment trace width**, which is what
+neck-down level 3 needs and what would let the neck rule measure the necked
+stretch rather than only the coherence of the declaration.
+
+## Report style
+
+Polish: result, next step, blocker. Details to the tracker, not the chat.
