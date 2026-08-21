@@ -164,13 +164,85 @@ fn evaluate(
                 ))
             }
         }
-        // `within` compares against a tolerance the model does not carry yet.
-        // Say so rather than pass the board.
-        AssertExpression::Within { .. } => Outcome::Unevaluable(
-            "assertion not checked: `within` needs tolerances, which the board model does not \
-             carry yet"
-                .to_string(),
-        ),
+        // `within` used to answer "not checked: the board model does not carry
+        // tolerances yet", and that was reading a harder question than the one
+        // asked. A part's own manufacturing tolerance is indeed not in the
+        // model. This assertion does not need it: `R1.value within 10kohm +/-
+        // 5%` asks whether the value the design **states** falls in a band,
+        // and the value and the band are both here.
+        AssertExpression::Within { left, target, .. } => {
+            let left_value = match resolve(left, board, values, nets) {
+                Ok(value) => value,
+                Err(why) => return Outcome::Unevaluable(format!("assertion not checked: {why}")),
+            };
+            let nominal = Value {
+                base: target.unit.to_base_f64(target.value),
+                quantity: quantity_of(target.unit),
+            };
+            if left_value.quantity != nominal.quantity {
+                return Outcome::Unevaluable(format!(
+                    "assertion not checked: {} cannot be compared with {}",
+                    left_value.quantity.name(),
+                    nominal.quantity.name()
+                ));
+            }
+
+            let Some(tolerance) = &target.tolerance else {
+                return Outcome::Unevaluable(
+                    "assertion not checked: `within` needs a band, as in \
+                     `within 10kohm +/- 5%` or `within 100nF to 220nF`"
+                        .to_string(),
+                );
+            };
+
+            let (low, high) = match &tolerance.kind {
+                cypcb_parser::ast::ToleranceKind::Percentage { value } => {
+                    let spread = nominal.base * value / 100.0;
+                    (nominal.base - spread, nominal.base + spread)
+                }
+                cypcb_parser::ast::ToleranceKind::Absolute(spread) => {
+                    if quantity_of(spread.unit) != nominal.quantity {
+                        return Outcome::Unevaluable(format!(
+                            "assertion not checked: a band of {} does not fit {}",
+                            quantity_of(spread.unit).name(),
+                            nominal.quantity.name()
+                        ));
+                    }
+                    let spread = spread.unit.to_base_f64(spread.value);
+                    (nominal.base - spread, nominal.base + spread)
+                }
+                // `within 100nF to 220nF` - the nominal is the low end and the
+                // stated value is the high one, not a spread either side.
+                cypcb_parser::ast::ToleranceKind::Range(upper) => {
+                    if quantity_of(upper.unit) != nominal.quantity {
+                        return Outcome::Unevaluable(format!(
+                            "assertion not checked: a range ending in {} does not fit {}",
+                            quantity_of(upper.unit).name(),
+                            nominal.quantity.name()
+                        ));
+                    }
+                    (nominal.base, upper.unit.to_base_f64(upper.value))
+                }
+            };
+
+            if left_value.base >= low && left_value.base <= high {
+                Outcome::Held
+            } else {
+                Outcome::Failed(format!(
+                    "assertion failed: {} is {}, which is outside {} to {}",
+                    describe(left),
+                    format_base(left_value),
+                    format_base(Value {
+                        base: low,
+                        quantity: nominal.quantity
+                    }),
+                    format_base(Value {
+                        base: high,
+                        quantity: nominal.quantity
+                    })
+                ))
+            }
+        }
     }
 }
 
