@@ -2,7 +2,7 @@
 //!
 //! Provides IPC-standard calculations for PCB design:
 //! - Trace width from current (IPC-2221)
-//! - Future: Impedance calculation (IPC-2141)
+//! - Impedance for a microstrip and a symmetric stripline (IPC-2141)
 //!
 //! # Example
 //!
@@ -17,8 +17,10 @@
 //! println!("Cross-section: {:.4}mm²", result.cross_section_mm2);
 //! ```
 
+pub mod impedance;
 pub mod trace_width;
 
+pub use impedance::{microstrip_ohms_x100, stripline_ohms_x100};
 pub use trace_width::{
     TraceWidthCalculator, TraceWidthParams, TraceWidthResult, TraceWidthWarning,
 };
