@@ -10,11 +10,20 @@
 //! Every token here was read out of KiCad's own writer rather than guessed.
 //! `BOARD_STACKUP::FormatBoardStackup` in `pcbnew/board_stackup_manager/
 //! board_stackup.cpp` prints `(layer %s (type %s)` with both quoted, then
-//! thickness, then material; `BOARD_STACKUP_ITEM::GetTypeName` is where
-//! `copper`, `core`, `prepreg`, `soldermask` and `silkscreen` come from. The
-//! comment beside the `(setup ...)` node in `board_writer.rs` records what
-//! happens when this is guessed instead: KiCad refuses the whole file, and
-//! this project's own importer reading it back happily proves nothing.
+//! thickness, then material.
+//!
+//! The `(type ...)` words come from `BuildDefaultStackupList` in the same
+//! file, which is what sets the name every board actually carries: `KEY_COPPER`,
+//! `KEY_CORE` and `KEY_PREPREG` for copper and dielectric, and the human
+//! labels `Top Solder Mask`, `Bottom Solder Mask`, `Top Silk Screen` and
+//! `Bottom Silk Screen` for the surface finishes. Reading
+//! `BOARD_STACKUP_ITEM`'s constructor instead - which sets `soldermask` and
+//! `silkscreen` and is overwritten before anything is written - is how this
+//! test file once asserted two wrong tokens.
+//!
+//! The comment beside the `(setup ...)` node in `board_writer.rs` records the
+//! cost of getting this wrong: KiCad refuses the whole file, and this
+//! project's own importer reading it back happily proves nothing.
 
 use cypcb_core::Nm;
 use cypcb_kicad::board_writer::write_board;
@@ -151,13 +160,13 @@ fn the_surface_finishes_take_the_side_they_sit_on() {
     assert_eq!(
         stackup_lines(&text),
         vec![
-            "(layer \"F.SilkS\" (type \"silkscreen\") (thickness 0.01))",
-            "(layer \"F.Mask\" (type \"soldermask\") (thickness 0.02))",
+            "(layer \"F.SilkS\" (type \"Top Silk Screen\") (thickness 0.01))",
+            "(layer \"F.Mask\" (type \"Top Solder Mask\") (thickness 0.02))",
             "(layer \"F.Cu\" (type \"copper\") (thickness 0.035))",
             "(layer \"dielectric 1\" (type \"core\") (thickness 1.5))",
             "(layer \"B.Cu\" (type \"copper\") (thickness 0.035))",
-            "(layer \"B.Mask\" (type \"soldermask\") (thickness 0.02))",
-            "(layer \"B.SilkS\" (type \"silkscreen\") (thickness 0.01))",
+            "(layer \"B.Mask\" (type \"Bottom Solder Mask\") (thickness 0.02))",
+            "(layer \"B.SilkS\" (type \"Bottom Silk Screen\") (thickness 0.01))",
         ],
         "\n{text}"
     );

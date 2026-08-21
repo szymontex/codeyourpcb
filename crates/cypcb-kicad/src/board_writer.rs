@@ -145,7 +145,7 @@ pub struct KicadDesignRules {
     pub annular_ring: Nm,
 }
 
-/// What KiCad calls each entry of a stackup, top to bottom.
+/// What KiCad calls each entry of a stackup, and what it says the entry is.
 ///
 /// Every layer line pcbnew writes carries a name, so a design that named none
 /// still needs one. The copper names follow the same rule the `(layers ...)`
@@ -154,7 +154,7 @@ pub struct KicadDesignRules {
 /// numbers them, which is what `dielectric 1` is.
 ///
 /// A name the design stated wins: it is what the fabricator was told.
-fn stackup_layer_names(stackup: &Stackup, copper_layers: usize) -> Vec<String> {
+fn stackup_entries(stackup: &Stackup, copper_layers: usize) -> Vec<(String, &'static str)> {
     let coppers: Vec<usize> = stackup
         .layers
         .iter()
@@ -167,14 +167,14 @@ fn stackup_layer_names(stackup: &Stackup, copper_layers: usize) -> Vec<String> {
 
     let mut dielectric = 0usize;
     let mut inner = 0usize;
-    let mut names = Vec::with_capacity(stackup.layers.len());
+    let mut entries = Vec::with_capacity(stackup.layers.len());
     for (index, layer) in stackup.layers.iter().enumerate() {
         // Before the first copper is the front of the board and after the last
         // is the back. A stackup with no copper at all has neither, and its
         // surface finishes default to the front rather than to nothing.
         let front = last_copper.is_none_or(|last| index < last);
-        let name = match layer.kind {
-            StackupLayerKind::Copper => {
+        let (name, type_name) = match layer.kind {
+            StackupLayerKind::Copper => (
                 if Some(index) == first_copper {
                     "F.Cu".to_string()
                 } else if Some(index) == last_copper {
@@ -187,49 +187,35 @@ fn stackup_layer_names(stackup: &Stackup, copper_layers: usize) -> Vec<String> {
                     // count would produce a layer pcbnew has not been told
                     // about.
                     format!("In{}.Cu", inner.min(copper_layers.saturating_sub(1)))
-                }
-            }
+                },
+                "copper",
+            ),
             StackupLayerKind::Mask => {
                 if front {
-                    "F.Mask".to_string()
+                    ("F.Mask".to_string(), "Top Solder Mask")
                 } else {
-                    "B.Mask".to_string()
+                    ("B.Mask".to_string(), "Bottom Solder Mask")
                 }
             }
             StackupLayerKind::Silk => {
                 if front {
-                    "F.SilkS".to_string()
+                    ("F.SilkS".to_string(), "Top Silk Screen")
                 } else {
-                    "B.SilkS".to_string()
+                    ("B.SilkS".to_string(), "Bottom Silk Screen")
                 }
             }
-            StackupLayerKind::Core | StackupLayerKind::Prepreg => {
+            StackupLayerKind::Core => {
                 dielectric += 1;
-                format!("dielectric {dielectric}")
+                (format!("dielectric {dielectric}"), "core")
+            }
+            StackupLayerKind::Prepreg => {
+                dielectric += 1;
+                (format!("dielectric {dielectric}"), "prepreg")
             }
         };
-        names.push(layer.name.clone().unwrap_or(name));
+        entries.push((layer.name.clone().unwrap_or(name), type_name));
     }
-    names
-}
-
-/// The word pcbnew writes in a stackup entry's `(type ...)`.
-///
-/// Read out of KiCad's own `BOARD_STACKUP_ITEM::GetTypeName` rather than
-/// guessed. The three dielectric and copper spellings are `KEY_COPPER`,
-/// `KEY_CORE` and `KEY_PREPREG` in `stackup_predefined_prms.h`; the two
-/// surface finishes are literals in `board_stackup.cpp`. Guessing here is the
-/// mistake the `(setup (rules ...))` note above records - a token pcbnew does
-/// not know makes the whole file unopenable, and this project's own importer
-/// reading it back happily is not evidence of anything.
-fn stackup_type_name(kind: StackupLayerKind) -> &'static str {
-    match kind {
-        StackupLayerKind::Copper => "copper",
-        StackupLayerKind::Core => "core",
-        StackupLayerKind::Prepreg => "prepreg",
-        StackupLayerKind::Mask => "soldermask",
-        StackupLayerKind::Silk => "silkscreen",
-    }
+    entries
 }
 
 /// The stackup, in the order and the shape `FormatBoardStackup` writes it.
@@ -237,14 +223,20 @@ fn stackup_type_name(kind: StackupLayerKind) -> &'static str {
 /// Fields in pcbnew's order - type, thickness, material - and each one omitted
 /// when the design did not state it. A thickness invented here would be a
 /// number the fabricator is quoted on that nobody chose.
+///
+/// The `(type ...)` words come from `BuildDefaultStackupList`, which is what
+/// actually sets the name every board carries: `KEY_COPPER`, `KEY_CORE` and
+/// `KEY_PREPREG` for copper and dielectric, and the human labels
+/// `Top Solder Mask`, `Bottom Solder Mask`, `Top Silk Screen` and
+/// `Bottom Silk Screen` for the surface finishes. The defaults in
+/// `BOARD_STACKUP_ITEM`'s constructor - `soldermask`, `silkscreen` - are
+/// overwritten there before anything is written, and reading the constructor
+/// alone is how this writer shipped two wrong tokens once already.
 fn write_stackup(out: &mut String, stackup: &Stackup, copper_layers: usize) {
-    let names = stackup_layer_names(stackup, copper_layers);
+    let entries = stackup_entries(stackup, copper_layers);
     let _ = writeln!(out, "    (stackup");
-    for (layer, name) in stackup.layers.iter().zip(names) {
-        let mut line = format!(
-            "      (layer \"{name}\" (type \"{}\")",
-            stackup_type_name(layer.kind)
-        );
+    for (layer, (name, type_name)) in stackup.layers.iter().zip(entries) {
+        let mut line = format!("      (layer \"{name}\" (type \"{type_name}\")");
         if let Some(thickness) = layer.thickness {
             let _ = write!(line, " (thickness {})", mm(thickness));
         }
