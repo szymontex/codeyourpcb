@@ -24,9 +24,9 @@
 
 use cypcb_autoroute::{route_board, AutorouteConfig};
 use cypcb_drc::presets::DesignRules;
-use cypcb_drc::{run_drc, ViolationKind};
+use cypcb_drc::{preset_for_world, ruleset_for_world, run_drc, ViolationKind};
 use cypcb_kicad::parse_kicad_pcb;
-use cypcb_rules::presets::{PresetRuleSet, RulesPreset};
+use cypcb_rules::presets::RulesPreset;
 
 fn fixture(name: &str) -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -40,9 +40,6 @@ fn fixture(name: &str) -> std::path::PathBuf {
 #[test]
 #[ignore = "diagnostic: routes three fixtures at four prices"]
 fn what_a_stacked_hole_should_cost() {
-    let rules = PresetRuleSet::new(RulesPreset::from_name("jlcpcb").expect("a known preset"));
-    let drc_rules = DesignRules::jlcpcb_2layer();
-
     for name in [
         "stm32_breakout.kicad_pcb",
         "multi_ic.kicad_pcb",
@@ -50,10 +47,21 @@ fn what_a_stacked_hole_should_cost() {
     ] {
         eprintln!();
         eprintln!("=== {name} ===");
+        let mut table: Option<&'static str> = None;
 
         for penalty in [0.0, 5.0, 20.0, 100.0] {
             let parsed = parse_kicad_pcb(&fixture(name)).expect("the fixture parses");
             let mut world = parsed.world;
+
+            // `multi_ic` is the four-layer board of the three, and a fixed
+            // two-layer table grades it as a board nobody ships.
+            let preset = preset_for_world(RulesPreset::JlcpcbStandard2Layer, &world);
+            let rules = ruleset_for_world(preset, &world);
+            let drc_rules = DesignRules::from_constraints(&preset.constraints());
+            if table.is_none() {
+                eprintln!("  graded on {}", preset.name());
+                table = Some(preset.name());
+            }
 
             let config = AutorouteConfig {
                 via_stack_penalty: penalty,

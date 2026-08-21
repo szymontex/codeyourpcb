@@ -207,8 +207,10 @@ const KNOWN_OVERLAPS: &[(&str, usize)] = &[];
 
 #[test]
 fn no_fixture_asks_for_two_parts_in_the_same_place() {
+    use cypcb_drc::preset_for_world;
     use cypcb_drc::presets::DesignRules;
     use cypcb_drc::rules::{CourtyardClearanceRule, DrcRule};
+    use cypcb_rules::presets::RulesPreset;
 
     for benchmark in BENCHMARKS {
         let parsed = parse_kicad_pcb(&fixture_path(benchmark.filename))
@@ -216,7 +218,13 @@ fn no_fixture_asks_for_two_parts_in_the_same_place() {
         let mut world = parsed.world;
         world.rebuild_spatial_index_from_library(&parsed.library);
 
-        let violations = CourtyardClearanceRule.check(&mut world, &DesignRules::jlcpcb_2layer());
+        // The board's own table rather than a fixed two-layer one. A courtyard
+        // clearance is one of the three figures no fab publishes, so both
+        // tables derive the same 0.25mm and this board's answer does not move
+        // - which is a thing to have measured rather than assumed.
+        let preset = preset_for_world(RulesPreset::JlcpcbStandard2Layer, &world);
+        let rules = DesignRules::from_constraints(&preset.constraints());
+        let violations = CourtyardClearanceRule.check(&mut world, &rules);
         let known = KNOWN_OVERLAPS
             .iter()
             .find(|(name, _)| *name == benchmark.filename)

@@ -14,7 +14,7 @@ use cypcb_autoroute::pathfinder_v2::PathFinderStrategy;
 use cypcb_autoroute::scoring::{score_board, RoutingScore, ScoreWeights};
 use cypcb_autoroute::strategy::RoutingStrategy;
 use cypcb_autoroute::AutorouteConfig;
-use cypcb_drc::DesignRules;
+use cypcb_drc::{preset_for_world, ruleset_for_world, DesignRules};
 use cypcb_kicad::{parse_kicad_pcb, KicadPcbParseResult};
 use cypcb_router::apply_routes;
 use cypcb_router::types::RoutingResult;
@@ -35,10 +35,19 @@ fn fixture_path(filename: &str) -> std::path::PathBuf {
         .join(filename)
 }
 
-/// Build JLCPCB 2-layer routing rules.
-fn test_rules() -> PresetRuleSet {
-    let preset = RulesPreset::from_name("jlcpcb").unwrap();
-    PresetRuleSet::new(preset)
+/// The fab table this board would actually be graded against, and the rule set
+/// the router gets for it.
+///
+/// `multi_ic` has four copper layers, so `cypcb check` reads it against
+/// `jlcpcb_standard_4layer`. A fixed two-layer table scores it as a board
+/// nobody ships.
+fn rules_for(world: &BoardWorld) -> (RulesPreset, PresetRuleSet, DesignRules) {
+    let preset = preset_for_world(RulesPreset::JlcpcbStandard2Layer, world);
+    (
+        preset,
+        ruleset_for_world(preset, world),
+        DesignRules::from_constraints(&preset.constraints()),
+    )
 }
 
 /// Holds a scored routing result for one strategy × fixture.
@@ -64,8 +73,9 @@ fn route_and_score(
     strategy: &dyn RoutingStrategy,
     fixture_name: &str,
 ) -> (StrategyResult, RoutingResult) {
-    let rules = test_rules();
+    let (preset, rules, drc_rules) = rules_for(&world);
     let config = AutorouteConfig::default();
+    eprintln!("  graded on {}", preset.name());
 
     eprintln!(
         "  [{}] {} — components={}, nets={}, library_fps={}",
@@ -85,7 +95,6 @@ fn route_and_score(
     // Rebuild spatial index for accurate scoring
     world.rebuild_spatial_index_from_library(library);
 
-    let drc_rules = DesignRules::jlcpcb_2layer();
     let score = score_board(&mut world, &drc_rules, &ScoreWeights::default());
 
     let sr = StrategyResult {

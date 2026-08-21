@@ -10,10 +10,10 @@
 use std::path::Path;
 
 use cypcb_autoroute::{route_board, AutorouteConfig};
-use cypcb_drc::{run_drc, DesignRules};
+use cypcb_drc::{preset_for_world, ruleset_for_world, run_drc, DesignRules};
 use cypcb_kicad::parse_kicad_pcb;
 use cypcb_router::apply_routes;
-use cypcb_rules::presets::{PresetRuleSet, RulesPreset};
+use cypcb_rules::presets::RulesPreset;
 
 #[test]
 #[ignore = "diagnostic: prints the repair pass's own decisions"]
@@ -29,10 +29,16 @@ fn what_repair_decided() {
         .join("../..")
         .join("tests/fixtures/benchmark/multi_ic.kicad_pcb");
 
-    let library = parse_kicad_pcb(&fixture)
-        .expect("the fixture parses")
-        .library;
-    let rules = PresetRuleSet::new(RulesPreset::from_name("jlcpcb").unwrap());
+    let parsed = parse_kicad_pcb(&fixture).expect("the fixture parses");
+    let library = parsed.library;
+
+    // `multi_ic` has four copper layers, so `cypcb check` reads it against
+    // `jlcpcb_standard_4layer`. A fixed two-layer table here would report on a
+    // board nobody ships.
+    let preset = preset_for_world(RulesPreset::JlcpcbStandard2Layer, &parsed.world);
+    let rules = ruleset_for_world(preset, &parsed.world);
+    let drc_rules = DesignRules::from_constraints(&preset.constraints());
+    eprintln!("graded on {}", preset.name());
 
     // What the pass costs, against what it returns. Each repair attempt is a
     // full re-route of the board, and the default is two radii of two passes.
@@ -50,7 +56,7 @@ fn what_repair_decided() {
 
         apply_routes(&mut board, &result);
         board.rebuild_spatial_index_from_library(&library);
-        let drc = run_drc(&mut board, &DesignRules::jlcpcb_2layer());
+        let drc = run_drc(&mut board, &drc_rules);
 
         eprintln!(
             "{label}: {:?}, {} routes, {} violations, {:.1}s",

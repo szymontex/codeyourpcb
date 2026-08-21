@@ -10,10 +10,11 @@
 use std::path::{Path, PathBuf};
 
 use cypcb_autoroute::{route_board, AutorouteConfig};
+use cypcb_drc::{preset_for_world, ruleset_for_world};
 use cypcb_export::{run_export, ExportJob};
 use cypcb_kicad::{parse_kicad_pcb, BENCHMARKS};
 use cypcb_router::apply_routes;
-use cypcb_rules::presets::{PresetRuleSet, RulesPreset};
+use cypcb_rules::presets::RulesPreset;
 use cypcb_world::components::trace::Trace;
 use cypcb_world::components::Layer;
 /// A drawn line as a Gerber reports it: where it starts and where it ends.
@@ -115,7 +116,10 @@ fn what_the_router_lays_is_what_the_fabricator_gets() {
         let mut world = parsed.world;
         let library = parsed.library;
 
-        let rules = PresetRuleSet::new(RulesPreset::from_name("jlcpcb").expect("the preset"));
+        let rules = ruleset_for_world(
+            preset_for_world(RulesPreset::JlcpcbStandard2Layer, &world),
+            &world,
+        );
         let routing = route_board(&mut world, &library, &rules, &AutorouteConfig::default());
         assert!(
             routing.route_count() > 0,
@@ -259,7 +263,10 @@ fn which_layers_the_router_joins_with_a_via() {
     let mut world = parsed.world;
     let library = parsed.library;
 
-    let rules = PresetRuleSet::new(RulesPreset::from_name("jlcpcb").expect("the preset"));
+    let rules = ruleset_for_world(
+        preset_for_world(RulesPreset::JlcpcbStandard2Layer, &world),
+        &world,
+    );
     let routing = route_board(&mut world, &library, &rules, &AutorouteConfig::default());
     assert!(routing.via_count() > 0, "no vias to look at");
 
@@ -293,8 +300,6 @@ fn how_many_pins_no_copper_reaches() {
     use cypcb_drc::rules::{DrcRule, UnroutedPinRule};
     use cypcb_drc::DesignRules;
 
-    let drc_rules = DesignRules::jlcpcb_2layer();
-
     for benchmark in BENCHMARKS {
         let parsed =
             parse_kicad_pcb(&fixture_path(benchmark.filename)).expect("the fixture parses");
@@ -302,9 +307,18 @@ fn how_many_pins_no_copper_reaches() {
         let library = parsed.library;
         world.rebuild_spatial_index_from_library(&library);
 
+        // The board's own table. `multi_ic` has four copper layers, and an
+        // unrouted pin counted against the wrong table is counted on a board
+        // nobody ships.
+        let preset = preset_for_world(RulesPreset::JlcpcbStandard2Layer, &world);
+        let drc_rules = DesignRules::from_constraints(&preset.constraints());
+
         let before = UnroutedPinRule.check(&mut world, &drc_rules).len();
 
-        let rules = PresetRuleSet::new(RulesPreset::from_name("jlcpcb").expect("the preset"));
+        let rules = ruleset_for_world(
+            preset_for_world(RulesPreset::JlcpcbStandard2Layer, &world),
+            &world,
+        );
         let routing = route_board(&mut world, &library, &rules, &AutorouteConfig::default());
         apply_routes(&mut world, &routing);
         world.rebuild_spatial_index_from_library(&library);
@@ -487,7 +501,10 @@ fn what_the_router_was_asked_to_connect() {
         }
 
         // And what the router laid for it.
-        let rules = PresetRuleSet::new(RulesPreset::from_name("jlcpcb").expect("the preset"));
+        let rules = ruleset_for_world(
+            preset_for_world(RulesPreset::JlcpcbStandard2Layer, &world),
+            &world,
+        );
         let routing = route_board(&mut world, &library, &rules, &AutorouteConfig::default());
         eprintln!("  status: {:?}", routing.status);
         for segment in routing
