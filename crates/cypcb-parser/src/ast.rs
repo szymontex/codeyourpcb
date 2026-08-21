@@ -219,8 +219,18 @@ pub struct StackupDef {
 pub struct StackupLayer {
     /// Type of layer (copper, prepreg, etc.).
     pub layer_type: LayerType,
+    /// What the fabricator calls this layer, when the design says.
+    ///
+    /// Quoted, because the canonical names carry a dot - `F.Cu`, `In1.Cu`,
+    /// `B.Mask` - which no identifier in this language may.
+    pub name: Option<StringLit>,
     /// Optional thickness of the layer.
     pub thickness: Option<Dimension>,
+    /// What the layer is made of: `material "FR4"`.
+    ///
+    /// A name, not a validated material - this crate reads the language and
+    /// has no table of laminates to check it against.
+    pub material: Option<StringLit>,
     /// Span covering this layer definition.
     pub span: Span,
 }

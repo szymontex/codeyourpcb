@@ -111,7 +111,32 @@ board four_layer {
 ```
 
 Layer types are `copper`, `prepreg`, `core`, `mask` and `silk`. A thickness is
-optional on each.
+optional on each, and so are the two names a fabricator needs:
+
+```
+board four_layer {
+    size 50mm x 30mm
+    layers 4
+    stackup {
+        copper "F.Cu" 0.035mm
+        prepreg "dielectric 1" 0.2mm material "FR4"
+        copper "In1.Cu" 0.0175mm
+        core "dielectric 2" 1.095mm material "Isola 370HR"
+        copper "In2.Cu" 0.0175mm
+        prepreg "dielectric 3" 0.2mm material "FR4"
+        copper "B.Cu" 0.035mm
+    }
+}
+```
+
+The name is what the fabricator calls that layer. It is quoted because the
+canonical names carry a dot - `F.Cu`, `In1.Cu`, `B.Mask` - which no identifier
+in this language may. A stackup entry and a copper layer are not the same
+thing: the four-layer board above has seven entries.
+
+`material` is the laminate or foil the board is quoted on, held as written.
+Nothing here has a table of laminates to check it against, and a material this
+tool does not recognise is still the one the fabricator is asked for.
 
 The checker reads the stackup against the rest of the design and reports two
 contradictions:

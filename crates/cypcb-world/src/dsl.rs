@@ -472,19 +472,17 @@ pub fn board_as_dsl(world: &mut BoardWorld) -> String {
             // A layer that stated no thickness is written without one. The
             // alternative - filling in a plausible foil or prepreg - would
             // turn a gap in the design into a number the fab is quoted on.
-            match layer.thickness {
-                Some(thickness) => {
-                    let _ = writeln!(
-                        out,
-                        "        {} {}mm",
-                        layer.kind.as_str(),
-                        format_mm(thickness.0 as f64 / 1e6)
-                    );
-                }
-                None => {
-                    let _ = writeln!(out, "        {}", layer.kind.as_str());
-                }
+            let mut line = format!("        {}", layer.kind.as_str());
+            if let Some(name) = &layer.name {
+                let _ = write!(line, " {}", quoted(name));
             }
+            if let Some(thickness) = layer.thickness {
+                let _ = write!(line, " {}mm", format_mm(thickness.0 as f64 / 1e6));
+            }
+            if let Some(material) = &layer.material {
+                let _ = write!(line, " material {}", quoted(material));
+            }
+            let _ = writeln!(out, "{line}");
         }
         let _ = writeln!(out, "    }}");
     }

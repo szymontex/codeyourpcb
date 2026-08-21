@@ -32,18 +32,12 @@ fn stackup_of(thickness_mm: f64) -> Stackup {
     // presses is nearly all core, so the core carries the number.
     Stackup {
         layers: vec![
-            StackupLayer {
-                kind: StackupLayerKind::Copper,
-                thickness: Some(Nm::from_mm(0.035)),
-            },
-            StackupLayer {
-                kind: StackupLayerKind::Core,
-                thickness: Some(Nm::from_mm(thickness_mm - 0.07)),
-            },
-            StackupLayer {
-                kind: StackupLayerKind::Copper,
-                thickness: Some(Nm::from_mm(0.035)),
-            },
+            StackupLayer::new(StackupLayerKind::Copper, Some(Nm::from_mm(0.035))),
+            StackupLayer::new(
+                StackupLayerKind::Core,
+                Some(Nm::from_mm(thickness_mm - 0.07)),
+            ),
+            StackupLayer::new(StackupLayerKind::Copper, Some(Nm::from_mm(0.035))),
         ],
     }
 }

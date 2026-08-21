@@ -427,12 +427,44 @@ impl StackupLayerKind {
 }
 
 /// One layer of the board, top to bottom.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+///
+/// Not `Copy`: a layer carries the two names a fabricator needs, and a name is
+/// a `String`.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct StackupLayer {
     /// What the layer is made of.
     pub kind: StackupLayerKind,
+    /// What the fabricator calls this layer, when the design says.
+    ///
+    /// `F.Cu`, `In1.Cu`, `dielectric 2` - the names KiCad's own board file
+    /// carries, which is why they are stored as written rather than parsed
+    /// into a layer index. A stackup entry and a copper layer are not the same
+    /// thing: a four-layer board has nine or eleven stackup entries.
+    pub name: Option<String>,
     /// How thick it is, when the design says.
     pub thickness: Option<Nm>,
+    /// The laminate or foil the fabricator is asked for: `FR4`, `Isola 370HR`.
+    ///
+    /// Held as written. Nothing in this project has a table of laminates to
+    /// check it against, and a material this tool did not recognise is still
+    /// the material the board is quoted on.
+    pub material: Option<String>,
+}
+
+impl StackupLayer {
+    /// A layer that states only what it is and how thick.
+    ///
+    /// The two names are what a design adds when it cares which fabricator
+    /// builds it; most designs state neither, and every caller that predates
+    /// them means this.
+    pub fn new(kind: StackupLayerKind, thickness: Option<Nm>) -> Self {
+        StackupLayer {
+            kind,
+            name: None,
+            thickness,
+            material: None,
+        }
+    }
 }
 
 /// The layers a fabricator presses together, in order from the top.

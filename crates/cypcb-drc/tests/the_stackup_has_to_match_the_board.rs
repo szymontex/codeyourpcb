@@ -21,10 +21,7 @@ fn layers(spec: &[(StackupLayerKind, Option<f64>)]) -> Stackup {
     Stackup {
         layers: spec
             .iter()
-            .map(|(kind, thickness)| StackupLayer {
-                kind: *kind,
-                thickness: thickness.map(Nm::from_mm),
-            })
+            .map(|(kind, thickness)| StackupLayer::new(*kind, thickness.map(Nm::from_mm)))
             .collect(),
     }
 }

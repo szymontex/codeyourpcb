@@ -409,12 +409,20 @@ impl CypcbParser {
             }
         };
 
+        let name =
+            get_child_by_field(node, "name").map(|n| self.convert_string_literal(source, &n));
+
         let thickness = get_child_by_field(node, "thickness")
             .and_then(|n| self.convert_dimension(source, &n, errors));
 
+        let material =
+            get_child_by_field(node, "material").map(|n| self.convert_string_literal(source, &n));
+
         Some(StackupLayer {
             layer_type,
+            name,
             thickness,
+            material,
             span: span_of(node),
         })
     }

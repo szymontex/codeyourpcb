@@ -152,3 +152,85 @@ board t {
     let back = load(&text);
     assert!(back.stackup().is_none(), "\n{text}");
 }
+
+/// The same stack, with the two names a fabricator needs on it.
+const FOUR_LAYER_NAMED: &str = r#"version 1
+
+board t {
+    size 40mm x 20mm
+    layers 4
+    stackup {
+        copper "F.Cu" 0.035mm
+        prepreg "dielectric 1" 0.2mm material "FR4"
+        copper "In1.Cu" 0.0175mm
+        core "dielectric 2" 1.095mm material "Isola 370HR"
+        copper "In2.Cu" 0.0175mm
+        prepreg "dielectric 3" 0.2mm material "FR4"
+        copper "B.Cu" 0.035mm
+    }
+}
+"#;
+
+#[test]
+fn a_layer_says_which_layer_it_is_and_what_it_is_made_of() {
+    // Before this, a stackup was seven anonymous slabs: a reader could count
+    // the copper and add up the thickness and could not say which entry was
+    // `In1.Cu`, nor which laminate the board is quoted on. Both names are
+    // quoted in the language because a fabricator's canonical layer names
+    // carry a dot, which no identifier here may.
+    let world = load(FOUR_LAYER_NAMED);
+    let stackup = world.stackup().expect("the premise");
+    let names: Vec<Option<&str>> = stackup
+        .layers
+        .iter()
+        .map(|layer| layer.name.as_deref())
+        .collect();
+    assert_eq!(
+        names,
+        vec![
+            Some("F.Cu"),
+            Some("dielectric 1"),
+            Some("In1.Cu"),
+            Some("dielectric 2"),
+            Some("In2.Cu"),
+            Some("dielectric 3"),
+            Some("B.Cu"),
+        ]
+    );
+    assert_eq!(stackup.layers[3].material.as_deref(), Some("Isola 370HR"));
+    assert_eq!(stackup.layers[0].material, None, "copper names no laminate");
+}
+
+#[test]
+fn the_two_names_survive_being_written_down() {
+    let mut world = load(FOUR_LAYER_NAMED);
+    let before = world.stackup().cloned().expect("the premise");
+
+    let text = board_as_dsl(&mut world);
+    assert!(
+        text.contains("copper \"In1.Cu\" 0.017500mm"),
+        "a layer name has to come back quoted, not dropped:\n{text}"
+    );
+    assert!(
+        text.contains("material \"Isola 370HR\""),
+        "a laminate has to come back:\n{text}"
+    );
+
+    let back = load(&text);
+    assert_eq!(
+        back.stackup().cloned(),
+        Some(before),
+        "the stackup changed on the way out:\n{text}"
+    );
+}
+
+#[test]
+fn a_layer_can_still_say_nothing_but_its_kind() {
+    // Both names are optional and the old spelling is still the whole of most
+    // designs, so this is the guard against a grammar change that quietly
+    // makes them required.
+    let world = load(FOUR_LAYER);
+    let stackup = world.stackup().expect("the premise");
+    assert!(stackup.layers.iter().all(|layer| layer.name.is_none()));
+    assert!(stackup.layers.iter().all(|layer| layer.material.is_none()));
+}

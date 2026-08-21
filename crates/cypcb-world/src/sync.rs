@@ -846,7 +846,9 @@ fn sync_board(board: &BoardDef, source: &str, world: &mut BoardWorld, result: &m
                 .iter()
                 .map(|layer| StackupLayer {
                     kind: stackup_kind(layer.layer_type),
+                    name: layer.name.as_ref().map(|n| n.value.clone()),
                     thickness: layer.thickness.as_ref().map(|d| d.to_nm()),
+                    material: layer.material.as_ref().map(|m| m.value.clone()),
                 })
                 .collect(),
         });

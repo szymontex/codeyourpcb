@@ -1519,6 +1519,26 @@
           }
         ]
       },
+      "material": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "string",
+            "named": true
+          }
+        ]
+      },
+      "name": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "string",
+            "named": true
+          }
+        ]
+      },
       "thickness": {
         "multiple": false,
         "required": false,
@@ -2352,6 +2372,10 @@
   },
   {
     "type": "mask",
+    "named": false
+  },
+  {
+    "type": "material",
     "named": false
   },
   {

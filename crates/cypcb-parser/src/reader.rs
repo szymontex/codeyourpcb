@@ -393,15 +393,35 @@ impl<'a> Reader<'a> {
                 continue;
             };
             self.bump();
+            // The layer's own name, when the design gives it one. A string,
+            // because a fabricator's canonical names carry a dot.
+            let name = match self.peek() {
+                Some(TokenKind::Str(_)) => self.string(),
+                _ => None,
+            };
             // A thickness is optional, and the next line's layer name is not
             // one, so only a number starts it.
             let thickness = match self.peek() {
                 Some(TokenKind::Number(_)) => self.dimension(),
                 _ => None,
             };
+            // Consumed here rather than left to the loop. The loop reads the
+            // next word as a layer kind, and `material` is not one, so leaving
+            // it would report the design's own syntax as an unknown property.
+            let material = if self.eat_word("material") {
+                let literal = self.string();
+                if literal.is_none() {
+                    self.unexpected("a quoted material after `material`");
+                }
+                literal
+            } else {
+                None
+            };
             layers.push(StackupLayer {
                 layer_type,
+                name,
                 thickness,
+                material,
                 span: Span::new(layer_start, self.behind()),
             });
         }
