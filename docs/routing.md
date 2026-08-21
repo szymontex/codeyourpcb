@@ -966,52 +966,79 @@ A pad zone switches off every obstacle within its radius so a route can reach
 the pad it is heading for. The radius was the pad's own copper plus a flat
 three cells, under a comment reading "generous but safe" - 0.762mm on the
 0.254mm grid, wider than the gap between the two pads of an 0402.
-`pad_zone_margin_sweep`, after / shorts. **This is the first sweep, on three
-boards, before either fixture was repaired** - the current six-board table is
-under "What that does not license" above and disagrees with this one on
-`multi_ic`:
+`pad_zone_margin_sweep`, after / shorts, re-measured 2026-08-21 on all six
+fixtures with each board graded on the fab table its own layer count asks for.
+The previous version of this table was three boards measured before either
+fixture was repaired, and it said in its own text that a six-board table
+elsewhere in this file disagreed with it. This run settles that: the six-board
+one is current and the three-board one is gone.
 
-| margin | led_blink | stm32_breakout | multi_ic |
-|---|---|---|---|
-| 0 cells | 1 / 1 | 250 / 91, **1 unrouted** | 406 / 193 |
-| 1 cell | 2 / 1 | 233 / 82 | 305 / 113 |
-| **2 cells** | 2 / 1 | **216 / 86** | **290 / 131** |
-| 3 cells (default) | 2 / 0 | 239 / 136 | 336 / 166 |
-| 5 cells | 4 / 1 | 273 / 164 | 353 / 189 |
+| margin | led_blink | stm32_breakout | multi_ic | shift_driver | plane_board | qfp_fanout |
+|---|---|---|---|---|---|---|
+| 0 cells | 1 / 1 | 158 / 63, **1 unrouted** | 447 / 174 | 79 / 31 | 30 / 20 | 384 / 205 |
+| 1 cell | 2 / 1 | 217 / 95 | 405 / 138 | 73 / 36 | 39 / 16 | 348 / 172 |
+| 2 cells (`Tight Pads`) | 2 / 1 | 281 / 148 | 397 / 189 | 71 / 34 | 36 / 19 | 324 / 185 |
+| **3 cells (default)** | **2 / 0** | **199 / 99** | **381 / 175** | **65 / 34** | **28 / 13** | **318 / 149** |
+| 5 cells | 4 / 1 | 297 / 204 | 388 / 155 | 81 / 54 | 44 / 25 | 350 / 210 |
 
-Two cells is better than the shipped three on both dense boards and on both
-columns - stm32_breakout by 23 violations and **50 shorts**, multi_ic by 46 and
-35, all outside the noise bands measured above. led_blink goes the other way,
-trading two near misses for one short, which under this project's ranking is
-the wrong direction. So it ships as the `PathFinder Tight Pads` variant rather
-than as the default, and **stm32_breakout picks it in best-of-eight** at
-216 / 86 where its previous pick, `Low-Via`, gave 216 / 114.
+**The shipped three cells is now the best row on every board, which reverses
+what this section used to conclude.** The old text said two cells beat three on
+both dense boards and both columns, "all outside the noise bands measured
+above". Today two cells is worse than three on all six: `stm32_breakout` by 82
+violations, which is outside its band of 59; `led_blink` and `plane_board` have
+a band of zero on both columns, so their losses are signal too; the rest are
+inside their bands and so are not evidence either way. Nothing prefers two.
+
+`PathFinder Tight Pads` is still a point in the variant list, and the list is
+ranked per board. What is gone is this section's separate claim that two cells
+is the better opening - and with it the claim that `stm32_breakout` picks
+`Tight Pads`. Measured 2026-08-21, no board picks it: `led_blink` takes
+`High-Density` at 1 / 0, `stm32_breakout` `Eager` at 179 / 75, `multi_ic`
+`Eager Pads` at 371 / 128, `shift_driver` `Eager Light` at 62 / 20,
+`plane_board` `Eager Pads Priced Ring` at 10 / 4, `qfp_fanout` `Default` at
+318 / 149.
 
 Zero is not the floor: with no margin at all stm32_breakout leaves a connection
-unrouted and takes seven times as long, because a route cannot always reach a
-pad through the clearance the grid bloated around it.
+unrouted, because a route cannot always reach a pad through the clearance the
+grid bloated around it. That part held - it is the one row of the old table
+that reproduced.
 
 ### A pad under a via, priced separately (`via_foreign_pad_penalty`, default 0)
 
 The blind spot named below is real and closing it does exactly what the theory
 says. At the narrower opening, `led_blink`'s via-on-a-pad short disappears the
-moment a pad in the keepout costs anything at all - after / shorts:
+moment a pad in the keepout costs anything at all. Re-measured 2026-08-21 on
+all six fixtures at both openings, after / shorts.
 
-| price | led_blink | stm32_breakout | multi_ic |
-|---|---|---|---|
-| 0 (default) | 2 / 1 | 216 / 86 | 290 / 131 |
-| 0.02 | **1 / 0** | 272 / 147 | 277 / 121 |
-| 0.05 | **1 / 0** | 239 / 124 | 330 / 168 |
-| 0.10 | **1 / 0** | 242 / 108 | 339 / 180 |
+At the shipped opening of three cells:
 
-And at the shipped opening it moves stm32_breakout's shorts 136 -> 122 at 0.10
-while multi_ic goes 166 -> 206.
+| price | led_blink | stm32_breakout | multi_ic | shift_driver | plane_board | qfp_fanout |
+|---|---|---|---|---|---|---|
+| 0 (default) | 2 / 0 | 199 / 99 | 381 / 175 | 65 / 34 | 28 / 13 | 318 / 149 |
+| **0.02** | 2 / 0 | 179 / 89 | 400 / 150 | **51 / 23** | **25 / 11** | 293 / 147 |
+| 0.05 | 2 / 0 | 196 / 107 | 396 / 185 | 51 / 23 | 25 / 11 | 335 / 168 |
+| 0.10 | 2 / 0 | 217 / 126 | 386 / 179 | 52 / 24 | 25 / 11 | 334 / 169 |
 
-It still ships at zero, because no price and opening together beat what each
-board already picks: stm32_breakout has 216 / 86 from `Tight Pads` at zero,
-multi_ic has 267 / 106 from `Pad Aware`, and led_blink has 1 / 0 from
-`High-Density`. The mechanism is confirmed and the knob is there; what is
-missing is a board that wants it, and none of these three does.
+At two cells:
+
+| price | led_blink | stm32_breakout | multi_ic | shift_driver | plane_board | qfp_fanout |
+|---|---|---|---|---|---|---|
+| 0 | 2 / 1 | 281 / 148 | 397 / 189 | 71 / 34 | 36 / 19 | 324 / 185 |
+| 0.02 | **1 / 0** | 182 / 81 | 377 / 153 | 54 / 29 | 38 / 17 | 280 / 152 |
+| 0.05 | **1 / 0** | 199 / 97 | 378 / 190 | 47 / 22 | 36 / 16 | 313 / 177 |
+| 0.10 | **1 / 0** | 210 / 120 | 373 / 151 | 46 / 22 | 38 / 17 | 277 / 139 |
+
+**At the shipped opening a price of 0.02 is a real improvement on two boards
+and a loss on none.** `plane_board` has a band of zero on both columns and goes
+28 / 13 to 25 / 11, so both are signal. `shift_driver` drops 11 shorts against a
+band of 8, which is outside it. Every other board's movement is inside its own
+band in one direction or the other, and no board gets worse outside its band.
+
+That is a stronger reading than this section carried before, and it is not yet a
+reason to change the default. What it has not been asked is the question the
+variant list answers: whether a variant carrying `via_foreign_pad_penalty: 0.02`
+would be picked by any board once it is ranked against the other thirteen. Until
+that is run, this stays at zero and the mechanism stays confirmed.
 
 The one fault that keeps two cells out of the defaults has a name:
 `D1 <-> via 'GND': 0.00mm` - a via whose ring lands on a part's pad. Two prices
@@ -1027,9 +1054,11 @@ stm32_breakout 239 -> 259 and multi_ic 336 -> 392 with 50 more shorts.
 Settings that help one board and hurt another are kept as variants rather than
 defaults, which is what `--variants` is for: `pad_zone_blocks_foreign_copper`
 (Guarded Pads), `via_ring_penalty` (Priced Via Rings) and `foreign_pad_penalty`
-(Pad Aware, which multi_ic picks in best-of-eight at 267 after / 106 shorts
-against the default's 336 / 166) and `pad_zone_margin_cells` (Tight Pads, which
-stm32_breakout picks at 216 / 86). `PathFinder Bare Centre Line` is the router
+(Pad Aware) and `pad_zone_margin_cells` (Tight Pads). Neither is picked by any
+board as of 2026-08-21 - `variant_picks_per_board` gives `High-Density`,
+`Eager`, `Eager Pads`, `Eager Light`, `Eager Pads Priced Ring` and `Default` -
+which is what a list of points looks like when the space has been searched
+since they were added, not a reason to delete them. `PathFinder Bare Centre Line` is the router
 without the copper reservation, kept as a control.
 
 ### The weighted heuristic, swept (`heuristic_weight`, default 1.0)

@@ -16,10 +16,11 @@ use std::collections::BTreeSet;
 use std::path::Path;
 
 use cypcb_autoroute::{route_board, AutorouteConfig};
-use cypcb_drc::{run_drc, DesignRules};
+use cypcb_drc::{preset_for_world, ruleset_for_world, run_drc, DesignRules};
 use cypcb_kicad::{parse_kicad_pcb, BENCHMARKS};
 use cypcb_router::apply_routes;
 use cypcb_rules::presets::{PresetRuleSet, RulesPreset};
+use cypcb_world::BoardWorld;
 
 fn fixture_path(filename: &str) -> std::path::PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -38,23 +39,43 @@ fn fingerprint(violation: &cypcb_drc::DrcViolation) -> String {
     )
 }
 
+/// The fab table this board would actually be graded against, and the rule set
+/// the router gets for it.
+///
+/// `multi_ic` has four copper layers, so `cypcb check` reads it against
+/// `jlcpcb_standard_4layer`. Every table in this file is quoted in
+/// `docs/routing.md`, so a fixed two-layer answer here becomes a published
+/// number about a board nobody ships.
+fn rules_for(world: &BoardWorld) -> (RulesPreset, PresetRuleSet, DesignRules) {
+    let preset = preset_for_world(RulesPreset::JlcpcbStandard2Layer, world);
+    (
+        preset,
+        ruleset_for_world(preset, world),
+        DesignRules::from_constraints(&preset.constraints()),
+    )
+}
+
 #[test]
 #[ignore = "diagnostic: routes every fixture at several pad zone radii"]
 fn what_a_pad_opening_should_cost() {
-    let drc_rules = DesignRules::jlcpcb_2layer();
-
     // Zero is the pad's own copper and nothing else; three is what ships.
     let margins = [0u16, 1, 2, 3, 5];
 
     for benchmark in BENCHMARKS {
         eprintln!();
-        eprintln!("=== {} ===", benchmark.filename);
+        eprintln!("=== [opening] {} ===", benchmark.filename);
+        let mut table: Option<&'static str> = None;
 
         for margin in margins {
             let parsed = parse_kicad_pcb(&fixture_path(benchmark.filename))
                 .unwrap_or_else(|e| panic!("Failed to parse {}: {:?}", benchmark.filename, e));
             let mut world = parsed.world;
             let library = parsed.library;
+            let (preset, rules, drc_rules) = rules_for(&world);
+            if table.is_none() {
+                eprintln!("  [opening] graded on {}", preset.name());
+                table = Some(preset.name());
+            }
 
             world.rebuild_spatial_index_from_library(&library);
             let baseline: BTreeSet<String> = run_drc(&mut world, &drc_rules)
@@ -67,8 +88,6 @@ fn what_a_pad_opening_should_cost() {
                 pad_zone_margin_cells: margin,
                 ..AutorouteConfig::default()
             };
-            let rules =
-                PresetRuleSet::new(RulesPreset::from_name("jlcpcb").expect("the preset exists"));
 
             let started = std::time::Instant::now();
             let result = route_board(&mut world, &library, &rules, &config);
@@ -120,12 +139,12 @@ fn what_a_pad_opening_should_cost() {
 #[test]
 #[ignore = "diagnostic: names led_blink's violations at two pad openings"]
 fn what_led_blink_trades_when_the_opening_narrows() {
-    let drc_rules = DesignRules::jlcpcb_2layer();
-
     for margin in [3u16, 2] {
         let parsed = parse_kicad_pcb(&fixture_path("led_blink.kicad_pcb")).expect("the fixture");
         let mut world = parsed.world;
         let library = parsed.library;
+        let (preset, rules, drc_rules) = rules_for(&world);
+        eprintln!("  [led_blink trade] graded on {}", preset.name());
 
         world.rebuild_spatial_index_from_library(&library);
         let baseline: BTreeSet<String> = run_drc(&mut world, &drc_rules)
@@ -138,15 +157,13 @@ fn what_led_blink_trades_when_the_opening_narrows() {
             pad_zone_margin_cells: margin,
             ..AutorouteConfig::default()
         };
-        let rules =
-            PresetRuleSet::new(RulesPreset::from_name("jlcpcb").expect("the preset exists"));
         let result = route_board(&mut world, &library, &rules, &config);
         apply_routes(&mut world, &result);
         world.rebuild_spatial_index_from_library(&library);
 
         eprintln!();
         eprintln!(
-            "=== margin {margin} cells, {} segments ===",
+            "=== [led_blink trade] margin {margin} cells, {} segments ===",
             result.route_count()
         );
         for violation in run_drc(&mut world, &drc_rules)
@@ -178,16 +195,23 @@ fn what_led_blink_trades_when_the_opening_narrows() {
 #[test]
 #[ignore = "diagnostic: sweeps the via-on-a-pad price at the narrower opening"]
 fn does_a_dearer_via_on_a_pad_close_the_last_fault() {
-    let drc_rules = DesignRules::jlcpcb_2layer();
-
     for benchmark in BENCHMARKS {
         eprintln!();
-        eprintln!("=== {} at margin 2 ===", benchmark.filename);
+        eprintln!(
+            "=== [pad layer change] {} at margin 2 ===",
+            benchmark.filename
+        );
+        let mut table: Option<&'static str> = None;
 
         for price in [50.0f64, 150.0, 400.0, 1000.0] {
             let parsed = parse_kicad_pcb(&fixture_path(benchmark.filename)).expect("the fixture");
             let mut world = parsed.world;
             let library = parsed.library;
+            let (preset, rules, drc_rules) = rules_for(&world);
+            if table.is_none() {
+                eprintln!("  [pad layer change] graded on {}", preset.name());
+                table = Some(preset.name());
+            }
 
             world.rebuild_spatial_index_from_library(&library);
             let baseline: BTreeSet<String> = run_drc(&mut world, &drc_rules)
@@ -201,8 +225,6 @@ fn does_a_dearer_via_on_a_pad_close_the_last_fault() {
                 pad_layer_change_penalty: price,
                 ..AutorouteConfig::default()
             };
-            let rules =
-                PresetRuleSet::new(RulesPreset::from_name("jlcpcb").expect("the preset exists"));
             let result = route_board(&mut world, &library, &rules, &config);
             apply_routes(&mut world, &result);
             world.rebuild_spatial_index_from_library(&library);
@@ -245,18 +267,25 @@ fn does_a_dearer_via_on_a_pad_close_the_last_fault() {
 #[test]
 #[ignore = "diagnostic: sweeps the price of a pad inside a via keepout"]
 fn what_a_pad_under_a_via_should_cost() {
-    let drc_rules = DesignRules::jlcpcb_2layer();
-
     for margin in [3u16, 2] {
         for benchmark in BENCHMARKS {
             eprintln!();
-            eprintln!("=== {} at margin {margin} ===", benchmark.filename);
+            eprintln!(
+                "=== [via on a pad] {} at margin {margin} ===",
+                benchmark.filename
+            );
+            let mut table: Option<&'static str> = None;
 
             for price in [0.0f64, 0.02, 0.05, 0.1] {
                 let parsed =
                     parse_kicad_pcb(&fixture_path(benchmark.filename)).expect("the fixture");
                 let mut world = parsed.world;
                 let library = parsed.library;
+                let (preset, rules, drc_rules) = rules_for(&world);
+                if table.is_none() {
+                    eprintln!("  [via on a pad] graded on {}", preset.name());
+                    table = Some(preset.name());
+                }
 
                 // `after` is what this table reads, because the two openings
                 // change what the fixture's own faults look like; the
@@ -268,9 +297,6 @@ fn what_a_pad_under_a_via_should_cost() {
                     via_foreign_pad_penalty: price,
                     ..AutorouteConfig::default()
                 };
-                let rules = PresetRuleSet::new(
-                    RulesPreset::from_name("jlcpcb").expect("the preset exists"),
-                );
                 let result = route_board(&mut world, &library, &rules, &config);
                 apply_routes(&mut world, &result);
                 world.rebuild_spatial_index_from_library(&library);
