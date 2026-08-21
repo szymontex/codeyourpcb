@@ -183,6 +183,33 @@ impl TraceSegment {
     }
 }
 
+/// Cut one segment at `distance` from its start, returning the two halves.
+///
+/// The cut point is interpolated in i128 so a long segment on a large board
+/// cannot overflow the multiply, and both halves inherit the original's own
+/// width - the caller decides which of them the neck is.
+fn split_at(segment: &TraceSegment, distance: i64) -> (TraceSegment, TraceSegment) {
+    let length = segment.length().0.max(1);
+    let dx = segment.end.x.0 as i128 - segment.start.x.0 as i128;
+    let dy = segment.end.y.0 as i128 - segment.start.y.0 as i128;
+    let at = Point::new(
+        Nm(segment.start.x.0 + (dx * distance as i128 / length as i128) as i64),
+        Nm(segment.start.y.0 + (dy * distance as i128 / length as i128) as i64),
+    );
+    (
+        TraceSegment {
+            start: segment.start,
+            end: at,
+            width: segment.width,
+        },
+        TraceSegment {
+            start: at,
+            end: segment.end,
+            width: segment.width,
+        },
+    )
+}
+
 /// Indicates whether a trace was created manually or by an autorouter.
 ///
 /// This is used to track the origin of traces for debugging and
@@ -266,6 +293,85 @@ impl Trace {
     /// assert!(trace.segments.is_empty());
     /// assert!(!trace.locked);
     /// ```
+    /// Draw a declared neck onto this trace's own geometry.
+    ///
+    /// `neck 0.8mm for 4mm` is a statement the language can make and could not
+    /// draw: a trace synced from a design ran at one width end to end, so
+    /// `NeckDownRule`'s fourth check - the copper against the claim - had
+    /// nothing to measure on a board written here. This narrows the last
+    /// `neck.length` of the run, splitting the segment the boundary falls
+    /// inside so the join is where the width changes rather than wherever a
+    /// vertex happened to be.
+    ///
+    /// **The far end is the necked end.** A `trace ... from A to B` is written
+    /// in the direction it runs, and the neck is the stretch going into the
+    /// pad it arrives at. That is a decision rather than a measurement, and it
+    /// is the one every EDA makes for the same reason: the thin copper is
+    /// there because the destination pad has no room for the wide copper.
+    ///
+    /// Two declarations are left as they are, because both are faults
+    /// `NeckDownRule` reports and neither describes copper worth drawing: a
+    /// neck no narrower than the trace, and a neck longer than the trace.
+    /// Drawing either would turn a reported declaration fault into geometry
+    /// that hides it.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use cypcb_world::components::trace::{Trace, TraceNeck, TraceSegment};
+    /// use cypcb_world::NetId;
+    /// use cypcb_core::{Nm, Point};
+    ///
+    /// let mut trace = Trace::new(NetId::new(0));
+    /// trace.width = Nm::from_mm(2.0);
+    /// trace.segments.push(TraceSegment::new(
+    ///     Point::from_mm(0.0, 0.0),
+    ///     Point::from_mm(10.0, 0.0),
+    /// ));
+    ///
+    /// trace.apply_neck(TraceNeck { width: Nm::from_mm(0.8), length: Nm::from_mm(4.0) });
+    ///
+    /// assert_eq!(trace.segments.len(), 2, "the one segment was split");
+    /// assert_eq!(trace.width_at(0), Nm::from_mm(2.0));
+    /// assert_eq!(trace.width_at(1), Nm::from_mm(0.8));
+    /// assert_eq!(trace.necked_length(), Nm::from_mm(4.0));
+    /// ```
+    pub fn apply_neck(&mut self, neck: TraceNeck) {
+        if neck.width.raw() >= self.width.raw() {
+            return;
+        }
+        let total = self.total_length();
+        if neck.length.raw() >= total.raw() || neck.length.raw() <= 0 {
+            return;
+        }
+
+        // Walk from the far end back, narrowing until the declared length is
+        // covered. `remaining` is how much of the neck is still to be drawn.
+        let mut remaining = neck.length.raw();
+        let mut index = self.segments.len();
+        while index > 0 && remaining > 0 {
+            index -= 1;
+            let length = self.segments[index].length().0;
+            if length <= 0 {
+                continue;
+            }
+            if length <= remaining {
+                self.segments[index].width = Some(neck.width);
+                remaining -= length;
+                continue;
+            }
+
+            // The boundary falls inside this segment: cut it there, and the
+            // part nearer the far end is the neck.
+            let cut = split_at(&self.segments[index], length - remaining);
+            let (wide, thin) = cut;
+            self.segments[index] = wide;
+            self.segments.insert(index + 1, thin);
+            self.segments[index + 1].width = Some(neck.width);
+            remaining = 0;
+        }
+    }
+
     /// The width one of this trace's segments actually runs at.
     ///
     /// A segment that states nothing runs at the trace's width. Out-of-range

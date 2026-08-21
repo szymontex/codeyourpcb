@@ -14,10 +14,11 @@
 //! That one needs a width per segment, which arrived on 2026-08-21; before it
 //! the honest position was that the declaration is well formed, not the board.
 //!
-//! The language cannot yet draw a neck: a `trace` states one width and one
-//! neck, and the segments it syncs to all run at the trace's width. So the
-//! fourth check is exercised on copper built the way the router and the KiCad
-//! reader build it, which is where necked copper comes from today.
+//! The language draws the neck as of 2026-08-22: `sync_ast_to_world` narrows
+//! the last `neck.length` of the run, splitting the segment the boundary falls
+//! inside. Before that a design could state a neck and the copper it produced
+//! ran at one width end to end, so the fourth check had nothing to read on a
+//! board written here.
 //!
 //! None of this decides whether the neck is thermally safe. That needs a
 //! current and a temperature rise this model does not carry.
@@ -212,9 +213,68 @@ fn copper_that_runs_thin_further_than_it_said_is_reported() {
 
 #[test]
 fn a_declared_neck_with_no_thin_copper_is_not_reported() {
-    // What the language produces today: one width for the whole trace. There
-    // is no thin copper to measure, so the fourth check has nothing to say -
-    // and must not read zero thin millimetres as a trace that overran.
-    let mut world = board("2mm", Some("neck 0.8mm for 4mm"));
+    // Copper that carries a neck declaration and no thin segment: a KiCad
+    // board whose tracks are uniform, opened against a design that states a
+    // neck. There is nothing to measure, and zero thin millimetres must not
+    // read as a trace that overran its declaration.
+    let mut world = drawn_neck(0.0, 4.0);
     assert_eq!(complaints(&mut world), Vec::<String>::new());
+}
+
+#[test]
+fn the_language_draws_the_neck_it_declares() {
+    use cypcb_world::components::trace::Trace;
+
+    let mut world = board("2mm", Some("neck 0.8mm for 4mm"));
+    let traces: Vec<Trace> = {
+        let ecs = world.ecs_mut();
+        let mut query = ecs.query::<&Trace>();
+        query.iter(ecs).cloned().collect()
+    };
+
+    assert_eq!(traces.len(), 1, "one trace was written");
+    let trace = &traces[0];
+    assert_eq!(
+        trace.necked_length(),
+        Nm::from_mm(4.0),
+        "`neck 0.8mm for 4mm` has to be 4mm of 0.8mm copper, not a note beside \
+         a trace that runs 2mm the whole way"
+    );
+    assert!(
+        trace.segments.len() >= 2,
+        "the run had to be cut where the width changes; it has {} segment(s)",
+        trace.segments.len()
+    );
+    assert_eq!(
+        trace.width_at(0),
+        Nm::from_mm(2.0),
+        "the first stretch carries the current at the stated width"
+    );
+    assert_eq!(
+        trace.width_at(trace.segments.len() - 1),
+        Nm::from_mm(0.8),
+        "the far end is the necked end: the thin copper goes into the pad the \
+         trace arrives at"
+    );
+    assert_eq!(complaints(&mut world), Vec::<String>::new());
+}
+
+#[test]
+fn a_neck_no_narrower_than_its_trace_is_not_drawn() {
+    // The declaration is a fault and `NeckDownRule` reports it. Drawing it as
+    // geometry would turn a reported fault into copper that hides it - the
+    // trace would carry a segment stating the same width it already has.
+    use cypcb_world::components::trace::Trace;
+
+    let mut world = board("2mm", Some("neck 2mm for 4mm"));
+    let traces: Vec<Trace> = {
+        let ecs = world.ecs_mut();
+        let mut query = ecs.query::<&Trace>();
+        query.iter(ecs).cloned().collect()
+    };
+    assert!(
+        traces[0].segments.iter().all(|s| s.width.is_none()),
+        "nothing should have been drawn"
+    );
+    assert_eq!(complaints(&mut world).len(), 1, "and the fault is reported");
 }

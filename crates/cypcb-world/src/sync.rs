@@ -1321,7 +1321,7 @@ fn sync_trace(
                     }
 
                     if !segments.is_empty() {
-                        let trace = Trace {
+                        let mut trace = Trace {
                             segments,
                             width,
                             layer: current_layer,
@@ -1329,19 +1329,23 @@ fn sync_trace(
                             locked: trace_def.locked,
                             source: TraceSource::Manual,
                         };
+                        // A declared neck becomes copper here rather than
+                        // staying a note beside it. Until this, a trace synced
+                        // from a design ran at one width end to end and the
+                        // check that measures the thin stretch had nothing to
+                        // read on a board written in this language.
+                        let neck = declared_neck(trace_def);
+                        if let Some(neck) = neck {
+                            trace.apply_neck(neck);
+                        }
                         // NetId has to be its own component, not just a field on Trace: DRC's
                         // same-net exemption and its message enrichment both query for
                         // it. The autorouted path learned this already (KNOWLEDGE.md
                         // K012); traces written in the DSL never did, so they collided
                         // with the pads they connect and reported as trace '?'.
                         let entity = world.ecs_mut().spawn((trace, net_id, span)).id();
-                        if let Some(neck) = &trace_def.neck {
-                            world.ecs_mut().entity_mut(entity).insert(
-                                crate::components::trace::TraceNeck {
-                                    width: neck.width.to_nm(),
-                                    length: neck.length.to_nm(),
-                                },
-                            );
+                        if let Some(neck) = neck {
+                            world.ecs_mut().entity_mut(entity).insert(neck);
                         }
                     }
                 }
@@ -1404,7 +1408,7 @@ fn sync_trace(
         }
 
         // Create the trace entity
-        let trace = Trace {
+        let mut trace = Trace {
             segments,
             width,
             layer,
@@ -1412,6 +1416,10 @@ fn sync_trace(
             locked: trace_def.locked,
             source: TraceSource::Manual,
         };
+        let neck = declared_neck(trace_def);
+        if let Some(neck) = neck {
+            trace.apply_neck(neck);
+        }
 
         // Add source span for error reporting
         let span = EcsSourceSpan::new(trace_def.span.start, trace_def.span.end);
@@ -1423,16 +1431,27 @@ fn sync_trace(
         // K012); traces written in the DSL never did, so they collided
         // with the pads they connect and reported as trace '?'.
         let entity = world.ecs_mut().spawn((trace, net_id, span)).id();
-        if let Some(neck) = &trace_def.neck {
-            world
-                .ecs_mut()
-                .entity_mut(entity)
-                .insert(crate::components::trace::TraceNeck {
-                    width: neck.width.to_nm(),
-                    length: neck.length.to_nm(),
-                });
+        if let Some(neck) = neck {
+            world.ecs_mut().entity_mut(entity).insert(neck);
         }
     }
+}
+
+/// The neck a `trace` block declares, in the model's own units.
+///
+/// One reader for the two places a trace is built - a `path` and a
+/// `from`/`to` - because a neck drawn on one shape and not the other is the
+/// kind of difference nobody finds until a board is wrong.
+fn declared_neck(
+    trace_def: &cypcb_parser::ast::TraceDef,
+) -> Option<crate::components::trace::TraceNeck> {
+    trace_def
+        .neck
+        .as_ref()
+        .map(|neck| crate::components::trace::TraceNeck {
+            width: neck.width.to_nm(),
+            length: neck.length.to_nm(),
+        })
 }
 
 /// Helper to get the position of a pin reference.
