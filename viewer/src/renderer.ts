@@ -18,6 +18,7 @@ import { LAYER_COLORS, getPadColor, getTraceColor, getThemeColors, netColor, bri
   layerOpacity,
 } from './layers';
 import { formatDimension } from './units';
+import { netLabelSpots } from './net-labels';
 import { getPreference } from './settings';
 
 export interface RenderState {
@@ -699,57 +700,37 @@ function drawTraceNetLabels(
     // KiCad: min segment length = trackWidth * num_chars
     const minSegLenPx = trackWidthPx * trace.net_name.length;
 
-    for (const seg of trace.segments) {
-      const [sx1, sy1] = worldToScreen(vp, seg.start_x, seg.start_y);
-      const [sx2, sy2] = worldToScreen(vp, seg.end_x, seg.end_y);
-      const segLen = Math.hypot(sx2 - sx1, sy2 - sy1);
+    // Where the names go is now `netLabelSpots`, which is a pure function and
+    // has tests. Two faults lived in the loop that used to be here: the count
+    // was `divisions = numNames + 1` while the loop placed `divisions` of
+    // them, so one name came out twice; and each segment placed its names
+    // without looking at the others, so a bend printed two on top of each
+    // other. Neither is visible by reading a canvas.
+    const labelWidthPx = ctx.measureText(trace.net_name).width;
+    const spots = netLabelSpots(
+      trace.segments.map((seg) => {
+        const [x1, y1] = worldToScreen(vp, seg.start_x, seg.start_y);
+        const [x2, y2] = worldToScreen(vp, seg.end_x, seg.end_y);
+        return { x1, y1, x2, y2 };
+      }),
+      { minSegLenPx, labelWidthPx, viewWidth: vp.width, viewHeight: vp.height },
+    );
 
-      if (segLen < minSegLenPx) continue;
+    // KiCad: penWidth = textSize / 12 — we approximate with strokeText
+    const penWidth = fontSize / 12;
 
-      // KiCad: repeat net name along segment based on viewport size
-      // num_names depends on segment direction vs viewport size
-      const dx = sx2 - sx1;
-      const dy = sy2 - sy1;
-      let numNames = 1;
+    for (const spot of spots) {
+      ctx.save();
+      ctx.translate(spot.x, spot.y);
+      ctx.rotate(spot.angle);
 
-      if (Math.abs(dy) < 1) {
-        // Horizontal
-        numNames = Math.max(1, Math.round(segLen / vp.width));
-      } else if (Math.abs(dx) < 1) {
-        // Vertical
-        numNames = Math.max(1, Math.round(segLen / vp.height));
-      } else {
-        const minDim = Math.min(vp.width, vp.height);
-        numNames = Math.max(1, Math.round(segLen / (Math.SQRT2 * minDim)));
-      }
+      // KiCad draws with stroke only (no fill) — gives thinner look
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+      ctx.lineWidth = penWidth;
+      ctx.strokeText(trace.net_name, 0, 0);
 
-      // Rotation angle — keep text upright
-      let angle = Math.atan2(dy, dx);
-      if (angle > Math.PI / 2) angle -= Math.PI;
-      if (angle < -Math.PI / 2) angle += Math.PI;
-
-      // KiCad: penWidth = textSize / 12 — we approximate with strokeText
-      const penWidth = fontSize / 12;
-
-      // Draw net name at evenly spaced positions along segment
-      const divisions = numNames + 1;
-      for (let ii = 1; ii < divisions + 1; ii++) {
-        const t = ii / (divisions + 1);
-        const tx = sx1 + dx * t;
-        const ty = sy1 + dy * t;
-
-        ctx.save();
-        ctx.translate(tx, ty);
-        ctx.rotate(angle);
-
-        // KiCad draws with stroke only (no fill) — gives thinner look
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
-        ctx.lineWidth = penWidth;
-        ctx.strokeText(trace.net_name, 0, 0);
-
-        ctx.restore();
-        _textElementsDrawn++;
-      }
+      ctx.restore();
+      _textElementsDrawn++;
     }
   }
 }
