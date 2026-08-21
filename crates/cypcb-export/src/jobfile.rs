@@ -97,16 +97,24 @@ fn guid_from_name(name: &str) -> String {
     )
 }
 
-/// The job file's word for a stackup layer.
-fn material_type(kind: StackupLayerKind) -> &'static str {
-    match kind {
+/// The job file's word for a stackup layer, or `None` for a layer that is not
+/// a material of the bare board.
+///
+/// Solder paste is the only `None`. The specification asks for "all layers of
+/// the PCB, and only those materials", and paste is deposited through a
+/// stencil at assembly - it is not part of what the fabricator delivers. A
+/// design can still declare one, because KiCad's stackup carries it; this file
+/// is where it stops.
+fn material_type(kind: StackupLayerKind) -> Option<&'static str> {
+    Some(match kind {
         StackupLayerKind::Copper => "Copper",
         // Prepreg and core are both dielectric to a fabricator reading this
         // file; which one it is stays in the note beside it.
         StackupLayerKind::Prepreg | StackupLayerKind::Core => "Dielectric",
         StackupLayerKind::Mask => "SolderMask",
         StackupLayerKind::Silk => "Legend",
-    }
+        StackupLayerKind::Paste => return None,
+    })
 }
 
 /// Add the surface materials the export wrote but the design did not declare.
@@ -240,9 +248,10 @@ pub fn build_job_file(
         let declared: Vec<Value> = stackup
             .layers
             .iter()
-            .map(|layer| {
+            .filter_map(|layer| {
+                let material = material_type(layer.kind)?;
                 let mut entry = Map::new();
-                entry.insert("Type".to_string(), json!(material_type(layer.kind)));
+                entry.insert("Type".to_string(), json!(material));
                 if let Some(thickness) = layer.thickness {
                     entry.insert("Thickness".to_string(), json!(thickness.to_mm()));
                 }
@@ -250,7 +259,7 @@ pub fn build_job_file(
                     "Notes".to_string(),
                     json!(format!("declared as {}", layer.kind.as_str())),
                 );
-                Value::Object(entry)
+                Some(Value::Object(entry))
             })
             .collect();
 

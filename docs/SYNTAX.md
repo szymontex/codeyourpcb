@@ -110,7 +110,8 @@ board four_layer {
 }
 ```
 
-Layer types are `copper`, `prepreg`, `core`, `mask` and `silk`. A thickness is
+Layer types are `copper`, `prepreg`, `core`, `mask`, `silk` and `paste`. A
+thickness is
 optional on each, and so are the two names a fabricator needs:
 
 ```

@@ -204,6 +204,13 @@ fn stackup_entries(stackup: &Stackup, copper_layers: usize) -> Vec<(String, &'st
                     ("B.SilkS".to_string(), "Bottom Silk Screen")
                 }
             }
+            StackupLayerKind::Paste => {
+                if front {
+                    ("F.Paste".to_string(), "Top Solder Paste")
+                } else {
+                    ("B.Paste".to_string(), "Bottom Solder Paste")
+                }
+            }
             StackupLayerKind::Core => {
                 dielectric += 1;
                 (format!("dielectric {dielectric}"), "core")

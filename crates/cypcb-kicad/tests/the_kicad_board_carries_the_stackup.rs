@@ -29,7 +29,7 @@ use cypcb_core::Nm;
 use cypcb_kicad::board_writer::write_board;
 use cypcb_world::{BoardWorld, Stackup, StackupLayer, StackupLayerKind};
 
-use StackupLayerKind::{Copper, Core, Mask, Prepreg, Silk};
+use StackupLayerKind::{Copper, Core, Mask, Paste, Prepreg, Silk};
 
 /// A layer as a design writes one: kind, thickness in mm, optional name and
 /// material.
@@ -206,5 +206,35 @@ fn a_board_that_stated_no_stackup_writes_no_stackup_node() {
     assert!(
         !text.contains("(stackup"),
         "a stackup was invented for a board that stated none:\n{text}"
+    );
+}
+
+#[test]
+fn a_paste_layer_takes_the_name_and_label_kicad_gives_it() {
+    // `BuildDefaultStackupList` puts F_Paste between the silkscreen and the
+    // mask and types it `Top Solder Paste`, so a board that declares paste has
+    // somewhere to arrive. The Gerber job file leaves paste out; this file
+    // does not, because this file is what pcbnew reads.
+    let with_paste: &[Spec] = &[
+        (Silk, Some(0.01), None, None),
+        (Paste, Some(0.1), None, None),
+        (Mask, Some(0.02), None, None),
+        (Copper, Some(0.035), None, None),
+        (Core, Some(1.5), None, None),
+        (Copper, Some(0.035), None, None),
+        (Mask, Some(0.02), None, None),
+        (Paste, Some(0.1), None, None),
+        (Silk, Some(0.01), None, None),
+    ];
+    let mut world = board(with_paste, 2);
+    let text = write_board(&mut world, "test");
+    let lines = stackup_lines(&text);
+    assert_eq!(
+        lines[1], "(layer \"F.Paste\" (type \"Top Solder Paste\") (thickness 0.1))",
+        "\n{text}"
+    );
+    assert_eq!(
+        lines[7], "(layer \"B.Paste\" (type \"Bottom Solder Paste\") (thickness 0.1))",
+        "\n{text}"
     );
 }

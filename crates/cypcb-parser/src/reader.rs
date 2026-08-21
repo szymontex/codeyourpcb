@@ -385,11 +385,17 @@ impl<'a> Reader<'a> {
         while !self.done() && !self.eat(&TokenKind::RBrace) {
             let layer_start = self.here();
             let Some(word) = self.peek_ident().map(str::to_string) else {
-                self.unknown_property("stackup", &["copper", "prepreg", "core", "mask", "silk"]);
+                self.unknown_property(
+                    "stackup",
+                    &["copper", "prepreg", "core", "mask", "silk", "paste"],
+                );
                 continue;
             };
             let Some(layer_type) = LayerType::from_str(&word) else {
-                self.unknown_property("stackup", &["copper", "prepreg", "core", "mask", "silk"]);
+                self.unknown_property(
+                    "stackup",
+                    &["copper", "prepreg", "core", "mask", "silk", "paste"],
+                );
                 continue;
             };
             self.bump();

@@ -132,7 +132,7 @@ module.exports = grammar({
     // The name is quoted because a fabricator's canonical layer names carry a
     // dot - F.Cu, In1.Cu, B.Mask - which no identifier in this language may.
     stackup_layer: $ => seq(
-      field('layer_type', choice('copper', 'prepreg', 'core', 'mask', 'silk')),
+      field('layer_type', choice('copper', 'prepreg', 'core', 'mask', 'silk', 'paste')),
       optional(field('name', $.string)),
       optional(field('thickness', $.dimension)),
       optional(seq('material', field('material', $.string))),

@@ -1510,6 +1510,10 @@
             "named": false
           },
           {
+            "type": "paste",
+            "named": false
+          },
+          {
             "type": "prepreg",
             "named": false
           },
@@ -2432,6 +2436,10 @@
   },
   {
     "type": "pad",
+    "named": false
+  },
+  {
+    "type": "paste",
     "named": false
   },
   {

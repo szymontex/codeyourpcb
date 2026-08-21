@@ -234,3 +234,45 @@ fn a_layer_can_still_say_nothing_but_its_kind() {
     assert!(stackup.layers.iter().all(|layer| layer.name.is_none()));
     assert!(stackup.layers.iter().all(|layer| layer.material.is_none()));
 }
+
+#[test]
+fn solder_paste_is_a_layer_this_language_can_spell() {
+    // Paste is not something a fabricator presses, and it is in the language
+    // anyway: KiCad's own stackup carries `F.Paste` and `B.Paste` between the
+    // silkscreen and the mask, so a board read without a word for one would
+    // describe a different build than the file it came from.
+    let source = r#"version 1
+
+board t {
+    size 40mm x 20mm
+    layers 2
+    stackup {
+        silk 0.01mm
+        paste "F.Paste" 0.1mm
+        mask 0.02mm
+        copper 0.035mm
+        core 1.5mm
+        copper 0.035mm
+        mask 0.02mm
+        paste "B.Paste" 0.1mm
+        silk 0.01mm
+    }
+}
+"#;
+    let mut world = load(source);
+    let before = world.stackup().cloned().expect("the premise");
+    let kinds: Vec<&str> = before
+        .layers
+        .iter()
+        .map(|layer| layer.kind.as_str())
+        .collect();
+    assert_eq!(
+        kinds,
+        vec!["silk", "paste", "mask", "copper", "core", "copper", "mask", "paste", "silk"]
+    );
+
+    let text = board_as_dsl(&mut world);
+    assert!(text.contains("paste \"F.Paste\" 0.100000mm"), "\n{text}");
+    let back = load(&text);
+    assert_eq!(back.stackup().cloned(), Some(before), "\n{text}");
+}

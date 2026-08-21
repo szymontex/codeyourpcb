@@ -22,7 +22,7 @@ use cypcb_world::footprint::FootprintLibrary;
 use cypcb_world::{BoardWorld, Stackup, StackupLayer, StackupLayerKind};
 use serde_json::Value;
 
-use StackupLayerKind::{Copper, Core, Mask, Prepreg, Silk};
+use StackupLayerKind::{Copper, Core, Mask, Paste, Prepreg, Silk};
 
 /// A four-layer board, optionally stating what it is made of.
 fn board(stackup: Option<&[(StackupLayerKind, Option<f64>)]>) -> BoardWorld {
@@ -315,5 +315,46 @@ fn a_partial_thickness_is_not_a_board_thickness() {
     assert!(
         job.get("MaterialStackup").is_some(),
         "the stackup itself is still described"
+    );
+}
+
+#[test]
+fn solder_paste_is_left_out_of_the_material_stackup() {
+    // The specification asks for "all layers of the PCB, and only those
+    // materials". Paste is deposited through a stencil at assembly and is not
+    // part of what the fabricator delivers, so a design may declare one and
+    // this file still describes the bare board. The declaration is not an
+    // error and nothing is added to make up for the omission - the design
+    // named its own surfaces, so `complete_stackup` leaves it alone.
+    let spec: &[(StackupLayerKind, Option<f64>)] = &[
+        (Silk, None),
+        (Paste, Some(0.1)),
+        (Mask, Some(0.025)),
+        (Copper, Some(0.035)),
+        (Core, Some(1.5)),
+        (Copper, Some(0.035)),
+        (Mask, Some(0.025)),
+        (Paste, Some(0.1)),
+        (Silk, None),
+    ];
+    let (job, _) = exported("paste", &mut board(Some(spec)));
+
+    let stackup = job["MaterialStackup"].as_array().expect("an array");
+    let types: Vec<&str> = stackup
+        .iter()
+        .map(|entry| entry["Type"].as_str().unwrap_or_default())
+        .collect();
+    assert_eq!(
+        types,
+        vec![
+            "Legend",
+            "SolderMask",
+            "Copper",
+            "Dielectric",
+            "Copper",
+            "SolderMask",
+            "Legend"
+        ],
+        "nine layers were declared and the two paste ones do not belong here: {stackup:#?}"
     );
 }

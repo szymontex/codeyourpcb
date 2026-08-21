@@ -249,6 +249,13 @@ pub enum LayerType {
     Mask,
     /// Silkscreen.
     Silk,
+    /// Solder paste, deposited through a stencil at assembly.
+    ///
+    /// Not something a fabricator presses, and deliberately still here: KiCad
+    /// puts a paste layer in its own stackup, so a board imported without a
+    /// word for one would describe a different build than the file it came
+    /// from.
+    Paste,
 }
 
 impl LayerType {
@@ -261,6 +268,7 @@ impl LayerType {
             "core" => Some(LayerType::Core),
             "mask" => Some(LayerType::Mask),
             "silk" => Some(LayerType::Silk),
+            "paste" => Some(LayerType::Paste),
             _ => None,
         }
     }

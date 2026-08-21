@@ -401,6 +401,15 @@ pub enum StackupLayerKind {
     Mask,
     /// Silkscreen.
     Silk,
+    /// Solder paste, deposited through a stencil at assembly.
+    ///
+    /// Not a layer a fabricator presses, and in the model anyway. KiCad's own
+    /// stackup carries `F.Paste` and `B.Paste` between the silkscreen and the
+    /// mask, so a board read without a word for one would describe a different
+    /// build than the file it came from. What a consumer does with it is that
+    /// consumer's business: the Gerber job file leaves it out, because that
+    /// file's stackup is the materials of the bare board.
+    Paste,
 }
 
 impl StackupLayerKind {
@@ -422,6 +431,7 @@ impl StackupLayerKind {
             StackupLayerKind::Core => "core",
             StackupLayerKind::Mask => "mask",
             StackupLayerKind::Silk => "silk",
+            StackupLayerKind::Paste => "paste",
         }
     }
 }

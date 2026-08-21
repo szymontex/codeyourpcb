@@ -864,6 +864,7 @@ fn stackup_kind(layer_type: cypcb_parser::ast::LayerType) -> StackupLayerKind {
         LayerType::Core => StackupLayerKind::Core,
         LayerType::Mask => StackupLayerKind::Mask,
         LayerType::Silk => StackupLayerKind::Silk,
+        LayerType::Paste => StackupLayerKind::Paste,
     }
 }
 
