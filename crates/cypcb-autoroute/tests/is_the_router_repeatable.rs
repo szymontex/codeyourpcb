@@ -23,9 +23,10 @@ use cypcb_autoroute::scoring::{score_board, ScoreWeights};
 use cypcb_autoroute::strategy::RoutingStrategy;
 use cypcb_autoroute::AutorouteConfig;
 use cypcb_drc::presets::DesignRules;
+use cypcb_drc::{preset_for_world, ruleset_for_world};
 use cypcb_kicad::{parse_kicad_pcb, BENCHMARKS};
 use cypcb_router::apply_routes;
-use cypcb_rules::presets::{PresetRuleSet, RulesPreset};
+use cypcb_rules::presets::RulesPreset;
 
 use std::path::{Path, PathBuf};
 
@@ -57,7 +58,11 @@ fn route_once(filename: &str) -> Run {
         .unwrap_or_else(|e| panic!("failed to parse {filename}: {e:?}"));
     let mut world = parsed.world;
     let library = parsed.library;
-    let rules = PresetRuleSet::new(RulesPreset::from_name("jlcpcb").unwrap());
+    // The board's own table. `multi_ic` has four copper layers, and a run that
+    // is repeatable under the wrong rules says nothing about the one shipped.
+    let preset = preset_for_world(RulesPreset::JlcpcbStandard2Layer, &world);
+    let rules = ruleset_for_world(preset, &world);
+    let drc_rules = DesignRules::from_constraints(&preset.constraints());
     let config = AutorouteConfig::default();
 
     let result = PathFinderStrategy.route(&mut world, &library, &rules, &config);
@@ -66,11 +71,7 @@ fn route_once(filename: &str) -> Run {
 
     apply_routes(&mut world, &result);
     world.rebuild_spatial_index_from_library(&library);
-    let score = score_board(
-        &mut world,
-        &DesignRules::jlcpcb_2layer(),
-        &ScoreWeights::default(),
-    );
+    let score = score_board(&mut world, &drc_rules, &ScoreWeights::default());
 
     Run {
         violations: score.drc_violations as usize,

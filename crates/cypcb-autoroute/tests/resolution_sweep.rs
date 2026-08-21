@@ -13,10 +13,11 @@ use std::collections::BTreeSet;
 use std::path::Path;
 
 use cypcb_autoroute::{route_board, AutorouteConfig};
-use cypcb_drc::{run_drc, DesignRules, ViolationKind};
+use cypcb_drc::{preset_for_world, ruleset_for_world, run_drc, DesignRules, ViolationKind};
 use cypcb_kicad::{parse_kicad_pcb, BENCHMARKS};
 use cypcb_router::apply_routes;
 use cypcb_rules::presets::{PresetRuleSet, RulesPreset};
+use cypcb_world::BoardWorld;
 
 fn fixture_path(filename: &str) -> std::path::PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -25,8 +26,19 @@ fn fixture_path(filename: &str) -> std::path::PathBuf {
         .join(filename)
 }
 
-fn test_rules() -> PresetRuleSet {
-    PresetRuleSet::new(RulesPreset::from_name("jlcpcb").unwrap())
+/// The fab table this board would actually be graded against, and the rule set
+/// the router gets for it.
+///
+/// `multi_ic` has four copper layers, so `cypcb check` reads it against
+/// `jlcpcb_standard_4layer`. A fixed two-layer answer here reports on a board
+/// nobody ships.
+fn rules_for(world: &BoardWorld) -> (RulesPreset, PresetRuleSet, DesignRules) {
+    let preset = preset_for_world(RulesPreset::JlcpcbStandard2Layer, world);
+    (
+        preset,
+        ruleset_for_world(preset, world),
+        DesignRules::from_constraints(&preset.constraints()),
+    )
 }
 
 fn fingerprint(violation: &cypcb_drc::DrcViolation) -> String {
@@ -42,8 +54,6 @@ fn fingerprint(violation: &cypcb_drc::DrcViolation) -> String {
 #[test]
 #[ignore = "diagnostic: routes every fixture at several grid resolutions"]
 fn what_a_finer_grid_buys() {
-    let drc_rules = DesignRules::jlcpcb_2layer();
-
     // The adaptive default, then the track pitch, then half of it. The
     // adaptive rule doubles the pitch on boards over 80mm, so on a large board
     // the middle entry answers whether that doubling costs quality; on a small
@@ -60,12 +70,18 @@ fn what_a_finer_grid_buys() {
     for benchmark in BENCHMARKS {
         eprintln!();
         eprintln!("=== {} ===", benchmark.filename);
+        let mut table: Option<&'static str> = None;
 
         for resolution in resolutions {
             let parsed = parse_kicad_pcb(&fixture_path(benchmark.filename))
                 .unwrap_or_else(|e| panic!("Failed to parse {}: {:?}", benchmark.filename, e));
             let mut world = parsed.world;
             let library = parsed.library;
+            let (preset, rules, drc_rules) = rules_for(&world);
+            if table.is_none() {
+                eprintln!("  graded on {}", preset.name());
+                table = Some(preset.name());
+            }
 
             world.rebuild_spatial_index_from_library(&library);
             let baseline: BTreeSet<String> = run_drc(&mut world, &drc_rules)
@@ -86,7 +102,7 @@ fn what_a_finer_grid_buys() {
             let (label, cells) = match world.board_info() {
                 Some((size, _)) => {
                     let effective = config.resolve_adaptive_grid_resolution(
-                        &test_rules(),
+                        &rules,
                         size.width.raw(),
                         size.height.raw(),
                     );
@@ -107,7 +123,7 @@ fn what_a_finer_grid_buys() {
             }
 
             let started = std::time::Instant::now();
-            let result = route_board(&mut world, &library, &test_rules(), &config);
+            let result = route_board(&mut world, &library, &rules, &config);
             let elapsed = started.elapsed();
 
             apply_routes(&mut world, &result);

@@ -173,11 +173,22 @@ until something moves a board further than the router moves it on its own.
 
 ## The noise band, and why the ratchets carry it
 
-First, what it is not. **The router is deterministic**: routing each of the five
+First, what it is not. **The router is deterministic**: routing each of the six
 fixtures three times with the same config gives identical violations, shorts,
 segments, vias and total copper down to the nanometre
-(`is_the_router_repeatable`). So every number in this file is reproducible and
-every comparison in it is between two real settings rather than two dice rolls.
+(`is_the_router_repeatable`, re-checked 2026-08-21 with each board on the fab
+table its own layer count asks for). So every number in this file is
+reproducible and every comparison in it is between two real settings rather
+than two dice rolls.
+
+**One consequence of that table is worth stating here, because it explains
+`multi_ic` rows throughout this file.** The grid cell is derived from the rule
+set by the adaptive rule, and the four-layer row is tighter on trace and space,
+so the cell is finer: `multi_ic` searches at **0.400mm** on its own table and at
+**0.508mm** on the two-layer one. Every harness in this crate used the two-layer
+table until 2026-08-21, so `multi_ic` rows measured before that date are a
+different search and not merely a differently-marked result. Measured by running
+`resolution_sweep` both ways on one commit.
 The gate runs that check, because Rust randomises `HashMap` iteration order per
 process and a single map walked to order work would turn all of it into noise
 without anything else noticing.

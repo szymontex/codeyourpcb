@@ -37,10 +37,7 @@ use std::path::Path;
 const STILL_ON_A_FIXED_TABLE: &[&str] = &[
     "benchmark_validation.rs",
     "grid_vs_checker.rs",
-    "heuristic_weight_sweep.rs",
-    "is_the_router_repeatable.rs",
     "ranking_rule_sweep.rs",
-    "resolution_sweep.rs",
     "what_a_via_ring_should_cost.rs",
 ];
 

@@ -16,10 +16,11 @@ use std::collections::BTreeSet;
 use std::path::Path;
 
 use cypcb_autoroute::{route_board, AutorouteConfig};
-use cypcb_drc::{run_drc, DesignRules};
+use cypcb_drc::{preset_for_world, ruleset_for_world, run_drc, DesignRules};
 use cypcb_kicad::{parse_kicad_pcb, BENCHMARKS};
 use cypcb_router::apply_routes;
 use cypcb_rules::presets::{PresetRuleSet, RulesPreset};
+use cypcb_world::BoardWorld;
 
 fn fixture_path(filename: &str) -> std::path::PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -30,6 +31,21 @@ fn fixture_path(filename: &str) -> std::path::PathBuf {
 
 /// A violation's identity, so the ones the fixture arrived with can be told
 /// from the ones the router made.
+/// The fab table this board would actually be graded against, and the rule set
+/// the router gets for it.
+///
+/// `multi_ic` has four copper layers, so `cypcb check` reads it against
+/// `jlcpcb_standard_4layer`. A fixed two-layer answer here reports on a board
+/// nobody ships.
+fn rules_for(world: &BoardWorld) -> (RulesPreset, PresetRuleSet, DesignRules) {
+    let preset = preset_for_world(RulesPreset::JlcpcbStandard2Layer, world);
+    (
+        preset,
+        ruleset_for_world(preset, world),
+        DesignRules::from_constraints(&preset.constraints()),
+    )
+}
+
 fn fingerprint(violation: &cypcb_drc::DrcViolation) -> String {
     format!(
         "{}|{}|{}|{}",
@@ -43,8 +59,6 @@ fn fingerprint(violation: &cypcb_drc::DrcViolation) -> String {
 #[test]
 #[ignore = "diagnostic: routes every fixture at several heuristic weights"]
 fn what_a_weighted_heuristic_buys() {
-    let drc_rules = DesignRules::jlcpcb_2layer();
-
     // 1.0 is what ships and the only weight that keeps A* optimal. The rest
     // bracket the range anybody would consider: a tenth over, a quarter over,
     // and half again.
@@ -53,12 +67,18 @@ fn what_a_weighted_heuristic_buys() {
     for benchmark in BENCHMARKS {
         eprintln!();
         eprintln!("=== {} ===", benchmark.filename);
+        let mut table: Option<&'static str> = None;
 
         for weight in weights {
             let parsed = parse_kicad_pcb(&fixture_path(benchmark.filename))
                 .unwrap_or_else(|e| panic!("Failed to parse {}: {:?}", benchmark.filename, e));
             let mut world = parsed.world;
             let library = parsed.library;
+            let (preset, rules, drc_rules) = rules_for(&world);
+            if table.is_none() {
+                eprintln!("  graded on {}", preset.name());
+                table = Some(preset.name());
+            }
 
             world.rebuild_spatial_index_from_library(&library);
             let baseline: BTreeSet<String> = run_drc(&mut world, &drc_rules)
@@ -71,9 +91,6 @@ fn what_a_weighted_heuristic_buys() {
                 heuristic_weight: weight,
                 ..AutorouteConfig::default()
             };
-            let rules =
-                PresetRuleSet::new(RulesPreset::from_name("jlcpcb").expect("the preset exists"));
-
             let started = std::time::Instant::now();
             let result = route_board(&mut world, &library, &rules, &config);
             let elapsed = started.elapsed();
