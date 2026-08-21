@@ -557,80 +557,6 @@
       gap: 4px;
     }
     /* Variant panel */
-    #variant-panel {
-      position: absolute;
-      bottom: 40px;
-      right: 8px;
-      width: 260px;
-      max-height: 200px;
-      background: var(--bg-elevated);
-      border: 1px solid var(--border-primary);
-      border-radius: 6px;
-      box-shadow: 0 2px 8px var(--shadow);
-      overflow: hidden;
-      z-index: 90;
-      transition: background-color 0.15s ease, border-color 0.15s ease;
-    }
-    #variant-panel.hidden {
-      display: none;
-    }
-    #variant-panel-header {
-      padding: 6px 10px;
-      background: var(--bg-secondary);
-      border-bottom: 1px solid var(--border-primary);
-      font-size: 11px;
-      font-weight: 600;
-      color: var(--text-secondary);
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-    }
-    #variant-list {
-      overflow-y: auto;
-      max-height: 160px;
-    }
-    .variant-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 6px 10px;
-      font-size: 12px;
-      cursor: pointer;
-      border-bottom: 1px solid var(--border-secondary);
-      transition: background-color 0.1s;
-    }
-    .variant-row:last-child {
-      border-bottom: none;
-    }
-    .variant-row:hover {
-      background: var(--bg-secondary);
-    }
-    .variant-row.active {
-      background: var(--accent-primary);
-      color: white;
-    }
-    .variant-row.active .variant-score,
-    .variant-row.active .variant-metrics {
-      color: rgba(255, 255, 255, 0.8);
-    }
-    .variant-name {
-      flex: 1;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      font-weight: 500;
-    }
-    .variant-score {
-      font-family: monospace;
-      font-size: 11px;
-      font-weight: 600;
-      color: var(--text-primary);
-    }
-    .variant-metrics {
-      font-size: 10px;
-      color: var(--text-tertiary);
-      white-space: nowrap;
-    }
-
     /* Routing status */
     #routing-status {
       position: absolute;
@@ -1816,10 +1742,6 @@
         <div id="routing-progress">Initializing...</div>
       </div>
       <!-- Variant panel (routing alternatives) -->
-      <div id="variant-panel" class="hidden">
-        <div id="variant-panel-header">Routing Variants</div>
-        <div id="variant-list"></div>
-      </div>
       <!-- Error panel (VS Code style - appears on badge click) -->
       <div id="error-panel" class="hidden">
         <div id="error-panel-header">

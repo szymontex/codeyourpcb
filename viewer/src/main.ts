@@ -52,8 +52,6 @@ import { initProjectManager, showProjectManager, hideProjectManager, addRecentFi
 import { initSearchPanel, hideSearchPanel, toggleSearchPanel, isSearchPanelVisible, buildComponentSnippet } from './jlcpcb-panel';
 import { fetch3DModel, fetchComponentFootprint } from './jlcpcb';
 import { registerDynamicFootprint, register3DModel, hasDynamicFootprint } from './wasm';
-import { initVariantPanel, hideVariants, isVariantPanelVisible, type VariantData } from './variant-panel';
-import type { VariantPreviewData } from './renderer';
 import { mergeTracesIntoDsl, syncTracesToEditor } from './trace-persist';
 import { reportLostTraces } from './trace-census';
 import { describeViolationKind } from './violation-kinds';
@@ -365,8 +363,6 @@ async function init(): Promise<void> {
   let padNetMap = new Map<string, string>();
 
   // Variant preview state
-  let variantPreview: VariantPreviewData | null = null;
-  let storedVariants: VariantData[] = [];
 
   /**
    * Pull fresh snapshot from engine and rebuild derived state (padNetMap).
@@ -1760,32 +1756,6 @@ async function init(): Promise<void> {
     toggleSearchPanel();
   });
 
-  // --- Variant Panel ---
-  initVariantPanel({
-    onHover: (index) => {
-      if (index != null && storedVariants[index]) {
-        variantPreview = {
-          routes: storedVariants[index].routes,
-          vias: storedVariants[index].vias,
-        };
-      } else {
-        variantPreview = null;
-      }
-      dirty = true;
-    },
-    onClick: (index) => {
-      if (!storedVariants[index]) return;
-      // Apply the clicked variant by re-routing with that variant's config
-      // For now, variant click just makes it the active display — the routes
-      // from auto_route_variants() already applied the best one.
-      // To truly apply, we would need a per-variant apply API.
-      // Mark it as active and clear preview
-      variantPreview = null;
-      dirty = true;
-      console.log(`[Variants] Applied variant: ${storedVariants[index].name}`);
-    },
-  });
-
   /**
    * Find the best insertion line for a new component with the given refdes prefix.
    * Groups components by type: a new resistor (R) goes after the last R block,
@@ -2681,7 +2651,6 @@ async function init(): Promise<void> {
         gridVisible,
         gridVisualSpacing: getPreference('gridVisualSpacing'),
         showNetLabels,
-        variantPreview,
         dragEdit: interactionState.dragEdit,
         rectSelect: interactionState.rectSelect,
       };
@@ -2893,11 +2862,6 @@ async function init(): Promise<void> {
       return;
     }
 
-    // Clear any existing variant panel on new Route click
-    hideVariants();
-    variantPreview = null;
-    storedVariants = [];
-
     isRouting = true;
     routingStartTime = Date.now();
     statusText.textContent = 'Routing…';
@@ -2979,9 +2943,7 @@ async function init(): Promise<void> {
       isRouting = false;
       updateRoutingUI({ isRouting: false, pass: 0, routed: 0, unrouted: 0, elapsed: 0 });
       setTimeout(() => {
-        if (!isVariantPanelVisible()) {
-          statusText.textContent = usingWasm ? 'Ready (WASM)' : 'Ready (Mock)';
-        }
+        statusText.textContent = usingWasm ? 'Ready (WASM)' : 'Ready (Mock)';
       }, 5000);
     }
   }
