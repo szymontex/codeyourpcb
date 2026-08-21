@@ -55,6 +55,8 @@ fn board(layers: &[Spec], copper: u8) -> BoardWorld {
                 name: name.map(str::to_string),
                 thickness: thickness.map(Nm::from_mm),
                 material: material.map(str::to_string),
+                dk_x1000: None,
+                df_x1000000: None,
             })
             .collect(),
     });
@@ -361,4 +363,35 @@ fn a_board_with_no_stackup_node_arrives_without_one() {
     let result = cypcb_kicad::pcb_parser::parse_kicad_pcb_str(&stripped).expect("parses");
     assert!(result.world.stackup().is_none(), "\n{stripped}");
     assert!(result.metadata.stackup_refusals.is_empty());
+}
+
+#[test]
+fn the_dielectric_numbers_make_the_trip_out_and_back() {
+    // What a controlled-impedance stack is actually chosen on. pcbnew writes
+    // them after the material, as `epsilon_r` and `loss_tangent`; the language
+    // and the datasheet both call them dk and df.
+    let mut world = board(BARE, 4);
+    {
+        let stackup = world.stackup().cloned().expect("the premise");
+        let mut layers = stackup.layers;
+        layers[3].material = Some("Isola 370HR".to_string());
+        layers[3].dk_x1000 = Some(3_920);
+        layers[3].df_x1000000 = Some(8_900);
+        world.set_stackup(cypcb_world::Stackup { layers });
+    }
+
+    let text = write_board(&mut world, "test");
+    assert!(
+        text.contains("(material \"Isola 370HR\") (epsilon_r 3.92) (loss_tangent 0.0089))"),
+        "\n{text}"
+    );
+
+    let result = cypcb_kicad::pcb_parser::parse_kicad_pcb_str(&text).expect("parses");
+    let back = result.world.stackup().expect("a stackup came back");
+    assert_eq!(back.layers[3].dk_x1000, Some(3_920), "\n{text}");
+    assert_eq!(back.layers[3].df_x1000000, Some(8_900), "\n{text}");
+    // A stack that states neither still states neither: an absent number is
+    // not a zero, and a zero permittivity is not a laminate.
+    assert_eq!(back.layers[0].dk_x1000, None);
+    assert_eq!(back.layers[0].df_x1000000, None);
 }

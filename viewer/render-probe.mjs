@@ -1,0 +1,16 @@
+import { chromium } from 'playwright';
+const B = process.env.BAZA, C = process.env.CIACHO, R = process.env.ROLA || 'realizator';
+const b = await chromium.launch();
+const c = await b.newContext({ viewport: { width: 1400, height: 1000 } });
+await c.addCookies([{ name: 'sb-api-auth-token', value: C, domain: new URL(B).hostname, path: '/' }]);
+const p = await c.newPage();
+await p.goto(`${B}/home`, { waitUntil: 'domcontentloaded', timeout: 60000 });
+await p.waitForTimeout(2000);
+const t = await p.evaluate(() => document.body.innerText);
+console.log(`rola: ${R}`);
+console.log(`  baner makiety widoczny : ${t.includes('Tryb Mockup: OFF') ? 'TAK - zle' : 'nie - dobrze'}`);
+console.log(`  zaslepka GCal widoczna : ${t.includes('128 event') ? 'TAK - zle' : 'nie - dobrze'}`);
+console.log(`  zaszyta data widoczna  : ${t.includes('13 maja 2026') ? 'TAK - zle' : 'nie - dobrze'}`);
+console.log(`  widoczna tresc         : ${t.length} znakow`);
+console.log(`  pierwsze linie         : ${t.split('\n').filter(Boolean).slice(0,40).join(' | ')}`);
+await b.close();

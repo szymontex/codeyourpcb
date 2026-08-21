@@ -250,6 +250,13 @@ fn write_stackup(out: &mut String, stackup: &Stackup, copper_layers: usize) {
         if let Some(material) = &layer.material {
             let _ = write!(line, " (material \"{material}\")");
         }
+        // pcbnew's own order puts these last, after the material.
+        if let Some(dk) = layer.dk_x1000 {
+            let _ = write!(line, " (epsilon_r {})", f64::from(dk) / 1_000.0);
+        }
+        if let Some(df) = layer.df_x1000000 {
+            let _ = write!(line, " (loss_tangent {})", f64::from(df) / 1_000_000.0);
+        }
         line.push(')');
         let _ = writeln!(out, "{line}");
     }

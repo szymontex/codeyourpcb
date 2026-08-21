@@ -1493,6 +1493,26 @@
     "type": "stackup_layer",
     "named": true,
     "fields": {
+      "df": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "number",
+            "named": true
+          }
+        ]
+      },
+      "dk": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "number",
+            "named": true
+          }
+        ]
+      },
       "layer_type": {
         "multiple": false,
         "required": true,
@@ -2242,11 +2262,19 @@
     "named": false
   },
   {
+    "type": "df",
+    "named": false
+  },
+  {
     "type": "diffpair",
     "named": false
   },
   {
     "type": "diode",
+    "named": false
+  },
+  {
+    "type": "dk",
     "named": false
   },
   {

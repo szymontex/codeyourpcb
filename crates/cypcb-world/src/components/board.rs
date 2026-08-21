@@ -459,6 +459,19 @@ pub struct StackupLayer {
     /// check it against, and a material this tool did not recognise is still
     /// the material the board is quoted on.
     pub material: Option<String>,
+    /// The dielectric constant, in thousandths.
+    ///
+    /// `4.5` is `4500`. Fixed point rather than an `f64` because this struct
+    /// is `Eq` and `Hash`, and because a laminate datasheet publishes three
+    /// decimals at most - `3.66`, `4.05`, `3.48`.
+    pub dk_x1000: Option<u32>,
+    /// The loss tangent, in millionths.
+    ///
+    /// `0.0089` is `8900`. A different scale from `dk_x1000` because the
+    /// numbers are: a low-loss laminate publishes `0.0021` and PTFE `0.0002`,
+    /// so thousandths would round both to nothing. The suffix names the scale
+    /// at every use, which is the point of writing it out.
+    pub df_x1000000: Option<u32>,
 }
 
 impl StackupLayer {
@@ -473,6 +486,8 @@ impl StackupLayer {
             name: None,
             thickness,
             material: None,
+            dk_x1000: None,
+            df_x1000000: None,
         }
     }
 }

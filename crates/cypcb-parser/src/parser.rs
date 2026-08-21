@@ -418,11 +418,19 @@ impl CypcbParser {
         let material =
             get_child_by_field(node, "material").map(|n| self.convert_string_literal(source, &n));
 
+        let number = |field: &str| {
+            get_child_by_field(node, field)
+                .and_then(|n| node_text(source, &n).parse::<f64>().ok())
+                .filter(|value| value.is_finite() && *value > 0.0)
+        };
+
         Some(StackupLayer {
             layer_type,
             name,
             thickness,
             material,
+            dk: number("dk"),
+            df: number("df"),
             span: span_of(node),
         })
     }

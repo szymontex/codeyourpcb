@@ -127,7 +127,7 @@ module.exports = grammar({
     ),
 
     // copper "F.Cu" 0.035mm
-    // core "dielectric 2" 1.095mm material "FR4"
+    // core "dielectric 2" 1.095mm material "FR4" dk 4.5 df 0.02
     //
     // The name is quoted because a fabricator's canonical layer names carry a
     // dot - F.Cu, In1.Cu, B.Mask - which no identifier in this language may.
@@ -136,6 +136,8 @@ module.exports = grammar({
       optional(field('name', $.string)),
       optional(field('thickness', $.dimension)),
       optional(seq('material', field('material', $.string))),
+      optional(seq('dk', field('dk', $.number))),
+      optional(seq('df', field('df', $.number))),
     ),
 
     // component R1 resistor "0402" { ... }

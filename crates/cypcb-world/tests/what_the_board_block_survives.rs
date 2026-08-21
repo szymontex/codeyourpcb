@@ -276,3 +276,61 @@ board t {
     let back = load(&text);
     assert_eq!(back.stackup().cloned(), Some(before), "\n{text}");
 }
+
+#[test]
+fn the_dielectric_numbers_come_back_as_written() {
+    // `dk` and `df` are what a controlled-impedance stack is chosen on, and
+    // the two names a laminate datasheet prints them under. They are held in
+    // thousandths and millionths rather than as floats, because `StackupLayer`
+    // is `Eq` and `Hash` - so this asserts the integers as well as the text,
+    // which is where a scale mistake would show.
+    let source = r#"version 1
+
+board t {
+    size 40mm x 20mm
+    layers 2
+    stackup {
+        copper "F.Cu" 0.035mm
+        core "dielectric 1" 1.53mm material "Isola 370HR" dk 3.92 df 0.0089
+        copper "B.Cu" 0.035mm
+    }
+}
+"#;
+    let mut world = load(source);
+    let before = world.stackup().cloned().expect("the premise");
+    assert_eq!(before.layers[1].dk_x1000, Some(3_920));
+    assert_eq!(before.layers[1].df_x1000000, Some(8_900));
+
+    let text = board_as_dsl(&mut world);
+    assert!(
+        text.contains("material \"Isola 370HR\" dk 3.92 df 0.0089"),
+        "the numbers were rewritten on the way out:\n{text}"
+    );
+
+    let back = load(&text);
+    assert_eq!(back.stackup().cloned(), Some(before), "\n{text}");
+}
+
+#[test]
+fn a_dielectric_constant_of_zero_is_refused_rather_than_stored() {
+    // A laminate with no permittivity is not a laminate, and a stored nonsense
+    // number reads later as a measurement.
+    let source = r#"version 1
+
+board t {
+    size 40mm x 20mm
+    layers 2
+    stackup {
+        copper 0.035mm
+        core 1.53mm dk 0
+        copper 0.035mm
+    }
+}
+"#;
+    let parsed = cypcb_parser::parse(source);
+    assert!(
+        !parsed.errors.is_empty(),
+        "`dk 0` was accepted: {:?}",
+        parsed.errors
+    );
+}

@@ -681,6 +681,8 @@ fn extract_stackup(elements: &[Sexp]) -> (Option<Stackup>, Vec<String>) {
         let mut type_name = None;
         let mut thickness = None;
         let mut material = None;
+        let mut dk_x1000 = None;
+        let mut df_x1000000 = None;
         for child in &fields[first_child..] {
             let Ok(pair) = child.list() else {
                 continue;
@@ -692,6 +694,16 @@ fn extract_stackup(elements: &[Sexp]) -> (Option<Stackup>, Vec<String>) {
                 Some("type") => type_name = get_string(&pair[1]),
                 Some("thickness") => thickness = get_f64(&pair[1]).map(Nm::from_mm),
                 Some("material") => material = get_string(&pair[1]),
+                Some("epsilon_r") => {
+                    dk_x1000 = get_f64(&pair[1])
+                        .filter(|value| value.is_finite() && *value > 0.0)
+                        .map(|value| (value * 1_000.0).round() as u32)
+                }
+                Some("loss_tangent") => {
+                    df_x1000000 = get_f64(&pair[1])
+                        .filter(|value| value.is_finite() && *value > 0.0)
+                        .map(|value| (value * 1_000_000.0).round() as u32)
+                }
                 _ => {}
             }
         }
@@ -711,6 +723,8 @@ fn extract_stackup(elements: &[Sexp]) -> (Option<Stackup>, Vec<String>) {
             name: Some(name),
             thickness,
             material,
+            dk_x1000,
+            df_x1000000,
         });
     }
 

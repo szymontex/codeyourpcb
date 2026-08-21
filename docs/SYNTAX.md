@@ -122,7 +122,7 @@ board four_layer {
         copper "F.Cu" 0.035mm
         prepreg "dielectric 1" 0.2mm material "FR4"
         copper "In1.Cu" 0.0175mm
-        core "dielectric 2" 1.095mm material "Isola 370HR"
+        core "dielectric 2" 1.095mm material "Isola 370HR" dk 3.92 df 0.0089
         copper "In2.Cu" 0.0175mm
         prepreg "dielectric 3" 0.2mm material "FR4"
         copper "B.Cu" 0.035mm
@@ -134,6 +134,13 @@ The name is what the fabricator calls that layer. It is quoted because the
 canonical names carry a dot - `F.Cu`, `In1.Cu`, `B.Mask` - which no identifier
 in this language may. A stackup entry and a copper layer are not the same
 thing: the four-layer board above has seven entries.
+
+`dk` is the dielectric constant and `df` the loss tangent - what a laminate
+datasheet prints under those two names, what KiCad's board file calls
+`epsilon_r` and `loss_tangent`, and what Altium's stack manager calls `Dk` and
+`Df`. Neither takes a unit. Both are what a controlled-impedance design is
+decided on, so a stack that states them says something the thickness alone
+cannot.
 
 `material` is the laminate or foil the board is quoted on, held as written.
 Nothing here has a table of laminates to check it against, and a material this

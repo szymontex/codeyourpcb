@@ -482,6 +482,16 @@ pub fn board_as_dsl(world: &mut BoardWorld) -> String {
             if let Some(material) = &layer.material {
                 let _ = write!(line, " material {}", quoted(material));
             }
+            // `f64`'s own Display prints the shortest text that reads back as
+            // the same number, so 4500 thousandths comes out `4.5` and 8900
+            // millionths comes out `0.0089` - and both round back to the
+            // integer they left as.
+            if let Some(dk) = layer.dk_x1000 {
+                let _ = write!(line, " dk {}", f64::from(dk) / 1_000.0);
+            }
+            if let Some(df) = layer.df_x1000000 {
+                let _ = write!(line, " df {}", f64::from(df) / 1_000_000.0);
+            }
             let _ = writeln!(out, "{line}");
         }
         let _ = writeln!(out, "    }}");

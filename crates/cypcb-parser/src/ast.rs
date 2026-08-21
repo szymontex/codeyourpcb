@@ -231,6 +231,15 @@ pub struct StackupLayer {
     /// A name, not a validated material - this crate reads the language and
     /// has no table of laminates to check it against.
     pub material: Option<StringLit>,
+    /// The dielectric constant, as written: `dk 4.5`.
+    ///
+    /// KiCad calls this `epsilon_r` and Altium calls it `Dk`; the datasheet a
+    /// designer reads it off calls it `Dk`, which is why the language does.
+    pub dk: Option<f64>,
+    /// The loss tangent, as written: `df 0.02`.
+    ///
+    /// `loss_tangent` to KiCad, `Df` to Altium and to the datasheet.
+    pub df: Option<f64>,
     /// Span covering this layer definition.
     pub span: Span,
 }

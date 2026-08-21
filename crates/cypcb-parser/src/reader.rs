@@ -423,11 +423,18 @@ impl<'a> Reader<'a> {
             } else {
                 None
             };
+            // The two numbers a dielectric is chosen for. Consumed here for
+            // the reason `material` is: the loop reads the next word as a
+            // layer kind, and neither of these is one.
+            let dk = self.stackup_number("dk");
+            let df = self.stackup_number("df");
             layers.push(StackupLayer {
                 layer_type,
                 name,
                 thickness,
                 material,
+                dk,
+                df,
                 span: Span::new(layer_start, self.behind()),
             });
         }
@@ -436,6 +443,28 @@ impl<'a> Reader<'a> {
             layers,
             span: Span::new(start, self.behind()),
         })
+    }
+
+    /// `dk 4.5` or `df 0.02` on a stackup layer, when the next word is that one.
+    ///
+    /// Neither is a dimension: a dielectric constant has no unit, and writing
+    /// one would be a unit this language does not have. Zero and below are
+    /// refused rather than stored, because a laminate with no permittivity is
+    /// not a laminate, and a stored nonsense number reads later as a
+    /// measurement.
+    fn stackup_number(&mut self, word: &str) -> Option<f64> {
+        if !self.eat_word(word) {
+            return None;
+        }
+        let Some((value, _)) = self.number() else {
+            self.unexpected(&format!("a number after `{word}`"));
+            return None;
+        };
+        if !value.is_finite() || value <= 0.0 {
+            self.unexpected(&format!("a positive number after `{word}`"));
+            return None;
+        }
+        Some(value)
     }
 
     /// Walk to the start of the next top-level definition.
