@@ -242,3 +242,70 @@ fn the_first_inner_layer_is_the_second_copper_entry() {
         said[0]
     );
 }
+
+#[test]
+fn every_layer_of_the_shared_fixture_reports_a_different_impedance() {
+    // The property that makes an index error visible, asserted through the
+    // rule rather than through the lookup: four layers, four numbers, none
+    // repeated. A rule reading the wrong layer would report a number that
+    // belongs to another one, and this is the assertion that would catch it -
+    // which the symmetric fixture used elsewhere in this file cannot do, and
+    // did not, three times.
+    let layers = [
+        Layer::TopCopper,
+        Layer::Inner(0),
+        Layer::Inner(1),
+        Layer::BottomCopper,
+    ];
+
+    let mut reported = Vec::new();
+    for layer in layers {
+        let mut world = BoardWorld::new();
+        world.set_board("z".to_string(), (Nm::from_mm(40.0), Nm::from_mm(20.0)), 4);
+        world.set_stackup(cypcb_fixtures::every_copper_layer_answers_differently());
+        let net_id = world.intern_net("CLK");
+        world.set_net_constraints(
+            net_id,
+            NetConstraints {
+                // Far from anything the stack can give, so every layer reports
+                // and the message carries its number.
+                impedance_ohms_x100: Some(1_000),
+                ..Default::default()
+            },
+        );
+        world.ecs_mut().spawn((
+            Trace {
+                segments: vec![TraceSegment {
+                    start: Point::new(Nm::from_mm(5.0), Nm::from_mm(10.0)),
+                    end: Point::new(Nm::from_mm(35.0), Nm::from_mm(10.0)),
+                }],
+                width: Nm::from_mm(0.2),
+                layer,
+                net_id,
+                locked: false,
+                source: TraceSource::Manual,
+            },
+            net_id,
+        ));
+
+        let said = complaints(&mut world);
+        assert_eq!(said.len(), 1, "{layer:?}: {said:?}");
+        let ohms = said[0]
+            .split("gives ")
+            .nth(1)
+            .and_then(|rest| rest.split("ohm").next())
+            .unwrap_or_else(|| panic!("{layer:?} reported no number: {}", said[0]))
+            .to_string();
+        reported.push((format!("{layer:?}"), ohms));
+    }
+
+    let mut numbers: Vec<&str> = reported.iter().map(|(_, ohms)| ohms.as_str()).collect();
+    numbers.sort_unstable();
+    let before = numbers.len();
+    numbers.dedup();
+    assert_eq!(
+        numbers.len(),
+        before,
+        "two layers reported the same impedance, so this fixture cannot catch an index error: {reported:?}"
+    );
+}

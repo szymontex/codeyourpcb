@@ -178,3 +178,52 @@ fn the_two_forms_agree_with_the_calculator_they_were_built_for() {
         "a 0.35mm outer trace on 0.2mm of 4.6 laminate should land near 50 ohm, got {z}"
     );
 }
+
+#[test]
+fn the_shared_fixture_gives_each_copper_layer_its_own_answer() {
+    // The guard on `cypcb-fixtures` itself. Its whole promise is that no two
+    // copper layers of that stack look alike, so a rule reading the wrong
+    // layer index cannot produce the right number by accident. If the fixture
+    // ever loses that property it stops being able to catch the thing it was
+    // built for, silently, and every test resting on it goes quiet with it.
+    let stackup = cypcb_fixtures::every_copper_layer_answers_differently();
+
+    let foils: Vec<Option<Nm>> = (0..4)
+        .map(|index| match stackup.environment_of(index) {
+            Some(CopperEnvironment::Microstrip { copper, .. }) => Some(copper),
+            Some(CopperEnvironment::Stripline { copper, .. }) => Some(copper),
+            None => None,
+        })
+        .collect();
+    let expected: Vec<Option<Nm>> = cypcb_fixtures::FOILS_MM
+        .iter()
+        .map(|mm| Some(Nm::from_mm(*mm)))
+        .collect();
+    assert_eq!(foils, expected, "every layer answers with its own foil");
+
+    // And all four are answerable: "no answer" and "the wrong answer" are
+    // different failures, and this fixture is for finding the second.
+    for index in 0..4 {
+        assert!(
+            stackup.environment_of(index).is_some(),
+            "copper entry {index} has no answer"
+        );
+    }
+    // The two inner layers are striplines and the two outer ones are not.
+    assert!(matches!(
+        stackup.environment_of(0),
+        Some(CopperEnvironment::Microstrip { .. })
+    ));
+    assert!(matches!(
+        stackup.environment_of(1),
+        Some(CopperEnvironment::Stripline { .. })
+    ));
+    assert!(matches!(
+        stackup.environment_of(2),
+        Some(CopperEnvironment::Stripline { .. })
+    ));
+    assert!(matches!(
+        stackup.environment_of(3),
+        Some(CopperEnvironment::Microstrip { .. })
+    ));
+}

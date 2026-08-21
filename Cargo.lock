@@ -1071,6 +1071,7 @@ dependencies = [
  "bevy_ecs",
  "cypcb-calc",
  "cypcb-core",
+ "cypcb-fixtures",
  "cypcb-parser",
  "cypcb-rules",
  "cypcb-world",
@@ -1094,6 +1095,14 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.18",
+]
+
+[[package]]
+name = "cypcb-fixtures"
+version = "0.1.0-beta"
+dependencies = [
+ "cypcb-core",
+ "cypcb-world",
 ]
 
 [[package]]
@@ -1235,6 +1244,7 @@ dependencies = [
  "bevy_ecs",
  "cypcb-calc",
  "cypcb-core",
+ "cypcb-fixtures",
  "cypcb-parser",
  "miette",
  "rstar",

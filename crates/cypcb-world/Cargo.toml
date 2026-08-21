@@ -24,4 +24,5 @@ miette = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
+cypcb-fixtures = { path = "../cypcb-fixtures" }
 cypcb-calc = { path = "../cypcb-calc" }

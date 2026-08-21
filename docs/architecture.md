@@ -148,6 +148,23 @@ Parsing happens differently on native vs WASM:
 - **Native**: Full Tree-sitter parser in Rust
 - **WASM**: Tree-sitter WASM in JavaScript, pass AST to Rust
 
+### cypcb-fixtures
+
+Boards whose layers cannot be mistaken for one another, shared by the test
+suites of the crates that read a layer index.
+
+Three index errors have shipped in this project and each was found by a
+mutation or by running the binary rather than by the test meant to cover it.
+All three had one cause: a symmetric stack gives neighbouring layers the same
+answer, so a rule reading the wrong index produces the right number. This crate
+holds a stack on which every copper layer answers differently, so that reading
+the wrong one fails.
+
+**Depends on**: cypcb-core, cypcb-world
+
+It is a dev-dependency of both and `publish = false`; nothing that ships links
+it.
+
 ### cypcb-world
 
 **Purpose**: ECS-based board model (single source of truth for PCB state)

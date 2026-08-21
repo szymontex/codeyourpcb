@@ -24,3 +24,6 @@ rstar = { workspace = true }
 
 # Optional parallelism
 rayon = { version = "1.10", optional = true }
+
+[dev-dependencies]
+cypcb-fixtures = { path = "../cypcb-fixtures" }

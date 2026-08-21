@@ -1,0 +1,11 @@
+[package]
+name = "cypcb-fixtures"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+description = "Board fixtures shared by the test suites of several crates"
+
+[dependencies]
+cypcb-core = { path = "../cypcb-core" }
+cypcb-world = { path = "../cypcb-world" }
