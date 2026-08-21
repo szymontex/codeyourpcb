@@ -30,8 +30,9 @@
 
 use cypcb_autoroute::variant::{default_variant_configs, generate_variants, VariantResult};
 use cypcb_drc::presets::DesignRules;
+use cypcb_drc::{preset_for_world, ruleset_for_world};
 use cypcb_kicad::{parse_kicad_pcb, BENCHMARKS};
-use cypcb_rules::presets::{PresetRuleSet, RulesPreset};
+use cypcb_rules::presets::RulesPreset;
 
 use std::path::{Path, PathBuf};
 
@@ -126,8 +127,6 @@ fn dominated_by<'a>(
 #[test]
 #[ignore = "routes every benchmark eight times"]
 fn what_the_ranking_should_order_on() {
-    let rules = PresetRuleSet::new(RulesPreset::from_name("jlcpcb").unwrap());
-    let design_rules = DesignRules::jlcpcb_2layer();
     let configs = default_variant_configs();
 
     // board -> the eight results, routed once.
@@ -136,6 +135,17 @@ fn what_the_ranking_should_order_on() {
         let parsed = parse_kicad_pcb(&fixture_path(benchmark.filename))
             .unwrap_or_else(|e| panic!("failed to parse {}: {e:?}", benchmark.filename));
         let mut world = parsed.world;
+
+        // The table this board would actually be ranked under. `multi_ic` has
+        // four copper layers, and on its own table the adaptive grid is
+        // 0.400mm against 0.508mm - so a fixed two-layer answer here ranks a
+        // different search, and this file is what every "which variant does
+        // this board pick" answer rests on.
+        let preset = preset_for_world(RulesPreset::JlcpcbStandard2Layer, &world);
+        let rules = ruleset_for_world(preset, &world);
+        let design_rules = DesignRules::from_constraints(&preset.constraints());
+        eprintln!("{} ranked on {}", benchmark.filename, preset.name());
+
         let results =
             generate_variants(&mut world, &parsed.library, &rules, &design_rules, &configs);
         per_board.push((benchmark.filename, results));
