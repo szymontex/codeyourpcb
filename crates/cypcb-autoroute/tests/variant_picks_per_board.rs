@@ -13,9 +13,9 @@
 use std::path::Path;
 
 use cypcb_autoroute::variant::{default_variant_configs, generate_variants};
-use cypcb_drc::DesignRules;
+use cypcb_drc::{preset_for_world, ruleset_for_world, DesignRules};
 use cypcb_kicad::{parse_kicad_pcb, BENCHMARKS};
-use cypcb_rules::presets::{PresetRuleSet, RulesPreset};
+use cypcb_rules::presets::RulesPreset;
 
 fn fixture_path(filename: &str) -> std::path::PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -27,14 +27,20 @@ fn fixture_path(filename: &str) -> std::path::PathBuf {
 #[test]
 #[ignore = "diagnostic: scores every routing variant on every benchmark board"]
 fn which_variant_each_board_picks() {
-    let rules = PresetRuleSet::new(RulesPreset::from_name("jlcpcb").unwrap());
-    let design_rules = DesignRules::jlcpcb_2layer();
     let configs = default_variant_configs();
 
     for benchmark in BENCHMARKS {
         let parsed = parse_kicad_pcb(&fixture_path(benchmark.filename))
             .unwrap_or_else(|e| panic!("Failed to parse {}: {:?}", benchmark.filename, e));
         let mut world = parsed.world;
+
+        // The table this board would actually be graded against. Ranking a
+        // four-layer board on the two-layer table answers about a board nobody
+        // ships, and on `multi_ic` it does not even rank the same variant
+        // first.
+        let preset = preset_for_world(RulesPreset::JlcpcbStandard2Layer, &world);
+        let rules = ruleset_for_world(preset, &world);
+        let design_rules = DesignRules::from_constraints(&preset.constraints());
 
         let started = std::time::Instant::now();
         let results =
@@ -43,9 +49,10 @@ fn which_variant_each_board_picks() {
 
         eprintln!();
         eprintln!(
-            "=== {} - {} variants in {:.1}s ===",
+            "=== {} - {} variants on {} in {:.1}s ===",
             benchmark.filename,
             results.len(),
+            preset.name(),
             elapsed.as_secs_f64()
         );
 

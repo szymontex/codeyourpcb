@@ -46,6 +46,30 @@ fn wider(floor: Nm, asked: Nm) -> Nm {
     }
 }
 
+/// The fab table this board's own layer count asks for.
+///
+/// A house publishes one table per layer count, so a four-layer board belongs
+/// on the four-layer table. The command line has resolved this since
+/// `preset_choice` was written, and the routing harnesses each carried their
+/// own hard-coded two-layer answer instead. That is not cosmetic: on
+/// `multi_ic`, which is the four-layer benchmark, the two tables do not rank
+/// the same variant first. One implementation, so a measurement and the tool
+/// it is about cannot drift apart.
+pub fn preset_for_world(base: RulesPreset, world: &BoardWorld) -> RulesPreset {
+    base.for_layer_count(copper_layer_count(world))
+}
+
+/// How many copper layers the board says it has.
+///
+/// Two when the board carries no stackup, which is what a `.kicad_pcb` without
+/// one and a `.cypcb` without a layer count both leave behind.
+pub fn copper_layer_count(world: &BoardWorld) -> u8 {
+    world
+        .board_info()
+        .map(|(_, stack)| stack.count)
+        .unwrap_or(2)
+}
+
 /// Build a routing rule set that carries the design's per-net constraints.
 ///
 /// Nets the design says nothing about are absent from the override map and

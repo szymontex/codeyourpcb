@@ -13,6 +13,7 @@
 //! file - and JLCPCB remains the answer when neither says anything, which is
 //! what it has always been.
 
+use cypcb_drc::preset_for_world;
 use cypcb_rules::presets::RulesPreset;
 use cypcb_world::BoardWorld;
 use miette::Result;
@@ -32,7 +33,7 @@ pub fn resolve(flag: Option<&str>, world: &BoardWorld) -> Result<RulesPreset> {
         let chosen = by_name(name, Origin::Design)?;
         return Ok(for_this_board(chosen, name, world));
     }
-    Ok(RulesPreset::JlcpcbStandard2Layer.for_layer_count(copper_layers(world)))
+    Ok(preset_for_world(RulesPreset::JlcpcbStandard2Layer, world))
 }
 
 /// The layer-count sibling of a preset, unless the name asked for one.
@@ -46,15 +47,7 @@ fn for_this_board(chosen: RulesPreset, written: &str, world: &BoardWorld) -> Rul
     if written.to_ascii_lowercase().contains("layer") {
         return chosen;
     }
-    chosen.for_layer_count(copper_layers(world))
-}
-
-/// How many copper layers the board says it has.
-fn copper_layers(world: &BoardWorld) -> u8 {
-    world
-        .board_info()
-        .map(|(_, stack)| stack.count)
-        .unwrap_or(2)
+    preset_for_world(chosen, world)
 }
 
 /// Where a preset name was written.

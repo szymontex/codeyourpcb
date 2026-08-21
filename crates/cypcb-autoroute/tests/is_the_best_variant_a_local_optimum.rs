@@ -23,9 +23,10 @@
 use std::path::Path;
 
 use cypcb_autoroute::variant::{default_variant_configs, generate_variants, VariantConfig};
-use cypcb_drc::DesignRules;
+use cypcb_drc::{preset_for_world, ruleset_for_world, DesignRules};
 use cypcb_kicad::{parse_kicad_pcb, BENCHMARKS};
-use cypcb_rules::presets::{PresetRuleSet, RulesPreset};
+use cypcb_rules::presets::RulesPreset;
+use cypcb_world::BoardWorld;
 
 fn fixture_path(filename: &str) -> std::path::PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -52,6 +53,16 @@ fn band(filename: &str) -> (i64, i64) {
         "plane_board.kicad_pcb" => (0, 0),
         _ => (0, 0),
     }
+}
+
+/// The fab table this board would actually be graded against.
+///
+/// `cypcb check` resolves the sibling that matches the board, so `multi_ic`
+/// reads against `jlcpcb_standard_4layer` and the other five against the
+/// two-layer table. This harness had its own two-layer answer for all six,
+/// which asks about a board nobody ships.
+fn table_for(world: &BoardWorld) -> RulesPreset {
+    preset_for_world(RulesPreset::JlcpcbStandard2Layer, world)
 }
 
 /// One-knob neighbours of a variant, named after what was changed.
@@ -114,11 +125,43 @@ fn neighbours(base: &VariantConfig) -> Vec<VariantConfig> {
     out
 }
 
+/// The yardstick is the board's own table, and one benchmark proves it matters.
+///
+/// `multi_ic` has four copper layers. Ranked on the two-layer table it puts
+/// `PathFinder Eager Pads Priced Ring` first at 172 / 84; ranked on its own
+/// table it puts `PathFinder Eager Pads` first at 371 / 128, which is what
+/// `cypcb route --variants` prints. A harness that ranks under a table the tool
+/// would not use answers about a board nobody ships, so which table each
+/// benchmark resolves to is pinned here rather than left to a diagnostic that
+/// only fails when it finds an improvement.
+#[test]
+fn each_benchmark_is_graded_on_the_table_its_own_layer_count_asks_for() {
+    let mut seen: Vec<(&str, &str)> = Vec::new();
+    for benchmark in BENCHMARKS {
+        let parsed = parse_kicad_pcb(&fixture_path(benchmark.filename))
+            .unwrap_or_else(|e| panic!("Failed to parse {}: {:?}", benchmark.filename, e));
+        seen.push((benchmark.filename, table_for(&parsed.world).name()));
+    }
+
+    assert!(
+        seen.contains(&("multi_ic.kicad_pcb", "jlcpcb_standard_4layer")),
+        "multi_ic is the four-layer benchmark and the harness must grade it on \
+         the four-layer table; got {seen:?}"
+    );
+    for (filename, table) in &seen {
+        if *filename == "multi_ic.kicad_pcb" {
+            continue;
+        }
+        assert_eq!(
+            *table, "jlcpcb_standard_2layer",
+            "{filename} is a two-layer board and should resolve to the two-layer table"
+        );
+    }
+}
+
 #[test]
 #[ignore = "diagnostic: one-knob neighbourhood around each board's chosen variant"]
 fn does_a_one_knob_neighbour_beat_the_variant_the_board_picks() {
-    let rules = PresetRuleSet::new(RulesPreset::from_name("jlcpcb").unwrap());
-    let design_rules = DesignRules::jlcpcb_2layer();
     let shipped = default_variant_configs();
 
     // Six boards times a dozen points is more than one sitting, and the
@@ -140,6 +183,9 @@ fn does_a_one_knob_neighbour_beat_the_variant_the_board_picks() {
         let parsed = parse_kicad_pcb(&fixture_path(benchmark.filename))
             .unwrap_or_else(|e| panic!("Failed to parse {}: {:?}", benchmark.filename, e));
         let mut world = parsed.world;
+        let preset = table_for(&world);
+        let rules = ruleset_for_world(preset, &world);
+        let design_rules = DesignRules::from_constraints(&preset.constraints());
         let ranked =
             generate_variants(&mut world, &parsed.library, &rules, &design_rules, &shipped);
         let winner_name = ranked
@@ -168,10 +214,11 @@ fn does_a_one_knob_neighbour_beat_the_variant_the_board_picks() {
 
         eprintln!();
         eprintln!(
-            "=== {} - {} points around `{}` in {:.1}s ===",
+            "=== {} - {} points around `{}` on {} in {:.1}s ===",
             benchmark.filename,
             local.len(),
             winner_name,
+            preset.name(),
             elapsed.as_secs_f64()
         );
         for (rank, r) in local.iter().take(5).enumerate() {
@@ -224,7 +271,10 @@ fn does_a_one_knob_neighbour_beat_the_variant_the_board_picks() {
     }
     if improved.is_empty() {
         eprintln!("No board has a one-knob neighbour that beats what it already picks.");
-        eprintln!("The twelve points are better chosen than 'guesses' suggests, and a");
+        eprintln!(
+            "The {} points are better chosen than 'guesses' suggests, and a",
+            shipped.len()
+        );
         eprintln!("search would have to look further than one knob to find anything.");
     } else {
         eprintln!("Beaten on {} board(s):", improved.len());
