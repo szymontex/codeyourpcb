@@ -1233,6 +1233,7 @@ name = "cypcb-world"
 version = "0.1.0-beta"
 dependencies = [
  "bevy_ecs",
+ "cypcb-calc",
  "cypcb-core",
  "cypcb-parser",
  "miette",
