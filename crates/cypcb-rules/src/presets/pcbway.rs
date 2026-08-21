@@ -40,8 +40,17 @@ pub fn standard() -> DesignConstraints {
         min_drill_size: Nm::from_mm(0.2), // 0.2mm, advanced normal process
         min_via_drill: Nm::from_mm(0.2),  // 0.2mm, advanced normal process
         min_annular_ring: Nm::from_mm(0.15), // 0.15mm/6mil, published
-        min_silk_width: Nm::from_mm(0.22), // 0.22mm (wider than JLCPCB)
-        min_edge_clearance: Nm::from_mm(0.3), // 0.3mm
+        // 0.15mm, published as the minimum legend width. 0.22 was a
+        // margin on top of it, and a capability table says what a house
+        // can make - the same correction the trace and space in this
+        // table already took.
+        min_silk_width: Nm::from_mm(0.15),
+        // 0.25mm, published for the standard CNC-milled process. The page
+        // puts 0.20mm under "medium difficulty" and says anything below
+        // that needs special consideration, so 0.25 is the normal one -
+        // the same standard-versus-advanced pairing this table's drill
+        // figure already follows.
+        min_edge_clearance: Nm::from_mm(0.25),
 
         // Advanced geometry
         // PCBWay publishes one annular-ring minimum, 0.15mm/6mil, and does not
@@ -51,9 +60,14 @@ pub fn standard() -> DesignConstraints {
         // --preset pcbway` and PCBWay's own page refuses it.
         min_via_annular_ring: Nm::from_mm(0.15), // 0.15mm/6mil, published
         max_drill_aspect_ratio: 1000,            // 10:1
-        min_solder_mask_bridge: Nm::from_mm(0.1), // 0.1mm
-        min_paste_clearance: Nm::from_mm(0.127), // 5 mil
-        solder_mask_expansion: Nm::from_mm(0.05), // 0.05mm
+        // 4 mil, published for copper under 2oz. 4mil is 0.1016mm.
+        min_solder_mask_bridge: Nm::from_mm(0.1016),
+        // UNSOURCED. Read 2026-08-21: the capabilities page publishes no
+        // stencil aperture at all.
+        min_paste_clearance: Nm::from_mm(0.127),
+        // 2 mil, published as the standard mask opening enlargement. 2mil
+        // is 0.0508mm.
+        solder_mask_expansion: Nm::from_mm(0.0508),
         // PCBWay publishes an annular ring and no pad diameter. Derived.
         min_pad_size: None,
         min_slot_clearance: Nm::from_mm(0.3), // 0.3mm

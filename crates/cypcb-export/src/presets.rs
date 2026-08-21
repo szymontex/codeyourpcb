@@ -178,7 +178,11 @@ pub fn pcbway_standard() -> ExportPreset {
         },
         assembly: true,
         silk_clearance: Nm::from_mm(0.2),
-        mask_expansion: Nm::from_mm(0.05),
+        // 2 mil, published as PCBWay's standard mask opening enlargement.
+        // 2mil is 0.0508mm. Has to stay equal to `solder_mask_expansion` in
+        // that house's design rules, which is what
+        // `the_mask_opening_is_the_fabs_number_in_both_writers` asserts.
+        mask_expansion: Nm::from_mm(0.0508),
         pour_clearance: Nm::from_mm(0.254),
     }
 }

@@ -32,15 +32,23 @@ pub fn two_layer() -> DesignConstraints {
         min_drill_size: Nm::from_mm(0.254),     // 10 mil
         min_via_drill: Nm::from_mm(0.254),      // 10 mil
         min_annular_ring: Nm::from_mm(0.127),   // 5 mil
-        min_silk_width: Nm::from_mm(0.127),     // 5 mil
-        min_edge_clearance: Nm::from_mm(0.381), // 15 mil
+        min_silk_width: Nm::from_mm(0.127),     // 5 mil, published
+        min_edge_clearance: Nm::from_mm(0.381), // 15 mil, published
 
         // Advanced geometry
         min_via_annular_ring: Nm::from_mm(0.127), // 5 mil
         max_drill_aspect_ratio: 800,              // 8:1
-        min_solder_mask_bridge: Nm::from_mm(0.1), // 4 mil
-        min_paste_clearance: Nm::from_mm(0.127),  // 5 mil
-        solder_mask_expansion: Nm::from_mm(0.05), // 0.05mm
+        // 4 mil, published as the minimum soldermask web. 4mil is
+        // 0.1016mm; the 0.1 that stood here was the mil figure rounded
+        // down, which is looser than the page by 1.6 microns.
+        min_solder_mask_bridge: Nm::from_mm(0.1016),
+        // UNSOURCED. Read 2026-08-21: the service page publishes no
+        // stencil aperture and no mask expansion. What it does publish is
+        // a 3mil soldermask alignment that "covers retraction, expansion,
+        // and shift" - a tolerance on where the mask lands, not a figure
+        // to enlarge an opening by, so it is not this field.
+        min_paste_clearance: Nm::from_mm(0.127),
+        solder_mask_expansion: Nm::from_mm(0.05),
         // OSH Park publishes an annular ring and no pad diameter. Derived.
         min_pad_size: None,
         min_slot_clearance: Nm::from_mm(0.381), // 15 mil
@@ -126,14 +134,15 @@ pub fn four_layer() -> DesignConstraints {
         // 4mil is 0.1016mm. This carried 0.1mm, which is looser than the
         // figure its own comment names.
         min_annular_ring: Nm::from_mm(0.1016), // 4 mil, published
-        min_silk_width: Nm::from_mm(0.127),    // 5 mil
-        min_edge_clearance: Nm::from_mm(0.381), // 15 mil
+        min_silk_width: Nm::from_mm(0.127),    // 5 mil, published
+        min_edge_clearance: Nm::from_mm(0.381), // 15 mil, published
 
         // Advanced geometry
         min_via_annular_ring: Nm::from_mm(0.1016), // 4 mil, published
         max_drill_aspect_ratio: 1000,              // 10:1
-        min_solder_mask_bridge: Nm::from_mm(0.1),  // 4 mil
-        min_paste_clearance: Nm::from_mm(0.127),   // 5 mil
+        min_solder_mask_bridge: Nm::from_mm(0.1016), // 4 mil, published
+        // UNSOURCED, the same two as the two-layer table above.
+        min_paste_clearance: Nm::from_mm(0.127),
         solder_mask_expansion: Nm::from_mm(0.05),
         // OSH Park publishes an annular ring and no pad diameter. Derived.
         min_pad_size: None,

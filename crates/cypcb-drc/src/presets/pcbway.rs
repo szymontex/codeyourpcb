@@ -103,16 +103,22 @@ mod tests {
         assert_eq!(rules.min_drill_size, Nm::from_mm(0.2));
         assert_eq!(rules.min_via_drill, Nm::from_mm(0.2));
         assert_eq!(rules.min_annular_ring, Nm::from_mm(0.15));
-        assert_eq!(rules.min_silk_width, Nm::from_mm(0.22));
-        assert_eq!(rules.min_edge_clearance, Nm::from_mm(0.3));
+        // 0.15mm and 0.25mm, likewise published. These read 0.22mm and
+        // 0.3mm, both margins on top of the page rather than the page.
+        assert_eq!(rules.min_silk_width, Nm::from_mm(0.15));
+        assert_eq!(rules.min_edge_clearance, Nm::from_mm(0.25));
     }
 
     #[test]
-    fn test_pcbway_wider_silk() {
-        // PCBWay requires wider silkscreen than JLCPCB
+    fn test_pcbway_and_jlcpcb_publish_the_same_silk() {
+        // This test used to assert that PCBWay needs a wider legend than
+        // JLCPCB, which was true only while this table carried 0.22mm - a
+        // margin nobody sourced. Both pages publish 0.15mm, read 2026-08-21,
+        // so the difference was the table's and not the houses'.
         let jlcpcb = DesignRules::jlcpcb_2layer();
         let pcbway = DesignRules::pcbway_standard();
-        assert!(pcbway.min_silk_width > jlcpcb.min_silk_width);
+        assert_eq!(pcbway.min_silk_width, Nm::from_mm(0.15));
+        assert_eq!(pcbway.min_silk_width, jlcpcb.min_silk_width);
     }
 
     #[test]
