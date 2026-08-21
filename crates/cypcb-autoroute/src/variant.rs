@@ -287,6 +287,29 @@ pub fn default_variant_configs() -> Vec<VariantConfig> {
             heuristic_weight: 1.25,
             clearance_barrier: 0.0,
         },
+        // Found 2026-08-21 by `is_the_best_variant_a_local_optimum`, which
+        // moves one knob at a time around the point each board picks. Five of
+        // the six boards' winners turned out to be local optima. `plane_board`
+        // was not: the same `Eager Pads` with the via ring priced at 1 gives
+        // **10 violations and 4 shorts against 12 and 5**, and that board's
+        // measured noise band is **zero on both**, so the move is a setting
+        // rather than the negotiation going differently.
+        //
+        // A thirteenth variant rather than a change to `Eager Pads`, because
+        // `multi_ic` picks `Eager Pads` too and pricing its ring is not free
+        // there. The board picks.
+        VariantConfig {
+            name: "PathFinder Eager Pads Priced Ring".to_string(),
+            strategy: StrategyKind::PathFinder,
+            params: AutorouteParams::default(),
+            via_ring_penalty: 1.0,
+            pad_zone_blocks_foreign_copper: false,
+            reserve_trace_footprint: true,
+            foreign_pad_penalty: 20.0,
+            pad_zone_margin_cells: cypcb_autoroute_default_margin(),
+            heuristic_weight: 1.25,
+            clearance_barrier: 0.0,
+        },
         VariantConfig {
             name: "PathFinder Eager Light".to_string(),
             strategy: StrategyKind::PathFinder,
