@@ -54,7 +54,10 @@ costs a run to rediscover. Read this before taking a fallback item.
 | neck-down level 2 | **done** | `NeckDownRule` ships four checks; level 3's precondition, a width per segment, shipped too |
 | the allocator in `route_with_blockers` | **done, and it was never there** | the per-connection allocations were `pathfinding::astar`'s three collections, replaced by `GridSearchScratch::for_grid` made **once per grid** at `pathfinder_v2.rs:494`. What `route_with_blockers` allocates - the grid, the ratsnest, one `HashMap` of widths - is once per routing run, not per connection |
 | variant panel, connect or delete | **done** | deleted in `a9e8c7a` |
-| real KiCad fixtures as a re-baseline | **open, and smaller than it sounds** | the only untouched item. The candidates in the tree are `viewer/kicad-tools/boards/*/output/*_routed.kicad_pcb`: `charlieplex_3x3_routed` is 178 segments, `voltage_divider_routed` 26, `usb_joystick_routed` 2. They are tool fixtures rather than designs, so adding one buys a different *writer's* output to parse, not a different routing regime |
+| real KiCad fixtures as a re-baseline | **answered, and the row above was wrong** | `crates/cypcb-kicad/tests/fixtures/kicad10-slotted.kicad_pcb` is a file **KiCad 10.0.5 itself wrote**, and `a_board_kicad_actually_wrote` reads it - it found two shipped defects on its first run, a version gate that refused a board KiCad had just saved and a net table KiCad 10 no longer writes. What is *not* covered is a second writer: the boards under `viewer/kicad-tools/boards/*/output/` come from another generator, but they are 2 to 178 segments of tool fixture, so they buy a parse target rather than a routing regime |
+
+**Every row above is closed.** Re-checked 2026-08-22 after the first version
+of this table called the last row open on a guess rather than a grep.
 
 **What is genuinely live**, both of them deliberately not heartbeat work and
 both recorded in their own vectors: the clearance rule reporting per contact
