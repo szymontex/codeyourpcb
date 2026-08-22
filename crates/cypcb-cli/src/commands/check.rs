@@ -272,6 +272,25 @@ impl CheckCommand {
             eprintln!("  {}: {}", kind, count);
         }
 
+        // Reconcile the two numbers a reader is now looking at. The listing
+        // prints one clearance row per contact and the summary counts rows, so
+        // on a routed board they disagree - `qfp_fanout` lists 166 and counts
+        // 291 - and a reader with no line explaining that is left to work out
+        // which of the two is the board.
+        //
+        // Said only when they differ, because on a board where every contact
+        // is reported once the sentence would be noise. The counts themselves
+        // do not move: they are what the ratchets, the noise bands and every
+        // table in `docs/routing.md` are made of.
+        let clearance_rows = counts.get("clearance").copied().unwrap_or(0);
+        let contacts = worst_of_pair.len();
+        if clearance_rows > contacts {
+            eprintln!(
+                "  ({clearance_rows} clearance rows describe {contacts} contacts; \
+                 one row is listed per contact, the worst of its group)"
+            );
+        }
+
         // A count on its own reads the same whether the board shorts or runs
         // 0.01mm under spec. The first cannot work; the second is a yield risk
         // a fab may still build, and a person deciding whether to send the

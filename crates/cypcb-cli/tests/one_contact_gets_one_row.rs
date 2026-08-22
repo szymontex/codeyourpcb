@@ -166,3 +166,45 @@ fn the_header_still_counts_rows() {
         "the header and the per-kind summary are both row counts\n{report}"
     );
 }
+
+#[test]
+fn the_summary_reconciles_the_two_numbers() {
+    // The listing prints one clearance row per contact and the summary counts
+    // rows, so on a routed board they disagree. A reader with no line
+    // explaining that is left to work out which of the two is the board.
+    const TAG: &str = "reconciled";
+    let report = check_a_routed_board(TAG, "plane_board.kicad_pcb");
+
+    let rows = summary_count(&report, "clearance");
+    let printed = report
+        .lines()
+        .filter(|line| line.contains("clearance at ("))
+        .count();
+
+    let line = report
+        .lines()
+        .find(|line| line.contains("clearance rows describe"))
+        .unwrap_or_else(|| panic!("no reconciling line in:\n{report}"));
+
+    assert!(
+        line.contains(&format!("{rows} clearance rows")),
+        "the line has to quote the summary's own count of {rows}: {line}"
+    );
+    assert!(
+        line.contains(&format!("describe {printed} contacts")),
+        "and the number of rows it actually listed, {printed}: {line}"
+    );
+}
+
+#[test]
+fn a_board_with_nothing_to_group_says_nothing() {
+    // Every contact reported once means the two numbers agree, and a sentence
+    // reconciling them would be noise. `led_blink` routes to one clearance
+    // fault: one row, one contact.
+    const TAG: &str = "quiet";
+    let report = check_a_routed_board(TAG, "led_blink.kicad_pcb");
+    assert!(
+        !report.contains("clearance rows describe"),
+        "nothing was grouped, so there is nothing to reconcile:\n{report}"
+    );
+}
