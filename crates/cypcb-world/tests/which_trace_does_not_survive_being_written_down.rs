@@ -561,3 +561,36 @@ fn a_zone_on_a_layer_the_language_cannot_name_says_so() {
     let mut back = load(&written);
     assert!(zones(&mut back).is_empty(), "nothing was invented");
 }
+
+#[test]
+fn a_pour_on_a_net_the_identifier_rule_refuses_round_trips_quoted() {
+    // `zone_net` took `$.identifier` while `net_definition` and
+    // `pad_definition` had both grown a quoted form, so a ground plane poured
+    // to `VBUS+` - which is every USB design there is - was held in the model
+    // and written as a comment saying it could not be named. It takes
+    // `net_name` now, the same rule the `net` block uses.
+    let mut world = load(&base_board("SIG"));
+    let net_id = world.intern_net("VBUS+");
+    add_zone(
+        &mut world,
+        Zone::copper_pour_for_net(
+            Rect::new(Point::from_mm(1.0, 1.0), Point::from_mm(39.0, 19.0)),
+            0b01,
+            net_id,
+        )
+        .with_name("power"),
+    );
+
+    let written = board_as_dsl(&mut world);
+    assert!(
+        written.contains("    net \"VBUS+\""),
+        "the name is quoted, not described in a comment:\n{written}"
+    );
+
+    let mut back = load(&written);
+    assert_eq!(
+        zones(&mut world),
+        zones(&mut back),
+        "the pour comes back on the net it left on, quotes and all:\n{written}"
+    );
+}

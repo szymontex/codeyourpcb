@@ -316,7 +316,7 @@ fn via_span_suffix(via: &crate::components::trace::Via) -> String {
 
 /// A `zone` or `keepout` block, or a comment saying why there is neither.
 ///
-/// Three things can stop a zone being written, and each says so in the file
+/// Two things can stop a zone being written, and each says so in the file
 /// rather than disappearing:
 ///
 /// - a layer mask that is not exactly top, exactly bottom or every layer. The
@@ -326,8 +326,10 @@ fn via_span_suffix(via: &crate::components::trace::Via) -> String {
 ///   move copper onto layers the design never put it on, and for a keepout it
 ///   would forbid copper where the design allowed it.
 /// - a name the grammar's `identifier` refuses.
-/// - a pour whose net needs quoting. `zone_net` takes `$.identifier` only,
-///   unlike `net_definition`, which grew a quoted form.
+///
+/// A pour whose net needs quoting used to be a third. `zone_net` takes
+/// `net_name` now, the same rule `net_definition` uses, so `VBUS+` is written
+/// quoted rather than described in a comment.
 fn zone_as_dsl(
     zone: &crate::components::zone::Zone,
     net_names: &std::collections::HashMap<u32, String>,
@@ -365,21 +367,10 @@ fn zone_as_dsl(
         }
     }
 
-    let net = match zone.net {
-        None => None,
-        Some(net_id) => match net_names.get(&net_id.0) {
-            None => None,
-            Some(name) if is_writable_identifier(name) => Some(name.clone()),
-            Some(name) => {
-                let _ = writeln!(
-                    out,
-                    "// one {what} poured to {name:?} is not written: `zone_net` takes an \
-                     identifier and has no quoted form"
-                );
-                return out;
-            }
-        },
-    };
+    let net = zone
+        .net
+        .and_then(|net_id| net_names.get(&net_id.0))
+        .map(|name| net_name_as_written(name));
 
     match &zone.name {
         Some(name) => {

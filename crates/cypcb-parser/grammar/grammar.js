@@ -529,7 +529,13 @@ module.exports = grammar({
     layer_name: $ => choice('top', 'bottom', 'all', 'Top', 'Bottom', 'All'),
 
     // net NETNAME (for copper pour zones)
-    zone_net: $ => seq('net', field('net', $.identifier)),
+    //
+    // `net_name`, not `identifier`: a pour is poured to a net, and a net can
+    // be called `VBUS+` or `3V3`. `net_definition` and `pad_definition` both
+    // grew a quoted form; this was the last name in the language without one,
+    // so a ground plane on a net the identifier rule refuses could be held in
+    // the model and never written down.
+    zone_net: $ => seq('net', field('net', $.net_name)),
 
     // ========================================================================
     // Manual Trace Definitions

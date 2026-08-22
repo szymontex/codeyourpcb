@@ -1324,7 +1324,9 @@ impl<'a> Reader<'a> {
                 }
                 Some("net") => {
                     self.bump();
-                    match self.identifier() {
+                    // The same reader the `net` block uses, so a quoted name
+                    // means here what it means there.
+                    match self.net_name() {
                         Some(name) => net = Some(name),
                         None => self.unexpected("a net name"),
                     }

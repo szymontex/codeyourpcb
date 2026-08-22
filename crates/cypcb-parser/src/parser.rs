@@ -1121,10 +1121,11 @@ impl CypcbParser {
                     }
                     "zone_net" => {
                         if let Some(net_node) = get_child_by_field(&prop, "net") {
-                            net = Some(Identifier::new(
-                                node_text(source, &net_node),
-                                span_of(&net_node),
-                            ));
+                            // Through `net_name_of`, which takes the quotes off
+                            // a quoted name. Reading the node text raw would
+                            // give a net called `"VBUS+"` with the quotation
+                            // marks in the name.
+                            net = Some(net_name_of(source, &net_node));
                         }
                     }
                     _ => {}
@@ -2370,6 +2371,33 @@ board test {
     }
 
     #[test]
+    fn a_pour_can_be_poured_to_a_quoted_net() {
+        // `zone_net` took `$.identifier` and takes `net_name` now, so the two
+        // readers agree about a net called `VBUS+`. This is the tree-sitter
+        // side of that: the node it reads is a `net_name` wrapping a string,
+        // and reading its text raw would put the quotation marks in the name.
+        let source = r#"
+zone power {
+    bounds 1mm, 1mm to 39mm, 19mm
+    layer top
+    net "VBUS+"
+}
+"#;
+        let result = parse(source);
+        assert!(result.is_ok(), "errors: {:?}", result.errors);
+
+        let Definition::Zone(zone) = &result.value.definitions[0] else {
+            panic!("expected zone definition");
+        };
+        assert_eq!(zone.kind, crate::ast::ZoneKind::CopperPour);
+        assert_eq!(
+            zone.net.as_ref().map(|n| n.value.as_str()),
+            Some("VBUS+"),
+            "the name comes back without its quotes"
+        );
+    }
+
+    #[test]
     fn test_parse_keepout_zone() {
         let source = r#"
 keepout antenna_clearance {
@@ -2491,7 +2519,11 @@ footprint MY_PKG {
 
             // Check pad 1
             let pad1 = &fp.pads[0];
-            assert_eq!(pad1.number, 1);
+            // A pad's name is a string since `pad <name>` shipped: a USB-C
+            // receptacle calls one A1. These two lines still compared it with
+            // an integer, so this whole test target had not compiled since -
+            // which is why nothing in the tree-sitter reader was under test.
+            assert_eq!(pad1.number, "1");
             assert_eq!(pad1.shape, PadShape::Rect);
             assert!((pad1.x.value - 0.0).abs() < 0.001);
             assert!((pad1.y.value - 0.0).abs() < 0.001);
@@ -2501,7 +2533,7 @@ footprint MY_PKG {
 
             // Check pad 2
             let pad2 = &fp.pads[1];
-            assert_eq!(pad2.number, 2);
+            assert_eq!(pad2.number, "2");
             assert!((pad2.x.value - 2.0).abs() < 0.001);
 
             // Check courtyard
