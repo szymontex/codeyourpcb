@@ -17,8 +17,9 @@
 
 use std::collections::BTreeMap;
 
-use cypcb_core::{Nm, Point};
+use cypcb_core::{Nm, Point, Rect};
 use cypcb_world::components::trace::{Trace, TraceSegment, TraceSource, Via};
+use cypcb_world::components::zone::Zone;
 use cypcb_world::components::Layer;
 use cypcb_world::dsl::board_as_dsl;
 use cypcb_world::footprint::FootprintLibrary;
@@ -431,4 +432,132 @@ fn a_net_carrying_only_a_via_is_declared_too() {
         vias(&mut back),
         "the via comes back where it was, on the net it was on:\n{written}"
     );
+}
+
+/// One zone, flattened to what a comparison needs: kind, name, net, the four
+/// corners and the layer mask.
+type ZoneRow = (String, String, Option<String>, i64, i64, i64, i64, u32);
+
+/// Every zone on the board, as comparable integers and names.
+fn zones(world: &mut BoardWorld) -> Vec<ZoneRow> {
+    let placed: Vec<Zone> = {
+        let ecs = world.ecs_mut();
+        let mut query = ecs.query::<&Zone>();
+        query.iter(ecs).cloned().collect()
+    };
+    let mut out: Vec<_> = placed
+        .into_iter()
+        .map(|zone| {
+            let net = zone
+                .net
+                .and_then(|id| world.net_name(id).map(str::to_string));
+            (
+                format!("{:?}", zone.kind),
+                zone.name.clone().unwrap_or_default(),
+                net,
+                zone.bounds.min.x.raw(),
+                zone.bounds.min.y.raw(),
+                zone.bounds.max.x.raw(),
+                zone.bounds.max.y.raw(),
+                zone.layer_mask,
+            )
+        })
+        .collect();
+    out.sort();
+    out
+}
+
+/// Put a zone on the board directly, the way an import does.
+fn add_zone(world: &mut BoardWorld, zone: Zone) {
+    world.ecs_mut().spawn(zone);
+}
+
+#[test]
+fn a_keepout_survives_being_written_down() {
+    // The writer used to print `// N copper pour(s) ... the language has no
+    // syntax for one yet` and drop every zone. The language has had
+    // `zone_definition` all along - bounds, layer and net - and `sync_zone`
+    // reads all three, so a board imported with a keepout lost it on its first
+    // save under a note claiming the loss was unavoidable.
+    let mut world = load(&base_board("SIG"));
+    add_zone(
+        &mut world,
+        Zone::keepout(
+            Rect::new(Point::from_mm(2.0, 2.0), Point::from_mm(8.0, 6.0)),
+            0b01,
+        )
+        .with_name("antenna_clearance"),
+    );
+
+    let written = board_as_dsl(&mut world);
+    assert!(
+        written.contains("keepout antenna_clearance {"),
+        "the keepout is written as a keepout:\n{written}"
+    );
+
+    let mut back = load(&written);
+    assert_eq!(
+        zones(&mut world),
+        zones(&mut back),
+        "bounds, layer and name all come back:\n{written}"
+    );
+}
+
+#[test]
+fn a_pour_comes_back_on_the_net_it_was_poured_to() {
+    // A ground plane is a pour with a net, and the net is what makes it a
+    // plane rather than a rectangle of copper: the pads inside it are
+    // connected by it. The net here reaches no pin, which is the shape a
+    // stitched plane takes.
+    let mut world = load(&base_board("SIG"));
+    let net_id = world.intern_net("GNDPLANE");
+    add_zone(
+        &mut world,
+        Zone::copper_pour_for_net(
+            Rect::new(Point::from_mm(1.0, 1.0), Point::from_mm(39.0, 19.0)),
+            0b10,
+            net_id,
+        )
+        .with_name("gnd"),
+    );
+
+    let written = board_as_dsl(&mut world);
+    assert!(
+        written.contains("zone gnd {") && written.contains("    net GNDPLANE"),
+        "a pour states the net it is poured to:\n{written}"
+    );
+
+    let mut back = load(&written);
+    assert_eq!(
+        zones(&mut world),
+        zones(&mut back),
+        "the pour comes back on the net it left on:\n{written}"
+    );
+}
+
+#[test]
+fn a_zone_on_a_layer_the_language_cannot_name_says_so() {
+    // `from-kicad` builds a mask by OR-ing the layers a KiCad zone lists, so a
+    // pour on In1 of a four-layer board arrives as `0b100`. The language has
+    // three words for a zone's layer. Writing `all` instead would put copper
+    // on layers the design never had - and for a keepout, forbid it where the
+    // design allowed it - so the zone is left out and the file says which one.
+    let mut world = load(&base_board("SIG"));
+    add_zone(
+        &mut world,
+        Zone::keepout(
+            Rect::new(Point::from_mm(2.0, 2.0), Point::from_mm(8.0, 6.0)),
+            0b100,
+        ),
+    );
+
+    let written = board_as_dsl(&mut world);
+    assert!(
+        written.contains("is not written") && written.contains("0b100"),
+        "the file names the zone it could not write and why:\n{written}"
+    );
+
+    // The point of saying so in a comment: what is left still opens.
+    let mut back = load(&written);
+    assert!(zones(&mut back).is_empty(), "nothing was invented");
 }

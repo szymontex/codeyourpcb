@@ -314,6 +314,98 @@ fn via_span_suffix(via: &crate::components::trace::Via) -> String {
     )
 }
 
+/// A `zone` or `keepout` block, or a comment saying why there is neither.
+///
+/// Three things can stop a zone being written, and each says so in the file
+/// rather than disappearing:
+///
+/// - a layer mask that is not exactly top, exactly bottom or every layer. The
+///   language has three words for a zone's layer and a mask has thirty-two
+///   bits, so an inner-layer pour - which `from-kicad` builds whenever a
+///   four-layer board has one - cannot be spelled. Writing `all` instead would
+///   move copper onto layers the design never put it on, and for a keepout it
+///   would forbid copper where the design allowed it.
+/// - a name the grammar's `identifier` refuses.
+/// - a pour whose net needs quoting. `zone_net` takes `$.identifier` only,
+///   unlike `net_definition`, which grew a quoted form.
+fn zone_as_dsl(
+    zone: &crate::components::zone::Zone,
+    net_names: &std::collections::HashMap<u32, String>,
+) -> String {
+    use crate::components::zone::ZoneKind;
+
+    let mut out = String::new();
+    let what = match zone.kind {
+        ZoneKind::Keepout => "keepout",
+        ZoneKind::CopperPour => "zone",
+    };
+
+    let layer = match zone.layer_mask {
+        0b01 => "top",
+        0b10 => "bottom",
+        0xFFFF_FFFF => "all",
+        mask => {
+            let _ = writeln!(
+                out,
+                "// one {what} on layer mask {mask:#b} is not written: the language says \
+                 top, bottom or all, and this is none of the three"
+            );
+            return out;
+        }
+    };
+
+    if let Some(name) = &zone.name {
+        if !is_writable_identifier(name) {
+            let _ = writeln!(
+                out,
+                "// one {what} named {name:?} is not written: the grammar takes an \
+                 identifier for a zone name and has no quoted form"
+            );
+            return out;
+        }
+    }
+
+    let net = match zone.net {
+        None => None,
+        Some(net_id) => match net_names.get(&net_id.0) {
+            None => None,
+            Some(name) if is_writable_identifier(name) => Some(name.clone()),
+            Some(name) => {
+                let _ = writeln!(
+                    out,
+                    "// one {what} poured to {name:?} is not written: `zone_net` takes an \
+                     identifier and has no quoted form"
+                );
+                return out;
+            }
+        },
+    };
+
+    match &zone.name {
+        Some(name) => {
+            let _ = writeln!(out, "{what} {name} {{");
+        }
+        None => {
+            let _ = writeln!(out, "{what} {{");
+        }
+    }
+    let _ = writeln!(
+        out,
+        "    bounds {}mm, {}mm to {}mm, {}mm",
+        format_mm(zone.bounds.min.x.to_mm()),
+        format_mm(zone.bounds.min.y.to_mm()),
+        format_mm(zone.bounds.max.x.to_mm()),
+        format_mm(zone.bounds.max.y.to_mm())
+    );
+    let _ = writeln!(out, "    layer {layer}");
+    if let Some(net) = net {
+        let _ = writeln!(out, "    net {net}");
+    }
+    let _ = writeln!(out, "}}");
+    let _ = writeln!(out);
+    out
+}
+
 /// The raw id of every net that has copper on it, trace or via.
 ///
 /// The writer emits a `trace` block per net that carries copper, whether or
@@ -492,10 +584,10 @@ pub fn board_as_dsl(world: &mut BoardWorld) -> String {
     // empty, and entity order is not a promise the ECS makes.
     parts.sort_by(|a, b| a.refdes.cmp(&b.refdes));
 
-    let zone_count = {
+    let zones: Vec<crate::components::zone::Zone> = {
         let ecs = world.ecs_mut();
         let mut query = ecs.query::<&crate::components::zone::Zone>();
-        query.iter(ecs).count()
+        query.iter(ecs).cloned().collect()
     };
 
     let outline: Option<Vec<cypcb_core::Point>> = world
@@ -530,14 +622,6 @@ pub fn board_as_dsl(world: &mut BoardWorld) -> String {
         .collect();
 
     let mut out = String::new();
-    if zone_count > 0 {
-        let _ = writeln!(
-            out,
-            "// {zone_count} copper pour(s) on the source board are not written: the language\n\
-             // has no syntax for one yet, so they would be invented rather than kept."
-        );
-        let _ = writeln!(out);
-    }
     let _ = writeln!(out, "version 1");
     let _ = writeln!(out);
     let _ = writeln!(out, "board {safe_name} {{");
@@ -766,6 +850,16 @@ pub fn board_as_dsl(world: &mut BoardWorld) -> String {
             let _ = writeln!(out, "    {pin}");
         }
         let _ = writeln!(out, "}}");
+    }
+
+    // Keepouts and copper pours, after the nets a pour is poured to and before
+    // the copper. This block used to write a comment saying "the language has
+    // no syntax for one yet", which had stopped being true: `zone_definition`
+    // takes bounds, a layer and a net, and `sync_zone` reads all three. A board
+    // imported from KiCad with a ground plane lost that plane on its first save
+    // through the editor, under a note claiming the loss was unavoidable.
+    for zone in &zones {
+        out.push_str(&zone_as_dsl(zone, &net_names));
     }
 
     let traces = traces_as_dsl(world);
