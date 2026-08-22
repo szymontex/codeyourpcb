@@ -41,6 +41,28 @@ current, which is how a fresh session was told to work on a phase that was over.
   instruments measured and written up, two kept; the 3x grid pass measured and
   kept. Nothing here is finished, and nothing here is guessed.
 
+## Backlog, and what is actually left
+
+Checked against the code on 2026-08-22, because five of the six items a
+heartbeat offers as fallback work were finished weeks or days ago and each one
+costs a run to rediscover. Read this before taking a fallback item.
+
+| item | state | evidence |
+|---|---|---|
+| JLCPCB advanced capability page | **done** | `RulesPreset::JlcpcbAdvanced2Layer` and `...4Layer` exist and were read against the page; four figures corrected |
+| `pad <name>` in the language | **done** | `pad_definition` in `grammar.js` takes `choice($.number, $.identifier, $.string)` |
+| neck-down level 2 | **done** | `NeckDownRule` ships four checks; level 3's precondition, a width per segment, shipped too |
+| the allocator in `route_with_blockers` | **done, and it was never there** | the per-connection allocations were `pathfinding::astar`'s three collections, replaced by `GridSearchScratch::for_grid` made **once per grid** at `pathfinder_v2.rs:494`. What `route_with_blockers` allocates - the grid, the ratsnest, one `HashMap` of widths - is once per routing run, not per connection |
+| variant panel, connect or delete | **done** | deleted in `a9e8c7a` |
+| real KiCad fixtures as a re-baseline | **open, and smaller than it sounds** | the only untouched item. The candidates in the tree are `viewer/kicad-tools/boards/*/output/*_routed.kicad_pcb`: `charlieplex_3x3_routed` is 178 segments, `voltage_divider_routed` 26, `usb_joystick_routed` 2. They are tool fixtures rather than designs, so adding one buys a different *writer's* output to parse, not a different routing regime |
+
+**What is genuinely live**, both of them deliberately not heartbeat work and
+both recorded in their own vectors: the clearance rule reporting per contact
+instead of per segment pair (V1), and a total order for the frontier so a
+bucket queue becomes possible (V7). Each moves every published number once, so
+they are worth doing in the same sequence, and the sequence wants a session
+rather than a fire.
+
 ## Vectors (parallel branches - keep ALL moving)
 
 ### V1 - CLI and core correctness
