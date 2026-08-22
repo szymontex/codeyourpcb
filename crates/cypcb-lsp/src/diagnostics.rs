@@ -87,7 +87,21 @@ pub fn run_diagnostics(doc: &DocumentState) -> Vec<Diagnostic> {
     }
 
     // 5. Convert DRC violations (run during build_world)
-    for violation in &doc.drc_violations {
+    //
+    // One marker per contact. `ClearanceRule` compares pairs of *segments* and
+    // a trace is a polyline, so two traces running beside each other are one
+    // fault and as many violations as they have segments in that stretch: on
+    // the shipped benchmarks, 759 rows for 484 contacts and 24 rows for a
+    // single `U1 <-> trace 'GND'`. Every one of those rows lands on the same
+    // declaration, so the editor stacked two dozen identical squiggles on one
+    // line - and, worse, spent the diagnostic budget on them. The cap below is
+    // 100, so duplicates of one contact push *different* faults off the end.
+    //
+    // The marker kept is the worst of its group, not the first: keeping
+    // whichever came first would show a 0.11mm near-miss and hide a 0.00mm
+    // short between the same two features. `cypcb check` groups the same way,
+    // and the editor should say what the command line says.
+    for violation in grouped_by_contact(&doc.drc_violations) {
         if let Some(diag) = violation_to_diagnostic(doc, violation) {
             diagnostics.push(diag);
         }
@@ -111,6 +125,53 @@ pub fn run_diagnostics(doc: &DocumentState) -> Vec<Diagnostic> {
     }
 
     diagnostics
+}
+
+/// The two features a violation is about, as its message names them.
+///
+/// `U1 <-> trace 'GND': Clearance violation: ...` - everything before the
+/// colon is the pair, and it is the same string however many segments of the
+/// same two features report it.
+fn pair_of(message: &str) -> &str {
+    message
+        .split_once(':')
+        .map(|(pair, _)| pair.trim())
+        .unwrap_or(message)
+}
+
+/// One violation per contact, worst first, in the order they arrived.
+///
+/// Only `clearance` is grouped. The other kinds report per feature, and two of
+/// their messages being equal is two faults rather than one seen twice.
+fn grouped_by_contact(violations: &[DrcViolation]) -> Vec<&DrcViolation> {
+    let mut worst: std::collections::BTreeMap<&str, usize> = std::collections::BTreeMap::new();
+    for (index, violation) in violations.iter().enumerate() {
+        if violation.kind != ViolationKind::Clearance {
+            continue;
+        }
+        let pair = pair_of(&violation.message);
+        match worst.get(pair) {
+            None => {
+                worst.insert(pair, index);
+            }
+            Some(best) => {
+                let gap = |v: &DrcViolation| v.actual.map(|a| a.raw()).unwrap_or(i64::MAX);
+                if gap(violation) < gap(&violations[*best]) {
+                    worst.insert(pair, index);
+                }
+            }
+        }
+    }
+
+    violations
+        .iter()
+        .enumerate()
+        .filter(|(index, violation)| {
+            violation.kind != ViolationKind::Clearance
+                || worst.get(pair_of(&violation.message)) == Some(index)
+        })
+        .map(|(_, violation)| violation)
+        .collect()
 }
 
 /// A semantic error, placed where it happened.
@@ -338,6 +399,95 @@ fn span_to_positions(doc: &DocumentState, span: &SourceSpan) -> (u32, u32, u32, 
 
 #[cfg(test)]
 mod tests {
+
+    /// A clearance violation between `pair`, at `gap` millimetres.
+    ///
+    /// Built by hand rather than routed: the grouping is about the message and
+    /// the gap, and a board that produces two rows for one contact needs a
+    /// router run to make.
+    fn contact(pair: &str, gap_mm: f64) -> DrcViolation {
+        use cypcb_core::{Nm, Point};
+        let mut violation = DrcViolation::clearance(
+            cypcb_world::Entity::from_raw(1),
+            cypcb_world::Entity::from_raw(2),
+            Nm::from_mm(gap_mm),
+            Nm::from_mm(0.13),
+            Point::from_mm(0.0, 0.0),
+        );
+        violation.message = format!("{pair}: Clearance violation: {gap_mm}mm actual");
+        violation
+    }
+
+    #[test]
+    fn one_contact_gets_one_marker() {
+        let violations = vec![
+            contact("U1 <-> trace 'GND'", 0.11),
+            contact("U1 <-> trace 'GND'", 0.00),
+            contact("U1 <-> trace 'GND'", 0.05),
+            contact("R1 <-> trace 'VCC'", 0.09),
+        ];
+        let kept = grouped_by_contact(&violations);
+        assert_eq!(kept.len(), 2, "two contacts, two markers");
+    }
+
+    #[test]
+    fn the_marker_kept_is_the_worst_of_its_group() {
+        // Keeping whichever came first would show a 0.11mm near-miss and hide
+        // the short between the same two features.
+        let violations = vec![
+            contact("U1 <-> trace 'GND'", 0.11),
+            contact("U1 <-> trace 'GND'", 0.00),
+        ];
+        let kept = grouped_by_contact(&violations);
+        assert_eq!(kept.len(), 1);
+        assert_eq!(
+            kept[0].actual,
+            Some(cypcb_core::Nm::from_mm(0.0)),
+            "the short is the one worth showing"
+        );
+    }
+
+    #[test]
+    fn the_pipeline_uses_the_grouping() {
+        // The three tests above call `grouped_by_contact` directly, so a
+        // mutation that stopped `run_diagnostics` from calling it survived all
+        // of them. This one goes through the entry point the editor uses.
+        let mut doc = DocumentState::new("file:///t.cypcb".to_string(), String::new(), 1);
+        doc.drc_violations = vec![
+            contact("U1 <-> trace 'GND'", 0.11),
+            contact("U1 <-> trace 'GND'", 0.00),
+            contact("U1 <-> trace 'GND'", 0.05),
+        ];
+
+        let markers: Vec<_> = run_diagnostics(&doc)
+            .into_iter()
+            .filter(|d| d.code == "clearance")
+            .collect();
+        assert_eq!(
+            markers.len(),
+            1,
+            "three rows about one contact are one squiggle: {markers:?}"
+        );
+        assert!(
+            markers[0].message.contains("0mm actual"),
+            "and it is the worst of the three: {}",
+            markers[0].message
+        );
+    }
+
+    #[test]
+    fn other_kinds_are_not_grouped() {
+        // Two unconnected pins are two faults, not one seen twice, and their
+        // messages carry no pair to group on.
+        use cypcb_core::Point;
+        let entity = cypcb_world::Entity::from_raw(1);
+        let violations = vec![
+            DrcViolation::unconnected_pin(entity, "1", "R1", Point::from_mm(0.0, 0.0)),
+            DrcViolation::unconnected_pin(entity, "2", "R1", Point::from_mm(1.0, 0.0)),
+        ];
+        assert_eq!(grouped_by_contact(&violations).len(), 2);
+    }
+
     use super::*;
 
     fn make_doc(content: &str) -> DocumentState {
