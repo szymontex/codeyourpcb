@@ -13,7 +13,6 @@
 //! - N = bottom copper (where N = total_copper_layers - 1)
 
 use crate::constraints::DesignConstraints;
-use crate::signal_class::{SignalClass, SignalClassConstraints};
 use cypcb_core::Nm;
 
 /// Rule set interface for routing and DRC engines.
@@ -33,7 +32,7 @@ use cypcb_core::Nm;
 /// # Examples
 ///
 /// ```
-/// use cypcb_rules::{RoutingRuleSet, DesignConstraints, SignalClass, SignalClassConstraints};
+/// use cypcb_rules::{RoutingRuleSet, DesignConstraints};
 /// use cypcb_core::Nm;
 ///
 /// struct SimpleRules {
@@ -43,10 +42,6 @@ use cypcb_core::Nm;
 /// impl RoutingRuleSet for SimpleRules {
 ///     fn constraints_for_net(&self, _net_id: u32) -> &DesignConstraints {
 ///         &self.constraints
-///     }
-///
-///     fn constraints_for_class(&self, class: SignalClass) -> SignalClassConstraints {
-///         class.default_constraints()
 ///     }
 ///
 ///     fn via_cost(&self, _from_layer: u8, _to_layer: u8) -> f64 {
@@ -71,12 +66,6 @@ pub trait RoutingRuleSet {
     /// For simple designs, this may return the same constraints for all nets.
     /// Advanced designs may have per-net overrides.
     fn constraints_for_net(&self, net_id: u32) -> &DesignConstraints;
-
-    /// Get the signal-class-specific constraints.
-    ///
-    /// Returns an owned [`SignalClassConstraints`] because classes may be
-    /// computed dynamically.
-    fn constraints_for_class(&self, class: SignalClass) -> SignalClassConstraints;
 
     /// Cost of placing a via transitioning between two layers.
     ///
@@ -119,10 +108,6 @@ mod tests {
     impl RoutingRuleSet for TestRules {
         fn constraints_for_net(&self, _net_id: u32) -> &DesignConstraints {
             &self.base
-        }
-
-        fn constraints_for_class(&self, class: SignalClass) -> SignalClassConstraints {
-            class.default_constraints()
         }
 
         fn via_cost(&self, from_layer: u8, to_layer: u8) -> f64 {
@@ -174,22 +159,12 @@ mod tests {
     }
 
     #[test]
-    fn test_constraints_for_class() {
-        let rules = TestRules::new();
-        let dyn_rules: &dyn RoutingRuleSet = &rules;
-        let power = dyn_rules.constraints_for_class(SignalClass::Power);
-        let digital = dyn_rules.constraints_for_class(SignalClass::Digital);
-        assert!(power.min_trace_width.raw() > digital.min_trace_width.raw());
-    }
-
-    #[test]
     fn test_dyn_dispatch_all_methods() {
         let rules = TestRules::new();
         let dyn_rules: &dyn RoutingRuleSet = &rules;
 
         // Exercise every trait method through dyn dispatch
         let _ = dyn_rules.constraints_for_net(42);
-        let _ = dyn_rules.constraints_for_class(SignalClass::HighSpeed);
         let _ = dyn_rules.via_cost(0, 3);
         let _ = dyn_rules.layer_change_cost(1);
         let _ = dyn_rules.clearance_between(10, 20);

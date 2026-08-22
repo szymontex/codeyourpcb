@@ -1,8 +1,8 @@
 //! PCB Design Rules Crate
 //!
-//! Provides the foundational types for PCB design rules, signal classification,
-//! layer stackup definitions, routing rule interfaces, manufacturer presets,
-//! and IPC-2221 clearance tables.
+//! Provides the foundational types for PCB design rules, layer stackup
+//! definitions, routing rule interfaces, manufacturer presets, and IPC-2221
+//! clearance tables.
 //!
 //! This crate is a leaf dependency — it depends only on `cypcb-core` and has
 //! no dependency on `cypcb-world`, `cypcb-drc`, or any other workspace crate.
@@ -10,7 +10,6 @@
 //! # Modules
 //!
 //! - [`constraints`]: PCB fabrication constraints ([`DesignConstraints`])
-//! - [`signal_class`]: Signal classification and per-class overrides ([`SignalClass`])
 //! - [`stackup`]: Layer stackup definitions ([`Stackup`], [`LayerStackEntry`])
 //! - [`routing_rules`]: Routing rule trait for the autorouter ([`RoutingRuleSet`])
 //! - [`presets`]: Manufacturer and IPC-tier presets ([`RulesPreset`], [`PresetRuleSet`])
@@ -19,8 +18,8 @@
 //! # Usage
 //!
 //! ```
-//! use cypcb_rules::{DesignConstraints, SignalClass, Stackup, RoutingRuleSet};
 //! use cypcb_rules::presets::{RulesPreset, PresetRuleSet};
+//! use cypcb_rules::RoutingRuleSet;
 //!
 //! // Get JLCPCB 2-layer constraints
 //! let preset = RulesPreset::from_name("jlcpcb").unwrap();
@@ -31,21 +30,15 @@
 //! let ruleset = PresetRuleSet::new(preset);
 //! let net_constraints = ruleset.constraints_for_net(0);
 //! assert_eq!(net_constraints.min_trace_width, constraints.min_trace_width);
-//!
-//! // Look up signal class constraints
-//! let hs = SignalClass::HighSpeed.default_constraints();
-//! assert!(hs.require_impedance_control);
 //! ```
 
 pub mod clearance_table;
 pub mod constraints;
 pub mod presets;
 pub mod routing_rules;
-pub mod signal_class;
 pub mod stackup;
 
 // Re-export primary types at crate root.
 pub use constraints::DesignConstraints;
 pub use routing_rules::RoutingRuleSet;
-pub use signal_class::{SignalClass, SignalClassConstraints};
 pub use stackup::{LayerStackEntry, LayerType, Stackup};

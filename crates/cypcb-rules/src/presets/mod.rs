@@ -18,7 +18,6 @@ use cypcb_core::Nm;
 
 use crate::constraints::DesignConstraints;
 use crate::routing_rules::RoutingRuleSet;
-use crate::signal_class::{SignalClass, SignalClassConstraints};
 use crate::stackup::Stackup;
 
 /// All available manufacturer/IPC preset configurations.
@@ -385,10 +384,6 @@ impl RoutingRuleSet for PresetRuleSet {
             .unwrap_or(&self.base_constraints)
     }
 
-    fn constraints_for_class(&self, class: SignalClass) -> SignalClassConstraints {
-        class.default_constraints()
-    }
-
     fn via_cost(&self, from_layer: u8, to_layer: u8) -> f64 {
         let span = (from_layer as i16 - to_layer as i16).unsigned_abs() as f64;
         let copper_layers = self.copper_layers;
@@ -655,7 +650,6 @@ mod tests {
         let _ = dyn_rules.via_cost(0, 1);
         let _ = dyn_rules.layer_change_cost(0);
         let _ = dyn_rules.clearance_between(0, 1);
-        let _ = dyn_rules.constraints_for_class(SignalClass::Digital);
     }
 
     #[test]

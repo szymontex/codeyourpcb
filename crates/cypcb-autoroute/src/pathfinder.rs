@@ -265,7 +265,6 @@ mod tests {
     use super::*;
     use crate::grid::{make_test_grid, CELL_OBSTACLE};
     use cypcb_core::Nm;
-    use cypcb_rules::signal_class::{SignalClass, SignalClassConstraints};
     use cypcb_rules::{DesignConstraints, RoutingRuleSet};
 
     /// Minimal rules for pathfinder tests.
@@ -284,9 +283,6 @@ mod tests {
     impl RoutingRuleSet for TestRules {
         fn constraints_for_net(&self, _net_id: u32) -> &DesignConstraints {
             &self.base
-        }
-        fn constraints_for_class(&self, class: SignalClass) -> SignalClassConstraints {
-            class.default_constraints()
         }
         fn via_cost(&self, from_layer: u8, to_layer: u8) -> f64 {
             let span = (from_layer as i16 - to_layer as i16).unsigned_abs() as f64;

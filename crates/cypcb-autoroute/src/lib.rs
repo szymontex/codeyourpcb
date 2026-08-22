@@ -549,7 +549,6 @@ mod tests {
     #[test]
     fn density_affects_grid_resolution() {
         use cypcb_core::Nm;
-        use cypcb_rules::signal_class::{SignalClass, SignalClassConstraints};
         use cypcb_rules::{DesignConstraints, RoutingRuleSet};
 
         struct TestRules;
@@ -559,9 +558,6 @@ mod tests {
                 static CONSTRAINTS: std::sync::OnceLock<DesignConstraints> =
                     std::sync::OnceLock::new();
                 CONSTRAINTS.get_or_init(DesignConstraints::default)
-            }
-            fn constraints_for_class(&self, c: SignalClass) -> SignalClassConstraints {
-                c.default_constraints()
             }
             fn via_cost(&self, _: u8, _: u8) -> f64 {
                 2.0
