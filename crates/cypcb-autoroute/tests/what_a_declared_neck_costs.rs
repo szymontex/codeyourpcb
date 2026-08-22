@@ -46,7 +46,36 @@ fn fixture_path(filename: &str) -> std::path::PathBuf {
 /// of what the feature can cost a board - if that is inside the noise, so is
 /// any subset of it, and the question is answered without picking a net and
 /// then arguing about the pick.
-fn route_and_count(filename: &str, width: Nm, neck: Option<TraceNeck>) -> (usize, usize, String) {
+/// What one routing of one board is worth reading.
+struct Reading {
+    /// Every violation the checker reported.
+    raw: usize,
+    /// Violations of the same kind at the same point, counted once.
+    ///
+    /// The clearance rule reports per segment pair, and necking cuts two
+    /// segments per run - so a raw count can rise because there are more pairs
+    /// to report the same contact in. This is the count a split cannot
+    /// inflate.
+    distinct: usize,
+    /// Raw clearance violations with nothing between the copper.
+    shorts: usize,
+    /// The same, deduplicated.
+    distinct_shorts: usize,
+    /// Total copper laid, in millimetres. Necking moves where a width changes
+    /// and must not move this: if it does, the two columns are not the same
+    /// board and nothing else in the row can be compared.
+    copper_mm: f64,
+    /// What the neck actually drew, for the reader.
+    drawn: String,
+    /// How many violations of each kind, so a delta can be attributed.
+    ///
+    /// A row that says "worse by 161" and nothing else is a number nobody can
+    /// act on. Clearance faults and min-width faults have different causes and
+    /// the fix for one is not the fix for the other.
+    by_kind: std::collections::BTreeMap<String, usize>,
+}
+
+fn route_and_count(filename: &str, width: Nm, neck: Option<TraceNeck>) -> Reading {
     let parsed = parse_kicad_pcb(&fixture_path(filename)).expect("the fixture parses");
     let mut world = parsed.world;
     let library = parsed.library;
@@ -71,12 +100,16 @@ fn route_and_count(filename: &str, width: Nm, neck: Option<TraceNeck>) -> (usize
     world.rebuild_spatial_index_from_library(&library);
 
     let drc = run_drc(&mut world, &drc_rules);
-    let shorts = drc
-        .violations
-        .iter()
-        .filter(|v| v.kind == ViolationKind::Clearance)
-        .filter(|v| v.actual == Some(Nm::ZERO))
-        .count();
+    let is_short = |v: &&cypcb_drc::DrcViolation| {
+        v.kind == ViolationKind::Clearance && v.actual == Some(Nm::ZERO)
+    };
+    let shorts = drc.violations.iter().filter(is_short).count();
+
+    let place =
+        |v: &cypcb_drc::DrcViolation| (v.kind.to_string(), v.location.x.raw(), v.location.y.raw());
+    let distinct: std::collections::BTreeSet<_> = drc.violations.iter().map(place).collect();
+    let distinct_shorts: std::collections::BTreeSet<_> =
+        drc.violations.iter().filter(is_short).map(place).collect();
     // How much copper actually ended up thin, and across how many chains. A
     // table of zero differences is either a feature that costs nothing or one
     // that did nothing, and only these two numbers tell the two apart.
@@ -101,6 +134,17 @@ fn route_and_count(filename: &str, width: Nm, neck: Option<TraceNeck>) -> (usize
             .max()
             .unwrap_or(0)
     };
+    let copper_mm = {
+        use cypcb_world::components::trace::Trace;
+        let ecs = world.ecs_mut();
+        let mut query = ecs.query::<&Trace>();
+        query
+            .iter(ecs)
+            .flat_map(|trace| trace.segments.iter())
+            .map(|segment| segment.length().0)
+            .sum::<i64>() as f64
+            / 1_000_000.0
+    };
     let drawn = format!(
         "{} nets at {:.3}mm, {} runs / {} segs, {:.1}mm thin",
         net_count,
@@ -109,7 +153,20 @@ fn route_and_count(filename: &str, width: Nm, neck: Option<TraceNeck>) -> (usize
         segments,
         thin as f64 / 1_000_000.0
     );
-    (drc.violations.len(), shorts, drawn)
+    let mut by_kind: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
+    for violation in &drc.violations {
+        *by_kind.entry(violation.kind.to_string()).or_insert(0) += 1;
+    }
+
+    Reading {
+        raw: drc.violations.len(),
+        distinct: distinct.len(),
+        shorts,
+        distinct_shorts: distinct_shorts.len(),
+        copper_mm,
+        drawn,
+        by_kind,
+    }
 }
 
 #[test]
@@ -137,37 +194,75 @@ fn what_a_declared_neck_costs() {
         neck.length.to_mm()
     );
     eprintln!();
-    eprintln!(
-        "{:<20} {:>13} {:>13} {:>10} {:>12} what was drawn",
-        "board", "without", "with", "band", "delta"
-    );
+    eprintln!("violations / shorts, without the neck -> with it");
 
     for benchmark in cypcb_kicad::BENCHMARKS {
-        let (before, before_shorts, _) = route_and_count(benchmark.filename, width, None);
-        let (after, after_shorts, drawn) = route_and_count(benchmark.filename, width, Some(neck));
+        let before = route_and_count(benchmark.filename, width, None);
+        let after = route_and_count(benchmark.filename, width, Some(neck));
         let (band, short_band) = noise_band(benchmark.filename);
 
-        let dv = after as i64 - before as i64;
-        let ds = after_shorts as i64 - before_shorts as i64;
-        let verdict = if dv.abs() > band || ds.abs() > short_band {
+        let dv = after.raw as i64 - before.raw as i64;
+        let ds = after.shorts as i64 - before.shorts as i64;
+        let dd = after.distinct as i64 - before.distinct as i64;
+        let dds = after.distinct_shorts as i64 - before.distinct_shorts as i64;
+        let verdict = if dd.abs() > band || dds.abs() > short_band {
             "OUTSIDE the band"
         } else {
             "inside the band"
         };
 
+        // The copper comes first because it is the check on the row: if the
+        // two routings do not lay the same copper they are not the same board,
+        // and every other column compares two different things.
+        eprintln!();
         eprintln!(
-            "{:<20} {:>8}/{:<4} {:>8}/{:<4} {:>5}/{:<4} {:+4} / {:+3} {:<11} {}",
+            "{}  copper {:.1}mm -> {:.1}mm{}",
             benchmark.filename.trim_end_matches(".kicad_pcb"),
-            before,
-            before_shorts,
-            after,
-            after_shorts,
+            before.copper_mm,
+            after.copper_mm,
+            if (after.copper_mm - before.copper_mm).abs() < 0.05 {
+                ", unchanged"
+            } else {
+                "  <- CHANGED, the rest of this row compares two boards"
+            }
+        );
+        eprintln!(
+            "  raw      {:>5}/{:<4} -> {:>5}/{:<4}   {:+5} / {:+4}",
+            before.raw, before.shorts, after.raw, after.shorts, dv, ds
+        );
+        eprintln!(
+            "  distinct {:>5}/{:<4} -> {:>5}/{:<4}   {:+5} / {:+4}   band {}/{}  {}",
+            before.distinct,
+            before.distinct_shorts,
+            after.distinct,
+            after.distinct_shorts,
+            dd,
+            dds,
             band,
             short_band,
-            drawn,
-            dv,
-            ds,
             verdict
+        );
+        eprintln!("  {}", after.drawn);
+
+        let mut kinds: Vec<String> = Vec::new();
+        for (kind, count) in &after.by_kind {
+            let was = before.by_kind.get(kind).copied().unwrap_or(0);
+            if *count != was {
+                kinds.push(format!("{kind} {was}->{count}"));
+            }
+        }
+        for (kind, was) in &before.by_kind {
+            if !after.by_kind.contains_key(kind) {
+                kinds.push(format!("{kind} {was}->0"));
+            }
+        }
+        eprintln!(
+            "  moved by kind: {}",
+            if kinds.is_empty() {
+                "nothing".to_string()
+            } else {
+                kinds.join(", ")
+            }
         );
     }
 }
