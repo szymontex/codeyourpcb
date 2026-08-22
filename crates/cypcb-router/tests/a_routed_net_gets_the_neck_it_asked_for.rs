@@ -96,14 +96,21 @@ fn the_declared_neck_reaches_the_copper() {
 
     assert_eq!(
         trace.necked_length(),
-        Nm::from_mm(4.0),
-        "the net asked for 4mm of 0.8mm copper and the router laid 20mm of 2mm"
+        Nm::from_mm(8.0),
+        "the net asked for 4mm of 0.8mm copper at each pad it meets, and the \
+         router laid 20mm of 2mm"
     );
-    assert_eq!(trace.width_at(0), Nm::from_mm(2.0));
+    assert_eq!(
+        trace.longest_necked_stretch(),
+        Nm::from_mm(4.0),
+        "neither approach exceeds what was declared"
+    );
+    assert_eq!(trace.width_at(0), Nm::from_mm(0.8), "thin leaving the pad");
+    assert_eq!(trace.width_at(1), Nm::from_mm(2.0), "wide across the board");
     assert_eq!(
         trace.width_at(trace.segments.len() - 1),
         Nm::from_mm(0.8),
-        "the thin stretch is at the end of the run"
+        "thin arriving at the other one"
     );
 }
 
@@ -133,20 +140,30 @@ fn each_branch_gets_its_own_neck_and_none_lands_mid_board() {
     assert_eq!(trace.runs().len(), 2, "two chains");
     assert_eq!(
         trace.necked_length(),
-        Nm::from_mm(8.0),
-        "each chain ends in 4mm of thin copper"
+        Nm::from_mm(16.0),
+        "each chain is necked at both of its ends: four approaches"
+    );
+    assert_eq!(
+        trace.longest_necked_stretch(),
+        Nm::from_mm(4.0),
+        "and no single approach is longer than the declaration"
     );
     for range in trace.runs() {
-        let last = range.end - 1;
-        assert_eq!(
-            trace.width_at(last),
-            Nm::from_mm(0.8),
-            "run ending at segment {last} should end thin"
-        );
         assert_eq!(
             trace.width_at(range.start),
-            Nm::from_mm(2.0),
-            "and start wide"
+            Nm::from_mm(0.8),
+            "run starting at segment {} should start thin",
+            range.start
+        );
+        assert_eq!(
+            trace.width_at(range.end - 1),
+            Nm::from_mm(0.8),
+            "and end thin"
+        );
+        assert!(
+            range.len() >= 3,
+            "thin, wide, thin: the run has {} segment(s)",
+            range.len()
         );
     }
 }

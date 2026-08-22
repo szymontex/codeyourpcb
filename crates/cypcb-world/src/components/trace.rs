@@ -315,15 +315,16 @@ impl Trace {
     ///
     /// let mut trace = Trace::new(NetId::new(0));
     /// trace.width = Nm::from_mm(2.0);
-    /// // Two separate chains, each necked for 4mm.
+    /// // Two separate chains, each necked at both of its ends.
     /// trace.segments.push(TraceSegment::new(
     ///     Point::from_mm(0.0, 0.0), Point::from_mm(20.0, 0.0)));
     /// trace.segments.push(TraceSegment::new(
     ///     Point::from_mm(0.0, 10.0), Point::from_mm(20.0, 10.0)));
     /// trace.apply_neck(TraceNeck { width: Nm::from_mm(0.8), length: Nm::from_mm(4.0) });
     ///
-    /// assert_eq!(trace.necked_length(), Nm::from_mm(8.0), "4mm twice");
-    /// assert_eq!(trace.longest_necked_stretch(), Nm::from_mm(4.0), "but never 8mm at once");
+    /// // Four approaches: both ends of both chains.
+    /// assert_eq!(trace.necked_length(), Nm::from_mm(16.0));
+    /// assert_eq!(trace.longest_necked_stretch(), Nm::from_mm(4.0), "but never 16mm at once");
     /// ```
     pub fn longest_necked_stretch(&self) -> Nm {
         let mut longest = 0i64;
@@ -351,11 +352,13 @@ impl Trace {
     /// inside so the join is where the width changes rather than wherever a
     /// vertex happened to be.
     ///
-    /// **The far end is the necked end.** A `trace ... from A to B` is written
-    /// in the direction it runs, and the neck is the stretch going into the
-    /// pad it arrives at. That is a decision rather than a measurement, and it
-    /// is the one every EDA makes for the same reason: the thin copper is
-    /// there because the destination pad has no room for the wide copper.
+    /// **Both ends of every run are necked.** A `trace ... from A to B` lands
+    /// on a pad going in and a pad coming out, and so does every chain the
+    /// router lays: the copper is thin because *a* pad has no room for the
+    /// wide copper, and a net usually meets two. `for <length>` bounds one
+    /// approach rather than the board's whole allowance, which is what
+    /// `Trace::longest_necked_stretch` measures and what the grammar means by
+    /// "on the way into a pad".
     ///
     /// Two declarations are left as they are, because both are faults
     /// `NeckDownRule` reports and neither describes copper worth drawing: a
@@ -374,15 +377,18 @@ impl Trace {
     /// trace.width = Nm::from_mm(2.0);
     /// trace.segments.push(TraceSegment::new(
     ///     Point::from_mm(0.0, 0.0),
-    ///     Point::from_mm(10.0, 0.0),
+    ///     Point::from_mm(20.0, 0.0),
     /// ));
     ///
     /// trace.apply_neck(TraceNeck { width: Nm::from_mm(0.8), length: Nm::from_mm(4.0) });
     ///
-    /// assert_eq!(trace.segments.len(), 2, "the one segment was split");
-    /// assert_eq!(trace.width_at(0), Nm::from_mm(2.0));
-    /// assert_eq!(trace.width_at(1), Nm::from_mm(0.8));
-    /// assert_eq!(trace.necked_length(), Nm::from_mm(4.0));
+    /// // Thin, wide, thin: a pad at each end of the run.
+    /// assert_eq!(trace.segments.len(), 3);
+    /// assert_eq!(trace.width_at(0), Nm::from_mm(0.8));
+    /// assert_eq!(trace.width_at(1), Nm::from_mm(2.0));
+    /// assert_eq!(trace.width_at(2), Nm::from_mm(0.8));
+    /// assert_eq!(trace.necked_length(), Nm::from_mm(8.0), "4mm at each pad");
+    /// assert_eq!(trace.longest_necked_stretch(), Nm::from_mm(4.0));
     /// ```
     pub fn apply_neck(&mut self, neck: TraceNeck) {
         if neck.width.raw() >= self.width.raw() || neck.length.raw() <= 0 {
@@ -441,22 +447,40 @@ impl Trace {
         runs
     }
 
-    /// Narrow the end of one run, cutting the segment the boundary falls in.
+    /// Narrow both ends of one run, cutting the segments the boundaries fall in.
     ///
-    /// A run shorter than the declared neck is left alone: it is the "the
-    /// whole trace is the neck" case, which `NeckDownRule` reports as a
-    /// declaration fault, and drawing it would hide the fault behind copper.
+    /// **Both ends, because a run has a pad at each of them.** `trace SIG from
+    /// R1.2 to R2.1` lands on a pad going in and a pad coming out, and so does
+    /// every chain the router lays - the copper is thin because *a* pad has no
+    /// room for the wide copper, and a net usually meets two. Necking one end
+    /// left the other approach at full width on a board that had asked for it
+    /// to be thin.
+    ///
+    /// The tail is narrowed first: a split there inserts a segment at an index
+    /// past the head's working area, so the head's indices are untouched. That
+    /// holds only because the two necks never meet, which is what the guard
+    /// below enforces.
+    ///
+    /// A run with no room for two necks is left alone entirely. Half a
+    /// treatment is not a smaller version of the right one - it would put thin
+    /// copper at one arbitrary end of a run too short to carry the
+    /// declaration, and `NeckDownRule` reports the declaration as the fault it
+    /// is.
     fn neck_one_run(&mut self, range: std::ops::Range<usize>, neck: TraceNeck) {
         let run_length: i64 = self.segments[range.clone()]
             .iter()
             .map(|segment| segment.length().0)
             .sum();
-        if neck.length.raw() >= run_length {
+        if neck.length.raw().saturating_mul(2) >= run_length {
             return;
         }
 
-        // Walk from the run's far end back, narrowing until the declared
-        // length is covered. `remaining` is how much is still to be drawn.
+        self.neck_run_tail(range.clone(), neck);
+        self.neck_run_head(range.start, neck);
+    }
+
+    /// Narrow backwards from the run's last segment.
+    fn neck_run_tail(&mut self, range: std::ops::Range<usize>, neck: TraceNeck) {
         let mut remaining = neck.length.raw();
         let mut index = range.end;
         while index > range.start && remaining > 0 {
@@ -477,6 +501,33 @@ impl Trace {
             self.segments[index] = wide;
             self.segments.insert(index + 1, thin);
             self.segments[index + 1].width = Some(neck.width);
+            remaining = 0;
+        }
+    }
+
+    /// Narrow forwards from the run's first segment.
+    fn neck_run_head(&mut self, start: usize, neck: TraceNeck) {
+        let mut remaining = neck.length.raw();
+        let mut index = start;
+        while index < self.segments.len() && remaining > 0 {
+            let length = self.segments[index].length().0;
+            if length <= 0 {
+                index += 1;
+                continue;
+            }
+            if length <= remaining {
+                self.segments[index].width = Some(neck.width);
+                remaining -= length;
+                index += 1;
+                continue;
+            }
+
+            // The boundary falls inside this segment: the part nearer the
+            // run's first point is the neck, so the thin half comes first.
+            let (thin, wide) = split_at(&self.segments[index], remaining);
+            self.segments[index] = thin;
+            self.segments[index].width = Some(neck.width);
+            self.segments.insert(index + 1, wide);
             remaining = 0;
         }
     }

@@ -62,7 +62,8 @@ fn the_written_file_states_the_neck() {
 fn reading_it_back_gives_the_same_thin_copper() {
     let mut world = load(NECKED);
     let before = only_trace(&mut world).necked_length();
-    assert_eq!(before, Nm::from_mm(4.0), "the source board is necked");
+    // 4mm at each of the two pads the trace runs between.
+    assert_eq!(before, Nm::from_mm(8.0), "the source board is necked");
 
     let text = board_as_dsl(&mut world);
     let mut reloaded = load(&text);

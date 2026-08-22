@@ -236,25 +236,35 @@ fn the_language_draws_the_neck_it_declares() {
     let trace = &traces[0];
     assert_eq!(
         trace.necked_length(),
-        Nm::from_mm(4.0),
-        "`neck 0.8mm for 4mm` has to be 4mm of 0.8mm copper, not a note beside \
-         a trace that runs 2mm the whole way"
+        Nm::from_mm(8.0),
+        "`neck 0.8mm for 4mm` is 4mm of 0.8mm copper at each of the two pads \
+         this trace runs between, not a note beside a trace that runs 2mm the \
+         whole way"
     );
-    assert!(
-        trace.segments.len() >= 2,
-        "the run had to be cut where the width changes; it has {} segment(s)",
-        trace.segments.len()
+    assert_eq!(
+        trace.longest_necked_stretch(),
+        Nm::from_mm(4.0),
+        "and neither approach exceeds what was declared"
+    );
+    assert_eq!(
+        trace.segments.len(),
+        3,
+        "thin, wide, thin: the run was cut where each width change is"
     );
     assert_eq!(
         trace.width_at(0),
-        Nm::from_mm(2.0),
-        "the first stretch carries the current at the stated width"
+        Nm::from_mm(0.8),
+        "the trace leaves R1.2 thin, because that pad is why it is thin"
     );
     assert_eq!(
-        trace.width_at(trace.segments.len() - 1),
+        trace.width_at(1),
+        Nm::from_mm(2.0),
+        "and carries the current"
+    );
+    assert_eq!(
+        trace.width_at(2),
         Nm::from_mm(0.8),
-        "the far end is the necked end: the thin copper goes into the pad the \
-         trace arrives at"
+        "and arrives at R2.1 thin for the same reason"
     );
     assert_eq!(complaints(&mut world), Vec::<String>::new());
 }
