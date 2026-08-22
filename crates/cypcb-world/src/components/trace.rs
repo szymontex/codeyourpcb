@@ -337,19 +337,81 @@ impl Trace {
     /// assert_eq!(trace.necked_length(), Nm::from_mm(4.0));
     /// ```
     pub fn apply_neck(&mut self, neck: TraceNeck) {
-        if neck.width.raw() >= self.width.raw() {
-            return;
-        }
-        let total = self.total_length();
-        if neck.length.raw() >= total.raw() || neck.length.raw() <= 0 {
+        if neck.width.raw() >= self.width.raw() || neck.length.raw() <= 0 {
             return;
         }
 
-        // Walk from the far end back, narrowing until the declared length is
-        // covered. `remaining` is how much of the neck is still to be drawn.
+        // One `Trace` holds every segment a net has on a layer, and a net with
+        // more than two pads branches: the list is a set of chains, not one
+        // chain. A trace written in the language is one chain and this changes
+        // nothing for it; copper the router laid can be several, and necking
+        // the tail of the vector there would put thin copper in the middle of
+        // the board where one branch ends and the next begins.
+        //
+        // Back to front, because narrowing a run inserts a segment and would
+        // move every later run's indices.
+        for range in self.runs().into_iter().rev() {
+            self.neck_one_run(range, neck);
+        }
+    }
+
+    /// The index ranges of this trace's contiguous runs.
+    ///
+    /// A run breaks where one segment's end is not the next one's start. The
+    /// same rule `board_as_dsl` uses to decide where one `path` stops and the
+    /// next begins - written once here rather than a second time there.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use cypcb_world::components::trace::{Trace, TraceSegment};
+    /// use cypcb_world::NetId;
+    /// use cypcb_core::Point;
+    ///
+    /// let mut trace = Trace::new(NetId::new(0));
+    /// trace.segments.push(TraceSegment::new(
+    ///     Point::from_mm(0.0, 0.0), Point::from_mm(1.0, 0.0)));
+    /// trace.segments.push(TraceSegment::new(
+    ///     Point::from_mm(1.0, 0.0), Point::from_mm(2.0, 0.0)));
+    /// trace.segments.push(TraceSegment::new(
+    ///     Point::from_mm(9.0, 9.0), Point::from_mm(9.0, 8.0)));
+    ///
+    /// assert_eq!(trace.runs(), vec![0..2, 2..3]);
+    /// ```
+    pub fn runs(&self) -> Vec<std::ops::Range<usize>> {
+        let mut runs = Vec::new();
+        let mut start = 0usize;
+        for index in 1..self.segments.len() {
+            if self.segments[index].start != self.segments[index - 1].end {
+                runs.push(start..index);
+                start = index;
+            }
+        }
+        if start < self.segments.len() {
+            runs.push(start..self.segments.len());
+        }
+        runs
+    }
+
+    /// Narrow the end of one run, cutting the segment the boundary falls in.
+    ///
+    /// A run shorter than the declared neck is left alone: it is the "the
+    /// whole trace is the neck" case, which `NeckDownRule` reports as a
+    /// declaration fault, and drawing it would hide the fault behind copper.
+    fn neck_one_run(&mut self, range: std::ops::Range<usize>, neck: TraceNeck) {
+        let run_length: i64 = self.segments[range.clone()]
+            .iter()
+            .map(|segment| segment.length().0)
+            .sum();
+        if neck.length.raw() >= run_length {
+            return;
+        }
+
+        // Walk from the run's far end back, narrowing until the declared
+        // length is covered. `remaining` is how much is still to be drawn.
         let mut remaining = neck.length.raw();
-        let mut index = self.segments.len();
-        while index > 0 && remaining > 0 {
+        let mut index = range.end;
+        while index > range.start && remaining > 0 {
             index -= 1;
             let length = self.segments[index].length().0;
             if length <= 0 {
@@ -362,9 +424,8 @@ impl Trace {
             }
 
             // The boundary falls inside this segment: cut it there, and the
-            // part nearer the far end is the neck.
-            let cut = split_at(&self.segments[index], length - remaining);
-            let (wide, thin) = cut;
+            // part nearer the run's far end is the neck.
+            let (wide, thin) = split_at(&self.segments[index], length - remaining);
             self.segments[index] = wide;
             self.segments.insert(index + 1, thin);
             self.segments[index + 1].width = Some(neck.width);

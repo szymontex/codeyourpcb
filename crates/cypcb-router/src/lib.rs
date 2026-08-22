@@ -170,7 +170,7 @@ pub fn apply_routes(world: &mut BoardWorld, result: &RoutingResult) {
             }
         }
 
-        let trace = Trace {
+        let mut trace = Trace {
             segments,
             width,
             layer,
@@ -178,6 +178,16 @@ pub fn apply_routes(world: &mut BoardWorld, result: &RoutingResult) {
             locked: false,
             source: TraceSource::Autorouted,
         };
+
+        // A neck the net declares becomes copper here, the same way
+        // `sync_ast_to_world` turns one on a `trace` block into copper. The
+        // search is untouched: it plans on a grid of whole cells and a 0.8mm
+        // neck on a 0.254mm cell is not expressible there, so the declaration
+        // is applied to the finished route instead. Every routing measurement
+        // this project has depends on the search not moving.
+        if let Some(neck) = world.net_constraints(net_id).and_then(|c| c.neck) {
+            trace.apply_neck(neck);
+        }
 
         // NetId has to be its own component, not just a field on Trace: DRC's
         // same-net exemption queries for it, and without it every trace reads as
