@@ -34,6 +34,18 @@ pub struct CheckCommand {
 /// The span a component carries is a byte range - the line it sits on is not
 /// known where that span is built, so it is worked out here against the source
 /// that produced it.
+/// The two features a violation is about, as its message names them.
+///
+/// `U1 <-> trace 'GND': Clearance violation: ...` - everything before the
+/// colon is the pair, and it is the same string however many segments of the
+/// same two features report it.
+fn pair_of(message: &str) -> String {
+    message
+        .split_once(':')
+        .map(|(pair, _)| pair.trim().to_string())
+        .unwrap_or_else(|| message.to_string())
+}
+
 fn line_of(source: &str, offset: usize) -> usize {
     source[..offset.min(source.len())].matches('\n').count() + 1
 }
@@ -155,9 +167,59 @@ impl CheckCommand {
             preset.name()
         );
 
+        // One contact, one row. `ClearanceRule` compares pairs of *segments*
+        // and a trace is a polyline, so two traces running beside each other
+        // for 10mm are one fault and as many rows as they have segments in
+        // that stretch. Measured on the shipped boards: 759 rows for 484
+        // contacts, and 24 rows for a single `U1 <-> trace 'GND'` on
+        // `qfp_fanout`. A designer reading that sees one problem two dozen
+        // times.
+        //
+        // **The counts do not change.** The header, the per-kind summary and
+        // the shorts line are row counts and stay row counts, because every
+        // published number in this project - the ratchets, the noise bands,
+        // every sweep table - is a count of rows, and a display change that
+        // quietly moved them would be a re-baseline pretending to be a tidy-up.
+        // What changes is which rows are printed and a note saying how many
+        // more there were.
+        //
+        // Only clearance is grouped. The other kinds report per feature and
+        // two of their messages being equal is two faults, not one seen twice.
+        let mut worst_of_pair: BTreeMap<(String, String), (usize, usize)> = BTreeMap::new();
+        for (index, violation) in drc.violations.iter().enumerate() {
+            if violation.kind != cypcb_drc::ViolationKind::Clearance {
+                continue;
+            }
+            let key = (violation.kind.to_string(), pair_of(&violation.message));
+            let gap = violation.actual.map(|a| a.raw()).unwrap_or(i64::MAX);
+            match worst_of_pair.get_mut(&key) {
+                None => {
+                    worst_of_pair.insert(key, (index, 1));
+                }
+                Some((best, count)) => {
+                    *count += 1;
+                    let best_gap = drc.violations[*best]
+                        .actual
+                        .map(|a| a.raw())
+                        .unwrap_or(i64::MAX);
+                    if gap < best_gap {
+                        *best = index;
+                    }
+                }
+            }
+        }
+
         let mut counts: BTreeMap<String, usize> = BTreeMap::new();
-        for violation in &drc.violations {
+        for (index, violation) in drc.violations.iter().enumerate() {
             *counts.entry(violation.kind.to_string()).or_insert(0) += 1;
+
+            let same_pair =
+                worst_of_pair.get(&(violation.kind.to_string(), pair_of(&violation.message)));
+            if let Some((best, _)) = same_pair {
+                if *best != index {
+                    continue;
+                }
+            }
 
             // Where in the file, when the model can say. A violation is found
             // in board coordinates, and a coordinate is not something a reader
@@ -183,6 +245,15 @@ impl CheckCommand {
             // island reported as a coordinate points at the middle of a plane,
             // which looks like every other part of the plane - the size and
             // the corners are what a person can act on.
+            if let Some((_, count)) = same_pair {
+                if *count > 1 {
+                    eprintln!(
+                        "      and {} more place(s) where the same two touch; this is the worst",
+                        count - 1
+                    );
+                }
+            }
+
             if let Some(area) = violation.area {
                 eprintln!(
                     "      copper {:.3}mm x {:.3}mm, from ({:.3}mm, {:.3}mm) to ({:.3}mm, {:.3}mm)",
