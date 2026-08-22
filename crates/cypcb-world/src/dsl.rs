@@ -314,6 +314,25 @@ fn via_span_suffix(via: &crate::components::trace::Via) -> String {
     )
 }
 
+/// The raw id of every net that has copper on it, trace or via.
+///
+/// The writer emits a `trace` block per net that carries copper, whether or
+/// not any pin is on that net, so this is the set of names the file has to
+/// declare on top of the ones the parts imply.
+fn copper_nets(world: &mut BoardWorld) -> Vec<u32> {
+    let mut ids: Vec<u32> = {
+        let ecs = world.ecs_mut();
+        let mut traces = ecs.query::<&Trace>();
+        traces.iter(ecs).map(|trace| trace.net_id.0).collect()
+    };
+    let ecs = world.ecs_mut();
+    let mut vias = ecs.query::<&Via>();
+    ids.extend(vias.iter(ecs).map(|via| via.net_id.0));
+    ids.sort_unstable();
+    ids.dedup();
+    ids
+}
+
 /// A `stackup` block as a `board` block writes it, indented to sit inside one.
 ///
 /// Pulled out of `board_as_dsl` so that a test needing this stack as *source
@@ -718,6 +737,21 @@ pub fn board_as_dsl(world: &mut BoardWorld) -> String {
                 .push(format!("{}.{}", part.refdes, connection.pin));
         }
     }
+    // A net that carries copper and connects to no pin is declared too, with
+    // an empty block. The comment above said such a net "is a name with no
+    // meaning in this language" - which is true of a net that carries nothing,
+    // and false the moment a trace names it: the trace writer emits
+    // `trace GND { ... }` from the copper alone, so leaving the declaration
+    // out wrote a file that parses and then fails to sync with `MissingNet`.
+    // The same shape as the quoting fault below, from the other direction.
+    //
+    // `net GND { }` is legal: `net_definition` takes an optional pin list.
+    for net_id in copper_nets(world) {
+        if let Some(name) = net_names.get(&net_id) {
+            pins_by_net.entry(name.clone()).or_default();
+        }
+    }
+
     // The second of the two places that used to drop a net for want of a
     // spelling. The trace writer was the other, and a fix to one alone left
     // the file with `trace "VBUS+"` and no `net "VBUS+"` above it - which

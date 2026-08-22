@@ -359,3 +359,76 @@ fn a_via_survives_and_its_diameter_is_the_documented_casualty() {
          changed, the comment at the top of that file is now wrong:\n{text}"
     );
 }
+
+#[test]
+fn a_net_that_carries_copper_and_no_pins_is_declared() {
+    // The router leaves these behind: a net that reaches no pin still gets
+    // copper laid on it, and a plane's stitching vias sit on a net nothing is
+    // wired to. The writer built its `net` blocks from the parts alone, so the
+    // file said `trace SPARE { ... }` with no `net SPARE` above it - which
+    // parses, and then fails to sync with `MissingNet`. A file this tool
+    // writes has to be a file this tool can open.
+    let mut world = load(&base_board("SIG"));
+    add_trace(
+        &mut world,
+        "SPARE",
+        Layer::TopCopper,
+        vec![TraceSegment::new(
+            Point::new(Nm::from_mm(5.0), Nm::from_mm(5.0)),
+            Point::new(Nm::from_mm(15.0), Nm::from_mm(5.0)),
+        )],
+    );
+
+    let written = board_as_dsl(&mut world);
+    assert!(
+        written.contains("net SPARE {"),
+        "the net the copper is on has to be declared:\n{written}"
+    );
+
+    let mut back = load(&written);
+    assert_eq!(
+        census(&mut back).get("SPARE"),
+        Some(&1),
+        "the copper comes back on the net it left on:\n{written}"
+    );
+    assert_eq!(
+        segments(&mut world),
+        segments(&mut back),
+        "and in the same place:\n{written}"
+    );
+}
+
+#[test]
+fn a_net_carrying_only_a_via_is_declared_too() {
+    // The stitching case, and the reason `copper_nets` reads vias as well as
+    // traces: a plane's stitching vias sit on a net that reaches no pin and
+    // may carry no trace at all. Without this the mutation that stops counting
+    // vias kills nothing, which is a test that is not there.
+    let mut world = load(&base_board("SIG"));
+    let net_id = world.intern_net("STITCH");
+    world.ecs_mut().spawn((
+        Via {
+            position: Point::from_mm(20.0, 10.0),
+            drill: Nm::from_mm(0.3),
+            outer_diameter: Nm::from_mm(0.6),
+            net_id,
+            start_layer: Layer::TopCopper,
+            end_layer: Layer::BottomCopper,
+            locked: false,
+        },
+        net_id,
+    ));
+
+    let written = board_as_dsl(&mut world);
+    assert!(
+        written.contains("net STITCH {"),
+        "the net the via is on has to be declared:\n{written}"
+    );
+
+    let mut back = load(&written);
+    assert_eq!(
+        vias(&mut world),
+        vias(&mut back),
+        "the via comes back where it was, on the net it was on:\n{written}"
+    );
+}
