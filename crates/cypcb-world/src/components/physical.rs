@@ -192,12 +192,23 @@ impl Layer {
     }
 }
 
+/// A layer, spelled the way a design writes it.
+///
+/// The copper layers are named as the language names them: `Top`, `Bottom`,
+/// `Inner1`. `Layer::Inner` is zero-based and the language is one-based, so
+/// the first inner layer is `Inner(0)` here and `Inner1` in a source file -
+/// the same off-by-one that `copper_index` got wrong against the stack.
+/// Printing the internal spelling put `Inner 0` in front of a designer who
+/// had written `Inner1` and never used the number 0 for anything.
+///
+/// The non-copper layers keep their descriptive names, because the language
+/// has no keyword for them: nothing is routed on solderpaste.
 impl std::fmt::Display for Layer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Layer::TopCopper => write!(f, "Top Copper"),
-            Layer::BottomCopper => write!(f, "Bottom Copper"),
-            Layer::Inner(n) => write!(f, "Inner {}", n),
+            Layer::TopCopper => write!(f, "Top"),
+            Layer::BottomCopper => write!(f, "Bottom"),
+            Layer::Inner(n) => write!(f, "Inner{}", n + 1),
             Layer::TopSilk => write!(f, "Top Silkscreen"),
             Layer::BottomSilk => write!(f, "Bottom Silkscreen"),
             Layer::TopMask => write!(f, "Top Soldermask"),

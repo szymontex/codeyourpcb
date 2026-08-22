@@ -315,15 +315,13 @@ fn via_span_suffix(via: &crate::components::trace::Via) -> String {
 }
 
 /// A layer as a `trace` block writes it.
+///
+/// One spelling, not two: this held its own copy of the copper names while
+/// `Display` held another, and the two disagreed - this one wrote `Inner1`
+/// for the first inner layer and `Display` wrote `Inner 0` for the same
+/// layer. `Display` is the one spelling now, and it is this one.
 fn layer_keyword(layer: crate::components::Layer) -> String {
-    use crate::components::Layer;
-
-    match layer {
-        Layer::TopCopper => "Top".to_string(),
-        Layer::BottomCopper => "Bottom".to_string(),
-        Layer::Inner(n) => format!("Inner{}", n + 1),
-        other => format!("{other:?}"),
-    }
+    layer.to_string()
 }
 
 /// The kind word the language wants for a part, taken from its reference.

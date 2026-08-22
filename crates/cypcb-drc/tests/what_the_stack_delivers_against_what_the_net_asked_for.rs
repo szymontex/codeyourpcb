@@ -156,7 +156,10 @@ fn an_inner_layer_that_is_centred_is_measured_as_a_stripline() {
         "a centred inner layer is answerable: {}",
         said[0]
     );
-    assert!(said[0].contains("Inner(1)"), "{}", said[0]);
+    // `Layer::Inner(1)` is the second inner layer, and the language spells
+    // that `Inner2`. A report reads back to the file it is about, so the
+    // message carries the design's spelling rather than this enum's.
+    assert!(said[0].contains("Inner2"), "{}", said[0]);
 }
 
 #[test]

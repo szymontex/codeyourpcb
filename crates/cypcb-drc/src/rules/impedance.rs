@@ -97,10 +97,10 @@ impl DrcRule for ImpedanceRule {
                 .and_then(|environment| impedance_of(environment, width));
 
             let Some(computed) = computed else {
-                if said.insert((net_id.0, format!("{layer:?}"))) {
+                if said.insert((net_id.0, format!("{layer}"))) {
                     let mut violation = DrcViolation::impedance(entity, at);
                     violation.message = format!(
-                        "net '{net_name}' asks for {} and this stack cannot be asked what it delivers on {layer:?}: \
+                        "net '{net_name}' asks for {} and this stack cannot be asked what it delivers on {layer}: \
                          the layer is not centred between two planes of the same dielectric, or the stack states no thickness or no dk for it. \
                          Not checked - not passed",
                         format_ohms(target)
@@ -114,7 +114,7 @@ impl DrcRule for ImpedanceRule {
             if off_by > TOLERANCE_PERCENT_X100 {
                 let mut violation = DrcViolation::impedance(entity, at);
                 violation.message = format!(
-                    "net '{net_name}' asks for {} and a {:.3}mm trace on {layer:?} gives {} - {:.1}% off. \
+                    "net '{net_name}' asks for {} and a {:.3}mm trace on {layer} gives {} - {:.1}% off. \
                      IPC-2141's closed form, which is quoted at 5-7%: check a controlled-impedance stack against your fabricator's own calculator",
                     format_ohms(target),
                     width.raw() as f64 / 1_000_000.0,
