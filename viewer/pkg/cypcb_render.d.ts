@@ -115,7 +115,18 @@ export class PcbEngine {
      */
     get_trace_at_point(x_nm: bigint, y_nm: bigint, tolerance_nm: bigint): number;
     /**
-     * Get DRC violations as JSON string (WASM-friendly).
+     * Get the last check's DRC violations as JSON.
+     *
+     * This is the rule's own report: one entry per pair of features the
+     * clearance rule put in fault, which is one entry per pair of segments
+     * where two features touch along a run. The reading is grouped by contact
+     * where it is shown - `cypcb check`, the language server and the viewer's
+     * error panel all do that - and the count here stays as the rule made it.
+     *
+     * One body, not two: this was written twice, once behind
+     * `#[cfg(target_arch = "wasm32")]` and once behind its negation, with the
+     * same code in both. The impl block is already `cfg_attr`'d onto
+     * `wasm_bindgen`, so the split bought nothing.
      */
     get_violations_json(): string;
     /**

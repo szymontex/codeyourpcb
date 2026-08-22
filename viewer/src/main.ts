@@ -55,6 +55,7 @@ import { registerDynamicFootprint, register3DModel, hasDynamicFootprint } from '
 import { mergeTracesIntoDsl, syncTracesToEditor } from './trace-persist';
 import { reportLostTraces } from './trace-census';
 import { describeViolationKind } from './violation-kinds';
+import { groupByContact, morePlacesNote } from './violation-grouping';
 
 // WebSocket server URL for hot reload + FreeRouting.
 // Only used when `npm run start` (dev server with file watcher) is running.
@@ -2400,7 +2401,23 @@ async function init(): Promise<void> {
       return;
     }
 
-    snapshot.violations.forEach((v) => {
+    // One item per contact, not one per pair of segments. The badge keeps the
+    // rule's own row count; what changes is the reading, where a pair of
+    // features that touch along a run filled the panel with copies.
+    const grouped = groupByContact(snapshot.violations);
+    if (snapshot.violations.length > grouped.length) {
+      const reconcile = document.createElement('div');
+      reconcile.className = 'error-item';
+      const note = document.createElement('div');
+      note.className = 'error-detail';
+      note.textContent =
+        `${snapshot.violations.length} rows describe ${grouped.length} contacts; ` +
+        'one item per contact, the worst of its group';
+      reconcile.appendChild(note);
+      errorList.appendChild(reconcile);
+    }
+
+    grouped.forEach(({ violation: v, others }) => {
       const meta = describeViolationKind(v.kind);
 
       // Parse detail from the raw message
@@ -2443,6 +2460,14 @@ async function init(): Promise<void> {
       }
 
       body.appendChild(loc);
+
+      if (others > 0) {
+        const more = document.createElement('div');
+        more.className = 'error-detail';
+        more.textContent = morePlacesNote(others);
+        body.appendChild(more);
+      }
+
       item.appendChild(icon);
       item.appendChild(body);
       errorList.appendChild(item);

@@ -9,6 +9,7 @@
  */
 
 import type { ViolationInfo } from '../types';
+import { groupByContact, morePlacesNote } from '../violation-grouping';
 
 /** A parse or sync message with the line and column the engine says it is on. */
 export interface SourceDiagnostic {
@@ -57,11 +58,16 @@ export function updateDiagnostics(
   // definition it is about - the entity's own span. Every one of these was
   // pinned to line 1 until 2026-08-08, which put the whole DRC report on the
   // `board` keyword.
-  for (const v of violations) {
+  // One marker per contact, not one per pair of segments. Two features that
+  // touch along a run report once for each segment that takes part, and every
+  // one of those rows carries the same line: the hover on a board like
+  // `qfp_fanout` stacked twenty-four copies of one sentence.
+  for (const { violation: v, others } of groupByContact(violations)) {
     const line = v.line ? Math.max(1, Math.min(v.line, model.getLineCount())) : 1;
+    const note = others > 0 ? ` (${morePlacesNote(others)})` : '';
     markers.push({
       severity: monaco.MarkerSeverity.Warning,
-      message: `[DRC ${v.kind}] ${v.message}`,
+      message: `[DRC ${v.kind}] ${v.message}${note}`,
       startLineNumber: line,
       startColumn: Math.max(1, v.column ?? 1),
       endLineNumber: line,

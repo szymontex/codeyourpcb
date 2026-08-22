@@ -716,19 +716,18 @@ impl PcbEngine {
         serde_json::to_string(&self.diagnostics).unwrap_or_else(|_| "[]".to_string())
     }
 
-    /// Get DRC violations as JSON string (WASM-friendly).
-    #[cfg(target_arch = "wasm32")]
-    pub fn get_violations_json(&self) -> String {
-        let violations: Vec<ViolationInfo> = self
-            .violations
-            .iter()
-            .map(|v| ViolationInfo::from_drc_located(v, &self.world, &self.source))
-            .collect();
-        serde_json::to_string(&violations).unwrap_or_else(|_| "[]".to_string())
-    }
-
-    /// Get DRC violations as JSON string (native).
-    #[cfg(not(target_arch = "wasm32"))]
+    /// Get the last check's DRC violations as JSON.
+    ///
+    /// This is the rule's own report: one entry per pair of features the
+    /// clearance rule put in fault, which is one entry per pair of segments
+    /// where two features touch along a run. The reading is grouped by contact
+    /// where it is shown - `cypcb check`, the language server and the viewer's
+    /// error panel all do that - and the count here stays as the rule made it.
+    ///
+    /// One body, not two: this was written twice, once behind
+    /// `#[cfg(target_arch = "wasm32")]` and once behind its negation, with the
+    /// same code in both. The impl block is already `cfg_attr`'d onto
+    /// `wasm_bindgen`, so the split bought nothing.
     pub fn get_violations_json(&self) -> String {
         let violations: Vec<ViolationInfo> = self
             .violations
