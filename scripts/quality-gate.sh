@@ -31,7 +31,10 @@ echo ""
 # dependencies are in `scripts/setup-dev.sh` now, so the exclusion has nothing
 # left to protect and a crate nobody compiles is a crate nobody maintains.
 echo "[2/8] cargo clippy"
-if cargo clippy --workspace --all-targets -- -D warnings 2>&1; then
+# The second reader is behind a feature, so the plain run does not lint it
+# either - the same gap the test stage below had.
+if cargo clippy --workspace --all-targets -- -D warnings 2>&1 \
+  && cargo clippy -p cypcb-parser --features tree-sitter-parser --all-targets -- -D warnings 2>&1; then
   pass "cargo-clippy"
 else
   fail "cargo-clippy"
@@ -40,14 +43,26 @@ echo ""
 
 # Stage 3: Rust tests
 echo "[3/8] cargo test"
-# The Rust reader is what `parse` is now. The two tests that check it against
-# the tree-sitter parser need that parser as well, which the plain run does not
+# The Rust reader is what `parse` is now. The tests that check it against the
+# tree-sitter parser need that parser as well, which the plain run does not
 # build - named explicitly, because a test nobody runs is not a test.
+#
+# The whole crate under the feature, not named targets. This used to name
+# `--test differential` and `--test error_parity`, which left the crate's own
+# `--lib` target uncompiled: 98 unit tests over the tree-sitter reader had not
+# been built since `pad <name>` shipped and turned `pad.number` into a
+# `String`, and nothing said so. Naming targets one at a time is how a target
+# goes missing, so the browser build below is run the same way - it named one
+# test out of twelve targets.
+#
+# Every other non-default feature in the workspace was checked when this line
+# was written and all of them compile: `cypcb-drc/parallel`,
+# `cypcb-library/jlcpcb`, and `cypcb-platform`'s `desktop`, `web` and
+# `native-dialogs`. They are not run here because nothing in them is a second
+# implementation of something the default build already has.
 if cargo test --workspace 2>&1 \
-  && cargo test -p cypcb-parser --features tree-sitter-parser --test differential 2>&1 \
-  && cargo test -p cypcb-parser --features tree-sitter-parser --test error_parity 2>&1 \
-  && cargo test -p cypcb-render --no-default-features --features wasm \
-       --test the_browser_build_reads_the_language 2>&1; then
+  && cargo test -p cypcb-parser --features tree-sitter-parser 2>&1 \
+  && cargo test -p cypcb-render --no-default-features --features wasm 2>&1; then
   pass "cargo-test"
 else
   fail "cargo-test"
