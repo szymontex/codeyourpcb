@@ -169,6 +169,149 @@ fn route_and_count(filename: &str, width: Nm, neck: Option<TraceNeck>) -> Readin
     }
 }
 
+/// The clearance violations of one routing, as (x, y, message).
+///
+/// The counting version above cannot answer where the extra faults are, and
+/// "worse by 13" is a number nobody can act on without that.
+fn clearance_faults(filename: &str, width: Nm, neck: Option<TraceNeck>) -> Vec<(i64, i64, String)> {
+    let parsed = parse_kicad_pcb(&fixture_path(filename)).expect("the fixture parses");
+    let mut world = parsed.world;
+    let library = parsed.library;
+
+    let preset = preset_for_world(RulesPreset::JlcpcbStandard2Layer, &world);
+    let drc_rules = DesignRules::from_constraints(&preset.constraints());
+
+    let nets: Vec<NetId> = world.nets().map(|(id, _)| id).collect();
+    for net in nets {
+        let mut carried = world.net_constraints(net).unwrap_or_default();
+        carried.width = Some(width);
+        carried.neck = neck;
+        world.set_net_constraints(net, carried);
+    }
+    let rules = ruleset_for_world(preset, &world);
+
+    let result = route_board(&mut world, &library, &rules, &AutorouteConfig::default());
+    apply_routes(&mut world, &result);
+    world.rebuild_spatial_index_from_library(&library);
+
+    run_drc(&mut world, &drc_rules)
+        .violations
+        .into_iter()
+        .filter(|v| v.kind == ViolationKind::Clearance)
+        .map(|v| (v.location.x.raw(), v.location.y.raw(), v.message))
+        .collect()
+}
+
+/// Distance in millimetres between two reported points.
+fn apart(a: (i64, i64), b: (i64, i64)) -> f64 {
+    let dx = (a.0 - b.0) as f64 / 1_000_000.0;
+    let dy = (a.1 - b.1) as f64 / 1_000_000.0;
+    (dx * dx + dy * dy).sqrt()
+}
+
+/// Where the clearance faults a neck adds actually are.
+///
+/// `plane_board` because its 55 clearance faults become 68 and thirteen is a
+/// number a reader can look at one by one. Two shapes and they mean different
+/// things: new faults sitting on top of old ones are one contact re-reported
+/// at an endpoint the split moved, and the feature costs nothing; new faults
+/// somewhere that had none are copper the neck really made worse.
+#[test]
+#[ignore = "diagnostic: where the clearance faults a neck adds actually are"]
+fn where_the_new_clearance_faults_are() {
+    let width = Nm::from_mm(1.0);
+    let neck = TraceNeck {
+        width: Nm::from_mm(0.127),
+        length: Nm::from_mm(1.0),
+    };
+    // Every board, because one board's answer is one board's answer. The
+    // details are printed for `plane_board` only - thirteen rows a reader can
+    // check by eye - and the summary line is what the other five are for.
+    for benchmark in cypcb_kicad::BENCHMARKS {
+        summarise(benchmark.filename, width, neck);
+    }
+}
+
+fn summarise(filename: &str, width: Nm, neck: TraceNeck) {
+    let before = clearance_faults(filename, width, None);
+    let after = clearance_faults(filename, width, Some(neck));
+
+    let old_places: Vec<(i64, i64)> = before.iter().map(|(x, y, _)| (*x, *y)).collect();
+    let old_rows: std::collections::BTreeSet<(i64, i64, String)> = before.iter().cloned().collect();
+
+    let mut fresh: Vec<((i64, i64, String), f64)> = Vec::new();
+    for row in &after {
+        if old_rows.contains(row) {
+            continue;
+        }
+        let nearest = old_places
+            .iter()
+            .map(|place| apart((row.0, row.1), *place))
+            .fold(f64::INFINITY, f64::min);
+        fresh.push((row.clone(), nearest));
+    }
+    fresh.sort_by(|a, b| a.1.partial_cmp(&b.1).expect("no NaN in a distance"));
+
+    eprintln!();
+    eprintln!(
+        "=== {filename}: {} clearance faults become {}, {} rows are new ===",
+        before.len(),
+        after.len(),
+        fresh.len()
+    );
+    let on_top = fresh.iter().filter(|(_, d)| *d < 0.5).count();
+    eprintln!(
+        "  {} of {} new rows are within 0.5mm of a fault that was already there",
+        on_top,
+        fresh.len()
+    );
+
+    // Distance is a poor proxy on a board with long segments: a split can
+    // re-report the same contact at a point far along the trace. Which two
+    // features are in contact does not move, so compare *pairs* instead.
+    //
+    // Narrowing copper cannot create a contact. `split_at` interpolates along
+    // the segment's own line, so a necked trace has the same centre line and
+    // strictly less copper - and the copper column above shows the length is
+    // unchanged. A pair that was not touching before and is touching after
+    // would contradict that, and is the thing to look for.
+    let pair_of = |message: &str| {
+        message
+            .split_once(':')
+            .map(|(pair, _)| pair.to_string())
+            .unwrap_or_else(|| message.to_string())
+    };
+    let old_pairs: std::collections::BTreeSet<String> =
+        before.iter().map(|(_, _, m)| pair_of(m)).collect();
+    let new_pairs: std::collections::BTreeSet<String> =
+        after.iter().map(|(_, _, m)| pair_of(m)).collect();
+    let gained: Vec<&String> = new_pairs.difference(&old_pairs).collect();
+    let lost = old_pairs.difference(&new_pairs).count();
+    eprintln!(
+        "  feature pairs in fault: {} -> {}, {} gained, {} lost",
+        old_pairs.len(),
+        new_pairs.len(),
+        gained.len(),
+        lost
+    );
+    if !gained.is_empty() {
+        eprintln!("  gained: {:?}", gained);
+    }
+    if filename != "plane_board.kicad_pcb" {
+        return;
+    }
+    eprintln!();
+    for ((x, y, message), nearest) in &fresh {
+        eprintln!(
+            "  {:>7.3}mm from the nearest old fault  ({:.3}, {:.3})  {}",
+            nearest,
+            *x as f64 / 1_000_000.0,
+            *y as f64 / 1_000_000.0,
+            message
+        );
+    }
+}
+
 #[test]
 #[ignore = "diagnostic: routes each board twice, with and without a declared neck"]
 fn what_a_declared_neck_costs() {
