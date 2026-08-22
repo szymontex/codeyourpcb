@@ -293,6 +293,54 @@ impl Trace {
     /// assert!(trace.segments.is_empty());
     /// assert!(!trace.locked);
     /// ```
+    /// The longest unbroken stretch of copper narrower than the trace's width.
+    ///
+    /// This is what `neck <width> for <length>` bounds. The grammar says a
+    /// neck is "how narrow the copper may get **on the way into a pad**, and
+    /// how far it may run at that width" - one approach, not a budget spent
+    /// across the board. A net whose copper reaches two pads through two
+    /// branches necks twice and is obeying the declaration both times;
+    /// [`Trace::necked_length`], which sums, would read that as twice the
+    /// allowance and fail a board that is correct.
+    ///
+    /// A stretch stops at a wide segment and at a break between runs: two thin
+    /// ends of two separate chains are two approaches, not one long one.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use cypcb_world::components::trace::{Trace, TraceNeck, TraceSegment};
+    /// use cypcb_world::NetId;
+    /// use cypcb_core::{Nm, Point};
+    ///
+    /// let mut trace = Trace::new(NetId::new(0));
+    /// trace.width = Nm::from_mm(2.0);
+    /// // Two separate chains, each necked for 4mm.
+    /// trace.segments.push(TraceSegment::new(
+    ///     Point::from_mm(0.0, 0.0), Point::from_mm(20.0, 0.0)));
+    /// trace.segments.push(TraceSegment::new(
+    ///     Point::from_mm(0.0, 10.0), Point::from_mm(20.0, 10.0)));
+    /// trace.apply_neck(TraceNeck { width: Nm::from_mm(0.8), length: Nm::from_mm(4.0) });
+    ///
+    /// assert_eq!(trace.necked_length(), Nm::from_mm(8.0), "4mm twice");
+    /// assert_eq!(trace.longest_necked_stretch(), Nm::from_mm(4.0), "but never 8mm at once");
+    /// ```
+    pub fn longest_necked_stretch(&self) -> Nm {
+        let mut longest = 0i64;
+        for range in self.runs() {
+            let mut current = 0i64;
+            for segment in &self.segments[range] {
+                if segment.width.is_some_and(|w| w.raw() < self.width.raw()) {
+                    current += segment.length().0;
+                    longest = longest.max(current);
+                } else {
+                    current = 0;
+                }
+            }
+        }
+        Nm(longest)
+    }
+
     /// Draw a declared neck onto this trace's own geometry.
     ///
     /// `neck 0.8mm for 4mm` is a statement the language can make and could not

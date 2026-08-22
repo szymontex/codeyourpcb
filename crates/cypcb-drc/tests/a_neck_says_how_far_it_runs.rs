@@ -278,3 +278,142 @@ fn a_neck_no_narrower_than_its_trace_is_not_drawn() {
     );
     assert_eq!(complaints(&mut world).len(), 1, "and the fault is reported");
 }
+
+/// A net whose copper reaches two pads through two chains, necked at each end.
+///
+/// One `Trace` per net and layer, and a net with more than two pads branches -
+/// so this is the ordinary shape of a routed power net, not a corner case.
+fn two_necked_branches(thin_mm: f64, declared_mm: f64) -> BoardWorld {
+    use cypcb_core::Point;
+    use cypcb_world::components::trace::{Trace, TraceNeck, TraceSegment, TraceSource};
+    use cypcb_world::components::Layer;
+
+    let mut world = BoardWorld::new();
+    world.set_board("t".to_string(), (Nm::from_mm(40.0), Nm::from_mm(20.0)), 2);
+    let net = world.intern_net("SIG");
+
+    let mut segments = Vec::new();
+    for y in [4.0, 14.0] {
+        segments.push(TraceSegment::new(
+            Point::from_mm(4.0, y),
+            Point::from_mm(14.0, y),
+        ));
+        segments.push(TraceSegment::new_with_width(
+            Point::from_mm(14.0, y),
+            Point::from_mm(14.0 + thin_mm, y),
+            Nm::from_mm(0.8),
+        ));
+    }
+
+    world.ecs_mut().spawn((
+        Trace {
+            layer: Layer::TopCopper,
+            width: Nm::from_mm(2.0),
+            segments,
+            net_id: net,
+            locked: false,
+            source: TraceSource::Manual,
+        },
+        net,
+        TraceNeck {
+            width: Nm::from_mm(0.8),
+            length: Nm::from_mm(declared_mm),
+        },
+    ));
+    world
+}
+
+#[test]
+fn two_branches_necking_into_two_pads_do_not_add_up() {
+    // 4mm at each of two pads, under a declaration allowing 4mm. The sum is
+    // 8mm and the board is correct: `neck 0.8mm for 4mm` bounds one approach,
+    // which is what the grammar means by "on the way into a pad". Measuring
+    // the sum reported this board as overrunning by double.
+    let mut world = two_necked_branches(4.0, 4.0);
+    assert_eq!(complaints(&mut world), Vec::<String>::new());
+}
+
+#[test]
+fn a_branch_that_overruns_is_still_caught() {
+    // The same two-chain shape with 6mm at each pad. Per-approach is not a way
+    // of never reporting anything: one stretch of 6mm against 4mm is a fault
+    // whether or not there is a second stretch beside it.
+    let mut world = two_necked_branches(6.0, 4.0);
+    let complaints = complaints(&mut world);
+    assert_eq!(complaints.len(), 1, "got {complaints:?}");
+    assert!(
+        complaints[0].contains("runs thin for 6mm in one stretch"),
+        "the message has to say it is one stretch; got {complaints:?}"
+    );
+}
+
+/// One chain that necks at both of its own ends: thin, wide, thin.
+///
+/// The shape a `from A to B` trace has when both pads are tight, and the one
+/// that separates "longest unbroken stretch" from "sum of thin segments"
+/// within a single run. A first draft of these tests had two chains only, and
+/// a mutation deleting the reset between stretches survived it.
+fn necked_at_both_ends(thin_mm: f64, declared_mm: f64) -> BoardWorld {
+    use cypcb_core::Point;
+    use cypcb_world::components::trace::{Trace, TraceNeck, TraceSegment, TraceSource};
+    use cypcb_world::components::Layer;
+
+    let mut world = BoardWorld::new();
+    world.set_board("t".to_string(), (Nm::from_mm(40.0), Nm::from_mm(20.0)), 2);
+    let net = world.intern_net("SIG");
+
+    let a = 4.0;
+    let b = a + thin_mm;
+    let c = b + 10.0;
+    let d = c + thin_mm;
+
+    world.ecs_mut().spawn((
+        Trace {
+            layer: Layer::TopCopper,
+            width: Nm::from_mm(2.0),
+            segments: vec![
+                TraceSegment::new_with_width(
+                    Point::from_mm(a, 10.0),
+                    Point::from_mm(b, 10.0),
+                    Nm::from_mm(0.8),
+                ),
+                TraceSegment::new(Point::from_mm(b, 10.0), Point::from_mm(c, 10.0)),
+                TraceSegment::new_with_width(
+                    Point::from_mm(c, 10.0),
+                    Point::from_mm(d, 10.0),
+                    Nm::from_mm(0.8),
+                ),
+            ],
+            net_id: net,
+            locked: false,
+            source: TraceSource::Manual,
+        },
+        net,
+        TraceNeck {
+            width: Nm::from_mm(0.8),
+            length: Nm::from_mm(declared_mm),
+        },
+    ));
+    world
+}
+
+#[test]
+fn two_necks_on_one_chain_do_not_add_up_either() {
+    // 3mm into each pad with 10mm of full-width copper between them, under a
+    // declaration allowing 4mm. Two approaches, neither over. Summing the thin
+    // segments gives 6mm and reports a board that is correct; the stretch has
+    // to end where the copper widens.
+    let mut world = necked_at_both_ends(3.0, 4.0);
+    assert_eq!(complaints(&mut world), Vec::<String>::new());
+}
+
+#[test]
+fn one_of_two_necks_on_a_chain_overrunning_is_caught() {
+    let mut world = necked_at_both_ends(6.0, 4.0);
+    let complaints = complaints(&mut world);
+    assert_eq!(complaints.len(), 1, "got {complaints:?}");
+    assert!(
+        complaints[0].contains("runs thin for 6mm in one stretch"),
+        "got {complaints:?}"
+    );
+}

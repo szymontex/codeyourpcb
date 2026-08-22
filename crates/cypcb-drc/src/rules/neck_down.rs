@@ -6,8 +6,11 @@
 //! measures the three ways the statement itself can be wrong.
 //!
 //! Since 2026-08-21 a segment can carry its own width, so there is a fourth
-//! thing to measure: **how far the copper actually runs thin**, against how
-//! far the declaration allows. A trace whose segments say nothing is still
+//! thing to measure: **how far the copper actually runs thin in one stretch**,
+//! against how far the declaration allows. One stretch, not the sum: the
+//! grammar calls a neck "how narrow the copper may get on the way into a pad",
+//! and a net whose copper reaches two pads necks twice while obeying the
+//! declaration both times. A trace whose segments say nothing is still
 //! only checked for a well-formed declaration - there is no thin copper to
 //! measure - and the rule says so rather than passing it quietly.
 //!
@@ -44,7 +47,7 @@ impl DrcRule for NeckDownRule {
                         neck_length: neck.length,
                         trace_width: trace.width,
                         trace_length: trace.total_length(),
-                        run_thin: trace.necked_length(),
+                        run_thin: trace.longest_necked_stretch(),
                         at: midpoint(trace)?,
                     })
                 })
@@ -92,14 +95,15 @@ impl DrcRule for NeckDownRule {
                 violations.push(violation);
             }
 
-            // The copper against the claim. `run_thin` is the length of the
-            // segments that really are narrower than the trace, which is what
-            // `neck <width> for <length>` is a statement about and what
-            // nothing could measure until segments carried a width.
+            // The copper against the claim. `run_thin` is the longest unbroken
+            // stretch of copper narrower than the trace - one approach to one
+            // pad, which is what `neck <width> for <length>` is a statement
+            // about. It was the *sum* until 2026-08-22, which read a net that
+            // necks into two pads as one that overran by double.
             if run_thin > neck_length {
                 let mut violation = DrcViolation::neck_down(entity, at);
                 violation.message = format!(
-                    "the copper runs thin for {} where the neck allows {}: the declaration is not what was drawn",
+                    "the copper runs thin for {} in one stretch where the neck allows {}: the declaration is not what was drawn",
                     mm(run_thin),
                     mm(neck_length)
                 );
