@@ -65,6 +65,69 @@ pub fn every_copper_layer_answers_differently() -> Stackup {
     }
 }
 
+/// The ordinary four-layer build: prepreg outside, a thick core in the middle.
+///
+/// Neither inner layer is centred between two planes of the same dielectric,
+/// so neither is a form the closed solutions cover, and a rule asked what this
+/// stack delivers there has to say it cannot answer. That is a different
+/// failure from answering wrongly, and a fixture that mixes the two proves
+/// neither - which is why this is a second stack rather than a flag on the
+/// first.
+///
+/// Written as a source file by
+/// [`an_inner_layer_the_forms_cannot_describe_source`].
+pub fn an_inner_layer_the_forms_cannot_describe() -> Stackup {
+    let layer = |kind, thickness_mm: f64, dk: Option<u32>| StackupLayer {
+        kind,
+        name: None,
+        thickness: Some(Nm::from_mm(thickness_mm)),
+        material: None,
+        dk_x1000: dk,
+        df_x1000000: None,
+    };
+    use StackupLayerKind::{Copper, Core, Prepreg};
+    Stackup {
+        layers: vec![
+            layer(Copper, 0.035, None),
+            layer(Prepreg, 0.2, Some(4_600)),
+            layer(Copper, 0.0175, None),
+            layer(Core, 1.095, Some(4_500)),
+            layer(Copper, 0.0175, None),
+            layer(Prepreg, 0.2, Some(4_600)),
+            layer(Copper, 0.035, None),
+        ],
+    }
+}
+
+/// [`an_inner_layer_the_forms_cannot_describe`], spelled the way a design
+/// writes it.
+pub fn an_inner_layer_the_forms_cannot_describe_source() -> String {
+    cypcb_world::dsl::stackup_as_dsl(&an_inner_layer_the_forms_cannot_describe())
+}
+
+/// The same stack as [`every_copper_layer_answers_differently`], spelled the
+/// way a design writes it.
+///
+/// A test that drives `cypcb check` has a source file, not a `Stackup`, so the
+/// value above was reachable from `cypcb-drc`'s unit tests and from nowhere
+/// else - and the command-line test that needed a four-layer stack built its
+/// own, which is the third time a test file has done that. The text comes from
+/// the writer the tool itself uses, so this cannot drift from the value it is
+/// written from.
+///
+/// Indented to sit inside a `board` block:
+///
+/// ```text
+/// board b {
+///     size 30mm x 20mm
+///     layers 4
+/// <this>
+/// }
+/// ```
+pub fn every_copper_layer_answers_differently_source() -> String {
+    cypcb_world::dsl::stackup_as_dsl(&every_copper_layer_answers_differently())
+}
+
 /// The foil thickness of each copper layer of [`every_copper_layer_answers_differently`],
 /// top to bottom.
 ///

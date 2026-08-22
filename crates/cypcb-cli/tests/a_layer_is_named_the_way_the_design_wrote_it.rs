@@ -15,31 +15,31 @@
 //! all", observed and not diagnosed: the cause was the `copper_index`
 //! off-by-one, fixed since, and nothing had run the whole path to say so.
 
+use cypcb_fixtures::{
+    an_inner_layer_the_forms_cannot_describe_source, every_copper_layer_answers_differently_source,
+};
 use std::process::Command;
 
 /// A four-layer board with a controlled-impedance net on one layer.
+///
+/// The stack comes from `cypcb-fixtures` rather than from this file. The
+/// fixture crate exists because three shipped index errors were all hidden by
+/// a symmetric stack, and until now it held its stacks as `Stackup` values,
+/// which a test driving the command line cannot use - so this test built its
+/// own, which is the habit the crate was written to end.
 ///
 /// The pads are drilled on purpose. A 0402 lands copper on the top layer only,
 /// so a trace on an inner layer cannot reach it and the board's complaint is
 /// about connectivity instead of impedance - which is what made the original
 /// observation ambiguous.
-fn board(layer: &str, dielectric_below_the_first_inner: &str, target: &str) -> String {
+fn board(stackup: &str, layer: &str, target: &str) -> String {
     format!(
         r#"version 1
 
 board named_layers {{
     size 30mm x 20mm
     layers 4
-    stackup {{
-        copper 0.035mm
-        prepreg 0.3mm dk 4.5
-        copper 0.0175mm
-{dielectric_below_the_first_inner}
-        copper 0.0175mm
-        core 1.095mm dk 4.5
-        copper 0.035mm
-    }}
-}}
+{stackup}}}
 
 footprint PAD1 {{
     description "one square pad, drilled so it reaches every layer"
@@ -72,14 +72,6 @@ trace SIG {{
     )
 }
 
-/// The first inner layer sits between two equal prepregs: a stripline the
-/// closed form covers, so the rule returns a number rather than declining.
-const CENTRED: &str = "        prepreg 0.3mm dk 4.5";
-
-/// The ordinary build - prepreg above, thick core below - which no form here
-/// covers. The rule says so, and that message names a layer too.
-const LOPSIDED: &str = "        core 1.095mm dk 4.5";
-
 fn check(source: &str, name: &str) -> String {
     let dir = std::env::temp_dir().join("cypcb-layer-naming");
     std::fs::create_dir_all(&dir).expect("a place to put the board");
@@ -99,9 +91,24 @@ fn check(source: &str, name: &str) -> String {
     )
 }
 
+/// The impedance a report states, in hundredths of an ohm.
+///
+/// Read back out of the message rather than computed, because what this file
+/// is about is what a person is told.
+fn ohms_x100(report: &str) -> u32 {
+    let after = report.split(" gives ").nth(1).unwrap_or_else(|| {
+        panic!("no impedance in the report:\n{report}");
+    });
+    let figure = after.split("ohm").next().expect("a number before `ohm`");
+    let (whole, hundredths) = figure.split_once('.').expect("a number like 41.16");
+    whole.trim().parse::<u32>().expect("whole ohms") * 100
+        + hundredths.parse::<u32>().expect("hundredths")
+}
+
 #[test]
 fn an_inner_layer_is_called_what_the_source_calls_it() {
-    let report = check(&board("Inner1", CENTRED, "90ohm"), "inner-centred");
+    let stack = every_copper_layer_answers_differently_source();
+    let report = check(&board(&stack, "Inner1", "90ohm"), "inner");
 
     assert!(
         report.contains("on Inner1 gives"),
@@ -114,28 +121,43 @@ fn an_inner_layer_is_called_what_the_source_calls_it() {
 }
 
 #[test]
-fn the_rule_measures_a_trace_on_an_inner_layer() {
-    // The half of this that is not about spelling. A centred stripline at
-    // 0.200mm on this stack is 52.61 ohm; asking for 90 forces the number into
-    // the report, where asking for 50 would pass and print nothing.
-    let report = check(&board("Inner1", CENTRED, "90ohm"), "inner-measured");
+fn no_two_copper_layers_of_the_shared_fixture_answer_alike() {
+    // The fixture's whole promise, held through the binary rather than through
+    // a unit test: four copper layers, four different answers. A rule reading
+    // the wrong layer index cannot produce the right number on this board,
+    // which is what a symmetric stack let three shipped index errors do.
+    //
+    // Asking for 1 ohm forces every layer to report, since nothing this stack
+    // builds is anywhere near it.
+    let stack = every_copper_layer_answers_differently_source();
+    let mut said: Vec<(&str, u32)> = Vec::new();
+    for layer in ["Top", "Inner1", "Inner2", "Bottom"] {
+        let report = check(&board(&stack, layer, "1ohm"), &format!("all-{layer}"));
+        assert!(
+            report.contains(&format!("on {layer} gives")),
+            "the report names the layer the design wrote:\n{report}"
+        );
+        said.push((layer, ohms_x100(&report)));
+    }
 
-    assert!(
-        report.contains("52.61ohm"),
-        "an inner layer is measured, not skipped:\n{report}"
-    );
+    for (index, (layer, ohms)) in said.iter().enumerate() {
+        for (other_layer, other_ohms) in said.iter().skip(index + 1) {
+            assert_ne!(
+                ohms, other_ohms,
+                "{layer} and {other_layer} answer alike, so this board cannot tell them apart: {said:?}"
+            );
+        }
+    }
 }
 
 #[test]
 fn the_top_layer_is_called_top() {
-    // The same trace one layer up is a microstrip, and a different number, so
-    // this also holds the two layers apart: a fixture whose layers all agree
-    // cannot catch an index error.
-    let report = check(&board("Top", CENTRED, "90ohm"), "top");
+    let stack = every_copper_layer_answers_differently_source();
+    let report = check(&board(&stack, "Top", "90ohm"), "top");
 
     assert!(
-        report.contains("on Top gives") && report.contains("79.42ohm"),
-        "the language calls it `Top`, and the top layer is a microstrip:\n{report}"
+        report.contains("on Top gives"),
+        "the language calls it `Top`:\n{report}"
     );
     assert!(
         !report.contains("TopCopper"),
@@ -144,10 +166,30 @@ fn the_top_layer_is_called_top() {
 }
 
 #[test]
+fn the_bottom_layer_is_called_bottom() {
+    // The bottom layer is here because it is where the second of the three
+    // index errors was: `BottomCopper` read as copper entry 0.
+    let stack = every_copper_layer_answers_differently_source();
+    let report = check(&board(&stack, "Bottom", "90ohm"), "bottom");
+
+    assert!(
+        report.contains("on Bottom gives"),
+        "the language calls it `Bottom`:\n{report}"
+    );
+    assert!(
+        !report.contains("BottomCopper"),
+        "`BottomCopper` is the internal name:\n{report}"
+    );
+}
+
+#[test]
 fn the_layer_a_stack_cannot_describe_is_named_the_same_way() {
-    // The other message in the rule carries a layer too, and it was formatted
-    // the same wrong way.
-    let report = check(&board("Inner1", LOPSIDED, "50ohm"), "inner-lopsided");
+    // The rule's other message carries a layer too, and it was formatted the
+    // same wrong way. The stack is the second fixture: prepreg outside, thick
+    // core in the middle, so neither inner layer is a form the closed
+    // solutions cover.
+    let stack = an_inner_layer_the_forms_cannot_describe_source();
+    let report = check(&board(&stack, "Inner1", "50ohm"), "lopsided");
 
     assert!(
         report.contains("delivers on Inner1:"),

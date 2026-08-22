@@ -1028,6 +1028,7 @@ dependencies = [
  "cypcb-core",
  "cypcb-drc",
  "cypcb-export",
+ "cypcb-fixtures",
  "cypcb-kicad",
  "cypcb-parser",
  "cypcb-router",

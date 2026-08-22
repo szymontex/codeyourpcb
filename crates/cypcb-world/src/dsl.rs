@@ -314,6 +314,49 @@ fn via_span_suffix(via: &crate::components::trace::Via) -> String {
     )
 }
 
+/// A `stackup` block as a `board` block writes it, indented to sit inside one.
+///
+/// Pulled out of `board_as_dsl` so that a test needing this stack as *source
+/// text* gets the same words the writer emits. `cypcb-fixtures` holds a stack
+/// whose four copper layers all answer differently - the shape three shipped
+/// index errors needed and did not have - and it held it only as a
+/// `Stackup` value, which a test driving the command line cannot use. The
+/// alternative was a second formatter in the fixture crate, and two
+/// formatters for one block is how the spelling of a layer came to disagree
+/// with itself.
+pub fn stackup_as_dsl(stackup: &crate::components::Stackup) -> String {
+    let mut out = String::new();
+    let _ = writeln!(out, "    stackup {{");
+    for layer in &stackup.layers {
+        // A layer that stated no thickness is written without one. The
+        // alternative - filling in a plausible foil or prepreg - would
+        // turn a gap in the design into a number the fab is quoted on.
+        let mut line = format!("        {}", layer.kind.as_str());
+        if let Some(name) = &layer.name {
+            let _ = write!(line, " {}", quoted(name));
+        }
+        if let Some(thickness) = layer.thickness {
+            let _ = write!(line, " {}mm", format_mm(thickness.0 as f64 / 1e6));
+        }
+        if let Some(material) = &layer.material {
+            let _ = write!(line, " material {}", quoted(material));
+        }
+        // `f64`'s own Display prints the shortest text that reads back as
+        // the same number, so 4500 thousandths comes out `4.5` and 8900
+        // millionths comes out `0.0089` - and both round back to the
+        // integer they left as.
+        if let Some(dk) = layer.dk_x1000 {
+            let _ = write!(line, " dk {}", f64::from(dk) / 1_000.0);
+        }
+        if let Some(df) = layer.df_x1000000 {
+            let _ = write!(line, " df {}", f64::from(df) / 1_000_000.0);
+        }
+        let _ = writeln!(out, "{line}");
+    }
+    let _ = writeln!(out, "    }}");
+    out
+}
+
 /// A layer as a `trace` block writes it.
 ///
 /// One spelling, not two: this held its own copy of the copper names while
@@ -487,34 +530,7 @@ pub fn board_as_dsl(world: &mut BoardWorld) -> String {
     );
     let _ = writeln!(out, "    layers {}", stack.count.max(2));
     if let Some(stackup) = &stackup {
-        let _ = writeln!(out, "    stackup {{");
-        for layer in &stackup.layers {
-            // A layer that stated no thickness is written without one. The
-            // alternative - filling in a plausible foil or prepreg - would
-            // turn a gap in the design into a number the fab is quoted on.
-            let mut line = format!("        {}", layer.kind.as_str());
-            if let Some(name) = &layer.name {
-                let _ = write!(line, " {}", quoted(name));
-            }
-            if let Some(thickness) = layer.thickness {
-                let _ = write!(line, " {}mm", format_mm(thickness.0 as f64 / 1e6));
-            }
-            if let Some(material) = &layer.material {
-                let _ = write!(line, " material {}", quoted(material));
-            }
-            // `f64`'s own Display prints the shortest text that reads back as
-            // the same number, so 4500 thousandths comes out `4.5` and 8900
-            // millionths comes out `0.0089` - and both round back to the
-            // integer they left as.
-            if let Some(dk) = layer.dk_x1000 {
-                let _ = write!(line, " dk {}", f64::from(dk) / 1_000.0);
-            }
-            if let Some(df) = layer.df_x1000000 {
-                let _ = write!(line, " df {}", f64::from(df) / 1_000_000.0);
-            }
-            let _ = writeln!(out, "{line}");
-        }
-        let _ = writeln!(out, "    }}");
+        let _ = write!(out, "{}", stackup_as_dsl(stackup));
     }
     if let Some(fab) = fab {
         let _ = writeln!(out, "    fab {fab}");
