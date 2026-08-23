@@ -106,6 +106,47 @@ pub enum ViolationKind {
     FlexHole,
 }
 
+/// The two features a clearance message is about.
+///
+/// `U1 <-> trace 'GND': Clearance violation: ...` - everything before the
+/// first colon names the pair, and it is the same string however many segments
+/// of the same two features report it.
+///
+/// One copy, in the crate that owns the message. `cypcb check` and the
+/// language server each had their own before this, and a third was about to be
+/// written in the router's scorer.
+pub fn pair_of(message: &str) -> &str {
+    message
+        .split_once(':')
+        .map(|(pair, _)| pair.trim())
+        .unwrap_or(message)
+}
+
+/// How many pairs of features the clearance violations describe.
+///
+/// The clearance rule reports per pair of features that come too close, and a
+/// trace is a chain of segments: two features touching along a run report once
+/// for each segment that takes part. On the shipped benchmarks that is 759
+/// rows for 484 contacts, and one pair accounts for 24 of them.
+///
+/// **Decided 2026-08-23: the rule keeps counting pairs of segments, and this
+/// number is published beside it.** A violation is a place, and two segments
+/// of one trace touching a pad at two points are two places a fabricator's
+/// etch can fail; collapsing them in the model loses the locations. The counts
+/// are also regression ratchets, and a per-contact count is the coarser
+/// number - it would mask a routing change that a per-segment count catches.
+/// What a reader needed was never a different count but a second one, which is
+/// this.
+pub fn clearance_contacts(violations: &[DrcViolation]) -> usize {
+    let mut seen: std::collections::BTreeSet<&str> = std::collections::BTreeSet::new();
+    for violation in violations {
+        if violation.kind == ViolationKind::Clearance {
+            seen.insert(pair_of(&violation.message));
+        }
+    }
+    seen.len()
+}
+
 impl std::fmt::Display for ViolationKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

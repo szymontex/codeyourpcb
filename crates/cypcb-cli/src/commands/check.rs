@@ -34,18 +34,6 @@ pub struct CheckCommand {
 /// The span a component carries is a byte range - the line it sits on is not
 /// known where that span is built, so it is worked out here against the source
 /// that produced it.
-/// The two features a violation is about, as its message names them.
-///
-/// `U1 <-> trace 'GND': Clearance violation: ...` - everything before the
-/// colon is the pair, and it is the same string however many segments of the
-/// same two features report it.
-fn pair_of(message: &str) -> String {
-    message
-        .split_once(':')
-        .map(|(pair, _)| pair.trim().to_string())
-        .unwrap_or_else(|| message.to_string())
-}
-
 fn line_of(source: &str, offset: usize) -> usize {
     source[..offset.min(source.len())].matches('\n').count() + 1
 }
@@ -190,7 +178,10 @@ impl CheckCommand {
             if violation.kind != cypcb_drc::ViolationKind::Clearance {
                 continue;
             }
-            let key = (violation.kind.to_string(), pair_of(&violation.message));
+            let key = (
+                violation.kind.to_string(),
+                cypcb_drc::pair_of(&violation.message).to_string(),
+            );
             let gap = violation.actual.map(|a| a.raw()).unwrap_or(i64::MAX);
             match worst_of_pair.get_mut(&key) {
                 None => {
@@ -213,8 +204,10 @@ impl CheckCommand {
         for (index, violation) in drc.violations.iter().enumerate() {
             *counts.entry(violation.kind.to_string()).or_insert(0) += 1;
 
-            let same_pair =
-                worst_of_pair.get(&(violation.kind.to_string(), pair_of(&violation.message)));
+            let same_pair = worst_of_pair.get(&(
+                violation.kind.to_string(),
+                cypcb_drc::pair_of(&violation.message).to_string(),
+            ));
             if let Some((best, _)) = same_pair {
                 if *best != index {
                     continue;

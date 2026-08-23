@@ -350,12 +350,55 @@ answered, not as they were found. Items 2 to 7 are open.
   coverlay names dropped -> 1 failed; the stiffener names dropped -> 1 failed;
   the type ignored entirely -> 4 failed. `./scripts/quality-gate.sh` ->
   `=== All stages passed ===`.
-- NEXT-ACTION: **none pulled.** V8 is closed and this was the last thing it
-  left behind. The two live questions are still the owner's: whether the
-  clearance rule should count contacts rather than segment pairs (V1), and
-  whether a 9.45% profile saving is worth `qfp_fanout` reading 58 shorts worse
-  (V7). Both are re-baselines of every published figure, which is why they are
-  asked rather than taken.
+- **DECIDED 2026-08-23, both of them, by the owner handing the call back: "nie
+  mam zielonego pojecia... trzeba podjac dobre decyzje inzynieryjne".** Neither
+  was a question about a preference. Both had a right answer that four runs of
+  measurement had already produced, and neither was taken because moving a
+  published number needs a decision rather than an opinion.
+- **D8, V1: the clearance rule keeps counting pairs of segments. The contact
+  count is published beside it.** Three reasons, in the order they weigh. A
+  violation is a *place*: two segments of one trace touching a pad at two
+  points are two places a fabricator's etch can fail, and collapsing them in
+  the model throws the locations away. The counts are *regression ratchets*
+  before they are a report, and a per-contact count is the coarser number - it
+  would mask a routing change that a per-segment count catches, which is the
+  opposite of what a ratchet is for. And the reader's actual complaint - one
+  problem printed 24 times - was answered four runs ago on all three surfaces
+  without moving a single number. What was missing was never a different count
+  but a second one.
+- **D9, V7: the bucket queue is refused.** A 9.45% profile saving is
+  approximately 0.4 seconds on a benchmark that takes seconds; `qfp_fanout`
+  reading 58 shorts worse is a router that is worse at routing. Speed is a
+  convenience and routing quality is the product. The tie order is also not
+  incidental - `router-is-repeatable` is a gate stage, and the total order the
+  heap gives is what makes it hold. The safe half of that work already shipped:
+  the packed `u64` key, 2.89%, every board byte-identical. What is left needs
+  an approach that keeps the total order, and until somebody has one this is
+  not a trade worth making.
+- DONE: **D8 has a consequence in the code, not only in this file.** `cypcb
+  score` published `drc_violations` and nothing else, and that is the number
+  `docs/routing.md`'s tables are built from - so a reader outside this project
+  read 454 faults where the board has 86 contacts. `RoutingScore` carries
+  `clearance_contacts` now, measured on `multi_ic`: **454 rows, 86 contacts**.
+  The composite is untouched, every ratchet is untouched, and nothing
+  re-baselines.
+- **One `pair_of`, in the crate that owns the message.** `cypcb check` and the
+  language server each had a private copy and the scorer was about to be given
+  a third; `cypcb_drc::pair_of` and `cypcb_drc::clearance_contacts` are the one
+  copy now.
+- Proof: `cargo test -p cypcb-drc --test what_a_published_count_counts` -> **5
+  passed**. Read off the release binary: `"drc_violations": 454,
+  "clearance_contacts": 86`. Mutations, each alone against a clean tree: every
+  kind counted rather than clearance -> 1 failed; the whole message used as the
+  key rather than the pair -> 1 failed; `pair_of` returning the half after the
+  colon -> 3 failed. `./scripts/quality-gate.sh` -> `=== All stages passed ===`.
+- **A guard earned its keep on the way through:** `score_json_serialization`
+  pins the published JSON to an exact field count, so adding a field failed it
+  rather than slipping past. It pins 9 now, with the new field named and the
+  decision beside it.
+- NEXT-ACTION: **none blocked, and nothing large pulled.** Every vector's open
+  question is now answered or measured and dropped. The next run should take a
+  small backlog item rather than start a new campaign.
 
 
 ### V1 - CLI and core correctness

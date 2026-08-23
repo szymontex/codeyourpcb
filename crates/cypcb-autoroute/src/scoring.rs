@@ -50,6 +50,19 @@ pub struct RoutingScore {
     pub via_count: u32,
     /// Number of DRC violations.
     pub drc_violations: u32,
+    /// How many pairs of features the clearance violations above describe.
+    ///
+    /// The clearance rule reports per pair of *segments*: two features that
+    /// touch along a run report once for each segment that takes part, so one
+    /// contact can be two dozen rows. On the shipped benchmarks the ratio is
+    /// 759 rows to 484 contacts.
+    ///
+    /// Published beside `drc_violations` rather than instead of it. The row
+    /// count is the sensitive one and the ratchets are set against it; this is
+    /// the one that says how many places on the board are actually in fault,
+    /// which is the number somebody outside this project reads a table for.
+    /// Neither is a correction of the other.
+    pub clearance_contacts: u32,
     /// Smoothness score (0.0–1.0). 1.0 = all bends at 45° multiples.
     pub smoothness: f64,
     /// Violations where the two features are touching - measured at 0.00mm.
@@ -159,6 +172,7 @@ pub fn score_board(
         .iter()
         .filter(|v| v.actual == Some(Nm::ZERO))
         .count() as u32;
+    let clearance_contacts = cypcb_drc::clearance_contacts(&drc_result.violations) as u32;
 
     // 4. Smoothness
     let smoothness = compute_smoothness(&traces);
@@ -203,6 +217,7 @@ pub fn score_board(
         total_length,
         via_count,
         drc_violations,
+        clearance_contacts,
         shorts,
         smoothness,
         crossings,
@@ -918,6 +933,7 @@ mod tests {
             total_length: Nm::from_mm(100.0),
             via_count: 5,
             drc_violations: 0,
+            clearance_contacts: 0,
             shorts: 0,
             smoothness: 0.95,
             crossings: 1,

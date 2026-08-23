@@ -127,18 +127,6 @@ pub fn run_diagnostics(doc: &DocumentState) -> Vec<Diagnostic> {
     diagnostics
 }
 
-/// The two features a violation is about, as its message names them.
-///
-/// `U1 <-> trace 'GND': Clearance violation: ...` - everything before the
-/// colon is the pair, and it is the same string however many segments of the
-/// same two features report it.
-fn pair_of(message: &str) -> &str {
-    message
-        .split_once(':')
-        .map(|(pair, _)| pair.trim())
-        .unwrap_or(message)
-}
-
 /// One violation per contact, worst first, in the order they arrived.
 ///
 /// Only `clearance` is grouped. The other kinds report per feature, and two of
@@ -149,7 +137,7 @@ fn grouped_by_contact(violations: &[DrcViolation]) -> Vec<&DrcViolation> {
         if violation.kind != ViolationKind::Clearance {
             continue;
         }
-        let pair = pair_of(&violation.message);
+        let pair = cypcb_drc::pair_of(&violation.message);
         match worst.get(pair) {
             None => {
                 worst.insert(pair, index);
@@ -168,7 +156,7 @@ fn grouped_by_contact(violations: &[DrcViolation]) -> Vec<&DrcViolation> {
         .enumerate()
         .filter(|(index, violation)| {
             violation.kind != ViolationKind::Clearance
-                || worst.get(pair_of(&violation.message)) == Some(index)
+                || worst.get(cypcb_drc::pair_of(&violation.message)) == Some(index)
         })
         .map(|(_, violation)| violation)
         .collect()

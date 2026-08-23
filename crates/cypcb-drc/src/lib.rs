@@ -43,7 +43,7 @@ pub mod violation;
 pub use net_rules::{copper_layer_count, preset_for_world, ruleset_for_world};
 pub use presets::{DesignRules, Preset, PresetRules};
 pub use rules::DrcRule;
-pub use violation::{DrcViolation, ViolationKind};
+pub use violation::{clearance_contacts, pair_of, DrcViolation, ViolationKind};
 
 use cypcb_world::BoardWorld;
 

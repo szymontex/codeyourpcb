@@ -259,6 +259,12 @@ fn score_json_serialization() {
         // copper on copper is a different failure from one with a gap under
         // spec, and the ranking has to be able to tell them apart.
         "shorts",
+        // Published beside the violation count, not instead of it: the
+        // clearance rule reports per pair of segments, so one contact can be
+        // two dozen rows. Decided 2026-08-23 - the row count stays the
+        // sensitive number the ratchets are set against, and this one says how
+        // many places on the board are actually in fault.
+        "clearance_contacts",
     ];
 
     for field in &expected_fields {
@@ -278,8 +284,8 @@ fn score_json_serialization() {
     let obj = parsed.as_object().unwrap();
     assert_eq!(
         obj.len(),
-        8,
-        "JSON object should have exactly 8 fields, got {}",
+        9,
+        "JSON object should have exactly 9 fields, got {}",
         obj.len()
     );
 

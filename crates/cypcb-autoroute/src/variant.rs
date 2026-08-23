@@ -664,6 +664,7 @@ mod tests {
                 crossings: 1,
                 layer_balance: 0.8,
                 composite: 42.5,
+                clearance_contacts: 0,
             },
             routes: vec![RouteSegment::new(
                 cypcb_world::NetId::new(1),
@@ -702,6 +703,7 @@ mod tests {
                     crossings: 0,
                     layer_balance: 1.0,
                     composite: 10.0,
+                    clearance_contacts: 0,
                 },
                 routes: vec![],
                 vias: vec![],
@@ -719,6 +721,7 @@ mod tests {
                     crossings: 0,
                     layer_balance: 1.0,
                     composite: 20.0,
+                    clearance_contacts: 0,
                 },
                 routes: vec![],
                 vias: vec![],
