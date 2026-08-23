@@ -33,6 +33,7 @@ fn stack(layers: &[Spec]) -> Stackup {
                 df_x1000000: None,
             })
             .collect(),
+        ..Stackup::default()
     }
 }
 

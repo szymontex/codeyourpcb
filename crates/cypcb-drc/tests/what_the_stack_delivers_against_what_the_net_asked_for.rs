@@ -59,6 +59,7 @@ fn board(stack: &[Spec], layer: Layer, width_mm: f64, target_ohms_x100: Option<u
                 df_x1000000: None,
             })
             .collect(),
+        ..Stackup::default()
     });
 
     let net_id = world.intern_net("CLK");

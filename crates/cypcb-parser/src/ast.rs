@@ -210,8 +210,31 @@ pub struct SizeProperty {
 pub struct StackupDef {
     /// List of layers in the stackup.
     pub layers: Vec<StackupLayer>,
+    /// The surface finish, as written: `finish "ENIG"`.
+    ///
+    /// A fabricator's word, held quoted for the reason `material` is: this
+    /// language has no table of finishes to check one against.
+    pub finish: Option<StringLit>,
+    /// `edges plated`: copper on the routed outline.
+    pub edges_plated: bool,
+    /// `pads castellated`: holes cut in half by the outline, plated.
+    pub castellated_pads: bool,
+    /// `connector plain` or `connector bevelled`: a gold-finger edge.
+    pub edge_connector: Option<EdgeConnectorDef>,
+    /// `impedance controlled`: the fabricator holds the dielectric to the
+    /// stackup rather than pressing to a total thickness.
+    pub impedance_controlled: bool,
     /// Span covering the stackup definition.
     pub span: Span,
+}
+
+/// Whether a stated edge connector is bevelled.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum EdgeConnectorDef {
+    /// `connector plain`.
+    Plain,
+    /// `connector bevelled`.
+    Bevelled,
 }
 
 /// A single layer in a stackup definition.

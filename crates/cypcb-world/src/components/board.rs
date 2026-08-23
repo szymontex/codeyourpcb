@@ -530,6 +530,45 @@ pub enum CopperEnvironment {
 pub struct Stackup {
     /// Every layer, top to bottom.
     pub layers: Vec<StackupLayer>,
+    /// The surface finish a fabricator is asked for: `ENIG`, `HASL`, `OSP`.
+    ///
+    /// Held as written, for the reason [`StackupLayer::material`] is: this
+    /// project has no table of finishes to check one against, and a finish it
+    /// did not recognise is still what the board is quoted on. KiCad carries
+    /// the same field as `copper_finish` inside its own stackup.
+    pub finish: Option<String>,
+    /// Copper on the board's outline, plated through.
+    ///
+    /// A price and a process, not a drawing: the fabricator plates the routed
+    /// edge. KiCad's `edge_plating`.
+    pub edges_plated: bool,
+    /// Holes cut in half by the board outline, plated.
+    ///
+    /// The field a rule has been asking about since the constraint tables were
+    /// written: `DesignConstraints::castellated_holes_allowed` says whether a
+    /// house will make them, and until this existed no board could say it
+    /// wanted them. KiCad's `castellated_pads`.
+    pub castellated_pads: bool,
+    /// A gold-finger edge connector, and whether its edge is bevelled.
+    ///
+    /// KiCad's `edge_connector`, which takes `yes` or `bevelled`.
+    pub edge_connector: Option<EdgeConnector>,
+    /// The design asks the fabricator to hold the dielectric to the stackup.
+    ///
+    /// This is what a controlled-impedance build is bought with: without it a
+    /// house presses to a total thickness and moves the dielectrics around to
+    /// get there, which is exactly what the impedance rule's arithmetic
+    /// assumes it may not do. KiCad's `dielectric_constraints`.
+    pub impedance_controlled: bool,
+}
+
+/// A gold-finger edge connector, as KiCad's stackup states it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum EdgeConnector {
+    /// Present, edge left square.
+    Plain,
+    /// Present, edge bevelled - the chamfer that lets a card enter a socket.
+    Bevelled,
 }
 
 impl Stackup {

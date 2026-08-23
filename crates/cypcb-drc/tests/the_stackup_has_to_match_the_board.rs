@@ -23,6 +23,7 @@ fn layers(spec: &[(StackupLayerKind, Option<f64>)]) -> Stackup {
             .iter()
             .map(|(kind, thickness)| StackupLayer::new(*kind, thickness.map(Nm::from_mm)))
             .collect(),
+        ..Stackup::default()
     }
 }
 
@@ -173,5 +174,92 @@ fn silk_over_copper_in_a_stackup_is_the_same_mistake() {
         faults[0].contains("silk is a surface finish"),
         "{}",
         faults[0]
+    );
+}
+
+/// The two-layer control stack, with nothing asked of the fabricator.
+fn plain_two_layer() -> Stackup {
+    layers(&[
+        (Copper, Some(0.035)),
+        (Core, Some(1.5)),
+        (Copper, Some(0.035)),
+    ])
+}
+
+#[test]
+fn asking_for_castellated_pads_where_the_house_makes_none_is_reported() {
+    // The flag has been in `DesignConstraints` since the tables were written
+    // and was dropped before it reached any rule, so it checked nothing - and
+    // no board could state the want either, which is why the gap survived.
+    // Both halves exist now.
+    let mut stackup = plain_two_layer();
+    stackup.castellated_pads = true;
+
+    let said = stackup_faults(2, Some(stackup));
+    assert_eq!(said.len(), 1, "{said:?}");
+    assert!(said[0].contains("castellated pads"), "{}", said[0]);
+    assert!(
+        said[0].contains("this table does not make them"),
+        "the message names the other side too: {}",
+        said[0]
+    );
+}
+
+#[test]
+fn a_board_that_asks_for_no_castellated_pads_is_silent() {
+    // The control. Every preset this project ships says the house does not
+    // make them, so a rule that fired on silence would fire on every board.
+    assert_eq!(
+        stackup_faults(2, Some(plain_two_layer())),
+        Vec::<String>::new()
+    );
+}
+
+#[test]
+fn a_house_that_makes_them_is_not_reported() {
+    // The other half of the same question, asked of the rule rather than of
+    // the table: with the flag on, the same board is fine. No preset ships
+    // this today, so the rules are built by hand here.
+    let mut stackup = plain_two_layer();
+    stackup.castellated_pads = true;
+
+    let mut world = BoardWorld::new();
+    world.set_board("t".to_string(), (Nm::from_mm(30.0), Nm::from_mm(20.0)), 2);
+    assert!(world.set_stackup(stackup), "the board takes a stackup");
+
+    let mut rules = Preset::JlcpcbStandard2Layer.rules();
+    rules.castellated_holes_allowed = true;
+
+    let said: Vec<String> = run_drc(&mut world, &rules)
+        .violations
+        .into_iter()
+        .filter(|violation| violation.kind == ViolationKind::Stackup)
+        .map(|violation| violation.message)
+        .collect();
+    assert_eq!(said, Vec::<String>::new(), "{said:?}");
+}
+
+#[test]
+fn the_flag_reaches_the_rules_from_the_table_it_is_written_in() {
+    // The half a rule test cannot see. `castellated_holes_allowed` lives in
+    // `DesignConstraints`, and `DesignRules::from_constraints` is the only
+    // place it crosses into what a rule reads - so hard-coding `false` there
+    // leaves every rule test above green while nothing a fab table says can
+    // ever reach a board again. No preset ships `true` today, so the
+    // constraints are built here rather than picked.
+    let mut constraints = cypcb_rules::DesignConstraints::default();
+    assert!(
+        !constraints.castellated_holes_allowed,
+        "the premise: the default says no"
+    );
+    assert!(
+        !cypcb_drc::DesignRules::from_constraints(&constraints).castellated_holes_allowed,
+        "a `no` in the table is a `no` in the rules"
+    );
+
+    constraints.castellated_holes_allowed = true;
+    assert!(
+        cypcb_drc::DesignRules::from_constraints(&constraints).castellated_holes_allowed,
+        "a `yes` in the table has to reach the rules, or nothing checks it"
     );
 }

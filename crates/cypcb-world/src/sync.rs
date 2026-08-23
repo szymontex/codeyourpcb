@@ -54,8 +54,8 @@ use cypcb_parser::ast::{
 
 use crate::components::{
     trace::{Trace, TraceSegment, TraceSource, Via},
-    ComponentKind, FootprintRef, Layer, NetConnections, PadShape as EcsPadShape, PinConnection,
-    Position, RefDes, Rotation, SourceSpan as EcsSourceSpan, Stackup, StackupLayer,
+    ComponentKind, EdgeConnector, FootprintRef, Layer, NetConnections, PadShape as EcsPadShape,
+    PinConnection, Position, RefDes, Rotation, SourceSpan as EcsSourceSpan, Stackup, StackupLayer,
     StackupLayerKind, Value, Zone, ZoneKind as EcsZoneKind,
 };
 use crate::footprint::{Footprint, FootprintLibrary, PadDef as FootprintPadDef};
@@ -853,6 +853,19 @@ fn sync_board(board: &BoardDef, source: &str, world: &mut BoardWorld, result: &m
                     df_x1000000: layer.df.map(|df| (df * 1_000_000.0).round() as u32),
                 })
                 .collect(),
+            // What the fabricator does to the board rather than what it
+            // presses. `castellated_pads` is the one a rule has been asking
+            // about since the constraint tables were written: a design could
+            // not state it, so `DesignConstraints::castellated_holes_allowed`
+            // had nothing to be checked against.
+            finish: stackup.finish.as_ref().map(|f| f.value.clone()),
+            edges_plated: stackup.edges_plated,
+            castellated_pads: stackup.castellated_pads,
+            edge_connector: stackup.edge_connector.map(|connector| match connector {
+                cypcb_parser::ast::EdgeConnectorDef::Plain => EdgeConnector::Plain,
+                cypcb_parser::ast::EdgeConnectorDef::Bevelled => EdgeConnector::Bevelled,
+            }),
+            impedance_controlled: stackup.impedance_controlled,
         });
     }
 }

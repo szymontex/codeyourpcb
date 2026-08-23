@@ -60,6 +60,7 @@ use cypcb_rules::DesignConstraints;
 /// - `min_solder_mask_bridge`: Minimum solder mask web between pads
 /// - `min_silk_clearance`: Minimum silkscreen to copper clearance
 /// - `min_courtyard_clearance`: Minimum courtyard clearance between components
+/// - `castellated_holes_allowed`: Whether the house cuts plated holes in half at the outline
 /// - `max_diff_pair_skew`: How far apart the halves of a differential pair may end up
 /// - `max_drill_aspect_ratio`: Deepest hole the plating chemistry reaches, in hundredths
 /// - `board_thickness`: How thick the fab builds a board that does not say
@@ -94,6 +95,7 @@ use cypcb_rules::DesignConstraints;
 ///     min_silk_clearance: Nm::from_mm(0.15),
 ///     min_courtyard_clearance: Nm::from_mm(0.25),
 ///     copper_weight_oz_x10: 10,
+///     castellated_holes_allowed: false,
 ///     max_diff_pair_skew: Nm::from_mm(0.5),
 ///     max_drill_aspect_ratio: 800,
 ///     board_thickness: Nm::from_mm(1.6),
@@ -161,6 +163,15 @@ pub struct DesignRules {
     /// traceable to the table it came from rather than to a default nobody
     /// mentions.
     pub copper_weight_oz_x10: u32,
+    /// Whether this house will cut plated holes in half at the board outline.
+    ///
+    /// A process rather than a dimension, and the first of those to reach this
+    /// table. It has been in `DesignConstraints` since the tables were written
+    /// and was dropped on the way here, so nothing could check it - and no
+    /// board could ask for castellated pads either, which is why nobody
+    /// noticed. Both halves exist now: `stackup { pads castellated }` states
+    /// the want, this states whether the fab does it.
+    pub castellated_holes_allowed: bool,
     /// How far apart the two halves of a differential pair may end up.
     ///
     /// The fab's number, from the same table the router is priced with. A pair
@@ -260,6 +271,7 @@ impl DesignRules {
             min_silk_clearance: c.min_silk_clearance.unwrap_or(c.min_silk_width),
             min_courtyard_clearance: c.min_courtyard_clearance.unwrap_or(Nm::from_mm(0.25)),
             copper_weight_oz_x10: c.copper_weight_oz_x10,
+            castellated_holes_allowed: c.castellated_holes_allowed,
             max_diff_pair_skew: c.length_match_tolerance,
             max_drill_aspect_ratio: c.max_drill_aspect_ratio,
             board_thickness: c.board_thickness,

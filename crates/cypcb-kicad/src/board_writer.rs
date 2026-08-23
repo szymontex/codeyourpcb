@@ -27,8 +27,8 @@ use cypcb_core::Nm;
 use cypcb_world::components::trace::{Trace, Via};
 use cypcb_world::components::zone::{Zone, ZoneKind};
 use cypcb_world::components::{
-    FootprintRef, Layer, NetConnections, PadShape, Position, RefDes, Rotation, Stackup,
-    StackupLayerKind, Value,
+    EdgeConnector, FootprintRef, Layer, NetConnections, PadShape, Position, RefDes, Rotation,
+    Stackup, StackupLayerKind, Value,
 };
 use cypcb_world::footprint::SilkShape;
 use cypcb_world::BoardWorld;
@@ -259,6 +259,28 @@ fn write_stackup(out: &mut String, stackup: &Stackup, copper_layers: usize) {
         }
         line.push(')');
         let _ = writeln!(out, "{line}");
+    }
+    // What the fabricator does to the board rather than what it presses.
+    // pcbnew writes these after the layers, and writes nothing for a flag that
+    // is off - which is why they are emitted only when the design states them.
+    if let Some(finish) = &stackup.finish {
+        let _ = writeln!(out, "      (copper_finish \"{finish}\")");
+    }
+    if stackup.impedance_controlled {
+        let _ = writeln!(out, "      (dielectric_constraints yes)");
+    }
+    if let Some(connector) = stackup.edge_connector {
+        let word = match connector {
+            EdgeConnector::Plain => "yes",
+            EdgeConnector::Bevelled => "bevelled",
+        };
+        let _ = writeln!(out, "      (edge_connector {word})");
+    }
+    if stackup.castellated_pads {
+        let _ = writeln!(out, "      (castellated_pads yes)");
+    }
+    if stackup.edges_plated {
+        let _ = writeln!(out, "      (edge_plating yes)");
     }
     let _ = writeln!(out, "    )");
 }

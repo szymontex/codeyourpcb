@@ -62,6 +62,7 @@ pub fn every_copper_layer_answers_differently() -> Stackup {
             layer(Prepreg, 0.1, Some(4_200)),
             layer(Copper, 0.07, None),
         ],
+        ..Stackup::default()
     }
 }
 
@@ -96,6 +97,7 @@ pub fn an_inner_layer_the_forms_cannot_describe() -> Stackup {
             layer(Prepreg, 0.2, Some(4_600)),
             layer(Copper, 0.035, None),
         ],
+        ..Stackup::default()
     }
 }
 

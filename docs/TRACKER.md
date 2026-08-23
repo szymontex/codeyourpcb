@@ -68,6 +68,76 @@ rather than a fire.
 
 ## Vectors (parallel branches - keep ALL moving)
 
+### V8 - Stackup parity with KiCad and Altium
+
+The owner asked for all seven gaps found on 2026-08-23 while reading this
+project's stackup against what KiCad and Altium can state. Ordered as they were
+answered, not as they were found. Items 2 to 7 are open.
+
+1. **What the fabricator does to the board** - **DONE**, see below.
+2. **Colour of mask and silkscreen.** KiCad carries `(color "Green")` per
+   stackup layer and it reaches the fab order. Nothing here has a word for it.
+3. **Dielectric sub-layers.** KiCad's `addsublayer` splits one dielectric slot
+   into several prepreg sheets of different thicknesses, which is ordinary on
+   six layers and up. The model is a flat list.
+4. **Units.** `unit: mm | mil | in | nm`. Copper is bought in ounces and every
+   fab table is written that way; a design can only say `0.035mm` and do the
+   conversion in the designer's head. Wanted: `oz` for copper weight, `um`,
+   and a conversion everything reads the same way.
+5. **An impedance solver.** Altium takes a target and returns a trace width.
+   This takes a width and returns the impedance and how far off it is. The
+   inverse does not exist, and it is the largest single item on this list.
+6. **Drill pairs and sequential lamination.** A via states `layers A to B`, and
+   the board states nothing about which spans a fabricator will make, so
+   nothing checks a blind or buried via against the build.
+7. **Rigid-flex.** Coverlay, stiffener, and regions that are rigid or flexible.
+   No word in the language.
+
+- DONE (item 1): **the five things KiCad states about a board that this project
+  read and walked past.** `copper_finish`, `edge_plating`, `castellated_pads`,
+  `edge_connector` and `dielectric_constraints` live inside KiCad's own
+  `(stackup ...)`, and `pcb_parser.rs` said in a comment that it passed over
+  them. A board imported from KiCad and sent back out asked for a different
+  build than it arrived with, and nothing said so.
+- **The language says them now**, in the block where they are bought:
+  `finish "ENIG"`, `edges plated`, `pads castellated`, `connector bevelled`,
+  `impedance controlled`. Each is a statement and silence is the rest, the way
+  `locked` on a trace is. Both readers, `sync`, the DSL writer, the KiCad
+  importer and the KiCad writer all carry them.
+- **The contradiction this closes was in the checker, not in the format.**
+  `DesignConstraints::castellated_holes_allowed` has been in every fab table
+  since the tables were written, and `DesignRules::from_constraints` dropped it
+  before it reached any rule - so a flag every house sets checked nothing, and
+  no board could state the want either. Both halves exist now, and
+  `StackupRule` reports a board asking for castellated pads against a table
+  that does not make them.
+- **`(edge_plating no)` is read as no.** pcbnew leaves a flag out when it is
+  off, so the node being present is nearly the statement - but the explicit
+  `no` does occur, and reading presence as `yes` would order plating nobody
+  asked for.
+- Proof: `cargo test -p cypcb-world --test what_the_board_block_survives` ->
+  **13 passed**; `cargo test -p cypcb-kicad --test the_kicad_board_carries_the_stackup`
+  -> **15 passed**; `cargo test -p cypcb-drc --test the_stackup_has_to_match_the_board`
+  -> **13 passed**. Read off the release binary: a board with all five states
+  `the stackup asks for castellated pads and this table does not make them`.
+  Mutations, each alone against a clean tree: `sync` dropping the flag -> 1
+  failed; the DSL writer dropping its line -> 1 failed; the KiCad writer
+  dropping `(edge_plating yes)` -> 1 failed; the importer reading `no` as
+  `yes` -> 1 failed; the rule's condition inverted -> 2 failed;
+  `from_constraints` hard-coding the flag to `false` -> 1 failed.
+  `./scripts/quality-gate.sh` -> `=== All stages passed ===`.
+- **The gate itself needed a fix to get there.** `playwright.config.ts` served
+  the viewer on 4321, which is Astro's default, and another repository's dev
+  server in this container held it - so stage 6 failed on a port rather than on
+  the code. `CYPCB_E2E_PORT` overrides it and the default is 4327, with
+  `--strictPort` so a busy port fails loudly rather than moving the server
+  somewhere the tests are not looking.
+- NEXT-ACTION: **item 4, units.** It is the one every other item on this list
+  touches: an impedance solver states a width, a copper weight is quoted in
+  ounces, and a sub-layer is quoted in microns. `oz` and `um` in the grammar,
+  a conversion in one place, and the fab tables read against it.
+
+
 ### V1 - CLI and core correctness
 - DONE: **the editor had the same defect the command line just lost, and worse: duplicate squiggles were spending the diagnostic budget.** One marker per contact now, and the marker kept is the worst of its group.
 - **Every row of one contact lands on the same declaration**, so a designer saw two dozen identical squiggles on one line - on the shipped benchmarks the worst is `U1 <-> trace 'GND'` at **24 rows**. `run_diagnostics` caps at **100** and appends "... and N more (truncated)", so duplicates of one contact were pushing **different faults** off the end. That is the part that made this a correctness item rather than a tidy-up.

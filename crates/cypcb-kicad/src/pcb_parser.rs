@@ -28,7 +28,7 @@ use std::path::Path;
 use cypcb_core::{Nm, Point, Rect};
 use cypcb_router::types::{RouteSegment, RoutingResult, RoutingStatus, ViaPlacement};
 use cypcb_world::components::zone::Zone;
-use cypcb_world::components::{BoardOutline, Layer, PadShape, Side};
+use cypcb_world::components::{BoardOutline, EdgeConnector, Layer, PadShape, Side};
 use cypcb_world::footprint::{Footprint, FootprintLibrary, PadDef};
 use cypcb_world::{
     BoardWorld, FootprintRef, NetConnections, NetId, PinConnection, Position, RefDes, Rotation,
@@ -639,9 +639,11 @@ fn stackup_kind_of(type_name: &str) -> Option<StackupLayerKind> {
 /// A dielectric may open either as a quoted `"dielectric 1"` or as the bare
 /// pair `dielectric 1`, so both are read and both come out as the same name.
 ///
-/// A `(thickness ...)` may carry `locked` after the number, and everything the
-/// stackup states about itself that is not a layer - `copper_finish`,
-/// `edge_plating` and the rest - is passed over rather than guessed at.
+/// A `(thickness ...)` may carry `locked` after the number. What the stackup
+/// states about itself that is not a layer - `copper_finish`, `edge_plating`,
+/// `castellated_pads`, `edge_connector`, `dielectric_constraints` - is read
+/// too: those five are what the board is quoted on, and dropping them meant a
+/// board imported from KiCad and sent back out asked for a different build.
 fn extract_stackup(elements: &[Sexp]) -> (Option<Stackup>, Vec<String>) {
     let mut refusals = Vec::new();
     let node = elements
@@ -656,6 +658,40 @@ fn extract_stackup(elements: &[Sexp]) -> (Option<Stackup>, Vec<String>) {
     let Ok(entries) = node.list() else {
         return (None, refusals);
     };
+
+    let mut finish = None;
+    let mut edges_plated = false;
+    let mut castellated_pads = false;
+    let mut edge_connector = None;
+    let mut impedance_controlled = false;
+    for entry in &entries[1..] {
+        let Ok(fields) = entry.list() else {
+            continue;
+        };
+        if fields.len() < 2 {
+            continue;
+        }
+        // KiCad writes `yes` for a flag that is on and leaves the whole node
+        // out when it is off, so the node being here is nearly the statement -
+        // but `(edge_plating no)` does occur, and reading that as `yes` would
+        // order plating nobody asked for.
+        let on = |value: &Sexp| get_string(value).as_deref() != Some("no");
+        match list_name(entry).as_deref() {
+            Some("copper_finish") => finish = get_string(&fields[1]),
+            Some("edge_plating") => edges_plated = on(&fields[1]),
+            Some("castellated_pads") => castellated_pads = on(&fields[1]),
+            Some("dielectric_constraints") => impedance_controlled = on(&fields[1]),
+            Some("edge_connector") => {
+                edge_connector = match get_string(&fields[1]).as_deref() {
+                    Some("bevelled") => Some(EdgeConnector::Bevelled),
+                    Some("no") => None,
+                    Some(_) => Some(EdgeConnector::Plain),
+                    None => None,
+                }
+            }
+            _ => {}
+        }
+    }
 
     let mut layers = Vec::new();
     for entry in &entries[1..] {
@@ -731,7 +767,17 @@ fn extract_stackup(elements: &[Sexp]) -> (Option<Stackup>, Vec<String>) {
     if layers.is_empty() {
         return (None, refusals);
     }
-    (Some(Stackup { layers }), refusals)
+    (
+        Some(Stackup {
+            layers,
+            finish,
+            edges_plated,
+            castellated_pads,
+            edge_connector,
+            impedance_controlled,
+        }),
+        refusals,
+    )
 }
 
 fn extract_layer_count(elements: &[Sexp]) -> u8 {

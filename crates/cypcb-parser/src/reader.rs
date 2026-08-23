@@ -19,16 +19,31 @@
 
 use crate::ast::{
     format_pad_number, AssertDef, AssertExpression, AssertOperand, BoardDef, ComparisonOp,
-    ComponentDef, ComponentKind, Definition, DiffPairDef, Dimension, FootprintDef, Identifier,
-    ImplementsClause, ImportDef, InterfaceDef, LayerType, ModuleDef, ModuleInstance, NetAssignment,
-    NetClassDef, NetConstraints, NetDef, OutlineDef, PadDef, PadShape, PhysicalValue,
-    PinDeclaration, PinId, PinRef, PortConnection, PositionExpr, RotationExpr, SilkDef,
-    SizeProperty, SourceFile, Span, StackupDef, StackupLayer, StringLit, Tolerance, ToleranceKind,
-    TraceDef, TraceDirective, TracePath, TraceVia, ZoneDef, ZoneKind,
+    ComponentDef, ComponentKind, Definition, DiffPairDef, Dimension, EdgeConnectorDef,
+    FootprintDef, Identifier, ImplementsClause, ImportDef, InterfaceDef, LayerType, ModuleDef,
+    ModuleInstance, NetAssignment, NetClassDef, NetConstraints, NetDef, OutlineDef, PadDef,
+    PadShape, PhysicalValue, PinDeclaration, PinId, PinRef, PortConnection, PositionExpr,
+    RotationExpr, SilkDef, SizeProperty, SourceFile, Span, StackupDef, StackupLayer, StringLit,
+    Tolerance, ToleranceKind, TraceDef, TraceDirective, TracePath, TraceVia, ZoneDef, ZoneKind,
 };
 use crate::errors::{ParseError, ParseResult};
 use crate::lexer::{tokenize, Token, TokenKind};
 use cypcb_core::Unit;
+
+/// Every word a `stackup` block takes, for the message a wrong one gets.
+const STACKUP_WORDS: &[&str] = &[
+    "copper",
+    "prepreg",
+    "core",
+    "mask",
+    "silk",
+    "paste",
+    "finish",
+    "edges",
+    "pads",
+    "connector",
+    "impedance",
+];
 
 /// Read a source file into the AST.
 ///
@@ -382,20 +397,68 @@ impl<'a> Reader<'a> {
         }
 
         let mut layers = Vec::new();
+        let mut finish = None;
+        let mut edges_plated = false;
+        let mut castellated_pads = false;
+        let mut edge_connector = None;
+        let mut impedance_controlled = false;
         while !self.done() && !self.eat(&TokenKind::RBrace) {
             let layer_start = self.here();
             let Some(word) = self.peek_ident().map(str::to_string) else {
-                self.unknown_property(
-                    "stackup",
-                    &["copper", "prepreg", "core", "mask", "silk", "paste"],
-                );
+                self.unknown_property("stackup", STACKUP_WORDS);
                 continue;
             };
+            // What the fabricator does to the board, rather than what it
+            // presses. Each starts with a word no layer type uses, so this
+            // reads them off the front without looking ahead.
+            match word.as_str() {
+                "finish" => {
+                    self.bump();
+                    match self.string() {
+                        Some(name) => finish = Some(name),
+                        None => self.unexpected("a quoted finish like `\"ENIG\"`"),
+                    }
+                    continue;
+                }
+                "edges" => {
+                    self.bump();
+                    if !self.eat_word("plated") {
+                        self.unexpected("`plated` after `edges`");
+                    }
+                    edges_plated = true;
+                    continue;
+                }
+                "pads" => {
+                    self.bump();
+                    if !self.eat_word("castellated") {
+                        self.unexpected("`castellated` after `pads`");
+                    }
+                    castellated_pads = true;
+                    continue;
+                }
+                "connector" => {
+                    self.bump();
+                    if self.eat_word("bevelled") {
+                        edge_connector = Some(EdgeConnectorDef::Bevelled);
+                    } else if self.eat_word("plain") {
+                        edge_connector = Some(EdgeConnectorDef::Plain);
+                    } else {
+                        self.unexpected("`plain` or `bevelled` after `connector`");
+                    }
+                    continue;
+                }
+                "impedance" => {
+                    self.bump();
+                    if !self.eat_word("controlled") {
+                        self.unexpected("`controlled` after `impedance`");
+                    }
+                    impedance_controlled = true;
+                    continue;
+                }
+                _ => {}
+            }
             let Some(layer_type) = LayerType::from_str(&word) else {
-                self.unknown_property(
-                    "stackup",
-                    &["copper", "prepreg", "core", "mask", "silk", "paste"],
-                );
+                self.unknown_property("stackup", STACKUP_WORDS);
                 continue;
             };
             self.bump();
@@ -441,6 +504,11 @@ impl<'a> Reader<'a> {
 
         Some(StackupDef {
             layers,
+            finish,
+            edges_plated,
+            castellated_pads,
+            edge_connector,
+            impedance_controlled,
             span: Span::new(start, self.behind()),
         })
     }

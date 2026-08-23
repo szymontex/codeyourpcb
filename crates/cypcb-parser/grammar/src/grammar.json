@@ -288,13 +288,120 @@
         {
           "type": "REPEAT",
           "content": {
-            "type": "SYMBOL",
-            "name": "stackup_layer"
+            "type": "CHOICE",
+            "members": [
+              {
+                "type": "SYMBOL",
+                "name": "stackup_layer"
+              },
+              {
+                "type": "SYMBOL",
+                "name": "stackup_finish"
+              },
+              {
+                "type": "SYMBOL",
+                "name": "stackup_edges"
+              },
+              {
+                "type": "SYMBOL",
+                "name": "stackup_pads"
+              },
+              {
+                "type": "SYMBOL",
+                "name": "stackup_connector"
+              },
+              {
+                "type": "SYMBOL",
+                "name": "stackup_impedance"
+              }
+            ]
           }
         },
         {
           "type": "STRING",
           "value": "}"
+        }
+      ]
+    },
+    "stackup_finish": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "STRING",
+          "value": "finish"
+        },
+        {
+          "type": "FIELD",
+          "name": "finish",
+          "content": {
+            "type": "SYMBOL",
+            "name": "string"
+          }
+        }
+      ]
+    },
+    "stackup_edges": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "STRING",
+          "value": "edges"
+        },
+        {
+          "type": "STRING",
+          "value": "plated"
+        }
+      ]
+    },
+    "stackup_pads": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "STRING",
+          "value": "pads"
+        },
+        {
+          "type": "STRING",
+          "value": "castellated"
+        }
+      ]
+    },
+    "stackup_connector": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "STRING",
+          "value": "connector"
+        },
+        {
+          "type": "FIELD",
+          "name": "bevel",
+          "content": {
+            "type": "CHOICE",
+            "members": [
+              {
+                "type": "STRING",
+                "value": "plain"
+              },
+              {
+                "type": "STRING",
+                "value": "bevelled"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "stackup_impedance": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "STRING",
+          "value": "impedance"
+        },
+        {
+          "type": "STRING",
+          "value": "controlled"
         }
       ]
     },

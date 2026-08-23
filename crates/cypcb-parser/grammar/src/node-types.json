@@ -1585,6 +1585,52 @@
     }
   },
   {
+    "type": "stackup_connector",
+    "named": true,
+    "fields": {
+      "bevel": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "bevelled",
+            "named": false
+          },
+          {
+            "type": "plain",
+            "named": false
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "stackup_edges",
+    "named": true,
+    "fields": {}
+  },
+  {
+    "type": "stackup_finish",
+    "named": true,
+    "fields": {
+      "finish": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "string",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "stackup_impedance",
+    "named": true,
+    "fields": {}
+  },
+  {
     "type": "stackup_layer",
     "named": true,
     "fields": {
@@ -1671,6 +1717,11 @@
     }
   },
   {
+    "type": "stackup_pads",
+    "named": true,
+    "fields": {}
+  },
+  {
     "type": "stackup_property",
     "named": true,
     "fields": {},
@@ -1679,7 +1730,27 @@
       "required": false,
       "types": [
         {
+          "type": "stackup_connector",
+          "named": true
+        },
+        {
+          "type": "stackup_edges",
+          "named": true
+        },
+        {
+          "type": "stackup_finish",
+          "named": true
+        },
+        {
+          "type": "stackup_impedance",
+          "named": true
+        },
+        {
           "type": "stackup_layer",
+          "named": true
+        },
+        {
+          "type": "stackup_pads",
           "named": true
         }
       ]
@@ -2318,6 +2389,10 @@
     "named": false
   },
   {
+    "type": "bevelled",
+    "named": false
+  },
+  {
     "type": "block_comment",
     "named": true,
     "extra": true
@@ -2339,6 +2414,10 @@
     "named": false
   },
   {
+    "type": "castellated",
+    "named": false
+  },
+  {
     "type": "circle",
     "named": false
   },
@@ -2352,6 +2431,10 @@
   },
   {
     "type": "connector",
+    "named": false
+  },
+  {
+    "type": "controlled",
     "named": false
   },
   {
@@ -2407,7 +2490,15 @@
     "named": false
   },
   {
+    "type": "edges",
+    "named": false
+  },
+  {
     "type": "fab",
+    "named": false
+  },
+  {
+    "type": "finish",
     "named": false
   },
   {
@@ -2604,6 +2695,10 @@
     "named": false
   },
   {
+    "type": "pads",
+    "named": false
+  },
+  {
     "type": "paste",
     "named": false
   },
@@ -2613,6 +2708,14 @@
   },
   {
     "type": "pin",
+    "named": false
+  },
+  {
+    "type": "plain",
+    "named": false
+  },
+  {
+    "type": "plated",
     "named": false
   },
   {

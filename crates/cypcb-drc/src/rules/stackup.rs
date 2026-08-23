@@ -16,6 +16,14 @@
 //!   Two foils pressed together are one thicker foil, so this describes a
 //!   board whose layers are shorted to each other by construction.
 //!
+//! - The board asks for a process the fab's table refuses. Castellated pads
+//!   are the first: `stackup { pads castellated }` is the design asking for
+//!   plated holes cut in half at the outline, and a table that says the house
+//!   does not make them is the answer. That flag had been in
+//!   `DesignConstraints` since the tables were written and was dropped before
+//!   it reached any rule, so it checked nothing - and no board could state the
+//!   want either, which is why the gap survived.
+//!
 //! Not reported: total thickness against anything. What a fab supports is fab
 //! data this project does not have, and inventing a range would be worse than
 //! staying quiet - the thickness is put in the message instead, where a person
@@ -38,7 +46,7 @@ impl DrcRule for StackupRule {
         "stackup"
     }
 
-    fn check(&self, world: &mut BoardWorld, _rules: &DesignRules) -> Vec<DrcViolation> {
+    fn check(&self, world: &mut BoardWorld, rules: &DesignRules) -> Vec<DrcViolation> {
         // Most designs state no stackup and take the fab's, which is not a
         // fault and is the reason this rule reports nothing on most boards.
         let Some(stackup) = world.stackup().cloned() else {
@@ -63,6 +71,21 @@ impl DrcRule for StackupRule {
                     "board says {counted} copper layers and the stackup describes {declared}{}",
                     thickness_note(&stackup)
                 ),
+                at,
+            ));
+        }
+
+        // A process the design asks for and this house does not do. The
+        // message names both sides, because a designer reading it has two
+        // ways out: drop the request, or send the board to a house that
+        // does it.
+        if stackup.castellated_pads && !rules.castellated_holes_allowed {
+            violations.push(DrcViolation::stackup(
+                board,
+                "the stackup asks for castellated pads and this table does not \
+                 make them: a plated hole cut in half at the outline is a \
+                 process a house either offers or does not"
+                    .to_string(),
                 at,
             ));
         }

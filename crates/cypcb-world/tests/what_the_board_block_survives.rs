@@ -334,3 +334,92 @@ board t {
         parsed.errors
     );
 }
+
+/// The five things a fabricator does to the board rather than presses into it.
+const FAB_ORDER: &str = r#"version 1
+
+board t {
+    size 40mm x 20mm
+    layers 2
+    stackup {
+        finish "ENIG"
+        edges plated
+        pads castellated
+        connector bevelled
+        impedance controlled
+        copper 0.035mm
+        core 1.5mm
+        copper 0.035mm
+    }
+}
+"#;
+
+#[test]
+fn what_the_fabricator_does_to_the_board_comes_back() {
+    // KiCad keeps `copper_finish`, `edge_plating`, `castellated_pads`,
+    // `edge_connector` and `dielectric_constraints` inside its own stackup,
+    // and this project read the file and walked past all five. A board
+    // imported and sent back out asked for a different build than it arrived
+    // with, and nothing said so.
+    let mut world = load(FAB_ORDER);
+    let before = world.stackup().cloned().expect("a stackup went in");
+    assert_eq!(before.finish.as_deref(), Some("ENIG"), "the premise");
+    assert!(before.edges_plated, "the premise");
+    assert!(before.castellated_pads, "the premise");
+    assert_eq!(
+        before.edge_connector,
+        Some(cypcb_world::components::EdgeConnector::Bevelled),
+        "the premise"
+    );
+    assert!(before.impedance_controlled, "the premise");
+
+    let text = board_as_dsl(&mut world);
+    let back = load(&text);
+    assert_eq!(
+        back.stackup().cloned(),
+        Some(before),
+        "the fabrication order did not come back:\n{text}"
+    );
+}
+
+#[test]
+fn a_plain_connector_is_not_a_bevelled_one() {
+    // Two words the same rule takes, and the difference is a chamfer a
+    // fabricator either cuts or does not.
+    let source = FAB_ORDER.replace("connector bevelled", "connector plain");
+    let mut world = load(&source);
+    assert_eq!(
+        world.stackup().and_then(|s| s.edge_connector),
+        Some(cypcb_world::components::EdgeConnector::Plain)
+    );
+
+    let text = board_as_dsl(&mut world);
+    assert!(
+        text.contains("connector plain"),
+        "the writer states which kind:\n{text}"
+    );
+}
+
+#[test]
+fn a_board_that_asks_for_none_of_it_writes_none_of_it() {
+    // Silence is the rest, the way `locked` on a trace works: a design that
+    // wants no edge plating does not say `edges plated`, and the writer must
+    // not invent a line saying it either way.
+    let mut world = load(FOUR_LAYER);
+    let stackup = world.stackup().cloned().expect("a stackup went in");
+    assert!(!stackup.edges_plated && !stackup.castellated_pads);
+
+    let text = board_as_dsl(&mut world);
+    for word in [
+        "finish",
+        "edges",
+        "pads castellated",
+        "connector",
+        "impedance",
+    ] {
+        assert!(
+            !text.contains(word),
+            "a board that stated nothing had `{word}` written for it:\n{text}"
+        );
+    }
+}

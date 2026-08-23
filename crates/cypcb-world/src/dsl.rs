@@ -429,6 +429,27 @@ fn copper_nets(world: &mut BoardWorld) -> Vec<u32> {
 pub fn stackup_as_dsl(stackup: &crate::components::Stackup) -> String {
     let mut out = String::new();
     let _ = writeln!(out, "    stackup {{");
+    // What the fabricator does to the board, before what it presses: a reader
+    // looking for the finish should not have to walk eleven layer lines first.
+    if let Some(finish) = &stackup.finish {
+        let _ = writeln!(out, "        finish {}", quoted(finish));
+    }
+    if stackup.edges_plated {
+        let _ = writeln!(out, "        edges plated");
+    }
+    if stackup.castellated_pads {
+        let _ = writeln!(out, "        pads castellated");
+    }
+    if let Some(connector) = stackup.edge_connector {
+        let word = match connector {
+            crate::components::EdgeConnector::Plain => "plain",
+            crate::components::EdgeConnector::Bevelled => "bevelled",
+        };
+        let _ = writeln!(out, "        connector {word}");
+    }
+    if stackup.impedance_controlled {
+        let _ = writeln!(out, "        impedance controlled");
+    }
     for layer in &stackup.layers {
         // A layer that stated no thickness is written without one. The
         // alternative - filling in a plausible foil or prepreg - would

@@ -38,6 +38,7 @@ fn board(stackup: Option<&[(StackupLayerKind, Option<f64>)]>) -> BoardWorld {
                 .iter()
                 .map(|(kind, thickness)| StackupLayer::new(*kind, thickness.map(Nm::from_mm)))
                 .collect(),
+            ..Stackup::default()
         });
     }
     world

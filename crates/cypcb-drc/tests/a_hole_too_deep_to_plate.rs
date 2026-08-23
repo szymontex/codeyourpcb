@@ -39,6 +39,7 @@ fn stackup_of(thickness_mm: f64) -> Stackup {
             ),
             StackupLayer::new(StackupLayerKind::Copper, Some(Nm::from_mm(0.035))),
         ],
+        ..Stackup::default()
     }
 }
 

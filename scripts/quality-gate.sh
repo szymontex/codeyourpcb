@@ -107,11 +107,16 @@ echo ""
 # artifact is a gate that lies.
 #
 # CI=1 turns off `reuseExistingServer` in playwright.config.ts. Without it the
-# suite silently attaches to whatever is already listening on 4321 - a dev
-# server someone left running from another checkout, or anything else at all -
-# and reports the result as if it had tested this tree. Proven by pointing a
-# bare `python3 -m http.server` at that port: the default run happily executed
-# the whole suite against it, while CI=1 stops with "already used".
+# suite silently attaches to whatever is already listening on the e2e port - a
+# dev server someone left running from another checkout, or anything else at
+# all - and reports the result as if it had tested this tree. Proven by
+# pointing a bare `python3 -m http.server` at that port: the default run
+# happily executed the whole suite against it, while CI=1 stops with "already
+# used".
+#
+# That port is no longer 4321. It was, and 4321 is Astro's default, so a gate
+# run failed here because another repository's dev server in this container
+# held it. `CYPCB_E2E_PORT` overrides, and the default is 4327.
 echo "[6/8] playwright (rebuilding viewer/pkg first)"
 if ./viewer/build-wasm.sh >/dev/null 2>&1; then
   :

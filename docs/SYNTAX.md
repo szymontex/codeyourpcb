@@ -146,7 +146,47 @@ cannot.
 Nothing here has a table of laminates to check it against, and a material this
 tool does not recognise is still the one the fabricator is asked for.
 
-The checker reads the stackup against the rest of the design and reports two
+### What the fabricator does to the board
+
+Five things a house does to a board rather than presses into it live in the
+same block, because that is where they are bought:
+
+```
+board edge_card {
+    size 50mm x 30mm
+    layers 2
+    stackup {
+        finish "ENIG"
+        edges plated
+        pads castellated
+        connector bevelled
+        impedance controlled
+        copper 0.035mm
+        core 1.5mm dk 4.5
+        copper 0.035mm
+    }
+}
+```
+
+- `finish` is the surface finish, quoted and held as written for the reason
+  `material` is: there is no table of finishes here to check one against.
+- `edges plated` asks for copper on the routed outline.
+- `pads castellated` asks for plated holes cut in half by the outline - the
+  half-moons along the edge of a module that solders onto another board.
+- `connector plain` or `connector bevelled` states a gold-finger edge
+  connector, and whether its edge is chamfered so a card enters a socket.
+- `impedance controlled` asks the fabricator to hold the dielectric to this
+  stackup rather than pressing to a total thickness. It is what a
+  controlled-impedance build is bought with, and what the impedance rule's
+  arithmetic assumes.
+
+Each is a statement, and silence is the rest: a board that wants no edge
+plating does not say `edges plated`, the same way a trace that is not `locked`
+says nothing. KiCad carries all five inside its own stackup as
+`copper_finish`, `edge_plating`, `castellated_pads`, `edge_connector` and
+`dielectric_constraints`, and a board imported from KiCad keeps them.
+
+The checker reads the stackup against the rest of the design and reports three
 contradictions:
 
 - The stackup describes a different number of copper layers than `layers` does.
@@ -154,6 +194,9 @@ contradictions:
   would disagree about what the board is.
 - Two copper layers sit against each other with no dielectric between them.
   `mask` and `silk` are surface finishes and do not separate copper.
+- The board asks for `pads castellated` and the fab table says the house does
+  not make them. A process a house either offers or does not, so the message
+  names both sides.
 
 It does not judge the total thickness: what a fab will press is fab data this
 tool does not have. The thickness is printed in the report instead, for

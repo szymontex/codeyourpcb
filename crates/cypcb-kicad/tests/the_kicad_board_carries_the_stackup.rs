@@ -59,6 +59,7 @@ fn board(layers: &[Spec], copper: u8) -> BoardWorld {
                 df_x1000000: None,
             })
             .collect(),
+        ..Stackup::default()
     });
     world
 }
@@ -377,7 +378,10 @@ fn the_dielectric_numbers_make_the_trip_out_and_back() {
         layers[3].material = Some("Isola 370HR".to_string());
         layers[3].dk_x1000 = Some(3_920);
         layers[3].df_x1000000 = Some(8_900);
-        world.set_stackup(cypcb_world::Stackup { layers });
+        world.set_stackup(cypcb_world::Stackup {
+            layers,
+            ..Default::default()
+        });
     }
 
     let text = write_board(&mut world, "test");
@@ -394,4 +398,90 @@ fn the_dielectric_numbers_make_the_trip_out_and_back() {
     // not a zero, and a zero permittivity is not a laminate.
     assert_eq!(back.layers[0].dk_x1000, None);
     assert_eq!(back.layers[0].df_x1000000, None);
+}
+
+#[test]
+fn what_the_fabricator_does_to_the_board_reaches_the_kicad_file() {
+    // KiCad keeps `copper_finish`, `edge_plating`, `castellated_pads`,
+    // `edge_connector` and `dielectric_constraints` inside `(stackup ...)`.
+    // This project read a board carrying them, walked past all five, and wrote
+    // a file asking for a different build than the one it opened.
+    let mut world = board(
+        &[
+            (StackupLayerKind::Copper, Some(0.035), None, None),
+            (StackupLayerKind::Core, Some(1.5), None, None),
+            (StackupLayerKind::Copper, Some(0.035), None, None),
+        ],
+        2,
+    );
+    {
+        let mut stackup = world.stackup().cloned().expect("the premise");
+        stackup.finish = Some("ENIG".to_string());
+        stackup.edges_plated = true;
+        stackup.castellated_pads = true;
+        stackup.edge_connector = Some(cypcb_world::components::EdgeConnector::Bevelled);
+        stackup.impedance_controlled = true;
+        world.set_stackup(stackup);
+    }
+
+    let text = write_board(&mut world, "test");
+    for line in [
+        "(copper_finish \"ENIG\")",
+        "(dielectric_constraints yes)",
+        "(edge_connector bevelled)",
+        "(castellated_pads yes)",
+        "(edge_plating yes)",
+    ] {
+        assert!(text.contains(line), "missing {line}:\n{text}");
+    }
+
+    // And back in. Checking the writer against the reader alone would pass a
+    // pair that agreed on the wrong spelling; the file in the middle is what
+    // the assertions above hold.
+    let result = cypcb_kicad::parse_kicad_pcb_str(&text).expect("the file reads");
+    let stackup = result
+        .world
+        .stackup()
+        .cloned()
+        .expect("a stackup came back");
+    assert_eq!(stackup.finish.as_deref(), Some("ENIG"));
+    assert!(stackup.edges_plated);
+    assert!(stackup.castellated_pads);
+    assert_eq!(
+        stackup.edge_connector,
+        Some(cypcb_world::components::EdgeConnector::Bevelled)
+    );
+    assert!(stackup.impedance_controlled);
+}
+
+#[test]
+fn a_flag_kicad_writes_as_no_is_read_as_no() {
+    // pcbnew leaves a flag out when it is off, so the node being present is
+    // nearly the statement - but `(edge_plating no)` does occur, and reading
+    // the node's presence as `yes` would order plating nobody asked for.
+    let mut world = board(BARE, 4);
+    let plain = write_board(&mut world, "test");
+    let spliced = with_stackup_node(
+        &plain,
+        "      (layer \"F.Cu\" (type \"copper\") (thickness 0.035))\n\
+         \x20     (layer \"dielectric 1\" (type \"core\") (thickness 1.51))\n\
+         \x20     (layer \"B.Cu\" (type \"copper\") (thickness 0.035))\n\
+         \x20     (copper_finish \"HASL\")\n\
+         \x20     (dielectric_constraints no)\n\
+         \x20     (edge_connector no)\n\
+         \x20     (castellated_pads no)\n\
+         \x20     (edge_plating no)\n",
+    );
+
+    let result = cypcb_kicad::parse_kicad_pcb_str(&spliced).expect("the file reads");
+    let stackup = result
+        .world
+        .stackup()
+        .cloned()
+        .expect("a stackup came back");
+    assert_eq!(stackup.finish.as_deref(), Some("HASL"));
+    assert!(!stackup.edges_plated, "`no` is not `yes`");
+    assert!(!stackup.castellated_pads, "`no` is not `yes`");
+    assert!(!stackup.impedance_controlled, "`no` is not `yes`");
+    assert_eq!(stackup.edge_connector, None, "`no` is not a connector");
 }

@@ -33,11 +33,12 @@
 use crate::ast::{
     format_pad_number, AssertDef, AssertExpression, AssertOperand, BoardDef, ComparisonOp,
     ComponentDef, ComponentKind, CurrentUnit, CurrentValue, Definition, DiffPairDef, Dimension,
-    FootprintDef, Identifier, ImplementsClause, ImportDef, InterfaceDef, LayerType, ModuleDef,
-    ModuleInstance, NeckDef, NetAssignment, NetClassDef, NetConstraints, NetDef, OutlineDef,
-    PadDef, PadShape, PhysicalValue, PinDeclaration, PinId, PinRef, PortConnection, PositionExpr,
-    RotationExpr, SilkDef, SizeProperty, SourceFile, Span, StackupDef, StackupLayer, StringLit,
-    Tolerance, ToleranceKind, TraceDef, TraceDirective, TracePath, TraceVia, ZoneDef, ZoneKind,
+    EdgeConnectorDef, FootprintDef, Identifier, ImplementsClause, ImportDef, InterfaceDef,
+    LayerType, ModuleDef, ModuleInstance, NeckDef, NetAssignment, NetClassDef, NetConstraints,
+    NetDef, OutlineDef, PadDef, PadShape, PhysicalValue, PinDeclaration, PinId, PinRef,
+    PortConnection, PositionExpr, RotationExpr, SilkDef, SizeProperty, SourceFile, Span,
+    StackupDef, StackupLayer, StringLit, Tolerance, ToleranceKind, TraceDef, TraceDirective,
+    TracePath, TraceVia, ZoneDef, ZoneKind,
 };
 use crate::errors::{ParseError, ParseResult};
 use crate::node_kinds;
@@ -371,18 +372,52 @@ impl CypcbParser {
         errors: &mut Vec<ParseError>,
     ) -> Option<StackupDef> {
         let mut layers = Vec::new();
+        let mut finish = None;
+        let mut edges_plated = false;
+        let mut castellated_pads = false;
+        let mut edge_connector = None;
+        let mut impedance_controlled = false;
 
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
-            if child.kind() == "stackup_layer" {
-                if let Some(layer) = self.convert_stackup_layer(source, &child, errors) {
-                    layers.push(layer);
+            match child.kind() {
+                "stackup_layer" => {
+                    if let Some(layer) = self.convert_stackup_layer(source, &child, errors) {
+                        layers.push(layer);
+                    }
                 }
+                // What the fabricator does to the board rather than what it
+                // presses. The flags carry no field: the node being here is
+                // the statement, the way `locked` on a trace is.
+                "stackup_finish" => {
+                    if let Some(text) = get_child_by_field(&child, "finish") {
+                        finish = Some(self.convert_string_literal(source, &text));
+                    }
+                }
+                "stackup_edges" => edges_plated = true,
+                "stackup_pads" => castellated_pads = true,
+                "stackup_connector" => {
+                    edge_connector = match get_child_by_field(&child, "bevel")
+                        .map(|bevel| node_text(source, &bevel).to_string())
+                        .as_deref()
+                    {
+                        Some("bevelled") => Some(EdgeConnectorDef::Bevelled),
+                        Some("plain") => Some(EdgeConnectorDef::Plain),
+                        _ => edge_connector,
+                    };
+                }
+                "stackup_impedance" => impedance_controlled = true,
+                _ => {}
             }
         }
 
         Some(StackupDef {
             layers,
+            finish,
+            edges_plated,
+            castellated_pads,
+            edge_connector,
+            impedance_controlled,
             span: span_of(node),
         })
     }

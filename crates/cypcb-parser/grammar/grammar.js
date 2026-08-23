@@ -122,9 +122,43 @@ module.exports = grammar({
     stackup_property: $ => seq(
       'stackup',
       '{',
-      repeat($.stackup_layer),
+      repeat(choice(
+        $.stackup_layer,
+        $.stackup_finish,
+        $.stackup_edges,
+        $.stackup_pads,
+        $.stackup_connector,
+        $.stackup_impedance,
+      )),
       '}',
     ),
+
+    // What the fabricator does to the board rather than what it presses.
+    //
+    // KiCad keeps these five inside its own `(stackup ...)`, which is where
+    // they belong: they are bought with the build, not drawn on a layer. Each
+    // starts with a different word, so neither reader has to look ahead.
+    //
+    //   finish "ENIG"
+    //   edges plated
+    //   pads castellated
+    //   connector bevelled
+    //   impedance controlled
+    //
+    // The finish is quoted for the reason `material` is: a fabricator's word
+    // for it is not this language's to spell, and there is no table here to
+    // check one against.
+    stackup_finish: $ => seq('finish', field('finish', $.string)),
+
+    // The flags are a keyword pair rather than `yes`/`no`, the way `locked`
+    // on a trace is: a design states what it wants, and silence is the rest.
+    stackup_edges: $ => seq('edges', 'plated'),
+    stackup_pads: $ => seq('pads', 'castellated'),
+    stackup_connector: $ => seq(
+      'connector',
+      field('bevel', choice('plain', 'bevelled')),
+    ),
+    stackup_impedance: $ => seq('impedance', 'controlled'),
 
     // copper "F.Cu" 0.035mm
     // core "dielectric 2" 1.095mm material "FR4" dk 4.5 df 0.02
