@@ -40,6 +40,67 @@ pub struct BoardSnapshot {
     /// sends back the copper it computed from them.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub zones: Vec<ZoneInfo>,
+    /// The stack the design says it wants pressed, when it says.
+    ///
+    /// Seven pieces of stackup vocabulary landed in this project between
+    /// 2026-08-22 and 2026-08-23 - what the fabricator does to the board,
+    /// colour, sheets, units, drill pairs, rigid-flex and the impedance
+    /// solver - and the language was the only way to see any of it. A stack is
+    /// the one part of a design that is a table rather than a list of
+    /// statements, so it is the part a person most wants to look at rather
+    /// than read.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stackup: Option<StackupInfo>,
+}
+
+/// A stack as the design states it, flattened for JavaScript.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StackupInfo {
+    /// Every layer, top to bottom.
+    pub layers: Vec<StackupLayerInfo>,
+    /// The surface finish the design asks for, empty when it asks for none.
+    pub finish: String,
+    /// Copper on the routed outline.
+    pub edges_plated: bool,
+    /// Plated holes cut in half by the outline.
+    pub castellated_pads: bool,
+    /// `""`, `"plain"` or `"bevelled"`.
+    pub edge_connector: String,
+    /// The fabricator holds the dielectric to this stack.
+    pub impedance_controlled: bool,
+    /// The drill spans this build makes, as pairs of layer names.
+    pub drill_pairs: Vec<[String; 2]>,
+    /// The whole stack's thickness in nanometres, when every layer states one.
+    ///
+    /// `None` rather than a partial sum, for the reason
+    /// `Stackup::total_thickness` answers `None`: a number built from half the
+    /// layers reads like a measurement rather than like a gap in the design.
+    pub total_thickness_nm: Option<i64>,
+}
+
+/// One entry of a stack, with every sheet it is pressed from.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StackupLayerInfo {
+    /// `copper`, `prepreg`, `core`, `mask`, `silk`, `paste`, `coverlay` or
+    /// `stiffener` - the word the language uses.
+    pub kind: String,
+    /// What the fabricator calls it, empty when the design did not say.
+    pub name: String,
+    /// Its own first sheet's thickness in nanometres, when stated.
+    pub thickness_nm: Option<i64>,
+    /// Every sheet including the first, so a reader sees what a slot is
+    /// pressed from rather than only how thick its first sheet is.
+    pub sheets_nm: Vec<i64>,
+    /// The whole slot: its own sheet plus the rest.
+    pub slot_thickness_nm: Option<i64>,
+    /// The laminate or foil, empty when the design did not say.
+    pub material: String,
+    /// The colour asked for, empty when none. Mask and silkscreen only.
+    pub color: String,
+    /// Dielectric constant in thousandths, when stated.
+    pub dk_x1000: Option<u32>,
+    /// Loss tangent in millionths, when stated.
+    pub df_x1000000: Option<u32>,
 }
 
 /// A zone as written: a rectangle, a layer mask, and possibly a net.
@@ -508,6 +569,7 @@ mod tests {
             ratsnest: vec![],
             pours: vec![],
             zones: vec![],
+            stackup: None,
         };
 
         // Verify it can serialize to JSON (serde-wasm-bindgen uses serde)
@@ -671,6 +733,7 @@ mod tests {
             ratsnest: vec![],
             pours: vec![],
             zones: vec![],
+            stackup: None,
         };
 
         let json = serde_json::to_string(&snapshot).unwrap();

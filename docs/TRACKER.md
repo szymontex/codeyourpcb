@@ -274,14 +274,37 @@ answered, not as they were found. Items 2 to 7 are open.
   stripline solver wired to the microstrip form -> 3 failed; the rule's advice
   forced to nothing -> 1 failed. `./scripts/quality-gate.sh` ->
   `=== All stages passed ===`.
-- NEXT-ACTION: **the stack-manager UI in the viewer, which was deferred until
-  the model had every field - and now it does.** Seven items of stackup
-  vocabulary landed between 2026-08-22 and today: what the fabricator does to
-  the board, colour, sheets, units, drill pairs, rigid-flex and the solver. The
-  language is the only interface to any of it, and a stack is the one part of a
-  design that is a table rather than a list of statements. Worth building
-  against the model as it now stands rather than growing it one field at a
-  time.
+- DONE: **the stack reaches the host that draws it.** `BoardSnapshot` carries a
+  `stackup` now - every layer with its kind, name, sheets, material, colour and
+  dielectric numbers, plus the finish, the four board-level flags, the drill
+  pairs and the total thickness. Seven pieces of stackup vocabulary landed on
+  2026-08-22 and 2026-08-23 and the language was the only way to see any of
+  them; a panel cannot draw a table it cannot read.
+- **Flattened in the render crate, not in TypeScript**, because that is the
+  crate holding the model and a second flattener in the host would be a second
+  place for the vocabulary to drift.
+- **A defect this found in its own predecessor:** `load_snapshot` mapped every
+  zone that was not a pour to a keepout and `collect_zones` did the same on the
+  way out, so a flexible region made the trip and came back as an area nothing
+  may enter. Both match on the kind now, and a test drives a `flex` region
+  through the snapshot.
+- Proof: `cargo test -p cypcb-render --test the_snapshot_carries_the_stack` ->
+  **6 passed**, on a four-layer board that states every field the model has.
+  `npx tsc --noEmit` in `viewer` -> clean, with `StackupInfo` and
+  `StackupLayerInfo` declared. Mutations, each alone against a clean tree: the
+  stack not collected at all -> 4 failed; a flexible region mapped to a keepout
+  again -> 1 failed; the sheets after the first dropped -> 1 failed; the total
+  thickness forced to `None` -> 1 failed; the finish dropped -> 1 failed.
+  `./scripts/quality-gate.sh` -> `=== All stages passed ===`.
+- **The gate caught the guide too:** the impedance example added yesterday
+  began with the word `net`, so `the_syntax_guide_parses` tried to parse a
+  violation message as source. It is written as a `cypcb check` transcript now,
+  which is both what it is and where a reader meets it.
+- NEXT-ACTION: **the panel itself.** The data is there and typed; what is left
+  is a table in the viewer - one row per stackup entry, thickness to scale,
+  the four flags and the drill pairs beside it. Read-only first: editing a
+  stack means writing back to source text, which is the same problem the rest
+  of the viewer's editing has and not one to solve inside a new panel.
 
 
 ### V1 - CLI and core correctness

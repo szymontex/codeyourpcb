@@ -15,6 +15,14 @@ export interface BoardSnapshot {
   pours?: PourInfo[];
   /** Zones as the design states them, sent to the engine so it can fill them */
   zones?: ZoneInfo[];
+  /**
+   * The stack the design says it wants pressed, when it says.
+   *
+   * A stack is the one part of a design that is a table rather than a list of
+   * statements, and until this field existed the language was the only way to
+   * see any of it.
+   */
+  stackup?: StackupInfo;
 }
 
 /**
@@ -243,4 +251,47 @@ export interface RatsnestInfo {
   end_x: number;
   end_y: number;
   net_name: string;
+}
+
+
+/** A stack as the design states it. */
+export interface StackupInfo {
+  /** Every layer, top to bottom. */
+  layers: StackupLayerInfo[];
+  /** The surface finish asked for, empty when none. */
+  finish: string;
+  /** Copper on the routed outline. */
+  edges_plated: boolean;
+  /** Plated holes cut in half by the outline. */
+  castellated_pads: boolean;
+  /** `''`, `'plain'` or `'bevelled'`. */
+  edge_connector: string;
+  /** The fabricator holds the dielectric to this stack. */
+  impedance_controlled: boolean;
+  /** The drill spans this build makes, as pairs of layer names. */
+  drill_pairs: [string, string][];
+  /** The whole stack in nanometres, absent when any layer stated no thickness. */
+  total_thickness_nm?: number;
+}
+
+/** One entry of a stack, with every sheet it is pressed from. */
+export interface StackupLayerInfo {
+  /** `copper`, `prepreg`, `core`, `mask`, `silk`, `paste`, `coverlay`, `stiffener`. */
+  kind: string;
+  /** What the fabricator calls it, empty when the design did not say. */
+  name: string;
+  /** Its own first sheet, in nanometres. */
+  thickness_nm?: number;
+  /** Every sheet including the first: a slot is not one sheet of laminate. */
+  sheets_nm: number[];
+  /** The whole slot, first sheet plus the rest. */
+  slot_thickness_nm?: number;
+  /** The laminate or foil, empty when unstated. */
+  material: string;
+  /** The colour asked for. Mask and silkscreen only. */
+  color: string;
+  /** Dielectric constant in thousandths. */
+  dk_x1000?: number;
+  /** Loss tangent in millionths. */
+  df_x1000000?: number;
 }

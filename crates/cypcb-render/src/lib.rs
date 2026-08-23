@@ -1345,10 +1345,10 @@ impl PcbEngine {
                     min: Point::new(Nm(zone.bounds[0]), Nm(zone.bounds[1])),
                     max: Point::new(Nm(zone.bounds[2]), Nm(zone.bounds[3])),
                 },
-                kind: if zone.kind == "pour" {
-                    ZoneKind::CopperPour
-                } else {
-                    ZoneKind::Keepout
+                kind: match zone.kind.as_str() {
+                    "pour" => ZoneKind::CopperPour,
+                    "flex" => ZoneKind::Flex,
+                    _ => ZoneKind::Keepout,
                 },
                 layer_mask: zone.layer_mask,
                 name: if zone.name.is_empty() {
@@ -1760,6 +1760,48 @@ impl PcbEngine {
             });
         }
 
+        // The stack the design states, if it states one. Flattened here rather
+        // than in the host: this is the crate that holds the model, and a
+        // second flattener in TypeScript would be a second place for the
+        // vocabulary to drift.
+        let stackup = self.world.stackup().map(|stackup| StackupInfo {
+            layers: stackup
+                .layers
+                .iter()
+                .map(|layer| StackupLayerInfo {
+                    kind: layer.kind.as_str().to_string(),
+                    name: layer.name.clone().unwrap_or_default(),
+                    thickness_nm: layer.thickness.map(|nm| nm.raw()),
+                    sheets_nm: layer
+                        .thickness
+                        .into_iter()
+                        .chain(layer.sheets.iter().filter_map(|sheet| sheet.thickness))
+                        .map(|nm| nm.raw())
+                        .collect(),
+                    slot_thickness_nm: layer.slot_thickness().map(|nm| nm.raw()),
+                    material: layer.material.clone().unwrap_or_default(),
+                    color: layer.color.clone().unwrap_or_default(),
+                    dk_x1000: layer.dk_x1000,
+                    df_x1000000: layer.df_x1000000,
+                })
+                .collect(),
+            finish: stackup.finish.clone().unwrap_or_default(),
+            edges_plated: stackup.edges_plated,
+            castellated_pads: stackup.castellated_pads,
+            edge_connector: match stackup.edge_connector {
+                Some(cypcb_world::components::EdgeConnector::Plain) => "plain".to_string(),
+                Some(cypcb_world::components::EdgeConnector::Bevelled) => "bevelled".to_string(),
+                None => String::new(),
+            },
+            impedance_controlled: stackup.impedance_controlled,
+            drill_pairs: stackup
+                .drill_pairs
+                .iter()
+                .map(|pair| [pair.start.to_string(), pair.end.to_string()])
+                .collect(),
+            total_thickness_nm: stackup.total_thickness().map(|nm| nm.raw()),
+        });
+
         // Build violations info
         let violations: Vec<ViolationInfo> = self
             .violations
@@ -1793,6 +1835,7 @@ impl PcbEngine {
             ratsnest,
             pours,
             zones,
+            stackup,
         }
     }
 
@@ -1807,7 +1850,11 @@ impl PcbEngine {
                 name: zone.name.clone().unwrap_or_default(),
                 kind: match zone.kind {
                     ZoneKind::CopperPour => "pour".to_string(),
-                    _ => "keepout".to_string(),
+                    // A flexible region is not a keepout, and calling one that
+                    // here would have turned every bend into an area nothing
+                    // may enter on the way through a snapshot.
+                    ZoneKind::Flex => "flex".to_string(),
+                    ZoneKind::Keepout => "keepout".to_string(),
                 },
                 layer_mask: zone.layer_mask,
                 net: zone
@@ -2649,6 +2696,7 @@ mod tests {
             ratsnest: vec![],
             pours: vec![],
             zones: vec![],
+            stackup: None,
         };
 
         let mut engine = PcbEngine::new();

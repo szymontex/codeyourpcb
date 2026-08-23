@@ -239,8 +239,9 @@ When the two disagree the report names the width that would have hit the
 target on this stack:
 
 ```
-net 'SIG' asks for 50ohm and a 0.200mm trace on Inner1 gives 22.29ohm
-- 55.4% off - 0.064mm would give 50ohm on this stack.
+$ cypcb check board.cypcb
+  impedance: net 'SIG' asks for 50ohm and a 0.200mm trace on Inner1 gives
+  22.29ohm - 55.4% off - 0.064mm would give 50ohm on this stack.
 ```
 
 The stack is what the fabricator presses and the target is what the part
