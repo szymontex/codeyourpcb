@@ -254,6 +254,11 @@ pub struct StackupLayer {
     /// A name, not a validated material - this crate reads the language and
     /// has no table of laminates to check it against.
     pub material: Option<StringLit>,
+    /// What colour the fabricator is asked to make this layer: `color "Red"`.
+    ///
+    /// Mask and silkscreen carry one; copper and prepreg are the colour they
+    /// are. Held as written, like `material`.
+    pub color: Option<StringLit>,
     /// The dielectric constant, as written: `dk 4.5`.
     ///
     /// KiCad calls this `epsilon_r` and Altium calls it `Dk`; the datasheet a

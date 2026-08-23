@@ -142,6 +142,25 @@ datasheet prints under those two names, what KiCad's board file calls
 decided on, so a stack that states them says something the thickness alone
 cannot.
 
+`color` is what the fabricator is asked to make a layer. Mask and silkscreen
+take one; copper and prepreg are the colour they are, and KiCad writes it on
+those two and no others:
+
+```
+stackup {
+    silk "F.SilkS" 0.01mm color "White"
+    mask "F.Mask" 0.02mm color "Matte Black"
+    copper 1oz
+    core 1.5mm
+    copper 1oz
+}
+```
+
+A solder mask is green unless somebody says otherwise, and a house charges for
+saying otherwise, so this is part of the order rather than part of the physics.
+Held as written, like `material`: KiCad's own list is a set of names plus a
+`#RRGGBB` custom form, and neither is this language's to spell.
+
 `material` is the laminate or foil the board is quoted on, held as written.
 Nothing here has a table of laminates to check it against, and a material this
 tool does not recognise is still the one the fabricator is asked for.

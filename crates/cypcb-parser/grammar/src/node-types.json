@@ -1650,6 +1650,16 @@
     "type": "stackup_layer",
     "named": true,
     "fields": {
+      "color": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "string",
+            "named": true
+          }
+        ]
+      },
       "df": {
         "multiple": false,
         "required": false,
@@ -2443,6 +2453,10 @@
   },
   {
     "type": "clearance",
+    "named": false
+  },
+  {
+    "type": "color",
     "named": false
   },
   {

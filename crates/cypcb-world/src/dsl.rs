@@ -479,6 +479,9 @@ pub fn stackup_as_dsl(stackup: &crate::components::Stackup) -> String {
         if let Some(material) = &layer.material {
             let _ = write!(line, " material {}", quoted(material));
         }
+        if let Some(color) = &layer.color {
+            let _ = write!(line, " color {}", quoted(color));
+        }
         // `f64`'s own Display prints the shortest text that reads back as
         // the same number, so 4500 thousandths comes out `4.5` and 8900
         // millionths comes out `0.0089` - and both round back to the

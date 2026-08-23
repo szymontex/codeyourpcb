@@ -465,6 +465,20 @@ pub struct StackupLayer {
     /// is `Eq` and `Hash`, and because a laminate datasheet publishes three
     /// decimals at most - `3.66`, `4.05`, `3.48`.
     pub dk_x1000: Option<u32>,
+    /// What colour the fabricator is asked to make this layer.
+    ///
+    /// A solder mask is green unless somebody says otherwise, and a house
+    /// charges for saying otherwise - so this is part of the order rather than
+    /// part of the physics. Held as written, for the reason `material` is:
+    /// KiCad's own list is a set of names plus a `#RRGGBB` custom form, and a
+    /// colour this project does not recognise is still the one the board is
+    /// quoted on.
+    ///
+    /// Only mask and silkscreen carry one. KiCad writes `(color ...)` on those
+    /// two and on nothing else, because copper and prepreg are the colour they
+    /// are.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color: Option<String>,
     /// The unit the design wrote the thickness in, when it wrote one.
     ///
     /// Presentation, not a second truth: `thickness` is the number, always in
@@ -493,6 +507,7 @@ impl StackupLayer {
             kind,
             name: None,
             thickness,
+            color: None,
             written_as: None,
             material: None,
             dk_x1000: None,

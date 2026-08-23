@@ -170,6 +170,11 @@ module.exports = grammar({
       optional(field('name', $.string)),
       optional(field('thickness', choice($.dimension, $.copper_weight))),
       optional(seq('material', field('material', $.string))),
+      // A solder mask is green unless somebody says otherwise, and a house
+      // charges for saying otherwise. Quoted like `material`: KiCad's list is
+      // names plus a `#RRGGBB` custom form, and neither is this language's to
+      // spell.
+      optional(seq('color', field('color', $.string))),
       optional(seq('dk', field('dk', $.number))),
       optional(seq('df', field('df', $.number))),
     ),

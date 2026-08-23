@@ -533,3 +533,62 @@ board t {
         "the message says what ounces are: {said}"
     );
 }
+
+/// A board that says what colour it wants to be.
+const COLOURED: &str = r#"version 1
+
+board t {
+    size 40mm x 20mm
+    layers 2
+    stackup {
+        silk "F.SilkS" 0.01mm color "White"
+        mask "F.Mask" 0.02mm color "Matte Black"
+        copper 1oz
+        core 1.5mm
+        copper 1oz
+        mask "B.Mask" 0.02mm color "Matte Black"
+        silk "B.SilkS" 0.01mm color "White"
+    }
+}
+"#;
+
+#[test]
+fn a_mask_can_say_what_colour_it_is() {
+    // A solder mask is green unless somebody says otherwise, and a house
+    // charges for saying otherwise - so the colour is part of the order.
+    // KiCad carries it per stackup layer and this project had no word for it.
+    let mut world = load(COLOURED);
+    let stackup = world.stackup().cloned().expect("a stackup went in");
+    let colours: Vec<Option<&str>> = stackup
+        .layers
+        .iter()
+        .map(|layer| layer.color.as_deref())
+        .collect();
+    assert_eq!(
+        colours,
+        vec![
+            Some("White"),
+            Some("Matte Black"),
+            None,
+            None,
+            None,
+            Some("Matte Black"),
+            Some("White"),
+        ],
+        "{colours:?}"
+    );
+
+    let text = board_as_dsl(&mut world);
+    assert!(text.contains("color \"Matte Black\""), "{text}");
+    let back = load(&text);
+    assert_eq!(back.stackup().cloned(), Some(stackup), "\n{text}");
+}
+
+#[test]
+fn a_layer_that_named_no_colour_is_not_given_one() {
+    // The control, and the same rule the rest of this writer follows: a colour
+    // invented here is a line on an order nobody chose.
+    let mut world = load(FOUR_LAYER);
+    let text = board_as_dsl(&mut world);
+    assert!(!text.contains("color"), "{text}");
+}

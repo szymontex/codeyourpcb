@@ -717,6 +717,7 @@ fn extract_stackup(elements: &[Sexp]) -> (Option<Stackup>, Vec<String>) {
         let mut type_name = None;
         let mut thickness = None;
         let mut material = None;
+        let mut color = None;
         let mut dk_x1000 = None;
         let mut df_x1000000 = None;
         for child in &fields[first_child..] {
@@ -730,6 +731,10 @@ fn extract_stackup(elements: &[Sexp]) -> (Option<Stackup>, Vec<String>) {
                 Some("type") => type_name = get_string(&pair[1]),
                 Some("thickness") => thickness = get_f64(&pair[1]).map(Nm::from_mm),
                 Some("material") => material = get_string(&pair[1]),
+                // KiCad writes this on mask and silkscreen only, and it is
+                // part of the order: a house charges for a mask that is not
+                // green.
+                Some("color") => color = get_string(&pair[1]),
                 Some("epsilon_r") => {
                     dk_x1000 = get_f64(&pair[1])
                         .filter(|value| value.is_finite() && *value > 0.0)
@@ -762,6 +767,7 @@ fn extract_stackup(elements: &[Sexp]) -> (Option<Stackup>, Vec<String>) {
             // there is no other unit to remember here.
             written_as: None,
             material,
+            color,
             dk_x1000,
             df_x1000000,
         });

@@ -518,6 +518,17 @@ impl<'a> Reader<'a> {
             } else {
                 None
             };
+            // Consumed here for the reason `material` is: the loop reads the
+            // next word as a layer kind, and `color` is not one.
+            let color = if self.eat_word("color") {
+                let literal = self.string();
+                if literal.is_none() {
+                    self.unexpected("a quoted colour after `color`");
+                }
+                literal
+            } else {
+                None
+            };
             // The two numbers a dielectric is chosen for. Consumed here for
             // the reason `material` is: the loop reads the next word as a
             // layer kind, and neither of these is one.
@@ -528,6 +539,7 @@ impl<'a> Reader<'a> {
                 name,
                 thickness,
                 material,
+                color,
                 dk,
                 df,
                 span: Span::new(layer_start, self.behind()),

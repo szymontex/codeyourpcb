@@ -250,6 +250,11 @@ fn write_stackup(out: &mut String, stackup: &Stackup, copper_layers: usize) {
         if let Some(material) = &layer.material {
             let _ = write!(line, " (material \"{material}\")");
         }
+        // pcbnew's order: colour after the material, before the two dielectric
+        // numbers. It writes this on mask and silkscreen only.
+        if let Some(color) = &layer.color {
+            let _ = write!(line, " (color \"{color}\")");
+        }
         // pcbnew's own order puts these last, after the material.
         if let Some(dk) = layer.dk_x1000 {
             let _ = write!(line, " (epsilon_r {})", f64::from(dk) / 1_000.0);

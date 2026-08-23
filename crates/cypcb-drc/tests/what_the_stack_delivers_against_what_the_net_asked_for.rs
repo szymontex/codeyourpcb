@@ -55,6 +55,7 @@ fn board(stack: &[Spec], layer: Layer, width_mm: f64, target_ohms_x100: Option<u
                 name: None,
                 thickness: thickness.map(Nm::from_mm),
                 material: None,
+                color: None,
                 written_as: None,
                 dk_x1000: *dk,
                 df_x1000000: None,

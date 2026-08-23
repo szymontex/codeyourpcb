@@ -515,6 +515,31 @@
               "members": [
                 {
                   "type": "STRING",
+                  "value": "color"
+                },
+                {
+                  "type": "FIELD",
+                  "name": "color",
+                  "content": {
+                    "type": "SYMBOL",
+                    "name": "string"
+                  }
+                }
+              ]
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
+        },
+        {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SEQ",
+              "members": [
+                {
+                  "type": "STRING",
                   "value": "dk"
                 },
                 {

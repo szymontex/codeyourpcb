@@ -858,6 +858,7 @@ fn sync_board(board: &BoardDef, source: &str, world: &mut BoardWorld, result: &m
                         .filter(|d| d.unit_written)
                         .map(|d| d.unit),
                     material: layer.material.as_ref().map(|m| m.value.clone()),
+                    color: layer.color.as_ref().map(|c| c.value.clone()),
                     dk_x1000: layer.dk.map(|dk| (dk * 1_000.0).round() as u32),
                     df_x1000000: layer.df.map(|df| (df * 1_000_000.0).round() as u32),
                 })

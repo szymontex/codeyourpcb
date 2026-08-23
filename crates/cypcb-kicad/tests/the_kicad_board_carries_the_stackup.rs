@@ -55,6 +55,7 @@ fn board(layers: &[Spec], copper: u8) -> BoardWorld {
                 name: name.map(str::to_string),
                 thickness: thickness.map(Nm::from_mm),
                 material: material.map(str::to_string),
+                color: None,
                 written_as: None,
                 dk_x1000: None,
                 df_x1000000: None,
@@ -485,4 +486,44 @@ fn a_flag_kicad_writes_as_no_is_read_as_no() {
     assert!(!stackup.castellated_pads, "`no` is not `yes`");
     assert!(!stackup.impedance_controlled, "`no` is not `yes`");
     assert_eq!(stackup.edge_connector, None, "`no` is not a connector");
+}
+
+#[test]
+fn a_colour_makes_the_trip_out_and_back() {
+    // KiCad writes `(color ...)` on mask and silkscreen, and it is part of the
+    // order: a house charges for a mask that is not green. This project read a
+    // board carrying one and dropped it.
+    let with_finishes: &[Spec] = &[
+        (Silk, Some(0.01), None, None),
+        (Mask, Some(0.02), None, None),
+        (Copper, Some(0.035), None, None),
+        (Core, Some(1.5), None, None),
+        (Copper, Some(0.035), None, None),
+    ];
+    let mut world = board(with_finishes, 2);
+    {
+        let mut stackup = world.stackup().cloned().expect("the premise");
+        stackup.layers[0].color = Some("White".to_string());
+        stackup.layers[1].color = Some("Matte Black".to_string());
+        world.set_stackup(stackup);
+    }
+
+    let text = write_board(&mut world, "test");
+    assert!(
+        text.contains("(color \"Matte Black\")"),
+        "the mask's colour reaches the file:\n{text}"
+    );
+
+    let result = cypcb_kicad::parse_kicad_pcb_str(&text).expect("the file reads");
+    let stackup = result
+        .world
+        .stackup()
+        .cloned()
+        .expect("a stackup came back");
+    assert_eq!(stackup.layers[0].color.as_deref(), Some("White"));
+    assert_eq!(stackup.layers[1].color.as_deref(), Some("Matte Black"));
+    assert_eq!(
+        stackup.layers[2].color, None,
+        "copper is the colour it is, and KiCad writes none for it"
+    );
 }

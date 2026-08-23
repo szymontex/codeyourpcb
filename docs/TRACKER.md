@@ -77,8 +77,7 @@ answered, not as they were found. Items 2 to 7 are open.
 1. **What the fabricator does to the board** - **DONE**, see below.
    - **Units** - **DONE**, see below. (Listed as item 4 when the list was
      written; taken second because every other item on it states a number.)
-2. **Colour of mask and silkscreen.** KiCad carries `(color "Green")` per
-   stackup layer and it reaches the fab order. Nothing here has a word for it.
+2. ~~**Colour of mask and silkscreen.**~~ **DONE.**
 3. **Dielectric sub-layers.** KiCad's `addsublayer` splits one dielectric slot
    into several prepreg sheets of different thicknesses, which is ordinary on
    six layers and up. The model is a flat list.
@@ -157,10 +156,26 @@ answered, not as they were found. Items 2 to 7 are open.
   `oz` on copper -> 3 failed; the writer ignoring the written unit -> 1
   failed; `sync` dropping it -> 1 failed. `./scripts/quality-gate.sh` ->
   `=== All stages passed ===`.
-- NEXT-ACTION: **item 2, the colour of mask and silkscreen.** The smallest of
-  the five left, and it is the same shape as the five properties above:
-  KiCad carries `(color "Green")` per stackup layer, it reaches the fab order,
-  and nothing here has a word for it.
+- DONE (item 2): **a mask can say what colour it is.** `color "Matte Black"` on
+  a stackup layer, held as written for the reason `material` is - KiCad's own
+  list is a set of names plus a `#RRGGBB` custom form, and neither is this
+  language's to spell. Mask and silkscreen take one; copper and prepreg are the
+  colour they are, which is also the only place KiCad writes it. Both readers,
+  `sync`, the DSL writer, the KiCad importer and the KiCad writer carry it.
+- **A solder mask is green unless somebody says otherwise, and a house charges
+  for saying otherwise**, so this is part of the order rather than part of the
+  physics. It was being dropped on the way in and on the way out.
+- Proof: `cargo test -p cypcb-world --test what_the_board_block_survives` ->
+  **20 passed**; `cargo test -p cypcb-kicad --test the_kicad_board_carries_the_stackup`
+  -> **16 passed**. Mutations, each alone against a clean tree: the reader not
+  reading `color` -> 1 failed; the DSL writer dropping it -> 1 failed; the
+  KiCad importer dropping it -> 1 failed; the KiCad writer dropping it -> 1
+  failed. `./scripts/quality-gate.sh` -> `=== All stages passed ===`.
+- NEXT-ACTION: **item 3, dielectric sub-layers.** `addsublayer` in KiCad splits
+  one dielectric slot into several prepreg sheets of different thicknesses,
+  which is ordinary on six layers and up. It is the first item on this list
+  that changes the shape of the model rather than adding a field: a stackup
+  entry stops being one layer.
 
 
 ### V1 - CLI and core correctness

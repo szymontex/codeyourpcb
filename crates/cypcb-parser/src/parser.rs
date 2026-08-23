@@ -462,6 +462,9 @@ impl CypcbParser {
         let material =
             get_child_by_field(node, "material").map(|n| self.convert_string_literal(source, &n));
 
+        let color =
+            get_child_by_field(node, "color").map(|n| self.convert_string_literal(source, &n));
+
         let number = |field: &str| {
             get_child_by_field(node, field)
                 .and_then(|n| node_text(source, &n).parse::<f64>().ok())
@@ -473,6 +476,7 @@ impl CypcbParser {
             name,
             thickness,
             material,
+            color,
             dk: number("dk"),
             df: number("df"),
             span: span_of(node),
