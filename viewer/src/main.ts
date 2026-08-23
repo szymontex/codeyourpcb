@@ -55,6 +55,7 @@ import { registerDynamicFootprint, register3DModel, hasDynamicFootprint } from '
 import { mergeTracesIntoDsl, syncTracesToEditor } from './trace-persist';
 import { reportLostTraces } from './trace-census';
 import { describeViolationKind } from './violation-kinds';
+import { renderStack } from './stack-panel';
 import { groupByContact, morePlacesNote } from './violation-grouping';
 
 // WebSocket server URL for hot reload + FreeRouting.
@@ -273,6 +274,19 @@ async function init(): Promise<void> {
   const themeToggle = document.getElementById('theme-toggle') as HTMLButtonElement;
   const themeIcon = document.getElementById('theme-icon')!;
   const editorToggleBtn = document.getElementById('editor-toggle') as HTMLButtonElement;
+  const stackPanel = document.getElementById('stack-panel');
+  const stackBody = document.getElementById('stack-body');
+  const stackToggleBtn = document.getElementById('stack-toggle');
+  const stackCloseBtn = document.getElementById('stack-close');
+  if (stackToggleBtn && stackPanel) {
+    stackToggleBtn.addEventListener('click', () => {
+      stackPanel.classList.toggle('hidden');
+      if (!stackPanel.classList.contains('hidden') && stackBody) {
+        renderStack(stackBody, snapshot?.stackup);
+      }
+    });
+  }
+  stackCloseBtn?.addEventListener('click', () => stackPanel?.classList.add('hidden'));
   const fitBtn = document.getElementById('fit-btn') as HTMLButtonElement;
   const view3dBtn = document.getElementById('view-3d-btn') as HTMLButtonElement;
   const editorContainer = document.getElementById('editor-container')!
@@ -373,6 +387,11 @@ async function init(): Promise<void> {
     const s = engine.get_snapshot();
     snapshot = s;
     padNetMap = s.nets ? buildPadNetMap(s.nets) : new Map();
+    // The stack manager reads what the design says about its own build, so it
+    // is redrawn wherever the design changes rather than only when opened.
+    if (stackBody) {
+      renderStack(stackBody, s.stackup);
+    }
     return s;
   }
 

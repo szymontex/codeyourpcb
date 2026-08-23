@@ -28,6 +28,60 @@
     label {
       color: var(--text-primary);
     }
+    /* Stack manager: the board's own build, as a table. */
+    #stack-panel {
+      position: absolute;
+      top: 56px;
+      right: 16px;
+      width: 320px;
+      max-height: calc(100vh - 96px);
+      overflow-y: auto;
+      z-index: 30;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-primary);
+      border-radius: 8px;
+      padding: 12px 14px 14px;
+      font-size: 13px;
+    }
+    #stack-panel.hidden { display: none; }
+    .sp-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-weight: 600;
+      margin-bottom: 10px;
+    }
+    .sp-head button {
+      background: none;
+      border: none;
+      color: var(--text-secondary);
+      font-size: 18px;
+      line-height: 1;
+      cursor: pointer;
+    }
+    .sp-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 3px 0;
+    }
+    .sp-bar { width: 10px; border-radius: 2px; flex: 0 0 auto; }
+    .sp-body { flex: 1 1 auto; min-width: 0; }
+    .sp-name { font-weight: 500; }
+    .sp-detail { color: var(--text-tertiary); font-size: 12px; }
+    .sp-thickness {
+      flex: 0 0 auto;
+      font-variant-numeric: tabular-nums;
+      color: var(--text-secondary);
+    }
+    .sp-summary {
+      margin: 12px 0 0;
+      padding-left: 16px;
+      color: var(--text-secondary);
+      font-size: 12px;
+    }
+    .sp-empty { color: var(--text-tertiary); margin: 0; }
+
     #toolbar {
       background: var(--bg-elevated);
       border-bottom: 1px solid var(--border-primary);
@@ -1437,6 +1491,13 @@
     <button id="editor-toggle" class="tb-btn" title="Toggle Editor (Ctrl+E)">
       <svg viewBox="0 0 16 16"><polyline points="5 2 1 8 5 14"/><polyline points="11 2 15 8 11 14"/></svg>
     </button>
+    <button id="stack-toggle" class="tb-btn" title="Stack manager - how the board is built">
+      <svg viewBox="0 0 16 16" aria-hidden="true">
+        <rect x="2" y="3" width="12" height="2" rx="0.5"/>
+        <rect x="2" y="7" width="12" height="2" rx="0.5"/>
+        <rect x="2" y="11" width="12" height="2" rx="0.5"/>
+      </svg>
+    </button>
 
     <!-- Edit -->
     <div class="tb-zone">
@@ -1713,6 +1774,13 @@
       <!-- Monaco mounts here -->
     </div>
     <div id="divider" style="width: 4px; cursor: col-resize; background: var(--border-primary); display: none;"></div>
+    <aside id="stack-panel" class="hidden" aria-label="Stack manager">
+      <div class="sp-head">
+        <span>Stack</span>
+        <button type="button" id="stack-close" title="Close">×</button>
+      </div>
+      <div id="stack-body"></div>
+    </aside>
     <aside id="layers-panel" aria-label="Layers">
       <div class="lp-head">
         <span>Layers</span>

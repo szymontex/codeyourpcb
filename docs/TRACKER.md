@@ -300,11 +300,42 @@ answered, not as they were found. Items 2 to 7 are open.
   began with the word `net`, so `the_syntax_guide_parses` tried to parse a
   violation message as source. It is written as a `cypcb check` transcript now,
   which is both what it is and where a reader meets it.
-- NEXT-ACTION: **the panel itself.** The data is there and typed; what is left
-  is a table in the viewer - one row per stackup entry, thickness to scale,
-  the four flags and the drill pairs beside it. Read-only first: editing a
-  stack means writing back to source text, which is the same problem the rest
-  of the viewer's editing has and not one to solve inside a new panel.
+- DONE: **the stack manager is in the viewer.** One row per stackup entry with
+  a bar sized by its share of the board, the material and dielectric numbers a
+  fabricator reads, and the fabrication order beside it - finish, the four
+  flags, the drill pairs, the total thickness. A design that states no stackup
+  gets a sentence saying so, because most do and that is not a board with no
+  layers. Toolbar button next to the editor toggle; read-only, as planned.
+- **A slot pressed from several sheets says so.** `2 sheets: 0.0668mm +
+  0.0668mm`, and the thickness column shows the whole slot: a panel that showed
+  the first sheet would show a thinner board than the one being built.
+- **The two functions that decide what it says are pure**, which is this
+  project's own lesson from an error list whose three deciding lines lived
+  inside a closure nothing could reach. The DOM assembly is not in vitest:
+  `vitest.config.ts` says `environment: 'node'` and nothing here pulls jsdom,
+  so the element tree is held by a playwright spec in a real browser instead -
+  a better place to hold a panel, since it opens the panel the way a person
+  does.
+- **Two things the e2e found about the app rather than about the panel.** The
+  project manager is open on a fresh load and covers the right-hand side of the
+  canvas, so the spec dismisses it first, the way a person does. And Monaco
+  closes a brace as you type one, so a board typed line by line arrives with
+  more braces than it left with - the spec loads through `__loadBoard`, since
+  what it is about is the panel and not the editor.
+- Proof: `npx vitest run src/__tests__/the-stack-manager-shows-the-build.test.ts`
+  -> **11 passed**; `CI=1 npx playwright test e2e/stack-panel.spec.ts` -> **4
+  passed** in a real browser. Mutations, each alone against a clean tree: the
+  thickness column showing the first sheet rather than the slot -> 2 failed;
+  the label not falling back to what the layer is -> 1 failed; the bar sized by
+  anything but its share -> 2 failed; a summary line dropped -> 1 failed; the
+  sheet count dropped -> 1 failed. `./scripts/quality-gate.sh` ->
+  `=== All stages passed ===`.
+- NEXT-ACTION: **none in V8.** Every item the owner asked for is closed and the
+  stack is visible in the viewer. The two questions that predate this vector
+  are still the owner's: whether the clearance rule should count contacts
+  rather than segment pairs (V1), and whether a 9.45% profile saving is worth
+  `qfp_fanout` reading 58 shorts worse (V7). Both are re-baselines of every
+  published figure, which is why they are asked rather than taken.
 
 
 ### V1 - CLI and core correctness
