@@ -259,6 +259,12 @@ pub struct StackupLayer {
     /// Mask and silkscreen carry one; copper and prepreg are the colour they
     /// are. Held as written, like `material`.
     pub color: Option<StringLit>,
+    /// The sheets after this one, when the slot is pressed from several.
+    ///
+    /// `prepreg 0.1mm sheet 0.0668mm sheet 0.0668mm` - a fabricator hits a
+    /// target thickness with the sheets they stock. KiCad calls each extra one
+    /// `addsublayer`.
+    pub sheets: Vec<StackupSheetDef>,
     /// The dielectric constant, as written: `dk 4.5`.
     ///
     /// KiCad calls this `epsilon_r` and Altium calls it `Dk`; the datasheet a
@@ -269,6 +275,24 @@ pub struct StackupLayer {
     /// `loss_tangent` to KiCad, `Df` to Altium and to the datasheet.
     pub df: Option<f64>,
     /// Span covering this layer definition.
+    pub span: Span,
+}
+
+/// One more sheet of laminate in a dielectric slot: `sheet 0.0668mm`.
+///
+/// The same four things a layer states about its own first sheet. No kind: a
+/// slot is prepreg or core, and a sheet of it is that by construction.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StackupSheetDef {
+    /// How thick this sheet is.
+    pub thickness: Option<Dimension>,
+    /// What it is made of.
+    pub material: Option<StringLit>,
+    /// The dielectric constant.
+    pub dk: Option<f64>,
+    /// The loss tangent.
+    pub df: Option<f64>,
+    /// Source span.
     pub span: Span,
 }
 

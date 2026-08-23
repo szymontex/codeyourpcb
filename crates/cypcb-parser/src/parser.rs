@@ -37,8 +37,8 @@ use crate::ast::{
     LayerType, ModuleDef, ModuleInstance, NeckDef, NetAssignment, NetClassDef, NetConstraints,
     NetDef, OutlineDef, PadDef, PadShape, PhysicalValue, PinDeclaration, PinId, PinRef,
     PortConnection, PositionExpr, RotationExpr, SilkDef, SizeProperty, SourceFile, Span,
-    StackupDef, StackupLayer, StringLit, Tolerance, ToleranceKind, TraceDef, TraceDirective,
-    TracePath, TraceVia, ZoneDef, ZoneKind,
+    StackupDef, StackupLayer, StackupSheetDef, StringLit, Tolerance, ToleranceKind, TraceDef,
+    TraceDirective, TracePath, TraceVia, ZoneDef, ZoneKind,
 };
 use crate::errors::{ParseError, ParseResult};
 use crate::node_kinds;
@@ -465,6 +465,30 @@ impl CypcbParser {
         let color =
             get_child_by_field(node, "color").map(|n| self.convert_string_literal(source, &n));
 
+        // The rest of the sheets in this slot, in the order the design wrote
+        // them: `addsublayer` in KiCad's file, `sheet` here.
+        let mut sheets = Vec::new();
+        let mut cursor = node.walk();
+        for child in node.children(&mut cursor) {
+            if child.kind() != "stackup_sheet" {
+                continue;
+            }
+            let sheet_number = |field: &str| {
+                get_child_by_field(&child, field)
+                    .and_then(|n| node_text(source, &n).parse::<f64>().ok())
+                    .filter(|value| value.is_finite() && *value > 0.0)
+            };
+            sheets.push(StackupSheetDef {
+                thickness: get_child_by_field(&child, "thickness")
+                    .and_then(|n| self.convert_dimension(source, &n, errors)),
+                material: get_child_by_field(&child, "material")
+                    .map(|n| self.convert_string_literal(source, &n)),
+                dk: sheet_number("dk"),
+                df: sheet_number("df"),
+                span: span_of(&child),
+            });
+        }
+
         let number = |field: &str| {
             get_child_by_field(node, field)
                 .and_then(|n| node_text(source, &n).parse::<f64>().ok())
@@ -477,6 +501,7 @@ impl CypcbParser {
             thickness,
             material,
             color,
+            sheets,
             dk: number("dk"),
             df: number("df"),
             span: span_of(node),

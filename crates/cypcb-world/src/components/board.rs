@@ -479,6 +479,20 @@ pub struct StackupLayer {
     /// are.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub color: Option<String>,
+    /// The rest of the sheets this dielectric slot is pressed from.
+    ///
+    /// One slot in a stackup is not one sheet of laminate. A fabricator hits a
+    /// target thickness by stacking prepreg of the sizes they stock - two
+    /// sheets of 0.0668mm and one of 0.1mm rather than one of 0.2336mm - and
+    /// on six layers and up that is the ordinary case rather than the exotic
+    /// one. KiCad writes each extra sheet as `addsublayer`; the language calls
+    /// it `sheet`.
+    ///
+    /// The layer's own `thickness`, `material` and dielectric numbers are the
+    /// first sheet. These are the ones after it, so a slot of one sheet has an
+    /// empty list and reads exactly as it did before.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sheets: Vec<StackupSheet>,
     /// The unit the design wrote the thickness in, when it wrote one.
     ///
     /// Presentation, not a second truth: `thickness` is the number, always in
@@ -496,6 +510,30 @@ pub struct StackupLayer {
     pub df_x1000000: Option<u32>,
 }
 
+/// One more sheet of laminate in a dielectric slot.
+///
+/// The same four things a [`StackupLayer`] states about its own first sheet.
+/// It carries no kind: a slot is prepreg or core, and a sheet of it is the
+/// same material by construction.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+pub struct StackupSheet {
+    /// How thick this sheet is, when the design says.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub thickness: Option<Nm>,
+    /// The laminate this sheet is, when the design says.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub material: Option<String>,
+    /// The dielectric constant, in thousandths.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dk_x1000: Option<u32>,
+    /// The loss tangent, in millionths.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub df_x1000000: Option<u32>,
+    /// The unit the design wrote this sheet's thickness in.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub written_as: Option<Unit>,
+}
+
 impl StackupLayer {
     /// A layer that states only what it is and how thick.
     ///
@@ -508,6 +546,7 @@ impl StackupLayer {
             name: None,
             thickness,
             color: None,
+            sheets: Vec::new(),
             written_as: None,
             material: None,
             dk_x1000: None,
@@ -521,6 +560,35 @@ impl StackupLayer {
             written_as: unit,
             ..StackupLayer::new(kind, thickness)
         }
+    }
+
+    /// How thick this slot is: its own sheet plus every sheet after it.
+    ///
+    /// `None` when any sheet left its thickness unsaid, for the reason
+    /// [`Stackup::total_thickness`] answers `None`: a partial sum reads like a
+    /// measurement rather than like a gap in the design.
+    pub fn slot_thickness(&self) -> Option<Nm> {
+        self.sheets
+            .iter()
+            .try_fold(self.thickness?, |total, sheet| {
+                Some(total + sheet.thickness?)
+            })
+    }
+
+    /// The dielectric constant of the whole slot, when it has one.
+    ///
+    /// A slot pressed from sheets of two different laminates has no single
+    /// `dk`, and the closed-form impedance solutions take one - so this
+    /// answers `None` rather than picking a sheet, and the rule above it
+    /// reports the layer as not checked instead of checked wrongly.
+    pub fn slot_dk_x1000(&self) -> Option<u32> {
+        let dk = self.dk_x1000?;
+        for sheet in &self.sheets {
+            if sheet.dk_x1000? != dk {
+                return None;
+            }
+        }
+        Some(dk)
     }
 }
 
@@ -621,7 +689,7 @@ impl Stackup {
     pub fn total_thickness(&self) -> Option<Nm> {
         self.layers
             .iter()
-            .try_fold(Nm(0), |total, layer| Some(total + layer.thickness?))
+            .try_fold(Nm(0), |total, layer| Some(total + layer.slot_thickness()?))
     }
 
     /// Where a copper layer sits, as the impedance forms need it.
@@ -681,15 +749,15 @@ impl Stackup {
             let inward = if copper_index == 0 { below } else { above };
             let inward = inward?;
             return Some(CopperEnvironment::Microstrip {
-                height: inward.thickness?,
-                dk_x1000: inward.dk_x1000?,
+                height: inward.slot_thickness()?,
+                dk_x1000: inward.slot_dk_x1000()?,
                 copper,
             });
         }
 
         let (above, below) = (above?, below?);
-        let (top, bottom) = (above.thickness?, below.thickness?);
-        let (top_dk, bottom_dk) = (above.dk_x1000?, below.dk_x1000?);
+        let (top, bottom) = (above.slot_thickness()?, below.slot_thickness()?);
+        let (top_dk, bottom_dk) = (above.slot_dk_x1000()?, below.slot_dk_x1000()?);
         if top != bottom || top_dk != bottom_dk {
             return None;
         }

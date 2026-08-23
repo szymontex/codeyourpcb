@@ -1744,6 +1744,16 @@
           }
         ]
       }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "stackup_sheet",
+          "named": true
+        }
+      ]
     }
   },
   {
@@ -1784,6 +1794,52 @@
           "named": true
         }
       ]
+    }
+  },
+  {
+    "type": "stackup_sheet",
+    "named": true,
+    "fields": {
+      "df": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "number",
+            "named": true
+          }
+        ]
+      },
+      "dk": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "number",
+            "named": true
+          }
+        ]
+      },
+      "material": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "string",
+            "named": true
+          }
+        ]
+      },
+      "thickness": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "dimension",
+            "named": true
+          }
+        ]
+      }
     }
   },
   {
@@ -2782,6 +2838,10 @@
   },
   {
     "type": "roundrect",
+    "named": false
+  },
+  {
+    "type": "sheet",
     "named": false
   },
   {

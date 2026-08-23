@@ -28,7 +28,7 @@ use std::path::Path;
 use cypcb_core::{Nm, Point, Rect};
 use cypcb_router::types::{RouteSegment, RoutingResult, RoutingStatus, ViaPlacement};
 use cypcb_world::components::zone::Zone;
-use cypcb_world::components::{BoardOutline, EdgeConnector, Layer, PadShape, Side};
+use cypcb_world::components::{BoardOutline, EdgeConnector, Layer, PadShape, Side, StackupSheet};
 use cypcb_world::footprint::{Footprint, FootprintLibrary, PadDef};
 use cypcb_world::{
     BoardWorld, FootprintRef, NetConnections, NetId, PinConnection, Position, RefDes, Rotation,
@@ -749,6 +749,46 @@ fn extract_stackup(elements: &[Sexp]) -> (Option<Stackup>, Vec<String>) {
             }
         }
 
+        // Every extra sheet in this slot. KiCad writes the first sheet's
+        // numbers on the layer itself and each one after it as `addsublayer`,
+        // which is how a fabricator hits a target thickness with the prepreg
+        // they stock. This project read the layer and dropped the rest, so a
+        // six-layer board came back thinner than it went out.
+        let mut sheets = Vec::new();
+        for child in &fields[first_child..] {
+            let Ok(sub) = child.list() else {
+                continue;
+            };
+            if get_string(&sub[0]).as_deref() != Some("addsublayer") {
+                continue;
+            }
+            let mut sheet = StackupSheet::default();
+            for pair in &sub[1..] {
+                let Ok(pair) = pair.list() else {
+                    continue;
+                };
+                if pair.len() < 2 {
+                    continue;
+                }
+                match get_string(&pair[0]).as_deref() {
+                    Some("thickness") => sheet.thickness = get_f64(&pair[1]).map(Nm::from_mm),
+                    Some("material") => sheet.material = get_string(&pair[1]),
+                    Some("epsilon_r") => {
+                        sheet.dk_x1000 = get_f64(&pair[1])
+                            .filter(|value| value.is_finite() && *value > 0.0)
+                            .map(|value| (value * 1_000.0).round() as u32)
+                    }
+                    Some("loss_tangent") => {
+                        sheet.df_x1000000 = get_f64(&pair[1])
+                            .filter(|value| value.is_finite() && *value > 0.0)
+                            .map(|value| (value * 1_000_000.0).round() as u32)
+                    }
+                    _ => {}
+                }
+            }
+            sheets.push(sheet);
+        }
+
         let Some(type_name) = type_name else {
             refusals.push(format!("`{name}` states no type"));
             continue;
@@ -768,6 +808,7 @@ fn extract_stackup(elements: &[Sexp]) -> (Option<Stackup>, Vec<String>) {
             written_as: None,
             material,
             color,
+            sheets,
             dk_x1000,
             df_x1000000,
         });

@@ -262,6 +262,24 @@ fn write_stackup(out: &mut String, stackup: &Stackup, copper_layers: usize) {
         if let Some(df) = layer.df_x1000000 {
             let _ = write!(line, " (loss_tangent {})", f64::from(df) / 1_000_000.0);
         }
+        // Every sheet after the first, as pcbnew writes them: one
+        // `(addsublayer ...)` each, inside the layer's own parentheses.
+        for sheet in &layer.sheets {
+            let _ = write!(line, " (addsublayer");
+            if let Some(thickness) = sheet.thickness {
+                let _ = write!(line, " (thickness {})", mm(thickness));
+            }
+            if let Some(material) = &sheet.material {
+                let _ = write!(line, " (material \"{material}\")");
+            }
+            if let Some(dk) = sheet.dk_x1000 {
+                let _ = write!(line, " (epsilon_r {})", f64::from(dk) / 1_000.0);
+            }
+            if let Some(df) = sheet.df_x1000000 {
+                let _ = write!(line, " (loss_tangent {})", f64::from(df) / 1_000_000.0);
+            }
+            line.push(')');
+        }
         line.push(')');
         let _ = writeln!(out, "{line}");
     }

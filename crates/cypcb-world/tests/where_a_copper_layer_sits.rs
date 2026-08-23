@@ -30,6 +30,7 @@ fn stack(layers: &[Spec]) -> Stackup {
                 thickness: thickness.map(Nm::from_mm),
                 material: None,
                 color: None,
+                sheets: Vec::new(),
                 written_as: None,
                 dk_x1000: *dk,
                 df_x1000000: None,

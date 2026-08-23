@@ -177,6 +177,20 @@ module.exports = grammar({
       optional(seq('color', field('color', $.string))),
       optional(seq('dk', field('dk', $.number))),
       optional(seq('df', field('df', $.number))),
+      // The rest of the sheets this slot is pressed from. A fabricator hits a
+      // target thickness with the prepreg they stock - two sheets of 0.0668mm
+      // rather than one of 0.1336mm - and on six layers and up that is the
+      // ordinary case. KiCad writes each one as `addsublayer`.
+      repeat($.stackup_sheet),
+    ),
+
+    // sheet 0.0668mm material "FR4" dk 4.5
+    stackup_sheet: $ => seq(
+      'sheet',
+      optional(field('thickness', $.dimension)),
+      optional(seq('material', field('material', $.string))),
+      optional(seq('dk', field('dk', $.number))),
+      optional(seq('df', field('df', $.number))),
     ),
 
     // component R1 resistor "0402" { ... }

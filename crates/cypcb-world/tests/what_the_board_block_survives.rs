@@ -592,3 +592,88 @@ fn a_layer_that_named_no_colour_is_not_given_one() {
     let text = board_as_dsl(&mut world);
     assert!(!text.contains("color"), "{text}");
 }
+
+/// A four-layer stack whose dielectric slots are pressed from several sheets,
+/// which is what a fabricator actually does above two layers.
+const SHEETED: &str = r#"version 1
+
+board t {
+    size 40mm x 20mm
+    layers 4
+    stackup {
+        copper 1oz
+        prepreg 0.0668mm material "FR4" dk 4.5 sheet 0.0668mm material "FR4" dk 4.5
+        copper 0.5oz
+        core 1.095mm material "FR4" dk 4.5
+        copper 0.5oz
+        prepreg 0.0668mm material "FR4" dk 4.5 sheet 0.0668mm material "FR4" dk 4.5
+        copper 1oz
+    }
+}
+"#;
+
+#[test]
+fn a_dielectric_slot_can_be_pressed_from_several_sheets() {
+    // One slot in a stackup is not one sheet of laminate. A fabricator hits a
+    // target thickness by stacking the prepreg they stock, and above two
+    // layers that is the ordinary case rather than the exotic one. KiCad
+    // writes each extra sheet as `addsublayer` and this project dropped them,
+    // so a six-layer board came back thinner than it went out.
+    let world = load(SHEETED);
+    let stackup = world.stackup().expect("a stackup went in");
+    assert_eq!(
+        stackup.layers[1].sheets.len(),
+        1,
+        "one sheet after the first"
+    );
+
+    // The slot is both sheets: 0.0668 twice is 0.1336mm.
+    assert_eq!(
+        stackup.layers[1].slot_thickness().expect("stated").raw(),
+        133_600
+    );
+    // And the layer's own `thickness` is still only its first sheet, so
+    // nothing that reads it has silently changed meaning.
+    assert_eq!(stackup.layers[1].thickness.expect("stated").raw(), 66_800);
+}
+
+#[test]
+fn a_slot_of_two_laminates_has_no_dielectric_constant() {
+    // The closed-form impedance solutions take one `dk`. A slot pressed from
+    // two different laminates has none, so the answer is "not checked" rather
+    // than a number picked off whichever sheet came first.
+    // Only the first slot: the two prepreg lines are identical, and replacing
+    // both would leave nothing uniform to compare against.
+    let source = SHEETED.replacen(
+        "prepreg 0.0668mm material \"FR4\" dk 4.5 sheet 0.0668mm material \"FR4\" dk 4.5",
+        "prepreg 0.0668mm material \"FR4\" dk 4.5 sheet 0.0668mm material \"Isola\" dk 3.92",
+        1,
+    );
+    let world = load(&source);
+    let stackup = world.stackup().expect("a stackup went in");
+    assert_eq!(stackup.layers[1].slot_dk_x1000(), None);
+    // The uniform slot below it still answers.
+    assert_eq!(stackup.layers[5].slot_dk_x1000(), Some(4_500));
+}
+
+#[test]
+fn the_total_thickness_counts_every_sheet() {
+    // `Stackup::total_thickness` is the depth every plated hole is drilled
+    // through and the figure a fab quotes against, so a slot counted as one
+    // sheet understates the board.
+    let world = load(SHEETED);
+    let stackup = world.stackup().expect("a stackup went in");
+    // Copper: 1 + 0.5 + 0.5 + 1 oz. Dielectric: 0.1336 x 2 + 1.095.
+    let expected = 34_998 + 17_499 + 17_499 + 34_998 + 133_600 + 133_600 + 1_095_000;
+    assert_eq!(stackup.total_thickness().expect("stated").raw(), expected);
+}
+
+#[test]
+fn the_sheets_survive_being_written_down() {
+    let mut world = load(SHEETED);
+    let before = world.stackup().cloned().expect("a stackup went in");
+    let text = board_as_dsl(&mut world);
+    assert!(text.contains("sheet 0.066800mm"), "{text}");
+    let back = load(&text);
+    assert_eq!(back.stackup().cloned(), Some(before), "\n{text}");
+}

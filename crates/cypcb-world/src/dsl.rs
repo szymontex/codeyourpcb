@@ -492,6 +492,30 @@ pub fn stackup_as_dsl(stackup: &crate::components::Stackup) -> String {
         if let Some(df) = layer.df_x1000000 {
             let _ = write!(line, " df {}", f64::from(df) / 1_000_000.0);
         }
+        // Every sheet after the first, on the same line: they are one slot,
+        // and a fabricator reads them as one.
+        for sheet in &layer.sheets {
+            let _ = write!(line, " sheet");
+            if let Some(thickness) = sheet.thickness {
+                match sheet.written_as {
+                    Some(unit) if unit != cypcb_core::Unit::Mm => {
+                        let _ = write!(line, " {}{}", unit.from_nm(thickness), unit);
+                    }
+                    _ => {
+                        let _ = write!(line, " {}mm", format_mm(thickness.0 as f64 / 1e6));
+                    }
+                }
+            }
+            if let Some(material) = &sheet.material {
+                let _ = write!(line, " material {}", quoted(material));
+            }
+            if let Some(dk) = sheet.dk_x1000 {
+                let _ = write!(line, " dk {}", f64::from(dk) / 1_000.0);
+            }
+            if let Some(df) = sheet.df_x1000000 {
+                let _ = write!(line, " df {}", f64::from(df) / 1_000_000.0);
+            }
+        }
         let _ = writeln!(out, "{line}");
     }
     let _ = writeln!(out, "    }}");

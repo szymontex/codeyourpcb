@@ -78,9 +78,7 @@ answered, not as they were found. Items 2 to 7 are open.
    - **Units** - **DONE**, see below. (Listed as item 4 when the list was
      written; taken second because every other item on it states a number.)
 2. ~~**Colour of mask and silkscreen.**~~ **DONE.**
-3. **Dielectric sub-layers.** KiCad's `addsublayer` splits one dielectric slot
-   into several prepreg sheets of different thicknesses, which is ordinary on
-   six layers and up. The model is a flat list.
+3. ~~**Dielectric sub-layers.**~~ **DONE.**
 4. ~~**Units.**~~ **DONE.**
 5. **An impedance solver.** Altium takes a target and returns a trace width.
    This takes a width and returns the impedance and how far off it is. The
@@ -171,11 +169,32 @@ answered, not as they were found. Items 2 to 7 are open.
   reading `color` -> 1 failed; the DSL writer dropping it -> 1 failed; the
   KiCad importer dropping it -> 1 failed; the KiCad writer dropping it -> 1
   failed. `./scripts/quality-gate.sh` -> `=== All stages passed ===`.
-- NEXT-ACTION: **item 3, dielectric sub-layers.** `addsublayer` in KiCad splits
-  one dielectric slot into several prepreg sheets of different thicknesses,
-  which is ordinary on six layers and up. It is the first item on this list
-  that changes the shape of the model rather than adding a field: a stackup
-  entry stops being one layer.
+- DONE (item 3): **a dielectric slot is not one sheet of laminate.** A
+  fabricator hits a target thickness with the prepreg they stock - two sheets
+  of 0.0668mm rather than one of 0.1336mm - and above two layers that is the
+  ordinary case. `sheet 0.0668mm material "FR4" dk 4.5` on the same entry;
+  KiCad calls it `addsublayer` and this project read the layer and dropped the
+  rest, so a six-layer board came back thinner than it went out.
+- **Two things that read a dielectric now read the slot.** `slot_thickness`
+  sums every sheet and `Stackup::total_thickness` uses it - that figure is the
+  depth every plated hole is drilled through and what a fab quotes against.
+  `slot_dk_x1000` answers `None` when the sheets disagree, so a slot pressed
+  from two laminates reports as **not checked** rather than checked against
+  whichever sheet came first. The layer's own `thickness` still means its own
+  first sheet, so nothing that read it has silently changed meaning.
+- Proof: `cargo test -p cypcb-world --test what_the_board_block_survives` ->
+  **24 passed**; `cargo test -p cypcb-kicad --test the_kicad_board_carries_the_stackup`
+  -> **17 passed**. Mutations, each alone against a clean tree: `slot_thickness`
+  ignoring the sheets -> 2 failed; `slot_dk_x1000` ignoring them -> 1 failed;
+  the reader not reading `sheet` -> 4 failed; the KiCad importer dropping
+  `addsublayer` -> 1 failed; the KiCad writer dropping it -> 1 failed.
+  `./scripts/quality-gate.sh` -> `=== All stages passed ===`.
+- NEXT-ACTION: **item 6, drill pairs and sequential lamination.** A via states
+  `layers A to B` and the board states nothing about which spans a fabricator
+  will make, so a blind or buried via is checked against nothing. Item 5, the
+  impedance solver, is the largest on the list and wants this one's vocabulary
+  first: a stack that states which layers are pressed in which cycle is what a
+  blind via's depth is measured against.
 
 
 ### V1 - CLI and core correctness

@@ -859,6 +859,23 @@ fn sync_board(board: &BoardDef, source: &str, world: &mut BoardWorld, result: &m
                         .map(|d| d.unit),
                     material: layer.material.as_ref().map(|m| m.value.clone()),
                     color: layer.color.as_ref().map(|c| c.value.clone()),
+                    // Every sheet after the first. A slot of one sheet has an
+                    // empty list and reads exactly as it did before.
+                    sheets: layer
+                        .sheets
+                        .iter()
+                        .map(|sheet| crate::components::StackupSheet {
+                            thickness: sheet.thickness.as_ref().map(|d| d.to_nm()),
+                            material: sheet.material.as_ref().map(|m| m.value.clone()),
+                            dk_x1000: sheet.dk.map(|dk| (dk * 1_000.0).round() as u32),
+                            df_x1000000: sheet.df.map(|df| (df * 1_000_000.0).round() as u32),
+                            written_as: sheet
+                                .thickness
+                                .as_ref()
+                                .filter(|d| d.unit_written)
+                                .map(|d| d.unit),
+                        })
+                        .collect(),
                     dk_x1000: layer.dk.map(|dk| (dk * 1_000.0).round() as u32),
                     df_x1000000: layer.df.map(|df| (df * 1_000_000.0).round() as u32),
                 })

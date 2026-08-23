@@ -23,8 +23,9 @@ use crate::ast::{
     FootprintDef, Identifier, ImplementsClause, ImportDef, InterfaceDef, LayerType, ModuleDef,
     ModuleInstance, NetAssignment, NetClassDef, NetConstraints, NetDef, OutlineDef, PadDef,
     PadShape, PhysicalValue, PinDeclaration, PinId, PinRef, PortConnection, PositionExpr,
-    RotationExpr, SilkDef, SizeProperty, SourceFile, Span, StackupDef, StackupLayer, StringLit,
-    Tolerance, ToleranceKind, TraceDef, TraceDirective, TracePath, TraceVia, ZoneDef, ZoneKind,
+    RotationExpr, SilkDef, SizeProperty, SourceFile, Span, StackupDef, StackupLayer,
+    StackupSheetDef, StringLit, Tolerance, ToleranceKind, TraceDef, TraceDirective, TracePath,
+    TraceVia, ZoneDef, ZoneKind,
 };
 use crate::errors::{ParseError, ParseResult};
 use crate::lexer::{tokenize, Token, TokenKind};
@@ -534,12 +535,43 @@ impl<'a> Reader<'a> {
             // layer kind, and neither of these is one.
             let dk = self.stackup_number("dk");
             let df = self.stackup_number("df");
+            // The rest of the sheets in this slot. Consumed here rather than
+            // left to the loop for the reason `material` is: `sheet` is not a
+            // layer kind, and leaving it would report the design's own syntax
+            // as an unknown property.
+            let mut sheets = Vec::new();
+            while self.eat_word("sheet") {
+                let sheet_start = self.behind();
+                let thickness = match self.peek() {
+                    Some(TokenKind::Number(_)) => self.dimension(),
+                    _ => None,
+                };
+                let material = if self.eat_word("material") {
+                    let literal = self.string();
+                    if literal.is_none() {
+                        self.unexpected("a quoted material after `material`");
+                    }
+                    literal
+                } else {
+                    None
+                };
+                let dk = self.stackup_number("dk");
+                let df = self.stackup_number("df");
+                sheets.push(StackupSheetDef {
+                    thickness,
+                    material,
+                    dk,
+                    df,
+                    span: Span::new(sheet_start, self.behind()),
+                });
+            }
             layers.push(StackupLayer {
                 layer_type,
                 name,
                 thickness,
                 material,
                 color,
+                sheets,
                 dk,
                 df,
                 span: Span::new(layer_start, self.behind()),

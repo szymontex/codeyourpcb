@@ -56,6 +56,7 @@ fn board(layers: &[Spec], copper: u8) -> BoardWorld {
                 thickness: thickness.map(Nm::from_mm),
                 material: material.map(str::to_string),
                 color: None,
+                sheets: Vec::new(),
                 written_as: None,
                 dk_x1000: None,
                 df_x1000000: None,
@@ -526,4 +527,43 @@ fn a_colour_makes_the_trip_out_and_back() {
         stackup.layers[2].color, None,
         "copper is the colour it is, and KiCad writes none for it"
     );
+}
+
+#[test]
+fn the_sheets_of_a_slot_make_the_trip_out_and_back() {
+    // A fabricator hits a target thickness with the prepreg they stock, so a
+    // dielectric slot above two layers is several sheets. KiCad writes each
+    // one after the first as `addsublayer`; this project read the layer and
+    // dropped the rest, which made a board come back thinner than it went out.
+    let mut world = board(BARE, 4);
+    {
+        let mut stackup = world.stackup().cloned().expect("the premise");
+        stackup.layers[1].sheets = vec![cypcb_world::components::StackupSheet {
+            thickness: Some(Nm::from_mm(0.0668)),
+            material: Some("FR4".to_string()),
+            dk_x1000: Some(4_500),
+            df_x1000000: Some(20_000),
+            written_as: None,
+        }];
+        world.set_stackup(stackup);
+    }
+
+    let text = write_board(&mut world, "test");
+    assert!(
+        text.contains("(addsublayer (thickness 0.0668) (material \"FR4\")"),
+        "the sheet reaches the file:\n{text}"
+    );
+
+    let result = cypcb_kicad::parse_kicad_pcb_str(&text).expect("the file reads");
+    let stackup = result
+        .world
+        .stackup()
+        .cloned()
+        .expect("a stackup came back");
+    assert_eq!(stackup.layers[1].sheets.len(), 1, "\n{text}");
+    let sheet = &stackup.layers[1].sheets[0];
+    assert_eq!(sheet.thickness, Some(Nm::from_mm(0.0668)));
+    assert_eq!(sheet.material.as_deref(), Some("FR4"));
+    assert_eq!(sheet.dk_x1000, Some(4_500));
+    assert_eq!(sheet.df_x1000000, Some(20_000));
 }

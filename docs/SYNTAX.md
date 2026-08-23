@@ -142,6 +142,34 @@ datasheet prints under those two names, what KiCad's board file calls
 decided on, so a stack that states them says something the thickness alone
 cannot.
 
+### A dielectric slot is not one sheet
+
+A fabricator hits a target thickness with the prepreg they stock - two sheets
+of 0.0668mm rather than one of 0.1336mm - and above two layers that is the
+ordinary case. Each sheet after the first is a `sheet` clause on the same
+entry:
+
+```
+stackup {
+    copper 1oz
+    prepreg 0.0668mm material "FR4" dk 4.5 sheet 0.0668mm material "FR4" dk 4.5
+    copper 0.5oz
+    core 1.095mm material "FR4" dk 4.5
+    copper 0.5oz
+    prepreg 0.0668mm material "FR4" dk 4.5 sheet 0.0668mm material "FR4" dk 4.5
+    copper 1oz
+}
+```
+
+The entry's own thickness and numbers are the first sheet; a slot of one sheet
+writes no `sheet` clause and reads exactly as it always did. The board's total
+thickness counts every sheet, and so does the impedance rule - a slot pressed
+from two different laminates has no single dielectric constant, so that layer
+reports as not checked rather than checked against whichever sheet came first.
+
+KiCad calls the same thing `addsublayer`, and a board carrying them survives
+the trip both ways.
+
 `color` is what the fabricator is asked to make a layer. Mask and silkscreen
 take one; copper and prepreg are the colour they are, and KiCad writes it on
 those two and no others:
