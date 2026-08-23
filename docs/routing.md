@@ -59,6 +59,21 @@ already. Two of them are called "violations" by something that prints them:
   both, `cypcb check` prints the split, and variant ranking puts shorts ahead
   of the composite.
 
+- **Contacts**: how many pairs of features the clearance violations describe.
+  The clearance rule reports per pair of *segments*, and a trace is a chain of
+  them: two features that touch along a run report once for each segment that
+  takes part, so one contact can be two dozen rows. On a routed `multi_ic` the
+  scorer reads **454 violations and 86 contacts**.
+
+  Every count in this document is the row count, and that is deliberate:
+  decided 2026-08-23, the rule keeps counting segment pairs because a violation
+  is a *place* - two segments of one trace touching a pad at two points are two
+  places an etch can fail - and because these numbers are regression ratchets
+  before they are a report, where the finer count is the sensitive one.
+  `RoutingScore::clearance_contacts` is published beside it, and `cypcb check`
+  prints both when they differ, so a reader who wants "how many places on this
+  board are in fault" has that number without any table here moving.
+
 Introduced is not after minus before: routing removes faults too. Every
 unrouted pin the fixture starts with is a violation that a successful route
 retires.

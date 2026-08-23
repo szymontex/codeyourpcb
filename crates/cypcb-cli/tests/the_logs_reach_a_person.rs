@@ -126,3 +126,40 @@ fn nothing_the_logger_writes_lands_on_stdout() {
     serde_json::from_str::<serde_json::Value>(&stdout)
         .unwrap_or_else(|e| panic!("stdout has to stay pure JSON ({e}):\n{stdout}"));
 }
+
+#[test]
+fn the_ranked_line_says_how_many_contacts_the_violations_describe() {
+    // A variant list ranked on violation counts is a list ranked on rows, and
+    // the clearance rule reports per pair of segments - so two of the lines
+    // below can differ by a violation and describe the same contact. Decided
+    // 2026-08-23: the counts stay as they are and the contact count is printed
+    // beside them, which is what makes the difference readable rather than
+    // confusing.
+    //
+    // Not through `route` above: that helper always passes `--fast`, and fast
+    // mode scores one candidate and prints no ranked list at all.
+    let board = scratch_copy("ranked-contacts");
+    let output = cypcb()
+        .arg("route")
+        .arg(&board)
+        .env_remove("RUST_LOG")
+        .output()
+        .expect("the binary runs");
+    assert!(output.status.success(), "routing failed");
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+
+    let ranked: Vec<&str> = stderr
+        .lines()
+        .filter(|line| line.contains("composite"))
+        .collect();
+    assert!(
+        !ranked.is_empty(),
+        "a default run ranks its candidates and says so:\n{stderr}"
+    );
+    for line in &ranked {
+        assert!(
+            line.contains("clearance contacts"),
+            "every ranked line names the contacts its violations describe: {line}"
+        );
+    }
+}

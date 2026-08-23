@@ -793,12 +793,14 @@ impl RouteCommand {
         // Ranked best first, so the list reads as the decision it made.
         for (rank, entry) in results.iter().enumerate() {
             eprintln!(
-                "  {}. {:<28} composite {:>10.1}, {} DRC violations ({} shorts), {} vias, {:.1}s",
+                "  {}. {:<28} composite {:>10.1}, {} DRC violations \
+                 ({} shorts, {} clearance contacts), {} vias, {:.1}s",
                 rank + 1,
                 entry.name,
                 entry.score.composite,
                 entry.score.drc_violations,
                 entry.score.shorts,
+                entry.score.clearance_contacts,
                 entry.score.via_count,
                 entry.elapsed_ms as f64 / 1000.0,
             );

@@ -44,14 +44,18 @@ test.describe('Stack manager', () => {
   test('it shows a row per stackup entry and the fabrication order beside it', async ({
     page,
   }) => {
+    // The panel is opened first and the board loaded into it, rather than the
+    // other way round with a wait in between. `pullSnapshot` redraws an open
+    // panel, so every assertion below is then covered by Playwright's own
+    // retrying rather than by a fixed sleep - which is what made this spec
+    // fail once under a full parallel run and pass on its own.
+    await page.click('#stack-toggle');
+    await expect(page.locator('#stack-panel')).toBeVisible();
+
     // Through the load hook rather than the editor: Monaco closes a brace as
     // you type one, so a block typed line by line arrives with more braces
     // than it left with. What this test is about is the panel, not the editor.
     await page.evaluate((source) => (window as any).__loadBoard(source), BOARD);
-    await page.waitForTimeout(300);
-
-    await page.click('#stack-toggle');
-    await expect(page.locator('#stack-panel')).toBeVisible();
 
     // Three entries: copper, core, copper.
     await expect(page.locator('#stack-panel .sp-row')).toHaveCount(3);

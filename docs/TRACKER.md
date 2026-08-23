@@ -396,9 +396,30 @@ answered, not as they were found. Items 2 to 7 are open.
   pins the published JSON to an exact field count, so adding a field failed it
   rather than slipping past. It pins 9 now, with the new field named and the
   decision beside it.
-- NEXT-ACTION: **none blocked, and nothing large pulled.** Every vector's open
-  question is now answered or measured and dropped. The next run should take a
-  small backlog item rather than start a new campaign.
+- DONE: **D8 reaches the two places a reader actually meets the number.**
+  `docs/routing.md` now names a fourth measured number - contacts - beside
+  after, introduced and shorts, and says once, for the whole document, that
+  every count in it is the row count and why that was chosen. The ranked
+  variant list in `cypcb route` prints it too, where it is immediately useful:
+  on `led_blink` two variants differ by a violation and describe the same
+  contact, which reads as nonsense without the second number.
+- **A flake fixed rather than retried.** `stack-panel.spec.ts` waited a fixed
+  300ms after `__loadBoard` and then clicked; under a full parallel gate run
+  that was not enough and the spec failed once while passing alone. The panel
+  is opened first and the board loaded into it now - `pullSnapshot` redraws an
+  open panel - so every assertion is covered by Playwright's own retrying and
+  there is no sleep left to be too short.
+- Proof: `cargo test -p cypcb-cli --test the_logs_reach_a_person` -> **5
+  passed**, the new one routing without `--fast` because fast mode scores one
+  candidate and prints no ranked list at all. Mutation, alone against a clean
+  tree: the contacts column dropped from the ranked line -> **1 failed**. Read
+  off the release binary: `1 DRC violations (0 shorts, 1 clearance contacts)`
+  against `2 DRC violations (0 shorts, 1 clearance contacts)` one line below.
+  `./scripts/quality-gate.sh` -> `=== All stages passed ===`, and the stack
+  panel spec passes inside the full parallel run rather than only alone.
+- NEXT-ACTION: **none pulled.** Every vector's open question is answered or
+  measured and dropped, D8 and D9 are closed and their consequences are in the
+  code. The next run should take a small backlog item.
 
 
 ### V1 - CLI and core correctness
