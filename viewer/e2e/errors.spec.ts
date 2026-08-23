@@ -87,6 +87,78 @@ test.describe('Error Display', () => {
     await expect(page.locator('#error-panel')).toContainText(/clearance/i);
   });
 
+  // The panel's three lines that call the grouper were the one part of that
+  // feature nothing exercised: `groupByContact` has unit tests, the editor
+  // markers have a pipeline test, and `populateErrorList` is a closure inside
+  // `main.ts` that touches the DOM on import, so only a browser reaches it.
+  // The fixture above cannot see grouping either way - two parts 0.5mm apart
+  // are one contact reported once - so this one is built to produce two rows
+  // about a single pair.
+  test('the panel lists one item per contact, not one per row', async ({ page }) => {
+    // R3 sits on a trace that steps around it, so two of the trace's three
+    // segments touch the same component. Measured with the release binary:
+    // `clearance: 2`, and `(2 clearance rows describe 1 contacts)`.
+    const GROUPED_BOARD = [
+      'version 1',
+      '',
+      'board grouping {',
+      '    size 30mm x 30mm',
+      '    layers 2',
+      '}',
+      '',
+      'component R1 resistor "0402" {',
+      '    value "10k"',
+      '    at 5mm, 15mm',
+      '}',
+      '',
+      'component R2 resistor "0402" {',
+      '    value "10k"',
+      '    at 25mm, 15mm',
+      '}',
+      '',
+      'component R3 resistor "0402" {',
+      '    value "10k"',
+      '    at 15mm, 15mm',
+      '}',
+      '',
+      'net SIG {',
+      '    R1.1',
+      '    R2.1',
+      '}',
+      '',
+      'trace SIG {',
+      '    from R1.1',
+      '    via 14mm, 15mm',
+      '    via 16mm, 15mm',
+      '    to R2.1',
+      '    layer Top',
+      '    width 0.2mm',
+      '}',
+    ].join('\n');
+
+    await page.evaluate((src) => (window as any).__loadBoard(src), GROUPED_BOARD);
+    await expect(
+      page.locator('#error-badge'),
+      'a trace crossing a component produced no violation badge',
+    ).toBeVisible({ timeout: 10_000 });
+
+    await page.click('#error-badge');
+    await expect(page.locator('#error-panel')).toBeVisible();
+
+    // One item, though the rule reported two rows.
+    await expect(
+      page.locator('#error-list .error-item').filter({ hasText: 'Copper clearance' }),
+    ).toHaveCount(1);
+
+    // And the panel says so, rather than quietly dropping a row.
+    await expect(page.locator('#error-panel')).toContainText(
+      '2 clearance rows describe 1 contacts',
+    );
+    await expect(page.locator('#error-panel')).toContainText(
+      'and 1 more place where the same two touch',
+    );
+  });
+
   test('error panel close button works', async ({ page }) => {
     // Verify error panel is hidden by default
     await expect(page.locator('#error-panel')).toBeHidden();

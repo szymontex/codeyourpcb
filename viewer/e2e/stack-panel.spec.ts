@@ -33,7 +33,15 @@ test.describe('Stack manager', () => {
     // The project manager is open on a fresh load and covers the right-hand
     // side of the canvas, which is where this panel lives. A person dismisses
     // it before doing anything else; so does this.
-    await page.evaluate(() => (window as any).__projectManager?.hide());
+    // `?.` here used to make that silent. `#pcb-canvas` is in the static HTML,
+    // so waiting for it says nothing about whether `main.ts` has run yet, and
+    // an optional call on a hook that is not there is a no-op that leaves the
+    // overlay up - which is what this spec did under a full parallel gate run
+    // while passing on its own.
+    await page.waitForFunction(
+      () => typeof (window as any).__projectManager?.hide === 'function',
+    );
+    await page.evaluate(() => (window as any).__projectManager.hide());
     await expect(page.locator('#project-manager')).toBeHidden();
   });
 

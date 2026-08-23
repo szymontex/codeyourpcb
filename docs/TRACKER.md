@@ -1,6 +1,6 @@
 # CodeYourPCB tracker - the control center
 
-Last updated: 2026-08-22. Update after every material step: add to DONE, pull the next item into NEXT-ACTION, in the same commit as the change.
+Last updated: 2026-08-24. Update after every material step: add to DONE, pull the next item into NEXT-ACTION, in the same commit as the change.
 
 Read this file first. It is the source of truth for what is in flight and what comes next.
 
@@ -59,12 +59,15 @@ costs a run to rediscover. Read this before taking a fallback item.
 **Every row above is closed.** Re-checked 2026-08-22 after the first version
 of this table called the last row open on a guess rather than a grep.
 
-**What is genuinely live**, both of them deliberately not heartbeat work and
-both recorded in their own vectors: the clearance rule reporting per contact
-instead of per segment pair (V1), and a total order for the frontier so a
-bucket queue becomes possible (V7). Each moves every published number once, so
-they are worth doing in the same sequence, and the sequence wants a session
-rather than a fire.
+**Both items this section used to call live are closed, and by a decision
+rather than by work.** They were the clearance rule reporting per contact
+instead of per segment pair (V1) and a total order for the frontier so a bucket
+queue becomes possible (V7). **D8** keeps the rule counting pairs of segments
+and publishes the contact count beside it; **D9** refuses the bucket queue.
+Neither moves a published number. Both were decided on 2026-08-23 when the
+owner handed the call back, and both are written up under V8's entry for that
+date - so a run that reads an older NEXT-ACTION in V1 or V7 and finds the
+owner's name on it is reading history.
 
 ## Vectors (parallel branches - keep ALL moving)
 
@@ -474,6 +477,14 @@ answered, not as they were found. Items 2 to 7 are open.
 
 
 ### V1 - CLI and core correctness
+- DONE: **the panel's own use of the grouper had no test, and writing one found the panel saying a different sentence than the command line.** The entry below named the gap itself and left it open: `groupByContact` has unit tests, the editor markers have a pipeline test, and the three lines in `populateErrorList` that call the grouper sit in a closure inside `main.ts` that touches the DOM on import, so only a browser reaches them. `viewer/e2e/errors.spec.ts` reaches them now.
+- **The fixture had to be built for it.** The spec's existing DRC board is two parts 0.5mm apart, which is one contact reported once - it cannot see grouping either way. The new one puts `R3` on a trace that steps around it with two waypoints, so two of the trace's three segments touch the same component. Measured with the release binary before the test was written: `clearance: 2`, and `(2 clearance rows describe 1 contacts; one row is listed per contact, the worst of its group)`.
+- **The defect the test found: the panel's reconciling line counted every violation rather than the clearance rows.** On that board it read `8 rows describe 7 contacts` where `cypcb check` reads `2 clearance rows describe 1 contacts` - four unconnected pins and two unrouted pins were being called contacts. Only clearance groups, so only clearance rows belong in that sentence. Three surfaces, one sentence.
+- **`__loadBoard` left the badge showing the board before it.** Every other path that loads a board calls `updateErrorBadge`; the test hook pulled a snapshot and did not, so a board loaded through it had violations that nothing announced. That is what the first run of this test failed on, with eight of them in the board.
+- **A third spec had to be fixed to get a green gate, and it is the same kind of silence.** `stack-panel.spec.ts` dismissed the project manager with `__projectManager?.hide()` after waiting for `#pcb-canvas` - which is in the static HTML, so that wait says nothing about whether `main.ts` has run. When it had not, the optional call did nothing, the overlay stayed up, and the spec failed in its own `beforeEach` under a full parallel run while passing on its own. It waits for the hook now.
+- Proof: `npx playwright test e2e/errors.spec.ts` -> **6 passed**, up from 5. Mutations, each alone against a clean tree and restored from the saved file rather than with git: the call site bypassed so every row becomes an item -> **1 failed**; the sentence back to counting every kind -> **1 failed**; the badge update dropped from `__loadBoard` -> **1 failed**. `./scripts/quality-gate.sh` -> `=== All stages passed ===`.
+- NEXT-ACTION: **none pulled.** D8 closed the question this vector had been carrying, so what is left here is small: the panel, the editor and the command line now say the same sentence about the same board, and each of the three paths has a test that fails without it.
+
 - DONE: **the editor had the same defect the command line just lost, and worse: duplicate squiggles were spending the diagnostic budget.** One marker per contact now, and the marker kept is the worst of its group.
 - **Every row of one contact lands on the same declaration**, so a designer saw two dozen identical squiggles on one line - on the shipped benchmarks the worst is `U1 <-> trace 'GND'` at **24 rows**. `run_diagnostics` caps at **100** and appends "... and N more (truncated)", so duplicates of one contact were pushing **different faults** off the end. That is the part that made this a correctness item rather than a tidy-up.
 - **The same rule as `cypcb check`, deliberately.** Group only `clearance`, keep the smallest actual gap rather than the first row, leave every other kind alone - two unconnected pins are two faults, not one seen twice. The editor should say what the command line says.
@@ -2882,7 +2893,7 @@ cypcb::parse::unknown_property
 - **Higher-cell-first is close to free on four boards and not free on two.** `shift_driver` and `plane_board` come out **byte for byte**, `stm32_breakout` moves 2 and 2 inside a band of 59 / 61, `multi_ic` 8 and -4 inside 34 / 49. What it costs is `qfp_fanout` - **+41 violations and +58 shorts against a band of 60 / 46**, so the shorts are outside - and `led_blink`, whose 21 segments become 20 with the same 2 / 0. On a board whose band is zero, one fewer segment is a real difference even when the fault count does not move.
 - **So the decision has a shape now**: a bucket queue is affordable if the project will accept one board getting 58 shorts worse and one laying a segment less, in exchange for the heap's 9.45%. That is a judgement about what the benchmarks are for, and it is the owner's kind of question rather than a measurement.
 - Proof: `cargo test --release -p cypcb-autoroute --test drc_report -- --ignored --nocapture` three times - once as shipped, once with `.then_with(|| other.cell.cmp(&self.cell))`, once with `self.cell.cmp(&other.cell)` - and once more after `git checkout --` to confirm the shipped figures came back: 21 / 2 / 0, 899 / 199 / 95, 970 / 381 / 169, 671 / 65 / 34, 181 / 28 / 13, 1478 / 318 / 149.
-- NEXT-ACTION: **ask, rather than measure.** The number that decides this is not on any board: it is whether a 9.45% saving is worth `qfp_fanout` reading 58 shorts worse. Everything measurable has been measured - the key packing took the free 2.89%, the headroom is 8,000x, and both tie directions are tabulated above. **Put the question to the owner** rather than picking an answer: a re-baseline that moves every published figure on a preference nobody stated is the kind of thing this file exists to prevent. If the answer is no, the honest entry is that V7 is finished at 2.89% and the heap stays.
+- NEXT-ACTION (**stale, closed by D9 on 2026-08-23: the bucket queue is refused, and the reasons are under V8's entry for that date**): **ask, rather than measure.** The number that decides this is not on any board: it is whether a 9.45% saving is worth `qfp_fanout` reading 58 shorts worse. Everything measurable has been measured - the key packing took the free 2.89%, the headroom is 8,000x, and both tie directions are tabulated above. **Put the question to the owner** rather than picking an answer: a re-baseline that moves every published figure on a preference nobody stated is the kind of thing this file exists to prevent. If the answer is no, the honest entry is that V7 is finished at 2.89% and the heap stays.
 
 - DONE: **the frontier is one `u64` key instead of two, 271 million instructions cheaper, and every board byte for byte where it was.** The measurement the last entry asked for came back with 8,000x of headroom, so the safe half of the win was takeable after all.
 - **The number that decided it: the largest key any of the six benchmarks produces is 526,738**, on `qfp_fanout`. The others: `stm32_breakout` 411,732, `shift_driver` 249,494, `multi_ic` 235,011, `plane_board` 192,563, `led_blink` 128,500. Against `u32::MAX` that is a headroom of 8,154x on the worst board. Both halves are clamped anyway, because a step is `(f * 1000.0).round()` and a sweep can set `foreign_pad_penalty` to 100 - the clamp is unreachable rather than merely unlikely, and a wrap would reorder the frontier silently.

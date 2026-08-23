@@ -1948,6 +1948,10 @@ async function init(): Promise<void> {
     if (snap.board) {
       viewport = fitBoard(viewport, snap.board.width_nm, snap.board.height_nm);
     }
+    // Every other path that loads a board updates the badge; this one did not,
+    // so a board loaded through the hook showed the previous board's error
+    // count until something else redrew it.
+    if (snap.violations) updateErrorBadge(snap.violations);
     // Sync viewport + snapshot to interaction state so click handlers use correct coords
     interactionState.viewport = viewport;
     interactionState.snapshot = snapshot;
@@ -2424,13 +2428,20 @@ async function init(): Promise<void> {
     // rule's own row count; what changes is the reading, where a pair of
     // features that touch along a run filled the panel with copies.
     const grouped = groupByContact(snapshot.violations);
-    if (snapshot.violations.length > grouped.length) {
+    // Only clearance groups, so only clearance rows belong in this sentence.
+    // Counting every kind called an unconnected pin a contact, and on the
+    // board this is tested with the panel said "8 rows describe 7 contacts"
+    // where `cypcb check` said "2 clearance rows describe 1 contacts" about
+    // the same board. Three surfaces, one sentence.
+    const clearanceRows = snapshot.violations.filter((v) => v.kind === 'clearance').length;
+    const clearanceItems = grouped.filter((g) => g.violation.kind === 'clearance').length;
+    if (clearanceRows > clearanceItems) {
       const reconcile = document.createElement('div');
       reconcile.className = 'error-item';
       const note = document.createElement('div');
       note.className = 'error-detail';
       note.textContent =
-        `${snapshot.violations.length} rows describe ${grouped.length} contacts; ` +
+        `${clearanceRows} clearance rows describe ${clearanceItems} contacts; ` +
         'one item per contact, the worst of its group';
       reconcile.appendChild(note);
       errorList.appendChild(reconcile);
