@@ -60,6 +60,7 @@ use cypcb_rules::DesignConstraints;
 /// - `min_solder_mask_bridge`: Minimum solder mask web between pads
 /// - `min_silk_clearance`: Minimum silkscreen to copper clearance
 /// - `min_courtyard_clearance`: Minimum courtyard clearance between components
+/// - `blind_vias_allowed`, `buried_vias_allowed`: Whether the house drills holes that stop inside the board
 /// - `castellated_holes_allowed`: Whether the house cuts plated holes in half at the outline
 /// - `max_diff_pair_skew`: How far apart the halves of a differential pair may end up
 /// - `max_drill_aspect_ratio`: Deepest hole the plating chemistry reaches, in hundredths
@@ -95,6 +96,8 @@ use cypcb_rules::DesignConstraints;
 ///     min_silk_clearance: Nm::from_mm(0.15),
 ///     min_courtyard_clearance: Nm::from_mm(0.25),
 ///     copper_weight_oz_x10: 10,
+///     blind_vias_allowed: false,
+///     buried_vias_allowed: false,
 ///     castellated_holes_allowed: false,
 ///     max_diff_pair_skew: Nm::from_mm(0.5),
 ///     max_drill_aspect_ratio: 800,
@@ -163,6 +166,18 @@ pub struct DesignRules {
     /// traceable to the table it came from rather than to a default nobody
     /// mentions.
     pub copper_weight_oz_x10: u32,
+    /// Whether this house drills a hole that stops inside the board.
+    ///
+    /// A blind via reaches an outer layer and stops; a buried one touches
+    /// neither face. Both mean the board is drilled and plated more than once,
+    /// with a lamination cycle between - which is why a house prices them
+    /// separately and many refuse them outright. Both flags have been in
+    /// `DesignConstraints` since the tables were written and were dropped
+    /// before they reached any rule, the same way `castellated_holes_allowed`
+    /// was.
+    pub blind_vias_allowed: bool,
+    /// Whether this house drills a hole that touches neither face.
+    pub buried_vias_allowed: bool,
     /// Whether this house will cut plated holes in half at the board outline.
     ///
     /// A process rather than a dimension, and the first of those to reach this
@@ -271,6 +286,8 @@ impl DesignRules {
             min_silk_clearance: c.min_silk_clearance.unwrap_or(c.min_silk_width),
             min_courtyard_clearance: c.min_courtyard_clearance.unwrap_or(Nm::from_mm(0.25)),
             copper_weight_oz_x10: c.copper_weight_oz_x10,
+            blind_vias_allowed: c.blind_vias_allowed,
+            buried_vias_allowed: c.buried_vias_allowed,
             castellated_holes_allowed: c.castellated_holes_allowed,
             max_diff_pair_skew: c.length_match_tolerance,
             max_drill_aspect_ratio: c.max_drill_aspect_ratio,

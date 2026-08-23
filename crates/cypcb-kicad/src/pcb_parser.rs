@@ -825,6 +825,10 @@ fn extract_stackup(elements: &[Sexp]) -> (Option<Stackup>, Vec<String>) {
             castellated_pads,
             edge_connector,
             impedance_controlled,
+            // KiCad has no word for a drill pair, so a board imported from it
+            // states none - which is not the same as stating that every span
+            // is allowed, and the rule reads it that way.
+            drill_pairs: Vec::new(),
         }),
         refusals,
     )

@@ -44,6 +44,7 @@ const STACKUP_WORDS: &[&str] = &[
     "pads",
     "connector",
     "impedance",
+    "drill",
 ];
 
 /// Read a source file into the AST.
@@ -419,6 +420,7 @@ impl<'a> Reader<'a> {
         let mut castellated_pads = false;
         let mut edge_connector = None;
         let mut impedance_controlled = false;
+        let mut drill_pairs = Vec::new();
         while !self.done() && !self.eat(&TokenKind::RBrace) {
             let layer_start = self.here();
             let Some(word) = self.peek_ident().map(str::to_string) else {
@@ -470,6 +472,19 @@ impl<'a> Reader<'a> {
                         self.unexpected("`controlled` after `impedance`");
                     }
                     impedance_controlled = true;
+                    continue;
+                }
+                "drill" => {
+                    self.bump();
+                    let start = self.identifier();
+                    let has_to = self.eat_word("to");
+                    let end = self.identifier();
+                    match (start, has_to, end) {
+                        (Some(start), true, Some(end)) => {
+                            drill_pairs.push((start.value, end.value));
+                        }
+                        _ => self.unexpected("a span like `drill Top to Inner2`"),
+                    }
                     continue;
                 }
                 _ => {}
@@ -585,6 +600,7 @@ impl<'a> Reader<'a> {
             castellated_pads,
             edge_connector,
             impedance_controlled,
+            drill_pairs,
             span: Span::new(start, self.behind()),
         })
     }

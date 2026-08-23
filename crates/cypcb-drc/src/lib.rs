@@ -153,6 +153,11 @@ pub fn run_drc(world: &mut BoardWorld, rules: &DesignRules) -> DrcResult {
         Box::new(rules::SlotClearanceRule),
         Box::new(rules::PadLandRule),
         Box::new(rules::DrillAspectRatioRule),
+        // A blind or buried via is a hole drilled in its own lamination
+        // cycle. Both flags a fab table sets for them had been dropped before
+        // they reached any rule, so nothing asked whether the house drills
+        // one - the same gap `castellated_holes_allowed` had.
+        Box::new(rules::ViaSpanRule),
     ];
 
     // Run each checker

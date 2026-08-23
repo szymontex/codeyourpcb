@@ -224,6 +224,37 @@ number is millimetres. A thickness comes back written in the unit the design
 wrote it in, so a stackup that says `copper 1oz` reads `copper 1oz` after a
 save rather than the arithmetic.
 
+### Which holes this build drills
+
+A board is drilled and plated once per lamination cycle, and each cycle reaches
+only the layers pressed together by then. A through hole is drilled after the
+last press; a **blind** via reaches an outer layer and stops inside; a
+**buried** one touches neither face. Both of the last two mean the board is
+drilled and plated more than once, which is why a house prices them separately
+and many refuse them.
+
+`drill` states a span this build makes - what Altium's stack manager calls a
+drill pair. KiCad has no word for it:
+
+```
+stackup {
+    copper 1oz
+    prepreg 0.1mm
+    copper 0.5oz
+    core 1.095mm
+    copper 0.5oz
+    prepreg 0.1mm
+    copper 1oz
+    drill Top to Bottom
+    drill Top to Inner1
+}
+```
+
+A via is then asked two questions. Does this house drill blind and buried holes
+at all - which is a number in the fab table. And is this span one of the ones
+listed - which is the design's own build plan. A board that lists no spans is
+asked only the first.
+
 ### What the fabricator does to the board
 
 Five things a house does to a board rather than presses into it live in the

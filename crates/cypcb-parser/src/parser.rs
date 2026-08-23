@@ -377,6 +377,7 @@ impl CypcbParser {
         let mut castellated_pads = false;
         let mut edge_connector = None;
         let mut impedance_controlled = false;
+        let mut drill_pairs = Vec::new();
 
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
@@ -407,6 +408,17 @@ impl CypcbParser {
                     };
                 }
                 "stackup_impedance" => impedance_controlled = true,
+                "stackup_drill" => {
+                    if let (Some(start), Some(end)) = (
+                        get_child_by_field(&child, "start"),
+                        get_child_by_field(&child, "end"),
+                    ) {
+                        drill_pairs.push((
+                            node_text(source, &start).to_string(),
+                            node_text(source, &end).to_string(),
+                        ));
+                    }
+                }
                 _ => {}
             }
         }
@@ -418,6 +430,7 @@ impl CypcbParser {
             castellated_pads,
             edge_connector,
             impedance_controlled,
+            drill_pairs,
             span: span_of(node),
         })
     }

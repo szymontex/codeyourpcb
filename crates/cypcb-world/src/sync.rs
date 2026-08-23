@@ -893,6 +893,28 @@ fn sync_board(board: &BoardDef, source: &str, world: &mut BoardWorld, result: &m
                 cypcb_parser::ast::EdgeConnectorDef::Bevelled => EdgeConnector::Bevelled,
             }),
             impedance_controlled: stackup.impedance_controlled,
+            // The spans this build drills. A name the language does not have
+            // is reported here rather than dropped, the same way a trace's
+            // layer is - a drill pair nobody can read is a hole nobody checks.
+            drill_pairs: stackup
+                .drill_pairs
+                .iter()
+                .filter_map(
+                    |(start, end)| match (parse_layer_name(start), parse_layer_name(end)) {
+                        (Some(start), Some(end)) => {
+                            Some(crate::components::DrillPair { start, end })
+                        }
+                        _ => {
+                            result.errors.push(SyncError::UnknownLayer {
+                                layer: format!("{start} to {end}"),
+                                src: source.to_string(),
+                                span: span_to_source_span(&stackup.span),
+                            });
+                            None
+                        }
+                    },
+                )
+                .collect(),
         });
     }
 }

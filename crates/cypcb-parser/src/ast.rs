@@ -224,6 +224,11 @@ pub struct StackupDef {
     /// `impedance controlled`: the fabricator holds the dielectric to the
     /// stackup rather than pressing to a total thickness.
     pub impedance_controlled: bool,
+    /// `drill Top to Inner2`: the drill spans this build makes.
+    ///
+    /// Layer names as written; the reader that builds the world resolves them,
+    /// so a name this language does not have is reported there with the rest.
+    pub drill_pairs: Vec<(String, String)>,
     /// Span covering the stackup definition.
     pub span: Span,
 }

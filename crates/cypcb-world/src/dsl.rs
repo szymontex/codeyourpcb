@@ -450,6 +450,9 @@ pub fn stackup_as_dsl(stackup: &crate::components::Stackup) -> String {
     if stackup.impedance_controlled {
         let _ = writeln!(out, "        impedance controlled");
     }
+    for pair in &stackup.drill_pairs {
+        let _ = writeln!(out, "        drill {} to {}", pair.start, pair.end);
+    }
     for layer in &stackup.layers {
         // A layer that stated no thickness is written without one. The
         // alternative - filling in a plausible foil or prepreg - would

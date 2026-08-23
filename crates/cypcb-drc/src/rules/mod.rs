@@ -29,6 +29,7 @@ pub mod trace_width;
 pub mod unrouted_pin;
 pub mod via_diameter;
 pub mod via_drill;
+pub mod via_span;
 pub mod zone_overlap;
 
 use cypcb_world::BoardWorld;
@@ -69,6 +70,7 @@ pub use trace_width::MinTraceWidthRule;
 pub use unrouted_pin::UnroutedPinRule;
 pub use via_diameter::ViaDiameterRule;
 pub use via_drill::ViaDrillRule;
+pub use via_span::ViaSpanRule;
 pub use zone_overlap::ZoneOverlapRule;
 
 /// A single DRC rule that can be executed against a board.

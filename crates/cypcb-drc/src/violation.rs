@@ -100,6 +100,8 @@ pub enum ViolationKind {
     SlotClearance,
     /// The land around a drilled hole is smaller than the fab will image.
     PadLand,
+    /// A via joins two layers by a route the build does not make.
+    ViaSpan,
 }
 
 impl std::fmt::Display for ViolationKind {
@@ -131,6 +133,7 @@ impl std::fmt::Display for ViolationKind {
             ViolationKind::DrillAspectRatio => write!(f, "drill-aspect-ratio"),
             ViolationKind::SlotClearance => write!(f, "slot-clearance"),
             ViolationKind::PadLand => write!(f, "pad-land"),
+            ViolationKind::ViaSpan => write!(f, "via-span"),
         }
     }
 }
@@ -773,6 +776,25 @@ impl DrcViolation {
     ///
     /// No `actual`/`required` pair: what is wrong is a disagreement between
     /// two statements the design makes, not a measurement against a limit.
+    /// A via whose span the build does not make.
+    ///
+    /// No `actual`/`required` pair, for the reason [`Self::stackup`] has none:
+    /// a via that goes from the top layer to an inner one is not a measurement
+    /// that missed a limit, it is a hole nobody drills on this build.
+    pub fn via_span(entity: Entity, message: String, location: Point) -> Self {
+        DrcViolation {
+            kind: ViolationKind::ViaSpan,
+            actual: None,
+            required: None,
+            area: None,
+            location,
+            entity,
+            other_entity: None,
+            source_span: None,
+            message,
+        }
+    }
+
     pub fn stackup(entity: Entity, message: String, location: Point) -> Self {
         DrcViolation {
             kind: ViolationKind::Stackup,

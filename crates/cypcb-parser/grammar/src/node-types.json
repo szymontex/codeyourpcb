@@ -1621,6 +1621,32 @@
     }
   },
   {
+    "type": "stackup_drill",
+    "named": true,
+    "fields": {
+      "end": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "trace_layer_name",
+            "named": true
+          }
+        ]
+      },
+      "start": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "trace_layer_name",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "stackup_edges",
     "named": true,
     "fields": {}
@@ -1771,6 +1797,10 @@
       "types": [
         {
           "type": "stackup_connector",
+          "named": true
+        },
+        {
+          "type": "stackup_drill",
           "named": true
         },
         {

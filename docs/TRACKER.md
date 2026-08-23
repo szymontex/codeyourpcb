@@ -83,9 +83,7 @@ answered, not as they were found. Items 2 to 7 are open.
 5. **An impedance solver.** Altium takes a target and returns a trace width.
    This takes a width and returns the impedance and how far off it is. The
    inverse does not exist, and it is the largest single item on this list.
-6. **Drill pairs and sequential lamination.** A via states `layers A to B`, and
-   the board states nothing about which spans a fabricator will make, so
-   nothing checks a blind or buried via against the build.
+6. ~~**Drill pairs and sequential lamination.**~~ **DONE.**
 7. **Rigid-flex.** Coverlay, stiffener, and regions that are rigid or flexible.
    No word in the language.
 
@@ -189,12 +187,41 @@ answered, not as they were found. Items 2 to 7 are open.
   the reader not reading `sheet` -> 4 failed; the KiCad importer dropping
   `addsublayer` -> 1 failed; the KiCad writer dropping it -> 1 failed.
   `./scripts/quality-gate.sh` -> `=== All stages passed ===`.
-- NEXT-ACTION: **item 6, drill pairs and sequential lamination.** A via states
-  `layers A to B` and the board states nothing about which spans a fabricator
-  will make, so a blind or buried via is checked against nothing. Item 5, the
-  impedance solver, is the largest on the list and wants this one's vocabulary
-  first: a stack that states which layers are pressed in which cycle is what a
-  blind via's depth is measured against.
+- DONE (item 6): **a via is a hole somebody has to drill, and now something
+  asks whether they will.** `blind_vias_allowed` and `buried_vias_allowed` have
+  been in every fab table since the tables were written and were dropped at
+  `from_constraints` before they reached a rule - the third instance of exactly
+  that defect, after `castellated_holes_allowed` and `min_pad_size`. New
+  `ViaSpanRule` (`via-span`, rule registry 27) classifies each via as through,
+  blind or buried from the board's own copper count and reports the last two
+  where the table refuses them.
+- **The design's own build plan is the second question.** `drill Top to Inner1`
+  in the stackup is a drill pair - what Altium's stack manager calls one, and
+  what KiCad has no word for. A via whose span is not on the list is a hole
+  this build does not make, whatever the house is capable of; a board that
+  lists none is asked only the fab table's question.
+- **The router has been laying holes nobody asked about.** Measured with the
+  rule unregistered: `multi_ic` routes to **381** violations, which is 34 under
+  its old ratchet of 415. Registered, the same run is **437** - the whole rise
+  is 56 blind and buried vias. The ratchet moves to 437 + its own band of 34 =
+  **471**, and the shorts count did not move at all. This is a re-baseline of a
+  published number for a new rule, not a regression, and the arithmetic is in
+  the table's own comment.
+- Proof: `cargo test -p cypcb-drc --test a_via_is_a_hole_somebody_drills` ->
+  **9 passed**; `cargo test -p cypcb-world --test what_the_board_block_survives`
+  -> **26 passed**. Read off the release binary on a four-layer board with a
+  `Top to Inner2` via: `a via from Top to Inner2 is a blind via and this table
+  does not drill them`. Mutations, each alone against a clean tree: the
+  `Inner` index offset dropped -> 1 failed; blind vias not checked -> 1 failed;
+  the design's list not checked -> 1 failed; `from_constraints` hard-coding the
+  flag -> 1 failed; the writer dropping the pairs -> 1 failed; an unknown layer
+  in a pair passed over in silence -> 1 failed. `./scripts/quality-gate.sh` ->
+  `=== All stages passed ===`.
+- NEXT-ACTION: **item 7, rigid-flex.** Coverlay, stiffener, and regions that
+  are rigid or flexible. It is the last item before the impedance solver, and
+  the one where this project has no prior art of its own to copy - a flexible
+  region is a property of an area of the board rather than of a layer, so it
+  is the first stackup item that needs geometry.
 
 
 ### V1 - CLI and core correctness

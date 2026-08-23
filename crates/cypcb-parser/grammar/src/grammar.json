@@ -313,6 +313,10 @@
               {
                 "type": "SYMBOL",
                 "name": "stackup_impedance"
+              },
+              {
+                "type": "SYMBOL",
+                "name": "stackup_drill"
               }
             ]
           }
@@ -402,6 +406,35 @@
         {
           "type": "STRING",
           "value": "controlled"
+        }
+      ]
+    },
+    "stackup_drill": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "STRING",
+          "value": "drill"
+        },
+        {
+          "type": "FIELD",
+          "name": "start",
+          "content": {
+            "type": "SYMBOL",
+            "name": "trace_layer_name"
+          }
+        },
+        {
+          "type": "STRING",
+          "value": "to"
+        },
+        {
+          "type": "FIELD",
+          "name": "end",
+          "content": {
+            "type": "SYMBOL",
+            "name": "trace_layer_name"
+          }
         }
       ]
     },

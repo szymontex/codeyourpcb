@@ -677,3 +677,66 @@ fn the_sheets_survive_being_written_down() {
     let back = load(&text);
     assert_eq!(back.stackup().cloned(), Some(before), "\n{text}");
 }
+
+#[test]
+fn the_drill_pairs_survive_being_written_down() {
+    // A board is drilled and plated once per lamination cycle, and each cycle
+    // reaches only the layers pressed together by then. Altium calls these
+    // drill pairs; KiCad has no word for them, so a design that states them
+    // and saves loses the whole build plan unless this writer carries it.
+    let source = r#"version 1
+
+board t {
+    size 40mm x 20mm
+    layers 4
+    stackup {
+        copper 1oz
+        prepreg 0.1mm
+        copper 0.5oz
+        core 1.095mm
+        copper 0.5oz
+        prepreg 0.1mm
+        copper 1oz
+        drill Top to Bottom
+        drill Top to Inner1
+    }
+}
+"#;
+    let mut world = load(source);
+    let before = world.stackup().cloned().expect("a stackup went in");
+    assert_eq!(before.drill_pairs.len(), 2, "the premise");
+
+    let text = board_as_dsl(&mut world);
+    assert!(text.contains("drill Top to Bottom"), "{text}");
+    assert!(text.contains("drill Top to Inner1"), "{text}");
+
+    let back = load(&text);
+    assert_eq!(back.stackup().cloned(), Some(before), "\n{text}");
+}
+
+#[test]
+fn a_drill_pair_naming_a_layer_the_language_does_not_have_is_reported() {
+    // The same rule a trace's layer follows: a name nobody can read is a hole
+    // nobody checks, so it is reported rather than dropped.
+    let source = r#"version 1
+
+board t {
+    size 40mm x 20mm
+    layers 4
+    stackup {
+        copper 1oz
+        core 1.5mm
+        copper 1oz
+        drill Top to Inner9
+    }
+}
+"#;
+    let parsed = cypcb_parser::parse(source);
+    assert!(parsed.errors.is_empty(), "parse: {:?}", parsed.errors);
+    let mut world = BoardWorld::new();
+    let mut library = FootprintLibrary::new();
+    let result = sync_ast_to_world(&parsed.value, source, &mut world, &mut library);
+    let said = format!("{:?}", result.errors);
+    assert!(!result.errors.is_empty(), "Inner9 is not a layer");
+    assert!(said.contains("Top to Inner9"), "{said}");
+}

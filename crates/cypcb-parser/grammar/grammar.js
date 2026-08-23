@@ -129,6 +129,7 @@ module.exports = grammar({
         $.stackup_pads,
         $.stackup_connector,
         $.stackup_impedance,
+        $.stackup_drill,
       )),
       '}',
     ),
@@ -159,6 +160,19 @@ module.exports = grammar({
       field('bevel', choice('plain', 'bevelled')),
     ),
     stackup_impedance: $ => seq('impedance', 'controlled'),
+
+    // drill Top to Inner2
+    //
+    // A drill span this build makes. A board is drilled and plated once per
+    // lamination cycle, and each cycle reaches only the layers pressed
+    // together by then - so a blind or buried via belongs to a cycle rather
+    // than sitting anywhere a designer likes. Altium calls these drill pairs.
+    stackup_drill: $ => seq(
+      'drill',
+      field('start', $.trace_layer_name),
+      'to',
+      field('end', $.trace_layer_name),
+    ),
 
     // copper "F.Cu" 0.035mm
     // core "dielectric 2" 1.095mm material "FR4" dk 4.5 df 0.02

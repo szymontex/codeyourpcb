@@ -653,6 +653,20 @@ pub struct Stackup {
     ///
     /// KiCad's `edge_connector`, which takes `yes` or `bevelled`.
     pub edge_connector: Option<EdgeConnector>,
+    /// The drill spans this build makes, when the design states them.
+    ///
+    /// A board is drilled and plated once per lamination cycle, and each cycle
+    /// can only reach the layers pressed together by then - so a blind or
+    /// buried via is not a hole a fabricator can put anywhere, it is a hole
+    /// that belongs to a cycle. Altium's stack manager calls these drill
+    /// pairs; KiCad has no word for them at all.
+    ///
+    /// Empty means the design says nothing, and then a via is checked only
+    /// against whether the house drills blind and buried holes. A design that
+    /// lists them is checked against the list as well: a span that is not on
+    /// it is a hole this build does not make.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub drill_pairs: Vec<DrillPair>,
     /// The design asks the fabricator to hold the dielectric to the stackup.
     ///
     /// This is what a controlled-impedance build is bought with: without it a
@@ -660,6 +674,28 @@ pub struct Stackup {
     /// get there, which is exactly what the impedance rule's arithmetic
     /// assumes it may not do. KiCad's `dielectric_constraints`.
     pub impedance_controlled: bool,
+}
+
+/// Two layers a drill reaches in one lamination cycle.
+///
+/// `drill Top to Inner2`. The order is the order the design wrote, and the
+/// rule that reads it compares both ways: a hole from the top layer to the
+/// second inner one is the same hole either way round.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct DrillPair {
+    /// One end of the span.
+    pub start: super::Layer,
+    /// The other end.
+    pub end: super::Layer,
+}
+
+impl DrillPair {
+    /// Whether this pair is the span between these two layers, either way
+    /// round.
+    #[inline]
+    pub fn covers(&self, start: super::Layer, end: super::Layer) -> bool {
+        (self.start == start && self.end == end) || (self.start == end && self.end == start)
+    }
 }
 
 /// A gold-finger edge connector, as KiCad's stackup states it.
