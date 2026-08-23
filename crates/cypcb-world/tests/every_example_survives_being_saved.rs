@@ -189,14 +189,15 @@ fn what_the_corpus_actually_exercises() {
     // example populates cannot fail - so this counts each column across the
     // corpus and states which ones are live.
     //
-    // Three are not, and they are named rather than left to be discovered:
+    // One is not, and it is named rather than left to be discovered:
     //
     // - **vias**: zero. Every mention of a via in `examples/` is prose in a
     //   comment. Dropping vias from the writer would leave this file green.
-    // - **fab**: no example names one, so nothing here carries a house.
-    // - **stackup**: no example carries one, so removing the writer's
-    //   `stackup` block leaves this file green. That was measured by removing
-    //   it: the round trip above stayed green.
+    //
+    // Two woke up on 2026-08-24 when `rigid-flex.cypcb` was added: it names a
+    // fab and carries a six-entry stack, so those columns guard something now.
+    // That is what the assertions below are for - they failed the moment the
+    // example landed, which is the whole point of asserting a zero.
     //
     // One more thing the corpus does not reach, measured the same way: no
     // example has a net that carries copper and connects to no pin, so
@@ -204,7 +205,7 @@ fn what_the_corpus_actually_exercises() {
     // too. `which_trace_does_not_survive_being_written_down` builds that shape
     // itself and is where it is covered.
     //
-    // The corpus is 122 components and 84 nets against **7 trace segments**,
+    // The corpus is 124 components and 86 nets against **9 trace segments**,
     // which is the same shape as the KiCad fixtures: boards written to show a
     // language feature, not to carry copper.
     let mut totals = Census {
@@ -243,6 +244,11 @@ fn what_the_corpus_actually_exercises() {
     assert!(totals.traces > 0, "{totals:?}");
     assert!(totals.segments > 0, "{totals:?}");
     assert!(totals.zones > 0, "{totals:?}");
+    assert!(totals.fab.is_some(), "no example names a fab: {totals:?}");
+    assert!(
+        totals.stackup_layers > 0,
+        "no example carries a stackup: {totals:?}"
+    );
     assert!(
         totals.layers > 0,
         "no example has more than two layers: {totals:?}"
@@ -254,13 +260,5 @@ fn what_the_corpus_actually_exercises() {
     assert_eq!(
         totals.vias, 0,
         "an example places a via now, so the via column guards something: {totals:?}"
-    );
-    assert_eq!(
-        totals.fab, None,
-        "an example names a fab now, so the fab column guards something: {totals:?}"
-    );
-    assert_eq!(
-        totals.stackup_layers, 0,
-        "an example carries a stackup now, so that column guards something: {totals:?}"
     );
 }

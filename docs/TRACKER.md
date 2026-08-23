@@ -440,10 +440,37 @@ answered, not as they were found. Items 2 to 7 are open.
   a different word -> 1 failed; a completion invented for `laminate`, which the
   language does not have -> 1 failed. `./scripts/quality-gate.sh` ->
   `=== All stages passed ===`.
-- NEXT-ACTION: **none pulled.** Every vector's open question is answered or
-  measured and dropped, and the language's newest vocabulary is now readable,
-  writable, checkable, drawable and discoverable. The next run should take a
-  small backlog item.
+- DONE: **the corpus had no example of anything V8 added, and writing one found
+  a defect.** `examples/rigid-flex.cypcb` is a two-layer flex board with a
+  Kapton stack, a coverlay, a stiffener, ounces of copper, a finish, a drill
+  span, a fab and a bend across the middle. It is the first example that states
+  a stackup at all.
+- **`EdgeClearanceRule` measured a flexible region against the board edge.** It
+  read `!zone.is_keepout()` where it meant `is_copper_pour()` - the third site
+  with that mistake, after `job.rs` and `zone_overlap.rs` - so every
+  rigid-flex board reported copper 0.00mm from its own outline. A ribbon is the
+  full width of the board by definition; it reaches the edge because that is
+  what it is. Found by `cypcb check` on the new example rather than by reading.
+- **Two guards woke up, which is what they were written for.**
+  `what_the_corpus_actually_exercises` asserted the fab and stackup columns
+  were zero, and both assertions failed the moment the example landed; they now
+  assert those columns are live. Vias are still zero and still stated. And
+  `spans_point_at_the_source` carried a third hardcoded list of the words a
+  zone can open with - `flex` was missing from it, which is the third such list
+  this word has had to be added to.
+- Proof: `cypcb check examples/rigid-flex.cypcb` -> `OK: passed DRC against
+  jlcpcb_standard_2layer`; `cargo test -p cypcb-world --test
+  every_example_survives_being_saved` -> **3 passed**, with the census reading
+  `fab: Some("jlcpcb"), stackup_layers: 6`. Mutation, alone against a clean
+  tree: the edge rule back to `is_keepout` -> **1 failed**, in
+  `every_example_is_a_board_worth_copying`, which is the test that would have
+  shipped the defect. `./scripts/quality-gate.sh` -> `=== All stages passed ===`.
+- **The example is also two of my own mistakes, fixed before it shipped:** a
+  trace leaving one pad and crossing the other on its way out, and a ground net
+  routed on the bottom layer of a board whose pads are surface copper on top.
+  Both were reported by the checker on the first run, which is the point of an
+  example being checked in CI.
+- NEXT-ACTION: **none pulled.** The next run should take a small backlog item.
 
 
 ### V1 - CLI and core correctness

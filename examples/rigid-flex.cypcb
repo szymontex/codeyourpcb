@@ -1,0 +1,92 @@
+// rigid-flex.cypcb - a board that bends, and how it is built.
+//
+// Two rigid ends with a flexible ribbon between them: a sensor at one end, a
+// connector at the other, folded once inside a case. The parts of the design
+// that describe the build - the stack, what the fabricator does to the board,
+// which spans it drills - are the point of this file.
+//
+//   cypcb check examples/rigid-flex.cypcb
+//
+// Nothing is drilled in the bend. The barrel of a plated hole is a tube of
+// copper on the wall of the hole; the laminate around it moves every time the
+// board is folded and the barrel does not, so it work-hardens and splits.
+// `cypcb check` reports one if you move a part into the ribbon.
+
+version 1
+
+board wearable {
+    size 60mm x 16mm
+    layers 2
+    fab jlcpcb
+
+    stackup {
+        // What a solder mask is on a rigid board, and not the same thing:
+        // mask is a liquid cured in place and cracks when the board bends.
+        coverlay 0.025mm material "Kapton"
+        copper 0.5oz
+        core 0.05mm material "Kapton" dk 3.4 df 0.008
+        copper 0.5oz
+        coverlay 0.025mm material "Kapton"
+
+        // Bonded under the rigid end that carries the connector, so the part
+        // of the flex that must not bend does not.
+        stiffener 0.2mm material "FR4"
+
+        finish "ENIG"
+        impedance controlled
+
+        // One cycle, one span: this build drills through and nothing else.
+        drill Top to Bottom
+    }
+}
+
+// The ribbon. Copper crosses it - that is what it is for - so it is neither a
+// keepout nor a pour.
+flex bend {
+    bounds 22mm, 0mm to 38mm, 16mm
+    layer all
+}
+
+footprint SMD2 {
+    description "two surface pads, one above the other - nothing drilled, because half of this board bends"
+    courtyard 3mm x 4mm
+
+    pad 1 rect at 0mm, -1mm size 1.4mm x 1mm
+    pad 2 rect at 0mm, 1mm size 1.4mm x 1mm
+}
+
+component J1 connector "SMD2" {
+    value "flex tail"
+    at 8mm, 8mm
+}
+
+component U1 ic "SMD2" {
+    value "sensor"
+    at 52mm, 8mm
+}
+
+net SDA {
+    J1.1
+    U1.1
+}
+
+net GND {
+    J1.2
+    U1.2
+}
+
+trace SDA {
+    from J1.1
+    to U1.1
+    layer Top
+    width 0.2mm
+}
+
+// Both nets run on the top layer: the pads are surface copper and a flexible
+// ribbon is a bad place for a via, so nothing here changes layer.
+trace GND {
+    from J1.2
+    to U1.2
+    layer Top
+    width 0.2mm
+}

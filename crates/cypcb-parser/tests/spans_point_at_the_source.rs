@@ -59,7 +59,9 @@ fn keyword(definition: &Definition) -> &'static [&'static str] {
         Definition::Component(_) => &["component"],
         Definition::Net(_) => &["net"],
         Definition::Footprint(_) => &["footprint"],
-        Definition::Zone(_) => &["zone", "keepout"],
+        // Three words, one definition: a copper pour, an area nothing may
+        // enter, and the part of a rigid-flex board that bends.
+        Definition::Zone(_) => &["zone", "keepout", "flex"],
         Definition::Trace(_) => &["trace"],
         Definition::Module(_) => &["module"],
         Definition::ModuleInstance(_) => &["use"],

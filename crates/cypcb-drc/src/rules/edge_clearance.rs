@@ -75,7 +75,13 @@ impl DrcRule for EdgeClearanceRule {
         // because nothing looked.
         let mut entries: Vec<_> = world.spatial().iter().cloned().collect();
         for (entity, zone) in world.zones() {
-            if zone.is_keepout() {
+            // `is_copper_pour`, not `!is_keepout`: this measures copper against
+            // the board edge, and only a pour is copper. A flexible region is
+            // an area the board bends in - it reaches the edge by definition,
+            // being the full width of the ribbon, so measuring one reported
+            // every rigid-flex board as having copper 0.00mm from its own
+            // outline.
+            if !zone.is_copper_pour() {
                 continue;
             }
             entries.push(cypcb_world::SpatialEntry::new(
