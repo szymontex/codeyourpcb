@@ -55,6 +55,7 @@ fn board(layers: &[Spec], copper: u8) -> BoardWorld {
                 name: name.map(str::to_string),
                 thickness: thickness.map(Nm::from_mm),
                 material: material.map(str::to_string),
+                written_as: None,
                 dk_x1000: None,
                 df_x1000000: None,
             })

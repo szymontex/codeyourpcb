@@ -271,12 +271,28 @@ impl<'a> Reader<'a> {
     /// A number and the unit written beside it. A bare number is millimetres,
     /// which is what the grammar's `unit` rule defaults to.
     fn dimension(&mut self) -> Option<Dimension> {
+        self.dimension_with_ounces(false)
+    }
+
+    /// The same, where ounces of copper are a thickness this position takes.
+    ///
+    /// `oz` is a weight per square foot rather than a length, and it is a
+    /// thickness of copper and of nothing else - `size 1oz x 2oz` is not a
+    /// board. One position takes it: a copper layer in a stackup, which is
+    /// where every fab table states it.
+    fn copper_thickness(&mut self) -> Option<Dimension> {
+        self.dimension_with_ounces(true)
+    }
+
+    fn dimension_with_ounces(&mut self, ounces: bool) -> Option<Dimension> {
         let (value, span) = self.number()?;
         let unit = match self.peek_ident() {
             Some("mm") => Some(Unit::Mm),
+            Some("um") => Some(Unit::Um),
             Some("mil") => Some(Unit::Mil),
             Some("in") => Some(Unit::Inch),
             Some("nm") => Some(Unit::Nm),
+            Some("oz") if ounces => Some(Unit::Oz),
             _ => None,
         };
         match unit {
@@ -471,7 +487,23 @@ impl<'a> Reader<'a> {
             // A thickness is optional, and the next line's layer name is not
             // one, so only a number starts it.
             let thickness = match self.peek() {
-                Some(TokenKind::Number(_)) => self.dimension(),
+                Some(TokenKind::Number(_)) if layer_type == LayerType::Copper => {
+                    self.copper_thickness()
+                }
+                Some(TokenKind::Number(_)) => {
+                    let read = self.dimension();
+                    // Without this the `oz` is left for the loop, which reads
+                    // the next word as a property name and answers "`stackup`
+                    // has no property `oz`" - true, and not what happened.
+                    if self.peek_ident() == Some("oz") {
+                        self.unexpected(
+                            "a length here: ounces are a weight of copper per square foot, \
+                             and only a copper layer is stated in them",
+                        );
+                        self.bump();
+                    }
+                    read
+                }
                 _ => None,
             };
             // Consumed here rather than left to the loop. The loop reads the

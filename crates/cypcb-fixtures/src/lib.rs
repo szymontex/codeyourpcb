@@ -48,6 +48,7 @@ pub fn every_copper_layer_answers_differently() -> Stackup {
         name: None,
         thickness: Some(Nm::from_mm(thickness_mm)),
         material: None,
+        written_as: None,
         dk_x1000: dk,
         df_x1000000: None,
     };
@@ -83,6 +84,7 @@ pub fn an_inner_layer_the_forms_cannot_describe() -> Stackup {
         name: None,
         thickness: Some(Nm::from_mm(thickness_mm)),
         material: None,
+        written_as: None,
         dk_x1000: dk,
         df_x1000000: None,
     };

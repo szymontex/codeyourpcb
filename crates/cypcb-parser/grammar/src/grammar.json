@@ -464,8 +464,17 @@
               "type": "FIELD",
               "name": "thickness",
               "content": {
-                "type": "SYMBOL",
-                "name": "dimension"
+                "type": "CHOICE",
+                "members": [
+                  {
+                    "type": "SYMBOL",
+                    "name": "dimension"
+                  },
+                  {
+                    "type": "SYMBOL",
+                    "name": "copper_weight"
+                  }
+                ]
               }
             },
             {
@@ -1342,6 +1351,10 @@
         },
         {
           "type": "STRING",
+          "value": "um"
+        },
+        {
+          "type": "STRING",
           "value": "mil"
         },
         {
@@ -1351,6 +1364,23 @@
         {
           "type": "STRING",
           "value": "nm"
+        }
+      ]
+    },
+    "copper_weight": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "FIELD",
+          "name": "value",
+          "content": {
+            "type": "SYMBOL",
+            "name": "number"
+          }
+        },
+        {
+          "type": "STRING",
+          "value": "oz"
         }
       ]
     },

@@ -46,7 +46,7 @@ pub mod pour;
 pub mod units;
 
 // Re-export primary types at crate root for convenience
-pub use coords::{Nm, Point, NM_PER_INCH, NM_PER_MIL, NM_PER_MM};
+pub use coords::{Nm, Point, NM_PER_INCH, NM_PER_MIL, NM_PER_MM, NM_PER_OZ, NM_PER_UM};
 pub use geometry::Rect;
 pub use physical_units::{ParsePhysicalUnitError, PhysicalQuantity, PhysicalUnit};
 pub use units::{Dimension, ParseUnitError, Unit};

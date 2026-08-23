@@ -459,7 +459,22 @@ pub fn stackup_as_dsl(stackup: &crate::components::Stackup) -> String {
             let _ = write!(line, " {}", quoted(name));
         }
         if let Some(thickness) = layer.thickness {
-            let _ = write!(line, " {}mm", format_mm(thickness.0 as f64 / 1e6));
+            // In the unit the design wrote, when it wrote one. A stackup that
+            // says `copper 1oz` is quoting the fab table it was written
+            // against, and answering `copper 0.034998mm` hands the fabricator
+            // arithmetic instead of the order they asked for.
+            match layer.written_as {
+                Some(unit) if unit != cypcb_core::Unit::Mm => {
+                    // Not `format_mm`: six decimals is 1nm resolution in
+                    // millimetres and noise in any other unit - `1oz` would
+                    // come back as `1.000000oz`. `f64`'s own Display prints
+                    // the shortest text that reads back as the same number.
+                    let _ = write!(line, " {}{}", unit.from_nm(thickness), unit);
+                }
+                _ => {
+                    let _ = write!(line, " {}mm", format_mm(thickness.0 as f64 / 1e6));
+                }
+            }
         }
         if let Some(material) = &layer.material {
             let _ = write!(line, " material {}", quoted(material));

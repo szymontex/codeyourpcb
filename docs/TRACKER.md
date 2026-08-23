@@ -75,15 +75,14 @@ project's stackup against what KiCad and Altium can state. Ordered as they were
 answered, not as they were found. Items 2 to 7 are open.
 
 1. **What the fabricator does to the board** - **DONE**, see below.
+   - **Units** - **DONE**, see below. (Listed as item 4 when the list was
+     written; taken second because every other item on it states a number.)
 2. **Colour of mask and silkscreen.** KiCad carries `(color "Green")` per
    stackup layer and it reaches the fab order. Nothing here has a word for it.
 3. **Dielectric sub-layers.** KiCad's `addsublayer` splits one dielectric slot
    into several prepreg sheets of different thicknesses, which is ordinary on
    six layers and up. The model is a flat list.
-4. **Units.** `unit: mm | mil | in | nm`. Copper is bought in ounces and every
-   fab table is written that way; a design can only say `0.035mm` and do the
-   conversion in the designer's head. Wanted: `oz` for copper weight, `um`,
-   and a conversion everything reads the same way.
+4. ~~**Units.**~~ **DONE.**
 5. **An impedance solver.** Altium takes a target and returns a trace width.
    This takes a width and returns the impedance and how far off it is. The
    inverse does not exist, and it is the largest single item on this list.
@@ -132,10 +131,36 @@ answered, not as they were found. Items 2 to 7 are open.
   the code. `CYPCB_E2E_PORT` overrides it and the default is 4327, with
   `--strictPort` so a busy port fails loudly rather than moving the server
   somewhere the tests are not looking.
-- NEXT-ACTION: **item 4, units.** It is the one every other item on this list
-  touches: an impedance solver states a width, a copper weight is quoted in
-  ounces, and a sub-layer is quoted in microns. `oz` and `um` in the grammar,
-  a conversion in one place, and the fab tables read against it.
+- DONE (item 4): **copper is stated in the unit it is bought in.** `um` is a
+  length like the rest. `oz` is not: it is a weight per square foot, so it is
+  taken in one position - a stackup's copper layer - and refused everywhere
+  else. `size 1oz x 2oz` is not a board and `core 1oz` is not a dielectric;
+  the second says what ounces are rather than leaving the loop to answer
+  "`stackup` has no property `oz`".
+- **One conversion, in one place.** `cypcb_core::NM_PER_OZ` is 34,998 - one
+  ounce over a square foot is 1.378 mils - and `cypcb-calc`'s IPC-2221 width
+  calculation now derives its `MILS_PER_OZ` from it instead of carrying its
+  own copy. Two copies is how the thickness a trace is priced on drifts from
+  the thickness the board is built with.
+- **A thickness comes back in the unit it was written in.** `StackupLayer`
+  gained `written_as`, which is presentation and not a second truth: the
+  number is always nanometres. A stackup that says `copper 1oz` reads
+  `copper 1oz` after a save rather than `copper 0.034998mm`, because a
+  fabricator asked for an order rather than for arithmetic. Millimetres still
+  print at six decimals, which is 1nm resolution and what makes the round trip
+  exact.
+- Proof: `cargo test -p cypcb-world --test what_the_board_block_survives` ->
+  **18 passed**. Read off the release binary: a board mixing `1.5in`, `1oz`,
+  `100um` and `43.1mil` checks clean, and both refusals report at the token.
+  Mutations, each alone against a clean tree: `oz` converted as millimetres ->
+  2 failed; `um` converted as millimetres -> 2 failed; the reader refusing
+  `oz` on copper -> 3 failed; the writer ignoring the written unit -> 1
+  failed; `sync` dropping it -> 1 failed. `./scripts/quality-gate.sh` ->
+  `=== All stages passed ===`.
+- NEXT-ACTION: **item 2, the colour of mask and silkscreen.** The smallest of
+  the five left, and it is the same shape as the five properties above:
+  KiCad carries `(color "Green")` per stackup layer, it reaches the fab order,
+  and nothing here has a word for it.
 
 
 ### V1 - CLI and core correctness

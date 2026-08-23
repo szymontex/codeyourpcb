@@ -4,7 +4,7 @@
 //! size, layer stackup, and the board marker.
 
 use bevy_ecs::prelude::*;
-use cypcb_core::Nm;
+use cypcb_core::{Nm, Unit};
 use serde::{Deserialize, Serialize};
 
 /// Marker component identifying the board entity.
@@ -465,6 +465,14 @@ pub struct StackupLayer {
     /// is `Eq` and `Hash`, and because a laminate datasheet publishes three
     /// decimals at most - `3.66`, `4.05`, `3.48`.
     pub dk_x1000: Option<u32>,
+    /// The unit the design wrote the thickness in, when it wrote one.
+    ///
+    /// Presentation, not a second truth: `thickness` is the number, always in
+    /// nanometres. This is what the writer prints it back as, so a stackup
+    /// that says `copper 1oz` - which is how every fab table states copper -
+    /// comes back saying `copper 1oz` rather than `copper 0.034998mm`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub written_as: Option<Unit>,
     /// The loss tangent, in millionths.
     ///
     /// `0.0089` is `8900`. A different scale from `dk_x1000` because the
@@ -485,9 +493,18 @@ impl StackupLayer {
             kind,
             name: None,
             thickness,
+            written_as: None,
             material: None,
             dk_x1000: None,
             df_x1000000: None,
+        }
+    }
+
+    /// The same, remembering the unit the design wrote the thickness in.
+    pub fn written_in(kind: StackupLayerKind, thickness: Option<Nm>, unit: Option<Unit>) -> Self {
+        StackupLayer {
+            written_as: unit,
+            ..StackupLayer::new(kind, thickness)
         }
     }
 }

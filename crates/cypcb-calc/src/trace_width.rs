@@ -59,8 +59,12 @@ const K_INTERNAL: f64 = 0.024;
 
 /// Copper thickness in mils per oz/ft² of copper weight.
 ///
-/// 1 oz copper = 1.378 mils = 35μm thickness.
-const MILS_PER_OZ: f64 = 1.378;
+/// 1 oz copper = 1.378 mils = 35μm thickness. Derived from `cypcb-core`'s
+/// `NM_PER_OZ` rather than written again: the language takes `copper 1oz` in a
+/// stackup and converts it with that constant, and two copies of one
+/// conversion is how the thickness a trace is priced on drifts from the
+/// thickness the board is built with.
+const MILS_PER_OZ: f64 = cypcb_core::NM_PER_OZ as f64 / NM_PER_MIL;
 
 /// Conversion: nanometers per mil.
 const NM_PER_MIL: f64 = 25_400.0;

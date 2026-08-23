@@ -273,6 +273,22 @@
     "fields": {}
   },
   {
+    "type": "copper_weight",
+    "named": true,
+    "fields": {
+      "value": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "number",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "courtyard_property",
     "named": true,
     "fields": {
@@ -1709,6 +1725,10 @@
         "required": false,
         "types": [
           {
+            "type": "copper_weight",
+            "named": true
+          },
+          {
             "type": "dimension",
             "named": true
           }
@@ -2687,6 +2707,10 @@
     "named": false
   },
   {
+    "type": "oz",
+    "named": false
+  },
+  {
     "type": "pF",
     "named": false
   },
@@ -2796,6 +2820,10 @@
   },
   {
     "type": "uH",
+    "named": false
+  },
+  {
+    "type": "um",
     "named": false
   },
   {

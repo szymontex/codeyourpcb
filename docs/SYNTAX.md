@@ -146,6 +146,37 @@ cannot.
 Nothing here has a table of laminates to check it against, and a material this
 tool does not recognise is still the one the fabricator is asked for.
 
+### Copper in the unit it is bought in
+
+Copper foil is sold by weight per square foot, and every fab table states it
+that way, so a copper layer takes ounces:
+
+```
+stackup {
+    copper 1oz
+    prepreg 100um dk 4.2
+    copper 0.5oz
+    core 43.1mil dk 4.5
+    copper 0.5oz
+    prepreg 100um dk 4.2
+    copper 2oz
+}
+```
+
+One ounce of copper spread over a square foot is 1.378 mils, which is 34,998
+nanometres - the same number IPC-2221's trace width calculation reads, so the
+thickness a trace is priced on cannot drift from the thickness the board is
+built with.
+
+`oz` is taken in that one position and nowhere else. It is a weight, not a
+length: `size 1oz x 2oz` is not a board, and `core 1oz` is not a dielectric.
+Both are refused, and the second says what ounces are.
+
+The units a length may carry are `mm`, `um`, `mil`, `in` and `nm`. A bare
+number is millimetres. A thickness comes back written in the unit the design
+wrote it in, so a stackup that says `copper 1oz` reads `copper 1oz` after a
+save rather than the arithmetic.
+
 ### What the fabricator does to the board
 
 Five things a house does to a board rather than presses into it live in the
@@ -851,19 +882,39 @@ import is reported as one that could not be followed.
 
 ## Units
 
-All dimensions require explicit units:
+A dimension carries a unit. A bare number is millimetres - the grammar's rule,
+and one the tool will say it applied.
 
-- `mm` - millimeters (most common)
+- `mm` - millimetres (most common)
+- `um` - micrometres, the unit a laminate datasheet prints a foil in
 - `mil` - thousandths of an inch
 - `in` - inches
-- `nm` - nanometers (internal precision)
+- `nm` - nanometres (internal precision)
 
 **Examples:**
 ```
 size 50mm x 30mm
 at 1.5in, 20mil
 width 0.254mm
+prepreg 100um
 ```
+
+One more unit exists and is not a length: `oz`, ounces of copper per square
+foot. Copper foil is bought by weight and every fab table states it that way,
+so a **copper layer in a stackup** takes it:
+
+```
+stackup {
+    copper 1oz
+    core 1.5mm
+    copper 1oz
+}
+```
+
+One ounce is 1.378 mils, which is 34,998 nanometres - the same number
+IPC-2221's trace width calculation reads. It is taken in that one position and
+refused everywhere else: `size 1oz x 2oz` is not a board and `core 1oz` is not
+a dielectric.
 
 Negative dimensions are supported for pad offsets:
 ```

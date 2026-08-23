@@ -423,3 +423,113 @@ fn a_board_that_asks_for_none_of_it_writes_none_of_it() {
         );
     }
 }
+
+/// A stack written the way a fab table is: copper in ounces, dielectrics in
+/// microns and mils, the board in inches.
+const MIXED_UNITS: &str = r#"version 1
+
+board t {
+    size 1.5in x 30mm
+    layers 4
+    stackup {
+        copper 1oz
+        prepreg 100um dk 4.2
+        copper 0.5oz
+        core 43.1mil dk 4.5
+        copper 0.5oz
+        prepreg 100um dk 4.2
+        copper 2oz
+    }
+}
+"#;
+
+#[test]
+fn copper_can_be_stated_in_the_unit_it_is_bought_in() {
+    // Copper foil is sold by weight per square foot and every fab table in
+    // this project states it that way. The language took millimetres and
+    // nothing else, so a designer reading `1oz` off a table did the conversion
+    // in their head before they could write it down.
+    let world = load(MIXED_UNITS);
+    let stackup = world.stackup().expect("a stackup went in");
+    let coppers: Vec<i64> = stackup
+        .layers
+        .iter()
+        .filter(|layer| layer.kind == cypcb_world::StackupLayerKind::Copper)
+        .map(|layer| layer.thickness.expect("stated").raw())
+        .collect();
+
+    // 1oz is 34_998nm, which is `cypcb_core::NM_PER_OZ` and what the IPC-2221
+    // width calculation reads as well.
+    assert_eq!(coppers, vec![34_998, 17_499, 17_499, 69_996], "{coppers:?}");
+}
+
+#[test]
+fn the_other_two_units_land_where_they_should() {
+    let world = load(MIXED_UNITS);
+    let stackup = world.stackup().expect("a stackup went in");
+    let prepreg = stackup.layers[1].thickness.expect("stated");
+    let core = stackup.layers[3].thickness.expect("stated");
+
+    assert_eq!(prepreg.raw(), 100_000, "100um is 0.1mm");
+    assert_eq!(core.raw(), 1_094_740, "43.1mil at 25400nm each");
+}
+
+#[test]
+fn a_thickness_comes_back_in_the_unit_it_was_written_in() {
+    // The number is nanometres either way. What this holds is the wording: a
+    // fabricator asked for `1oz` should read `1oz` back, not the arithmetic.
+    let mut world = load(MIXED_UNITS);
+    let text = board_as_dsl(&mut world);
+
+    assert!(text.contains("copper 1oz"), "{text}");
+    assert!(text.contains("copper 0.5oz"), "{text}");
+    assert!(text.contains("copper 2oz"), "{text}");
+    assert!(text.contains("prepreg 100um"), "{text}");
+    assert!(text.contains("core 43.1mil"), "{text}");
+
+    // And it still reads back as the same board.
+    let back = load(&text);
+    assert_eq!(back.stackup(), world.stackup(), "\n{text}");
+}
+
+#[test]
+fn a_thickness_written_in_millimetres_is_still_written_in_millimetres() {
+    // The control. Most stackups state millimetres, and this must not start
+    // printing them as something else.
+    let mut world = load(FOUR_LAYER);
+    let text = board_as_dsl(&mut world);
+    // Six decimals, which is 1nm resolution: the writer's rule for
+    // millimetres, and the reason a round trip through this file is exact.
+    assert!(text.contains("copper 0.035000mm"), "{text}");
+    assert!(!text.contains("oz"), "{text}");
+}
+
+#[test]
+fn ounces_are_a_copper_weight_and_the_reader_says_so() {
+    // A weight per square foot is a thickness of copper and of nothing else.
+    // Without a message here the loop reads the leftover `oz` as a property
+    // name and answers "`stackup` has no property `oz`" - true, and not what
+    // happened.
+    let source = r#"version 1
+
+board t {
+    size 30mm x 20mm
+    layers 2
+    stackup {
+        copper 1oz
+        core 1oz
+        copper 1oz
+    }
+}
+"#;
+    let parsed = cypcb_parser::parse(source);
+    let said = format!("{:?}", parsed.errors);
+    assert!(
+        !parsed.errors.is_empty(),
+        "a core in ounces is not a length"
+    );
+    assert!(
+        said.contains("weight of copper"),
+        "the message says what ounces are: {said}"
+    );
+}

@@ -29,6 +29,7 @@ fn stack(layers: &[Spec]) -> Stackup {
                 name: None,
                 thickness: thickness.map(Nm::from_mm),
                 material: None,
+                written_as: None,
                 dk_x1000: *dk,
                 df_x1000000: None,
             })

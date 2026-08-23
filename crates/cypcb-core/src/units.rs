@@ -3,7 +3,7 @@
 //! This module provides the [`Unit`] enum for representing and converting
 //! between different measurement units used in PCB design.
 
-use crate::coords::{Nm, NM_PER_INCH, NM_PER_MIL, NM_PER_MM};
+use crate::coords::{Nm, NM_PER_INCH, NM_PER_MIL, NM_PER_MM, NM_PER_OZ, NM_PER_UM};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use thiserror::Error;
@@ -34,6 +34,17 @@ pub enum Unit {
     Inch,
     /// Nanometers (native unit)
     Nm,
+    /// Micrometres (1 um = 1,000 nm)
+    ///
+    /// What a laminate datasheet prints a foil in: 18, 35 and 70 microns.
+    Um,
+    /// Ounces of copper per square foot (1 oz = 34,998 nm)
+    ///
+    /// A weight rather than a length, and the only unit here that is: copper
+    /// foil is bought by the ounce and every fab table states it that way.
+    /// It is a thickness of copper and of nothing else, which the grammar
+    /// enforces by taking it in one position - a stackup's copper layer.
+    Oz,
 }
 
 impl Unit {
@@ -56,6 +67,8 @@ impl Unit {
             Unit::Mil => (value * NM_PER_MIL as f64).round() as i64,
             Unit::Inch => (value * NM_PER_INCH as f64).round() as i64,
             Unit::Nm => value.round() as i64,
+            Unit::Um => (value * NM_PER_UM as f64).round() as i64,
+            Unit::Oz => (value * NM_PER_OZ as f64).round() as i64,
         };
         Nm(nm)
     }
@@ -77,6 +90,8 @@ impl Unit {
             Unit::Mil => nm.0 as f64 / NM_PER_MIL as f64,
             Unit::Inch => nm.0 as f64 / NM_PER_INCH as f64,
             Unit::Nm => nm.0 as f64,
+            Unit::Um => nm.0 as f64 / NM_PER_UM as f64,
+            Unit::Oz => nm.0 as f64 / NM_PER_OZ as f64,
         }
     }
 
@@ -96,6 +111,8 @@ impl Unit {
             Unit::Mil => "mil",
             Unit::Inch => "in",
             Unit::Nm => "nm",
+            Unit::Um => "um",
+            Unit::Oz => "oz",
         }
     }
 
@@ -108,6 +125,8 @@ impl Unit {
             Unit::Mil => NM_PER_MIL,
             Unit::Inch => NM_PER_INCH,
             Unit::Nm => 1,
+            Unit::Um => NM_PER_UM,
+            Unit::Oz => NM_PER_OZ,
         }
     }
 }
@@ -120,7 +139,7 @@ impl std::fmt::Display for Unit {
 
 /// Error type for unit parsing.
 #[derive(Debug, Clone, Error, PartialEq, Eq)]
-#[error("unknown unit: '{0}' (expected: mm, mil, in, nm)")]
+#[error("unknown unit: '{0}' (expected: mm, um, mil, in, nm, oz)")]
 pub struct ParseUnitError(pub String);
 
 impl FromStr for Unit {
@@ -151,6 +170,8 @@ impl FromStr for Unit {
             "mil" | "mils" => Ok(Unit::Mil),
             "in" | "inch" | "inches" => Ok(Unit::Inch),
             "nm" => Ok(Unit::Nm),
+            "um" | "µm" | "micron" | "microns" => Ok(Unit::Um),
+            "oz" => Ok(Unit::Oz),
             _ => Err(ParseUnitError(s.to_string())),
         }
     }

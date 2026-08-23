@@ -848,6 +848,15 @@ fn sync_board(board: &BoardDef, source: &str, world: &mut BoardWorld, result: &m
                     kind: stackup_kind(layer.layer_type),
                     name: layer.name.as_ref().map(|n| n.value.clone()),
                     thickness: layer.thickness.as_ref().map(|d| d.to_nm()),
+                    // The unit the design wrote, kept so the writer can print
+                    // it back. `copper 1oz` is how a fab table states copper,
+                    // and a round trip that answers `copper 0.034998mm` has
+                    // given the fabricator arithmetic instead of an order.
+                    written_as: layer
+                        .thickness
+                        .as_ref()
+                        .filter(|d| d.unit_written)
+                        .map(|d| d.unit),
                     material: layer.material.as_ref().map(|m| m.value.clone()),
                     dk_x1000: layer.dk.map(|dk| (dk * 1_000.0).round() as u32),
                     df_x1000000: layer.df.map(|df| (df * 1_000_000.0).round() as u32),

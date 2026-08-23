@@ -758,6 +758,9 @@ fn extract_stackup(elements: &[Sexp]) -> (Option<Stackup>, Vec<String>) {
             kind,
             name: Some(name),
             thickness,
+            // KiCad states a thickness in millimetres and nothing else, so
+            // there is no other unit to remember here.
+            written_as: None,
             material,
             dk_x1000,
             df_x1000000,

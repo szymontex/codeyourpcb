@@ -31,6 +31,25 @@ pub const NM_PER_MIL: i64 = 25_400;
 /// Conversion constant: nanometers per inch
 pub const NM_PER_INCH: i64 = 25_400_000;
 
+/// Conversion constant: nanometers per micrometre.
+///
+/// The unit a laminate datasheet prints a foil in, and the one a stackup is
+/// argued about in: 18, 35 and 70 microns rather than 0.018, 0.035 and 0.07
+/// millimetres.
+pub const NM_PER_UM: i64 = 1_000;
+
+/// Conversion constant: nanometers per ounce of copper weight.
+///
+/// Copper foil is bought by weight per square foot, not by thickness: an
+/// ounce of copper spread over a square foot is 1.378 mils thick, which is
+/// where this number comes from. Every fab table in this project states copper
+/// in ounces and every stackup states it in millimetres, and until this
+/// existed the conversion between them lived in a designer's head.
+///
+/// One number, in one place: `cypcb-calc`'s IPC-2221 width calculation used to
+/// carry its own `MILS_PER_OZ = 1.378` and now reads this.
+pub const NM_PER_OZ: i64 = 34_998;
+
 /// A coordinate value in nanometers.
 ///
 /// This newtype provides type safety and prevents accidentally mixing

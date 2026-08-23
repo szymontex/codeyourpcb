@@ -168,7 +168,7 @@ module.exports = grammar({
     stackup_layer: $ => seq(
       field('layer_type', choice('copper', 'prepreg', 'core', 'mask', 'silk', 'paste')),
       optional(field('name', $.string)),
-      optional(field('thickness', $.dimension)),
+      optional(field('thickness', choice($.dimension, $.copper_weight))),
       optional(seq('material', field('material', $.string))),
       optional(seq('dk', field('dk', $.number))),
       optional(seq('df', field('df', $.number))),
@@ -415,7 +415,14 @@ module.exports = grammar({
     ),
 
     // Units
-    unit: $ => choice('mm', 'mil', 'in', 'nm'),
+    // `um` is a length like the rest. `oz` is not here on purpose: it is a
+    // weight per square foot, a thickness of copper and of nothing else, so it
+    // is taken in one position - `stackup_layer`'s thickness - rather than
+    // everywhere a number can appear. `size 1oz x 2oz` is not a board.
+    unit: $ => choice('mm', 'um', 'mil', 'in', 'nm'),
+
+    // 1oz, 2oz - copper foil as every fab table states it.
+    copper_weight: $ => seq(field('value', $.number), 'oz'),
 
     // Terminals
     identifier: $ => /[a-zA-Z_][a-zA-Z0-9_]*/,

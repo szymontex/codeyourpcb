@@ -447,8 +447,17 @@ impl CypcbParser {
         let name =
             get_child_by_field(node, "name").map(|n| self.convert_string_literal(source, &n));
 
-        let thickness = get_child_by_field(node, "thickness")
-            .and_then(|n| self.convert_dimension(source, &n, errors));
+        // A copper layer's thickness may be stated in ounces per square foot,
+        // which is how every fab table states it and how nobody's stackup
+        // could until now. It is a different node, not a unit on `dimension`,
+        // because it is a thickness of copper and of nothing else.
+        let thickness = get_child_by_field(node, "thickness").and_then(|n| {
+            if n.kind() == "copper_weight" {
+                self.convert_copper_weight(source, &n, errors)
+            } else {
+                self.convert_dimension(source, &n, errors)
+            }
+        });
 
         let material =
             get_child_by_field(node, "material").map(|n| self.convert_string_literal(source, &n));
@@ -870,6 +879,33 @@ impl CypcbParser {
             PinId::Number(n)
         } else {
             PinId::Name(text.to_string())
+        }
+    }
+
+    /// Convert a `1oz` copper weight into the thickness it names.
+    ///
+    /// The conversion is `cypcb_core`'s `NM_PER_OZ`, which the IPC-2221 trace
+    /// width calculation reads as well - one number in one place, because two
+    /// copies is how the thickness a trace is priced on drifts from the
+    /// thickness the board is built with.
+    fn convert_copper_weight(
+        &self,
+        source: &str,
+        node: &Node,
+        errors: &mut Vec<ParseError>,
+    ) -> Option<Dimension> {
+        let value_node = get_child_by_field(node, "value")?;
+        let text = node_text(source, &value_node);
+        match text.parse::<f64>() {
+            Ok(value) => Some(Dimension::new(value, Unit::Oz, span_of(node))),
+            Err(_) => {
+                errors.push(ParseError::invalid_number(
+                    text,
+                    source.to_string(),
+                    span_of(&value_node).to_miette(),
+                ));
+                None
+            }
         }
     }
 
