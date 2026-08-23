@@ -417,9 +417,33 @@ answered, not as they were found. Items 2 to 7 are open.
   against `2 DRC violations (0 shorts, 1 clearance contacts)` one line below.
   `./scripts/quality-gate.sh` -> `=== All stages passed ===`, and the stack
   panel spec passes inside the full parallel run rather than only alone.
+- DONE: **the editor offered none of the language's new words, and inside a
+  stack it offered the wrong ones.** Measured before the fix: of `finish`,
+  `sheet`, `coverlay`, `stiffener`, `color`, `castellated`, `impedance`, `oz`
+  and `um`, the completion list had **zero**. Worse, `detectBlockContext` had
+  no `stackup` case, so a cursor inside `stackup { }` answered `board` and the
+  editor offered `size`, `layers` and `stackup` - three words none of which
+  belong there, and none of the fifteen that do.
+- **Fifteen completions and fourteen hover entries**, plus `flex` recognised as
+  a block that takes `bounds` and `layer`, which it was not. `drill` now
+  documents both of its meanings in one entry: the hole in a pad, and a span
+  the build drills.
+- **A ratchet, not a list.** `the-editor-offers-every-stackup-word.test.ts`
+  reads the words out of the generated grammar and holds the completion table
+  to them in both directions - nothing missing, and nothing offered that the
+  language refuses, because a completion for a word the parser rejects is worse
+  than none. It also guards its own selector: a rule set that matched nothing
+  would make every other assertion pass while proving nothing.
+- Proof: `npx vitest run src/__tests__/the-editor-offers-every-stackup-word.test.ts`
+  -> **4 passed**. Mutations, each alone against a clean tree: `sheet` dropped
+  -> 1 failed; `coverlay` dropped -> 1 failed; `drill`'s snippet starting with
+  a different word -> 1 failed; a completion invented for `laminate`, which the
+  language does not have -> 1 failed. `./scripts/quality-gate.sh` ->
+  `=== All stages passed ===`.
 - NEXT-ACTION: **none pulled.** Every vector's open question is answered or
-  measured and dropped, D8 and D9 are closed and their consequences are in the
-  code. The next run should take a small backlog item.
+  measured and dropped, and the language's newest vocabulary is now readable,
+  writable, checkable, drawable and discoverable. The next run should take a
+  small backlog item.
 
 
 ### V1 - CLI and core correctness

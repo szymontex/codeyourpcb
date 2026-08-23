@@ -90,7 +90,11 @@ type BlockContext =
   | 'net-pins'
   | 'trace'
   | 'footprint'
-  | 'zone';
+  | 'zone'
+  // Inside `stackup { }` the detector used to answer `board`, so the editor
+  // offered `size`, `layers` and `stackup` to somebody writing a stack - three
+  // words none of which belong there, and none of the eleven that do.
+  | 'stackup';
 
 function detectBlockContext(model: any, position: any): BlockContext {
   let braceDepth = 0;
@@ -114,7 +118,8 @@ function detectBlockContext(model: any, position: any): BlockContext {
           if (/^net\b/.test(before)) return 'net-pins';
           if (/^trace\b/.test(before)) return 'trace';
           if (/^footprint\b/.test(before)) return 'footprint';
-          if (/^(zone|keepout)\b/.test(before)) return 'zone';
+          if (/^(zone|keepout|flex)\b/.test(before)) return 'zone';
+          if (/^stackup\b/.test(before)) return 'stackup';
         }
       } else if (ch === ']') bracketDepth++;
       else if (ch === '[') {
@@ -191,7 +196,8 @@ function detectInlineSlot(beforeCursor: string, block: BlockContext): InlineSlot
       if (words.length === 2 && beforeCursor.endsWith(' ')) return 'component-type';
       if (words.length <= 1) return 'top-keyword';
       return 'nothing';
-    case 'board': case 'net': case 'trace': case 'footprint': case 'zone': case 'keepout':
+    case 'board': case 'net': case 'trace': case 'footprint':
+    case 'zone': case 'keepout': case 'flex':
       return words.length >= 2 ? 'nothing' : 'top-keyword';
     default:
       return words.length <= 1 ? 'top-keyword' : 'nothing';
@@ -282,11 +288,32 @@ function getUsedProperties(model: any, position: any): Set<string> {
 // Phase 3: Completion Provider
 // ============================================================================
 
-const BLOCK_PROPERTIES: Record<string, { label: string; snippet: string; detail: string }[]> = {
+export const BLOCK_PROPERTIES: Record<string, { label: string; snippet: string; detail: string }[]> = {
   board: [
     { label: 'size', snippet: 'size ${1:100}mm x ${2:80}mm', detail: 'Board dimensions' },
     { label: 'layers', snippet: 'layers ${1|2,4,6|}', detail: 'Copper layer count' },
     { label: 'stackup', snippet: 'stackup {\n\t$0\n}', detail: 'Layer stackup' },
+  ],
+  // Everything a stack states, in the order a fabricator reads it: what is
+  // pressed, then what is done to the board afterwards. The words come from
+  // the grammar and `the-editor-offers-every-stackup-word.test.ts` holds them
+  // to it, because a list here is a second place to forget one.
+  stackup: [
+    { label: 'copper', snippet: 'copper ${1:1}oz', detail: 'Copper foil - ounces or millimetres' },
+    { label: 'prepreg', snippet: 'prepreg ${1:0.1}mm dk ${2:4.5}', detail: 'Prepreg: glass and resin, cured in the press' },
+    { label: 'core', snippet: 'core ${1:1.5}mm dk ${2:4.5}', detail: 'Core: cured laminate, copper-clad both faces' },
+    { label: 'mask', snippet: 'mask ${1:0.02}mm color "${2:Green}"', detail: 'Solder mask' },
+    { label: 'silk', snippet: 'silk ${1:0.01}mm color "${2:White}"', detail: 'Silkscreen' },
+    { label: 'paste', snippet: 'paste ${1:0.1}mm', detail: 'Solder paste - deposited at assembly, not pressed' },
+    { label: 'coverlay', snippet: 'coverlay ${1:0.025}mm material "${2:Kapton}"', detail: 'Coverlay: the film over a bend' },
+    { label: 'stiffener', snippet: 'stiffener ${1:0.2}mm material "${2:FR4}"', detail: 'Stiffener: holds part of a flex rigid' },
+    { label: 'sheet', snippet: 'sheet ${1:0.0668}mm', detail: 'Another sheet in this dielectric slot' },
+    { label: 'finish', snippet: 'finish "${1|ENIG,HASL,OSP,Immersion Silver|}"', detail: 'Surface finish' },
+    { label: 'edges', snippet: 'edges plated', detail: 'Copper on the routed outline' },
+    { label: 'pads', snippet: 'pads castellated', detail: 'Plated holes cut in half by the outline' },
+    { label: 'connector', snippet: 'connector ${1|bevelled,plain|}', detail: 'Gold-finger edge connector' },
+    { label: 'impedance', snippet: 'impedance controlled', detail: 'Hold the dielectric to this stack' },
+    { label: 'drill', snippet: 'drill ${1:Top} to ${2:Inner1}', detail: 'A drill span this build makes' },
   ],
   component: [
     { label: 'value', snippet: 'value "${1:10k}"', detail: 'Component value' },
@@ -511,7 +538,9 @@ const KEYWORD_DOCS: Record<string, string> = {
   from: 'Trace start pin.\n\nSyntax: `from <refdes>.<pin>`',
   to: 'Trace end pin.\n\nSyntax: `to <refdes>.<pin>`',
   via: 'Via.\n\nSyntax: `via <x>mm,<y>mm drill <d>mm`',
-  drill: 'The hole in a pad.\n\n`drill 0.9mm` is drilled and round. `drill 2.4mm x 1.0mm` is a slot: milled along its length with a bit the width of its narrow dimension.',
+  // One word, two blocks: in a footprint it is the hole in a pad, in a stackup
+  // it is a span the build drills. Both, in the order a reader meets them.
+  drill: 'In a footprint, the hole in a pad: `drill 0.9mm` is drilled and round, `drill 2.4mm x 1.0mm` is a slot milled along its length with a bit the width of its narrow dimension.\n\nIn a stackup, a drill span this build makes: `drill Top to Inner1`. A board is drilled and plated once per lamination cycle, so a blind or buried via belongs to a cycle. Altium calls these drill pairs; KiCad has no word for them.',
   path: 'Trace polyline.\n\nSyntax: `path <x1>mm,<y1>mm -> <x2>mm,<y2>mm [-> ...]`',
   layer: 'Copper layer.\n\nTrace: `layer Top` / `layer Bottom`\nZone: `layer top` / `layer bottom` / `layer all`',
   locked: 'Prevent autorouter modification.\n\nSyntax: `locked`',
@@ -520,6 +549,21 @@ const KEYWORD_DOCS: Record<string, string> = {
   courtyard: 'Courtyard.\n\nSyntax: `courtyard <w>mm x <h>mm`',
   description: 'Description.\n\nSyntax: `description "<text>"`',
   stackup: 'Layer stackup.\n\nSyntax: `stackup { copper ... prepreg ... }`',
+  copper: 'Copper foil.\n\nSyntax: `copper 1oz` or `copper 0.035mm`. Ounces per square foot is how every fab table states it: 1oz is 34,998nm.',
+  prepreg: 'Prepreg: glass cloth and resin, cured in the press.\n\nSyntax: `prepreg 0.1mm material "FR4" dk 4.5 df 0.02`',
+  core: 'Core: cured laminate, copper-clad on both faces.\n\nSyntax: `core 1.5mm material "FR4" dk 4.5`',
+  coverlay: 'Coverlay: the polyimide film that covers copper where the board bends.\n\nWhat solder mask is on a rigid board, and not the same thing - mask is a liquid cured in place and cracks when the board bends.',
+  stiffener: 'Stiffener: material bonded under a flexible section to hold it rigid.\n\nFR4 or steel, under a connector or a mounting hole.',
+  sheet: 'Another sheet in this dielectric slot.\n\nSyntax: `prepreg 0.0668mm dk 4.5 sheet 0.0668mm dk 4.5`. A fabricator hits a target thickness with the prepreg they stock, so one slot is often several sheets. KiCad calls it `addsublayer`.',
+  finish: 'Surface finish the fabricator is asked for.\n\nSyntax: `finish "ENIG"`. Held as written - there is no table of finishes here to check one against.',
+  edges: 'Copper on the routed board outline, plated.\n\nSyntax: `edges plated`',
+  pads: 'Plated holes cut in half by the board outline.\n\nSyntax: `pads castellated`. The half-moons along the edge of a module that solders onto another board. The checker reports one if the fab table says the house does not make them.',
+  impedance: 'Ask the fabricator to hold the dielectric to this stack rather than pressing to a total thickness.\n\nSyntax: `impedance controlled`. What a controlled-impedance build is bought with.',
+  color: 'What colour the fabricator is asked to make this layer.\n\nSyntax: `color "Matte Black"`. Mask and silkscreen only - copper is the colour it is.',
+  material: 'The laminate or foil the board is quoted on.\n\nSyntax: `material "Isola 370HR"`. Held as written.',
+  dk: 'Dielectric constant.\n\nSyntax: `dk 4.5`. No unit. What a laminate datasheet prints, what KiCad calls `epsilon_r` and Altium calls Dk.',
+  df: 'Loss tangent.\n\nSyntax: `df 0.02`. No unit. KiCad calls it `loss_tangent`.',
+  flex: 'A flexible region: the part of a rigid-flex board that bends.\n\nSyntax: `flex bend { bounds 20mm, 0mm to 40mm, 20mm layer all }`. Not a keepout - copper crosses it, that is what it is for. Nothing may be drilled there: a plated hole in a bend cracks.',
   Top: 'Top copper layer (layer 1).',
   Bottom: 'Bottom copper layer (layer 2).',
   Inner1: 'Inner layer 1 (4+ layer boards).',
