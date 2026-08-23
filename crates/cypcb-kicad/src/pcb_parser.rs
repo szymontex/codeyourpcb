@@ -621,6 +621,28 @@ fn extract_version(elements: &[Sexp]) -> Result<i64, KicadPcbError> {
 /// file written by something other than pcbnew may well carry either.
 /// Accepting both on the way in cannot produce a wrong file; the writer beside
 /// this one stays exact.
+/// What a layer is, read from its name first and its type second.
+///
+/// KiCad's stackup has no word for a coverlay or a stiffener, so the writer
+/// beside this one puts them in the file as what they physically are - a
+/// dielectric film and a dielectric sheet - under the names `F.Coverlay` and
+/// `B.Stiffener`, which say which. Reading the type alone brought a
+/// rigid-flex board back as prepreg and core: the information was in the file
+/// and this reader walked past it, which made the trip lossy in one direction
+/// only and therefore invisible to a writer test.
+///
+/// A name is only allowed to override the type towards these two. Nothing
+/// else in a KiCad file is named this way, and a board that happens to carry a
+/// layer called `F.Coverlay` means the same thing by it.
+fn kind_of(name: &str, type_name: &str) -> Option<StackupLayerKind> {
+    match name {
+        "F.Coverlay" | "B.Coverlay" => return Some(StackupLayerKind::Coverlay),
+        "F.Stiffener" | "B.Stiffener" => return Some(StackupLayerKind::Stiffener),
+        _ => {}
+    }
+    stackup_kind_of(type_name)
+}
+
 fn stackup_kind_of(type_name: &str) -> Option<StackupLayerKind> {
     Some(match type_name {
         "copper" => StackupLayerKind::Copper,
@@ -793,7 +815,7 @@ fn extract_stackup(elements: &[Sexp]) -> (Option<Stackup>, Vec<String>) {
             refusals.push(format!("`{name}` states no type"));
             continue;
         };
-        let Some(kind) = stackup_kind_of(&type_name) else {
+        let Some(kind) = kind_of(&name, &type_name) else {
             refusals.push(format!(
                 "`{name}` is a `{type_name}`, which has no word here"
             ));

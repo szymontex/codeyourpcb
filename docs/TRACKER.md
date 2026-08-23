@@ -330,12 +330,32 @@ answered, not as they were found. Items 2 to 7 are open.
   anything but its share -> 2 failed; a summary line dropped -> 1 failed; the
   sheet count dropped -> 1 failed. `./scripts/quality-gate.sh` ->
   `=== All stages passed ===`.
-- NEXT-ACTION: **none in V8.** Every item the owner asked for is closed and the
-  stack is visible in the viewer. The two questions that predate this vector
-  are still the owner's: whether the clearance rule should count contacts
-  rather than segment pairs (V1), and whether a 9.45% profile saving is worth
-  `qfp_fanout` reading 58 shorts worse (V7). Both are re-baselines of every
-  published figure, which is why they are asked rather than taken.
+- DONE: **a rigid-flex board came back from KiCad as an ordinary one, and the
+  information was in the file the whole time.** KiCad's stackup has no word for
+  a coverlay or a stiffener, so the writer added two runs ago puts them in as
+  what they physically are - a dielectric film and a dielectric sheet - under
+  the names `F.Coverlay` and `B.Stiffener`, which say which. The reader
+  matched on the type alone, so the trip out and back turned a flex build into
+  prepreg and core. Measured before it was fixed: `["prepreg", "copper",
+  "core", "copper", "core"]` where the design said coverlay, copper, core,
+  copper, stiffener.
+- **Lossy in one direction only, which is why a writer test could not see it.**
+  The writer's own test asserted the file carries the right names and passed;
+  nothing read the file back with those names in it. `kind_of` reads the name
+  first and the type second, and a name may only override the type towards
+  those two kinds - a plain four-layer board still comes back exactly as it
+  went out, which is what the control test holds.
+- Proof: `cargo test -p cypcb-kicad --test the_kicad_board_carries_the_stackup`
+  -> **18 passed**, up from 16. Mutations, each alone against a clean tree: the
+  coverlay names dropped -> 1 failed; the stiffener names dropped -> 1 failed;
+  the type ignored entirely -> 4 failed. `./scripts/quality-gate.sh` ->
+  `=== All stages passed ===`.
+- NEXT-ACTION: **none pulled.** V8 is closed and this was the last thing it
+  left behind. The two live questions are still the owner's: whether the
+  clearance rule should count contacts rather than segment pairs (V1), and
+  whether a 9.45% profile saving is worth `qfp_fanout` reading 58 shorts worse
+  (V7). Both are re-baselines of every published figure, which is why they are
+  asked rather than taken.
 
 
 ### V1 - CLI and core correctness

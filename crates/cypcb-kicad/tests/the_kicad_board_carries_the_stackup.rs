@@ -567,3 +567,82 @@ fn the_sheets_of_a_slot_make_the_trip_out_and_back() {
     assert_eq!(sheet.dk_x1000, Some(4_500));
     assert_eq!(sheet.df_x1000000, Some(20_000));
 }
+
+#[test]
+fn a_rigid_flex_stack_comes_back_rigid_flex() {
+    // KiCad's stackup has no word for a coverlay or a stiffener, so the writer
+    // puts them in the file as what they physically are - a dielectric film
+    // and a dielectric sheet - under names that say which. Reading the type
+    // alone brought the board back as prepreg and core: the information was in
+    // the file and the reader walked past it, which made the trip lossy in one
+    // direction only and therefore invisible to a writer test.
+    let flex: &[Spec] = &[
+        (
+            StackupLayerKind::Coverlay,
+            Some(0.025),
+            None,
+            Some("Kapton"),
+        ),
+        (Copper, Some(0.0175), None, None),
+        (Core, Some(0.05), None, Some("Kapton")),
+        (Copper, Some(0.0175), None, None),
+        (StackupLayerKind::Stiffener, Some(0.2), None, Some("FR4")),
+    ];
+    let mut world = board(flex, 2);
+
+    let text = write_board(&mut world, "test");
+    assert!(
+        text.contains("\"F.Coverlay\""),
+        "the name carries it:\n{text}"
+    );
+    assert!(
+        text.contains("\"B.Stiffener\""),
+        "and so does this one:\n{text}"
+    );
+
+    let result = cypcb_kicad::parse_kicad_pcb_str(&text).expect("the file reads");
+    let stackup = result
+        .world
+        .stackup()
+        .cloned()
+        .expect("a stackup came back");
+    let kinds: Vec<&str> = stackup
+        .layers
+        .iter()
+        .map(|layer| layer.kind.as_str())
+        .collect();
+    assert_eq!(
+        kinds,
+        vec!["coverlay", "copper", "core", "copper", "stiffener"],
+        "\n{text}"
+    );
+    // The materials survive with them: a coverlay of Kapton is not a coverlay
+    // of nothing.
+    assert_eq!(stackup.layers[0].material.as_deref(), Some("Kapton"));
+    assert_eq!(stackup.layers[4].material.as_deref(), Some("FR4"));
+}
+
+#[test]
+fn an_ordinary_dielectric_is_still_an_ordinary_dielectric() {
+    // The control. A name is only allowed to override the type towards those
+    // two kinds, and nothing else in a KiCad file is named that way - so a
+    // plain four-layer board must come back exactly as it went out.
+    let mut world = board(BARE, 4);
+    let text = write_board(&mut world, "test");
+    let result = cypcb_kicad::parse_kicad_pcb_str(&text).expect("the file reads");
+    let stackup = result
+        .world
+        .stackup()
+        .cloned()
+        .expect("a stackup came back");
+    let kinds: Vec<&str> = stackup
+        .layers
+        .iter()
+        .map(|layer| layer.kind.as_str())
+        .collect();
+    assert_eq!(
+        kinds,
+        vec!["copper", "prepreg", "copper", "core", "copper", "prepreg", "copper"],
+        "\n{text}"
+    );
+}
