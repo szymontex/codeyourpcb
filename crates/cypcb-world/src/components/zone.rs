@@ -15,6 +15,14 @@ pub enum ZoneKind {
     Keepout,
     /// Copper fill zone (pour) - connected to a net.
     CopperPour,
+    /// The part of the board that bends.
+    ///
+    /// A rigid-flex board is one panel with rigid sections and a flexible
+    /// ribbon between them. The ribbon is not a keepout - copper crosses it,
+    /// that is what it is for - and it is not a pour. What it is, is an area
+    /// the board is bent in during service, and a plated hole in a bend
+    /// cracks: the barrel is copper and the laminate around it moves.
+    Flex,
 }
 
 /// A zone entity (keepout or copper pour).
@@ -88,6 +96,17 @@ impl Zone {
         }
     }
 
+    /// Create a flexible region: the part of the board that bends.
+    pub fn flex(bounds: Rect, layer_mask: u32) -> Self {
+        Zone {
+            net: None,
+            bounds,
+            kind: ZoneKind::Flex,
+            layer_mask,
+            name: None,
+        }
+    }
+
     /// Create a new copper pour zone.
     ///
     /// # Arguments
@@ -143,6 +162,12 @@ impl Zone {
     #[inline]
     pub fn is_copper_pour(&self) -> bool {
         self.kind == ZoneKind::CopperPour
+    }
+
+    /// Check if this is a flexible region: the part of the board that bends.
+    #[inline]
+    pub fn is_flex(&self) -> bool {
+        self.kind == ZoneKind::Flex
     }
 
     /// Check if a point is inside the zone bounds.

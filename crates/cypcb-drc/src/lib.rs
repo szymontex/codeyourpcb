@@ -158,6 +158,11 @@ pub fn run_drc(world: &mut BoardWorld, rules: &DesignRules) -> DrcResult {
         // they reached any rule, so nothing asked whether the house drills
         // one - the same gap `castellated_holes_allowed` had.
         Box::new(rules::ViaSpanRule),
+        // A plated hole in a bend cracks: the barrel is copper and the
+        // laminate around it moves. Reports nothing on a board that declares
+        // no flexible region, which is every board this project shipped
+        // before rigid-flex had a word here.
+        Box::new(rules::FlexHoleRule),
     ];
 
     // Run each checker

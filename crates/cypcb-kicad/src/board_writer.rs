@@ -197,6 +197,25 @@ fn stackup_entries(stackup: &Stackup, copper_layers: usize) -> Vec<(String, &'st
                     ("B.Mask".to_string(), "Bottom Solder Mask")
                 }
             }
+            // KiCad's stackup has no word for either, and inventing a type
+            // name would produce a file pcbnew refuses. They are written as
+            // what they physically are - a dielectric film and a dielectric
+            // sheet - under a name that says which, so nothing is silently
+            // lost and nothing is silently invented.
+            StackupLayerKind::Coverlay => {
+                if front {
+                    ("F.Coverlay".to_string(), "prepreg")
+                } else {
+                    ("B.Coverlay".to_string(), "prepreg")
+                }
+            }
+            StackupLayerKind::Stiffener => {
+                if front {
+                    ("F.Stiffener".to_string(), "core")
+                } else {
+                    ("B.Stiffener".to_string(), "core")
+                }
+            }
             StackupLayerKind::Silk => {
                 if front {
                     ("F.SilkS".to_string(), "Top Silk Screen")

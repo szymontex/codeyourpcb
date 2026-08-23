@@ -322,6 +322,10 @@ pub enum LayerType {
     /// word for one would describe a different build than the file it came
     /// from.
     Paste,
+    /// Coverlay: the film that covers copper where the board bends.
+    Coverlay,
+    /// Stiffener: material bonded under a flexible section to hold it rigid.
+    Stiffener,
 }
 
 impl LayerType {
@@ -335,6 +339,8 @@ impl LayerType {
             "mask" => Some(LayerType::Mask),
             "silk" => Some(LayerType::Silk),
             "paste" => Some(LayerType::Paste),
+            "coverlay" => Some(LayerType::Coverlay),
+            "stiffener" => Some(LayerType::Stiffener),
             _ => None,
         }
     }
@@ -938,6 +944,8 @@ pub enum ZoneKind {
     Keepout,
     /// Copper fill zone (pour) - connected to a net.
     CopperPour,
+    /// A flexible region: the part of a rigid-flex board that bends.
+    Flex,
 }
 
 impl ZoneKind {
@@ -947,6 +955,7 @@ impl ZoneKind {
         match s {
             "keepout" => Some(ZoneKind::Keepout),
             "zone" => Some(ZoneKind::CopperPour),
+            "flex" => Some(ZoneKind::Flex),
             _ => None,
         }
     }

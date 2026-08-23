@@ -224,6 +224,45 @@ number is millimetres. A thickness comes back written in the unit the design
 wrote it in, so a stackup that says `copper 1oz` reads `copper 1oz` after a
 save rather than the arithmetic.
 
+### A board that bends
+
+A rigid-flex board is one panel with rigid sections and a flexible ribbon
+between them. The ribbon needs three words the rest of this language does not
+have.
+
+`coverlay` and `stiffener` are stackup layers. Coverlay is what solder mask is
+on a rigid board and not the same thing: mask is a liquid cured in place and
+cracks when the board bends, so a flexible section gets a polyimide film
+laminated over it instead. A stiffener is FR4 or steel bonded under the part of
+the flex that must not bend - under a connector, or a mounting hole.
+
+`flex` is a region, written like a `zone` or a `keepout`:
+
+```
+board wearable {
+    size 60mm x 20mm
+    layers 2
+    stackup {
+        coverlay 0.025mm material "Kapton"
+        copper 0.5oz
+        core 0.05mm material "Kapton" dk 3.4
+        copper 0.5oz
+        coverlay 0.025mm material "Kapton"
+        stiffener 0.2mm material "FR4"
+    }
+}
+
+flex bend { bounds 20mm, 0mm to 40mm, 20mm layer all }
+```
+
+A flexible region is not a keepout - copper crosses it, that is what it is for
+- and it is not a pour. What it is, is an area the board is bent in during
+service, and the checker holds one rule about it: **nothing is drilled there**.
+The barrel of a plated hole is a tube of copper on the wall of the hole; the
+laminate around it moves every time the board is folded and the barrel does
+not, so it work-hardens and splits. A board that declares no flexible region is
+never asked.
+
 ### Which holes this build drills
 
 A board is drilled and plated once per lamination cycle, and each cycle reaches

@@ -470,6 +470,14 @@
               {
                 "type": "STRING",
                 "value": "paste"
+              },
+              {
+                "type": "STRING",
+                "value": "coverlay"
+              },
+              {
+                "type": "STRING",
+                "value": "stiffener"
               }
             ]
           }
@@ -2046,6 +2054,10 @@
               {
                 "type": "STRING",
                 "value": "keepout"
+              },
+              {
+                "type": "STRING",
+                "value": "flex"
               }
             ]
           }

@@ -401,6 +401,19 @@ pub enum StackupLayerKind {
     Mask,
     /// Silkscreen.
     Silk,
+    /// Coverlay: the polyimide film that covers copper on a flexible section.
+    ///
+    /// What a solder mask is on a rigid board, and not the same thing: mask is
+    /// a liquid cured in place and cracks when the board bends, so a flexible
+    /// section gets a film laminated over it instead. A rigid-flex build has
+    /// both, in different places.
+    Coverlay,
+    /// Stiffener: material bonded under a flexible section to hold it rigid.
+    ///
+    /// FR4 or steel, under a connector or a mounting hole, so the part of the
+    /// flex that must not bend does not. It is bonded rather than pressed, and
+    /// it carries no copper.
+    Stiffener,
     /// Solder paste, deposited through a stencil at assembly.
     ///
     /// Not a layer a fabricator presses, and in the model anyway. KiCad's own
@@ -431,6 +444,8 @@ impl StackupLayerKind {
             StackupLayerKind::Core => "core",
             StackupLayerKind::Mask => "mask",
             StackupLayerKind::Silk => "silk",
+            StackupLayerKind::Coverlay => "coverlay",
+            StackupLayerKind::Stiffener => "stiffener",
             StackupLayerKind::Paste => "paste",
         }
     }

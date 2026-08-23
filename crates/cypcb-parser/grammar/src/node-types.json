@@ -1719,6 +1719,10 @@
             "named": false
           },
           {
+            "type": "coverlay",
+            "named": false
+          },
+          {
             "type": "mask",
             "named": false
           },
@@ -1732,6 +1736,10 @@
           },
           {
             "type": "silk",
+            "named": false
+          },
+          {
+            "type": "stiffener",
             "named": false
           }
         ]
@@ -2278,6 +2286,10 @@
         "required": true,
         "types": [
           {
+            "type": "flex",
+            "named": false
+          },
+          {
             "type": "keepout",
             "named": false
           },
@@ -2570,6 +2582,10 @@
     "named": false
   },
   {
+    "type": "coverlay",
+    "named": false
+  },
+  {
     "type": "crystal",
     "named": false
   },
@@ -2619,6 +2635,10 @@
   },
   {
     "type": "finish",
+    "named": false
+  },
+  {
+    "type": "flex",
     "named": false
   },
   {
@@ -2892,6 +2912,10 @@
   },
   {
     "type": "stackup",
+    "named": false
+  },
+  {
+    "type": "stiffener",
     "named": false
   },
   {

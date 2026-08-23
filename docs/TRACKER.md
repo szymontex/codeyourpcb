@@ -84,8 +84,7 @@ answered, not as they were found. Items 2 to 7 are open.
    This takes a width and returns the impedance and how far off it is. The
    inverse does not exist, and it is the largest single item on this list.
 6. ~~**Drill pairs and sequential lamination.**~~ **DONE.**
-7. **Rigid-flex.** Coverlay, stiffener, and regions that are rigid or flexible.
-   No word in the language.
+7. ~~**Rigid-flex.**~~ **DONE.**
 
 - DONE (item 1): **the five things KiCad states about a board that this project
   read and walked past.** `copper_finish`, `edge_plating`, `castellated_pads`,
@@ -217,11 +216,46 @@ answered, not as they were found. Items 2 to 7 are open.
   flag -> 1 failed; the writer dropping the pairs -> 1 failed; an unknown layer
   in a pair passed over in silence -> 1 failed. `./scripts/quality-gate.sh` ->
   `=== All stages passed ===`.
-- NEXT-ACTION: **item 7, rigid-flex.** Coverlay, stiffener, and regions that
-  are rigid or flexible. It is the last item before the impedance solver, and
-  the one where this project has no prior art of its own to copy - a flexible
-  region is a property of an area of the board rather than of a layer, so it
-  is the first stackup item that needs geometry.
+- DONE (item 7): **a board that bends has three words it did not have.**
+  `coverlay` and `stiffener` are stackup layers - coverlay is what solder mask
+  is on a rigid board and not the same thing, because mask is a liquid cured in
+  place and cracks when the board bends. `flex` is a region, written like a
+  `zone` or a `keepout`, and it is neither: copper crosses a flexible region,
+  that is what it is for.
+- **One rule, and it is the one every flex design guide leads with.**
+  `FlexHoleRule` (`flex-hole`, rule registry 28) reports a drilled hole inside
+  a flexible region: the barrel of a plated hole is a tube of copper on the
+  wall, the laminate around it moves every time the board is folded and the
+  barrel does not, so it work-hardens and splits. A board that declares no
+  region is never asked, which is every board this project shipped.
+- **Two places treated "not a keepout" as "a pour" and now ask the right
+  question.** `job.rs` would have exported a flexible region as copper and
+  filled the bend with it; `zone_overlap.rs` would have measured it against a
+  pour of another net. Both read `is_copper_pour()` now.
+- **The gate caught the two surfaces I would have forgotten.**
+  `the_guide_shows_every_construct` failed because `docs/SYNTAX.md` showed no
+  `flex` example, and `the-editor-knows-every-keyword` failed because the
+  viewer's Monaco grammar would have written it in plain text. Both are tests
+  written for exactly this and both earned their keep on this change.
+- Proof: `cargo test -p cypcb-drc --test nothing_is_drilled_where_the_board_bends`
+  -> **5 passed**; `cargo test -p cypcb-world --test what_the_board_block_survives`
+  -> **27 passed**; `... --test which_trace_does_not_survive_being_written_down`
+  -> **13 passed**. Read off the release binary on a Kapton two-layer board
+  with a bend from 20mm to 40mm: `a hole 0.800mm across sits in the flexible
+  region 'bend'`, and the connector at 10mm is not reported. Mutations, each
+  alone against a clean tree: the region's bounds not checked -> 2 failed; the
+  rule reading every zone but the flexible ones -> 3 failed; the reader
+  dropping `flex` -> 1 failed; the writer calling one a keepout -> 1 failed.
+  `./scripts/quality-gate.sh` -> `=== All stages passed ===`.
+- NEXT-ACTION: **item 5, the impedance solver, and it is the last one.** Altium
+  takes a target impedance and returns a trace width; this takes a width and
+  returns the impedance and how far off it is. The inverse is what a designer
+  actually needs, and everything it needs now exists: `Stackup::environment_of`
+  says which form a layer calls for and with what geometry, `cypcb-calc` has
+  IPC-2141's closed forms, and a net can state `impedance 50ohm`. What is
+  missing is the search - the forms are not invertible in closed form, so it is
+  a bisection on width against a tolerance, and the answer has to say which
+  form it solved and that the fab's own calculator is the authority.
 
 
 ### V1 - CLI and core correctness

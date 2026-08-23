@@ -495,6 +495,7 @@ fn hover_for_zone(_doc: &DocumentState, zone: &ZoneDef, offset: usize) -> Option
         let kind_str = match zone.kind {
             ZoneKind::Keepout => "Keepout",
             ZoneKind::CopperPour => "Copper Pour",
+            ZoneKind::Flex => "Flexible region",
         };
 
         let mut lines = vec![];

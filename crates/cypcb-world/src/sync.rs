@@ -929,6 +929,8 @@ fn stackup_kind(layer_type: cypcb_parser::ast::LayerType) -> StackupLayerKind {
         LayerType::Mask => StackupLayerKind::Mask,
         LayerType::Silk => StackupLayerKind::Silk,
         LayerType::Paste => StackupLayerKind::Paste,
+        LayerType::Coverlay => StackupLayerKind::Coverlay,
+        LayerType::Stiffener => StackupLayerKind::Stiffener,
     }
 }
 
@@ -1221,6 +1223,7 @@ fn sync_zone(zone_def: &ZoneDef, world: &mut BoardWorld, _result: &mut SyncResul
     let kind = match zone_def.kind {
         AstZoneKind::Keepout => EcsZoneKind::Keepout,
         AstZoneKind::CopperPour => EcsZoneKind::CopperPour,
+        AstZoneKind::Flex => EcsZoneKind::Flex,
     };
 
     // Parse layer to layer mask
@@ -1248,7 +1251,9 @@ fn sync_zone(zone_def: &ZoneDef, world: &mut BoardWorld, _result: &mut SyncResul
             .net
             .as_ref()
             .map(|net| world.intern_net(&net.value)),
-        AstZoneKind::Keepout => None,
+        // Neither of these is poured to anything: a keepout forbids copper and
+        // a flexible region is an area the board bends in.
+        AstZoneKind::Keepout | AstZoneKind::Flex => None,
     };
 
     let zone = Zone {

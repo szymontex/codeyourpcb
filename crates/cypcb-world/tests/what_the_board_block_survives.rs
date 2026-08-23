@@ -740,3 +740,52 @@ board t {
     assert!(!result.errors.is_empty(), "Inner9 is not a layer");
     assert!(said.contains("Top to Inner9"), "{said}");
 }
+
+#[test]
+fn a_flex_stack_can_name_its_coverlay_and_its_stiffener() {
+    // What a solder mask is on a rigid board, coverlay is on a flexible one -
+    // and not the same thing: mask is a liquid cured in place and cracks when
+    // the board bends, so a flexible section gets a film laminated over it. A
+    // stiffener is bonded under the part of the flex that must not bend.
+    let source = r#"version 1
+
+board wearable {
+    size 60mm x 20mm
+    layers 2
+    stackup {
+        coverlay 0.025mm material "Kapton"
+        copper 0.5oz
+        core 0.05mm material "Kapton" dk 3.4
+        copper 0.5oz
+        coverlay 0.025mm material "Kapton"
+        stiffener 0.2mm material "FR4"
+    }
+}
+"#;
+    let mut world = load(source);
+    let before = world.stackup().cloned().expect("a stackup went in");
+    let kinds: Vec<String> = before
+        .layers
+        .iter()
+        .map(|layer| layer.kind.as_str().to_string())
+        .collect();
+    assert_eq!(
+        kinds,
+        vec![
+            "coverlay",
+            "copper",
+            "core",
+            "copper",
+            "coverlay",
+            "stiffener"
+        ],
+        "{kinds:?}"
+    );
+
+    let text = board_as_dsl(&mut world);
+    assert!(text.contains("coverlay 0.025000mm"), "{text}");
+    assert!(text.contains("stiffener 0.200000mm"), "{text}");
+
+    let back = load(&text);
+    assert_eq!(back.stackup().cloned(), Some(before), "\n{text}");
+}

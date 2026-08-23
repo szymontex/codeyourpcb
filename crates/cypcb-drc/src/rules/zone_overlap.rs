@@ -31,7 +31,10 @@ impl DrcRule for ZoneOverlapRule {
         let pours: Vec<_> = world
             .zones()
             .into_iter()
-            .filter(|(_, zone)| !zone.is_keepout())
+            // `is_copper_pour`, not `!is_keepout`: this rule is about two
+            // pours of different nets meeting, and a flexible region is not a
+            // pour.
+            .filter(|(_, zone)| zone.is_copper_pour())
             .collect();
 
         for i in 0..pours.len() {

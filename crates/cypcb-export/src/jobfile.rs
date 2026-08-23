@@ -113,6 +113,12 @@ fn material_type(kind: StackupLayerKind) -> Option<&'static str> {
         StackupLayerKind::Prepreg | StackupLayerKind::Core => "Dielectric",
         StackupLayerKind::Mask => "SolderMask",
         StackupLayerKind::Silk => "Legend",
+        // The film over a flexible section, in the specification's own word.
+        StackupLayerKind::Coverlay => "Coverlay",
+        // A stiffener is bonded on after the board is built, the way paste is
+        // deposited at assembly: it is not a material of the bare board, so
+        // this file is where it stops.
+        StackupLayerKind::Stiffener => return None,
         StackupLayerKind::Paste => return None,
     })
 }

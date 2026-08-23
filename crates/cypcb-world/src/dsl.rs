@@ -340,6 +340,7 @@ fn zone_as_dsl(
     let what = match zone.kind {
         ZoneKind::Keepout => "keepout",
         ZoneKind::CopperPour => "zone",
+        ZoneKind::Flex => "flex",
     };
 
     let layer = match zone.layer_mask {

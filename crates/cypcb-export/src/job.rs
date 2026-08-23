@@ -455,7 +455,10 @@ pub fn run_export(
         let zone_count = world
             .zones()
             .iter()
-            .filter(|(_, z)| !z.is_keepout())
+            // `is_copper_pour`, not `!is_keepout`: a flexible region is
+            // neither, and exporting one as copper would fill the bend with
+            // it.
+            .filter(|(_, z)| z.is_copper_pour())
             .count();
         if zone_count > 0 {
             warnings.push(format!(

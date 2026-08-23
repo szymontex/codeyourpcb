@@ -102,6 +102,8 @@ pub enum ViolationKind {
     PadLand,
     /// A via joins two layers by a route the build does not make.
     ViaSpan,
+    /// A drilled hole sits where the board bends.
+    FlexHole,
 }
 
 impl std::fmt::Display for ViolationKind {
@@ -134,6 +136,7 @@ impl std::fmt::Display for ViolationKind {
             ViolationKind::SlotClearance => write!(f, "slot-clearance"),
             ViolationKind::PadLand => write!(f, "pad-land"),
             ViolationKind::ViaSpan => write!(f, "via-span"),
+            ViolationKind::FlexHole => write!(f, "flex-hole"),
         }
     }
 }
@@ -776,6 +779,24 @@ impl DrcViolation {
     ///
     /// No `actual`/`required` pair: what is wrong is a disagreement between
     /// two statements the design makes, not a measurement against a limit.
+    /// A hole drilled where the board bends.
+    ///
+    /// No `actual`/`required` pair: nothing was measured against a limit. A
+    /// hole is either in the bend or it is not.
+    pub fn flex_hole(entity: Entity, message: String, location: Point) -> Self {
+        DrcViolation {
+            kind: ViolationKind::FlexHole,
+            actual: None,
+            required: None,
+            area: None,
+            location,
+            entity,
+            other_entity: None,
+            source_span: None,
+            message,
+        }
+    }
+
     /// A via whose span the build does not make.
     ///
     /// No `actual`/`required` pair, for the reason [`Self::stackup`] has none:

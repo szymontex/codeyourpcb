@@ -180,7 +180,12 @@ module.exports = grammar({
     // The name is quoted because a fabricator's canonical layer names carry a
     // dot - F.Cu, In1.Cu, B.Mask - which no identifier in this language may.
     stackup_layer: $ => seq(
-      field('layer_type', choice('copper', 'prepreg', 'core', 'mask', 'silk', 'paste')),
+      field('layer_type', choice(
+        'copper', 'prepreg', 'core', 'mask', 'silk', 'paste',
+        // Rigid-flex: the film over a bend, and the material bonded under one
+        // to stop it bending.
+        'coverlay', 'stiffener',
+      )),
       optional(field('name', $.string)),
       optional(field('thickness', choice($.dimension, $.copper_weight))),
       optional(seq('material', field('material', $.string))),
@@ -568,7 +573,9 @@ module.exports = grammar({
 
     // zone NAME { ... } or keepout NAME { ... }
     zone_definition: $ => seq(
-      field('kind', choice('zone', 'keepout')),
+      // `flex` is the third: the part of a rigid-flex board that bends. Not a
+      // keepout - copper crosses it, that is what it is for - and not a pour.
+      field('kind', choice('zone', 'keepout', 'flex')),
       optional(field('name', $.identifier)),
       '{',
       repeat($.zone_property),

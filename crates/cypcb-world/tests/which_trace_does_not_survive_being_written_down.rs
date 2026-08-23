@@ -594,3 +594,38 @@ fn a_pour_on_a_net_the_identifier_rule_refuses_round_trips_quoted() {
         "the pour comes back on the net it left on, quotes and all:\n{written}"
     );
 }
+
+#[test]
+fn a_flexible_region_survives_being_written_down() {
+    // A rigid-flex board is one panel with rigid sections and a flexible
+    // ribbon between them. The ribbon is not a keepout - copper crosses it,
+    // that is what it is for - and it is not a pour, so it needed its own word
+    // rather than a flag on one of those.
+    let mut world = load(&base_board("SIG"));
+    add_zone(
+        &mut world,
+        Zone::flex(
+            Rect::new(Point::from_mm(20.0, 0.0), Point::from_mm(30.0, 20.0)),
+            0xFFFF_FFFF,
+        )
+        .with_name("bend"),
+    );
+
+    let written = board_as_dsl(&mut world);
+    assert!(
+        written.contains("flex bend {"),
+        "the region is written as what it is:\n{written}"
+    );
+
+    let mut back = load(&written);
+    assert_eq!(
+        zones(&mut world),
+        zones(&mut back),
+        "the bend comes back where it was:\n{written}"
+    );
+    assert!(
+        zones(&mut back)[0].0.contains("Flex"),
+        "and as a flexible region rather than a pour: {:?}",
+        zones(&mut back)[0]
+    );
+}
