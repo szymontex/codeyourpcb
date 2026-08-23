@@ -318,3 +318,45 @@ fn every_layer_of_the_shared_fixture_reports_a_different_impedance() {
         "two layers reported the same impedance, so this fixture cannot catch an index error: {reported:?}"
     );
 }
+
+#[test]
+fn the_message_says_what_width_would_have_worked() {
+    // The question a designer actually has. The stack is what the fabricator
+    // presses and the target is what the datasheet demands, so the width is
+    // the only thing left to choose - and this checker used to say how far off
+    // a trace was and leave the arithmetic to the reader.
+    let mut world = board(CENTRED, Layer::Inner(1), 0.2, Some(5_000));
+    let said = complaints(&mut world);
+    assert_eq!(said.len(), 1, "{said:?}");
+    assert!(
+        said[0].contains("would give 50ohm on this stack"),
+        "the message names a width that hits the target: {}",
+        said[0]
+    );
+    // And it is a width somebody could etch, not a number off an asymptote.
+    let width: f64 = said[0]
+        .split(" off - ")
+        .nth(1)
+        .and_then(|rest| rest.split("mm would give").next())
+        .and_then(|number| number.parse().ok())
+        .unwrap_or_else(|| panic!("no width in: {}", said[0]));
+    assert!(
+        (0.01..10.0).contains(&width),
+        "{width}mm is not a trace: {}",
+        said[0]
+    );
+}
+
+#[test]
+fn a_target_the_stack_cannot_deliver_gets_no_width() {
+    // 1 ohm needs a trace wider than the board. Naming a width nobody can etch
+    // is worse than saying nothing, so the message stops at the measurement.
+    let mut world = board(CENTRED, Layer::Inner(1), 0.2, Some(100));
+    let said = complaints(&mut world);
+    assert_eq!(said.len(), 1, "{said:?}");
+    assert!(
+        !said[0].contains("would give"),
+        "no width is named for an unreachable target: {}",
+        said[0]
+    );
+}

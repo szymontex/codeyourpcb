@@ -92,9 +92,11 @@ impl DrcRule for ImpedanceRule {
                 continue;
             };
 
-            let computed = stackup
-                .environment_of(index)
-                .and_then(|environment| impedance_of(environment, width));
+            // The surroundings the forms need, kept rather than consumed:
+            // the same environment answers both what this width gives and what
+            // width the target wants.
+            let environment = stackup.environment_of(index);
+            let computed = environment.and_then(|environment| impedance_of(environment, width));
 
             let Some(computed) = computed else {
                 if said.insert((net_id.0, format!("{layer}"))) {
@@ -113,8 +115,23 @@ impl DrcRule for ImpedanceRule {
             let off_by = computed.abs_diff(target) as u64 * 10_000 / u64::from(target);
             if off_by > TOLERANCE_PERCENT_X100 {
                 let mut violation = DrcViolation::impedance(entity, at);
+                // What width would have hit it. Solved against the same form
+                // that produced the number above, by bisection: neither form
+                // inverts in closed form, because the width is inside a
+                // logarithm and under a correction for the foil.
+                let advice = match environment.and_then(|env| width_for(env, target)) {
+                    Some(wanted) => format!(
+                        " - {:.3}mm would give {} on this stack",
+                        wanted.raw() as f64 / 1_000_000.0,
+                        format_ohms(target)
+                    ),
+                    // A target this stack cannot deliver at any width a
+                    // fabricator would image. Saying nothing beats naming a
+                    // width nobody can etch.
+                    None => String::new(),
+                };
                 violation.message = format!(
-                    "net '{net_name}' asks for {} and a {:.3}mm trace on {layer} gives {} - {:.1}% off. \
+                    "net '{net_name}' asks for {} and a {:.3}mm trace on {layer} gives {} - {:.1}% off{advice}. \
                      IPC-2141's closed form, which is quoted at 5-7%: check a controlled-impedance stack against your fabricator's own calculator",
                     format_ohms(target),
                     width.raw() as f64 / 1_000_000.0,
@@ -151,6 +168,32 @@ fn copper_index(layer: Layer, copper_count: usize) -> Option<usize> {
             (index < copper_count).then_some(index)
         }
         _ => None,
+    }
+}
+
+/// The width that would hit this target in these surroundings.
+///
+/// The question a designer actually has. The stack is what the fabricator
+/// presses and the target is what the part datasheet demands, so the width is
+/// the only thing left to choose - and until this existed the checker said how
+/// far off a trace was and left the arithmetic to the reader.
+fn width_for(environment: CopperEnvironment, target_x100: u32) -> Option<Nm> {
+    match environment {
+        CopperEnvironment::Microstrip {
+            height,
+            dk_x1000,
+            copper,
+        } => cypcb_calc::microstrip_width_for_ohms_x100(target_x100, height, copper, dk_x1000),
+        CopperEnvironment::Stripline {
+            plate_separation,
+            dk_x1000,
+            copper,
+        } => cypcb_calc::stripline_width_for_ohms_x100(
+            target_x100,
+            plate_separation,
+            copper,
+            dk_x1000,
+        ),
     }
 }
 

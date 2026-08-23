@@ -111,3 +111,141 @@ pub fn stripline_ohms_x100(
     }
     ohms_x100(60.0 / er.sqrt() * ratio.ln())
 }
+
+/// The narrowest and widest trace this solver will look at.
+///
+/// A tenth of a millimetre either side of anything a fabricator images: below
+/// 0.01mm nobody etches, above 10mm nobody calls it a trace. The bracket is
+/// here so a target the stack cannot deliver ends as `None` rather than as a
+/// search that walks off into a number no board could use.
+const NARROWEST: Nm = Nm(10_000);
+const WIDEST: Nm = Nm(10_000_000);
+
+/// How close the search has to get before it stops, in nanometres.
+///
+/// The forms are quoted at 5-7%, so this is far below the accuracy of the
+/// answer and exists only to make the search terminate on an exact number
+/// rather than an asymptote. It is 100nm rather than a micrometre because a
+/// stripline moves about 0.03 ohm per micrometre of width, which is visible in
+/// a test that checks the solver against its own form.
+const CLOSE_ENOUGH: i64 = 100;
+
+/// The width that gives this impedance, by bisection.
+///
+/// Both closed forms are `k * ln(c / w)`: monotone **decreasing** in width, so
+/// a wider trace is a lower impedance and there is exactly one width for a
+/// reachable target. Neither inverts in closed form - the width is inside a
+/// logarithm and under a correction for the foil thickness - so this searches
+/// instead of solving, which is what every field solver and every fab
+/// calculator does with the same equations.
+///
+/// `None` when the target is outside what this stack can deliver between
+/// [`NARROWEST`] and [`WIDEST`], or when the form itself refuses the geometry.
+fn width_for(target_x100: u32, ohms_at: impl Fn(Nm) -> Option<u32>) -> Option<Nm> {
+    if target_x100 == 0 {
+        return None;
+    }
+    // The narrow end is the high-impedance end. A form that refuses the
+    // narrowest width refuses the geometry rather than the target.
+    let at_narrowest = ohms_at(NARROWEST)?;
+    if at_narrowest < target_x100 {
+        return None;
+    }
+    // The wide end may fall outside the form's range, which is itself the
+    // answer that the target is too low for this stack: walk in until the form
+    // answers, and if it never does, say so.
+    let mut low = NARROWEST;
+    let mut high = WIDEST;
+    let mut at_high = None;
+    for _ in 0..64 {
+        match ohms_at(high) {
+            Some(ohms) => {
+                at_high = Some(ohms);
+                break;
+            }
+            None => {
+                let next = Nm((low.raw() + high.raw()) / 2);
+                if next.raw() <= low.raw() {
+                    break;
+                }
+                high = next;
+            }
+        }
+    }
+    if at_high? > target_x100 {
+        return None;
+    }
+
+    while high.raw() - low.raw() > CLOSE_ENOUGH {
+        let middle = Nm((low.raw() + high.raw()) / 2);
+        match ohms_at(middle) {
+            // Too high an impedance means too narrow a trace.
+            Some(ohms) if ohms > target_x100 => low = middle,
+            Some(_) => high = middle,
+            // Out of the form's range on the wide side.
+            None => high = middle,
+        }
+    }
+    Some(Nm((low.raw() + high.raw()) / 2))
+}
+
+/// The trace width that gives this impedance on an outer layer.
+///
+/// The inverse of [`microstrip_ohms_x100`], and the question a designer
+/// actually asks: the stack is what the fabricator presses, the target is what
+/// the part datasheet demands, and the width is the only thing left to choose.
+///
+/// # Examples
+///
+/// ```
+/// use cypcb_calc::{microstrip_ohms_x100, microstrip_width_for_ohms_x100};
+/// use cypcb_core::Nm;
+///
+/// let height = Nm::from_mm(0.2);
+/// let copper = Nm::from_mm(0.035);
+/// let width = microstrip_width_for_ohms_x100(5_000, height, copper, 4_500)
+///     .expect("50 ohm is reachable on this stack");
+///
+/// // And the forward form agrees, to the nearest hundredth of an ohm.
+/// let back = microstrip_ohms_x100(width, height, copper, 4_500).expect("in range");
+/// assert!(back.abs_diff(5_000) <= 2, "{back}");
+/// ```
+pub fn microstrip_width_for_ohms_x100(
+    target_x100: u32,
+    height: Nm,
+    copper: Nm,
+    dk_x1000: u32,
+) -> Option<Nm> {
+    width_for(target_x100, |width| {
+        microstrip_ohms_x100(width, height, copper, dk_x1000)
+    })
+}
+
+/// The trace width that gives this impedance on a centred inner layer.
+///
+/// The inverse of [`stripline_ohms_x100`].
+///
+/// # Examples
+///
+/// ```
+/// use cypcb_calc::{stripline_ohms_x100, stripline_width_for_ohms_x100};
+/// use cypcb_core::Nm;
+///
+/// let separation = Nm::from_mm(0.4);
+/// let copper = Nm::from_mm(0.0175);
+/// let width = stripline_width_for_ohms_x100(5_000, separation, copper, 4_500)
+///     .expect("50 ohm is reachable between these planes");
+///
+/// let back = stripline_ohms_x100(width, separation, copper, 4_500).expect("in range");
+/// assert!(back.abs_diff(5_000) <= 2, "{back}");
+/// ```
+pub fn stripline_width_for_ohms_x100(
+    target_x100: u32,
+    plate_separation: Nm,
+    copper: Nm,
+    dk_x1000: u32,
+) -> Option<Nm> {
+    width_for(target_x100, |width| {
+        stripline_ohms_x100(width, plate_separation, copper, dk_x1000)
+    })
+}

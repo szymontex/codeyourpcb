@@ -224,6 +224,36 @@ number is millimetres. A thickness comes back written in the unit the design
 wrote it in, so a stackup that says `copper 1oz` reads `copper 1oz` after a
 save rather than the arithmetic.
 
+### The width a target impedance asks for
+
+A net states what it needs and the checker measures what it got:
+
+```
+net CLK [impedance 50ohm] {
+    U1.CLK
+    U2.CLK
+}
+```
+
+When the two disagree the report names the width that would have hit the
+target on this stack:
+
+```
+net 'SIG' asks for 50ohm and a 0.200mm trace on Inner1 gives 22.29ohm
+- 55.4% off - 0.064mm would give 50ohm on this stack.
+```
+
+The stack is what the fabricator presses and the target is what the part
+datasheet demands, so the width is the only thing left to choose. Neither
+closed form inverts - the width sits inside a logarithm and under a correction
+for the foil thickness - so the answer is searched for by bisection, which is
+what every field solver does with these same equations.
+
+A target the stack cannot deliver at any width a fabricator would image gets no
+suggestion at all: naming a width nobody can etch is worse than saying nothing.
+On 0.2mm of FR4 with 1oz copper the ceiling is about 119 ohm; between two
+planes 0.4mm apart with half-ounce copper it is about 96.
+
 ### A board that bends
 
 A rigid-flex board is one panel with rigid sections and a flexible ribbon

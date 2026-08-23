@@ -80,9 +80,7 @@ answered, not as they were found. Items 2 to 7 are open.
 2. ~~**Colour of mask and silkscreen.**~~ **DONE.**
 3. ~~**Dielectric sub-layers.**~~ **DONE.**
 4. ~~**Units.**~~ **DONE.**
-5. **An impedance solver.** Altium takes a target and returns a trace width.
-   This takes a width and returns the impedance and how far off it is. The
-   inverse does not exist, and it is the largest single item on this list.
+5. ~~**An impedance solver.**~~ **DONE.** Every item on this list is closed.
 6. ~~**Drill pairs and sequential lamination.**~~ **DONE.**
 7. ~~**Rigid-flex.**~~ **DONE.**
 
@@ -247,15 +245,43 @@ answered, not as they were found. Items 2 to 7 are open.
   rule reading every zone but the flexible ones -> 3 failed; the reader
   dropping `flex` -> 1 failed; the writer calling one a keepout -> 1 failed.
   `./scripts/quality-gate.sh` -> `=== All stages passed ===`.
-- NEXT-ACTION: **item 5, the impedance solver, and it is the last one.** Altium
-  takes a target impedance and returns a trace width; this takes a width and
-  returns the impedance and how far off it is. The inverse is what a designer
-  actually needs, and everything it needs now exists: `Stackup::environment_of`
-  says which form a layer calls for and with what geometry, `cypcb-calc` has
-  IPC-2141's closed forms, and a net can state `impedance 50ohm`. What is
-  missing is the search - the forms are not invertible in closed form, so it is
-  a bisection on width against a tolerance, and the answer has to say which
-  form it solved and that the fab's own calculator is the authority.
+- DONE (item 5): **the checker says what width would have worked, and that
+  closes V8.** `microstrip_width_for_ohms_x100` and
+  `stripline_width_for_ohms_x100` are the inverse of the two forms this project
+  has had since the impedance rule was written. Neither inverts in closed form
+  - the width sits inside a logarithm and under a correction for the foil - so
+  the answer is searched for by bisection between 0.01mm and 10mm, which is
+  what every field solver does with these same equations.
+- **It reaches the designer where they already look.** The impedance
+  violation's message used to end at "55.4% off" and leave the arithmetic to
+  the reader; it now reads `- 0.064mm would give 50ohm on this stack`. A target
+  the stack cannot deliver at any width a fabricator would image gets no
+  suggestion at all, because naming a width nobody can etch is worse than
+  saying nothing.
+- **The ceilings are measured, not assumed.** At the narrowest width the search
+  looks at, an 0.2mm FR4 microstrip reads **119.01 ohm** and a 0.4mm stripline
+  **96.02 ohm** - so 97 ohm is an answer on one stack and refused on the other,
+  and a test says exactly that.
+- Proof: `cargo test -p cypcb-calc --test the_width_a_target_impedance_asks_for`
+  -> **8 passed**, every one checking the solver against the forward form
+  rather than against a number written down beside it;
+  `cargo test -p cypcb-drc --test what_the_stack_delivers_against_what_the_net_asked_for`
+  -> **11 passed**. Read off the release binary: `a 0.200mm trace on Top gives
+  41.16ohm - 17.7% off - 0.148mm would give 50ohm on this stack`, and the same
+  board's inner layer answers 0.064mm. Mutations, each alone against a clean
+  tree: the bisection comparison reversed -> 2 failed; the narrow-end bracket
+  check removed -> 2 failed; the wide-end check removed -> 1 failed; the
+  stripline solver wired to the microstrip form -> 3 failed; the rule's advice
+  forced to nothing -> 1 failed. `./scripts/quality-gate.sh` ->
+  `=== All stages passed ===`.
+- NEXT-ACTION: **the stack-manager UI in the viewer, which was deferred until
+  the model had every field - and now it does.** Seven items of stackup
+  vocabulary landed between 2026-08-22 and today: what the fabricator does to
+  the board, colour, sheets, units, drill pairs, rigid-flex and the solver. The
+  language is the only interface to any of it, and a stack is the one part of a
+  design that is a table rather than a list of statements. Worth building
+  against the model as it now stands rather than growing it one field at a
+  time.
 
 
 ### V1 - CLI and core correctness

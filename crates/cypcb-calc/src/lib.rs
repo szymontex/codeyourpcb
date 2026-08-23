@@ -20,7 +20,10 @@
 pub mod impedance;
 pub mod trace_width;
 
-pub use impedance::{microstrip_ohms_x100, stripline_ohms_x100};
+pub use impedance::{
+    microstrip_ohms_x100, microstrip_width_for_ohms_x100, stripline_ohms_x100,
+    stripline_width_for_ohms_x100,
+};
 pub use trace_width::{
     TraceWidthCalculator, TraceWidthParams, TraceWidthResult, TraceWidthWarning,
 };
