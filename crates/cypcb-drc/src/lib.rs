@@ -42,6 +42,11 @@ pub mod violation;
 
 pub use net_rules::{copper_layer_count, preset_for_world, ruleset_for_world};
 pub use presets::{DesignRules, Preset, PresetRules};
+/// The trace width that hits an impedance target in a given stack position.
+///
+/// The checker's own inverse, published so the language server answers the
+/// same question with the same arithmetic.
+pub use rules::impedance::width_for as impedance_width_for;
 pub use rules::DrcRule;
 pub use violation::{clearance_contacts, pair_of, DrcViolation, ViolationKind};
 

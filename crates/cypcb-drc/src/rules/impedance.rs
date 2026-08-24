@@ -152,7 +152,12 @@ impl DrcRule for ImpedanceRule {
 /// presses and the target is what the part datasheet demands, so the width is
 /// the only thing left to choose - and until this existed the checker said how
 /// far off a trace was and left the arithmetic to the reader.
-fn width_for(environment: CopperEnvironment, target_x100: u32) -> Option<Nm> {
+///
+/// Public because the checker is not the only place the question gets asked:
+/// the language server answers it on a net that states a target, before any
+/// copper exists to measure. Two callers, one arithmetic - which is the rule
+/// this project keeps having to relearn about IPC formulas.
+pub fn width_for(environment: CopperEnvironment, target_x100: u32) -> Option<Nm> {
     match environment {
         CopperEnvironment::Microstrip {
             height,

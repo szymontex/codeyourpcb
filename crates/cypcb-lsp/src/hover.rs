@@ -305,9 +305,9 @@ fn footprint_def_named<'a>(doc: &'a DocumentState, name: &str) -> Option<&'a Foo
         })
 }
 
-fn hover_for_net(_doc: &DocumentState, net: &NetDef, offset: usize) -> Option<HoverInfo> {
+fn hover_for_net(doc: &DocumentState, net: &NetDef, offset: usize) -> Option<HoverInfo> {
     if offset >= net.name.span.start && offset < net.name.span.end {
-        return Some(make_net_hover(net));
+        return Some(make_net_hover(doc, net));
     }
 
     for conn in &net.connections {
@@ -322,13 +322,38 @@ fn hover_for_net(_doc: &DocumentState, net: &NetDef, offset: usize) -> Option<Ho
     }
 
     if offset >= net.span.start && offset < net.span.end {
-        return Some(make_net_hover(net));
+        return Some(make_net_hover(doc, net));
     }
 
     None
 }
 
-fn make_net_hover(net: &NetDef) -> HoverInfo {
+/// The width that would hit an impedance target on this board's top layer.
+///
+/// `None` when the design states no stack - most boards, and nothing to say
+/// about them. `Some(None)` when it states one that cannot answer: an outer
+/// layer needs a dielectric under it with both a thickness and a `dk`, and
+/// most stacks written by hand give neither.
+///
+/// Through `cypcb_drc::impedance_width_for`, which is what `cypcb check` uses
+/// on a trace that already exists. The same arithmetic answering the same
+/// question earlier - a designer asks this before drawing the copper, which is
+/// what Altium's calculator is for.
+fn impedance_width_on_top(doc: &DocumentState, ohms: f64) -> Option<Option<f64>> {
+    if !(ohms.is_finite() && ohms > 0.0) {
+        return None;
+    }
+    let stackup = doc.world.as_ref()?.stackup()?;
+    // Entry zero of the copper sequence is the top layer, which is where a
+    // microstrip lives and where a hand-drawn trace starts.
+    let Some(environment) = stackup.environment_of(0) else {
+        return Some(None);
+    };
+    let target_x100 = (ohms * 100.0).round().max(0.0) as u32;
+    Some(cypcb_drc::impedance_width_for(environment, target_x100).map(|width| width.to_mm()))
+}
+
+fn make_net_hover(doc: &DocumentState, net: &NetDef) -> HoverInfo {
     let mut lines = vec![format!("**Net: {}**", net.name.value)];
 
     // Connection count
@@ -350,6 +375,24 @@ fn make_net_hover(net: &NetDef) -> HoverInfo {
         }
         if let Some(clearance) = &constraints.clearance {
             lines.push(format!("- Clearance: {}", clearance));
+        }
+        if let Some(ohms) = constraints.impedance_ohms {
+            // The card said nothing about a target it had been given, which is
+            // the one constraint a designer cannot work out in their head.
+            lines.push(format!("- Impedance: {ohms}ohm"));
+            match impedance_width_on_top(doc, ohms) {
+                Some(Some(width)) => lines.push(format!(
+                    "- {width:.3}mm on Top gives {ohms}ohm on this board's stack (IPC-2141, \
+                     quoted at 5-7%)"
+                )),
+                Some(None) => lines.push(
+                    "  The stack cannot answer: an outer layer needs a dielectric under it \
+                     stating both a thickness and a dk."
+                        .to_string(),
+                ),
+                // No stack stated, so there is no board to answer for.
+                None => {}
+            }
         }
         if let Some(current) = &constraints.current {
             lines.push(format!("- Current: {}", current));
@@ -1076,6 +1119,125 @@ net VCC [current 1A] {
         assert!(
             !info.content.contains("Outside the standard"),
             "nothing about 1A is outside it: {}",
+            info.content
+        );
+    }
+
+    #[test]
+    fn a_net_with_a_target_is_told_the_width_that_hits_it() {
+        // The question Altium's calculator answers and this project only
+        // answered after the copper existed: `cypcb check` reports how far off
+        // a drawn trace is. A designer asks before drawing.
+        let doc = make_doc_with_world(
+            r#"
+board rf {
+    size 40mm x 20mm
+    layers 2
+
+    stackup {
+        copper 1oz
+        core 0.2mm material "FR4" dk 4.5
+        copper 1oz
+    }
+}
+
+net RF [impedance 50ohm] {
+    R1.1
+}
+"#,
+        );
+
+        let pos = Position {
+            line: 12,
+            character: 4,
+        };
+        let info = hover_at_position(&doc, &pos).expect("a net hover");
+
+        assert!(
+            info.content.contains("Impedance: 50ohm"),
+            "the card has to name the target it was given: {}",
+            info.content
+        );
+        assert!(
+            info.content.contains("0.326mm on Top gives 50ohm"),
+            "and the width that hits it on this stack: {}",
+            info.content
+        );
+        assert!(
+            info.content.contains("IPC-2141"),
+            "with the form it came from, which is quoted at 5-7%: {}",
+            info.content
+        );
+    }
+
+    #[test]
+    fn a_stack_that_cannot_answer_says_so_rather_than_guessing() {
+        // An outer layer needs a dielectric under it stating both a thickness
+        // and a dk. This one states neither.
+        let doc = make_doc_with_world(
+            r#"
+board rf {
+    size 40mm x 20mm
+    layers 2
+
+    stackup {
+        copper 1oz
+        core 0.2mm
+        copper 1oz
+    }
+}
+
+net RF [impedance 50ohm] {
+    R1.1
+}
+"#,
+        );
+
+        let pos = Position {
+            line: 12,
+            character: 4,
+        };
+        let info = hover_at_position(&doc, &pos).expect("a net hover");
+
+        assert!(
+            info.content.contains("Impedance: 50ohm"),
+            "{}",
+            info.content
+        );
+        assert!(
+            info.content.contains("The stack cannot answer"),
+            "a number invented for a stack that states no dk reads like a measurement: {}",
+            info.content
+        );
+    }
+
+    #[test]
+    fn a_board_with_no_stack_is_asked_nothing() {
+        // Most boards. There is no stack to answer for, so the card carries
+        // the target and stops - the half that keeps the other two from being
+        // noise on every design that never mentions a stackup.
+        let doc = make_doc_with_world(
+            r#"
+net RF [impedance 50ohm] {
+    R1.1
+}
+"#,
+        );
+
+        let pos = Position {
+            line: 1,
+            character: 4,
+        };
+        let info = hover_at_position(&doc, &pos).expect("a net hover");
+
+        assert!(
+            info.content.contains("Impedance: 50ohm"),
+            "{}",
+            info.content
+        );
+        assert!(
+            !info.content.contains("cannot answer") && !info.content.contains("gives 50ohm"),
+            "nothing to say about a stack that was never stated: {}",
             info.content
         );
     }
