@@ -27,6 +27,8 @@ struct Census {
     traces: usize,
     segments: usize,
     vias: usize,
+    /// Traces that narrow on the way into a pad.
+    necks: usize,
     zones: usize,
     layers: u8,
     fab: Option<String>,
@@ -61,6 +63,11 @@ fn census(world: &mut BoardWorld) -> Census {
         traces,
         segments,
         vias,
+        necks: {
+            let ecs = world.ecs_mut();
+            let mut query = ecs.query::<&cypcb_world::components::trace::TraceNeck>();
+            query.iter(ecs).count()
+        },
         zones,
         layers: world
             .board_info()
@@ -194,8 +201,12 @@ fn what_the_corpus_actually_exercises() {
     // - **vias**: zero. Every mention of a via in `examples/` is prose in a
     //   comment. Dropping vias from the writer would leave this file green.
     //
-    // Two woke up on 2026-08-24 when `rigid-flex.cypcb` was added: it names a
-    // fab and carries a six-entry stack, so those columns guard something now.
+    // Three woke up on 2026-08-24. `rigid-flex.cypcb` names a fab and carries a
+    // six-entry stack; `slotted-connector.cypcb` gained a trace that necks on
+    // the way into a 1.6mm pad, and the neck had been in the language, both
+    // readers, four DRC rules and the router for four days with no example
+    // using one - so the differential test that holds the two readers to the
+    // same answer had never asked either of them about a neck.
     // That is what the assertions below are for - they failed the moment the
     // example landed, which is the whole point of asserting a zero.
     //
@@ -214,6 +225,7 @@ fn what_the_corpus_actually_exercises() {
         traces: 0,
         segments: 0,
         vias: 0,
+        necks: 0,
         zones: 0,
         layers: 0,
         fab: None,
@@ -232,6 +244,7 @@ fn what_the_corpus_actually_exercises() {
         totals.traces += one.traces;
         totals.segments += one.segments;
         totals.vias += one.vias;
+        totals.necks += one.necks;
         totals.zones += one.zones;
         totals.layers += u8::from(one.layers > 2);
         totals.fab = totals.fab.or(one.fab);
@@ -243,6 +256,10 @@ fn what_the_corpus_actually_exercises() {
     assert!(totals.nets > 0, "{totals:?}");
     assert!(totals.traces > 0, "{totals:?}");
     assert!(totals.segments > 0, "{totals:?}");
+    assert!(
+        totals.necks > 0,
+        "no example necks, so the writer could drop the neck and leave this green: {totals:?}"
+    );
     assert!(totals.zones > 0, "{totals:?}");
     assert!(totals.fab.is_some(), "no example names a fab: {totals:?}");
     assert!(

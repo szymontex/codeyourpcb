@@ -54,11 +54,23 @@ net GND {
 
 // Each pin joined to the anchor beside it, so every pad on the board is
 // reached by copper and the checker is silent.
+// The one example that necks.
+//
+// 0.4mm of copper is what this net wants along its length; the pads it lands
+// on are 1.6mm circles 1.27mm apart, so full-width copper arriving between
+// them is the clearance a fabricator argues about. `neck` narrows the last
+// stretch into each pad and says how far the narrowing runs.
+//
+// It is here because nothing else exercised it: the neck has been in the
+// language, both readers, the checker's four rules and the router since
+// 2026-08-20, and no example used one - so the differential test that holds
+// the two readers to the same answer never asked either of them about a neck.
 trace VBUS {
     from J1.3
     to J1.1
     layer Top
     width 0.4mm
+    neck 0.25mm for 1.5mm
 }
 
 trace GND {
