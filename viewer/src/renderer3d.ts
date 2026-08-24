@@ -32,6 +32,7 @@ import {
   DEFAULT_BOARD_THICKNESS_MM,
   DEFAULT_COPPER_THICKNESS_MM,
 } from './board-thickness';
+import { flexRegions } from './flex-regions';
 import { fetch3DModelByUuid } from './jlcpcb';
 import { parseEasyEdaOBJ } from './easyeda-obj-parser';
 
@@ -356,6 +357,35 @@ export class Renderer3D {
     const boardMesh = new THREE.Mesh(subGeo, subMat);
     boardMesh.name = 'board-substrate';
     this.boardGroup.add(boardMesh);
+
+    // The part of the board that bends, tinted through the substrate.
+    //
+    // A tint rather than a step: this language states one stack for the whole
+    // board and says nothing about where a stiffener stops, so a thinner slab
+    // through the bend would be a thickness nobody wrote down. See
+    // `flex-regions.ts`.
+    for (const region of flexRegions(snapshot)) {
+      const flexGeo = new THREE.BoxGeometry(
+        region.widthMm,
+        region.heightMm,
+        BOARD_THICKNESS_MM * 1.02,
+      );
+      flexGeo.translate(
+        region.xMm + region.widthMm / 2,
+        region.yMm + region.heightMm / 2,
+        0,
+      );
+      const flexMat = new THREE.MeshPhysicalMaterial({
+        color: 0xc98b2e, // Kapton amber, the same colour the 2D view uses
+        roughness: 0.6,
+        metalness: 0.0,
+        transparent: true,
+        opacity: 0.55,
+      });
+      const flexMesh = new THREE.Mesh(flexGeo, flexMat);
+      flexMesh.name = region.name ? `flex-region-${region.name}` : 'flex-region';
+      this.boardGroup.add(flexMesh);
+    }
 
     // Create layer groups
     const topGroup = new THREE.Group();
