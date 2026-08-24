@@ -328,29 +328,52 @@ fn hover_for_net(doc: &DocumentState, net: &NetDef, offset: usize) -> Option<Hov
     None
 }
 
-/// The width that would hit an impedance target on this board's top layer.
+/// The width that hits an impedance target, on each layer the stack can answer.
 ///
 /// `None` when the design states no stack - most boards, and nothing to say
-/// about them. `Some(None)` when it states one that cannot answer: an outer
-/// layer needs a dielectric under it with both a thickness and a `dk`, and
-/// most stacks written by hand give neither.
+/// about them. An empty list when it states one that answers for no layer: a
+/// microstrip needs a dielectric under it with both a thickness and a `dk`,
+/// and a stripline needs the same above **and** below with the two matching,
+/// which most stacks written by hand do not give.
+///
+/// Every layer rather than the top one. The card used to answer for `Top`
+/// alone and say so, which is honest and half the question: a net routed on an
+/// inner layer wants the stripline figure, and a net that is not routed yet
+/// has no layer to ask about. A short table answers whichever one the designer
+/// turns out to need.
 ///
 /// Through `cypcb_drc::impedance_width_for`, which is what `cypcb check` uses
 /// on a trace that already exists. The same arithmetic answering the same
 /// question earlier - a designer asks this before drawing the copper, which is
 /// what Altium's calculator is for.
-fn impedance_width_on_top(doc: &DocumentState, ohms: f64) -> Option<Option<f64>> {
+fn impedance_widths(doc: &DocumentState, ohms: f64) -> Option<Vec<(String, f64)>> {
     if !(ohms.is_finite() && ohms > 0.0) {
         return None;
     }
     let stackup = doc.world.as_ref()?.stackup()?;
-    // Entry zero of the copper sequence is the top layer, which is where a
-    // microstrip lives and where a hand-drawn trace starts.
-    let Some(environment) = stackup.environment_of(0) else {
-        return Some(None);
-    };
+    let count = stackup.copper_count();
     let target_x100 = (ohms * 100.0).round().max(0.0) as u32;
-    Some(cypcb_drc::impedance_width_for(environment, target_x100).map(|width| width.to_mm()))
+
+    let mut answers = Vec::new();
+    for index in 0..count {
+        // The copper sequence runs top to bottom, and `Layer::Inner` is
+        // zero-based against a one-based name: copper entry 1 is `Inner1`,
+        // which is the off-by-one this project has shipped four times.
+        let layer = if index == 0 {
+            cypcb_world::Layer::TopCopper
+        } else if index + 1 == count {
+            cypcb_world::Layer::BottomCopper
+        } else {
+            cypcb_world::Layer::Inner((index - 1) as u8)
+        };
+        let Some(environment) = stackup.environment_of(index) else {
+            continue;
+        };
+        if let Some(width) = cypcb_drc::impedance_width_for(environment, target_x100) {
+            answers.push((layer.to_string(), width.to_mm()));
+        }
+    }
+    Some(answers)
 }
 
 fn make_net_hover(doc: &DocumentState, net: &NetDef) -> HoverInfo {
@@ -380,14 +403,20 @@ fn make_net_hover(doc: &DocumentState, net: &NetDef) -> HoverInfo {
             // The card said nothing about a target it had been given, which is
             // the one constraint a designer cannot work out in their head.
             lines.push(format!("- Impedance: {ohms}ohm"));
-            match impedance_width_on_top(doc, ohms) {
-                Some(Some(width)) => lines.push(format!(
-                    "- {width:.3}mm on Top gives {ohms}ohm on this board's stack (IPC-2141, \
-                     quoted at 5-7%)"
-                )),
-                Some(None) => lines.push(
-                    "  The stack cannot answer: an outer layer needs a dielectric under it \
-                     stating both a thickness and a dk."
+            match impedance_widths(doc, ohms) {
+                Some(answers) if !answers.is_empty() => {
+                    lines.push(format!(
+                        "- Widths that give {ohms}ohm on this board's stack (IPC-2141, quoted \
+                         at 5-7%):"
+                    ));
+                    for (layer, width) in answers {
+                        lines.push(format!("  - {layer}: {width:.3}mm"));
+                    }
+                }
+                Some(_) => lines.push(
+                    "  The stack cannot answer on any layer: a microstrip needs a dielectric \
+                     under it stating a thickness and a dk, and a stripline needs a matching \
+                     one on each side."
                         .to_string(),
                 ),
                 // No stack stated, so there is no board to answer for.
@@ -1159,8 +1188,13 @@ net RF [impedance 50ohm] {
             info.content
         );
         assert!(
-            info.content.contains("0.326mm on Top gives 50ohm"),
-            "and the width that hits it on this stack: {}",
+            info.content.contains("Widths that give 50ohm"),
+            "and the widths that hit it on this stack: {}",
+            info.content
+        );
+        assert!(
+            info.content.contains("- Top: 0.326mm"),
+            "named per layer, because a net may end up on any of them: {}",
             info.content
         );
         assert!(
@@ -1205,7 +1239,8 @@ net RF [impedance 50ohm] {
             info.content
         );
         assert!(
-            info.content.contains("The stack cannot answer"),
+            info.content
+                .contains("The stack cannot answer on any layer"),
             "a number invented for a stack that states no dk reads like a measurement: {}",
             info.content
         );
@@ -1236,8 +1271,76 @@ net RF [impedance 50ohm] {
             info.content
         );
         assert!(
-            !info.content.contains("cannot answer") && !info.content.contains("gives 50ohm"),
+            !info.content.contains("cannot answer") && !info.content.contains("Widths that give"),
             "nothing to say about a stack that was never stated: {}",
+            info.content
+        );
+    }
+
+    #[test]
+    fn a_four_layer_stack_answers_for_every_layer_it_can() {
+        // The reason the card stopped picking one layer: a net routed inside
+        // wants the stripline figure, and a net that is not routed yet has no
+        // layer to ask about. Both inner layers here are centred between
+        // matching dielectrics, which is the only inner case the closed forms
+        // in `cypcb-calc` cover.
+        let doc = make_doc_with_world(
+            r#"
+board rf4 {
+    size 40mm x 20mm
+    layers 4
+
+    stackup {
+        copper 1oz
+        prepreg 0.2mm material "FR4" dk 4.5
+        copper 1oz
+        core 0.2mm material "FR4" dk 4.5
+        copper 1oz
+        prepreg 0.2mm material "FR4" dk 4.5
+        copper 1oz
+    }
+}
+
+net RF [impedance 50ohm] {
+    R1.1
+}
+"#,
+        );
+
+        let pos = Position {
+            line: 16,
+            character: 4,
+        };
+        let info = hover_at_position(&doc, &pos).expect("a net hover");
+
+        // Measured: 0.326mm on either face over one 0.2mm dielectric, 0.118mm
+        // between two of them.
+        assert!(
+            info.content.contains("- Top: 0.326mm") && info.content.contains("- Inner1: 0.118mm"),
+            "the four rows this stack produces: {}",
+            info.content
+        );
+
+        for layer in ["- Top: ", "- Inner1: ", "- Inner2: ", "- Bottom: "] {
+            assert!(
+                info.content.contains(layer),
+                "every layer the stack can answer for gets a row, and `{layer}` has none: {}",
+                info.content
+            );
+        }
+
+        // An inner layer sits between two planes and needs less copper for the
+        // same impedance than an outer one over a single dielectric of the
+        // same thickness. Said as an order rather than as two numbers.
+        let width_of = |layer: &str| -> f64 {
+            let at = info.content.find(layer).expect("the row is there") + layer.len();
+            let rest = &info.content[at..];
+            let end = rest.find("mm").expect("a width in mm");
+            rest[..end].trim().parse().expect("a number")
+        };
+        assert!(
+            width_of("- Inner1: ") < width_of("- Top: "),
+            "a stripline is narrower than a microstrip on the same dielectric: {}",
             info.content
         );
     }
