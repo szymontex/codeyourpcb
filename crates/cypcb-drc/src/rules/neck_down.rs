@@ -17,8 +17,11 @@
 //! What it still does **not** do is decide whether the neck is thermally safe.
 //! That needs a current and a temperature rise this model does not carry.
 
+use std::collections::HashMap;
+
 use cypcb_core::{Nm, Point};
 use cypcb_world::components::trace::{Trace, TraceNeck};
+use cypcb_world::components::NetId;
 use cypcb_world::BoardWorld;
 
 use crate::presets::DesignRules;
@@ -35,12 +38,34 @@ impl DrcRule for NeckDownRule {
     }
 
     fn check(&self, world: &mut BoardWorld, rules: &DesignRules) -> Vec<DrcViolation> {
+        // A neck stated on the net rather than on the trace. `net SIG [neck
+        // 0.2mm for 1mm]` is the same sentence written where it covers every
+        // trace on the net, and the router already reads it that way. This
+        // rule read the `TraceNeck` component alone, so a net-level neck was
+        // measured by nobody: on a 0.05mm neck stated on a net - under the
+        // 0.127mm JLCPCB will etch - `cypcb check` reported the same three
+        // violations as the board without the statement, while the identical
+        // sentence written on the trace was refused.
+        //
+        // A trace that states its own neck keeps it. Two statements about one
+        // trace is the design contradicting itself, and the trace is the more
+        // specific of the two places to have said it.
+        let net_neck: HashMap<u32, TraceNeck> = {
+            let ids: Vec<u32> = world.nets().map(|(net, _name)| net.id()).collect();
+            ids.into_iter()
+                .filter_map(|id| Some((id, world.net_constraints(NetId::new(id))?.neck?)))
+                .collect()
+        };
+
         let necked: Vec<Measured> = {
             let ecs = world.ecs_mut();
-            let mut query = ecs.query::<(bevy_ecs::entity::Entity, &Trace, &TraceNeck)>();
+            let mut query = ecs.query::<(bevy_ecs::entity::Entity, &Trace, Option<&TraceNeck>)>();
             query
                 .iter(ecs)
-                .filter_map(|(entity, trace, neck)| {
+                .filter_map(|(entity, trace, own)| {
+                    let neck = own
+                        .copied()
+                        .or_else(|| net_neck.get(&trace.net_id.id()).copied())?;
                     Some(Measured {
                         entity,
                         neck_width: neck.width,
