@@ -64,7 +64,13 @@ impl DrcRule for TraceCurrentRule {
             // should be traceable to the table it came from - every preset
             // says 1.0oz today, which is what the default was, so this moves
             // no number and makes the one it prints explainable.
-            let copper_oz = rules.copper_weight_oz_x10 as f64 / 10.0;
+            // The board's own stack before the fab's default. A design that
+            // states `copper 2oz` is telling the fabricator what to press, and
+            // holding it to the table's 1oz asks for twice the copper the
+            // board needs - measured on a 5A net: 2.766mm demanded against
+            // 1.383mm the stack actually calls for.
+            let copper_oz =
+                stackup_copper_oz(world, layer).unwrap_or(rules.copper_weight_oz_x10 as f64 / 10.0);
             let mut params =
                 cypcb_calc::TraceWidthParams::new(current_ma / 1000.0).with_copper_oz(copper_oz);
             if !is_external(layer) {
@@ -110,6 +116,18 @@ impl DrcRule for TraceCurrentRule {
 
         violations
     }
+}
+
+/// The copper weight the board's own stackup states for a layer, in ounces.
+///
+/// `None` when the board states no stack, when the layer is not one the stack
+/// describes, or when that copper entry states no thickness - each of which
+/// leaves the fab table's figure standing, which is what this rule used before
+/// a board could state a stack at all.
+fn stackup_copper_oz(world: &BoardWorld, layer: Layer) -> Option<f64> {
+    let stackup = world.stackup()?;
+    let index = super::copper_index(layer, stackup.copper_count())?;
+    stackup.copper_weight_oz(index)
 }
 
 /// Outer layers shed heat into the air; inner ones are buried and need more

@@ -42,6 +42,25 @@ use cypcb_world::BoardWorld;
 /// offset toward zero where its drill writer rounded it.
 pub(crate) use cypcb_world::components::rotate_about_origin as rotate_point;
 
+/// Where a layer sits in the copper sequence, top first.
+///
+/// `Layer::Inner` is zero-based and the copper sequence is not: the first
+/// inner layer is copper entry 1, which is the off-by-one this project has
+/// shipped three times. Two rules carried byte-identical private copies of
+/// this and a third was about to want it - which is how an index error gets
+/// fixed in one file and left standing in the other.
+pub(crate) fn copper_index(layer: cypcb_world::Layer, copper_count: usize) -> Option<usize> {
+    match layer {
+        cypcb_world::Layer::TopCopper => Some(0),
+        cypcb_world::Layer::BottomCopper => copper_count.checked_sub(1),
+        cypcb_world::Layer::Inner(n) => {
+            let index = usize::from(n) + 1;
+            (index < copper_count).then_some(index)
+        }
+        _ => None,
+    }
+}
+
 use crate::presets::DesignRules;
 use crate::violation::DrcViolation;
 

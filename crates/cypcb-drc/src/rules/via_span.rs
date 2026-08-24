@@ -27,13 +27,12 @@
 //! table's answer standing.
 
 use cypcb_world::components::trace::Via;
-use cypcb_world::components::Layer;
 use cypcb_world::BoardWorld;
 
 use crate::presets::DesignRules;
 use crate::violation::DrcViolation;
 
-use super::DrcRule;
+use super::{copper_index, DrcRule};
 
 /// What kind of hole a span is on a board with this many copper layers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -44,23 +43,6 @@ enum Span {
     Blind,
     /// Touches neither face.
     Buried,
-}
-
-/// Where a layer sits in the copper sequence, top first.
-///
-/// `Layer::Inner` is zero-based and the copper sequence is not: the first
-/// inner layer is copper entry 1, which is the off-by-one this project has
-/// shipped three times.
-fn copper_index(layer: Layer, copper_count: usize) -> Option<usize> {
-    match layer {
-        Layer::TopCopper => Some(0),
-        Layer::BottomCopper => copper_count.checked_sub(1),
-        Layer::Inner(n) => {
-            let index = usize::from(n) + 1;
-            (index < copper_count).then_some(index)
-        }
-        _ => None,
-    }
 }
 
 fn span_of(via: &Via, copper_count: usize) -> Option<Span> {

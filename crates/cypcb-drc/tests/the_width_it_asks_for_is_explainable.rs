@@ -149,3 +149,90 @@ fn an_ordinary_current_carries_no_note_at_all() {
         "nothing about this board is outside the standard, so nothing is appended: {said}"
     );
 }
+
+#[test]
+fn the_boards_own_stack_beats_the_fab_table() {
+    // A design that states `copper 2oz` is telling the fabricator what to
+    // press. The rule read the fab table and nothing else, so a board built
+    // with 2oz foil was held to the table's 1oz and asked for twice the copper
+    // it needs - measured on this 5A net: 2.766mm demanded against the 1.383mm
+    // the stack actually calls for.
+    use cypcb_world::components::{Stackup, StackupLayer, StackupLayerKind};
+
+    let rules = Preset::JlcpcbStandard2Layer.rules();
+
+    let mut heavy = board(Nm::from_mm(0.5), 5000.0);
+    heavy.set_stackup(Stackup {
+        layers: vec![
+            StackupLayer::new(
+                StackupLayerKind::Copper,
+                Some(Nm(2 * cypcb_core::NM_PER_OZ)),
+            ),
+            StackupLayer::new(StackupLayerKind::Core, Some(Nm::from_mm(1.5))),
+            StackupLayer::new(
+                StackupLayerKind::Copper,
+                Some(Nm(2 * cypcb_core::NM_PER_OZ)),
+            ),
+        ],
+        ..Default::default()
+    });
+
+    let said = run_drc(&mut heavy, &rules)
+        .violations
+        .iter()
+        .find(|v| v.kind == cypcb_drc::ViolationKind::TraceCurrent)
+        .map(|v| v.message.clone())
+        .expect("0.5mm is too narrow for 5A on any stack");
+
+    assert!(
+        said.contains("2.0oz copper"),
+        "the board states its foil and the message has to use it: {said}"
+    );
+    assert!(
+        said.contains("1.383mm"),
+        "twice the copper is half the width: {said}"
+    );
+
+    // And a board that states no stack is unchanged: the table still answers.
+    let mut plain = board(Nm::from_mm(0.5), 5000.0);
+    let fallback = run_drc(&mut plain, &rules)
+        .violations
+        .iter()
+        .find(|v| v.kind == cypcb_drc::ViolationKind::TraceCurrent)
+        .map(|v| v.message.clone())
+        .expect("the same trace is too narrow without a stack too");
+    assert!(
+        fallback.contains("1.0oz copper") && fallback.contains("2.766mm"),
+        "with no stack to read, the fab table is still the answer: {fallback}"
+    );
+}
+
+#[test]
+fn a_stack_that_states_no_thickness_leaves_the_table_standing() {
+    // The half that keeps the rule honest about what it knows. A stackup entry
+    // may name a layer and say nothing about how thick it is, and inventing an
+    // ounce figure for it would read like a measurement.
+    use cypcb_world::components::{Stackup, StackupLayer, StackupLayerKind};
+
+    let rules = Preset::JlcpcbStandard2Layer.rules();
+    let mut world = board(Nm::from_mm(0.5), 5000.0);
+    world.set_stackup(Stackup {
+        layers: vec![
+            StackupLayer::new(StackupLayerKind::Copper, None),
+            StackupLayer::new(StackupLayerKind::Core, Some(Nm::from_mm(1.5))),
+            StackupLayer::new(StackupLayerKind::Copper, None),
+        ],
+        ..Default::default()
+    });
+
+    let said = run_drc(&mut world, &rules)
+        .violations
+        .iter()
+        .find(|v| v.kind == cypcb_drc::ViolationKind::TraceCurrent)
+        .map(|v| v.message.clone())
+        .expect("still too narrow");
+    assert!(
+        said.contains("1.0oz copper"),
+        "a stack with no foil thickness cannot answer, so the table does: {said}"
+    );
+}

@@ -743,6 +743,25 @@ impl Stackup {
             .try_fold(Nm(0), |total, layer| Some(total + layer.slot_thickness()?))
     }
 
+    /// The copper weight of the nth copper layer, in ounces.
+    ///
+    /// Derived from thickness rather than from how it was written: `copper
+    /// 2oz` and `copper 0.07mm` are the same foil, and a stack imported from
+    /// KiCad states micrometres. `None` when that layer states no thickness,
+    /// which is the same answer `environment_of` gives for the same reason -
+    /// a number invented for a stack that did not state one reads like a
+    /// measurement.
+    ///
+    /// `copper_index` counts copper entries from the top, as everywhere else.
+    pub fn copper_weight_oz(&self, copper_index: usize) -> Option<f64> {
+        let at = self
+            .layers
+            .iter()
+            .filter(|layer| layer.kind == StackupLayerKind::Copper)
+            .nth(copper_index)?;
+        Some(at.thickness?.0 as f64 / cypcb_core::NM_PER_OZ as f64)
+    }
+
     /// Where a copper layer sits, as the impedance forms need it.
     ///
     /// `copper_index` counts copper entries from the top, so 0 is the outer
