@@ -2,7 +2,7 @@
 //!
 //! # Commands
 //!
-//! - `cypcb parse <file>` - Parse a .cypcb or .kicad_pcb board, print JSON
+//! - `cypcb parse <file>` - Parse a .cypcb design, print the model as JSON
 //! - `cypcb check <file>` - Check a .cypcb or .kicad_pcb board for errors
 //! - `cypcb route <file>` - Route a .cypcb or .kicad_pcb board in-house
 //!
@@ -57,7 +57,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Parse a .cypcb or .kicad_pcb board and print the model as JSON
+    /// Parse a .cypcb design and print the model as JSON (see parse-kicad)
     Parse(commands::ParseCommand),
     /// Check a .cypcb or .kicad_pcb board for errors
     Check(commands::CheckCommand),

@@ -260,9 +260,10 @@ fn test_parse_help() {
 
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
-    // The line names both formats: `parse` opens a `.kicad_pcb` board too, and
-    // said ".cypcb file" until 2026-08-24.
-    assert!(stdout.contains("Parse a .cypcb or .kicad_pcb board"));
+    // `parse` reads the .cypcb language and turns a KiCad board away, naming
+    // `parse-kicad` as it goes. It said "both formats" for one commit, on the
+    // strength of a source grep that could not tell support from detection.
+    assert!(stdout.contains("Parse a .cypcb design"));
     assert!(stdout.contains("--output"));
 }
 

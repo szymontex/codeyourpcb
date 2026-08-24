@@ -1,128 +1,131 @@
-//! The help says which boards a command reads.
+//! The help says which boards a command reads, and it is asked rather than read.
 //!
 //! `cargo test -p cypcb-cli --test the_help_says_which_boards_it_reads`
 //!
-//! Six of the nine subcommands take a `.kicad_pcb` file as readily as a
-//! `.cypcb` one - `parse`, `check`, `route`, `export`, `score` and `watch`
-//! each open with `board_source::is_kicad` - and every one of their help lines
-//! said ".cypcb file". `score`'s said "a routed .cypcb file" in the same
-//! sentence as "routes the board", so it was wrong about the format and about
-//! what it does with it. The argument's own doc under `score` had said
-//! "a `.cypcb` design or a `.kicad_pcb` file" the whole time, which is how a
-//! reader could find out.
+//! Six subcommands call `board_source::is_kicad`, and the first version of
+//! this test paired that call with a help line naming both formats. It was
+//! wrong the day it was written: `parse` calls it to **refuse** - "`parse`
+//! reads the .cypcb language and this is a KiCad board" - so a source grep
+//! cannot tell support from detection, and the line it made true said `parse`
+//! reads a board it turns away.
 //!
-//! The pairing is what this holds: a command that reads both formats says so,
-//! and a command that says so reads both. The second half matters as much -
-//! a help line promising KiCad support that the code does not have sends a
-//! person to a file that will be refused.
+//! So each command is handed a board KiCad itself wrote and asked. What it
+//! does with the file is the fact; the help line is checked against that.
 
-use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::process::Command;
 
 /// The phrase a dual-format command's help line carries.
 const BOTH_FORMATS: &str = ".cypcb or .kicad_pcb";
 
-fn crate_src() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src")
+/// What a command says when it will not read a KiCad board.
+const REFUSAL: &str = "reads the .cypcb language and this is a KiCad board";
+
+fn repo_root() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(|p| p.parent())
+        .expect("the crate sits two levels below the repo root")
+        .to_path_buf()
 }
 
-/// `ParseKicadCommand` -> `parse_kicad`.
-fn module_of(type_name: &str) -> String {
-    let stem = type_name.strip_suffix("Command").unwrap_or(type_name);
-    let mut out = String::new();
-    for (index, ch) in stem.char_indices() {
-        if ch.is_uppercase() && index > 0 {
-            out.push('_');
-        }
-        out.extend(ch.to_lowercase());
+/// A board KiCad 10.0.5 wrote, copied so nothing lands in the repo.
+fn kicad_board(who: &str) -> PathBuf {
+    let dir = std::env::temp_dir().join(format!("cypcb-reads-{who}"));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("a place to work");
+    let source = repo_root().join("crates/cypcb-kicad/tests/fixtures/kicad10-slotted.kicad_pcb");
+    let target = dir.join("board.kicad_pcb");
+    std::fs::copy(&source, &target).expect("the fixture is copyable");
+    target
+}
+
+/// Whether the command took the board rather than turning it away.
+///
+/// Not whether it succeeded: a command can accept a KiCad board and then fail
+/// on it for its own reasons, which is a different fault from refusing to read
+/// the format at all.
+fn takes_a_kicad_board(subcommand: &str) -> bool {
+    let board = kicad_board(subcommand);
+    let out = board.parent().expect("a directory").join("out");
+    let mut command = Command::new(env!("CARGO_BIN_EXE_cypcb"));
+    command.arg(subcommand).arg(&board);
+    if subcommand == "export" {
+        command.arg("-o").arg(&out);
     }
-    out
+    let output = command.output().expect("the binary runs");
+    let said = String::from_utf8_lossy(&output.stderr).to_string();
+    !said.contains(REFUSAL)
 }
 
-/// Each subcommand, as (type name, the doc comment clap prints).
-fn subcommands() -> Vec<(String, String)> {
-    let source = fs::read_to_string(crate_src().join("main.rs")).expect("main.rs is readable");
-    let lines: Vec<&str> = source.lines().collect();
-    let mut found = Vec::new();
-
-    for (index, line) in lines.iter().enumerate() {
-        let Some(open) = line.find("(commands::") else {
-            continue;
-        };
-        let rest = &line[open + "(commands::".len()..];
-        let Some(type_name) = rest.trim_end().strip_suffix("),") else {
-            continue;
-        };
-
-        // The `///` lines directly above are what clap prints for it.
-        let mut doc = Vec::new();
-        for above in lines[..index].iter().rev() {
-            let trimmed = above.trim();
-            match trimmed.strip_prefix("///") {
-                Some(text) => doc.push(text.trim().to_string()),
-                None => break,
-            }
-        }
-        doc.reverse();
-        found.push((type_name.to_string(), doc.join(" ")));
-    }
-
-    found
-}
-
-#[test]
-fn a_command_that_reads_both_formats_says_so() {
-    let commands = subcommands();
-
-    // A reader that found nothing would make the loop below pass while proving
-    // nothing. Nine subcommands ship today; a floor, not a census.
-    assert!(
-        commands.len() >= 9,
-        "only {} subcommands were read out of main.rs, so the reader is broken rather than the crate: {commands:?}",
-        commands.len()
-    );
-
-    for (type_name, doc) in &commands {
-        let module = crate_src()
-            .join("commands")
-            .join(format!("{}.rs", module_of(type_name)));
-        let body = fs::read_to_string(&module)
-            .unwrap_or_else(|e| panic!("{} is readable ({e})", module.display()));
-
-        let reads_kicad = body.contains("is_kicad(");
-        let says_kicad = doc.contains(BOTH_FORMATS);
-
-        assert_eq!(
-            reads_kicad,
-            says_kicad,
-            "{type_name} {} a KiCad board and its help line {} say so: {doc:?}",
-            if reads_kicad {
-                "reads"
-            } else {
-                "does not read"
-            },
-            if says_kicad { "does" } else { "does not" },
-        );
-    }
-}
-
-#[test]
-fn the_help_output_carries_what_the_source_says() {
-    // The source is not the surface. This asks the binary.
-    let output = std::process::Command::new(env!("CARGO_BIN_EXE_cypcb"))
+/// The line clap prints for a subcommand in `cypcb --help`.
+fn help_line(subcommand: &str) -> String {
+    let output = Command::new(env!("CARGO_BIN_EXE_cypcb"))
         .arg("--help")
         .output()
         .expect("the binary runs");
     let help = String::from_utf8_lossy(&output.stdout).to_string();
+    help.lines()
+        .find(|line| line.trim_start().starts_with(subcommand))
+        .unwrap_or_else(|| panic!("no line for `{subcommand}` in:\n{help}"))
+        .to_string()
+}
 
-    for command in ["parse", "check", "route", "export", "score", "watch"] {
-        let line = help
-            .lines()
-            .find(|line| line.trim_start().starts_with(command))
-            .unwrap_or_else(|| panic!("no line for `{command}` in:\n{help}"));
-        assert!(
-            line.contains(BOTH_FORMATS),
-            "`{command}` reads a KiCad board and its line does not say so: {line}"
+#[test]
+fn the_help_line_matches_what_the_command_does() {
+    // `watch` is not here and cannot be: it does not return. Its help line is
+    // held by the reader below instead, which is the weaker check this test
+    // exists to replace everywhere it can.
+    for subcommand in ["parse", "check", "export", "score"] {
+        let takes = takes_a_kicad_board(subcommand);
+        let line = help_line(subcommand);
+        let says = line.contains(BOTH_FORMATS);
+
+        assert_eq!(
+            takes,
+            says,
+            "`{subcommand}` {} a KiCad board and its help line {} say so: {line}",
+            if takes { "takes" } else { "refuses" },
+            if says { "does" } else { "does not" },
         );
     }
+}
+
+#[test]
+fn parse_is_the_one_that_turns_a_kicad_board_away() {
+    // Stated on its own, because it is the case that made the source-reading
+    // version of this test wrong. `parse` detects the format in order to
+    // refuse it, and points at the command that does read it.
+    let board = kicad_board("parse-refusal");
+    let output = Command::new(env!("CARGO_BIN_EXE_cypcb"))
+        .arg("parse")
+        .arg(&board)
+        .output()
+        .expect("the binary runs");
+    let said = String::from_utf8_lossy(&output.stderr).to_string();
+
+    assert!(!output.status.success(), "it has to fail, not half-read it");
+    assert!(said.contains(REFUSAL), "{said}");
+    assert!(
+        said.contains("parse-kicad"),
+        "and it has to name the command that does read one: {said}"
+    );
+}
+
+#[test]
+fn watch_is_the_one_command_this_can_only_read() {
+    // It watches a file forever, so it cannot be handed a board and asked.
+    // The source is the fallback: it opens with the same format check the
+    // others do, and its line says both formats.
+    let body = std::fs::read_to_string(repo_root().join("crates/cypcb-cli/src/commands/watch.rs"))
+        .expect("watch.rs is readable");
+    assert!(
+        body.contains("is_kicad("),
+        "watch checks the format it was handed"
+    );
+    assert!(
+        help_line("watch").contains(BOTH_FORMATS),
+        "and says so: {}",
+        help_line("watch")
+    );
 }
