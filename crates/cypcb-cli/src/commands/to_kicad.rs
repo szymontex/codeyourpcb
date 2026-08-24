@@ -159,6 +159,21 @@ impl ToKicadCommand {
         // asks for, so those three stop checking on a board read back from
         // here - silently, because a net with no constraints is a net nobody
         // constrained.
+        //
+        // The four do not share a fate, and the warning says which is which.
+        // Read out of three `.kicad_pro` files KiCad itself wrote, in
+        // `viewer/faebryk` and `viewer/kicad-tools`: a net class there carries
+        // `clearance`, `track_width`, `via_diameter`, `via_drill` and the
+        // diff-pair figures, and **no current and no impedance**. So width and
+        // clearance could travel in the project file this command already
+        // writes; the other two have nowhere in either file to go.
+        //
+        // What could not be measured is how a net is *assigned* to a class:
+        // all three of those files carry `netclass_patterns: []` and
+        // `netclass_assignments: null`, so the shape of an entry is not
+        // visible in any of them. Writing one from memory is the kind of guess
+        // this project keeps finding in its own history, so the classes are
+        // not written until a file that uses them can be read.
         {
             let constrained: Vec<String> = world
                 .nets()
@@ -171,9 +186,10 @@ impl ToKicadCommand {
                 .collect();
             if !constrained.is_empty() {
                 eprintln!(
-                    "Warning: what {} net(s) ask for ({}) is not in the KiCad board: width, \
-                     clearance, current and impedance have no field there, so the trace-width, \
-                     trace-current and impedance rules stop checking those nets.",
+                    "Warning: what {} net(s) ask for ({}) is not in the KiCad board: it carries \
+                     a net's membership and nothing else. Width and clearance have a home in the \
+                     project file's net classes; current and impedance have none in either file, \
+                     so the trace-current and impedance rules stop checking those nets.",
                     constrained.len(),
                     constrained.join(", ")
                 );

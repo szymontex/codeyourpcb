@@ -83,6 +83,10 @@ fn a_design_that_states_none_is_left_alone() {
         !said.contains("drill spans"),
         "a board that states no spans has none to lose:\n{said}"
     );
+    assert!(
+        !said.contains("stop checking"),
+        "its nets ask for nothing, so nothing about them is lost:\n{said}"
+    );
 }
 
 #[test]
@@ -239,6 +243,18 @@ fn the_trip_costs_exactly_these_three_things() {
     assert!(
         said.contains("SIG") && said.contains("stop checking"),
         "{said}"
+    );
+    // The four constraints do not share a fate, and the warning says which is
+    // which: read out of three `.kicad_pro` files KiCad itself wrote, a net
+    // class carries a clearance and a track width and has no field for either
+    // current or impedance.
+    assert!(
+        said.contains("Width and clearance have a home"),
+        "two of the four could travel in the project file, and that is worth knowing:\n{said}"
+    );
+    assert!(
+        said.contains("current and impedance have none in either file"),
+        "and two of them cannot, which is the half nothing can fix:\n{said}"
     );
 
     let back = dir.join("back.cypcb");
