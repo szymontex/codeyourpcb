@@ -18,16 +18,22 @@ current, which is how a fresh session was told to work on a phase that was over.
 
 - [x] P0 - Establish verified ground truth (2026-07-10 audit)
 - [x] P1 - Stop the bleeding: crashes, lying commands, broken fresh clone.
-  Measured 2026-08-08: `git clone` into an empty directory, then
-  `cargo test --workspace --exclude cypcb-desktop` -> **119 suites, 1467
-  passed, 0 failed, 1m18s from cold**. The commands that lied - `check` on a
-  file with no board, `parse -o json` printing the AST, `score` guessing a
-  fabricator, three build scripts printing success over a failed build - are
-  each fixed with a test in V1 and V3 below.
+  **Run it rather than reading a number here:**
+  `cargo test --workspace --exclude cypcb-desktop 2>&1 | grep -c '^test result:'`
+  for the suites, and the same output for the totals. Two dated readings, so
+  the direction is visible: **2026-08-08**, from a `git clone` into an empty
+  directory, 119 suites and 1467 passed in 1m18s from cold; **2026-08-24**, in
+  the working tree, **228 suites, 1996 passed, 0 failed, 76 ignored**. The
+  commands that lied - `check` on a file with no board, `parse -o json`
+  printing the AST, `score` guessing a fabricator, three build scripts printing
+  success over a failed build - are each fixed with a test in V1 and V3 below.
 - [x] P2 - Green quality gate: clippy, fmt, all tests including WASM E2E.
-  `./scripts/quality-gate.sh` -> `=== All stages passed ===`, all eight stages,
-  playwright 100 passed / 17 skipped. First green on 2026-08-06 and green on
-  every run since.
+  `./scripts/quality-gate.sh` -> `=== All stages passed ===`, all eight stages.
+  First green on 2026-08-06 and green on every run since. The browser halves,
+  re-read **2026-08-24** because the figure below had been stale since the
+  first: `npx playwright test` -> **114 passed, 17 skipped**, where this line
+  said 100; `npx vitest run` -> **55 files, 439 passed**, a figure it had never
+  carried at all.
 - [ ] P3 - Structural: one parser, one width formula, no orphan crates.  <- current
   **One parser: done** - `parseSource` and its helpers are deleted, the Rust
   reader is the only one, `docs/one-parser.md` carries the drift table.
@@ -483,6 +489,12 @@ answered, not as they were found. Every one of them is closed.
 
 
 ### V1 - CLI and core correctness
+- DONE: **the two phase-map lines that quote a command were re-run, and both figures were stale.** P1 said 119 suites and 1467 tests, measured 2026-08-08 from a cold clone; today the same command in the working tree gives **228 suites, 1996 passed, 0 failed, 76 ignored**. P2 said playwright 100 passed / 17 skipped; it is **114 passed, 17 skipped**, and the line had never mentioned vitest at all - **55 files, 439 passed**.
+- **They are written as a command with dated readings rather than as a number.** That is this project's own documentation rule and the P4 lesson applied: a figure in a file is true on the day it is written and silently false after, while a command stays true. Two readings are kept rather than one, because the direction - 119 suites to 228 in sixteen days - is worth more than either figure alone.
+- **What is not claimed: the cold-clone half.** The 2026-08-08 reading came from a `git clone` into an empty directory and today's did not, so the line says which is which. A fresh-clone run is a different measurement and restating it as if it had been repeated is the kind of borrowed credit that made the P4 sentence wrong.
+- Proof: `cargo test --workspace --exclude cypcb-desktop` summed over its `test result:` lines -> **228 suites, 1996 passed, 0 failed, 76 ignored**; `npx playwright test` -> **114 passed, 17 skipped**; `npx vitest run` -> **55 passed files, 439 passed**; `./scripts/quality-gate.sh` -> `=== All stages passed ===`. No test is added for these: a test that pins a test count fails on every commit that adds a test, which is churn rather than a guard - the guard is that the line names the command.
+- NEXT-ACTION: **P3 and P5 are the two remaining phase-map claims, and they name tests rather than counts.** P3 says one parser and one width formula, each with a test named in the line - `docs/one-parser.md` and `one-width-formula.test.ts` - so the check is whether those tests still exist and still fail without the thing they hold. P5 says seventeen routing instruments were measured and two kept, which is a claim about `docs/routing.md` rather than about the code. Both are one run each.
+
 - DONE: **the phase map's P4 sentence is a test now, because one clause of it was false for weeks and nobody had run a command.** It says copper pour, KiCad in and out, modules, imports and assertions "are done and have tests" - and `interface` sat in the same sentence claiming to build nothing while `sync.rs` was enforcing it. A sentence that mixes five true claims with one false one is worse than no sentence: the false one borrows the others' credit.
 - **Five cases, each running the binary rather than reading the code.** `pour-island: 1` on the example written for it, with the stranded copper's measured size; `LED_PWR_D1`, `LED_PWR_R1` and `PSU_C_IN` placed by module instances that name their parts after themselves; `DIV_A_RTOP`, `DIV_B_RBOT` and `STATUS_D1` placed across an `import` from a file that defines none of them; `assertion: 1` when one figure of `v2-constraints.cypcb` is moved **and none when it is not**, because either half alone proves nothing; and the interface failure kept as its own case so it cannot go wrong quietly again.
 - **KiCad in and out is the one clause not repeated here**, deliberately: it has four suites of its own from the last several runs - the round-trip census, the drill spans, the slot through to the drill file, and a KiCad 10 board coming back routed - and a sixth shallow case would be worse than a pointer to those.
