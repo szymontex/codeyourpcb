@@ -20,6 +20,16 @@ use cypcb_world::footprint::FootprintLibrary;
 use cypcb_world::sync_ast_to_world;
 use cypcb_world::{BoardWorld, NetConnections};
 
+/// The heading the FreeRouting-only options are printed under.
+///
+/// They read as general settings for `cypcb route` and are not: the built-in
+/// router runs unless a jar is named, and a timeout or a pass count for a
+/// program that is never started is a flag that looks like an instruction the
+/// tool followed. `--timeout` cannot be refused - it carries a default, so
+/// nothing tells a user who typed it from one who did not - which is the more
+/// reason to print it where it belongs.
+const FREEROUTING_OPTIONS: &str = "FreeRouting (opt-in: name a jar)";
+
 /// Route a .cypcb file with the built-in autorouter.
 #[derive(Args)]
 pub struct RouteCommand {
@@ -31,20 +41,24 @@ pub struct RouteCommand {
     #[arg(short, long)]
     pub output: Option<PathBuf>,
 
-    /// Path to freerouting.jar (can also set FREEROUTING_JAR env var)
-    #[arg(long)]
+    /// Path to freerouting.jar (can also set FREEROUTING_JAR env var).
+    ///
+    /// Naming a jar is what asks for FreeRouting. Without it the built-in
+    /// router does the work and none of the options under this heading mean
+    /// anything - three of the four are refused rather than ignored.
+    #[arg(long, help_heading = FREEROUTING_OPTIONS)]
     pub freerouting: Option<PathBuf>,
 
     /// Timeout in seconds (default: 300)
-    #[arg(long, default_value = "300")]
+    #[arg(long, default_value = "300", help_heading = FREEROUTING_OPTIONS)]
     pub timeout: u64,
 
     /// Maximum routing passes
-    #[arg(long)]
+    #[arg(long, help_heading = FREEROUTING_OPTIONS)]
     pub max_passes: Option<u32>,
 
     /// Dry run: export DSN only, don't run FreeRouting
-    #[arg(long)]
+    #[arg(long, help_heading = FREEROUTING_OPTIONS)]
     pub dry_run: bool,
 
     /// Route with the built-in PathFinder autorouter and write the result

@@ -4,7 +4,7 @@
 //!
 //! - `cypcb parse <file>` - Parse a .cypcb file and output JSON
 //! - `cypcb check <file>` - Validate a .cypcb file and report errors
-//! - `cypcb route <file>` - Route a .cypcb file using FreeRouting autorouter
+//! - `cypcb route <file>` - Route a .cypcb file with the built-in autorouter
 //!
 //! # Examples
 //!
@@ -18,7 +18,10 @@
 //! # Validate a design file
 //! cypcb check examples/blink.cypcb
 //!
-//! # Route a design using FreeRouting
+//! # Route a design
+//! cypcb route examples/blink.cypcb
+//!
+//! # Route it through FreeRouting instead, by naming the jar it needs
 //! cypcb route examples/blink.cypcb --freerouting /path/to/freerouting.jar
 //! ```
 
@@ -58,7 +61,7 @@ enum Commands {
     Parse(commands::ParseCommand),
     /// Check a .cypcb file for errors
     Check(commands::CheckCommand),
-    /// Route a .cypcb file using FreeRouting autorouter
+    /// Route a .cypcb file with the built-in autorouter
     Route(commands::RouteCommand),
     /// Export a .cypcb file to manufacturing files
     Export(commands::ExportCommand),

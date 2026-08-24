@@ -100,3 +100,46 @@ fn naming_a_jar_still_asks_for_freerouting() {
         "and it must not quietly route in-house instead"
     );
 }
+
+#[test]
+fn the_help_prints_the_freerouting_flags_under_their_own_heading() {
+    // They read as general settings for `cypcb route` and are not. Three of
+    // the four are refused rather than ignored once the built-in router runs,
+    // and `--timeout` cannot even be refused: it carries a default, so nothing
+    // tells a user who typed it from one who did not.
+    let output = cypcb()
+        .arg("route")
+        .arg("-h")
+        .output()
+        .expect("the binary runs");
+    let help = String::from_utf8_lossy(&output.stdout).to_string();
+
+    assert!(
+        help.starts_with("Route a .cypcb file with the built-in autorouter"),
+        "the command says which router it is: {help}"
+    );
+
+    let heading = "FreeRouting (opt-in: name a jar):";
+    let split = help
+        .find(heading)
+        .unwrap_or_else(|| panic!("no FreeRouting heading in the help:\n{help}"));
+    let (general, freerouting) = help.split_at(split);
+
+    for flag in ["--freerouting", "--timeout", "--max-passes", "--dry-run"] {
+        assert!(
+            freerouting.contains(flag),
+            "{flag} only means something once a jar is named, so it belongs under the heading:\n{help}"
+        );
+        assert!(
+            !general.contains(flag),
+            "{flag} is printed twice, or above the heading:\n{help}"
+        );
+    }
+
+    for flag in ["--in-house", "--variants", "--fast", "--preset"] {
+        assert!(
+            general.contains(flag),
+            "{flag} works on the router that actually runs:\n{help}"
+        );
+    }
+}
