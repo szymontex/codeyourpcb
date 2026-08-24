@@ -35,11 +35,14 @@ current, which is how a fresh session was told to work on a phase that was over.
   `viewer/src/__tests__/one-width-formula.test.ts` fails if it comes back.
   **Orphan crates: blocked on D3**, which is the owner's call, not a fire's.
 - [ ] P4 - Roadmap features. Copper pour, KiCad in and out, modules, imports
-  and assertions are done and have tests. **`interface` is enforced**, against
-  what this line said for weeks: `sync.rs` carries `interface_not_satisfied`
-  and its sibling for an interface nobody defined, and
-  `cypcb check` on a module implementing `I2C` while exposing only `SDA` says
-  `module 'Sensor' implements 'I2C' without pin SCL`. Measured 2026-08-24.
+  and assertions are done, and `interface` is enforced too - which this line
+  denied for weeks. **Every clause of it is now a test**:
+  `cargo test -p cypcb-cli --test the_roadmap_claims_are_measured`, five cases,
+  each running the binary. Measured 2026-08-24: `pour-island: 1` with the
+  stranded copper's size on `examples/pour-island.cypcb`; `LED_PWR_D1` and its
+  siblings placed by a module; `DIV_A_RTOP` placed across an `import`;
+  `assertion: 1` when one figure of `v2-constraints.cypcb` is moved and none
+  when it is not; and `module 'Sensor' implements 'I2C' without pin SCL`.
 - [ ] P5 - Optimization passes (measured, per GP-002). Seventeen routing
   instruments measured and written up, two kept; the 3x grid pass measured and
   kept. Nothing here is finished, and nothing here is guessed.
@@ -480,6 +483,12 @@ answered, not as they were found. Every one of them is closed.
 
 
 ### V1 - CLI and core correctness
+- DONE: **the phase map's P4 sentence is a test now, because one clause of it was false for weeks and nobody had run a command.** It says copper pour, KiCad in and out, modules, imports and assertions "are done and have tests" - and `interface` sat in the same sentence claiming to build nothing while `sync.rs` was enforcing it. A sentence that mixes five true claims with one false one is worse than no sentence: the false one borrows the others' credit.
+- **Five cases, each running the binary rather than reading the code.** `pour-island: 1` on the example written for it, with the stranded copper's measured size; `LED_PWR_D1`, `LED_PWR_R1` and `PSU_C_IN` placed by module instances that name their parts after themselves; `DIV_A_RTOP`, `DIV_B_RBOT` and `STATUS_D1` placed across an `import` from a file that defines none of them; `assertion: 1` when one figure of `v2-constraints.cypcb` is moved **and none when it is not**, because either half alone proves nothing; and the interface failure kept as its own case so it cannot go wrong quietly again.
+- **KiCad in and out is the one clause not repeated here**, deliberately: it has four suites of its own from the last several runs - the round-trip census, the drill spans, the slot through to the drill file, and a KiCad 10 board coming back routed - and a sixth shallow case would be worse than a pointer to those.
+- Proof: `cargo test -p cypcb-cli --test the_roadmap_claims_are_measured` -> **5 passed**. Mutations, each alone against a clean tree and restored from the saved file: `AssertionRule` unregistered -> **1 failed**, the assertion case; `PourIslandRule` unregistered -> **1 failed**, the pour case. `cargo test --workspace --exclude cypcb-desktop` -> no failures; `cargo fmt --all -- --check` clean; `cargo clippy -p cypcb-cli --all-targets -- -D warnings` -> **0 errors**.
+- NEXT-ACTION: **the rest of the phase map has the same shape and none of it is held.** P1 quotes a suite count from a clean clone, P2 quotes the gate, P3 says one parser and one width formula with a test named for each, P5 says seventeen instruments were measured. Those are five more sentences that were true when written, and the P4 lesson is that a sentence stays in this file long after the thing it describes has moved. The cheap half is the two that name a command: re-run them and date the line.
+
 - DONE: **`interface` is enforced, and the reason for hiding it was a claim nobody re-measured.** The previous run left it out of the editor's completions because this tracker had said since the roadmap work that it "parses and builds nothing". Measured: `cypcb check` on a module declaring `implements I2C` and exposing only `pin SDA` says **`module 'Sensor' implements 'I2C' without pin SCL`**, and `sync.rs` carries that error and its sibling for an interface nobody defined. `examples/v2-interfaces.cypcb` documents the same failure in its own header.
 - **So the exclusion mechanism is gone rather than corrected.** Every one of the seventeen constructs is offered now, with no allow-list: a list of things left out on purpose is a list of reasons nobody re-checks, and this one had already outlived its reason before it was written. If a construct ever needs leaving out, it comes back with a fresh one.
 - **What this cost is worth naming.** The claim travelled from the phase map into a completion exclusion and into a test's own doc comment - three places, one measurement, and the measurement was a `cypcb check` away the whole time. P4 in the phase map is corrected with the command that shows it.
