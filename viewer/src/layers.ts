@@ -699,13 +699,20 @@ export function viaSpanDepths(
   endLayer: string,
   innerCount: number,
   thicknessMm: number,
+  innerDepths?: number[] | null,
 ): { bottom: number; top: number } {
   const depth = (layer: string, fallback: number): number => {
     if (layer === 'Top') return thicknessMm / 2;
     if (layer === 'Bottom') return -thicknessMm / 2;
     const index = innerLayerIndex(layer);
     if (index === null || innerCount <= 0) return fallback;
-    return innerLayerDepth(Math.min(index, innerCount - 1), innerCount, thicknessMm);
+    const at = Math.min(index, innerCount - 1);
+    // The stack's own positions when the board states them; the even spread
+    // when it does not. A barrel that stops short of the copper it lands on is
+    // a hole drawn ending in laminate.
+    const stated = innerDepths?.[at];
+    if (typeof stated === 'number' && Number.isFinite(stated)) return stated;
+    return innerLayerDepth(at, innerCount, thicknessMm);
   };
 
   const a = depth(startLayer, thicknessMm / 2);

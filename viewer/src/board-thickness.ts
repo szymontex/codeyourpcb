@@ -65,6 +65,59 @@ export function copperThicknessMm(
   return stated * NM_TO_MM;
 }
 
+/**
+ * Where each inner copper layer sits, in mm from the board's centre.
+ *
+ * From the stack's own running sum rather than from an even spread. A
+ * four-layer board is not four equal steps: a common build is 0.1mm of prepreg
+ * under the top foil and a 1.2mm core in the middle, which puts both inner
+ * layers close to the faces. Drawn evenly they read as a board nobody presses.
+ *
+ * Measured down from the top of the stack, which is where the substrate box
+ * starts: the same total this module's `boardThicknessMm` returns, so the
+ * offsets and the box agree by construction. Entry `0` is the first inner
+ * copper, which is `Inner1` - the same direction `innerLayerDepth` counts.
+ *
+ * `null` when the stack cannot answer: fewer than three copper entries, or any
+ * layer that states no thickness. A running sum over a stack with a hole in it
+ * places every layer after the hole wrongly, so a partial answer is worse than
+ * the even spread that stands in for it.
+ */
+export function innerCopperDepthsMm(
+  snapshot: BoardSnapshot | null | undefined,
+  thicknessMm: number,
+): number[] | null {
+  const layers = snapshot?.stackup?.layers ?? [];
+  if (layers.filter((layer) => layer.kind === 'copper').length < 3) {
+    return null;
+  }
+
+  const depths: number[] = [];
+  let offset = 0;
+  let coppersSeen = 0;
+  const coppersTotal = layers.filter((layer) => layer.kind === 'copper').length;
+
+  for (const layer of layers) {
+    // The whole slot, not the first sheet: a dielectric pressed from three
+    // sheets is as thick as all three, and `total_thickness_nm` sums it that
+    // way too.
+    const slot = layer.slot_thickness_nm ?? layer.thickness_nm;
+    if (typeof slot !== 'number' || !Number.isFinite(slot) || slot < 0) {
+      return null;
+    }
+    if (layer.kind === 'copper') {
+      coppersSeen += 1;
+      const isOuter = coppersSeen === 1 || coppersSeen === coppersTotal;
+      if (!isOuter) {
+        depths.push(thicknessMm / 2 - (offset + slot / 2) * NM_TO_MM);
+      }
+    }
+    offset += slot;
+  }
+
+  return depths.length > 0 ? depths : null;
+}
+
 /** Where each surface sits on the Z axis, with the board centred on zero. */
 export interface ZStack {
   boardTop: number;

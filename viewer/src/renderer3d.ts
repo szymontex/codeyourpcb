@@ -27,6 +27,7 @@ import {
 import {
   boardThicknessMm,
   copperThicknessMm,
+  innerCopperDepthsMm,
   zStack,
   DEFAULT_BOARD_THICKNESS_MM,
   DEFAULT_COPPER_THICKNESS_MM,
@@ -98,6 +99,14 @@ let Z_TOP_PAD = F_COPPER_TOP_Z + 0.003;
 let Z_BOTTOM_PAD = B_COPPER_BOT_Z - 0.003;
 
 /**
+ * Where the stack puts each inner copper layer, or `null` for an even spread.
+ *
+ * Read once per `updateBoard` beside the thickness, for the same reason: a
+ * board states this and the view was guessing at it.
+ */
+let INNER_DEPTHS: number[] | null = null;
+
+/**
  * Take the thickness the board states, and move every surface with it.
  *
  * Called once per `updateBoard`, which clears and rebuilds the scene, so
@@ -105,6 +114,7 @@ let Z_BOTTOM_PAD = B_COPPER_BOT_Z - 0.003;
  */
 function applyBoardThickness(snapshot: BoardSnapshot): void {
   BOARD_THICKNESS_MM = boardThicknessMm(snapshot);
+  INNER_DEPTHS = innerCopperDepthsMm(snapshot, BOARD_THICKNESS_MM);
   const z = zStack(
     BOARD_THICKNESS_MM,
     copperThicknessMm(snapshot, 'front'),
@@ -768,10 +778,12 @@ export class Renderer3D {
           ? topPositions
           : bottomPositions;
 
-      // Inner copper sits inside the substrate, evenly spaced between the two
-      // faces, so which layer a trace is on can be read from the side.
+      // Inner copper sits inside the substrate where the stack puts it, or
+      // evenly spaced between the two faces when the board does not say, so
+      // which layer a trace is on can be read from the side.
       const innerZ = isInner
-        ? innerLayerDepth(innerIndex, innerPositions.length, BOARD_THICKNESS_MM)
+        ? (INNER_DEPTHS?.[innerIndex] ??
+          innerLayerDepth(innerIndex, innerPositions.length, BOARD_THICKNESS_MM))
         : 0;
       const zBot = isInner
         ? innerZ - COPPER_THICKNESS_MM / 2
@@ -1213,6 +1225,7 @@ export class Renderer3D {
         via.end_layer ?? 'Bottom',
         innerCount,
         BOARD_THICKNESS_MM,
+        INNER_DEPTHS,
       );
       const spanHeight = Math.max(span.top - span.bottom, COPPER_THICKNESS_MM);
       const zScale = spanHeight / BOARD_THICKNESS_MM;

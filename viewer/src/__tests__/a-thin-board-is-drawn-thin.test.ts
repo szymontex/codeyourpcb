@@ -5,10 +5,12 @@ import { join } from 'node:path';
 import {
   boardThicknessMm,
   copperThicknessMm,
+  innerCopperDepthsMm,
   zStack,
   DEFAULT_BOARD_THICKNESS_MM,
   DEFAULT_COPPER_THICKNESS_MM,
 } from '../board-thickness';
+import { innerLayerDepth, viaSpanDepths } from '../layers';
 import type { BoardSnapshot } from '../types';
 
 /**
@@ -99,6 +101,14 @@ describe('the renderer', () => {
     expect(source).toContain("copperThicknessMm(snapshot, 'back')");
   });
 
+  it('hands the stack positions to the traces and the vias alike', () => {
+    // A barrel placed by the stack and a trace placed by an even spread would
+    // be a via ending beside the copper it lands on.
+    expect(source).toContain('innerCopperDepthsMm(snapshot, BOARD_THICKNESS_MM)');
+    expect(source).toContain('INNER_DEPTHS?.[innerIndex]');
+    expect(source).toContain('INNER_DEPTHS,');
+  });
+
   it('no longer holds 1.6 as the answer', () => {
     expect(source).not.toContain('const BOARD_THICKNESS_MM = 1.6');
   });
@@ -157,5 +167,97 @@ describe('the foil on each face', () => {
   it('reads the back as the front when only one is given', () => {
     const z = zStack(1.6, 0.035);
     expect(z.frontCopperTop - z.boardTop).toBeCloseTo(z.boardBot - z.backCopperBot, 12);
+  });
+});
+
+describe('where the inner copper sits', () => {
+  /**
+   * A four-layer build nobody would call unusual: thin prepreg under each
+   * outer foil and a thick core in the middle. 0.035 + 0.1 + 0.035 + 1.2 +
+   * 0.035 + 0.1 + 0.035 = 1.54mm.
+   */
+  const FOUR_LAYER = {
+    stackup: {
+      total_thickness_nm: 1_540_000,
+      layers: [
+        { kind: 'copper', thickness_nm: 35_000 },
+        { kind: 'prepreg', thickness_nm: 100_000 },
+        { kind: 'copper', thickness_nm: 35_000 },
+        { kind: 'core', thickness_nm: 1_200_000 },
+        { kind: 'copper', thickness_nm: 35_000 },
+        { kind: 'prepreg', thickness_nm: 100_000 },
+        { kind: 'copper', thickness_nm: 35_000 },
+      ],
+    },
+  } as unknown as BoardSnapshot;
+
+  it('follows the stack rather than an even spread', () => {
+    const thickness = boardThicknessMm(FOUR_LAYER);
+    expect(thickness).toBeCloseTo(1.54, 9);
+
+    const depths = innerCopperDepthsMm(FOUR_LAYER, thickness);
+    expect(depths).not.toBeNull();
+    // The centre of each inner foil, measured down from the top of the stack:
+    // 0.035 + 0.1 + 0.0175 = 0.1525 in, so 0.77 - 0.1525.
+    expect(depths![0]).toBeCloseTo(0.6175, 6);
+    expect(depths![1]).toBeCloseTo(-0.6175, 6);
+
+    // And that is the point: this build puts its inner copper nearer the
+    // faces than equal steps would.
+    const even = innerLayerDepth(0, 2, thickness);
+    expect(depths![0]).toBeGreaterThan(even);
+  });
+
+  it('counts the same direction as the even spread it replaces', () => {
+    const depths = innerCopperDepthsMm(FOUR_LAYER, boardThicknessMm(FOUR_LAYER))!;
+    expect(depths[0]).toBeGreaterThan(depths[1]);
+  });
+
+  it('says nothing rather than something partial', () => {
+    const stack = (layers: unknown[]) =>
+      ({ stackup: { layers } }) as unknown as BoardSnapshot;
+
+    // A two-layer board has no inner copper to place.
+    expect(
+      innerCopperDepthsMm(
+        stack([
+          { kind: 'copper', thickness_nm: 35_000 },
+          { kind: 'core', thickness_nm: 1_500_000 },
+          { kind: 'copper', thickness_nm: 35_000 },
+        ]),
+        1.57,
+      ),
+    ).toBeNull();
+
+    // A hole in the running sum misplaces everything after it, so the even
+    // spread stands in rather than a partial answer.
+    expect(
+      innerCopperDepthsMm(
+        stack([
+          { kind: 'copper', thickness_nm: 35_000 },
+          { kind: 'prepreg' },
+          { kind: 'copper', thickness_nm: 35_000 },
+          { kind: 'core', thickness_nm: 1_200_000 },
+          { kind: 'copper', thickness_nm: 35_000 },
+        ]),
+        1.54,
+      ),
+    ).toBeNull();
+
+    expect(innerCopperDepthsMm(null, 1.6)).toBeNull();
+  });
+
+  it('lands a blind via on the copper the stack states', () => {
+    const thickness = boardThicknessMm(FOUR_LAYER);
+    const depths = innerCopperDepthsMm(FOUR_LAYER, thickness);
+
+    const stated = viaSpanDepths('Top', 'Inner1', 2, thickness, depths);
+    expect(stated.top).toBeCloseTo(thickness / 2, 9);
+    expect(stated.bottom).toBeCloseTo(0.6175, 6);
+
+    // Without the stack it falls back to the even spread, which on this build
+    // would end the barrel in laminate a tenth of a millimetre short.
+    const guessed = viaSpanDepths('Top', 'Inner1', 2, thickness);
+    expect(guessed.bottom).toBeLessThan(stated.bottom);
   });
 });
