@@ -209,11 +209,28 @@ pub fn pcbway_standard() -> ExportPreset {
 /// assert!(from_name("unknown").is_none());
 /// ```
 pub fn from_name(name: &str) -> Option<ExportPreset> {
-    match name.to_lowercase().as_str() {
-        "jlcpcb" => Some(jlcpcb_2layer()),
-        "pcbway" => Some(pcbway_standard()),
-        _ => None,
-    }
+    let wanted = name.to_lowercase();
+    HOUSES
+        .iter()
+        .find(|(house, _)| *house == wanted)
+        .map(|(_, build)| build())
+}
+
+/// Every house this command can cut files for, and how to build its profile.
+///
+/// One list rather than a `match` beside a sentence. The command's refusal used
+/// to say "Two are written down: jlcpcb, pcbway" and name the pair twice more
+/// in the same message - four hand-written copies of a list of two, which is
+/// the shape this project keeps finding stale. A third house now changes one
+/// line and the message counts itself.
+/// A house's name and the profile it stands for.
+type House = (&'static str, fn() -> ExportPreset);
+
+const HOUSES: [House; 2] = [("jlcpcb", jlcpcb_2layer), ("pcbway", pcbway_standard)];
+
+/// The name of every house, in the order they are written down.
+pub fn house_names() -> impl Iterator<Item = &'static str> {
+    HOUSES.iter().map(|(house, _)| *house)
 }
 
 #[cfg(test)]

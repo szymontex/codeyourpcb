@@ -68,9 +68,13 @@ impl ExportCommand {
     /// cannot export for it deserves to be told why rather than just told no.
     fn resolve_house(&self) -> Result<cypcb_export::presets::ExportPreset> {
         from_name(&self.house).ok_or_else(|| {
+            // Counted and named from the one list rather than written out
+            // here: this message used to hold four hand-written copies of a
+            // list of two, and a third house would have made all four wrong.
+            let houses: Vec<&str> = cypcb_export::presets::house_names().collect();
             miette::miette!(
-                "'{}' is not a house this command can cut files for. Two are \
-                 written down: jlcpcb, pcbway. They say what a fabricator \
+                "'{}' is not a house this command can cut files for. {} are \
+                 written down: {}. They say what a fabricator \
                  wants the files called and in what format.\n\n\
                  That is a different list from `cypcb check --preset`, which \
                  takes design rules - what a house can etch - and knows more \
@@ -78,10 +82,17 @@ impl ExportCommand {
                  house this command cannot yet write files for, and it is the \
                  board's own `fab` line that decides which rules it is checked \
                  against here.\n\n\
-                 Export with `--house jlcpcb` or `--house pcbway`; the copper \
+                 Export with {}; the copper \
                  is the same either way, only the file names and the \
                  coordinate format differ.",
-                self.house
+                self.house,
+                houses.len(),
+                houses.join(", "),
+                houses
+                    .iter()
+                    .map(|house| format!("`--house {house}`"))
+                    .collect::<Vec<_>>()
+                    .join(" or "),
             )
         })
     }
