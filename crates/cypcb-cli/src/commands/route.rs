@@ -1,7 +1,8 @@
 //! Route command implementation.
 //!
-//! This command exports a .cypcb file to DSN format, runs FreeRouting,
-//! and imports the resulting routes.
+//! The built-in router does the work. FreeRouting is still reachable - this
+//! command exports DSN and reads SES back - but only when a run names its jar,
+//! because it is a Java program this binary cannot supply.
 
 use std::collections::HashMap;
 use std::io::Write;
@@ -19,7 +20,7 @@ use cypcb_world::footprint::FootprintLibrary;
 use cypcb_world::sync_ast_to_world;
 use cypcb_world::{BoardWorld, NetConnections};
 
-/// Route a .cypcb file using FreeRouting autorouter.
+/// Route a .cypcb file with the built-in autorouter.
 #[derive(Args)]
 pub struct RouteCommand {
     /// Input .cypcb file
@@ -46,12 +47,14 @@ pub struct RouteCommand {
     #[arg(long)]
     pub dry_run: bool,
 
-    /// Route with the built-in PathFinder autorouter instead of FreeRouting,
-    /// and write the result back as `.cypcb` trace blocks.
+    /// Route with the built-in PathFinder autorouter and write the result
+    /// back as `.cypcb` trace blocks.
     ///
-    /// Needs no Java and no jar. The default is left on FreeRouting because
-    /// which router this project bets on is an open decision (D1 in
-    /// docs/TRACKER.md), not because it is the better path today.
+    /// This is what a run does anyway. The flag is kept because it reads as an
+    /// instruction and because scripts carry it: the default sat on
+    /// FreeRouting while D1 - which router this project bets on - was open,
+    /// and D1 closed on 2026-08-09 in favour of the in-house router. A command
+    /// that needs a Java jar nobody has is not a default.
     #[arg(long)]
     pub in_house: bool,
 
@@ -155,7 +158,11 @@ impl RouteCommand {
             eprintln!("{:?}", miette::Report::new(warning.clone()));
         }
 
-        if self.in_house || self.variants {
+        // FreeRouting only when a run asks for it by name. `--dry-run` counts:
+        // its whole output is a DSN file for somebody else's router.
+        let freerouting_asked_for =
+            !self.in_house && !self.variants && (self.freerouting.is_some() || self.dry_run);
+        if !freerouting_asked_for {
             return self.route_in_house(&source, world, library, start_time);
         }
 
@@ -620,8 +627,8 @@ impl RouteCommand {
 
         Err(miette::miette!(
             "{} {} only to routing through FreeRouting, and {why}. Drop the \
-             flag, or route a .cypcb board without --in-house to use \
-             FreeRouting.",
+             flag, or name a jar with --freerouting to route a .cypcb board \
+             through FreeRouting.",
             named.join(" and "),
             if named.len() == 1 { "applies" } else { "apply" },
         ))

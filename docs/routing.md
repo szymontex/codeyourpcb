@@ -327,8 +327,8 @@ Five different winners across six boards. This file used to say the default was
 "fourth of eight on every board", measured on three fixtures; on six it ranges
 from first to seventh, and the sentence it supported - that the default is not a
 bad setting so much as nobody's best - now has one board that disagrees with it.
-`cypcb route --in-house` routes best-of-N and hands over the winner, so the
-command line is unaffected; what runs on the default is `--fast`, the viewer's
+`cypcb route` routes best-of-N and hands over the winner, so the command line
+is unaffected; what runs on the default settings is `--fast`, the viewer's
 single-shot path, and every ratchet in CI.
 
 **The majority of every introduced clearance violation sits in a cell the grid

@@ -136,7 +136,7 @@ once by measuring copper instead of part bodies and once by seeing footprints
 on imported boards at all. `docs/TRACKER.md` records each change with what it
 moved.
 
-`cypcb route --in-house` routes the board eleven ways and keeps the best,
+`cypcb route` routes the board eleven ways and keeps the best,
 because no one setting wins everywhere - measured across the six benchmark
 boards, the winner differs between them. It costs roughly eleven times the wall
 clock of a single run and buys, on `examples/blink.cypcb`, 5 violations with 3 shorts

@@ -475,10 +475,11 @@ Used by CLI for `--watch` mode. Not used in web/desktop (handled by Vite dev ser
   `--no-drc` stops at parsing.
 - `cypcb export <file> --output <dir>` - Gerbers, drill, BOM and
   pick-and-place. 13 files.
-- `cypcb route <file>` - autorouter. `--in-house` uses the built-in
-  PathFinder, routes the board every measured way, keeps the best and writes
-  it back as `.cypcb` trace blocks; `--fast` routes once instead. Without
-  `--in-house` it exports DSN for FreeRouting, which needs Java and a jar.
+- `cypcb route <file>` - autorouter. The built-in PathFinder routes the board
+  every measured way, keeps the best and writes it back as `.cypcb` trace
+  blocks; `--fast` routes once instead. FreeRouting is opt-in, by naming its
+  jar with `--freerouting <path>`: it is a Java program this binary cannot
+  supply, so it is not something a plain `cypcb route` should need.
 - `cypcb score <file>` - route and print quality metrics as JSON.
 - `cypcb parse <file>` - the board model as JSON: the components with their
   resolved footprints and nets, the nets with their constraints, the traces,
