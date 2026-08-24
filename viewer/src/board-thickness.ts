@@ -17,6 +17,9 @@ import type { BoardSnapshot } from './types';
 /** What a board is when it does not say: 1.6mm, the standard FR-4 panel. */
 export const DEFAULT_BOARD_THICKNESS_MM = 1.6;
 
+/** What the foil is when the stack does not say: one ounce. */
+export const DEFAULT_COPPER_THICKNESS_MM = 0.035;
+
 /** Nanometres to millimetres. */
 const NM_TO_MM = 1e-6;
 
@@ -33,6 +36,31 @@ export function boardThicknessMm(snapshot: BoardSnapshot | null | undefined): nu
   const stated = snapshot?.stackup?.total_thickness_nm;
   if (typeof stated !== 'number' || !Number.isFinite(stated) || stated <= 0) {
     return DEFAULT_BOARD_THICKNESS_MM;
+  }
+  return stated * NM_TO_MM;
+}
+
+/**
+ * The foil on one face of the board, in millimetres.
+ *
+ * The outer copper of the stack: its first `copper` entry for the front, its
+ * last for the back. A half-ounce flex and a two-ounce power board are drawn
+ * with the foil they are pressed from rather than with one ounce for both -
+ * the same figure `TraceCurrentRule` reads through `Stackup::copper_weight_oz`
+ * when it decides how wide a trace has to be.
+ *
+ * Falls back to one ounce when the stack states no copper, or states one with
+ * no thickness, for the reason the board's own thickness does.
+ */
+export function copperThicknessMm(
+  snapshot: BoardSnapshot | null | undefined,
+  face: 'front' | 'back',
+): number {
+  const coppers = (snapshot?.stackup?.layers ?? []).filter((layer) => layer.kind === 'copper');
+  const at = face === 'front' ? coppers[0] : coppers[coppers.length - 1];
+  const stated = at?.thickness_nm;
+  if (typeof stated !== 'number' || !Number.isFinite(stated) || stated <= 0) {
+    return DEFAULT_COPPER_THICKNESS_MM;
   }
   return stated * NM_TO_MM;
 }
@@ -57,13 +85,18 @@ export interface ZStack {
  * KiCad's convention, which this view already followed: the substrate is
  * centred on zero, so the two faces are at plus and minus half the thickness
  * and everything else is measured out from them. Copper and mask keep their
- * own thicknesses - a thin board is thin in its laminate, not in its foil.
+ * own thicknesses - a thin board is thin in its laminate, not in its foil, and
+ * the two faces need not carry the same foil.
  */
-export function zStack(thicknessMm: number, copperMm: number): ZStack {
+export function zStack(
+  thicknessMm: number,
+  frontCopperMm: number,
+  backCopperMm: number = frontCopperMm,
+): ZStack {
   const boardTop = thicknessMm / 2;
   const boardBot = -thicknessMm / 2;
-  const frontCopperTop = boardTop + copperMm;
-  const backCopperBot = boardBot - copperMm;
+  const frontCopperTop = boardTop + frontCopperMm;
+  const backCopperBot = boardBot - backCopperMm;
   const frontMask = frontCopperTop + 0.001;
   const backMask = backCopperBot - 0.001;
   return {

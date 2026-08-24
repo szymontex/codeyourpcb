@@ -26,8 +26,10 @@ import {
 } from './layers';
 import {
   boardThicknessMm,
+  copperThicknessMm,
   zStack,
   DEFAULT_BOARD_THICKNESS_MM,
+  DEFAULT_COPPER_THICKNESS_MM,
 } from './board-thickness';
 import { fetch3DModelByUuid } from './jlcpcb';
 import { parseEasyEdaOBJ } from './easyeda-obj-parser';
@@ -48,8 +50,15 @@ const THT_HEIGHT_MM = 5.0;
  */
 let BOARD_THICKNESS_MM = DEFAULT_BOARD_THICKNESS_MM;
 
-/** Copper layer thickness in mm */
-const COPPER_THICKNESS_MM = 0.035;
+/**
+ * One ounce of copper, in mm.
+ *
+ * Still a constant, and deliberately: it is the foil an inner layer is drawn
+ * with and the floor a via span is given. What is no longer a constant is the
+ * foil on the two outer faces, which the stack can state per layer and
+ * `applyBoardThickness` reads.
+ */
+const COPPER_THICKNESS_MM = DEFAULT_COPPER_THICKNESS_MM;
 
 /** Solder mask thickness in mm (KiCad DEFAULT_TECH_LAYER_THICKNESS) */
 const MASK_THICKNESS_MM = 0.025;
@@ -96,7 +105,11 @@ let Z_BOTTOM_PAD = B_COPPER_BOT_Z - 0.003;
  */
 function applyBoardThickness(snapshot: BoardSnapshot): void {
   BOARD_THICKNESS_MM = boardThicknessMm(snapshot);
-  const z = zStack(BOARD_THICKNESS_MM, COPPER_THICKNESS_MM);
+  const z = zStack(
+    BOARD_THICKNESS_MM,
+    copperThicknessMm(snapshot, 'front'),
+    copperThicknessMm(snapshot, 'back'),
+  );
   BOARD_TOP_Z = z.boardTop;
   BOARD_BOT_Z = z.boardBot;
   F_COPPER_BOT_Z = z.frontCopperBot;

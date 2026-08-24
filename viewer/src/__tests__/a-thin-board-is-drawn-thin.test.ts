@@ -4,8 +4,10 @@ import { join } from 'node:path';
 
 import {
   boardThicknessMm,
+  copperThicknessMm,
   zStack,
   DEFAULT_BOARD_THICKNESS_MM,
+  DEFAULT_COPPER_THICKNESS_MM,
 } from '../board-thickness';
 import type { BoardSnapshot } from '../types';
 
@@ -90,7 +92,70 @@ describe('the renderer', () => {
     expect(body).toContain('applyBoardThickness(snapshot)');
   });
 
+  it('gives the stack a foil for each face', () => {
+    // Two arguments, not one: passing a single foil would draw a board with
+    // two ounces on the back as though it had one.
+    expect(source).toContain("copperThicknessMm(snapshot, 'front')");
+    expect(source).toContain("copperThicknessMm(snapshot, 'back')");
+  });
+
   it('no longer holds 1.6 as the answer', () => {
     expect(source).not.toContain('const BOARD_THICKNESS_MM = 1.6');
+  });
+});
+
+describe('the foil on each face', () => {
+  /** A stack, as the snapshot carries it: outer copper first and last. */
+  function stack(layers: Array<{ kind: string; thickness_nm?: number }>): BoardSnapshot {
+    return { stackup: { layers } } as unknown as BoardSnapshot;
+  }
+
+  it('is the outer copper of the stack, per face', () => {
+    // Half an ounce on the front, two ounces on the back - the same board a
+    // fabricator would press with different foils on each side. One ounce is
+    // 34,998 nm, so half is 17,499 and two are 69,996.
+    const board = stack([
+      { kind: 'copper', thickness_nm: 17_499 },
+      { kind: 'core', thickness_nm: 1_500_000 },
+      { kind: 'copper', thickness_nm: 69_996 },
+    ]);
+
+    expect(copperThicknessMm(board, 'front')).toBeCloseTo(0.017499, 9);
+    expect(copperThicknessMm(board, 'back')).toBeCloseTo(0.069996, 9);
+  });
+
+  it('skips whatever is not copper', () => {
+    // A rigid-flex stack opens with a coverlay, so the first entry is not the
+    // foil and taking it would draw the copper as the film over it.
+    const board = stack([
+      { kind: 'coverlay', thickness_nm: 25_000 },
+      { kind: 'copper', thickness_nm: 17_499 },
+      { kind: 'core', thickness_nm: 50_000 },
+      { kind: 'copper', thickness_nm: 17_499 },
+      { kind: 'coverlay', thickness_nm: 25_000 },
+      { kind: 'stiffener', thickness_nm: 200_000 },
+    ]);
+
+    expect(copperThicknessMm(board, 'front')).toBeCloseTo(0.017499, 9);
+    expect(copperThicknessMm(board, 'back')).toBeCloseTo(0.017499, 9);
+  });
+
+  it('is one ounce when the stack does not say', () => {
+    expect(copperThicknessMm(stack([]), 'front')).toBe(DEFAULT_COPPER_THICKNESS_MM);
+    expect(copperThicknessMm(stack([{ kind: 'copper' }]), 'back')).toBe(
+      DEFAULT_COPPER_THICKNESS_MM,
+    );
+    expect(copperThicknessMm(null, 'front')).toBe(DEFAULT_COPPER_THICKNESS_MM);
+  });
+
+  it('places the two faces with their own foil', () => {
+    const z = zStack(1.6, 0.017499, 0.069996);
+    expect(z.frontCopperTop - z.boardTop).toBeCloseTo(0.017499, 9);
+    expect(z.boardBot - z.backCopperBot).toBeCloseTo(0.069996, 9);
+  });
+
+  it('reads the back as the front when only one is given', () => {
+    const z = zStack(1.6, 0.035);
+    expect(z.frontCopperTop - z.boardTop).toBeCloseTo(z.boardBot - z.backCopperBot, 12);
   });
 });
