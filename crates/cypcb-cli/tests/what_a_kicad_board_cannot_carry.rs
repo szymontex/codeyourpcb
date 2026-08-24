@@ -155,3 +155,143 @@ fn the_round_trip_loses_the_spans_and_keeps_the_stack() {
         "the spans do not, which is what the warning is about:\n{source}"
     );
 }
+
+/// A board that states every field this project has a word for.
+///
+/// Written here rather than shipped as an example: it exists to be taken
+/// apart, and an example is something a person copies.
+const EVERYTHING: &str = r#"version 1
+
+board everything {
+    size 40mm x 30mm
+    layers 4
+    fab jlcpcb
+
+    stackup {
+        silk "F.SilkS" 0.01mm color "White"
+        mask "F.Mask" 0.02mm material "LPI" color "Green"
+        copper "F.Cu" 1oz
+        prepreg "dielectric 1" 0.1mm material "7628" dk 4.5 df 0.02
+        copper "In1.Cu" 0.5oz
+        core "dielectric 2" 1.2mm material "FR4" dk 4.6 df 0.018
+        copper "In2.Cu" 0.5oz
+        prepreg "dielectric 3" 0.1mm material "7628" dk 4.5 df 0.02
+        copper "B.Cu" 1oz
+        mask "B.Mask" 0.02mm material "LPI" color "Green"
+        silk "B.SilkS" 0.01mm color "White"
+
+        finish "ENIG"
+        edges plated
+        pads castellated
+        connector bevelled
+        impedance controlled
+
+        drill Top to Bottom
+        drill Top to Inner1
+    }
+}
+
+component R1 resistor "0402" {
+    value "10k"
+    at 10mm, 10mm
+}
+
+component R2 resistor "0402" {
+    value "10k"
+    at 30mm, 10mm
+}
+
+net SIG [width 0.2mm clearance 0.25mm current 500mA impedance 50ohm] {
+    R1.1
+    R2.1
+}
+
+trace SIG {
+    from R1.1
+    to R2.1
+    layer Top
+    width 0.2mm
+}
+"#;
+
+#[test]
+fn the_trip_costs_exactly_these_three_things() {
+    // The census. A board stating every field this project has a word for,
+    // written out as KiCad and read back, so what the format cannot hold is a
+    // list somebody maintains rather than something a reader discovers one
+    // field at a time.
+    let dir = scratch("everything");
+    let board = dir.join("everything.cypcb");
+    std::fs::write(&board, EVERYTHING).expect("the fixture is writable");
+
+    let kicad = dir.join("everything.kicad_pcb");
+    let said = to_kicad(&board, &kicad);
+
+    // Each loss is announced, and each announcement names what was lost.
+    assert!(
+        said.contains("drill spans") && said.contains("Top to Inner1"),
+        "{said}"
+    );
+    assert!(
+        said.contains("fabricator this design names (jlcpcb)"),
+        "{said}"
+    );
+    assert!(
+        said.contains("SIG") && said.contains("stop checking"),
+        "{said}"
+    );
+
+    let back = dir.join("back.cypcb");
+    let output = cypcb()
+        .arg("from-kicad")
+        .arg(&kicad)
+        .arg("-o")
+        .arg(&back)
+        .output()
+        .expect("the binary runs");
+    assert!(
+        output.status.success(),
+        "reading the board back failed:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let source = std::fs::read_to_string(&back).expect("the design came back");
+
+    // What survives, which is nearly all of it - the whole stack with its
+    // names, materials, dielectric constants, loss tangents and colours, and
+    // the five things a fabricator does to the board.
+    for kept in [
+        "layers 4",
+        "finish \"ENIG\"",
+        "edges plated",
+        "pads castellated",
+        "connector bevelled",
+        "impedance controlled",
+        "silk \"F.SilkS\"",
+        "mask \"F.Mask\"",
+        "copper \"In1.Cu\"",
+        "core \"dielectric 2\"",
+        "material \"7628\"",
+        "dk 4.6",
+        "df 0.018",
+        "color \"Green\"",
+        "component R1",
+        "value \"10k\"",
+        "trace SIG",
+    ] {
+        assert!(source.contains(kept), "the trip lost `{kept}`:\n{source}");
+    }
+
+    // And what it costs. Three statements, each with a rule behind it.
+    assert!(
+        !source.contains("drill Top"),
+        "the drill spans came back, so the warning about them is stale:\n{source}"
+    );
+    assert!(
+        !source.contains("fab "),
+        "the fabricator came back, so the warning about it is stale:\n{source}"
+    );
+    assert!(
+        !source.contains('['),
+        "a net constraint came back, so the warning about them is stale:\n{source}"
+    );
+}

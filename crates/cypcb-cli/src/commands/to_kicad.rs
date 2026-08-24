@@ -135,6 +135,51 @@ impl ToKicadCommand {
             );
         }
 
+        // The fab the board names.
+        //
+        // `board b { fab oshpark }` decides which table `cypcb check` grades
+        // the board against, and a `.kicad_pcb` has no field for it - KiCad
+        // keeps its constraints as numbers in the project file rather than as
+        // a fabricator's name. `--preset` writes those numbers beside the
+        // board; the name itself does not survive, so a design read back from
+        // here is graded against the default table.
+        if let Some(fab) = world.fab() {
+            eprintln!(
+                "Warning: the fabricator this design names ({fab}) is not in the KiCad board: \
+                 a board read back from this file is checked against the default table."
+            );
+        }
+
+        // What a net asks for.
+        //
+        // `net SIG [width 0.2mm clearance 0.25mm current 500mA impedance
+        // 50ohm]` is four constraints, and three rules read them:
+        // `MinTraceWidthRule`, `TraceCurrentRule` and `ImpedanceRule`. The
+        // board file carries the net's *membership* and nothing about what it
+        // asks for, so those three stop checking on a board read back from
+        // here - silently, because a net with no constraints is a net nobody
+        // constrained.
+        {
+            let constrained: Vec<String> = world
+                .nets()
+                .filter_map(|(id, name)| {
+                    let asks = world
+                        .net_constraints(id)
+                        .is_some_and(|c| c != Default::default());
+                    asks.then(|| name.to_string())
+                })
+                .collect();
+            if !constrained.is_empty() {
+                eprintln!(
+                    "Warning: what {} net(s) ask for ({}) is not in the KiCad board: width, \
+                     clearance, current and impedance have no field there, so the trace-width, \
+                     trace-current and impedance rules stop checking those nets.",
+                    constrained.len(),
+                    constrained.join(", ")
+                );
+            }
+        }
+
         // The rules go in the project file beside the board, because that is
         // where KiCad reads them from. A board file stating them is a board
         // file KiCad refuses to open.
