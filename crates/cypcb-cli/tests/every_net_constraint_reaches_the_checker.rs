@@ -200,3 +200,90 @@ fn the_census_covers_every_constraint_the_block_takes() {
          case above rather than a bigger number here"
     );
 }
+
+/// The same board, with the statement moved into a `netclass` instead.
+///
+/// `{CLASS}` is the class block and `{CONSTRAINT}` the net's own statement, so
+/// one string covers the class alone and the class beside a net that states
+/// something else.
+const WITH_CLASS: &str = r#"version 1
+
+board classes {
+    size 30mm x 30mm
+    layers 2
+}
+
+component R1 resistor "0402" {
+    value "10k"
+    at 5mm, 10mm
+}
+
+component R2 resistor "0402" {
+    value "10k"
+    at 25mm, 10mm
+}
+
+{CLASS}
+net A {CONSTRAINT}{
+    R1.1
+    R2.1
+}
+
+trace A {
+    from R1.1
+    to R2.1
+    layer Top
+    width 0.2mm
+}
+"#;
+
+/// A board built from `WITH_CLASS`, in a directory of its own.
+fn class_board(who: &str, class: &str, constraint: &str) -> PathBuf {
+    let dir = std::env::temp_dir().join(format!("cypcb-netclass-{who}"));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("a place to work");
+
+    let source = WITH_CLASS
+        .replace("{CLASS}", class)
+        .replace("{CONSTRAINT}", constraint);
+    let board = dir.join("board.cypcb");
+    std::fs::write(&board, source).expect("the fixture is writable");
+    board
+}
+
+/// The class block used below: one rule, stated once, for a group of nets.
+const POWER_CLASS: &str = "netclass Power [width 0.5mm] {\n    A\n}\n";
+
+#[test]
+fn a_netclass_states_a_rule_for_a_group_and_the_checker_reads_it() {
+    // The net itself says nothing: everything the checker holds this trace to
+    // has to have come through the class.
+    let said = check(&class_board("alone", POWER_CLASS, ""));
+    assert!(
+        said.contains("0.200mm actual, 0.500mm minimum"),
+        "a class states a rule once for every net in it, and the trace on \
+         net A carries 0.2mm:\n{said}"
+    );
+
+    let without = check(&class_board("none", "", ""));
+    assert!(
+        !without.contains("trace-width"),
+        "0.2mm clears the fab floor, so the class is what this reports:\n{without}"
+    );
+}
+
+#[test]
+fn a_net_that_states_one_rule_keeps_the_rest_of_its_class() {
+    // The net states a clearance; the class states a width. A net block that
+    // replaced its class rather than merging into it would drop the width, and
+    // the board would be checked against a rule nobody wrote.
+    let said = check(&class_board("merged", POWER_CLASS, "[clearance 5mm] "));
+    assert!(
+        said.contains("0.200mm actual, 0.500mm minimum"),
+        "the class width has to survive the net stating something else:\n{said}"
+    );
+    assert!(
+        said.contains("5.00mm required"),
+        "and the net's own clearance has to be there too:\n{said}"
+    );
+}
