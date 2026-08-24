@@ -198,8 +198,9 @@ fn what_the_corpus_actually_exercises() {
     //
     // One is not, and it is named rather than left to be discovered:
     //
-    // - **vias**: zero. Every mention of a via in `examples/` is prose in a
-    //   comment. Dropping vias from the writer would leave this file green.
+    // None, as of 2026-08-24. The last one to wake was **vias**: every mention
+    // of a via in `examples/` was prose in a comment until `blind-via.cypcb`
+    // landed, so dropping vias from the writer left this file green.
     //
     // Three woke up on 2026-08-24. `rigid-flex.cypcb` names a fab and carries a
     // six-entry stack; `slotted-connector.cypcb` gained a trace that necks on
@@ -260,6 +261,10 @@ fn what_the_corpus_actually_exercises() {
         totals.necks > 0,
         "no example necks, so the writer could drop the neck and leave this green: {totals:?}"
     );
+    assert!(
+        totals.vias > 0,
+        "no example carries a via, so the writer could drop them and leave this green: {totals:?}"
+    );
     assert!(totals.zones > 0, "{totals:?}");
     assert!(totals.fab.is_some(), "no example names a fab: {totals:?}");
     assert!(
@@ -271,11 +276,8 @@ fn what_the_corpus_actually_exercises() {
         "no example has more than two layers: {totals:?}"
     );
 
-    // Not live. Each of these is an assertion that the corpus does **not**
-    // cover something, so that the day it does, this test fails and says which
-    // column woke up. Raise them rather than deleting them.
-    assert_eq!(
-        totals.vias, 0,
-        "an example places a via now, so the via column guards something: {totals:?}"
-    );
+    // Nothing is left on the "not covered" list. Every column of this census
+    // is populated by at least one example, so a writer that drops any of them
+    // fails here. The list is kept as a heading rather than deleted: the next
+    // field the model grows starts on it.
 }

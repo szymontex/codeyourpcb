@@ -145,14 +145,21 @@ test.describe('Error Display', () => {
     await page.click('#error-badge');
     await expect(page.locator('#error-panel')).toBeVisible();
 
-    // One item, though the rule reported two rows.
+    // One item per contact, though the rule reports more rows than that.
+    // Measured in the browser on this board: 6 rows describing 3 contacts.
+    // The command line counts 4 rows for the same 3 contacts - the two DRC
+    // paths group identically and count rows differently, which is worth
+    // knowing and is not what this test is about. It read 2 and 1 until
+    // 2026-08-24, when a trace stating a via stopped losing its copper - the
+    // board had been two holes with nothing joining them, so only the vias
+    // could touch anything.
     await expect(
       page.locator('#error-list .error-item').filter({ hasText: 'Copper clearance' }),
-    ).toHaveCount(1);
+    ).toHaveCount(3);
 
     // And the panel says so, rather than quietly dropping a row.
     await expect(page.locator('#error-panel')).toContainText(
-      '2 clearance rows describe 1 contacts',
+      '6 clearance rows describe 3 contacts',
     );
     await expect(page.locator('#error-panel')).toContainText(
       'and 1 more place where the same two touch',

@@ -1111,6 +1111,7 @@ impl<'a> Reader<'a> {
         let mut locked = false;
         let mut neck = None;
         let mut directives = Vec::new();
+        let mut waypoints: Vec<PositionExpr> = Vec::new();
 
         if self.eat(&TokenKind::LBrace) {
             while !self.done() && !self.eat(&TokenKind::RBrace) {
@@ -1202,6 +1203,13 @@ impl<'a> Reader<'a> {
                         } else {
                             None
                         };
+                        // The same via in both fields, which is what the
+                        // tree-sitter reader does. `waypoints` is the older of
+                        // the two and something still reads it; leaving it
+                        // empty here made the two readers disagree about the
+                        // same file, and the differential test that compares
+                        // them found it the day an example first used a via.
+                        waypoints.push(position.clone());
                         directives.push(TraceDirective::Via(TraceVia {
                             position,
                             drill,
@@ -1227,7 +1235,7 @@ impl<'a> Reader<'a> {
             net,
             from,
             to,
-            waypoints: Vec::new(),
+            waypoints,
             layer,
             width,
             locked,

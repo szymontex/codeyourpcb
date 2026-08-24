@@ -87,7 +87,16 @@ fn no_example_ships_a_fault_somebody_would_copy() {
         world.rebuild_spatial_index_from_library(&library);
         checked += 1;
 
-        let preset = Preset::from_name("jlcpcb").expect("a known preset");
+        // The board decides which table it is held to, exactly as `cypcb check`
+        // lets it. This graded every example against JLCPCB whatever its `fab`
+        // line said, so a board written for a house that makes blind vias was
+        // failed for having one - the same defect the checker itself was fixed
+        // for, living on in the guard that watches the examples.
+        let named = world
+            .fab()
+            .and_then(Preset::from_name)
+            .unwrap_or_else(|| Preset::from_name("jlcpcb").expect("a known preset"));
+        let preset = cypcb_drc::preset_for_world(named, &world);
         let drc = run_drc(&mut world, &preset.rules());
 
         let mut counts: BTreeMap<String, usize> = BTreeMap::new();

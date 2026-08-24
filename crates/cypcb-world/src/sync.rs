@@ -1344,18 +1344,33 @@ fn sync_trace(
         None
     };
 
+    // Every via the block states, whichever mode the rest of it is in.
+    //
+    // This used to live inside the geometric branch, and a via was also what
+    // chose that branch - so `trace SIG { from J1.1 via 10mm,10mm to J2.1 }`,
+    // the form the grammar documents, took the geometric path, which reads
+    // `path` and `via` and ignores `from` and `to`. The vias were spawned and
+    // **the copper was not**: the board came back with two holes, no trace,
+    // and `cypcb check` reporting both pins as unreached. Measured on a
+    // four-layer board: `parse` -> `traces 0, vias 2`.
+    for directive in &trace_def.directives {
+        if let TraceDirective::Via(via_def) = directive {
+            spawn_via(world, trace_def, via_def, net_id);
+        }
+    }
+
     // Whether this block describes geometry rather than a pin-to-pin
     // connection.
     //
-    // A via counts. The writer emits each via as a block of its own -
-    // `trace GND { via 20mm,10mm drill 0.3mm }` - with no path in it, and
-    // testing only for a path skipped that block entirely: every via the
-    // router placed disappeared the moment the file was read back, silently,
-    // taking its layer change with it.
+    // A path counts and a via does not. The writer emits each via as a block
+    // of its own - `trace GND { via 20mm,10mm drill 0.3mm }` - with no path in
+    // it; that block now spawns its via above and falls through to the logical
+    // branch, which has no endpoints to join and draws nothing, which is
+    // right.
     let has_geometry = trace_def
         .directives
         .iter()
-        .any(|d| matches!(d, TraceDirective::Path(_) | TraceDirective::Via(_)));
+        .any(|d| matches!(d, TraceDirective::Path(_)));
 
     if has_geometry {
         // Geometric mode: process ordered directives to create traces and vias
@@ -1420,36 +1435,8 @@ fn sync_trace(
                         }
                     }
                 }
-                TraceDirective::Via(via_def) => {
-                    let position =
-                        Point::new(via_def.position.x.to_nm(), via_def.position.y.to_nm());
-                    let drill = via_def
-                        .drill
-                        .as_ref()
-                        .map(|d| d.to_nm())
-                        .unwrap_or_else(|| Nm::from_mm(0.3));
-                    let outer_diameter = Nm(drill.0 * 2); // 2x drill for annular ring
-
-                    // A via with no stated pair goes through the board.
-                    let (start_layer, end_layer) = via_def
-                        .layers
-                        .as_ref()
-                        .and_then(|(start, end)| {
-                            Some((parse_layer_name(start)?, parse_layer_name(end)?))
-                        })
-                        .unwrap_or((Layer::TopCopper, Layer::BottomCopper));
-
-                    let via = Via {
-                        position,
-                        drill,
-                        outer_diameter,
-                        start_layer,
-                        end_layer,
-                        net_id,
-                        locked: trace_def.locked,
-                    };
-                    world.ecs_mut().spawn((via, net_id, span));
-                }
+                // Spawned above, for every mode rather than only this one.
+                TraceDirective::Via(_) => {}
             }
         }
     } else {
@@ -1461,10 +1448,28 @@ fn sync_trace(
             all_points.push(start);
         }
 
-        // Add waypoints
-        for waypoint in &trace_def.waypoints {
-            let point = Point::new(waypoint.x.to_nm(), waypoint.y.to_nm());
-            all_points.push(point);
+        // Add waypoints.
+        //
+        // Two readers fill two fields. The tree-sitter parser pushes each
+        // `via X, Y` into `waypoints`; the Rust reader records it as a `Via`
+        // directive and leaves `waypoints` empty. Reading only the first gave
+        // a board parsed by the shipped reader one segment where the language
+        // says three - the trace went straight from pin to pin and the vias
+        // sat off it.
+        if trace_def.waypoints.is_empty() {
+            for directive in &trace_def.directives {
+                if let TraceDirective::Via(via_def) = directive {
+                    all_points.push(Point::new(
+                        via_def.position.x.to_nm(),
+                        via_def.position.y.to_nm(),
+                    ));
+                }
+            }
+        } else {
+            for waypoint in &trace_def.waypoints {
+                let point = Point::new(waypoint.x.to_nm(), waypoint.y.to_nm());
+                all_points.push(point);
+            }
         }
 
         if let Some(end) = to_position {
@@ -1476,6 +1481,15 @@ fn sync_trace(
             if let [start, end] = window {
                 segments.push(TraceSegment::new(*start, *end));
             }
+        }
+
+        // A block that stated only vias has no endpoints to join, and the
+        // vias are already on the board. Spawning a trace with no segments
+        // gives the census a trace that is not copper - which is what the
+        // writer's own `trace GND { via ... }` blocks produced the moment
+        // they stopped choosing the geometric branch.
+        if segments.is_empty() {
+            return;
         }
 
         // Create the trace entity
@@ -3734,4 +3748,43 @@ fn sync_outline(outline: &cypcb_parser::ast::OutlineDef, world: &mut BoardWorld)
     if let Some(ring) = crate::components::BoardOutline::new(points) {
         world.ecs_mut().entity_mut(board).insert(ring);
     }
+}
+
+/// Put one stated via on the board.
+///
+/// Lifted out of the geometric branch so a block that also states `from` and
+/// `to` keeps its vias: a via used to be what chose that branch, and the
+/// branch ignores the endpoints.
+fn spawn_via(
+    world: &mut BoardWorld,
+    trace_def: &TraceDef,
+    via_def: &cypcb_parser::ast::TraceVia,
+    net_id: crate::NetId,
+) {
+    let position = Point::new(via_def.position.x.to_nm(), via_def.position.y.to_nm());
+    let drill: Nm = via_def
+        .drill
+        .as_ref()
+        .map(|d| d.to_nm())
+        .unwrap_or_else(|| Nm::from_mm(0.3));
+    let outer_diameter = Nm(drill.0 * 2); // 2x drill for annular ring
+
+    // A via with no stated pair goes through the board.
+    let (start_layer, end_layer) = via_def
+        .layers
+        .as_ref()
+        .and_then(|(start, end)| Some((parse_layer_name(start)?, parse_layer_name(end)?)))
+        .unwrap_or((Layer::TopCopper, Layer::BottomCopper));
+
+    let via = Via {
+        position,
+        drill,
+        outer_diameter,
+        start_layer,
+        end_layer,
+        net_id,
+        locked: trace_def.locked,
+    };
+    let span = EcsSourceSpan::new(trace_def.span.start, trace_def.span.end);
+    world.ecs_mut().spawn((via, net_id, span));
 }

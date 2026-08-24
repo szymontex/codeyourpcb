@@ -1,0 +1,73 @@
+// blind-via.cypcb - a via that stops inside the board, and the build that drills it.
+//
+// A via states the two layers it joins. A board states which spans its
+// fabricator will drill, because a blind or buried via is a hole made in its
+// own lamination cycle and a house that presses the whole stack once cannot
+// make one. Both halves of that were in the language before this file existed
+// and nothing used them: `ViaSpanRule` had no example, and neither did the
+// `drill` pairs that tell it what the build makes.
+//
+//   cypcb check examples/blind-via.cypcb
+//
+// Move the `drill Top to Inner1` line out of the stackup and the checker says
+// so - that span is then a hole this build does not drill.
+
+version 1
+
+board blind_via {
+    size 30mm x 20mm
+    layers 4
+    fab pcbway
+
+    stackup {
+        copper "F.Cu" 1oz
+        prepreg "dielectric 1" 0.2mm material "7628" dk 4.5
+        copper "In1.Cu" 0.5oz
+        core "dielectric 2" 1.065mm material "FR4" dk 4.6
+        copper "In2.Cu" 0.5oz
+        prepreg "dielectric 3" 0.2mm material "7628" dk 4.5
+        copper "B.Cu" 1oz
+
+        finish "HASL"
+
+        // Two cycles: the outer pair pressed onto the core, then the whole
+        // stack drilled through. The first cycle is what makes a Top-to-Inner1
+        // hole possible at all.
+        drill Top to Bottom
+        drill Top to Inner1
+    }
+}
+
+footprint PAD1 {
+    description "one square pad, drilled so it reaches every layer"
+    courtyard 2mm x 2mm
+
+    pad 1 rect at 0mm, 0mm size 1.6mm x 1.6mm drill 0.8mm
+}
+
+component J1 connector "PAD1" {
+    value "in"
+    at 5mm, 10mm
+}
+
+component J2 connector "PAD1" {
+    value "out"
+    at 25mm, 10mm
+}
+
+net SIG {
+    J1.1
+    J2.1
+}
+
+// Down to the first inner layer and along it. The via stops at In1 - it is
+// drilled in the cycle that pressed the outer pair onto the core, and never
+// reaches the bottom copper.
+trace SIG {
+    from J1.1
+    via 10mm, 10mm layers Top to Inner1
+    via 20mm, 10mm layers Top to Inner1
+    to J2.1
+    layer Top
+    width 0.25mm
+}
