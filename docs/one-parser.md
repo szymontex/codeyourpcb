@@ -4,17 +4,22 @@ The `.cypcb` language is read twice. This is the measurement behind choosing
 which reader survives, written before any of the work, so the decision can be
 checked against numbers rather than taste.
 
-## Why there are two
+## Why there were two
+
+**Deleted on 2026-08-07.** There is one reader now - `cypcb-parser`'s - and
+this section is why. Everything below it is written in the tense of the day the
+decision was taken; what changed since is marked as it happened, and the last
+section says where the work ended.
 
 `cypcb-parser` is a tree-sitter grammar with a generated C parser. C does not
 reach the browser: the wasm build compiles the crate with
-`default-features = false`, which leaves it **with no parser at all**, so
-`viewer/src/wasm.ts` reads the DSL a second time in TypeScript - `parseSource`,
-a hand-written line reader.
+`default-features = false`, which left it **with no parser at all**, so
+`viewer/src/wasm.ts` read the DSL a second time in TypeScript - `parseSource`,
+a hand-written line reader of 439 lines.
 
-What that costs is measured, not argued
-(`viewer/src/__tests__/parser-drift.test.ts`, every board in `examples/`
-through both):
+What that cost was measured, not argued
+(`viewer/src/__tests__/parser-drift.test.ts`, since deleted with the reader it
+graded, every board in `examples/` through both):
 
 | board | what the browser shows against what the CLI exports |
 |---|---|
@@ -88,8 +93,12 @@ rewrite:
    is correct when it prints byte-identical JSON for every example, which is a
    differential test against the parser being replaced rather than against a
    hand-written expectation.
-4. `viewer/src/__tests__/parser-drift.test.ts` - the drift list must reach zero
-   and the file must stop being needed.
+4. ~~`viewer/src/__tests__/parser-drift.test.ts` - the drift list must reach
+   zero and the file must stop being needed.~~ **Done.** The file is gone,
+   which is what "stop being needed" meant. What replaced it is
+   `viewer/src/__tests__/one-reader-of-the-language.test.ts`: the drift test
+   graded a second reader, and this one holds that there is not a second one to
+   grade.
 
 Order of work, each step shippable on its own:
 

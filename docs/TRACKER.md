@@ -35,8 +35,12 @@ current, which is how a fresh session was told to work on a phase that was over.
   said 100; `npx vitest run` -> **55 files, 439 passed**, a figure it had never
   carried at all.
 - [ ] P3 - Structural: one parser, one width formula, no orphan crates.  <- current
-  **One parser: done** - `parseSource` and its helpers are deleted, the Rust
-  reader is the only one, `docs/one-parser.md` carries the drift table.
+  **One parser: done and now guarded** - `parseSource` and its helpers are
+  deleted, the Rust reader is the only one, and
+  `viewer/src/__tests__/one-reader-of-the-language.test.ts` fails if a second
+  one comes back. `docs/one-parser.md` carries the drift table and says, since
+  2026-08-24, that the reader it argued against is gone rather than reading as
+  though it were still there.
   **One width formula: done** - the viewer's copy of IPC-2221 is gone and
   `viewer/src/__tests__/one-width-formula.test.ts` fails if it comes back.
   **Orphan crates: blocked on D3**, which is the owner's call, not a fire's.
@@ -489,6 +493,12 @@ answered, not as they were found. Every one of them is closed.
 
 
 ### V1 - CLI and core correctness
+- DONE: **P3's parser half was true, undefended, and its own write-up said the opposite.** The line claimed one parser with `docs/one-parser.md` behind it; that document opens *"Why there are two"* and says in the present tense that `viewer/src/wasm.ts` reads the DSL a second time in TypeScript. It was written while both readers existed and argued for replacing one - the replacement shipped on **2026-08-07** and nothing went back for the tense.
+- **The claim rested on nobody happening to write another reader.** The width formula has had a guard since the day its second copy was deleted; the parser never did. `one-reader-of-the-language.test.ts` is that guard: no viewer source may call `parseSource` or the helpers it used, the browser's route from text to board must still be `load_source_with_imports`, and the write-up must say the reader is gone rather than that it is there.
+- **The document is corrected rather than rewritten.** The drift table is the evidence that made the decision - the browser showed an empty board for `v2-imports.cypcb` where the command line saw six parts on seven nets - so it stays, under a heading that says when it stopped describing the present. Verification point 4, which asked that `parser-drift.test.ts` "stop being needed", is marked done: the file is gone, and what replaced it grades the absence of the thing that test graded.
+- Proof: `npx vitest run src/__tests__/one-reader-of-the-language.test.ts` -> **3 passed**. Mutations, each alone against a clean tree and restored from the saved file: a `parseSource` method put back on the engine adapter -> **1 failed**; the document's date removed so it stops saying when the second reader went -> **1 failed**. `./scripts/quality-gate.sh` -> `=== All stages passed ===`.
+- NEXT-ACTION: **P5 is the last phase-map claim without a check, and it is a claim about a document.** It says seventeen routing instruments were measured and two kept, which lives in `docs/routing.md` rather than in the code. The cheap read is whether the instruments that line counts are still the ones `docs/routing.md` tabulates - the tracker already records that several of its tables were re-baselined after the fixture repairs, which is exactly the drift this sweep keeps finding.
+
 - DONE: **the two phase-map lines that quote a command were re-run, and both figures were stale.** P1 said 119 suites and 1467 tests, measured 2026-08-08 from a cold clone; today the same command in the working tree gives **228 suites, 1996 passed, 0 failed, 76 ignored**. P2 said playwright 100 passed / 17 skipped; it is **114 passed, 17 skipped**, and the line had never mentioned vitest at all - **55 files, 439 passed**.
 - **They are written as a command with dated readings rather than as a number.** That is this project's own documentation rule and the P4 lesson applied: a figure in a file is true on the day it is written and silently false after, while a command stays true. Two readings are kept rather than one, because the direction - 119 suites to 228 in sixteen days - is worth more than either figure alone.
 - **What is not claimed: the cold-clone half.** The 2026-08-08 reading came from a `git clone` into an empty directory and today's did not, so the line says which is which. A fresh-clone run is a different measurement and restating it as if it had been repeated is the kind of borrowed credit that made the P4 sentence wrong.
