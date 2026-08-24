@@ -10,6 +10,10 @@
 // reported - try moving R2 to 20mm, 20mm and running:
 //
 //   cypcb check examples/cutout.cypcb
+//
+// Nothing on this board is routed - the shape is the subject and the copper is
+// not - so that command reports 6 violations, 2 unconnected pins and 4
+// unrouted ones, and exits 1.
 
 version 1
 

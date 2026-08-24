@@ -6,6 +6,10 @@
 //
 // Check it with:
 //   cypcb check examples/v2-imports.cypcb
+//
+// The imported blocks are placed and their nets named, and nothing is routed,
+// so the command reports 10 unrouted pins and exits 1. What it demonstrates is
+// that the import resolved.
 
 version 1
 

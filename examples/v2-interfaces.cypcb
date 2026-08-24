@@ -2,8 +2,11 @@
 //
 // An interface is a contract: a named set of pins. A module signs it with
 // `implements`, and the checker holds the module to it. Both modules below
-// keep their contracts, which is why this file checks clean rather than
-// demonstrating the failure.
+// keep their contracts, so nothing here is refused for breaking one.
+//
+// The board is a sketch: the two instances are placed and nothing is routed,
+// so `cypcb check` reports 22 violations, 15 unconnected pins and 7 unrouted
+// ones, and exits 1. The contracts are what this file is about, and they hold.
 //
 // The failure is worth seeing, so here is what it looks like. Drop `pin SDA`
 // from TemperatureSensor and `cypcb check` refuses the file:
