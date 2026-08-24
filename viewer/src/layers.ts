@@ -670,10 +670,19 @@ export function innerLayerIndex(layer: string): number | null {
  *
  * Evenly spaced between the two faces, so which layer a trace is on can be
  * read from the side of a 3D view instead of guessed from its colour.
+ *
+ * **Counted down from the top face**, because that is what the name means
+ * everywhere else in this project: `Inner1` is the copper directly beneath
+ * `Top`, the second entry of the stack's copper sequence, and `copper_index`
+ * in the checker says the same. This measured up from the bottom, so on a
+ * four-layer board `Inner1` drew in the lower half and a blind via from `Top`
+ * to `Inner1` was drawn going two thirds of the way through the board. The
+ * fourth index error of this shape in this project, and the first on a
+ * surface a person looks at rather than in a rule.
  */
 export function innerLayerDepth(index: number, count: number, thicknessMm: number): number {
   if (count <= 0) return 0;
-  return -thicknessMm / 2 + ((index + 1) * thicknessMm) / (count + 1);
+  return thicknessMm / 2 - ((index + 1) * thicknessMm) / (count + 1);
 }
 
 /**
