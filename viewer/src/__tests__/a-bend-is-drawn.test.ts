@@ -112,3 +112,34 @@ describe('the renderer', () => {
     expect(flexAt).toBeLessThan(poursAt);
   });
 });
+
+describe('what the band is called', () => {
+  it('carries the name the design gave it', () => {
+    // An amber band with nothing written on it is a colour a person has to
+    // remember the meaning of. `flex bend { ... }` named it `bend`.
+    const { ctx, calls } = recordingContext();
+    drawFlexRegion(ctx, viewport, bend, createLayerVisibility());
+
+    const text = calls.find((call) => call.method === 'fillText');
+    expect(text, 'the band is labelled').toBeTruthy();
+    expect(text!.args[0]).toBe('bend');
+  });
+
+  it('says nothing when the design named nothing', () => {
+    const { ctx, calls } = recordingContext();
+    drawFlexRegion(ctx, viewport, { ...bend, name: '' }, createLayerVisibility());
+
+    expect(calls.some((call) => call.method === 'fillText')).toBe(false);
+  });
+
+  it('stays quiet when the band is too small to hold the words', () => {
+    // Zoomed out far enough and a label is a smear over the copper it is
+    // supposed to sit behind.
+    const far: Viewport = { ...viewport, scale: 1e-7 };
+    const { ctx, calls } = recordingContext();
+    drawFlexRegion(ctx, far, bend, createLayerVisibility());
+
+    expect(calls.some((call) => call.method === 'strokeRect')).toBe(true);
+    expect(calls.some((call) => call.method === 'fillText')).toBe(false);
+  });
+});

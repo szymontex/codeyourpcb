@@ -563,6 +563,24 @@ export function drawFlexRegion(
   ctx.strokeStyle = LAYER_COLORS.flex;
   ctx.lineWidth = 1.5;
   ctx.strokeRect(x, y, width, height);
+
+  // The name the design gave it, in the middle of the band.
+  //
+  // An amber band with nothing written on it is a colour a person has to
+  // remember the meaning of. A `flex` region is named in the source - `flex
+  // bend { ... }` - and that name is what they called it.
+  //
+  // Only when the band is big enough to hold the words: at a zoom where the
+  // whole board is 40 pixels across, a label is a smear over the copper it is
+  // supposed to sit behind.
+  const LEGIBLE_PX = 60;
+  if (zone.name && width >= LEGIBLE_PX && height >= 14) {
+    ctx.font = '12px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = LAYER_COLORS.flex;
+    ctx.fillText(zone.name, x + width / 2, y + height / 2);
+  }
   ctx.restore();
 }
 
