@@ -64,11 +64,12 @@ current, which is how a fresh session was told to work on a phase that was over.
   Read **2026-08-24: 18 rows**, plus a nineteenth dropped in prose above the
   table - this line said seventeen, and so did `docs/routing.md` itself in the
   paragraph that quotes the table while its own prose called one of them "the
-  nineteenth instrument". The 3x grid pass is measured and kept. **What is not
-  re-measured here is the "two kept" half**, which is a different question -
-  which settings shipped rather than which experiments were run - and it is
-  named in V7 rather than counted here. Nothing here is finished, and nothing
-  here is guessed.
+  nineteenth instrument". The 3x grid pass is measured and kept. **The "two
+  kept" half is measured too, and true**: `via_foreign_copper_penalty` at 0.25
+  and `reserve_trace_footprint`, the only two priced instruments the shipped
+  `AutorouteConfig::default()` turns on, held by
+  `cargo test -p cypcb-autoroute --test the_default_is_what_survived_measurement`.
+  Nothing here is finished, and nothing here is guessed.
 
 ## Backlog, and what is actually left
 
@@ -506,6 +507,12 @@ answered, not as they were found. Every one of them is closed.
 
 
 ### V1 - CLI and core correctness
+- DONE: **"two kept" was the one phase-map claim left unmeasured, and it is true - now with the two named and held.** Reverting an instrument in this project meant setting its price to zero rather than deleting the knob, so the difference between *measured and dropped* and *shipped* was a set of default values that nothing checked. `AutorouteConfig::default()` prices five of them at zero - `via_ring_penalty`, `via_stack_penalty`, `via_foreign_pad_penalty`, `clearance_barrier`, `foreign_pad_penalty` - and leaves `pad_zone_blocks_foreign_copper` off. **The two that are on are `via_foreign_copper_penalty` at 0.25 and `reserve_trace_footprint`.**
+- **Which is the table's own pattern, arrived at from the other end.** `docs/routing.md` concludes that pricing copper that exists pays and pricing space somebody might want does not; the two survivors are the two that price copper that exists. That was written as a conclusion and is now also a property of the shipped defaults.
+- **Why it is worth a test rather than a sentence.** Every number in `docs/routing.md`, every ratchet in `benchmark_validation` and every routing figure this project has published was produced with these defaults. Turning one on is a re-baseline of all of them - a decision rather than an edit - so it fails here first, before the ratchets, with the reason in the message.
+- Proof: `cargo test -p cypcb-autoroute --test the_default_is_what_survived_measurement` -> **3 passed**. Mutations, each alone against a clean tree and restored from the saved file: `via_ring_penalty` set to 0.5 -> **1 failed**, naming it; `reserve_trace_footprint` set false -> **1 failed**. `cargo test --workspace --exclude cypcb-desktop` -> no failures; `cargo fmt --all -- --check` clean; `cargo clippy -p cypcb-autoroute --all-targets -- -D warnings` -> **0 errors**.
+- NEXT-ACTION: **none pulled.** Every claim the phase map makes is now either a command with a dated reading or a test, and the last one closed the loop between what `docs/routing.md` argues and what the binary ships. The variants are the part of this vector still worth a session rather than a fire: thirteen of them are ranked on every run and only the winner is written, so twelve measurements are made and discarded each time a board is routed.
+
 - DONE: **P5 said seventeen instruments and `docs/routing.md` says eighteen - and so did `docs/routing.md`, in the same file as its own prose calling one of them "the nineteenth".** The phase-map sweep ends where it started: a number written once, true then, and repeated since by two documents that disagree with each other and with the table they both point at.
 - **Counted rather than argued.** The table under *Instruments that were measured and dropped* holds **18 rows** today; the paragraph at the top of the over-block section said seventeen, and a `Dropped as the nineteenth instrument` sits above the table for one that was never tabulated. Both places now carry the command that counts, and the reading is dated.
 - **The "two kept" half is deliberately not restated.** It is a different question - which settings shipped, not which experiments ran - and answering it by repeating the old number is exactly what this sweep has been correcting. It is named as V7's rather than counted here.
