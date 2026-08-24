@@ -1210,8 +1210,14 @@ impl<'a> Reader<'a> {
                         }));
                     }
                     _ => self.unknown_property(
+                        // `neck` was missing from this list while the arm
+                        // above read it: a designer who mistyped inside a
+                        // trace was told the block does not take a neck, on a
+                        // board where `neck 0.15mm for 1mm` parses.
                         "trace",
-                        &["from", "to", "path", "layer", "width", "via", "locked"],
+                        &[
+                            "from", "to", "path", "layer", "width", "via", "neck", "locked",
+                        ],
                     ),
                 }
             }
