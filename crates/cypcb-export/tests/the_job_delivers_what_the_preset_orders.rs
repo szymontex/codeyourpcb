@@ -260,12 +260,17 @@ fn the_legend_prints_the_names_of_the_parts_it_labels() {
 }
 
 #[test]
-fn a_declared_pour_that_cannot_be_made_is_named() {
-    // A `zone` carries a net and the ratsnest treats a pad inside it as
-    // connected, so a design with a ground plane reads as finished. The
-    // exporter draws nothing there - measured on a board with one pour: four
-    // pad flashes and no copper. Someone who draws a plane and sends these
-    // files gets a board without one, so the export has to say so.
+fn a_pour_that_is_drawn_correctly_is_not_warned_about() {
+    // The export used to warn about every board with a plane on it, and the
+    // warning had been false for a long time: first "declared and not
+    // exported", which the fill answered, then "flooded solid without thermal
+    // relief", which the spokes answered in the very next commit. This suite
+    // proved both halves wrong while asserting the warning was there -
+    // `a_pour_keeps_clear_of_other_nets_and_reaches_its_own`, twenty lines
+    // below, checks that a spoke crosses the pad and the gap ring stays open.
+    //
+    // So the claim under test is the absence: a pour the exporter draws
+    // correctly is not something to warn a fabricator about.
     use cypcb_core::Rect;
     use cypcb_world::components::zone::{Zone, ZoneKind};
 
@@ -293,12 +298,15 @@ fn a_declared_pour_that_cannot_be_made_is_named() {
     let _ = std::fs::remove_dir_all(&output_dir);
 
     assert!(
-        result.warnings.iter().any(|w| w.contains("thermal relief")),
-        "what the pour cannot do yet has to be named: {:?}",
+        !result
+            .warnings
+            .iter()
+            .any(|w| w.contains("pour") || w.contains("thermal relief")),
+        "the pour is drawn and relieved, so nothing about it belongs in the warnings: {:?}",
         result.warnings
     );
 
-    // And the pour itself reaches the copper layer.
+    // And the pour itself reaches the copper layer, which is why.
     let format = cypcb_export::coords::CoordinateFormat::FORMAT_MM_2_6;
     let copper =
         cypcb_export::gerber::export_copper_layer(&mut world, &library, Layer::TopCopper, &format)

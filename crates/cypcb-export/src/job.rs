@@ -444,28 +444,20 @@ pub fn run_export(
             warnings.push("the board has no traces: this exports an unrouted design".to_string());
         }
 
-        // A zone the design asks for and the exporter cannot draw.
+        // Nothing is said about copper pours, and that is the point.
         //
-        // Copper pour is not implemented: a `zone` carries a net and the
-        // ratsnest treats a pad inside it as connected, so the design reads as
-        // finished, and the Gerber has nothing where the pour should be.
-        // Measured on a board with one ground pour: four pad flashes and zero
-        // copper. Someone who draws a ground plane and sends these files gets
-        // a board without one.
-        let zone_count = world
-            .zones()
-            .iter()
-            // `is_copper_pour`, not `!is_keepout`: a flexible region is
-            // neither, and exporting one as copper would fill the bend with
-            // it.
-            .filter(|(_, z)| z.is_copper_pour())
-            .count();
-        if zone_count > 0 {
-            warnings.push(format!(
-                "{zone_count} copper pour(s) are filled without thermal relief: a pad on the pour's own net \
-                 is flooded solid, which connects it and makes it hard to solder by hand"
-            ));
-        }
+        // This warning has been wrong twice. It first said a declared pour was
+        // not exported at all, which stopped being true when
+        // `export_copper_layer` started filling zones; it was then changed to
+        // say the pour is flooded solid without thermal relief, which stopped
+        // being true in the very next commit, when a pad on the pour's own net
+        // started getting a gap ring and four spokes. It kept printing on
+        // every export of every board with a plane on it for as long as both
+        // of those were false, and `the_pour_keeps_the_fabs_distance` and
+        // `a_pour_keeps_clear_of_other_nets_and_reaches_its_own` were passing
+        // the whole time. A warning is a claim, and an export that cries about
+        // a plane it drew correctly teaches a user to skip the warnings that
+        // matter.
 
         for file in &files {
             // Only the outline. A silkscreen or a paste layer with nothing on
