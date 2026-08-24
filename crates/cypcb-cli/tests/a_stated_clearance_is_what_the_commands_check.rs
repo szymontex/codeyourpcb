@@ -73,8 +73,13 @@ trace B {
 }
 "#;
 
-fn boards() -> (PathBuf, PathBuf) {
-    let dir = std::env::temp_dir().join("cypcb-stated-clearance");
+/// The pair of boards, in a directory of this test's own.
+///
+/// Two tests here build the same fixtures, and cargo runs them at the same
+/// time: sharing one directory means one test wiping it while the other is
+/// reading what it just wrote.
+fn boards(who: &str) -> (PathBuf, PathBuf) {
+    let dir = std::env::temp_dir().join(format!("cypcb-stated-clearance-{who}"));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).expect("a place to work");
 
@@ -116,7 +121,7 @@ fn scored_violations(board: &PathBuf) -> u64 {
 
 #[test]
 fn check_measures_the_pair_against_what_the_net_asked_for() {
-    let (stated, plain) = boards();
+    let (stated, plain) = boards("check");
 
     let said = run("check", &stated);
     assert!(
@@ -139,7 +144,7 @@ fn check_measures_the_pair_against_what_the_net_asked_for() {
 
 #[test]
 fn score_counts_the_same_board_against_the_same_statement() {
-    let (stated, plain) = boards();
+    let (stated, plain) = boards("score");
 
     let with = scored_violations(&stated);
     let without = scored_violations(&plain);

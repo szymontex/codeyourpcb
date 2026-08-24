@@ -1,7 +1,8 @@
 //! Minimum trace width rule (DRC-02).
 //!
 //! Every routed or hand-drawn trace has to be at least as wide as the fab can
-//! etch. The width lives on the `Trace` component, so one pass over the trace
+//! etch, and at least as wide as its own net asked for. The width lives on the
+//! `Trace` component and the statement on the net, so one pass over the trace
 //! entities is enough - no geometry work.
 //!
 //! # Design Rules Reference
@@ -13,8 +14,11 @@
 //! - PCBWay standard: 0.15mm
 //! - Prototype: 0.25mm (10 mil)
 
+use std::collections::HashMap;
+
 use cypcb_core::{Nm, Point};
 use cypcb_world::components::trace::Trace;
+use cypcb_world::components::NetId;
 use cypcb_world::BoardWorld;
 
 use super::DrcRule;
@@ -60,14 +64,40 @@ impl DrcRule for MinTraceWidthRule {
     fn check(&self, world: &mut BoardWorld, rules: &DesignRules) -> Vec<DrcViolation> {
         let min_width = rules.min_trace_width;
 
+        // What each net's own block asks for. `net POWER [width 0.5mm]` states
+        // a rule the fab table knows nothing about, and the router already
+        // honours it: `ruleset_for_world` raises `min_trace_width` for that net
+        // before a single segment is drawn. A checker reading the table alone
+        // passed a 0.2mm trace on a net that asked for 0.5mm - the same board,
+        // routed and checked, disagreed with itself about the same statement.
+        //
+        // The fab floor still wins where it is the wider of the two. A net
+        // asking for less than the house can etch is asking for something
+        // nobody can make, which is a different fault and belongs to whoever
+        // reads the statement rather than to the trace that obeyed it.
+        let net_width: HashMap<u32, Nm> = {
+            let ids: Vec<u32> = world.nets().map(|(net, _name)| net.id()).collect();
+            ids.into_iter()
+                .filter_map(|id| {
+                    let stated = world.net_constraints(NetId::new(id))?.width?;
+                    Some((id, stated))
+                })
+                .collect()
+        };
+
         let ecs = world.ecs_mut();
         let mut query = ecs.query::<(bevy_ecs::entity::Entity, &Trace)>();
 
         query
             .iter(ecs)
-            .filter(|(_, trace)| trace.width < min_width)
-            .map(|(entity, trace)| {
-                DrcViolation::trace_width(entity, trace.width, min_width, trace_midpoint(trace))
+            .filter_map(|(entity, trace)| {
+                let required = net_width
+                    .get(&trace.net_id.id())
+                    .copied()
+                    .map_or(min_width, |stated| min_width.max(stated));
+                (trace.width < required).then(|| {
+                    DrcViolation::trace_width(entity, trace.width, required, trace_midpoint(trace))
+                })
             })
             .collect()
     }
