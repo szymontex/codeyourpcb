@@ -106,6 +106,35 @@ impl ToKicadCommand {
 
         println!("Wrote {} ({} bytes)", output.display(), board.len());
 
+        // What a `.kicad_pcb` has no place for.
+        //
+        // A design states which spans its fabricator drills - `drill Top to
+        // Bottom`, `drill Top to Inner1` - and `ViaSpanRule` holds the board's
+        // vias to that list. KiCad keeps no such list in the board file: a via
+        // there carries its own two layers and the question of which spans the
+        // build makes lives in the project's design rules, not in the
+        // `(setup ...)` this writer fills. So the statement is dropped, and a
+        // board read back from this file states none, which is the same as
+        // saying every span is allowed. Said out loud rather than left for a
+        // reader to find by checking the same board twice and getting two
+        // answers.
+        if let Some(pairs) = world
+            .stackup()
+            .map(|stackup| stackup.drill_pairs.clone())
+            .filter(|pairs| !pairs.is_empty())
+        {
+            let named: Vec<String> = pairs
+                .iter()
+                .map(|pair| format!("{} to {}", pair.start, pair.end))
+                .collect();
+            eprintln!(
+                "Warning: the drill spans this design states ({}) are not in the KiCad board: \
+                 the format has no place for them, so a board read back from this file allows \
+                 every span.",
+                named.join(", ")
+            );
+        }
+
         // The rules go in the project file beside the board, because that is
         // where KiCad reads them from. A board file stating them is a board
         // file KiCad refuses to open.
