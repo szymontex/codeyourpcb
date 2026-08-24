@@ -130,6 +130,16 @@ export function render(ctx: CanvasRenderingContext2D, state: RenderState): void 
     }
   }
 
+  // The bend before anything else: it is what the board is made of there, so
+  // every piece of copper belongs on top of it.
+  if (snapshot.zones) {
+    for (const zone of snapshot.zones) {
+      if (zone.kind === 'flex') {
+        drawFlexRegion(ctx, viewport, zone, layers);
+      }
+    }
+  }
+
   // Keepouts before the copper: an area the design forbids is context for
   // everything drawn on top of it.
   if (snapshot.zones) {
@@ -511,6 +521,47 @@ export function drawKeepout(
   ctx.strokeStyle = LAYER_COLORS.keepout;
   ctx.lineWidth = 1.5;
   ctx.setLineDash([6, 4]);
+  ctx.strokeRect(x, y, width, height);
+  ctx.restore();
+}
+
+/**
+ * Draw the part of the board that bends.
+ *
+ * Filled rather than outlined, which is the opposite of a keepout and says the
+ * opposite thing: a keepout is an absence of copper and a flexible region is
+ * the material the board is made of there. Copper crosses it - that is what a
+ * ribbon is for - so it is drawn under everything and kept faint.
+ *
+ * The engine has sent `kind: "flex"` since rigid-flex shipped and the screen
+ * drew nothing for it: the bend, which is the whole reason such a board
+ * exists, was the one thing a person could not see.
+ */
+export function drawFlexRegion(
+  ctx: CanvasRenderingContext2D, vp: Viewport, zone: ZoneInfo,
+  layers: LayerVisibility,
+): void {
+  // The same visibility rule a keepout follows. A region written `layer all`
+  // carries both bits, so it shows while either face is being looked at.
+  const onTop = (zone.layer_mask & 0b01) !== 0;
+  const onBottom = (zone.layer_mask & 0b10) !== 0;
+  const visible = (onTop && layers.topCopper) || (onBottom && layers.bottomCopper);
+  if (!visible) return;
+
+  const [sx1, sy1] = worldToScreen(vp, zone.bounds[0], zone.bounds[1]);
+  const [sx2, sy2] = worldToScreen(vp, zone.bounds[2], zone.bounds[3]);
+  const x = Math.min(sx1, sx2);
+  const y = Math.min(sy1, sy2);
+  const width = Math.abs(sx2 - sx1);
+  const height = Math.abs(sy2 - sy1);
+
+  ctx.save();
+  ctx.globalAlpha = 0.18;
+  ctx.fillStyle = LAYER_COLORS.flex;
+  ctx.fillRect(x, y, width, height);
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = LAYER_COLORS.flex;
+  ctx.lineWidth = 1.5;
   ctx.strokeRect(x, y, width, height);
   ctx.restore();
 }

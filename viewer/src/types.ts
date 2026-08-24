@@ -36,7 +36,14 @@ export interface BoardSnapshot {
 export interface ZoneInfo {
   /** Name the design gave it, empty when it gave none */
   name: string;
-  /** "pour" for copper, "keepout" for an area nothing may enter */
+  /**
+   * `"pour"` for copper, `"keepout"` for an area nothing may enter, `"flex"`
+   * for the part of the board that bends.
+   *
+   * A flexible region is none of the other two - copper crosses it, which is
+   * what it is for - and it was missing from this list while the engine had
+   * been sending it since rigid-flex shipped.
+   */
   kind: string;
   /** Layers it covers, as a layer mask: bit 0 top, bit 1 bottom */
   layer_mask: number;

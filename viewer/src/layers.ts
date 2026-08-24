@@ -9,6 +9,7 @@ export const LAYER_COLORS = {
   bottom_copper: '#1E1EC4',    // Brighter blue (visible under solder mask)
   orphaned_copper: '#FF8C1A', // Copper a pour left connected to nothing
   keepout: '#E05A5A',          // Dashed outline for an area nothing may enter
+  flex: '#C98B2E',             // Kapton amber: the part of the board that bends
   top_silk: '#F0F0F0',         // Near-white silkscreen
   bottom_silk: '#A0A0A0',     // Medium gray
   drill: '#1A1A1A',            // Near-black drill holes
