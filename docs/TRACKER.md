@@ -35,8 +35,11 @@ current, which is how a fresh session was told to work on a phase that was over.
   `viewer/src/__tests__/one-width-formula.test.ts` fails if it comes back.
   **Orphan crates: blocked on D3**, which is the owner's call, not a fire's.
 - [ ] P4 - Roadmap features. Copper pour, KiCad in and out, modules, imports
-  and assertions are done and have tests; `interface` parses and builds
-  nothing, and what it should build is a question for the owner.
+  and assertions are done and have tests. **`interface` is enforced**, against
+  what this line said for weeks: `sync.rs` carries `interface_not_satisfied`
+  and its sibling for an interface nobody defined, and
+  `cypcb check` on a module implementing `I2C` while exposing only `SDA` says
+  `module 'Sensor' implements 'I2C' without pin SCL`. Measured 2026-08-24.
 - [ ] P5 - Optimization passes (measured, per GP-002). Seventeen routing
   instruments measured and written up, two kept; the 3x grid pass measured and
   kept. Nothing here is finished, and nothing here is guessed.
@@ -477,9 +480,15 @@ answered, not as they were found. Every one of them is closed.
 
 
 ### V1 - CLI and core correctness
+- DONE: **`interface` is enforced, and the reason for hiding it was a claim nobody re-measured.** The previous run left it out of the editor's completions because this tracker had said since the roadmap work that it "parses and builds nothing". Measured: `cypcb check` on a module declaring `implements I2C` and exposing only `pin SDA` says **`module 'Sensor' implements 'I2C' without pin SCL`**, and `sync.rs` carries that error and its sibling for an interface nobody defined. `examples/v2-interfaces.cypcb` documents the same failure in its own header.
+- **So the exclusion mechanism is gone rather than corrected.** Every one of the seventeen constructs is offered now, with no allow-list: a list of things left out on purpose is a list of reasons nobody re-checks, and this one had already outlived its reason before it was written. If a construct ever needs leaving out, it comes back with a fresh one.
+- **What this cost is worth naming.** The claim travelled from the phase map into a completion exclusion and into a test's own doc comment - three places, one measurement, and the measurement was a `cypcb check` away the whole time. P4 in the phase map is corrected with the command that shows it.
+- Proof: `./target/release/cypcb check /tmp/iface.cypcb` -> `cypcb::sync::interface_not_satisfied - module 'Sensor' implements 'I2C' without pin SCL`. `npx vitest run src/__tests__/the-editor-offers-every-construct.test.ts` -> **2 passed**, down from 3 because the case that held the exclusion's reason has nothing left to hold. Mutations, each alone against a clean tree and restored from the saved file: the `interface` completion removed -> **1 failed**; the `diffpair` completion removed -> **1 failed**. `./scripts/quality-gate.sh` -> `=== All stages passed ===`.
+- NEXT-ACTION: **the other roadmap claims in P4 have not been measured either.** That line says copper pour, KiCad in and out, modules, imports and assertions "are done and have tests", and `interface` sat in the same sentence being wrong. Each is one command. Worth doing as a sweep rather than a fire at a time, and worth doing before anything in this file is quoted to somebody outside the project.
+
 - DONE: **the editor offered ten of the seventeen words a file can start a definition with.** `flex` was among the seven missing, on the day the checker, both renderers and the hover card all knew it - and so were `outline`, `netclass`, `diffpair`, `module` and `use`. A person typing at the top of a file was shown `zone` and `keepout` and never told the rest of the language exists.
 - **The same failure mode the highlighter had, in a second list.** `the-editor-knows-every-keyword` holds the highlighter against the generated grammar and its own header records what that found: `outline`, `netclass` and `diffpair` written in plain text beside coloured ones. Nothing held the completion list, so it drifted the same way.
-- **One construct is left out on purpose and says why.** `interface` parses and builds nothing - the tracker has recorded that since the roadmap work - and a completion is an invitation, so offering it would invite a person to write a block that does nothing on a board. The exclusion carries its reason in the test, and a third case asserts the excluded word is still a construct, so a reason about something that no longer exists fails rather than sits there.
+- ~~**One construct is left out on purpose and says why.**~~ **Wrong, and corrected the next run.** `interface` was excluded on the grounds that it "parses and builds nothing" - repeated from this file rather than measured - and it is enforced. See the entry above.
 - Proof: `npx vitest run src/__tests__/the-editor-offers-every-construct.test.ts` -> **3 passed**. Mutations, each alone against a clean tree and restored from the saved file: the `flex` completion removed -> **1 failed**, naming it; a word the grammar does not have added to the exclusion list -> **1 failed**. `npx tsc --noEmit` clean. `./scripts/quality-gate.sh` -> `=== All stages passed ===`.
 - NEXT-ACTION: **`interface` is the one word in the language that builds nothing, and that is now stated in three places.** The tracker, the completion list's exclusion, and P4 in the phase map. What it should build is the owner's question - the tracker has carried it as one since the roadmap work - so the honest move is not to answer it here. What a fire can do meanwhile: `cypcb check` on a design using `interface` says nothing about it either, and a construct that is accepted and ignored is the shape this project keeps finding.
 

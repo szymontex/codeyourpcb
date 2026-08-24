@@ -397,6 +397,7 @@ export function registerCompletionProvider(monaco: typeof import('monaco-editor'
             { label: 'diffpair', insert: 'diffpair ${1:USB} {\n\t${2:USB_DP}\n\t${3:USB_DM}\n}', detail: 'Differential pair: two nets held to the same length' },
             { label: 'module', insert: 'module ${1:PowerSupply} {\n\t$0\n}', detail: 'Module: a piece of design to place more than once' },
             { label: 'use', insert: 'use ${1:PowerSupply} as ${2:PSU} at ${3:10}mm, ${4:8}mm {\n\t${5:IN} = ${6:VIN}\n}', detail: 'Place a module' },
+            { label: 'interface', insert: 'interface ${1:I2C} {\n\tpin ${2:SDA}\n\tpin ${3:SCL}\n}', detail: 'Interface: the pins a module promises to expose' },
             { label: 'import', insert: 'import "${1:path.cypcb}"', detail: 'Import module (v2)' },
             { label: 'assert', insert: 'assert ${1:R1.value} ${2|>=,<=,==|} ${3:10kohm}', detail: 'Design assertion (v2)' },
           ];

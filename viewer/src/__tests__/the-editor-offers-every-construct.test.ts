@@ -14,6 +14,9 @@ import { join } from 'node:path';
  * seven missing, on the day the checker, both renderers and the hover card all
  * knew it.
  *
+ * `interface` was the seventeenth, and it was left out on purpose for a reason
+ * that had stopped being true - see the case below.
+ *
  * The list of constructs comes out of the generated grammar, because a second
  * list in this file is a second place to forget.
  */
@@ -71,17 +74,6 @@ function leadingWords(
   leadingWords(rule.content, rules, out, seen);
 }
 
-/**
- * Constructs the editor deliberately does not offer, and why.
- *
- * A completion is an invitation. `interface` parses and builds nothing - the
- * tracker has said so since the roadmap work - so offering it would invite a
- * person to write a block that does nothing on a board.
- */
-const NOT_OFFERED: Record<string, string> = {
-  interface: 'parses and builds nothing yet, so offering it would invite dead text',
-};
-
 describe('the completion list', () => {
   const grammar = JSON.parse(readFileSync(GRAMMAR, 'utf8')) as { rules: Record<string, Rule> };
   const source = readFileSync(BRIDGE, 'utf8');
@@ -98,18 +90,17 @@ describe('the completion list', () => {
   });
 
   it('offers every construct a file can start with', () => {
+    // Every one of them, with no exceptions. The first version of this test
+    // carried a list of words left out on purpose and `interface` was on it,
+    // on the grounds that it "parses and builds nothing" - which the tracker
+    // had said since the roadmap work and which is false: `cypcb check` on a
+    // module that implements an interface without exposing all of its pins
+    // says `module 'Sensor' implements 'I2C' without pin SCL` and the example
+    // documents that failure in its own header. A reason nobody re-measured is
+    // how a construct stays hidden after the objection to it stops being true.
     const missing = constructs.filter(
-      (word) => !(word in NOT_OFFERED) && !source.includes(`label: '${word}', insert:`),
+      (word) => !source.includes(`label: '${word}', insert:`),
     );
     expect(missing, 'constructs the language has and the editor never suggests').toEqual([]);
-  });
-
-  it('says why anything is left out', () => {
-    // A construct on that list has to be in the grammar, or the reason is
-    // about something that no longer exists.
-    for (const [word, why] of Object.entries(NOT_OFFERED)) {
-      expect(constructs, `${word} is not a construct any more`).toContain(word);
-      expect(why.length).toBeGreaterThan(20);
-    }
   });
 });
