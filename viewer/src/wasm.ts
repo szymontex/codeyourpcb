@@ -236,6 +236,16 @@ export interface PcbEngine {
   min_trace_width_for_current_ma(current_ma: number): number;
 
   /**
+   * What IPC-2221 says about the width above, or an empty string.
+   *
+   * The width is a number and a number cannot say it is an extrapolation. At
+   * 40A the calculator answers 48mm from curves fitted to data up to about
+   * 35A, and the viewer used to apply that silently. One sentence, already
+   * joined; empty for every current inside the standard's ranges.
+   */
+  trace_width_notes_for_current_ma(current_ma: number): string;
+
+  /**
    * Rotate a component by delta millidegrees.
    * @param refdes Reference designator (e.g. "R1")
    * @param delta_mdeg Rotation delta in millidegrees (90° = 90000)
@@ -300,6 +310,7 @@ interface WasmPcbEngine {
   export_traces_as_dsl(): string;
   get_min_clearance_nm(): number;
   min_trace_width_for_current_ma(current_ma: number): number;
+  trace_width_notes_for_current_ma(current_ma: number): string;
   get_violations_json(): string;
   rotate_component(refdes: string, delta_mdeg: number): boolean;
   set_board_size(width_nm: bigint, height_nm: bigint): boolean;
@@ -751,6 +762,16 @@ export class WasmPcbEngineAdapter implements PcbEngine {
     return this.wasmEngine.min_trace_width_for_current_ma(current_ma);
   }
 
+  trace_width_notes_for_current_ma(current_ma: number): string {
+    // Guarded, unlike the width beside it: a `pkg/` built before this method
+    // existed is a stale build rather than a broken one, and a missing note is
+    // the same as no note.
+    if (typeof this.wasmEngine.trace_width_notes_for_current_ma === 'function') {
+      return this.wasmEngine.trace_width_notes_for_current_ma(current_ma);
+    }
+    return '';
+  }
+
   rotate_component(refdes: string, delta_mdeg: number): boolean {
     const result = this.wasmEngine.rotate_component(refdes, delta_mdeg);
     if (result) {
@@ -982,6 +1003,13 @@ class MockPcbEngine implements PcbEngine {
     // came to hold a second copy of it in the first place; 0 means "no
     // constraint", and the caller keeps its default width.
     return 0;
+  }
+
+  trace_width_notes_for_current_ma(_current_ma: number): string {
+    // The mock computes no width, so it has nothing to say about one. The
+    // ranges live in `cypcb-calc` and stating them here would be the copy the
+    // method above exists to avoid.
+    return '';
   }
 
   rotate_component(refdes: string, delta_mdeg: number): boolean {

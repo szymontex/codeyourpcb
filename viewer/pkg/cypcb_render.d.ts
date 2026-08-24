@@ -258,6 +258,21 @@ export class PcbEngine {
      * Get the number of trace entities in the world.
      */
     trace_count(): number;
+    /**
+     * What IPC-2221 says about its own answer for this current.
+     *
+     * The width above is a number and nothing else, which is how the viewer
+     * came to apply a 48mm auto-width to a 40A net without a word. The
+     * calculator has always known when its answer is off the end of the data
+     * it was fitted to - `cypcb-calc` reports current past 35A, a temperature
+     * rise outside 10C to 100C, a width past 10mm - and every caller in this
+     * workspace dropped that until the checker and the language server
+     * started reading it.
+     *
+     * One sentence, already joined, or an empty string when there is nothing
+     * to say - which is the ordinary case for an ordinary net.
+     */
+    trace_width_notes_for_current_ma(current_ma: number): string;
 }
 
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
@@ -291,6 +306,7 @@ export interface InitOutput {
     readonly pcbengine_run_drc_incremental: (a: number) => number;
     readonly pcbengine_set_board_size: (a: number, b: bigint, c: bigint) => number;
     readonly pcbengine_trace_count: (a: number) => number;
+    readonly pcbengine_trace_width_notes_for_current_ma: (a: number, b: number, c: number) => void;
     readonly __wbindgen_export: (a: number, b: number) => number;
     readonly __wbindgen_export2: (a: number, b: number, c: number, d: number) => number;
     readonly __wbindgen_export3: (a: number) => void;

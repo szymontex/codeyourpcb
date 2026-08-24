@@ -2096,6 +2096,9 @@ async function init(): Promise<void> {
       statusText.textContent = `Board resized to ${wMm} × ${hMm} mm`;
       dirty = true;
     },
+    onStatus: (message: string) => {
+      statusText.textContent = message;
+    },
     onRouteStart: (netName: string) => {
       highlightedNet = netName;
       console.log(`[Net] Highlighted: ${netName}`);

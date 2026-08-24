@@ -28,6 +28,7 @@ export const pcbengine_rotate_component: (a: number, b: number, c: number, d: nu
 export const pcbengine_run_drc_incremental: (a: number) => number;
 export const pcbengine_set_board_size: (a: number, b: bigint, c: bigint) => number;
 export const pcbengine_trace_count: (a: number) => number;
+export const pcbengine_trace_width_notes_for_current_ma: (a: number, b: number, c: number) => void;
 export const __wbindgen_export: (a: number, b: number) => number;
 export const __wbindgen_export2: (a: number, b: number, c: number, d: number) => number;
 export const __wbindgen_export3: (a: number) => void;

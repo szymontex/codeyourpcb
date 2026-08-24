@@ -244,6 +244,33 @@ impl PcbEngine {
         String::new()
     }
 
+    /// What IPC-2221 says about its own answer for this current.
+    ///
+    /// The width above is a number and nothing else, which is how the viewer
+    /// came to apply a 48mm auto-width to a 40A net without a word. The
+    /// calculator has always known when its answer is off the end of the data
+    /// it was fitted to - `cypcb-calc` reports current past 35A, a temperature
+    /// rise outside 10C to 100C, a width past 10mm - and every caller in this
+    /// workspace dropped that until the checker and the language server
+    /// started reading it.
+    ///
+    /// One sentence, already joined, or an empty string when there is nothing
+    /// to say - which is the ordinary case for an ordinary net.
+    pub fn trace_width_notes_for_current_ma(&self, current_ma: f64) -> String {
+        if current_ma <= 0.0 {
+            return String::new();
+        }
+        // The same parameters `min_trace_width_for_current_ma` uses, so the
+        // notes describe the number beside them: external, 1oz, a 10C rise.
+        let params = cypcb_calc::TraceWidthParams::new(current_ma / 1000.0);
+        cypcb_calc::TraceWidthCalculator::calculate(&params)
+            .warnings
+            .iter()
+            .map(|warning| warning.to_string())
+            .collect::<Vec<_>>()
+            .join("; ")
+    }
+
     /// Minimum trace width for a current, in nanometers.
     ///
     /// IPC-2221 for an external layer, 10C rise, 1 oz copper - the same
@@ -2389,6 +2416,30 @@ mod tests {
                 "re-parsing must not drop a footprint the host registered"
             );
         }
+    }
+
+    #[test]
+    fn a_current_past_the_standards_data_reaches_the_browser() {
+        // The viewer applies this width to the trace a person is drawing. At
+        // 40A that is 48mm of copper from a formula fitted to data up to about
+        // 35A, and the engine had no way to say either thing.
+        let engine = PcbEngine::new();
+
+        let notes = engine.trace_width_notes_for_current_ma(40_000.0);
+        assert!(
+            notes.contains("accuracy degrades"),
+            "40A is past the data IPC-2221 was fitted to: {notes}"
+        );
+        assert!(
+            notes.contains("multiple parallel traces"),
+            "and the width it produces is a bus bar: {notes}"
+        );
+
+        // The ordinary case is silence, which is what keeps the line above
+        // worth reading.
+        assert_eq!(engine.trace_width_notes_for_current_ma(1000.0), "");
+        assert_eq!(engine.trace_width_notes_for_current_ma(0.0), "");
+        assert_eq!(engine.trace_width_notes_for_current_ma(-5.0), "");
     }
 
     #[test]

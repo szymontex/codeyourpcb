@@ -586,6 +586,38 @@ export class PcbEngine {
         const ret = wasm.pcbengine_trace_count(this.__wbg_ptr);
         return ret >>> 0;
     }
+    /**
+     * What IPC-2221 says about its own answer for this current.
+     *
+     * The width above is a number and nothing else, which is how the viewer
+     * came to apply a 48mm auto-width to a 40A net without a word. The
+     * calculator has always known when its answer is off the end of the data
+     * it was fitted to - `cypcb-calc` reports current past 35A, a temperature
+     * rise outside 10C to 100C, a width past 10mm - and every caller in this
+     * workspace dropped that until the checker and the language server
+     * started reading it.
+     *
+     * One sentence, already joined, or an empty string when there is nothing
+     * to say - which is the ordinary case for an ordinary net.
+     * @param {number} current_ma
+     * @returns {string}
+     */
+    trace_width_notes_for_current_ma(current_ma) {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            wasm.pcbengine_trace_width_notes_for_current_ma(retptr, this.__wbg_ptr, current_ma);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            deferred1_0 = r0;
+            deferred1_1 = r1;
+            return getStringFromWasm0(r0, r1);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            wasm.__wbindgen_export4(deferred1_0, deferred1_1, 1);
+        }
+    }
 }
 if (Symbol.dispose) PcbEngine.prototype[Symbol.dispose] = PcbEngine.prototype.free;
 

@@ -83,6 +83,8 @@ export interface InteractionState {
   activeResizeHandle?: ResizeHandle | null;
   /** Callback when routing starts — passes net name for highlightedNet */
   onRouteStart?: (netName: string) => void;
+  /** Callback for a one-line message to the status bar */
+  onStatus?: (message: string) => void;
   /** Callback when routing ends (complete or cancel) — clear highlightedNet */
   onRouteEnd?: () => void;
   /** Callback when a trace is edited via drag (segment/corner move, for undo stack) */
@@ -138,6 +140,37 @@ export interface RectSelectState {
  */
 function minWidthForCurrent(state: InteractionState, currentMa: number): number {
   return state.engine?.min_trace_width_for_current_ma(currentMa) ?? 0;
+}
+
+/**
+ * What the standard says about the width above, or an empty string.
+ *
+ * Asked of the engine for the same reason the width is: `cypcb-calc` holds the
+ * ranges IPC-2221 was fitted to, and writing one of those thresholds here
+ * would be the fifth place this arithmetic lives.
+ */
+function widthNotesForCurrent(state: InteractionState, currentMa: number): string {
+  return state.engine?.trace_width_notes_for_current_ma(currentMa) ?? '';
+}
+
+/**
+ * The sentence a person gets when a width is chosen for them.
+ *
+ * This was a `console.log` and nothing else: a 40A net silently became a 48mm
+ * trace, from a formula whose data stops well below that. The width is stated
+ * because it was not asked for, and the note is appended when the calculator
+ * has one, which for an ordinary net it does not.
+ */
+export function autoWidthNotice(
+  netName: string,
+  currentMa: number,
+  widthNm: number,
+  notes: string,
+): string {
+  const current = currentMa >= 1000 ? `${(currentMa / 1000).toFixed(1)}A` : `${currentMa.toFixed(0)}mA`;
+  const width = `${(widthNm / 1e6).toFixed(3)}mm`;
+  const said = `${netName}: ${current} needs ${width} (IPC-2221)`;
+  return notes ? `${said} - ${notes}` : said;
 }
 
 /**
@@ -828,7 +861,12 @@ export function setupInteraction(
           const widthNm = minWidthForCurrent(state, netInfo.current_ma);
           if (widthNm > 0) {
             state.routing = { ...state.routing, traceWidth: widthNm };
-            console.log(`[Route] IPC-2221 auto-width for ${netInfo.current_ma}mA: ${(widthNm / 1e6).toFixed(3)}mm for ${padHit.netName}`);
+            state.onStatus?.(autoWidthNotice(
+              padHit.netName,
+              netInfo.current_ma,
+              widthNm,
+              widthNotesForCurrent(state, netInfo.current_ma),
+            ));
           }
         }
       }
@@ -1032,7 +1070,15 @@ export function setupInteraction(
         const ni = state.snapshot?.nets?.find(n => n.name === hit.trace.net_name);
         if (ni?.current_ma) {
           const widthNm = minWidthForCurrent(state, ni.current_ma);
-          if (widthNm > 0) return widthNm;
+          if (widthNm > 0) {
+            state.onStatus?.(autoWidthNotice(
+              hit.trace.net_name,
+              ni.current_ma,
+              widthNm,
+              widthNotesForCurrent(state, ni.current_ma),
+            ));
+            return widthNm;
+          }
         }
         return 250_000;
       })(),
