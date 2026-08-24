@@ -3,12 +3,12 @@
  *
  * Renders the PCB board as a 3D scene with Three.js.
  * Coordinate system: X/Y from board data (mm), Z is stack-up axis (Z-up).
- * Board bottom face at Z=0, top face at Z=1.6mm.
+ * The substrate is centred on Z=0, so its faces are at plus and minus half the
+ * board's thickness - which the board states through its stackup and which is
+ * 1.6mm only when it says nothing. See `board-thickness.ts`.
  *
- * Copper layers:
- *   Bottom copper: Z = 0.035 mm (copper thickness above board bottom)
- *   Top copper:    Z = 1.565 mm (board thickness minus copper thickness)
- *   Pads get slight Z-offset above traces to prevent Z-fighting.
+ * Copper sits one foil thickness outside each face, and pads a hair outside
+ * the mask so they are visible through its openings.
  */
 
 import * as THREE from 'three';
@@ -24,6 +24,11 @@ import {
   viaSpanDepths,
   type LayerVisibility,
 } from './layers';
+import {
+  boardThicknessMm,
+  zStack,
+  DEFAULT_BOARD_THICKNESS_MM,
+} from './board-thickness';
 import { fetch3DModelByUuid } from './jlcpcb';
 import { parseEasyEdaOBJ } from './easyeda-obj-parser';
 
@@ -33,8 +38,15 @@ const SMD_HEIGHT_MM = 1.2;
 /** Component body height for THT parts in mm */
 const THT_HEIGHT_MM = 5.0;
 
-/** Standard PCB thickness in mm */
-const BOARD_THICKNESS_MM = 1.6;
+/**
+ * How thick the board being drawn is, in mm.
+ *
+ * Not a constant: it was, and every board drew 1.6mm thick while the stack
+ * panel beside it printed the board's own figure. `applyBoardThickness` sets
+ * this and the Z positions below from the snapshot, once per `updateBoard`,
+ * which rebuilds the whole scene anyway.
+ */
+let BOARD_THICKNESS_MM = DEFAULT_BOARD_THICKNESS_MM;
 
 /** Copper layer thickness in mm */
 const COPPER_THICKNESS_MM = 0.035;
@@ -54,24 +66,48 @@ const MASK_THICKNESS_MM = 0.025;
  *   B_Cu       -0.8mm    ─── back copper
  *   B_Mask     -0.835mm  ─── solder mask bottom
  */
-const BOARD_TOP_Z = BOARD_THICKNESS_MM / 2;   // +0.8
-const BOARD_BOT_Z = -BOARD_THICKNESS_MM / 2;  // -0.8
+// Each of these moves with the board's thickness, so they are bindings rather
+// than constants. Every use site reads them by name and none of them changed:
+// what changed is that the names are set from the board instead of from 1.6.
+let BOARD_TOP_Z = BOARD_THICKNESS_MM / 2;
+let BOARD_BOT_Z = -BOARD_THICKNESS_MM / 2;
 
 // Front copper: sits on board top surface
-const F_COPPER_BOT_Z = BOARD_TOP_Z;
-const F_COPPER_TOP_Z = BOARD_TOP_Z + COPPER_THICKNESS_MM;
+let F_COPPER_BOT_Z = BOARD_TOP_Z;
+let F_COPPER_TOP_Z = BOARD_TOP_Z + COPPER_THICKNESS_MM;
 
 // Back copper: sits on board bottom surface
-const B_COPPER_TOP_Z = BOARD_BOT_Z;
-const B_COPPER_BOT_Z = BOARD_BOT_Z - COPPER_THICKNESS_MM;
+let B_COPPER_TOP_Z = BOARD_BOT_Z;
+let B_COPPER_BOT_Z = BOARD_BOT_Z - COPPER_THICKNESS_MM;
 
 // Solder mask: sits on top of copper
-const F_MASK_Z = F_COPPER_TOP_Z + 0.001;  // tiny offset to avoid z-fight
-const B_MASK_Z = B_COPPER_BOT_Z - 0.001;
+let F_MASK_Z = F_COPPER_TOP_Z + 0.001;  // tiny offset to avoid z-fight
+let B_MASK_Z = B_COPPER_BOT_Z - 0.001;
 
 // Pads: slightly above mask to be visible through openings
-const Z_TOP_PAD = F_COPPER_TOP_Z + 0.003;
-const Z_BOTTOM_PAD = B_COPPER_BOT_Z - 0.003;
+let Z_TOP_PAD = F_COPPER_TOP_Z + 0.003;
+let Z_BOTTOM_PAD = B_COPPER_BOT_Z - 0.003;
+
+/**
+ * Take the thickness the board states, and move every surface with it.
+ *
+ * Called once per `updateBoard`, which clears and rebuilds the scene, so
+ * nothing drawn under the previous board's thickness survives it.
+ */
+function applyBoardThickness(snapshot: BoardSnapshot): void {
+  BOARD_THICKNESS_MM = boardThicknessMm(snapshot);
+  const z = zStack(BOARD_THICKNESS_MM, COPPER_THICKNESS_MM);
+  BOARD_TOP_Z = z.boardTop;
+  BOARD_BOT_Z = z.boardBot;
+  F_COPPER_BOT_Z = z.frontCopperBot;
+  F_COPPER_TOP_Z = z.frontCopperTop;
+  B_COPPER_TOP_Z = z.backCopperTop;
+  B_COPPER_BOT_Z = z.backCopperBot;
+  F_MASK_Z = z.frontMask;
+  B_MASK_Z = z.backMask;
+  Z_TOP_PAD = z.topPad;
+  Z_BOTTOM_PAD = z.bottomPad;
+}
 
 
 /** Nanometers to millimeters conversion factor */
@@ -273,6 +309,10 @@ export class Renderer3D {
       this.updateDebugSurface();
       return;
     }
+
+    // Before any geometry: the board says how thick it is, and everything
+    // below is placed against that.
+    applyBoardThickness(snapshot);
 
     const widthMm = snapshot.board.width_nm * NM_TO_MM;
     const heightMm = snapshot.board.height_nm * NM_TO_MM;
