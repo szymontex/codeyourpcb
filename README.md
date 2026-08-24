@@ -196,14 +196,14 @@ cargo run -p cypcb-cli -- parse examples/blink.cypcb          # the board, as JS
 cargo run -p cypcb-cli -- parse examples/blink.cypcb -o ast    # the AST instead
 cargo run -p cypcb-cli -- parse-kicad tests/fixtures/benchmark/led_blink.kicad_pcb   # a KiCad board
 cargo run -p cypcb-cli -- to-kicad examples/blink.cypcb       # the design as a KiCad board
-cargo run -p cypcb-cli -- from-kicad board.kicad_pcb          # a KiCad board as a design
+cargo run -p cypcb-cli -- from-kicad tests/fixtures/benchmark/led_blink.kicad_pcb   # a KiCad board as a design
 cargo run -p cypcb-cli -- watch examples/blink.cypcb          # check again on every save
 ```
 
 `check`, `route` and `score` all take `--preset`, and an unknown
-name prints the list. They use the same rules and agree on the same board: a
-routed file that `check --preset pcbway` calls 27 violations is 27 to
-`score --preset pcbway` too.
+name prints the list. They use the same rules and agree on the same board:
+`examples/blink.routed.cypcb` is 4 violations to `check --preset pcbway` and 4
+to `score --preset pcbway`.
 
 On an **unrouted** file they will not agree, and that is not a disagreement
 about the rules. `score` routes the board before measuring it, so it reports

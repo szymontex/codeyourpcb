@@ -56,6 +56,16 @@ fn no_example_ships_a_fault_somebody_would_copy() {
         .expect("the examples directory is there")
         .filter_map(|entry| entry.ok().map(|e| e.path()))
         .filter(|path| path.extension().is_some_and(|ext| ext == "cypcb"))
+        // Not what the router leaves behind. `cypcb route examples/blink.cypcb`
+        // - the line the README asks a reader to type - writes
+        // `examples/blink.routed.cypcb` beside its input, and a routed board
+        // with clearance faults in it is a result, not an example somebody
+        // would copy. The file is git-ignored; this directory listing is not.
+        .filter(|path| {
+            !path
+                .file_name()
+                .is_some_and(|name| name.to_string_lossy().ends_with(".routed.cypcb"))
+        })
         .collect();
     files.sort();
     assert!(files.len() > 10, "the examples directory went missing");
