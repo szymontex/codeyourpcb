@@ -70,7 +70,12 @@ impl DrcRule for TraceCurrentRule {
             if !is_external(layer) {
                 params = params.internal();
             }
-            let required = cypcb_calc::TraceWidthCalculator::calculate(&params).width;
+            // The whole result, not only the width. `cypcb-calc` says when the
+            // number it just produced is outside the data IPC-2221 was fitted
+            // to, and every caller dropped that on the floor - so a net asking
+            // for 40A was held to an extrapolation with nothing saying so.
+            let calculated = cypcb_calc::TraceWidthCalculator::calculate(&params);
+            let required = calculated.width;
 
             if width.raw() < required.raw() {
                 let net_name = world.net_name(net_id).unwrap_or("unnamed").to_string();
@@ -88,6 +93,17 @@ impl DrcRule for TraceCurrentRule {
                     copper_oz,
                     params.temp_rise_c,
                 );
+                // What the calculator said about its own answer. Silence here
+                // is the ordinary case: the defaults sit inside every range,
+                // so a message only grows when the design leaves one.
+                if !calculated.warnings.is_empty() {
+                    let notes: Vec<String> = calculated
+                        .warnings
+                        .iter()
+                        .map(|warning| warning.to_string())
+                        .collect();
+                    violation.message = format!("{} ({})", violation.message, notes.join("; "));
+                }
                 violations.push(violation);
             }
         }

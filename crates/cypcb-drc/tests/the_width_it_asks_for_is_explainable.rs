@@ -51,7 +51,11 @@ fn board(width: Nm, current_ma: f64) -> BoardWorld {
 }
 
 fn message(rules: &DesignRules) -> String {
-    let mut world = board(Nm::from_mm(0.3), 3000.0);
+    message_at(3000.0, rules)
+}
+
+fn message_at(current_ma: f64, rules: &DesignRules) -> String {
+    let mut world = board(Nm::from_mm(0.3), current_ma);
     let result = run_drc(&mut world, rules);
     result
         .violations
@@ -106,4 +110,42 @@ fn every_preset_states_one_ounce_so_no_number_moved() {
             preset.name()
         );
     }
+}
+
+#[test]
+fn a_current_past_the_data_the_standard_was_fitted_to_says_so() {
+    // IPC-2221's curves were derived from measurements up to about 35A, and
+    // `cypcb-calc` has said so since it was written - `TraceWidthWarning` is
+    // five variants with a `Display` each, and nothing outside that crate ever
+    // read one. `TraceCurrentRule` took `.width` and dropped the rest, so a
+    // net asking for 40A was held to a number off the end of the data with
+    // nothing on the page to say the standard does not reach that far.
+    let rules = Preset::JlcpcbStandard2Layer.rules();
+    let said = message_at(40_000.0, &rules);
+
+    assert!(
+        said.contains("accuracy degrades"),
+        "40A is past the data IPC-2221 was fitted to and the report has to say so: {said}"
+    );
+    // The same calculation trips a second one, and both belong to the reader:
+    // 40A at 1oz wants far more than 10mm of copper, which is several traces
+    // rather than one.
+    assert!(
+        said.contains("multiple parallel traces"),
+        "a width this far past 10mm is a bus bar, not a trace: {said}"
+    );
+}
+
+#[test]
+fn an_ordinary_current_carries_no_note_at_all() {
+    // The other half, and the one that keeps the first from being noise: 3A at
+    // 1oz and a 10C rise sits inside every range the calculator checks, so the
+    // message it produces is the plain one.
+    let rules = Preset::JlcpcbStandard2Layer.rules();
+    let said = message(&rules);
+
+    assert!(
+        !said.contains('('),
+        "nothing about this board is outside the standard, so nothing is appended: {said}"
+    );
 }
