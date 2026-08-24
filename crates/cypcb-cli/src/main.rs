@@ -2,9 +2,9 @@
 //!
 //! # Commands
 //!
-//! - `cypcb parse <file>` - Parse a .cypcb file and output JSON
-//! - `cypcb check <file>` - Validate a .cypcb file and report errors
-//! - `cypcb route <file>` - Route a .cypcb file with the built-in autorouter
+//! - `cypcb parse <file>` - Parse a .cypcb or .kicad_pcb board, print JSON
+//! - `cypcb check <file>` - Check a .cypcb or .kicad_pcb board for errors
+//! - `cypcb route <file>` - Route a .cypcb or .kicad_pcb board in-house
 //!
 //! # Examples
 //!
@@ -57,24 +57,24 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Parse a .cypcb file and output the result
+    /// Parse a .cypcb or .kicad_pcb board and print the model as JSON
     Parse(commands::ParseCommand),
-    /// Check a .cypcb file for errors
+    /// Check a .cypcb or .kicad_pcb board for errors
     Check(commands::CheckCommand),
-    /// Route a .cypcb file with the built-in autorouter
+    /// Route a .cypcb or .kicad_pcb board with the built-in autorouter
     Route(commands::RouteCommand),
-    /// Export a .cypcb file to manufacturing files
+    /// Export a .cypcb or .kicad_pcb board to manufacturing files
     Export(commands::ExportCommand),
     /// Parse a KiCad .kicad_pcb file and output metadata as JSON
     ParseKicad(commands::ParseKicadCommand),
 
     /// Write a KiCad .kicad_pcb board out as a .cypcb design
     FromKicad(commands::FromKicadCommand),
-    /// Score a routed .cypcb file — routes and prints quality metrics as JSON
+    /// Route a .cypcb or .kicad_pcb board and print quality metrics as JSON
     Score(commands::ScoreCommand),
     /// Write a .cypcb design out as a KiCad .kicad_pcb board
     ToKicad(commands::ToKicadCommand),
-    /// Check a design, then check it again every time it changes
+    /// Check a .cypcb or .kicad_pcb board, then again every time it changes
     Watch(commands::WatchCommand),
 }
 

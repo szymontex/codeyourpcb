@@ -1,6 +1,7 @@
 //! Score command implementation.
 //!
-//! Routes a .cypcb board and outputs a quality score breakdown as JSON.
+//! Routes a board - `.cypcb` or `.kicad_pcb` - and outputs a quality score
+//! breakdown as JSON.
 //! Uses the `score_board()` function from `cypcb_autoroute::scoring` to
 //! compute all 7 routing quality metrics.
 
@@ -16,7 +17,11 @@ use cypcb_world::footprint::FootprintLibrary;
 use cypcb_world::sync_ast_to_world;
 use cypcb_world::BoardWorld;
 
-/// Score a routed .cypcb file — routes the board and prints quality metrics as JSON.
+/// Route a board and print quality metrics as JSON.
+///
+/// The board arrives unrouted: this routes it and grades what it laid. The
+/// help line used to call it "a routed .cypcb file" in the same sentence as
+/// "routes the board", and named one of the two formats it reads.
 #[derive(Args)]
 pub struct ScoreCommand {
     /// Input board: a `.cypcb` design or a `.kicad_pcb` file

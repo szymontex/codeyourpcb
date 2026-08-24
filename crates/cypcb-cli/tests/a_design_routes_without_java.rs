@@ -115,8 +115,8 @@ fn the_help_prints_the_freerouting_flags_under_their_own_heading() {
     let help = String::from_utf8_lossy(&output.stdout).to_string();
 
     assert!(
-        help.starts_with("Route a .cypcb file with the built-in autorouter"),
-        "the command says which router it is: {help}"
+        help.starts_with("Route a .cypcb or .kicad_pcb board with the built-in autorouter"),
+        "the command says which router it is, and which boards it reads: {help}"
     );
 
     let heading = "FreeRouting (opt-in: name a jar):";

@@ -260,7 +260,9 @@ fn test_parse_help() {
 
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("Parse a .cypcb file"));
+    // The line names both formats: `parse` opens a `.kicad_pcb` board too, and
+    // said ".cypcb file" until 2026-08-24.
+    assert!(stdout.contains("Parse a .cypcb or .kicad_pcb board"));
     assert!(stdout.contains("--output"));
 }
 
@@ -274,7 +276,8 @@ fn test_check_help() {
 
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("Check a .cypcb file"));
+    // Both formats, for the reason recorded beside `test_parse_help`.
+    assert!(stdout.contains("Check a .cypcb or .kicad_pcb board"));
 }
 
 #[test]

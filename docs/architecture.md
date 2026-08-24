@@ -487,6 +487,12 @@ Used by CLI for `--watch` mode. Not used in web/desktop (handled by Vite dev ser
   raw syntax tree instead.
 - `cypcb parse-kicad <file>` - KiCad board metadata as JSON.
 
+Six of the nine take either format: `check`, `export`, `route`, `score`,
+`parse` and `watch` read a `.kicad_pcb` board as readily as a `.cypcb` one and
+decide from the file which it is. `cypcb-cli`'s
+`the_help_says_which_boards_it_reads` holds each one's help line against
+whether its command calls `board_source::is_kicad`.
+
 **Dependencies**: `clap`, `cypcb-parser`, `cypcb-world`, `cypcb-export`,
 `cypcb-router`, `cypcb-autoroute`, `cypcb-drc`, `cypcb-rules`, `cypcb-kicad`
 
