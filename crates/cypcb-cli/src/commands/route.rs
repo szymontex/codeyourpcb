@@ -573,10 +573,13 @@ impl RouteCommand {
         // setting it always used is the one measured **fourth of eight on
         // every benchmark board**. Two commands, one router, one behaviour.
         eprintln!("Routing {}...", self.file.display());
+        // A KiCad board is written back as KiCad, which has no comment line to
+        // carry how it was routed - so the name is dropped here rather than
+        // threaded through the writer.
         let result = if self.fast {
             route_board(&mut world, &library, &rules, &AutorouteConfig::default())
         } else {
-            self.route_variants(&mut world, &library, &rules)?
+            self.route_variants(&mut world, &library, &rules)?.0
         };
 
         if result.routes.is_empty() {
@@ -709,9 +712,17 @@ impl RouteCommand {
         // router can do: on examples/blink.cypcb one run gives 9 violations
         // with 6 shorts and best-of-eight gives 5 with 3, for 0.06s against
         // 0.9s.
-        let result = if self.fast {
+        // What produced this board, in the words the file will carry. A routed
+        // design used to say only that it came from `cypcb route --in-house` -
+        // a flag that stopped being needed when the built-in router became the
+        // default - and never which of the thirteen candidates won, so the
+        // board could not be reproduced from the file it produced.
+        let (result, how) = if self.fast {
             eprintln!("Routing with the built-in autorouter...");
-            route_board(&mut world, &library, &rules, &AutorouteConfig::default())
+            (
+                route_board(&mut world, &library, &rules, &AutorouteConfig::default()),
+                "the default settings, once (`--fast`)".to_string(),
+            )
         } else {
             self.route_variants(&mut world, &library, &rules)?
         };
@@ -773,7 +784,9 @@ impl RouteCommand {
         if !out.ends_with('\n') {
             out.push('\n');
         }
-        out.push_str("\n// Traces below were produced by `cypcb route --in-house`.\n");
+        out.push_str(&format!(
+            "\n// Traces below were produced by `cypcb route`: {how}.\n"
+        ));
         out.push_str(&traces);
 
         std::fs::write(&routed_path, &out)
@@ -828,7 +841,7 @@ impl RouteCommand {
         world: &mut BoardWorld,
         library: &FootprintLibrary,
         rules: &cypcb_rules::presets::PresetRuleSet,
-    ) -> Result<cypcb_router::types::RoutingResult> {
+    ) -> Result<(cypcb_router::types::RoutingResult, String)> {
         use cypcb_autoroute::variant::{default_variant_configs, generate_variants};
         use cypcb_drc::DesignRules;
 
@@ -866,9 +879,9 @@ impl RouteCommand {
         }
         eprintln!("Chose {}", best.name);
 
-        Ok(cypcb_router::types::RoutingResult::complete(
-            best.routes.clone(),
-            best.vias.clone(),
+        Ok((
+            cypcb_router::types::RoutingResult::complete(best.routes.clone(), best.vias.clone()),
+            format!("best of {} variants, `{}`", results.len(), best.name),
         ))
     }
 }
