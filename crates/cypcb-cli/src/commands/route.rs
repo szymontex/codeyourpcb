@@ -586,11 +586,49 @@ impl RouteCommand {
             ));
         }
 
-        let routed = cypcb_kicad::writer::append_routing(
+        // A board KiCad 10 saved declares no nets, so there is no number for a
+        // segment to carry. Give the file a table rather than refusing to
+        // write: the nets are known - the importer interned them from the
+        // pads - and the numbering only has to be self-consistent within the
+        // file it is written into.
+        let (numbers, declare) = if parsed.net_numbers.is_empty() {
+            let mut numbers = std::collections::HashMap::new();
+            let mut declare = Vec::new();
+            let mut named: Vec<(cypcb_world::NetId, String)> = world
+                .nets()
+                .map(|(id, name)| (id, name.to_string()))
+                .collect();
+            named.sort_by(|a, b| a.1.cmp(&b.1));
+            // Zero is KiCad's unconnected net and is always the empty name.
+            let mut next = 1;
+            for (id, name) in named {
+                let number = if name.is_empty() { 0 } else { next };
+                if number != 0 {
+                    next += 1;
+                }
+                numbers.insert(id, number);
+                declare.push((number, name));
+            }
+            declare.sort_by_key(|(number, _)| *number);
+            if !declare.iter().any(|(number, _)| *number == 0) {
+                declare.insert(0, (0, String::new()));
+            }
+            eprintln!(
+                "The board declares no nets - KiCad 10 writes none - so {} are written into the \
+                 routed copy.",
+                declare.len()
+            );
+            (numbers, declare)
+        } else {
+            (parsed.net_numbers.clone(), Vec::new())
+        };
+
+        let routed = cypcb_kicad::writer::append_routing_declaring(
             &source,
             &result,
-            &parsed.net_numbers,
+            &numbers,
             parsed.board_origin_mm,
+            &declare,
         )
         .map_err(|e| miette::miette!("{e}"))?;
 

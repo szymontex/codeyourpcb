@@ -71,6 +71,50 @@ pub fn append_routing(
     net_numbers: &HashMap<NetId, i64>,
     origin: (f64, f64),
 ) -> Result<String, KicadWriteError> {
+    append_routing_declaring(source, routing, net_numbers, origin, &[])
+}
+
+/// The same, for a board whose file declares no nets.
+///
+/// **KiCad 10 writes no `(net N "name")` table.** Its pads carry `(net
+/// "VBUS")` - the name - and a board it saved has nowhere for a segment to
+/// find a number. Routing one used to end at `net NetId(0) is not one of the
+/// file's nets`, which is true and useless: nothing the router did was wrong,
+/// the file simply had no table to point into.
+///
+/// `declare` is that table, as `(number, name)` pairs. It is written where
+/// this crate's own board writer writes one - ahead of the first footprint, so
+/// every node that names a net comes after the nets exist - and `net_numbers`
+/// has to agree with it. Empty for a file that already declares its nets,
+/// which is every KiCad before 10 and every board this project writes itself.
+pub fn append_routing_declaring(
+    source: &str,
+    routing: &RoutingResult,
+    net_numbers: &HashMap<NetId, i64>,
+    origin: (f64, f64),
+    declare: &[(i64, String)],
+) -> Result<String, KicadWriteError> {
+    let source = if declare.is_empty() {
+        source.to_string()
+    } else {
+        let mut table = String::new();
+        for (number, name) in declare {
+            table.push_str(&format!("  (net {number} \"{name}\")\n"));
+        }
+        // Ahead of the first footprint when there is one: a pad naming a net
+        // reads better after the net is declared, and that is where this
+        // crate's own writer puts the table. A board with no footprints has
+        // nothing to come before, so the table goes with the copper.
+        match source
+            .find("  (footprint ")
+            .or_else(|| source.find("(footprint "))
+        {
+            Some(at) => format!("{}{table}{}", &source[..at], &source[at..]),
+            None => source.to_string(),
+        }
+    };
+    let source = source.as_str();
+
     let cut = source.rfind(')').ok_or(KicadWriteError::NotABoard)?;
 
     let to_file = |x: i64, y: i64| -> (String, String) {
