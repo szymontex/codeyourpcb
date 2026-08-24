@@ -231,3 +231,89 @@ fn the_shared_fixture_gives_each_copper_layer_its_own_answer() {
         Some(CopperEnvironment::Microstrip { .. })
     ));
 }
+
+/// The same question asked of a board this project ships, rather than of a
+/// stack a test built.
+///
+/// `examples/four-layer.cypcb` states the build a four-layer board is pressed
+/// from: one-ounce foil outside, half-ounce inside, two sheets of prepreg
+/// around a core. Every synthetic case above was written to make a point; this
+/// one is what a person copies.
+mod the_example {
+    use super::*;
+    use cypcb_world::footprint::FootprintLibrary;
+    use cypcb_world::{sync_ast_to_world, BoardWorld};
+
+    fn four_layer() -> Stackup {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../..")
+            .join("examples/four-layer.cypcb");
+        let source = std::fs::read_to_string(&path).expect("the example is on disk");
+        let parsed = cypcb_parser::parse(&source);
+        assert!(parsed.errors.is_empty(), "{:?}", parsed.errors);
+
+        let mut world = BoardWorld::new();
+        let mut library = FootprintLibrary::new();
+        let result = sync_ast_to_world(&parsed.value, &source, &mut world, &mut library);
+        assert!(result.errors.is_empty(), "{:?}", result.errors);
+
+        world
+            .stackup()
+            .cloned()
+            .expect("the example states the build it is pressed from")
+    }
+
+    #[test]
+    fn it_states_four_coppers_and_what_they_add_up_to() {
+        let stack = four_layer();
+        assert_eq!(
+            stack.copper_count(),
+            4,
+            "four copper layers, as the board says"
+        );
+
+        // 0.035 + 0.2 + 0.0175 + 1.065 + 0.0175 + 0.2 + 0.035, in the ounces
+        // and millimetres the example writes: 1.57mm, which is what a house
+        // quotes a four-layer board at.
+        let total = stack
+            .total_thickness()
+            .expect("every layer of it states a thickness");
+        assert!(
+            (total.to_mm() - 1.5700).abs() < 0.001,
+            "the stack adds up to 1.57mm, not {}mm",
+            total.to_mm()
+        );
+    }
+
+    #[test]
+    fn its_faces_are_microstrips_and_its_inner_layers_answer_nothing() {
+        // The ordinary case rather than a gap: prepreg on one side of each
+        // inner layer and a core on the other, so neither is centred between
+        // matching dielectrics and the symmetric form does not describe them.
+        let stack = four_layer();
+
+        assert!(
+            matches!(
+                stack.environment_of(0),
+                Some(CopperEnvironment::Microstrip { .. })
+            ),
+            "the top layer sits over one dielectric: {:?}",
+            stack.environment_of(0)
+        );
+        assert!(
+            matches!(
+                stack.environment_of(3),
+                Some(CopperEnvironment::Microstrip { .. })
+            ),
+            "and so does the bottom: {:?}",
+            stack.environment_of(3)
+        );
+        assert!(
+            stack.environment_of(1).is_none() && stack.environment_of(2).is_none(),
+            "an inner layer of this build is an asymmetric stripline, which this project has no \
+             form for: {:?} and {:?}",
+            stack.environment_of(1),
+            stack.environment_of(2)
+        );
+    }
+}

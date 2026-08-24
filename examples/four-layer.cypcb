@@ -10,6 +10,36 @@
 board four_layer {
     size 30mm x 20mm
     layers 4
+    fab jlcpcb
+
+    // The build a four-layer board is actually pressed from, and the only
+    // example that states one for a rigid board. Two sheets of prepreg around
+    // a core, half-ounce foil inside and one ounce out, which is what a house
+    // quotes for 1.57mm.
+    //
+    // It is here because several things read a stack and had nothing rigid to
+    // read: the 3D view places inner copper by the stack's own running sum
+    // rather than by an even spread, and the checker asks the stack what a
+    // trace's impedance is.
+    //
+    // Note what this stack cannot answer, because it is the ordinary case
+    // rather than a gap: prepreg on one side of each inner layer and a core on
+    // the other means neither is centred between matching dielectrics, and the
+    // symmetric-stripline form is the only inner one this project has. `Top`
+    // and `Bottom` answer as microstrips; `In1` and `In2` answer nothing, and
+    // saying nothing is the right answer rather than a number from a form that
+    // does not describe them.
+    stackup {
+        copper "F.Cu" 1oz
+        prepreg "dielectric 1" 0.2mm material "7628" dk 4.5 df 0.02
+        copper "In1.Cu" 0.5oz
+        core "dielectric 2" 1.065mm material "FR4" dk 4.6 df 0.018
+        copper "In2.Cu" 0.5oz
+        prepreg "dielectric 3" 0.2mm material "7628" dk 4.5 df 0.02
+        copper "B.Cu" 1oz
+
+        finish "HASL"
+    }
 }
 
 footprint PAD1 {
