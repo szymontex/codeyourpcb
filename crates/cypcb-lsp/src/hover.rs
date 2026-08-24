@@ -356,11 +356,19 @@ fn make_net_hover(net: &NetDef) -> HoverInfo {
 
             // Calculate recommended trace width based on IPC-2221
             let amps: f64 = current.to_amps();
-            if let Some(calc_width) = calculate_trace_width(amps) {
+            if let Some((calc_width, notes)) = calculate_trace_width(amps) {
                 lines.push(format!(
                     "- IPC-2221 width: {:.2}mm (external, 10C rise)",
                     calc_width
                 ));
+
+                // When the calculator says its own answer is off the end of
+                // the data, that belongs beside the number rather than
+                // nowhere. An ordinary net trips none of these and the card
+                // does not grow.
+                if !notes.is_empty() {
+                    lines.push(format!("  **Outside the standard:** {}", notes.join("; ")));
+                }
 
                 // Warning if specified width is less than calculated
                 if let Some(specified) = &constraints.width {
@@ -382,18 +390,34 @@ fn make_net_hover(net: &NetDef) -> HoverInfo {
     }
 }
 
-/// Recommended trace width for a current, in mm.
+/// Recommended trace width for a current, in mm, and what the standard says
+/// about its own answer.
 ///
 /// Delegates to `cypcb-calc`, which is the one implementation of IPC-2221 in
 /// the workspace. This used to be a fourth copy of the formula and it had
 /// drifted: it took 1 oz copper as 1.37 mils where every other copy uses
 /// 1.378, so the hover tooltip quoted a width 0.6% wider than the router
 /// would draw.
-fn calculate_trace_width(current_amps: f64) -> Option<f64> {
+///
+/// The notes were dropped for as long as this returned a bare number.
+/// `min_width_for_current` takes `calculate(&params).width` and throws the
+/// rest away, so a card quoting 48mm for 40A said nothing about the curves
+/// being fitted to data up to about 35A. `TraceCurrentRule` says it now and a
+/// hover is where the same question gets asked first.
+fn calculate_trace_width(current_amps: f64) -> Option<(f64, Vec<String>)> {
     if current_amps <= 0.0 {
         return None;
     }
-    Some(TraceWidthCalculator::min_width_for_current(current_amps, true).to_mm())
+    // The same parameters `min_width_for_current(amps, true)` builds: an
+    // external layer, 1oz copper and a 10C rise, which is what the card says.
+    let params = cypcb_calc::TraceWidthParams::new(current_amps);
+    let result = TraceWidthCalculator::calculate(&params);
+    let notes = result
+        .warnings
+        .iter()
+        .map(|warning| warning.to_string())
+        .collect();
+    Some((result.width.to_mm(), notes))
 }
 
 /// How a pad's hole reads on a hover card.
@@ -878,7 +902,7 @@ component R1 resistor "0402" {}
         // Test IPC-2221 calculation
         let width = calculate_trace_width(1.0); // 1A
         assert!(width.is_some());
-        let w = width.unwrap();
+        let (w, _notes) = width.unwrap();
         // 1A should give roughly 0.3-0.5mm for external, 10C rise
         assert!(
             w > 0.2 && w < 1.0,
@@ -991,6 +1015,68 @@ interface I2C {
         assert!(
             info.content.contains("R1.value"),
             "Should show left operand"
+        );
+    }
+
+    #[test]
+    fn a_current_past_the_data_the_standard_was_fitted_to_is_named_on_the_card() {
+        // The hover is where a designer asks what a width would have to be,
+        // and for 40A the honest answer is a number plus the fact that
+        // IPC-2221's curves were fitted to measurements up to about 35A.
+        let doc = make_doc(
+            r#"
+net VBUS [current 40A] {
+    R1.1
+}
+"#,
+        );
+
+        let pos = Position {
+            line: 1,
+            character: 4,
+        };
+        let info = hover_at_position(&doc, &pos).expect("a net hover");
+
+        assert!(
+            info.content.contains("accuracy degrades"),
+            "40A is past the data the standard was fitted to: {}",
+            info.content
+        );
+        assert!(
+            info.content.contains("multiple parallel traces"),
+            "and the width it produces is a bus bar: {}",
+            info.content
+        );
+    }
+
+    #[test]
+    fn an_ordinary_current_leaves_the_card_plain() {
+        // The half that keeps the other from being noise: 1A on an external
+        // layer at 1oz and a 10C rise is inside every range the calculator
+        // checks, so the card carries the width and nothing else.
+        let doc = make_doc(
+            r#"
+net VCC [current 1A] {
+    R1.1
+}
+"#,
+        );
+
+        let pos = Position {
+            line: 1,
+            character: 4,
+        };
+        let info = hover_at_position(&doc, &pos).expect("a net hover");
+
+        assert!(
+            info.content.contains("IPC-2221 width"),
+            "the card still quotes a width: {}",
+            info.content
+        );
+        assert!(
+            !info.content.contains("Outside the standard"),
+            "nothing about 1A is outside it: {}",
+            info.content
         );
     }
 }
