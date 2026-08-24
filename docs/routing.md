@@ -835,9 +835,17 @@ check the date it carries.
 
 ### The over-block is load-bearing, which was not what anybody expected
 
-`docs/router-plan.md` is built on a claim: that the seventeen instruments in
-the table below failed because a grid of whole cells cannot hold the quantity
-they were reaching for. The via keepout is the case whose arithmetic was
+`docs/router-plan.md` is built on a claim: that the instruments in the table
+below failed because a grid of whole cells cannot hold the quantity they were
+reaching for. It said **seventeen** when it was written and the table holds
+**eighteen** rows now, with a nineteenth dropped in prose above - count it
+rather than trusting either number:
+
+```
+awk '/^## Instruments that were measured and dropped/{f=1} f&&/^\|---/{t=1;next} \
+     t&&/^\| /{n++;next} t&&!/^\| /{print n; exit}' docs/routing.md
+```
+ The via keepout is the case whose arithmetic was
 already written down - `0.15 + 0.127 + 0.127 + 0.0635 = 0.4675mm`, which is
 1.84 cells at 0.254mm and becomes 2 after `ceil`, a disc of 0.508mm around a
 ring that is 0.277mm across. So the plan made it step 2, the narrowest possible

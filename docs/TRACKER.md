@@ -53,9 +53,22 @@ current, which is how a fresh session was told to work on a phase that was over.
   siblings placed by a module; `DIV_A_RTOP` placed across an `import`;
   `assertion: 1` when one figure of `v2-constraints.cypcb` is moved and none
   when it is not; and `module 'Sensor' implements 'I2C' without pin SCL`.
-- [ ] P5 - Optimization passes (measured, per GP-002). Seventeen routing
-  instruments measured and written up, two kept; the 3x grid pass measured and
-  kept. Nothing here is finished, and nothing here is guessed.
+- [ ] P5 - Optimization passes (measured, per GP-002). The instruments live in
+  `docs/routing.md`; **count them rather than reading a number here**:
+
+  ```
+  awk '/^## Instruments that were measured and dropped/{f=1} f&&/^\|---/{t=1;next} \
+       t&&/^\| /{n++;next} t&&!/^\| /{print n; exit}' docs/routing.md
+  ```
+
+  Read **2026-08-24: 18 rows**, plus a nineteenth dropped in prose above the
+  table - this line said seventeen, and so did `docs/routing.md` itself in the
+  paragraph that quotes the table while its own prose called one of them "the
+  nineteenth instrument". The 3x grid pass is measured and kept. **What is not
+  re-measured here is the "two kept" half**, which is a different question -
+  which settings shipped rather than which experiments were run - and it is
+  named in V7 rather than counted here. Nothing here is finished, and nothing
+  here is guessed.
 
 ## Backlog, and what is actually left
 
@@ -493,6 +506,13 @@ answered, not as they were found. Every one of them is closed.
 
 
 ### V1 - CLI and core correctness
+- DONE: **P5 said seventeen instruments and `docs/routing.md` says eighteen - and so did `docs/routing.md`, in the same file as its own prose calling one of them "the nineteenth".** The phase-map sweep ends where it started: a number written once, true then, and repeated since by two documents that disagree with each other and with the table they both point at.
+- **Counted rather than argued.** The table under *Instruments that were measured and dropped* holds **18 rows** today; the paragraph at the top of the over-block section said seventeen, and a `Dropped as the nineteenth instrument` sits above the table for one that was never tabulated. Both places now carry the command that counts, and the reading is dated.
+- **The "two kept" half is deliberately not restated.** It is a different question - which settings shipped, not which experiments ran - and answering it by repeating the old number is exactly what this sweep has been correcting. It is named as V7's rather than counted here.
+- Proof: `awk '/^## Instruments that were measured and dropped/{f=1} f&&/^\|---/{t=1;next} t&&/^\| /{n++;next} t&&!/^\| /{print n; exit}' docs/routing.md` -> **18**. `grep -n "nineteenth instrument" docs/routing.md` -> line 683. `cargo test --workspace --exclude cypcb-desktop` -> no failures.
+- **The sweep is finished.** All five phase-map claims that name something checkable have now been run: P1 and P2 re-measured and rewritten as commands with dated readings, P3's parser half guarded by a test that did not exist, P4 turned into five cases running the binary, P5 counted. Four of the five carried a figure or a claim that had stopped being true.
+- NEXT-ACTION: **none pulled.** The phase map is measured end to end and each line names how to re-measure it. What the sweep did not touch is the vector bodies below it - roughly two hundred entries, each with numbers from the day it was written - and those are history rather than claims about now, which is why they were left alone.
+
 - DONE: **P3's parser half was true, undefended, and its own write-up said the opposite.** The line claimed one parser with `docs/one-parser.md` behind it; that document opens *"Why there are two"* and says in the present tense that `viewer/src/wasm.ts` reads the DSL a second time in TypeScript. It was written while both readers existed and argued for replacing one - the replacement shipped on **2026-08-07** and nothing went back for the tense.
 - **The claim rested on nobody happening to write another reader.** The width formula has had a guard since the day its second copy was deleted; the parser never did. `one-reader-of-the-language.test.ts` is that guard: no viewer source may call `parseSource` or the helpers it used, the browser's route from text to board must still be `load_source_with_imports`, and the write-up must say the reader is gone rather than that it is there.
 - **The document is corrected rather than rewritten.** The drift table is the evidence that made the decision - the browser showed an empty board for `v2-imports.cypcb` where the command line saw six parts on seven nets - so it stays, under a heading that says when it stopped describing the present. Verification point 4, which asked that `parser-drift.test.ts` "stop being needed", is marked done: the file is gone, and what replaced it grades the absence of the thing that test graded.
