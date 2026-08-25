@@ -689,7 +689,8 @@ something of its own overwrites **only the field it states**. So with the class
 above, `net VCC [width 0.8mm]` is 0.8mm wide and still carries the class's
 0.3mm clearance.
 
-A constraint block takes `width`, `clearance`, `current` and `impedance`:
+A constraint block takes `width`, `clearance`, `current`, `impedance` and
+`neck`:
 
 ```
 netclass USB [width 0.2mm impedance 90ohm] {
@@ -788,6 +789,8 @@ trace <net> {
     via <x>, <y>
     layer <layer>
     width <dimension>
+    neck <dimension> for <dimension>
+    path <x>,<y> -> <x>,<y>
     locked
 }
 ```
@@ -819,6 +822,11 @@ trace VCC {
   buried via: it gets its own Excellon file, the checker only measures it
   against holes made in the same drill pass, and the 3D view draws it to that
   depth.
+- `path`: The copper itself, as a polyline whose points are joined by `->`:
+  `path 10mm,10mm -> 12mm,10mm -> 12mm,14mm`. This is what `cypcb route` writes, one
+  `path` per unbroken run of segments - a net that branches gets several, and
+  writing such a net as a single path would draw copper between the end of one
+  branch and the start of the next.
 - `layer`: Copper layer (`Top`, `Bottom`, `Inner1`-`Inner4`, or the same names in lower case)
 - `width`: Trace width (optional, defaults to DRC minimum)
 - `locked`: Prevents autorouter from modifying this trace
