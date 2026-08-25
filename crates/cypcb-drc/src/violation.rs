@@ -1123,4 +1123,43 @@ mod tests {
             "keepout-violation"
         );
     }
+
+    /// The number the drill-aspect rule divides by, worked by hand.
+    ///
+    /// Every `drill-aspect-ratio` violation prints it - `0.200mm is the
+    /// smallest that reaches` - and the rule stays silent whenever it comes
+    /// back zero. Nothing named this function in a test until now.
+    #[test]
+    fn the_smallest_platable_drill_is_the_thickness_over_the_ratio() {
+        // 1.6mm of board at 8:1 is 0.2mm exactly.
+        assert_eq!(
+            smallest_platable_drill(Nm::from_mm(1.6), 800),
+            Nm::from_mm(0.2)
+        );
+
+        // The same board at 12:1, which is JLCPCB's advanced process: 1.6 / 12
+        // is 0.13333..., and the answer is rounded **up**, because a hole one
+        // nanometre under is a hole over the ratio.
+        assert_eq!(
+            smallest_platable_drill(Nm::from_mm(1.6), 1_200),
+            Nm(133_334)
+        );
+
+        // A thin flexible build, where the same drill is a quarter as deep.
+        assert_eq!(
+            smallest_platable_drill(Nm::from_mm(0.4), 800),
+            Nm::from_mm(0.05)
+        );
+
+        // 1mm at 3:1 is 333_333.33nm, and rounding down would publish a width
+        // the fab would refuse.
+        assert_eq!(smallest_platable_drill(Nm::from_mm(1.0), 300), Nm(333_334));
+    }
+
+    #[test]
+    fn a_fab_that_publishes_no_ratio_puts_no_floor_under_a_drill() {
+        // Zero reads as "no limit" and keeps the rule silent, rather than
+        // failing every hole on the board.
+        assert_eq!(smallest_platable_drill(Nm::from_mm(1.6), 0), Nm(0));
+    }
 }
