@@ -215,3 +215,102 @@ trace A {{
         String::from_utf8_lossy(&output.stderr)
     );
 }
+
+/// One block, where the guide documents it, and a board that mistypes a
+/// property inside it.
+struct Block {
+    /// The name the parser uses when it says what the block takes.
+    name: &'static str,
+    /// The heading the guide documents it under. A section owns its
+    /// subsections: the stack's fields are spread over `### A board that
+    /// bends`, `### Which holes this build drills` and their neighbours, which
+    /// is why `stackup` is measured against the whole board section.
+    heading: &'static str,
+    source: &'static str,
+}
+
+const BLOCKS: &[Block] = &[
+    Block {
+        name: "board",
+        heading: "## Board Definition",
+        source: "version 1\n\nboard b {\n    size 20mm x 20mm\n    layers 2\n    nonsense 1mm\n}\n",
+    },
+    Block {
+        name: "stackup",
+        heading: "## Board Definition",
+        source: "version 1\n\nboard b {\n    size 20mm x 20mm\n    layers 2\n    stackup {\n        nonsense 1mm\n    }\n}\n",
+    },
+    Block {
+        name: "component",
+        heading: "## Component Definition",
+        source: "version 1\n\nboard base {\n    size 20mm x 20mm\n    layers 2\n}\n\ncomponent R1 resistor \"0402\" {\n    value \"1k\"\n    nonsense 1mm\n}\n",
+    },
+    Block {
+        name: "zone",
+        heading: "## Zone Definition",
+        source: "version 1\n\nboard base {\n    size 20mm x 20mm\n    layers 2\n}\n\nzone gnd {\n    layer Top\n    nonsense 1mm\n}\n",
+    },
+    Block {
+        name: "footprint",
+        heading: "## Custom Footprint Definition",
+        source: "version 1\n\nboard base {\n    size 20mm x 20mm\n    layers 2\n}\n\nfootprint F {\n    nonsense 1mm\n}\n",
+    },
+    Block {
+        name: "module",
+        heading: "## Modules and Interfaces",
+        source: "version 1\n\nboard base {\n    size 20mm x 20mm\n    layers 2\n}\n\nmodule M {\n    nonsense 1mm\n}\n",
+    },
+];
+
+/// The part of the guide that documents this block, subsections included.
+fn section(guide: &str, heading: &str) -> String {
+    let level = heading.chars().take_while(|c| *c == '#').count();
+    let start = guide
+        .find(heading)
+        .unwrap_or_else(|| panic!("the guide has no section `{heading}`"));
+    let rest = &guide[start + heading.len()..];
+
+    let mut end = rest.len();
+    for (offset, _) in rest.match_indices('\n') {
+        let line = rest[offset + 1..].lines().next().unwrap_or_default();
+        let hashes = line.chars().take_while(|c| *c == '#').count();
+        if hashes > 0 && hashes <= level {
+            end = offset;
+            break;
+        }
+    }
+    rest[..end].to_string()
+}
+
+#[test]
+fn every_block_the_parser_knows_is_documented_property_by_property() {
+    let guide = guide();
+    assert_eq!(
+        BLOCKS.len(),
+        6,
+        "six blocks answer with a property list; a seventh needs a case here"
+    );
+
+    for block in BLOCKS {
+        let takes = what_the_parser_says(block.name, block.source);
+        assert!(
+            !takes.is_empty(),
+            "the parser named nothing for `{}`",
+            block.name
+        );
+        let documented = section(&guide, block.heading);
+
+        for property in &takes {
+            // `pin.<N> = <NET>` is a form rather than a word: what the guide
+            // has to name is the `pin`.
+            let word = property.split('.').next().unwrap_or(property);
+            assert!(
+                documented.contains(word),
+                "`{}` takes `{word}` and the guide's `{}` section never says \
+                 so.\n  parser: {takes:?}",
+                block.name,
+                block.heading
+            );
+        }
+    }
+}

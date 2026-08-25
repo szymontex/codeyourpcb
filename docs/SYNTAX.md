@@ -842,6 +842,8 @@ footprint <name> {
     description "<text>"
     courtyard <width> x <height>
     pad <number> <shape> at <x>, <y> size <w> x <h> [drill <d> [x <d2>]]
+    silk line <x>, <y> to <x>, <y> [width <w>]
+    silk circle <x>, <y> radius <r> [width <w>]
     ...
 }
 ```
@@ -876,6 +878,24 @@ The drill file mills a slot from one end centre to the other, which Excellon
 writes as `X..Y..G85X..Y..`; `examples/slotted-connector.cypcb` is a board
 with two of them.
 
+**Silkscreen.** A footprint draws its own outline, pin-1 dot and polarity mark
+with `silk`, in the part's own coordinates, so they rotate and flip with it.
+Two shapes: a line between two points, and a circle around a centre. The
+`width` is the pen, and it is optional:
+
+```
+footprint POLARISED {
+    description "an electrolytic, marked so it goes in one way round"
+    courtyard 5mm x 3mm
+
+    pad 1 rect at -1.5mm, 0mm size 1.2mm x 1.6mm
+    pad 2 rect at 1.5mm, 0mm size 1.2mm x 1.6mm
+
+    silk line -2.5mm, 1.5mm to 2.5mm, 1.5mm width 0.15mm
+    silk circle -1.5mm, -1.8mm radius 0.2mm
+}
+```
+
 **Pad Shapes:**
 - `rect`: Rectangular pad
 - `circle`: Circular pad
@@ -899,6 +919,8 @@ module <name> {
 
     component ... { ... }
     net ... { ... }
+    use <module> as <name> at <x>, <y> { ... }
+    assert <condition>
 }
 ```
 
@@ -942,6 +964,10 @@ use Divider as SENSE at 20mm, 10mm rotate 90 {
 
 Every pin the module declares has to be given a net. Leave one out and the
 checker names it.
+
+A module holds two more things: a `use` of its own, so a block can be built out
+of smaller blocks, and an `assert`, so a condition the block depends on travels
+with it rather than being remembered by whoever places it.
 
 ### Interfaces
 
