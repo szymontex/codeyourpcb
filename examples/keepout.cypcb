@@ -1,0 +1,53 @@
+// keepout.cypcb - a part of the board copper may not enter.
+//
+// An antenna needs the ground under it gone, a mounting screw's head needs the
+// copper around the hole gone, and a relay's mains pins need a strip of bare
+// laminate beside them. `keepout` states that area: same block as a copper
+// pour, no net, and the router treats it as ground it cannot use.
+//
+// This board is a radio module's corner. The keepout covers the 10mm by 8mm
+// patch under the antenna, on the top layer where the antenna sits, and the
+// one trace on the board goes around it rather than through it.
+//
+// Check it with:
+//   cypcb check examples/keepout.cypcb
+//
+// It reports 2 unconnected pins - each header's second pin is spare - and
+// exits 1. Nothing crosses the keepout.
+
+version 1
+
+board radio_corner {
+    size 30mm x 20mm
+    layers 2
+    fab jlcpcb
+}
+
+keepout antenna_clearance {
+    bounds 10mm, 2mm to 20mm, 10mm
+    layer top
+}
+
+component J1 connector "PIN-HDR-1x2" {
+    value "feed"
+    at 4mm, 16mm
+    rotate 90
+}
+
+component J2 connector "PIN-HDR-1x2" {
+    value "radio"
+    at 24mm, 16mm
+    rotate 90
+}
+
+net RF {
+    J1.1
+    J2.1
+}
+
+trace RF {
+    from J1.1
+    to J2.1
+    layer Top
+    width 0.3mm
+}

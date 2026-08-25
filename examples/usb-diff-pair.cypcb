@@ -1,0 +1,82 @@
+// usb-diff-pair.cypcb - two nets that carry one signal.
+//
+// A differential receiver reads the difference between its two inputs, so the
+// half that arrives late is the half that ruins the reading. `diffpair` names
+// the two nets as one signal and the checker measures the copper: the skew
+// between them against the fabricator's length-match tolerance, 0.5mm on
+// JLCPCB's standard process.
+//
+// The two halves here run between headers placed level with each other, so both
+// traces are the same length and the pair passes. Move one header along the
+// board and `cypcb check` names the pair and prints both lengths.
+//
+// The gap between the halves is not checked: that is the other half of a
+// differential-pair rule and needs the router to place them alongside each
+// other first.
+//
+// Check it with:
+//   cypcb check examples/usb-diff-pair.cypcb
+//
+// It reports 4 unconnected pins - each header's second pin is spare - and
+// exits 1. The pair itself is clean: no skew, no clearance fault.
+
+version 1
+
+board usb_diff_pair {
+    size 30mm x 20mm
+    layers 2
+    fab jlcpcb
+}
+
+component J1 connector "PIN-HDR-1x2" {
+    value "USB in"
+    at 5mm, 8mm
+    rotate 90
+}
+
+component J2 connector "PIN-HDR-1x2" {
+    value "USB out"
+    at 25mm, 8mm
+    rotate 90
+}
+
+component J3 connector "PIN-HDR-1x2" {
+    value "USB in"
+    at 5mm, 13mm
+    rotate 90
+}
+
+component J4 connector "PIN-HDR-1x2" {
+    value "USB out"
+    at 25mm, 13mm
+    rotate 90
+}
+
+net USB_DP {
+    J1.1
+    J2.1
+}
+
+net USB_DM {
+    J3.1
+    J4.1
+}
+
+diffpair USB {
+    USB_DP
+    USB_DM
+}
+
+trace USB_DP {
+    from J1.1
+    to J2.1
+    layer Top
+    width 0.2mm
+}
+
+trace USB_DM {
+    from J3.1
+    to J4.1
+    layer Top
+    width 0.2mm
+}
