@@ -61,6 +61,22 @@ fn wait_for_checks(log: &std::path::Path, count: usize, what: &str) -> String {
     }
 }
 
+/// The watcher, killed when this goes out of scope.
+///
+/// `watch` runs until something stops it, and the first version of this test
+/// killed it on the last line - so every run that failed an assertion or timed
+/// out waiting for a check left one behind. Three were found alive in the
+/// build container on 2026-08-25, the oldest sixteen days old, idle on inotify
+/// and invisible to everything except `ps`.
+struct Watched(std::process::Child);
+
+impl Drop for Watched {
+    fn drop(&mut self) {
+        let _ = self.0.kill();
+        let _ = self.0.wait();
+    }
+}
+
 #[test]
 fn saving_a_design_checks_it_again() {
     let dir = std::env::temp_dir().join("cypcb-watch-test");
@@ -71,13 +87,15 @@ fn saving_a_design_checks_it_again() {
     let log_path = dir.join("watch.log");
     let log = std::fs::File::create(&log_path).expect("a log to read");
 
-    let mut child = Command::new(env!("CARGO_BIN_EXE_cypcb"))
-        .args(["watch"])
-        .arg(&board)
-        .stdout(Stdio::from(log.try_clone().expect("the log is shareable")))
-        .stderr(Stdio::from(log))
-        .spawn()
-        .expect("the binary runs");
+    let _watcher = Watched(
+        Command::new(env!("CARGO_BIN_EXE_cypcb"))
+            .args(["watch"])
+            .arg(&board)
+            .stdout(Stdio::from(log.try_clone().expect("the log is shareable")))
+            .stderr(Stdio::from(log))
+            .spawn()
+            .expect("the binary runs"),
+    );
 
     // The first check happens before anything is watched.
     let first = wait_for_checks(&log_path, 1, "the first check");
@@ -99,8 +117,6 @@ fn saving_a_design_checks_it_again() {
     drop(file);
 
     let after = wait_for_checks(&log_path, 2, "a check after the save");
-    let _ = child.kill();
-    let _ = child.wait();
 
     assert!(
         after.contains("changed"),
