@@ -65,14 +65,32 @@ fn section<'a>(manual: &'a str, heading: &str) -> &'a str {
 }
 
 /// Start the server, ask it what it can do, return the `result` object.
+/// The server, killed when this goes out of scope.
+///
+/// Everything between the spawn and the kill can panic - reading a header,
+/// parsing a length, waiting for a whole message - and a language server left
+/// on a pipe nobody reads runs until the machine is rebooted. The same shape
+/// left three `cypcb watch` processes alive in the build container, the oldest
+/// sixteen days old, before the watch test was given a guard on 2026-08-25.
+struct Served(std::process::Child);
+
+impl Drop for Served {
+    fn drop(&mut self) {
+        let _ = self.0.kill();
+        let _ = self.0.wait();
+    }
+}
+
 fn initialize_result() -> Value {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_cypcb-lsp"))
-        .arg("--stdio")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-        .expect("the language server binary runs");
+    let mut child = Served(
+        Command::new(env!("CARGO_BIN_EXE_cypcb-lsp"))
+            .arg("--stdio")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("the language server binary runs"),
+    );
 
     let request = json!({
         "jsonrpc": "2.0",
@@ -82,13 +100,13 @@ fn initialize_result() -> Value {
     });
     let body = serde_json::to_string(&request).expect("the request serializes");
     {
-        let stdin = child.stdin.as_mut().expect("stdin is piped");
+        let stdin = child.0.stdin.as_mut().expect("stdin is piped");
         write!(stdin, "Content-Length: {}\r\n\r\n{}", body.len(), body)
             .expect("the server listens");
         stdin.flush().expect("the write lands");
     }
 
-    let mut reader = BufReader::new(child.stdout.take().expect("stdout is piped"));
+    let mut reader = BufReader::new(child.0.stdout.take().expect("stdout is piped"));
     let mut length = 0usize;
     loop {
         let mut line = String::new();
@@ -103,8 +121,6 @@ fn initialize_result() -> Value {
     }
     let mut buffer = vec![0u8; length];
     reader.read_exact(&mut buffer).expect("a whole message");
-    let _ = child.kill();
-    let _ = child.wait();
 
     let message: Value = serde_json::from_slice(&buffer).expect("valid JSON-RPC");
     message
