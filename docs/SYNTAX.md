@@ -243,6 +243,12 @@ target on this stack:
   22.29ohm - 55.4% off - 0.064mm would give 50ohm on this stack.
 ```
 
+Those three figures are from one board, so the board is worth naming: the
+four-layer stack `cypcb-fixtures` keeps for this - 0.035mm, 0.0175mm, 0.025mm
+and 0.07mm of copper with 0.1mm of dk 4.2 prepreg between each pair - carrying
+`net SIG [impedance 50ohm]` on `Inner1` at 0.2mm wide. Change the stack and
+every number here changes with it.
+
 The stack is what the fabricator presses and the target is what the part
 datasheet demands, so the width is the only thing left to choose. Neither
 closed form inverts - the width sits inside a logarithm and under a correction
