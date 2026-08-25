@@ -18,37 +18,19 @@ use cypcb_world::BoardWorld;
 use StackupLayerKind::{Copper, Core, Prepreg};
 
 /// kind, thickness in mm, dk in thousandths.
+///
+/// One stack in this file is still built this way: the lopsided one, which
+/// exists for a single assertion. The two it used to declare were the shared
+/// fixtures written out a second time - the ordinary build here was byte for
+/// byte `an_inner_layer_the_forms_cannot_describe` - and a second copy of a
+/// stack is how a test starts measuring a board nobody else has.
 type Spec = (StackupLayerKind, Option<f64>, Option<u32>);
 
-/// Four coppers with the same dielectric between every pair, so the inner
-/// layers are genuinely centred and the stack can answer for all four.
-const CENTRED: &[Spec] = &[
-    (Copper, Some(0.035), None),
-    (Prepreg, Some(0.2), Some(4_600)),
-    (Copper, Some(0.0175), None),
-    (Prepreg, Some(0.2), Some(4_600)),
-    (Copper, Some(0.0175), None),
-    (Prepreg, Some(0.2), Some(4_600)),
-    (Copper, Some(0.035), None),
-];
-
-/// The ordinary build: prepreg outside, a thick core in the middle, so the
-/// inner layers are not centred.
-const ORDINARY: &[Spec] = &[
-    (Copper, Some(0.035), None),
-    (Prepreg, Some(0.2), Some(4_600)),
-    (Copper, Some(0.0175), None),
-    (Core, Some(1.095), Some(4_500)),
-    (Copper, Some(0.0175), None),
-    (Prepreg, Some(0.2), Some(4_600)),
-    (Copper, Some(0.035), None),
-];
-
-fn board(stack: &[Spec], layer: Layer, width_mm: f64, target_ohms_x100: Option<u32>) -> BoardWorld {
-    let mut world = BoardWorld::new();
-    world.set_board("z".to_string(), (Nm::from_mm(40.0), Nm::from_mm(20.0)), 4);
-    world.set_stackup(Stackup {
-        layers: stack
+/// A stack written here rather than in `cypcb-fixtures`, as its layers spell
+/// it.
+fn stack_of(specs: &[Spec]) -> Stackup {
+    Stackup {
+        layers: specs
             .iter()
             .map(|(kind, thickness, dk)| StackupLayer {
                 kind: *kind,
@@ -63,7 +45,25 @@ fn board(stack: &[Spec], layer: Layer, width_mm: f64, target_ohms_x100: Option<u
             })
             .collect(),
         ..Stackup::default()
-    });
+    }
+}
+
+/// Four coppers with the same dielectric between every pair, so the inner
+/// layers are genuinely centred and the stack can answer for all four.
+fn centred() -> Stackup {
+    cypcb_fixtures::a_stack_that_answers_on_every_layer()
+}
+
+/// The ordinary build: prepreg outside, a thick core in the middle, so the
+/// inner layers are not centred.
+fn ordinary() -> Stackup {
+    cypcb_fixtures::an_inner_layer_the_forms_cannot_describe()
+}
+
+fn board(stack: Stackup, layer: Layer, width_mm: f64, target_ohms_x100: Option<u32>) -> BoardWorld {
+    let mut world = BoardWorld::new();
+    world.set_board("z".to_string(), (Nm::from_mm(40.0), Nm::from_mm(20.0)), 4);
+    world.set_stackup(stack);
 
     let net_id = world.intern_net("CLK");
     if let Some(target) = target_ohms_x100 {
@@ -109,7 +109,7 @@ fn a_trace_that_hits_its_target_is_silent() {
     // 0.35mm on 0.2mm of 4.6 laminate is 47.35 ohm - 87/sqrt(6.01) times
     // ln(1.196/0.315) - and a net asking for 50 is 5.3% away, inside the ten
     // percent this rule reports outside of.
-    let mut world = board(CENTRED, Layer::TopCopper, 0.35, Some(5_000));
+    let mut world = board(centred(), Layer::TopCopper, 0.35, Some(5_000));
     assert_eq!(complaints(&mut world), Vec::<String>::new());
 }
 
@@ -118,7 +118,7 @@ fn a_trace_that_misses_says_both_numbers_and_the_gap() {
     // The same geometry against a 90 ohm target: 47.35 against 90 is nowhere
     // near, and a differential pair asked to be 90 is the ordinary way this
     // goes wrong.
-    let mut world = board(CENTRED, Layer::TopCopper, 0.35, Some(9_000));
+    let mut world = board(centred(), Layer::TopCopper, 0.35, Some(9_000));
     let said = complaints(&mut world);
     assert_eq!(said.len(), 1, "{said:?}");
     let message = &said[0];
@@ -134,7 +134,7 @@ fn a_layer_the_stack_cannot_describe_is_reported_as_not_checked() {
     // The ordinary four-layer build. L2 has prepreg above and core below, so
     // it is an asymmetric stripline and no form here covers it. Saying
     // nothing would read as a pass on a controlled-impedance net.
-    let mut world = board(ORDINARY, Layer::Inner(1), 0.2, Some(5_000));
+    let mut world = board(ordinary(), Layer::Inner(1), 0.2, Some(5_000));
     let said = complaints(&mut world);
     assert_eq!(said.len(), 1, "{said:?}");
     assert!(said[0].contains("Not checked - not passed"), "{}", said[0]);
@@ -144,7 +144,7 @@ fn a_layer_the_stack_cannot_describe_is_reported_as_not_checked() {
 #[test]
 fn a_net_that_asked_for_nothing_is_not_measured() {
     // Most nets. The rule is for the ones that stated a target.
-    let mut world = board(CENTRED, Layer::TopCopper, 0.35, None);
+    let mut world = board(centred(), Layer::TopCopper, 0.35, None);
     assert_eq!(complaints(&mut world), Vec::<String>::new());
 }
 
@@ -152,7 +152,7 @@ fn a_net_that_asked_for_nothing_is_not_measured() {
 fn an_inner_layer_that_is_centred_is_measured_as_a_stripline() {
     // 0.2mm between two 0.2mm prepregs: the stripline form, and well under
     // any ordinary target, so it reports.
-    let mut world = board(CENTRED, Layer::Inner(1), 0.2, Some(9_000));
+    let mut world = board(centred(), Layer::Inner(1), 0.2, Some(9_000));
     let said = complaints(&mut world);
     assert_eq!(said.len(), 1, "{said:?}");
     assert!(
@@ -172,14 +172,14 @@ fn the_tolerance_is_ten_percent_and_it_is_a_boundary_not_a_slope() {
     // one it is 13.9% away from does not. The form is quoted at 5-7%, so
     // anything tighter than ten would be reporting the equation's own error as
     // a fault on the board.
-    let mut inside = board(CENTRED, Layer::TopCopper, 0.35, Some(5_200));
+    let mut inside = board(centred(), Layer::TopCopper, 0.35, Some(5_200));
     assert_eq!(
         complaints(&mut inside),
         Vec::<String>::new(),
         "47.35 against 52 is 8.9% and under the bar"
     );
 
-    let mut outside = board(CENTRED, Layer::TopCopper, 0.35, Some(5_500));
+    let mut outside = board(centred(), Layer::TopCopper, 0.35, Some(5_500));
     assert_eq!(
         complaints(&mut outside).len(),
         1,
@@ -205,14 +205,14 @@ fn the_bottom_layer_is_measured_against_the_dielectric_on_its_own_side() {
 
     // Top: 5.98 * 0.1 / 0.315 = 1.898, ln = 0.6410, 87/sqrt(6.01) = 35.488,
     // so 22.75 ohm.
-    let mut top = board(lopsided, Layer::TopCopper, 0.35, Some(9_000));
+    let mut top = board(stack_of(lopsided), Layer::TopCopper, 0.35, Some(9_000));
     let said = complaints(&mut top);
     assert_eq!(said.len(), 1, "{said:?}");
     assert!(said[0].contains("gives 22.75ohm"), "{}", said[0]);
 
     // Bottom: 5.98 * 0.3 / 0.315 = 5.695238, ln = 1.739630, so 61.74 ohm. A rule
     // that looked at the top's dielectric would say 22.75 here too.
-    let mut bottom = board(lopsided, Layer::BottomCopper, 0.35, Some(9_000));
+    let mut bottom = board(stack_of(lopsided), Layer::BottomCopper, 0.35, Some(9_000));
     let said = complaints(&mut bottom);
     assert_eq!(said.len(), 1, "{said:?}");
     assert!(
@@ -236,7 +236,7 @@ fn the_first_inner_layer_is_the_second_copper_entry() {
     // Read as copper entry 0 it would be the **top** layer's microstrip -
     // 0.2mm over 0.2mm with the top's 0.035mm foil - which is 64.37 ohm. The
     // two are far enough apart that no rounding hides the difference.
-    let mut world = board(CENTRED, Layer::Inner(0), 0.2, Some(9_000));
+    let mut world = board(centred(), Layer::Inner(0), 0.2, Some(9_000));
     let said = complaints(&mut world);
     assert_eq!(said.len(), 1, "{said:?}");
     assert!(
@@ -325,7 +325,7 @@ fn the_message_says_what_width_would_have_worked() {
     // presses and the target is what the datasheet demands, so the width is
     // the only thing left to choose - and this checker used to say how far off
     // a trace was and leave the arithmetic to the reader.
-    let mut world = board(CENTRED, Layer::Inner(1), 0.2, Some(5_000));
+    let mut world = board(centred(), Layer::Inner(1), 0.2, Some(5_000));
     let said = complaints(&mut world);
     assert_eq!(said.len(), 1, "{said:?}");
     assert!(
@@ -351,7 +351,7 @@ fn the_message_says_what_width_would_have_worked() {
 fn a_target_the_stack_cannot_deliver_gets_no_width() {
     // 1 ohm needs a trace wider than the board. Naming a width nobody can etch
     // is worse than saying nothing, so the message stops at the measurement.
-    let mut world = board(CENTRED, Layer::Inner(1), 0.2, Some(100));
+    let mut world = board(centred(), Layer::Inner(1), 0.2, Some(100));
     let said = complaints(&mut world);
     assert_eq!(said.len(), 1, "{said:?}");
     assert!(

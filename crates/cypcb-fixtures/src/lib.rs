@@ -69,6 +69,45 @@ pub fn every_copper_layer_answers_differently() -> Stackup {
     }
 }
 
+/// A stack every copper layer of which the closed forms can answer for.
+///
+/// The same dielectric between every pair of coppers, so both inner layers are
+/// genuinely centred between two planes and both outer ones sit over a plane
+/// at a stated distance. Four answers, none of them "this stack cannot be
+/// asked" - which is what a test about *targets* wants, where
+/// [`an_inner_layer_the_forms_cannot_describe`] is what a test about *silence*
+/// wants.
+///
+/// The foils are not all different here, so this stack cannot catch a layer
+/// index error the way [`every_copper_layer_answers_differently`] does. It is
+/// the ordinary case rather than the diagnostic one.
+pub fn a_stack_that_answers_on_every_layer() -> Stackup {
+    let layer = |kind, thickness_mm: f64, dk: Option<u32>| StackupLayer {
+        kind,
+        name: None,
+        thickness: Some(Nm::from_mm(thickness_mm)),
+        material: None,
+        color: None,
+        sheets: Vec::new(),
+        written_as: None,
+        dk_x1000: dk,
+        df_x1000000: None,
+    };
+    use StackupLayerKind::{Copper, Prepreg};
+    Stackup {
+        layers: vec![
+            layer(Copper, 0.035, None),
+            layer(Prepreg, 0.2, Some(4_600)),
+            layer(Copper, 0.0175, None),
+            layer(Prepreg, 0.2, Some(4_600)),
+            layer(Copper, 0.0175, None),
+            layer(Prepreg, 0.2, Some(4_600)),
+            layer(Copper, 0.035, None),
+        ],
+        ..Stackup::default()
+    }
+}
+
 /// The ordinary four-layer build: prepreg outside, a thick core in the middle.
 ///
 /// Neither inner layer is centred between two planes of the same dielectric,
