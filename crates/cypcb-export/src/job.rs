@@ -444,6 +444,40 @@ pub fn run_export(
             warnings.push("the board has no traces: this exports an unrouted design".to_string());
         }
 
+        // A stiffener is part of the board a fabricator hands over and not
+        // part of the bare board the job file describes: it is bonded on after
+        // the stack is pressed, the way paste is deposited at assembly, and
+        // `material_type` returns nothing for it on purpose. That is the right
+        // call about the file and the wrong thing to do in silence - a design
+        // that states one is asking for a board nobody can make from this set
+        // of files alone.
+        if let Some(stiffener) = world.stackup().and_then(|stackup| {
+            stackup
+                .layers
+                .iter()
+                .find(|layer| {
+                    matches!(
+                        layer.kind,
+                        cypcb_world::components::StackupLayerKind::Stiffener
+                    )
+                })
+                .cloned()
+        }) {
+            let thickness = stiffener
+                .thickness
+                .map(|nm| format!("{:.3}mm", nm.raw() as f64 / 1_000_000.0))
+                .unwrap_or_else(|| "an unstated thickness".to_string());
+            let material = stiffener
+                .material
+                .clone()
+                .unwrap_or_else(|| "unstated material".to_string());
+            warnings.push(format!(
+                "the stiffener this design states ({thickness} of {material}) is not in these \
+                 files: the job file describes the bare board and a stiffener is bonded on after \
+                 it is built, so the fabricator has to be told about it another way"
+            ));
+        }
+
         // Nothing is said about copper pours, and that is the point.
         //
         // This warning has been wrong twice. It first said a declared pour was
