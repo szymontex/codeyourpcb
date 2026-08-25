@@ -1464,6 +1464,7 @@ fn parse_zone(
 
     let mut net_id: Option<NetId> = None;
     let mut net_name = String::new();
+    let mut zone_name: Option<String> = None;
     let mut layer_mask: u32 = 0;
     let mut points: Vec<(f64, f64)> = Vec::new();
     let mut is_keepout = false;
@@ -1488,6 +1489,21 @@ fn parse_zone(
                         parse_layer_names(&get_string(layer_sexp).unwrap_or_default(), &mut layers);
                         for layer in layers {
                             layer_mask |= layer.to_copper_mask();
+                        }
+                    }
+                }
+            }
+            // The zone's own name, which KiCad does keep and this reader did
+            // not read: a pour called `gnd_pour` came back called `GND`,
+            // because the fallback is the net it fills. The writer has been
+            // putting the name here all along, so a design's pour went out
+            // named and came home renamed.
+            Some("name") => {
+                if let Ok(name_list) = child.list() {
+                    if name_list.len() >= 2 {
+                        let text = get_string(&name_list[1]).unwrap_or_default();
+                        if !text.trim().is_empty() {
+                            zone_name = Some(text);
                         }
                     }
                 }
@@ -1545,8 +1561,12 @@ fn parse_zone(
     }
 
     match net_id {
+        // The name the file states, or the net it fills. KiCad writes no name
+        // for a pour nobody has named, and those have always arrived under
+        // their net's name.
         Some(net) => Ok(ZoneImport::Carried(
-            Zone::copper_pour_for_net(bounds, layer_mask, net).with_name(net_name),
+            Zone::copper_pour_for_net(bounds, layer_mask, net)
+                .with_name(zone_name.unwrap_or(net_name)),
         )),
         // A pour with no net cannot be filled or checked, and KiCad does write
         // them - an unassigned pour is a common half-finished state.
