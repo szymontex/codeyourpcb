@@ -70,34 +70,13 @@ impl FromKicadCommand {
         // finding out here rather than on the user's next command is one parse.
         let reread = cypcb_parser::parse(&source);
         if let Some(first) = reread.errors.first() {
-            // One cause of this is not a defect in the writer but a gap in the
-            // language, and telling the two apart is the difference between a
-            // bug report and a decision. `pad_definition` takes a *number*, and
-            // a USB-C receptacle's pads are called A1, B4, S1 - two rows and a
-            // shell, on every USB-C part there is. Name them, so the answer is
-            // "this board needs pad names in the language" rather than
-            // "Missing a pad number".
-            let unspeakable: Vec<&str> = source
-                .lines()
-                .filter_map(|line| line.trim().strip_prefix("pad "))
-                .filter_map(|rest| rest.split_whitespace().next())
-                .filter(|name| name.parse::<u32>().is_err())
-                .collect();
-            if !unspeakable.is_empty() {
-                let mut names: Vec<&str> = unspeakable;
-                names.sort_unstable();
-                names.dedup();
-                return Err(miette::miette!(
-                    "{} pad(s) on this board are named rather than numbered: {}. \
-                     The language writes `pad <number>`, so these cannot be stated - \
-                     and renaming them would move pins to the wrong nets. The file at \
-                     {} is written and readable, but it will not parse until the \
-                     language takes a pad name.",
-                    names.len(),
-                    names.join(", "),
-                    output.display()
-                ));
-            }
+            // A pad named rather than numbered used to be reported here as a
+            // gap in the language: `pad_definition` took a number, and a USB-C
+            // receptacle's pads are called A1, B4, S1. The language takes both
+            // a name and a quoted name now, and the writer quotes what has to
+            // be quoted, so a board like that imports like any other. What is
+            // left is the honest message: a file this writer produced and this
+            // reader refuses is a defect in the writer.
             return Err(miette::miette!("{first}")).wrap_err_with(|| {
                 format!(
                     "{} was written but does not parse - this is a defect in the writer, \

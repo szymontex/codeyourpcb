@@ -1,0 +1,52 @@
+(kicad_pcb (version 20240108) (generator "pcbnew") (generator_version "8.0.0")
+
+  (general
+    (thickness 1.6)
+    (legacy_teardrops no)
+  )
+
+  (paper "A4")
+
+  (layers
+    (0 "F.Cu" signal)
+    (31 "B.Cu" signal)
+    (36 "B.SilkS" user "B.Silkscreen")
+    (37 "F.SilkS" user "F.Silkscreen")
+    (38 "B.Mask" user)
+    (39 "F.Mask" user)
+    (44 "Edge.Cuts" user)
+  )
+
+  (net 0 "")
+  (net 1 "VBUS+")
+  (net 2 "GND")
+  (net 3 "D-")
+
+  (footprint "Connector_USB:USB_C_Receptacle"
+    (layer "F.Cu")
+    (at 20 15 0)
+    (property "Reference" "J1")
+    (property "Value" "USB_C_Receptacle_USB2.0")
+    (property "Footprint" "Connector_USB:USB_C_Receptacle")
+    (pad "A1" smd rect (at -3.2 0) (size 0.6 1.2) (layers "F.Cu" "F.Paste" "F.Mask") (net 2 "GND"))
+    (pad "A4" smd rect (at -1.25 0) (size 0.6 1.2) (layers "F.Cu" "F.Paste" "F.Mask") (net 1 "VBUS+"))
+    (pad "A7" smd rect (at 0.25 0) (size 0.6 1.2) (layers "F.Cu" "F.Paste" "F.Mask") (net 3 "D-"))
+    (pad "B4" smd rect (at 1.25 0) (size 0.6 1.2) (layers "F.Cu" "F.Paste" "F.Mask") (net 1 "VBUS+"))
+    (pad "S1" thru_hole oval (at -4.32 1.5) (size 1.2 1.8) (drill oval 0.6 1.2) (layers "*.Cu" "*.Mask") (net 2 "GND"))
+  )
+
+  (footprint "Capacitor_SMD:C_0402_1005Metric"
+    (layer "F.Cu")
+    (at 30 15 0)
+    (property "Reference" "C1")
+    (property "Value" "10uF")
+    (property "Footprint" "Capacitor_SMD:C_0402_1005Metric")
+    (pad "1" smd rect (at -0.51 0) (size 0.54 0.64) (layers "F.Cu" "F.Paste" "F.Mask") (net 1 "VBUS+"))
+    (pad "2" smd rect (at 0.51 0) (size 0.54 0.64) (layers "F.Cu" "F.Paste" "F.Mask") (net 2 "GND"))
+  )
+
+  (gr_line (start 10 5) (end 45 5) (layer "Edge.Cuts") (width 0.05))
+  (gr_line (start 45 5) (end 45 25) (layer "Edge.Cuts") (width 0.05))
+  (gr_line (start 45 25) (end 10 25) (layer "Edge.Cuts") (width 0.05))
+  (gr_line (start 10 25) (end 10 5) (layer "Edge.Cuts") (width 0.05))
+)
