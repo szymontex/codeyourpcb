@@ -49,7 +49,14 @@ component R1 resistor "0402" {
 /// Write the board with the given flags and hand back both files: the board,
 /// then the project beside it - empty when no preset was asked for.
 fn exported_pair(name: &str, preset: Option<&str>) -> (String, String) {
-    let dir = std::env::temp_dir().join("cypcb-kicad-rules");
+    // One directory per case, wiped first. These cases share a board name and
+    // differ in what the command writes beside it, so a leftover
+    // `.kicad_pro` from an earlier run is a file this test then reads as its
+    // own output: when `to-kicad` learned to read the board's own fab, the
+    // case asserting silence failed against a project file written days
+    // earlier.
+    let dir = std::env::temp_dir().join(format!("cypcb-kicad-rules-{name}"));
+    let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).expect("a place to work");
     let source = dir.join(format!("{name}.cypcb"));
     std::fs::write(&source, BOARD).expect("the board is written");
@@ -159,7 +166,8 @@ fn without_a_preset_neither_file_states_any_rules() {
 
 #[test]
 fn an_unknown_fab_is_refused_by_name() {
-    let dir = std::env::temp_dir().join("cypcb-kicad-rules");
+    let dir = std::env::temp_dir().join("cypcb-kicad-rules-unknown");
+    let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).expect("a place to work");
     let source = dir.join("bad.cypcb");
     std::fs::write(&source, BOARD).expect("the board is written");

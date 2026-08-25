@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use clap::Args;
 use miette::{IntoDiagnostic, Result, WrapErr};
 
-use cypcb_drc::{Preset, PresetRules};
+use cypcb_drc::PresetRules;
 use cypcb_world::footprint::FootprintLibrary;
 use cypcb_world::sync_ast_to_world;
 use cypcb_world::BoardWorld;
@@ -27,10 +27,11 @@ pub struct ToKicadCommand {
 
     /// Manufacturer preset whose design rules the board is written with.
     ///
-    /// Without one the file states no rules at all and KiCad checks the board
-    /// against its own defaults - numbers with nothing to do with the fab this
-    /// design was checked for. This was the last command in the CLI that never
-    /// asked which fabricator a board is for.
+    /// Absent means the board decides: `board b { fab oshpark }`. Absent from
+    /// both is JLCPCB, which is what every other command here falls back to.
+    /// The board file has room for one of those numbers - KiCad keeps the rest
+    /// in the project file, and this writer does not guess at a format it has
+    /// no example of - so what travels is the fab's mask expansion.
     #[arg(short, long)]
     preset: Option<String>,
 }
@@ -67,32 +68,34 @@ impl ToKicadCommand {
 
         // The rules the board is written with are the ones a person can ask
         // `cypcb check` for by the same name, so the two tools agree about
-        // whether the board passes.
-        let rules = match &self.preset {
-            Some(name) => {
-                let preset = Preset::from_name(name).ok_or_else(|| {
-                    let available: Vec<&str> = Preset::all().iter().map(|p| p.name()).collect();
-                    miette::miette!(
-                        "Unknown preset '{}'. Available presets: {}",
-                        name,
-                        available.join(", ")
-                    )
-                })?;
-                let rules = preset.rules();
-                Some(cypcb_kicad::KicadDesignRules {
-                    clearance: rules.min_clearance,
-                    track_width: rules.min_trace_width,
-                    via_diameter: rules.min_via_diameter,
-                    via_drill: rules.min_via_drill,
-                    mask_expansion: rules.solder_mask_expansion,
-                    drill_size: rules.min_drill_size,
-                    hole_to_hole: rules.min_hole_to_hole,
-                    edge_clearance: rules.min_edge_clearance,
-                    silk_clearance: rules.min_silk_clearance,
-                    annular_ring: rules.min_annular_ring,
-                })
-            }
-            None => None,
+        // whether the board passes - and the name comes from the same place
+        // for both: the flag when there is one, the design's own `fab`
+        // otherwise, JLCPCB when neither states one. This command used to read
+        // the flag alone, so `board b { fab pcbway }` written out to KiCad
+        // carried no rules at all and KiCad checked it against its own
+        // defaults. It was the last command in the binary that ignored what
+        // the board says about itself.
+        // Nobody chose, nothing is written: a board that names no fab and is
+        // exported with no flag keeps the old silence, because rules nobody
+        // chose are worse than none - KiCad believes them.
+        let chosen = self.preset.is_some() || world.fab().is_some();
+        let rules = if !chosen {
+            None
+        } else {
+            let preset = crate::preset_choice::resolve(self.preset.as_deref(), &world)?;
+            let rules = preset.rules();
+            Some(cypcb_kicad::KicadDesignRules {
+                clearance: rules.min_clearance,
+                track_width: rules.min_trace_width,
+                via_diameter: rules.min_via_diameter,
+                via_drill: rules.min_via_drill,
+                mask_expansion: rules.solder_mask_expansion,
+                drill_size: rules.min_drill_size,
+                hole_to_hole: rules.min_hole_to_hole,
+                edge_clearance: rules.min_edge_clearance,
+                silk_clearance: rules.min_silk_clearance,
+                annular_ring: rules.min_annular_ring,
+            })
         };
 
         let board = cypcb_kicad::write_board_with_rules(&mut world, "cypcb", rules);
