@@ -355,7 +355,12 @@ pub fn parse_kicad_pcb_str(content: &str) -> Result<KicadPcbParseResult, KicadPc
     if let Some(ref bounds) = board_bounds {
         let width = Nm(bounds.max.x.0 - bounds.min.x.0);
         let height = Nm(bounds.max.y.0 - bounds.min.y.0);
-        let board = world.set_board("KiCad PCB".to_string(), (width, height), layer_count);
+        // The name the file's title block carries, when it has one. A board
+        // written by this project states the design's own name there, so a
+        // round trip keeps it; a board pcbnew wrote usually states nothing and
+        // falls back to what this importer has always called them.
+        let name = extract_title(elements).unwrap_or_else(|| "KiCad PCB".to_string());
+        let board = world.set_board(name, (width, height), layer_count);
 
         // The real edge, when Edge.Cuts describes one. The size above stays the
         // bounding box, which is what everything that only needs "how big" uses.
@@ -1559,6 +1564,35 @@ pub enum ZoneImport {
     Refused(String),
     /// Not a zone worth a word.
     Skipped,
+}
+
+/// The board's name, out of the file's title block.
+///
+/// `(title_block (title "blink"))` is where pcbnew puts the name a person
+/// reads, and this project writes the design's own name there. An empty title
+/// is no title: KiCad writes the node with blank fields on a board nobody has
+/// named.
+fn extract_title(elements: &[Sexp]) -> Option<String> {
+    for elem in elements {
+        if list_name(elem).as_deref() != Some("title_block") {
+            continue;
+        }
+        let Ok(list) = elem.list() else { continue };
+        for child in &list[1..] {
+            if list_name(child).as_deref() != Some("title") {
+                continue;
+            }
+            let Ok(title) = child.list() else { continue };
+            if title.len() < 2 {
+                continue;
+            }
+            let text = get_string(&title[1]).unwrap_or_default();
+            if !text.trim().is_empty() {
+                return Some(text);
+            }
+        }
+    }
+    None
 }
 
 /// The rectangle an outline describes, if it describes one.

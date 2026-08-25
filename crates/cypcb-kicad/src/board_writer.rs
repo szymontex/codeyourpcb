@@ -375,6 +375,21 @@ pub fn write_board_with_rules(
     let _ = writeln!(out, "  (general (thickness {thickness}))");
     let _ = writeln!(out, "  (paper \"A4\")");
 
+    // The board's own name. KiCad keeps no field for it on the board itself,
+    // and the title block is where pcbnew puts the name a person reads - so
+    // this is where it goes, rather than being dropped. Without it a design
+    // written out and read back came home called `KiCad PCB`, whatever its
+    // author had called it, and nothing said so.
+    if let Some(name) = world.board_name() {
+        let _ = writeln!(out, "  (title_block");
+        // A name with a quote in it would end the string early. The
+        // language cannot write one today - a board name is an identifier -
+        // but this file is also written from boards read out of KiCad.
+        let safe = name.replace('\\', "\\\\").replace('"', "\\\"");
+        let _ = writeln!(out, "    (title \"{safe}\")");
+        let _ = writeln!(out, "  )");
+    }
+
     // What KiCad checks the board against, as much of it as belongs in a board
     // file: the fab's own mask expansion, which was a literal 0 before.
     //
