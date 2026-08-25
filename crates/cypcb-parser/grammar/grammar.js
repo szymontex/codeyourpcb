@@ -576,7 +576,11 @@ module.exports = grammar({
       // `flex` is the third: the part of a rigid-flex board that bends. Not a
       // keepout - copper crosses it, that is what it is for - and not a pour.
       field('kind', choice('zone', 'keepout', 'flex')),
-      optional(field('name', $.identifier)),
+      // The same rule a net name uses: a pour is usually named after the net
+      // it fills, and `VBUS+` is not an identifier. Writing it bare would
+      // produce a file this project cannot read back, which is how the
+      // importer came to drop such a zone with a comment.
+      optional(field('name', $.net_name)),
       '{',
       repeat($.zone_property),
       '}',

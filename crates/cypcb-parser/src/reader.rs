@@ -1459,10 +1459,13 @@ impl<'a> Reader<'a> {
         self.bump(); // `zone` or `keepout`
 
         // The name is optional, so a `{` here means the zone is unnamed.
+        //
+        // `net_name` rather than `identifier`: a pour is usually named after
+        // the net it fills, and a net can be called `VBUS+`.
         let name = if self.peek() == Some(&TokenKind::LBrace) {
             None
         } else {
-            self.identifier()
+            self.net_name()
         };
 
         if !self.eat(&TokenKind::LBrace) {

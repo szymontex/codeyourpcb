@@ -327,9 +327,11 @@ fn via_span_suffix(via: &crate::components::trace::Via) -> String {
 ///   would forbid copper where the design allowed it.
 /// - a name the grammar's `identifier` refuses.
 ///
-/// A pour whose net needs quoting used to be a third. `zone_net` takes
-/// `net_name` now, the same rule `net_definition` uses, so `VBUS+` is written
-/// quoted rather than described in a comment.
+/// A pour whose net needs quoting used to be a third, and a pour *named* after
+/// such a net was a fourth: the grammar took an identifier for a zone name, so
+/// a `GND` pour came through and a `VBUS+` pour was described in a comment.
+/// Both the net and the name take `net_name` now, which is the rule that knows
+/// about quotes.
 fn zone_as_dsl(
     zone: &crate::components::zone::Zone,
     net_names: &std::collections::HashMap<u32, String>,
@@ -357,17 +359,6 @@ fn zone_as_dsl(
         }
     };
 
-    if let Some(name) = &zone.name {
-        if !is_writable_identifier(name) {
-            let _ = writeln!(
-                out,
-                "// one {what} named {name:?} is not written: the grammar takes an \
-                 identifier for a zone name and has no quoted form"
-            );
-            return out;
-        }
-    }
-
     let net = zone
         .net
         .and_then(|net_id| net_names.get(&net_id.0))
@@ -375,7 +366,7 @@ fn zone_as_dsl(
 
     match &zone.name {
         Some(name) => {
-            let _ = writeln!(out, "{what} {name} {{");
+            let _ = writeln!(out, "{what} {} {{", net_name_as_written(name));
         }
         None => {
             let _ = writeln!(out, "{what} {{");

@@ -2304,7 +2304,7 @@
         "required": false,
         "types": [
           {
-            "type": "identifier",
+            "type": "net_name",
             "named": true
           }
         ]

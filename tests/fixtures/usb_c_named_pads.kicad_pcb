@@ -49,4 +49,34 @@
   (gr_line (start 45 5) (end 45 25) (layer "Edge.Cuts") (width 0.05))
   (gr_line (start 45 25) (end 10 25) (layer "Edge.Cuts") (width 0.05))
   (gr_line (start 10 25) (end 10 5) (layer "Edge.Cuts") (width 0.05))
+
+  (zone
+    (net 2)
+    (net_name "GND")
+    (layer "B.Cu")
+    (hatch edge 0.5)
+    (connect_pads (clearance 0.5))
+    (min_thickness 0.25)
+    (fill yes (thermal_gap 0.5) (thermal_bridge_width 0.5))
+    (polygon
+      (pts
+        (xy 11 6) (xy 44 6) (xy 44 24) (xy 11 24)
+      )
+    )
+  )
+
+  (zone
+    (net 1)
+    (net_name "VBUS+")
+    (layer "F.Cu")
+    (hatch edge 0.5)
+    (connect_pads (clearance 0.5))
+    (min_thickness 0.25)
+    (fill yes (thermal_gap 0.5) (thermal_bridge_width 0.5))
+    (polygon
+      (pts
+        (xy 25 8) (xy 40 8) (xy 40 20) (xy 25 20)
+      )
+    )
+  )
 )
