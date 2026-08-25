@@ -373,6 +373,99 @@ fn hovering_a_component_explains_it() {
     );
 }
 
+/// A board whose net says what it carries, so the card has a number to work.
+const CARRIES_A_CURRENT: &str = r#"version 1
+
+board probe {
+    size 20mm x 20mm
+    layers 2
+}
+
+component R1 resistor "0402" {
+    value "10k"
+    at 5mm, 5mm
+}
+
+component R2 resistor "0402" {
+    value "1k"
+    at 12mm, 5mm
+}
+
+net POWER [current 1A] {
+    R1.1
+    R2.1
+}
+
+trace POWER {
+    from R1.1
+    to R2.1
+    layer Top
+    width 0.1mm
+}
+"#;
+
+#[test]
+fn hovering_a_current_gives_the_width_the_checker_would_demand() {
+    // One number, two surfaces. The card and the report both come from
+    // `TraceWidthCalculator` with the same defaults - an outer layer, 1oz of
+    // copper and a 10C rise - and IPC-2221 puts 1A at **0.300mm**, worked by
+    // hand in `cypcb-calc`'s own test. The card rounds to two decimals; the
+    // report prints three.
+    //
+    // Nothing held the two together. A hover that quoted a different width
+    // from the checker would send a designer to widen a trace the checker
+    // then still refuses, or to leave one it will.
+    let uri = "file:///virtual/lsp-probe/current.cypcb";
+    let mut server = Server::start();
+    server.initialize();
+    server.open(uri, CARRIES_A_CURRENT);
+
+    let (line, character) = position_of(CARRIES_A_CURRENT, "current 1A");
+    let result = server.request(
+        "textDocument/hover",
+        json!({
+            "textDocument": {"uri": uri},
+            "position": {"line": line, "character": character},
+        }),
+    );
+
+    let contents =
+        serde_json::to_string(result.pointer("/result/contents").unwrap_or(&Value::Null))
+            .expect("hover contents serialize");
+    assert!(
+        contents.contains("IPC-2221 width: 0.30mm"),
+        "the card has to state the width the standard asks for: {result}"
+    );
+
+    // And the command line says the same thing about the same board.
+    let dir = std::env::temp_dir().join("cypcb-lsp-current-card");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("a place to work");
+    let board = dir.join("board.cypcb");
+    std::fs::write(&board, CARRIES_A_CURRENT).expect("the board is writable");
+
+    // The checker lives beside this server in the same target directory:
+    // `CARGO_BIN_EXE_*` is only set for the crate that builds the binary, and
+    // that crate is `cypcb-cli`.
+    let checker = std::path::Path::new(env!("CARGO_BIN_EXE_cypcb-lsp")).with_file_name("cypcb");
+    assert!(
+        checker.exists(),
+        "the checker is built beside the server: {}",
+        checker.display()
+    );
+    let output = std::process::Command::new(&checker)
+        .arg("check")
+        .arg(&board)
+        .output()
+        .expect("the binary runs");
+    let said = String::from_utf8_lossy(&output.stdout).to_string()
+        + &String::from_utf8_lossy(&output.stderr);
+    assert!(
+        said.contains("IPC-2221 wants 0.300mm"),
+        "the checker states the same figure to three decimals:\n{said}"
+    );
+}
+
 #[test]
 fn completion_works_on_the_half_typed_line_it_is_asked_about() {
     // The moment completion is for: the user has typed `component R3 resistor "`
