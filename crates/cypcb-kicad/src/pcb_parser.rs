@@ -359,7 +359,15 @@ pub fn parse_kicad_pcb_str(content: &str) -> Result<KicadPcbParseResult, KicadPc
 
         // The real edge, when Edge.Cuts describes one. The size above stays the
         // bounding box, which is what everything that only needs "how big" uses.
-        if let Some(outline) = extract_board_ring(elements).and_then(BoardOutline::new) {
+        // The same origin every pad, trace and pour is measured from. The
+        // ring was read in file coordinates while everything else was moved to
+        // the board's own corner, so a design imported, written back out and
+        // imported again walked away from its outline: measured on the USB
+        // fixture, the parts moved 10mm left and 5mm up per trip while the
+        // outline stayed on the sheet.
+        if let Some(outline) =
+            extract_board_ring(elements, board_origin).and_then(BoardOutline::new)
+        {
             world.ecs_mut().entity_mut(board).insert(outline);
         }
 
@@ -1891,7 +1899,7 @@ fn calculate_pad_bounds(pads: &[PadDef]) -> Rect {
 /// segments are walked end to end into one; anything that does not close, or
 /// leaves segments over, yields nothing rather than a guess - a partial
 /// outline would be worse than the bounding box it replaces.
-fn extract_board_ring(elements: &[Sexp]) -> Option<Vec<Point>> {
+fn extract_board_ring(elements: &[Sexp], origin: (f64, f64)) -> Option<Vec<Point>> {
     // A polygon states the ring directly.
     for elem in elements {
         if list_name(elem).as_deref() != Some("gr_poly") || !is_on_edge_cuts(elem) {
@@ -1911,7 +1919,7 @@ fn extract_board_ring(elements: &[Sexp]) -> Option<Vec<Point>> {
                     let Ok(pt_list) = pt.list() else { continue };
                     if pt_list.len() >= 3 {
                         if let (Some(x), Some(y)) = (get_f64(&pt_list[1]), get_f64(&pt_list[2])) {
-                            points.push(Point::from_mm(x, y));
+                            points.push(Point::from_mm(x - origin.0, y - origin.1));
                         }
                     }
                 }
@@ -1931,8 +1939,8 @@ fn extract_board_ring(elements: &[Sexp]) -> Option<Vec<Point>> {
         if let (Some(start), Some(end)) = (find_xy_child(elem, "start"), find_xy_child(elem, "end"))
         {
             segments.push((
-                Point::from_mm(start.0, start.1),
-                Point::from_mm(end.0, end.1),
+                Point::from_mm(start.0 - origin.0, start.1 - origin.1),
+                Point::from_mm(end.0 - origin.0, end.1 - origin.1),
             ));
         }
     }
