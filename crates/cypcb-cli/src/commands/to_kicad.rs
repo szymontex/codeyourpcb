@@ -135,6 +135,33 @@ impl ToKicadCommand {
             );
         }
 
+        // The part of the board that bends.
+        //
+        // `flex bend { ... }` is V8's rigid-flex vocabulary: the region a
+        // rigid-flex build folds, which the stackup's coverlay and stiffener
+        // are about. KiCad has no area for it - a zone there is copper or a
+        // rule area, and this is neither - so it is dropped rather than
+        // written as a pour with no net, which is what it used to be: one
+        // netless zone per copper layer, 32 for a region stated on `all`.
+        {
+            let flex: Vec<String> = world
+                .zones()
+                .into_iter()
+                .filter(|(_, zone)| {
+                    matches!(zone.kind, cypcb_world::components::zone::ZoneKind::Flex)
+                })
+                .map(|(_, zone)| zone.name.clone().unwrap_or_else(|| "unnamed".to_string()))
+                .collect();
+            if !flex.is_empty() {
+                eprintln!(
+                    "Warning: the flexible region(s) this design states ({}) are not in the \
+                     KiCad board: the format has no area for the part of a board that bends, \
+                     so a board read back from this file is rigid throughout.",
+                    flex.join(", ")
+                );
+            }
+        }
+
         // The fab the board names.
         //
         // `board b { fab oshpark }` decides which table `cypcb check` grades

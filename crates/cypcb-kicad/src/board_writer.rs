@@ -733,6 +733,16 @@ fn write_zones(
     };
 
     for zone in zones {
+        // A flex region is not copper. It says which part of the board bends,
+        // which KiCad has no area for - and writing it as a pour made it one
+        // netless `(zone ...)` per copper layer, 32 of them for a region
+        // stated on `all`, every one of which the importer then refused as
+        // `a zone is poured to no net`. `to-kicad` names the regions it
+        // cannot carry instead.
+        if matches!(zone.kind, ZoneKind::Flex) {
+            continue;
+        }
+
         let net = zone
             .net
             .and_then(|id| net_number.get(&id).copied())
