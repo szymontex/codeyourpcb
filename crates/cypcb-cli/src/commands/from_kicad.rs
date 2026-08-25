@@ -66,6 +66,24 @@ impl FromKicadCommand {
             source.len()
         );
 
+        // What the board carried and the design does not.
+        //
+        // The importer refuses a pour it cannot state - an L cut around a
+        // connector is not a rectangle, and a bounding box would put copper
+        // where the shape was drawn to avoid it - and it says why. The browser
+        // engine has printed those reasons since they existed; this command
+        // did not, so a board came through the command line one ground plane
+        // short and nothing said so. Same for a stackup this reader will not
+        // guess at.
+        for refusal in parsed
+            .metadata
+            .zone_refusals
+            .iter()
+            .chain(parsed.metadata.stackup_refusals.iter())
+        {
+            eprintln!("Warning: {refusal}");
+        }
+
         // A design that will not read back is not an import, and the cost of
         // finding out here rather than on the user's next command is one parse.
         let reread = cypcb_parser::parse(&source);
