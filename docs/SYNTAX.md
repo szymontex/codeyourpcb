@@ -239,7 +239,6 @@ When the two disagree the report names the width that would have hit the
 target on this stack:
 
 ```
-$ cypcb check board.cypcb
   impedance: net 'SIG' asks for 50ohm and a 0.200mm trace on Inner1 gives
   22.29ohm - 55.4% off - 0.064mm would give 50ohm on this stack.
 ```
@@ -1097,16 +1096,29 @@ net VCC [current 500mA] {
 }
 ```
 
-### 2. Missing Units
+### 2. Units Left Off
 
-**Wrong:**
+A bare number is millimetres. That is the grammar's rule, so this is read as
+15mm, 10mm rather than refused:
+
 ```
-at 15, 10  // Missing units
+at 15, 10
 ```
 
-**Correct:**
+Write the unit where you mean anything else:
+
 ```
 at 15mm, 10mm
+at 600mil, 400mil
+```
+
+One place says so out loud. A board size with no unit is where getting it
+wrong resizes the whole design - somebody thinking in mils who writes `size
+800 x 600` asks for 800mm - so the checker warns there:
+
+```
+board size 800 has no unit, read as 800mm
+help: write `800mm` to say so, or `800mil` if that is what you meant
 ```
 
 ### 3. Unquoted Footprint Names
@@ -1126,7 +1138,7 @@ component R1 resistor "0402" { ... }
 Validate your `.cypcb` files with the CLI:
 
 ```bash
-cypcb check my_board.cypcb
+cypcb check examples/slotted-connector.cypcb
 ```
 
 This checks for:

@@ -102,6 +102,18 @@ fn every_top_level_example_in_the_guide_parses() {
             continue;
         }
 
+        // A message the tool prints rather than a definition. The warning
+        // about a board size with no unit opens with the word `board` too, and
+        // the only definitions that open no block are `version`, `import` and
+        // `use`.
+        if !block.contains('{') && !matches!(keyword, "version" | "import" | "use") {
+            skipped.push(format!(
+                "printed output: {}",
+                first.chars().take(40).collect::<String>()
+            ));
+            continue;
+        }
+
         // Blocks the guide presents as wrong on purpose.
         if block.contains("ERROR") || block.contains("Missing") {
             skipped.push(format!(
