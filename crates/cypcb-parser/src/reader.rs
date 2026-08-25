@@ -1246,9 +1246,13 @@ impl<'a> Reader<'a> {
     }
 
     /// `footprint NAME { description "..."  pad 1 rect at X, Y size W x H [drill D]  courtyard W x H  silk ... }`.
+    /// `footprint NAME { ... }`, where the name takes quotes when it needs
+    /// them: a KiCad footprint is called `0805` or
+    /// `Package_QFP:LQFP-48_7x7mm_P0.5mm`, and a name the reader refuses is a
+    /// name the writer has to invent a replacement for.
     fn footprint(&mut self, start: usize) -> Option<FootprintDef> {
         self.bump(); // `footprint`
-        let name = match self.identifier() {
+        let name = match self.net_name() {
             Some(name) => name,
             None => {
                 self.unexpected("a footprint name");

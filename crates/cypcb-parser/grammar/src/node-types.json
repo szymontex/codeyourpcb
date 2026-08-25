@@ -500,7 +500,7 @@
         "required": true,
         "types": [
           {
-            "type": "identifier",
+            "type": "net_name",
             "named": true
           }
         ]

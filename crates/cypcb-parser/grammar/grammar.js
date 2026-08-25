@@ -487,7 +487,11 @@ module.exports = grammar({
     // footprint NAME { ... }
     footprint_definition: $ => seq(
       'footprint',
-      field('name', $.identifier),
+      // The same rule a net name uses. A KiCad footprint is called
+      // `Package_QFP:LQFP-48_7x7mm_P0.5mm` or `0805`, and neither is an
+      // identifier - so the writer used to rewrite them, and a part that came
+      // in as `0805` went out as `_0805`.
+      field('name', $.net_name),
       '{',
       repeat($.footprint_property),
       '}',

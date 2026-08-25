@@ -1630,7 +1630,7 @@
           "name": "name",
           "content": {
             "type": "SYMBOL",
-            "name": "identifier"
+            "name": "net_name"
           }
         },
         {

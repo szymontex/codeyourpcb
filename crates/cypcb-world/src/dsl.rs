@@ -718,33 +718,14 @@ pub fn board_as_dsl(world: &mut BoardWorld) -> String {
     // library does not already have. A KiCad board names parts things like
     // `Package_QFP:LQFP-48_7x7mm_P0.5mm`, which no built-in library has, so
     // without this the file names pads nobody can resolve.
-    // A footprint definition takes a bare identifier - `footprint USB_ANCHOR {`
-    // - and a KiCad footprint is named `cypcb:USB_ANCHOR` or
-    // `Package_QFP:LQFP-48_7x7mm_P0.5mm`, which is neither bare nor an
-    // identifier. The library prefix goes, and anything the grammar will not
-    // take becomes an underscore. Names that collide after that are given a
-    // number rather than silently merged, because two footprints wearing one
-    // name is two parts with the wrong pads.
-    fn as_identifier(name: &str) -> String {
-        let bare = name.rsplit(':').next().unwrap_or(name);
-        let mut out: String = bare
-            .chars()
-            .map(|c| {
-                if c.is_ascii_alphanumeric() || c == '_' {
-                    c
-                } else {
-                    '_'
-                }
-            })
-            .collect();
-        if out.chars().next().is_some_and(|c| c.is_ascii_digit()) {
-            out.insert(0, '_');
-        }
-        if out.is_empty() {
-            out.push_str("FOOTPRINT");
-        }
-        out
-    }
+    // A footprint definition takes the same kind of name a net does - bare
+    // where it can be, quoted where it cannot - so `0805` stays `0805` and
+    // `Package_QFP:LQFP-48_7x7mm_P0.5mm` stays itself. It used to be rewritten
+    // into an identifier, which meant a part imported from KiCad as `0805`
+    // went back out as `_0805` and a round trip renamed every footprint on the
+    // board. Names that still collide are given a number rather than silently
+    // merged, because two footprints wearing one name is two parts with the
+    // wrong pads.
 
     let builtin = crate::footprint::FootprintLibrary::new();
     let library = world.footprints().clone();
@@ -765,7 +746,12 @@ pub fn board_as_dsl(world: &mut BoardWorld) -> String {
             written_name.insert(name.clone(), name.clone());
             continue;
         };
-        let mut identifier = as_identifier(name);
+        // The library prefix goes: `cypcb:0402` and
+        // `Package_QFP:LQFP-48_7x7mm_P0.5mm` are KiCad's way of saying which
+        // library a part came from, and this language's own library is keyed
+        // by the bare name - so a `0402` that went out to KiCad has to come
+        // home as `0402` rather than as `cypcb:0402`.
+        let mut identifier = name.rsplit(':').next().unwrap_or(name.as_str()).to_string();
         if !taken.insert(identifier.clone()) {
             let mut n = 2;
             while !taken.insert(format!("{identifier}_{n}")) {
@@ -775,7 +761,7 @@ pub fn board_as_dsl(world: &mut BoardWorld) -> String {
         }
         written_name.insert(name.clone(), identifier.clone());
         let _ = writeln!(out);
-        let _ = writeln!(out, "footprint {identifier} {{");
+        let _ = writeln!(out, "footprint {} {{", net_name_as_written(&identifier));
         let (cw, ch) = (footprint.courtyard.width(), footprint.courtyard.height());
         let _ = writeln!(
             out,
