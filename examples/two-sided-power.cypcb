@@ -1,0 +1,73 @@
+// two-sided-power.cypcb - a part on the back, and a net that says what it carries.
+//
+// The bulk capacitor goes underneath, where the board meets the enclosure and
+// there is room for it: `side bottom` flips the part, its copper, its mask and
+// its silkscreen onto the back in one statement, and the pick-and-place file
+// says which side the machine places it from.
+//
+// The rail states what it is for. `current 2A` is what the checker measures
+// the copper against - IPC-2221 wants a certain width for a given current and
+// temperature rise - and `clearance 0.4mm` is the gap this rail keeps from
+// everything else, wider than the fab's own floor because a supply that arcs
+// takes the board with it.
+//
+// `lcsc` names the part to buy, so the bill of materials carries an order code
+// rather than a description somebody has to shop for.
+//
+// The footprint draws its own polarity mark with `silk`: a line down the
+// negative side and a dot beside pin 1, in the part's coordinates, so they
+// rotate and flip with it.
+//
+// Check it with:
+//   cypcb check examples/two-sided-power.cypcb
+//
+// The rail runs on the back, because that is the side the capacitor is on: a
+// trace on the top would never reach it, and the checker says so.
+//
+// It reports 2 unconnected pins - the header's second pin is spare, and so is
+// the capacitor's - and exits 1. The rail itself is clean.
+
+version 1
+
+board two_sided_power {
+    size 40mm x 25mm
+    layers 2
+    fab jlcpcb
+}
+
+footprint CAP_POLARISED {
+    description "an electrolytic, marked so it goes in one way round"
+    courtyard 6mm x 4mm
+
+    pad 1 rect at -1.6mm, 0mm size 1.8mm x 2.4mm
+    pad 2 rect at 1.6mm, 0mm size 1.8mm x 2.4mm
+
+    silk line -3mm, 2.2mm to 3mm, 2.2mm width 0.15mm
+    silk circle -1.6mm, -2.4mm radius 0.25mm
+}
+
+component J1 connector "PIN-HDR-1x2" {
+    value "5V in"
+    at 6mm, 12mm
+    rotate 90
+}
+
+component C1 capacitor "CAP_POLARISED" {
+    value "220uF"
+    at 28mm, 12mm
+    rotate 180
+    side bottom
+    lcsc "C3020"
+}
+
+net VBUS [current 2A clearance 0.4mm] {
+    J1.1
+    C1.1
+}
+
+trace VBUS {
+    from J1.1
+    to C1.1
+    layer Bottom
+    width 1mm
+}

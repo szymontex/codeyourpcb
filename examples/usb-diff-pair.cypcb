@@ -10,6 +10,12 @@
 // traces are the same length and the pair passes. Move one header along the
 // board and `cypcb check` names the pair and prints both lengths.
 //
+// Each half states the impedance it wants - 90ohm is what a USB pair is
+// specified at - and the checker measures that against the stack. This board
+// declares no stackup, so there is nothing to measure it with and the checker
+// says nothing rather than guessing; give the board a `stackup` and the same
+// line becomes a number.
+//
 // The gap between the halves is not checked: that is the other half of a
 // differential-pair rule and needs the router to place them alongside each
 // other first.
@@ -52,12 +58,12 @@ component J4 connector "PIN-HDR-1x2" {
     rotate 90
 }
 
-net USB_DP {
+net USB_DP [impedance 90ohm] {
     J1.1
     J2.1
 }
 
-net USB_DM {
+net USB_DM [impedance 90ohm] {
     J3.1
     J4.1
 }

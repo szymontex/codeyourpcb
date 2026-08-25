@@ -9,6 +9,11 @@
 // patch under the antenna, on the top layer where the antenna sits, and the
 // one trace on the board goes around it rather than through it.
 //
+// The feed states its own neck: `neck 0.2mm for 1mm` on the net says the
+// copper may run thin for the last millimetre into a pad, which is how a
+// 0.3mm trace reaches a header pin without a blob of copper at the joint. The
+// checker holds the declaration to the fab's floor and to the trace it is on.
+//
 // Check it with:
 //   cypcb check examples/keepout.cypcb
 //
@@ -40,7 +45,7 @@ component J2 connector "PIN-HDR-1x2" {
     rotate 90
 }
 
-net RF {
+net RF [neck 0.2mm for 1mm] {
     J1.1
     J2.1
 }

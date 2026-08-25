@@ -1,4 +1,8 @@
-// Routing test with numeric pin names
+// Routing test with numeric pin names.
+//
+// The VCC net is drawn with `path`: the geometric form, a polyline of points
+// joined by `->`, which is what `cypcb route` writes into every file it
+// produces. The other two nets are left for the router to solve.
 version 1
    
 board routing_test {
@@ -34,4 +38,10 @@ net GND {
 
 net SIGNAL {
     R2.2
+}
+
+trace VCC {
+    path 9.5mm,12mm -> 9.5mm,8mm -> 16.5mm,8mm
+    layer Top
+    width 0.2mm
 }

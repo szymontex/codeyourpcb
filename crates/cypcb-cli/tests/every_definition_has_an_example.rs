@@ -129,3 +129,99 @@ fn every_definition_the_grammar_has_appears_in_some_example() {
         );
     }
 }
+
+/// The property lists the parser publishes, block by block.
+///
+/// Every `unknown_property("block", &["a", "b"])` in the reader is a promise:
+/// mistype something inside that block and this is what it takes. A property
+/// on one of those lists with no board using it is the same gap the language's
+/// own constructs had - `diffpair` and `keepout` were in no example until
+/// 2026-08-25, and neither was ever run by anything a person could copy.
+fn published_properties() -> Vec<(String, Vec<String>)> {
+    let reader = std::fs::read_to_string(repo_root().join("crates/cypcb-parser/src/reader.rs"))
+        .expect("the reader is in the repo");
+
+    let mut found: Vec<(String, Vec<String>)> = Vec::new();
+    for chunk in reader.split("unknown_property(").skip(1) {
+        // One statement at a time: the call ends at `)`, and reading past it
+        // takes the next hundred lines of the reader as property names.
+        let Some((statement, _)) = chunk.split_once(");") else {
+            continue;
+        };
+        let Some((head, _)) = statement.split_once(']') else {
+            continue;
+        };
+        // The stackup's list is a named constant rather than a literal, and
+        // its words have their own guard in the syntax guide's tests. A chunk
+        // with no `&[` in it is that call, and running past it reads the next
+        // hundred lines of the reader as property names.
+        if !head.contains("&[") {
+            continue;
+        }
+        let mut names = head.split('"').skip(1).step_by(2);
+        let Some(block) = names.next() else { continue };
+        let props: Vec<String> = names.map(str::to_string).collect();
+        if props.is_empty() {
+            continue;
+        }
+        found.push((block.to_string(), props));
+    }
+    found
+}
+
+#[test]
+fn every_property_a_block_takes_is_in_some_example() {
+    let reader = std::fs::read_to_string(repo_root().join("crates/cypcb-parser/src/reader.rs"))
+        .expect("the reader is in the repo");
+    let dir = repo_root().join("examples");
+    let mut sources = String::new();
+    for entry in std::fs::read_dir(&dir).expect("the examples are there") {
+        let path = entry.expect("an entry").path();
+        if path.extension().is_some_and(|ext| ext == "cypcb") {
+            sources.push_str(&std::fs::read_to_string(&path).expect("an example is readable"));
+            sources.push('\n');
+        }
+    }
+
+    let blocks = published_properties();
+    assert!(
+        blocks.len() >= 6,
+        "six blocks published a literal property list when this was written: \
+         {:?}",
+        blocks.iter().map(|(b, _)| b).collect::<Vec<_>>()
+    );
+    let named_constant = reader
+        .matches("unknown_property(\"stackup\", STACKUP_WORDS)")
+        .count();
+    assert_eq!(
+        named_constant, 2,
+        "the stackup is the one block whose list is a constant, and it is \
+         passed twice; a third call or a second such block would go unread here"
+    );
+
+    for (block, props) in &blocks {
+        for property in props {
+            // `pin.<N> = <NET>` is a form rather than a word; what a board has
+            // to show is the `pin`.
+            let word = property.split('.').next().unwrap_or(property);
+            let used = if block == "net constraint" {
+                // These live between brackets, and the same words are trace
+                // properties - a `width` on a trace says nothing about
+                // whether a net has ever stated one.
+                sources
+                    .lines()
+                    .filter(|line| line.contains('[') && line.contains(']'))
+                    .any(|line| line.contains(&format!("{word} ")))
+            } else {
+                sources
+                    .lines()
+                    .any(|line| line.trim_start().starts_with(&format!("{word} ")))
+            };
+            assert!(
+                used,
+                "`{block}` takes `{word}` and no example states one: a property \
+                 nobody has written down is a property nobody has run"
+            );
+        }
+    }
+}
