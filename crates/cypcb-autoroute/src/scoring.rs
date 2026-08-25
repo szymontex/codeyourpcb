@@ -639,18 +639,29 @@ mod tests {
     }
 
     #[test]
-    fn test_angle_penalty_23_degrees() {
-        // 23° is between 0° and 45°, closest to 22.5° from both
-        let angle = 23.0_f64.to_radians();
-        let penalty = angle_penalty(angle);
-        // 23° is 23° from 0° and 22° from 45°. Closest multiple is 0° at 23°.
-        // Penalty = 23/22.5 ≈ 1.02 → clamped to 1.0? No:
-        // remainder = min(23%45, 45-23%45) = min(23, 22) = 22
-        // penalty = 22/22.5 ≈ 0.978
-        assert!(
-            penalty > 0.9 && penalty < 1.0,
-            "23° should have high penalty (~0.978), got {penalty}"
-        );
+    fn the_penalty_is_the_distance_to_the_nearest_45_degree_multiple() {
+        // The form, worked by hand: how far the turn is from the nearest
+        // multiple of 45 degrees, over the furthest it can be, which is 22.5.
+        //
+        //   23 deg -> min(23, 45 - 23) = 22   -> 22 / 22.5   = 0.977778
+        //   10 deg -> min(10, 35)      = 10   -> 10 / 22.5   = 0.444444
+        //    5 deg -> min(5, 40)       = 5    ->  5 / 22.5   = 0.222222
+        //   40 deg -> min(40, 5)       = 5    ->  5 / 22.5   = 0.222222
+        //
+        // A band would let a wrong denominator through: 22/45 is 0.489 and
+        // still "between 0 and 1", which is what this test used to assert.
+        for (degrees, expected) in [
+            (23.0_f64, 22.0 / 22.5),
+            (10.0, 10.0 / 22.5),
+            (5.0, 5.0 / 22.5),
+            (40.0, 5.0 / 22.5),
+        ] {
+            let penalty = angle_penalty(degrees.to_radians());
+            assert!(
+                (penalty - expected).abs() < 1e-9,
+                "{degrees} degrees is {expected} off a 45 degree multiple, not {penalty}"
+            );
+        }
     }
 
     #[test]
