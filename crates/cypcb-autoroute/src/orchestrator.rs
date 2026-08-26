@@ -1130,4 +1130,80 @@ mod tests {
         assert_eq!(ratsnest[0].net_name, "GND");
         assert_eq!(ratsnest[0].pads.len(), 3);
     }
+
+    /// What a pad opens in the grid, worked by hand.
+    ///
+    /// A pad is an obstacle - the router must not cross it - and its zone is
+    /// the hole in that rule, the cells a route may enter to reach it. The
+    /// radius is the pad's own half-extent in cells, rounded **up**, plus the
+    /// margin: too small and no route can land, too large and the router walks
+    /// through copper it should have gone round. `DEFAULT_PAD_ZONE_MARGIN_CELLS`
+    /// is 3 for reasons `docs/routing.md` measures; none of that was named by a
+    /// test.
+    #[test]
+    fn a_pads_zone_is_its_own_radius_in_cells_plus_the_margin() {
+        use crate::grid::make_test_grid;
+
+        // The grid the dense fixtures use: 0.254mm to a cell.
+        let grid = make_test_grid(100, 100, 254_000, 2);
+        let pad = |w: f64, h: f64| PadTarget {
+            position: Point::from_mm(10.0, 10.0),
+            layer_mask: 1,
+            pad_size: (Nm::from_mm(w), Nm::from_mm(h)),
+            pin: "1".to_string(),
+        };
+
+        // An 0402: 0.6mm across its longer side, so 0.3mm of radius, which is
+        // 1.18 cells and rounds up to 2. Three cells of margin puts the zone
+        // at 5.
+        assert_eq!(pad_to_zone(&grid, &pad(0.5, 0.6)).radius, 5);
+
+        // Exactly one cell of radius stays one cell: 0.508mm across is
+        // 0.254mm out, and rounding up must not make that 2.
+        assert_eq!(
+            pad_to_zone_with_margin(&grid, &pad(0.508, 0.508), 0).radius,
+            1
+        );
+
+        // A pad smaller than a cell still opens one.
+        assert_eq!(pad_to_zone_with_margin(&grid, &pad(0.1, 0.1), 0).radius, 1);
+
+        // The margin is what it says: the same pad, three more cells.
+        assert_eq!(
+            pad_to_zone_with_margin(&grid, &pad(0.508, 0.508), 3).radius,
+            4
+        );
+
+        // And the zone sits on the pad, not beside it.
+        let zone = pad_to_zone(&grid, &pad(0.5, 0.6));
+        let (gx, gy) = grid.nm_to_grid(Point::from_mm(10.0, 10.0));
+        assert_eq!((zone.cx, zone.cy), (gx as u16, gy as u16));
+    }
+
+    #[test]
+    fn a_pad_is_entered_on_a_layer_it_actually_has() {
+        use crate::grid::make_test_grid;
+
+        let grid = make_test_grid(100, 100, 254_000, 4);
+        let on = |mask: u32| PadTarget {
+            position: Point::from_mm(10.0, 10.0),
+            layer_mask: mask,
+            pad_size: (Nm::from_mm(0.5), Nm::from_mm(0.5)),
+            pin: "1".to_string(),
+        };
+
+        // Top when the pad has it - a through-hole pad is entered from the
+        // face the router prefers rather than from the middle of the board.
+        assert_eq!(pad_to_grid_node(&grid, &on(0b1111)).2, 0);
+        // A bottom-only pad is entered on the bottom.
+        assert_eq!(pad_to_grid_node(&grid, &on(0b0010)).2, 1);
+        // And an inner-layer-only pad on that inner layer: bit 2 is the
+        // router's first inner layer, which the language calls `Inner1`.
+        assert_eq!(pad_to_grid_node(&grid, &on(0b0100)).2, 2);
+        // A pad on the bottom and the first inner layer is entered on the
+        // bottom: the lowest layer it has, not the highest. Without a mask
+        // that sets more than one bit and not bit 0, a rule reading the
+        // highest gives the same answers as one reading the lowest.
+        assert_eq!(pad_to_grid_node(&grid, &on(0b0110)).2, 1);
+    }
 }
