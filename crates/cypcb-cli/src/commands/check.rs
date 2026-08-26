@@ -27,6 +27,37 @@ pub struct CheckCommand {
     /// Check syntax and semantics only, skip design rule check
     #[arg(long)]
     pub no_drc: bool,
+
+    /// What to print: a report for a person, or JSON for a program.
+    ///
+    /// The verdict has been an exit code and a page of prose since the first
+    /// release, so a CI job could fail a build on "some rule broke" and never
+    /// on *which* rule. `-o json` prints the same violations the browser
+    /// receives - kind, place, what was measured and what was required - on
+    /// stdout, with the prose left on stderr.
+    #[arg(short, long, default_value = "text")]
+    pub output: ReportFormat,
+}
+
+/// What `check` prints.
+#[derive(Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+pub enum ReportFormat {
+    /// A report for a person, on stderr, with the verdict in the exit code.
+    Text,
+    /// The violations as JSON, on stdout.
+    Json,
+}
+
+impl CheckCommand {
+    /// One JSON document on stdout, and nothing else.
+    ///
+    /// Every other line this command writes goes to stderr, so a program can
+    /// read the report without filtering prose out of it.
+    fn print_json(&self, report: &serde_json::Value) -> Result<()> {
+        let text = serde_json::to_string_pretty(report).into_diagnostic()?;
+        println!("{text}");
+        Ok(())
+    }
 }
 
 /// The 1-based line a byte offset falls on.
@@ -119,6 +150,17 @@ impl CheckCommand {
                     self.file.display()
                 ));
             }
+            if self.output == ReportFormat::Json {
+                self.print_json(&serde_json::json!({
+                    "file": self.file.display().to_string(),
+                    "preset": serde_json::Value::Null,
+                    "checked": false,
+                    "violations": [],
+                    "summary": {},
+                    "ok": true,
+                }))?;
+                return Ok(());
+            }
             println!(
                 "{} declares no board and places no components: nothing was checked.",
                 self.file.display()
@@ -127,6 +169,17 @@ impl CheckCommand {
         }
 
         if self.no_drc {
+            if self.output == ReportFormat::Json {
+                self.print_json(&serde_json::json!({
+                    "file": self.file.display().to_string(),
+                    "preset": serde_json::Value::Null,
+                    "checked": false,
+                    "violations": [],
+                    "summary": {},
+                    "ok": true,
+                }))?;
+                return Ok(());
+            }
             println!(
                 "OK: {} parsed and validated (DRC skipped)",
                 self.file.display()
@@ -140,6 +193,17 @@ impl CheckCommand {
         let drc = run_drc(&mut world, &preset.rules());
 
         if drc.violations.is_empty() {
+            if self.output == ReportFormat::Json {
+                self.print_json(&serde_json::json!({
+                    "file": self.file.display().to_string(),
+                    "preset": preset.name(),
+                    "checked": true,
+                    "violations": [],
+                    "summary": {},
+                    "ok": true,
+                }))?;
+                return Ok(());
+            }
             println!(
                 "OK: {} passed DRC against {} in {}ms",
                 self.file.display(),
@@ -147,6 +211,42 @@ impl CheckCommand {
                 drc.duration_ms
             );
             return Ok(());
+        }
+
+        // A program asked, so it gets every row rather than the grouped
+        // listing below: the prose collapses a pair of traces running beside
+        // each other into their worst contact, which is the right thing to
+        // read and the wrong thing to count against.
+        if self.output == ReportFormat::Json {
+            let mut summary: BTreeMap<String, usize> = BTreeMap::new();
+            let violations: Vec<serde_json::Value> = drc
+                .violations
+                .iter()
+                .map(|violation| {
+                    *summary.entry(violation.kind.to_string()).or_insert(0) += 1;
+                    let line = world
+                        .get::<cypcb_world::components::SourceSpan>(violation.entity)
+                        .map(|span| line_of(source, span.start_byte));
+                    serde_json::json!({
+                        "kind": violation.kind.to_string(),
+                        "message": violation.message,
+                        "x_mm": violation.location.x.to_mm(),
+                        "y_mm": violation.location.y.to_mm(),
+                        "actual_mm": violation.actual.map(|value| value.to_mm()),
+                        "required_mm": violation.required.map(|value| value.to_mm()),
+                        "line": line,
+                    })
+                })
+                .collect();
+            self.print_json(&serde_json::json!({
+                "file": self.file.display().to_string(),
+                "preset": preset.name(),
+                "checked": true,
+                "violations": violations,
+                "summary": summary,
+                "ok": false,
+            }))?;
+            std::process::exit(1);
         }
 
         eprintln!(
