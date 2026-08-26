@@ -383,4 +383,59 @@ mod tests {
         let violations = EdgeClearanceRule.check(&mut world, &rules);
         assert!(violations.is_empty());
     }
+
+    /// The measurement behind every edge-clearance number on a board whose
+    /// outline is not a rectangle.
+    ///
+    /// `distance_to_outline` takes a bounding box and the ring, and answers
+    /// how far one sits from the other - measuring the box's four sides
+    /// against every edge of the ring rather than its centre against the
+    /// nearest one. Nothing named it in a test.
+    #[test]
+    fn a_box_is_measured_from_its_own_sides_to_the_ring() {
+        use cypcb_world::components::BoardOutline;
+
+        // The U from `examples/cutout.cypcb`: 40 by 30 with a slot cut down
+        // from the top edge between x = 15 and x = 25.
+        let u = BoardOutline::new(vec![
+            Point::from_mm(0.0, 0.0),
+            Point::from_mm(40.0, 0.0),
+            Point::from_mm(40.0, 30.0),
+            Point::from_mm(25.0, 30.0),
+            Point::from_mm(25.0, 10.0),
+            Point::from_mm(15.0, 10.0),
+            Point::from_mm(15.0, 30.0),
+            Point::from_mm(0.0, 30.0),
+        ])
+        .expect("a ring");
+
+        let mm = |v: f64| Nm::from_mm(v).raw();
+
+        // A 1mm box in the left arm, its centre 5mm from the left edge: the
+        // nearest side of the box is 4.5mm from it, not 5mm.
+        assert_eq!(
+            distance_to_outline(&u, mm(4.5), mm(19.5), mm(5.5), mm(20.5)),
+            mm(4.5)
+        );
+
+        // The same box in the middle of the arm, equidistant from the left
+        // edge and the slot wall.
+        assert_eq!(
+            distance_to_outline(&u, mm(7.0), mm(14.5), mm(8.0), mm(15.5)),
+            mm(7.0)
+        );
+
+        // Copper in the slot is not copper well clear of the edge: a box whose
+        // centre falls outside the ring reads zero.
+        assert_eq!(
+            distance_to_outline(&u, mm(19.5), mm(19.5), mm(20.5), mm(20.5)),
+            0
+        );
+
+        // And a box straddling the slot wall touches the ring.
+        assert_eq!(
+            distance_to_outline(&u, mm(12.0), mm(18.0), mm(16.0), mm(22.0)),
+            0
+        );
+    }
 }
