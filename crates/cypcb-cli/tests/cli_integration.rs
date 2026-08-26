@@ -493,9 +493,12 @@ fn the_dry_run_lists_the_inner_layers_a_board_declares() {
         stderr.contains("Board stack: 4 copper layers (2 inner)"),
         "the stack should be stated beside the preset name, got:\n{stderr}"
     );
+    // The prose is on stderr and the paths on stdout, so a dry run can be
+    // piped into a file that holds nothing but the file set.
+    let listing = String::from_utf8_lossy(&output.stdout);
     assert!(
-        stderr.contains("In1_Cu.gbr") && stderr.contains("In2_Cu.gbr"),
-        "both inner layers should be listed, got:\n{stderr}"
+        listing.contains("In1_Cu.gbr") && listing.contains("In2_Cu.gbr"),
+        "both inner layers should be listed, got:\n{listing}"
     );
 }
 

@@ -68,10 +68,14 @@ fn dry_run_listing(board: &Path, out: &Path) -> BTreeSet<String> {
         .output()
         .expect("the binary runs");
     assert!(output.status.success(), "the dry run failed");
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    // The paths come back on stdout. They used to arrive on stderr with the
+    // progress lines, so `export --dry-run board.cypcb > set.txt` wrote an
+    // empty file; the listing is the answer this command is asked for, so it
+    // goes to the stream a pipe reads.
+    let listing = String::from_utf8_lossy(&output.stdout).to_string();
 
     let prefix = format!("{}/", out.display());
-    stderr
+    listing
         .lines()
         .filter_map(|line| line.trim().strip_prefix(&prefix).map(str::to_string))
         .collect()

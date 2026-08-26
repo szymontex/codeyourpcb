@@ -47,7 +47,9 @@ fn export(out: &Path, extra: &[&str]) -> String {
         "exporting a board KiCad wrote has to work:\n{}",
         String::from_utf8_lossy(&output.stderr)
     );
-    String::from_utf8_lossy(&output.stderr).to_string()
+    // Both streams: the progress lines speak on stderr and the dry run's file
+    // list on stdout, and this helper's callers read one or the other.
+    String::from_utf8_lossy(&output.stdout).to_string() + &String::from_utf8_lossy(&output.stderr)
 }
 
 #[test]

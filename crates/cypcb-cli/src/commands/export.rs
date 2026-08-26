@@ -208,6 +208,10 @@ impl ExportCommand {
                 }
             }
 
+            // The prose stays on stderr and the paths go to stdout, because
+            // the paths are the answer: `export --dry-run board.cypcb > set.txt`
+            // wrote an empty file while the whole listing went to the stream
+            // reserved for diagnostics.
             eprintln!("\nFiles that would be generated:");
             eprintln!();
 
@@ -218,13 +222,13 @@ impl ExportCommand {
             let root = self.output.display().to_string();
 
             if preset.layers.top_copper {
-                eprintln!(
+                println!(
                     "  {root}/gerber/{}{}",
                     board_name, preset.file_naming.top_copper
                 );
             }
             if preset.layers.bottom_copper {
-                eprintln!(
+                println!(
                     "  {root}/gerber/{}{}",
                     board_name, preset.file_naming.bottom_copper
                 );
@@ -239,7 +243,7 @@ impl ExportCommand {
                 .unwrap_or(0)
                 .max(preset.layers.inner_copper.len() as u8);
             for index in 0..inner_count {
-                eprintln!(
+                println!(
                     "  {root}/gerber/{}{}",
                     board_name,
                     cypcb_export::inner_layer_suffix(preset.file_naming.top_copper, index + 1)
@@ -247,57 +251,57 @@ impl ExportCommand {
             }
 
             if preset.layers.top_mask {
-                eprintln!(
+                println!(
                     "  {root}/gerber/{}{}",
                     board_name, preset.file_naming.top_mask
                 );
             }
             if preset.layers.bottom_mask {
-                eprintln!(
+                println!(
                     "  {root}/gerber/{}{}",
                     board_name, preset.file_naming.bottom_mask
                 );
             }
             if preset.layers.top_silk {
-                eprintln!(
+                println!(
                     "  {root}/gerber/{}{}",
                     board_name, preset.file_naming.top_silk
                 );
             }
             if preset.layers.bottom_silk {
-                eprintln!(
+                println!(
                     "  {root}/gerber/{}{}",
                     board_name, preset.file_naming.bottom_silk
                 );
             }
             if preset.layers.top_paste {
-                eprintln!(
+                println!(
                     "  {root}/gerber/{}{}",
                     board_name, preset.file_naming.top_paste
                 );
             }
             if preset.layers.bottom_paste {
-                eprintln!(
+                println!(
                     "  {root}/gerber/{}{}",
                     board_name, preset.file_naming.bottom_paste
                 );
             }
             if preset.layers.outline {
-                eprintln!(
+                println!(
                     "  {root}/gerber/{}{}",
                     board_name, preset.file_naming.outline
                 );
             }
             if preset.layers.drill {
-                eprintln!(
+                println!(
                     "  {root}/drill/{}{}",
                     board_name, preset.file_naming.drill_pth
                 );
             }
             if preset.assembly {
-                eprintln!("  {root}/assembly/{}{}", board_name, preset.file_naming.bom);
-                eprintln!("  {root}/assembly/{}.json", board_name);
-                eprintln!("  {root}/assembly/{}{}", board_name, preset.file_naming.cpl);
+                println!("  {root}/assembly/{}{}", board_name, preset.file_naming.bom);
+                println!("  {root}/assembly/{}.json", board_name);
+                println!("  {root}/assembly/{}{}", board_name, preset.file_naming.cpl);
             }
 
             // The Gerber job file, which the listing left out: a real run
@@ -307,7 +311,7 @@ impl ExportCommand {
             // written, and the missing one is the file a fabricator's software
             // opens first.
             if preset.layers.top_copper || preset.layers.bottom_copper || preset.layers.drill {
-                eprintln!("  {root}/{board_name}-job.gbrjob");
+                println!("  {root}/{board_name}-job.gbrjob");
             }
 
             eprintln!();
