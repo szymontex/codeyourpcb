@@ -54,8 +54,14 @@ const MOCK_COMPONENT_DATA = {
   result: {
     packageDetail: {
       dataStr: {
+        // Two pads in EasyEDA's own field order - `PAD~shape~x~y~w~h~layer~net~
+        // number~holeR` - because the footprint parser returns null when it
+        // finds no pad it can read, and a mock that fails to parse quietly
+        // turns every test of the panel's fetch into a test of its catch block.
+        head: { x: 4000, y: 3000 },
         shape: [
-          'PAD~1~1~0.5~0.4~0.3~0.1~1~~1~0',
+          'PAD~RECT~3960~3000~40~50~1~~1~0~',
+          'PAD~RECT~4040~3000~40~50~1~~2~0~',
           'SVGNODE~{"c_etype":"outline3D","uuid":"c7acac53bcbc44d68fbab8f60a747688","z":0}',
         ],
       },
@@ -98,6 +104,15 @@ f 8// 7// 3//
 `.trim();
 
 const MINIMAL_BOARD = `version 1\nboard test {\n  size 50mm x 50mm\n  layers 2\n}`;
+
+// A board with room for a part the panel inserts.
+const BOARD_WITH_ROOM = `version 1
+
+board panel_insert {
+    size 60mm x 40mm
+    layers 2
+}
+`;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -450,5 +465,51 @@ test.describe('JLCPCB 3D Model Loading', () => {
     // Verify 3D renderer is still active (pipeline didn't crash it)
     const isActive = await page.evaluate(() => (window as any).__renderer3d?.isActive);
     expect(isActive).toBe(true);
+  });
+
+  test('inserting the part draws its model on the board', async ({ page }) => {
+    // The panel's own flow, end to end: click a result so the footprint fetch
+    // carries the model uuid to the engine, insert the part so a component
+    // uses that package, and the 3D view fetches the OBJ for it and replaces
+    // the placeholder mesh. Every piece of this had a test and the sequence
+    // had none, which is how the model came to be handed to the renderer
+    // keyed by an LCSC number that names no mesh.
+    await interceptAPIs(page);
+
+    await page.goto('/');
+    await expect(page.locator('#status-text')).toContainText('Ready', { timeout: 15_000 });
+    await loadBoard(page);
+
+    // The board goes through the editor rather than the load hook, because the
+    // part is inserted into the editor: a snippet added to an empty document
+    // is a component with no board under it, and the 3D view has nothing to
+    // draw on.
+    await page.waitForFunction(() => Boolean((window as any).__editor), { timeout: 10_000 });
+    await page.evaluate((src) => (window as any).__editor?.setValue(src), BOARD_WITH_ROOM);
+    await page.waitForTimeout(600);
+
+    await activate3D(page);
+
+    expect(
+      await page.evaluate(() => (window as any).__renderer3d?.objModelCount ?? 0),
+      'an empty board has no models',
+    ).toBe(0);
+
+    await page.click('#jlcpcb-search-btn');
+    await page.fill('#jlcpcb-search-input', '0805 10k');
+    await expect(page.locator('.jlcpcb-result')).toHaveCount(3, { timeout: 5_000 });
+
+    // Selecting fetches the footprint, which is where the model uuid rides in.
+    await page.locator('.jlcpcb-result').first().click();
+    await page.waitForTimeout(500);
+
+    // Inserting puts the part in the source, so a component finally uses the
+    // package the uuid was filed under.
+    await page.locator('.jlcpcb-result-insert').first().click();
+
+    await page.waitForFunction(
+      () => ((window as any).__renderer3d?.objModelCount ?? 0) >= 1,
+      { timeout: 15_000 },
+    );
   });
 });
