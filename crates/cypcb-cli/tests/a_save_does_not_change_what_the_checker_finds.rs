@@ -316,3 +316,82 @@ fn the_legend_a_footprint_draws_survives_a_save() {
         "the silkscreen a fabricator prints is the same board's:\n{text}"
     );
 }
+
+/// The part an assembly house orders has to survive a save.
+///
+/// `lcsc "C3020"` is the only line on a board that says which part to buy, and
+/// `crates/cypcb-export/src/bom/csv.rs` writes it into the `LCSC Part #`
+/// column. The writer dropped it, so a design saved through here came back
+/// with a bill of materials nobody can order against - and, like the
+/// silkscreen, nothing in the check output moves.
+const ORDERED: &str = r#"version 1
+
+board ordered {
+    size 20mm x 20mm
+    layers 2
+}
+
+component R1 resistor "0402" {
+    value 10kohm
+    at 8mm, 10mm
+    lcsc "C25744"
+}
+
+component C1 capacitor "0402" {
+    value 100nF
+    at 12mm, 10mm
+    lcsc "C1525"
+}
+"#;
+
+/// The bill of materials `export` writes for a board.
+fn bom(board: &Path, into: &Path) -> String {
+    let output = Command::new(env!("CARGO_BIN_EXE_cypcb"))
+        .arg("export")
+        .arg(board)
+        .arg("-o")
+        .arg(into)
+        .current_dir(repo_root())
+        .output()
+        .expect("the binary runs");
+    assert!(
+        output.status.success(),
+        "exporting failed:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let csv = std::fs::read_dir(into.join("assembly"))
+        .expect("the assembly files are there")
+        .filter_map(|entry| entry.ok().map(|e| e.path()))
+        .find(|path| path.to_string_lossy().ends_with("BOM.csv"))
+        .expect("a bill of materials");
+    std::fs::read_to_string(csv).expect("the BOM is readable")
+}
+
+#[test]
+fn the_part_to_buy_survives_a_save() {
+    let dir = std::env::temp_dir().join("cypcb-save-keeps-lcsc");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("a place to work");
+
+    let original = dir.join("ordered.cypcb");
+    std::fs::write(&original, ORDERED).expect("the fixture is writable");
+
+    let before = bom(&original, &dir.join("out-before"));
+    assert!(
+        before.contains("C25744") && before.contains("C1525"),
+        "the fixture only says something if both parts reach the BOM:\n{before}"
+    );
+
+    let saved = saved_from(&original, "saved-ordered.cypcb", &dir);
+    let text = std::fs::read_to_string(&saved).expect("the saved design is there");
+    assert!(
+        text.contains("lcsc \"C25744\""),
+        "the part number is written back:\n{text}"
+    );
+
+    let after = bom(&saved, &dir.join("out-after"));
+    assert_eq!(
+        before, after,
+        "the same board orders the same parts:\n{text}"
+    );
+}

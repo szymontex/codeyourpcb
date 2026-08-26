@@ -718,6 +718,8 @@ pub fn board_as_dsl(world: &mut BoardWorld) -> String {
         rotation: i32,
         on_bottom: bool,
         connections: Option<NetConnections>,
+        /// The catalogue part to buy, when the design named one.
+        lcsc: Option<String>,
     }
     let mut parts: Vec<Part> = {
         let ecs = world.ecs_mut();
@@ -729,11 +731,12 @@ pub fn board_as_dsl(world: &mut BoardWorld) -> String {
             Option<&Value>,
             Option<&NetConnections>,
             Option<&Side>,
+            Option<&crate::components::LcscPart>,
         )>();
         query
             .iter(ecs)
             .map(
-                |(refdes, position, rotation, footprint, value, connections, side)| Part {
+                |(refdes, position, rotation, footprint, value, connections, side, lcsc)| Part {
                     refdes: refdes.0.clone(),
                     footprint: footprint.0.clone(),
                     value: value.map(|v| v.0.clone()).unwrap_or_default(),
@@ -741,6 +744,7 @@ pub fn board_as_dsl(world: &mut BoardWorld) -> String {
                     rotation: rotation.0,
                     on_bottom: matches!(side, Some(Side::Bottom)),
                     connections: connections.cloned(),
+                    lcsc: lcsc.map(|part| part.0.clone()),
                 },
             )
             .collect()
@@ -998,6 +1002,14 @@ pub fn board_as_dsl(world: &mut BoardWorld) -> String {
         }
         if part.on_bottom {
             let _ = writeln!(out, "    side bottom");
+        }
+        // The part to buy. A footprint says what the pads look like and a
+        // value says what is printed on it; neither says which part an
+        // assembly house orders, and the writer dropped the one line that
+        // does - so a design saved through here came back with a bill of
+        // materials whose `LCSC Part #` column is empty.
+        if let Some(part_number) = &part.lcsc {
+            let _ = writeln!(out, "    lcsc {}", quoted(part_number));
         }
         let _ = writeln!(out, "}}");
     }
