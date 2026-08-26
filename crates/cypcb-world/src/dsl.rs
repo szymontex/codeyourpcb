@@ -937,6 +937,36 @@ pub fn board_as_dsl(world: &mut BoardWorld) -> String {
         let _ = writeln!(out, "}}");
     }
 
+    // The pairs that carry one signal between them, after the nets they name.
+    //
+    // `diffpair USB { USB_DP USB_DM }` is what `DiffPairSkewRule` measures,
+    // and unlike a `netclass` it is flattened onto nothing: the world keeps
+    // the pair as its own statement. The writer dropped it, so a board written
+    // out came back with two ordinary nets and a rule with nothing to check -
+    // a rule lost rather than a sentence's brevity, which is what a class
+    // costs.
+    //
+    // A pair whose halves cannot be spelled bare is left out with the rest of
+    // what this writer cannot say: `diffpair` takes identifiers, and a net
+    // called `D+` has no written form here.
+    let pairs: Vec<String> = world
+        .diff_pairs()
+        .iter()
+        .filter(|pair| {
+            is_writable_identifier(&pair.positive.value)
+                && is_writable_identifier(&pair.negative.value)
+        })
+        .map(|pair| {
+            format!(
+                "\ndiffpair {} {{\n    {}\n    {}\n}}\n",
+                pair.name.value, pair.positive.value, pair.negative.value
+            )
+        })
+        .collect();
+    for pair in pairs {
+        out.push_str(&pair);
+    }
+
     // Keepouts and copper pours, after the nets a pour is poured to and before
     // the copper. This block used to write a comment saying "the language has
     // no syntax for one yet", which had stopped being true: `zone_definition`
