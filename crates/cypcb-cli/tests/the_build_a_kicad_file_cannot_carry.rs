@@ -130,3 +130,63 @@ fn the_span_list_is_lost_the_house_is_not() {
     assert_eq!(preset, "jlcpcb_standard_4layer", "{counts:?}");
     assert_eq!(counts.get("via-span").copied(), Some(2), "{counts:?}");
 }
+
+/// The numbers in that project file are read too, and only mentioned when they
+/// disagree with the table the board will be checked against.
+///
+/// `--preset` has written eight constraints into the `.kicad_pro` since it
+/// existed and nothing ever read them back, so a project somebody set up by
+/// hand to a tighter clearance than the house publishes came home saying
+/// nothing about it.
+#[test]
+fn a_project_file_that_states_its_own_rules_is_read() {
+    let dir = scratch("project-rules");
+    let board = dir.join("board.kicad_pcb");
+    let (_, said, ok) = run(&[
+        "to-kicad",
+        "examples/blind-via.cypcb",
+        "-o",
+        board.to_str().expect("a path"),
+    ]);
+    assert!(ok, "writing the KiCad board failed:\n{said}");
+
+    // As written, the project file states the house's own numbers, so there is
+    // nothing to report and the command stays quiet about them.
+    let quiet = dir.join("quiet.cypcb");
+    let (_, said, ok) = run(&[
+        "from-kicad",
+        board.to_str().expect("a path"),
+        "-o",
+        quiet.to_str().expect("a path"),
+    ]);
+    assert!(ok, "reading the board back failed:\n{said}");
+    assert!(
+        !said.contains("states rules this language cannot"),
+        "a project file agreeing with the table is not news:\n{said}"
+    );
+
+    // Somebody tightens the clearance by hand, the way a person does when a
+    // board is going to a house's advanced process.
+    let project = board.with_extension("kicad_pro");
+    let text = std::fs::read_to_string(&project).expect("the project file is there");
+    let tightened = text.replace("\"min_clearance\": 0.1", "\"min_clearance\": 0.09");
+    assert_ne!(tightened, text, "the fixture states a clearance to change");
+    std::fs::write(&project, tightened).expect("the project file is writable");
+
+    let back = dir.join("back.cypcb");
+    let (_, said, ok) = run(&[
+        "from-kicad",
+        board.to_str().expect("a path"),
+        "-o",
+        back.to_str().expect("a path"),
+    ]);
+    assert!(ok, "reading the board back failed:\n{said}");
+    assert!(
+        said.contains("minimum clearance 0.090mm against 0.100mm"),
+        "the figure somebody set and the figure the board is checked against:\n{said}"
+    );
+    assert!(
+        said.contains("pcbway_standard"),
+        "and which table that is:\n{said}"
+    );
+}

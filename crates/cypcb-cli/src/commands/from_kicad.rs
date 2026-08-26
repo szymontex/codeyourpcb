@@ -3,6 +3,7 @@
 use std::path::PathBuf;
 
 use clap::Args;
+use cypcb_drc::PresetRules;
 use miette::{IntoDiagnostic, Result, WrapErr};
 
 /// Write a KiCad `.kicad_pcb` board out as a `.cypcb` design.
@@ -58,6 +59,59 @@ impl FromKicadCommand {
                         project.display()
                     );
                     world.set_fab(cypcb_world::components::Fab(fab));
+                }
+            }
+        }
+
+        // The rest of that project file: eight numbers KiCad enforces, which
+        // this language has no way to state. A board names a fab and a net
+        // states its own figures; nothing writes a rule table per board. So
+        // the numbers are read, compared against the table this design will
+        // actually be checked against, and the ones that disagree are named -
+        // a project set up by hand to a tighter clearance than its house
+        // publishes is a fact about the board, and dropping it silently is how
+        // the fab used to be lost.
+        {
+            let project = self.file.with_extension("kicad_pro");
+            if let Some(stated) = std::fs::read_to_string(&project)
+                .ok()
+                .and_then(|text| cypcb_kicad::rules_of_project(&text))
+            {
+                let preset = crate::preset_choice::resolve(None, &world)?;
+                let table = preset.rules();
+                let checked = |name: &str| -> Option<cypcb_core::Nm> {
+                    match name {
+                        "minimum clearance" => Some(table.min_clearance),
+                        "minimum track width" => Some(table.min_trace_width),
+                        "minimum via diameter" => Some(table.min_via_diameter),
+                        "minimum drill" => Some(table.min_drill_size),
+                        "minimum hole to hole" => Some(table.min_hole_to_hole),
+                        "minimum edge clearance" => Some(table.min_edge_clearance),
+                        "minimum silkscreen clearance" => Some(table.min_silk_clearance),
+                        "minimum annular ring" => Some(table.min_annular_ring),
+                        _ => None,
+                    }
+                };
+                let mut differing: Vec<String> = Vec::new();
+                for (name, value) in stated.named() {
+                    let Some(ours) = checked(name) else { continue };
+                    if value != ours {
+                        differing.push(format!(
+                            "{name} {:.3}mm against {:.3}mm",
+                            value.to_mm(),
+                            ours.to_mm()
+                        ));
+                    }
+                }
+                if !differing.is_empty() {
+                    eprintln!(
+                        "Warning: {} states rules this language cannot ({}): a board names a \
+                         fab and a net states its own figures, so the design is checked against \
+                         {} instead.",
+                        project.display(),
+                        differing.join(", "),
+                        preset.name()
+                    );
                 }
             }
         }

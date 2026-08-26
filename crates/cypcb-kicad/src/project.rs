@@ -82,6 +82,68 @@ pub fn fab_of_project(text: &str) -> Option<String> {
         .map(|name| name.to_string())
 }
 
+/// The design rules a `.kicad_pro` states, in nanometres.
+///
+/// Every field is optional because a project file states what somebody set:
+/// KiCad writes the keys it knows and a person editing one by hand may leave
+/// any of them out.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct ProjectRules {
+    pub clearance: Option<Nm>,
+    pub track_width: Option<Nm>,
+    pub via_diameter: Option<Nm>,
+    pub drill_size: Option<Nm>,
+    pub hole_to_hole: Option<Nm>,
+    pub edge_clearance: Option<Nm>,
+    pub silk_clearance: Option<Nm>,
+    pub annular_ring: Option<Nm>,
+}
+
+impl ProjectRules {
+    /// Each rule with the name a person reads, in the order KiCad writes them.
+    pub fn named(&self) -> Vec<(&'static str, Nm)> {
+        [
+            ("minimum clearance", self.clearance),
+            ("minimum track width", self.track_width),
+            ("minimum via diameter", self.via_diameter),
+            ("minimum drill", self.drill_size),
+            ("minimum hole to hole", self.hole_to_hole),
+            ("minimum edge clearance", self.edge_clearance),
+            ("minimum silkscreen clearance", self.silk_clearance),
+            ("minimum annular ring", self.annular_ring),
+        ]
+        .into_iter()
+        .filter_map(|(name, value)| value.map(|value| (name, value)))
+        .collect()
+    }
+}
+
+/// The rules a `.kicad_pro` states, whoever wrote it.
+///
+/// `board.design_settings.rules` is where KiCad keeps what its design rule
+/// check enforces, and it is the half of a project file this language has no
+/// way to say: a board states a fab and a net states its own figures, and
+/// neither is a rule table written out per board.
+pub fn rules_of_project(text: &str) -> Option<ProjectRules> {
+    let value: serde_json::Value = serde_json::from_str(text).ok()?;
+    let rules = value.get("board")?.get("design_settings")?.get("rules")?;
+    let read = |key: &str| -> Option<Nm> {
+        let mm = rules.get(key)?.as_f64()?;
+        (mm.is_finite() && mm >= 0.0).then(|| Nm::from_mm(mm))
+    };
+    let found = ProjectRules {
+        clearance: read("min_clearance"),
+        track_width: read("min_track_width"),
+        via_diameter: read("min_via_diameter"),
+        drill_size: read("min_through_hole_diameter"),
+        hole_to_hole: read("min_hole_to_hole"),
+        edge_clearance: read("min_copper_edge_clearance"),
+        silk_clearance: read("min_silk_clearance"),
+        annular_ring: read("min_via_annular_width"),
+    };
+    (found != ProjectRules::default()).then_some(found)
+}
+
 pub fn write_project(rules: KicadDesignRules, stem: &str, fab: Option<&str>) -> String {
     format!(
         r#"{{
@@ -212,5 +274,19 @@ mod tests {
             serde_json::from_str::<serde_json::Value>(&text)
                 .unwrap_or_else(|error| panic!("the project file is JSON: {error}\n{text}"));
         }
+    }
+
+    /// The rules come back out of the file they were written into.
+    #[test]
+    fn the_numbers_are_read_back() {
+        let text = write_project(jlcpcb_shaped(), "board", None);
+        let read = rules_of_project(&text).expect("the file states rules");
+        assert_eq!(read.clearance, Some(jlcpcb_shaped().clearance));
+        assert_eq!(read.annular_ring, Some(jlcpcb_shaped().annular_ring));
+        assert_eq!(read.named().len(), 8, "{read:?}");
+
+        // A file with no rules section, and one that is not JSON at all.
+        assert_eq!(rules_of_project("{\"board\": {}}"), None);
+        assert_eq!(rules_of_project("not json"), None);
     }
 }
