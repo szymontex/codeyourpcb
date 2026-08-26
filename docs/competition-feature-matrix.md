@@ -2,7 +2,7 @@
 
 **CodeYourPCB vs. 9 EDA Tools — Comprehensive Feature Comparison**
 
-*Last updated: 2026-03-13*
+*Last updated: 2026-08-26. The CodeYourPCB column is measured; see **Verification** at the foot of this file. The other nine columns are read from vendor documentation and are not re-checked here.*
 
 ---
 
@@ -14,15 +14,15 @@ CodeYourPCB occupies a unique niche: **the only code-first, standalone, browser-
 - 🚀 Fully standalone — no KiCad dependency
 - 🚀 Browser-native (WASM) + Tauri desktop, zero install
 - 🚀 Integrated code editor (Monaco) + live PCB preview
-- 🚀 Built-in autorouter (FreeRouting integration)
+- 🚀 Built-in autorouter - an in-house grid A*, no Java to install (FreeRouting stays available through DSN/SES)
 - 🚀 Share-by-URL for instant collaboration
 
 **Our biggest gaps (honest assessment):**
 - ❌ No constraint solver / component auto-selection
 - ❌ No SPICE simulation
 - ❌ No package registry / community ecosystem
-- ❌ Limited component library (no LCSC/Mouser integration)
-- ❌ DSL lacks modules, typed interfaces, physical units (v2 in progress)
+- ❌ Limited component library - an LCSC part number written on a component reaches the BOM, but nothing resolves a part number to a footprint
+- ❌ No STEP or 3D model export, no IPC-2581, no ODB++
 - ❌ No real-time multi-user collaboration
 - ❌ No schematic capture (code-only entry)
 
@@ -51,10 +51,10 @@ CodeYourPCB occupies a unique niche: **the only code-first, standalone, browser-
 |---------|:-----------:|:-------:|:------------:|:-----:|:------:|:-------:|:-----:|:-----:|:-------:|:-------:|
 | Code-based design entry | ✅ `.cypcb` DSL | ✅ `.ato` language | ✅ `.zen` (Starlark) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | 🔶 AI prompts |
 | GUI schematic capture | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Module / hierarchy system | 🔶 v2 in progress | ✅ Full inheritance | ✅ Modules + imports | ✅ Hierarchical sheets | ✅ Multi-sheet | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Typed interfaces (I2C, SPI) | 🔶 v2 in progress | ✅ First-class types | ✅ Typed nets | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| Physical units in DSL | ❌ Strings only | ✅ `10kohm`, `3.3V` | ✅ `1kohm`, `0402` | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| Constraint assertions | 🔶 v2 in progress | ✅ `assert within` | ✅ Checks + properties | ✅ Custom DRC rules | ✅ Constraint manager | ✅ ECSets | ✅ | 🔶 | 🔶 | 🔶 |
+| Module / hierarchy system | ✅ `module` + `use` | ✅ Full inheritance | ✅ Modules + imports | ✅ Hierarchical sheets | ✅ Multi-sheet | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Typed interfaces (I2C, SPI) | ✅ `interface`, enforced | ✅ First-class types | ✅ Typed nets | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Physical units in DSL | ✅ mm, mil, oz | ✅ `10kohm`, `3.3V` | ✅ `1kohm`, `0402` | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| Constraint assertions | ✅ `assert` | ✅ `assert within` | ✅ Checks + properties | ✅ Custom DRC rules | ✅ Constraint manager | ✅ ECSets | ✅ | 🔶 | 🔶 | 🔶 |
 | LSP / IDE support | ✅ Full LSP | ✅ VS Code extension | ✅ Starlark LSP | ❌ | ❌ | ❌ | ❌ | ❌ | N/A | N/A |
 | Embedded code editor | ✅ Monaco | ❌ (VS Code extension) | ❌ (CLI) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 
@@ -71,10 +71,10 @@ CodeYourPCB occupies a unique niche: **the only code-first, standalone, browser-
 | Interactive trace routing | 🔶 Click-to-route | ❌ (KiCad) | ❌ (KiCad) | ✅ Push & shove | ✅ Push & shove | ✅ Advanced | ✅ | ✅ | ✅ Push & shove | ✅ AI + manual |
 | Ratsnest display | ✅ | ❌ (KiCad) | ❌ (KiCad) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Layer visibility toggle | ✅ | N/A | N/A | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Copper pour / zones | ❌ | ❌ (KiCad) | ❌ (KiCad) | ✅ Zone manager | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Copper pour / zones | ✅ `zone`, islands flagged | ❌ (KiCad) | ❌ (KiCad) | ✅ Zone manager | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Differential pair routing | ❌ | ❌ (KiCad) | ❌ | ✅ | ✅ | ✅ | 🔶 Pro only | ✅ | 🔶 Pro only | ✅ |
-| Length matching | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | 🔶 |
-| Multi-layer support | ✅ 2-layer | ❌ (KiCad) | ❌ (KiCad) | ✅ Up to 32 | ✅ Up to 64 | ✅ Unlimited | ✅ Up to 32 | ✅ Up to 16 | ✅ Up to 34 | ✅ Up to 8 |
+| Length matching | 🔶 Diff-pair skew checked | ❌ | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | 🔶 |
+| Multi-layer support | ✅ 2 and 4-layer, blind/buried | ❌ (KiCad) | ❌ (KiCad) | ✅ Up to 32 | ✅ Up to 64 | ✅ Unlimited | ✅ Up to 32 | ✅ Up to 16 | ✅ Up to 34 | ✅ Up to 8 |
 
 **Parity assessment:** Our interactive editing is functional but minimal compared to mature GUI tools. We're code-first by design — interactive routing is supplementary. The key gap is copper pour/zones and differential pair routing.
 
@@ -84,7 +84,7 @@ CodeYourPCB occupies a unique niche: **the only code-first, standalone, browser-
 
 | Feature | CodeYourPCB | atopile | diodeinc/pcb | KiCad | Altium | Allegro | OrCAD | EAGLE | EasyEDA | Flux.ai |
 |---------|:-----------:|:-------:|:------------:|:-----:|:------:|:-------:|:-----:|:-----:|:-------:|:-------:|
-| Built-in autorouter | ✅ FreeRouting (DSN/SES) | ❌ | ❌ | 🔶 External only | ✅ ActiveRoute | ✅ | ❌ Standard | ✅ | ✅ | ✅ AI auto-layout |
+| Built-in autorouter | ✅ In-house A* (FreeRouting optional) | ❌ | ❌ | 🔶 External only | ✅ ActiveRoute | ✅ | ❌ Standard | ✅ | ✅ | ✅ AI auto-layout |
 | Grid-based pathfinding | ✅ A* with cost model | N/A | N/A | N/A | ✅ | ✅ | N/A | ✅ | ✅ | ✅ ML-based |
 | Signal class awareness | ✅ | N/A | N/A | ✅ Net classes | ✅ Net classes | ✅ ECSets | ✅ | 🔶 | 🔶 | ✅ |
 | Post-route optimization | ✅ Via minimization | N/A | N/A | ❌ | ✅ | ✅ | ❌ | 🔶 | 🔶 | ✅ |
@@ -149,7 +149,7 @@ CodeYourPCB occupies a unique niche: **the only code-first, standalone, browser-
 |---------|:-----------:|:-------:|:------------:|:-----:|:------:|:-------:|:-----:|:-----:|:-------:|:-------:|
 | Built-in component library | 🔶 Basic footprints | ✅ Package registry | ✅ Stdlib + API | ✅ Thousands | ✅ Octopart/Vault | ✅ | ✅ | ✅ | ✅ 700K+ | ✅ 750K+ |
 | Community package registry | ❌ | ✅ packages.atopile.io | ❌ | ✅ KiCad libraries | ✅ Altium 365 | ❌ | ❌ | ❌ | ✅ OSHWLab | ✅ Community |
-| LCSC/Mouser integration | ❌ | ✅ LCSC auto-pick | ✅ Diode API | ❌ | ✅ Octopart | ❌ | ❌ | ❌ | ✅ LCSC + JLCPCB | ✅ Multi-supplier |
+| LCSC/Mouser integration | 🔶 LCSC part in the BOM | ✅ LCSC auto-pick | ✅ Diode API | ❌ | ✅ Octopart | ❌ | ❌ | ❌ | ✅ LCSC + JLCPCB | ✅ Multi-supplier |
 | Custom footprint creation | ✅ Code-defined | ✅ | ✅ | ✅ GUI editor | ✅ IPC wizard | ✅ | ✅ | ✅ | ✅ | ✅ |
 | 3D model assignment | ❌ | ❌ | ❌ | ✅ STEP/VRML | ✅ | ✅ | ❌ | 🔶 | ✅ | ✅ |
 
@@ -277,3 +277,24 @@ Legend: 🚀 = CodeYourPCB advantage | ✅ = parity | 🔶 = partial | ❌ = com
 - **Commercial tools** (Altium, Allegro, OrCAD, EAGLE): Analyzed from official feature pages, documentation, release notes, and industry reviews.
 - **CodeYourPCB**: Audited from actual crate structure, viewer source, DSL examples, and WASM API surface.
 - **Honesty policy**: Features are marked as present only if they are implemented and functional, not planned or stubbed.
+
+---
+
+## Verification
+
+The CodeYourPCB column is the only one this repository can measure, and every
+claim in it that changed on 2026-08-26 was changed against a command. The rows
+about the language are guarded by
+`cargo test -p cypcb-cli --test the_matrix_is_honest_about_us`, which fails if
+a cell is downgraded or if the construct behind it stops working.
+
+| Claim | Command |
+|---|---|
+| modules, interfaces, assertions, pours | `./target/release/cypcb check examples/{v2-modules,v2-interfaces,v2-constraints,pour-island}.cypcb` |
+| physical units | `crates/cypcb-parser/src/reader.rs` reads `mm`, `mil` and `oz`; a bare number is millimetres |
+| 4-layer boards | `examples/four-layer.cypcb`, `examples/blind-via.cypcb`, `tests/fixtures/benchmark/multi_ic.kicad_pcb` |
+| in-house autorouter | `./target/release/cypcb route --help` - `--in-house` is what a run does anyway; D1 closed on 2026-08-09 in favour of it |
+| LCSC in the BOM | `crates/cypcb-export/src/bom/csv.rs` writes the `LCSC Part #` column |
+| what export does **not** write | `./target/release/cypcb export --dry-run examples/blink.cypcb` - Gerber, Excellon, BOM, CPL and a job file, and nothing else |
+
+Last verified: 2026-08-26.
