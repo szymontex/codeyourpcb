@@ -81,6 +81,19 @@ enum Commands {
     ParseKicad(commands::ParseKicadCommand),
 
     /// Write a KiCad .kicad_pcb board out as a .cypcb design
+    ///
+    /// A `.kicad_pro` beside the board is read when there is one. A
+    /// `.kicad_pcb` has no field for the fabricator a board was written for or
+    /// for what a net asks of a trace, so `to-kicad` puts both in the project
+    /// file under a key of this project's own and this reads them back - keep
+    /// the pair together or the design comes home graded against the default
+    /// table with its nets asking for nothing.
+    ///
+    /// The rules that project file states - the eight numbers KiCad enforces -
+    /// are read too and compared against the table this design will be checked
+    /// against; the ones that disagree are named, because this language states
+    /// rules per fab and per net rather than per board. A project file KiCad
+    /// wrote has no such key and is read for those numbers alone.
     FromKicad(commands::FromKicadCommand),
     /// Route a .cypcb or .kicad_pcb board and print quality metrics as JSON
     Score(commands::ScoreCommand),

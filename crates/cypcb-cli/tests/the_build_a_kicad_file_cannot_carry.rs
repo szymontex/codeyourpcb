@@ -294,3 +294,44 @@ fn what_a_net_asks_for_survives_the_trip() {
     let (_, counts) = checked(&orphan);
     assert_eq!(counts.get("trace-width").copied(), None, "{counts:?}");
 }
+
+/// The command's help says it reads the project file beside the board.
+///
+/// Everything above depends on that pairing - the house, what each net asks
+/// for, and the rules a project states - and none of it was mentioned where
+/// somebody meets the command. A design read without its `.kicad_pro` is a
+/// different board, and the only warning of that was in this file.
+#[test]
+fn the_help_says_the_project_file_is_read() {
+    let (help, _, ok) = run(&["from-kicad", "--help"]);
+    assert!(ok, "the help prints");
+    for named in [".kicad_pro", "keep the pair together", "rules"] {
+        assert!(
+            help.contains(named),
+            "the help has to say `{named}`:\n{help}"
+        );
+    }
+
+    // And the command really does it: the house comes back through the pair.
+    let dir = scratch("help-and-behaviour");
+    let board = dir.join("board.kicad_pcb");
+    let (_, said, ok) = run(&[
+        "to-kicad",
+        "examples/blind-via.cypcb",
+        "-o",
+        board.to_str().expect("a path"),
+    ]);
+    assert!(ok, "writing the board failed:\n{said}");
+    let back = dir.join("back.cypcb");
+    let (_, said, ok) = run(&[
+        "from-kicad",
+        board.to_str().expect("a path"),
+        "-o",
+        back.to_str().expect("a path"),
+    ]);
+    assert!(ok, "reading it back failed:\n{said}");
+    assert!(
+        said.contains("The house comes from"),
+        "the pairing the help describes is the pairing the command performs:\n{said}"
+    );
+}
