@@ -107,12 +107,6 @@ impl Default for ScoreWeights {
     }
 }
 
-/// Configuration for the scoring system.
-#[derive(Debug, Clone, Default)]
-pub struct ScoringConfig {
-    pub weights: ScoreWeights,
-}
-
 /// Score a routed board on all 7 metrics.
 ///
 /// Queries ECS entities for traces and vias, runs DRC, computes smoothness,
