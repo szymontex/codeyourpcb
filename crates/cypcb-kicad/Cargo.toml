@@ -10,6 +10,9 @@ cypcb-core = { path = "../cypcb-core" }
 cypcb-world = { path = "../cypcb-world", default-features = false }
 cypcb-router = { path = "../cypcb-router" }
 serde = { workspace = true }
+# The project file this crate writes beside a board is JSON, and the house's
+# name rides in it under a key of this project's own.
+serde_json = { workspace = true }
 kicad_parse_gen = "0.7"
 symbolic_expressions = "0.4"
 thiserror.workspace = true

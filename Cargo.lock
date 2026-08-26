@@ -1117,6 +1117,7 @@ dependencies = [
  "cypcb-world",
  "kicad_parse_gen",
  "serde",
+ "serde_json",
  "symbolic_expressions",
  "tempfile",
  "thiserror 2.0.18",

@@ -297,14 +297,17 @@ fn the_trip_costs_exactly_these_three_things() {
         assert!(source.contains(kept), "the trip lost `{kept}`:\n{source}");
     }
 
-    // And what it costs. Three statements, each with a rule behind it.
+    // And what it costs. Two statements now, each with a rule behind it: the
+    // house used to be the third, and it rides in the `.kicad_pro` written
+    // beside the board since 2026-08-26, so it comes back when the pair stays
+    // together - which it does here, both files in one directory.
     assert!(
         !source.contains("drill Top"),
         "the drill spans came back, so the warning about them is stale:\n{source}"
     );
     assert!(
-        !source.contains("fab "),
-        "the fabricator came back, so the warning about it is stale:\n{source}"
+        source.contains("fab "),
+        "the house travels in the project file beside the board:\n{source}"
     );
     assert!(
         !source.contains('['),

@@ -8,10 +8,12 @@
 //! are announced when the file is written, and both sentences make a claim
 //! about what happens next. Nothing checked either claim.
 //!
-//! Measured here end to end: the board comes back refused by a table that
-//! does not drill blind vias, and passes again the moment its fab is restored
-//! by hand - which is what "allows every span" means, because the list it
-//! would have been held to is gone with the rest of the build.
+//! Measured here end to end. The span list really is gone, and the house is
+//! not: `to-kicad` writes the name into the `.kicad_pro` beside the board and
+//! `from-kicad` reads it back, so the board comes home to its own table and
+//! passes. Separate the pair - read the board with no project file beside it -
+//! and the cost of losing a house shows: graded against the default table, the
+//! two blind vias it was written for are refused.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -62,7 +64,7 @@ fn checked(board: &Path) -> (String, BTreeMap<String, usize>) {
 }
 
 #[test]
-fn the_two_losses_are_announced_and_they_are_real() {
+fn the_span_list_is_lost_the_house_is_not() {
     let dir = scratch("blind-via");
     let board = dir.join("board.kicad_pcb");
 
@@ -82,7 +84,8 @@ fn the_two_losses_are_announced_and_they_are_real() {
         "so is the fabricator whose table the board is graded against:\n{said}"
     );
 
-    // Back again. Neither the build nor the house survives the trip.
+    // Back again. The build's span list is gone with the file that could not
+    // carry it; the house is not, because it rides in the project file.
     let back = dir.join("back.cypcb");
     let (_, said, ok) = run(&[
         "from-kicad",
@@ -91,32 +94,39 @@ fn the_two_losses_are_announced_and_they_are_real() {
         back.to_str().expect("a path"),
     ]);
     assert!(ok, "reading the KiCad board back failed:\n{said}");
+    assert!(
+        said.contains("checked against pcbway"),
+        "the command says where the house came from:\n{said}"
+    );
     let design = std::fs::read_to_string(&back).expect("the design was written");
     assert!(
-        !design.contains("drill Top") && !design.contains("fab "),
-        "the trip drops both, which is what the warnings say:\n{design}"
+        !design.contains("drill Top"),
+        "the span list does not survive the trip:\n{design}"
     );
+    assert!(design.contains("fab pcbway"), "the house does:\n{design}");
 
-    // What that costs: the default table does not drill blind vias, and the
-    // board has two of them.
+    // So the board comes home to its own table and passes: the span list is
+    // gone, and with a house that drills blind vias there is nothing to hold
+    // them to - which is what the first warning claims.
     let (preset, counts) = checked(&back);
+    assert_eq!(preset, "pcbway_standard", "{counts:?}");
+    assert!(counts.is_empty(), "{counts:?}");
+
+    // Separate the pair and the cost shows. A board read without the project
+    // file beside it is graded against the default table, which does not drill
+    // blind vias, and the board has two.
+    let alone_dir = scratch("blind-via-alone");
+    let alone = alone_dir.join("alone.kicad_pcb");
+    std::fs::copy(&board, &alone).expect("the board is copyable");
+    let orphan = alone_dir.join("orphan.cypcb");
+    let (_, said, ok) = run(&[
+        "from-kicad",
+        alone.to_str().expect("a path"),
+        "-o",
+        orphan.to_str().expect("a path"),
+    ]);
+    assert!(ok, "reading the lone board failed:\n{said}");
+    let (preset, counts) = checked(&orphan);
     assert_eq!(preset, "jlcpcb_standard_4layer", "{counts:?}");
     assert_eq!(counts.get("via-span").copied(), Some(2), "{counts:?}");
-
-    // And what it does not cost. Put the house back by hand and the board
-    // passes: the span list is gone, so nothing holds the vias to it - which
-    // is the claim the first warning makes.
-    let restored = dir.join("restored.cypcb");
-    std::fs::write(
-        &restored,
-        design.replacen("layers 4", "layers 4\n    fab pcbway", 1),
-    )
-    .expect("the fixture is writable");
-    let (preset, counts) = checked(&restored);
-    assert_eq!(preset, "pcbway_standard");
-    assert!(
-        counts.is_empty(),
-        "a house that drills blind vias and a design with no span list of its \
-         own leaves nothing to refuse: {counts:?}"
-    );
 }

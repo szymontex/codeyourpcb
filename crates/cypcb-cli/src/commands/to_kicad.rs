@@ -176,7 +176,9 @@ impl ToKicadCommand {
         if let Some(fab) = world.fab() {
             eprintln!(
                 "Warning: the fabricator this design names ({fab}) is not in the KiCad board: \
-                 a board read back from this file is checked against the default table."
+                 the format has no field for it. The name is written into the `.kicad_pro` \
+                 beside the board instead, so `from-kicad` finds it there - keep the pair \
+                 together, and a board read without it is checked against the default table."
             );
         }
 
@@ -235,7 +237,7 @@ impl ToKicadCommand {
                 .file_stem()
                 .and_then(|stem| stem.to_str())
                 .unwrap_or("board");
-            let text = cypcb_kicad::write_project(rules, stem);
+            let text = cypcb_kicad::write_project(rules, stem, world.fab());
             std::fs::write(&project, &text)
                 .into_diagnostic()
                 .wrap_err_with(|| format!("Failed to write {}", project.display()))?;

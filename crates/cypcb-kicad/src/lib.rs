@@ -37,4 +37,4 @@ pub use pcb_parser::{
     parse_kicad_pcb, parse_kicad_pcb_str, BenchmarkComplexity, KicadBenchmark, KicadPcbError,
     KicadPcbMetadata, KicadPcbParseResult, BENCHMARKS,
 };
-pub use project::write_project;
+pub use project::{fab_of_project, write_project};

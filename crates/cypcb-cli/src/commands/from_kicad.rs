@@ -41,6 +41,27 @@ impl FromKicadCommand {
             cypcb_router::apply_routes(&mut world, &routes);
         }
 
+        // The house the board was written for, out of the project file beside
+        // it. A `.kicad_pcb` has no field for a fabricator, so `to-kicad` puts
+        // the name in the `.kicad_pro` it writes; without reading it back, a
+        // blind-via board came home graded against the default table and
+        // reported two `via-span` violations for holes its own house drills.
+        //
+        // Silent when there is no project file, when it is not ours, or when
+        // it names nothing: each of those is a board that named no house.
+        if world.fab().is_none() {
+            let project = self.file.with_extension("kicad_pro");
+            if let Ok(text) = std::fs::read_to_string(&project) {
+                if let Some(fab) = cypcb_kicad::fab_of_project(&text) {
+                    eprintln!(
+                        "The house comes from {}: this board is checked against {fab}.",
+                        project.display()
+                    );
+                    world.set_fab(cypcb_world::components::Fab(fab));
+                }
+            }
+        }
+
         let source = cypcb_world::dsl::board_as_dsl(&mut world);
 
         let output = self
