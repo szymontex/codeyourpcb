@@ -46,6 +46,47 @@ trace A {
 }
 "#;
 
+/// A board with faults of four different depths, in an order the registry
+/// does not rank: the trace is 0.100mm against a 0.127mm floor, which is a
+/// milder fault than a 0.05mm drill against 0.3mm, and the registry emits the
+/// trace first.
+const RANKED: &str = r#"version 1
+
+footprint TINY_DRILL {
+    description "two holes narrower than the house drills"
+    courtyard 4mm x 4mm
+    pad 1 circle at 0mm, 0mm size 1.6mm x 1.6mm drill 0.05mm
+    pad 2 circle at 2.54mm, 0mm size 1.6mm x 1.6mm drill 0.05mm
+}
+
+board ranked {
+    size 30mm x 30mm
+    layers 2
+}
+
+component J1 connector "TINY_DRILL" {
+    value "header"
+    at 5mm, 10mm
+}
+
+component J2 connector "TINY_DRILL" {
+    value "header"
+    at 25mm, 10mm
+}
+
+net A {
+    J1.1
+    J2.1
+}
+
+trace A {
+    from J1.1
+    to J2.1
+    layer Top
+    width 0.10mm
+}
+"#;
+
 fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -171,4 +212,64 @@ fn the_report_for_a_person_is_untouched() {
         "the sentence a person reads is unchanged:\n{said}"
     );
     assert_eq!(output.status.code(), Some(1));
+}
+
+#[test]
+fn the_worst_fault_is_the_first_row() {
+    let file = board("ranked", RANKED);
+    let output = check(&["-o", "json", file.to_str().expect("a path")]);
+    let report = report(&output);
+    let rows = report["violations"].as_array().expect("a list of rows");
+
+    let kinds: Vec<&str> = rows
+        .iter()
+        .map(|row| row["kind"].as_str().expect("every row names its rule"))
+        .collect();
+
+    // Copper touching copper measures nothing at all, so it is the deepest
+    // fault on the board whatever rule the registry ran first.
+    assert_eq!(kinds[0], "clearance", "{kinds:?}");
+
+    // The discriminator: unsorted, the 0.100mm trace comes out above the
+    // 0.05mm drills, and it is the milder fault of the two.
+    let first_drill = kinds
+        .iter()
+        .position(|kind| *kind == "drill-size")
+        .expect("the drills are too small to make");
+    let width = kinds
+        .iter()
+        .position(|kind| *kind == "trace-width")
+        .expect("the trace is under the floor");
+    assert!(
+        first_drill < width,
+        "a 0.05mm drill against 0.3mm is deeper than 0.100mm against 0.127mm: {kinds:?}"
+    );
+
+    // How far under its rule each row is, as the report itself states it.
+    let depth = |row: &serde_json::Value| -> Option<f64> {
+        let actual = row["actual_mm"].as_f64()?;
+        let required = row["required_mm"].as_f64()?;
+        (required > 0.0).then(|| (required - actual) / required)
+    };
+    let measured: Vec<f64> = rows.iter().filter_map(depth).collect();
+    assert!(
+        measured.len() >= 4,
+        "this board has faults of several depths: {kinds:?}"
+    );
+    assert!(
+        measured.windows(2).all(|pair| pair[0] >= pair[1] - 1e-9),
+        "the rows run deepest first: {measured:?}"
+    );
+
+    // A fault with no distance in it - a pin nothing reaches - sorts to the
+    // end rather than among the ones that were measured.
+    let unmeasured = rows.iter().filter(|row| depth(row).is_none()).count();
+    assert_eq!(unmeasured, 2, "two pins are unconnected: {kinds:?}");
+    assert!(
+        rows.iter()
+            .rev()
+            .take(unmeasured)
+            .all(|row| depth(row).is_none()),
+        "the unmeasured rows are the last ones: {kinds:?}"
+    );
 }

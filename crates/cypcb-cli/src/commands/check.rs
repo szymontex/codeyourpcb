@@ -219,8 +219,26 @@ impl CheckCommand {
         // read and the wrong thing to count against.
         if self.output == ReportFormat::Json {
             let mut summary: BTreeMap<String, usize> = BTreeMap::new();
-            let violations: Vec<serde_json::Value> = drc
-                .violations
+
+            // Worst first, so a job reading the file finds the board's real
+            // problem at the top rather than whichever rule the registry ran
+            // first. The order is by how far under its rule each row is, as a
+            // fraction of what the rule asked for: a short measures nothing at
+            // all and comes out 1.0, a 0.100mm trace against a 0.127mm floor
+            // 0.213. Rules that measure no distance - an unrouted pin, an
+            // assertion - keep their order at the end, because a number
+            // invented for them would sort them among the ones that have one.
+            let mut ranked: Vec<&cypcb_drc::DrcViolation> = drc.violations.iter().collect();
+            ranked.sort_by(|left, right| {
+                let key = |violation: &cypcb_drc::DrcViolation| {
+                    cypcb_drc::shortfall(violation).unwrap_or(-1.0)
+                };
+                key(right)
+                    .partial_cmp(&key(left))
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
+
+            let violations: Vec<serde_json::Value> = ranked
                 .iter()
                 .map(|violation| {
                     *summary.entry(violation.kind.to_string()).or_insert(0) += 1;

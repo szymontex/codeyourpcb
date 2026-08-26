@@ -147,6 +147,26 @@ pub fn clearance_contacts(violations: &[DrcViolation]) -> usize {
     seen.len()
 }
 
+/// How far under its rule a violation is, as a fraction of what the rule asked
+/// for.
+///
+/// A short is 1.0 - the copper measured nothing at all - and a trace 0.100mm
+/// wide against a 0.127mm floor is 0.213. The fraction rather than the
+/// difference, because the difference ranks a 0.300mm miss on a 0.500mm net
+/// above a short on a 0.127mm rule, and a short is the worse board every time.
+///
+/// `None` where the rule measures nothing: an unrouted pin and an assertion
+/// are faults with no distance in them, and a number invented for them here
+/// would sort them among the ones that have one.
+pub fn shortfall(violation: &DrcViolation) -> Option<f64> {
+    let (actual, required) = (violation.actual?, violation.required?);
+    if required <= Nm::ZERO {
+        return None;
+    }
+    let missing = (required.raw() - actual.raw()) as f64 / required.raw() as f64;
+    Some(missing.clamp(0.0, 1.0))
+}
+
 /// Copper touching copper, counted.
 ///
 /// Three call sites counted this as "any violation whose measured distance is

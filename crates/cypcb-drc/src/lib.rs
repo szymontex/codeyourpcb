@@ -48,7 +48,7 @@ pub use presets::{DesignRules, Preset, PresetRules};
 /// same question with the same arithmetic.
 pub use rules::impedance::width_for as impedance_width_for;
 pub use rules::DrcRule;
-pub use violation::{clearance_contacts, pair_of, shorts, DrcViolation, ViolationKind};
+pub use violation::{clearance_contacts, pair_of, shortfall, shorts, DrcViolation, ViolationKind};
 
 use cypcb_world::BoardWorld;
 
