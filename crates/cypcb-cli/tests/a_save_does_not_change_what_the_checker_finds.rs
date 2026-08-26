@@ -155,3 +155,87 @@ fn a_value_that_is_not_a_quantity_stays_a_string() {
     // loudly on a design the binary cannot parse.
     assert_eq!(checked(&saved), before);
 }
+
+/// Every example that reads at all, through the writer and back.
+///
+/// Three of them were compared when this file was written and the repository
+/// has twenty-five. The two that exist to fail - `invalid.cypcb` and
+/// `unknown_keyword.cypcb` - are skipped by the parse rather than by a list,
+/// so a third one cannot join them quietly.
+#[test]
+fn every_example_survives_a_save() {
+    let dir = std::env::temp_dir().join("cypcb-save-every-example");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("a place to work");
+
+    let mut files: Vec<PathBuf> = std::fs::read_dir(repo_root().join("examples"))
+        .expect("the examples are there")
+        .filter_map(|entry| entry.ok().map(|e| e.path()))
+        .filter(|path| path.extension().is_some_and(|ext| ext == "cypcb"))
+        .collect();
+    files.sort();
+
+    let mut compared = 0;
+    let mut differed: Vec<String> = Vec::new();
+    for file in files {
+        let name = file
+            .file_name()
+            .expect("a name")
+            .to_string_lossy()
+            .to_string();
+        let source = std::fs::read_to_string(&file).expect("a readable example");
+        if !cypcb_parser::parse(&source).errors.is_empty() {
+            continue;
+        }
+        let before = checked(&file);
+        let after = checked(&saved(&name, &dir));
+        compared += 1;
+        if before != after {
+            differed.push(format!("{name}: {before:?} became {after:?}"));
+        }
+    }
+
+    assert!(
+        compared > 20,
+        "only {compared} examples reached the writer, so this proves little"
+    );
+    assert!(
+        differed.is_empty(),
+        "a save changed what the checker finds:\n{}",
+        differed.join("\n")
+    );
+}
+
+/// A board with copper on it, which none of the examples above carry much of.
+#[test]
+fn a_routed_board_survives_a_save() {
+    let dir = std::env::temp_dir().join("cypcb-save-routed");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("a place to work");
+
+    let routed = dir.join("routed.cypcb");
+    let output = Command::new(env!("CARGO_BIN_EXE_cypcb"))
+        .arg("route")
+        .arg(repo_root().join("examples/routing-test.cypcb"))
+        .arg("--in-house")
+        .arg("--fast")
+        .arg("-o")
+        .arg(&routed)
+        .current_dir(repo_root())
+        .output()
+        .expect("the binary runs");
+    assert!(
+        output.status.success(),
+        "routing the example failed:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let copper = std::fs::read_to_string(&routed).expect("the routed design is there");
+    assert!(
+        copper.contains("trace "),
+        "the point of this case is copper:\n{copper}"
+    );
+
+    let before = checked(&routed);
+    let after = checked(&saved_from(&routed, "saved-routed.cypcb", &dir));
+    assert_eq!(before, after, "a save changed a routed board");
+}

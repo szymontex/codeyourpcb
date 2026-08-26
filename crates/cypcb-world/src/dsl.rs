@@ -846,7 +846,20 @@ pub fn board_as_dsl(world: &mut BoardWorld) -> String {
 
     let builtin = crate::footprint::FootprintLibrary::new();
     let library = world.footprints().clone();
-    let mut used: Vec<String> = parts.iter().map(|p| p.footprint.clone()).collect();
+    // A part on the bottom is placed against a mirrored copy of its footprint,
+    // filed under a derived name - `CAP_POLARISED@bottom` - which is this
+    // project's own arrangement rather than anything a design says. Written as
+    // it stands, that copy came back **beside** the `side bottom` line that
+    // caused it, so a reload mirrored the pads a second time: measured on
+    // `examples/two-sided-power.cypcb`, a board that reported two unconnected
+    // pins came back reporting a clearance fault and an unrouted pin as well.
+    //
+    // So the definitions are written under the names the design asked for, and
+    // `side bottom` says the rest.
+    let mut used: Vec<String> = parts
+        .iter()
+        .map(|p| crate::footprint::base_name(&p.footprint).to_string())
+        .collect();
     used.sort();
     used.dedup();
     // What each footprint is called in the written file, so the components
@@ -929,7 +942,10 @@ pub fn board_as_dsl(world: &mut BoardWorld) -> String {
             "component {} {} {} {{",
             part.refdes,
             kind_from_refdes(&part.refdes),
-            quoted(written_name.get(&part.footprint).unwrap_or(&part.footprint))
+            quoted({
+                let base = crate::footprint::base_name(&part.footprint);
+                written_name.get(base).map(String::as_str).unwrap_or(base)
+            })
         );
         if !part.value.is_empty() {
             let _ = writeln!(out, "    value {}", value_as_written(&part.value));
