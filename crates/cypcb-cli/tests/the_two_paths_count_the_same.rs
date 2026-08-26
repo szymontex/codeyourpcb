@@ -68,19 +68,34 @@ fn what_the_command_found(board: &Path) -> Option<BTreeMap<String, usize>> {
     Some(counts)
 }
 
-/// What the engine the browser runs found, by kind.
-fn what_the_engine_found(source: &str) -> Option<BTreeMap<String, usize>> {
+/// What the engine found in a KiCad board, by kind.
+fn what_the_engine_found_in_kicad(source: &str) -> Option<BTreeMap<String, usize>> {
     let mut engine = PcbEngine::new();
-    if !engine.load_source(source).is_empty() {
+    let errors = engine.load_kicad(source);
+    if !errors.is_empty() {
         return None;
     }
-    let rows: serde_json::Value = serde_json::from_str(&engine.get_violations_json()).ok()?;
+    counts_of(&engine.get_violations_json())
+}
+
+/// Rows of the engine's report, by kind.
+fn counts_of(json: &str) -> Option<BTreeMap<String, usize>> {
+    let rows: serde_json::Value = serde_json::from_str(json).ok()?;
     let mut counts = BTreeMap::new();
     for row in rows.as_array()? {
         let kind = row["kind"].as_str()?.to_string();
         *counts.entry(kind).or_insert(0) += 1;
     }
     Some(counts)
+}
+
+/// What the engine the browser runs found, by kind.
+fn what_the_engine_found(source: &str) -> Option<BTreeMap<String, usize>> {
+    let mut engine = PcbEngine::new();
+    if !engine.load_source(source).is_empty() {
+        return None;
+    }
+    counts_of(&engine.get_violations_json())
 }
 
 #[test]
@@ -113,5 +128,48 @@ fn every_example_is_counted_the_same_by_both() {
         disagreements.is_empty(),
         "the two paths count the same board differently:\n{}",
         disagreements.join("\n")
+    );
+}
+
+/// The census above is taken on boards nobody has routed.
+///
+/// Every example is a placement with no copper between the parts, so what the
+/// two paths were compared on is mostly pins nobody joined. Clearance rows -
+/// the kind that made `score` and `check` differ by a factor of six once - only
+/// appear in numbers once there is copper to measure, and a router puts it
+/// there in a way no fixture in this repository does.
+#[test]
+fn a_routed_board_is_counted_the_same_by_both() {
+    let dir = std::env::temp_dir().join("cypcb-two-paths-routed");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("a place to work");
+    let routed = dir.join("routed.kicad_pcb");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_cypcb"))
+        .arg("route")
+        .arg(repo_root().join("tests/fixtures/benchmark/led_blink.kicad_pcb"))
+        .arg("--in-house")
+        .arg("--fast")
+        .arg("-o")
+        .arg(&routed)
+        .output()
+        .expect("the binary runs");
+    assert!(
+        output.status.success(),
+        "routing the fixture failed:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let source = std::fs::read_to_string(&routed).expect("the routed board was written");
+    let engine = what_the_engine_found_in_kicad(&source).expect("the engine reads a KiCad board");
+    let command = what_the_command_found(&routed).expect("the command reads it too");
+
+    assert!(
+        command.get("clearance").copied().unwrap_or(0) > 0,
+        "a routed board has copper close enough to measure: {command:?}"
+    );
+    assert_eq!(
+        command, engine,
+        "the two paths count a routed board differently"
     );
 }
