@@ -34,3 +34,6 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # its own is a test that cannot tell one layer from the next, which is how three
 # index errors shipped.
 cypcb-fixtures = { path = "../cypcb-fixtures" }
+# The engine the browser runs, so one test can ask both paths the same board
+# and compare what they found. The two have disagreed about row counts before.
+cypcb-render = { path = "../cypcb-render" }
