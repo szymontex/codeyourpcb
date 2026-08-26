@@ -632,4 +632,88 @@ mod tests {
         assert!(refdes_list.iter().any(|m| m.contains("R3")));
         assert!(!refdes_list.iter().any(|m| m.contains("R2")));
     }
+
+    /// The distance every clearance measurement is built on, worked by hand.
+    ///
+    /// Four endpoint-to-segment distances and a crossing test, because the
+    /// closed-form parametric solution is wrong for the case this exists for:
+    /// two segments laid end to end leave its denominator at zero, and the
+    /// fallback pins one parameter at an endpoint. Two slots in a row - which
+    /// is how a connector's anchors sit - measured 2.8mm apart when their ends
+    /// were 1.4mm apart.
+    #[test]
+    fn two_segments_are_as_far_apart_as_their_nearest_points() {
+        use cypcb_core::Point;
+
+        // Crossing: nothing between them.
+        assert_eq!(
+            segment_distance(
+                Point::from_mm(0.0, 0.0),
+                Point::from_mm(10.0, 0.0),
+                Point::from_mm(5.0, -5.0),
+                Point::from_mm(5.0, 5.0),
+            ),
+            0
+        );
+
+        // Touching at one point is the same answer.
+        assert_eq!(
+            segment_distance(
+                Point::from_mm(0.0, 0.0),
+                Point::from_mm(10.0, 0.0),
+                Point::from_mm(10.0, 0.0),
+                Point::from_mm(10.0, 5.0),
+            ),
+            0
+        );
+
+        // Parallel, 2mm apart along their whole length.
+        assert_eq!(
+            segment_distance(
+                Point::from_mm(0.0, 0.0),
+                Point::from_mm(10.0, 0.0),
+                Point::from_mm(0.0, 2.0),
+                Point::from_mm(10.0, 2.0),
+            ),
+            2_000_000
+        );
+
+        // End to end on one line: the gap is between the ends, 1mm, and this
+        // is the case the parametric form got wrong.
+        assert_eq!(
+            segment_distance(
+                Point::from_mm(0.0, 0.0),
+                Point::from_mm(10.0, 0.0),
+                Point::from_mm(11.0, 0.0),
+                Point::from_mm(20.0, 0.0),
+            ),
+            1_000_000
+        );
+
+        // The nearest pair is an endpoint of the *second* segment against the
+        // middle of the first: (5, 3) sits 3mm above the line, while either
+        // end of the first segment is sqrt(25 + 9) = 5.83mm away. A solver
+        // that only tried the first segment's endpoints would answer 5.831mm.
+        assert_eq!(
+            segment_distance(
+                Point::from_mm(0.0, 0.0),
+                Point::from_mm(10.0, 0.0),
+                Point::from_mm(5.0, 3.0),
+                Point::from_mm(5.0, 9.0),
+            ),
+            3_000_000
+        );
+
+        // The nearest point is an endpoint rather than the foot of a
+        // perpendicular: from (10, 0) to (15, 5) is sqrt(25 + 25) = 7.0711mm.
+        assert_eq!(
+            segment_distance(
+                Point::from_mm(0.0, 0.0),
+                Point::from_mm(10.0, 0.0),
+                Point::from_mm(15.0, 5.0),
+                Point::from_mm(20.0, 10.0),
+            ),
+            7_071_068
+        );
+    }
 }
