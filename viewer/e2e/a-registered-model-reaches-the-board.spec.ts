@@ -128,4 +128,121 @@ test.describe('a registered model reaches the board', () => {
       0,
     );
   });
+
+  test('a rebuild reads the model out of the cache instead of the network', async ({ page }) => {
+    let objRequests = 0;
+    for (const pattern of ['**/easyeda-modules/3dmodel/**', '**/modules.easyeda.com/3dmodel/**']) {
+      await page.route(pattern, async (route: Route) => {
+        objRequests++;
+        await route.fulfill({
+          status: 200,
+          contentType: 'text/plain',
+          headers: { 'Access-Control-Allow-Origin': '*' },
+          body: MOCK_OBJ_TEXT,
+        });
+      });
+    }
+
+    await page.goto('/');
+    await expect(page.locator('#status-text')).toContainText('Ready', { timeout: 15_000 });
+    await page.evaluate((src) => (window as any).__loadBoard(src), BOARD);
+    await page.waitForTimeout(300);
+    const pkg = await page.evaluate(
+      () => (window as any).__pcbEngine.get_snapshot().components[0].footprint as string,
+    );
+    await page.evaluate(
+      (name) => (window as any).__pcbEngine.register_3d_model(name, 'uuid-cache'),
+      pkg,
+    );
+    await page.evaluate((src) => (window as any).__loadBoard(src), BOARD);
+
+    await page.click('#view-3d-btn');
+    await page.waitForFunction(() => (window as any).__renderer3d?.isActive === true, {
+      timeout: 5_000,
+    });
+    await page.waitForFunction(
+      () => ((window as any).__renderer3d?.objModelCount ?? 0) >= 1,
+      { timeout: 15_000 },
+    );
+    expect(objRequests, 'the first build fetches the model').toBe(1);
+
+    // The scene is thrown away and built again. It used to ask the CDN for
+    // every model each time, which on a board being edited is one request per
+    // part per keystroke.
+    await page.click('#view-3d-btn');
+    await expect(page.locator('#view-3d-btn')).not.toHaveClass(/active/, { timeout: 5_000 });
+    await page.click('#view-3d-btn');
+    await page.waitForFunction(
+      () => ((window as any).__renderer3d?.objModelCount ?? 0) >= 1,
+      { timeout: 15_000 },
+    );
+    await page.waitForTimeout(500);
+    expect(objRequests, 'the second build asks the cache, not the network').toBe(1);
+  });
+
+  test('an answer that outlives its scene lands once, not twice', async ({ page }) => {
+    const errors: string[] = [];
+    page.on('console', (msg) => {
+      if (msg.type() === 'error') errors.push(msg.text());
+    });
+
+    for (const pattern of ['**/easyeda-modules/3dmodel/**', '**/modules.easyeda.com/3dmodel/**']) {
+      await page.route(pattern, async (route: Route) => {
+        // Slow on purpose, so the first build's answer arrives after the
+        // second build has replaced the scene it was meant for. What keeps
+        // that harmless is `loadComponentFromOBJ` replacing a model it has
+        // already attached rather than adding a second one - measured, by
+        // deleting a build counter written for this and watching nothing
+        // change.
+        await new Promise((resolve) => setTimeout(resolve, 800));
+        await route.fulfill({
+          status: 200,
+          contentType: 'text/plain',
+          headers: { 'Access-Control-Allow-Origin': '*' },
+          body: MOCK_OBJ_TEXT,
+        });
+      });
+    }
+
+    await page.goto('/');
+    await expect(page.locator('#status-text')).toContainText('Ready', { timeout: 15_000 });
+    await page.evaluate((src) => (window as any).__loadBoard(src), BOARD);
+    await page.waitForTimeout(300);
+    const pkg = await page.evaluate(
+      () => (window as any).__pcbEngine.get_snapshot().components[0].footprint as string,
+    );
+    await page.evaluate(
+      (name) => (window as any).__pcbEngine.register_3d_model(name, 'uuid-late'),
+      pkg,
+    );
+    await page.evaluate((src) => (window as any).__loadBoard(src), BOARD);
+
+    await page.click('#view-3d-btn');
+    await page.waitForFunction(() => (window as any).__renderer3d?.isActive === true, {
+      timeout: 5_000,
+    });
+    // Before the answer lands, throw the scene away and build another one.
+    await page.waitForTimeout(200);
+    await page.click('#view-3d-btn');
+    await expect(page.locator('#view-3d-btn')).not.toHaveClass(/active/, { timeout: 5_000 });
+    await page.click('#view-3d-btn');
+    await page.waitForFunction(() => (window as any).__renderer3d?.isActive === true, {
+      timeout: 5_000,
+    });
+
+    await page.waitForFunction(
+      () => ((window as any).__renderer3d?.objModelCount ?? 0) >= 1,
+      { timeout: 20_000 },
+    );
+    await page.waitForTimeout(1500);
+
+    expect(
+      errors.filter((line) => line.includes('OBJ load failed')),
+      'a late answer finds the scene it can attach to, or nothing at all',
+    ).toEqual([]);
+    expect(
+      await page.evaluate(() => (window as any).__renderer3d?.objModelCount ?? 0),
+      'the model is attached once',
+    ).toBe(1);
+  });
 });

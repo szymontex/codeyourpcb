@@ -248,6 +248,17 @@ export async function fetch3DModel(lcscId: number): Promise<string | null> {
 }
 
 /**
+ * Model text already fetched, by uuid.
+ *
+ * The 3D scene is torn down and rebuilt on every board change, and the pass
+ * that attaches models runs on each rebuild, so a session editing a board with
+ * ten placed parts asked the CDN for the same ten files on every keystroke's
+ * re-parse. Only successful fetches are kept: a miss is worth retrying, and
+ * caching `null` would make one bad response permanent for the session.
+ */
+const objCache = new Map<string, string>();
+
+/**
  * Fetch a 3D model OBJ text by its EasyEDA UUID.
  * Uses the same proxy-aware URL as fetch3DModel.
  * Auto-detects and decompresses gzipped responses (some EasyEDA models
@@ -255,6 +266,10 @@ export async function fetch3DModel(lcscId: number): Promise<string | null> {
  * Returns null on any error — never throws.
  */
 export async function fetch3DModelByUuid(uuid: string): Promise<string | null> {
+  const cached = objCache.get(uuid);
+  if (cached !== undefined) {
+    return cached;
+  }
   try {
     const objUrl = `${EASYEDA_MODULES_BASE}/3dmodel/${uuid}`;
     const objResponse = await fetch(objUrl);
@@ -262,7 +277,9 @@ export async function fetch3DModelByUuid(uuid: string): Promise<string | null> {
       console.error(`[JLCPCB] 3D fetch error: HTTP ${objResponse.status} for OBJ ${uuid}`);
       return null;
     }
-    return await responseToText(objResponse);
+    const objText = await responseToText(objResponse);
+    objCache.set(uuid, objText);
+    return objText;
   } catch (error) {
     console.error(`[JLCPCB] 3D fetch error: ${error}`);
     return null;
