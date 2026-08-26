@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { flexThicknessMm, substrateSlabs } from '../flex-regions';
+import { dropAt, flexThicknessMm, substrateSlabs } from '../flex-regions';
 import type { BoardSnapshot } from '../types';
 
 /**
@@ -86,5 +86,20 @@ describe('the bend is drawn thinner', () => {
       [6, 4, true],
       [10, 6, false],
     ]);
+  });
+
+  it('brings the faces over the bend down with the laminate', () => {
+    const snapshot = rigidFlex();
+    const slabs = substrateSlabs(snapshot);
+
+    // 0.335mm of board against 0.135mm of ribbon: each face 0.1mm nearer the
+    // middle, because the slabs are centred on Z=0.
+    expect(dropAt(slabs, 0.335, 30, 8), 'in the bend').toBeCloseTo(0.1, 6);
+    expect(dropAt(slabs, 0.335, 5, 8), 'on the rigid end').toBe(0);
+    expect(dropAt(slabs, 0.335, 50, 8), 'on the other rigid end').toBe(0);
+
+    // A board with no step has nothing to bring down.
+    const plain = substrateSlabs(rigidFlex({ stiffener: false }));
+    expect(dropAt(plain, 0.335, 30, 8)).toBe(0);
   });
 });

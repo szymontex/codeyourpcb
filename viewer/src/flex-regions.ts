@@ -201,3 +201,35 @@ export function substrateSlabs(snapshot: BoardSnapshot | null | undefined): Subs
 
   return slabs.length > 0 ? slabs : whole;
 }
+
+/**
+ * How far a face drops at a point, in millimetres.
+ *
+ * The slabs are centred on Z=0, so a bend that is 0.2mm thinner puts both of
+ * its faces 0.1mm nearer the middle. Copper, mask and silkscreen over the
+ * ribbon have to come with it or they float where the rigid surface used to
+ * be - which is what the view did when the substrate learned about the bend
+ * and nothing else did.
+ *
+ * Zero outside a bend, and zero on a board with no step to make.
+ */
+export function dropAt(
+  slabs: SubstrateSlab[],
+  boardThicknessMm: number,
+  xMm: number,
+  yMm: number,
+): number {
+  for (const slab of slabs) {
+    if (!slab.flex) continue;
+    const inside =
+      xMm >= slab.xMm - EPS_MM &&
+      xMm <= slab.xMm + slab.widthMm + EPS_MM &&
+      yMm >= slab.yMm - EPS_MM &&
+      yMm <= slab.yMm + slab.heightMm + EPS_MM;
+    if (inside) {
+      const drop = (boardThicknessMm - slab.thicknessMm) / 2;
+      return drop > 0 ? drop : 0;
+    }
+  }
+  return 0;
+}

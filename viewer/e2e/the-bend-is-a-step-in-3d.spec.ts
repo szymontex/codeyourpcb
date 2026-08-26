@@ -54,6 +54,10 @@ test('the board is three boxes where it bends, and one where it does not', async
     await page.evaluate(() => (window as any).__renderer3d?.substrateSlabCount),
     'an ordinary board is one slab',
   ).toBe(1);
+  expect(
+    await page.evaluate(() => (window as any).__renderer3d?.maskStepMm),
+    'and its solder mask is flat',
+  ).toBeCloseTo(0, 6);
 
   await page.evaluate((src) => (window as any).__loadBoard(src), RIGID_FLEX);
   await page.waitForTimeout(300);
@@ -69,4 +73,16 @@ test('the board is three boxes where it bends, and one where it does not', async
     await page.evaluate(() => (window as any).__renderer3d?.substrateSlabCount),
     'the ribbon splits the board into rigid, bend, rigid',
   ).toBe(3);
+
+  // 0.335mm of board against 0.135mm of ribbon: each face 0.1mm nearer the
+  // middle. The mask is drawn cell by cell, so the step is in its own
+  // geometry rather than only in the number the renderer worked out.
+  expect(
+    await page.evaluate(() => (window as any).__renderer3d?.bendDropMm),
+    'the faces drop by half what the stiffener adds',
+  ).toBeCloseTo(0.1, 3);
+  expect(
+    await page.evaluate(() => (window as any).__renderer3d?.maskStepMm),
+    'and the mask itself steps by the same amount',
+  ).toBeCloseTo(0.1, 3);
 });

@@ -32,7 +32,7 @@ import {
   DEFAULT_BOARD_THICKNESS_MM,
   DEFAULT_COPPER_THICKNESS_MM,
 } from './board-thickness';
-import { flexRegions, substrateSlabs } from './flex-regions';
+import { dropAt, flexRegions, substrateSlabs } from './flex-regions';
 import { fetch3DModelByUuid } from './jlcpcb';
 import { parseEasyEdaOBJ } from './easyeda-obj-parser';
 
@@ -239,6 +239,18 @@ export class Renderer3D {
 
   /** How many boxes the board was drawn from: more than one means a step. */
   private _substrateSlabCount = 0;
+  /** How far a face drops over the bend, in millimetres. Zero without one. */
+  private _bendDropMm = 0;
+  /** The highest and lowest the front solder mask was drawn, in millimetres. */
+  private _maskTopZMin = 0;
+  private _maskTopZMax = 0;
+  /**
+   * How far the surface at this point sits from where a rigid board's would.
+   *
+   * Set for each build from the slabs the board is drawn from, so copper, mask
+   * and silkscreen over a bend come down with the laminate under them.
+   */
+  private surfaceDrop: (xMm: number, yMm: number) => number = () => 0;
   /** Count of OBJ models loaded (subset of loadedModels) */
   private _objModelCount = 0;
 
@@ -351,6 +363,10 @@ export class Renderer3D {
     // thickness is what the step is made of. See `substrateSlabs`.
     const slabs = substrateSlabs(snapshot);
     this._substrateSlabCount = slabs.length;
+    this.surfaceDrop = (x: number, y: number) => dropAt(slabs, BOARD_THICKNESS_MM, x, y);
+    this._bendDropMm = slabs
+      .filter((slab) => slab.flex)
+      .reduce((most, slab) => Math.max(most, (BOARD_THICKNESS_MM - slab.thicknessMm) / 2), 0);
     for (const slab of slabs) {
       const subGeo = new THREE.BoxGeometry(slab.widthMm, slab.heightMm, slab.thicknessMm);
       subGeo.translate(slab.xMm + slab.widthMm / 2, slab.yMm + slab.heightMm / 2, 0);
@@ -854,26 +870,34 @@ export class Renderer3D {
         const px = (-dy / len) * halfW;
         const py = (dx / len) * halfW;
 
+        // Copper over the bend comes down with the laminate. Per segment
+        // rather than per trace: a trace that runs off the ribbon on to the
+        // rigid part changes height where the board does.
+        const drop = isInner ? 0 : this.surfaceDrop((sx + ex) / 2, (sy + ey) / 2);
+        const shift = isTop ? -drop : drop;
+        const segZBot = zBot + shift;
+        const segZTop = zTop + shift;
+
         const slx = sx + px, sly = sy + py;
         const srx = sx - px, sry = sy - py;
         const erx = ex - px, ery = ey - py;
         const elx = ex + px, ely = ey + py;
 
         // TOP FACE
-        positions.push(slx, sly, zTop, srx, sry, zTop, erx, ery, zTop);
-        positions.push(slx, sly, zTop, erx, ery, zTop, elx, ely, zTop);
+        positions.push(slx, sly, segZTop, srx, sry, segZTop, erx, ery, segZTop);
+        positions.push(slx, sly, segZTop, erx, ery, segZTop, elx, ely, segZTop);
 
         // BOTTOM FACE
-        positions.push(slx, sly, zBot, erx, ery, zBot, srx, sry, zBot);
-        positions.push(slx, sly, zBot, elx, ely, zBot, erx, ery, zBot);
+        positions.push(slx, sly, segZBot, erx, ery, segZBot, srx, sry, segZBot);
+        positions.push(slx, sly, segZBot, elx, ely, segZBot, erx, ery, segZBot);
 
         // LEFT SIDE
-        positions.push(slx, sly, zBot, slx, sly, zTop, elx, ely, zTop);
-        positions.push(slx, sly, zBot, elx, ely, zTop, elx, ely, zBot);
+        positions.push(slx, sly, segZBot, slx, sly, segZTop, elx, ely, segZTop);
+        positions.push(slx, sly, segZBot, elx, ely, segZTop, elx, ely, segZBot);
 
         // RIGHT SIDE
-        positions.push(srx, sry, zBot, erx, ery, zTop, srx, sry, zTop);
-        positions.push(srx, sry, zBot, erx, ery, zBot, erx, ery, zTop);
+        positions.push(srx, sry, segZBot, erx, ery, segZTop, srx, sry, segZTop);
+        positions.push(srx, sry, segZBot, erx, ery, segZBot, erx, ery, segZTop);
 
         // No flat start/end caps — round caps handle endpoints
 
@@ -882,11 +906,11 @@ export class Renderer3D {
         const eKey = `${ex.toFixed(4)},${ey.toFixed(4)}`;
         if (!capPoints.has(sKey)) {
           capPoints.add(sKey);
-          pushRoundCap(positions, sx, sy, halfW, zBot, zTop);
+          pushRoundCap(positions, sx, sy, halfW, segZBot, segZTop);
         }
         if (!capPoints.has(eKey)) {
           capPoints.add(eKey);
-          pushRoundCap(positions, ex, ey, halfW, zBot, zTop);
+          pushRoundCap(positions, ex, ey, halfW, segZBot, segZTop);
         }
 
         if (isInner) innerSegCount++;
@@ -955,6 +979,8 @@ export class Renderer3D {
 
     const topPositions: number[] = [];
     const botPositions: number[] = [];
+    this._maskTopZMin = Number.POSITIVE_INFINITY;
+    this._maskTopZMax = Number.NEGATIVE_INFINITY;
 
     for (let row = 0; row < rows; row++) {
       for (let col = 0; col < cols; col++) {
@@ -977,13 +1003,20 @@ export class Renderer3D {
         const x1 = Math.min(x0 + CELL_SIZE, widthMm);
         const y1 = Math.min(y0 + CELL_SIZE, heightMm);
 
+        // Both faces come down with the laminate where the board bends.
+        const drop = this.surfaceDrop(cx, cy);
+        const topZ = F_MASK_Z - drop;
+        const botZ = B_MASK_Z + drop;
+        this._maskTopZMin = Math.min(this._maskTopZMin, topZ);
+        this._maskTopZMax = Math.max(this._maskTopZMax, topZ);
+
         // Top solder mask quad (sits on top of front copper)
-        topPositions.push(x0, y0, F_MASK_Z, x1, y0, F_MASK_Z, x1, y1, F_MASK_Z);
-        topPositions.push(x0, y0, F_MASK_Z, x1, y1, F_MASK_Z, x0, y1, F_MASK_Z);
+        topPositions.push(x0, y0, topZ, x1, y0, topZ, x1, y1, topZ);
+        topPositions.push(x0, y0, topZ, x1, y1, topZ, x0, y1, topZ);
 
         // Bottom solder mask quad (sits below back copper)
-        botPositions.push(x0, y0, B_MASK_Z, x1, y1, B_MASK_Z, x1, y0, B_MASK_Z);
-        botPositions.push(x0, y0, B_MASK_Z, x0, y1, B_MASK_Z, x1, y1, B_MASK_Z);
+        botPositions.push(x0, y0, botZ, x1, y1, botZ, x1, y0, botZ);
+        botPositions.push(x0, y0, botZ, x0, y1, botZ, x1, y1, botZ);
       }
     }
 
@@ -1721,6 +1754,7 @@ export class Renderer3D {
     this._padDrillCount = 0;
     this._objModelCount = 0;
     this._substrateSlabCount = 0;
+    this._bendDropMm = 0;
   }
 
   private getMeshCount(): number {
@@ -1755,6 +1789,12 @@ export class Renderer3D {
       get padDrillCount() { return self._padDrillCount; },
       get objModelCount() { return self._objModelCount; },
       get substrateSlabCount() { return self._substrateSlabCount; },
+      get bendDropMm() { return self._bendDropMm; },
+      /** How far the front mask steps between its highest and lowest cell. */
+      get maskStepMm() {
+        const range = self._maskTopZMax - self._maskTopZMin;
+        return Number.isFinite(range) ? range : 0;
+      },
     };
   }
 }
