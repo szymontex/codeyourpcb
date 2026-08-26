@@ -460,3 +460,33 @@ fn the_holes_and_the_placements_survive_a_save() {
         );
     }
 }
+
+/// The job file a fabricator opens first.
+///
+/// `<board>-job.gbrjob` names the stack, the finish and every layer file, and
+/// V8 taught it the fab's own figures. A board whose stackup came back thinner
+/// or whose finish went missing would show there and in none of the six cases
+/// above: the checker does not read a job file, and neither does the drill,
+/// the placement or the bill of materials.
+#[test]
+fn the_job_file_survives_a_save() {
+    let dir = std::env::temp_dir().join("cypcb-save-keeps-the-job");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("a place to work");
+
+    for example in ["blind-via.cypcb", "rigid-flex.cypcb"] {
+        let original = repo_root().join("examples").join(example);
+        let before = exported(&original, &dir.join(format!("before-{example}")), ".gbrjob");
+        assert!(
+            before.contains("MaterialStackup") || before.contains("FilesAttributes"),
+            "{example} has to write a job file worth comparing:\n{before}"
+        );
+
+        let saved = saved(example, &dir);
+        let after = exported(&saved, &dir.join(format!("after-{example}")), ".gbrjob");
+        assert_eq!(
+            before, after,
+            "{example} hands the fabricator a different job file after a save"
+        );
+    }
+}
