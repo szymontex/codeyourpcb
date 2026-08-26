@@ -225,3 +225,40 @@ fn the_language_server_row_lists_what_the_server_advertises() {
         );
     }
 }
+
+/// A verb the API row names, and the method that provides it.
+///
+/// Two of them are things this project does not do, and they are here so the
+/// test fails when somebody writes them into the row rather than into the
+/// engine.
+const ENGINE: &[(&str, &str)] = &[
+    ("load", "pub fn load_source"),
+    ("drc", "pub fn get_violations_json"),
+    ("route", "pub fn auto_route"),
+    ("export", "pub fn export_traces_as_dsl"),
+    ("spice", "pub fn spice"),
+    ("schematic", "pub fn schematic"),
+];
+
+/// The headless API row names what the engine has, not what a browser is.
+///
+/// It read `WASM API` from March, which says where the code runs and nothing
+/// about what a program can ask it. `PcbEngine` carries thirty
+/// `#[wasm_bindgen]` methods; the four the row names are the four a headless
+/// caller needs, and this fails if one of them goes or if a fifth is claimed.
+#[test]
+fn the_headless_api_row_names_methods_the_engine_has() {
+    let cell = our_cell(&matrix(), "API / headless mode");
+    let engine = std::fs::read_to_string(repo_root().join("crates/cypcb-render/src/lib.rs"))
+        .expect("the engine is there");
+
+    let said = cell.to_lowercase();
+    for (verb, needle) in ENGINE {
+        let claimed = said.contains(verb);
+        let provided = engine.contains(needle);
+        assert_eq!(
+            claimed, provided,
+            "the matrix says `{cell}`; `{verb}` is claimed: {claimed}, provided: {provided}"
+        );
+    }
+}

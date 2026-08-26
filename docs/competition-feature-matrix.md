@@ -213,7 +213,7 @@ CodeYourPCB occupies a unique niche: **the only code-first, standalone, browser-
 | SPICE simulation | ❌ | ❌ | ✅ `pcb-sim` crate | ✅ Ngspice | ✅ Keysight SI/PI | ✅ Sigrity | 🔶 PSpice | ✅ | ✅ Ngspice | ✅ |
 | Signal integrity analysis | ❌ | ❌ | ❌ | 🔶 | ✅ Keysight | ✅ Sigrity | ❌ | ❌ | ❌ | 🔶 |
 | Trace width calculator | ✅ IPC-2221 | ❌ | ❌ | ❌ | 🔶 | 🔶 | ❌ | ❌ | ❌ | ❌ |
-| API / headless mode | ✅ WASM API | ✅ Python API | ✅ Rust crates | ✅ kicad-cli | 🔶 | 🔶 | ❌ | ❌ | ❌ | ✅ |
+| API / headless mode | ✅ `PcbEngine`: load, drc, route, export | ✅ Python API | ✅ Rust crates | ✅ kicad-cli | 🔶 | 🔶 | ❌ | ❌ | ❌ | ✅ |
 | AI / LLM integration | ❌ | ✅ MCP server | ✅ MCP server | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ Copilot + agents |
 
 **Parity assessment:** We have good headless/API capabilities (WASM, CLI) and a unique trace width calculator. Gaps: no simulation, no plugin system, no AI integration. Flux.ai leads on AI features; KiCad/Altium/Allegro lead on plugin ecosystems.
@@ -297,6 +297,7 @@ a cell is downgraded or if the construct behind it stops working.
 | LCSC in the BOM | `crates/cypcb-export/src/bom/csv.rs` writes the `LCSC Part #` column |
 | what export does **not** write | `./target/release/cypcb export --dry-run examples/blink.cypcb` - Gerber, Excellon, BOM, CPL and a job file, and nothing else |
 | what the language server answers | `cargo test -p cypcb-lsp --test the_manual_matches_the_server` - the manual and the server's `initialize` result are held to each other in both directions. Hover, completion and go-to-definition are what it advertises; references, rename, formatting and semantic tokens are not implemented |
+| what the browser API exposes | `cargo test -p cypcb-cli --test the_matrix_is_honest_about_us` holds the row against `crates/cypcb-render/src/lib.rs`, where `PcbEngine`'s `#[wasm_bindgen]` methods are declared. `Browser (zero install)` is the one row here nobody can test from a command line: it is a claim about how the thing is delivered, not about what it does |
 | the desktop binary's size | `cargo build --release -p cypcb-desktop && ls -l target/release/cypcb-desktop` -> **9,333,064 bytes** on x86_64 Linux, 2026-08-26. That is the executable; a packaged bundle carries more |
 
 Last verified: 2026-08-26.
