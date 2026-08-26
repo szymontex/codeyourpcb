@@ -64,6 +64,18 @@ enum Commands {
     /// Route a .cypcb or .kicad_pcb board with the built-in autorouter
     Route(commands::RouteCommand),
     /// Export a .cypcb or .kicad_pcb board to manufacturing files
+    ///
+    /// Every file written carries the moment it was written, so two exports of
+    /// one board never compare equal byte for byte: a gerber and a drill file
+    /// carry `TF.CreationDate`, the job file a `CreationDate` field, and the
+    /// assembly JSON an `export_date` to the nanosecond. Measured by exporting
+    /// one board twice a second apart - all fifteen files differ, each by that
+    /// line and nothing else.
+    ///
+    /// It is written because a fabricator asks when the files were cut, KiCad
+    /// writes it too, and Ucamco's specification lists the attribute as
+    /// optional rather than unwanted. There is no flag to leave it out, so
+    /// anything comparing two exports has to drop the stamp itself.
     Export(commands::ExportCommand),
     /// Parse a KiCad .kicad_pcb file and output metadata as JSON
     ParseKicad(commands::ParseKicadCommand),
