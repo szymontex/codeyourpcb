@@ -60,20 +60,6 @@ fn mm(nm: i64) -> String {
     }
 }
 
-/// Add routed copper to a copy of the board it was routed from.
-///
-/// `origin` is the board's corner in the file's coordinates - the same value
-/// the importer subtracted - and it is added back here. Getting this wrong is
-/// the defect the importer carried for months in the other direction.
-pub fn append_routing(
-    source: &str,
-    routing: &RoutingResult,
-    net_numbers: &HashMap<NetId, i64>,
-    origin: (f64, f64),
-) -> Result<String, KicadWriteError> {
-    append_routing_declaring(source, routing, net_numbers, origin, &[])
-}
-
 /// The same, for a board whose file declares no nets.
 ///
 /// **KiCad 10 writes no `(net N "name")` table.** Its pads carry `(net

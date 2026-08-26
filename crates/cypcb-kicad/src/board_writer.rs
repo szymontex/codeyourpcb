@@ -80,25 +80,6 @@ fn on_sheet(origin: cypcb_core::Point, x: Nm, y: Nm) -> (String, String) {
     (mm(Nm(origin.x.0 + x.0)), mm(Nm(origin.y.0 + y.0)))
 }
 
-/// Where a pad sits once its component's placement is applied.
-fn placed(
-    origin: cypcb_core::Point,
-    offset: cypcb_core::Point,
-    rotation_millideg: i32,
-) -> cypcb_core::Point {
-    if rotation_millideg == 0 {
-        return cypcb_core::Point::new(Nm(origin.x.0 + offset.x.0), Nm(origin.y.0 + offset.y.0));
-    }
-    let radians = (rotation_millideg as f64 / 1000.0).to_radians();
-    let (sin, cos) = radians.sin_cos();
-    let x = offset.x.0 as f64 * cos - offset.y.0 as f64 * sin;
-    let y = offset.x.0 as f64 * sin + offset.y.0 as f64 * cos;
-    cypcb_core::Point::new(
-        Nm(origin.x.0 + x.round() as i64),
-        Nm(origin.y.0 + y.round() as i64),
-    )
-}
-
 /// KiCad's name for a pad shape.
 ///
 /// A rounded rectangle is written as one, with the corner ratio the footprint
@@ -869,13 +850,4 @@ fn write_copper(
             mm(via.drill)
         );
     }
-}
-
-/// A pad's placed position, exposed for the round-trip test.
-pub fn placed_pad(
-    origin: cypcb_core::Point,
-    offset: cypcb_core::Point,
-    rotation_millideg: i32,
-) -> cypcb_core::Point {
-    placed(origin, offset, rotation_millideg)
 }
