@@ -553,4 +553,31 @@ mod tests {
             }
         }
     }
+
+    /// How wide a designator is, worked by hand.
+    ///
+    /// The exporter draws silkscreen text glyph by glyph and warns when a name
+    /// is too wide for the part it belongs to, so this number decides whether
+    /// `R12` fits beside a 0402 or is clipped. It is `n` glyph widths plus the
+    /// gap between them, which is `n - 1` gaps and not `n`.
+    #[test]
+    fn a_name_is_its_glyphs_plus_the_gaps_between_them() {
+        assert_eq!(width_in_glyphs(""), 0.0);
+        assert_eq!(width_in_glyphs("R"), 1.0);
+        // 2 glyphs and one gap: 2 + 0.35.
+        assert!((width_in_glyphs("R1") - 2.35).abs() < 1e-6);
+        // 3 glyphs and two gaps: 3 + 0.70.
+        assert!((width_in_glyphs("U12") - 3.70).abs() < 1e-6);
+    }
+
+    #[test]
+    fn a_character_the_font_cannot_draw_still_takes_its_place() {
+        // Ohm is not in this font and is two bytes long. It is one glyph wide
+        // all the same: a name with one character nobody can draw stays where
+        // it is rather than shuffling left, and a width counted in bytes would
+        // make it twice as wide as it is.
+        assert!(glyph('\u{3a9}').is_none());
+        assert_eq!(width_in_glyphs("\u{3a9}"), 1.0);
+        assert!((width_in_glyphs("R\u{3a9}") - 2.35).abs() < 1e-6);
+    }
 }
