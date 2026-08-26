@@ -35,6 +35,12 @@ pub struct CheckCommand {
     /// on *which* rule. `-o json` prints the same violations the browser
     /// receives - kind, place, what was measured and what was required - on
     /// stdout, with the prose left on stderr.
+    ///
+    /// The rows come **deepest first**: how far under its rule each one is, as
+    /// a fraction of what the rule asked for, so copper touching copper leads
+    /// and a trace a hair under the floor trails. Faults with no distance in
+    /// them - an unrouted pin, an assertion - keep their order at the end. The
+    /// prose report groups for reading instead, and the two orders differ.
     #[arg(short, long, default_value = "text")]
     pub output: ReportFormat,
 }

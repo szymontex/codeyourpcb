@@ -261,6 +261,25 @@ fn the_worst_fault_is_the_first_row() {
         "the rows run deepest first: {measured:?}"
     );
 
+    // The help says all of this, because an order a program depends on is a
+    // promise: a CI job reading the first row is reading the board's worst
+    // fault only while that sentence is true.
+    let help = Command::new(env!("CARGO_BIN_EXE_cypcb"))
+        .arg("check")
+        .arg("--help")
+        .current_dir(repo_root())
+        .output()
+        .expect("the binary runs");
+    let help = String::from_utf8_lossy(&help.stdout).to_string();
+    assert!(
+        help.contains("deepest first"),
+        "the help states the order the rows come in:\n{help}"
+    );
+    assert!(
+        help.contains("keep their order at the end"),
+        "and what happens to the faults with no distance in them:\n{help}"
+    );
+
     // A fault with no distance in it - a pin nothing reaches - sorts to the
     // end rather than among the ones that were measured.
     let unmeasured = rows.iter().filter(|row| depth(row).is_none()).count();
