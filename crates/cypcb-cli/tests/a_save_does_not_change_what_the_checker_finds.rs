@@ -311,8 +311,13 @@ fn the_legend_a_footprint_draws_survives_a_save() {
     // The half that matters: the fabricator gets the same artwork.
     let before = silk_gerber(&original, &dir.join("out-before"));
     let after = silk_gerber(&saved, &dir.join("out-after"));
+    assert!(
+        before.contains("TF.CreationDate"),
+        "a gerber is stamped with the moment it was written:\n{before}"
+    );
     assert_eq!(
-        before, after,
+        without_the_clock(&before),
+        without_the_clock(&after),
         "the silkscreen a fabricator prints is the same board's:\n{text}"
     );
 }
@@ -391,7 +396,8 @@ fn the_part_to_buy_survives_a_save() {
 
     let after = bom(&saved, &dir.join("out-after"));
     assert_eq!(
-        before, after,
+        without_the_clock(&before),
+        without_the_clock(&after),
         "the same board orders the same parts:\n{text}"
     );
 }
@@ -448,6 +454,10 @@ fn the_holes_and_the_placements_survive_a_save() {
         let original = repo_root().join("examples").join(example);
         let before = exported(&original, &dir.join(format!("before-{example}")), file);
         assert!(
+            file != "PTH.drl" || before.contains("CreationDate"),
+            "a drill file is stamped too, and this drops the stamp:\n{before}"
+        );
+        assert!(
             before.lines().count() > 2,
             "{example} has to write a {file} worth comparing:\n{before}"
         );
@@ -455,22 +465,33 @@ fn the_holes_and_the_placements_survive_a_save() {
         let saved = saved(example, &dir);
         let after = exported(&saved, &dir.join(format!("after-{example}")), file);
         assert_eq!(
-            before, after,
+            without_the_clock(&before),
+            without_the_clock(&after),
             "{example} exports a different {file} after a save"
         );
     }
 }
 
-/// The job file without the moment it was written.
+/// An exported file without the moment it was written.
 ///
-/// `CreationDate` is stamped to the second, so two exports either side of a
-/// second boundary differ in a way that says nothing about the board. The
-/// first version of this case compared the whole file and passed twice by
-/// luck; a comparison that depends on how fast the machine is would have
-/// failed on somebody else's, at a time nobody could reproduce.
-fn without_the_clock(job: &str) -> String {
-    job.lines()
-        .filter(|line| !line.contains("\"CreationDate\""))
+/// **Every** file this project exports is stamped: a gerber carries `G04 #@!
+/// TF.CreationDate`, a drill file the same attribute, the job file a
+/// `"CreationDate"` field. Measured by exporting one board twice a second
+/// apart - all fifteen files differ, each by that line alone.
+///
+/// The assembly JSON stamps itself differently again - `export_date`, to the
+/// nanosecond - so two exports in the **same** second still differ there. Any
+/// byte comparison of that file was always a comparison of two clocks.
+///
+/// So a byte comparison of two exports is a comparison of two clocks unless
+/// the stamp comes out. The first version of these cases compared whole files
+/// and passed because two runs land milliseconds apart on this machine; on a
+/// slower one, or across a second boundary, they would have failed at a time
+/// nobody could reproduce.
+fn without_the_clock(exported: &str) -> String {
+    exported
+        .lines()
+        .filter(|line| !line.contains("CreationDate") && !line.contains("export_date"))
         .collect::<Vec<_>>()
         .join("\n")
 }
@@ -508,4 +529,75 @@ fn the_job_file_survives_a_save() {
             "{example} hands the fabricator a different job file after a save"
         );
     }
+}
+
+/// Two exports of one board differ by the clock and by nothing else.
+///
+/// Every file this project writes is stamped with the moment it was written -
+/// measured by exporting `blind-via.cypcb` twice a second apart: all fifteen
+/// files differ, each by that one line. What matters is the "and nothing
+/// else": a board exported today and again next week has to hand a fabricator
+/// the same board, and an identifier drawn from a random source or a map
+/// iterated in whatever order it felt like would break that quietly.
+#[test]
+fn two_exports_of_one_board_differ_only_by_the_clock() {
+    let dir = std::env::temp_dir().join("cypcb-export-twice");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("a place to work");
+
+    let board = repo_root().join("examples/blind-via.cypcb");
+    let first = dir.join("first");
+    let second = dir.join("second");
+    let run = |into: &Path| {
+        let output = Command::new(env!("CARGO_BIN_EXE_cypcb"))
+            .arg("export")
+            .arg(&board)
+            .arg("-o")
+            .arg(into)
+            .current_dir(repo_root())
+            .output()
+            .expect("the binary runs");
+        assert!(output.status.success(), "exporting failed");
+    };
+    run(&first);
+    // Long enough to cross a second boundary, which is the resolution the
+    // stamps are written at.
+    std::thread::sleep(std::time::Duration::from_millis(1100));
+    run(&second);
+
+    let mut compared = 0;
+    let mut stamped = 0;
+    let mut stack = vec![first.clone()];
+    while let Some(dir) = stack.pop() {
+        for entry in std::fs::read_dir(&dir)
+            .expect("the export directory is there")
+            .flatten()
+        {
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+                continue;
+            }
+            let relative = path.strip_prefix(&first).expect("under the first export");
+            let mine = std::fs::read_to_string(&path).expect("a readable export");
+            let theirs = std::fs::read_to_string(second.join(relative))
+                .expect("the second export writes the same files");
+            compared += 1;
+            if mine != theirs {
+                stamped += 1;
+            }
+            assert_eq!(
+                without_the_clock(&mine),
+                without_the_clock(&theirs),
+                "{} differs by more than the clock",
+                relative.display()
+            );
+        }
+    }
+
+    assert!(compared > 10, "only {compared} files were compared");
+    assert!(
+        stamped > 0,
+        "if nothing differed at all, this case is not measuring the stamps"
+    );
 }
