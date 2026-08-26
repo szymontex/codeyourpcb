@@ -50,7 +50,7 @@ import type { DisplayUnit } from './units';
 import { selectableTraceIds, selectionAfterClick, selectionAfterRect } from './selection';
 import { initProjectManager, showProjectManager, hideProjectManager, addRecentFile, updateProjectFiles } from './project-manager';
 import { initSearchPanel, hideSearchPanel, toggleSearchPanel, isSearchPanelVisible, buildComponentSnippet } from './jlcpcb-panel';
-import { fetch3DModel, fetchComponentFootprint } from './jlcpcb';
+import { fetchComponentFootprint } from './jlcpcb';
 import { registerDynamicFootprint, register3DModel, hasDynamicFootprint } from './wasm';
 import { mergeTracesIntoDsl, syncTracesToEditor } from './trace-persist';
 import { reportLostTraces } from './trace-census';
@@ -1752,16 +1752,13 @@ async function init(): Promise<void> {
         console.warn(`[JLCPCB] Footprint pre-fetch failed for ${lcscStr}:`, e);
       }
 
-      if (is3DActive && renderer3d) {
-        console.log(`[JLCPCB] Fetching 3D model for ${lcscStr}...`);
-        const objText = await fetch3DModel(component.lcsc);
-        if (objText) {
-          renderer3d.loadComponentFromOBJ(objText, lcscStr);
-          console.log(`[3D] OBJ loaded for ${lcscStr}`);
-        } else {
-          console.log(`[JLCPCB] No 3D model available for ${lcscStr}`);
-        }
-      }
+      // The model is not fetched here any more. This block asked EasyEDA for
+      // the OBJ and handed it to `loadComponentFromOBJ` keyed by the LCSC
+      // number - `C2040`, say - while every placeholder mesh in the scene is
+      // named `component-<refdes>`, so the lookup failed on every part and
+      // the console said so. The uuid registered above reaches the engine
+      // now, arrives on the component as `model_3d`, and the renderer's
+      // auto-load pass fetches it keyed by the refdes it already knows.
     },
     onInsertToEditor: (component) => {
       insertComponentSnippet(component);

@@ -107,7 +107,12 @@ export function getRegisteredFootprints(): string[] {
 
 /**
  * Registry mapping package names to 3D model UUIDs.
- * Populated during footprint fetch. Used by the parser to set model_3d on components.
+ *
+ * Kept for the same reason the footprint registry is: a supplier's answer can
+ * land before the engine exists, and what arrived early has to be handed over
+ * when it does. The comment here used to say the parser read this map, and
+ * nothing ever read it - the only reader had no callers, so a model fetched
+ * for a part went into a `Map` and stopped there.
  */
 const model3dRegistry = new Map<string, string>();
 
@@ -116,14 +121,19 @@ const model3dRegistry = new Map<string, string>();
  */
 export function register3DModel(packageName: string, uuid: string): void {
   model3dRegistry.set(packageName, uuid);
+  if (engineInstance) {
+    engineInstance.register_3d_model(packageName, uuid);
+  }
   console.log(`[3D] Registered model for ${packageName}: ${uuid}`);
 }
 
 /**
- * Get a registered 3D model UUID for a package name.
+ * Hand the engine every 3D model that was registered before it existed.
  */
-export function get3DModelUuid(packageName: string): string | null {
-  return model3dRegistry.get(packageName) ?? null;
+function replayRegisteredModels(engine: PcbEngine): void {
+  for (const [name, uuid] of model3dRegistry) {
+    engine.register_3d_model(name, uuid);
+  }
 }
 
 /**
@@ -141,6 +151,14 @@ export interface PcbEngine {
    * Returns an empty string on success, an error message otherwise.
    */
   register_footprint(name: string, pads: PadInfo[], silk: SilkShape[]): string;
+  /**
+   * Record which 3D model a package uses.
+   *
+   * The same half that was missing for footprints was missing here: the map
+   * below fed nothing, so no component ever carried a `model_3d` and the 3D
+   * view's auto-load pass never fired.
+   */
+  register_3d_model(packageName: string, uuid: string): void;
   /**
    * The last load's parse and sync messages, each with the line it is about.
    *
@@ -319,6 +337,7 @@ interface WasmPcbEngine {
   auto_route_variants(): string;
   auto_route_debug(params_json: string): string;
   register_footprint(name: string, pads_json: string, silk_json: string): string;
+  register_3d_model(package_name: string, model: string): void;
   free(): void;
 }
 
@@ -578,6 +597,10 @@ export class WasmPcbEngineAdapter implements PcbEngine {
     return this.wasmEngine.register_footprint(name, JSON.stringify(pads), JSON.stringify(silk));
   }
 
+  register_3d_model(packageName: string, uuid: string): void {
+    this.wasmEngine.register_3d_model(packageName, uuid);
+  }
+
   get_diagnostics_json(): string {
     return (this.wasmEngine as unknown as { get_diagnostics_json(): string }).get_diagnostics_json();
   }
@@ -827,12 +850,18 @@ class MockPcbEngine implements PcbEngine {
   private snapshot: BoardSnapshot = { board: null, components: [], nets: [], violations: [], traces: [], vias: [], ratsnest: [] };
   /** Footprints handed to the engine that did not come from source. */
   private registered = new Map<string, { pads: PadInfo[]; silk: SilkShape[] }>();
+  /** 3D models handed to the engine, by package name. */
+  private registeredModels = new Map<string, string>();
   /** Next mock entity ID counter */
   private nextEntityId = 1000;
 
   register_footprint(name: string, pads: PadInfo[], silk: SilkShape[]): string {
     this.registered.set(name, { pads, silk });
     return '';
+  }
+
+  register_3d_model(packageName: string, uuid: string): void {
+    this.registeredModels.set(packageName, uuid);
   }
 
   get_diagnostics_json(): string {
@@ -1081,6 +1110,7 @@ export async function loadWasm(): Promise<PcbEngine> {
     const rawEngine = new wasm.PcbEngine() as unknown as WasmPcbEngine;
     engineInstance = new WasmPcbEngineAdapter(rawEngine);
     replayRegisteredFootprints(engineInstance);
+  replayRegisteredModels(engineInstance);
     console.log('WASM module loaded successfully');
     return engineInstance;
   } catch (e) {
@@ -1094,6 +1124,7 @@ export async function loadWasm(): Promise<PcbEngine> {
   console.log('Using MockPcbEngine (WASM fallback)');
   engineInstance = new MockPcbEngine();
   replayRegisteredFootprints(engineInstance);
+  replayRegisteredModels(engineInstance);
   return engineInstance;
 }
 

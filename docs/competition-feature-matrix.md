@@ -151,7 +151,7 @@ CodeYourPCB occupies a unique niche: **the only code-first, standalone, browser-
 | Community package registry | ❌ | ✅ packages.atopile.io | ❌ | ✅ KiCad libraries | ✅ Altium 365 | ❌ | ❌ | ❌ | ✅ OSHWLab | ✅ Community |
 | LCSC/Mouser integration | 🔶 LCSC part in the BOM | ✅ LCSC auto-pick | ✅ Diode API | ❌ | ✅ Octopart | ❌ | ❌ | ❌ | ✅ LCSC + JLCPCB | ✅ Multi-supplier |
 | Custom footprint creation | ✅ Code-defined | ✅ | ✅ | ✅ GUI editor | ✅ IPC wizard | ✅ | ✅ | ✅ | ✅ | ✅ |
-| 3D model assignment | 🔶 JLCPCB parts, in the 3D view | ❌ | ❌ | ✅ STEP/VRML | ✅ | ✅ | ❌ | 🔶 | ✅ | ✅ |
+| 3D model assignment | ✅ JLCPCB parts, drawn by refdes | ❌ | ❌ | ✅ STEP/VRML | ✅ | ✅ | ❌ | 🔶 | ✅ | ✅ |
 
 **Parity assessment:** ❌ This is our weakest category. We have basic footprint support but no component catalog, no supplier integration, and no community registry. EasyEDA (700K+) and Flux.ai (750K+) have massive libraries. atopile has LCSC auto-picking. This is a critical gap for adoption.
 
@@ -297,7 +297,7 @@ a cell is downgraded or if the construct behind it stops working.
 | LCSC in the BOM | `crates/cypcb-export/src/bom/csv.rs` writes the `LCSC Part #` column |
 | what export does **not** write | `./target/release/cypcb export --dry-run examples/blink.cypcb` - Gerber, Excellon, BOM, CPL and a job file, and nothing else |
 | what the language server answers | `cargo test -p cypcb-lsp --test the_manual_matches_the_server` - the manual and the server's `initialize` result are held to each other in both directions. Hover, completion and go-to-definition are what it advertises; references, rename, formatting and semantic tokens are not implemented |
-| what the 3D view draws | A part placed from the JLCPCB panel while the 3D view is open fetches its EasyEDA model: `viewer/src/main.ts` calls `fetch3DModel(component.lcsc)` and hands the OBJ to `renderer3d.loadComponentFromOBJ`. Nothing assigns a model from the language, and the engine's own `register_3d_model` is not on that path - see the V4 entry for the chain that is |
+| what the 3D view draws | A part placed from the JLCPCB panel registers its EasyEDA model uuid: `viewer/src/main.ts` calls `register3DModel(pkg, footprint.modelUuid)`, `viewer/src/wasm.ts` hands it to the engine (replaying whatever arrived before the engine existed), the snapshot carries it as `model_3d`, and `renderer3d.ts` fetches the OBJ and replaces the placeholder mesh named for that component's refdes. Nothing assigns a model from the language |
 | what the browser API exposes | `cargo test -p cypcb-cli --test the_matrix_is_honest_about_us` holds the row against `crates/cypcb-render/src/lib.rs`, where `PcbEngine`'s `#[wasm_bindgen]` methods are declared. `Browser (zero install)` is the one row here nobody can test from a command line: it is a claim about how the thing is delivered, not about what it does |
 | the desktop binary's size | `cargo build --release -p cypcb-desktop && ls -l target/release/cypcb-desktop` -> **9,333,064 bytes** on x86_64 Linux, 2026-08-26. That is the executable; a packaged bundle carries more |
 

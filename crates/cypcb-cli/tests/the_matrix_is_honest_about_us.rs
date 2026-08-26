@@ -292,14 +292,14 @@ fn the_three_d_rows_say_what_the_renderer_and_the_engine_do() {
         );
     }
 
-    // Two paths, and the row has to name the one that runs. A part placed from
-    // the JLCPCB panel fetches its EasyEDA model directly; the engine's own
-    // `register_3d_model` is on a chain nothing completes, so a tick here
-    // would claim the dead one.
+    // The chain is complete now, so a tick is allowed - but only while the
+    // viewer really reaches the engine's `register_3d_model`. Unhook that call
+    // and the row has to come back down.
     //
-    // The first draft of this case searched for `register_3d_model` alone and
-    // passed while the row said `no caller yet` - the viewer's wrapper is
-    // spelled `register3DModel` and the live path does not use either.
+    // An earlier draft searched for `register_3d_model` alone and passed while
+    // the row said `no caller yet` - the viewer's wrapper is spelled
+    // `register3DModel`, and at the time neither spelling was on the path that
+    // ran. One identifier is not a capability.
     let assignment = our_cell(&matrix, "3D model assignment");
     let viewer = walk(&repo_root().join("viewer/src"));
     let through_the_engine = viewer
@@ -314,7 +314,7 @@ fn the_three_d_rows_say_what_the_renderer_and_the_engine_do() {
 
     let from_the_panel = viewer
         .iter()
-        .any(|source| source.contains("fetch3DModel(component.lcsc)"));
+        .any(|source| source.contains("register3DModel(pkg, footprint.modelUuid)"));
     assert_eq!(
         assignment.to_lowercase().contains("jlcpcb"),
         from_the_panel,

@@ -349,7 +349,7 @@ test.describe('JLCPCB Search Panel', () => {
 });
 
 test.describe('JLCPCB 3D Model Loading', () => {
-  test('component click triggers 3D model fetch pipeline when 3D view active', async ({ page }) => {
+  test('component click registers the model and leaves the fetch to the board', async ({ page }) => {
     let easyedaHit = false;
     let modulesHit = false;
 
@@ -417,14 +417,16 @@ test.describe('JLCPCB 3D Model Loading', () => {
     await page.fill('#jlcpcb-search-input', '0805 10k');
     await expect(page.locator('.jlcpcb-result')).toHaveCount(3, { timeout: 5_000 });
 
-    // Click first result — triggers onComponentSelect → fetch3DModel pipeline
+    // Click first result — triggers onComponentSelect → footprint fetch,
+    // which carries the 3D model uuid to the engine.
     await page.locator('.jlcpcb-result').first().click();
 
-    // Wait for the full fetch pipeline to complete (EasyEDA API → OBJ fetch)
-    // The pipeline runs: component API → extract UUID → fetch OBJ → attempt loadComponentFromOBJ.
-    // loadComponentFromOBJ will log an error because no placeholder mesh exists in the
-    // minimal board (no components with matching refdes), but the fetch pipeline itself
-    // should complete — verifiable via route hit tracking.
+    // The OBJ is not fetched here. It used to be, and the model was handed to
+    // `loadComponentFromOBJ` keyed by the LCSC number while every placeholder
+    // mesh is named `component-<refdes>`, so the lookup failed every time -
+    // this test's own comment said so and asserted the fetch anyway. The uuid
+    // now reaches the engine, arrives on a component as `model_3d` once the
+    // part is in the source, and the renderer fetches it keyed by refdes.
     await page.waitForFunction(
       () => {
         // The console.log for "[JLCPCB] Fetching 3D model" or "[3D] OBJ loaded" indicates
@@ -438,11 +440,12 @@ test.describe('JLCPCB 3D Model Loading', () => {
     // Give the async fetch chain time to complete
     await page.waitForTimeout(2000);
 
-    // Verify the full 3D model fetch pipeline was triggered:
-    // 1. EasyEDA component API was hit (to get 3D UUID)
-    // 2. EasyEDA 3D model CDN was hit (to get OBJ text)
+    // The component API is hit, because that is where the uuid comes from.
     expect(easyedaHit).toBe(true);
-    expect(modulesHit).toBe(true);
+    // The model CDN is not, because no component on this board uses that
+    // package yet. Fetching an OBJ nothing can be attached to is the waste
+    // this test used to require.
+    expect(modulesHit).toBe(false);
 
     // Verify 3D renderer is still active (pipeline didn't crash it)
     const isActive = await page.evaluate(() => (window as any).__renderer3d?.isActive);
