@@ -461,6 +461,20 @@ fn the_holes_and_the_placements_survive_a_save() {
     }
 }
 
+/// The job file without the moment it was written.
+///
+/// `CreationDate` is stamped to the second, so two exports either side of a
+/// second boundary differ in a way that says nothing about the board. The
+/// first version of this case compared the whole file and passed twice by
+/// luck; a comparison that depends on how fast the machine is would have
+/// failed on somebody else's, at a time nobody could reproduce.
+fn without_the_clock(job: &str) -> String {
+    job.lines()
+        .filter(|line| !line.contains("\"CreationDate\""))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 /// The job file a fabricator opens first.
 ///
 /// `<board>-job.gbrjob` names the stack, the finish and every layer file, and
@@ -481,11 +495,16 @@ fn the_job_file_survives_a_save() {
             before.contains("MaterialStackup") || before.contains("FilesAttributes"),
             "{example} has to write a job file worth comparing:\n{before}"
         );
+        assert!(
+            before.contains("\"CreationDate\""),
+            "the line this comparison drops has to be there to drop:\n{before}"
+        );
 
         let saved = saved(example, &dir);
         let after = exported(&saved, &dir.join(format!("after-{example}")), ".gbrjob");
         assert_eq!(
-            before, after,
+            without_the_clock(&before),
+            without_the_clock(&after),
             "{example} hands the fabricator a different job file after a save"
         );
     }
