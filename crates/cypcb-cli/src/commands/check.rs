@@ -394,14 +394,7 @@ impl CheckCommand {
         // reported a different zero-width thing: a paste stencil web of 0.000mm
         // is a torn stencil, not copper touching copper, and counting it here
         // made the line say something untrue about the board.
-        let shorts = drc
-            .violations
-            .iter()
-            .filter(|violation| {
-                matches!(violation.kind, cypcb_drc::ViolationKind::Clearance)
-                    && violation.actual == Some(cypcb_core::Nm::ZERO)
-            })
-            .count();
+        let shorts = cypcb_drc::shorts(&drc.violations);
         if shorts > 0 {
             eprintln!("  copper touching copper at 0.00mm: {}", shorts);
         }

@@ -147,6 +147,25 @@ pub fn clearance_contacts(violations: &[DrcViolation]) -> usize {
     seen.len()
 }
 
+/// Copper touching copper, counted.
+///
+/// Three call sites counted this as "any violation whose measured distance is
+/// zero" - `cypcb route`, `cypcb export` and the autorouter's own score - and
+/// `check` counted the same thing until a paste stencil web of 0.000mm turned
+/// up in the total. A stencil aperture with no web left is a torn stencil, not
+/// a short, and the difference is what the sentence beside the number claims.
+///
+/// The kind is the guard. Every rule that measures a distance now carries it
+/// as a number, so "actual is zero" alone would count a via with no annular
+/// ring and a trace of no width as copper touching copper.
+pub fn shorts(violations: &[DrcViolation]) -> usize {
+    violations
+        .iter()
+        .filter(|violation| violation.kind == ViolationKind::Clearance)
+        .filter(|violation| violation.actual == Some(Nm::ZERO))
+        .count()
+}
+
 impl std::fmt::Display for ViolationKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -320,8 +339,8 @@ impl DrcViolation {
     pub fn drill_size(entity: Entity, actual: Nm, required: Nm, location: Point) -> Self {
         DrcViolation {
             kind: ViolationKind::DrillSize,
-            actual: None,
-            required: None,
+            actual: Some(actual),
+            required: Some(required),
             area: None,
             location,
             entity,
@@ -362,8 +381,8 @@ impl DrcViolation {
     pub fn trace_width(entity: Entity, actual: Nm, required: Nm, location: Point) -> Self {
         DrcViolation {
             kind: ViolationKind::TraceWidth,
-            actual: None,
-            required: None,
+            actual: Some(actual),
+            required: Some(required),
             area: None,
             location,
             entity,
@@ -493,8 +512,8 @@ impl DrcViolation {
     pub fn edge_clearance(entity: Entity, actual: Nm, required: Nm, location: Point) -> Self {
         DrcViolation {
             kind: ViolationKind::EdgeClearance,
-            actual: None,
-            required: None,
+            actual: Some(actual),
+            required: Some(required),
             area: None,
             location,
             entity,
@@ -535,8 +554,8 @@ impl DrcViolation {
     pub fn annular_ring(entity: Entity, actual: Nm, required: Nm, location: Point) -> Self {
         DrcViolation {
             kind: ViolationKind::AnnularRing,
-            actual: None,
-            required: None,
+            actual: Some(actual),
+            required: Some(required),
             area: None,
             location,
             entity,
@@ -579,8 +598,8 @@ impl DrcViolation {
     pub fn via_diameter(entity: Entity, actual: Nm, required: Nm, location: Point) -> Self {
         DrcViolation {
             kind: ViolationKind::ViaDiameter,
-            actual: None,
-            required: None,
+            actual: Some(actual),
+            required: Some(required),
             area: None,
             location,
             entity,
@@ -601,8 +620,8 @@ impl DrcViolation {
     pub fn via_drill(entity: Entity, actual: Nm, required: Nm, location: Point) -> Self {
         DrcViolation {
             kind: ViolationKind::ViaDrill,
-            actual: None,
-            required: None,
+            actual: Some(actual),
+            required: Some(required),
             area: None,
             location,
             entity,
@@ -893,8 +912,8 @@ impl DrcViolation {
     pub fn trace_current(entity: Entity, actual: Nm, required: Nm, location: Point) -> Self {
         DrcViolation {
             kind: ViolationKind::TraceCurrent,
-            actual: None,
-            required: None,
+            actual: Some(actual),
+            required: Some(required),
             area: None,
             location,
             entity,
@@ -951,8 +970,8 @@ impl DrcViolation {
     pub fn silk_clearance(entity: Entity, actual: Nm, required: Nm, location: Point) -> Self {
         DrcViolation {
             kind: ViolationKind::SilkClearance,
-            actual: None,
-            required: None,
+            actual: Some(actual),
+            required: Some(required),
             area: None,
             location,
             entity,
@@ -976,8 +995,8 @@ impl DrcViolation {
     ) -> Self {
         DrcViolation {
             kind: ViolationKind::CourtyardClearance,
-            actual: None,
-            required: None,
+            actual: Some(actual),
+            required: Some(required),
             area: None,
             location,
             entity,

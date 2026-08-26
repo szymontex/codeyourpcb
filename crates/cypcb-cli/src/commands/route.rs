@@ -750,11 +750,7 @@ impl RouteCommand {
                 &mut world,
                 &DesignRules::from_constraints(&preset.constraints()),
             );
-            let shorts = report
-                .violations
-                .iter()
-                .filter(|violation| violation.actual == Some(cypcb_core::Nm::ZERO))
-                .count();
+            let shorts = cypcb_drc::shorts(&report.violations);
             if shorts > 0 {
                 eprintln!(
                     "DRC on the routed board: {} violations, {} of them copper touching copper",

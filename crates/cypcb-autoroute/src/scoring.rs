@@ -161,11 +161,10 @@ pub fn score_board(
     // 3. DRC violations
     let drc_result = run_drc(world, rules);
     let drc_violations = drc_result.violation_count() as u32;
-    let shorts = drc_result
-        .violations
-        .iter()
-        .filter(|v| v.actual == Some(Nm::ZERO))
-        .count() as u32;
+    // Copper touching copper, which is a different thing from a rule that
+    // measured zero: `cypcb_drc::shorts` is guarded on the clearance kind, so
+    // a via with no annular ring is not counted here as a short.
+    let shorts = cypcb_drc::shorts(&drc_result.violations) as u32;
     let clearance_contacts = cypcb_drc::clearance_contacts(&drc_result.violations) as u32;
 
     // 4. Smoothness

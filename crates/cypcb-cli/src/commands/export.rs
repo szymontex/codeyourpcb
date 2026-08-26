@@ -343,11 +343,7 @@ impl ExportCommand {
             world.rebuild_spatial_index_from_library(&library);
             let report = run_drc(&mut world, &rules);
 
-            let shorts = report
-                .violations
-                .iter()
-                .filter(|violation| violation.actual == Some(cypcb_core::Nm::ZERO))
-                .count();
+            let shorts = cypcb_drc::shorts(&report.violations);
 
             if !report.violations.is_empty() {
                 eprintln!();

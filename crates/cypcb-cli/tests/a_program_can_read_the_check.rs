@@ -108,6 +108,14 @@ fn a_broken_rule_is_named_measured_and_placed() {
         width["line"], 23,
         "the trace is written on line 23 of the fixture: {report}"
     );
+    assert_eq!(
+        width["actual_mm"], 0.2,
+        "the two figures in that sentence are numbers too: {report}"
+    );
+    assert_eq!(
+        width["required_mm"], 0.5,
+        "and the one the net asked for: {report}"
+    );
 
     // The clearance rule measures a distance and carries it as a number, so a
     // program can tell copper touching copper from a gap under spec without
