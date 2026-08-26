@@ -98,6 +98,20 @@ enum Commands {
     /// Route a .cypcb or .kicad_pcb board and print quality metrics as JSON
     Score(commands::ScoreCommand),
     /// Write a .cypcb design out as a KiCad .kicad_pcb board
+    ///
+    /// Two files come out, not one: the board, and a `.kicad_pro` beside it
+    /// carrying what a `.kicad_pcb` has no field for. The design rules go
+    /// there because that is where KiCad reads them; the fabricator the board
+    /// names and what each net asks for go there under a key of this
+    /// project's own, so `from-kicad` can read them back. **Keep the pair
+    /// together**: a board opened or re-read without its project file is
+    /// checked against the default table with its nets asking for nothing.
+    ///
+    /// KiCad ignores the key it does not know and drops it if it saves the
+    /// project itself, so the pairing survives a trip through these two
+    /// commands rather than through the editor. What the format cannot carry
+    /// at all - the drill spans a build makes, a flexible region - is
+    /// announced as it is dropped.
     ToKicad(commands::ToKicadCommand),
     /// Check a .cypcb or .kicad_pcb board, then again every time it changes
     Watch(commands::WatchCommand),

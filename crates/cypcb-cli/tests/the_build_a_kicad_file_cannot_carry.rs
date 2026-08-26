@@ -335,3 +335,37 @@ fn the_help_says_the_project_file_is_read() {
         "the pairing the help describes is the pairing the command performs:\n{said}"
     );
 }
+
+/// The other half of the pair says so too.
+///
+/// `to-kicad` writes two files and its page used to name one. The project file
+/// is where the rules, the house and what each net asks for travel, and a
+/// board handed on without it is a different board - which is worth reading
+/// before the files are sent rather than in a warning after they are written.
+#[test]
+fn the_help_says_two_files_come_out() {
+    let (help, _, ok) = run(&["to-kicad", "--help"]);
+    assert!(ok, "the help prints");
+    for named in [".kicad_pro", "Keep the pair together", "default table"] {
+        assert!(
+            help.contains(named),
+            "the help has to say `{named}`:\n{help}"
+        );
+    }
+
+    // And two files really come out.
+    let dir = scratch("two-files");
+    let board = dir.join("board.kicad_pcb");
+    let (_, said, ok) = run(&[
+        "to-kicad",
+        "examples/blind-via.cypcb",
+        "-o",
+        board.to_str().expect("a path"),
+    ]);
+    assert!(ok, "writing the board failed:\n{said}");
+    assert!(board.exists(), "the board is there");
+    assert!(
+        board.with_extension("kicad_pro").exists(),
+        "and the project file the help describes:\n{said}"
+    );
+}
