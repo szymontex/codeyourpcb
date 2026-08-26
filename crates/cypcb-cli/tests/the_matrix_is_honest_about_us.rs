@@ -292,21 +292,33 @@ fn the_three_d_rows_say_what_the_renderer_and_the_engine_do() {
         );
     }
 
-    // The assignment exists on the engine and nothing in the app calls it, so
-    // the row may not read as a shipped feature. Give the viewer a caller and
-    // this fails - which is the moment the cell should change.
+    // Two paths, and the row has to name the one that runs. A part placed from
+    // the JLCPCB panel fetches its EasyEDA model directly; the engine's own
+    // `register_3d_model` is on a chain nothing completes, so a tick here
+    // would claim the dead one.
+    //
+    // The first draft of this case searched for `register_3d_model` alone and
+    // passed while the row said `no caller yet` - the viewer's wrapper is
+    // spelled `register3DModel` and the live path does not use either.
     let assignment = our_cell(&matrix, "3D model assignment");
-    let called = walk(&repo_root().join("viewer/src"))
+    let viewer = walk(&repo_root().join("viewer/src"));
+    let through_the_engine = viewer
         .iter()
         .any(|source| source.contains("register_3d_model"));
     assert_eq!(
         assignment.starts_with('✅'),
-        called,
-        "`3D model assignment` reads `{assignment}` and a caller in viewer/src: {called}"
+        through_the_engine,
+        "`3D model assignment` reads `{assignment}` and the engine path in viewer/src: \
+         {through_the_engine}"
     );
-    assert!(
-        assignment.to_lowercase().contains("api"),
-        "the row says where the assignment is reachable from: {assignment}"
+
+    let from_the_panel = viewer
+        .iter()
+        .any(|source| source.contains("fetch3DModel(component.lcsc)"));
+    assert_eq!(
+        assignment.to_lowercase().contains("jlcpcb"),
+        from_the_panel,
+        "`3D model assignment` reads `{assignment}` and the panel path: {from_the_panel}"
     );
 }
 
