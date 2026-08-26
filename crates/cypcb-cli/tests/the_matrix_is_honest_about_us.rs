@@ -262,3 +262,73 @@ fn the_headless_api_row_names_methods_the_engine_has() {
         );
     }
 }
+
+/// What the 3D view can draw, and the loader that draws it.
+const THREE_D: &[(&str, &str)] = &[
+    ("generic", "BoxGeometry"),
+    ("gltf", "GLTFLoader"),
+    ("step", "STEPLoader"),
+];
+
+/// The 3D rows say what the renderer loads and who can assign a model.
+///
+/// `Component 3D models` read `Generic bodies` while `renderer3d.ts` has
+/// carried a GLTF loader and an auto-load pass for components with a model
+/// since before this file was written, and `3D model assignment` read a flat
+/// no beside an engine method that does exactly that. Both were half right,
+/// which is the hardest kind of stale to notice.
+#[test]
+fn the_three_d_rows_say_what_the_renderer_and_the_engine_do() {
+    let matrix = matrix();
+    let renderer = std::fs::read_to_string(repo_root().join("viewer/src/renderer3d.ts"))
+        .expect("the 3D renderer is there");
+
+    let bodies = our_cell(&matrix, "Component 3D models").to_lowercase();
+    for (what, needle) in THREE_D {
+        assert_eq!(
+            bodies.contains(what),
+            renderer.contains(needle),
+            "`Component 3D models` reads `{bodies}` and the renderer's `{needle}` says otherwise"
+        );
+    }
+
+    // The assignment exists on the engine and nothing in the app calls it, so
+    // the row may not read as a shipped feature. Give the viewer a caller and
+    // this fails - which is the moment the cell should change.
+    let assignment = our_cell(&matrix, "3D model assignment");
+    let called = walk(&repo_root().join("viewer/src"))
+        .iter()
+        .any(|source| source.contains("register_3d_model"));
+    assert_eq!(
+        assignment.starts_with('✅'),
+        called,
+        "`3D model assignment` reads `{assignment}` and a caller in viewer/src: {called}"
+    );
+    assert!(
+        assignment.to_lowercase().contains("api"),
+        "the row says where the assignment is reachable from: {assignment}"
+    );
+}
+
+/// Every `.ts` file under a directory, read.
+fn walk(dir: &Path) -> Vec<String> {
+    let mut sources = Vec::new();
+    let mut stack = vec![dir.to_path_buf()];
+    while let Some(next) = stack.pop() {
+        let Ok(entries) = std::fs::read_dir(&next) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+            } else if path.extension().is_some_and(|ext| ext == "ts") {
+                if let Ok(text) = std::fs::read_to_string(&path) {
+                    sources.push(text);
+                }
+            }
+        }
+    }
+    assert!(!sources.is_empty(), "no TypeScript under {}", dir.display());
+    sources
+}
