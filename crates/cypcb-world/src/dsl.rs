@@ -59,6 +59,60 @@ fn format_mm(mm: f64) -> String {
     format!("{:.6}", mm)
 }
 
+/// A number as the language would read it back: `10`, `0.5`, `1.27`.
+fn format_number(value: f64) -> String {
+    if value.fract() == 0.0 && value.abs() < 1e15 {
+        format!("{value:.0}")
+    } else {
+        let text = format!("{value:.6}");
+        text.trim_end_matches('0').trim_end_matches('.').to_string()
+    }
+}
+
+/// One operand of an assertion, or `None` when it cannot be spelled.
+fn assert_operand_as_written(operand: &cypcb_parser::ast::AssertOperand) -> Option<String> {
+    use cypcb_parser::ast::AssertOperand;
+    match operand {
+        AssertOperand::QualifiedName { parts, .. } => Some(parts.join(".")),
+        AssertOperand::Physical(value) => {
+            // A tolerance is part of what a value states and has no form in an
+            // assertion, so a value carrying one is not written back.
+            value
+                .tolerance
+                .is_none()
+                .then(|| format!("{}{}", format_number(value.value), value.unit))
+        }
+        AssertOperand::Dimension(dimension) => Some(format!(
+            "{}{}",
+            format_number(dimension.value),
+            dimension.unit
+        )),
+        AssertOperand::Number { value, .. } => Some(format_number(*value)),
+    }
+}
+
+/// One assertion as a statement, or `None` when a half of it cannot be spelled.
+fn assert_as_written(expression: &cypcb_parser::ast::AssertExpression) -> Option<String> {
+    use cypcb_parser::ast::AssertExpression;
+    match expression {
+        AssertExpression::Comparison {
+            left, op, right, ..
+        } => Some(format!(
+            "assert {} {op} {}",
+            assert_operand_as_written(left)?,
+            assert_operand_as_written(right)?
+        )),
+        AssertExpression::Within { left, target, .. } => target.tolerance.is_none().then(|| {
+            format!(
+                "assert {} within {}{}",
+                assert_operand_as_written(left).unwrap_or_default(),
+                format_number(target.value),
+                target.unit
+            )
+        }),
+    }
+}
+
 /// The constraint block for a net that asks for something, or nothing at all.
 ///
 /// Written in the units the grammar reads: millimetres for a width, a
@@ -935,6 +989,27 @@ pub fn board_as_dsl(world: &mut BoardWorld) -> String {
             let _ = writeln!(out, "    {pin}");
         }
         let _ = writeln!(out, "}}");
+    }
+
+    // What the design asserts about itself, after the parts the assertions are
+    // about.
+    //
+    // `assert R1.value >= 10kohm` is a rule the checker reports as an
+    // `assertion` violation, and the writer dropped it: a board saved through
+    // here came back with the parts and none of the claims made about them,
+    // which is the same shape of loss as the differential pair - a rule rather
+    // than a sentence's brevity.
+    //
+    // An assertion this writer cannot spell exactly is left out rather than
+    // approximated: a tolerance on an operand has no written form here, and a
+    // claim written down wrong is worse than one written down not at all.
+    let claims: Vec<String> = world
+        .assertions()
+        .iter()
+        .filter_map(|assertion| assert_as_written(&assertion.expression))
+        .collect();
+    for claim in claims {
+        let _ = writeln!(out, "\n{claim}");
     }
 
     // The pairs that carry one signal between them, after the nets they name.
