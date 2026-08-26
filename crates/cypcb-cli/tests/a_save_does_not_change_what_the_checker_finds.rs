@@ -395,3 +395,68 @@ fn the_part_to_buy_survives_a_save() {
         "the same board orders the same parts:\n{text}"
     );
 }
+
+/// One exported file of a board, by the tail of its name.
+fn exported(board: &Path, into: &Path, ends_with: &str) -> String {
+    let output = Command::new(env!("CARGO_BIN_EXE_cypcb"))
+        .arg("export")
+        .arg(board)
+        .arg("-o")
+        .arg(into)
+        .current_dir(repo_root())
+        .output()
+        .expect("the binary runs");
+    assert!(
+        output.status.success(),
+        "exporting failed:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let mut stack = vec![into.to_path_buf()];
+    while let Some(dir) = stack.pop() {
+        for entry in std::fs::read_dir(&dir)
+            .expect("the export directory is there")
+            .flatten()
+        {
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+            } else if path.to_string_lossy().ends_with(ends_with) {
+                return std::fs::read_to_string(&path).expect("the file is readable");
+            }
+        }
+    }
+    panic!("no file ending in {ends_with} under {}", into.display());
+}
+
+/// The two files a fabricator drills from and an assembly house places from.
+///
+/// Neither is read by the checker, by the silkscreen gerber or by the bill of
+/// materials, so a save that moved a hole or dropped a rotation passed every
+/// case above it in this file. `slotted-connector.cypcb` carries milled slots
+/// and `two-sided-power.cypcb` has a part on the bottom, rotated - which is
+/// the pair of facts a placement file is about.
+#[test]
+fn the_holes_and_the_placements_survive_a_save() {
+    let dir = std::env::temp_dir().join("cypcb-save-keeps-manufacturing");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("a place to work");
+
+    for (example, file) in [
+        ("slotted-connector.cypcb", "PTH.drl"),
+        ("two-sided-power.cypcb", "CPL.csv"),
+    ] {
+        let original = repo_root().join("examples").join(example);
+        let before = exported(&original, &dir.join(format!("before-{example}")), file);
+        assert!(
+            before.lines().count() > 2,
+            "{example} has to write a {file} worth comparing:\n{before}"
+        );
+
+        let saved = saved(example, &dir);
+        let after = exported(&saved, &dir.join(format!("after-{example}")), file);
+        assert_eq!(
+            before, after,
+            "{example} exports a different {file} after a save"
+        );
+    }
+}
