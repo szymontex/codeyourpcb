@@ -649,6 +649,35 @@ pub fn kind_from_refdes(refdes: &str) -> &'static str {
 }
 
 /// Quote a string the way the language reads one back.
+/// A component's value as the language would read it back.
+///
+/// `value 10kohm` is a physical value the checker can compare - `assert
+/// R1.value >= 10kohm` is what `examples/v2-constraints.cypcb` demonstrates -
+/// and the writer quoted every value it wrote. A quoted value is a string, a
+/// string is not a resistance, and the comparison that passed before a save
+/// failed after it: measured on that example, the saved board reported an
+/// `assertion` violation the original did not have.
+///
+/// Written bare only when the whole value is a number and a unit this
+/// language knows. `"LDO-3V3"` and `"10k"` are strings and stay quoted, and so
+/// does anything carrying a tolerance, which has a form here that this writer
+/// does not produce.
+fn value_as_written(value: &str) -> String {
+    let split = value
+        .find(|c: char| !(c.is_ascii_digit() || c == '.' || c == '-' || c == '+'))
+        .unwrap_or(value.len());
+    let (number, unit) = value.split_at(split);
+    let reads_back = !number.is_empty()
+        && !unit.is_empty()
+        && number.parse::<f64>().is_ok()
+        && unit.parse::<cypcb_core::PhysicalUnit>().is_ok();
+    if reads_back {
+        value.to_string()
+    } else {
+        quoted(value)
+    }
+}
+
 fn quoted(text: &str) -> String {
     format!("\"{}\"", text.replace('\\', "\\\\").replace('"', "\\\""))
 }
@@ -903,7 +932,7 @@ pub fn board_as_dsl(world: &mut BoardWorld) -> String {
             quoted(written_name.get(&part.footprint).unwrap_or(&part.footprint))
         );
         if !part.value.is_empty() {
-            let _ = writeln!(out, "    value {}", quoted(&part.value));
+            let _ = writeln!(out, "    value {}", value_as_written(&part.value));
         }
         let _ = writeln!(
             out,
