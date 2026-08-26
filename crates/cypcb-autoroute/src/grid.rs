@@ -1128,4 +1128,48 @@ mod tests {
         assert_eq!(rotated.x.raw(), p.x.raw());
         assert_eq!(rotated.y.raw(), p.y.raw());
     }
+
+    /// The two directions of the routing layer index, and the trap between
+    /// them.
+    ///
+    /// The router numbers copper `Top, Bottom, Inner1, Inner2` - the bottom
+    /// face at **1**, before any inner layer - while a stackup runs top to
+    /// bottom with the inner layers in the middle. Three shipped defects in
+    /// this project have been an index read in the wrong one of those orders,
+    /// and nothing named either function in a test.
+    #[test]
+    fn a_layer_and_its_routing_index_convert_both_ways() {
+        assert_eq!(layer_to_index(Layer::TopCopper), Some(0));
+        assert_eq!(layer_to_index(Layer::BottomCopper), Some(1));
+        // `Inner` is zero-based here and one-based in the language: what a
+        // designer writes as `Inner1` is `Layer::Inner(0)`, and the router
+        // puts it at index 2.
+        assert_eq!(layer_to_index(Layer::Inner(0)), Some(2));
+        assert_eq!(layer_to_index(Layer::Inner(1)), Some(3));
+
+        assert_eq!(index_to_layer(0), Layer::TopCopper);
+        assert_eq!(index_to_layer(1), Layer::BottomCopper);
+        assert_eq!(index_to_layer(2), Layer::Inner(0));
+        assert_eq!(index_to_layer(3), Layer::Inner(1));
+
+        // And the round trip, over more layers than any fixture has.
+        for index in 0..8usize {
+            let layer = index_to_layer(index);
+            assert_eq!(
+                layer_to_index(layer),
+                Some(index),
+                "index {index} came back as {layer:?}, which converts to \
+                 something else"
+            );
+        }
+    }
+
+    #[test]
+    fn a_layer_that_carries_no_copper_has_no_routing_index() {
+        // The router grids copper and nothing else: a mask or a legend has no
+        // index, and `None` is what keeps them out of the grid rather than a
+        // number that would land on somebody else's layer.
+        assert_eq!(layer_to_index(Layer::TopMask), None);
+        assert_eq!(layer_to_index(Layer::TopSilk), None);
+    }
 }
