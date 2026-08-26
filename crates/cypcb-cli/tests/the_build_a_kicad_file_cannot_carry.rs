@@ -190,3 +190,107 @@ fn a_project_file_that_states_its_own_rules_is_read() {
         "and which table that is:\n{said}"
     );
 }
+
+/// A board whose net asks for a width comes home still asking for it.
+///
+/// `net SIG [width 0.5mm ...]` is read by three rules, and a `.kicad_pcb`
+/// carries a net's membership and nothing else - so a round trip used to
+/// return a design whose nets asked for nothing and whose trace-width,
+/// trace-current and impedance rules checked nothing, silently.
+const ASKING: &str = r#"version 1
+
+board asks {
+    size 30mm x 20mm
+    layers 2
+    fab jlcpcb
+}
+
+component R1 resistor "0402" {
+    value "10k"
+    at 5mm, 10mm
+}
+
+component R2 resistor "0402" {
+    value "10k"
+    at 25mm, 10mm
+}
+
+net SIG [width 0.5mm clearance 0.3mm current 500mA] {
+    R1.1
+    R2.1
+}
+
+trace SIG {
+    from R1.1
+    to R2.1
+    layer Top
+    width 0.2mm
+}
+"#;
+
+#[test]
+fn what_a_net_asks_for_survives_the_trip() {
+    let dir = scratch("net-asks");
+    let design = dir.join("asks.cypcb");
+    std::fs::write(&design, ASKING).expect("the fixture is writable");
+
+    // The design holds its own trace to 0.5mm, and the trace carries 0.2mm.
+    let (_, counts) = checked(&design);
+    assert_eq!(counts.get("trace-width").copied(), Some(1), "{counts:?}");
+
+    let board = dir.join("board.kicad_pcb");
+    let (_, said, ok) = run(&[
+        "to-kicad",
+        design.to_str().expect("a path"),
+        "-o",
+        board.to_str().expect("a path"),
+    ]);
+    assert!(ok, "writing the KiCad board failed:\n{said}");
+    assert!(
+        said.contains("what 1 net(s) ask for (SIG)"),
+        "the loss is announced by name:\n{said}"
+    );
+
+    let back = dir.join("back.cypcb");
+    let (_, said, ok) = run(&[
+        "from-kicad",
+        board.to_str().expect("a path"),
+        "-o",
+        back.to_str().expect("a path"),
+    ]);
+    assert!(ok, "reading the board back failed:\n{said}");
+    assert!(
+        said.contains("What 1 net(s) ask for comes from"),
+        "and recovered from the project file beside it:\n{said}"
+    );
+
+    let source = std::fs::read_to_string(&back).expect("the design came back");
+    assert!(
+        source.contains("width 0.500000mm") && source.contains("current 500mA"),
+        "the figures are written back into the language:\n{source}"
+    );
+
+    // The half that matters: the rule checks again.
+    let (_, counts) = checked(&back);
+    assert_eq!(
+        counts.get("trace-width").copied(),
+        Some(1),
+        "the restored width is a rule the checker reads: {counts:?}"
+    );
+
+    // Read the board with no project file beside it and the net asks for
+    // nothing, so nothing holds the trace to anything.
+    let alone_dir = scratch("net-asks-alone");
+    let alone = alone_dir.join("alone.kicad_pcb");
+    std::fs::copy(&board, &alone).expect("the board is copyable");
+    let orphan = alone_dir.join("orphan.cypcb");
+    let (_, said, ok) = run(&[
+        "from-kicad",
+        alone.to_str().expect("a path"),
+        "-o",
+        orphan.to_str().expect("a path"),
+    ]);
+    assert!(ok, "reading the lone board failed:\n{said}");
+    let (_, counts) = checked(&orphan);
+    assert_eq!(counts.get("trace-width").copied(), None, "{counts:?}");
+}

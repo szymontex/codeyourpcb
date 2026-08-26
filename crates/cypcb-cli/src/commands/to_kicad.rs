@@ -219,9 +219,10 @@ impl ToKicadCommand {
             if !constrained.is_empty() {
                 eprintln!(
                     "Warning: what {} net(s) ask for ({}) is not in the KiCad board: it carries \
-                     a net's membership and nothing else. Width and clearance have a home in the \
-                     project file's net classes; current and impedance have none in either file, \
-                     so the trace-current and impedance rules stop checking those nets.",
+                     a net's membership and nothing else. All four figures are written into the \
+                     `.kicad_pro` beside it instead, where `from-kicad` reads them back - KiCad \
+                     does not read them, so a board opened in the editor is a board whose nets \
+                     ask for nothing.",
                     constrained.len(),
                     constrained.join(", ")
                 );
@@ -237,7 +238,17 @@ impl ToKicadCommand {
                 .file_stem()
                 .and_then(|stem| stem.to_str())
                 .unwrap_or("board");
-            let text = cypcb_kicad::write_project(rules, stem, world.fab());
+            let extras = cypcb_kicad::ProjectExtras {
+                fab: world.fab().map(|name| name.to_string()),
+                nets: world
+                    .nets()
+                    .filter_map(|(id, name)| {
+                        let asks = world.net_constraints(id)?;
+                        (asks != Default::default()).then(|| (name.to_string(), asks))
+                    })
+                    .collect(),
+            };
+            let text = cypcb_kicad::write_project(rules, stem, &extras);
             std::fs::write(&project, &text)
                 .into_diagnostic()
                 .wrap_err_with(|| format!("Failed to write {}", project.display()))?;

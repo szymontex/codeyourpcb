@@ -59,6 +59,40 @@ fn format_mm(mm: f64) -> String {
     format!("{:.6}", mm)
 }
 
+/// The constraint block for a net that asks for something, or nothing at all.
+///
+/// Written in the units the grammar reads: millimetres for a width, a
+/// clearance and both halves of a neck, milliamps for a current, ohms for a
+/// target impedance - which the model keeps in hundredths, so it comes back
+/// out as a decimal.
+fn net_constraints_as_written(asks: &crate::registry::NetConstraints) -> String {
+    let mut parts: Vec<String> = Vec::new();
+    if let Some(width) = asks.width {
+        parts.push(format!("width {}mm", format_mm(width.to_mm())));
+    }
+    if let Some(clearance) = asks.clearance {
+        parts.push(format!("clearance {}mm", format_mm(clearance.to_mm())));
+    }
+    if let Some(current) = asks.current_ma {
+        parts.push(format!("current {current}mA"));
+    }
+    if let Some(impedance) = asks.impedance_ohms_x100 {
+        parts.push(format!("impedance {}ohm", f64::from(impedance) / 100.0));
+    }
+    if let Some(neck) = asks.neck {
+        parts.push(format!(
+            "neck {}mm for {}mm",
+            format_mm(neck.width.to_mm()),
+            format_mm(neck.length.to_mm())
+        ));
+    }
+    if parts.is_empty() {
+        String::new()
+    } else {
+        format!(" [{}]", parts.join(" "))
+    }
+}
+
 /// Render every trace and via on the board as `.cypcb` source.
 ///
 /// Returns an empty string for a board with neither, so a caller can tell
@@ -876,11 +910,27 @@ pub fn board_as_dsl(world: &mut BoardWorld) -> String {
     // the file with `trace "VBUS+"` and no `net "VBUS+"` above it - which
     // parses and then fails to sync with `MissingNet`, a worse outcome than
     // either whole answer.
+    // What a net asks for, beside its name.
+    //
+    // `net SIG [width 0.5mm clearance 0.3mm current 500mA]` is four figures
+    // three rules read - `MinTraceWidthRule`, `TraceCurrentRule` and
+    // `ImpedanceRule` - and the writer used to drop every one of them. A board
+    // written out and read back came home with its nets unconstrained and
+    // those three quietly checking nothing, which is the same shape of silent
+    // loss as the pours and the named pads before it.
+    let ids_by_name: std::collections::HashMap<&String, u32> =
+        net_names.iter().map(|(id, name)| (name, *id)).collect();
+
     for (net, mut pins) in pins_by_net {
         pins.sort();
         pins.dedup();
+        let asks = ids_by_name
+            .get(&net)
+            .and_then(|id| world.net_constraints(crate::NetId::new(*id)))
+            .map(|asks| net_constraints_as_written(&asks))
+            .unwrap_or_default();
         let _ = writeln!(out);
-        let _ = writeln!(out, "net {} {{", net_name_as_written(&net));
+        let _ = writeln!(out, "net {}{} {{", net_name_as_written(&net), asks);
         for pin in pins {
             let _ = writeln!(out, "    {pin}");
         }

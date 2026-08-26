@@ -63,6 +63,37 @@ impl FromKicadCommand {
             }
         }
 
+        // What each net asks for, out of the same key. `net SIG [width 0.2mm
+        // clearance 0.25mm current 500mA impedance 50ohm]` is four figures
+        // three rules read, and a `.kicad_pcb` carries a net's membership and
+        // nothing else - so a board round-tripped without this came back with
+        // every net unconstrained and three rules quietly checking nothing.
+        {
+            let project = self.file.with_extension("kicad_pro");
+            let asking = std::fs::read_to_string(&project)
+                .map(|text| cypcb_kicad::nets_of_project(&text))
+                .unwrap_or_default();
+            if !asking.is_empty() {
+                let ids: Vec<(cypcb_world::NetId, String)> = world
+                    .nets()
+                    .map(|(id, name)| (id, name.to_string()))
+                    .collect();
+                let mut restored = 0;
+                for (name, constraints) in asking {
+                    if let Some((id, _)) = ids.iter().find(|(_, known)| *known == name) {
+                        world.set_net_constraints(*id, constraints);
+                        restored += 1;
+                    }
+                }
+                if restored > 0 {
+                    eprintln!(
+                        "What {restored} net(s) ask for comes from {}.",
+                        project.display()
+                    );
+                }
+            }
+        }
+
         // The rest of that project file: eight numbers KiCad enforces, which
         // this language has no way to state. A board names a fab and a net
         // states its own figures; nothing writes a rule table per board. So

@@ -241,20 +241,21 @@ fn the_trip_costs_exactly_these_three_things() {
         "{said}"
     );
     assert!(
-        said.contains("SIG") && said.contains("stop checking"),
+        said.contains("SIG") && said.contains("`.kicad_pro`"),
         "{said}"
     );
-    // The four constraints do not share a fate, and the warning says which is
-    // which: read out of three `.kicad_pro` files KiCad itself wrote, a net
-    // class carries a clearance and a track width and has no field for either
-    // current or impedance.
+    // All four travel now, in this project's own key rather than in KiCad's
+    // net classes - which carry a clearance and a track width and have no
+    // field for either current or impedance, read out of three `.kicad_pro`
+    // files KiCad itself wrote. What the editor makes of a board opened
+    // without them is what the sentence warns about.
     assert!(
-        said.contains("Width and clearance have a home"),
-        "two of the four could travel in the project file, and that is worth knowing:\n{said}"
+        said.contains("All four figures are written into the `.kicad_pro`"),
+        "the figures travel beside the board, and that is worth knowing:\n{said}"
     );
     assert!(
-        said.contains("current and impedance have none in either file"),
-        "and two of them cannot, which is the half nothing can fix:\n{said}"
+        said.contains("a board opened in the editor is a board whose nets ask for nothing"),
+        "and KiCad still does not read them:\n{said}"
     );
 
     let back = dir.join("back.cypcb");
@@ -297,10 +298,11 @@ fn the_trip_costs_exactly_these_three_things() {
         assert!(source.contains(kept), "the trip lost `{kept}`:\n{source}");
     }
 
-    // And what it costs. Two statements now, each with a rule behind it: the
-    // house used to be the third, and it rides in the `.kicad_pro` written
-    // beside the board since 2026-08-26, so it comes back when the pair stays
-    // together - which it does here, both files in one directory.
+    // And what it costs: the drill spans, and nothing else. The house and
+    // what each net asks for used to be the other two, and both ride in the
+    // `.kicad_pro` written beside the board since 2026-08-26 - so they come
+    // back when the pair stays together, which it does here, both files in one
+    // directory.
     assert!(
         !source.contains("drill Top"),
         "the drill spans came back, so the warning about them is stale:\n{source}"
@@ -310,7 +312,7 @@ fn the_trip_costs_exactly_these_three_things() {
         "the house travels in the project file beside the board:\n{source}"
     );
     assert!(
-        !source.contains('['),
-        "a net constraint came back, so the warning about them is stale:\n{source}"
+        source.contains("width 0.200000mm"),
+        "what the net asks for travels in the project file:\n{source}"
     );
 }

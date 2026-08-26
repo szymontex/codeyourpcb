@@ -21,6 +21,7 @@
 //! and unmatched library footprints, neither of which is a design rule.
 
 use cypcb_core::Nm;
+use cypcb_world::registry::NetConstraints;
 
 use crate::board_writer::KicadDesignRules;
 
@@ -46,6 +47,42 @@ fn mm(nm: Nm) -> String {
 /// enforces; `net_settings.classes` is what the editor hands you when you draw
 /// a new trace. A project stating only the first passes DRC and then offers a
 /// default 0.2mm trace on a board whose fab tops out at 0.127mm.
+/// What this project keeps in a `.kicad_pro` that KiCad has no field for.
+///
+/// A `.kicad_pcb` carries a board's shape and its copper and nothing about the
+/// house it was written for or what a net asks of a trace. Both were dropped on
+/// the way out and announced as losses; both ride here instead, under a key of
+/// this project's own so nothing pretends to be KiCad's.
+#[derive(Debug, Default, Clone)]
+pub struct ProjectExtras {
+    /// The fabricator the board named.
+    pub fab: Option<String>,
+    /// What each net asks for, by net name.
+    pub nets: Vec<(String, NetConstraints)>,
+}
+
+/// One net's figures as the project file states them.
+fn net_json(name: &str, constraints: &NetConstraints) -> Option<String> {
+    let mut fields: Vec<String> = Vec::new();
+    if let Some(width) = constraints.width {
+        fields.push(format!("\"width_nm\": {}", width.raw()));
+    }
+    if let Some(clearance) = constraints.clearance {
+        fields.push(format!("\"clearance_nm\": {}", clearance.raw()));
+    }
+    if let Some(current) = constraints.current_ma {
+        fields.push(format!("\"current_ma\": {current}"));
+    }
+    if let Some(impedance) = constraints.impedance_ohms_x100 {
+        fields.push(format!("\"impedance_ohms_x100\": {impedance}"));
+    }
+    if let Some(neck) = constraints.neck {
+        fields.push(format!("\"neck_width_nm\": {}", neck.width.raw()));
+        fields.push(format!("\"neck_length_nm\": {}", neck.length.raw()));
+    }
+    (!fields.is_empty()).then(|| format!("      \"{name}\": {{ {} }}", fields.join(", ")))
+}
+
 /// The house the board was written for, in a key KiCad does not read.
 ///
 /// A `.kicad_pcb` has no field for a fabricator's name, and losing it costs
@@ -58,11 +95,63 @@ fn mm(nm: Nm) -> String {
 /// KiCad ignores what it does not know, and drops it if it saves the project
 /// itself - so this survives a round trip through these two commands rather
 /// than through the editor.
-fn cypcb_section(fab: Option<&str>) -> String {
-    match fab {
-        Some(name) => format!("  \"cypcb\": {{\n    \"fab\": \"{name}\"\n  }},\n"),
-        None => String::new(),
+fn cypcb_section(extras: &ProjectExtras) -> String {
+    let mut parts: Vec<String> = Vec::new();
+    if let Some(name) = &extras.fab {
+        parts.push(format!("    \"fab\": \"{name}\""));
     }
+    let nets: Vec<String> = extras
+        .nets
+        .iter()
+        .filter_map(|(name, constraints)| net_json(name, constraints))
+        .collect();
+    if !nets.is_empty() {
+        parts.push(format!("    \"nets\": {{\n{}\n    }}", nets.join(",\n")));
+    }
+    if parts.is_empty() {
+        return String::new();
+    }
+    format!("  \"cypcb\": {{\n{}\n  }},\n", parts.join(",\n"))
+}
+
+/// What each net asks for, out of a project file this project wrote.
+///
+/// Empty for a file KiCad wrote, which has no such key, and for a design whose
+/// nets stated nothing.
+pub fn nets_of_project(text: &str) -> Vec<(String, NetConstraints)> {
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(text) else {
+        return Vec::new();
+    };
+    let Some(nets) = value.get(FAB_KEY).and_then(|ours| ours.get("nets")) else {
+        return Vec::new();
+    };
+    let Some(nets) = nets.as_object() else {
+        return Vec::new();
+    };
+    let nm = |row: &serde_json::Value, key: &str| -> Option<Nm> { row.get(key)?.as_i64().map(Nm) };
+    nets.iter()
+        .map(|(name, row)| {
+            let neck = match (nm(row, "neck_width_nm"), nm(row, "neck_length_nm")) {
+                (Some(width), Some(length)) => {
+                    Some(cypcb_world::components::trace::TraceNeck { width, length })
+                }
+                _ => None,
+            };
+            (
+                name.clone(),
+                NetConstraints {
+                    width: nm(row, "width_nm"),
+                    clearance: nm(row, "clearance_nm"),
+                    current_ma: row.get("current_ma").and_then(|v| v.as_f64()),
+                    impedance_ohms_x100: row
+                        .get("impedance_ohms_x100")
+                        .and_then(|v| v.as_u64())
+                        .map(|v| v as u32),
+                    neck,
+                },
+            )
+        })
+        .collect()
 }
 
 /// The name this project files a board's house under.
@@ -144,7 +233,7 @@ pub fn rules_of_project(text: &str) -> Option<ProjectRules> {
     (found != ProjectRules::default()).then_some(found)
 }
 
-pub fn write_project(rules: KicadDesignRules, stem: &str, fab: Option<&str>) -> String {
+pub fn write_project(rules: KicadDesignRules, stem: &str, extras: &ProjectExtras) -> String {
     format!(
         r#"{{
 {cypcb}  "board": {{
@@ -181,7 +270,7 @@ pub fn write_project(rules: KicadDesignRules, stem: &str, fab: Option<&str>) -> 
   }}
 }}
 "#,
-        cypcb = cypcb_section(fab),
+        cypcb = cypcb_section(extras),
         clearance = mm(rules.clearance),
         track_width = mm(rules.track_width),
         via_diameter = mm(rules.via_diameter),
@@ -215,7 +304,7 @@ mod tests {
 
     #[test]
     fn the_numbers_are_the_fabs_own() {
-        let text = write_project(jlcpcb_shaped(), "board", None);
+        let text = write_project(jlcpcb_shaped(), "board", &ProjectExtras::default());
 
         assert!(text.contains("\"min_track_width\": 0.127"), "{text}");
         assert!(text.contains("\"min_clearance\": 0.127"), "{text}");
@@ -230,7 +319,7 @@ mod tests {
     fn the_editors_default_trace_is_the_same_number() {
         // A project that passes DRC and then hands you a trace the fab cannot
         // make is the same disagreement in a different place.
-        let text = write_project(jlcpcb_shaped(), "board", None);
+        let text = write_project(jlcpcb_shaped(), "board", &ProjectExtras::default());
         let class = text
             .split("\"classes\"")
             .nth(1)
@@ -242,7 +331,7 @@ mod tests {
 
     #[test]
     fn the_file_names_itself() {
-        let text = write_project(jlcpcb_shaped(), "my-board", None);
+        let text = write_project(jlcpcb_shaped(), "my-board", &ProjectExtras::default());
         assert!(
             text.contains("\"filename\": \"my-board.kicad_pro\""),
             "{text}"
@@ -257,13 +346,20 @@ mod tests {
     /// drills without blinking.
     #[test]
     fn the_house_rides_in_the_project_file() {
-        let named = write_project(jlcpcb_shaped(), "board", Some("pcbway"));
+        let named = write_project(
+            jlcpcb_shaped(),
+            "board",
+            &ProjectExtras {
+                fab: Some("pcbway".to_string()),
+                nets: Vec::new(),
+            },
+        );
         assert!(named.contains("\"fab\": \"pcbway\""), "{named}");
         assert_eq!(fab_of_project(&named).as_deref(), Some("pcbway"));
 
         // A board that named no house says nothing, and neither does a project
         // file KiCad wrote itself.
-        let anonymous = write_project(jlcpcb_shaped(), "board", None);
+        let anonymous = write_project(jlcpcb_shaped(), "board", &ProjectExtras::default());
         assert!(!anonymous.contains("cypcb"), "{anonymous}");
         assert_eq!(fab_of_project(&anonymous), None);
         assert_eq!(fab_of_project("{\"board\": {}}"), None);
@@ -279,7 +375,7 @@ mod tests {
     /// The rules come back out of the file they were written into.
     #[test]
     fn the_numbers_are_read_back() {
-        let text = write_project(jlcpcb_shaped(), "board", None);
+        let text = write_project(jlcpcb_shaped(), "board", &ProjectExtras::default());
         let read = rules_of_project(&text).expect("the file states rules");
         assert_eq!(read.clearance, Some(jlcpcb_shaped().clearance));
         assert_eq!(read.annular_ring, Some(jlcpcb_shaped().annular_ring));
@@ -288,5 +384,49 @@ mod tests {
         // A file with no rules section, and one that is not JSON at all.
         assert_eq!(rules_of_project("{\"board\": {}}"), None);
         assert_eq!(rules_of_project("not json"), None);
+    }
+
+    /// What a net asks for rides in the same key, and comes back out.
+    #[test]
+    fn a_nets_figures_ride_in_the_project_file() {
+        let asking = NetConstraints {
+            width: Some(Nm::from_mm(0.2)),
+            clearance: Some(Nm::from_mm(0.25)),
+            current_ma: Some(500.0),
+            impedance_ohms_x100: Some(5000),
+            neck: Some(cypcb_world::components::trace::TraceNeck {
+                width: Nm::from_mm(0.15),
+                length: Nm::from_mm(1.0),
+            }),
+        };
+        let text = write_project(
+            jlcpcb_shaped(),
+            "board",
+            &ProjectExtras {
+                fab: None,
+                nets: vec![("SIG".to_string(), asking)],
+            },
+        );
+        serde_json::from_str::<serde_json::Value>(&text)
+            .unwrap_or_else(|error| panic!("still JSON: {error}\n{text}"));
+
+        let read = nets_of_project(&text);
+        assert_eq!(read.len(), 1, "{read:?}");
+        assert_eq!(read[0].0, "SIG");
+        assert_eq!(read[0].1, asking, "every figure comes back");
+
+        // A net that asks for nothing is not written, and a file KiCad wrote
+        // has no such key at all.
+        let silent = write_project(
+            jlcpcb_shaped(),
+            "board",
+            &ProjectExtras {
+                fab: None,
+                nets: vec![("GND".to_string(), NetConstraints::default())],
+            },
+        );
+        assert!(!silent.contains("cypcb"), "{silent}");
+        assert!(nets_of_project(&silent).is_empty());
+        assert!(nets_of_project("{\"board\": {}}").is_empty());
     }
 }
