@@ -32,7 +32,7 @@ import {
   DEFAULT_BOARD_THICKNESS_MM,
   DEFAULT_COPPER_THICKNESS_MM,
 } from './board-thickness';
-import { flexRegions } from './flex-regions';
+import { flexRegions, substrateSlabs } from './flex-regions';
 import { fetch3DModelByUuid } from './jlcpcb';
 import { parseEasyEdaOBJ } from './easyeda-obj-parser';
 
@@ -237,6 +237,8 @@ export class Renderer3D {
   /** Loaded GLTF models: refdes → Group */
   private loadedModels: Map<string, THREE.Group> = new Map();
 
+  /** How many boxes the board was drawn from: more than one means a step. */
+  private _substrateSlabCount = 0;
   /** Count of OBJ models loaded (subset of loadedModels) */
   private _objModelCount = 0;
 
@@ -341,22 +343,31 @@ export class Renderer3D {
     const widthMm = snapshot.board.width_nm * NM_TO_MM;
     const heightMm = snapshot.board.height_nm * NM_TO_MM;
 
-    // Board substrate — centered at Z=0 (KiCad convention)
-    const subGeo = new THREE.BoxGeometry(widthMm, heightMm, BOARD_THICKNESS_MM);
-    subGeo.translate(widthMm / 2, heightMm / 2, 0); // Z=0 center
+    // Board substrate — centered at Z=0 (KiCad convention).
+    //
+    // One box for an ordinary board, and a thinner one across the bend when
+    // the stack states a stiffener: a stiffener is bonded on to stop a part of
+    // the board flexing, so it cannot run through the ribbon, and its own
+    // thickness is what the step is made of. See `substrateSlabs`.
+    const slabs = substrateSlabs(snapshot);
+    this._substrateSlabCount = slabs.length;
+    for (const slab of slabs) {
+      const subGeo = new THREE.BoxGeometry(slab.widthMm, slab.heightMm, slab.thicknessMm);
+      subGeo.translate(slab.xMm + slab.widthMm / 2, slab.yMm + slab.heightMm / 2, 0);
 
-    // FR-4 substrate — yellowish-brown visible at board edges
-    const subMat = new THREE.MeshPhysicalMaterial({
-      color: 0x8B7D3C,      // Light olive-tan FR-4
-      roughness: 0.7,
-      metalness: 0.0,
-      clearcoat: 0.1,
-      clearcoatRoughness: 0.5,
-    });
+      // FR-4 substrate — yellowish-brown visible at board edges
+      const subMat = new THREE.MeshPhysicalMaterial({
+        color: 0x8B7D3C,      // Light olive-tan FR-4
+        roughness: 0.7,
+        metalness: 0.0,
+        clearcoat: 0.1,
+        clearcoatRoughness: 0.5,
+      });
 
-    const boardMesh = new THREE.Mesh(subGeo, subMat);
-    boardMesh.name = 'board-substrate';
-    this.boardGroup.add(boardMesh);
+      const boardMesh = new THREE.Mesh(subGeo, subMat);
+      boardMesh.name = slab.flex ? 'board-substrate-flex' : 'board-substrate';
+      this.boardGroup.add(boardMesh);
+    }
 
     // The part of the board that bends, tinted through the substrate.
     //
@@ -1709,6 +1720,7 @@ export class Renderer3D {
     this._viaCount = 0;
     this._padDrillCount = 0;
     this._objModelCount = 0;
+    this._substrateSlabCount = 0;
   }
 
   private getMeshCount(): number {
@@ -1742,6 +1754,7 @@ export class Renderer3D {
       get viaCount() { return self._viaCount; },
       get padDrillCount() { return self._padDrillCount; },
       get objModelCount() { return self._objModelCount; },
+      get substrateSlabCount() { return self._substrateSlabCount; },
     };
   }
 }
