@@ -728,15 +728,20 @@ pub fn pad_to_zone_with_margin(grid: &RoutingGrid, pad: &PadTarget, margin: u16)
     }
 }
 
-/// Pick the preferred routing layer from a layer mask.
-/// Prefers top copper (layer 0) if available.
+/// Pick the routing layer a pad is entered on: the lowest one it has.
+///
+/// Bit 0 is the top face, so the lowest copper layer a pad reaches is also the
+/// one a router prefers to enter it from - a through-hole pad is approached
+/// from the top rather than from the middle of the board.
+///
+/// This used to special-case the top layer before falling back to the lowest
+/// set bit, and **the special case could not change an answer**: wherever it
+/// fired, bit 0 was set, and the lowest set bit was 0 too. Two of the tests
+/// below pin what is left - a pad with every layer is entered at 0, and a pad
+/// on the bottom and the first inner layer at 1 rather than 2 - so removing
+/// the branch is a deletion rather than a change.
 fn preferred_layer(layer_mask: u32) -> u8 {
-    if layer_mask & 1 != 0 {
-        0 // Top copper
-    } else {
-        // Find lowest set bit
-        layer_mask.trailing_zeros() as u8
-    }
+    layer_mask.trailing_zeros() as u8
 }
 
 /// Check if a layer mask covers multiple copper layers (through-hole pad).
