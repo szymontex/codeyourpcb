@@ -187,3 +187,41 @@ fn a_number_carries_its_unit() {
         "3mm clears the fab floor, so the unit is what the case above reports:\n{wide}"
     );
 }
+
+/// A capability the matrix names, and the line in the server that provides it.
+///
+/// The needle carries `: Some(` so a commented-out plan - `// -
+/// references_provider` sits in that file today - does not read as a feature.
+const CAPABILITIES: &[(&str, &str)] = &[
+    ("hover", "hover_provider: Some("),
+    ("completion", "completion_provider: Some("),
+    ("go-to-definition", "definition_provider: Some("),
+    ("references", "references_provider: Some("),
+    ("rename", "rename_provider: Some("),
+    ("formatting", "document_formatting_provider: Some("),
+    ("semantic tokens", "semantic_tokens_provider: Some("),
+    ("diagnostics", "publish_diagnostics"),
+];
+
+/// The language server row says what the server answers, not how it feels.
+///
+/// That cell read `Full LSP` from March until 2026-08-26, beside a server
+/// advertising four things and a source file whose own comment lists
+/// `references_provider` as something to add later. "Full" is not a claim
+/// anybody can check; a list is.
+#[test]
+fn the_language_server_row_lists_what_the_server_advertises() {
+    let cell = our_cell(&matrix(), "LSP / IDE support");
+    let backend = std::fs::read_to_string(repo_root().join("crates/cypcb-lsp/src/backend.rs"))
+        .expect("the server is there");
+
+    let said = cell.to_lowercase();
+    for (capability, needle) in CAPABILITIES {
+        let claimed = said.contains(capability);
+        let provided = backend.contains(needle);
+        assert_eq!(
+            claimed, provided,
+            "the matrix says `{cell}`; `{capability}` is claimed: {claimed}, provided: {provided}"
+        );
+    }
+}

@@ -55,7 +55,7 @@ CodeYourPCB occupies a unique niche: **the only code-first, standalone, browser-
 | Typed interfaces (I2C, SPI) | ✅ `interface`, enforced | ✅ First-class types | ✅ Typed nets | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | Physical units in DSL | ✅ mm, mil, oz | ✅ `10kohm`, `3.3V` | ✅ `1kohm`, `0402` | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
 | Constraint assertions | ✅ `assert` | ✅ `assert within` | ✅ Checks + properties | ✅ Custom DRC rules | ✅ Constraint manager | ✅ ECSets | ✅ | 🔶 | 🔶 | 🔶 |
-| LSP / IDE support | ✅ Full LSP | ✅ VS Code extension | ✅ Starlark LSP | ❌ | ❌ | ❌ | ❌ | ❌ | N/A | N/A |
+| LSP / IDE support | ✅ Hover, completion, go-to-definition, diagnostics | ✅ VS Code extension | ✅ Starlark LSP | ❌ | ❌ | ❌ | ❌ | ❌ | N/A | N/A |
 | Embedded code editor | ✅ Monaco | ❌ (VS Code extension) | ❌ (CLI) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 
 **Parity assessment:** Our DSL is simpler but complete end-to-end. atopile and diodeinc/pcb have richer language features (modules, types, units) but depend on KiCad for layout. v2 DSL features (modules, interfaces, constraints) are in progress and will close the gap significantly.
@@ -176,7 +176,7 @@ CodeYourPCB occupies a unique niche: **the only code-first, standalone, browser-
 | Feature | CodeYourPCB | atopile | diodeinc/pcb | KiCad | Altium | Allegro | OrCAD | EAGLE | EasyEDA | Flux.ai |
 |---------|:-----------:|:-------:|:------------:|:-----:|:------:|:-------:|:-----:|:-----:|:-------:|:-------:|
 | Browser (zero install) | 🚀 WASM viewer | ❌ | 🔶 WASM (pcb-zen-wasm) | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ |
-| Desktop app | ✅ Tauri (<10MB) | ❌ (Python CLI) | ✅ Native CLI | ✅ Native | ✅ Native | ✅ Native | ✅ Native | ✅ Native | ✅ Electron | ❌ Browser only |
+| Desktop app | ✅ Tauri, 8.9MiB binary | ❌ (Python CLI) | ✅ Native CLI | ✅ Native | ✅ Native | ✅ Native | ✅ Native | ✅ Native | ✅ Electron | ❌ Browser only |
 | CLI | ✅ `cypcb` | ✅ `ato` | ✅ `pcb` | ✅ `kicad-cli` | 🔶 Limited | 🔶 | 🔶 | ❌ | ❌ | ❌ |
 | Windows | ✅ | ✅ (WSL) | ✅ (WSL) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | macOS | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ |
@@ -296,5 +296,7 @@ a cell is downgraded or if the construct behind it stops working.
 | in-house autorouter | `./target/release/cypcb route --help` - `--in-house` is what a run does anyway; D1 closed on 2026-08-09 in favour of it |
 | LCSC in the BOM | `crates/cypcb-export/src/bom/csv.rs` writes the `LCSC Part #` column |
 | what export does **not** write | `./target/release/cypcb export --dry-run examples/blink.cypcb` - Gerber, Excellon, BOM, CPL and a job file, and nothing else |
+| what the language server answers | `cargo test -p cypcb-lsp --test the_manual_matches_the_server` - the manual and the server's `initialize` result are held to each other in both directions. Hover, completion and go-to-definition are what it advertises; references, rename, formatting and semantic tokens are not implemented |
+| the desktop binary's size | `cargo build --release -p cypcb-desktop && ls -l target/release/cypcb-desktop` -> **9,333,064 bytes** on x86_64 Linux, 2026-08-26. That is the executable; a packaged bundle carries more |
 
 Last verified: 2026-08-26.
