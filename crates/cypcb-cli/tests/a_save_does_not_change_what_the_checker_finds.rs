@@ -239,3 +239,80 @@ fn a_routed_board_survives_a_save() {
     let after = checked(&saved_from(&routed, "saved-routed.cypcb", &dir));
     assert_eq!(before, after, "a save changed a routed board");
 }
+
+/// The legend a fabricator prints has to survive a save.
+///
+/// `SilkClearanceRule` measures printed designators rather than a footprint's
+/// own artwork, so this is not a rule going missing - it is the picture. The
+/// writer dropped every `silk` shape of a footprint it wrote, and the silk
+/// gerber is drawn from those shapes: a design saved through here exported a
+/// different board than the one it came from, with no warning and nothing in
+/// the checker to say so.
+const MARKED: &str = r#"version 1
+
+board marked {
+    size 20mm x 20mm
+    layers 2
+}
+
+footprint MARKED {
+    courtyard 4mm x 4mm
+    pad 1 rect at -1mm, 0mm size 1.2mm x 1.2mm
+    pad 2 rect at 1mm, 0mm size 1.2mm x 1.2mm
+    silk line -2mm, 1.4mm to 2mm, 1.4mm width 0.15mm
+    silk circle -1.6mm, -1.4mm radius 0.25mm width 0.15mm
+}
+
+component U1 ic "MARKED" {
+    value "marked"
+    at 10mm, 10mm
+}
+"#;
+
+/// The silkscreen gerber `export` writes for a board.
+fn silk_gerber(board: &Path, into: &Path) -> String {
+    let output = Command::new(env!("CARGO_BIN_EXE_cypcb"))
+        .arg("export")
+        .arg(board)
+        .arg("-o")
+        .arg(into)
+        .current_dir(repo_root())
+        .output()
+        .expect("the binary runs");
+    assert!(
+        output.status.success(),
+        "exporting failed:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let gerber = std::fs::read_dir(into.join("gerber"))
+        .expect("the gerbers are there")
+        .filter_map(|entry| entry.ok().map(|e| e.path()))
+        .find(|path| path.to_string_lossy().contains("F_SilkS"))
+        .expect("a front silkscreen file");
+    std::fs::read_to_string(gerber).expect("the gerber is readable")
+}
+
+#[test]
+fn the_legend_a_footprint_draws_survives_a_save() {
+    let dir = std::env::temp_dir().join("cypcb-save-keeps-silk");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("a place to work");
+
+    let original = dir.join("marked.cypcb");
+    std::fs::write(&original, MARKED).expect("the fixture is writable");
+
+    let saved = saved_from(&original, "saved-marked.cypcb", &dir);
+    let text = std::fs::read_to_string(&saved).expect("the saved design is there");
+    assert!(
+        text.contains("silk line") && text.contains("silk circle"),
+        "both shapes are written back:\n{text}"
+    );
+
+    // The half that matters: the fabricator gets the same artwork.
+    let before = silk_gerber(&original, &dir.join("out-before"));
+    let after = silk_gerber(&saved, &dir.join("out-after"));
+    assert_eq!(
+        before, after,
+        "the silkscreen a fabricator prints is the same board's:\n{text}"
+    );
+}

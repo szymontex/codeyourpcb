@@ -932,6 +932,43 @@ pub fn board_as_dsl(world: &mut BoardWorld) -> String {
             }
             let _ = writeln!(out);
         }
+
+        // The legend the fabricator prints.
+        //
+        // `SilkClearanceRule` measures printed designators rather than a
+        // footprint's own artwork, so dropping these changed nothing the
+        // checker says - it changed the board. The silkscreen gerber is drawn
+        // from these shapes, so a design saved through here exported a
+        // different board than the one it came from, silently.
+        for shape in &footprint.silk {
+            match shape {
+                crate::footprint::SilkShape::Segment { start, end, width } => {
+                    let _ = writeln!(
+                        out,
+                        "    silk line {}mm, {}mm to {}mm, {}mm width {}mm",
+                        format_mm(start.x.0 as f64 / 1e6),
+                        format_mm(start.y.0 as f64 / 1e6),
+                        format_mm(end.x.0 as f64 / 1e6),
+                        format_mm(end.y.0 as f64 / 1e6),
+                        format_mm(width.0 as f64 / 1e6)
+                    );
+                }
+                crate::footprint::SilkShape::Circle {
+                    centre,
+                    radius,
+                    width,
+                } => {
+                    let _ = writeln!(
+                        out,
+                        "    silk circle {}mm, {}mm radius {}mm width {}mm",
+                        format_mm(centre.x.0 as f64 / 1e6),
+                        format_mm(centre.y.0 as f64 / 1e6),
+                        format_mm(radius.0 as f64 / 1e6),
+                        format_mm(width.0 as f64 / 1e6)
+                    );
+                }
+            }
+        }
         let _ = writeln!(out, "}}");
     }
 
