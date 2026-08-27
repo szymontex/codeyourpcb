@@ -1,0 +1,42 @@
+// board-dimensions.cypcb - what the board measures, written down.
+//
+// A fabricator receives copper, drills and an outline. Nothing in that set
+// says how big the board is meant to be: it says how big the board is. If the
+// outline was drawn wrong, every file agrees with the mistake.
+//
+// A dimension is the design stating a measurement it expects to hold:
+//
+//   dimension { from 0mm, 0mm  to 40mm, 0mm  offset 3mm }
+//
+// `from` and `to` are the two ends being measured and both are required.
+// `offset` is how far the dimension line sits beside what it measures, so the
+// line does not lie on the edge it is about; it defaults to 2mm.
+//
+// A dimension is documentation. It is drawn on the SVG plot and nowhere else -
+// not on copper, not on the legend, not in the Gerbers. A fabricator reads
+// `40.000mm` on the plot and can measure the outline against it.
+//
+// Check it with:
+//   cypcb check examples/board-dimensions.cypcb
+//
+// It reports nothing and exits 0.
+
+version 1
+
+board board_dimensions {
+    size 40mm x 25mm
+    layers 2
+    fab jlcpcb
+}
+
+dimension {
+    from 0mm, 0mm
+    to 40mm, 0mm
+    offset 3mm
+}
+
+dimension {
+    from 0mm, 0mm
+    to 0mm, 25mm
+    offset 3mm
+}

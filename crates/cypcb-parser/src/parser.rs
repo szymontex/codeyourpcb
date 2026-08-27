@@ -33,10 +33,10 @@
 use crate::ast::{
     format_pad_number, AssertDef, AssertExpression, AssertOperand, BoardDef, ComparisonOp,
     ComponentDef, ComponentKind, CurrentUnit, CurrentValue, Definition, DiffPairDef, Dimension,
-    EdgeConnectorDef, FootprintDef, Identifier, ImplementsClause, ImportDef, InterfaceDef,
-    LayerType, ModuleDef, ModuleInstance, NeckDef, NetAssignment, NetClassDef, NetConstraints,
-    NetDef, OutlineDef, PadDef, PadShape, PhysicalValue, PinDeclaration, PinId, PinRef,
-    PortConnection, PositionExpr, RotationExpr, SilkDef, SizeProperty, SourceFile, Span,
+    DimensionDef, EdgeConnectorDef, FootprintDef, Identifier, ImplementsClause, ImportDef,
+    InterfaceDef, LayerType, ModuleDef, ModuleInstance, NeckDef, NetAssignment, NetClassDef,
+    NetConstraints, NetDef, OutlineDef, PadDef, PadShape, PhysicalValue, PinDeclaration, PinId,
+    PinRef, PortConnection, PositionExpr, RotationExpr, SilkDef, SizeProperty, SourceFile, Span,
     StackupDef, StackupLayer, StackupSheetDef, StringLit, TeardropsProperty, TextDef, Tolerance,
     ToleranceKind, TraceDef, TraceDirective, TracePath, TraceVia, ZoneDef, ZoneKind,
 };
@@ -165,6 +165,11 @@ impl CypcbParser {
                 "text_definition" => {
                     if let Some(text) = self.convert_board_text(source, &child, errors) {
                         definitions.push(Definition::Text(text));
+                    }
+                }
+                "dimension_definition" => {
+                    if let Some(dimension) = self.convert_dimension_def(source, &child, errors) {
+                        definitions.push(Definition::Dimension(dimension));
                     }
                 }
                 "netclass_definition" => {
@@ -1210,6 +1215,54 @@ impl CypcbParser {
             height,
             drill,
             drill_height,
+            span: span_of(node),
+        })
+    }
+
+    /// Convert a dimension node.
+    fn convert_dimension_def(
+        &self,
+        source: &str,
+        node: &Node,
+        errors: &mut Vec<ParseError>,
+    ) -> Option<DimensionDef> {
+        let mut from = None;
+        let mut to = None;
+        let mut offset = None;
+
+        let mut cursor = node.walk();
+        for child in node.children(&mut cursor) {
+            let property = if child.kind() == "dimension_property" {
+                child.named_child(0)
+            } else {
+                Some(child)
+            };
+            let Some(property) = property else { continue };
+            let mut point = || {
+                let x = get_child_by_field(&property, "x")
+                    .and_then(|n| self.convert_dimension(source, &n, errors));
+                let y = get_child_by_field(&property, "y")
+                    .and_then(|n| self.convert_dimension(source, &n, errors));
+                match (x, y) {
+                    (Some(x), Some(y)) => Some((x, y)),
+                    _ => None,
+                }
+            };
+            match property.kind() {
+                "dimension_from" => from = point(),
+                "dimension_to" => to = point(),
+                "dimension_offset" => {
+                    offset = get_child_by_field(&property, "value")
+                        .and_then(|n| self.convert_dimension(source, &n, errors));
+                }
+                _ => {}
+            }
+        }
+
+        Some(DimensionDef {
+            from: from?,
+            to: to?,
+            offset,
             span: span_of(node),
         })
     }

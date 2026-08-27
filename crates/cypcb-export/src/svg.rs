@@ -23,7 +23,7 @@
 //! shape negating its own Y - one place to be wrong instead of six.
 
 use crate::gerber::copper::place_pad_millideg;
-use cypcb_core::Nm;
+use cypcb_core::{Nm, Point};
 use cypcb_world::components::trace::{Trace, Via};
 use cypcb_world::components::{FootprintRef, Position, Rotation};
 use cypcb_world::footprint::FootprintLibrary;
@@ -165,6 +165,57 @@ pub fn plot_layer(world: &mut BoardWorld, library: &FootprintLibrary, layer: Lay
             mm(via.position.x),
             mm(via.position.y),
             mm(Nm(via.drill.0 / 2))
+        ));
+    }
+
+    // The measurements, drawn for the person looking at the plot and for
+    // nobody else: a dimension is documentation, and a fabricator printing one
+    // would put `30.000mm` across the finished board.
+    let dimensions: Vec<cypcb_world::components::BoardDimension> = {
+        let ecs = world.ecs_mut();
+        let mut query = ecs.query::<&cypcb_world::components::BoardDimension>();
+        query.iter(ecs).copied().collect()
+    };
+    for dimension in &dimensions {
+        let dx = (dimension.to.x.0 - dimension.from.x.0) as f64;
+        let dy = (dimension.to.y.0 - dimension.from.y.0) as f64;
+        let run = (dx * dx + dy * dy).sqrt();
+        if run <= 0.0 {
+            continue;
+        }
+        // Beside what it measures, not on top of it.
+        let (nx, ny) = (-dy / run, dx / run);
+        let shift = dimension.offset.0 as f64;
+        let shifted = |point: Point| Point {
+            x: Nm(point.x.0 + (nx * shift).round() as i64),
+            y: Nm(point.y.0 + (ny * shift).round() as i64),
+        };
+        let a = shifted(dimension.from);
+        let b = shifted(dimension.to);
+
+        body.push_str(&format!(
+            "  <line x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\" stroke=\"#606060\" stroke-width=\"0.050\"/>\n",
+            mm(a.x), mm(a.y), mm(b.x), mm(b.y)
+        ));
+        // The witness lines, from the thing measured out to the dimension.
+        for (end, shifted_end) in [(dimension.from, a), (dimension.to, b)] {
+            body.push_str(&format!(
+                "  <line x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\" stroke=\"#606060\" stroke-width=\"0.050\"/>\n",
+                mm(end.x), mm(end.y), mm(shifted_end.x), mm(shifted_end.y)
+            ));
+        }
+        // The figure, upright in the reader's frame rather than the board's:
+        // the whole drawing is inside a flipped group, so the text is flipped
+        // back here or it reads mirrored.
+        let middle_x = (a.x.0 + b.x.0) / 2;
+        let middle_y = (a.y.0 + b.y.0) / 2;
+        body.push_str(&format!(
+            "  <text x=\"{}\" y=\"{}\" font-size=\"1\" fill=\"#606060\" text-anchor=\"middle\" \
+             transform=\"translate(0 {}) scale(1 -1)\">{:.3}mm</text>\n",
+            mm(Nm(middle_x)),
+            mm(Nm(-middle_y)),
+            mm(Nm(2 * middle_y)),
+            dimension.length().0 as f64 / 1_000_000.0
         ));
     }
 

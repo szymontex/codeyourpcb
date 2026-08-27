@@ -1195,6 +1195,32 @@ pub fn board_as_dsl(world: &mut BoardWorld) -> String {
         out.push_str(&zone_as_dsl(zone, *stitch, &net_names));
     }
 
+    // The measurements, before the words: a reader meets the board's size
+    // before its labels. Documentation either way - neither reaches copper.
+    let dimensions: Vec<crate::components::BoardDimension> = {
+        let ecs = world.ecs_mut();
+        let mut query = ecs.query::<&crate::components::BoardDimension>();
+        query.iter(ecs).copied().collect()
+    };
+    for dimension in &dimensions {
+        let _ = writeln!(out, "dimension {{");
+        let _ = writeln!(
+            out,
+            "    from {}mm, {}mm",
+            format_mm(dimension.from.x.to_mm()),
+            format_mm(dimension.from.y.to_mm())
+        );
+        let _ = writeln!(
+            out,
+            "    to {}mm, {}mm",
+            format_mm(dimension.to.x.to_mm()),
+            format_mm(dimension.to.y.to_mm())
+        );
+        let _ = writeln!(out, "    offset {}mm", format_mm(dimension.offset.to_mm()));
+        let _ = writeln!(out, "}}");
+        let _ = writeln!(out);
+    }
+
     // The design's own words. Written after the zones for the same reason the
     // zones come after the parts: a reader meets the board, then what is on it,
     // then what is written on top.

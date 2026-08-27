@@ -464,6 +464,112 @@
     }
   },
   {
+    "type": "dimension_definition",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "dimension_property",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "dimension_from",
+    "named": true,
+    "fields": {
+      "x": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "dimension",
+            "named": true
+          }
+        ]
+      },
+      "y": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "dimension",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "dimension_offset",
+    "named": true,
+    "fields": {
+      "value": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "dimension",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "dimension_property",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "dimension_from",
+          "named": true
+        },
+        {
+          "type": "dimension_offset",
+          "named": true
+        },
+        {
+          "type": "dimension_to",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "dimension_to",
+    "named": true,
+    "fields": {
+      "x": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "dimension",
+            "named": true
+          }
+        ]
+      },
+      "y": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "dimension",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "drill_spec",
     "named": true,
     "fields": {
@@ -1524,6 +1630,10 @@
         },
         {
           "type": "diffpair_definition",
+          "named": true
+        },
+        {
+          "type": "dimension_definition",
           "named": true
         },
         {
@@ -2814,6 +2924,10 @@
     "named": true
   },
   {
+    "type": "dimension",
+    "named": false
+  },
+  {
     "type": "diode",
     "named": false
   },
@@ -3024,6 +3138,10 @@
   },
   {
     "type": "oblong",
+    "named": false
+  },
+  {
+    "type": "offset",
     "named": false
   },
   {

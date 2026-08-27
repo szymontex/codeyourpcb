@@ -5,8 +5,9 @@
 
 use cypcb_calc::TraceWidthCalculator;
 use cypcb_parser::ast::{
-    AssertDef, AssertExpression, AssertOperand, BoardDef, ComponentDef, Definition, FootprintDef,
-    ImportDef, InterfaceDef, ModuleDef, NetDef, SourceFile, TraceDef, ZoneDef, ZoneKind,
+    AssertDef, AssertExpression, AssertOperand, BoardDef, ComponentDef, Definition, DimensionDef,
+    FootprintDef, ImportDef, InterfaceDef, ModuleDef, NetDef, SourceFile, TraceDef, ZoneDef,
+    ZoneKind,
 };
 use cypcb_world::footprint::FootprintLibrary;
 
@@ -67,6 +68,7 @@ fn hover_for_definition(doc: &DocumentState, def: &Definition, offset: usize) ->
         // A pair is two net names; hovering either should explain the net,
         // which the net hover already does.
         Definition::DiffPair(_) => None,
+        Definition::Dimension(dimension) => hover_for_dimension(dimension, offset),
     }
 }
 
@@ -742,6 +744,38 @@ fn hover_for_import(import: &ImportDef, offset: usize) -> Option<HoverInfo> {
         });
     }
     None
+}
+
+/// A dimension states two ends; the distance between them is the whole point
+/// of writing one, and it is the one number the file does not spell out.
+fn hover_for_dimension(dimension: &DimensionDef, offset: usize) -> Option<HoverInfo> {
+    if offset < dimension.span.start || offset >= dimension.span.end {
+        return None;
+    }
+
+    let from = (dimension.from.0.to_nm(), dimension.from.1.to_nm());
+    let to = (dimension.to.0.to_nm(), dimension.to.1.to_nm());
+    let dx = (to.0 .0 - from.0 .0) as f64;
+    let dy = (to.1 .0 - from.1 .0) as f64;
+    let length = (dx * dx + dy * dy).sqrt() / 1_000_000.0;
+
+    let mut lines = vec!["**Dimension**".to_string()];
+    lines.push(format!("Measures: {:.3}mm", length));
+    lines.push(format!(
+        "From: {:.3}mm, {:.3}mm",
+        from.0 .0 as f64 / 1_000_000.0,
+        from.1 .0 as f64 / 1_000_000.0
+    ));
+    lines.push(format!(
+        "To: {:.3}mm, {:.3}mm",
+        to.0 .0 as f64 / 1_000_000.0,
+        to.1 .0 as f64 / 1_000_000.0
+    ));
+    lines.push("Documentation only - never reaches copper or silkscreen.".to_string());
+
+    Some(HoverInfo {
+        content: lines.join("\n"),
+    })
 }
 
 fn hover_for_assert(assert_def: &AssertDef, offset: usize) -> Option<HoverInfo> {

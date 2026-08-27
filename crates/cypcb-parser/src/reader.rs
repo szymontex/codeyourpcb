@@ -19,11 +19,11 @@
 
 use crate::ast::{
     format_pad_number, AssertDef, AssertExpression, AssertOperand, BoardDef, ComparisonOp,
-    ComponentDef, ComponentKind, Definition, DiffPairDef, Dimension, EdgeConnectorDef,
-    FootprintDef, Identifier, ImplementsClause, ImportDef, InterfaceDef, LayerType, ModuleDef,
-    ModuleInstance, NetAssignment, NetClassDef, NetConstraints, NetDef, OutlineDef, PadDef,
-    PadShape, PhysicalValue, PinDeclaration, PinId, PinRef, PortConnection, PositionExpr,
-    RotationExpr, SilkDef, SizeProperty, SourceFile, Span, StackupDef, StackupLayer,
+    ComponentDef, ComponentKind, Definition, DiffPairDef, Dimension, DimensionDef,
+    EdgeConnectorDef, FootprintDef, Identifier, ImplementsClause, ImportDef, InterfaceDef,
+    LayerType, ModuleDef, ModuleInstance, NetAssignment, NetClassDef, NetConstraints, NetDef,
+    OutlineDef, PadDef, PadShape, PhysicalValue, PinDeclaration, PinId, PinRef, PortConnection,
+    PositionExpr, RotationExpr, SilkDef, SizeProperty, SourceFile, Span, StackupDef, StackupLayer,
     StackupSheetDef, StringLit, TeardropsProperty, TextDef, Tolerance, ToleranceKind, TraceDef,
     TraceDirective, TracePath, TraceVia, ZoneDef, ZoneKind,
 };
@@ -120,6 +120,10 @@ pub fn read(source: &str) -> ParseResult<SourceFile> {
             },
             "text" => match reader.board_text(start) {
                 Some(def) => definitions.push(Definition::Text(def)),
+                None => reader.skip_to_next_definition(),
+            },
+            "dimension" => match reader.dimension_def(start) {
+                Some(def) => definitions.push(Definition::Dimension(def)),
                 None => reader.skip_to_next_definition(),
             },
             "import" => match reader.import(start) {
@@ -1601,6 +1605,68 @@ impl<'a> Reader<'a> {
     }
 
     /// `diffpair USB { USB_DP USB_DM }`.
+    /// `dimension { from 0mm, 0mm  to 30mm, 0mm  offset 2mm }`.
+    ///
+    /// Both ends are required - a measurement of one point is not a
+    /// measurement. The offset is where the line sits beside what it measures,
+    /// and a drawing that does not say gets the ordinary two millimetres.
+    fn dimension_def(&mut self, start: usize) -> Option<DimensionDef> {
+        self.bump(); // `dimension`
+        if !self.eat(&TokenKind::LBrace) {
+            self.unexpected("`{` after `dimension`");
+            return None;
+        }
+
+        let mut from = None;
+        let mut to = None;
+        let mut offset = None;
+
+        while !self.done() && !self.eat(&TokenKind::RBrace) {
+            match self.peek_ident() {
+                Some("from") => {
+                    self.bump();
+                    let x = self.dimension();
+                    self.eat(&TokenKind::Comma);
+                    let y = self.dimension();
+                    match (x, y) {
+                        (Some(x), Some(y)) => from = Some((x, y)),
+                        _ => self.unexpected("a point like `0mm, 0mm`"),
+                    }
+                }
+                Some("to") => {
+                    self.bump();
+                    let x = self.dimension();
+                    self.eat(&TokenKind::Comma);
+                    let y = self.dimension();
+                    match (x, y) {
+                        (Some(x), Some(y)) => to = Some((x, y)),
+                        _ => self.unexpected("a point like `30mm, 0mm`"),
+                    }
+                }
+                Some("offset") => {
+                    self.bump();
+                    match self.dimension() {
+                        Some(value) => offset = Some(value),
+                        None => self.unexpected("a distance like `2mm`"),
+                    }
+                }
+                _ => self.unknown_property("dimension", &["from", "to", "offset"]),
+            }
+        }
+
+        let (Some(from), Some(to)) = (from, to) else {
+            self.unexpected("a dimension with both ends");
+            return None;
+        };
+
+        Some(DimensionDef {
+            from,
+            to,
+            offset,
+            span: Span::new(start, self.behind()),
+        })
+    }
+
     /// `text "REV B" { at 5mm, 2mm  layer top  height 1.5mm }`.
     ///
     /// Only the position is required: a legend with no height takes the one

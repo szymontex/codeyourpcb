@@ -746,6 +746,20 @@ pub fn sync_ast_to_world(
             Definition::Text(text) => {
                 sync_board_text(text, world);
             }
+            Definition::Dimension(dimension) => {
+                world.ecs_mut().spawn(crate::components::BoardDimension {
+                    from: cypcb_core::Point::new(
+                        dimension.from.0.to_nm(),
+                        dimension.from.1.to_nm(),
+                    ),
+                    to: cypcb_core::Point::new(dimension.to.0.to_nm(), dimension.to.1.to_nm()),
+                    offset: dimension
+                        .offset
+                        .as_ref()
+                        .map(|offset| offset.to_nm())
+                        .unwrap_or(crate::components::BoardDimension::DEFAULT_OFFSET),
+                });
+            }
             Definition::Outline(_) => {
                 // Already applied above, once the board existed.
             }

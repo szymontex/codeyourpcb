@@ -365,6 +365,34 @@ pub struct BoardOutline {
     pub points: Vec<cypcb_core::Point>,
 }
 
+/// A measurement for the drawing: `dimension { from ... to ... offset 2mm }`.
+///
+/// Documentation rather than copper or ink: it is drawn in the plot a person
+/// looks at and in nothing a fabricator receives. KiCad keeps these on a
+/// layer of their own for the same reason - a board with `30.000mm` printed
+/// across it is a board nobody asked for.
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BoardDimension {
+    /// One end of what is measured.
+    pub from: cypcb_core::Point,
+    /// The other end.
+    pub to: cypcb_core::Point,
+    /// How far the dimension line sits from the line it measures.
+    pub offset: cypcb_core::Nm,
+}
+
+impl BoardDimension {
+    /// Where the line sits when a drawing does not say.
+    pub const DEFAULT_OFFSET: cypcb_core::Nm = cypcb_core::Nm(2_000_000);
+
+    /// What it measures, in nanometres.
+    pub fn length(&self) -> cypcb_core::Nm {
+        let dx = (self.to.x.0 - self.from.x.0) as f64;
+        let dy = (self.to.y.0 - self.from.y.0) as f64;
+        cypcb_core::Nm((dx * dx + dy * dy).sqrt().round() as i64)
+    }
+}
+
 /// Words a design put on the legend: `text "REV B" { at 5mm, 2mm }`.
 ///
 /// Every part's designator is already printed from `silk_text`; this is what a

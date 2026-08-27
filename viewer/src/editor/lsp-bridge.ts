@@ -393,6 +393,7 @@ export function registerCompletionProvider(monaco: typeof import('monaco-editor'
             { label: 'keepout', insert: 'keepout ${1:name} {\n\tbounds ${2:0}mm, ${3:0}mm to ${4:10}mm, ${5:10}mm\n}', detail: 'Keepout area' },
             { label: 'flex', insert: 'flex ${1:bend} {\n\tbounds ${2:20}mm, ${3:0}mm to ${4:40}mm, ${5:20}mm\n\tlayer ${6|all,top,bottom|}\n}', detail: 'Flexible region: the part of the board that bends' },
             { label: 'text', insert: 'text "${1:REV B}" {\n\tat ${2:10}mm, ${3:5}mm\n\tlayer ${4|top,bottom|}\n\theight ${5:1.5}mm\n}', detail: 'Words on the legend: a revision, a label, a warning' },
+            { label: 'dimension', insert: 'dimension {\n\tfrom ${1:0}mm, ${2:0}mm\n\tto ${3:30}mm, ${4:0}mm\n\toffset ${5:2}mm\n}', detail: 'A measurement a fabricator can check the board against' },
             { label: 'outline', insert: 'outline {\n\tpoint ${1:0}mm, ${2:0}mm\n\tpoint ${3:40}mm, ${4:0}mm\n\tpoint ${5:40}mm, ${6:30}mm\n}', detail: 'Board outline, for a board that is not a rectangle' },
             { label: 'netclass', insert: 'netclass ${1:Mains} [current ${2:10}A clearance ${3:3}mm] {\n\t${4:L}\n}', detail: 'Net class: one set of constraints for several nets' },
             { label: 'diffpair', insert: 'diffpair ${1:USB} {\n\t${2:USB_DP}\n\t${3:USB_DM}\n}', detail: 'Differential pair: two nets held to the same length' },

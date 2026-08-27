@@ -72,6 +72,7 @@ fn keyword(definition: &Definition) -> &'static [&'static str] {
         Definition::Assert(_) => &["assert"],
         Definition::DiffPair(_) => &["diffpair"],
         Definition::Text(_) => &["text"],
+        Definition::Dimension(_) => &["dimension"],
     }
 }
 
@@ -189,8 +190,12 @@ fn named_things(ast: &SourceFile) -> Vec<(String, Span, &'static str)> {
                 ));
             }
             // A legend's words are a string, but not a name: nothing refers
-            // to them, so there is nothing for this to cross-check.
-            Definition::Outline(_) | Definition::Assert(_) | Definition::Text(_) => {}
+            // to them, so there is nothing for this to cross-check. A
+            // dimension is two points and a distance, with no name at all.
+            Definition::Outline(_)
+            | Definition::Assert(_)
+            | Definition::Text(_)
+            | Definition::Dimension(_) => {}
         }
     }
 

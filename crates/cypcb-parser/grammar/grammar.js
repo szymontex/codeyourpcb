@@ -46,6 +46,7 @@ module.exports = grammar({
       $.board_definition,
       $.outline_definition,
       $.text_definition,
+      $.dimension_definition,
       $.component_definition,
       $.net_definition,
       $.netclass_definition,
@@ -65,6 +66,41 @@ module.exports = grammar({
     // Words a person puts on the board: a revision, a warning, a name beside a
     // connector. The legend already carries every part's designator; this is
     // for what the design wants to say that is not a designator.
+    // dimension { from 0mm, 0mm  to 30mm, 0mm  offset 2mm }
+    //
+    // A measurement a person reads off the drawing: the distance between two
+    // points, drawn as a line with arrows and the figure it measures. Not on
+    // the silkscreen - a dimension is documentation, and a fabricator printing
+    // it would put `30.000mm` on the finished board.
+    dimension_definition: $ => seq(
+      'dimension',
+      '{',
+      repeat($.dimension_property),
+      '}',
+    ),
+
+    dimension_property: $ => choice(
+      $.dimension_from,
+      $.dimension_to,
+      $.dimension_offset,
+    ),
+
+    dimension_from: $ => seq(
+      'from',
+      field('x', $.dimension),
+      ',',
+      field('y', $.dimension),
+    ),
+
+    dimension_to: $ => seq(
+      'to',
+      field('x', $.dimension),
+      ',',
+      field('y', $.dimension),
+    ),
+
+    dimension_offset: $ => seq('offset', field('value', $.dimension)),
+
     text_definition: $ => seq(
       'text',
       field('content', $.string),

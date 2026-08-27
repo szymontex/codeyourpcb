@@ -817,6 +817,30 @@ Every part's designator is already printed without being asked for. This is for
 what the design wants to say that is not a designator - a revision, a label
 beside a connector, a polarity mark's word.
 
+## Dimensions
+
+What the board measures, written down so a fabricator can check it:
+
+```
+dimension {
+    from 0mm, 0mm
+    to 40mm, 0mm
+    offset 3mm
+}
+```
+
+`from` and `to` are the two ends being measured and both are required. `offset`
+is how far the dimension line sits beside what it measures, so the line does
+not lie on top of the edge it is about; it defaults to 2mm.
+
+The distance itself is never written in the file. It is computed from the two
+ends, which is the point: a dimension cannot disagree with the coordinates it
+was drawn from.
+
+A dimension is documentation. It is drawn on the SVG plot and nowhere else -
+not on copper, not on the legend, not in the Gerbers - so nothing a fabricator
+manufactures from ever carries it.
+
 ## Zone Definition
 
 Define keepout areas or copper pour zones:
@@ -1227,6 +1251,7 @@ Complete working examples can be found in the `examples/` directory:
 - `examples/power-indicator.cypcb` - Power indicator with current constraints
 - `examples/drc-test.cypcb` - DRC rule demonstrations
 - `examples/routing-test.cypcb` - Manual trace definitions
+- `examples/board-dimensions.cypcb` - Measurements a fabricator can check the board against
 
 ## Common Mistakes
 

@@ -61,6 +61,10 @@
         },
         {
           "type": "SYMBOL",
+          "name": "dimension_definition"
+        },
+        {
+          "type": "SYMBOL",
           "name": "component_definition"
         },
         {
@@ -106,6 +110,122 @@
         {
           "type": "SYMBOL",
           "name": "assert_statement"
+        }
+      ]
+    },
+    "dimension_definition": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "STRING",
+          "value": "dimension"
+        },
+        {
+          "type": "STRING",
+          "value": "{"
+        },
+        {
+          "type": "REPEAT",
+          "content": {
+            "type": "SYMBOL",
+            "name": "dimension_property"
+          }
+        },
+        {
+          "type": "STRING",
+          "value": "}"
+        }
+      ]
+    },
+    "dimension_property": {
+      "type": "CHOICE",
+      "members": [
+        {
+          "type": "SYMBOL",
+          "name": "dimension_from"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "dimension_to"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "dimension_offset"
+        }
+      ]
+    },
+    "dimension_from": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "STRING",
+          "value": "from"
+        },
+        {
+          "type": "FIELD",
+          "name": "x",
+          "content": {
+            "type": "SYMBOL",
+            "name": "dimension"
+          }
+        },
+        {
+          "type": "STRING",
+          "value": ","
+        },
+        {
+          "type": "FIELD",
+          "name": "y",
+          "content": {
+            "type": "SYMBOL",
+            "name": "dimension"
+          }
+        }
+      ]
+    },
+    "dimension_to": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "STRING",
+          "value": "to"
+        },
+        {
+          "type": "FIELD",
+          "name": "x",
+          "content": {
+            "type": "SYMBOL",
+            "name": "dimension"
+          }
+        },
+        {
+          "type": "STRING",
+          "value": ","
+        },
+        {
+          "type": "FIELD",
+          "name": "y",
+          "content": {
+            "type": "SYMBOL",
+            "name": "dimension"
+          }
+        }
+      ]
+    },
+    "dimension_offset": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "STRING",
+          "value": "offset"
+        },
+        {
+          "type": "FIELD",
+          "name": "value",
+          "content": {
+            "type": "SYMBOL",
+            "name": "dimension"
+          }
         }
       ]
     },

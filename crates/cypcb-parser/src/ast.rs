@@ -143,6 +143,8 @@ pub enum Definition {
     Outline(OutlineDef),
     /// Words a person put on the board's legend.
     Text(TextDef),
+    /// A measurement between two points, for the drawing rather than the board.
+    Dimension(DimensionDef),
     /// An interface definition (v2).
     Interface(InterfaceDef),
     /// A differential pair.
@@ -168,12 +170,31 @@ impl Definition {
             Definition::NetClass(c) => c.span,
             Definition::Outline(o) => o.span,
             Definition::Text(t) => t.span,
+            Definition::Dimension(d) => d.span,
             Definition::Interface(i) => i.span,
             Definition::DiffPair(d) => d.span,
             Definition::Import(i) => i.span,
             Definition::Assert(a) => a.span,
         }
     }
+}
+
+/// A measurement: `dimension { from 0mm, 0mm to 30mm, 0mm offset 2mm }`.
+///
+/// What a drawing states so a person can check the board against it. Not
+/// silkscreen: a dimension printed on copper would put `30.000mm` on the
+/// finished product, which is why KiCad keeps them on a documentation layer.
+/// This draws them in the SVG plot and nowhere else.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DimensionDef {
+    /// One end of what is being measured.
+    pub from: (Dimension, Dimension),
+    /// The other end.
+    pub to: (Dimension, Dimension),
+    /// How far the dimension line sits from the thing it measures.
+    pub offset: Option<Dimension>,
+    /// Source span.
+    pub span: Span,
 }
 
 /// Words on the board: `text "REV B" { at 5mm, 2mm layer top height 1.5mm }`.
