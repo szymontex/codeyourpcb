@@ -25,6 +25,11 @@ key_files:
   - viewer/src/parse-source.ts
   - viewer/src/main.ts
   - viewer/e2e/autoroute-worker.spec.ts
+key_files_not_in_repo:
+  - viewer/src/routing-worker.ts - no commit in this clone ever added it - `git log --all -- viewer/src/routing-worker.ts` is empty (checked 2026-08-27)
+  - viewer/src/worker-protocol.ts - no commit in this clone ever added it (checked 2026-08-27)
+  - viewer/src/parse-source.ts - no commit in this clone ever added it (checked 2026-08-27)
+  - viewer/e2e/autoroute-worker.spec.ts - no commit in this clone ever added it (checked 2026-08-27)
 key_decisions:
   - Worker routes on its own PcbEngine copy, posts snapshot back via postMessage (D-M005-004)
   - Fresh worker per route — terminate on cancel, spawn new for next (D-M005-005)

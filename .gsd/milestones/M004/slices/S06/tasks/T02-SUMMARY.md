@@ -18,6 +18,8 @@ key_files:
   - crates/cypcb-autoroute/src/variant.rs
   - crates/cypcb-render/src/lib.rs
   - crates/cypcb-render/Cargo.toml
+key_files_not_in_repo:
+  - viewer/src/variant-panel.ts - deleted by a9e8c7a, `refactor(viewer): delete the variant panel, which nothing could reach`
 key_decisions:
   - Fixed std::time::Instant WASM panic by conditionally compiling time measurement (cfg(not(target_arch = "wasm32")))
   - Added console_error_panic_hook for better WASM error diagnostics

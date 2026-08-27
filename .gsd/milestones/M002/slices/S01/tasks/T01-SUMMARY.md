@@ -13,6 +13,8 @@ key_files:
   - crates/cypcb-rules/src/routing_rules.rs
   - crates/cypcb-rules/src/lib.rs
   - crates/cypcb-rules/Cargo.toml
+key_files_not_in_repo:
+  - crates/cypcb-rules/src/signal_class.rs - deleted by 051e503, `refactor(rules): delete SignalClass, which nothing read`
 key_decisions:
   - Used integer-scaled fields (x100, x1000, x10) for non-dimension values (impedance, dielectric constant, copper weight) to avoid floats while maintaining precision
   - Used u8 layer indices in RoutingRuleSet and SignalClassConstraints to avoid cypcb-world dependency

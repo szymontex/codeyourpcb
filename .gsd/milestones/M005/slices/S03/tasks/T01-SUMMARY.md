@@ -8,6 +8,9 @@ provides:
 key_files:
   - viewer/e2e/fixtures/blink.cypcb
   - viewer/e2e/autoroute-regression.spec.ts
+key_files_not_in_repo:
+  - viewer/e2e/fixtures/blink.cypcb - no commit in this clone ever added it (checked 2026-08-27)
+  - viewer/e2e/autoroute-regression.spec.ts - no commit in this clone ever added it (checked 2026-08-27)
 key_decisions: []
 patterns_established:
   - Regression tests are separate from smoke tests — different spec file, different describe block, different intent

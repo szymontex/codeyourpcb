@@ -6,6 +6,8 @@ provides:
   - E2E Playwright test suite (3 tests) proving worker routing overlay visibility, cancel, and result delivery
 key_files:
   - viewer/e2e/autoroute-worker.spec.ts
+key_files_not_in_repo:
+  - viewer/e2e/autoroute-worker.spec.ts - no commit in this clone ever added it (checked 2026-08-27)
 key_decisions:
   - Test 3 (routing produces valid result) auto-skips when WASM is unavailable (mock engine) — the worker loads WASM independently and mock mode cannot produce routing results via the worker path
   - Cancel test uses page.evaluate DOM click instead of Playwright's page.click to avoid actionability race when routing completes faster than Playwright can check visibility

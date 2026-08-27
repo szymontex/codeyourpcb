@@ -7,6 +7,8 @@ provides:
   - Two-line mini-card layout per variant (name+score header, metrics detail below)
 key_files:
   - viewer/src/variant-panel.ts
+key_files_not_in_repo:
+  - viewer/src/variant-panel.ts - deleted by a9e8c7a, `refactor(viewer): delete the variant panel, which nothing could reach`
 key_decisions:
   - total_length displayed in mm (divided by 1,000,000 from Nm)
   - smoothness displayed as percentage (multiplied by 100)

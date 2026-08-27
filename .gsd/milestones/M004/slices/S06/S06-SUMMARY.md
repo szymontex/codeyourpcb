@@ -31,6 +31,8 @@ key_files:
   - viewer/src/wasm.ts
   - viewer/index.html
   - viewer/e2e/variant-panel.spec.ts
+key_files_not_in_repo:
+  - viewer/src/variant-panel.ts - deleted by a9e8c7a, `refactor(viewer): delete the variant panel, which nothing could reach`
 key_decisions:
   - Sequential variant generation on single &mut BoardWorld (bevy_ecs World not Clone)
   - 4 default configs: PathFinder default, PathFinder low-via, ImprovedAStar default, PathFinder high-density
