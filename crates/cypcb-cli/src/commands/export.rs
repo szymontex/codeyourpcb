@@ -8,7 +8,7 @@ use clap::Args;
 use miette::{IntoDiagnostic, Result, WrapErr};
 
 use cypcb_export::presets::from_name;
-use cypcb_export::{run_export, ExportJob};
+use cypcb_export::{run_export_with, ExportJob};
 use cypcb_world::footprint::FootprintLibrary;
 use cypcb_world::sync_ast_to_world;
 use cypcb_world::BoardWorld;
@@ -54,6 +54,19 @@ pub struct ExportCommand {
     /// otherwise.
     #[arg(long)]
     force: bool,
+
+    /// Fillet every join where a track meets a pad.
+    ///
+    /// A track meeting a pad at a right angle is where the copper tears when
+    /// the board is drilled or flexed, and a teardrop is the standard answer -
+    /// KiCad has drawn them since 7.0. Off by default, because a board that
+    /// has been fabricated before must keep receiving the copper it received
+    /// last time until somebody asks for the change.
+    ///
+    /// The ratios are KiCad's defaults: the fillet runs half a pad's size
+    /// along the track and leaves the pad at nine tenths of its width.
+    #[arg(long)]
+    teardrops: bool,
 }
 
 impl ExportCommand {
@@ -387,7 +400,10 @@ impl ExportCommand {
         eprintln!();
         eprintln!("Generating Gerber files...");
 
-        let export_result = run_export(&job, &mut world, &library)
+        let teardrops = self
+            .teardrops
+            .then(cypcb_world::teardrop::TeardropRatios::default);
+        let export_result = run_export_with(&job, &mut world, &library, teardrops)
             .into_diagnostic()
             .wrap_err("Export failed")?;
 
@@ -515,6 +531,7 @@ mod tests {
             no_assembly: false,
             dry_run: false,
             force: false,
+            teardrops: false,
         };
 
         assert_eq!(cmd.house, "jlcpcb");

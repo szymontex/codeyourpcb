@@ -10,6 +10,7 @@ use cypcb_core::Point;
 use cypcb_world::components::trace::{Trace, Via};
 use cypcb_world::components::{place_pad, FootprintRef, Position, Rotation};
 use cypcb_world::footprint::FootprintLibrary;
+use cypcb_world::teardrop::{inscribed_radius, teardrop, TeardropRatios};
 use cypcb_world::{BoardWorld, Layer};
 
 /// Export error types.
@@ -70,6 +71,7 @@ pub fn export_copper_layer(
         layer,
         format,
         &crate::pour::PourOptions::default(),
+        None,
     )
 }
 
@@ -84,6 +86,7 @@ pub fn export_copper_layer_with(
     layer: Layer,
     format: &CoordinateFormat,
     pour: &crate::pour::PourOptions,
+    teardrops: Option<TeardropRatios>,
 ) -> Result<String, ExportError> {
     // Only copper layers are supported
     assert!(layer.is_copper(), "Layer must be a copper layer");
@@ -136,6 +139,12 @@ pub fn export_copper_layer_with(
 
     // Export vias (if they span this layer)
     export_vias(world, layer, &mut apertures, &mut drawing_commands, format);
+
+    // The fillets where tracks meet pads, before the pour, so a pour still
+    // cuts its clearance around them the way it does around a track.
+    if let Some(ratios) = teardrops {
+        export_teardrops(world, library, layer, ratios, &mut drawing_commands, format)?;
+    }
 
     // Fill any copper pour on this layer, last, so the regions are cut around
     // copper that is already placed.
@@ -350,6 +359,98 @@ fn export_pours(
             emit_region(*piece, output, format);
         }
     }
+}
+
+/// Draw a fillet wherever a track ends on a pad of this layer.
+///
+/// Item 1 of the KiCad parity audit: a track meeting a pad at a right angle
+/// tears away there when the board is drilled or flexed. The shape comes from
+/// [`cypcb_world::teardrop`]; this decides which shapes a layer has.
+///
+/// Only track *ends* are filleted, and only where the end lands inside a pad.
+/// That is where a router leaves copper - on the pad's centre - and it is the
+/// join a fabricator asks about. A track crossing a pad on its way elsewhere
+/// is not an entry and gets nothing.
+fn export_teardrops(
+    world: &mut BoardWorld,
+    library: &FootprintLibrary,
+    layer: Layer,
+    ratios: TeardropRatios,
+    output: &mut String,
+    format: &CoordinateFormat,
+) -> Result<(), ExportError> {
+    // Every pad on this layer, as a centre and the radius a fillet may start
+    // from. Collected once: a board has far more track ends than pads.
+    let mut pads: Vec<(cypcb_core::Point, cypcb_core::Nm)> = Vec::new();
+    {
+        let mut query = world
+            .ecs_mut()
+            .query::<(&Position, &FootprintRef, &Rotation)>();
+        for (position, footprint_ref, rotation) in query.iter(world.ecs()) {
+            let footprint = library
+                .get(&footprint_ref.0)
+                .ok_or_else(|| ExportError::FootprintNotFound(footprint_ref.0.clone()))?;
+            for pad in &footprint.pads {
+                if !pad.layers.contains(&layer) {
+                    continue;
+                }
+                let centre = place_pad_millideg(position.0, pad.position, rotation.0);
+                pads.push((centre, inscribed_radius(pad.size.0, pad.size.1)));
+            }
+        }
+    }
+    if pads.is_empty() {
+        return Ok(());
+    }
+
+    let ends: Vec<(cypcb_core::Point, cypcb_core::Point, cypcb_core::Nm)> = {
+        let mut query = world.ecs_mut().query::<&Trace>();
+        let mut ends = Vec::new();
+        for trace in query.iter(world.ecs()) {
+            if trace.layer != layer || trace.segments.is_empty() {
+                continue;
+            }
+            for segment in &trace.segments {
+                // Both ends of every segment: a net with three pads is one
+                // `Trace` holding several chains, so the ends that matter are
+                // not only the first and the last of the list.
+                ends.push((segment.start, segment.end, trace.width));
+                ends.push((segment.end, segment.start, trace.width));
+            }
+        }
+        ends
+    };
+
+    for (end, toward, width) in ends {
+        for (centre, radius) in &pads {
+            let dx = (end.x.0 - centre.x.0) as f64;
+            let dy = (end.y.0 - centre.y.0) as f64;
+            if dx * dx + dy * dy > (radius.0 as f64) * (radius.0 as f64) {
+                continue;
+            }
+            if let Some(shape) = teardrop(*centre, *radius, toward, width, ratios) {
+                emit_polygon(&shape, output, format);
+            }
+            break;
+        }
+    }
+
+    Ok(())
+}
+
+/// Emit one closed polygon as a Gerber region.
+fn emit_polygon(points: &[cypcb_core::Point], output: &mut String, format: &CoordinateFormat) {
+    if points.len() < 3 {
+        return;
+    }
+    output.push_str("G36*\n");
+    for (index, point) in points.iter().chain(points.first()).enumerate() {
+        let gx = nm_to_gerber(point.x.0, format);
+        let gy = nm_to_gerber(point.y.0, format);
+        let command = if index == 0 { "D02" } else { "D01" };
+        output.push_str(&format!("X{}Y{}{}*\n", gx, gy, command));
+    }
+    output.push_str("G37*\n");
 }
 
 /// Emit one rectangle as a Gerber region.

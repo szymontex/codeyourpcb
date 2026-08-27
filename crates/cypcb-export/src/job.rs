@@ -137,6 +137,21 @@ pub fn run_export(
     world: &mut BoardWorld,
     library: &FootprintLibrary,
 ) -> Result<ExportResult, ExportError> {
+    run_export_with(job, world, library, None)
+}
+
+/// Run the same export, filleting where tracks meet pads.
+///
+/// Separate from [`run_export`] rather than a field on [`ExportJob`] because a
+/// board that has never asked for teardrops must keep receiving the copper it
+/// received yesterday: the default is the absence, and a caller has to say the
+/// word. Item 1 of the KiCad parity audit.
+pub fn run_export_with(
+    job: &ExportJob,
+    world: &mut BoardWorld,
+    library: &FootprintLibrary,
+    teardrops: Option<cypcb_world::teardrop::TeardropRatios>,
+) -> Result<ExportResult, ExportError> {
     let start = Instant::now();
     let mut files = Vec::new();
     let mut warnings = Vec::new();
@@ -162,6 +177,7 @@ pub fn run_export(
             Layer::TopCopper,
             &job.preset.coordinate_format,
             &pour_options(job),
+            teardrops,
         )
         .map_err(|e| ExportError::Export(format!("{:?}", e)))?;
         let file = write_export_file(&path, &content, "Top Copper")?;
@@ -177,6 +193,7 @@ pub fn run_export(
             Layer::BottomCopper,
             &job.preset.coordinate_format,
             &pour_options(job),
+            teardrops,
         )
         .map_err(|e| ExportError::Export(format!("{:?}", e)))?;
         let file = write_export_file(&path, &content, "Bottom Copper")?;
@@ -207,6 +224,7 @@ pub fn run_export(
             Layer::Inner(index),
             &job.preset.coordinate_format,
             &pour_options(job),
+            teardrops,
         )
         .map_err(|e| ExportError::Export(format!("{:?}", e)))?;
         let file = write_export_file(&path, &content, &format!("Inner Copper {number}"))?;
