@@ -21,6 +21,7 @@ pub mod apertures;
 pub mod bom;
 pub mod coords;
 pub mod cpl;
+pub mod dxf;
 pub mod excellon;
 pub mod gerber;
 pub mod ipc356;

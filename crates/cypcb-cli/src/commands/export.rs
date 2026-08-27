@@ -85,6 +85,14 @@ pub struct ExportCommand {
     /// millimetres at size, with the board's outline around it.
     #[arg(long)]
     svg: bool,
+
+    /// Also plot every copper layer as DXF, for a mechanical tool to read.
+    ///
+    /// An enclosure is drawn in a CAD tool, and the question that tool asks of
+    /// a board is where the copper, the holes and the edge are. Same files as
+    /// `--svg`, in `plot/`, on layers named as the Gerbers are.
+    #[arg(long)]
+    dxf: bool,
 }
 
 impl ExportCommand {
@@ -465,7 +473,7 @@ impl ExportCommand {
 
         // The picture, when it was asked for. Same rule as the netlist: the
         // file set a house receives does not change unless somebody says so.
-        if self.svg {
+        if self.svg || self.dxf {
             let plot_dir = job.output_dir.join("plot");
             std::fs::create_dir_all(&plot_dir)
                 .into_diagnostic()
@@ -485,17 +493,32 @@ impl ExportCommand {
                 ));
             }
             for (layer, suffix) in layers {
-                let drawing = cypcb_export::svg::plot_layer(&mut world, &library, layer);
-                let path = plot_dir.join(format!("{}-{}.svg", job.board_name, suffix));
-                std::fs::write(&path, &drawing)
-                    .into_diagnostic()
-                    .wrap_err("Writing the plot failed")?;
-                eprintln!(
-                    "  [OK] {} ({:.1} KB) - {} plot",
-                    path.display(),
-                    drawing.len() as f64 / 1024.0,
-                    suffix
-                );
+                if self.svg {
+                    let drawing = cypcb_export::svg::plot_layer(&mut world, &library, layer);
+                    let path = plot_dir.join(format!("{}-{}.svg", job.board_name, suffix));
+                    std::fs::write(&path, &drawing)
+                        .into_diagnostic()
+                        .wrap_err("Writing the plot failed")?;
+                    eprintln!(
+                        "  [OK] {} ({:.1} KB) - {} plot",
+                        path.display(),
+                        drawing.len() as f64 / 1024.0,
+                        suffix
+                    );
+                }
+                if self.dxf {
+                    let drawing = cypcb_export::dxf::plot_layer(&mut world, &library, layer);
+                    let path = plot_dir.join(format!("{}-{}.dxf", job.board_name, suffix));
+                    std::fs::write(&path, &drawing)
+                        .into_diagnostic()
+                        .wrap_err("Writing the plot failed")?;
+                    eprintln!(
+                        "  [OK] {} ({:.1} KB) - {} drawing",
+                        path.display(),
+                        drawing.len() as f64 / 1024.0,
+                        suffix
+                    );
+                }
             }
         }
 
@@ -626,6 +649,7 @@ mod tests {
             teardrops: false,
             ipc356: false,
             svg: false,
+            dxf: false,
         };
 
         assert_eq!(cmd.house, "jlcpcb");
