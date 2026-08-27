@@ -73,15 +73,23 @@ fi
 # fetch a different one.
 TREE_SITTER_BIN=crates/cypcb-parser/grammar/node_modules/.bin/tree-sitter
 if [ -x "$TREE_SITTER_BIN" ]; then
+  # Against the tree rather than against HEAD. The first version of this asked
+  # `git diff HEAD -- grammar/src`, which is a different question: it fails for
+  # any *uncommitted* grammar change, including the one being tested, so a
+  # commit that touches the language could never pass its own gate. What is
+  # actually being asked is whether the parser on disk is the one this grammar
+  # produces, so the answer is a before-and-after of the regeneration itself.
+  BEFORE=$(find crates/cypcb-parser/grammar/src -type f -exec md5sum {} + | sort)
   if ! (cd crates/cypcb-parser/grammar && ./node_modules/.bin/tree-sitter generate) >/dev/null 2>&1; then
     fail "tree-sitter generate"
   fi
-  REGENERATED=$(git diff --name-only HEAD -- crates/cypcb-parser/grammar/src)
-  if [ -n "$REGENERATED" ]; then
+  AFTER=$(find crates/cypcb-parser/grammar/src -type f -exec md5sum {} + | sort)
+  if [ "$BEFORE" != "$AFTER" ]; then
     echo ""
-    echo "  the committed parser is not the one this grammar generates:"
-    echo "$REGENERATED" | sed 's/^/    /'
-    echo "  commit crates/cypcb-parser/grammar/src."
+    echo "  the parser in the tree is not the one this grammar generates;"
+    echo "  regenerating changed:"
+    diff <(echo "$BEFORE") <(echo "$AFTER") | grep '^[<>]' | sed 's/^/    /' | head -10
+    echo "  the files are correct now - commit crates/cypcb-parser/grammar/src."
     fail "parser does not match its grammar"
   fi
 else

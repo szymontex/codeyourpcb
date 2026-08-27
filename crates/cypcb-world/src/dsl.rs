@@ -506,6 +506,18 @@ fn copper_nets(world: &mut BoardWorld) -> Vec<u32> {
 /// alternative was a second formatter in the fixture crate, and two
 /// formatters for one block is how the spelling of a layer came to disagree
 /// with itself.
+/// A ratio as the language writes it: `0.5`, not `0.5000000`.
+fn format_ratio(value: f64) -> String {
+    let mut text = format!("{value:.4}");
+    while text.ends_with('0') {
+        text.pop();
+    }
+    if text.ends_with('.') {
+        text.push('0');
+    }
+    text
+}
+
 pub fn stackup_as_dsl(stackup: &crate::components::Stackup) -> String {
     let mut out = String::new();
     let _ = writeln!(out, "    stackup {{");
@@ -771,6 +783,9 @@ pub fn board_as_dsl(world: &mut BoardWorld) -> String {
     // source never made.
     let fab: Option<String> = world.fab().map(|fab| fab.to_string());
 
+    // What the board asked for where its tracks meet its pads.
+    let teardrops: Option<crate::components::Teardrops> = world.teardrops();
+
     // The layers a fabricator is expected to press together, likewise carried
     // straight back out. This block was read, checked against the layer count
     // and then dropped on the way out, so a design that said how it wanted to
@@ -807,6 +822,21 @@ pub fn board_as_dsl(world: &mut BoardWorld) -> String {
     }
     if let Some(fab) = fab {
         let _ = writeln!(out, "    fab {fab}");
+    }
+    // The fillets, written back as the board asked for them. A board that asked
+    // with the ordinary ratios gets the bare word: writing the numbers out
+    // would turn a request into a specification the source never made, and the
+    // next reader would have no way to tell which of the two it was looking at.
+    if let Some(teardrops) = teardrops {
+        let default = crate::components::Teardrops::default();
+        if teardrops == default {
+            let _ = writeln!(out, "    teardrops");
+        } else {
+            let _ = writeln!(out, "    teardrops {{");
+            let _ = writeln!(out, "        length {}", format_ratio(teardrops.length));
+            let _ = writeln!(out, "        width {}", format_ratio(teardrops.width));
+            let _ = writeln!(out, "    }}");
+        }
     }
     let _ = writeln!(out, "}}");
 

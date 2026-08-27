@@ -400,9 +400,20 @@ impl ExportCommand {
         eprintln!();
         eprintln!("Generating Gerber files...");
 
-        let teardrops = self
-            .teardrops
-            .then(cypcb_world::teardrop::TeardropRatios::default);
+        // What the board itself asked for wins: a design that states its
+        // ratios is more specific than a flag that states none, and a person
+        // running the command should not have to repeat what the file says.
+        // The flag turns them on for a board that is silent.
+        let teardrops = world
+            .teardrops()
+            .map(|asked| cypcb_world::teardrop::TeardropRatios {
+                length: asked.length,
+                width: asked.width,
+            })
+            .or_else(|| {
+                self.teardrops
+                    .then(cypcb_world::teardrop::TeardropRatios::default)
+            });
         let export_result = run_export_with(&job, &mut world, &library, teardrops)
             .into_diagnostic()
             .wrap_err("Export failed")?;

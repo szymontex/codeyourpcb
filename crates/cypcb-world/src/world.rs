@@ -190,6 +190,26 @@ impl BoardWorld {
         true
     }
 
+    /// Ask for the fillets where tracks meet pads.
+    ///
+    /// Separate from `set_board` for the reason the fab is: a board that says
+    /// nothing has to stay distinguishable from one that named this project's
+    /// default out loud. Returns false when there is no board to attach it to.
+    pub fn set_teardrops(&mut self, teardrops: crate::components::Teardrops) -> bool {
+        let Some(entity) = self.board_entity else {
+            return false;
+        };
+        self.world.entity_mut(entity).insert(teardrops);
+        true
+    }
+
+    /// The teardrops the design asked for, if it asked.
+    pub fn teardrops(&self) -> Option<crate::components::Teardrops> {
+        self.board_entity
+            .and_then(|entity| self.world.get::<crate::components::Teardrops>(entity))
+            .copied()
+    }
+
     /// The fabricator the design named, if it named one.
     pub fn fab(&self) -> Option<&str> {
         self.board_entity

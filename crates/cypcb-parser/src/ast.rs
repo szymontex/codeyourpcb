@@ -190,7 +190,27 @@ pub struct BoardDef {
     /// no table of fabs to check it against. Whoever resolves it to a rule set
     /// says so when the name is not one they know.
     pub fab: Option<Identifier>,
+    /// Fillet the joins where tracks meet pads: `teardrops`.
+    ///
+    /// `None` is a board that did not say. A board that says the word without
+    /// a block asks for the ordinary fillet, which is why the ratios inside
+    /// are themselves optional.
+    pub teardrops: Option<TeardropsProperty>,
     /// Span covering the entire board definition.
+    pub span: Span,
+}
+
+/// What `teardrops` asks for: `teardrops { length 0.5 width 0.9 }`.
+///
+/// Both ratios are fractions of the pad's size, the way KiCad states them.
+/// Absent means the house's ordinary figure rather than zero.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TeardropsProperty {
+    /// How far the fillet runs along the track.
+    pub length: Option<f64>,
+    /// How wide it is where it leaves the pad.
+    pub width: Option<f64>,
+    /// Span covering the property.
     pub span: Span,
 }
 
@@ -1446,6 +1466,7 @@ mod tests {
                 layers: Some(2),
                 stackup: None,
                 fab: None,
+                teardrops: None,
                 span: Span::new(0, 50),
             })],
             span: Span::new(0, 100),

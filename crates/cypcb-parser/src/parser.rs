@@ -37,8 +37,8 @@ use crate::ast::{
     LayerType, ModuleDef, ModuleInstance, NeckDef, NetAssignment, NetClassDef, NetConstraints,
     NetDef, OutlineDef, PadDef, PadShape, PhysicalValue, PinDeclaration, PinId, PinRef,
     PortConnection, PositionExpr, RotationExpr, SilkDef, SizeProperty, SourceFile, Span,
-    StackupDef, StackupLayer, StackupSheetDef, StringLit, Tolerance, ToleranceKind, TraceDef,
-    TraceDirective, TracePath, TraceVia, ZoneDef, ZoneKind,
+    StackupDef, StackupLayer, StackupSheetDef, StringLit, TeardropsProperty, Tolerance,
+    ToleranceKind, TraceDef, TraceDirective, TracePath, TraceVia, ZoneDef, ZoneKind,
 };
 use crate::errors::{ParseError, ParseResult};
 use crate::node_kinds;
@@ -266,6 +266,7 @@ impl CypcbParser {
         let mut layers = None;
         let mut stackup = None;
         let mut fab = None;
+        let mut teardrops = None;
 
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
@@ -289,6 +290,9 @@ impl CypcbParser {
                     "stackup_property" => {
                         stackup = self.convert_stackup(source, &prop, errors);
                     }
+                    "teardrops_property" => {
+                        teardrops = Some(self.convert_teardrops(source, &prop));
+                    }
                     node_kinds::FAB_PROPERTY => {
                         if let Some(name_node) = get_child_by_field(&prop, "name") {
                             fab = Some(Identifier::new(
@@ -308,8 +312,30 @@ impl CypcbParser {
             layers,
             stackup,
             fab,
+            teardrops,
             span: span_of(node),
         })
+    }
+
+    /// Convert a `teardrops` property, bare or with its two ratios.
+    fn convert_teardrops(&self, source: &str, node: &Node) -> TeardropsProperty {
+        let mut length = None;
+        let mut width = None;
+        let mut cursor = node.walk();
+        for child in node.children(&mut cursor) {
+            let ratio = get_child_by_field(&child, "ratio")
+                .and_then(|value| node_text(source, &value).parse::<f64>().ok());
+            match child.kind() {
+                "teardrop_length" => length = ratio,
+                "teardrop_width" => width = ratio,
+                _ => {}
+            }
+        }
+        TeardropsProperty {
+            length,
+            width,
+            span: span_of(node),
+        }
     }
 
     /// Convert a size property node.

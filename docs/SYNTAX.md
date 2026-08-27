@@ -54,6 +54,45 @@ board my_circuit {
 - `layers`: Number of copper layers (2, 4, 6, etc.)
 - `fab`: Which fabricator the board is for (optional)
 - `stackup`: What the fabricator presses together, top to bottom (optional)
+- `teardrops`: Fillet the joins where tracks meet pads (optional)
+
+### Teardrops
+
+A track that meets a pad at a right angle is a stress riser: the copper tears
+there when the board is drilled, and again when a flex board is bent. The
+fillet - a teardrop - is the standard answer, and a fabricator quoting a flex
+process asks for it by name.
+
+```
+board sensor {
+    size 24mm x 12mm
+    layers 2
+    teardrops
+}
+```
+
+The bare word asks for the ordinary fillet. A house with its own figures gets a
+block, and both ratios are fractions of the pad's size:
+
+```
+board sensor {
+    size 24mm x 12mm
+    layers 2
+    teardrops {
+        length 0.5
+        width 0.9
+    }
+}
+```
+
+`length` is how far the fillet runs along the track, `width` how wide it is
+where it leaves the pad. Those two numbers are the defaults, which are KiCad's,
+so a board that says the bare word and a board that spells them out ask a
+fabricator for the same copper.
+
+A board that says nothing gets nothing: an export writes the copper it has
+always written, and `cypcb export --teardrops` is how to try the fillets
+without editing the design.
 
 ### Fab
 

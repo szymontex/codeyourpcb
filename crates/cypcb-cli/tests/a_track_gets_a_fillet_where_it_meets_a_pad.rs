@@ -110,6 +110,31 @@ fn a_board_that_does_not_ask_gets_what_it_got_before() {
 }
 
 #[test]
+fn a_board_that_asks_for_them_needs_no_flag() {
+    // Where a design states what it is - the fabricator, the stackup, the
+    // finish - is the board block, and this belongs beside them. A person
+    // exporting should not have to repeat on the command line what the file
+    // already says.
+    let source =
+        std::fs::read_to_string(example("usb-diff-pair.cypcb")).expect("the example is readable");
+    let asked = source.replace("    fab jlcpcb", "    fab jlcpcb\n    teardrops");
+    assert_ne!(
+        asked, source,
+        "the example carries the line this test edits"
+    );
+
+    let board = std::env::temp_dir().join("cypcb-teardrops-asked.cypcb");
+    std::fs::write(&board, &asked).expect("the board is writable");
+
+    let filleted = top_copper(&board, &scratch("asked"), false);
+    assert_eq!(
+        regions(&filleted),
+        4,
+        "the board asked for teardrops, so the export draws them without the flag"
+    );
+}
+
+#[test]
 fn the_help_says_what_the_flag_does() {
     let output = cypcb()
         .arg("export")

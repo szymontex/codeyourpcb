@@ -182,6 +182,23 @@ impl ToKicadCommand {
             );
         }
 
+        // The fillets a board asks for. KiCad has its own teardrop settings -
+        // per board, per net class, and per pad since 7.0 - and they live in
+        // the project file's design settings rather than in the board. Writing
+        // ours into a `.kicad_pcb` would put a request where nothing reads it,
+        // so the request is announced instead: a board taken to KiCad and
+        // fabricated from there is fabricated without them unless somebody
+        // turns KiCad's own on.
+        if let Some(teardrops) = world.teardrops() {
+            eprintln!(
+                "Warning: the teardrops this design asks for (length {:.2}, width {:.2} of pad \
+                 size) are not in the KiCad board: KiCad keeps its own teardrop settings in the \
+                 project's design settings, not in the board file. Export from here with \
+                 `cypcb export` to get the fillets in the copper, or switch KiCad's on.",
+                teardrops.length, teardrops.width
+            );
+        }
+
         // What a net asks for.
         //
         // `net SIG [width 0.2mm clearance 0.25mm current 500mA impedance

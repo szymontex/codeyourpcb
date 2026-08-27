@@ -172,6 +172,10 @@
         {
           "type": "stackup_property",
           "named": true
+        },
+        {
+          "type": "teardrops_property",
+          "named": true
         }
       ]
     }
@@ -1886,6 +1890,57 @@
     "fields": {}
   },
   {
+    "type": "teardrop_length",
+    "named": true,
+    "fields": {
+      "ratio": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "number",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "teardrop_width",
+    "named": true,
+    "fields": {
+      "ratio": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "number",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "teardrops_property",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "teardrop_length",
+          "named": true
+        },
+        {
+          "type": "teardrop_width",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
     "type": "tolerance",
     "named": true,
     "fields": {},
@@ -2738,6 +2793,10 @@
     "named": false
   },
   {
+    "type": "length",
+    "named": false
+  },
+  {
     "type": "line",
     "named": false
   },
@@ -2916,6 +2975,10 @@
   },
   {
     "type": "stiffener",
+    "named": false
+  },
+  {
+    "type": "teardrops",
     "named": false
   },
   {

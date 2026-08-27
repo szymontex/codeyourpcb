@@ -24,8 +24,8 @@ use crate::ast::{
     ModuleInstance, NetAssignment, NetClassDef, NetConstraints, NetDef, OutlineDef, PadDef,
     PadShape, PhysicalValue, PinDeclaration, PinId, PinRef, PortConnection, PositionExpr,
     RotationExpr, SilkDef, SizeProperty, SourceFile, Span, StackupDef, StackupLayer,
-    StackupSheetDef, StringLit, Tolerance, ToleranceKind, TraceDef, TraceDirective, TracePath,
-    TraceVia, ZoneDef, ZoneKind,
+    StackupSheetDef, StringLit, TeardropsProperty, Tolerance, ToleranceKind, TraceDef,
+    TraceDirective, TracePath, TraceVia, ZoneDef, ZoneKind,
 };
 use crate::errors::{ParseError, ParseResult};
 use crate::lexer::{tokenize, Token, TokenKind};
@@ -408,6 +408,55 @@ impl<'a> Reader<'a> {
     /// against the layer count, and the thickness it adds up to is the depth
     /// every plated hole is drilled through, which decides whether the fab
     /// can plate it at all.
+    /// `teardrops`, bare or with the two ratios.
+    ///
+    /// Bare is the ordinary request - a fabricator asking for fillets is not
+    /// asking for particular ones - so the block and both ratios inside it are
+    /// optional. A ratio the reader cannot make sense of is an error rather
+    /// than a silent default: a board that states a number means it.
+    fn teardrops(&mut self) -> Option<TeardropsProperty> {
+        let start = self.here();
+        self.bump(); // `teardrops`
+
+        let mut length = None;
+        let mut width = None;
+
+        if self.eat(&TokenKind::LBrace) {
+            while !self.done() && !self.eat(&TokenKind::RBrace) {
+                let Some(word) = self.peek_ident().map(str::to_string) else {
+                    self.unknown_property("teardrops", &["length", "width"]);
+                    continue;
+                };
+                match word.as_str() {
+                    "length" => {
+                        self.bump();
+                        match self.number() {
+                            Some((value, _)) => length = Some(value),
+                            None => self.unexpected("a ratio like `0.5`"),
+                        }
+                    }
+                    "width" => {
+                        self.bump();
+                        match self.number() {
+                            Some((value, _)) => width = Some(value),
+                            None => self.unexpected("a ratio like `0.9`"),
+                        }
+                    }
+                    _ => {
+                        self.unknown_property("teardrops", &["length", "width"]);
+                        self.bump();
+                    }
+                }
+            }
+        }
+
+        Some(TeardropsProperty {
+            length,
+            width,
+            span: Span::new(start, self.behind()),
+        })
+    }
+
     fn stackup(&mut self) -> Option<StackupDef> {
         let start = self.here();
         self.bump(); // `stackup`
@@ -689,6 +738,7 @@ impl<'a> Reader<'a> {
         let mut size = None;
         let mut layers = None;
         let mut stackup = None;
+        let mut teardrops = None;
         let mut fab = None;
 
         while !self.done() && !self.eat(&TokenKind::RBrace) {
@@ -725,13 +775,16 @@ impl<'a> Reader<'a> {
                         None => self.unexpected("a fabricator name like `jlcpcb`"),
                     }
                 }
-                _ => self.unknown_property("board", &["size", "layers", "stackup", "fab"]),
+                Some("teardrops") => teardrops = self.teardrops(),
+                _ => self
+                    .unknown_property("board", &["size", "layers", "stackup", "fab", "teardrops"]),
             }
         }
 
         Some(BoardDef {
             name,
             size,
+            teardrops,
             layers,
             stackup,
             fab,

@@ -73,6 +73,30 @@ fn a_design_that_states_its_drill_spans_is_told_they_are_dropped() {
 }
 
 #[test]
+fn a_design_that_asks_for_teardrops_is_told_kicad_keeps_its_own() {
+    // KiCad has teardrops - per board, per net class and per pad since 7.0 -
+    // and keeps the settings in the project's design settings rather than in
+    // the board file. A request written into a `.kicad_pcb` would sit where
+    // nothing reads it, so the writer says so instead.
+    let source =
+        std::fs::read_to_string(example("usb-diff-pair.cypcb")).expect("the example is readable");
+    let asked = source.replace("    fab jlcpcb", "    fab jlcpcb\n    teardrops");
+    assert_ne!(
+        asked, source,
+        "the example carries the line this test edits"
+    );
+
+    let board = std::env::temp_dir().join("cypcb-kicad-teardrops.cypcb");
+    std::fs::write(&board, &asked).expect("the board is writable");
+
+    let warnings = to_kicad(&board, &scratch("teardrops").join("board.kicad_pcb"));
+    assert!(
+        warnings.contains("teardrops") && warnings.contains("design settings"),
+        "the writer names what it could not carry: {warnings}"
+    );
+}
+
+#[test]
 fn a_design_that_states_none_is_left_alone() {
     // The half that keeps the other from being noise. `examples/blink.cypcb`
     // states no stackup at all, so there is nothing to drop and nothing to say.

@@ -91,6 +91,7 @@ module.exports = grammar({
       $.layers_property,
       $.stackup_property,
       $.fab_property,
+      $.teardrops_property,
     ),
 
     // size 30mm x 20mm
@@ -116,6 +117,33 @@ module.exports = grammar({
     fab_property: $ => seq(
       'fab',
       field('name', $.identifier),
+    ),
+
+    // teardrops
+    // teardrops { length 0.5 width 0.9 }
+    //
+    // The fillet where a track meets a pad. Bare is the fabricator's ordinary
+    // request; the block states the two ratios when a house asks for its own.
+    teardrops_property: $ => seq(
+      'teardrops',
+      optional(seq(
+        '{',
+        repeat(choice(
+          $.teardrop_length,
+          $.teardrop_width,
+        )),
+        '}',
+      )),
+    ),
+
+    teardrop_length: $ => seq(
+      'length',
+      field('ratio', $.number),
+    ),
+
+    teardrop_width: $ => seq(
+      'width',
+      field('ratio', $.number),
     ),
 
     // stackup { ... } (placeholder for future)

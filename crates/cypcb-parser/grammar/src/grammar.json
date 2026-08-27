@@ -208,6 +208,10 @@
         {
           "type": "SYMBOL",
           "name": "fab_property"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "teardrops_property"
         }
       ]
     },
@@ -270,6 +274,86 @@
           "content": {
             "type": "SYMBOL",
             "name": "identifier"
+          }
+        }
+      ]
+    },
+    "teardrops_property": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "STRING",
+          "value": "teardrops"
+        },
+        {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SEQ",
+              "members": [
+                {
+                  "type": "STRING",
+                  "value": "{"
+                },
+                {
+                  "type": "REPEAT",
+                  "content": {
+                    "type": "CHOICE",
+                    "members": [
+                      {
+                        "type": "SYMBOL",
+                        "name": "teardrop_length"
+                      },
+                      {
+                        "type": "SYMBOL",
+                        "name": "teardrop_width"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "type": "STRING",
+                  "value": "}"
+                }
+              ]
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
+        }
+      ]
+    },
+    "teardrop_length": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "STRING",
+          "value": "length"
+        },
+        {
+          "type": "FIELD",
+          "name": "ratio",
+          "content": {
+            "type": "SYMBOL",
+            "name": "number"
+          }
+        }
+      ]
+    },
+    "teardrop_width": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "STRING",
+          "value": "width"
+        },
+        {
+          "type": "FIELD",
+          "name": "ratio",
+          "content": {
+            "type": "SYMBOL",
+            "name": "number"
           }
         }
       ]

@@ -39,6 +39,31 @@ pub struct Board;
 #[derive(Component, Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Fab(pub String);
 
+/// The board asked for teardrops, and at what ratios: `teardrops`.
+///
+/// A track meeting a pad at a right angle is where copper tears when a board
+/// is drilled or flexed. Absent means the design did not ask - not that it
+/// asked for none - so a board exported before this word existed keeps
+/// receiving the copper it received then.
+#[derive(Component, Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct Teardrops {
+    /// How far the fillet runs along the track, as a fraction of pad size.
+    pub length: f64,
+    /// How wide it is where it leaves the pad, as a fraction of pad size.
+    pub width: f64,
+}
+
+impl Default for Teardrops {
+    /// KiCad's figures, so two boards do not arrive at one house looking like
+    /// different tools drew them.
+    fn default() -> Self {
+        Teardrops {
+            length: 0.5,
+            width: 0.9,
+        }
+    }
+}
+
 /// Board dimensions.
 ///
 /// Defines the width and height of the PCB in nanometers.

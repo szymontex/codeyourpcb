@@ -831,6 +831,17 @@ fn sync_board(board: &BoardDef, source: &str, world: &mut BoardWorld, result: &m
     // The fabricator, as the design wrote it. Not checked against a table of
     // fabs here - this crate has none - so a name nobody recognises reaches the
     // caller that resolves it, which is the one that can name the alternatives.
+    // The fillets, if the design asked for them. Both ratios fall back to the
+    // ordinary figure rather than to zero: `teardrops` on its own is a request
+    // for teardrops, not for teardrops of no size.
+    if let Some(teardrops) = &board.teardrops {
+        let default = crate::components::Teardrops::default();
+        world.set_teardrops(crate::components::Teardrops {
+            length: teardrops.length.unwrap_or(default.length),
+            width: teardrops.width.unwrap_or(default.width),
+        });
+    }
+
     if let Some(fab) = &board.fab {
         world.set_fab(crate::components::Fab(fab.value.clone()));
     }

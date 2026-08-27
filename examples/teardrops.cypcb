@@ -1,0 +1,62 @@
+// teardrops.cypcb - the fillet where a track meets a pad.
+//
+// A track that meets a pad at a right angle is a stress riser: the copper
+// tears there when the board is drilled, and again when a flex board is bent.
+// Every fabricator quoting a flex process asks for teardrops, and KiCad has
+// drawn them since 7.0.
+//
+// The board asks for them here rather than the person exporting, because it is
+// part of what this design wants made - like the fabricator and the stackup.
+//
+//   teardrops                 the ordinary fillet
+//   teardrops { ... }         the two ratios, as fractions of pad size
+//
+// `length` is how far the fillet runs along the track, `width` how wide it is
+// where it leaves the pad. The defaults are KiCad's, 0.5 and 0.9; the block
+// below states them explicitly so a reader can see the shape of the request.
+//
+// Check it with:
+//   cypcb check examples/teardrops.cypcb
+//
+// It reports 2 unconnected pins - each header's second pin is spare - and
+// exits 1. The fillets are not what it is complaining about.
+//
+// Exporting this board writes one Gerber region into the top copper for every
+// track end that lands on a pad: two here, one at each end of the single
+// track. Delete the block above and the same export writes none.
+
+version 1
+
+board teardrops {
+    size 24mm x 12mm
+    layers 2
+    fab jlcpcb
+    teardrops {
+        length 0.5
+        width 0.9
+    }
+}
+
+component J1 connector "PIN-HDR-1x2" {
+    value "in"
+    at 4mm, 6mm
+    rotate 90
+}
+
+component J2 connector "PIN-HDR-1x2" {
+    value "out"
+    at 20mm, 6mm
+    rotate 90
+}
+
+net SIG {
+    J1.1
+    J2.1
+}
+
+trace SIG {
+    from J1.1
+    to J2.1
+    layer Top
+    width 0.2mm
+}
