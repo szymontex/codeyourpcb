@@ -353,6 +353,42 @@ This file is the explicit capability and coverage contract for the project.
 | R206 | quality-attribute | active | M005/S03 | none | unmapped |
 | R207 | core-capability | active | M005/S04 | none | unmapped |
 
+## The ids this file used to have
+
+**This file was renumbered once and nothing recorded it.** `4c7a49f`,
+`docs(M004): context, requirements, and roadmap`, replaced a list of **64**
+requirements under seven prefixes with **21** R-numbered ones; the file carries
+**28** today. No mapping between the two schemes was ever written, so a
+document naming `WEB-01` names a requirement this file does not have.
+
+**That is not a small residue.** **62 of the 64** are still named by other
+documents under `.gsd/`, `WEB-01` alone in 19 of them, and M001, M002 and M003
+were signed off against them - `M002-SUMMARY.md` says "all 64 requirements
+entered and exited this milestone in `validated` status". Only `UI-06` and
+`UI-07` are named nowhere any more.
+
+**This section states the fact rather than inventing the mapping.** Which
+R-number, if any, succeeded a given legacy id is a judgement about intent that
+the repository does not record, and guessing it here would be the same kind of
+claim this file keeps finding in other documents.
+
+superseded_ids:
+  - DESK-01 DESK-02 DESK-03 DESK-04 DESK-05 DESK-06 DESK-07 DESK-08 DESK-09 DESK-10
+  - DOC-01 DOC-02 DOC-03 DOC-04 DOC-05 DOC-06 DOC-07 DOC-08 DOC-09
+  - EDIT-01 EDIT-02 EDIT-03 EDIT-04 EDIT-05 EDIT-06 EDIT-07 EDIT-08 EDIT-09 EDIT-10
+  - LIB-01 LIB-02 LIB-03 LIB-04 LIB-05 LIB-06 LIB-07 LIB-08 LIB-09 LIB-10 LIB-11 LIB-12
+  - PLAT-01 PLAT-02 PLAT-03 PLAT-04 PLAT-05
+  - UI-01 UI-02 UI-03 UI-04 UI-05 UI-06 UI-07 UI-08 UI-09
+  - WEB-01 WEB-02 WEB-03 WEB-04 WEB-05 WEB-06 WEB-07 WEB-08 WEB-09
+
+- Superseded ids: 64
+- Still named elsewhere under `.gsd/`: 62
+- Named nowhere any more: UI-06, UI-07
+
+Re-take the last two counts with
+`cargo test -p cypcb-cli --test the_ids_this_file_used_to_have`, which reads
+this block and the documents rather than trusting the numbers above.
+
 ## Coverage gaps
 
 Test suites that do not run, and what that costs. A suite skipped without a
