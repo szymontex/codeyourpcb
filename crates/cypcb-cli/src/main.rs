@@ -62,6 +62,17 @@ enum Commands {
     /// Check a .cypcb or .kicad_pcb board for errors
     Check(commands::CheckCommand),
     /// Route a .cypcb or .kicad_pcb board with the built-in autorouter
+    ///
+    /// Thirteen variants are routed and the best is kept: each is a different
+    /// cost model, they are scored on the board in front of them, and the
+    /// winner is named on the way out - `Chose PathFinder High-Density`. That
+    /// is the search, and it is what makes a run take as long as it does.
+    ///
+    /// `--fast` routes once with the shipped defaults instead, which is the
+    /// same thing `score` does. Two commands routing one board therefore
+    /// answer differently unless both are told to run once, and this page and
+    /// `score`'s say so rather than leaving a reader to compare two numbers
+    /// that were never the same measurement.
     Route(commands::RouteCommand),
     /// Export a .cypcb or .kicad_pcb board to manufacturing files
     ///
@@ -96,6 +107,15 @@ enum Commands {
     /// wrote has no such key and is read for those numbers alone.
     FromKicad(commands::FromKicadCommand),
     /// Route a .cypcb or .kicad_pcb board and print quality metrics as JSON
+    ///
+    /// The shipped defaults, once - no variant search. `route` ranks thirteen
+    /// cost models and keeps the winner, so its board is usually the better
+    /// one and its numbers are not these numbers; `route --fast` is the run
+    /// that matches this one. Scoring measures a board rather than searching
+    /// for one, which is why the defaults are the honest thing to measure.
+    ///
+    /// A board that already carries copper is measured as it stands rather
+    /// than routed again, and the run says which it did.
     Score(commands::ScoreCommand),
     /// Write a .cypcb design out as a KiCad .kicad_pcb board
     ///
