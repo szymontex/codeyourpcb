@@ -15,8 +15,13 @@
 .DS_Store
 Thumbs.db
 
-# Generated Tree-sitter parser files
-crates/cypcb-parser/grammar/src/
+# The generated Tree-sitter parser is not ignored, on purpose. Six files under
+# crates/cypcb-parser/grammar/src/ are committed - `parser.c` and the two JSON
+# tables `tree-sitter generate` writes, plus the headers it vendors - because
+# `build.rs` compiles them and refuses to build without them. Ignoring the
+# directory they live in made `git add` demand -f, which is how a regenerated
+# parser can be committed one file short, and hid any new file the generator
+# started writing.
 crates/cypcb-parser/grammar/node_modules/
 crates/cypcb-parser/grammar/package-lock.json
 

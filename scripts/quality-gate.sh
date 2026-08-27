@@ -42,6 +42,36 @@ fi
 echo ""
 
 # Stage 3: Rust tests
+# The generated Tree-sitter parser, asked the same question as viewer/pkg and
+# for the same reason: `crates/cypcb-parser/grammar/src/parser.c` is committed
+# and `build.rs` compiles whatever is there - it does not regenerate, it panics
+# if the file is missing. A `grammar.js` committed without the parser it
+# generates means the language parses by the old grammar while its source says
+# otherwise, and nothing in this gate would notice.
+#
+# Commit order again rather than bytes: `tree-sitter-cli` is a caret range in
+# grammar/package.json and its lockfile is not in git, so two machines can
+# generate different C from one grammar.
+GRAMMAR_COMMIT=$(git log -1 --format=%H -- crates/cypcb-parser/grammar/grammar.js)
+PARSER_COMMIT=$(git log -1 --format=%H -- crates/cypcb-parser/grammar/src)
+if [ -n "$GRAMMAR_COMMIT" ] && [ -n "$PARSER_COMMIT" ] \
+  && ! git merge-base --is-ancestor "$GRAMMAR_COMMIT" "$PARSER_COMMIT"; then
+  echo ""
+  echo "  the committed parser predates the grammar it comes from:"
+  echo "    grammar.js last changed by $(git log -1 --format='%h %s' "$GRAMMAR_COMMIT")"
+  echo "    grammar/src last changed by $(git log -1 --format='%h %s' "$PARSER_COMMIT")"
+  echo "  regenerate with (cd crates/cypcb-parser/grammar && npx tree-sitter generate) and commit grammar/src."
+  fail "stale tree-sitter parser"
+fi
+UNTRACKED_PARSER=$(git ls-files --others --exclude-standard crates/cypcb-parser/grammar/src)
+if [ -n "$UNTRACKED_PARSER" ]; then
+  echo ""
+  echo "  the generator writes files under grammar/src that git does not track:"
+  echo "$UNTRACKED_PARSER" | sed 's/^/    /'
+  echo "  commit them, or stop writing them."
+  fail "untracked tree-sitter output"
+fi
+
 echo "[3/8] cargo test"
 # The Rust reader is what `parse` is now. The tests that check it against the
 # tree-sitter parser need that parser as well, which the plain run does not
