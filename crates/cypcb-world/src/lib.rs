@@ -88,6 +88,8 @@
 //! }
 //! ```
 
+/// A curve in copper, as chords every measurement here already reads.
+pub mod arc;
 pub mod components;
 pub mod copper;
 
