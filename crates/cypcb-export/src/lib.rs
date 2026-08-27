@@ -23,6 +23,7 @@ pub mod coords;
 pub mod cpl;
 pub mod excellon;
 pub mod gerber;
+pub mod ipc356;
 pub mod job;
 pub mod jobfile;
 /// The geometry a copper pour takes, re-exported from cypcb-core where both

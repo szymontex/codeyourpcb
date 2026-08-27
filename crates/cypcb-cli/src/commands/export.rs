@@ -67,6 +67,16 @@ pub struct ExportCommand {
     /// along the track and leaves the pad at nine tenths of its width.
     #[arg(long)]
     teardrops: bool,
+
+    /// Also write the IPC-D-356A netlist a bare-board tester reads.
+    ///
+    /// Before anything is soldered, a fabricator probes the board and checks
+    /// that every point which should be connected is, and that no two which
+    /// should not be are. The tester needs the design's own answer to compare
+    /// against, and this file carries it - one 80-column record per pad and
+    /// via, written into `netlist/` beside the Gerbers.
+    #[arg(long)]
+    ipc356: bool,
 }
 
 impl ExportCommand {
@@ -418,6 +428,33 @@ impl ExportCommand {
             .into_diagnostic()
             .wrap_err("Export failed")?;
 
+        // The netlist a bare-board tester reads, when it was asked for. It is
+        // written here rather than inside the job because it is not part of
+        // the file set a house receives by default: a board that has been
+        // fabricated before keeps getting exactly the files it got before.
+        if self.ipc356 {
+            let (netlist, netlist_warnings) =
+                cypcb_export::ipc356::export_ipc356(&mut world, &library, &job.board_name);
+            let netlist_dir = job.output_dir.join("netlist");
+            std::fs::create_dir_all(&netlist_dir)
+                .into_diagnostic()
+                .wrap_err("Creating the netlist directory failed")?;
+            let netlist_path = netlist_dir.join(format!("{}-IPC-D-356.ipc", job.board_name));
+            std::fs::write(&netlist_path, &netlist)
+                .into_diagnostic()
+                .wrap_err("Writing the IPC-D-356 netlist failed")?;
+            // Anything the format could not hold is said here rather than left
+            // in a file a tester will read as fact.
+            for warning in netlist_warnings {
+                eprintln!("Warning: {warning}");
+            }
+            eprintln!(
+                "  [OK] {} ({:.1} KB) - IPC-D-356A netlist",
+                netlist_path.display(),
+                netlist.len() as f64 / 1024.0
+            );
+        }
+
         // Print results
         eprintln!();
         for file in &export_result.files {
@@ -543,6 +580,7 @@ mod tests {
             dry_run: false,
             force: false,
             teardrops: false,
+            ipc356: false,
         };
 
         assert_eq!(cmd.house, "jlcpcb");
