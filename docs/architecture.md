@@ -707,6 +707,32 @@ No WebSocket server needed - WASM engine provides diagnostics directly.
   rules and the stackup work reached the browser. Measure before quoting it;
   the module is rebuilt by `viewer/build-wasm.sh`, which the quality gate runs.
 - **Techniques**: opt-level="z", LTO, codegen-units=1, panic="abort", strip=true, wasm-opt -O4
+- **What is in it**, measured 2026-08-27 on a `wasm-release` build with
+  `CARGO_PROFILE_WASM_RELEASE_STRIP=false` so the names survive, then
+  `wasm-opt --func-metrics` with the feature flags `viewer/build-wasm.sh`
+  passes. 6,421 of 6,471 functions, 1,350,923 bytes before `wasm-opt -O4`:
+
+  | share | where |
+  |---|---|
+  | 23.0% | `core` |
+  | 12.8% | `cypcb-autoroute` |
+  | 11.2% | `alloc` |
+  | 9.9% | `bevy_ecs` |
+  | 7.8% | `hashbrown` |
+  | 6.5% | `serde_core` |
+  | 5.1% | `cypcb-drc` |
+  | 4.5% | `cypcb-world` |
+  | 4.3% | `cypcb-parser` |
+  | 3.2% | `cypcb-render` |
+
+  The four largest functions are `cypcb_autoroute::pathfinder_v2::pathfinder_loop`
+  (32,165 bytes), `cypcb_kicad::pcb_parser::parse_kicad_pcb_str` (26,131),
+  `cypcb_parser::reader::read` (22,307) and
+  `cypcb_autoroute::astar_improved::route_all_nets_improved` (16,976). Generic
+  impls are attributed to the crate their name mentions, so the shares are
+  crate-level rather than module-level, and they are measured **before**
+  `wasm-opt`, which shrinks the module by roughly a third - the ranking is what
+  this table is for, not the absolute bytes.
 
 ### Rendering
 
