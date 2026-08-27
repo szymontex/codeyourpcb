@@ -10,7 +10,11 @@ CodeYourPCB is a **code-first PCB design tool** where the source file is the des
 
 - **Backend**: Rust (compiled to native and WASM)
 - **Frontend**: TypeScript with Vite
-- **Architecture**: 14 Rust crates in a Cargo workspace
+- **Architecture**: **18** Rust crates in a Cargo workspace - `ls crates | wc -l`
+  -> 17, plus `src-tauri`, which `members = ["crates/*", "src-tauri"]` makes the
+  eighteenth. This line said fourteen; four crates were added and nobody came
+  back to it, which is why the count is written beside the command that gives
+  it.
 - **Rendering**: WebGL via WASM
 - **Desktop**: Tauri v2 for native application
 
@@ -474,7 +478,10 @@ Used by CLI for `--watch` mode. Not used in web/desktop (handled by Vite dev ser
   violations, so it is usable from a script. `--preset` picks the fab rules,
   `--no-drc` stops at parsing.
 - `cypcb export <file> --output <dir>` - Gerbers, drill, BOM and
-  pick-and-place. 13 files.
+  pick-and-place. **Count them rather than reading a number here**:
+  `cypcb export --dry-run examples/blink.cypcb | wc -l` -> **14** on
+  2026-08-27, the fourteenth being the Gerber job file that was added after
+  this line first said thirteen.
 - `cypcb route <file>` - autorouter. The built-in PathFinder routes the board
   every measured way, keeps the best and writes it back as `.cypcb` trace
   blocks; `--fast` routes once instead. FreeRouting is opt-in, by naming its
@@ -693,7 +700,12 @@ No WebSocket server needed - WASM engine provides diagnostics directly.
 ### WASM Size
 
 - **Target**: <300 KB gzipped
-- **Current**: 264 KB gzipped (29% reduction from initial 374 KB)
+- **Current**: **505 KB gzipped**, measured 2026-08-27 -
+  `gzip -c viewer/pkg/cypcb_render_bg.wasm | wc -c` -> 517,225 bytes, from
+  1,313,613 uncompressed. The target is missed by 70% and the figure that used
+  to stand here, 264 KB, was written before the router, the checker's newer
+  rules and the stackup work reached the browser. Measure before quoting it;
+  the module is rebuilt by `viewer/build-wasm.sh`, which the quality gate runs.
 - **Techniques**: opt-level="z", LTO, codegen-units=1, panic="abort", strip=true, wasm-opt -O4
 
 ### Rendering
