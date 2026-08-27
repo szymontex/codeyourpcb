@@ -186,35 +186,35 @@ This file is the explicit capability and coverage contract for the project.
 
 ### R201 — Web Worker Routing — Main Thread Never Blocked
 - Class: core-capability
-- Status: active
+- Status: validated
 - Description: All WASM autorouting (single route, variants, tuning re-route) executes in a Web Worker. Main thread never calls synchronous WASM routing functions.
 - Why it matters: User says "zacina totalnie przeglądarkę" — synchronous WASM on main thread freezes UI for 60-160+ seconds. Unusable.
 - Source: user
 - Primary owning slice: M005/S01
 - Supporting slices: M005/S04
-- Validation: unmapped
-- Notes: Cancel via worker.terminate() + respawn. No SharedArrayBuffer (requires COOP/COEP headers).
+- Validation: `viewer/e2e/routing-runs-off-the-main-thread.spec.ts`, `viewer/e2e/the-sliders-reroute-the-board.spec.ts` and `viewer/e2e/the-debug-run-is-not-on-the-main-thread.spec.ts`, each asking the page a question while its run is in flight - a blocked main thread cannot answer. `grep -c "engine\\.auto_route" viewer/src/main.ts` -> **0** (2026-08-27).
+- Notes: Variant generation is the one caller the description names that this cannot cover: it has no caller at all, because the variant panel was deleted in `a9e8c7a`. That is a feature to rebuild rather than a call to move. Cancel via worker.terminate() + respawn. No SharedArrayBuffer (requires COOP/COEP headers).
 
 ### R202 — Routing Progress Visible During Execution
 - Class: primary-user-loop
-- Status: active
+- Status: validated
 - Description: User sees a spinner/overlay immediately when routing starts and it remains visible throughout. Browser stays responsive — user can scroll, click cancel, interact with toolbar.
 - Why it matters: "żadnego okienka, żadnego progressbaru, po prostu freeze" — zero feedback is unacceptable UX
 - Source: user
 - Primary owning slice: M005/S01
 - Supporting slices: none
-- Validation: unmapped
+- Validation: `viewer/e2e/routing-runs-off-the-main-thread.spec.ts` reads `#routing-status` and `__routingWorker.active` in one evaluation while the worker routes, so the overlay is proven visible *during* the run rather than before it.
 - Notes: With Web Worker, main thread is free to paint — spinner just works. No setTimeout hack needed.
 
 ### R203 — Cancel Routing Mid-Execution
 - Class: primary-user-loop
-- Status: active
+- Status: validated
 - Description: Cancel button visible during routing, clicking it terminates the routing immediately and resets UI to pre-route state.
 - Why it matters: User cannot wait minutes for routing to finish on complex boards. Must have escape hatch.
 - Source: user
 - Primary owning slice: M005/S01
 - Supporting slices: none
-- Validation: unmapped
+- Validation: `viewer/e2e/cancel-stops-the-routing-worker.spec.ts`: the run is started and cancelled in one turn of the event loop, and five seconds later no result has arrived and the trace count is unchanged. The mutation that proves the test - cancel no longer terminating the worker - fails it with `Received: "{\"ok\":true,\"routed\":52,\"unrouted\":0}"`.
 - Notes: worker.terminate() is the only reliable cancellation — WASM has no cooperative preemption.
 
 ### R204 — 0 Unrouted on Blink LED
@@ -345,9 +345,9 @@ This file is the explicit capability and coverage contract for the project.
 | R122 | core-capability | deferred | future | none | unmapped |
 | R130 | constraint | out-of-scope | none | none | n/a |
 | R131 | constraint | out-of-scope | none | none | n/a |
-| R201 | core-capability | active | M005/S01 | M005/S04 | unmapped |
-| R202 | primary-user-loop | active | M005/S01 | none | unmapped |
-| R203 | primary-user-loop | active | M005/S01 | none | unmapped |
+| R201 | core-capability | validated | M005/S01 | M005/S04 | E2E: the page answers mid-run, cancel leaves nothing behind (2026-08-27) |
+| R202 | primary-user-loop | validated | M005/S01 | none | E2E: the page answers mid-run, cancel leaves nothing behind (2026-08-27) |
+| R203 | primary-user-loop | validated | M005/S01 | none | E2E: the page answers mid-run, cancel leaves nothing behind (2026-08-27) |
 | R204 | quality-attribute | active | M005/S02 | M005/S03 | unmapped |
 | R205 | quality-attribute | active | M005/S03 | none | unmapped |
 | R206 | quality-attribute | active | M005/S03 | none | unmapped |
@@ -403,13 +403,18 @@ in the viewer's tests fails if this list and the specs disagree.
 
 ## Coverage Summary
 
-- Active requirements: 12
+- Active requirements: 9
 - Mapped to slices: 23 (requirements whose primary owner in the traceability table is a slice: 16 under M004, 7 under M005)
-- Validated: 11
+- Validated: 14
 - Unmapped active requirements: 0
 - **Three requirements moved from validated to active on 2026-08-08**: R110,
   R113 and R115 each cited E2E tests as their validation, and those suites are
   skipped. A requirement is not validated by a test that does not run.
+- **Three requirements moved from active to validated on 2026-08-27**: R201,
+  R202 and R203, the Web Worker report the owner made in his own words. Each
+  cites an end-to-end test that runs in the gate rather than a slice summary,
+  and each of those tests was killed by a mutation restoring the behaviour it
+  forbids.
 - **The traceability table went on calling those three validated until
   2026-08-27**, which is the shape of drift this file exists to prevent: the
   status was corrected where it is declared and not where it is repeated. The
