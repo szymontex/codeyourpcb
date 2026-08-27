@@ -1,0 +1,44 @@
+// curved-track.cypcb - copper that turns a corner instead of cutting it.
+//
+// A right angle in copper is a stress point in the etch and a discontinuity a
+// fast signal reflects off. Every board tool draws a curve for it; until now
+// this language had only straight segments, so a corner was two of them.
+//
+//   path 8mm, 6mm -> 12mm, 6mm
+//   arc centre 12mm, 10mm sweep 90 clockwise
+//
+// An arc continues from wherever the copper already is, so it states only the
+// centre it turns about and how far it turns. Two points and a radius would be
+// shorter and would not say which of the two arcs it means - the short way
+// round or the long way. The turn is counter-clockwise - the direction angles
+// grow in - unless the arc says `clockwise`, which this one does: the copper
+// comes up the right of the board and turns left across the top.
+//
+// The copper the board carries is the chords the curve is flattened into, at
+// 10 microns of error - finer than any fabricator's registration. Everything
+// that measures copper measures straight segments, so a curve reaches the
+// checker, the router and every exporter that way.
+//
+// Check it with:
+//   cypcb check examples/curved-track.cypcb
+//
+// It reports nothing and exits 0.
+
+version 1
+
+board curved_track {
+    size 24mm x 20mm
+    layers 2
+    fab jlcpcb
+}
+
+net SIG {
+}
+
+trace SIG {
+    layer top
+    width 0.25mm
+    path 8mm, 6mm -> 12mm, 6mm
+    arc centre 12mm, 10mm sweep 90 clockwise
+    path 8mm, 10mm -> 8mm, 14mm
+}

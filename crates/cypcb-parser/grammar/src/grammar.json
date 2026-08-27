@@ -2642,6 +2642,10 @@
         },
         {
           "type": "SYMBOL",
+          "name": "trace_arc"
+        },
+        {
+          "type": "SYMBOL",
           "name": "trace_layer"
         },
         {
@@ -2838,6 +2842,92 @@
               }
             ]
           }
+        }
+      ]
+    },
+    "trace_arc": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "STRING",
+          "value": "arc"
+        },
+        {
+          "type": "STRING",
+          "value": "centre"
+        },
+        {
+          "type": "FIELD",
+          "name": "cx",
+          "content": {
+            "type": "SYMBOL",
+            "name": "dimension"
+          }
+        },
+        {
+          "type": "STRING",
+          "value": ","
+        },
+        {
+          "type": "FIELD",
+          "name": "cy",
+          "content": {
+            "type": "SYMBOL",
+            "name": "dimension"
+          }
+        },
+        {
+          "type": "STRING",
+          "value": "sweep"
+        },
+        {
+          "type": "FIELD",
+          "name": "sweep",
+          "content": {
+            "type": "SYMBOL",
+            "name": "number"
+          }
+        },
+        {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "FIELD",
+              "name": "unit",
+              "content": {
+                "type": "CHOICE",
+                "members": [
+                  {
+                    "type": "STRING",
+                    "value": "deg"
+                  },
+                  {
+                    "type": "STRING",
+                    "value": "degrees"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
+        },
+        {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "FIELD",
+              "name": "direction",
+              "content": {
+                "type": "STRING",
+                "value": "clockwise"
+              }
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
         }
       ]
     },

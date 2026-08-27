@@ -24,8 +24,8 @@ use crate::ast::{
     LayerType, ModuleDef, ModuleInstance, NetAssignment, NetClassDef, NetConstraints, NetDef,
     OutlineDef, PadDef, PadShape, PhysicalValue, PinDeclaration, PinId, PinRef, PortConnection,
     PositionExpr, RotationExpr, SilkDef, SizeProperty, SourceFile, Span, StackupDef, StackupLayer,
-    StackupSheetDef, StringLit, TeardropsProperty, TextDef, Tolerance, ToleranceKind, TraceDef,
-    TraceDirective, TracePath, TraceVia, ZoneDef, ZoneKind,
+    StackupSheetDef, StringLit, TeardropsProperty, TextDef, Tolerance, ToleranceKind, TraceArc,
+    TraceDef, TraceDirective, TracePath, TraceVia, ZoneDef, ZoneKind,
 };
 use crate::errors::{ParseError, ParseResult};
 use crate::lexer::{tokenize, Token, TokenKind};
@@ -1233,6 +1233,49 @@ impl<'a> Reader<'a> {
                         }
                         directives.push(TraceDirective::Path(TracePath {
                             points,
+                            span: Span::new(directive_start, self.behind()),
+                        }));
+                    }
+                    Some("arc") => {
+                        self.bump();
+                        if !self.eat_word("centre") {
+                            self.unexpected("`centre` after `arc`");
+                            continue;
+                        }
+                        let centre_start = self.here();
+                        let x = self.dimension();
+                        self.eat(&TokenKind::Comma);
+                        let y = self.dimension();
+                        let Some((x, y)) = x.zip(y) else {
+                            self.unexpected("a centre like `15mm, 10mm`");
+                            continue;
+                        };
+                        let centre = PositionExpr {
+                            x,
+                            y,
+                            span: Span::new(centre_start, self.behind()),
+                        };
+                        if !self.eat_word("sweep") {
+                            self.unexpected("`sweep` and how far the arc turns");
+                            continue;
+                        }
+                        let Some((sweep, _)) = self.number() else {
+                            self.unexpected("how far the arc turns, like `90`");
+                            continue;
+                        };
+                        // `deg` is the only unit an angle has here, so it is
+                        // allowed to be written and never has to be.
+                        let _ = self.eat_word("deg") || self.eat_word("degrees");
+                        // Angles grow counter-clockwise, so that is the
+                        // direction with no word beside it.
+                        let sweep_degrees = if self.eat_word("clockwise") {
+                            -sweep
+                        } else {
+                            sweep
+                        };
+                        directives.push(TraceDirective::Arc(TraceArc {
+                            centre,
+                            sweep_degrees,
                             span: Span::new(directive_start, self.behind()),
                         }));
                     }

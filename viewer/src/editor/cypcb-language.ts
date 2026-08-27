@@ -39,7 +39,7 @@ export const cypcbLanguage: monaco.languages.IMonarchLanguage = {
     'size', 'layers', 'value', 'at', 'rotate', 'pin', 'lcsc', 'width',
     'clearance', 'current', 'from', 'to', 'path', 'via', 'layer', 'locked',
     'bounds', 'stackup', 'description', 'pad', 'courtyard', 'silk', 'point',
-    'implements', 'drill', 'radius', 'as'
+    'implements', 'drill', 'radius', 'as', 'arc', 'centre', 'sweep', 'clockwise'
   ],
 
   layerNames: ['Top', 'Bottom', 'Inner1', 'Inner2', 'Inner3', 'Inner4', 'all'],

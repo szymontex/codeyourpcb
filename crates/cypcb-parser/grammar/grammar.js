@@ -756,6 +756,7 @@ module.exports = grammar({
       $.trace_to,
       $.trace_via,
       $.trace_path,
+      $.trace_arc,
       $.trace_layer,
       $.trace_width,
       $.trace_locked,
@@ -814,6 +815,27 @@ module.exports = grammar({
       'path',
       $.path_point,
       repeat(seq('->', $.path_point)),
+    ),
+
+    // arc centre 15mm,10mm sweep 90
+    //
+    // A curve continues from wherever the copper already is, and states the
+    // centre it turns about and how far it turns. Two points and a radius
+    // would be shorter to write and would not say which of the two arcs that
+    // describes - the short way round or the long way - and every neighbouring
+    // format answers that differently. A centre and a sweep need no
+    // convention. The turn is counter-clockwise, which is the direction angles
+    // grow in, unless the arc says `clockwise`.
+    trace_arc: $ => seq(
+      'arc',
+      'centre',
+      field('cx', $.dimension),
+      ',',
+      field('cy', $.dimension),
+      'sweep',
+      field('sweep', $.number),
+      optional(field('unit', choice('deg', 'degrees'))),
+      optional(field('direction', 'clockwise')),
     ),
 
     path_point: $ => seq(

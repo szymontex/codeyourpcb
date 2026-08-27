@@ -1157,6 +1157,25 @@ pub enum TraceDirective {
     Path(TracePath),
     /// Via with optional drill size: `via X,Y [drill D]`
     Via(TraceVia),
+    /// A curve continuing from where the copper is: `arc centre X,Y sweep 90`
+    Arc(TraceArc),
+}
+
+/// A curve in a trace: where it turns about, and how far.
+///
+/// In the DSL: `arc centre 15mm,10mm sweep 90`
+///
+/// It starts wherever the copper already is - the end of the path or arc
+/// before it - so a curve is written as the continuation it is. The sweep is
+/// signed: positive turns counter-clockwise.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TraceArc {
+    /// The centre the copper turns about.
+    pub centre: PositionExpr,
+    /// How far it turns, in degrees. Negative turns clockwise.
+    pub sweep_degrees: f64,
+    /// Span covering the arc statement.
+    pub span: Span,
 }
 
 /// An explicit trace path: a polyline of coordinate pairs.

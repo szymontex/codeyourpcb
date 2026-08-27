@@ -38,7 +38,7 @@ use crate::ast::{
     NetConstraints, NetDef, OutlineDef, PadDef, PadShape, PhysicalValue, PinDeclaration, PinId,
     PinRef, PortConnection, PositionExpr, RotationExpr, SilkDef, SizeProperty, SourceFile, Span,
     StackupDef, StackupLayer, StackupSheetDef, StringLit, TeardropsProperty, TextDef, Tolerance,
-    ToleranceKind, TraceDef, TraceDirective, TracePath, TraceVia, ZoneDef, ZoneKind,
+    ToleranceKind, TraceArc, TraceDef, TraceDirective, TracePath, TraceVia, ZoneDef, ZoneKind,
 };
 use crate::errors::{ParseError, ParseResult};
 use crate::node_kinds;
@@ -1497,6 +1497,28 @@ impl CypcbParser {
                     if !points.is_empty() {
                         directives.push(TraceDirective::Path(TracePath {
                             points,
+                            span: span_of(&child),
+                        }));
+                    }
+                }
+                "trace_arc" => {
+                    let cx = get_child_by_field(&child, "cx")
+                        .and_then(|n| self.convert_dimension(source, &n, errors));
+                    let cy = get_child_by_field(&child, "cy")
+                        .and_then(|n| self.convert_dimension(source, &n, errors));
+                    let sweep = get_child_by_field(&child, "sweep")
+                        .and_then(|n| node_text(source, &n).parse::<f64>().ok());
+                    // Angles grow counter-clockwise, so that is the direction
+                    // with no word beside it.
+                    let clockwise = get_child_by_field(&child, "direction").is_some();
+                    if let (Some(x), Some(y), Some(sweep)) = (cx, cy, sweep) {
+                        directives.push(TraceDirective::Arc(TraceArc {
+                            centre: PositionExpr {
+                                x,
+                                y,
+                                span: span_of(&child),
+                            },
+                            sweep_degrees: if clockwise { -sweep } else { sweep },
                             span: span_of(&child),
                         }));
                     }

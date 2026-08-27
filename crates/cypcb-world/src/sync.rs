@@ -217,6 +217,14 @@ pub enum SyncError {
         span: miette::SourceSpan,
     },
 
+    /// An arc has no copper to continue from.
+    ArcWithoutStart {
+        /// Source code for miette display.
+        src: String,
+        /// Source span of the arc.
+        span: miette::SourceSpan,
+    },
+
     /// A trace references an unknown layer.
     UnknownLayer {
         /// The unknown layer name.
@@ -308,6 +316,9 @@ impl fmt::Display for SyncError {
             SyncError::UnknownLayer { layer, .. } => {
                 write!(f, "unknown layer: '{}'", layer)
             }
+            SyncError::ArcWithoutStart { .. } => {
+                write!(f, "an arc with nothing to continue from")
+            }
         }
     }
 }
@@ -333,6 +344,7 @@ impl Diagnostic for SyncError {
             }
             SyncError::ModuleCycle { .. } => Some(Box::new("cypcb::sync::module_cycle")),
             SyncError::UnknownLayer { .. } => Some(Box::new("cypcb::sync::unknown_layer")),
+            SyncError::ArcWithoutStart { .. } => Some(Box::new("cypcb::sync::arc_without_start")),
         }
     }
 
@@ -381,6 +393,9 @@ impl Diagnostic for SyncError {
             SyncError::UnknownLayer { .. } => {
                 Some(Box::new("use a valid layer name: Top, Bottom, Inner1, Inner2, etc."))
             }
+            SyncError::ArcWithoutStart { .. } => Some(Box::new(
+                "an arc continues the copper before it: put a `path` in front of it",
+            )),
         }
     }
 
@@ -398,6 +413,7 @@ impl Diagnostic for SyncError {
             SyncError::InterfaceNotSatisfied { src, .. } => Some(src),
             SyncError::ModuleCycle { src, .. } => Some(src),
             SyncError::UnknownLayer { src, .. } => Some(src),
+            SyncError::ArcWithoutStart { src, .. } => Some(src),
         }
     }
 
@@ -471,6 +487,9 @@ impl Diagnostic for SyncError {
             ))),
             SyncError::UnknownLayer { span, .. } => Some(Box::new(std::iter::once(
                 LabeledSpan::new_with_span(Some("unknown layer".to_string()), *span),
+            ))),
+            SyncError::ArcWithoutStart { span, .. } => Some(Box::new(std::iter::once(
+                LabeledSpan::new_with_span(Some("this arc starts nowhere".to_string()), *span),
             ))),
         }
     }
@@ -1665,12 +1684,16 @@ fn sync_trace(
     let has_geometry = trace_def
         .directives
         .iter()
-        .any(|d| matches!(d, TraceDirective::Path(_)));
+        .any(|d| matches!(d, TraceDirective::Path(_) | TraceDirective::Arc(_)));
 
     if has_geometry {
         // Geometric mode: process ordered directives to create traces and vias
         let mut current_layer = layer;
         let span = EcsSourceSpan::new(trace_def.span.start, trace_def.span.end);
+        // Where the copper is. An arc continues from it rather than stating a
+        // start of its own, which is what makes a curve a continuation of the
+        // path before it rather than a second trace beside it.
+        let mut cursor: Option<Point> = None;
 
         for directive in &trace_def.directives {
             match directive {
@@ -1701,6 +1724,8 @@ fn sync_trace(
                         }
                     }
 
+                    cursor = points.last().copied();
+
                     if !segments.is_empty() {
                         let mut trace = Trace {
                             segments,
@@ -1728,6 +1753,46 @@ fn sync_trace(
                         if let Some(neck) = neck {
                             world.ecs_mut().entity_mut(entity).insert(neck);
                         }
+                    }
+                }
+                TraceDirective::Arc(arc_def) => {
+                    let Some(start) = cursor else {
+                        result.errors.push(SyncError::ArcWithoutStart {
+                            src: source.to_string(),
+                            span: span_to_source_span(&arc_def.span),
+                        });
+                        continue;
+                    };
+                    let centre = Point::new(arc_def.centre.x.to_nm(), arc_def.centre.y.to_nm());
+                    let dx = (start.x.0 - centre.x.0) as f64;
+                    let dy = (start.y.0 - centre.y.0) as f64;
+                    let arc = crate::arc::Arc {
+                        centre,
+                        radius: cypcb_core::Nm((dx * dx + dy * dy).sqrt().round() as i64),
+                        start_millideg: (dy.atan2(dx).to_degrees() * 1000.0).round() as i32,
+                        sweep_millideg: (arc_def.sweep_degrees * 1000.0).round() as i32,
+                    };
+                    // The curve reaches copper as the chords that stand in for
+                    // it, at the tolerance the arc states: everything
+                    // downstream - the checker, the router, both exporters -
+                    // measures straight segments.
+                    let points = arc.flatten(crate::arc::Arc::DEFAULT_TOLERANCE);
+                    let segments: Vec<TraceSegment> = points
+                        .windows(2)
+                        .map(|pair| TraceSegment::new(pair[0], pair[1]))
+                        .collect();
+                    cursor = points.last().copied();
+
+                    if !segments.is_empty() {
+                        let trace = Trace {
+                            segments,
+                            width,
+                            layer: current_layer,
+                            net_id,
+                            locked: trace_def.locked,
+                            source: TraceSource::Manual,
+                        };
+                        world.ecs_mut().spawn((trace, net_id, span));
                     }
                 }
                 // Spawned above, for every mode rather than only this one.

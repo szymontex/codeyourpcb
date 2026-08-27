@@ -926,9 +926,43 @@ trace <net> {
     width <dimension>
     neck <dimension> for <dimension>
     path <x>,<y> -> <x>,<y>
+    arc centre <x>,<y> sweep <degrees> [clockwise]
     locked
 }
 ```
+
+### Copper that turns a corner
+
+A right angle in copper is a stress point in the etch and a discontinuity a
+fast signal reflects off. An `arc` curves instead:
+
+```
+trace SIG {
+    layer top
+    width 0.25mm
+    path 8mm, 6mm -> 12mm, 6mm
+    arc centre 12mm, 10mm sweep 90 clockwise
+    path 8mm, 10mm -> 8mm, 14mm
+}
+```
+
+An arc continues from wherever the copper already is - the end of the path or
+arc before it - so it states only the centre it turns about and how far. Two
+points and a radius would be shorter to write and would not say which of the
+two arcs it means, the short way round or the long way; a centre and a sweep
+need no convention. An arc with nothing in front of it is an error rather than
+a curve that starts somewhere of its own choosing.
+
+The turn is counter-clockwise, the direction angles grow in, unless the arc
+says `clockwise`. `deg` or `degrees` may be written after the sweep and never
+has to be.
+
+What the board carries is the chords the curve is flattened into, at 10 microns
+of error - finer than any fabricator's registration, and a chord roughly every
+seven degrees on a 5mm radius. Everything that measures copper here measures
+straight segments, so that is how a curve reaches the checker, the router and
+every exporter at once. A saved design writes those chords rather than the arc:
+the copper is what survives a round trip, not the sentence that produced it.
 
 **Example:**
 ```
@@ -1252,6 +1286,7 @@ Complete working examples can be found in the `examples/` directory:
 - `examples/drc-test.cypcb` - DRC rule demonstrations
 - `examples/routing-test.cypcb` - Manual trace definitions
 - `examples/board-dimensions.cypcb` - Measurements a fabricator can check the board against
+- `examples/curved-track.cypcb` - Copper that turns a corner instead of cutting it
 
 ## Common Mistakes
 

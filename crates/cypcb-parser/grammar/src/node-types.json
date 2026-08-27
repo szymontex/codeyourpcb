@@ -2241,6 +2241,66 @@
     }
   },
   {
+    "type": "trace_arc",
+    "named": true,
+    "fields": {
+      "cx": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "dimension",
+            "named": true
+          }
+        ]
+      },
+      "cy": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "dimension",
+            "named": true
+          }
+        ]
+      },
+      "direction": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "clockwise",
+            "named": false
+          }
+        ]
+      },
+      "sweep": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "number",
+            "named": true
+          }
+        ]
+      },
+      "unit": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "deg",
+            "named": false
+          },
+          {
+            "type": "degrees",
+            "named": false
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "trace_definition",
     "named": true,
     "fields": {
@@ -2259,6 +2319,10 @@
       "multiple": true,
       "required": false,
       "types": [
+        {
+          "type": "trace_arc",
+          "named": true
+        },
         {
           "type": "trace_from",
           "named": true
@@ -2811,6 +2875,10 @@
     "named": false
   },
   {
+    "type": "arc",
+    "named": false
+  },
+  {
     "type": "as",
     "named": false
   },
@@ -2852,11 +2920,19 @@
     "named": false
   },
   {
+    "type": "centre",
+    "named": false
+  },
+  {
     "type": "circle",
     "named": false
   },
   {
     "type": "clearance",
+    "named": false
+  },
+  {
+    "type": "clockwise",
     "named": false
   },
   {
@@ -3246,6 +3322,10 @@
   },
   {
     "type": "stitch",
+    "named": false
+  },
+  {
+    "type": "sweep",
     "named": false
   },
   {
