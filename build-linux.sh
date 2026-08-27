@@ -26,15 +26,45 @@ if [ ! -e /dev/fuse ]; then
     export APPIMAGE_EXTRACT_AND_RUN=1
 fi
 
+# Which bundles to build. `bundle.targets` in tauri.conf.json is "all", and on
+# Linux that includes the AppImage, whose bundler fails inside a vendored script
+# this project does not own - `linuxdeploy-plugin-gtk.sh` lines 300-310, the
+# cause read line by line and recorded in docs/TRACKER.md. Tauri reports the
+# whole build as failed when one bundler does, so `.deb` and `.rpm` were being
+# built and then buried under "Build FAILED".
+#
+# A third-party bug is not a reason to ship nothing. This builds the two
+# formats that do build, and attempts the AppImage only when asked - so the day
+# the upstream script is fixed, `CYPCB_APPIMAGE=1 ./build-linux.sh` says so.
+BUNDLES="deb,rpm"
+if [ "${CYPCB_APPIMAGE:-0}" = "1" ]; then
+    BUNDLES="deb,rpm,appimage"
+    echo "[INFO] CYPCB_APPIMAGE=1: the AppImage is attempted as well."
+    echo ""
+fi
+
 cd viewer
-if ! npm run build:desktop; then
+if ! npm run build:desktop -- --bundles "$BUNDLES"; then
     echo ""
     echo "============================================"
     echo "Build FAILED"
     echo "============================================"
     echo ""
-    echo "Nothing was installed. On a fresh Linux box the usual cause is the"
-    echo "system libraries Tauri links against - run ./setup-linux.sh first."
+    if [ "${CYPCB_APPIMAGE:-0}" = "1" ]; then
+        echo "The AppImage was requested, and its bundler fails inside"
+        echo "linuxdeploy-plugin-gtk.sh, a vendored script this project does not"
+        echo "own - the cause is recorded in docs/TRACKER.md. Tauri reports the"
+        echo "whole build as failed, so anything it did produce first is listed"
+        echo "here rather than left unmentioned:"
+        ls -lh ../target/release/bundle/deb/*.deb \
+               ../target/release/bundle/rpm/*.rpm 2>/dev/null \
+          || echo "  (nothing)"
+        echo ""
+        echo "Run without CYPCB_APPIMAGE=1 for the two formats that do build."
+    else
+        echo "Nothing was installed. On a fresh Linux box the usual cause is the"
+        echo "system libraries Tauri links against - run ./setup-linux.sh first."
+    fi
     exit 1
 fi
 
@@ -54,11 +84,18 @@ BUNDLE=../target/release/bundle
 echo "Installers created:"
 echo ""
 MISSING=0
-echo "AppImage (portable):"
-ls -lh "$BUNDLE"/appimage/*.AppImage 2>/dev/null || { echo "  (not created)"; MISSING=1; }
-echo ""
 echo "Debian package (.deb):"
 ls -lh "$BUNDLE"/deb/*.deb 2>/dev/null || { echo "  (not created)"; MISSING=1; }
+echo ""
+echo "RPM package (.rpm):"
+ls -lh "$BUNDLE"/rpm/*.rpm 2>/dev/null || { echo "  (not created)"; MISSING=1; }
+echo ""
+if [ "${CYPCB_APPIMAGE:-0}" = "1" ]; then
+    echo "AppImage (portable):"
+    ls -lh "$BUNDLE"/appimage/*.AppImage 2>/dev/null || { echo "  (not created)"; MISSING=1; }
+else
+    echo "AppImage (portable): not requested - set CYPCB_APPIMAGE=1 to attempt it."
+fi
 echo ""
 
 # A build that exits 0 and leaves nothing behind is not a build that worked,
