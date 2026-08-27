@@ -78,8 +78,10 @@ Introduced is not after minus before: routing removes faults too. Every
 unrouted pin the fixture starts with is a violation that a successful route
 retires.
 
-Where the numbers come from (`drc_report`, re-run 2026-08-21 on all six
-fixtures). Each board is graded against the fab table its own layer count asks
+Where the numbers come from (`drc_report`; re-run **2026-08-27** on all six
+fixtures, which is when `multi_ic`'s row was corrected - five of the six read
+exactly as they had, and that one had been stale since `ViaSpanRule` was
+registered). Each board is graded against the fab table its own layer count asks
 for, which the harness prints per row, so `multi_ic` is read against
 `jlcpcb_standard_4layer` and the rest against `jlcpcb_standard_2layer`:
 
@@ -87,10 +89,19 @@ for, which the harness prints per row, so `multi_ic` is read against
 |---|---|---|---|---|---|---|
 | `led_blink.kicad_pcb` | small, 21 routes | 2layer | 12 | **2** | 2 | 0 |
 | `stm32_breakout.kicad_pcb` | dense, 899 routes | 2layer | 156 | **199** | 175 | 95 |
-| `multi_ic.kicad_pcb` | large, four copper layers, 970 routes | 4layer | 263 | **381** | 336 | 169 |
+| `multi_ic.kicad_pcb` | large, four copper layers, 970 routes | 4layer | 263 | **437** | 392 | 169 |
 | `shift_driver.kicad_pcb` | DIP and 0805, 2 layers, 671 routes | 2layer | 156 | **65** | 65 | 34 |
 | `plane_board.kicad_pcb` | poured GND plane, 181 routes | 2layer | 46 | **28** | 28 | 13 |
 | `qfp_fanout.kicad_pcb` | LQFP-64 at 0.5mm on 2 layers, 1478 routes | 2layer | 140 | **318** | 318 | 149 |
+
+**The row above read 381 after and 336 introduced until 2026-08-27**, and the
+rise is a rule rather than the router: `ViaSpanRule` was registered on
+2026-08-23 and `multi_ic` carries **56 blind and buried vias** this project
+laid before anything asked whether the fab drills them. The ratchet was
+re-baselined that day - `benchmark_validation` holds 471, the routed 437 plus
+this board's own band of 34 - and this table was not, so the two disagreed for
+four days. The shorts figure, 169, did not move: a via span is not copper
+touching copper.
 
 **`multi_ic` moved because its yardstick did, and that is separated from
 everything else that moved rather than asserted.** The harness graded all six
