@@ -14,7 +14,7 @@ echo "=== Quality Gate ==="
 echo ""
 
 # Stage 1: Rust formatting
-echo "[1/8] cargo fmt --check"
+echo "[1/9] cargo fmt --check"
 if cargo fmt --check 2>&1; then
   pass "cargo-fmt"
 else
@@ -30,7 +30,7 @@ echo ""
 # icon the macro refused, all found the first time anybody ran it. The
 # dependencies are in `scripts/setup-dev.sh` now, so the exclusion has nothing
 # left to protect and a crate nobody compiles is a crate nobody maintains.
-echo "[2/8] cargo clippy"
+echo "[2/9] cargo clippy"
 # The second reader is behind a feature, so the plain run does not lint it
 # either - the same gap the test stage below had.
 if cargo clippy --workspace --all-targets -- -D warnings 2>&1 \
@@ -96,7 +96,7 @@ if [ -n "$UNTRACKED_PARSER" ]; then
   fail "untracked tree-sitter output"
 fi
 
-echo "[3/8] cargo test"
+echo "[3/9] cargo test"
 # The Rust reader is what `parse` is now. The tests that check it against the
 # tree-sitter parser need that parser as well, which the plain run does not
 # build - named explicitly, because a test nobody runs is not a test.
@@ -124,7 +124,31 @@ fi
 echo ""
 
 # Stage 4: ESLint
-echo "[4/8] eslint"
+# Nothing here type-checked the viewer until 2026-08-27. `npm run build` is
+# `build:wasm && tsc && vite build`, and the gate ran neither: Vite strips types
+# rather than checking them and Playwright starts its server the same way, so a
+# viewer that cannot compile passed every stage. Measured before the stage was
+# written - `npx tsc --noEmit` in `viewer` -> no output, exit 0, over 136
+# project files - so this starts green rather than starting with a hundred
+# errors nobody will fix.
+#
+# tsconfig.json includes `src`, `e2e` and the root `*.ts`, which is what makes
+# this worth a stage: the specs and the dev server are code too.
+echo "[4/9] tsc --noEmit"
+TSC_LOG=$(mktemp)
+if (cd viewer && npx tsc --noEmit 2>&1 | tee "$TSC_LOG"); then
+  pass "tsc"
+else
+  echo ""
+  echo "  first errors:"
+  grep -E "error TS" "$TSC_LOG" | head -10 || true
+  rm -f "$TSC_LOG"
+  fail "tsc"
+fi
+rm -f "$TSC_LOG"
+echo ""
+
+echo "[5/9] eslint"
 if (cd viewer && npx eslint src/ e2e/ *.ts) 2>&1; then
   pass "eslint"
 else
@@ -133,7 +157,7 @@ fi
 echo ""
 
 # Stage 5: Vitest
-echo "[5/8] vitest"
+echo "[6/9] vitest"
 VITEST_LOG=$(mktemp)
 if (cd viewer && npx vitest run 2>&1 | tee "$VITEST_LOG"); then
   pass "vitest"
@@ -171,7 +195,7 @@ echo ""
 # That port is no longer 4321. It was, and 4321 is Astro's default, so a gate
 # run failed here because another repository's dev server in this container
 # held it. `CYPCB_E2E_PORT` overrides, and the default is 4327.
-echo "[6/8] playwright (rebuilding viewer/pkg first)"
+echo "[7/9] playwright (rebuilding viewer/pkg first)"
 # Before rebuilding, ask whether the *committed* bundle is the one this source
 # builds. The rebuild below makes the suite honest about the working tree and
 # says nothing about what a clean clone carries, and on 2026-08-27 those were
@@ -284,7 +308,7 @@ rm -f "$PLAYWRIGHT_LOG"
 echo ""
 
 # Stage 7: Autorouter benchmark — regression gate + performance benchmark
-echo "[7/8] autorouter benchmark"
+echo "[8/9] autorouter benchmark"
 if cargo test --release -p cypcb-autoroute -- benchmark_regression 2>&1; then
   pass "benchmark-regression"
 else
@@ -325,7 +349,7 @@ fi
 echo ""
 
 # Stage 8: Code duplication check
-echo "[8/8] jscpd"
+echo "[9/9] jscpd"
 if (cd viewer && npx jscpd --exitCode 1) 2>&1; then
   pass "jscpd"
 else
