@@ -5,6 +5,42 @@ remediation_round: 0
 
 # Milestone Validation: M005
 
+## Re-read on 2026-08-27
+
+**Five of the six criteria below are ticked on evidence that is not in this
+repository.** Measured on branch `fix/cli-check-drc`, not argued:
+
+- `grep -c "engine\.auto_route" viewer/src/main.ts` -> **2**, where the first
+  criterion quotes 0: `auto_route_with_params` at `viewer/src/main.ts:2948` and
+  `auto_route_debug` at `:3096`, both called from the main thread. R201 forbids
+  exactly that, and the browser freeze R201 was written for is still reachable.
+- `grep -rl` over `viewer/src` and `viewer/index.html` finds **0 files** for
+  `__routingWorker`, `triggerVariantRouting`, `transformVariantResults` and
+  `spawnRoutingWorker`. What is there predates this milestone: `#routing-status`
+  in 2 files, `isRouting` in 1, `cancelRouting` in 1, `__loadBoard` in 1.
+- `git log --all -- <path>` is empty for every file this document names as its
+  evidence - never committed to this clone rather than deleted from it. They are
+  listed under `not_in_this_repository:` below.
+- `test_blink_led_zero_unrouted`, the named proof under R204, is in no crate.
+  **The property it names does hold**: `benchmark_regression` in
+  `crates/cypcb-autoroute/tests/benchmark_validation.rs` routes led_blink with
+  PathFinder and asserts `unrouted == 0`, and
+  `cargo test --release -p cypcb-autoroute --test benchmark_validation benchmark_regression`
+  -> **1 passed**. R204 is the one requirement here with something behind it.
+- The committed wasm binary is **1,308,372 bytes**, not the 637,460 the S02 row
+  states - `git show HEAD:viewer/pkg/cypcb_render_bg.wasm | wc -c`.
+
+The checklist and the tables below are left as they were written: they are the
+record of what was reported. The ticks are not evidence and this section is.
+
+not_in_this_repository:
+  - routing-worker.ts - no commit in this clone ever added it (checked 2026-08-27)
+  - worker-protocol.ts - no commit in this clone ever added it (checked 2026-08-27)
+  - parse-source.ts - no commit in this clone ever added it (checked 2026-08-27)
+  - variant-transform.ts - no commit in this clone ever added it (checked 2026-08-27)
+  - autoroute-worker.spec.ts - no commit in this clone ever added it (checked 2026-08-27)
+  - autoroute-regression.spec.ts - no commit in this clone ever added it (checked 2026-08-27)
+
 ## Success Criteria Checklist
 
 - [x] **Route button never freezes the browser — main thread stays responsive during routing**

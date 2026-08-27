@@ -5,6 +5,14 @@ remediation_round: 0
 
 # Milestone Validation: M004
 
+## Re-read on 2026-08-27
+
+One file this document cites is no longer in the tree, and it left on purpose
+rather than by accident. The rest of what M004 names is there.
+
+not_in_this_repository:
+  - variant-panel.ts - deleted by a9e8c7a, `refactor(viewer): delete the variant panel, which nothing could reach`
+
 ## Success Criteria Checklist
 
 - [~] **Autorouter output has zero DRC violations on all benchmark boards** — PARTIAL: DRC reduced from baseline 50 to 5 on led_blink (90% improvement). Regression gate asserts DRC ≤ 5 (not 0). R107 status is "active" not "validated". The remaining 5 violations are documented as grid-boundary artifacts. This was a known scope compromise accepted during S03/S07, not a missed deliverable.
