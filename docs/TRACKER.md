@@ -109,6 +109,13 @@ than assumed - the command is beside the row - and every "KiCad has it" is a
 feature of KiCad 9 that a person meets in the ordinary course of making a
 board. Ordered by what a fabricated board actually needs, not by size.
 
+**One row of this table was false and the method is why.** Row 3 said pours
+connect solid; they have connected by spokes since before the audit was
+written, in `cypcb-core/src/pour.rs`. The audit grepped the files it expected a
+feature to live in - the zone model and the Gerber writer - rather than the
+repository, so a feature implemented one crate over read as absent. Every row
+was re-measured repo-wide on 2026-08-27 and the two that moved are marked.
+
 **Measured on our side.** `cypcb --help` lists ten subcommands: `parse`,
 `check`, `route`, `export`, `parse-kicad`, `from-kicad`, `score`, `to-kicad`,
 `watch`, `help`. `crates/cypcb-export/src/` writes Gerber (copper, mask, silk,
@@ -120,15 +127,15 @@ V8 added.
 
 | # | What KiCad has | What is here | Measured by |
 |---|---|---|---|
-| 1 | **Teardrops** on pad and via entries | nothing | `grep -rli teardrop crates viewer/src` -> **0 files** |
+| 1 | **Teardrops** on pad and via entries | **done 2026-08-27** - `board { teardrops }`, the geometry, the Gerber regions and the `to-kicad` warning | was `grep -rli teardrop crates viewer/src` -> 0 files |
 | 2 | **Arcs in copper** - a track can curve | straight segments only | `grep -n "Arc" crates/cypcb-world/src/components/trace.rs` -> **nothing** |
-| 3 | **Thermal reliefs** - a pad in a pour connects by spokes | pours connect solid | `grep -rn thermal` in the zone model and the Gerber writer -> **nothing** |
+| 3 | ~~**Thermal reliefs**~~ | **this row was wrong: they exist** - `pour::thermal_spokes`, `PourOptions::thermal_gap` and `spoke_width`, used by `cypcb_world::copper::fill_zone` and carried into the KiCad writer | `grep -rln "thermal_spokes\|thermal_gap" crates/*/src` -> **cypcb-core, cypcb-world, cypcb-kicad** |
 | 4 | **Stitching vias** - a field of vias tying pours together | nothing | `grep -rli via_stitch crates viewer/src` -> **0 files** |
 | 5 | **Length tuning** - meanders to match a pair or a bus | the checker measures skew and cannot fix it | `grep -rli meander` -> **0**, `length_tune` -> **0** |
 | 6 | **IPC-D-356 netlist** for bare-board testing | nothing | `grep -rli "ipc-d-356"` -> **0 files** |
 | 7 | **Plot to PDF, SVG and DXF** | Gerber only | `ls crates/cypcb-export/src` - no plotter of any kind |
 | 8 | **DXF import** of a board outline | outline is written in the language | same |
-| 9 | **Free text and dimensions** on the board | text exists inside a footprint's silkscreen only | grammar keywords: `silk`, `text` under `footprint` |
+| 9 | **Free text and dimensions** placed by the designer | a footprint states `silk line` and `silk circle`, and `cypcb_world::silk_text` prints every designator as strokes - what is missing is text and dimensions a person places | `grep -n silk_line grammar.js`, `crates/cypcb-world/src/silk_text.rs` |
 | 10 | **IPC-2581 / ODB++** handoff | Gerber and Excellon | `ls crates/cypcb-export/src` |
 
 **Deliberately not on this list.** Schematic capture and ERC - the language is
@@ -150,7 +157,8 @@ different product.
 - **Three of this repository's own guards demanded the rest of the work**, which is the point of having them: an example that states the property (`examples/teardrops.cypcb`), an example header whose advertised command really exits the way it says, and a section in `docs/SYNTAX.md` describing the block property by property.
 - **The gate's own parser check was wrong and this commit is what proved it.** It asked `git diff HEAD -- grammar/src` after regenerating, which fails for any *uncommitted* grammar change - so a commit that touches the language could never pass its own gate. It now takes the md5s of the generated files before and after regenerating: the question is whether the parser on disk is the one this grammar produces, not whether it matches the last commit.
 - Proof: `cargo test -p cypcb-world --test the_board_can_ask_for_teardrops` -> **4 passed**; `cargo test -p cypcb-cli --test a_track_gets_a_fillet_where_it_meets_a_pad` -> **4 passed**, the new case exporting a board that asks with no flag and finding four regions; `cargo test -p cypcb-cli --test what_a_kicad_board_cannot_carry` -> **6 passed**. Mutations, each alone and restored from the saved file: sync ignoring the block's ratios -> **2 failed**; the writer dropping the bare word -> **1 failed**; the `to-kicad` warning removed -> **1 failed**; `grammar.json` emptied -> the gate's parser check reports `PARSER WAS STALE`. `./scripts/quality-gate.sh` -> **All stages passed**, 9 of 9.
-- NEXT-ACTION: **item 2, arcs in copper.** `crates/cypcb-world/src/components/trace.rs` has no arc: every track is straight segments, so a curve is drawn as a fan of chords and a fabricator receives a polygon where KiCad would send `G02`/`G03`. It is the next item because it is the one the other nine lean on - a teardrop is a straight fillet *because* the export cannot curve, length tuning wants arcs at the bends, and a DXF outline is arcs more often than not.
+- ~~NEXT-ACTION: **item 2, arcs in copper.**~~ **Deferred, with a reason a measurement gave.** `cypcb-drc`'s clearance is `segment_distance` over straight segments, and the router, the congestion map and the KiCad writer are the same: an arc in the model would be copper the checker cannot measure, which is worse than a board that cannot curve. Arcs are a session across the model, the DRC, the router and both interop paths - not a fire.
+- NEXT-ACTION: **item 6, the IPC-D-356 netlist.** It is the next item that is bounded: a text format of one record per net endpoint, written from the board this project already holds, and the file a fabricator's flying-probe tester reads to check a bare board before anything is soldered to it. Nothing else in the tool has to change to write it, which is what makes it a fire rather than a session.
 
 
 ### V8 - Stackup parity with KiCad and Altium
