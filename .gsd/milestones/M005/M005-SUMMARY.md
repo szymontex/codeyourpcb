@@ -65,6 +65,14 @@ requirement_outcomes:
     from_status: active
     to_status: validated
     proof: "Route button calls triggerVariantRouting() → worker generates 3+ variants → snapshot applied to canvas → score panel shows detailed metrics (DRC/smoothness/vias/length/crossings) → click-to-apply re-routes with per-variant params → hover preview renders ghost overlay. 3 E2E + 11 unit tests."
+outcomes_not_in_effect:
+  - R201 - the requirements file still declares it `active`, and no commit in this clone contains the Web Worker this outcome rests on (checked 2026-08-27)
+  - R202 - the requirements file still declares it `active`, and no commit in this clone contains the Web Worker this outcome rests on (checked 2026-08-27)
+  - R203 - the requirements file still declares it `active`, and no commit in this clone contains the Web Worker this outcome rests on (checked 2026-08-27)
+  - R204 - the requirements file still declares it `active`, and no commit in this clone contains the Web Worker this outcome rests on (checked 2026-08-27)
+  - R205 - the requirements file still declares it `active`, and no commit in this clone contains the Web Worker this outcome rests on (checked 2026-08-27)
+  - R206 - the requirements file still declares it `active`, and no commit in this clone contains the Web Worker this outcome rests on (checked 2026-08-27)
+  - R207 - the requirements file still declares it `active`, and no commit in this clone contains the Web Worker this outcome rests on (checked 2026-08-27)
 duration: 3h 30m
 verification_result: passed
 completed_at: 2026-03-19

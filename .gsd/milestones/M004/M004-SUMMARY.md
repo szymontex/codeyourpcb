@@ -101,6 +101,10 @@ requirement_outcomes:
     from_status: active
     to_status: validated
     proof: "PathFinder composite 5001 vs ImprovedAStar 15544 on led_blink, confirmed as default — M004/S07"
+outcomes_not_in_effect:
+  - R110 - moved back to `active` by 4b2d2c8, `docs(gsd): three requirements were validated by tests that do not run` (2026-08-08)
+  - R113 - moved back to `active` by 4b2d2c8, `docs(gsd): three requirements were validated by tests that do not run` (2026-08-08)
+  - R115 - moved back to `active` by 4b2d2c8, `docs(gsd): three requirements were validated by tests that do not run` (2026-08-08)
 duration: ~5h (S01:60m, S02:45m, S03:103m, S04:30m, S05:45m, S06:75m, S07:33m)
 verification_result: passed
 completed_at: 2026-03-14

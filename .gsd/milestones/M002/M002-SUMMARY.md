@@ -45,6 +45,8 @@ requirement_outcomes:
     from_status: validated
     to_status: validated
     proof: "Playwright E2E test measures domContentLoaded at 105ms (<3000ms target) via Navigation Timing API"
+outcomes_not_in_effect:
+  - WEB-01 - no requirement in `.gsd/REQUIREMENTS.md` carries this id; M001 and M002 used a WEB-nn scheme that the R-numbered file never adopted, and 19 documents still name one (checked 2026-08-27)
 duration: ~10 hours across 8 slices (S01-S08)
 verification_result: passed
 completed_at: 2026-03-13
