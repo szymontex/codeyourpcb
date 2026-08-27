@@ -96,6 +96,7 @@ pub mod dsl;
 pub mod footprint;
 pub mod registry;
 
+pub mod meander;
 /// The letters a legend prints, as strokes both the exporter and the checker
 /// read.
 pub mod silk_text;
