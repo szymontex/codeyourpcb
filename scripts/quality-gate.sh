@@ -228,6 +228,32 @@ if [ -n "$GENERATED_BINDINGS" ]; then
     fail "stale viewer/pkg bindings"
   fi
 fi
+# The pair checked against each other rather than against the toolchain. The
+# module's bytes cannot be compared - `rust-toolchain.toml` pins `stable` and
+# binaryen comes from the operating system - but what the bindings ask of the
+# module can be: every `wasm.<symbol>` the glue calls has to be a symbol the
+# module exports. That holds whoever compiled it, and it is the failure a
+# mismatched pair actually produces - a call into a name that is not there.
+if command -v wasm-dis >/dev/null 2>&1; then
+  MODULE_EXPORTS=$(wasm-dis viewer/pkg/cypcb_render_bg.wasm 2>/dev/null \
+    | grep -oE '\(export "[^"]+"' | sed 's/(export "//; s/"$//' | sort -u)
+  GLUE_CALLS=$(grep -oE 'wasm\.[a-zA-Z0-9_]+' viewer/pkg/cypcb_render.js | sed 's/^wasm\.//' | sort -u)
+  ABSENT=$(comm -23 <(echo "$GLUE_CALLS") <(echo "$MODULE_EXPORTS"))
+  if [ -n "$ABSENT" ]; then
+    echo ""
+    echo "  the bindings call symbols the module does not export:"
+    echo "$ABSENT" | sed 's/^/    /'
+    echo "  rebuild with ./viewer/build-wasm.sh and commit viewer/pkg."
+    fail "bindings and module disagree"
+  fi
+  UNCALLED=$(comm -13 <(echo "$GLUE_CALLS") <(echo "$MODULE_EXPORTS"))
+  if [ -n "$UNCALLED" ]; then
+    echo "  (the module exports $(echo "$UNCALLED" | wc -l) symbol(s) the bindings never call)"
+  fi
+else
+  echo "  (bindings not checked against the module: no wasm-dis - install binaryen)"
+fi
+
 # And whether the rebuild wrote anything nobody tracks. `viewer/.gitignore`
 # carried `pkg/` from the wasm-pack era while six files inside it were tracked,
 # so a new artifact appearing there was invisible in `git status` and shipped to
