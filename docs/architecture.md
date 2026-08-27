@@ -734,6 +734,11 @@ No WebSocket server needed - WASM engine provides diagnostics directly.
   `wasm-opt`, which shrinks the module by roughly a third - the ranking is what
   this table is for, not the absolute bytes.
 
+  The shares come from a run that its own timeout cut at 6,421 of the module's
+  6,471 functions. A second run, left to finish, gives the same twelve largest
+  functions with the same byte counts, so the ranking is the whole module's
+  rather than 99% of it.
+
 ### Rendering
 
 - **Canvas**: Single `getComputedStyle()` call per frame (cache theme colors)
