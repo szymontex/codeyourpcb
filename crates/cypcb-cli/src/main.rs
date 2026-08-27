@@ -106,6 +106,16 @@ enum Commands {
     /// rules per fab and per net rather than per board. A project file KiCad
     /// wrote has no such key and is read for those numbers alone.
     FromKicad(commands::FromKicadCommand),
+    /// Read a DXF drawing's cutout as a .cypcb board outline
+    ///
+    /// An enclosure is drawn in a mechanical tool and the board has to fit
+    /// inside it. Until this, the way that fact reached a design was a person
+    /// reading coordinates off a drawing and typing them in. The largest
+    /// closed shape wins unless `--layer` names one, the shape is moved to the
+    /// origin unless `--keep-origin` says otherwise, and every entity passed
+    /// over is named - a curve is not a line or a polyline, and this reads
+    /// only those two.
+    FromDxf(commands::FromDxfCommand),
     /// Route a .cypcb or .kicad_pcb board and print quality metrics as JSON
     ///
     /// The shipped defaults, once - no variant search. `route` ranks thirteen
@@ -177,6 +187,7 @@ fn main() -> Result<()> {
         Commands::Export(cmd) => cmd.run(),
         Commands::ParseKicad(cmd) => cmd.run(),
         Commands::FromKicad(cmd) => cmd.run(),
+        Commands::FromDxf(cmd) => cmd.run(),
         Commands::ToKicad(cmd) => cmd.run(),
         Commands::Watch(cmd) => cmd.run(),
         Commands::Score(cmd) => cmd.run(),

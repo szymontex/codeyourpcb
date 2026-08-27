@@ -292,3 +292,284 @@ pub fn plot_layer(world: &mut BoardWorld, library: &FootprintLibrary, layer: Lay
     group(&mut out, 0, "EOF");
     out
 }
+
+// ---------------------------------------------------------------------------
+// Reading one back
+// ---------------------------------------------------------------------------
+//
+// The other direction, and the one a mechanical engineer actually hands over:
+// an enclosure's cutout arrives as a DXF and is retyped as `outline` points by
+// hand, which is how a board ends up a fraction out from the case it has to
+// fit. The reader takes the entity set the writer above produces, so the two
+// agree by construction - and it takes `LWPOLYLINE` as well, because every
+// tool newer than R14 writes cutouts with it.
+
+/// What a DXF drawing had to say about a board's edge.
+#[derive(Debug, Clone)]
+pub struct DxfOutline {
+    /// The closed loop, in the drawing's own coordinates.
+    pub points: Vec<Point>,
+    /// The DXF layer it came from.
+    pub layer: String,
+    /// What a drawing unit turned out to be.
+    pub units: &'static str,
+    /// How many closed loops the drawing held, this one included.
+    pub loops: usize,
+    /// Entity kinds that were passed over, and how many of each.
+    pub skipped: Vec<(String, usize)>,
+}
+
+/// One group pair: the code, and the value that followed it.
+type Pair = (u16, String);
+
+/// Split a DXF into its pairs, or say which line stopped it.
+///
+/// Every line of the format is half of a pair, so a file with an odd number of
+/// lines or a non-numeric code is a file whose every entity after that point
+/// would be read as something else. Saying so beats guessing.
+fn read_pairs(text: &str) -> Result<Vec<Pair>, String> {
+    let lines: Vec<&str> = text.lines().map(|line| line.trim()).collect();
+    // A trailing newline leaves one empty line, which is not half of a pair.
+    let lines: Vec<&str> = match lines.last() {
+        Some(&"") => lines[..lines.len() - 1].to_vec(),
+        _ => lines,
+    };
+    if !lines.len().is_multiple_of(2) {
+        return Err(format!(
+            "the file has {} lines, and every line of a DXF is half of a pair",
+            lines.len()
+        ));
+    }
+    let mut pairs = Vec::with_capacity(lines.len() / 2);
+    for (index, chunk) in lines.chunks(2).enumerate() {
+        let code = chunk[0].parse::<u16>().map_err(|_| {
+            format!(
+                "line {} should be a group code and is `{}`",
+                index * 2 + 1,
+                chunk[0]
+            )
+        })?;
+        pairs.push((code, chunk[1].to_string()));
+    }
+    Ok(pairs)
+}
+
+/// The value of the first `code` in an entity's pairs.
+fn value(entity: &[Pair], code: u16) -> Option<&str> {
+    entity
+        .iter()
+        .find(|(found, _)| *found == code)
+        .map(|(_, value)| value.as_str())
+}
+
+/// A closed loop of points, and the layer it was drawn on.
+struct Loop {
+    points: Vec<Point>,
+    layer: String,
+}
+
+/// Twice the signed area, which is all that is needed to rank loops by size.
+fn double_area(points: &[Point]) -> f64 {
+    let mut sum = 0.0;
+    for index in 0..points.len() {
+        let a = points[index];
+        let b = points[(index + 1) % points.len()];
+        sum += a.x.0 as f64 * b.y.0 as f64 - b.x.0 as f64 * a.y.0 as f64;
+    }
+    sum.abs()
+}
+
+/// Read the board edge out of a DXF drawing.
+///
+/// `layer` names the DXF layer to read; without one, every layer is
+/// considered and the largest closed loop wins - a drawing of a case holds the
+/// cutout and the holes in it, and the cutout is the big one.
+///
+/// The loop comes back in the drawing's own coordinates. Moving it to the
+/// origin is the caller's decision, because a board placed against a fixture
+/// may want the drawing's own numbers.
+pub fn read_outline(text: &str, layer: Option<&str>) -> Result<DxfOutline, String> {
+    let pairs = read_pairs(text)?;
+
+    // A DXF number carries no unit of its own. `$INSUNITS` is the drawing
+    // saying which it meant; a drawing that says nothing is read as
+    // millimetres, which is what every board tool writes.
+    let mut scale = 1_000_000.0;
+    let mut units = "millimetres";
+    for (index, (code, value)) in pairs.iter().enumerate() {
+        if *code == 9 && value == "$INSUNITS" {
+            if let Some((70, setting)) = pairs.get(index + 1) {
+                if setting.trim() == "1" {
+                    scale = 25_400_000.0;
+                    units = "inches";
+                }
+            }
+        }
+    }
+    let point_at = |x: f64, y: f64| Point {
+        x: Nm((x * scale).round() as i64),
+        y: Nm((y * scale).round() as i64),
+    };
+    let number = |entity: &[Pair], code: u16| -> f64 {
+        value(entity, code)
+            .and_then(|text| text.parse::<f64>().ok())
+            .unwrap_or(0.0)
+    };
+
+    // Only the entities section: a drawing's blocks and tables carry the same
+    // entity names and are not the drawing.
+    let start = pairs
+        .windows(2)
+        .position(|window| {
+            window[0] == (0, "SECTION".to_string()) && window[1] == (2, "ENTITIES".to_string())
+        })
+        .ok_or_else(|| "the file has no ENTITIES section".to_string())?;
+    let entities_end = pairs
+        .iter()
+        .skip(start)
+        .position(|pair| *pair == (0, "ENDSEC".to_string()))
+        .map(|offset| start + offset)
+        .unwrap_or(pairs.len());
+    let body = &pairs[start + 2..entities_end];
+
+    // Split into entities: a `0` pair starts one and ends the one before it.
+    let mut entities: Vec<(String, Vec<Pair>)> = Vec::new();
+    for pair in body {
+        if pair.0 == 0 {
+            entities.push((pair.1.clone(), Vec::new()));
+        } else if let Some(last) = entities.last_mut() {
+            last.1.push(pair.clone());
+        }
+    }
+
+    let mut loops: Vec<Loop> = Vec::new();
+    let mut segments: Vec<(String, Point, Point)> = Vec::new();
+    let mut skipped: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
+
+    let mut index = 0;
+    while index < entities.len() {
+        let (kind, entity) = &entities[index];
+        let on = value(entity, 8).unwrap_or("0").to_string();
+        match kind.as_str() {
+            // R12: the vertices are entities of their own, up to a SEQEND.
+            "POLYLINE" => {
+                let closed = number(entity, 70) as i64 & 1 == 1;
+                let mut points = Vec::new();
+                index += 1;
+                while index < entities.len() && entities[index].0 == "VERTEX" {
+                    let vertex = &entities[index].1;
+                    points.push(point_at(number(vertex, 10), number(vertex, 20)));
+                    index += 1;
+                }
+                if index < entities.len() && entities[index].0 == "SEQEND" {
+                    index += 1;
+                }
+                if closed && points.len() >= 3 {
+                    loops.push(Loop { points, layer: on });
+                }
+                continue;
+            }
+            // R14 and later: the vertices are pairs inside the one entity.
+            "LWPOLYLINE" => {
+                let closed = number(entity, 70) as i64 & 1 == 1;
+                let mut points = Vec::new();
+                let mut x = None;
+                for (code, text) in entity {
+                    match code {
+                        10 => x = text.parse::<f64>().ok(),
+                        20 => {
+                            if let (Some(found), Ok(y)) = (x.take(), text.parse::<f64>()) {
+                                points.push(point_at(found, y));
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                if closed && points.len() >= 3 {
+                    loops.push(Loop { points, layer: on });
+                }
+            }
+            // A cutout drawn as loose lines is the ordinary case, and the
+            // lines arrive in whatever order the tool drew them.
+            "LINE" => segments.push((
+                on,
+                point_at(number(entity, 10), number(entity, 20)),
+                point_at(number(entity, 11), number(entity, 21)),
+            )),
+            "VERTEX" | "SEQEND" => {}
+            other => {
+                *skipped.entry(other.to_string()).or_insert(0) += 1;
+            }
+        }
+        index += 1;
+    }
+
+    // Loose lines into loops: take one, follow whichever unused line starts or
+    // ends where the last one stopped, and keep the ring if it closes.
+    let mut used = vec![false; segments.len()];
+    for seed in 0..segments.len() {
+        if used[seed] {
+            continue;
+        }
+        let on = segments[seed].0.clone();
+        let start_point = segments[seed].1;
+        let mut points = vec![start_point];
+        let mut head = segments[seed].2;
+        used[seed] = true;
+        loop {
+            points.push(head);
+            let next = (0..segments.len()).find(|candidate| {
+                !used[*candidate]
+                    && segments[*candidate].0 == on
+                    && (segments[*candidate].1 == head || segments[*candidate].2 == head)
+            });
+            let Some(next) = next else { break };
+            used[next] = true;
+            head = if segments[next].1 == head {
+                segments[next].2
+            } else {
+                segments[next].1
+            };
+            if head == start_point {
+                break;
+            }
+        }
+        if head == start_point && points.len() >= 3 {
+            loops.push(Loop { points, layer: on });
+        }
+    }
+
+    let considered: Vec<&Loop> = loops
+        .iter()
+        .filter(|found| layer.is_none_or(|wanted| found.layer == wanted))
+        .collect();
+    let best = considered
+        .iter()
+        .max_by(|a, b| {
+            double_area(&a.points)
+                .partial_cmp(&double_area(&b.points))
+                .unwrap_or(std::cmp::Ordering::Equal)
+        })
+        .ok_or_else(|| {
+            let seen: Vec<String> = skipped
+                .iter()
+                .map(|(kind, count)| format!("{count} {kind}"))
+                .collect();
+            match (layer, seen.is_empty()) {
+                (Some(wanted), _) => format!("no closed shape on layer `{wanted}`"),
+                (None, true) => "no closed shape in the drawing".to_string(),
+                (None, false) => format!(
+                    "no closed shape in the drawing - it holds {}, which this reads none of",
+                    seen.join(", ")
+                ),
+            }
+        })?;
+
+    Ok(DxfOutline {
+        points: best.points.clone(),
+        layer: best.layer.clone(),
+        units,
+        loops: considered.len(),
+        skipped: skipped.into_iter().collect(),
+    })
+}
