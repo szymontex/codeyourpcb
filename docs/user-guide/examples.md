@@ -182,14 +182,12 @@ The PCB layout has components arranged for optimal power distribution:
 - Input and output filtering
 - Pin number assignments for ICs
 
-**Note:** This example contains Polish comments. The DSL syntax is the same regardless of comment language.
-
 ### Code Walkthrough
 
 ```cypcb
-// Najprostszy zasilacz 5V (Simplest 5V power supply)
-// Wejście: 7-12V DC (Input: 7-12V DC)
-// Wyjście: 5V stabilizowane (Output: 5V regulated)
+// The simplest 5V power supply
+// Input: 7-12V DC
+// Output: 5V regulated
 version 1
 
 board simple_psu {
@@ -197,50 +195,50 @@ board simple_psu {
     layers 2
 }
 
-// Złącze wejściowe - 2-pin header (Input connector)
+// Input connector - 2-pin header
 component J1 connector "PIN-HDR-1x2" {
     at 5mm, 10mm
 }
 
-// Kondensator wejściowy (filtr) (Input capacitor - filter)
+// Input capacitor (filter)
 component C1 capacitor "0805" {
     value "100nF"
     at 12mm, 14mm
 }
 
-// Regulator napięcia LDO 5V (SOT-23) (LDO 5V voltage regulator)
-// np. MCP1700, XC6206, lub podobny (e.g., MCP1700, XC6206, or similar)
+// LDO 5V voltage regulator (SOT-23)
+// e.g. MCP1700, XC6206, or similar
 component U1 ic "SOT-23" {                   // IC type, SOT-23 package
     value "LDO-5V"                           // Part type designation
     at 18mm, 10mm
 }
 
-// Kondensator wyjściowy (stabilizacja) (Output capacitor - stabilization)
+// Output capacitor (stabilization)
 component C2 capacitor "0805" {
     value "100nF"
     at 24mm, 14mm
 }
 
-// Złącze wyjściowe - 2-pin header (Output connector)
+// Output connector - 2-pin header
 component J2 connector "PIN-HDR-1x2" {
     at 27mm, 10mm
 }
 
-// Sieć VIN - wejście nieregulowane (VIN net - unregulated input)
+// VIN net - unregulated input
 net VIN {
     J1.1                                     // Input header pin 1
     C1.1                                     // Input filter cap
     U1.3                                     // MCP1700: pin 3 = VIN
 }
 
-// Sieć VOUT - wyjście 5V (VOUT net - 5V output)
+// VOUT net - 5V output
 net VOUT {
     U1.2                                     // MCP1700: pin 2 = VOUT
     C2.1                                     // Output filter cap
     J2.1                                     // Output header pin 1
 }
 
-// Masa wspólna (Common ground)
+// Common ground
 net GND {
     J1.2                                     // Input ground
     C1.2                                     // Input cap ground
