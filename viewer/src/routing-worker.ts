@@ -36,6 +36,7 @@ function post(message: WorkerResponse): void {
 interface RoutingEngine {
   load_source(source: string): string;
   auto_route_with_params(params: string): string;
+  auto_route_debug(params: string): string;
   export_traces_as_dsl(): string;
   free(): void;
 }
@@ -76,6 +77,11 @@ ctx.onmessage = async (event: MessageEvent<unknown>): Promise<void> => {
     const loadError = readError(loaded);
     if (loadError) {
       post({ type: 'failed', error: loadError });
+      return;
+    }
+
+    if (request.type === 'route-debug') {
+      post({ type: 'debugged', result: engine.auto_route_debug(request.params) });
       return;
     }
 

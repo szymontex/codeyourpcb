@@ -26,6 +26,16 @@ describe('the routing protocol', () => {
     expect(isWorkerResponse('routed')).toBe(false);
   });
 
+  it('accepts a debug report and a debug request', () => {
+    // The debug run is the heaviest call the engine has, and it answers with a
+    // stage report rather than copper - a shape of its own, so the handler that
+    // draws traces cannot be handed one by mistake.
+    expect(isWorkerResponse({ type: 'debugged', result: '{"ok":true,"stages":[]}' })).toBe(true);
+    expect(isWorkerResponse({ type: 'debugged' })).toBe(false);
+    expect(isWorkerRequest({ type: 'route-debug', source: 'board b {}', params: '{}' })).toBe(true);
+    expect(isWorkerRequest({ type: 'route-debug', source: 'board b {}' })).toBe(false);
+  });
+
   it('accepts a routing request and refuses a half-written one', () => {
     expect(isWorkerRequest({ type: 'route', source: 'board b {}', params: '{}' })).toBe(true);
     expect(isWorkerRequest({ type: 'route', source: 'board b {}' })).toBe(false);

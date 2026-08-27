@@ -2923,6 +2923,8 @@ async function init(): Promise<void> {
   // flight the moment the next value arrives.
   let tuningWorker: Worker | null = null;
   let lastTuningResult: string | null = null;
+  let debugWorker: Worker | null = null;
+  let lastDebugResult: string | null = null;
 
   // What a test outside this closure can see: whether a run is in flight, and
   // what the last one answered. Getters rather than values, so a test that
@@ -2956,6 +2958,21 @@ async function init(): Promise<void> {
     get lastResult(): string | null {
       return lastTuningResult;
     },
+  };
+
+  (window as unknown as {
+    __debugWorker: { readonly active: boolean; readonly lastResult: string | null };
+  }).__debugWorker = {
+    get active(): boolean {
+      return debugWorker !== null;
+    },
+    get lastResult(): string | null {
+      return lastDebugResult;
+    },
+  };
+
+  (window as unknown as { __triggerDebugRouting: () => void }).__triggerDebugRouting = (): void => {
+    triggerDebugRouting();
   };
 
   function stopRoutingWorker(): void {
@@ -3077,6 +3094,9 @@ async function init(): Promise<void> {
         statusText.textContent = `Tuning failed: ${message.error}`;
         return;
       }
+      if (message.type !== 'routed') {
+        return;
+      }
       lastTuningResult = message.result;
       applyTunedCopper(message.result, message.traces);
     };
@@ -3181,6 +3201,11 @@ async function init(): Promise<void> {
         finishRouting(`Routing failed: ${message.error}`);
         return;
       }
+      if (message.type !== 'routed') {
+        // A debug report reaching the routing handler means the two paths have
+        // been crossed; drawing it as copper would be worse than ignoring it.
+        return;
+      }
       applyRoutedCopper(message.result, message.traces);
     };
 
@@ -3266,43 +3291,107 @@ async function init(): Promise<void> {
    * Run routing in debug mode — captures each pipeline stage and renders them
    * as toggleable overlays. Shift+click Route to activate.
    */
-  async function triggerDebugRouting(): Promise<void> {
-    if (!snapshot?.board) {
+  function triggerDebugRouting(): void {
+    if (!snapshot?.board || !lastLoadedSource) {
       statusText.textContent = 'Load a board first';
       return;
     }
 
+    // The heaviest call the engine has - it routes the board and keeps every
+    // pass - and the last one that was still made from this thread. It froze
+    // the page for longer than the run it was there to explain.
+    debugWorker?.terminate();
+    debugWorker = null;
+
+    const params = getPreference('autorouteParams');
+    const rustParams = JSON.stringify({
+      via_cost: params.viaCost,
+      layer_preference: params.layerPreference,
+      roundness: params.roundness,
+      density: params.density,
+    });
+    const source = lastLoadedSource;
+
     statusText.textContent = 'Debug routing…';
-    await new Promise(resolve => setTimeout(resolve, 50));
 
+    let worker: Worker;
     try {
-      const params = getPreference('autorouteParams');
-      const rustParams = {
-        via_cost: params.viaCost,
-        layer_preference: params.layerPreference,
-        roundness: params.roundness,
-        density: params.density,
-      };
-
-      const resultJson = engine.auto_route_debug(JSON.stringify(rustParams));
-      const debug = JSON.parse(resultJson);
-
-      if (debug.ok === false) {
-        statusText.textContent = `Debug route failed: ${debug.error}`;
-        return;
-      }
-
-      // Store globally for inspection
-      (window as any).__routeDebug = debug;
-
-      // Show debug panel
-      showRouteDebugPanel(debug);
-
-      statusText.textContent = `Debug: ${debug.stages.length} stages, grid ${debug.grid_width}×${debug.grid_height}, ${debug.unrouted_count} unrouted, ${debug.iterations} iterations${debug.converged ? ' ✓' : ' ✗'}`;
+      worker = new Worker(new URL('./routing-worker.ts', import.meta.url), { type: 'module' });
     } catch (err) {
       statusText.textContent = `Debug route error: ${err}`;
       console.error('[DebugRoute]', err);
+      return;
     }
+    debugWorker = worker;
+
+    worker.onmessage = (event: MessageEvent<unknown>): void => {
+      if (!isWorkerResponse(event.data)) {
+        return;
+      }
+      const message = event.data;
+      if (message.type === 'ready') {
+        const request: WorkerRequest = { type: 'route-debug', source, params: rustParams };
+        worker.postMessage(request);
+        return;
+      }
+      if (debugWorker !== worker) {
+        return;
+      }
+      debugWorker = null;
+      worker.terminate();
+      if (message.type === 'failed') {
+        statusText.textContent = `Debug route failed: ${message.error}`;
+        console.error('[DebugRoute]', message.error);
+        return;
+      }
+      if (message.type !== 'debugged') {
+        return;
+      }
+      showDebugReport(message.result);
+    };
+
+    worker.onerror = (event: ErrorEvent): void => {
+      if (debugWorker === worker) {
+        debugWorker = null;
+      }
+      statusText.textContent = `Debug route error: ${event.message}`;
+      console.error('[DebugRoute]', event.message);
+    };
+  }
+
+  /** What the debug run reported, drawn and left where a console can read it. */
+  function showDebugReport(resultJson: string): void {
+    let debug: {
+      ok?: unknown;
+      error?: unknown;
+      stages?: unknown[];
+      grid_width?: number;
+      grid_height?: number;
+      unrouted_count?: number;
+      iterations?: number;
+      converged?: boolean;
+    };
+    try {
+      debug = JSON.parse(resultJson);
+    } catch (err) {
+      statusText.textContent = `Debug route error: ${err}`;
+      return;
+    }
+
+    if (debug.ok === false) {
+      statusText.textContent = `Debug route failed: ${debug.error}`;
+      return;
+    }
+
+    lastDebugResult = resultJson;
+    (window as unknown as { __routeDebug: unknown }).__routeDebug = debug;
+    showRouteDebugPanel(debug);
+
+    const stages = debug.stages?.length ?? 0;
+    statusText.textContent =
+      `Debug: ${stages} stages, grid ${debug.grid_width}×${debug.grid_height}, ` +
+      `${debug.unrouted_count} unrouted, ${debug.iterations} iterations` +
+      `${debug.converged ? ' ✓' : ' ✗'}`;
   }
 
   /**

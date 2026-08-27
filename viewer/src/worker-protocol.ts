@@ -23,7 +23,20 @@ export interface RouteRequest {
   params: string;
 }
 
-export type WorkerRequest = RouteRequest;
+/**
+ * Route this design and report every stage of the pipeline.
+ *
+ * The debug run is the heaviest thing the engine does - it routes the board
+ * and keeps each pass - so it is the call that froze the page for longest,
+ * and the last one still made from the main thread.
+ */
+export interface DebugRequest {
+  type: 'route-debug';
+  source: string;
+  params: string;
+}
+
+export type WorkerRequest = RouteRequest | DebugRequest;
 
 /** The worker has its engine and will answer the next request. */
 export interface ReadyResponse {
@@ -43,7 +56,13 @@ export interface FailedResponse {
   error: string;
 }
 
-export type WorkerResponse = ReadyResponse | RoutedResponse | FailedResponse;
+/** The debug run finished. `result` is the engine's stage report. */
+export interface DebuggedResponse {
+  type: 'debugged';
+  result: string;
+}
+
+export type WorkerResponse = ReadyResponse | RoutedResponse | DebuggedResponse | FailedResponse;
 
 /**
  * Is this a message this protocol describes?
@@ -62,6 +81,8 @@ export function isWorkerResponse(value: unknown): value is WorkerResponse {
       return true;
     case 'routed':
       return typeof message.result === 'string' && typeof message.traces === 'string';
+    case 'debugged':
+      return typeof message.result === 'string';
     case 'failed':
       return typeof message.error === 'string';
     default:
@@ -76,7 +97,7 @@ export function isWorkerRequest(value: unknown): value is WorkerRequest {
   }
   const message = value as { type?: unknown; source?: unknown; params?: unknown };
   return (
-    message.type === 'route' &&
+    (message.type === 'route' || message.type === 'route-debug') &&
     typeof message.source === 'string' &&
     typeof message.params === 'string'
   );
