@@ -148,6 +148,32 @@ if ./viewer/build-wasm.sh >/dev/null 2>&1; then
 else
   fail "build-wasm"
 fi
+# The bindings beside the module, compared byte for byte against what the
+# rebuild just wrote. The history check above cannot see this one: it asks when
+# `viewer/pkg` last changed, and a commit that refreshes the module alone -
+# `52ec725` did exactly that, `git add -f` on the wasm and nothing else - makes
+# the whole directory look current while `cypcb_render.js` stays a generation
+# behind. The glue is not decoration: it names every method the Rust side
+# exports, `auto_route_with_params` among 29 of them, and calls into the module
+# by symbol. Bindings from one API against a module built from another fail in
+# the browser and nowhere else.
+#
+# These files can be compared where the `.wasm` cannot: wasm-bindgen writes
+# them and its version is pinned in `Cargo.lock`, while the module's bytes come
+# out of whichever rustc the channel resolves to and whichever binaryen is
+# installed.
+GENERATED_BINDINGS=$(git ls-files viewer/pkg | grep -v '\.wasm$' || true)
+if [ -n "$GENERATED_BINDINGS" ]; then
+  # shellcheck disable=SC2086
+  DRIFTED=$(git diff --name-only HEAD -- $GENERATED_BINDINGS)
+  if [ -n "$DRIFTED" ]; then
+    echo ""
+    echo "  the committed bindings are not the ones this source generates:"
+    echo "$DRIFTED" | sed 's/^/    /'
+    echo "  commit viewer/pkg after ./viewer/build-wasm.sh."
+    fail "stale viewer/pkg bindings"
+  fi
+fi
 PLAYWRIGHT_LOG=$(mktemp)
 if (cd viewer && CI=1 npx playwright test 2>&1 | tee "$PLAYWRIGHT_LOG"); then
   pass "playwright"
