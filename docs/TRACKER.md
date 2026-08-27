@@ -101,6 +101,51 @@ owner's name on it is reading history.
 
 ## Vectors (parallel branches - keep ALL moving)
 
+### V9 - KiCad parity: what a board editor has and this does not
+
+The owner asked for the list on 2026-08-27 and then asked for it to be worked
+through. Every "we do not have it" below was measured in this repository rather
+than assumed - the command is beside the row - and every "KiCad has it" is a
+feature of KiCad 9 that a person meets in the ordinary course of making a
+board. Ordered by what a fabricated board actually needs, not by size.
+
+**Measured on our side.** `cypcb --help` lists ten subcommands: `parse`,
+`check`, `route`, `export`, `parse-kicad`, `from-kicad`, `score`, `to-kicad`,
+`watch`, `help`. `crates/cypcb-export/src/` writes Gerber (copper, mask, silk,
+outline), Excellon, a job file, a bill of materials and a pick-and-place file -
+and nothing else. `crates/cypcb-drc/src/rules/` holds twenty rules. The
+grammar's keyword list carries `zone`, `keepout`, `via`, `trace`, `netclass`,
+`diffpair`, `stackup`, `coverlay`, `stiffener` and the fabrication vocabulary
+V8 added.
+
+| # | What KiCad has | What is here | Measured by |
+|---|---|---|---|
+| 1 | **Teardrops** on pad and via entries | nothing | `grep -rli teardrop crates viewer/src` -> **0 files** |
+| 2 | **Arcs in copper** - a track can curve | straight segments only | `grep -n "Arc" crates/cypcb-world/src/components/trace.rs` -> **nothing** |
+| 3 | **Thermal reliefs** - a pad in a pour connects by spokes | pours connect solid | `grep -rn thermal` in the zone model and the Gerber writer -> **nothing** |
+| 4 | **Stitching vias** - a field of vias tying pours together | nothing | `grep -rli via_stitch crates viewer/src` -> **0 files** |
+| 5 | **Length tuning** - meanders to match a pair or a bus | the checker measures skew and cannot fix it | `grep -rli meander` -> **0**, `length_tune` -> **0** |
+| 6 | **IPC-D-356 netlist** for bare-board testing | nothing | `grep -rli "ipc-d-356"` -> **0 files** |
+| 7 | **Plot to PDF, SVG and DXF** | Gerber only | `ls crates/cypcb-export/src` - no plotter of any kind |
+| 8 | **DXF import** of a board outline | outline is written in the language | same |
+| 9 | **Free text and dimensions** on the board | text exists inside a footprint's silkscreen only | grammar keywords: `silk`, `text` under `footprint` |
+| 10 | **IPC-2581 / ODB++** handoff | Gerber and Excellon | `ls crates/cypcb-export/src` |
+
+**Deliberately not on this list.** Schematic capture and ERC - the language is
+the schematic here, which is the whole premise; an interactive push-and-shove
+router - D1 put the in-house router first and D5 keeps its UI hidden;
+panelisation - KiCad itself leaves that to KiKit; symbol and footprint editors
+- footprints come from a library and from LCSC, and drawing them by hand is a
+different product.
+
+- NEXT-ACTION: **item 1, teardrops.** It is first because it is the one on this
+  list that changes what a fabricator receives - a teardrop is copper, it goes
+  in the Gerber, and it is the standard answer to a track tearing away from a
+  pad on a flexed or drilled board. It needs a word in the language, geometry
+  in the world, the copper in the export, and a DRC rule that does not report
+  the fillet as a clearance fault against its own pad.
+
+
 ### V8 - Stackup parity with KiCad and Altium
 - DONE: **`route` and `score` both route and neither page said how, which made two numbers from one board look comparable.** `route` announces `Routing 13 variants and keeping the best...` and names the winner - `Chose PathFinder High-Density`; `score` runs the shipped defaults once, and on a board that already carries copper measures it as it stands rather than routing again - `Scoring the 1 trace(s) the file carries.` Both pages say all of that now, and each names the other: `route --fast` is the run that matches a score.
 - **That finishes the sweep of the command pages.** Five commands read against what they do this week - `export` and its stamp, `check` and its row order, `from-kicad` and `to-kicad` and the project file between them, and now these two - and every gap found was a thing the code had learned and the page had not.
