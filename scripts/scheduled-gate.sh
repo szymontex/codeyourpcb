@@ -27,9 +27,24 @@ LOG_DIR=${1:-/config/gate-runs}
 STAMP=$(date +%Y-%m-%dT%H-%M-%S)
 mkdir -p "$LOG_DIR"
 LOG="$LOG_DIR/$STAMP.log"
+BODY=$(mktemp)
 
 say() {
-    echo "$1" | tee -a "$LOG"
+    echo "$1" | tee -a "$BODY"
+}
+
+# The verdict goes first in the finished file. The first version of this said
+# so in a comment and then appended it, which put it under six thousand lines
+# of stage output - so the reader it was written for would have had to know to
+# look at the end. The body is collected in a temporary file and the log is
+# assembled once, verdict at the top.
+finish() {
+    { echo "$1"; cat "$BODY"; } > "$LOG"
+    rm -f "$BODY"
+    ln -sf "$LOG" "$LOG_DIR/latest.log"
+    ls -1t "$LOG_DIR"/*.log 2>/dev/null | tail -n +31 | while read -r old; do
+        [ "$old" = "$LOG_DIR/latest.log" ] || rm -f "$old"
+    done
 }
 
 cd "$REPO" || exit 2
@@ -43,7 +58,8 @@ say "branch: $(git rev-parse --abbrev-ref HEAD), commit: $(git rev-parse --short
 # running". A lock file is the thing that is actually being contended.
 exec 9>"$LOG_DIR/.lock"
 if ! flock -n 9; then
-    say "VERDICT: skipped - a gate is already running"
+    finish "VERDICT: skipped - a gate is already running"
+    echo "VERDICT: skipped - a gate is already running"
     exit 0
 fi
 
@@ -51,30 +67,27 @@ fi
 # there is the gate's own doing and not somebody's work in progress.
 DIRTY=$(git status --porcelain | grep -v "^.. viewer/pkg/" || true)
 if [ -n "$DIRTY" ]; then
-    say "VERDICT: skipped - the working tree is busy"
-    echo "$DIRTY" | sed 's/^/  /' | tee -a "$LOG"
+    echo "$DIRTY" | sed 's/^/  /' >> "$BODY"
+    finish "VERDICT: skipped - the working tree is busy"
+    echo "VERDICT: skipped - the working tree is busy"
+    echo "$DIRTY" | sed 's/^/  /'
     exit 0
 fi
 
 say "running ./scripts/quality-gate.sh"
 START=$(date +%s)
-./scripts/quality-gate.sh >>"$LOG" 2>&1
+./scripts/quality-gate.sh >>"$BODY" 2>&1
 CODE=$?
 ELAPSED=$(( $(date +%s) - START ))
 
 if [ "$CODE" -eq 0 ]; then
-    say "VERDICT: green, all stages passed, ${ELAPSED}s"
+    VERDICT="VERDICT: green, all stages passed, ${ELAPSED}s"
 else
-    STAGE=$(grep -E "^\[[0-9]+/[0-9]+\]" "$LOG" | tail -1)
-    say "VERDICT: red, exit $CODE after ${ELAPSED}s, last stage: ${STAGE:-unknown}"
+    STAGE=$(grep -E "^\[[0-9]+/[0-9]+\]" "$BODY" | tail -1)
+    VERDICT="VERDICT: red, exit $CODE after ${ELAPSED}s, last stage: ${STAGE:-unknown}"
 fi
 
-# The newest run, findable without knowing today's date.
-ln -sf "$LOG" "$LOG_DIR/latest.log"
-
-# Keep a month of runs; the logs carry every stage's output and grow.
-ls -1t "$LOG_DIR"/*.log 2>/dev/null | tail -n +31 | while read -r old; do
-    [ "$old" = "$LOG_DIR/latest.log" ] || rm -f "$old"
-done
+finish "$VERDICT"
+echo "$VERDICT"
 
 exit "$CODE"
