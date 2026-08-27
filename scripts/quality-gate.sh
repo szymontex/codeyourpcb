@@ -174,6 +174,20 @@ if [ -n "$GENERATED_BINDINGS" ]; then
     fail "stale viewer/pkg bindings"
   fi
 fi
+# And whether the rebuild wrote anything nobody tracks. `viewer/.gitignore`
+# carried `pkg/` from the wasm-pack era while six files inside it were tracked,
+# so a new artifact appearing there was invisible in `git status` and shipped to
+# nobody. The rule is gone; this is what replaces it - a generated file that is
+# not in git is either an artifact this repository forgot to ship or one it
+# should not be writing.
+UNTRACKED_PKG=$(git ls-files --others --exclude-standard viewer/pkg)
+if [ -n "$UNTRACKED_PKG" ]; then
+  echo ""
+  echo "  the build wrote files under viewer/pkg that git does not track:"
+  echo "$UNTRACKED_PKG" | sed 's/^/    /'
+  echo "  commit them, or stop writing them."
+  fail "untracked viewer/pkg output"
+fi
 PLAYWRIGHT_LOG=$(mktemp)
 if (cd viewer && CI=1 npx playwright test 2>&1 | tee "$PLAYWRIGHT_LOG"); then
   pass "playwright"

@@ -4,8 +4,12 @@ node_modules/
 # Build output
 dist/
 
-# WASM output (from wasm-pack)
-pkg/
+# pkg/ is not ignored, on purpose. wasm-pack wrote this rule when the bundle
+# was a build artifact; it has been a committed one since, and the two facts sat
+# on top of each other. `git add viewer/pkg/...` refused with "The following
+# paths are ignored" and needed -f, which is how 52ec725 committed the module
+# and silently skipped the bindings beside it. A file this repository ships
+# cannot be a file git argues about.
 
 # Logs
 *.log
