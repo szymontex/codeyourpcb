@@ -55,17 +55,26 @@ duplicate TypeScript reader would still be there to delete separately.
 
 ## Route (b): read `.cypcb` in Rust
 
-What a Rust reader has to cover, counted:
+What a Rust reader has to cover. **The sizes moved while this document sat
+still** - every figure below was written in August and every one of them was
+wrong by the time the reader shipped - so each row carries the command that
+gives it, and the reading is dated:
 
-| piece | size | fate under (b) |
-|---|---|---|
-| `grammar/grammar.js` | 663 lines, 83 rules | replaced; about a sixth of the rules are lexical (identifier, number, string, units, comments) and become a tokenizer |
-| `src/parser.rs` (CST to AST) | 3,226 lines | **replaced, not added to** - a recursive-descent reader produces the AST directly |
-| `src/ast.rs` | 1,224 lines, 47 public types | unchanged; this is the contract |
-| `src/imports.rs` | 404 lines | unchanged; it works on the AST |
-| `src/errors.rs` | 485 lines | unchanged; miette diagnostics keyed by span |
-| `viewer/src/wasm.ts` `parseSource` | 439 lines | deleted |
-| tree-sitter C runtime | 13,647 lines of C | gone from the build |
+| piece | size, 2026-08-27 | how it is counted | fate under (b) |
+|---|---|---|---|
+| `grammar/grammar.js` | 914 lines, 102 rules | `wc -l`; `grep -oE "^    [a-zA-Z_0-9]+:" \| wc -l` | replaced; about a sixth of the rules are lexical (identifier, number, string, units, comments) and become a tokenizer |
+| `src/parser.rs` (CST to AST) | 3,541 lines | `wc -l` | **replaced, not added to** - a recursive-descent reader produces the AST directly |
+| `src/ast.rs` | 1,500 lines, 53 public types | `wc -l`; `grep -cE "^pub (struct\|enum) "` | unchanged; this is the contract |
+| `src/imports.rs` | 554 lines | `wc -l` | unchanged; it works on the AST |
+| `src/errors.rs` | 508 lines | `wc -l` | unchanged; miette diagnostics keyed by span |
+| `viewer/src/wasm.ts` `parseSource` | 439 lines | gone; `grep -n parseSource viewer/src/wasm.ts` finds two comments about its deletion and no code | deleted |
+| tree-sitter C runtime | 13,647 lines of C | as vendored by the crate | gone from the build |
+
+The figures this table carried before - 663 lines and 83 rules of grammar,
+3,226 of `parser.rs`, 1,224 and 47 types of `ast.rs`, 404 of `imports.rs`, 485
+of `errors.rs` - are what the same commands gave when the decision was taken.
+The language grew by about a third since; the argument did not change, which is
+why the decision below still stands.
 
 Nothing consumes the concrete syntax tree. Every caller - `cypcb-cli` (parse,
 check, export, route, score), `cypcb-lsp` (`document.rs` calls `parse()`),
