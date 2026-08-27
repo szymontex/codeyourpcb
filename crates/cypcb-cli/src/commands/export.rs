@@ -93,6 +93,14 @@ pub struct ExportCommand {
     /// `--svg`, in `plot/`, on layers named as the Gerbers are.
     #[arg(long)]
     dxf: bool,
+
+    /// Also plot every copper layer as PDF, to print or to attach.
+    ///
+    /// What a person sends in a message and what a house lays on the bench
+    /// beside the board. Same files as `--svg`, in `plot/`, one page per layer
+    /// at the board's own size.
+    #[arg(long)]
+    pdf: bool,
 }
 
 impl ExportCommand {
@@ -473,7 +481,7 @@ impl ExportCommand {
 
         // The picture, when it was asked for. Same rule as the netlist: the
         // file set a house receives does not change unless somebody says so.
-        if self.svg || self.dxf {
+        if self.svg || self.dxf || self.pdf {
             let plot_dir = job.output_dir.join("plot");
             std::fs::create_dir_all(&plot_dir)
                 .into_diagnostic()
@@ -516,6 +524,19 @@ impl ExportCommand {
                         "  [OK] {} ({:.1} KB) - {} drawing",
                         path.display(),
                         drawing.len() as f64 / 1024.0,
+                        suffix
+                    );
+                }
+                if self.pdf {
+                    let page = cypcb_export::pdf::plot_layer(&mut world, &library, layer);
+                    let path = plot_dir.join(format!("{}-{}.pdf", job.board_name, suffix));
+                    std::fs::write(&path, &page)
+                        .into_diagnostic()
+                        .wrap_err("Writing the plot failed")?;
+                    eprintln!(
+                        "  [OK] {} ({:.1} KB) - {} page",
+                        path.display(),
+                        page.len() as f64 / 1024.0,
                         suffix
                     );
                 }
@@ -650,6 +671,7 @@ mod tests {
             ipc356: false,
             svg: false,
             dxf: false,
+            pdf: false,
         };
 
         assert_eq!(cmd.house, "jlcpcb");

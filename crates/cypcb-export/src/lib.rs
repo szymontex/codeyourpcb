@@ -27,6 +27,7 @@ pub mod gerber;
 pub mod ipc356;
 pub mod job;
 pub mod jobfile;
+pub mod pdf;
 pub mod svg;
 /// The geometry a copper pour takes, re-exported from cypcb-core where both
 /// the exporter and the renderer can reach it.
