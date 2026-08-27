@@ -385,6 +385,16 @@
     "type": "diffpair_definition",
     "named": true,
     "fields": {
+      "match": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "diffpair_match",
+            "named": true
+          }
+        ]
+      },
       "name": {
         "multiple": false,
         "required": true,
@@ -2687,6 +2697,10 @@
   {
     "type": "diffpair",
     "named": false
+  },
+  {
+    "type": "diffpair_match",
+    "named": true
   },
   {
     "type": "diode",

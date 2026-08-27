@@ -1196,6 +1196,12 @@ pub struct DiffPairDef {
     pub positive: Identifier,
     /// The net carrying the negative half.
     pub negative: Identifier,
+    /// Make the two halves the same length, rather than only measuring them.
+    ///
+    /// The checker has reported skew since it was written and could do nothing
+    /// about it. A pair that says `match` asks for the short half to be
+    /// meandered until the two agree.
+    pub match_lengths: bool,
     /// Source span.
     pub span: Span,
 }

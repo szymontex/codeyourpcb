@@ -380,8 +380,14 @@ module.exports = grammar({
       '{',
       field('positive', $.net_name),
       field('negative', $.net_name),
+      // `match` asks for the two halves to be made the same length rather
+      // than merely measured. The checker has reported skew since it was
+      // written; this is the word that says "and fix it".
+      optional(field('match', $.diffpair_match)),
       '}',
     ),
+
+    diffpair_match: $ => 'match',
 
     // Optional constraint block: net VCC [width 0.3mm] { ... }
     net_constraint_block: $ => seq(

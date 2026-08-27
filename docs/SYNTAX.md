@@ -767,6 +767,27 @@ diff-pair-skew: diffpair 'USB': USB_DP runs 30.000mm and USB_DM runs 40.000mm
 A pair naming a net the board does not have is reported too, because a typo
 there would otherwise turn the check off without a word.
 
+#### Matching the two halves
+
+`match` asks for the difference to be closed rather than only reported:
+
+```
+diffpair USB {
+    USB_DP
+    USB_DM
+    match
+}
+```
+
+The short half's longest straight run is folded into a square meander until the
+two agree. The fold is quantised - one tooth adds six trace widths - so the
+halves end within a tooth of each other rather than exactly equal, which is how
+a fabricator states the tolerance anyway.
+
+Nothing is folded silently into trouble: a meander that will not fit in the run
+available, or that would land on other copper, is not drawn, and the run says
+which pair it left alone and why.
+
 Not checked yet: the gap between the two halves. That is the other half of a
 differential-pair rule and needs the router to place them alongside each other
 first.

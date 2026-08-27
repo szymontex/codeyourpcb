@@ -1618,6 +1618,7 @@ impl<'a> Reader<'a> {
             self.unexpected("the net carrying the negative half");
             return None;
         };
+        let match_lengths = self.eat_word("match");
         if !self.eat(&TokenKind::RBrace) {
             self.unexpected("`}` after the pair's two nets");
             return None;
@@ -1626,6 +1627,7 @@ impl<'a> Reader<'a> {
             name,
             positive,
             negative,
+            match_lengths,
             span: Span::new(start, self.behind()),
         })
     }

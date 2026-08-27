@@ -780,7 +780,189 @@ pub fn sync_ast_to_world(
     // in.
     place_stitching_vias(world, footprint_lib);
 
+    // Then the pairs that asked to be matched, which needs every trace to be
+    // in and the vias to be placed: a meander has to keep clear of both.
+    match_diff_pair_lengths(world, footprint_lib, &mut result);
+
     result
+}
+
+/// Meander the short half of every pair that asked to be matched.
+///
+/// `diff-pair-skew` has measured this since the checker was written and could
+/// do nothing about it. What was missing was the shape - `cypcb_world::meander`
+/// - and a caller. This is the caller.
+///
+/// The rule it follows is the one a person would: find the pair's two nets,
+/// measure the copper on each, take the longest straight segment of the short
+/// one and fold the difference into it. A meander that would not fit, or that
+/// would land on somebody else's copper, is not drawn - a pair left honestly
+/// unmatched is better than a short.
+fn match_diff_pair_lengths(
+    world: &mut BoardWorld,
+    footprint_lib: &FootprintLibrary,
+    result: &mut SyncResult,
+) {
+    use crate::components::trace::Trace;
+    use crate::meander::{meander, MeanderSpec};
+
+    let pairs: Vec<(String, String, String)> = world
+        .diff_pairs()
+        .iter()
+        .filter(|pair| pair.match_lengths)
+        .map(|pair| {
+            (
+                pair.name.value.clone(),
+                pair.positive.value.clone(),
+                pair.negative.value.clone(),
+            )
+        })
+        .collect();
+
+    for (name, positive, negative) in pairs {
+        let (Some(positive_id), Some(negative_id)) =
+            (world.get_net(&positive), world.get_net(&negative))
+        else {
+            continue;
+        };
+
+        let lengths: Vec<(crate::components::NetId, cypcb_core::Nm)> = {
+            let mut query = world.ecs_mut().query::<&Trace>();
+            let mut positive_length = 0i64;
+            let mut negative_length = 0i64;
+            for trace in query.iter(world.ecs()) {
+                if trace.net_id == positive_id {
+                    positive_length += trace.total_length().0;
+                } else if trace.net_id == negative_id {
+                    negative_length += trace.total_length().0;
+                }
+            }
+            vec![
+                (positive_id, cypcb_core::Nm(positive_length)),
+                (negative_id, cypcb_core::Nm(negative_length)),
+            ]
+        };
+
+        let (short_net, short_length) = lengths[0];
+        let (other_net, other_length) = lengths[1];
+        let (short_net, extra) = if short_length.0 < other_length.0 {
+            (short_net, cypcb_core::Nm(other_length.0 - short_length.0))
+        } else {
+            (other_net, cypcb_core::Nm(short_length.0 - other_length.0))
+        };
+        if extra.0 <= 0 {
+            continue;
+        }
+
+        // The longest straight run on the short half is where a meander has
+        // room; a short segment between two pads has none.
+        let target = {
+            let mut query = world.ecs_mut().query::<(Entity, &Trace)>();
+            query
+                .iter(world.ecs())
+                .filter(|(_, trace)| trace.net_id == short_net)
+                .flat_map(|(entity, trace)| {
+                    trace
+                        .segments
+                        .iter()
+                        .enumerate()
+                        .map(move |(index, segment)| {
+                            let dx = (segment.end.x.0 - segment.start.x.0) as f64;
+                            let dy = (segment.end.y.0 - segment.start.y.0) as f64;
+                            (entity, index, (dx * dx + dy * dy).sqrt() as i64)
+                        })
+                })
+                .max_by_key(|(_, _, length)| *length)
+        };
+        let Some((entity, index, _)) = target else {
+            continue;
+        };
+
+        let (start, end, width) = {
+            let trace = world
+                .ecs()
+                .get::<Trace>(entity)
+                .expect("the entity was just read");
+            let segment = &trace.segments[index];
+            (segment.start, segment.end, trace.width)
+        };
+
+        // Room to fold, and space beside the track to fold into: three widths
+        // of amplitude and two of pitch is the shape a hand would draw.
+        let spec = MeanderSpec {
+            amplitude: cypcb_core::Nm(width.0 * 3),
+            pitch: cypcb_core::Nm(width.0 * 2),
+        };
+        let Some(tuned) = meander(start, end, extra, spec) else {
+            result.warnings.push(SyncWarning {
+                message: format!(
+                    "the pair {name} asks to be matched and the short half has no run long enough                      to fold {:.3}mm into; the halves are left as they are",
+                    extra.0 as f64 / 1_000_000.0
+                ),
+                help: Some("match the pair by hand, or give it the room".to_string()),
+                src: String::new(),
+                span: (0, 0).into(),
+            });
+            continue;
+        };
+
+        // The new copper has to be as clear as any other. Same question the
+        // stitching answered, same blockers.
+        let clear = {
+            let (foreign, _own) = crate::copper::copper_on_layer(
+                world,
+                footprint_lib,
+                world
+                    .ecs()
+                    .get::<Trace>(entity)
+                    .map(|trace| trace.layer)
+                    .unwrap_or(crate::Layer::TopCopper),
+                Some(short_net),
+            );
+            tuned.points.iter().all(|point| {
+                foreign.iter().all(|box_| {
+                    let dx = (box_.min.x.0 - point.x.0)
+                        .max(point.x.0 - box_.max.x.0)
+                        .max(0);
+                    let dy = (box_.min.y.0 - point.y.0)
+                        .max(point.y.0 - box_.max.y.0)
+                        .max(0);
+                    let distance_sq = (dx as i128) * (dx as i128) + (dy as i128) * (dy as i128);
+                    let keep = (width.0 / 2 + width.0) as i128;
+                    distance_sq >= keep * keep
+                })
+            })
+        };
+        if !clear {
+            result.warnings.push(SyncWarning {
+                message: format!(
+                    "the pair {name} asks to be matched and the meander that would do it runs                      into other copper; the halves are left as they are"
+                ),
+                help: Some("match the pair by hand, or give it the room".to_string()),
+                src: String::new(),
+                span: (0, 0).into(),
+            });
+            continue;
+        }
+
+        // Replace the one segment with the folded run.
+        let mut trace = world
+            .ecs()
+            .get::<Trace>(entity)
+            .expect("the entity was just read")
+            .clone();
+        let folded: Vec<crate::components::trace::TraceSegment> = tuned
+            .points
+            .windows(2)
+            .map(|pair| crate::components::trace::TraceSegment {
+                start: pair[0],
+                end: pair[1],
+                width: None,
+            })
+            .collect();
+        trace.segments.splice(index..=index, folded);
+        world.ecs_mut().entity_mut(entity).insert(trace);
+    }
 }
 
 /// Synchronize a board definition to the world.

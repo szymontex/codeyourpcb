@@ -1648,6 +1648,7 @@ impl CypcbParser {
             name: Identifier::new(node_text(source, &name_node), span_of(&name_node)),
             positive: net_name_of(source, &positive),
             negative: net_name_of(source, &negative),
+            match_lengths: get_child_by_field(node, "match").is_some(),
             span: span_of(node),
         })
     }

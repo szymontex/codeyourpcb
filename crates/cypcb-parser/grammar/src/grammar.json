@@ -1298,10 +1298,30 @@
           }
         },
         {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "FIELD",
+              "name": "match",
+              "content": {
+                "type": "SYMBOL",
+                "name": "diffpair_match"
+              }
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
+        },
+        {
           "type": "STRING",
           "value": "}"
         }
       ]
+    },
+    "diffpair_match": {
+      "type": "STRING",
+      "value": "match"
     },
     "net_constraint_block": {
       "type": "SEQ",
