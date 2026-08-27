@@ -2917,6 +2917,13 @@ async function init(): Promise<void> {
   let routingWorker: Worker | null = null;
   let lastRouteResult: string | null = null;
 
+  // The tuning sliders get a worker of their own rather than sharing the one
+  // the Route button uses. Their lifecycles are opposite: a routing run is
+  // meant to finish, and a slider drag is meant to abandon whatever is in
+  // flight the moment the next value arrives.
+  let tuningWorker: Worker | null = null;
+  let lastTuningResult: string | null = null;
+
   // What a test outside this closure can see: whether a run is in flight, and
   // what the last one answered. Getters rather than values, so a test that
   // reads the surface mid-run reads the truth rather than a snapshot taken
@@ -2938,6 +2945,17 @@ async function init(): Promise<void> {
   // call, reachable by name.
   (window as unknown as { __triggerRouting: () => void }).__triggerRouting = (): void => {
     triggerRouting();
+  };
+
+  (window as unknown as {
+    __tuningWorker: { readonly active: boolean; readonly lastResult: string | null };
+  }).__tuningWorker = {
+    get active(): boolean {
+      return tuningWorker !== null;
+    },
+    get lastResult(): string | null {
+      return lastTuningResult;
+    },
   };
 
   function stopRoutingWorker(): void {
@@ -2998,6 +3016,104 @@ async function init(): Promise<void> {
       : `Routed ${routed} segments in ${elapsed}s`;
     console.log(`[Routing] ${message}`);
     finishRouting(message);
+  }
+
+  /**
+   * Re-route on the parameters the sliders now hold.
+   *
+   * This is what the sliders were for, and it was taken out with the comment
+   * "no auto re-route - it freezes the browser", which was true while the
+   * engine ran on this thread: a drag generates a value every few pixels, and
+   * each one blocked everything for as long as a route takes. On a worker the
+   * abandonment is free - terminate and spawn - so the slider can mean what it
+   * says again.
+   */
+  function triggerTuningRoute(): void {
+    if (!lastLoadedSource || !snapshot?.board) {
+      return;
+    }
+
+    // Whatever is in flight is answering a question the user has already
+    // changed. Terminating is the whole point of a second worker.
+    tuningWorker?.terminate();
+    tuningWorker = null;
+
+    const params = readTuningSliders();
+    const rustParams = JSON.stringify({
+      via_cost: params.viaCost,
+      layer_preference: params.layerPreference,
+      roundness: params.roundness,
+      density: params.density,
+    });
+    const source = lastLoadedSource;
+
+    let worker: Worker;
+    try {
+      worker = new Worker(new URL('./routing-worker.ts', import.meta.url), { type: 'module' });
+    } catch (err) {
+      console.warn('[Tuning] Worker failed to start:', err);
+      return;
+    }
+    tuningWorker = worker;
+
+    worker.onmessage = (event: MessageEvent<unknown>): void => {
+      if (!isWorkerResponse(event.data)) {
+        return;
+      }
+      const message = event.data;
+      if (message.type === 'ready') {
+        const request: WorkerRequest = { type: 'route', source, params: rustParams };
+        worker.postMessage(request);
+        return;
+      }
+      // A worker that has been replaced is answering about old parameters.
+      if (tuningWorker !== worker) {
+        return;
+      }
+      tuningWorker = null;
+      worker.terminate();
+      if (message.type === 'failed') {
+        console.warn('[Tuning]', message.error);
+        statusText.textContent = `Tuning failed: ${message.error}`;
+        return;
+      }
+      lastTuningResult = message.result;
+      applyTunedCopper(message.result, message.traces);
+    };
+
+    worker.onerror = (event: ErrorEvent): void => {
+      if (tuningWorker === worker) {
+        tuningWorker = null;
+      }
+      console.warn('[Tuning] Worker error:', event.message);
+    };
+  }
+
+  /** The tuned board, drawn without touching the routing run's status line. */
+  function applyTunedCopper(resultJson: string, traces: string): void {
+    let parsed: { ok?: unknown; routed?: unknown; unrouted?: unknown };
+    try {
+      parsed = JSON.parse(resultJson);
+    } catch {
+      return;
+    }
+    if (parsed.ok !== true || !lastLoadedSource) {
+      return;
+    }
+
+    const merged = mergeTracesIntoDsl(lastLoadedSource, traces);
+    loadDesign(merged);
+    lastLoadedSource = merged;
+    pullSnapshot();
+    syncEditorTraces();
+    markTracesUnsaved();
+    dirty = true;
+
+    const routed = typeof parsed.routed === 'number' ? parsed.routed : 0;
+    const unrouted = typeof parsed.unrouted === 'number' ? parsed.unrouted : 0;
+    statusText.textContent = unrouted > 0
+      ? `Tuned: ${routed} segments (${unrouted} unrouted)`
+      : `Tuned: ${routed} segments`;
   }
 
   function triggerRouting(): void {
@@ -3391,9 +3507,7 @@ async function init(): Promise<void> {
 
     tuningDebounceTimer = window.setTimeout(() => {
       tuningDebounceTimer = null;
-      // Parameters are already persisted above in setPreference.
-      // User can click Route to apply the new params.
-      console.log('[Tuning] Params updated — click Route to apply');
+      triggerTuningRoute();
     }, 300);
   }
 
