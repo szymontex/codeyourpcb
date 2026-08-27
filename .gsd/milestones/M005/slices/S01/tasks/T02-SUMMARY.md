@@ -6,8 +6,6 @@ provides:
   - routing-worker.ts Web Worker module with WASM init and 3 routing message handlers
 key_files:
   - viewer/src/routing-worker.ts
-key_files_not_in_repo:
-  - viewer/src/routing-worker.ts - no commit in this clone ever added it (checked 2026-08-27)
 key_decisions:
   - Fresh PcbEngine created per routing request, freed after result extraction (per D-M005-005)
   - Exhaustive switch with `never` type on default branch ensures compile-time enforcement that all WorkerRequest variants are handled

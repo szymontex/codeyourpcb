@@ -11,7 +11,6 @@ key_files:
   - viewer/src/parse-source.ts
   - viewer/src/wasm.ts
 key_files_not_in_repo:
-  - viewer/src/worker-protocol.ts - no commit in this clone ever added it (checked 2026-08-27)
   - viewer/src/parse-source.ts - no commit in this clone ever added it (checked 2026-08-27)
 key_decisions:
   - Extracted parseUnit() and getFootprintPads() alongside parseSource() since they are private helpers only used by the parser

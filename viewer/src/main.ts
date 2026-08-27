@@ -53,6 +53,7 @@ import { initSearchPanel, hideSearchPanel, toggleSearchPanel, isSearchPanelVisib
 import { fetchComponentFootprint } from './jlcpcb';
 import { registerDynamicFootprint, register3DModel, hasDynamicFootprint } from './wasm';
 import { mergeTracesIntoDsl, syncTracesToEditor } from './trace-persist';
+import { isWorkerResponse, type WorkerRequest } from './worker-protocol';
 import { reportLostTraces } from './trace-census';
 import { describeViolationKind } from './violation-kinds';
 import { renderStack } from './stack-panel';
@@ -2902,7 +2903,104 @@ async function init(): Promise<void> {
    * Trigger routing via WebSocket to dev server.
    * The server runs the CLI route command and streams progress.
    */
-  async function triggerRouting(): Promise<void> {
+  /**
+   * Route the board on a worker thread.
+   *
+   * This ran on the main thread until 2026-08-27 and the browser froze for the
+   * whole run - the overlay could not paint, the cancel button could not be
+   * clicked, and a fifty-millisecond `setTimeout` before the call was the only
+   * thing that let the word "routing" appear at all. R201 to R203 are that
+   * report. The worker owns its own engine, so what comes back is text: the
+   * engine's JSON answer and the routed copper as DSL, applied here through
+   * the merge the save path already uses.
+   */
+  let routingWorker: Worker | null = null;
+  let lastRouteResult: string | null = null;
+
+  // What a test outside this closure can see: whether a run is in flight, and
+  // what the last one answered. Getters rather than values, so a test that
+  // reads the surface mid-run reads the truth rather than a snapshot taken
+  // when the page loaded.
+  (window as unknown as {
+    __routingWorker: { readonly active: boolean; readonly lastResult: string | null };
+  }).__routingWorker = {
+    get active(): boolean {
+      return isRouting && routingWorker !== null;
+    },
+    get lastResult(): string | null {
+      return lastRouteResult;
+    },
+  };
+
+  // The Route button sits inside a `display:none` anchor - the autorouter is
+  // hidden until D5 unhides it - so a test cannot click its way to a routing
+  // run. This is the same seam `__loadBoard` is: the function the button would
+  // call, reachable by name.
+  (window as unknown as { __triggerRouting: () => void }).__triggerRouting = (): void => {
+    triggerRouting();
+  };
+
+  function stopRoutingWorker(): void {
+    routingWorker?.terminate();
+    routingWorker = null;
+  }
+
+  function finishRouting(message: string): void {
+    stopRoutingWorker();
+    isRouting = false;
+    updateRoutingUI({ isRouting: false, pass: 0, routed: 0, unrouted: 0, elapsed: 0 });
+    statusText.textContent = message;
+    setTimeout(() => {
+      statusText.textContent = usingWasm ? 'Ready (WASM)' : 'Ready (Mock)';
+    }, 5000);
+  }
+
+  /** What the worker sent back, applied to the board on screen. */
+  function applyRoutedCopper(resultJson: string, traces: string): void {
+    lastRouteResult = resultJson;
+    const elapsed = Math.round((Date.now() - routingStartTime) / 1000);
+
+    let parsed: { ok?: unknown; error?: unknown; routed?: unknown; unrouted?: unknown };
+    try {
+      parsed = JSON.parse(resultJson);
+    } catch {
+      console.error('[Routing] Invalid JSON:', resultJson);
+      finishRouting('Routing error: invalid JSON response');
+      return;
+    }
+
+    if (parsed.ok === false) {
+      console.error('[Routing]', parsed.error);
+      finishRouting(`Routing failed: ${parsed.error}`);
+      return;
+    }
+
+    if (parsed.ok !== true) {
+      console.warn('[Routing] Unexpected response:', parsed);
+      finishRouting('Routing produced unexpected result');
+      return;
+    }
+
+    if (lastLoadedSource) {
+      const merged = mergeTracesIntoDsl(lastLoadedSource, traces);
+      loadDesign(merged);
+      lastLoadedSource = merged;
+      pullSnapshot();
+      syncEditorTraces();
+      markTracesUnsaved();
+      dirty = true;
+    }
+
+    const unrouted = typeof parsed.unrouted === 'number' ? parsed.unrouted : 0;
+    const routed = typeof parsed.routed === 'number' ? parsed.routed : 0;
+    const message = unrouted > 0
+      ? `Routed ${routed} segments (${unrouted} unrouted) in ${elapsed}s`
+      : `Routed ${routed} segments in ${elapsed}s`;
+    console.log(`[Routing] ${message}`);
+    finishRouting(message);
+  }
+
+  function triggerRouting(): void {
     if (isRouting) {
       console.log('[Routing] Already routing');
       return;
@@ -2917,90 +3015,63 @@ async function init(): Promise<void> {
       return;
     }
 
+    // The worker reads the design from text, so a board this thread holds only
+    // as a snapshot - one imported from KiCad, say - has nothing to send.
+    if (!lastLoadedSource) {
+      statusText.textContent = 'Routing needs the design source';
+      setTimeout(() => {
+        statusText.textContent = usingWasm ? 'Ready (WASM)' : 'Ready (Mock)';
+      }, 3000);
+      return;
+    }
+
+    const params = getPreference('autorouteParams');
+    const rustParams = JSON.stringify({
+      via_cost: params.viaCost,
+      layer_preference: params.layerPreference,
+      roundness: params.roundness,
+      density: params.density,
+    });
+    const source = lastLoadedSource;
+
     isRouting = true;
     routingStartTime = Date.now();
     statusText.textContent = 'Routing…';
+    updateRoutingUI({ isRouting: true, pass: 0, routed: 0, unrouted: 0, elapsed: 0 });
 
-    updateRoutingUI({
-      isRouting: true,
-      pass: 0,
-      routed: 0,
-      unrouted: 0,
-      elapsed: 0,
-    });
-
-    // Yield to browser so it can paint the "Routing..." overlay before
-    // the synchronous WASM call blocks the main thread.
-    await new Promise(resolve => setTimeout(resolve, 50));
-
-    // Route with current tuning parameters from sliders
+    let worker: Worker;
     try {
-      let resultJson: string;
-
-      try {
-        const params = getPreference('autorouteParams');
-        const rustParams = {
-          via_cost: params.viaCost,
-          layer_preference: params.layerPreference,
-          roundness: params.roundness,
-          density: params.density,
-        };
-        resultJson = engine.auto_route_with_params(JSON.stringify(rustParams));
-        (window as any).__lastRouteResult = resultJson;
-      } catch (routeErr) {
-        console.warn('[Routing] auto_route() failed:', routeErr);
-        // Reload the board to reset WASM engine state after panic
-        if (lastLoadedSource) {
-          loadDesign(lastLoadedSource);
-        }
-        statusText.textContent = `Routing failed: ${routeErr}`;
-        return;
-      }
-
-      const elapsed = Math.round((Date.now() - routingStartTime) / 1000);
-
-      // Check if it's an error response
-      let parsed: any;
-      try {
-        parsed = JSON.parse(resultJson);
-      } catch {
-        statusText.textContent = `Routing error: invalid JSON response`;
-        console.error('[Routing] Invalid JSON:', resultJson);
-        return;
-      }
-
-      // Error response: { ok: false, error: "..." }
-      if (parsed && parsed.ok === false) {
-        statusText.textContent = `Routing failed: ${parsed.error}`;
-        console.error('[Routing]', parsed.error);
-        return;
-      }
-
-      // Success: auto_route() returned {ok:true, routed:N, unrouted:N}
-      if (parsed && parsed.ok === true) {
-        pullSnapshot();
-        dirty = true;
-        const msg = parsed.unrouted > 0
-          ? `Routed ${parsed.routed} segments (${parsed.unrouted} unrouted) in ${elapsed}s`
-          : `Routed ${parsed.routed} segments in ${elapsed}s`;
-        statusText.textContent = msg;
-        console.log(`[Routing] ${msg}`);
-        return;
-      }
-
-      statusText.textContent = 'Routing produced unexpected result';
-      console.warn('[Routing] Unexpected response:', parsed);
-
+      worker = new Worker(new URL('./routing-worker.ts', import.meta.url), { type: 'module' });
     } catch (err) {
-      statusText.textContent = `Routing error: ${err}`;
-      console.error('[Routing] Exception:', err);
-    } finally {
-      isRouting = false;
-      updateRoutingUI({ isRouting: false, pass: 0, routed: 0, unrouted: 0, elapsed: 0 });
-      setTimeout(() => {
-        statusText.textContent = usingWasm ? 'Ready (WASM)' : 'Ready (Mock)';
-      }, 5000);
+      console.error('[Routing] Worker failed to start:', err);
+      finishRouting(`Routing failed: ${err}`);
+      return;
     }
+    routingWorker = worker;
+
+    worker.onmessage = (event: MessageEvent<unknown>): void => {
+      if (!isWorkerResponse(event.data)) {
+        console.warn('[Routing] Worker sent something this protocol does not describe');
+        return;
+      }
+      const message = event.data;
+      if (message.type === 'ready') {
+        const request: WorkerRequest = { type: 'route', source, params: rustParams };
+        worker.postMessage(request);
+        return;
+      }
+      if (message.type === 'failed') {
+        console.error('[Routing] Worker:', message.error);
+        finishRouting(`Routing failed: ${message.error}`);
+        return;
+      }
+      applyRoutedCopper(message.result, message.traces);
+    };
+
+    worker.onerror = (event: ErrorEvent): void => {
+      console.error('[Routing] Worker error:', event.message);
+      finishRouting(`Routing failed: ${event.message}`);
+    };
   }
 
   /**
@@ -3065,10 +3136,14 @@ async function init(): Promise<void> {
    * Cancel the current routing operation
    */
   function cancelRouting(): void {
-    // Cancel is only meaningful for async routing (future Web Worker implementation)
+    // Terminating the worker is what makes this real: the engine is inside it,
+    // so the run stops with the thread. While routing was synchronous this
+    // function could only hide the overlay and wait for the freeze to end.
     console.log('[Routing] Cancel requested');
+    stopRoutingWorker();
     isRouting = false;
     updateRoutingUI({ isRouting: false, pass: 0, routed: 0, unrouted: 0, elapsed: 0 });
+    statusText.textContent = 'Routing cancelled';
   }
 
   /**

@@ -34,8 +34,6 @@ The checklist and the tables below are left as they were written: they are the
 record of what was reported. The ticks are not evidence and this section is.
 
 not_in_this_repository:
-  - routing-worker.ts - no commit in this clone ever added it (checked 2026-08-27)
-  - worker-protocol.ts - no commit in this clone ever added it (checked 2026-08-27)
   - parse-source.ts - no commit in this clone ever added it (checked 2026-08-27)
   - variant-transform.ts - no commit in this clone ever added it (checked 2026-08-27)
   - autoroute-worker.spec.ts - no commit in this clone ever added it (checked 2026-08-27)

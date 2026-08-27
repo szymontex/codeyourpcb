@@ -26,8 +26,6 @@ key_files:
   - viewer/src/main.ts
   - viewer/e2e/autoroute-worker.spec.ts
 key_files_not_in_repo:
-  - viewer/src/routing-worker.ts - no commit in this clone ever added it - `git log --all -- viewer/src/routing-worker.ts` is empty (checked 2026-08-27)
-  - viewer/src/worker-protocol.ts - no commit in this clone ever added it (checked 2026-08-27)
   - viewer/src/parse-source.ts - no commit in this clone ever added it (checked 2026-08-27)
   - viewer/e2e/autoroute-worker.spec.ts - no commit in this clone ever added it (checked 2026-08-27)
 key_decisions:

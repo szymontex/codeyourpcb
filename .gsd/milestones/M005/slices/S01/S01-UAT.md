@@ -13,8 +13,6 @@ broken". `#routing-status` and `window.__loadBoard` are here; the worker is
 not.
 
 not_in_this_repository:
-  - routing-worker.ts - no commit in this clone ever added it (checked 2026-08-27)
-  - window.__routingWorker - no commit in this clone ever added it (checked 2026-08-27)
   - window.__triggerVariantRouting - no commit in this clone ever added it (checked 2026-08-27)
 
 ## UAT Type

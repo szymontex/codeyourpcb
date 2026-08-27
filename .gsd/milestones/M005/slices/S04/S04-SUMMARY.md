@@ -24,8 +24,6 @@ key_files:
   - viewer/e2e/autoroute-worker.spec.ts
   - viewer/e2e/variant-panel.spec.ts
 key_files_not_in_repo:
-  - viewer/src/worker-protocol.ts - no commit in this clone ever added it (checked 2026-08-27)
-  - viewer/src/routing-worker.ts - no commit in this clone ever added it (checked 2026-08-27)
   - viewer/src/variant-transform.ts - no commit in this clone ever added it (checked 2026-08-27)
   - viewer/src/__tests__/variant-transform.test.ts - no commit in this clone ever added it (checked 2026-08-27)
   - viewer/src/variant-panel.ts - deleted by a9e8c7a, `refactor(viewer): delete the variant panel, which nothing could reach`
