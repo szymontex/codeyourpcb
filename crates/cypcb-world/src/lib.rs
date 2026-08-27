@@ -100,6 +100,7 @@ pub mod registry;
 /// read.
 pub mod silk_text;
 pub mod spatial;
+pub mod stitch;
 #[cfg(feature = "sync")]
 pub mod sync;
 pub mod teardrop;
