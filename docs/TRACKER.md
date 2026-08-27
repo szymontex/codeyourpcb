@@ -138,12 +138,10 @@ panelisation - KiCad itself leaves that to KiKit; symbol and footprint editors
 - footprints come from a library and from LCSC, and drawing them by hand is a
 different product.
 
-- NEXT-ACTION: **item 1, teardrops.** It is first because it is the one on this
-  list that changes what a fabricator receives - a teardrop is copper, it goes
-  in the Gerber, and it is the standard answer to a track tearing away from a
-  pad on a flexed or drilled board. It needs a word in the language, geometry
-  in the world, the copper in the export, and a DRC rule that does not report
-  the fillet as a clearance fault against its own pad.
+- DONE (item 1, the geometry): **a teardrop is a shape before it is a feature, so the shape came first and it is measured.** `cypcb_world::teardrop` returns the four corners of the fillet where a track leaves a pad: two on the pad's edge at the width ratio, two at the track's own width some way along it. The straight fillet rather than the curved one - KiCad draws both and a fabricator receives the same copper either way, and a straight edge is one an arc-free export can already write. Ratios default to KiCad's: **length 50%, width 90%** of pad size, so two boards do not arrive at a house looking like different tools drew them.
+- **It refuses three cases rather than drawing nonsense**: a track already as wide as the fillet would be, which would pinch rather than support; a pad with no size; and a point on the pad centre, which names no direction. `inscribed_radius` reads a long pad as the narrow thing it is where the track leaves it.
+- Proof: `cargo test -p cypcb-world --test a_teardrop_is_copper_that_tapers` -> **5 passed**: the pad-side corners sit on the edge to within a micron, the track-side corners sit past it, the tip measures the track's own width, the shape turns with the track, and both ratios move what they say they move. Mutation, run alone and restored from the saved file: the fillet made to stop at the pad edge -> **2 failed**, `the fillet reaches up the track, not sideways`. `cargo test -p cypcb-world` -> no failures; `cargo fmt --all -- --check` clean; `cargo clippy -p cypcb-world --all-targets -- -D warnings` -> 0 errors.
+- NEXT-ACTION: **the copper has to reach the fabricator, which is the half that makes this item real.** Two pieces left: `cypcb export` needs to draw these as Gerber regions on each copper layer - `emit_region` already writes rectangles that way, so the writer takes polygons with a small change - and the board needs a way to ask for them. The flag comes first as `cypcb export --teardrops`, because it is reachable without touching the grammar; the word in the language follows, and with it the KiCad writer's warning that a `.kicad_pcb` carries its own teardrop settings rather than ours.
 
 
 ### V8 - Stackup parity with KiCad and Altium

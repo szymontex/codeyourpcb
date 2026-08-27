@@ -102,6 +102,7 @@ pub mod silk_text;
 pub mod spatial;
 #[cfg(feature = "sync")]
 pub mod sync;
+pub mod teardrop;
 pub mod world;
 
 // Re-export all component types at crate root for convenience
