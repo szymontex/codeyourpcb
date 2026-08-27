@@ -1013,6 +1013,12 @@ pub struct ZoneDef {
     pub layer: Option<String>,
     /// Net for copper pour zones (keepouts don't have this).
     pub net: Option<Identifier>,
+    /// Tie the two sides of this pour together with vias at this pitch.
+    ///
+    /// `None` is a pour that did not ask. A plane on a two-layer board is two
+    /// planes until a field of vias joins them, and where those go is a
+    /// decision a design makes rather than a tool.
+    pub stitch: Option<Dimension>,
     /// Source span.
     pub span: Span,
 }

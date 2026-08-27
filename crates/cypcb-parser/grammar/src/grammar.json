@@ -2193,6 +2193,27 @@
         {
           "type": "SYMBOL",
           "name": "zone_net"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "zone_stitch"
+        }
+      ]
+    },
+    "zone_stitch": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "STRING",
+          "value": "stitch"
+        },
+        {
+          "type": "FIELD",
+          "name": "pitch",
+          "content": {
+            "type": "SYMBOL",
+            "name": "dimension"
+          }
         }
       ]
     },

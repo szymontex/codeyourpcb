@@ -804,8 +804,34 @@ zone <name> {
     bounds <x1>, <y1> to <x2>, <y2>
     layer <layer>
     net <netname>
+    stitch <pitch>
 }
 ```
+
+### Stitching a pour
+
+A pour on a two-layer board fills the top and the bottom, and until something
+joins them they are two planes at the same potential by accident rather than by
+construction. `stitch` states the pitch of the via field that makes them one:
+
+```
+zone GND {
+    bounds 3mm, 3mm to 27mm, 17mm
+    layer all
+    net GND
+    stitch 4mm
+}
+```
+
+The pour states the rule and the tool places the vias, on a grid starting half
+a pitch inside the pour. A via lands only where the copper is and nothing else
+is: inside the pour with its ring and clearance to spare, and clear of every
+pad and track on either outer layer - its own net included, because a via on a
+pad wicks solder down the barrel and starves the joint above it.
+
+The vias are not written back into the design. One line is what the board
+states; the holes are what the line produces, and writing them out would stitch
+the stitching on the next save.
 
 **Layers:**
 - `top` or `Top`: Top copper layer

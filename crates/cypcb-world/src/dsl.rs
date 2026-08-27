@@ -218,10 +218,14 @@ pub fn traces_as_dsl(world: &mut BoardWorld) -> String {
             .collect()
     };
 
-    // Collect all vias grouped by net name
+    // Collect all vias grouped by net name, except the ones a stitched pour
+    // produced: those are what its `stitch` line means, and writing them back
+    // as copper would turn one rule into a hundred holes - and stitch the
+    // stitching on the next trip through.
     let via_data: Vec<Via> = {
         let ecs = world.ecs_mut();
-        let mut query = ecs.query::<&Via>();
+        let mut query =
+            ecs.query_filtered::<&Via, bevy_ecs::prelude::Without<crate::components::Stitched>>();
         query.iter(ecs).copied().collect()
     };
 
@@ -422,6 +426,7 @@ fn via_span_suffix(via: &crate::components::trace::Via) -> String {
 /// about quotes.
 fn zone_as_dsl(
     zone: &crate::components::zone::Zone,
+    stitch: Option<cypcb_core::Nm>,
     net_names: &std::collections::HashMap<u32, String>,
 ) -> String {
     use crate::components::zone::ZoneKind;
@@ -471,6 +476,12 @@ fn zone_as_dsl(
     let _ = writeln!(out, "    layer {layer}");
     if let Some(net) = net {
         let _ = writeln!(out, "    net {net}");
+    }
+    // The pitch, not the vias. A stitched pour states a rule and the vias are
+    // what the rule produces; writing them out as copper would turn a request
+    // into a hundred holes the next reader cannot tell from hand-placed ones.
+    if let Some(pitch) = stitch {
+        let _ = writeln!(out, "    stitch {}mm", format_mm(pitch.to_mm()));
     }
     let _ = writeln!(out, "}}");
     let _ = writeln!(out);
@@ -766,10 +777,18 @@ pub fn board_as_dsl(world: &mut BoardWorld) -> String {
     // empty, and entity order is not a promise the ECS makes.
     parts.sort_by(|a, b| a.refdes.cmp(&b.refdes));
 
-    let zones: Vec<crate::components::zone::Zone> = {
+    // With the pitch beside each one: a stitched pour keeps its rule through a
+    // round trip, and the vias it produced are not written as copper.
+    let zones: Vec<(crate::components::zone::Zone, Option<cypcb_core::Nm>)> = {
         let ecs = world.ecs_mut();
-        let mut query = ecs.query::<&crate::components::zone::Zone>();
-        query.iter(ecs).cloned().collect()
+        let mut query = ecs.query::<(
+            &crate::components::zone::Zone,
+            Option<&crate::components::StitchPitch>,
+        )>();
+        query
+            .iter(ecs)
+            .map(|(zone, pitch)| (zone.clone(), pitch.map(|p| p.0)))
+            .collect()
     };
 
     let outline: Option<Vec<cypcb_core::Point>> = world
@@ -1172,8 +1191,8 @@ pub fn board_as_dsl(world: &mut BoardWorld) -> String {
     // takes bounds, a layer and a net, and `sync_zone` reads all three. A board
     // imported from KiCad with a ground plane lost that plane on its first save
     // through the editor, under a note claiming the loss was unavoidable.
-    for zone in &zones {
-        out.push_str(&zone_as_dsl(zone, &net_names));
+    for (zone, stitch) in &zones {
+        out.push_str(&zone_as_dsl(zone, *stitch, &net_names));
     }
 
     let traces = traces_as_dsl(world);

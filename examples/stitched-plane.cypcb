@@ -1,0 +1,49 @@
+// stitched-plane.cypcb - a ground plane that is one plane, not two.
+//
+// A pour on a two-layer board fills the top and the bottom, and until
+// something joins them they are two separate planes at the same potential by
+// accident rather than by construction. A field of vias through the copper is
+// what makes them one, and every board that carries a ground past a connector
+// or under a fast signal has them.
+//
+//   stitch 4mm      a via every 4mm, in both directions
+//
+// The pour states the rule and the tool places the vias. They are kept out of
+// the saved file on purpose: one line is the design, and a hundred holes are
+// what the line produces - writing the holes back would stitch the stitching
+// on the next save.
+//
+// A via lands only where the copper is and nothing else is: inside the pour
+// with its ring and clearance to spare, and clear of every pad and track on
+// either outer layer. This board's connector is inside the pour, so the field
+// has a hole in it where the pads are.
+//
+// Check it with:
+//   cypcb check examples/stitched-plane.cypcb
+//
+// It reports 1 unconnected pin - the connector's signal pin goes nowhere on
+// purpose - and exits 1. The plane itself is stitched.
+
+version 1
+
+board stitched_plane {
+    size 30mm x 20mm
+    layers 2
+    fab jlcpcb
+}
+
+component J1 connector "PIN-HDR-1x2" {
+    value "GND"
+    at 15mm, 10mm
+}
+
+net GND {
+    J1.2
+}
+
+zone GND {
+    bounds 3mm, 3mm to 27mm, 17mm
+    layer all
+    net GND
+    stitch 4mm
+}

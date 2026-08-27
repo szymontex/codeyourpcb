@@ -63,11 +63,19 @@ pub fn stitching_vias(
         return Vec::new();
     }
 
-    // Foreign copper on both outer layers: a hole goes through the board.
+    // Every piece of copper on both outer layers, the pour's own included: a
+    // hole goes through the board, so both sides decide, and a via that lands
+    // on a pad is wrong even when the pad is on the same net. Electrically it
+    // is nothing; in a reflow oven it is solder wicking down the barrel and a
+    // starved joint above it, which is why every tool that places these keeps
+    // them off pads. Measured on `examples/stitched-plane.cypcb`: with only
+    // foreign copper blocked, a via overlapped the connector's own ground pin
+    // and the checker read `J1 <-> via: 0.00mm actual, 0.13mm required`.
     let mut blockers: Vec<Rect> = Vec::new();
     for layer in [Layer::TopCopper, Layer::BottomCopper] {
-        let (foreign, _own) = copper_boxes(world, library, layer, zone);
+        let (foreign, own) = copper_boxes(world, library, layer, zone);
         blockers.extend(foreign);
+        blockers.extend(own);
     }
 
     let ring = Nm(spec.diameter.0 / 2);

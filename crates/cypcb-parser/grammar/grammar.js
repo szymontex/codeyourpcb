@@ -622,6 +622,17 @@ module.exports = grammar({
       $.zone_bounds,
       $.zone_layer,
       $.zone_net,
+      $.zone_stitch,
+    ),
+
+    // stitch 5mm
+    //
+    // Tie the two sides of a plane together with a field of vias at this
+    // pitch. A plane on a two-layer board is two planes until something
+    // joins them.
+    zone_stitch: $ => seq(
+      'stitch',
+      field('pitch', $.dimension),
     ),
 
     // bounds X1, Y1 to X2, Y2

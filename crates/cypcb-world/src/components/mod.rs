@@ -51,4 +51,4 @@ pub use electrical::{
 pub use metadata::{ComponentKind, Name, SourceSpan};
 pub use physical::{FootprintRef, Layer, Pad, PadShape, Side};
 pub use position::{place_pad, rotate_about_origin, Position, Rotation};
-pub use zone::{Zone, ZoneKind};
+pub use zone::{StitchPitch, Stitched, Zone, ZoneKind};

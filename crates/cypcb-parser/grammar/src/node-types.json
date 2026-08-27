@@ -2427,8 +2427,28 @@
         {
           "type": "zone_net",
           "named": true
+        },
+        {
+          "type": "zone_stitch",
+          "named": true
         }
       ]
+    }
+  },
+  {
+    "type": "zone_stitch",
+    "named": true,
+    "fields": {
+      "pitch": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "dimension",
+            "named": true
+          }
+        ]
+      }
     }
   },
   {
@@ -2975,6 +2995,10 @@
   },
   {
     "type": "stiffener",
+    "named": false
+  },
+  {
+    "type": "stitch",
     "named": false
   },
   {

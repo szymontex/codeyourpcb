@@ -65,6 +65,24 @@ pub struct Zone {
     pub net: Option<NetId>,
 }
 
+/// The pitch of the via field that ties a pour's two sides together.
+///
+/// A component on the zone's own entity rather than a field of [`Zone`]: a
+/// pour that says nothing is the ordinary case, and thirty-five places in this
+/// workspace build a `Zone` literally. What a stitched pour has, and a plain
+/// one does not, is this.
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StitchPitch(pub cypcb_core::Nm);
+
+/// A via this tool placed to stitch a pour, rather than one a person put there.
+///
+/// The writer skips these. A stitched pour states a rule and the vias are what
+/// the rule produces; writing them back as copper would turn one line into a
+/// hundred holes that the next reader cannot tell from hand-placed ones, and a
+/// second round trip would stitch the stitching.
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Stitched;
+
 impl Zone {
     /// Create a new keepout zone.
     ///

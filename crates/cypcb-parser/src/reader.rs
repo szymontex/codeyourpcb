@@ -1533,6 +1533,7 @@ impl<'a> Reader<'a> {
         let mut bounds = None;
         let mut layer = None;
         let mut net = None;
+        let mut stitch = None;
 
         while !self.done() && !self.eat(&TokenKind::RBrace) {
             match self.peek_ident() {
@@ -1568,7 +1569,14 @@ impl<'a> Reader<'a> {
                         None => self.unexpected("a net name"),
                     }
                 }
-                _ => self.unknown_property("zone", &["bounds", "layer", "net"]),
+                Some("stitch") => {
+                    self.bump();
+                    match self.dimension() {
+                        Some(pitch) => stitch = Some(pitch),
+                        None => self.unexpected("a pitch like `5mm`"),
+                    }
+                }
+                _ => self.unknown_property("zone", &["bounds", "layer", "net", "stitch"]),
             }
         }
 
@@ -1583,6 +1591,7 @@ impl<'a> Reader<'a> {
             bounds,
             layer,
             net,
+            stitch,
             span: Span::new(start, self.behind()),
         })
     }

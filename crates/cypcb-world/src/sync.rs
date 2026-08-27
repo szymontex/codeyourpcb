@@ -775,6 +775,11 @@ pub fn sync_ast_to_world(
         }
     }
 
+    // And the vias a stitched pour asked for, last of all: where one may sit
+    // depends on every track and pad the file placed, whatever order they came
+    // in.
+    place_stitching_vias(world, footprint_lib);
+
     result
 }
 
@@ -1275,7 +1280,57 @@ fn sync_zone(zone_def: &ZoneDef, world: &mut BoardWorld, _result: &mut SyncResul
         net,
     };
 
-    world.ecs_mut().spawn(zone);
+    let entity = world.ecs_mut().spawn(zone).id();
+
+    // The pitch rides on the zone's own entity rather than inside `Zone`: a
+    // pour that says nothing is the ordinary case, and this is what a stitched
+    // one has that a plain one does not. The vias themselves are placed after
+    // every definition is in, because where they may sit depends on the tracks
+    // and pads that come later in the file.
+    if let Some(pitch) = &zone_def.stitch {
+        let pitch = crate::components::StitchPitch(pitch.to_nm());
+        world.ecs_mut().entity_mut(entity).insert(pitch);
+    }
+}
+
+/// Place the vias every stitched pour asked for.
+///
+/// Last, on purpose: a via may only sit where the pour is and nothing else is,
+/// and the tracks and pads it has to avoid are spawned by definitions that can
+/// come after the zone in the file.
+fn place_stitching_vias(world: &mut BoardWorld, footprint_lib: &FootprintLibrary) {
+    use crate::components::trace::Via;
+    use crate::components::{StitchPitch, Zone};
+
+    let stitched: Vec<(Zone, cypcb_core::Nm)> = {
+        let mut query = world.ecs_mut().query::<(&Zone, &StitchPitch)>();
+        query
+            .iter(world.ecs())
+            .map(|(zone, pitch)| (zone.clone(), pitch.0))
+            .collect()
+    };
+
+    for (zone, pitch) in stitched {
+        let Some(net) = zone.net else {
+            continue;
+        };
+        let spec = crate::stitch::StitchSpec::at(pitch);
+        let places = crate::stitch::stitching_vias(world, footprint_lib, &zone, spec);
+        for centre in places {
+            world.ecs_mut().spawn((
+                Via {
+                    position: centre,
+                    drill: spec.drill,
+                    outer_diameter: spec.diameter,
+                    start_layer: crate::Layer::TopCopper,
+                    end_layer: crate::Layer::BottomCopper,
+                    net_id: net,
+                    locked: false,
+                },
+                crate::components::Stitched,
+            ));
+        }
+    }
 }
 
 /// Synchronize a trace definition to the ECS world.
