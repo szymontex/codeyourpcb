@@ -45,6 +45,7 @@ module.exports = grammar({
     _definition: $ => choice(
       $.board_definition,
       $.outline_definition,
+      $.text_definition,
       $.component_definition,
       $.net_definition,
       $.netclass_definition,
@@ -58,6 +59,36 @@ module.exports = grammar({
       $.import_statement,
       $.assert_statement,
     ),
+
+    // text "REV B" { at 5mm, 2mm  layer top  height 1.5mm }
+    //
+    // Words a person puts on the board: a revision, a warning, a name beside a
+    // connector. The legend already carries every part's designator; this is
+    // for what the design wants to say that is not a designator.
+    text_definition: $ => seq(
+      'text',
+      field('content', $.string),
+      '{',
+      repeat($.text_property),
+      '}',
+    ),
+
+    text_property: $ => choice(
+      $.text_at,
+      $.text_layer,
+      $.text_height,
+    ),
+
+    text_at: $ => seq(
+      'at',
+      field('x', $.dimension),
+      ',',
+      field('y', $.dimension),
+    ),
+
+    text_layer: $ => seq('layer', field('name', $.layer_name)),
+
+    text_height: $ => seq('height', field('value', $.dimension)),
 
     // outline { point 0mm, 0mm  point 40mm, 0mm  ... }
     //

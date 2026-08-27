@@ -792,6 +792,31 @@ Not checked yet: the gap between the two halves. That is the other half of a
 differential-pair rule and needs the router to place them alongside each other
 first.
 
+## Text on the Board
+
+Words a person puts on the legend:
+
+```
+text "REV B" {
+    at 10mm, 3mm
+    layer top
+    height 1.5mm
+}
+```
+
+`at` is the middle of the line and is the only property a text needs. `layer`
+is `top` or `bottom` and defaults to the top, which is the side a person looks
+at. `height` defaults to the height every part's designator is printed at, so a
+board that says nothing about size gets a legend that matches the rest of it.
+
+The letters are strokes from the same font the designators use, and they are
+clipped off solderable copper by the same rule: ink over a pad starves the
+joint under it, whoever put the letters there.
+
+Every part's designator is already printed without being asked for. This is for
+what the design wants to say that is not a designator - a revision, a label
+beside a connector, a polarity mark's word.
+
 ## Zone Definition
 
 Define keepout areas or copper pour zones:

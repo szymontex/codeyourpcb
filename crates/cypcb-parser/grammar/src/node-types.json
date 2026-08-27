@@ -1559,6 +1559,10 @@
           "named": true
         },
         {
+          "type": "text_definition",
+          "named": true
+        },
+        {
           "type": "trace_definition",
           "named": true
         },
@@ -1945,6 +1949,113 @@
         },
         {
           "type": "teardrop_width",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "text_at",
+    "named": true,
+    "fields": {
+      "x": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "dimension",
+            "named": true
+          }
+        ]
+      },
+      "y": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "dimension",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "text_definition",
+    "named": true,
+    "fields": {
+      "content": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "string",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "text_property",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "text_height",
+    "named": true,
+    "fields": {
+      "value": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "dimension",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "text_layer",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "layer_name",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "text_property",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "text_at",
+          "named": true
+        },
+        {
+          "type": "text_height",
+          "named": true
+        },
+        {
+          "type": "text_layer",
           "named": true
         }
       ]
@@ -2747,6 +2858,10 @@
     "named": false
   },
   {
+    "type": "height",
+    "named": false
+  },
+  {
     "type": "ic",
     "named": false
   },
@@ -3017,6 +3132,10 @@
   },
   {
     "type": "teardrops",
+    "named": false
+  },
+  {
+    "type": "text",
     "named": false
   },
   {

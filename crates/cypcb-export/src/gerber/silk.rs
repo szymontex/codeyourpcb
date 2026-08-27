@@ -284,6 +284,37 @@ pub fn export_silkscreen_reporting(
         }
     }
 
+    // The design's own words, on the side it asked for. Drawn from the same
+    // stroke font as every designator, and clipped by the same rule: a legend
+    // printed over solderable copper starves the joint under it, whoever put
+    // the letters there.
+    {
+        let silk_layer = match side {
+            Side::Top => Layer::TopSilk,
+            Side::Bottom => Layer::BottomSilk,
+        };
+        let texts: Vec<cypcb_world::components::BoardText> = {
+            let ecs = world.ecs_mut();
+            let mut query = ecs.query::<&cypcb_world::components::BoardText>();
+            query
+                .iter(ecs)
+                .filter(|text| text.layer == silk_layer)
+                .cloned()
+                .collect()
+        };
+        for text in texts {
+            // `designator_strokes` lifts a part's name above its artwork; a
+            // board's own words sit where they were put, so the rise is none.
+            shapes.extend(cypcb_world::silk_text::designator_strokes(
+                &text.content,
+                text.position,
+                text.height,
+                config.line_width,
+                cypcb_core::Nm(0),
+            ));
+        }
+    }
+
     let mut pen = None;
     for shape in cypcb_world::silk_text::clip_strokes(shapes, &keepouts) {
         emit(&shape, &mut pen, &mut drawing_commands, format);

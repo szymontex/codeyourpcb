@@ -262,6 +262,7 @@ fn find_context_in_definition(def: &Definition, content: &str, offset: usize) ->
         Definition::Trace(_) => find_context_in_trace(content, offset),
         // v2 constructs — completion context not yet implemented
         Definition::Outline(_)
+        | Definition::Text(_)
         | Definition::NetClass(_)
         | Definition::ModuleInstance(_)
         | Definition::Module(_)

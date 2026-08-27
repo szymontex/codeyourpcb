@@ -743,6 +743,9 @@ pub fn sync_ast_to_world(
             Definition::NetClass(_) => {
                 // Already applied above, before any net could overwrite it.
             }
+            Definition::Text(text) => {
+                sync_board_text(text, world);
+            }
             Definition::Outline(_) => {
                 // Already applied above, once the board existed.
             }
@@ -1408,6 +1411,36 @@ fn sync_net(
             });
         }
     }
+}
+
+/// Put a design's own words on the legend.
+///
+/// The letters themselves are drawn where every designator is drawn, from the
+/// same stroke font, so what the checker measures and what the exporter prints
+/// stay one thing. This only records what was asked for and where.
+fn sync_board_text(text_def: &cypcb_parser::ast::TextDef, world: &mut BoardWorld) {
+    let layer = match text_def
+        .layer
+        .as_deref()
+        .map(|name| name.to_ascii_lowercase())
+        .as_deref()
+    {
+        Some("bottom") => crate::Layer::BottomSilk,
+        // Top, all, unnamed or a word this does not know: a legend a person
+        // reads is on the side a person looks at.
+        _ => crate::Layer::TopSilk,
+    };
+
+    world.ecs_mut().spawn(crate::components::BoardText {
+        content: text_def.content.clone(),
+        position: cypcb_core::Point::new(text_def.at.0.to_nm(), text_def.at.1.to_nm()),
+        layer,
+        height: text_def
+            .height
+            .as_ref()
+            .map(|height| height.to_nm())
+            .unwrap_or(crate::components::BoardText::DEFAULT_HEIGHT),
+    });
 }
 
 /// Synchronize a zone definition to the world.

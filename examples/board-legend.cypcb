@@ -1,0 +1,46 @@
+// board-legend.cypcb - words a person puts on the board.
+//
+// Every part's designator is printed automatically: the legend carries `R1`
+// beside R1 so an assembler can work by eye. What a design could not say until
+// now is anything else - the revision, a label beside a connector, a warning.
+//
+//   text "REV B" { at 10mm, 3mm  layer top  height 1.5mm }
+//
+// `at` is the middle of the line. `layer` is `top` or `bottom` and defaults to
+// the top, which is the side a person looks at. `height` defaults to the same
+// height every designator is printed at, so a board that says nothing about
+// size gets a legend that matches the rest of the legend.
+//
+// The letters are strokes from the same font the designators use, and they are
+// clipped off solderable copper the same way: ink over a pad starves the joint
+// under it, whoever put the letters there.
+//
+// Check it with:
+//   cypcb check examples/board-legend.cypcb
+//
+// It reports nothing and exits 0.
+
+version 1
+
+board board_legend {
+    size 30mm x 15mm
+    layers 2
+    fab jlcpcb
+}
+
+text "REV B" {
+    at 10mm, 3mm
+    layer top
+    height 1.5mm
+}
+
+text "GND" {
+    at 22mm, 3mm
+    layer top
+}
+
+text "MADE IN EU" {
+    at 15mm, 12mm
+    layer bottom
+    height 1.2mm
+}

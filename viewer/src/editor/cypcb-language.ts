@@ -28,7 +28,7 @@ export const cypcbLanguage: monaco.languages.IMonarchLanguage = {
   // they were not part of the language.
   keywords: [
     'version', 'board', 'outline', 'component', 'net', 'netclass', 'diffpair',
-    'footprint', 'trace', 'zone', 'keepout', 'flex',
+    'footprint', 'trace', 'zone', 'keepout', 'flex', 'text',
     'resistor', 'capacitor', 'ic', 'connector',
     'diode', 'transistor', 'led', 'crystal', 'inductor', 'generic',
     // v2 keywords

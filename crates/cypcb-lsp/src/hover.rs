@@ -58,6 +58,9 @@ fn hover_for_definition(doc: &DocumentState, def: &Definition, offset: usize) ->
         Definition::NetClass(_) => None,
         // An outline is a list of coordinates; there is nothing to add.
         Definition::Outline(_) => None,
+        // Words on the legend: what they say is in the file, and hovering the
+        // string adds nothing a reader cannot already see.
+        Definition::Text(_) => None,
         Definition::Interface(iface) => hover_for_interface(iface, offset),
         Definition::Import(import) => hover_for_import(import, offset),
         Definition::Assert(assert_def) => hover_for_assert(assert_def, offset),

@@ -141,6 +141,8 @@ pub enum Definition {
     NetClass(NetClassDef),
     /// The board's outline, when it is not a rectangle.
     Outline(OutlineDef),
+    /// Words a person put on the board's legend.
+    Text(TextDef),
     /// An interface definition (v2).
     Interface(InterfaceDef),
     /// A differential pair.
@@ -165,12 +167,33 @@ impl Definition {
             Definition::ModuleInstance(i) => i.span,
             Definition::NetClass(c) => c.span,
             Definition::Outline(o) => o.span,
+            Definition::Text(t) => t.span,
             Definition::Interface(i) => i.span,
             Definition::DiffPair(d) => d.span,
             Definition::Import(i) => i.span,
             Definition::Assert(a) => a.span,
         }
     }
+}
+
+/// Words on the board: `text "REV B" { at 5mm, 2mm layer top height 1.5mm }`.
+///
+/// The legend already carries every part's designator, drawn from the same
+/// stroke font. This is for what a design wants to say that is not a
+/// designator: a revision, a polarity mark's label, a warning beside a
+/// connector.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TextDef {
+    /// What it says.
+    pub content: String,
+    /// Where the middle of it sits.
+    pub at: (Dimension, Dimension),
+    /// Which silkscreen it is printed on. `None` means the top.
+    pub layer: Option<String>,
+    /// How tall the letters are. `None` takes the legend's own height.
+    pub height: Option<Dimension>,
+    /// Source span.
+    pub span: Span,
 }
 
 /// A board definition: `board name { ... }`.

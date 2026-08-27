@@ -71,6 +71,7 @@ fn keyword(definition: &Definition) -> &'static [&'static str] {
         Definition::Import(_) => &["import"],
         Definition::Assert(_) => &["assert"],
         Definition::DiffPair(_) => &["diffpair"],
+        Definition::Text(_) => &["text"],
     }
 }
 
@@ -187,7 +188,9 @@ fn named_things(ast: &SourceFile) -> Vec<(String, Span, &'static str)> {
                     "identifier",
                 ));
             }
-            Definition::Outline(_) | Definition::Assert(_) => {}
+            // A legend's words are a string, but not a name: nothing refers
+            // to them, so there is nothing for this to cross-check.
+            Definition::Outline(_) | Definition::Assert(_) | Definition::Text(_) => {}
         }
     }
 

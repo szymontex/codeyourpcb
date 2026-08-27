@@ -365,6 +365,30 @@ pub struct BoardOutline {
     pub points: Vec<cypcb_core::Point>,
 }
 
+/// Words a design put on the legend: `text "REV B" { at 5mm, 2mm }`.
+///
+/// Every part's designator is already printed from `silk_text`; this is what a
+/// board wants to say that is not a designator - a revision, a label beside a
+/// connector, a warning. The letters are drawn from the same stroke font, so
+/// what the checker measures is what the fabricator prints.
+#[derive(Component, Debug, Clone, PartialEq, Eq)]
+pub struct BoardText {
+    /// What it says.
+    pub content: String,
+    /// The middle of the text.
+    pub position: cypcb_core::Point,
+    /// `TopSilk` or `BottomSilk`.
+    pub layer: crate::Layer,
+    /// Height of the letters.
+    pub height: cypcb_core::Nm,
+}
+
+impl BoardText {
+    /// The height every designator is printed at, so a board that says nothing
+    /// about size gets a legend that matches the rest of the legend.
+    pub const DEFAULT_HEIGHT: cypcb_core::Nm = cypcb_core::Nm(1_000_000);
+}
+
 impl BoardOutline {
     /// Build an outline, rejecting anything that is not a ring.
     ///

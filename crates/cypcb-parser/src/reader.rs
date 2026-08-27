@@ -24,7 +24,7 @@ use crate::ast::{
     ModuleInstance, NetAssignment, NetClassDef, NetConstraints, NetDef, OutlineDef, PadDef,
     PadShape, PhysicalValue, PinDeclaration, PinId, PinRef, PortConnection, PositionExpr,
     RotationExpr, SilkDef, SizeProperty, SourceFile, Span, StackupDef, StackupLayer,
-    StackupSheetDef, StringLit, TeardropsProperty, Tolerance, ToleranceKind, TraceDef,
+    StackupSheetDef, StringLit, TeardropsProperty, TextDef, Tolerance, ToleranceKind, TraceDef,
     TraceDirective, TracePath, TraceVia, ZoneDef, ZoneKind,
 };
 use crate::errors::{ParseError, ParseResult};
@@ -116,6 +116,10 @@ pub fn read(source: &str) -> ParseResult<SourceFile> {
             },
             "outline" => match reader.outline(start) {
                 Some(def) => definitions.push(Definition::Outline(def)),
+                None => reader.skip_to_next_definition(),
+            },
+            "text" => match reader.board_text(start) {
+                Some(def) => definitions.push(Definition::Text(def)),
                 None => reader.skip_to_next_definition(),
             },
             "import" => match reader.import(start) {
@@ -1597,6 +1601,70 @@ impl<'a> Reader<'a> {
     }
 
     /// `diffpair USB { USB_DP USB_DM }`.
+    /// `text "REV B" { at 5mm, 2mm  layer top  height 1.5mm }`.
+    ///
+    /// Only the position is required: a legend with no height takes the one
+    /// every designator is printed at, and a legend with no layer is on the
+    /// top, which is where a person reads a board.
+    fn board_text(&mut self, start: usize) -> Option<TextDef> {
+        self.bump(); // `text`
+        let Some(content) = self.string() else {
+            self.unexpected("the words to print, in quotes");
+            return None;
+        };
+        if !self.eat(&TokenKind::LBrace) {
+            self.unexpected("`{` after the text");
+            return None;
+        }
+
+        let mut at = None;
+        let mut layer = None;
+        let mut height = None;
+
+        while !self.done() && !self.eat(&TokenKind::RBrace) {
+            match self.peek_ident() {
+                Some("at") => {
+                    self.bump();
+                    let x = self.dimension();
+                    self.eat(&TokenKind::Comma);
+                    let y = self.dimension();
+                    match (x, y) {
+                        (Some(x), Some(y)) => at = Some((x, y)),
+                        _ => self.unexpected("a position like `5mm, 2mm`"),
+                    }
+                }
+                Some("layer") => {
+                    self.bump();
+                    match self.identifier() {
+                        Some(name) => layer = Some(name.value),
+                        None => self.unexpected("a layer name"),
+                    }
+                }
+                Some("height") => {
+                    self.bump();
+                    match self.dimension() {
+                        Some(value) => height = Some(value),
+                        None => self.unexpected("a height like `1.5mm`"),
+                    }
+                }
+                _ => self.unknown_property("text", &["at", "layer", "height"]),
+            }
+        }
+
+        let Some(at) = at else {
+            self.unexpected("text with a position");
+            return None;
+        };
+
+        Some(TextDef {
+            content: content.value,
+            at,
+            layer,
+            height,
+            span: Span::new(start, self.behind()),
+        })
+    }
+
     fn diffpair(&mut self, start: usize) -> Option<DiffPairDef> {
         self.bump(); // `diffpair`
         let name = match self.identifier() {

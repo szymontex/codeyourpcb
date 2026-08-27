@@ -1195,6 +1195,33 @@ pub fn board_as_dsl(world: &mut BoardWorld) -> String {
         out.push_str(&zone_as_dsl(zone, *stitch, &net_names));
     }
 
+    // The design's own words. Written after the zones for the same reason the
+    // zones come after the parts: a reader meets the board, then what is on it,
+    // then what is written on top.
+    let texts: Vec<crate::components::BoardText> = {
+        let ecs = world.ecs_mut();
+        let mut query = ecs.query::<&crate::components::BoardText>();
+        query.iter(ecs).cloned().collect()
+    };
+    for text in &texts {
+        let layer = if text.layer == crate::Layer::BottomSilk {
+            "bottom"
+        } else {
+            "top"
+        };
+        let _ = writeln!(out, "text {} {{", quoted(&text.content));
+        let _ = writeln!(
+            out,
+            "    at {}mm, {}mm",
+            format_mm(text.position.x.to_mm()),
+            format_mm(text.position.y.to_mm())
+        );
+        let _ = writeln!(out, "    layer {layer}");
+        let _ = writeln!(out, "    height {}mm", format_mm(text.height.to_mm()));
+        let _ = writeln!(out, "}}");
+        let _ = writeln!(out);
+    }
+
     let traces = traces_as_dsl(world);
     if !traces.is_empty() {
         let _ = writeln!(out);

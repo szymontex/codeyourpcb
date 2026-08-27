@@ -37,7 +37,7 @@ use crate::ast::{
     LayerType, ModuleDef, ModuleInstance, NeckDef, NetAssignment, NetClassDef, NetConstraints,
     NetDef, OutlineDef, PadDef, PadShape, PhysicalValue, PinDeclaration, PinId, PinRef,
     PortConnection, PositionExpr, RotationExpr, SilkDef, SizeProperty, SourceFile, Span,
-    StackupDef, StackupLayer, StackupSheetDef, StringLit, TeardropsProperty, Tolerance,
+    StackupDef, StackupLayer, StackupSheetDef, StringLit, TeardropsProperty, TextDef, Tolerance,
     ToleranceKind, TraceDef, TraceDirective, TracePath, TraceVia, ZoneDef, ZoneKind,
 };
 use crate::errors::{ParseError, ParseResult};
@@ -160,6 +160,11 @@ impl CypcbParser {
                 "outline_definition" => {
                     if let Some(outline) = self.convert_outline(source, &child, errors) {
                         definitions.push(Definition::Outline(outline));
+                    }
+                }
+                "text_definition" => {
+                    if let Some(text) = self.convert_board_text(source, &child, errors) {
+                        definitions.push(Definition::Text(text));
                     }
                 }
                 "netclass_definition" => {
@@ -1205,6 +1210,62 @@ impl CypcbParser {
             height,
             drill,
             drill_height,
+            span: span_of(node),
+        })
+    }
+
+    /// Convert a board text node.
+    fn convert_board_text(
+        &self,
+        source: &str,
+        node: &Node,
+        errors: &mut Vec<ParseError>,
+    ) -> Option<TextDef> {
+        let content_node = get_child_by_field(node, "content")?;
+        let content = node_text(source, &content_node)
+            .trim_matches('"')
+            .to_string();
+
+        let mut at = None;
+        let mut layer = None;
+        let mut height = None;
+
+        let mut cursor = node.walk();
+        for child in node.children(&mut cursor) {
+            let property = if child.kind() == "text_property" {
+                child.named_child(0)
+            } else {
+                Some(child)
+            };
+            let Some(property) = property else { continue };
+            match property.kind() {
+                "text_at" => {
+                    let x = get_child_by_field(&property, "x")
+                        .and_then(|n| self.convert_dimension(source, &n, errors));
+                    let y = get_child_by_field(&property, "y")
+                        .and_then(|n| self.convert_dimension(source, &n, errors));
+                    if let (Some(x), Some(y)) = (x, y) {
+                        at = Some((x, y));
+                    }
+                }
+                "text_layer" => {
+                    if let Some(name) = get_child_by_field(&property, "name") {
+                        layer = Some(node_text(source, &name).to_string());
+                    }
+                }
+                "text_height" => {
+                    height = get_child_by_field(&property, "value")
+                        .and_then(|n| self.convert_dimension(source, &n, errors));
+                }
+                _ => {}
+            }
+        }
+
+        Some(TextDef {
+            content,
+            at: at?,
+            layer,
+            height,
             span: span_of(node),
         })
     }
