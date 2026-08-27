@@ -333,12 +333,12 @@ This file is the explicit capability and coverage contract for the project.
 | R107 | quality-attribute | active | M004/S03 | M004/S04, M004/S07 | DRC 50→5 (partial, M004/S03), non-regression proven (M004/S04) |
 | R108 | quality-attribute | validated | M004/S04 | none | smoothness=1.000, is_valid_angle() enforcement, 22 unit tests (M004/S04) |
 | R109 | core-capability | validated | M004/S04 | none | 3-pass smoother + per-move DRC, 17 unit + 1 integration test (M004/S04) |
-| R110 | differentiator | validated | M004/S05 | none | AutorouteParams, WASM entry point, tuning panel, 8+4+7 tests (M004/S05) |
+| R110 | differentiator | active | M004/S05 | none | AutorouteParams, WASM entry point, tuning panel, 8+4+7 tests (M004/S05) |
 | R111 | differentiator | validated | M004/S05 | M004/S03 | 300ms debounced re-route, params→score difference proven (M004/S05) |
 | R112 | core-capability | validated | M004/S06 | M004/S02, M004/S03 | 4 variants, 5 unit + 5 integration + 7 E2E tests (M004/S06) |
-| R113 | primary-user-loop | validated | M004/S06 | none | auto-apply best + hover ghost preview + 7 E2E tests (M004/S06) |
+| R113 | primary-user-loop | active | M004/S06 | none | auto-apply best + hover ghost preview + 7 E2E tests (M004/S06) |
 | R114 | quality-attribute | validated | M004/S07 | M004/S01, M004/S02 | benchmark_regression CI gate + benchmark_full_matrix comparison (M004/S07) |
-| R115 | quality-attribute | validated | M004/S07 | none | 6 Playwright screenshots to test-results/benchmark/ (M004/S07) |
+| R115 | quality-attribute | active | M004/S07 | none | 6 Playwright screenshots to test-results/benchmark/ (M004/S07) |
 | R116 | quality-attribute | validated | M004/S07 | M004/S03 | PathFinder 5001 vs ImprovedAStar 15544 on led_blink (M004/S07) |
 | R120 | quality-attribute | deferred | future | none | unmapped |
 | R121 | core-capability | deferred | future | none | unmapped |
@@ -368,9 +368,13 @@ in the viewer's tests fails if this list and the specs disagree.
 ## Coverage Summary
 
 - Active requirements: 12
-- Mapped to slices: 21
+- Mapped to slices: 23 (requirements whose primary owner in the traceability table is a slice: 16 under M004, 7 under M005)
 - Validated: 11
 - Unmapped active requirements: 0
 - **Three requirements moved from validated to active on 2026-08-08**: R110,
   R113 and R115 each cited E2E tests as their validation, and those suites are
   skipped. A requirement is not validated by a test that does not run.
+- **The traceability table went on calling those three validated until
+  2026-08-27**, which is the shape of drift this file exists to prevent: the
+  status was corrected where it is declared and not where it is repeated. The
+  table is the repetition, so a test now holds the two together.
