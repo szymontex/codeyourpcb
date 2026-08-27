@@ -77,6 +77,14 @@ pub struct ExportCommand {
     /// via, written into `netlist/` beside the Gerbers.
     #[arg(long)]
     ipc356: bool,
+
+    /// Also plot every copper layer as SVG, for a person to look at.
+    ///
+    /// Gerber is what a fabricator reads; this is the picture for a review, a
+    /// document or a web page. One file per copper layer in `plot/`, drawn in
+    /// millimetres at size, with the board's outline around it.
+    #[arg(long)]
+    svg: bool,
 }
 
 impl ExportCommand {
@@ -455,6 +463,42 @@ impl ExportCommand {
             );
         }
 
+        // The picture, when it was asked for. Same rule as the netlist: the
+        // file set a house receives does not change unless somebody says so.
+        if self.svg {
+            let plot_dir = job.output_dir.join("plot");
+            std::fs::create_dir_all(&plot_dir)
+                .into_diagnostic()
+                .wrap_err("Creating the plot directory failed")?;
+            let layer_count = world
+                .board_info()
+                .map(|(_, stack)| stack.count)
+                .unwrap_or(2);
+            let mut layers = vec![
+                (cypcb_world::Layer::TopCopper, "F_Cu".to_string()),
+                (cypcb_world::Layer::BottomCopper, "B_Cu".to_string()),
+            ];
+            for index in 0..layer_count.saturating_sub(2) {
+                layers.push((
+                    cypcb_world::Layer::Inner(index),
+                    format!("In{}_Cu", index + 1),
+                ));
+            }
+            for (layer, suffix) in layers {
+                let drawing = cypcb_export::svg::plot_layer(&mut world, &library, layer);
+                let path = plot_dir.join(format!("{}-{}.svg", job.board_name, suffix));
+                std::fs::write(&path, &drawing)
+                    .into_diagnostic()
+                    .wrap_err("Writing the plot failed")?;
+                eprintln!(
+                    "  [OK] {} ({:.1} KB) - {} plot",
+                    path.display(),
+                    drawing.len() as f64 / 1024.0,
+                    suffix
+                );
+            }
+        }
+
         // Print results
         eprintln!();
         for file in &export_result.files {
@@ -581,6 +625,7 @@ mod tests {
             force: false,
             teardrops: false,
             ipc356: false,
+            svg: false,
         };
 
         assert_eq!(cmd.house, "jlcpcb");
