@@ -63,6 +63,30 @@ if [ -n "$GRAMMAR_COMMIT" ] && [ -n "$PARSER_COMMIT" ] \
   echo "  regenerate with (cd crates/cypcb-parser/grammar && npx tree-sitter generate) and commit grammar/src."
   fail "stale tree-sitter parser"
 fi
+# And whether the committed parser is the one this grammar makes. Commit order
+# catches a forgotten regeneration and says nothing about a `parser.c` edited by
+# hand or generated from a grammar that was amended afterwards. This comparison
+# can be made now that `tree-sitter-cli` is pinned to an exact version in
+# grammar/package.json with `grammar/package-lock.json` in git: the generator is
+# the same one everywhere, so a difference is the repository's and not the
+# machine's. The local binary is used rather than `npx`, which would happily
+# fetch a different one.
+TREE_SITTER_BIN=crates/cypcb-parser/grammar/node_modules/.bin/tree-sitter
+if [ -x "$TREE_SITTER_BIN" ]; then
+  if ! (cd crates/cypcb-parser/grammar && ./node_modules/.bin/tree-sitter generate) >/dev/null 2>&1; then
+    fail "tree-sitter generate"
+  fi
+  REGENERATED=$(git diff --name-only HEAD -- crates/cypcb-parser/grammar/src)
+  if [ -n "$REGENERATED" ]; then
+    echo ""
+    echo "  the committed parser is not the one this grammar generates:"
+    echo "$REGENERATED" | sed 's/^/    /'
+    echo "  commit crates/cypcb-parser/grammar/src."
+    fail "parser does not match its grammar"
+  fi
+else
+  echo "  (parser not regenerated: no CLI at $TREE_SITTER_BIN - run npm ci in crates/cypcb-parser/grammar)"
+fi
 UNTRACKED_PARSER=$(git ls-files --others --exclude-standard crates/cypcb-parser/grammar/src)
 if [ -n "$UNTRACKED_PARSER" ]; then
   echo ""

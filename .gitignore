@@ -23,7 +23,10 @@ Thumbs.db
 # parser can be committed one file short, and hid any new file the generator
 # started writing.
 crates/cypcb-parser/grammar/node_modules/
-crates/cypcb-parser/grammar/package-lock.json
+# grammar/package-lock.json is tracked: it pins the tree-sitter CLI that
+# generates parser.c, and the gate regenerates the parser and compares it
+# against what is committed. Without the lockfile that comparison would be
+# between two different generators.
 
 # Environment files
 .env
