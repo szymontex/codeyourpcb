@@ -3,6 +3,16 @@
 **Milestone:** M005
 **Written:** 2026-03-19
 
+## Not runnable here (checked 2026-08-27)
+
+The two Playwright suites this script runs are in no commit in this clone, so
+the commands below have nothing to execute. `#routing-status` is here; the
+tests that would drive it are not.
+
+not_in_this_repository:
+  - autoroute-worker.spec.ts - no commit in this clone ever added it (checked 2026-08-27)
+  - autoroute-regression.spec.ts - no commit in this clone ever added it (checked 2026-08-27)
+
 ## UAT Type
 
 - UAT mode: artifact-driven

@@ -3,6 +3,15 @@
 **Milestone:** M004
 **Written:** 2026-03-14
 
+## Not runnable here (checked 2026-08-27)
+
+Step 4 asks the reader to open a console and read a debug surface the viewer no
+longer exposes. The panel it belonged to was removed on purpose, so this script
+is a record of what was tested then rather than a test to run now.
+
+not_in_this_repository:
+  - window.__variantPanel - deleted by a9e8c7a, `refactor(viewer): delete the variant panel, which nothing could reach`
+
 ## UAT Type
 
 - UAT mode: mixed (artifact-driven for Rust engine + live-runtime for browser UI)

@@ -3,6 +3,20 @@
 **Milestone:** M005
 **Written:** 2026-03-18
 
+## Not runnable here (checked 2026-08-27)
+
+Every step below turns on a Web Worker, and no commit in this clone ever added
+one: `routing-worker.ts` is in no commit, and `viewer/src/main.ts` still calls
+`auto_route_with_params` on the main thread. The smoke test's own sentence is
+the verdict - "if the browser freezes, the worker is NOT active and S01 is
+broken". `#routing-status` and `window.__loadBoard` are here; the worker is
+not.
+
+not_in_this_repository:
+  - routing-worker.ts - no commit in this clone ever added it (checked 2026-08-27)
+  - window.__routingWorker - no commit in this clone ever added it (checked 2026-08-27)
+  - window.__triggerVariantRouting - no commit in this clone ever added it (checked 2026-08-27)
+
 ## UAT Type
 
 - UAT mode: mixed (artifact-driven for code verification + live-runtime for browser behavior)

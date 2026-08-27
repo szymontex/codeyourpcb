@@ -3,6 +3,17 @@
 **Milestone:** M005
 **Written:** 2026-03-19
 
+## Not runnable here (checked 2026-08-27)
+
+This script drives the variant run through a Worker that is in no commit here,
+and reads two debug surfaces that go with it. The variant panel it displays in
+was deleted on purpose after M004.
+
+not_in_this_repository:
+  - window.__routingWorker - no commit in this clone ever added it (checked 2026-08-27)
+  - window.__triggerVariantRouting - no commit in this clone ever added it (checked 2026-08-27)
+  - window.__variantPanel - deleted by a9e8c7a, `refactor(viewer): delete the variant panel, which nothing could reach`
+
 ## UAT Type
 
 - UAT mode: mixed (artifact-driven for unit/build/E2E, live-runtime for browser variant interaction)
