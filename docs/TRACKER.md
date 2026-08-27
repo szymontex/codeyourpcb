@@ -2451,6 +2451,12 @@ multi_ic        0.26: 13 iterations, converged false, [553, 339, 269, 270, 258, 
 - ~~QUEUED: the integration suite still spends 86s in one test~~ **Stale by a factor of four.** Measured 2026-08-08 across the whole workspace: the slowest suite is `every_hole_is_drilled_in_one_pass` at 21.73s, and the total of every suite is 43.8s. A* is still disabled in the UI, which is D5 and the owner's call.
 
 ### V3 - Build, CI and quality gates
+- DONE: **this vector is called "Build, CI and quality gates" and there is no CI.** Measured, because the name has been carried for weeks: `ls .github/workflows` -> the directory does not exist, and `git ls-files .github` -> **nothing**. The nine-stage gate runs when a person remembers to run it, on one machine, and `origin` is `https://github.com/szymontex/codeyourpcb.git`, so nothing has ever checked a push.
+- **What the gate would cost on a runner, stage by stage**, since that is what the decision turns on: `cargo fmt`, `cargo clippy`, `cargo test`, `tsc --noEmit`, `eslint`, `vitest` and `jscpd` need a Rust toolchain and node and nothing else; `playwright` needs a browser download and rebuilds the wasm bundle, which needs `wasm-bindgen` and binaryen; the autorouter benchmark is the long one. The desktop bundle is not in the gate at all and needs GTK and webkit development packages.
+- **Not written, and the reason is not technical.** A workflow file on this remote starts spending the owner's GitHub Actions minutes on every push, which is his call rather than a fire's - the same rule that keeps a fabricator-facing flag out of `export`. **D10** below is the question, with the three shapes that differ in cost.
+- Proof: `ls -a .github/workflows` -> `NO-WORKFLOWS`; `git ls-files .github` -> empty; `git remote -v` -> the GitHub URL above; `git ls-remote --heads origin` -> `main` and `fix/cli-check-drc`, so the remote is live and reachable.
+- NEXT-ACTION: **D10 is the only thing between this project and a gate that runs without being remembered.** Until it is answered the gate stays a local command, and the honest thing is to say so here rather than to quietly ship a workflow. Nothing else in this vector is pullable by a fire.
+
 - DONE: **the gate type-checks the viewer, which it never did.** `npm run build` is `build:wasm && tsc && vite build` and the gate ran neither half of that: Vite strips types rather than checking them, Playwright starts its server the same way, so a viewer that cannot compile passed eight green stages. `[4/9] tsc --noEmit` is now a stage of its own and the rest are renumbered.
 - **Measured before writing it, because a stage that starts red is a stage nobody keeps.** `npx tsc --noEmit` in `viewer` -> no output, exit 0. It is not vacuous: `tsconfig.json` includes `src/**/*`, `e2e/**/*` and the root `*.ts`, and `--listFiles` counts **136** project files - **104** under `src`, **27** under `e2e` - so the specs and the dev server are checked with the application.
 - Proof: the stage green on the tree. Mutation, run alone and restored from the saved file rather than with git: `const mutationProbe: number = 'not a number'` appended to `viewer/src/units.ts` -> `src/units.ts(111,7): error TS2322: Type 'string' is not assignable to type 'number'`, exit **2**; the file restored to `f625aa6b79f55dc3dddaca9f2743a251` and `tsc --noEmit` clean again. `./scripts/quality-gate.sh` -> **All stages passed**, 9 of 9.
@@ -4150,7 +4156,7 @@ this list whenever a piece of work runs into a missing concept.
 | M5 | ~~Net classes.~~ **Closed.** `netclass Power [width 0.5mm] { VCC GND }` states a rule once for a group; a net's own block overrides it field by field. | - | - |
 | M6 | ~~Silkscreen artwork per footprint.~~ **Closed.** Carried by `Footprint`, written in the DSL, accepted from a supplier, measured by the checker and printed by the gerber. | - | The viewer cannot call `register_footprint` - see the note under V4. |
 
-## Owner-decision queue - ALL SEVEN ANSWERED 2026-08-09
+## Owner-decision queue - D1 to D9 answered, D10 open
 
 The owner answered the whole queue in one pass. What each answer means, and
 what it turns into, is below. Nothing here is blocked any more.
@@ -4164,6 +4170,7 @@ what it turns into, is below. Nothing here is blocked any more.
 | D5 | **Keep the Route button hidden until the router is good.** | Closed, and tied to D1: it unhides when the in-house router is finished, not before. The 13 E2E tests stay parked. |
 | D6 | **"Ty mi powiedz."** | Answered below, from two published rows and a real board rather than a preference. **`min_pad_size` is a via land and through-hole pad minimum, not an SMD land.** |
 | D7 | **"Ty mi powiedz."** | Answered below. **`min_slot_clearance` is copper to a milled opening** - the same question `min_edge_clearance` asks of the board outline, asked of a slot. |
+| **D10 - open, 2026-08-27** | **Should a push run the quality gate on GitHub Actions, and how much of it?** Three shapes, and they differ in minutes rather than in difficulty. **(a) The cheap set on every push** - fmt, clippy, `cargo test`, `tsc`, eslint, vitest, jscpd: no browser, no wasm rebuild, no benchmark. **(b) The whole gate on every push** - adds Playwright with its browser download, the wasm rebuild and the autorouter benchmark, which is the long stage. **(c) The whole gate on pull requests and on `main` only**, with the cheap set on other branches. This is a spending question on the owner's account, not an engineering one - all three are the same afternoon's work. | Nothing is blocked: the gate runs locally before every commit that touches build, viewer or scripts, and has since 2026-08-20. |
 
 ### D6, settled: `min_pad_size` is not an SMD land
 
