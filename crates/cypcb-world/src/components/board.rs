@@ -600,6 +600,50 @@ pub struct StackupLayer {
     /// so thousandths would round both to nothing. The suffix names the scale
     /// at every use, which is the point of writing it out.
     pub df_x1000000: Option<u32>,
+    /// Where this layer stops, when it does not run the whole panel.
+    ///
+    /// `None` is a layer pressed across the whole board - every layer of a
+    /// rigid build, and most layers of a rigid-flex one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub coverage: Option<LayerCoverage>,
+}
+
+/// Where a stackup layer stops, against an area the design has named.
+///
+/// A rigid-flex build is not one stack. A stiffener is bonded on to stop a
+/// part of the board flexing, so it cannot run through the ribbon; a coverlay
+/// is the film over the ribbon and often stops before the rigid ends; a build
+/// with a second core on one end only is the same shape of fact. Before this
+/// existed the language could state the layer and not where it stopped, so
+/// everything downstream inferred it - the 3D view read "a stiffener is not in
+/// the bend", which is true of a stiffener and of nothing else.
+///
+/// The area is named rather than drawn. A design that bends already names its
+/// ribbon - `flex bend { bounds ... }` - and a second way to draw the same
+/// rectangle would be a second truth about one board.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LayerCoverage {
+    /// `covers bend` - the layer is there and nowhere else.
+    Only(String),
+    /// `outside bend` - the layer is everywhere but there.
+    Outside(String),
+}
+
+impl LayerCoverage {
+    /// The area this clause names, whichever way it names it.
+    pub fn region(&self) -> &str {
+        match self {
+            LayerCoverage::Only(region) | LayerCoverage::Outside(region) => region,
+        }
+    }
+
+    /// Whether this layer is pressed over the named area.
+    ///
+    /// The question a 3D view and a fabricator both ask: is this layer there?
+    pub fn includes_region(&self) -> bool {
+        matches!(self, LayerCoverage::Only(_))
+    }
 }
 
 /// One more sheet of laminate in a dielectric slot.
@@ -643,6 +687,7 @@ impl StackupLayer {
             material: None,
             dk_x1000: None,
             df_x1000000: None,
+            coverage: None,
         }
     }
 

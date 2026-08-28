@@ -944,10 +944,56 @@
           ]
         },
         {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "FIELD",
+              "name": "coverage",
+              "content": {
+                "type": "SYMBOL",
+                "name": "stackup_layer_coverage"
+              }
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
+        },
+        {
           "type": "REPEAT",
           "content": {
             "type": "SYMBOL",
             "name": "stackup_sheet"
+          }
+        }
+      ]
+    },
+    "stackup_layer_coverage": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "FIELD",
+          "name": "sense",
+          "content": {
+            "type": "CHOICE",
+            "members": [
+              {
+                "type": "STRING",
+                "value": "covers"
+              },
+              {
+                "type": "STRING",
+                "value": "outside"
+              }
+            ]
+          }
+        },
+        {
+          "type": "FIELD",
+          "name": "region",
+          "content": {
+            "type": "SYMBOL",
+            "name": "net_name"
           }
         }
       ]

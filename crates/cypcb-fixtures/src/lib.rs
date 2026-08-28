@@ -53,6 +53,7 @@ pub fn every_copper_layer_answers_differently() -> Stackup {
         written_as: None,
         dk_x1000: dk,
         df_x1000000: None,
+        coverage: None,
     };
     use StackupLayerKind::{Copper, Prepreg};
     Stackup {
@@ -92,6 +93,7 @@ pub fn a_stack_that_answers_on_every_layer() -> Stackup {
         written_as: None,
         dk_x1000: dk,
         df_x1000000: None,
+        coverage: None,
     };
     use StackupLayerKind::{Copper, Prepreg};
     Stackup {
@@ -130,6 +132,7 @@ pub fn an_inner_layer_the_forms_cannot_describe() -> Stackup {
         written_as: None,
         dk_x1000: dk,
         df_x1000000: None,
+        coverage: None,
     };
     use StackupLayerKind::{Copper, Core, Prepreg};
     Stackup {

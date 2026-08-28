@@ -101,6 +101,20 @@ pub struct StackupLayerInfo {
     pub dk_x1000: Option<u32>,
     /// Loss tangent in millionths, when stated.
     pub df_x1000000: Option<u32>,
+    /// The area this layer stops at, empty when it runs the whole panel.
+    ///
+    /// A rigid-flex build is not one stack: `stiffener 0.2mm outside bend` is
+    /// a layer pressed over part of the panel. Sent so the 3D view can read
+    /// the design's own sentence instead of the rule it used to apply, which
+    /// was "a stiffener is not in the bend" - true of a stiffener and of
+    /// nothing else.
+    pub coverage_region: String,
+    /// Whether the layer is over that area or everywhere but it.
+    ///
+    /// `true` is `covers bend`, `false` is `outside bend`. Meaningless when
+    /// `coverage_region` is empty, and the reader is expected to ask that
+    /// first.
+    pub coverage_covers: bool,
 }
 
 /// A zone as written: a rectangle, a layer mask, and possibly a net.

@@ -1810,6 +1810,15 @@ impl PcbEngine {
                     color: layer.color.clone().unwrap_or_default(),
                     dk_x1000: layer.dk_x1000,
                     df_x1000000: layer.df_x1000000,
+                    coverage_region: layer
+                        .coverage
+                        .as_ref()
+                        .map(|coverage| coverage.region().to_string())
+                        .unwrap_or_default(),
+                    coverage_covers: layer
+                        .coverage
+                        .as_ref()
+                        .is_some_and(|coverage| coverage.includes_region()),
                 })
                 .collect(),
             finish: stackup.finish.clone().unwrap_or_default(),

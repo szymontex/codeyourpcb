@@ -19,13 +19,13 @@
 
 use crate::ast::{
     format_pad_number, AssertDef, AssertExpression, AssertOperand, BoardDef, ComparisonOp,
-    ComponentDef, ComponentKind, Definition, DiffPairDef, Dimension, DimensionDef,
+    ComponentDef, ComponentKind, CoverageSense, Definition, DiffPairDef, Dimension, DimensionDef,
     EdgeConnectorDef, FootprintDef, Identifier, ImplementsClause, ImportDef, InterfaceDef,
-    LayerType, ModuleDef, ModuleInstance, NetAssignment, NetClassDef, NetConstraints, NetDef,
-    OutlineDef, PadDef, PadShape, PhysicalValue, PinDeclaration, PinId, PinRef, PortConnection,
-    PositionExpr, RotationExpr, SilkDef, SizeProperty, SourceFile, Span, StackupDef, StackupLayer,
-    StackupSheetDef, StringLit, TeardropsProperty, TextDef, Tolerance, ToleranceKind, TraceArc,
-    TraceDef, TraceDirective, TracePath, TraceVia, ZoneDef, ZoneKind,
+    LayerCoverageDef, LayerType, ModuleDef, ModuleInstance, NetAssignment, NetClassDef,
+    NetConstraints, NetDef, OutlineDef, PadDef, PadShape, PhysicalValue, PinDeclaration, PinId,
+    PinRef, PortConnection, PositionExpr, RotationExpr, SilkDef, SizeProperty, SourceFile, Span,
+    StackupDef, StackupLayer, StackupSheetDef, StringLit, TeardropsProperty, TextDef, Tolerance,
+    ToleranceKind, TraceArc, TraceDef, TraceDirective, TracePath, TraceVia, ZoneDef, ZoneKind,
 };
 use crate::errors::{ParseError, ParseResult};
 use crate::lexer::{tokenize, Token, TokenKind};
@@ -609,6 +609,11 @@ impl<'a> Reader<'a> {
             // layer kind, and neither of these is one.
             let dk = self.stackup_number("dk");
             let df = self.stackup_number("df");
+            // Where the layer stops. Consumed here for the reason `material`
+            // is: `covers` and `outside` are not layer kinds, and leaving
+            // either to the loop would report the design's own syntax as an
+            // unknown property.
+            let coverage = self.stackup_coverage();
             // The rest of the sheets in this slot. Consumed here rather than
             // left to the loop for the reason `material` is: `sheet` is not a
             // layer kind, and leaving it would report the design's own syntax
@@ -648,6 +653,7 @@ impl<'a> Reader<'a> {
                 sheets,
                 dk,
                 df,
+                coverage,
                 span: Span::new(layer_start, self.behind()),
             });
         }
@@ -660,6 +666,33 @@ impl<'a> Reader<'a> {
             edge_connector,
             impedance_controlled,
             drill_pairs,
+            span: Span::new(start, self.behind()),
+        })
+    }
+
+    /// `covers bend` or `outside bend` on a stackup layer, when it says one.
+    ///
+    /// The area is named rather than drawn: a design that bends already names
+    /// the ribbon, and a second way to draw the same rectangle would be a
+    /// second truth. Whether the name is an area the design declared is a
+    /// question for `sync`, which is where every other name in this language
+    /// is resolved.
+    fn stackup_coverage(&mut self) -> Option<LayerCoverageDef> {
+        let start = self.here();
+        let sense = if self.eat_word("covers") {
+            CoverageSense::Covers
+        } else if self.eat_word("outside") {
+            CoverageSense::Outside
+        } else {
+            return None;
+        };
+        let Some(region) = self.net_name() else {
+            self.unexpected("the name of an area after `covers` or `outside`");
+            return None;
+        };
+        Some(LayerCoverageDef {
+            sense,
+            region,
             span: Span::new(start, self.behind()),
         })
     }

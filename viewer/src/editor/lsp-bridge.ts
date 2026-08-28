@@ -563,6 +563,8 @@ const KEYWORD_DOCS: Record<string, string> = {
   core: 'Core: cured laminate, copper-clad on both faces.\n\nSyntax: `core 1.5mm material "FR4" dk 4.5`',
   coverlay: 'Coverlay: the polyimide film that covers copper where the board bends.\n\nWhat solder mask is on a rigid board, and not the same thing - mask is a liquid cured in place and cracks when the board bends.',
   stiffener: 'Stiffener: material bonded under a flexible section to hold it rigid.\n\nFR4 or steel, under a connector or a mounting hole.',
+  covers: 'This stackup layer is over the named area and nowhere else.\n\nSyntax: `coverlay 0.025mm material "Kapton" covers bend`. The area is one the design names - `flex bend { bounds ... }`. A layer that says neither `covers` nor `outside` is pressed across the whole panel.',
+  outside: 'This stackup layer is everywhere but the named area.\n\nSyntax: `stiffener 0.2mm material "FR4" outside bend`. A stiffener cannot run through the ribbon it is bonded on to stiffen, and this is how the design says where it stops.',
   sheet: 'Another sheet in this dielectric slot.\n\nSyntax: `prepreg 0.0668mm dk 4.5 sheet 0.0668mm dk 4.5`. A fabricator hits a target thickness with the prepreg they stock, so one slot is often several sheets. KiCad calls it `addsublayer`.',
   finish: 'Surface finish the fabricator is asked for.\n\nSyntax: `finish "ENIG"`. Held as written - there is no table of finishes here to check one against.',
   edges: 'Copper on the routed board outline, plated.\n\nSyntax: `edges plated`',

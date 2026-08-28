@@ -291,11 +291,37 @@ module.exports = grammar({
       optional(seq('color', field('color', $.string))),
       optional(seq('dk', field('dk', $.number))),
       optional(seq('df', field('df', $.number))),
+      // Where the layer stops, when it does not run the whole panel.
+      optional(field('coverage', $.stackup_layer_coverage)),
       // The rest of the sheets this slot is pressed from. A fabricator hits a
       // target thickness with the prepreg they stock - two sheets of 0.0668mm
       // rather than one of 0.1336mm - and on six layers and up that is the
       // ordinary case. KiCad writes each one as `addsublayer`.
       repeat($.stackup_sheet),
+    ),
+
+    // stiffener 0.2mm material "FR4" outside bend
+    // coverlay 0.025mm material "Kapton" covers bend
+    //
+    // A rigid-flex build is not one stack. A stiffener is bonded on to stop a
+    // part of the board flexing, so it cannot run through the ribbon; a
+    // coverlay is the film over the ribbon and often stops before the rigid
+    // ends; and a build with a second core on one end only is the same shape
+    // of fact. Until this clause the language could state the layer and not
+    // where it stops, so everything downstream inferred it - the 3D view read
+    // "a stiffener is not in the bend", which is true of a stiffener and of
+    // nothing else.
+    //
+    // The area is named rather than drawn: a design that bends already names
+    // the ribbon - `flex bend { bounds ... }` - and a second way to draw the
+    // same rectangle would be a second truth.
+    //
+    // `covers` and `outside` rather than `in` and `except`, because `in` is
+    // already this language's word for an inch: `0.2 in` is a thickness, so
+    // `stiffener 0.2 in bend` would be two readings of one line.
+    stackup_layer_coverage: $ => seq(
+      field('sense', choice('covers', 'outside')),
+      field('region', $.net_name),
     ),
 
     // sheet 0.0668mm material "FR4" dk 4.5

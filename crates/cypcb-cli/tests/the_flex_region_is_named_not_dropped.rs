@@ -81,6 +81,36 @@ fn the_command_names_the_region_it_cannot_carry() {
 }
 
 #[test]
+fn where_a_layer_stops_is_named_too() {
+    // The same file states three bounded layers - two coverlays over the
+    // ribbon and a stiffener everywhere but - and KiCad's stackup has a row
+    // per layer with no area on it. The layer survives with its thickness and
+    // its material; where it stops does not, and a board read back from the
+    // file has the stiffener running through its own ribbon.
+    let dir = scratch("bounded");
+    let kicad = dir.join("rigid-flex.kicad_pcb");
+
+    let said = cypcb(&[
+        "to-kicad",
+        "examples/rigid-flex.cypcb",
+        "-o",
+        kicad.to_str().expect("a path that is text"),
+    ]);
+    assert!(
+        said.contains("where 3 stackup layer(s) stop"),
+        "three layers of that stack say where they stop:\n{said}"
+    );
+    assert!(
+        said.contains("stiffener outside bend"),
+        "and the warning names each one as the design wrote it:\n{said}"
+    );
+    assert!(
+        said.contains("coverlay covers bend"),
+        "the coverlays too:\n{said}"
+    );
+}
+
+#[test]
 fn nothing_comes_back_as_a_pour_that_connects_to_nothing() {
     let dir = scratch("import");
     let kicad = dir.join("rigid-flex.kicad_pcb");

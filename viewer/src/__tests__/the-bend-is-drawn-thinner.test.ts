@@ -43,6 +43,66 @@ function rigidFlex(options?: { stiffener?: boolean; bounds?: [number, number, nu
   } as unknown as BoardSnapshot;
 }
 
+/**
+ * The same board with the design saying where its layers stop, which is what
+ * `covers` and `outside` are for. The coverlays are over the ribbon and the
+ * stiffener is everywhere but - so the bend is the whole stack minus the
+ * stiffener, and the rigid ends are what is left.
+ */
+function stated(options?: { coverlayOverBendOnly?: boolean }) {
+  const { coverlayOverBendOnly = false } = options ?? {};
+  const snapshot = rigidFlex() as unknown as {
+    stackup: { layers: Record<string, unknown>[] };
+  };
+  for (const layer of snapshot.stackup.layers) {
+    if (layer.kind === 'stiffener') {
+      layer.coverage_region = 'bend';
+      layer.coverage_covers = false;
+    }
+    if (layer.kind === 'coverlay' && coverlayOverBendOnly) {
+      layer.coverage_region = 'bend';
+      layer.coverage_covers = true;
+    }
+  }
+  return snapshot as unknown as BoardSnapshot;
+}
+
+describe('where a layer stops, the design says', () => {
+  it('adds up the layers that are in the bend rather than guessing', () => {
+    // The stiffener says `outside bend`, so it is not in the ribbon: the same
+    // 135 microns as the inference gives, from the design's own sentence.
+    expect(flexThicknessMm(stated())).toBeCloseTo(0.135, 6);
+  });
+
+  it('answers differently when the design says something different', () => {
+    // Both coverlays say `covers bend` as well, which changes nothing about
+    // the ribbon - they are in it - and this is the case the old arithmetic
+    // could not tell apart from any other: 135 microns either way, but now
+    // because the board says so.
+    expect(flexThicknessMm(stated({ coverlayOverBendOnly: true }))).toBeCloseTo(0.135, 6);
+
+    // A coverlay that is over the rigid ends instead is not in the bend, and
+    // the figure moves: 135 - 25 - 25 = 85 microns. Nothing in the old
+    // arithmetic could produce this number, because nothing could state it.
+    const elsewhere = stated() as unknown as {
+      stackup: { layers: Record<string, unknown>[] };
+    };
+    for (const layer of elsewhere.stackup.layers) {
+      if (layer.kind === 'coverlay') {
+        layer.coverage_region = 'bend';
+        layer.coverage_covers = false;
+      }
+    }
+    expect(flexThicknessMm(elsewhere as unknown as BoardSnapshot)).toBeCloseTo(0.085, 6);
+  });
+
+  it('draws the step from the stated figure', () => {
+    const slabs = substrateSlabs(stated());
+    expect(slabs.map((slab) => slab.flex)).toEqual([false, true, false]);
+    expect(slabs[1].thicknessMm).toBeCloseTo(0.135, 6);
+  });
+});
+
 describe('the bend is drawn thinner', () => {
   it('takes the stiffener off the stack, and nothing else', () => {
     // 25 + 17.5 + 50 + 17.5 + 25 = 135 microns of flex, 200 of stiffener.

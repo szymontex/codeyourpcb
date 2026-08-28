@@ -54,9 +54,10 @@ use cypcb_parser::ast::{
 
 use crate::components::{
     trace::{Trace, TraceSegment, TraceSource, Via},
-    ComponentKind, EdgeConnector, FootprintRef, Layer, NetConnections, PadShape as EcsPadShape,
-    PinConnection, Position, RefDes, Rotation, SourceSpan as EcsSourceSpan, Stackup, StackupLayer,
-    StackupLayerKind, Value, Zone, ZoneKind as EcsZoneKind,
+    ComponentKind, EdgeConnector, FootprintRef, Layer, LayerCoverage, NetConnections,
+    PadShape as EcsPadShape, PinConnection, Position, RefDes, Rotation,
+    SourceSpan as EcsSourceSpan, Stackup, StackupLayer, StackupLayerKind, Value, Zone,
+    ZoneKind as EcsZoneKind,
 };
 use crate::footprint::{Footprint, FootprintLibrary, PadDef as FootprintPadDef};
 use crate::world::BoardWorld;
@@ -94,6 +95,26 @@ pub enum SyncError {
         first: miette::SourceSpan,
         /// Span of the duplicate.
         duplicate: miette::SourceSpan,
+    },
+
+    /// A stackup layer says it stops at an area the design never named.
+    ///
+    /// `stiffener 0.2mm outside bend` on a board with no `flex bend` is a
+    /// build nobody can press: the clause is about a rectangle, and there is
+    /// no rectangle. Caught here rather than downstream because every reader
+    /// of the stackup - the 3D view, the writer, a fabricator's document -
+    /// would otherwise have to decide for itself what an unknown area means.
+    UnknownCoverageRegion {
+        /// The area the layer named.
+        region: String,
+        /// The stackup layer that named it, as the language spells its kind.
+        layer: String,
+        /// The areas the design does name, in the order it declares them.
+        available: Vec<String>,
+        /// Source code for miette display.
+        src: String,
+        /// Source span of the clause.
+        span: miette::SourceSpan,
     },
 
     /// A net references a component that doesn't exist.
@@ -248,6 +269,13 @@ impl fmt::Display for SyncError {
             SyncError::UnknownComponent { component, .. } => {
                 write!(f, "unknown component: '{}'", component)
             }
+            SyncError::UnknownCoverageRegion { region, layer, .. } => {
+                write!(
+                    f,
+                    "the {} layer is bounded by '{}', which this design does not declare",
+                    layer, region
+                )
+            }
             SyncError::InvalidTracePin {
                 net,
                 component,
@@ -331,6 +359,9 @@ impl Diagnostic for SyncError {
             SyncError::UnknownFootprint { .. } => Some(Box::new("cypcb::sync::unknown_footprint")),
             SyncError::DuplicateRefDes { .. } => Some(Box::new("cypcb::sync::duplicate_refdes")),
             SyncError::UnknownComponent { .. } => Some(Box::new("cypcb::sync::unknown_component")),
+            SyncError::UnknownCoverageRegion { .. } => {
+                Some(Box::new("cypcb::sync::unknown_coverage_region"))
+            }
             SyncError::InvalidTracePin { .. } => Some(Box::new("cypcb::sync::invalid_trace_pin")),
             SyncError::UnknownPin { .. } => Some(Box::new("cypcb::sync::unknown_pin")),
             SyncError::MissingNet { .. } => Some(Box::new("cypcb::sync::missing_net")),
@@ -359,6 +390,16 @@ impl Diagnostic for SyncError {
             SyncError::UnknownComponent { .. } => {
                 Some(Box::new("define the component before referencing it in a net"))
             }
+            SyncError::UnknownCoverageRegion { available, .. } => Some(Box::new(if available
+                .is_empty()
+            {
+                "declare the area first: `flex bend { bounds ... }`".to_string()
+            } else {
+                format!(
+                    "name one of the areas this design declares: {}",
+                    available.join(", ")
+                )
+            })),
             SyncError::UnknownPin { available, .. } => Some(Box::new(format!(
                 "use one of the pins the footprint declares: {}",
                 available.join(", ")
@@ -404,6 +445,7 @@ impl Diagnostic for SyncError {
             SyncError::UnknownFootprint { src, .. } => Some(src),
             SyncError::DuplicateRefDes { src, .. } => Some(src),
             SyncError::UnknownComponent { src, .. } => Some(src),
+            SyncError::UnknownCoverageRegion { src, .. } => Some(src),
             SyncError::UnknownPin { src, .. } => Some(src),
             SyncError::InvalidTracePin { src, .. } => Some(src),
             SyncError::MissingNet { src, .. } => Some(src),
@@ -439,6 +481,9 @@ impl Diagnostic for SyncError {
             )),
             SyncError::UnknownComponent { span, .. } => Some(Box::new(std::iter::once(
                 LabeledSpan::new_with_span(Some("component not defined".to_string()), *span),
+            ))),
+            SyncError::UnknownCoverageRegion { span, .. } => Some(Box::new(std::iter::once(
+                LabeledSpan::new_with_span(Some("no area of this name".to_string()), *span),
             ))),
             SyncError::UnknownPin {
                 span, available, ..
@@ -716,11 +761,23 @@ pub fn sync_ast_to_world(
     // Track component entities for net resolution
     let mut component_entities: HashMap<String, Entity> = HashMap::new();
 
+    // The areas this design names, for a stackup layer that says where it
+    // stops. Collected before the loop rather than during it because a board
+    // block is ordinarily written first, and `stiffener 0.2mm outside bend`
+    // has to resolve whether the ribbon is declared above it or below.
+    let named_regions: Vec<String> = definitions
+        .iter()
+        .filter_map(|def| match def {
+            Definition::Zone(zone) => zone.name.as_ref().map(|name| name.value.clone()),
+            _ => None,
+        })
+        .collect();
+
     // Process definitions in order (footprints already handled above)
     for def in definitions {
         match def {
             Definition::Board(board) => {
-                sync_board(board, source, world, &mut result);
+                sync_board(board, source, world, &named_regions, &mut result);
             }
             Definition::Component(comp) => {
                 sync_component(
@@ -1002,7 +1059,13 @@ fn match_diff_pair_lengths(
 }
 
 /// Synchronize a board definition to the world.
-fn sync_board(board: &BoardDef, source: &str, world: &mut BoardWorld, result: &mut SyncResult) {
+fn sync_board(
+    board: &BoardDef,
+    source: &str,
+    world: &mut BoardWorld,
+    named_regions: &[String],
+    result: &mut SyncResult,
+) {
     let at_the_board = span_to_source_span(&board.name.span);
 
     // Extract size, defaulting if not specified
@@ -1112,6 +1175,31 @@ fn sync_board(board: &BoardDef, source: &str, world: &mut BoardWorld, result: &m
                         .collect(),
                     dk_x1000: layer.dk.map(|dk| (dk * 1_000.0).round() as u32),
                     df_x1000000: layer.df.map(|df| (df * 1_000_000.0).round() as u32),
+                    // Where the layer stops, when it says. A clause naming an
+                    // area the design does not declare is refused rather than
+                    // stored: the model would otherwise hold a boundary
+                    // against a rectangle nobody drew, and every reader of it
+                    // would have to decide for itself what that means.
+                    coverage: layer.coverage.as_ref().and_then(|clause| {
+                        if !named_regions.contains(&clause.region.value) {
+                            result.errors.push(SyncError::UnknownCoverageRegion {
+                                region: clause.region.value.clone(),
+                                layer: stackup_kind(layer.layer_type).as_str().to_string(),
+                                available: named_regions.to_vec(),
+                                src: source.to_string(),
+                                span: clause.span.to_miette(),
+                            });
+                            return None;
+                        }
+                        Some(match clause.sense {
+                            cypcb_parser::ast::CoverageSense::Covers => {
+                                LayerCoverage::Only(clause.region.value.clone())
+                            }
+                            cypcb_parser::ast::CoverageSense::Outside => {
+                                LayerCoverage::Outside(clause.region.value.clone())
+                            }
+                        })
+                    }),
                 })
                 .collect(),
             // What the fabricator does to the board rather than what it

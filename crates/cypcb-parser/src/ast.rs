@@ -343,7 +343,38 @@ pub struct StackupLayer {
     ///
     /// `loss_tangent` to KiCad, `Df` to Altium and to the datasheet.
     pub df: Option<f64>,
+    /// Where the layer stops, when it does not run the whole panel.
+    ///
+    /// `None` is a layer pressed across the whole board, which is every layer
+    /// of a rigid build and most layers of a rigid-flex one.
+    pub coverage: Option<LayerCoverageDef>,
     /// Span covering this layer definition.
+    pub span: Span,
+}
+
+/// Which side of a named area a stackup layer is on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CoverageSense {
+    /// `covers bend` - the layer is there and nowhere else.
+    Covers,
+    /// `outside bend` - the layer is everywhere but there.
+    Outside,
+}
+
+/// `covers bend` or `outside bend` on a stackup layer.
+///
+/// A rigid-flex build is not one stack: a stiffener cannot run through the
+/// ribbon it is bonded on to stiffen, and a coverlay often stops before the
+/// rigid ends. This is how a design says so, against an area it has already
+/// named.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LayerCoverageDef {
+    /// Whether the layer is only there, or everywhere but there.
+    pub sense: CoverageSense,
+    /// The name of the area, as the design spelled it.
+    pub region: Identifier,
+    /// Source span of the clause.
     pub span: Span,
 }
 

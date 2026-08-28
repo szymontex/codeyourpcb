@@ -1814,6 +1814,16 @@
           }
         ]
       },
+      "coverage": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "stackup_layer_coverage",
+            "named": true
+          }
+        ]
+      },
       "df": {
         "multiple": false,
         "required": false,
@@ -1916,6 +1926,36 @@
           "named": true
         }
       ]
+    }
+  },
+  {
+    "type": "stackup_layer_coverage",
+    "named": true,
+    "fields": {
+      "region": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "net_name",
+            "named": true
+          }
+        ]
+      },
+      "sense": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "covers",
+            "named": false
+          },
+          {
+            "type": "outside",
+            "named": false
+          }
+        ]
+      }
     }
   },
   {
@@ -2988,6 +3028,10 @@
     "named": false
   },
   {
+    "type": "covers",
+    "named": false
+  },
+  {
     "type": "crystal",
     "named": false
   },
@@ -3246,6 +3290,10 @@
   },
   {
     "type": "outline",
+    "named": false
+  },
+  {
+    "type": "outside",
     "named": false
   },
   {

@@ -321,4 +321,14 @@ export interface StackupLayerInfo {
   dk_x1000?: number;
   /** Loss tangent in millionths. */
   df_x1000000?: number;
+  /**
+   * The area this layer stops at, empty when it runs the whole panel.
+   *
+   * `stiffener 0.2mm outside bend` is a layer pressed over part of the panel.
+   * The 3D view reads this instead of the rule it used to apply - "a stiffener
+   * is not in the bend" - which is true of a stiffener and of nothing else.
+   */
+  coverage_region: string;
+  /** `true` for `covers`, `false` for `outside`. Ask about the region first. */
+  coverage_covers: boolean;
 }

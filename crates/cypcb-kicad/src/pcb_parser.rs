@@ -866,6 +866,10 @@ fn extract_stackup(elements: &[Sexp]) -> (Option<Stackup>, Vec<String>) {
             sheets,
             dk_x1000,
             df_x1000000,
+            // KiCad's stackup states a layer and never where it stops: a
+            // rigid-flex build there is drawn with per-layer areas the board
+            // file has no field for. Nothing to read, so nothing is claimed.
+            coverage: None,
         });
     }
 

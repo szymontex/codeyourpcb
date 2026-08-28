@@ -22,15 +22,20 @@ board wearable {
     stackup {
         // What a solder mask is on a rigid board, and not the same thing:
         // mask is a liquid cured in place and cracks when the board bends.
-        coverlay 0.025mm material "Kapton"
+        // Over the ribbon and nowhere else: the rigid ends carry solder mask
+        // like any board, and a coverlay costs more than mask does.
+        coverlay 0.025mm material "Kapton" covers bend
         copper 0.5oz
         core 0.05mm material "Kapton" dk 3.4 df 0.008
         copper 0.5oz
-        coverlay 0.025mm material "Kapton"
+        coverlay 0.025mm material "Kapton" covers bend
 
         // Bonded under the rigid end that carries the connector, so the part
-        // of the flex that must not bend does not.
-        stiffener 0.2mm material "FR4"
+        // of the flex that must not bend does not - which is what `outside
+        // bend` says. A stiffener through the ribbon is a ribbon that does
+        // not bend, so where it stops is part of the build rather than a
+        // detail a reader infers.
+        stiffener 0.2mm material "FR4" outside bend
 
         finish "ENIG"
         impedance controlled

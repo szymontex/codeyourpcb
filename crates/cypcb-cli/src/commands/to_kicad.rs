@@ -165,6 +165,49 @@ impl ToKicadCommand {
             }
         }
 
+        // Where a stackup layer stops.
+        //
+        // `stiffener 0.2mm outside bend` is a layer pressed over part of the
+        // panel, and KiCad's stackup has one row per layer with no area on it
+        // - a rigid-flex build is drawn there by hand rather than stated. The
+        // layer itself survives with its thickness and material; the boundary
+        // does not, so a board read back from this file has the stiffener
+        // running through its own ribbon.
+        {
+            let bounded: Vec<String> = world
+                .stackup()
+                .map(|stackup| {
+                    stackup
+                        .layers
+                        .iter()
+                        .filter_map(|layer| {
+                            layer.coverage.as_ref().map(|coverage| {
+                                format!(
+                                    "{} {} {}",
+                                    layer.kind.as_str(),
+                                    if coverage.includes_region() {
+                                        "covers"
+                                    } else {
+                                        "outside"
+                                    },
+                                    coverage.region()
+                                )
+                            })
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            if !bounded.is_empty() {
+                eprintln!(
+                    "Warning: where {} stackup layer(s) stop ({}) is not in the KiCad board: \
+                     the format states a layer and never the area it covers, so a board read \
+                     back from this file presses every layer across the whole panel.",
+                    bounded.len(),
+                    bounded.join(", ")
+                );
+            }
+        }
+
         // The fab the board names.
         //
         // `board b { fab oshpark }` decides which table `cypcb check` grades

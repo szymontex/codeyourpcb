@@ -667,6 +667,18 @@ pub fn stackup_as_dsl(stackup: &crate::components::Stackup) -> String {
         if let Some(df) = layer.df_x1000000 {
             let _ = write!(line, " df {}", f64::from(df) / 1_000_000.0);
         }
+        // Where the layer stops, when it does not run the whole panel. Before
+        // the sheets, the way the grammar reads it: a sheet belongs to the
+        // slot and the coverage belongs to the layer.
+        match &layer.coverage {
+            Some(crate::components::LayerCoverage::Only(region)) => {
+                let _ = write!(line, " covers {}", net_name_as_written(region));
+            }
+            Some(crate::components::LayerCoverage::Outside(region)) => {
+                let _ = write!(line, " outside {}", net_name_as_written(region));
+            }
+            None => {}
+        }
         // Every sheet after the first, on the same line: they are one slot,
         // and a fabricator reads them as one.
         for sheet in &layer.sheets {

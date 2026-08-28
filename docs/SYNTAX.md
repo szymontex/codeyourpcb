@@ -330,6 +330,42 @@ board wearable {
 flex bend { bounds 20mm, 0mm to 40mm, 20mm layer all }
 ```
 
+#### Where a layer stops
+
+A rigid-flex build is not one stack. A stiffener cannot run through the ribbon
+it is bonded on to stiffen; a coverlay is often over the ribbon and nowhere
+else, because the rigid ends take solder mask like any board and a coverlay
+costs more. A stackup layer says so against an area the design already names:
+
+```
+stackup {
+    coverlay 0.025mm material "Kapton" covers bend
+    copper 0.5oz
+    core 0.05mm material "Kapton" dk 3.4
+    copper 0.5oz
+    coverlay 0.025mm material "Kapton" covers bend
+    stiffener 0.2mm material "FR4" outside bend
+}
+
+flex bend { bounds 22mm, 0mm to 38mm, 16mm layer all }
+```
+
+`covers bend` is a layer that is there and nowhere else. `outside bend` is a
+layer that is everywhere but there. A layer that says neither is pressed across
+the whole panel, which is every layer of a rigid build.
+
+The area is named rather than drawn: a board that bends already names its
+ribbon, and a second way to draw the same rectangle would be a second truth. A
+name no area answers to is refused rather than stored -
+`cypcb::sync::unknown_coverage_region` names the areas the design does declare.
+
+The words are `covers` and `outside` rather than `in` and `except`, because
+`in` is already this language's word for an inch: `stiffener 0.2 in bend` would
+be two readings of one line.
+
+KiCad's board file has a row per stackup layer and no area on it, so
+`cypcb to-kicad` names this among the things it cannot carry.
+
 A flexible region is not a keepout - copper crosses it, that is what it is for
 - and it is not a pour. What it is, is an area the board is bent in during
 service, and the checker holds one rule about it: **nothing is drilled there**.

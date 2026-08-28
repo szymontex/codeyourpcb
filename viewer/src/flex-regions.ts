@@ -6,14 +6,12 @@
  * place a flexible region would be most obvious - showed a board that cannot
  * fold.
  *
- * **It is a tint rather than a thinner slab, and that is a decision.** A
- * rigid-flex design in this language states one stack for the whole board:
- * `examples/rigid-flex.cypcb` is coverlay, foil, core, foil, coverlay and a
- * stiffener, 0.335mm of it, and nothing says where the stiffener stops. The
- * bend is thinner on a real board because a layer or two ends before it, and
- * this project has no word for that yet - so drawing a step would be inventing
- * a thickness the design never gave. What the design does say is *this part
- * bends*, and that is what gets drawn.
+ * **The step is drawn from the design's own figures.** A stackup layer states
+ * where it stops - `stiffener 0.2mm outside bend`, `coverlay 0.025mm covers
+ * bend` - so the thickness in the ribbon is the sum of the layers that are
+ * there rather than a number invented for the picture. A board that says
+ * nothing about where its layers stop is still drawn as one slab with the
+ * amber tint, which is what this view did before the language could say it.
  *
  * Here rather than in `renderer3d.ts` so it can be tested without a browser:
  * that module imports three.js and its `OrbitControls`, which want a DOM, and
@@ -74,24 +72,58 @@ export interface SubstrateSlab {
 const EPS_MM = 1e-6;
 
 /**
- * The stack with its stiffeners taken out, or `null` when there are none.
+ * How thick the board is where it bends, or `null` when the design does not say.
  *
- * A stiffener is the one layer of a rigid-flex stack that cannot be in a bend:
- * it is bonded on to stop a part of the board flexing, which is the opposite
- * of what the ribbon is for. Its thickness is stated - `examples/rigid-flex.cypcb`
- * says `stiffener 0.2mm material "FR4"` - so taking it off is arithmetic on
- * the design's own figures rather than a thickness invented for the picture.
+ * Two ways to know, and the design's own sentence comes first.
  *
- * `null` whenever that arithmetic cannot be done from what the board says:
- * no stiffener, no total, or a stiffener with no thickness of its own.
+ * A stackup layer can state where it stops - `stiffener 0.2mm outside bend`,
+ * `coverlay 0.025mm covers bend` - so the bend is the sum of the layers that
+ * are there. A layer that says nothing is pressed across the whole panel and
+ * counts everywhere; a layer bounded by some other area does not count here.
+ *
+ * When no layer says anything, the older arithmetic still answers: a stiffener
+ * is the one layer that cannot be in a bend, because it is bonded on to stop a
+ * part of the board flexing, so the bend is the stack minus every stiffener.
+ * That inference is why the clause exists - it is true of a stiffener and of
+ * nothing else, and a coverlay ending before the rigid part was unsayable.
+ *
+ * `null` whenever the arithmetic cannot be done from what the board says: no
+ * figure for the whole stack, or a layer that is in the bend and states no
+ * thickness. A thickness invented for the picture is worse than a flat board.
  */
 export function flexThicknessMm(snapshot: BoardSnapshot | null | undefined): number | null {
   const layers = snapshot?.stackup?.layers ?? [];
+  if (layers.length === 0) return null;
+
+  const bends = new Set(
+    (snapshot?.zones ?? [])
+      .filter((zone) => zone.kind === 'flex' && zone.name !== '')
+      .map((zone) => zone.name),
+  );
+  const stated = layers.filter((layer) => (layer.coverage_region ?? '') !== '');
+
+  if (stated.length > 0) {
+    let inTheBend = 0;
+    for (const layer of layers) {
+      const region = layer.coverage_region ?? '';
+      // A layer bounded by an area that is not a bend is somewhere else on the
+      // panel: `covers rigid_left` is not over the ribbon, and `outside
+      // rigid_left` is.
+      const here = region === '' ? true : bends.has(region) === layer.coverage_covers;
+      if (!here) continue;
+      const own = layer.slot_thickness_nm ?? layer.thickness_nm;
+      if (typeof own !== 'number' || !Number.isFinite(own) || own <= 0) return null;
+      inTheBend += own;
+    }
+    const mm = inTheBend * NM_TO_MM;
+    return mm > 0 ? mm : null;
+  }
+
   const stiffeners = layers.filter((layer) => layer.kind === 'stiffener');
   if (stiffeners.length === 0) return null;
 
-  const stated = snapshot?.stackup?.total_thickness_nm;
-  if (typeof stated !== 'number' || !Number.isFinite(stated) || stated <= 0) return null;
+  const whole = snapshot?.stackup?.total_thickness_nm;
+  if (typeof whole !== 'number' || !Number.isFinite(whole) || whole <= 0) return null;
 
   let bonded = 0;
   for (const layer of stiffeners) {
@@ -100,7 +132,7 @@ export function flexThicknessMm(snapshot: BoardSnapshot | null | undefined): num
     bonded += own;
   }
 
-  const left = (stated - bonded) * NM_TO_MM;
+  const left = (whole - bonded) * NM_TO_MM;
   return left > 0 ? left : null;
 }
 

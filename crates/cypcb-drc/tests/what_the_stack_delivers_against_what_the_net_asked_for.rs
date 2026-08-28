@@ -42,6 +42,7 @@ fn stack_of(specs: &[Spec]) -> Stackup {
                 written_as: None,
                 dk_x1000: *dk,
                 df_x1000000: None,
+                coverage: None,
             })
             .collect(),
         ..Stackup::default()

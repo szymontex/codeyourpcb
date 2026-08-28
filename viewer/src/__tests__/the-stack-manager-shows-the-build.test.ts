@@ -29,6 +29,8 @@ function stack(): StackupInfo {
         slot_thickness_nm: 20_000,
         material: '',
         color: 'Matte Black',
+        coverage_region: '',
+        coverage_covers: false,
       },
       {
         kind: 'copper',
@@ -38,6 +40,8 @@ function stack(): StackupInfo {
         slot_thickness_nm: 34_998,
         material: '',
         color: '',
+        coverage_region: '',
+        coverage_covers: false,
       },
       {
         kind: 'prepreg',
@@ -49,6 +53,8 @@ function stack(): StackupInfo {
         color: '',
         dk_x1000: 4_500,
         df_x1000000: 20_000,
+        coverage_region: '',
+        coverage_covers: false,
       },
       {
         kind: 'copper',
@@ -58,6 +64,8 @@ function stack(): StackupInfo {
         slot_thickness_nm: 17_499,
         material: '',
         color: '',
+        coverage_region: '',
+        coverage_covers: false,
       },
     ],
     finish: 'ENIG',

@@ -32,13 +32,14 @@
 
 use crate::ast::{
     format_pad_number, AssertDef, AssertExpression, AssertOperand, BoardDef, ComparisonOp,
-    ComponentDef, ComponentKind, CurrentUnit, CurrentValue, Definition, DiffPairDef, Dimension,
-    DimensionDef, EdgeConnectorDef, FootprintDef, Identifier, ImplementsClause, ImportDef,
-    InterfaceDef, LayerType, ModuleDef, ModuleInstance, NeckDef, NetAssignment, NetClassDef,
-    NetConstraints, NetDef, OutlineDef, PadDef, PadShape, PhysicalValue, PinDeclaration, PinId,
-    PinRef, PortConnection, PositionExpr, RotationExpr, SilkDef, SizeProperty, SourceFile, Span,
-    StackupDef, StackupLayer, StackupSheetDef, StringLit, TeardropsProperty, TextDef, Tolerance,
-    ToleranceKind, TraceArc, TraceDef, TraceDirective, TracePath, TraceVia, ZoneDef, ZoneKind,
+    ComponentDef, ComponentKind, CoverageSense, CurrentUnit, CurrentValue, Definition, DiffPairDef,
+    Dimension, DimensionDef, EdgeConnectorDef, FootprintDef, Identifier, ImplementsClause,
+    ImportDef, InterfaceDef, LayerCoverageDef, LayerType, ModuleDef, ModuleInstance, NeckDef,
+    NetAssignment, NetClassDef, NetConstraints, NetDef, OutlineDef, PadDef, PadShape,
+    PhysicalValue, PinDeclaration, PinId, PinRef, PortConnection, PositionExpr, RotationExpr,
+    SilkDef, SizeProperty, SourceFile, Span, StackupDef, StackupLayer, StackupSheetDef, StringLit,
+    TeardropsProperty, TextDef, Tolerance, ToleranceKind, TraceArc, TraceDef, TraceDirective,
+    TracePath, TraceVia, ZoneDef, ZoneKind,
 };
 use crate::errors::{ParseError, ParseResult};
 use crate::node_kinds;
@@ -544,6 +545,23 @@ impl CypcbParser {
                 .filter(|value| value.is_finite() && *value > 0.0)
         };
 
+        // Where the layer stops, when it does not run the whole panel.
+        let coverage = get_child_by_field(node, "coverage").and_then(|clause| {
+            let sense_node = get_child_by_field(&clause, "sense")?;
+            let sense = match node_text(source, &sense_node) {
+                "covers" => CoverageSense::Covers,
+                "outside" => CoverageSense::Outside,
+                _ => return None,
+            };
+            let region_node = get_child_by_field(&clause, "region")?;
+            let region = net_name_of(source, &region_node);
+            Some(LayerCoverageDef {
+                sense,
+                region,
+                span: span_of(&clause),
+            })
+        });
+
         Some(StackupLayer {
             layer_type,
             name,
@@ -553,6 +571,7 @@ impl CypcbParser {
             sheets,
             dk: number("dk"),
             df: number("df"),
+            coverage,
             span: span_of(node),
         })
     }

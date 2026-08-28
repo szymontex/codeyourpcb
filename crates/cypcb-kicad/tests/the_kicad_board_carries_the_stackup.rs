@@ -60,6 +60,7 @@ fn board(layers: &[Spec], copper: u8) -> BoardWorld {
                 written_as: None,
                 dk_x1000: None,
                 df_x1000000: None,
+                coverage: None,
             })
             .collect(),
         ..Stackup::default()
