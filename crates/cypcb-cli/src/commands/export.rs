@@ -101,6 +101,15 @@ pub struct ExportCommand {
     /// at the board's own size.
     #[arg(long)]
     pdf: bool,
+
+    /// Also write the IPC-2581 handoff document.
+    ///
+    /// One XML file carrying what Gerber cannot: which layer is which, the
+    /// board's own outline, and - as the format's feature sections land - the
+    /// netlist and the stackup beside the copper rather than in a folder of
+    /// files a person has to keep together.
+    #[arg(long)]
+    ipc2581: bool,
 }
 
 impl ExportCommand {
@@ -479,6 +488,26 @@ impl ExportCommand {
             );
         }
 
+        // The handoff document, when it was asked for. Same rule again: a
+        // house receives what it received last month unless a flag says
+        // otherwise.
+        if self.ipc2581 {
+            let handoff_dir = job.output_dir.join("handoff");
+            std::fs::create_dir_all(&handoff_dir)
+                .into_diagnostic()
+                .wrap_err("Creating the handoff directory failed")?;
+            let document = cypcb_export::ipc2581::export_ipc2581_now(&mut world);
+            let path = handoff_dir.join(format!("{}.xml", job.board_name));
+            std::fs::write(&path, &document)
+                .into_diagnostic()
+                .wrap_err("Writing the handoff document failed")?;
+            eprintln!(
+                "  [OK] {} ({:.1} KB) - IPC-2581 handoff",
+                path.display(),
+                document.len() as f64 / 1024.0
+            );
+        }
+
         // The picture, when it was asked for. Same rule as the netlist: the
         // file set a house receives does not change unless somebody says so.
         if self.svg || self.dxf || self.pdf {
@@ -672,6 +701,7 @@ mod tests {
             svg: false,
             dxf: false,
             pdf: false,
+            ipc2581: false,
         };
 
         assert_eq!(cmd.house, "jlcpcb");

@@ -24,6 +24,7 @@ pub mod cpl;
 pub mod dxf;
 pub mod excellon;
 pub mod gerber;
+pub mod ipc2581;
 pub mod ipc356;
 pub mod job;
 pub mod jobfile;
