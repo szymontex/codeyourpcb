@@ -104,6 +104,8 @@ pub enum ViolationKind {
     ViaSpan,
     /// A drilled hole sits where the board bends.
     FlexHole,
+    /// A declared area has no width, no height, or neither.
+    EmptyArea,
 }
 
 /// The two features a clearance message is about.
@@ -217,6 +219,7 @@ impl std::fmt::Display for ViolationKind {
             ViolationKind::PadLand => write!(f, "pad-land"),
             ViolationKind::ViaSpan => write!(f, "via-span"),
             ViolationKind::FlexHole => write!(f, "flex-hole"),
+            ViolationKind::EmptyArea => write!(f, "empty-area"),
         }
     }
 }
@@ -863,6 +866,24 @@ impl DrcViolation {
     ///
     /// No `actual`/`required` pair: nothing was measured against a limit. A
     /// hole is either in the bend or it is not.
+    /// An area whose rectangle has no area.
+    ///
+    /// The location is the corner the design wrote first, which is the only
+    /// point of a collapsed rectangle a reader can be sent to.
+    pub fn empty_area(entity: Entity, message: String, location: Point) -> Self {
+        DrcViolation {
+            kind: ViolationKind::EmptyArea,
+            actual: None,
+            required: None,
+            area: None,
+            location,
+            entity,
+            other_entity: None,
+            source_span: None,
+            message,
+        }
+    }
+
     pub fn flex_hole(entity: Entity, message: String, location: Point) -> Self {
         DrcViolation {
             kind: ViolationKind::FlexHole,

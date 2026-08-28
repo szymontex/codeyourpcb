@@ -168,6 +168,11 @@ pub fn run_drc(world: &mut BoardWorld, rules: &DesignRules) -> DrcResult {
         // no flexible region, which is every board this project shipped
         // before rigid-flex had a word here.
         Box::new(rules::FlexHoleRule),
+        // An area a design names has to be an area. A rectangle whose corners
+        // share an edge contains nothing, and every reader of it - the handoff
+        // document, the 3D view, the copper filler - is pointed at a shape
+        // that is not there.
+        Box::new(rules::EmptyAreaRule),
     ];
 
     // Run each checker
