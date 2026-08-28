@@ -106,6 +106,40 @@ ELAPSED=$(( $(date +%s) - START ))
 
 if [ "$CODE" -eq 0 ]; then
     VERDICT="VERDICT: green, all stages passed, ${ELAPSED}s"
+
+    # A green run moves `main` up to the commit it just proved.
+    #
+    # D12, answered 2026-08-28: "wdrazaj na main wszystko jak leci... grunt
+    # zeby dzialalo i zeby nic nie stracic co wartosciowe". `main` had sat
+    # sixteen days and 375 commits behind the work because publishing was a
+    # thing somebody had to remember; this is the thing that remembers.
+    #
+    # Only ever a fast-forward, and only from the branch this checkout is on:
+    # `--ff-only` semantics come from the ancestry test, so a `main` that has
+    # moved on its own is left alone with a line saying why. Nothing here
+    # forces, rebases or deletes - the rule the same answer set: lose nothing.
+    if [ "${GATE_PUBLISH:-1}" = "1" ]; then
+        BRANCH=$(git rev-parse --abbrev-ref HEAD)
+        git fetch -q origin 2>>"$BODY" || true
+        if [ "$BRANCH" = "HEAD" ]; then
+            say "not publishing: this checkout is on a detached HEAD"
+        elif ! git rev-parse --verify -q origin/main >/dev/null; then
+            say "not publishing: origin has no main"
+        elif git merge-base --is-ancestor HEAD origin/main; then
+            say "main already carries this commit"
+        elif ! git merge-base --is-ancestor origin/main HEAD; then
+            say "not publishing: main has commits this branch does not - fast-forward would lose them"
+        else
+            AHEAD=$(git rev-list --count origin/main..HEAD)
+            if git push -q origin "HEAD:refs/heads/main" 2>>"$BODY"; then
+                say "published: main fast-forwarded by $AHEAD commit(s) to $(git rev-parse --short HEAD)"
+                VERDICT="$VERDICT, main fast-forwarded by $AHEAD"
+            else
+                say "publish failed: the push to main was refused, see above"
+                VERDICT="$VERDICT, publish to main failed"
+            fi
+        fi
+    fi
 else
     STAGE=$(grep -E "^\[[0-9]+/[0-9]+\]" "$BODY" | tail -1)
     VERDICT="VERDICT: red, exit $CODE after ${ELAPSED}s, last stage: ${STAGE:-unknown}"
