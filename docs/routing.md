@@ -1256,6 +1256,37 @@ what follows is signal or it is nothing.
 | plane_board | 28 / 13 | 30 / 15 | 28 / 11 | 29 / 13 | 0 / 0 |
 | qfp_fanout | 309 / 147 | 328 / 168 | 289 / 151 | 360 / 187 | 57 / 44 |
 
+**Re-run 2026-08-28, after a pad started blocking its own rectangle instead of
+a disc, and the conclusion is the same for different reasons:**
+
+| board | 1.0 | 1.1 | 1.25 | 1.5 | band |
+|---|---|---|---|---|---|
+| led_blink | **0 / 0** | 1 / 1 | 0 / 0 | 0 / 0 | 0 / 0 |
+| stm32_breakout | 187 / 109 | 215 / 136 | 173 / 92 | 176 / 78 | 64 / 48 |
+| multi_ic | **449 / 141** | 445 / 132 | 494 / 147 | 550 / 143 | 35 / 15 |
+| shift_driver | **7 / 5** | 34 / 27 | 36 / 22 | 32 / 19 | 26 / 15 |
+| plane_board | 26 / 13 | 25 / 13 | 25 / 13 | **19 / 6** | 0 / 0 |
+| qfp_fanout | 271 / 150 | 327 / 192 | 265 / 152 | 338 / 195 | 61 / 46 |
+
+Read against the re-measured bands, **1.25 is now a regression rather than a
+wash**: `multi_ic` gives up 45 violations against a band of 35 and
+`shift_driver` gives up 29 against 26 and 17 shorts against 15. `stm32_breakout`
+and `qfp_fanout` move inside their own bands either way, and `plane_board`
+gains one violation against a band of zero - a real improvement, and one
+violation wide.
+
+**The 31% the old paragraph bought no longer exists either.** Summed over the
+six boards: **3.70s at 1.0, 4.22s at 1.25** - the weighted search is *slower*
+here - and 3.41s at 1.5, which is 8%. A weight buys speed when the search is
+exploring a wide open grid; the rectangular pad obstacle opened that grid up,
+and the search now spends its time on paths the weight sends it down rather
+than on breadth it no longer has.
+
+**1.5 is the one figure worth looking at again**, and only on `plane_board`:
+19 / 6 against 26 / 13 at a band of zero. One board is not a rule, and the same
+weight costs `multi_ic` 101 violations, so the default stays 1.0. The rest of
+this section is the August reading, kept for its reasoning.
+
 Violations / shorts, and each board's own noise band from
 `via_price_sweep::how_much_of_the_price_is_noise` - the same bands the
 ratchets carry.
