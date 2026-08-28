@@ -34,7 +34,12 @@ current, which is how a fresh session was told to work on a phase that was over.
   first: `npx playwright test` -> **114 passed, 17 skipped**, where this line
   said 100; `npx vitest run` -> **55 files, 439 passed**, a figure it had never
   carried at all.
-- [ ] P3 - Structural: one parser, one width formula, no orphan crates.  <- current
+- [x] P3 - Structural: one parser, one width formula, no orphan crates.
+  **Measured 2026-08-28 rather than remembered, and the third clause was
+  false**: `cypcb-library` is 3751 lines with 41 passing tests and nothing in
+  this workspace names it - not a manifest, not a `use`. It is guarded rather
+  than deleted, because deleting a crate is the owner's call:
+  `cargo test -p cypcb-cli --test no_crate_is_written_and_never_called`.
   **One parser: done and now guarded** - `parseSource` and its helpers are
   deleted, the Rust reader is the only one, and
   `viewer/src/__tests__/one-reader-of-the-language.test.ts` fails if a second
@@ -53,7 +58,8 @@ current, which is how a fresh session was told to work on a phase that was over.
   siblings placed by a module; `DIV_A_RTOP` placed across an `import`;
   `assertion: 1` when one figure of `v2-constraints.cypcb` is moved and none
   when it is not; and `module 'Sensor' implements 'I2C' without pin SCL`.
-- [ ] P5 - Optimization passes (measured, per GP-002). The instruments live in
+- [ ] P5 - Optimization passes (measured, per GP-002).  <- current
+  The instruments live in
   `docs/routing.md`; **count them rather than reading a number here**:
 
   ```
@@ -884,6 +890,14 @@ answered, not as they were found. Every one of them is closed.
 
 
 ### V1 - CLI and core correctness
+- DONE: **a crate nobody calls, found by counting all of them instead of four.** D3 asked what to tidy and was closed on the finding that `cypcb-calc`, `cypcb-kicad`, `cypcb-platform` and `cypcb-watcher` all have callers. They do. **`cypcb-library` does not**, and nothing had asked: **3751 lines across nine modules, 41 passing tests, a SQLite dependency**, and not one mention anywhere else in the workspace - `grep -rn "cypcb-library\|cypcb_library" --include=Cargo.toml --include=*.rs crates src-tauri viewer` outside its own directory returns nothing.
+- **It builds and its tests pass, which is exactly why it survived.** A crate that failed would have been found the first time the workspace went green; one that passes is invisible to every guard this project has. The census that caught it has the shape the other censuses in this file have: count the whole set, not the members somebody already suspected.
+- **Guarded rather than deleted.** Deleting 3751 lines is the owner's call and this was a fire; the test names the crates that are neither called nor a program and fails when that list changes - so a new orphan fails a test rather than joining a category nobody counts, and the day `cypcb-library` gains a caller the list has to say so.
+- **The phase map said P3 was current and blocked on D3; both halves were stale.** Its parser and width clauses have been guarded since 2026-08-24 and D3 closed itself, so P3 is checked and the marker moves to P5, which is the phase that is actually open.
+- Proof: `cargo test -p cypcb-cli --test no_crate_is_written_and_never_called` -> **2 passed** - the uncalled list is exactly `cypcb-library`, and `cypcb-cli` and `cypcb-lsp` state programs rather than being orphans. `cargo test -p cypcb-library` -> **41 passed**, which is what makes this a finding rather than a broken-crate report. Mutations, each alone and restored from the saved file: the orphan given a caller without the list being updated -> **1 failed**; the language server no longer stating a program -> **2 failed**. A third was attempted - removing a crate's only caller - and **the tree cannot express it**: `cypcb-cli` uses the watcher in `commands/watch.rs`, so the manifest line cannot go without the build going with it. `./scripts/quality-gate.sh` -> **All stages passed**, 9 of 9.
+- **This entry is a commit behind its own change, and that is worth admitting.** The guard shipped in `bca2300` while this tracker edit failed on a quote character and was not noticed until after the push - so the rule this file states, that the board moves in the same commit as the work, was broken by the run that wrote this line.
+- NEXT-ACTION: **`cypcb-library` is the owner's to decide, and the question is one line: is it work that has not landed yet, or work that never will?** It reads like a component library manager - SQLite-backed search, KiCad and EasyEDA sources, metadata and previews - and the viewer does its own EasyEDA parsing in TypeScript, which is either duplication or a different job. A fire should not delete it and should not wire it in; what a fire can do next is measure the overlap - which of its nine modules answer a question something in this project already asks - and put that beside the question in the owner-decision queue.
+
 - DONE: **`check --help` did not say which order the JSON rows come in, and a program depends on that order.** The flag's page describes what a row carries - kind, place, what was measured, what was required - and said nothing about the sort added the same week: deepest first, as a fraction of what the rule asked for, with the faults that measure no distance keeping their order at the end. A CI job reading the first row is reading the board's worst fault only while that sentence is true, so the sentence is now in the help.
 - **The prose report is grouped for reading and the JSON is ranked for a program**, which is a difference worth stating where somebody meets it rather than in a commit message.
 - Proof: `cargo test -p cypcb-cli --test a_program_can_read_the_check` -> **4 passed**, the ranking case now reading `check --help` beside the report it ranks. Mutation, alone against a clean tree and restored from the saved file: the paragraph deleted from the help -> **1 failed**, `the help states the order the rows come in`. `cargo test -p cypcb-cli` -> no failures; `cargo fmt --check` clean; `cargo clippy -p cypcb-cli --all-targets` silent.
@@ -4442,7 +4456,7 @@ what it turns into, is below. Nothing here is blocked any more.
 |---|---|---|
 | D1 | **In-house router. FreeRouting is out.** "Nie jestem z niego happy, długa była walka." It is a must, and the owner expects roughly a month before it is beyond criticism. No approach preferred - that part is mine to propose. | V2 is unblocked and is now the largest workstream in the project. FreeRouting stops being an option, so every line about it in the docs is history rather than a plan. |
 | D2 | **The desktop must work on every platform, no discussion.** The owner will supply hardware of any type for testing on request. | V3 scope settled: keep `src-tauri`, fix the build, and it has to build and run on Linux, macOS and Windows. Ask for machines when the Linux build is green. |
-| D3 | **"Porządkuj co trzeba."** | Measured before touching anything, and the answer is that **there is nothing to delete**: `cypcb-calc` has three callers (`cypcb-drc`'s trace-current rule, `cypcb-lsp`'s hover, `cypcb-render`), `cypcb-platform` has one (`src-tauri/src/menu.rs`, which D2 just made a supported target), and `cypcb-watcher` got one when `cypcb watch` shipped. The orphan-crate question dissolved while nobody was looking. **D3 is closed with no deletions.** |
+| D3 | **"Porządkuj co trzeba."** | Measured before touching anything, and the answer is that **there is nothing to delete**: `cypcb-calc` has three callers (`cypcb-drc`'s trace-current rule, `cypcb-lsp`'s hover, `cypcb-render`), `cypcb-platform` has one (`src-tauri/src/menu.rs`, which D2 just made a supported target), and `cypcb-watcher` got one when `cypcb watch` shipped. The orphan-crate question dissolved while nobody was looking. **D3 is closed with no deletions.** **Corrected 2026-08-28: that measurement counted the four crates the question named, and `cypcb-library` was not one of them - it has no caller at all. See the V1 entry of that date; the crate is guarded rather than deleted, and whether it stays is the owner's.** |
 | D4 | **"Zrób tak, żeby było dobrze."** | Mine to decide. **The default stays `jlcpcb` and the board block gains an optional `fab <name>`.** Mandatory is wrong: it breaks every existing board and every example, and a beginner should not have to choose a fabricator before drawing a rectangle. But today the fab exists **only as a command-line flag**, so `cypcb check --preset oshpark` and `cypcb export` with no flag grade the same board against different tables and neither says so. A design that states its fab settles that. |
 | D5 | **Keep the Route button hidden until the router is good.** | Closed, and tied to D1: it unhides when the in-house router is finished, not before. The 13 E2E tests stay parked. |
 | D6 | **"Ty mi powiedz."** | Answered below, from two published rows and a real board rather than a preference. **`min_pad_size` is a via land and through-hole pad minimum, not an SMD land.** |
