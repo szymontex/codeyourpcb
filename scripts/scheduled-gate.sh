@@ -24,6 +24,12 @@ set -uo pipefail
 
 REPO=$(cd "$(dirname "$0")/.." && pwd)
 LOG_DIR=${1:-/config/gate-runs}
+
+# The nine stages, named rather than hard-coded, so the decision around them
+# can be tested without paying for them. `scripts/scheduled-gate-selftest.sh`
+# runs this script against throwaway repositories with `GATE_COMMAND=true` and
+# `GATE_COMMAND=false`; nothing else sets it.
+GATE_COMMAND=${GATE_COMMAND:-./scripts/quality-gate.sh}
 STAMP=$(date +%Y-%m-%dT%H-%M-%S)
 mkdir -p "$LOG_DIR"
 LOG="$LOG_DIR/$STAMP.log"
@@ -98,9 +104,9 @@ if [ "$WAITED" -gt 0 ]; then
     say "the tree went quiet after ${WAITED}s"
 fi
 
-say "running ./scripts/quality-gate.sh"
+say "running $GATE_COMMAND"
 START=$(date +%s)
-./scripts/quality-gate.sh >>"$BODY" 2>&1
+$GATE_COMMAND >>"$BODY" 2>&1
 CODE=$?
 ELAPSED=$(( $(date +%s) - START ))
 
@@ -120,7 +126,14 @@ if [ "$CODE" -eq 0 ]; then
     # forces, rebases or deletes - the rule the same answer set: lose nothing.
     if [ "${GATE_PUBLISH:-1}" = "1" ]; then
         BRANCH=$(git rev-parse --abbrev-ref HEAD)
-        git fetch -q origin 2>>"$BODY" || true
+        # `origin/main` is a cached answer, and every test below reads it.
+        # A fetch that fails leaves the cache in place, so the run would
+        # decide against whatever this checkout last saw - which is how a
+        # green gate publishes nothing and says main already carries the
+        # commit. If the refresh fails, the log says so before the decision.
+        if ! git fetch -q origin 2>>"$BODY"; then
+            say "the fetch from origin failed: the decision below reads a cached origin/main"
+        fi
         if [ "$BRANCH" = "HEAD" ]; then
             say "not publishing: this checkout is on a detached HEAD"
         elif ! git rev-parse --verify -q origin/main >/dev/null; then
