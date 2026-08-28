@@ -57,7 +57,7 @@ function sign(v: number): number {
  * Compute the closest DIRECTION_45 from a vector.
  * KiCad flips Y because screen Y is down but "north" is up.
  */
-export function dirFromVec(vec: Vec2): Dir45 {
+function dirFromVec(vec: Vec2): Dir45 {
   if (vec.x === 0 && vec.y === 0) return Dir45.UNDEFINED;
 
   // KiCad: vec.y = -vec.y (screen coords → compass)
@@ -88,24 +88,14 @@ export function isDiagonal(dir: Dir45): boolean {
   return (dir % 2) === 1;
 }
 
-export function oppositeDir(dir: Dir45): Dir45 {
-  const map = [Dir45.S, Dir45.SW, Dir45.W, Dir45.NW, Dir45.N, Dir45.NE, Dir45.E, Dir45.SE, Dir45.UNDEFINED];
-  return dir === Dir45.UNDEFINED ? Dir45.UNDEFINED : map[dir];
-}
-
 /** Turn right by 45° (or 90° if is90deg). */
-export function rightDir(dir: Dir45, is90deg = false): Dir45 {
+function rightDir(dir: Dir45, is90deg = false): Dir45 {
   if (dir === Dir45.UNDEFINED) return Dir45.UNDEFINED;
   const step = is90deg ? 2 : 1;
   return ((dir + step) % 8) as Dir45;
 }
 
 /** Turn left by 45° (or 90° if is90deg). */
-export function leftDir(dir: Dir45, is90deg = false): Dir45 {
-  if (dir === Dir45.UNDEFINED) return Dir45.UNDEFINED;
-  const step = is90deg ? 2 : 1;
-  return ((dir + 8 - step) % 8) as Dir45;
-}
 
 export function angleBetween(a: Dir45, b: Dir45): AngleType {
   if (a === Dir45.UNDEFINED || b === Dir45.UNDEFINED) return AngleType.ANG_UNDEFINED;
