@@ -65,13 +65,37 @@ fi
 
 # viewer/pkg is a committed artifact the gate itself rebuilds, so a difference
 # there is the gate's own doing and not somebody's work in progress.
+#
+# A busy tree waits rather than giving up at once. On 2026-08-28 the 04:30 run
+# skipped because a fire was mid-edit, and the consequence was that the gate
+# did not run at all that night - the skip is quiet, the next run is a day
+# away, and nobody reads a log that says "skipped" until something else goes
+# wrong. Three checks twenty minutes apart cost an hour of waiting and catch
+# every fire shorter than that; a tree still busy after them really is busy.
+#
+# `GATE_RETRY_ATTEMPTS` and `GATE_RETRY_SECONDS` exist so this is testable
+# without waiting an hour to see it work.
+ATTEMPTS=${GATE_RETRY_ATTEMPTS:-3}
+INTERVAL=${GATE_RETRY_SECONDS:-1200}
+WAITED=0
 DIRTY=$(git status --porcelain | grep -v "^.. viewer/pkg/" || true)
+while [ -n "$DIRTY" ] && [ "$ATTEMPTS" -gt 1 ]; do
+    say "the working tree is busy, waiting ${INTERVAL}s ($((ATTEMPTS - 1)) more check(s))"
+    sleep "$INTERVAL"
+    WAITED=$(( WAITED + INTERVAL ))
+    ATTEMPTS=$(( ATTEMPTS - 1 ))
+    DIRTY=$(git status --porcelain | grep -v "^.. viewer/pkg/" || true)
+done
 if [ -n "$DIRTY" ]; then
     echo "$DIRTY" | sed 's/^/  /' >> "$BODY"
-    finish "VERDICT: skipped - the working tree is busy"
-    echo "VERDICT: skipped - the working tree is busy"
+    VERDICT="VERDICT: skipped - the working tree is busy after waiting ${WAITED}s"
+    finish "$VERDICT"
+    echo "$VERDICT"
     echo "$DIRTY" | sed 's/^/  /'
     exit 0
+fi
+if [ "$WAITED" -gt 0 ]; then
+    say "the tree went quiet after ${WAITED}s"
 fi
 
 say "running ./scripts/quality-gate.sh"
