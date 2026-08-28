@@ -386,11 +386,123 @@ fn a_board_with_no_parts_says_nothing_about_shapes() {
     let tags = tags(&xml);
 
     assert!(
-        !tags.iter().any(|tag| tag.name == "LayerFeature"),
-        "no copper section for copper that is not there:\n{xml}"
+        !tags.iter().any(|tag| tag.name == "Pad"),
+        "no pads for a board that has no parts:\n{xml}"
     );
     assert!(
         !tags.iter().any(|tag| tag.name == "DictionaryStandard"),
         "and no dictionary of shapes it does not use"
+    );
+    // This board does carry copper - two straight runs and a curve - so it has
+    // a feature section for the layer they are on and none for the other. The
+    // rule the schema fixes is that a section always holds at least one `Set`.
+    let sections: Vec<&Tag> = tags
+        .iter()
+        .filter(|tag| tag.name == "LayerFeature")
+        .collect();
+    assert_eq!(sections.len(), 1, "one layer carries this board's copper");
+    assert_eq!(attribute(sections[0], "layerRef"), "F_Cu");
+}
+
+#[test]
+fn the_copper_between_the_pads_is_in_the_document_too() {
+    // Gerber says which copper is there and nothing about what it connects.
+    // This format's whole point beside Gerber is that a run of copper says
+    // which net it belongs to, so a track is written inside a `Set` that
+    // names one.
+    let xml = document("curved-track.cypcb", &scratch("tracks"));
+    let tags = tags(&xml);
+
+    let lines: Vec<&Tag> = tags.iter().filter(|tag| tag.name == "Line").collect();
+    assert_eq!(lines.len(), 2, "the two straight runs:\n{xml}");
+    assert_eq!(
+        attribute(lines[0], "startX"),
+        "8.000",
+        "drawn where the board draws them"
+    );
+
+    let sets: Vec<String> = tags
+        .iter()
+        .filter(|tag| tag.name == "Set" && tag.attributes.contains("net="))
+        .map(|tag| attribute(tag, "net"))
+        .collect();
+    // Three runs of copper - two straight, one curved - and each one says
+    // which net it is. Counting them matters: a filter over sets that name a
+    // net is vacuously satisfied when no set names one, which is exactly what
+    // a writer that dropped the attribute would produce.
+    assert_eq!(
+        sets,
+        vec!["SIG".to_string(), "SIG".to_string(), "SIG".to_string()],
+        "every run says which net it is"
+    );
+}
+
+#[test]
+fn a_width_is_named_once_and_pointed_at() {
+    // The same shape of rule the pads follow: the width lives in a dictionary
+    // at the top and each segment names it, so two tracks at 0.2mm are one
+    // entry rather than two.
+    let xml = document("curved-track.cypcb", &scratch("widths"));
+    let tags = tags(&xml);
+
+    let defined: Vec<String> = tags
+        .iter()
+        .filter(|tag| tag.name == "EntryLineDesc")
+        .map(|tag| attribute(tag, "id"))
+        .collect();
+    // Named after the width itself, so two tracks at the same width share one
+    // entry and a board with two widths cannot collapse them into one.
+    assert_eq!(
+        defined,
+        vec!["line_0_250".to_string()],
+        "one width on this board, named after itself"
+    );
+
+    let used: Vec<String> = tags
+        .iter()
+        .filter(|tag| tag.name == "LineDescRef")
+        .map(|tag| attribute(tag, "id"))
+        .collect();
+    assert!(!used.is_empty(), "the copper names its width");
+    for id in &used {
+        assert!(defined.contains(id), "`{id}` is used and never defined");
+    }
+
+    let dictionary = tags
+        .iter()
+        .find(|tag| tag.name == "DictionaryLineDesc")
+        .expect("the widths are declared");
+    assert_eq!(dictionary.path.join("/"), "IPC-2581/Content");
+    assert_eq!(attribute(dictionary, "units"), "MILLIMETER");
+}
+
+#[test]
+fn a_curve_reaches_the_handoff_as_a_curve() {
+    // The checker reads chords and the fabricator should not have to. This
+    // format states an arc by its ends, its centre and which way it turns,
+    // which is exactly what the model holds.
+    let xml = document("curved-track.cypcb", &scratch("arc"));
+    let tags = tags(&xml);
+
+    let arcs: Vec<&Tag> = tags.iter().filter(|tag| tag.name == "Arc").collect();
+    assert_eq!(arcs.len(), 1, "one curve, one arc:\n{xml}");
+    let arc = arcs[0];
+    assert_eq!(attribute(arc, "startX"), "12.000");
+    assert_eq!(attribute(arc, "startY"), "6.000");
+    assert_eq!(attribute(arc, "endX"), "8.000");
+    assert_eq!(attribute(arc, "endY"), "10.000");
+    assert_eq!(attribute(arc, "centerX"), "12.000");
+    assert_eq!(attribute(arc, "centerY"), "10.000");
+    assert_eq!(
+        attribute(arc, "clockwise"),
+        "true",
+        "and it turns the way the board says"
+    );
+    // The chords the curve was flattened into are not in the file: twelve
+    // little lines would be a curve nobody can edit as one.
+    assert_eq!(
+        tags.iter().filter(|tag| tag.name == "Line").count(),
+        2,
+        "only the two straight runs are lines"
     );
 }

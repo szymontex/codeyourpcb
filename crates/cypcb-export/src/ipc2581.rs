@@ -30,6 +30,7 @@
 
 use crate::gerber::copper::place_pad_millideg;
 use cypcb_core::{Nm, Point};
+use cypcb_world::components::trace::{Curve, Trace};
 use cypcb_world::components::{FootprintRef, Position, Rotation};
 use cypcb_world::footprint::FootprintLibrary;
 use cypcb_world::{BoardWorld, Layer, PadShape};
@@ -62,6 +63,14 @@ fn qualified(name: &str) -> String {
         Some(first) if first.is_ascii_alphabetic() => cleaned,
         _ => format!("b_{cleaned}"),
     }
+}
+
+/// The dictionary entry a width is written as.
+///
+/// One entry per width the board uses, named after the width itself: two
+/// tracks at 0.2mm name the same entry, which is what a dictionary is for.
+fn line_desc_id(width: Nm) -> String {
+    format!("line_{}", mm(width).replace('.', "_"))
 }
 
 /// The name and the three things the schema wants said about each layer.
@@ -169,6 +178,25 @@ pub fn export_ipc2581(world: &mut BoardWorld, library: &FootprintLibrary, now: &
         }
     }
 
+    // The copper, gathered the same way and for the same reason: a segment
+    // states its width by naming an entry in a dictionary at the top of the
+    // document, so every width the board uses has to be known before the first
+    // segment is written.
+    let traces: Vec<(Trace, Option<Curve>)> = {
+        let mut query = world.ecs_mut().query::<(&Trace, Option<&Curve>)>();
+        query
+            .iter(world.ecs())
+            .map(|(trace, curve)| (trace.clone(), curve.copied()))
+            .collect()
+    };
+    let mut widths: BTreeMap<String, String> = BTreeMap::new();
+    for (trace, _) in &traces {
+        for index in 0..trace.segments.len() {
+            let width = trace.width_at(index);
+            widths.insert(line_desc_id(width), mm(width));
+        }
+    }
+
     let mut out = String::new();
     out.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
     out.push_str("<IPC-2581 revision=\"C\">\n");
@@ -190,6 +218,17 @@ pub fn export_ipc2581(world: &mut BoardWorld, library: &FootprintLibrary, now: &
             );
         }
         out.push_str("    </DictionaryStandard>\n");
+    }
+    if !widths.is_empty() {
+        out.push_str("    <DictionaryLineDesc units=\"MILLIMETER\">\n");
+        for (id, width) in &widths {
+            let _ = writeln!(
+                out,
+                "      <EntryLineDesc id=\"{id}\"><LineDesc lineEnd=\"ROUND\" \
+                 lineWidth=\"{width}\"/></EntryLineDesc>"
+            );
+        }
+        out.push_str("    </DictionaryLineDesc>\n");
     }
     out.push_str("  </Content>\n");
 
@@ -292,11 +331,27 @@ pub fn export_ipc2581(world: &mut BoardWorld, library: &FootprintLibrary, now: &
             .iter()
             .filter(|(layer, _, _, _)| layer == layer_name)
             .collect();
-        if on_layer.is_empty() {
+        let layer = match layer_name.as_str() {
+            "F_Cu" => Layer::TopCopper,
+            "B_Cu" => Layer::BottomCopper,
+            _ => Layer::TopCopper,
+        };
+        let on_this_layer: Vec<&(Trace, Option<Curve>)> = traces
+            .iter()
+            .filter(|(trace, _)| trace.layer == layer)
+            .collect();
+        if on_layer.is_empty() && on_this_layer.is_empty() {
             continue;
         }
         let _ = writeln!(out, "        <LayerFeature layerRef=\"{layer_name}\">");
-        out.push_str("          <Set padUsage=\"TERMINATION\">\n");
+        if on_layer.is_empty() {
+            // A `LayerFeature` wants at least one `Set`, and a layer that
+            // carries copper but no pads still needs the pads' set skipped
+            // rather than written empty.
+            out.push_str("          <Set padUsage=\"NONE\">\n");
+        } else {
+            out.push_str("          <Set padUsage=\"TERMINATION\">\n");
+        }
         for (_, centre, rotation, id) in on_layer {
             out.push_str("            <Pad>\n");
             // Rotation is a non-negative number in this format, and a pad
@@ -313,6 +368,69 @@ pub fn export_ipc2581(world: &mut BoardWorld, library: &FootprintLibrary, now: &
             out.push_str("            </Pad>\n");
         }
         out.push_str("          </Set>\n");
+
+        // The copper, one set per net so a reader can tell which run belongs
+        // to which connection - which is the whole reason this format exists
+        // beside Gerber.
+        for (trace, curve) in &on_this_layer {
+            let net = world
+                .net_name(trace.net_id)
+                .unwrap_or("unknown")
+                .to_string();
+            let _ = writeln!(out, "          <Set net=\"{}\">", qualified(&net));
+            match curve {
+                // A curve is a curve here too. The format states an arc by its
+                // ends, its centre and which way it turns, which is what the
+                // model holds - so the chords the checker reads stay out of
+                // the file a fabricator receives.
+                Some(curve) => {
+                    if let (Some(first), Some(last)) =
+                        (trace.segments.first(), trace.segments.last())
+                    {
+                        out.push_str("            <Features>\n");
+                        let _ = writeln!(
+                            out,
+                            "              <Arc startX=\"{}\" startY=\"{}\" endX=\"{}\" \
+                             endY=\"{}\" centerX=\"{}\" centerY=\"{}\" clockwise=\"{}\">",
+                            mm(first.start.x),
+                            mm(first.start.y),
+                            mm(last.end.x),
+                            mm(last.end.y),
+                            mm(curve.centre.x),
+                            mm(curve.centre.y),
+                            curve.sweep_millideg < 0
+                        );
+                        let _ = writeln!(
+                            out,
+                            "                <LineDescRef id=\"{}\"/>",
+                            line_desc_id(trace.width)
+                        );
+                        out.push_str("              </Arc>\n            </Features>\n");
+                    }
+                }
+                None => {
+                    for (index, segment) in trace.segments.iter().enumerate() {
+                        out.push_str("            <Features>\n");
+                        let _ = writeln!(
+                            out,
+                            "              <Line startX=\"{}\" startY=\"{}\" endX=\"{}\" \
+                             endY=\"{}\">",
+                            mm(segment.start.x),
+                            mm(segment.start.y),
+                            mm(segment.end.x),
+                            mm(segment.end.y)
+                        );
+                        let _ = writeln!(
+                            out,
+                            "                <LineDescRef id=\"{}\"/>",
+                            line_desc_id(trace.width_at(index))
+                        );
+                        out.push_str("              </Line>\n            </Features>\n");
+                    }
+                }
+            }
+            out.push_str("          </Set>\n");
+        }
         out.push_str("        </LayerFeature>\n");
     }
 
