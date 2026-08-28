@@ -104,6 +104,26 @@ impl HouseTolerances {
 ///
 /// One entry per width the board uses, named after the width itself: two
 /// tracks at 0.2mm name the same entry, which is what a dictionary is for.
+/// What this document calls a layer of that kind.
+///
+/// The schema's own vocabulary, which is not the language's: a `core` here is
+/// `CORE` and a `mask` is `SOLDERMASK`. Lifted out of the writer when the
+/// stackup grew a second group, because two copies of a table like this drift
+/// one entry at a time.
+fn material_type(kind: cypcb_world::components::StackupLayerKind) -> &'static str {
+    use cypcb_world::components::StackupLayerKind as Kind;
+    match kind {
+        Kind::Copper => "COPPER",
+        Kind::Prepreg => "PREPREG",
+        Kind::Core => "CORE",
+        Kind::Mask => "SOLDERMASK",
+        Kind::Silk => "SILKSCREEN",
+        Kind::Coverlay => "COVERLAY",
+        Kind::Stiffener => "STIFFENER",
+        Kind::Paste => "SOLDERPASTE",
+    }
+}
+
 fn line_desc_id(width: Nm) -> String {
     format!("line_{}", mm(width).replace('.', "_"))
 }
@@ -392,16 +412,7 @@ pub fn export_ipc2581(
             mm(tolerance)
         );
         for (index, entry) in stack.layers.iter().enumerate() {
-            let material = match entry.kind {
-                cypcb_world::components::StackupLayerKind::Copper => "COPPER",
-                cypcb_world::components::StackupLayerKind::Prepreg => "PREPREG",
-                cypcb_world::components::StackupLayerKind::Core => "CORE",
-                cypcb_world::components::StackupLayerKind::Mask => "SOLDERMASK",
-                cypcb_world::components::StackupLayerKind::Silk => "SILKSCREEN",
-                cypcb_world::components::StackupLayerKind::Coverlay => "COVERLAY",
-                cypcb_world::components::StackupLayerKind::Stiffener => "STIFFENER",
-                cypcb_world::components::StackupLayerKind::Paste => "SOLDERPASTE",
-            };
+            let material = material_type(entry.kind);
             let name = entry
                 .name
                 .clone()
@@ -415,6 +426,87 @@ pub fn export_ipc2581(
             );
         }
         out.push_str("        </StackupGroup>\n");
+
+        // A rigid-flex board is not one stack, and this document is where a
+        // fabricator reads the build. The language says which area a layer
+        // stops at - `stiffener 0.2mm covers connector_end` - and until now
+        // every one of those layers was written into the single group above,
+        // so the document ordered a stiffener across the whole panel.
+        //
+        // IPC-2581 Revision C carries several stackup groups and ties each to
+        // a zone of the board; the group is written here with the design's own
+        // area name, and the tie is not, because this project has not read the
+        // element that carries it. That is said out loud rather than guessed:
+        // an invented boundary reference would be read by a fabricator's tool
+        // as a link to something that is not there.
+        let mut areas: Vec<String> = Vec::new();
+        for entry in &stack.layers {
+            if let Some(coverage) = &entry.coverage {
+                let area = coverage.region().to_string();
+                if !areas.contains(&area) {
+                    areas.push(area);
+                }
+            }
+        }
+        for area in &areas {
+            // Paired with its place in the whole stack, because that is what
+            // names an unnamed layer: `copper_3` is the fourth entry of the
+            // board's stack, and numbering each group from zero would give one
+            // physical layer two names and a reader two layers.
+            let layers: Vec<(usize, &cypcb_world::components::StackupLayer)> = stack
+                .layers
+                .iter()
+                .enumerate()
+                .filter(|(_, entry)| match &entry.coverage {
+                    // A layer that says nothing runs the whole panel, so it is
+                    // in every area of it.
+                    None => true,
+                    Some(coverage) => (coverage.region() == area) == coverage.includes_region(),
+                })
+                .collect();
+            let thickness = Nm(layers
+                .iter()
+                .filter_map(|(_, entry)| entry.thickness)
+                .map(|thickness| thickness.0)
+                .sum());
+            let _ = writeln!(
+                out,
+                "        <StackupGroup name=\"{}\" thickness=\"{}\" tolPlus=\"{}\" \
+                 tolMinus=\"{}\">",
+                qualified(&format!("{board}_{area}")),
+                mm(thickness),
+                mm(tolerance),
+                mm(tolerance)
+            );
+            for (index, entry) in layers.iter() {
+                let material = material_type(entry.kind);
+                let name = entry
+                    .name
+                    .clone()
+                    .unwrap_or_else(|| format!("{}_{index}", material.to_lowercase()));
+                let _ = writeln!(
+                    out,
+                    "          <StackupLayer layerOrGroupRef=\"{}\" materialType=\"{material}\" \
+                     thickness=\"{}\"/>",
+                    qualified(&name),
+                    mm(entry.thickness.unwrap_or(Nm(0)))
+                );
+            }
+            out.push_str("        </StackupGroup>\n");
+        }
+        if !areas.is_empty() {
+            warnings.push(format!(
+                "{} of this board's stackup layers stop at a named area, so the document \
+                 carries a stackup group per area ({}) - but not the boundary each group \
+                 belongs to, which is the link a fabricator's tool follows",
+                stack
+                    .layers
+                    .iter()
+                    .filter(|entry| entry.coverage.is_some())
+                    .count(),
+                areas.join(", ")
+            ));
+        }
         out.push_str("      </Stackup>\n");
     }
 
