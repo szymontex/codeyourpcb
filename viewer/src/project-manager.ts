@@ -227,7 +227,7 @@ export function addRecentFile(
 /**
  * Generate a 200×150 thumbnail of the board via offscreen canvas.
  */
-export function generateThumbnail(
+function generateThumbnail(
   snapshot: BoardSnapshot,
   partialState: Partial<RenderState>,
 ): string {

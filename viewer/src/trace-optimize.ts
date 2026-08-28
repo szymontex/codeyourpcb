@@ -24,7 +24,7 @@ import { checkRouteObstacles } from './routing';
  *
  * Preserves first and last point (pad connections).
  */
-export function simplifyTrace(segments: TraceSegmentInfo[]): TraceSegmentInfo[] {
+function simplifyTrace(segments: TraceSegmentInfo[]): TraceSegmentInfo[] {
   if (segments.length <= 1) return segments;
 
   const pts = traceVertices({ segments, id: 0, width: 0, layer: '', net_name: '', locked: false } as any);

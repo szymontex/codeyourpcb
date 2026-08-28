@@ -50,7 +50,7 @@ export interface OpenFileResult {
 /**
  * Check if File System Access API is available in this browser.
  */
-export function hasFileSystemAccess(): boolean {
+function hasFileSystemAccess(): boolean {
   return 'showOpenFilePicker' in window;
 }
 

@@ -220,7 +220,7 @@ export function hitTestPad(
  * Snap a point to the nearest grid intersection.
  * Grid origin is (0, 0). Spacing is in nm.
  */
-export function snapToGrid(
+function snapToGrid(
   point: { x: number; y: number },
   spacing: number,
 ): { x: number; y: number } {
@@ -234,49 +234,6 @@ export function snapToGrid(
 // Angle snapping
 // ---------------------------------------------------------------------------
 
-/** Allowed snap angles in degrees */
-const SNAP_ANGLES_DEG = [0, 45, 90, 135, 180, 225, 270, 315];
-
-/**
- * Snap a cursor point to the nearest 45°/90° angle from an anchor.
- * Returns the snapped world-coordinate endpoint and the angle used.
- */
-export function computeSnappedPoint(
-  anchor: { x: number; y: number },
-  cursor: { x: number; y: number },
-): { x: number; y: number; angleDeg: number } {
-  const dx = cursor.x - anchor.x;
-  const dy = cursor.y - anchor.y;
-  const distance = Math.sqrt(dx * dx + dy * dy);
-
-  if (distance < 1) {
-    return { x: anchor.x, y: anchor.y, angleDeg: 0 };
-  }
-
-  // Angle from anchor to cursor (degrees, 0 = right, counter-clockwise)
-  const rawAngleDeg = (Math.atan2(dy, dx) * 180) / Math.PI;
-  // Normalize to 0-360
-  const normalAngle = ((rawAngleDeg % 360) + 360) % 360;
-
-  // Find closest snap angle
-  let bestAngle = 0;
-  let bestDiff = 360;
-  for (const snap of SNAP_ANGLES_DEG) {
-    let diff = Math.abs(normalAngle - snap);
-    if (diff > 180) diff = 360 - diff;
-    if (diff < bestDiff) {
-      bestDiff = diff;
-      bestAngle = snap;
-    }
-  }
-
-  const radians = (bestAngle * Math.PI) / 180;
-  return {
-    x: anchor.x + distance * Math.cos(radians),
-    y: anchor.y + distance * Math.sin(radians),
-    angleDeg: bestAngle,
-  };
-}
 
 // ---------------------------------------------------------------------------
 // Angle snap toggle
@@ -1153,7 +1110,7 @@ export function checkRouteObstacles(
  * Build the flat segment array for the preview trace (committed + preview).
  * Format: [x1,y1,x2,y2, ...] matching PcbEngine.add_trace() signature.
  */
-export function previewSegmentsFlat(state: RoutingState): number[] {
+function previewSegmentsFlat(state: RoutingState): number[] {
   const segs = [...state.committedSegments];
 
   // Add preview path segments (KiCad-style multi-segment)

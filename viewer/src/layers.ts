@@ -61,7 +61,7 @@ export const LAYER_MASK = {
 export type LayerFocus = 'all' | 'ghost' | 'dim' | 'solo';
 
 /** The order `X` walks, and the order the button cycles. */
-export const LAYER_FOCUS_ORDER: readonly LayerFocus[] = ['all', 'ghost', 'dim', 'solo'] as const;
+const LAYER_FOCUS_ORDER: readonly LayerFocus[] = ['all', 'ghost', 'dim', 'solo'] as const;
 
 /** What each state is called where a person can read it. */
 export const LAYER_FOCUS_LABEL: Record<LayerFocus, string> = {
@@ -179,16 +179,6 @@ export function createLayerVisibility(): LayerVisibility {
 }
 
 /**
- * Toggle a specific layer's visibility
- */
-export function toggleLayer(layers: LayerVisibility, layer: keyof LayerVisibility): LayerVisibility {
-  return {
-    ...layers,
-    [layer]: !layers[layer],
-  };
-}
-
-/**
  * Get color for a pad based on its layer mask and visibility settings
  * Returns null if the pad should not be drawn (layer hidden)
  */
@@ -250,27 +240,6 @@ const COPPER_LAYER_NAMES_FOR_MASK: readonly string[] = [
   'Bottom',
   ...Array.from({ length: 16 }, (_, index) => `Inner${index + 1}`),
 ];
-
-/**
- * Check if a layer mask is on the top layer
- */
-export function isTopLayer(layerMask: number): boolean {
-  return (layerMask & LAYER_MASK.TOP_COPPER) !== 0;
-}
-
-/**
- * Check if a layer mask is on the bottom layer
- */
-export function isBottomLayer(layerMask: number): boolean {
-  return (layerMask & LAYER_MASK.BOTTOM_COPPER) !== 0;
-}
-
-/**
- * Check if a layer mask is through-hole (both layers)
- */
-export function isThroughHole(layerMask: number): boolean {
-  return isTopLayer(layerMask) && isBottomLayer(layerMask);
-}
 
 // Well-known net name color overrides
 const NET_COLOR_OVERRIDES: Record<string, string> = {

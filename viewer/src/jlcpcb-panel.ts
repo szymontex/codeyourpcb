@@ -90,7 +90,7 @@ export function initSearchPanel(cb: JLCPCBPanelCallbacks): void {
 /**
  * Show the search panel and focus the input.
  */
-export function showSearchPanel(): void {
+function showSearchPanel(): void {
   if (!panel) return;
   panel.classList.remove('hidden');
   visible = true;

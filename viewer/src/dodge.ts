@@ -30,7 +30,7 @@ const N = Number;
 /**
  * Build pad exclusion rectangles for all pads NOT on the routing net.
  */
-export function buildPadRects(
+function buildPadRects(
   snapshot: BoardSnapshot,
   routingNet: string,
   clearance: number,

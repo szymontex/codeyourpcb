@@ -358,7 +358,7 @@ const COMPONENT_TYPES = [
   'resistor','capacitor','ic','connector','diode','led','transistor','crystal','inductor','generic',
 ];
 
-export function registerCompletionProvider(monaco: typeof import('monaco-editor')): void {
+function registerCompletionProvider(monaco: typeof import('monaco-editor')): void {
   monaco.languages.registerCompletionItemProvider('cypcb', {
     triggerCharacters: ['.', ' ', '\n', '{', '['],
 
@@ -580,7 +580,7 @@ const KEYWORD_DOCS: Record<string, string> = {
   all: 'All layers.',
 };
 
-export function registerHoverProvider(monaco: typeof import('monaco-editor')): void {
+function registerHoverProvider(monaco: typeof import('monaco-editor')): void {
   monaco.languages.registerHoverProvider('cypcb', {
     provideHover: (model, position) => {
       const word = model.getWordAtPosition(position);

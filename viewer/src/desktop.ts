@@ -23,20 +23,6 @@ export function isDesktop(): boolean {
 }
 
 /**
- * Get the current file path (for save operations).
- */
-export function getCurrentFilePath(): string | null {
-  return currentFilePath;
-}
-
-/**
- * Set the current file path (after opening or saving).
- */
-export function setCurrentFilePath(path: string | null): void {
-  currentFilePath = path;
-}
-
-/**
  * Initialize desktop integrations.
  * Should only be called if isDesktop() returns true.
  */

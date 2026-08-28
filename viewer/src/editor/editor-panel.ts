@@ -116,15 +116,6 @@ export function isEditorVisible(): boolean {
 }
 
 /**
- * Get the current editor instance
- *
- * @returns Monaco editor instance or null if not initialized
- */
-export function getEditorInstance(): any {
-  return editorInstance;
-}
-
-/**
  * Get the Monaco module reference
  *
  * @returns Monaco module or null if not initialized
@@ -139,7 +130,7 @@ export function getMonacoModule(): typeof import('monaco-editor') | null {
  * Allows user to resize editor/canvas proportions by dragging the divider.
  * Enforces minimum width (200px) and maximum width (70% of main content).
  */
-export function setupDivider(): void {
+function setupDivider(): void {
   const divider = document.getElementById('divider');
   const editorContainer = document.getElementById('editor-container');
   const mainContent = document.getElementById('main-content');

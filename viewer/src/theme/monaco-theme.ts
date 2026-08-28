@@ -27,7 +27,7 @@ interface MonacoThemeData {
  * Syntax colors chosen for PCB DSL (keywords, numbers, strings, comments)
  * Editor chrome matches light theme CSS variables from colors.css
  */
-export const lightTheme: MonacoThemeData = {
+const lightTheme: MonacoThemeData = {
   base: 'vs',
   inherit: true,
   rules: [
@@ -56,7 +56,7 @@ export const lightTheme: MonacoThemeData = {
  * Syntax colors adapted for dark backgrounds
  * Editor chrome matches dark theme CSS variables from colors.css
  */
-export const darkTheme: MonacoThemeData = {
+const darkTheme: MonacoThemeData = {
   base: 'vs-dark',
   inherit: true,
   rules: [

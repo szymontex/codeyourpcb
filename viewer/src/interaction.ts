@@ -4,7 +4,7 @@
  */
 
 import type { Viewport } from './viewport';
-import { createLayerVisibility, type LayerVisibility } from './layers';
+import { type LayerVisibility } from './layers';
 import type { BoardSnapshot, TraceSegmentInfo } from './types';
 import type { PcbEngine } from './wasm';
 import type { RoutingState, PadHit } from './routing';
@@ -1098,34 +1098,4 @@ export function setupInteraction(
     state.onRouteStart?.(hit.trace.net_name);
     state.dirty = true;
   });
-}
-
-/**
- * Create initial interaction state
- */
-export function createInteractionState(
-  viewport: Viewport,
-  onSelect: (x_nm: number, y_nm: number) => void,
-  onViewportChange: (vp: Viewport) => void
-): InteractionState {
-  return {
-    viewport,
-    isPanning: false,
-    lastX: 0,
-    lastY: 0,
-    dirty: false,
-    onSelect,
-    onViewportChange,
-    snapshot: null,
-    selectedTraceId: null,
-    hoveredTraceId: null,
-    onTraceSelect: () => {},
-    onTraceHover: () => {},
-    layers: createLayerVisibility(),
-    routing: createRoutingState(),
-    engine: null,
-    onRoutingChange: () => {},
-    dragEdit: null,
-    rectSelect: null,
-  };
 }
