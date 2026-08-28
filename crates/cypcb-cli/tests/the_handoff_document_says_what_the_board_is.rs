@@ -281,3 +281,116 @@ fn a_board_that_does_not_ask_gets_no_handoff() {
         "the file set a house receives is unchanged unless the document is asked for"
     );
 }
+
+#[test]
+fn every_pad_points_at_a_shape_the_document_defines() {
+    // A pad in this format is a reference: the shape lives once in the
+    // dictionary at the top and every placement names it. A reference with
+    // nothing behind it is a pad a fabricator cannot make.
+    let xml = document("usb-diff-pair.cypcb", &scratch("pads"));
+    let tags = tags(&xml);
+
+    let defined: Vec<String> = tags
+        .iter()
+        .filter(|tag| tag.name == "EntryStandard")
+        .map(|tag| attribute(tag, "id"))
+        .collect();
+    let used: Vec<String> = tags
+        .iter()
+        .filter(|tag| tag.name == "StandardPrimitiveRef")
+        .map(|tag| attribute(tag, "id"))
+        .collect();
+
+    assert!(!used.is_empty(), "the board has pads:\n{xml}");
+    for id in &used {
+        assert!(
+            defined.contains(id),
+            "`{id}` is placed and never defined: {defined:?}"
+        );
+    }
+    // Sixteen placements, because every pad of this board goes through it and
+    // therefore appears on both outer layers.
+    assert_eq!(
+        tags.iter().filter(|tag| tag.name == "Pad").count(),
+        16,
+        "eight through-hole pads, seen from both sides"
+    );
+}
+
+#[test]
+fn the_dictionary_comes_before_the_pads_that_use_it() {
+    // The schema puts the dictionary inside `Content`, which is the first
+    // section: a reader building shapes as it goes has them all before the
+    // first placement.
+    let xml = document("usb-diff-pair.cypcb", &scratch("dictionary"));
+    let tags = tags(&xml);
+
+    let dictionary = tags
+        .iter()
+        .find(|tag| tag.name == "DictionaryStandard")
+        .expect("the board has shapes");
+    assert_eq!(dictionary.path.join("/"), "IPC-2581/Content");
+    assert_eq!(
+        attribute(dictionary, "units"),
+        "MILLIMETER",
+        "the shapes are in the same units as everything else"
+    );
+
+    let first_entry = tags
+        .iter()
+        .position(|tag| tag.name == "EntryStandard")
+        .expect("an entry");
+    let first_pad = tags
+        .iter()
+        .position(|tag| tag.name == "Pad")
+        .expect("a pad");
+    assert!(first_entry < first_pad, "defined before it is used");
+}
+
+#[test]
+fn a_pad_is_placed_where_the_part_puts_it() {
+    // A pad's own position is inside its footprint; where it lands is that
+    // turned by the part's rotation and moved to where the part sits. Writing
+    // the footprint's own numbers would put every pad of a turned part in the
+    // wrong place.
+    let xml = document("usb-diff-pair.cypcb", &scratch("placement"));
+    let tags = tags(&xml);
+
+    let located: Vec<(String, String)> = tags
+        .iter()
+        .filter(|tag| tag.name == "Location" && tag.path.ends_with(&["Pad".to_string()]))
+        .map(|tag| (attribute(tag, "x"), attribute(tag, "y")))
+        .collect();
+    assert!(
+        located.contains(&("5.000".to_string(), "6.730".to_string())),
+        "the first pad lands where the SVG and the Gerber put it: {located:?}"
+    );
+
+    // Rotation is a non-negative number in this format: a pad turned by -90
+    // degrees is written as 270.
+    for tag in tags.iter().filter(|tag| tag.name == "Xform") {
+        let turn = attribute(tag, "rotation");
+        assert!(
+            !turn.starts_with('-'),
+            "a turn is stated the way the format states it: {turn}"
+        );
+    }
+}
+
+#[test]
+fn a_board_with_no_parts_says_nothing_about_shapes() {
+    // The schema wants at least one `Set` inside a `LayerFeature`, so a layer
+    // with nothing on it gets no section rather than an empty one - and a
+    // board with no parts gets no dictionary either.
+    let xml = document("curved-track.cypcb", &scratch("bare"));
+    let tags = tags(&xml);
+
+    assert!(
+        !tags.iter().any(|tag| tag.name == "LayerFeature"),
+        "no copper section for copper that is not there:\n{xml}"
+    );
+    assert!(
+        !tags.iter().any(|tag| tag.name == "DictionaryStandard"),
+        "and no dictionary of shapes it does not use"
+    );
+}

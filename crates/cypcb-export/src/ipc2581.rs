@@ -28,8 +28,12 @@
 //! then `Ecad` - and inside `Ecad`, `CadHeader` before `CadData`, and inside
 //! that, every `Layer` before the `Step`.
 
-use cypcb_core::Nm;
-use cypcb_world::BoardWorld;
+use crate::gerber::copper::place_pad_millideg;
+use cypcb_core::{Nm, Point};
+use cypcb_world::components::{FootprintRef, Position, Rotation};
+use cypcb_world::footprint::FootprintLibrary;
+use cypcb_world::{BoardWorld, Layer, PadShape};
+use std::collections::BTreeMap;
 use std::fmt::Write;
 
 /// Millimetres, which is what the document says its units are.
@@ -76,9 +80,10 @@ fn copper_layers(count: usize) -> Vec<(String, &'static str)> {
 /// The stamp lives here rather than in the caller for the same reason every
 /// other exporter's does: a fabricator asks when the files were cut, and the
 /// answer should not depend on which command asked for them.
-pub fn export_ipc2581_now(world: &mut BoardWorld) -> String {
+pub fn export_ipc2581_now(world: &mut BoardWorld, library: &FootprintLibrary) -> String {
     export_ipc2581(
         world,
+        library,
         &chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%z").to_string(),
     )
 }
@@ -87,13 +92,82 @@ pub fn export_ipc2581_now(world: &mut BoardWorld) -> String {
 ///
 /// `now` is the timestamp the document carries, passed in rather than read
 /// here so a test can write the same board twice and compare the two files.
-pub fn export_ipc2581(world: &mut BoardWorld, now: &str) -> String {
+pub fn export_ipc2581(world: &mut BoardWorld, library: &FootprintLibrary, now: &str) -> String {
     let (size, stack) = world.board_info().unwrap_or((
         cypcb_world::components::BoardSize::new(Nm(0), Nm(0)),
         cypcb_world::components::LayerStack::new(2),
     ));
     let board = qualified(world.board_name().unwrap_or("board"));
     let layers = copper_layers(stack.count as usize);
+
+    // Every pad the board has, on which copper layer, and what shape it is.
+    //
+    // The shapes are collected before anything is written because the format
+    // wants them at the top: a pad in the features section is a reference to a
+    // dictionary entry, so the dictionary has to know every shape the board
+    // uses before the first pad is placed. That is the one structural
+    // difference from every exporter here so far, which write geometry where
+    // they meet it.
+    let mut shapes: BTreeMap<String, String> = BTreeMap::new();
+    let mut placed: Vec<(String, Point, i32, String)> = Vec::new();
+    let parts: Vec<(Point, i32, String)> = {
+        let mut query = world
+            .ecs_mut()
+            .query::<(&Position, &Rotation, &FootprintRef)>();
+        query
+            .iter(world.ecs())
+            .map(|(position, rotation, footprint)| {
+                (position.0, rotation.0, footprint.as_str().to_string())
+            })
+            .collect()
+    };
+    for (position, rotation, footprint_name) in parts {
+        let Some(footprint) = library.get(&footprint_name) else {
+            continue;
+        };
+        for pad in &footprint.pads {
+            for (layer_name, side) in &layers {
+                let layer = match *side {
+                    "TOP" => Layer::TopCopper,
+                    "BOTTOM" => Layer::BottomCopper,
+                    _ => continue,
+                };
+                if !pad.layers.contains(&layer) {
+                    continue;
+                }
+                let (width, height) = pad.size;
+                // A round pad is a circle and everything else is drawn as the
+                // rectangle it fits inside. IPC-2581 has primitives for an
+                // oval and a rounded rectangle; this writes neither yet, and
+                // says so rather than calling a rounded pad round.
+                let (id, primitive) = match pad.shape {
+                    PadShape::Circle => (
+                        format!("circle_{}", mm(Nm(width.0)).replace('.', "_")),
+                        format!("<Circle diameter=\"{}\"/>", mm(width)),
+                    ),
+                    _ => (
+                        format!(
+                            "rect_{}x{}",
+                            mm(Nm(width.0)).replace('.', "_"),
+                            mm(Nm(height.0)).replace('.', "_")
+                        ),
+                        format!(
+                            "<RectCenter width=\"{}\" height=\"{}\"/>",
+                            mm(width),
+                            mm(height)
+                        ),
+                    ),
+                };
+                shapes.insert(id.clone(), primitive);
+                placed.push((
+                    layer_name.clone(),
+                    place_pad_millideg(position, pad.position, rotation),
+                    rotation,
+                    id,
+                ));
+            }
+        }
+    }
 
     let mut out = String::new();
     out.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
@@ -107,6 +181,16 @@ pub fn export_ipc2581(world: &mut BoardWorld, now: &str) -> String {
         let _ = writeln!(out, "    <LayerRef name=\"{name}\"/>");
     }
     out.push_str("    <LayerRef name=\"Edge_Cuts\"/>\n");
+    if !shapes.is_empty() {
+        out.push_str("    <DictionaryStandard units=\"MILLIMETER\">\n");
+        for (id, primitive) in &shapes {
+            let _ = writeln!(
+                out,
+                "      <EntryStandard id=\"{id}\">{primitive}</EntryStandard>"
+            );
+        }
+        out.push_str("    </DictionaryStandard>\n");
+    }
     out.push_str("  </Content>\n");
 
     // The people the format expects. A design written in a text file has no
@@ -198,6 +282,40 @@ pub fn export_ipc2581(world: &mut BoardWorld, now: &str) -> String {
         mm(first.y)
     );
     out.push_str("          </Polygon>\n        </Profile>\n");
+
+    // The copper, one section per layer. A layer with nothing on it gets no
+    // section rather than an empty one: the schema wants at least one `Set`
+    // inside a `LayerFeature`, so an empty section would be a document that
+    // fails validation for saying nothing.
+    for (layer_name, _) in &layers {
+        let on_layer: Vec<&(String, Point, i32, String)> = placed
+            .iter()
+            .filter(|(layer, _, _, _)| layer == layer_name)
+            .collect();
+        if on_layer.is_empty() {
+            continue;
+        }
+        let _ = writeln!(out, "        <LayerFeature layerRef=\"{layer_name}\">");
+        out.push_str("          <Set padUsage=\"TERMINATION\">\n");
+        for (_, centre, rotation, id) in on_layer {
+            out.push_str("            <Pad>\n");
+            // Rotation is a non-negative number in this format, and a pad
+            // turned by -90 degrees is the same copper as one turned by 270.
+            let turn = ((*rotation as f64 / 1000.0) % 360.0 + 360.0) % 360.0;
+            let _ = writeln!(out, "              <Xform rotation=\"{turn:.3}\"/>");
+            let _ = writeln!(
+                out,
+                "              <Location x=\"{}\" y=\"{}\"/>",
+                mm(centre.x),
+                mm(centre.y)
+            );
+            let _ = writeln!(out, "              <StandardPrimitiveRef id=\"{id}\"/>");
+            out.push_str("            </Pad>\n");
+        }
+        out.push_str("          </Set>\n");
+        out.push_str("        </LayerFeature>\n");
+    }
+
     out.push_str("      </Step>\n");
     out.push_str("    </CadData>\n");
     out.push_str("  </Ecad>\n");
