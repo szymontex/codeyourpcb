@@ -496,6 +496,39 @@ pub fn run_export_with(
             ));
         }
 
+        // A stack that differs by area is a fact this file has nowhere to put.
+        //
+        // `MaterialStackup` is one array of one build: the specification wants
+        // it complete - all layers of the PCB and only those materials - and
+        // has no notion of an area, so a rigid-flex design written here reads
+        // as a board pressed the same way end to end. The handoff document
+        // carries a stackup group per area; this one flattens them, and a
+        // fabricator quoting from the flattened list quotes the wrong board.
+        let bounded: Vec<String> = world
+            .stackup()
+            .map(|stackup| {
+                let mut areas: Vec<String> = Vec::new();
+                for layer in &stackup.layers {
+                    if let Some(coverage) = &layer.coverage {
+                        let area = coverage.region().to_string();
+                        if !areas.contains(&area) {
+                            areas.push(area);
+                        }
+                    }
+                }
+                areas
+            })
+            .unwrap_or_default();
+        if !bounded.is_empty() {
+            warnings.push(format!(
+                "the job file states one stack and this design states a different one per \
+                 area ({}): the Gerber job file has no notion of an area, so what it lists \
+                 is the whole panel pressed the same way end to end - export --ipc2581 for \
+                 the document that carries a stack per area",
+                bounded.join(", ")
+            ));
+        }
+
         // Nothing is said about copper pours, and that is the point.
         //
         // This warning has been wrong twice. It first said a declared pour was

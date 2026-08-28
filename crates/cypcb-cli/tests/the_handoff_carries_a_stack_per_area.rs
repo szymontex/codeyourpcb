@@ -87,6 +87,36 @@ region connector_end {
 }
 "#;
 
+/// Export the same board the ordinary way - Gerbers, drill, job file - and
+/// hand back what was said while writing it.
+fn gerbers(source: &str, who: &str) -> String {
+    let dir = std::env::temp_dir().join(format!("cypcb-stack-per-area-{who}"));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("a place to work");
+
+    let board = dir.join("board.cypcb");
+    std::fs::write(&board, source).expect("the board is written");
+    let out = dir.join("out");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_cypcb"))
+        .args([
+            "export",
+            board.to_str().expect("a path that is text"),
+            "-o",
+            out.to_str().expect("a path that is text"),
+            "--force",
+        ])
+        .current_dir(repo_root())
+        .output()
+        .expect("the binary runs");
+    assert!(
+        output.status.success(),
+        "export failed:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    String::from_utf8_lossy(&output.stderr).to_string()
+}
+
 fn group(document: &str, name: &str) -> String {
     let start = document
         .find(&format!("<StackupGroup name=\"{name}\""))
@@ -171,5 +201,34 @@ fn a_board_whose_layers_stop_nowhere_gets_one_group_and_no_warning() {
     assert!(
         !said.contains("stackup group per area"),
         "and nothing to say about areas:\n{said}"
+    );
+}
+
+#[test]
+fn the_job_file_says_it_is_flattening_the_stack() {
+    // `MaterialStackup` is one array of one build. The specification wants it
+    // complete - all layers of the PCB and only those materials - and has no
+    // notion of an area, so a rigid-flex design reads there as a board pressed
+    // the same way end to end, and a fabricator quoting from it quotes the
+    // wrong board.
+    let said = gerbers(RIGID_FLEX, "job-file");
+    assert!(
+        said.contains("the job file states one stack and this design states a different one per area (bend, connector_end)"),
+        "the job file names the areas it cannot hold:\n{said}"
+    );
+    assert!(
+        said.contains("--ipc2581"),
+        "and points at the document that can:\n{said}"
+    );
+
+    // A board whose layers stop nowhere is described by the job file exactly,
+    // and says nothing about areas.
+    let plain = RIGID_FLEX
+        .replace(" covers bend", "")
+        .replace(" covers connector_end", "");
+    let said = gerbers(&plain, "job-file-plain");
+    assert!(
+        !said.contains("states a different one per area"),
+        "one stack, nothing to say:\n{said}"
     );
 }
