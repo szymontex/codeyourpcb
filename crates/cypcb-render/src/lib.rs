@@ -1961,18 +1961,25 @@ impl PcbEngine {
     /// Collect all traces from the world.
     fn collect_traces(&mut self) -> Vec<TraceInfo> {
         // Collect trace data with entity IDs (cloning to avoid borrow issues)
-        let trace_data: Vec<(u32, Trace)> = {
+        // The curve comes with the copper: the viewer can draw an arc in one
+        // call, and a dozen chords look like a dozen chords at a high zoom.
+        type RenderedTrace = (u32, Trace, Option<cypcb_world::components::trace::Curve>);
+        let trace_data: Vec<RenderedTrace> = {
             let world_ref = self.world.ecs_mut();
-            let mut query = world_ref.query::<(Entity, &Trace)>();
+            let mut query = world_ref.query::<(
+                Entity,
+                &Trace,
+                Option<&cypcb_world::components::trace::Curve>,
+            )>();
             query
                 .iter(world_ref)
-                .map(|(e, t)| (e.index(), t.clone()))
+                .map(|(e, t, c)| (e.index(), t.clone(), c.copied()))
                 .collect()
         };
 
         // Now process with net names
         let mut traces: Vec<TraceInfo> = Vec::new();
-        for (entity_id, trace) in trace_data {
+        for (entity_id, trace, curve) in trace_data {
             let layer_name = match trace.layer {
                 Layer::TopCopper => "Top".to_string(),
                 Layer::BottomCopper => "Bottom".to_string(),
@@ -2000,6 +2007,21 @@ impl PcbEngine {
                 })
                 .collect();
 
+            // Where the curve starts is read off the copper rather than
+            // stored twice: the first chord begins on the arc.
+            let curve = curve.and_then(|curve| {
+                let first = trace.segments.first()?;
+                let dx = (first.start.x.0 - curve.centre.x.0) as f64;
+                let dy = (first.start.y.0 - curve.centre.y.0) as f64;
+                Some(crate::snapshot::CurveInfo {
+                    centre_x: curve.centre.x.0 as f64,
+                    centre_y: curve.centre.y.0 as f64,
+                    radius: (dx * dx + dy * dy).sqrt(),
+                    start_degrees: dy.atan2(dx).to_degrees(),
+                    sweep_degrees: curve.sweep_millideg as f64 / 1000.0,
+                })
+            });
+
             traces.push(TraceInfo {
                 id: entity_id,
                 segments,
@@ -2007,6 +2029,7 @@ impl PcbEngine {
                 layer: layer_name,
                 net_name,
                 locked: trace.locked,
+                curve,
             });
         }
 

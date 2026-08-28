@@ -423,6 +423,25 @@ pub struct TraceSegmentInfo {
     pub end_y: f64,
 }
 
+/// The curve a run of copper was drawn as, for a renderer that can draw one.
+///
+/// The segments are still there and are still what a hit test measures: this
+/// is the sentence beside the copper, not instead of it. A canvas draws an arc
+/// in one call, and a dozen chords at a high zoom look like what they are.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct CurveInfo {
+    /// Centre X in nanometers.
+    pub centre_x: f64,
+    /// Centre Y in nanometers.
+    pub centre_y: f64,
+    /// Radius in nanometers.
+    pub radius: f64,
+    /// Where the curve starts, in degrees counter-clockwise from `+X`.
+    pub start_degrees: f64,
+    /// How far it turns, in degrees. Negative turns clockwise.
+    pub sweep_degrees: f64,
+}
+
 /// Trace information for rendering.
 ///
 /// Represents a copper trace as a polyline with a given width.
@@ -441,6 +460,9 @@ pub struct TraceInfo {
     pub net_name: String,
     /// Whether this trace is locked (manual, not to be modified).
     pub locked: bool,
+    /// The curve this copper was drawn as, when it was drawn as one.
+    #[serde(default)]
+    pub curve: Option<CurveInfo>,
 }
 
 /// Via information for rendering.
@@ -643,6 +665,7 @@ mod tests {
             ],
             width: 200_000.0, // 0.2mm
             layer: "Top".to_string(),
+            curve: None,
             net_name: "VCC".to_string(),
             locked: true,
         };
@@ -717,6 +740,7 @@ mod tests {
                 }],
                 width: 250_000.0,
                 layer: "Top".to_string(),
+                curve: None,
                 net_name: "VCC".to_string(),
                 locked: false,
             }],

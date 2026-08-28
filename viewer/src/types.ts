@@ -217,6 +217,19 @@ export interface TraceSegmentInfo {
 /**
  * Trace information for rendering
  */
+export interface CurveInfo {
+  /** Centre X in nanometres */
+  centre_x: number;
+  /** Centre Y in nanometres */
+  centre_y: number;
+  /** Radius in nanometres */
+  radius: number;
+  /** Where the curve starts, in degrees counter-clockwise from +X */
+  start_degrees: number;
+  /** How far it turns, in degrees. Negative turns clockwise. */
+  sweep_degrees: number;
+}
+
 export interface TraceInfo {
   /** Entity index for selection/hit-testing */
   id: number;
@@ -225,6 +238,13 @@ export interface TraceInfo {
   layer: string;
   net_name: string;
   locked: boolean;
+  /**
+   * The curve this copper was drawn as, when it was drawn as one.
+   *
+   * The segments are still the copper and are still what a hit test measures.
+   * This is what a canvas can draw in one call instead of a dozen facets.
+   */
+  curve?: CurveInfo | null;
 }
 
 /**

@@ -451,8 +451,23 @@ export function resizeHandleCursor(handle: ResizeHandle): string {
 // Traces
 // ---------------------------------------------------------------------------
 
-function tracePolyline(ctx: CanvasRenderingContext2D, vp: Viewport, trace: TraceInfo): void {
+export function tracePolyline(ctx: CanvasRenderingContext2D, vp: Viewport, trace: TraceInfo): void {
   ctx.beginPath();
+  // Copper the board states as a curve is drawn as one. The chords are what
+  // the checker measures and what a hit test walks; on screen they are a dozen
+  // facets on something the design says is smooth, and at a high zoom that is
+  // what a person sees.
+  if (trace.curve) {
+    const { centre_x, centre_y, radius, start_degrees, sweep_degrees } = trace.curve;
+    const [cx, cy] = worldToScreen(vp, centre_x, centre_y);
+    // Screen Y grows down, so a board angle is its own negative here - and a
+    // turn that grows the angle on the board shrinks it on the screen, which
+    // is what the canvas calls anticlockwise.
+    const start = (-start_degrees * Math.PI) / 180;
+    const end = (-(start_degrees + sweep_degrees) * Math.PI) / 180;
+    ctx.arc(cx, cy, radius * vp.scale, start, end, sweep_degrees > 0);
+    return;
+  }
   const firstSeg = trace.segments[0];
   const [startX, startY] = worldToScreen(vp, firstSeg.start_x, firstSeg.start_y);
   ctx.moveTo(startX, startY);
