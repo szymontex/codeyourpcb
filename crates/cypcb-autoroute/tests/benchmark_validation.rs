@@ -229,7 +229,18 @@ fn print_table_footer() {
 /// 239 violations with 130 -> 136 shorts, multi_ic 375 -> 336 and 194 -> 166,
 /// open pins unchanged at 6 and one better at 22. Never raise these for a
 /// regression; lower them when the via ring reaches the grid.
-const DRC_RATCHETS: &[(&str, &str, u32, u32)] = &[
+/// One row: file, label, violation ratchet, shorts ratchet, and the routed
+/// values those two were derived from.
+///
+/// The routed pair is recorded because the arithmetic is the whole convention -
+/// a ratchet is the routed value plus that board's own noise band - and until
+/// 2026-08-28 nothing checked it. A band could be edited, or a ratchet moved,
+/// and no test would notice: the band feeds diagnostics and the ratchet is a
+/// constant, so the two were only ever tied together by whoever wrote the
+/// comment. `the_ratchets_are_the_routed_values_plus_their_bands` ties them.
+type Ratchet = (&'static str, &'static str, u32, u32, u32, u32);
+
+const DRC_RATCHETS: &[Ratchet] = &[
     // Every entry re-measured 2026-08-08, and every band with it, on boards
     // that are all fabricable for the first time: no copper outside an
     // outline, no two parts in the same place, no copper the files invent.
@@ -292,8 +303,15 @@ const DRC_RATCHETS: &[(&str, &str, u32, u32)] = &[
     // its band widened by 5, `multi_ic` gives up 12 violations while losing 42
     // shorts. A ratchet set inside a board's own noise fails on weather, which
     // is why the band is added rather than the routed value used bare.
-    ("led_blink.kicad_pcb", "led_blink", 0, 0),
-    ("stm32_breakout.kicad_pcb", "stm32_breakout", 251, 152),
+    ("led_blink.kicad_pcb", "led_blink", 0, 0, 0, 0),
+    (
+        "stm32_breakout.kicad_pcb",
+        "stm32_breakout",
+        251,
+        152,
+        187,
+        104,
+    ),
     // Re-baselined 2026-08-23 for `ViaSpanRule`, and the router did not move:
     // measured with the rule unregistered, `multi_ic` routes to **381**
     // violations, which is 34 *under* the old 415. Registered, the same run is
@@ -302,14 +320,14 @@ const DRC_RATCHETS: &[(&str, &str, u32, u32)] = &[
     // `buried_vias_allowed` were dropped before they reached a rule. New
     // ratchet is the routed value plus this board's own band of 34, the same
     // arithmetic as every other row: 437 + 34 = 471. Shorts unmoved at 175.
-    ("multi_ic.kicad_pcb", "multi_ic", 484, 149),
-    ("shift_driver.kicad_pcb", "shift_driver", 33, 20),
-    ("qfp_fanout.kicad_pcb", "qfp_fanout", 332, 196),
+    ("multi_ic.kicad_pcb", "multi_ic", 484, 149, 449, 134),
+    ("shift_driver.kicad_pcb", "shift_driver", 33, 20, 7, 5),
+    ("qfp_fanout.kicad_pcb", "qfp_fanout", 332, 196, 271, 150),
     // A band of zero is not a rounding: this board routes identically at every
     // via price from 0.22 to 0.28, 28 violations and 13 shorts each time. Its
     // ratchet is the measured value exactly, so any movement at all is a real
     // change rather than weather.
-    ("plane_board.kicad_pcb", "plane_board", 26, 13),
+    ("plane_board.kicad_pcb", "plane_board", 26, 13, 26, 13),
 ];
 
 /// Routes every fixture and holds the line on completeness and DRC count.
@@ -325,7 +343,7 @@ fn benchmark_all_fixtures_drc() {
     eprintln!();
     print_table_header();
     let mut measured = Vec::new();
-    for (filename, label, _, _) in DRC_RATCHETS {
+    for (filename, label, _, _, _, _) in DRC_RATCHETS {
         let (score, route_count, unrouted) = route_and_score(&pathfinder, filename);
         print_table_row(&BenchmarkResult::from_score(
             label,
@@ -351,8 +369,10 @@ fn benchmark_all_fixtures_drc() {
     // be read off one row.
     let mut failures: Vec<String> = Vec::new();
 
-    for ((label, violations, shorts, unrouted, route_count), (_, _, ratchet, shorts_ratchet)) in
-        measured.iter().zip(DRC_RATCHETS)
+    for (
+        (label, violations, shorts, unrouted, route_count),
+        (_, _, ratchet, shorts_ratchet, _, _),
+    ) in measured.iter().zip(DRC_RATCHETS)
     {
         eprintln!(
             "  {}: {} routes, {} violations against {}, {} shorts against {}, {} unrouted",
@@ -603,4 +623,31 @@ fn benchmark_full_matrix() {
     eprintln!();
     eprintln!("═══ Default strategy: PathFinder (empirically validated) ═══");
     eprintln!();
+}
+
+/// A ratchet is the routed value plus that board's own noise band.
+///
+/// That sentence has been the convention since 2026-08-08 and lived only in a
+/// comment. A band edited without its ratchet, or a ratchet moved without a
+/// measurement, changed what the gate enforces and failed nothing: `noise_band`
+/// feeds diagnostics, `DRC_RATCHETS` is a constant, and the two were tied
+/// together by prose. This is the arithmetic, checked.
+///
+/// It does not route anything - it reads three numbers per board - so it runs
+/// in the ordinary `cargo test` rather than behind `--ignored`.
+#[test]
+fn the_ratchets_are_the_routed_values_plus_their_bands() {
+    for (filename, label, ratchet, shorts_ratchet, routed, routed_shorts) in DRC_RATCHETS {
+        let (band, shorts_band) = cypcb_autoroute::noise_band::noise_band(filename);
+        assert_eq!(
+            u64::from(*ratchet),
+            u64::from(*routed) + band as u64,
+            "{label}: the violation ratchet is the routed {routed} plus its band {band}"
+        );
+        assert_eq!(
+            u64::from(*shorts_ratchet),
+            u64::from(*routed_shorts) + shorts_band as u64,
+            "{label}: the shorts ratchet is the routed {routed_shorts} plus its band {shorts_band}"
+        );
+    }
 }

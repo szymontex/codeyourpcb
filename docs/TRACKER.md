@@ -1,6 +1,6 @@
 # CodeYourPCB tracker - the control center
 
-Last updated: 2026-08-26. Update after every material step: add to DONE, pull the next item into NEXT-ACTION, in the same commit as the change.
+Last updated: 2026-08-28. Update after every material step: add to DONE, pull the next item into NEXT-ACTION, in the same commit as the change.
 
 Read this file first. It is the source of truth for what is in flight and what comes next.
 
@@ -2326,6 +2326,10 @@ multi_ic        0.26: 13 iterations, converged false, [553, 339, 269, 270, 258, 
 
 ### V2 - Autorouter and routing quality
 
+- DONE: **the ratchets and the bands are tied together by arithmetic rather than by a comment.** A ratchet is the routed value plus that board's own noise band, which has been the convention since 2026-08-08 and lived only in prose - a mutation two fires ago proved it: a band edited without its ratchet **killed nothing**, because `noise_band` feeds diagnostics and `DRC_RATCHETS` is a constant. Each row now carries the routed pair it was derived from, and `the_ratchets_are_the_routed_values_plus_their_bands` checks the addition.
+- **It routes nothing.** Three numbers per board, so it runs in the ordinary `cargo test` rather than behind `--ignored` - the gate catches a mismatched baseline in the second stage rather than the eighth.
+- Proof: `cargo test -p cypcb-autoroute --test benchmark_validation the_ratchets_are` -> **1 passed**. Mutations, each alone and restored from the saved file: a band edited without its ratchet -> **1 failed**; a ratchet moved without a measurement -> **1 failed**; a routed value recorded wrong -> **1 failed**. That is the unkilled mutation from 2026-08-28 closed. `./scripts/quality-gate.sh` -> **All stages passed**, 9 of 9.
+- NEXT-ACTION: **none pulled in this vector.** What is left in V2 is the variants session, which wants a decision rather than a fire.
 - DONE: **the variant table is re-measured, and `docs/routing.md` is current end to end for the first time since the pad obstacle changed.** Four tables were measured on the disc-shaped pad; this is the last of them. **The default is first on two boards of six now and second on two more** - it was first on one and nobody's best on five. `led_blink` and `shift_driver` pick it outright, `multi_ic` and `qfp_fanout` put it second behind `Low-Via`, `stm32_breakout` fifth behind `High-Density`, `plane_board` tenth behind `Eager Pads`.
 - **One row is worth reading twice and it is not a contradiction.** On `stm32_breakout` the default has **fewer violations than the winner** - 187 against 198 - and loses on **shorts**, 104 against 78. That is the documented ranking doing what it says: complete first, then fewest shorts, then composite, because a short is the fault a board cannot be built around.
 - **`Low-Via` wins two boards and won none in August.** With pads blocking their own rectangle there is room to route without changing layer, so the variant that prices vias highly is the one that finds it - which is the same mechanism the weight sweep saw from the other side when its 31% speed-up disappeared.
@@ -4495,12 +4499,13 @@ this list whenever a piece of work runs into a missing concept.
 | M5 | ~~Net classes.~~ **Closed.** `netclass Power [width 0.5mm] { VCC GND }` states a rule once for a group; a net's own block overrides it field by field. | - | - |
 | M6 | ~~Silkscreen artwork per footprint.~~ **Closed.** Carried by `Footprint`, written in the DSL, accepted from a supplier, measured by the checker and printed by the gerber. | - | The viewer cannot call `register_footprint` - see the note under V4. |
 
-## Owner-decision queue - D1 to D10 answered, D11 open
+## Owner-decision queue - D1 to D11 answered
 
 The owner answered the whole queue in one pass. What each answer means, and
-what it turns into, is below. **D11 was added on 2026-08-28** and is the only
-open row: it is a question about 3751 lines nobody calls, and the measurement
-behind it is in V1 rather than in this table.
+what it turns into, is below. **D11 was added and answered on 2026-08-28**, and the
+answer is not the owner's: they said the crate means nothing to them, which is
+the correct answer to a housekeeping question dressed up as a decision. It is
+parked rather than deleted, with the reasoning in the row.
 
 | # | Answer | What it means here |
 |---|---|---|
@@ -4511,7 +4516,7 @@ behind it is in V1 rather than in this table.
 | D5 | **Keep the Route button hidden until the router is good.** | Closed, and tied to D1: it unhides when the in-house router is finished, not before. The 13 E2E tests stay parked. |
 | D6 | **"Ty mi powiedz."** | Answered below, from two published rows and a real board rather than a preference. **`min_pad_size` is a via land and through-hole pad minimum, not an SMD land.** |
 | D7 | **"Ty mi powiedz."** | Answered below. **`min_slot_clearance` is copper to a milled opening** - the same question `min_edge_clearance` asks of the board outline, asked of a slot. |
-| **D11 - open, asked 2026-08-28** | **`cypcb-library`: work that has not landed, or work that never will?** 3751 lines, 41 passing tests, no caller anywhere. **570 of those lines do a job this project already does** - its KiCad scanner against `cypcb_kicad::library::scan_library`, which has callers, and its JLCPCB client against `viewer/src/jlcpcb.ts`, which works without the API approval the crate's own comment says its path needs. **The other ~3010 are a component database nothing here has**: three SQLite tables, search over them, metadata and previews, and a custom-library editor. Nothing in the project asks for any of it today. Three ways out: **delete it**, **wire it in** behind a `cypcb library` command, or **keep it parked** with the guard that now names it. | Open for the owner. A fire will not delete 3751 lines and will not adopt them either. |
+| **D11 - answered 2026-08-28, and not by the owner** | **`cypcb-library`: work that has not landed, or work that never will?** 3751 lines, 41 passing tests, no caller anywhere. **570 of those lines do a job this project already does** - its KiCad scanner against `cypcb_kicad::library::scan_library`, which has callers, and its JLCPCB client against `viewer/src/jlcpcb.ts`, which works without the API approval the crate's own comment says its path needs. **The other ~3010 are a component database nothing here has**: three SQLite tables, search over them, metadata and previews, and a custom-library editor. Nothing in the project asks for any of it today. Three ways out: **delete it**, **wire it in** behind a `cypcb library` command, or **keep it parked** with the guard that now names it. | **Parked, unwired, guarded.** The owner's answer was that this is not their question - "nie wiem co to jest wgl, sluzy albo moze sluzyc to czemus?" - and they are right: it is housekeeping rather than product direction, so it is mine. **Kept** because 3751 working lines behind a feature that makes sense - a part picker, where a designer searches a local catalogue instead of typing a footprint name - is worth more parked than deleted; **not wired in** because nothing has asked for that feature. The guard from `bca2300` names the crate, so the day it gains a caller the list has to say so. Revisit when somebody asks to search for a part rather than name one. |
 | **D10 - answered 2026-08-27** | **No load on GitHub Actions. The suite runs on flightcore.** The owner's words: "nie chcialbym obciazac bardzo github actions, wolalbym robic te testy na workerze na serwerze flightcore... Poki to nie jest ultra stabilny projekt to nie potrzebujmy na kazdym puszu miec. ale powinna byc jakas regula ze jak konczymy jakis etap to musimy przejsc pelny suite testow, lub gdy dajesz mi realnie feature do sprawdzenia to tez bym wolal zeby byl po calym suite testow." So: **no workflow file, no minutes spent**, and the full nine-stage gate is required at three moments - before a commit that touches build, viewer or scripts (already the rule since 2026-08-20), **at the end of a stage**, and **before anything is handed to him to try**. A scheduled run on the server replaces per-push CI. | Nothing is blocked. The scheduled runner is V3's next action. |
 
 ### D6, settled: `min_pad_size` is not an SMD land
