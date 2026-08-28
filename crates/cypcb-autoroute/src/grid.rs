@@ -132,6 +132,30 @@ impl RoutingGrid {
         rules: &dyn RoutingRuleSet,
         resolution_nm: i64,
     ) -> Option<Self> {
+        Self::from_board_with_pads(world, library, rules, resolution_nm, None)
+    }
+
+    /// The same, with the shape a pad blocks stated.
+    ///
+    /// `None` is the disc this grid has always marked: the pad's longer
+    /// half-side in every direction. `Some(extra)` marks the pad's own
+    /// rectangle, turned the way the part is turned, with `extra` cells of
+    /// reach beyond the clearance.
+    ///
+    /// The disc over-blocks an oblong pad by the difference between its sides -
+    /// 0.7mm on each long side of a 2.0mm by 0.6mm pad - which K011 and
+    /// D-DRC-002 both say is wrong and which the checker has never done.
+    /// Measured on 2026-08-28: the rectangle alone helps two fixtures and
+    /// shorts two others, so what the disc is really buying is margin the cost
+    /// model does not ask for, and `pad_obstacle_shape_sweep` is where that
+    /// trade is measured rather than guessed.
+    pub fn from_board_with_pads(
+        world: &mut BoardWorld,
+        library: &FootprintLibrary,
+        rules: &dyn RoutingRuleSet,
+        resolution_nm: i64,
+        pad_rect_extra_cells: Option<u16>,
+    ) -> Option<Self> {
         let _span = tracing::info_span!("grid_construction").entered();
 
         let (board_size, layer_stack) = world.board_info()?;
@@ -197,7 +221,7 @@ impl RoutingGrid {
         let clearance_cells = ((keepout_nm + resolution_nm - 1) / resolution_nm) as u32;
 
         // Mark pads as obstacles
-        grid.populate_pads(world, library, clearance_cells);
+        grid.populate_pads(world, library, clearance_cells, pad_rect_extra_cells);
 
         // Mark zones as obstacles
         grid.populate_zones(world, clearance_cells);
@@ -214,6 +238,7 @@ impl RoutingGrid {
         world: &mut BoardWorld,
         library: &FootprintLibrary,
         clearance_cells: u32,
+        pad_rect_extra_cells: Option<u16>,
     ) {
         use cypcb_world::{FootprintRef, Position, Rotation};
 
@@ -275,13 +300,25 @@ impl RoutingGrid {
                     for layer in &pad.layers {
                         if let Some(li) = layer_to_index(*layer) {
                             if (li as u8) < self.layer_count {
-                                self.mark_obstacle_at_nm(
-                                    abs_x,
-                                    abs_y,
-                                    li,
-                                    pad_radius_cells + clearance_cells,
-                                    CELL_PAD,
-                                );
+                                match pad_rect_extra_cells {
+                                    Some(extra) => self.mark_pad_rect_at_nm(
+                                        abs_x,
+                                        abs_y,
+                                        pad.size.0.raw() / 2,
+                                        pad.size.1.raw() / 2,
+                                        *rotation_deg,
+                                        li,
+                                        clearance_cells + extra as u32,
+                                        CELL_PAD,
+                                    ),
+                                    None => self.mark_obstacle_at_nm(
+                                        abs_x,
+                                        abs_y,
+                                        li,
+                                        pad_radius_cells + clearance_cells,
+                                        CELL_PAD,
+                                    ),
+                                }
 
                                 // Whose pad it is, so a net's own zone can be
                                 // opened for its own pin and not for the pin
@@ -289,13 +326,25 @@ impl RoutingGrid {
                                 if let Some((_, net)) =
                                     pins.iter().find(|(pin, _)| *pin == pad.number)
                                 {
-                                    self.mark_pad_owner_at_nm(
-                                        abs_x,
-                                        abs_y,
-                                        li,
-                                        pad_radius_cells + clearance_cells,
-                                        *net,
-                                    );
+                                    match pad_rect_extra_cells {
+                                        Some(extra) => self.mark_pad_owner_rect_at_nm(
+                                            abs_x,
+                                            abs_y,
+                                            pad.size.0.raw() / 2,
+                                            pad.size.1.raw() / 2,
+                                            *rotation_deg,
+                                            li,
+                                            clearance_cells + extra as u32,
+                                            *net,
+                                        ),
+                                        None => self.mark_pad_owner_at_nm(
+                                            abs_x,
+                                            abs_y,
+                                            li,
+                                            pad_radius_cells + clearance_cells,
+                                            *net,
+                                        ),
+                                    }
                                 }
                             }
                         }
@@ -575,6 +624,94 @@ impl RoutingGrid {
                 if dx * dx + dy * dy <= r_sq {
                     self.set_cell(x, y, layer, flag);
                 }
+            }
+        }
+    }
+
+    /// The cells a pad's own rectangle covers, turned the way the part is.
+    ///
+    /// A cell is covered when its centre is inside the rectangle measured in
+    /// the pad's own frame, which is the test `ClearanceRule` makes.
+    fn pad_rect_cells(
+        &self,
+        nm_x: i64,
+        nm_y: i64,
+        half_w: i64,
+        half_h: i64,
+        rotation_deg: f64,
+        reach_cells: u32,
+    ) -> Vec<(u32, u32)> {
+        let reach_nm = reach_cells as i64 * self.resolution;
+        let reach_x = half_w + reach_nm;
+        let reach_y = half_h + reach_nm;
+        let turn = rotation_deg.to_radians();
+        let (sin, cos) = turn.sin_cos();
+        // The rotated rectangle's own bounding box, so the scan covers it at
+        // any angle.
+        let span_x = (reach_x as f64 * cos.abs() + reach_y as f64 * sin.abs()).ceil() as i64;
+        let span_y = (reach_x as f64 * sin.abs() + reach_y as f64 * cos.abs()).ceil() as i64;
+
+        let min_x = self.nm_to_grid_x(nm_x - span_x);
+        let max_x = self.nm_to_grid_x(nm_x + span_x);
+        let min_y = self.nm_to_grid_y(nm_y - span_y);
+        let max_y = self.nm_to_grid_y(nm_y + span_y);
+
+        let mut cells = Vec::new();
+        for gy in min_y..=max_y {
+            for gx in min_x..=max_x {
+                let dx = (self.grid_to_nm_x(gx) - nm_x) as f64;
+                let dy = (self.grid_to_nm_y(gy) - nm_y) as f64;
+                let local_x = dx * cos + dy * sin;
+                let local_y = -dx * sin + dy * cos;
+                if local_x.abs() <= reach_x as f64 && local_y.abs() <= reach_y as f64 {
+                    cells.push((gx, gy));
+                }
+            }
+        }
+        cells
+    }
+
+    /// Mark a pad as its own rectangle on one layer.
+    #[allow(clippy::too_many_arguments)]
+    fn mark_pad_rect_at_nm(
+        &mut self,
+        nm_x: i64,
+        nm_y: i64,
+        half_w: i64,
+        half_h: i64,
+        rotation_deg: f64,
+        layer: usize,
+        reach_cells: u32,
+        flag: u8,
+    ) {
+        if layer >= self.layer_count as usize {
+            return;
+        }
+        for (x, y) in self.pad_rect_cells(nm_x, nm_y, half_w, half_h, rotation_deg, reach_cells) {
+            self.set_cell(x, y, layer, flag);
+        }
+    }
+
+    /// Record which net a pad's copper belongs to, over its own rectangle.
+    #[allow(clippy::too_many_arguments)]
+    fn mark_pad_owner_rect_at_nm(
+        &mut self,
+        nm_x: i64,
+        nm_y: i64,
+        half_w: i64,
+        half_h: i64,
+        rotation_deg: f64,
+        layer: usize,
+        reach_cells: u32,
+        net: u32,
+    ) {
+        if layer >= self.layer_count as usize {
+            return;
+        }
+        for (x, y) in self.pad_rect_cells(nm_x, nm_y, half_w, half_h, rotation_deg, reach_cells) {
+            let idx = layer * self.plane + y as usize * self.width as usize + x as usize;
+            if self.pad_net[idx] == u32::MAX {
+                self.pad_net[idx] = net;
             }
         }
     }

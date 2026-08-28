@@ -37,10 +37,15 @@ fn fixture(name: &str) -> PathBuf {
 /// the fixtures ship with none, and the first draft of this test asserted
 /// against a report that was entirely `unrouted-pin`.
 ///
-/// `plane_board` rather than `led_blink`: the small board routes to **one**
-/// clearance fault, which is one row and one contact, so it can never show a
-/// grouped row. A test whose fixture cannot exhibit the thing it checks passes
-/// for the wrong reason.
+/// `qfp_fanout` rather than `led_blink` or `plane_board`: a fixture has to be
+/// able to exhibit the thing this test checks, and a board whose faults are
+/// one row each can never show a grouped row. `led_blink` routes to one
+/// clearance fault; `plane_board` used to route to several rows over fewer
+/// contacts and stopped on 2026-08-28, when the router's pad obstacles became
+/// rectangles and its faults fell to eight rows over eight contacts. The
+/// fine-pitch board is the one whose copper runs beside itself for millimetres
+/// at a time - this file's own opening measured 24 rows for one `U1 <-> trace
+/// 'GND'` on it.
 fn check_a_routed_board(tag: &str, name: &str) -> String {
     // A file per caller. These run in parallel and the first draft gave them
     // one shared path, so a test could route into a file another test had just
@@ -87,7 +92,7 @@ fn summary_count(report: &str, kind: &str) -> usize {
 #[test]
 fn the_listing_groups_and_the_summary_does_not() {
     const TAG: &str = "listing";
-    let report = check_a_routed_board(TAG, "plane_board.kicad_pcb");
+    let report = check_a_routed_board(TAG, "qfp_fanout.kicad_pcb");
 
     let rows = summary_count(&report, "clearance");
     let printed = report
@@ -117,7 +122,7 @@ fn the_listing_groups_and_the_summary_does_not() {
 #[test]
 fn every_grouped_row_says_how_many_it_stands_for() {
     const TAG: &str = "accounted";
-    let report = check_a_routed_board(TAG, "plane_board.kicad_pcb");
+    let report = check_a_routed_board(TAG, "qfp_fanout.kicad_pcb");
 
     let rows = summary_count(&report, "clearance");
     let printed = report
@@ -144,7 +149,7 @@ fn the_header_still_counts_rows() {
     // The number the ratchets and the bands are made of. If grouping ever
     // reaches it, every published figure in this project moves at once.
     const TAG: &str = "header";
-    let report = check_a_routed_board(TAG, "plane_board.kicad_pcb");
+    let report = check_a_routed_board(TAG, "qfp_fanout.kicad_pcb");
     let header: usize = report
         .lines()
         .find_map(|line| line.split(" DRC violation(s)").next()?.trim().parse().ok())
@@ -173,7 +178,7 @@ fn the_summary_reconciles_the_two_numbers() {
     // rows, so on a routed board they disagree. A reader with no line
     // explaining that is left to work out which of the two is the board.
     const TAG: &str = "reconciled";
-    let report = check_a_routed_board(TAG, "plane_board.kicad_pcb");
+    let report = check_a_routed_board(TAG, "qfp_fanout.kicad_pcb");
 
     let rows = summary_count(&report, "clearance");
     let printed = report

@@ -121,7 +121,13 @@ impl PathFinderStrategy {
         let resolution = Self::resolution_for(world, rules, config);
 
         // Build grid
-        let mut grid = match RoutingGrid::from_board(world, library, rules, resolution) {
+        let mut grid = match RoutingGrid::from_board_with_pads(
+            world,
+            library,
+            rules,
+            resolution,
+            config.pad_rect_extra_cells,
+        ) {
             Some(g) => g,
             None => {
                 return RoutingResult::failed("Failed to build routing grid (no board entity?)")

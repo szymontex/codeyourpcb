@@ -138,6 +138,11 @@ fn every_example_is_counted_the_same_by_both() {
 /// the kind that made `score` and `check` differ by a factor of six once - only
 /// appear in numbers once there is copper to measure, and a router puts it
 /// there in a way no fixture in this repository does.
+///
+/// `qfp_fanout` rather than `led_blink`: the small board routed to a handful
+/// of clearance faults until 2026-08-28, when the router's pad obstacles
+/// became rectangles and it started routing clean. A test that needs copper
+/// close enough to measure has to run on a board that still produces some.
 #[test]
 fn a_routed_board_is_counted_the_same_by_both() {
     let dir = std::env::temp_dir().join("cypcb-two-paths-routed");
@@ -147,7 +152,7 @@ fn a_routed_board_is_counted_the_same_by_both() {
 
     let output = Command::new(env!("CARGO_BIN_EXE_cypcb"))
         .arg("route")
-        .arg(repo_root().join("tests/fixtures/benchmark/led_blink.kicad_pcb"))
+        .arg(repo_root().join("tests/fixtures/benchmark/qfp_fanout.kicad_pcb"))
         .arg("--in-house")
         .arg("--fast")
         .arg("-o")

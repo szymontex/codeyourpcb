@@ -139,8 +139,8 @@ moved.
 `cypcb route` routes the board eleven ways and keeps the best,
 because no one setting wins everywhere - measured across the six benchmark
 boards, the winner differs between them. It costs roughly eleven times the wall
-clock of a single run and buys, on `examples/blink.cypcb`, 5 violations with 3 shorts
-against 9 with 6. `--fast` routes once when the wait matters more than the
+clock of a single run and buys, on `examples/blink.cypcb`, 2 violations with 2 shorts
+against 4 with 3. `--fast` routes once when the wait matters more than the
 board.
 
 <p align="center">
@@ -202,13 +202,13 @@ cargo run -p cypcb-cli -- watch examples/blink.cypcb          # check again on e
 
 `check`, `route` and `score` all take `--preset`, and an unknown
 name prints the list. They use the same rules and agree on the same board:
-`examples/blink.routed.cypcb` is 4 violations to `check --preset pcbway` and 4
+`examples/blink.routed.cypcb` is 2 violations to `check --preset pcbway` and 2
 to `score --preset pcbway`.
 
 On an **unrouted** file they will not agree, and that is not a disagreement
 about the rules. `score` routes the board before measuring it, so it reports
 what its own routing came to - `examples/blink.cypcb` is 24 violations to
-`check` and 9 to `score`, because the second one laid copper first.
+`check` and 4 to `score`, because the second one laid copper first.
 
 `--preset` means two things, though, and the lists are not the same length.
 `check`, `route` and `score` take a **design-rule** preset - what a house can

@@ -224,6 +224,25 @@ pub struct AutorouteConfig {
     /// that close, which on a dense board is the pin next door.
     pub pad_zone_margin_cells: u16,
 
+    /// What shape a pad blocks on the grid.
+    ///
+    /// `None` is the disc this router marked until 2026-08-28: the pad's
+    /// longer half-side in every direction, which over-blocks an oblong pad by
+    /// the difference between its sides. `Some(extra)` marks the pad's own
+    /// rectangle at the angle the part sits at, with `extra` cells of reach
+    /// beyond the clearance.
+    ///
+    /// **Two is what ships**, and it is a measurement rather than a
+    /// preference. The rectangle alone - `Some(0)` - improves two fixtures and
+    /// shorts two others, because the disc was buying margin the cost model
+    /// does not ask for. `pad_obstacle_shape_sweep` measured the rectangle at
+    /// nought to three cells of reach on all six fixtures: at two, five of the
+    /// six improve on the disc - `led_blink` 2 violations to **0**,
+    /// `shift_driver` 65 to **7**, `qfp_fanout` 318 to **271**,
+    /// `stm32_breakout` 199 to **187**, `plane_board` 28 to **26** - and
+    /// `multi_ic` gives up 12 violations while losing 35 shorts, 176 to 141.
+    pub pad_rect_extra_cells: Option<u16>,
+
     /// Whether a route may enter a pad's keepout that another net's copper
     /// already occupies.
     ///
@@ -316,6 +335,7 @@ impl Default for AutorouteConfig {
             clearance_barrier: 0.0,
             pad_layer_change_penalty: crate::pathfinder_v2::PAD_LAYER_CHANGE_PENALTY,
             pad_zone_margin_cells: crate::orchestrator::DEFAULT_PAD_ZONE_MARGIN_CELLS,
+            pad_rect_extra_cells: Some(2),
             pad_zone_blocks_foreign_copper: false,
             reserve_trace_footprint: true,
             via_foreign_copper_penalty: 0.25,
