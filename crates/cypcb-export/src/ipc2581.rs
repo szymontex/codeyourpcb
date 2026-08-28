@@ -65,6 +65,41 @@ fn qualified(name: &str) -> String {
     }
 }
 
+/// What a fabricator publishes about how far off a finished board may be.
+///
+/// Every field is optional and `None` means the same thing everywhere: no
+/// published figure has been read for that house. A document that wants a
+/// number then says zero and the run says why, because a figure invented here
+/// is a figure a fabricator gets held to.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct HouseTolerances {
+    /// How far the finished thickness may be off, as a percentage, at 1mm and
+    /// above.
+    pub thickness_percent: Option<u32>,
+    /// The absolute figure a board thinner than 1mm gets instead.
+    pub thickness_thin: Option<Nm>,
+    /// How much larger a finished hole may come out than it was drawn.
+    pub hole_plus: Option<Nm>,
+    /// How much smaller a finished hole may come out than it was drawn.
+    pub hole_minus: Option<Nm>,
+}
+
+impl HouseTolerances {
+    /// How far this board's own thickness may be off.
+    ///
+    /// Two rules rather than one, which is how JLCPCB publishes it: ten
+    /// percent at 1mm and above, and a flat 0.1mm below that - ten percent of
+    /// a 0.4mm board would be 0.04mm, finer than the press can hold.
+    pub fn thickness(&self, overall: Nm) -> Option<Nm> {
+        if overall.0 < Nm::from_mm(1.0).0 {
+            self.thickness_thin
+        } else {
+            self.thickness_percent
+                .map(|percent| Nm(overall.0 * percent as i64 / 100))
+        }
+    }
+}
+
 /// The dictionary entry a width is written as.
 ///
 /// One entry per width the board uses, named after the width itself: two
@@ -92,12 +127,12 @@ fn copper_layers(count: usize) -> Vec<(String, &'static str)> {
 pub fn export_ipc2581_now(
     world: &mut BoardWorld,
     library: &FootprintLibrary,
-    thickness_tolerance_percent: Option<u32>,
+    house: HouseTolerances,
 ) -> (String, Vec<String>) {
     export_ipc2581(
         world,
         library,
-        thickness_tolerance_percent,
+        house,
         &chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%z").to_string(),
     )
 }
@@ -109,7 +144,7 @@ pub fn export_ipc2581_now(
 pub fn export_ipc2581(
     world: &mut BoardWorld,
     library: &FootprintLibrary,
-    thickness_tolerance_percent: Option<u32>,
+    house: HouseTolerances,
     now: &str,
 ) -> (String, Vec<String>) {
     let (size, stack) = world.board_info().unwrap_or((
@@ -327,8 +362,8 @@ pub fn export_ipc2581(
         // minus ten percent as its standard - so it comes from the fab table
         // when that table has read a published figure, and is zero with a word
         // said about it when it has not.
-        let tolerance = match thickness_tolerance_percent {
-            Some(percent) => Nm(overall.0 * percent as i64 / 100),
+        let tolerance = match house.thickness(overall) {
+            Some(figure) => figure,
             None => {
                 warnings.push(
                     "no published thickness tolerance is known for this board's fab, so the \
@@ -557,6 +592,16 @@ pub fn export_ipc2581(
             })
             .collect();
         if !through.is_empty() {
+            if house.hole_plus.is_none() || house.hole_minus.is_none() {
+                let already = warnings.iter().any(|said| said.contains("hole tolerance"));
+                if !already {
+                    warnings.push(
+                        "no published hole tolerance is known for this board's fab, so every \
+                         hole in the document says zero either way"
+                            .to_string(),
+                    );
+                }
+            }
             out.push_str("          <Set padUsage=\"VIA\">\n");
             for via in through {
                 out.push_str("            <Pad>\n");
@@ -572,16 +617,18 @@ pub fn export_ipc2581(
                     mm(via.outer_diameter).replace('.', "_")
                 );
                 out.push_str("            </Pad>\n");
-                // A hole states its own tolerance, and this project states
-                // none anywhere: writing a figure here would be inventing a
-                // number a fabricator can hold the board to.
+                // A hole's tolerance is the house's, published and not
+                // symmetric - JLCPCB states through-holes as `+0.13 / -0.08`,
+                // because plating grows into the barrel.
                 let _ = writeln!(
                     out,
                     "            <Hole name=\"via_{}_{}\" diameter=\"{}\" \
-                     platingStatus=\"VIA\" plusTol=\"0\" minusTol=\"0\" x=\"{}\" y=\"{}\"/>",
+                     platingStatus=\"VIA\" plusTol=\"{}\" minusTol=\"{}\" x=\"{}\" y=\"{}\"/>",
                     mm(via.position.x).replace('.', "_"),
                     mm(via.position.y).replace('.', "_"),
                     mm(via.drill),
+                    mm(house.hole_plus.unwrap_or(Nm(0))),
+                    mm(house.hole_minus.unwrap_or(Nm(0))),
                     mm(via.position.x),
                     mm(via.position.y)
                 );

@@ -103,6 +103,9 @@ use cypcb_rules::DesignConstraints;
 ///     max_drill_aspect_ratio: 800,
 ///     board_thickness: Nm::from_mm(1.6),
 ///     board_thickness_tolerance_percent: Some(10),
+///     board_thickness_tolerance_thin: Some(Nm::from_mm(0.1)),
+///     hole_tolerance_plus: Some(Nm::from_mm(0.13)),
+///     hole_tolerance_minus: Some(Nm::from_mm(0.08)),
 /// };
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -218,6 +221,12 @@ pub struct DesignRules {
     /// zero and says that it is saying zero, because a figure invented here is
     /// a figure a fabricator gets held to.
     pub board_thickness_tolerance_percent: Option<u32>,
+    /// The absolute tolerance this fab gives a board thinner than 1mm.
+    pub board_thickness_tolerance_thin: Option<Nm>,
+    /// How much larger a finished hole may come out than it was drawn.
+    pub hole_tolerance_plus: Option<Nm>,
+    /// How much smaller a finished hole may come out than it was drawn.
+    pub hole_tolerance_minus: Option<Nm>,
 }
 
 /// The land minimum this fab is held to: what it published, or what its own
@@ -301,6 +310,9 @@ impl DesignRules {
             max_drill_aspect_ratio: c.max_drill_aspect_ratio,
             board_thickness: c.board_thickness,
             board_thickness_tolerance_percent: c.board_thickness_tolerance_percent,
+            board_thickness_tolerance_thin: c.board_thickness_tolerance_thin,
+            hole_tolerance_plus: c.hole_tolerance_plus,
+            hole_tolerance_minus: c.hole_tolerance_minus,
         }
     }
 }

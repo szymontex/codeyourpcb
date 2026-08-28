@@ -734,3 +734,44 @@ fn a_board_with_no_stack_gets_no_stack_section() {
         "and nothing is said about a tolerance it never needed: {said}"
     );
 }
+
+#[test]
+fn a_hole_carries_the_tolerance_its_house_publishes() {
+    // Not symmetric, and that is the point: plating grows into the barrel, so
+    // JLCPCB states through-holes as "+0.13 / -0.08 mm". One figure either way
+    // would be wrong in one direction.
+    let (xml, said) = document_and_run("stitched-plane.cypcb", &scratch("hole-tol"));
+    let tags = tags(&xml);
+
+    let holes: Vec<&Tag> = tags.iter().filter(|tag| tag.name == "Hole").collect();
+    assert!(!holes.is_empty(), "the board drills holes:\n{xml}");
+    for hole in &holes {
+        assert_eq!(attribute(hole, "plusTol"), "0.130");
+        assert_eq!(attribute(hole, "minusTol"), "0.080");
+    }
+    assert!(
+        !said.contains("no published hole tolerance"),
+        "nothing is apologised for at a house that publishes one: {said}"
+    );
+}
+
+#[test]
+fn a_house_with_no_published_hole_figure_says_zero_and_says_so() {
+    let (xml, said) = document_and_run("blind-via.cypcb", &scratch("hole-unknown"));
+    let tags = tags(&xml);
+    let holes: Vec<&Tag> = tags.iter().filter(|tag| tag.name == "Hole").collect();
+    assert!(!holes.is_empty(), "the board drills holes:\n{xml}");
+    for hole in &holes {
+        assert_eq!(attribute(hole, "plusTol"), "0.000");
+        assert_eq!(attribute(hole, "minusTol"), "0.000");
+    }
+    assert!(
+        said.contains("no published hole tolerance is known"),
+        "and the run says why, once: {said}"
+    );
+    assert_eq!(
+        said.matches("no published hole tolerance is known").count(),
+        1,
+        "once per export rather than once per hole: {said}"
+    );
+}

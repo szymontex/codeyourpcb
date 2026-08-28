@@ -91,6 +91,9 @@ pub fn standard() -> DesignConstraints {
         copper_weight_oz_x10: 10, // 1.0 oz
         board_thickness: Nm::from_mm(1.6),
         board_thickness_tolerance_percent: None, // no published figure read
+        board_thickness_tolerance_thin: None,
+        hole_tolerance_plus: None,
+        hole_tolerance_minus: None,
         min_hole_to_hole: Nm::from_mm(0.5),
         min_hole_to_edge: Nm::from_mm(0.3),
         blind_vias_allowed: true,         // available at extra cost

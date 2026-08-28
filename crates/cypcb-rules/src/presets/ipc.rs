@@ -78,7 +78,10 @@ pub fn class1() -> DesignConstraints {
         copper_weight_oz_x10: 10, // 1.0 oz
         board_thickness: Nm::from_mm(1.6),
         board_thickness_tolerance_percent: None, // no published figure read
-        min_hole_to_hole: Nm::from_mm(0.6),      // relaxed
+        board_thickness_tolerance_thin: None,
+        hole_tolerance_plus: None,
+        hole_tolerance_minus: None,
+        min_hole_to_hole: Nm::from_mm(0.6), // relaxed
         min_hole_to_edge: Nm::from_mm(0.4),
         blind_vias_allowed: false,
         buried_vias_allowed: false,
@@ -147,6 +150,9 @@ pub fn class2() -> DesignConstraints {
         copper_weight_oz_x10: 10,
         board_thickness: Nm::from_mm(1.6),
         board_thickness_tolerance_percent: None, // no published figure read
+        board_thickness_tolerance_thin: None,
+        hole_tolerance_plus: None,
+        hole_tolerance_minus: None,
         min_hole_to_hole: Nm::from_mm(0.5),
         min_hole_to_edge: Nm::from_mm(0.3),
         blind_vias_allowed: false,
@@ -216,6 +222,9 @@ pub fn class3() -> DesignConstraints {
         copper_weight_oz_x10: 10,
         board_thickness: Nm::from_mm(1.6),
         board_thickness_tolerance_percent: None, // no published figure read
+        board_thickness_tolerance_thin: None,
+        hole_tolerance_plus: None,
+        hole_tolerance_minus: None,
         min_hole_to_hole: Nm::from_mm(0.5),
         min_hole_to_edge: Nm::from_mm(0.5), // wider for reliability
         blind_vias_allowed: false,          // through-hole only for reliability

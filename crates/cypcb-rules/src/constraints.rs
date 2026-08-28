@@ -122,6 +122,22 @@ pub struct DesignConstraints {
     /// saying zero. A figure invented here is a figure a fabricator gets held
     /// to.
     pub board_thickness_tolerance_percent: Option<u32>,
+    /// The absolute tolerance a thin board gets instead of the percentage.
+    ///
+    /// JLCPCB publishes two rules, not one: "± 10%" at 1.0mm and above, and
+    /// "± 0.1mm" below it - ten percent of 0.4mm would be 0.04mm, which is
+    /// finer than the press can hold. `None` means no published figure has
+    /// been read for the house.
+    pub board_thickness_tolerance_thin: Option<Nm>,
+    /// How much larger a finished hole may come out than it was drawn.
+    ///
+    /// Published per house and **not symmetric**: JLCPCB's own capabilities
+    /// page states through-holes as "+0.13 / -0.08 mm", because plating grows
+    /// into the barrel. A single figure either way would be wrong in one
+    /// direction, so both are carried.
+    pub hole_tolerance_plus: Option<Nm>,
+    /// How much smaller a finished hole may come out than it was drawn.
+    pub hole_tolerance_minus: Option<Nm>,
     /// Minimum hole-to-hole spacing (edge to edge).
     pub min_hole_to_hole: Nm,
     /// Smallest via pad a fab states, when it states one.
@@ -163,7 +179,7 @@ impl DesignConstraints {
     /// count is a regression. It said 35 while the struct had 34, because
     /// nothing checked it - `field_count_matches_the_struct` does now, and a
     /// field added or removed without touching this line fails to compile.
-    pub const FIELD_COUNT: usize = 38;
+    pub const FIELD_COUNT: usize = 41;
 }
 
 impl Default for DesignConstraints {
@@ -211,6 +227,9 @@ impl Default for DesignConstraints {
             copper_weight_oz_x10: 10,          // 1.0 oz
             board_thickness: Nm::from_mm(1.6), // 1.6mm standard
             board_thickness_tolerance_percent: None,
+            board_thickness_tolerance_thin: None,
+            hole_tolerance_plus: None,
+            hole_tolerance_minus: None,
             min_hole_to_hole: Nm::from_mm(0.5), // 0.5mm
             min_hole_to_edge: Nm::from_mm(0.3), // 0.3mm
             blind_vias_allowed: false,
@@ -293,6 +312,9 @@ mod tests {
             thermal_relief_spokes: _,
             board_thickness: _,
             board_thickness_tolerance_percent: _,
+            board_thickness_tolerance_thin: _,
+            hole_tolerance_plus: _,
+            hole_tolerance_minus: _,
             min_hole_to_hole: _,
             min_hole_to_edge: _,
             blind_vias_allowed: _,
@@ -305,7 +327,7 @@ mod tests {
             copper_weight_oz_x10: _,
         } = DesignConstraints::default();
 
-        let named = 38;
+        let named = 41;
         assert_eq!(
             DesignConstraints::FIELD_COUNT,
             named,

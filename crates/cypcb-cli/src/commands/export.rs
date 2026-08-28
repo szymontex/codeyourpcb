@@ -498,15 +498,22 @@ impl ExportCommand {
                 .wrap_err("Creating the handoff directory failed")?;
             // The tolerance is the fab's, so it comes from the fab the board
             // names rather than from the flag that decides file naming.
-            let thickness_tolerance = world
+            let published = world
                 .fab()
                 .and_then(cypcb_rules::presets::RulesPreset::from_name)
-                .and_then(|preset| preset.constraints().board_thickness_tolerance_percent);
-            let (document, handoff_warnings) = cypcb_export::ipc2581::export_ipc2581_now(
-                &mut world,
-                &library,
-                thickness_tolerance,
-            );
+                .map(|preset| preset.constraints());
+            let house = cypcb_export::ipc2581::HouseTolerances {
+                thickness_percent: published
+                    .as_ref()
+                    .and_then(|c| c.board_thickness_tolerance_percent),
+                thickness_thin: published
+                    .as_ref()
+                    .and_then(|c| c.board_thickness_tolerance_thin),
+                hole_plus: published.as_ref().and_then(|c| c.hole_tolerance_plus),
+                hole_minus: published.as_ref().and_then(|c| c.hole_tolerance_minus),
+            };
+            let (document, handoff_warnings) =
+                cypcb_export::ipc2581::export_ipc2581_now(&mut world, &library, house);
             // Before the file is announced, so a person reads what it could
             // not say before they read that it was written.
             for warning in handoff_warnings {
