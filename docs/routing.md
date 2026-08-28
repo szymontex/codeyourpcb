@@ -353,6 +353,31 @@ then fewest shorts, then composite:
 | `plane_board` | `Eager Pads Priced Ring` | 5th | 10 / 4 against 28 / 13 |
 | `qfp_fanout` | `Default` | **1st** | - |
 
+**Re-run 2026-08-28 on the rectangular pad obstacle, and the sentence this
+table exists to support has weakened:**
+
+| board | winner | the default's place | winner vs default |
+|---|---|---|---|
+| `led_blink` | `Default` | **1st** | - |
+| `stm32_breakout` | `High-Density` | 5th | 198 / 78 against 187 / 104 |
+| `multi_ic` | `Low-Via` | 2nd | 402 / 128 against 449 / 134 |
+| `shift_driver` | `Default` | **1st** | - |
+| `plane_board` | `Eager Pads` | 10th | 9 / 5 against 26 / 13 |
+| `qfp_fanout` | `Low-Via` | 2nd | 246 / 148 against 271 / 150 |
+
+**The default is now first on two boards of six and second on two more.** It
+was first on one and nobody's best on five. `stm32_breakout` is the row worth
+reading twice: the default has **fewer violations** than the winner - 187
+against 198 - and loses on shorts, 104 against 78, which is the ranking working
+as documented rather than a contradiction. Shorts come first because a short is
+the fault a board cannot be built around.
+
+`Low-Via` winning two boards is the other change. It was nobody's winner in
+August; with pads blocking their own rectangle there is room to route without
+changing layer, and a variant that prices vias highly is the one that finds it.
+
+The August reading follows, kept for its argument.
+
 Five different winners across six boards. This file used to say the default was
 "fourth of eight on every board", measured on three fixtures; on six it ranges
 from first to seventh, and the sentence it supported - that the default is not a
