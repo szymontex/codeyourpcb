@@ -1170,6 +1170,9 @@ pub enum TraceDirective {
 /// signed: positive turns counter-clockwise.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TraceArc {
+    /// Where the curve begins, when the file says so rather than leaving it to
+    /// the copper before it.
+    pub start: Option<PositionExpr>,
     /// The centre the copper turns about.
     pub centre: PositionExpr,
     /// How far it turns, in degrees. Negative turns clockwise.

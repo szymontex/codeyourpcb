@@ -1756,7 +1756,11 @@ fn sync_trace(
                     }
                 }
                 TraceDirective::Arc(arc_def) => {
-                    let Some(start) = cursor else {
+                    let stated = arc_def
+                        .start
+                        .as_ref()
+                        .map(|point| Point::new(point.x.to_nm(), point.y.to_nm()));
+                    let Some(start) = stated.or(cursor) else {
                         result.errors.push(SyncError::ArcWithoutStart {
                             src: source.to_string(),
                             span: span_to_source_span(&arc_def.span),
@@ -1792,7 +1796,18 @@ fn sync_trace(
                             locked: trace_def.locked,
                             source: TraceSource::Manual,
                         };
-                        world.ecs_mut().spawn((trace, net_id, span));
+                        // The curve rides along with the copper it became, so
+                        // a saved board can state the arc again rather than
+                        // the chords it was flattened into.
+                        world.ecs_mut().spawn((
+                            trace,
+                            net_id,
+                            span,
+                            crate::components::trace::Curve {
+                                centre,
+                                sweep_millideg: arc.sweep_millideg,
+                            },
+                        ));
                     }
                 }
                 // Spawned above, for every mode rather than only this one.

@@ -2284,6 +2284,26 @@
           }
         ]
       },
+      "sx": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "dimension",
+            "named": true
+          }
+        ]
+      },
+      "sy": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "dimension",
+            "named": true
+          }
+        ]
+      },
       "unit": {
         "multiple": false,
         "required": false,
@@ -3314,6 +3334,10 @@
   },
   {
     "type": "stackup",
+    "named": false
+  },
+  {
+    "type": "start",
     "named": false
   },
   {

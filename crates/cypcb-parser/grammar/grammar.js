@@ -826,8 +826,18 @@ module.exports = grammar({
     // format answers that differently. A centre and a sweep need no
     // convention. The turn is counter-clockwise, which is the direction angles
     // grow in, unless the arc says `clockwise`.
+    //
+    // `start` is for a file a tool wrote rather than a person: the writer
+    // states where each curve begins so a saved board does not depend on the
+    // order its traces come out of the world in.
     trace_arc: $ => seq(
       'arc',
+      optional(seq(
+        'start',
+        field('sx', $.dimension),
+        ',',
+        field('sy', $.dimension),
+      )),
       'centre',
       field('cx', $.dimension),
       ',',

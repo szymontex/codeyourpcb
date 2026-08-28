@@ -1511,8 +1511,20 @@ impl CypcbParser {
                     // Angles grow counter-clockwise, so that is the direction
                     // with no word beside it.
                     let clockwise = get_child_by_field(&child, "direction").is_some();
+                    let start = get_child_by_field(&child, "sx")
+                        .and_then(|n| self.convert_dimension(source, &n, errors))
+                        .zip(
+                            get_child_by_field(&child, "sy")
+                                .and_then(|n| self.convert_dimension(source, &n, errors)),
+                        )
+                        .map(|(x, y)| PositionExpr {
+                            x,
+                            y,
+                            span: span_of(&child),
+                        });
                     if let (Some(x), Some(y), Some(sweep)) = (cx, cy, sweep) {
                         directives.push(TraceDirective::Arc(TraceArc {
+                            start,
                             centre: PositionExpr {
                                 x,
                                 y,

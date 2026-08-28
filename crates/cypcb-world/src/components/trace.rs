@@ -1028,6 +1028,25 @@ mod tests {
     }
 }
 
+/// The curve a run of copper was drawn as.
+///
+/// A `Trace` holds straight segments because everything that measures copper
+/// here measures straight segments. An arc is flattened into those the moment
+/// it is read, which is right for the checker and wrong for the writer: a
+/// design that stated one curve came back as a dozen chords, and the next save
+/// flattened the flattening.
+///
+/// This is the same shape as [`crate::components::Stitched`]: a marker
+/// recording what a run of copper came from, so the writer can put the
+/// sentence back rather than the copper it produced.
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct Curve {
+    /// The centre the copper turns about.
+    pub centre: Point,
+    /// How far it turns, in millidegrees. Negative turns clockwise.
+    pub sweep_millideg: i32,
+}
+
 /// How narrow a trace may get on the way into a pad, and for how far.
 ///
 /// A separate component rather than a field on [`Trace`]: most traces do not

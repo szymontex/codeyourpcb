@@ -209,12 +209,24 @@ pub fn traces_as_dsl(world: &mut BoardWorld) -> String {
     // the two in separate passes would pair them by iteration order - which is
     // not an order this project relies on anywhere else and should not start
     // relying on here.
-    let trace_data: Vec<(Trace, Option<crate::components::trace::TraceNeck>)> = {
+    // The curve comes with it too, for the same reason: a trace spawned from
+    // an `arc` is a dozen chords in the world, and writing those back turns
+    // one sentence into twelve - and flattens the flattening on the next save.
+    type WrittenTrace = (
+        Trace,
+        Option<crate::components::trace::TraceNeck>,
+        Option<crate::components::trace::Curve>,
+    );
+    let trace_data: Vec<WrittenTrace> = {
         let ecs = world.ecs_mut();
-        let mut query = ecs.query::<(&Trace, Option<&crate::components::trace::TraceNeck>)>();
+        let mut query = ecs.query::<(
+            &Trace,
+            Option<&crate::components::trace::TraceNeck>,
+            Option<&crate::components::trace::Curve>,
+        )>();
         query
             .iter(ecs)
-            .map(|(trace, neck)| (trace.clone(), neck.copied()))
+            .map(|(trace, neck, curve)| (trace.clone(), neck.copied(), curve.copied()))
             .collect()
     };
 
@@ -234,16 +246,40 @@ pub fn traces_as_dsl(world: &mut BoardWorld) -> String {
     }
 
     // Group traces by net name, using BTreeMap for deterministic ordering
-    type NeckedTrace<'a> = (&'a Trace, Option<crate::components::trace::TraceNeck>);
+    type NeckedTrace<'a> = (
+        &'a Trace,
+        Option<crate::components::trace::TraceNeck>,
+        Option<crate::components::trace::Curve>,
+    );
     let mut net_traces: BTreeMap<String, Vec<NeckedTrace<'_>>> = BTreeMap::new();
     let mut net_vias: BTreeMap<String, Vec<&Via>> = BTreeMap::new();
 
-    for (trace, neck) in &trace_data {
+    for (trace, neck, curve) in &trace_data {
         let net_name = world
             .net_name(trace.net_id)
             .unwrap_or("unknown")
             .to_string();
-        net_traces.entry(net_name).or_default().push((trace, *neck));
+        net_traces
+            .entry(net_name)
+            .or_default()
+            .push((trace, *neck, *curve));
+    }
+
+    // A net's traces are written in an order of their own rather than the
+    // order the world hands them over. Bevy iterates archetypes, and a trace
+    // carrying a curve sits in a different one from a plain trace - so a board
+    // read from a saved file gave its blocks back in a different order and the
+    // second save differed from the first. A file that changes when nothing
+    // changed is a file nobody can keep in version control.
+    for traces in net_traces.values_mut() {
+        traces.sort_by_key(|(trace, _, _)| {
+            let start = trace
+                .segments
+                .first()
+                .map(|segment| (segment.start.x.0, segment.start.y.0))
+                .unwrap_or((0, 0));
+            (format!("{:?}", trace.layer), start.0, start.1)
+        });
     }
 
     for via in &via_data {
@@ -278,7 +314,7 @@ pub fn traces_as_dsl(world: &mut BoardWorld) -> String {
 
         // For each trace on this net, emit a separate trace block
         if let Some(traces) = traces {
-            for (trace, neck) in traces {
+            for (trace, neck, curve) in traces {
                 let _ = writeln!(output, "trace {} {{", net_name_as_written(net_name));
 
                 // Layer
@@ -313,7 +349,40 @@ pub fn traces_as_dsl(world: &mut BoardWorld) -> String {
                 // start of the next, which is copper that was never routed.
                 // Measured on examples/blink.cypcb: 2 DRC violations in the
                 // routed board, 13 in the file it was written to.
-                for run in contiguous_runs(&trace.segments) {
+                // A curve is written as the curve it was. The chords are what
+                // the checker reads; the sentence is what a person edits, and
+                // a saved file has to hold both without one becoming the other.
+                if let Some(curve) = curve {
+                    let start = trace
+                        .segments
+                        .first()
+                        .map(|segment| segment.start)
+                        .unwrap_or(curve.centre);
+                    let _ = write!(
+                        output,
+                        "    arc start {}mm,{}mm centre {}mm,{}mm sweep {}",
+                        format_mm(start.x.to_mm()),
+                        format_mm(start.y.to_mm()),
+                        format_mm(curve.centre.x.to_mm()),
+                        format_mm(curve.centre.y.to_mm()),
+                        format_number(curve.sweep_millideg.abs() as f64 / 1000.0)
+                    );
+                    // Counter-clockwise is the direction with no word on it.
+                    if curve.sweep_millideg < 0 {
+                        let _ = write!(output, " clockwise");
+                    }
+                    let _ = writeln!(output);
+                }
+
+                // A curve was written above; the chords it became are not
+                // written again. `continue` here would skip the rest of the
+                // block - the neck, the `locked` line and the closing brace -
+                // and the first version of this did exactly that: the saved
+                // file ran two `trace` blocks together and would not parse.
+                for run in contiguous_runs(&trace.segments)
+                    .into_iter()
+                    .filter(|_| curve.is_none())
+                {
                     let _ = write!(output, "    path ");
                     let first = run[0];
                     let _ = write!(

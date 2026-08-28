@@ -926,7 +926,7 @@ trace <net> {
     width <dimension>
     neck <dimension> for <dimension>
     path <x>,<y> -> <x>,<y>
-    arc centre <x>,<y> sweep <degrees> [clockwise]
+    arc [start <x>,<y>] centre <x>,<y> sweep <degrees> [clockwise]
     locked
 }
 ```
@@ -961,8 +961,21 @@ What the board carries is the chords the curve is flattened into, at 10 microns
 of error - finer than any fabricator's registration, and a chord roughly every
 seven degrees on a 5mm radius. Everything that measures copper here measures
 straight segments, so that is how a curve reaches the checker, the router and
-every exporter at once. A saved design writes those chords rather than the arc:
-the copper is what survives a round trip, not the sentence that produced it.
+every exporter at once.
+
+A saved design says `arc` again rather than the chords, and states where each
+curve begins:
+
+```
+    arc start 12.000000mm,6.000000mm centre 12.000000mm,10.000000mm sweep 90 clockwise
+```
+
+`start` is for a file a tool wrote. A person leaves it out and the curve
+continues the copper in front of it; a writer cannot, because the traces come
+out of the board in an order of their own and a curve that relied on what was
+written before it would move whenever anything else about the board changed.
+Where both are present the stated start wins - a file that says where a curve
+begins means it.
 
 **Example:**
 ```

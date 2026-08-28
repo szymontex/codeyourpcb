@@ -1238,6 +1238,28 @@ impl<'a> Reader<'a> {
                     }
                     Some("arc") => {
                         self.bump();
+                        // A written file states where each curve begins; a
+                        // person writing one by hand leaves it to the copper
+                        // in front of it.
+                        let start = if self.eat_word("start") {
+                            let start_span = self.here();
+                            let x = self.dimension();
+                            self.eat(&TokenKind::Comma);
+                            let y = self.dimension();
+                            match x.zip(y) {
+                                Some((x, y)) => Some(PositionExpr {
+                                    x,
+                                    y,
+                                    span: Span::new(start_span, self.behind()),
+                                }),
+                                None => {
+                                    self.unexpected("a point like `12mm, 6mm` after `start`");
+                                    continue;
+                                }
+                            }
+                        } else {
+                            None
+                        };
                         if !self.eat_word("centre") {
                             self.unexpected("`centre` after `arc`");
                             continue;
@@ -1274,6 +1296,7 @@ impl<'a> Reader<'a> {
                             sweep
                         };
                         directives.push(TraceDirective::Arc(TraceArc {
+                            start,
                             centre,
                             sweep_degrees,
                             span: Span::new(directive_start, self.behind()),

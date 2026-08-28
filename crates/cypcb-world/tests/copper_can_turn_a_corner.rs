@@ -9,7 +9,7 @@
 //! nothing is converted and no convention is invented.
 
 use cypcb_core::{Nm, Point};
-use cypcb_world::components::trace::Trace;
+use cypcb_world::components::trace::{Curve, Trace};
 use cypcb_world::footprint::FootprintLibrary;
 use cypcb_world::{sync_ast_to_world, BoardWorld};
 
@@ -34,11 +34,48 @@ fn world_of(source: &str) -> BoardWorld {
     world
 }
 
-/// Every trace's segments, in the order they were spawned.
-fn traces(world: &mut BoardWorld) -> Vec<Trace> {
+/// Every trace on the board, each with the curve it was drawn as if it had one.
+///
+/// Selected by the curve rather than by position: a trace spawned from an arc
+/// carries an extra component, which puts it in a different archetype, and
+/// bevy iterates archetypes rather than spawn order. A test that indexed the
+/// list broke the moment the marker was added, which was the test being wrong
+/// rather than the board.
+fn traces(world: &mut BoardWorld) -> Vec<(Trace, Option<Curve>)> {
     let ecs = world.ecs_mut();
-    let mut query = ecs.query::<&Trace>();
-    query.iter(ecs).cloned().collect()
+    let mut query = ecs.query::<(&Trace, Option<&Curve>)>();
+    query
+        .iter(ecs)
+        .map(|(trace, curve)| (trace.clone(), curve.copied()))
+        .collect()
+}
+
+/// The one trace that was drawn as a curve.
+fn curved_copper(world: &mut BoardWorld) -> Trace {
+    let found: Vec<Trace> = traces(world)
+        .into_iter()
+        .filter(|(_, curve)| curve.is_some())
+        .map(|(trace, _)| trace)
+        .collect();
+    assert_eq!(found.len(), 1, "one arc was written, one is here");
+    found.into_iter().next().expect("the curve")
+}
+
+/// The straight runs, ordered by where they start.
+fn straight_copper(world: &mut BoardWorld) -> Vec<Trace> {
+    let mut found: Vec<Trace> = traces(world)
+        .into_iter()
+        .filter(|(_, curve)| curve.is_none())
+        .map(|(trace, _)| trace)
+        .collect();
+    found.sort_by_key(|trace| {
+        trace
+            .segments
+            .first()
+            .map(|segment| (segment.start.x.0, segment.start.y.0))
+            .unwrap_or((0, 0))
+    });
+    found
 }
 
 const HEAD: &str =
@@ -58,11 +95,15 @@ fn the_curve_starts_where_the_copper_stopped() {
     // would be a second trace beside the first with a gap between them, which
     // is an open circuit that checks clean.
     let mut world = world_of(&curved(" clockwise"));
-    let traces = traces(&mut world);
-    assert_eq!(traces.len(), 2, "the path and the arc are each copper");
+    assert_eq!(
+        traces(&mut world).len(),
+        2,
+        "the path and the arc are each copper"
+    );
 
-    let path = &traces[0];
-    let arc = &traces[1];
+    let straight = straight_copper(&mut world);
+    let path = &straight[0];
+    let arc = &curved_copper(&mut world);
     assert_eq!(
         path.segments.last().expect("the path has copper").end,
         arc.segments.first().expect("the arc has copper").start,
@@ -85,12 +126,12 @@ fn which_way_it_turns_is_the_word_beside_the_sweep() {
     let mut widdershins = world_of(&curved(""));
     let mut clockwise = world_of(&curved(" clockwise"));
 
-    let anti_end = traces(&mut widdershins)[1]
+    let anti_end = curved_copper(&mut widdershins)
         .segments
         .last()
         .expect("copper")
         .end;
-    let clock_end = traces(&mut clockwise)[1]
+    let clock_end = curved_copper(&mut clockwise)
         .segments
         .last()
         .expect("copper")
@@ -111,8 +152,7 @@ fn the_copper_is_chords_and_all_of_them_are_on_the_curve() {
     // What reaches the board is the flattening: everything downstream - the
     // checker, the router, both exporters - measures straight segments.
     let mut world = world_of(&curved(" clockwise"));
-    let traces = traces(&mut world);
-    let arc = &traces[1];
+    let arc = curved_copper(&mut world);
 
     assert!(
         arc.segments.len() >= 8,
@@ -164,11 +204,16 @@ fn the_run_carries_on_after_the_curve() {
          arc centre 12mm, 10mm sweep 90 clockwise\n    path 8mm, 10mm -> 8mm, 14mm\n}}\n"
     );
     let mut world = world_of(&source);
-    let traces = traces(&mut world);
-    assert_eq!(traces.len(), 3, "two straight runs and the curve between");
     assert_eq!(
-        traces[1].segments.last().expect("copper").end,
-        traces[2].segments.first().expect("copper").start,
+        traces(&mut world).len(),
+        3,
+        "two straight runs and the curve between"
+    );
+    let arc = curved_copper(&mut world);
+    let straight = straight_copper(&mut world);
+    assert_eq!(
+        arc.segments.last().expect("copper").end,
+        straight[1].segments.first().expect("copper").start,
         "the second straight run picks up where the curve left off"
     );
 }
