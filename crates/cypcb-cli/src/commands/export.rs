@@ -496,7 +496,13 @@ impl ExportCommand {
             std::fs::create_dir_all(&handoff_dir)
                 .into_diagnostic()
                 .wrap_err("Creating the handoff directory failed")?;
-            let document = cypcb_export::ipc2581::export_ipc2581_now(&mut world, &library);
+            let (document, handoff_warnings) =
+                cypcb_export::ipc2581::export_ipc2581_now(&mut world, &library);
+            // Before the file is announced, so a person reads what it could
+            // not say before they read that it was written.
+            for warning in handoff_warnings {
+                eprintln!("Warning: {warning}");
+            }
             let path = handoff_dir.join(format!("{}.xml", job.board_name));
             std::fs::write(&path, &document)
                 .into_diagnostic()

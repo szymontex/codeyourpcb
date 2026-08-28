@@ -37,6 +37,23 @@ fn scratch(who: &str) -> PathBuf {
     dir
 }
 
+/// Export with the handoff document and hand back what the run said.
+fn document_and_run(board: &str, out: &Path) -> (String, String) {
+    let result = cypcb()
+        .arg("export")
+        .arg(example(board))
+        .arg("-o")
+        .arg(out)
+        .arg("--ipc2581")
+        .output()
+        .expect("the binary runs");
+    assert!(result.status.success(), "the export failed");
+    let name = board.trim_end_matches(".cypcb");
+    let xml = std::fs::read_to_string(out.join("handoff").join(format!("{name}.xml")))
+        .expect("the document is readable");
+    (xml, String::from_utf8_lossy(&result.stderr).to_string())
+}
+
 /// Export with the handoff document and read it back.
 fn document(board: &str, out: &Path) -> String {
     let status = cypcb()
@@ -608,5 +625,96 @@ fn a_board_with_neither_says_neither() {
     assert!(
         !tags.iter().any(|tag| tag.name == "Contour"),
         "and no pour in a board that pours none"
+    );
+}
+
+#[test]
+fn the_stack_the_board_states_is_in_the_document() {
+    // Every fact in a stackup travels beside a Gerber today as a note in an
+    // email. This is the section that carries it: what each layer is made of,
+    // how thick it is, and what the board comes to.
+    let (xml, _) = document_and_run("blind-via.cypcb", &scratch("stack"));
+    let tags = tags(&xml);
+
+    let stack = tags
+        .iter()
+        .find(|tag| tag.name == "Stackup")
+        .expect("the design states a stack");
+    assert_eq!(stack.path.join("/"), "IPC-2581/Ecad/CadData");
+    assert_eq!(
+        attribute(stack, "whereMeasured"),
+        "LAMINATE",
+        "measured where a fabricator measures"
+    );
+
+    let entries: Vec<(String, String, String)> = tags
+        .iter()
+        .filter(|tag| tag.name == "StackupLayer")
+        .map(|tag| {
+            (
+                attribute(tag, "layerOrGroupRef"),
+                attribute(tag, "materialType"),
+                attribute(tag, "thickness"),
+            )
+        })
+        .collect();
+    assert!(
+        entries.len() >= 5,
+        "a four-layer board is many entries: {entries:?}"
+    );
+    assert!(
+        entries
+            .iter()
+            .any(|(name, material, _)| name == "F_Cu" && material == "COPPER"),
+        "copper says it is copper: {entries:?}"
+    );
+    assert!(
+        entries.iter().any(|(_, material, _)| material == "CORE"),
+        "and the core says it is a core: {entries:?}"
+    );
+
+    // The overall thickness is the sum of the entries, not a figure of its own.
+    let overall: f64 = attribute(stack, "overallThickness")
+        .parse()
+        .expect("a number");
+    let summed: f64 = entries
+        .iter()
+        .map(|(_, _, thickness)| thickness.parse::<f64>().expect("a number"))
+        .sum();
+    // Each printed thickness is rounded to a micron, so the printed total can
+    // sit a micron per entry away from the sum of the printed parts. The
+    // document's own number is the sum of the unrounded ones.
+    assert!(
+        (overall - summed).abs() <= 0.001 * entries.len() as f64,
+        "the board comes to what its layers come to: {overall} against {summed}"
+    );
+}
+
+#[test]
+fn the_run_says_the_tolerance_is_not_the_boards_own() {
+    // A tolerance is a number a fabricator holds the board to, and this
+    // language has nowhere to state one. Writing zero silently would be a
+    // reader taking zero for a promise.
+    let (xml, said) = document_and_run("blind-via.cypcb", &scratch("tolerance"));
+    assert!(
+        xml.contains("tolPlus=\"0\" tolMinus=\"0\""),
+        "the document states zero:\n{xml}"
+    );
+    assert!(
+        said.contains("states no thickness tolerance"),
+        "and the run says why: {said}"
+    );
+}
+
+#[test]
+fn a_board_with_no_stack_gets_no_stack_section() {
+    let (xml, said) = document_and_run("curved-track.cypcb", &scratch("nostack"));
+    assert!(
+        !xml.contains("<Stackup "),
+        "a board that states no stack has none written for it:\n{xml}"
+    );
+    assert!(
+        !said.contains("states no thickness tolerance"),
+        "and nothing is said about a tolerance it never needed: {said}"
     );
 }

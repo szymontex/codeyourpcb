@@ -89,7 +89,10 @@ fn copper_layers(count: usize) -> Vec<(String, &'static str)> {
 /// The stamp lives here rather than in the caller for the same reason every
 /// other exporter's does: a fabricator asks when the files were cut, and the
 /// answer should not depend on which command asked for them.
-pub fn export_ipc2581_now(world: &mut BoardWorld, library: &FootprintLibrary) -> String {
+pub fn export_ipc2581_now(
+    world: &mut BoardWorld,
+    library: &FootprintLibrary,
+) -> (String, Vec<String>) {
     export_ipc2581(
         world,
         library,
@@ -101,7 +104,11 @@ pub fn export_ipc2581_now(world: &mut BoardWorld, library: &FootprintLibrary) ->
 ///
 /// `now` is the timestamp the document carries, passed in rather than read
 /// here so a test can write the same board twice and compare the two files.
-pub fn export_ipc2581(world: &mut BoardWorld, library: &FootprintLibrary, now: &str) -> String {
+pub fn export_ipc2581(
+    world: &mut BoardWorld,
+    library: &FootprintLibrary,
+    now: &str,
+) -> (String, Vec<String>) {
     let (size, stack) = world.board_info().unwrap_or((
         cypcb_world::components::BoardSize::new(Nm(0), Nm(0)),
         cypcb_world::components::LayerStack::new(2),
@@ -213,6 +220,10 @@ pub fn export_ipc2581(world: &mut BoardWorld, library: &FootprintLibrary, now: &
         }
     }
 
+    // What the document could not say, so the run can say it instead. A file
+    // that quietly leaves a fact out is a file somebody reads as a fact.
+    let mut warnings: Vec<String> = Vec::new();
+
     let mut out = String::new();
     out.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
     out.push_str("<IPC-2581 revision=\"C\">\n");
@@ -290,6 +301,72 @@ pub fn export_ipc2581(world: &mut BoardWorld, library: &FootprintLibrary, now: &
         "      <Layer name=\"Edge_Cuts\" layerFunction=\"BOARD_OUTLINE\" side=\"NONE\" \
          polarity=\"POSITIVE\"/>\n",
     );
+
+    // The stack, when the design states one. `CadData` puts it between the
+    // layers and the step, which is the order the schema fixes.
+    if let Some(stack) = world.stackup().cloned() {
+        let stated: Vec<Nm> = stack
+            .layers
+            .iter()
+            .filter_map(|entry| entry.thickness)
+            .collect();
+        let unstated = stack.layers.len() - stated.len();
+        let overall = Nm(stated.iter().map(|thickness| thickness.0).sum());
+        if unstated > 0 {
+            warnings.push(format!(
+                "{unstated} of {} stackup entries state no thickness, so the overall \
+                 thickness in the document is the sum of the ones that do",
+                stack.layers.len()
+            ));
+        }
+        // A tolerance is a number a fabricator holds the board to, and this
+        // language has nowhere to state one. Zero is what the document says,
+        // and the run says that is what happened rather than letting a reader
+        // take it for a promise.
+        warnings.push(
+            "the stackup states no thickness tolerance, so the document says zero: \
+             the language has no field for one yet"
+                .to_string(),
+        );
+
+        let _ = writeln!(
+            out,
+            "      <Stackup overallThickness=\"{}\" tolPlus=\"0\" tolMinus=\"0\" \
+             whereMeasured=\"LAMINATE\">",
+            mm(overall)
+        );
+        let _ = writeln!(
+            out,
+            "        <StackupGroup name=\"{board}\" thickness=\"{}\" tolPlus=\"0\" \
+             tolMinus=\"0\">",
+            mm(overall)
+        );
+        for (index, entry) in stack.layers.iter().enumerate() {
+            let material = match entry.kind {
+                cypcb_world::components::StackupLayerKind::Copper => "COPPER",
+                cypcb_world::components::StackupLayerKind::Prepreg => "PREPREG",
+                cypcb_world::components::StackupLayerKind::Core => "CORE",
+                cypcb_world::components::StackupLayerKind::Mask => "SOLDERMASK",
+                cypcb_world::components::StackupLayerKind::Silk => "SILKSCREEN",
+                cypcb_world::components::StackupLayerKind::Coverlay => "COVERLAY",
+                cypcb_world::components::StackupLayerKind::Stiffener => "STIFFENER",
+                cypcb_world::components::StackupLayerKind::Paste => "SOLDERPASTE",
+            };
+            let name = entry
+                .name
+                .clone()
+                .unwrap_or_else(|| format!("{}_{index}", material.to_lowercase()));
+            let _ = writeln!(
+                out,
+                "          <StackupLayer layerOrGroupRef=\"{}\" materialType=\"{material}\" \
+                 thickness=\"{}\"/>",
+                qualified(&name),
+                mm(entry.thickness.unwrap_or(Nm(0)))
+            );
+        }
+        out.push_str("        </StackupGroup>\n");
+        out.push_str("      </Stackup>\n");
+    }
 
     let _ = writeln!(out, "      <Step name=\"{board}\">");
     out.push_str("        <Datum x=\"0\" y=\"0\"/>\n");
@@ -569,5 +646,5 @@ pub fn export_ipc2581(world: &mut BoardWorld, library: &FootprintLibrary, now: &
     out.push_str("    </CadData>\n");
     out.push_str("  </Ecad>\n");
     out.push_str("</IPC-2581>\n");
-    out
+    (out, warnings)
 }
