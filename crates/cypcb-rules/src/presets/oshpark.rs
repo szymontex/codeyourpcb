@@ -69,12 +69,18 @@ pub fn two_layer() -> DesignConstraints {
         thermal_relief_spokes: 4,
 
         // Manufacturing
-        copper_weight_oz_x10: 10,                // 1.0 oz
-        board_thickness: Nm::from_mm(1.6),       // 63 mil (1.6mm)
-        board_thickness_tolerance_percent: None, // no published figure read
+        copper_weight_oz_x10: 10,          // 1.0 oz
+        board_thickness: Nm::from_mm(1.6), // 63 mil (1.6mm)
+        // The service page states "Board Thickness: 63mil (1.6mm) nominal"
+        // and publishes no tolerance for it, so none is carried.
+        board_thickness_tolerance_percent: None,
         board_thickness_tolerance_thin: None,
-        hole_tolerance_plus: None,
-        hole_tolerance_minus: None,
+        // "Drill Size tolerance: Max: +/- 2.5mil (0.0635mm), Typical: +/-
+        // 1.0mil (0.0254)". The maximum is what a board is guaranteed, so it
+        // is the figure carried; the typical one is not a promise.
+        // <https://docs.oshpark.com/services/two-layer/>
+        hole_tolerance_plus: Some(Nm::from_mm(0.0635)),
+        hole_tolerance_minus: Some(Nm::from_mm(0.0635)),
         min_hole_to_hole: Nm::from_mm(0.635), // 25 mil
         min_hole_to_edge: Nm::from_mm(0.381), // 15 mil
         blind_vias_allowed: false,
@@ -170,10 +176,16 @@ pub fn four_layer() -> DesignConstraints {
         // Manufacturing
         copper_weight_oz_x10: 10, // 1.0 oz outer
         board_thickness: Nm::from_mm(1.6),
-        board_thickness_tolerance_percent: None, // no published figure read
+        // The service page states "Board Thickness: 63mil (1.6mm) nominal"
+        // and publishes no tolerance for it, so none is carried.
+        board_thickness_tolerance_percent: None,
         board_thickness_tolerance_thin: None,
-        hole_tolerance_plus: None,
-        hole_tolerance_minus: None,
+        // "Drill Size tolerance: Max: +/- 2.5mil (0.0635mm), Typical: +/-
+        // 1.0mil (0.0254)". The maximum is what a board is guaranteed, so it
+        // is the figure carried; the typical one is not a promise.
+        // <https://docs.oshpark.com/services/two-layer/>
+        hole_tolerance_plus: Some(Nm::from_mm(0.0635)),
+        hole_tolerance_minus: Some(Nm::from_mm(0.0635)),
         min_hole_to_hole: Nm::from_mm(0.508), // 20 mil
         min_hole_to_edge: Nm::from_mm(0.381), // 15 mil
         blind_vias_allowed: false,

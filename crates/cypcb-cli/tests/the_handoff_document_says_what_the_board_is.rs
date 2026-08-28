@@ -37,6 +37,43 @@ fn scratch(who: &str) -> PathBuf {
     dir
 }
 
+/// A board written by the test rather than shipped as an example.
+///
+/// Every example in this repository names a fabricator, and both of the ones
+/// they name now publish tolerances - so the case where nothing is known has
+/// no example to run on and gets a board of its own.
+fn nameless_board(dir: &Path) -> PathBuf {
+    let source = "version 1\n\nboard nameless {\n    size 20mm x 20mm\n    layers 2\n                      stackup {\n        copper 1oz\n        core 1.0mm material \"FR4\" dk 4.5\n                          copper 1oz\n    }\n}\n\nnet GND {\n}\n\ntrace GND {\n                      via 10mm, 10mm drill 0.3mm\n}\n";
+    std::fs::create_dir_all(dir).expect("the scratch directory is made");
+    let path = dir.join("nameless.cypcb");
+    std::fs::write(&path, source).expect("the design is written");
+    path
+}
+
+/// Export a design at a path and hand back the document and what was said.
+fn document_at(design: &Path, out: &Path) -> (String, String) {
+    let result = cypcb()
+        .arg("export")
+        .arg(design)
+        .arg("-o")
+        .arg(out)
+        .arg("--ipc2581")
+        .output()
+        .expect("the binary runs");
+    assert!(
+        result.status.success(),
+        "the export failed: {}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    let name = design
+        .file_stem()
+        .and_then(|stem| stem.to_str())
+        .expect("a name");
+    let xml = std::fs::read_to_string(out.join("handoff").join(format!("{name}.xml")))
+        .expect("the document is readable");
+    (xml, String::from_utf8_lossy(&result.stderr).to_string())
+}
+
 /// Export with the handoff document and hand back what the run said.
 fn document_and_run(board: &str, out: &Path) -> (String, String) {
     let result = cypcb()
@@ -707,18 +744,30 @@ fn the_tolerance_comes_from_the_house_the_board_names() {
 }
 
 #[test]
-fn a_house_with_no_published_figure_gets_a_zero_and_a_word_about_it() {
+fn a_board_whose_house_published_nothing_says_zero_and_says_so() {
     // Writing zero silently would be a reader taking zero for a promise, and
     // inventing a figure would be a fabricator held to a number nobody
-    // published.
-    let (xml, said) = document_and_run("blind-via.cypcb", &scratch("tolerance-unknown"));
+    // published. Both figures come from the house, so a board that names none
+    // gets both warnings.
+    let dir = scratch("tolerance-unknown");
+    let board = nameless_board(&dir);
+    let (xml, said) = document_at(&board, &dir.join("out"));
+
     assert!(
         xml.contains("tolPlus=\"0.000\" tolMinus=\"0.000\""),
-        "the document states zero:\n{xml}"
+        "the stack states zero:\n{xml}"
+    );
+    assert!(
+        xml.contains("plusTol=\"0.000\" minusTol=\"0.000\""),
+        "and so does the hole:\n{xml}"
     );
     assert!(
         said.contains("no published thickness tolerance is known"),
-        "and the run says why: {said}"
+        "the run says why for the stack: {said}"
+    );
+    assert!(
+        said.contains("no published hole tolerance is known"),
+        "and for the hole: {said}"
     );
 }
 
@@ -756,22 +805,27 @@ fn a_hole_carries_the_tolerance_its_house_publishes() {
 }
 
 #[test]
-fn a_house_with_no_published_hole_figure_says_zero_and_says_so() {
-    let (xml, said) = document_and_run("blind-via.cypcb", &scratch("hole-unknown"));
-    let tags = tags(&xml);
-    let holes: Vec<&Tag> = tags.iter().filter(|tag| tag.name == "Hole").collect();
-    assert!(!holes.is_empty(), "the board drills holes:\n{xml}");
-    for hole in &holes {
-        assert_eq!(attribute(hole, "plusTol"), "0.000");
-        assert_eq!(attribute(hole, "minusTol"), "0.000");
-    }
+fn each_house_carries_the_shape_of_figure_it_publishes() {
+    // JLCPCB publishes an asymmetric hole tolerance because plating grows
+    // into the barrel; PCBWay publishes a symmetric one. A model that assumed
+    // either shape would be wrong at one of the two houses.
+    let (jlcpcb, _) = document_and_run("stitched-plane.cypcb", &scratch("shape-jlcpcb"));
+    let (pcbway, said) = document_and_run("blind-via.cypcb", &scratch("shape-pcbway"));
+
     assert!(
-        said.contains("no published hole tolerance is known"),
-        "and the run says why, once: {said}"
+        jlcpcb.contains("plusTol=\"0.130\" minusTol=\"0.080\""),
+        "JLCPCB's +0.13 / -0.08:\n{jlcpcb}"
     );
-    assert_eq!(
-        said.matches("no published hole tolerance is known").count(),
-        1,
-        "once per export rather than once per hole: {said}"
+    assert!(
+        pcbway.contains("plusTol=\"0.080\" minusTol=\"0.080\""),
+        "PCBWay's +/-0.08:\n{pcbway}"
+    );
+    assert!(
+        pcbway.contains("tolPlus=\"0.157\" tolMinus=\"0.157\""),
+        "and its ten percent of a 1.570mm stack:\n{pcbway}"
+    );
+    assert!(
+        !said.contains("no published"),
+        "nothing is apologised for at a house that publishes both: {said}"
     );
 }

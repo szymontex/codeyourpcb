@@ -90,10 +90,17 @@ pub fn standard() -> DesignConstraints {
         // Manufacturing
         copper_weight_oz_x10: 10, // 1.0 oz
         board_thickness: Nm::from_mm(1.6),
-        board_thickness_tolerance_percent: None, // no published figure read
-        board_thickness_tolerance_thin: None,
-        hole_tolerance_plus: None,
-        hole_tolerance_minus: None,
+        // Published on the capabilities page: "±10%" at 1.0mm and above and
+        // "±0.1mm" below it, the same two rules JLCPCB publishes. The page
+        // also carries a per-thickness table for multilayer boards - 0.13mm
+        // at 1.0mm, 0.18mm at 1.6mm - which this model has no shape for yet,
+        // so the general figure is the one carried and the finer one is not
+        // claimed. <https://www.pcbway.com/capabilities.html>
+        board_thickness_tolerance_percent: Some(10),
+        board_thickness_tolerance_thin: Some(Nm::from_mm(0.1)),
+        // "PTH: +/-0.08mm" - symmetric here, unlike JLCPCB's.
+        hole_tolerance_plus: Some(Nm::from_mm(0.08)),
+        hole_tolerance_minus: Some(Nm::from_mm(0.08)),
         min_hole_to_hole: Nm::from_mm(0.5),
         min_hole_to_edge: Nm::from_mm(0.3),
         blind_vias_allowed: true,         // available at extra cost

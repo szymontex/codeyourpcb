@@ -77,7 +77,9 @@ pub fn class1() -> DesignConstraints {
         // Manufacturing
         copper_weight_oz_x10: 10, // 1.0 oz
         board_thickness: Nm::from_mm(1.6),
-        board_thickness_tolerance_percent: None, // no published figure read
+        // IPC-6012 states these per performance class and the standard is
+        // paywalled; nothing here has read it, so nothing is claimed.
+        board_thickness_tolerance_percent: None,
         board_thickness_tolerance_thin: None,
         hole_tolerance_plus: None,
         hole_tolerance_minus: None,
@@ -149,7 +151,9 @@ pub fn class2() -> DesignConstraints {
         // Manufacturing
         copper_weight_oz_x10: 10,
         board_thickness: Nm::from_mm(1.6),
-        board_thickness_tolerance_percent: None, // no published figure read
+        // IPC-6012 states these per performance class and the standard is
+        // paywalled; nothing here has read it, so nothing is claimed.
+        board_thickness_tolerance_percent: None,
         board_thickness_tolerance_thin: None,
         hole_tolerance_plus: None,
         hole_tolerance_minus: None,
@@ -221,7 +225,9 @@ pub fn class3() -> DesignConstraints {
         // Manufacturing — strict
         copper_weight_oz_x10: 10,
         board_thickness: Nm::from_mm(1.6),
-        board_thickness_tolerance_percent: None, // no published figure read
+        // IPC-6012 states these per performance class and the standard is
+        // paywalled; nothing here has read it, so nothing is claimed.
+        board_thickness_tolerance_percent: None,
         board_thickness_tolerance_thin: None,
         hole_tolerance_plus: None,
         hole_tolerance_minus: None,
