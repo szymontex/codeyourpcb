@@ -165,6 +165,32 @@ impl ToKicadCommand {
             }
         }
 
+        // The areas the design names for something else to point at.
+        //
+        // `region rigid_left { bounds ... }` is a rectangle with a name on it,
+        // and the thing that points at it is a stackup layer: `core 1mm covers
+        // rigid_left`. KiCad has no area of that kind at all - a zone there is
+        // copper or a rule area - so the name goes, and with it the meaning of
+        // any `covers` clause that used it.
+        {
+            let regions: Vec<String> = world
+                .zones()
+                .into_iter()
+                .filter(|(_, zone)| {
+                    matches!(zone.kind, cypcb_world::components::zone::ZoneKind::Region)
+                })
+                .map(|(_, zone)| zone.name.clone().unwrap_or_else(|| "unnamed".to_string()))
+                .collect();
+            if !regions.is_empty() {
+                eprintln!(
+                    "Warning: the named area(s) this design states ({}) are not in the KiCad \
+                     board: the format has no area that means nothing on its own, so a board \
+                     read back from this file has nothing for a stackup layer to point at.",
+                    regions.join(", ")
+                );
+            }
+        }
+
         // Where a stackup layer stops.
         //
         // `stiffener 0.2mm outside bend` is a layer pressed over part of the

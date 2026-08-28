@@ -1375,6 +1375,11 @@ impl PcbEngine {
                 kind: match zone.kind.as_str() {
                     "pour" => ZoneKind::CopperPour,
                     "flex" => ZoneKind::Flex,
+                    // A named area carries no meaning of its own, and the
+                    // fallback below is the one that would have given it one:
+                    // an unnamed kind arriving here becomes a keepout, which
+                    // is copper nothing may enter.
+                    "region" => ZoneKind::Region,
                     _ => ZoneKind::Keepout,
                 },
                 layer_mask: zone.layer_mask,
@@ -1890,6 +1895,7 @@ impl PcbEngine {
                     // here would have turned every bend into an area nothing
                     // may enter on the way through a snapshot.
                     ZoneKind::Flex => "flex".to_string(),
+                    ZoneKind::Region => "region".to_string(),
                     ZoneKind::Keepout => "keepout".to_string(),
                 },
                 layer_mask: zone.layer_mask,

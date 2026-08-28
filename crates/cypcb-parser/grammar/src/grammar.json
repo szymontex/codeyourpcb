@@ -2444,6 +2444,10 @@
               {
                 "type": "STRING",
                 "value": "flex"
+              },
+              {
+                "type": "STRING",
+                "value": "region"
               }
             ]
           }

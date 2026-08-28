@@ -43,15 +43,15 @@ fn definitions() -> Vec<String> {
         .next()
         .expect("that list ends");
 
-    // The zone block is three keywords in one rule - `zone`, `keepout` and
-    // `flex` - so the list of definitions does not name two of them. A census
-    // that reads only the choice above would have called this file complete
-    // while `keepout` was in no example, which is exactly what it did the
-    // first time it was run.
+    // The zone block is four keywords in one rule - `zone`, `keepout`, `flex`
+    // and `region` - so the list of definitions does not name three of them. A
+    // census that reads only the choice above would have called this file
+    // complete while `keepout` was in no example, which is exactly what it did
+    // the first time it was run.
     let kinds = grammar
         .split("field('kind', choice(")
         .nth(1)
-        .expect("the zone block chooses between its three words")
+        .expect("the zone block chooses between its four words")
         .split(')')
         .next()
         .expect("that choice ends");
@@ -62,8 +62,8 @@ fn definitions() -> Vec<String> {
         .collect();
     assert_eq!(
         zone_words.len(),
-        3,
-        "three words open a zone block: {zone_words:?}"
+        4,
+        "four words open a zone block: {zone_words:?}"
     );
 
     let mut found: Vec<String> = zone_words;

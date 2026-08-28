@@ -38,7 +38,8 @@ export interface ZoneInfo {
   name: string;
   /**
    * `"pour"` for copper, `"keepout"` for an area nothing may enter, `"flex"`
-   * for the part of the board that bends.
+   * for the part of the board that bends, `"region"` for an area that means
+   * nothing on its own and is there to be pointed at by name.
    *
    * A flexible region is none of the other two - copper crosses it, which is
    * what it is for - and it was missing from this list while the engine had

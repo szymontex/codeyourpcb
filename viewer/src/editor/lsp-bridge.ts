@@ -118,7 +118,7 @@ function detectBlockContext(model: any, position: any): BlockContext {
           if (/^net\b/.test(before)) return 'net-pins';
           if (/^trace\b/.test(before)) return 'trace';
           if (/^footprint\b/.test(before)) return 'footprint';
-          if (/^(zone|keepout|flex)\b/.test(before)) return 'zone';
+          if (/^(zone|keepout|flex|region)\b/.test(before)) return 'zone';
           if (/^stackup\b/.test(before)) return 'stackup';
         }
       } else if (ch === ']') bracketDepth++;
@@ -197,7 +197,7 @@ function detectInlineSlot(beforeCursor: string, block: BlockContext): InlineSlot
       if (words.length <= 1) return 'top-keyword';
       return 'nothing';
     case 'board': case 'net': case 'trace': case 'footprint':
-    case 'zone': case 'keepout': case 'flex':
+    case 'zone': case 'keepout': case 'flex': case 'region':
       return words.length >= 2 ? 'nothing' : 'top-keyword';
     default:
       return words.length <= 1 ? 'top-keyword' : 'nothing';
@@ -392,6 +392,7 @@ function registerCompletionProvider(monaco: typeof import('monaco-editor')): voi
             { label: 'zone', insert: 'zone ${1:GND_pour} {\n\tbounds ${2:0}mm, ${3:0}mm to ${4:50}mm, ${5:30}mm\n\tlayer ${6|bottom,top,all|}\n\tnet ${7:GND}\n}', detail: 'Copper zone' },
             { label: 'keepout', insert: 'keepout ${1:name} {\n\tbounds ${2:0}mm, ${3:0}mm to ${4:10}mm, ${5:10}mm\n}', detail: 'Keepout area' },
             { label: 'flex', insert: 'flex ${1:bend} {\n\tbounds ${2:20}mm, ${3:0}mm to ${4:40}mm, ${5:20}mm\n\tlayer ${6|all,top,bottom|}\n}', detail: 'Flexible region: the part of the board that bends' },
+            { label: 'region', insert: 'region ${1:connector_end} {\n\tbounds ${2:0}mm, ${3:0}mm to ${4:22}mm, ${5:16}mm\n\tlayer ${6|all,top,bottom|}\n}', detail: 'A named area, there so a stackup layer can point at it' },
             { label: 'text', insert: 'text "${1:REV B}" {\n\tat ${2:10}mm, ${3:5}mm\n\tlayer ${4|top,bottom|}\n\theight ${5:1.5}mm\n}', detail: 'Words on the legend: a revision, a label, a warning' },
             { label: 'dimension', insert: 'dimension {\n\tfrom ${1:0}mm, ${2:0}mm\n\tto ${3:30}mm, ${4:0}mm\n\toffset ${5:2}mm\n}', detail: 'A measurement a fabricator can check the board against' },
             { label: 'outline', insert: 'outline {\n\tpoint ${1:0}mm, ${2:0}mm\n\tpoint ${3:40}mm, ${4:0}mm\n\tpoint ${5:40}mm, ${6:30}mm\n}', detail: 'Board outline, for a board that is not a rectangle' },
@@ -574,6 +575,7 @@ const KEYWORD_DOCS: Record<string, string> = {
   material: 'The laminate or foil the board is quoted on.\n\nSyntax: `material "Isola 370HR"`. Held as written.',
   dk: 'Dielectric constant.\n\nSyntax: `dk 4.5`. No unit. What a laminate datasheet prints, what KiCad calls `epsilon_r` and Altium calls Dk.',
   df: 'Loss tangent.\n\nSyntax: `df 0.02`. No unit. KiCad calls it `loss_tangent`.',
+  region: 'A named area and nothing else.\n\nSyntax: `region connector_end { bounds 0mm, 0mm to 22mm, 16mm layer all }`. Nothing is poured in it, nothing is kept out of it and it does not bend - it is a rectangle with a name, so a stackup layer can say `stiffener 0.2mm covers connector_end`.',
   flex: 'A flexible region: the part of a rigid-flex board that bends.\n\nSyntax: `flex bend { bounds 20mm, 0mm to 40mm, 20mm layer all }`. Not a keepout - copper crosses it, that is what it is for. Nothing may be drilled there: a plated hole in a bend cracks.',
   Top: 'Top copper layer (layer 1).',
   Bottom: 'Bottom copper layer (layer 2).',

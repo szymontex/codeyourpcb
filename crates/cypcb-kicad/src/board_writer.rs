@@ -720,7 +720,12 @@ fn write_zones(
         // stated on `all`, every one of which the importer then refused as
         // `a zone is poured to no net`. `to-kicad` names the regions it
         // cannot carry instead.
-        if matches!(zone.kind, ZoneKind::Flex) {
+        //
+        // A named area is the same case one step further: it is not copper and
+        // not even a fact about the board, only a rectangle something else
+        // points at - `core 1mm covers rigid_left`. Writing one as a pour
+        // would put copper on the board the design never asked for.
+        if matches!(zone.kind, ZoneKind::Flex | ZoneKind::Region) {
             continue;
         }
 

@@ -30,12 +30,11 @@ board wearable {
         copper 0.5oz
         coverlay 0.025mm material "Kapton" covers bend
 
-        // Bonded under the rigid end that carries the connector, so the part
-        // of the flex that must not bend does not - which is what `outside
-        // bend` says. A stiffener through the ribbon is a ribbon that does
-        // not bend, so where it stops is part of the build rather than a
-        // detail a reader infers.
-        stiffener 0.2mm material "FR4" outside bend
+        // Bonded under the rigid end that carries the connector, and under
+        // that end only - which is what a fabricator is quoted for and what
+        // `covers connector_end` says. `outside bend` would say something
+        // else and something wrong: that the stiffener is under both ends.
+        stiffener 0.2mm material "FR4" covers connector_end
 
         finish "ENIG"
         impedance controlled
@@ -49,6 +48,14 @@ board wearable {
 // keepout nor a pour.
 flex bend {
     bounds 22mm, 0mm to 38mm, 16mm
+    layer all
+}
+
+// The end J1 is soldered to. A `region` means nothing on its own: nothing is
+// poured in it, nothing is kept out of it, and it does not bend. It is a name,
+// so the stiffener above can say which end it is bonded under.
+region connector_end {
+    bounds 0mm, 0mm to 22mm, 16mm
     layer all
 }
 

@@ -2704,6 +2704,10 @@
             "named": false
           },
           {
+            "type": "region",
+            "named": false
+          },
+          {
             "type": "zone",
             "named": false
           }
@@ -3346,6 +3350,10 @@
   },
   {
     "type": "rect",
+    "named": false
+  },
+  {
+    "type": "region",
     "named": false
   },
   {

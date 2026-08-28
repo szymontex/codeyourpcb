@@ -23,6 +23,18 @@ pub enum ZoneKind {
     /// the board is bent in during service, and a plated hole in a bend
     /// cracks: the barrel is copper and the laminate around it moves.
     Flex,
+    /// A named area and nothing else.
+    ///
+    /// The other three kinds each carry a meaning, and a rigid end of a
+    /// rigid-flex board has none of them: it is not poured, nothing is kept
+    /// out of it, and it does not bend. What it needs is a name, so a stackup
+    /// layer can say `core 1mm covers rigid_left` - a build with a second core
+    /// on one end only, which is an ordinary rigid-flex order and was
+    /// unsayable while the only nameable area was the ribbon.
+    ///
+    /// Nothing here draws or fills one. Every reader of a zone asks for the
+    /// kind it wants, and none of them ask for this.
+    Region,
 }
 
 /// A zone entity (keepout or copper pour).
@@ -186,6 +198,12 @@ impl Zone {
     #[inline]
     pub fn is_flex(&self) -> bool {
         self.kind == ZoneKind::Flex
+    }
+
+    /// Check if this is a named area and nothing else.
+    #[inline]
+    pub fn is_region(&self) -> bool {
+        self.kind == ZoneKind::Region
     }
 
     /// Check if a point is inside the zone bounds.

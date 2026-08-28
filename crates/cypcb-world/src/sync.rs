@@ -1576,6 +1576,7 @@ fn sync_zone(zone_def: &ZoneDef, world: &mut BoardWorld, _result: &mut SyncResul
         AstZoneKind::Keepout => EcsZoneKind::Keepout,
         AstZoneKind::CopperPour => EcsZoneKind::CopperPour,
         AstZoneKind::Flex => EcsZoneKind::Flex,
+        AstZoneKind::Region => EcsZoneKind::Region,
     };
 
     // Parse layer to layer mask
@@ -1605,7 +1606,9 @@ fn sync_zone(zone_def: &ZoneDef, world: &mut BoardWorld, _result: &mut SyncResul
             .map(|net| world.intern_net(&net.value)),
         // Neither of these is poured to anything: a keepout forbids copper and
         // a flexible region is an area the board bends in.
-        AstZoneKind::Keepout | AstZoneKind::Flex => None,
+        // Neither is poured, and a named area least of all: it is a rectangle
+        // with a name on it, there so something else can point at it.
+        AstZoneKind::Keepout | AstZoneKind::Flex | AstZoneKind::Region => None,
     };
 
     let zone = Zone {

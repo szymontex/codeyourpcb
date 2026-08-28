@@ -597,6 +597,7 @@ fn hover_for_zone(_doc: &DocumentState, zone: &ZoneDef, offset: usize) -> Option
             ZoneKind::Keepout => "Keepout",
             ZoneKind::CopperPour => "Copper Pour",
             ZoneKind::Flex => "Flexible region",
+            ZoneKind::Region => "Named area",
         };
 
         let mut lines = vec![];

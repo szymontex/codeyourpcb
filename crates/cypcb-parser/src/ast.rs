@@ -1041,6 +1041,13 @@ pub enum ZoneKind {
     CopperPour,
     /// A flexible region: the part of a rigid-flex board that bends.
     Flex,
+    /// A named area and nothing else.
+    ///
+    /// The other three kinds each carry a meaning: a pour is filled, a keepout
+    /// is kept clear, a flexible region bends. A rigid end of a rigid-flex
+    /// board is none of those and still needs a name, so that a stackup layer
+    /// can say `core 1mm covers rigid_left`.
+    Region,
 }
 
 impl ZoneKind {
@@ -1051,6 +1058,7 @@ impl ZoneKind {
             "keepout" => Some(ZoneKind::Keepout),
             "zone" => Some(ZoneKind::CopperPour),
             "flex" => Some(ZoneKind::Flex),
+            "region" => Some(ZoneKind::Region),
             _ => None,
         }
     }

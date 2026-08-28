@@ -359,6 +359,28 @@ ribbon, and a second way to draw the same rectangle would be a second truth. A
 name no area answers to is refused rather than stored -
 `cypcb::sync::unknown_coverage_region` names the areas the design does declare.
 
+Not every area a layer stops at is a ribbon. A stiffener is bonded under **one**
+rigid end, and a build with a second core on one end only is an ordinary
+rigid-flex order - so an end needs a name too, and it is not a pour, not a
+keepout and does not bend. That is what `region` is:
+
+```
+region connector_end {
+    bounds 0mm, 0mm to 22mm, 16mm
+    layer all
+}
+
+stackup {
+    stiffener 0.2mm material "FR4" covers connector_end
+}
+```
+
+A `region` means nothing on its own. Nothing is filled in it, nothing is kept
+out of it, the checker has no rule about it and no Gerber carries it - it is a
+rectangle with a name, there so something else can point at it. `covers` and
+`outside` take any named area: a `region`, or the `flex` region a board that
+bends already has.
+
 The words are `covers` and `outside` rather than `in` and `except`, because
 `in` is already this language's word for an inch: `stiffener 0.2 in bend` would
 be two readings of one line.

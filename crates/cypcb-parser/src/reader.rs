@@ -102,7 +102,7 @@ pub fn read(source: &str) -> ParseResult<SourceFile> {
                 Some(def) => definitions.push(Definition::Footprint(def)),
                 None => reader.skip_to_next_definition(),
             },
-            "zone" | "keepout" | "flex" => match reader.zone(start) {
+            "zone" | "keepout" | "flex" | "region" => match reader.zone(start) {
                 Some(def) => definitions.push(Definition::Zone(def)),
                 None => reader.skip_to_next_definition(),
             },
@@ -1618,6 +1618,7 @@ impl<'a> Reader<'a> {
         let kind = match self.peek_ident() {
             Some("keepout") => ZoneKind::Keepout,
             Some("flex") => ZoneKind::Flex,
+            Some("region") => ZoneKind::Region,
             _ => ZoneKind::CopperPour,
         };
         self.bump(); // `zone` or `keepout`

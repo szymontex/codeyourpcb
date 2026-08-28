@@ -101,12 +101,46 @@ fn where_a_layer_stops_is_named_too() {
         "three layers of that stack say where they stop:\n{said}"
     );
     assert!(
-        said.contains("stiffener outside bend"),
-        "and the warning names each one as the design wrote it:\n{said}"
+        said.contains("stiffener covers connector_end"),
+        "and the warning names each one as the design wrote it - the stiffener \
+         is bonded under one end, which is what the file says:\n{said}"
     );
     assert!(
         said.contains("coverlay covers bend"),
         "the coverlays too:\n{said}"
+    );
+}
+
+#[test]
+fn a_named_area_is_named_too_and_is_not_written_as_copper() {
+    // `region connector_end { ... }` is a rectangle with a name on it, there
+    // so the stiffener can say which end it is bonded under. KiCad has no area
+    // of that kind at all, and writing one as a pour would put copper on the
+    // board the design never asked for - the defect the flex region had before
+    // the writer learned to leave it out.
+    let dir = scratch("named-area");
+    let kicad = dir.join("rigid-flex.kicad_pcb");
+
+    let said = cypcb(&[
+        "to-kicad",
+        "examples/rigid-flex.cypcb",
+        "-o",
+        kicad.to_str().expect("a path that is text"),
+    ]);
+    assert!(
+        said.contains("the named area(s) this design states (connector_end)"),
+        "the design's area is called `connector_end` and the warning has to \
+         name it:\n{said}"
+    );
+
+    let written = std::fs::read_to_string(&kicad).expect("the KiCad board was written");
+    assert!(
+        !written.contains("(zone"),
+        "a named area is not copper, so the file still has no zone in it"
+    );
+    assert!(
+        !written.contains("connector_end"),
+        "and the name is not in the file under any other spelling"
     );
 }
 

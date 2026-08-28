@@ -702,11 +702,18 @@ module.exports = grammar({
       field('height', $.dimension),
     ),
 
-    // zone NAME { ... } or keepout NAME { ... }
+    // zone NAME { ... }, keepout NAME { ... }, flex NAME { ... } or
+    // region NAME { ... }
     zone_definition: $ => seq(
       // `flex` is the third: the part of a rigid-flex board that bends. Not a
       // keepout - copper crosses it, that is what it is for - and not a pour.
-      field('kind', choice('zone', 'keepout', 'flex')),
+      //
+      // `region` is the fourth, and it means nothing on its own: an area with
+      // a name, so that something else can point at it. A stackup layer that
+      // says `core 1mm covers rigid_left` needs a name for the rigid end, and
+      // the three kinds above all carry a meaning the rigid end does not have
+      // - it is not poured, nothing is kept out of it, and it does not bend.
+      field('kind', choice('zone', 'keepout', 'flex', 'region')),
       // The same rule a net name uses: a pour is usually named after the net
       // it fills, and `VBUS+` is not an identifier. Writing it bare would
       // produce a file this project cannot read back, which is how the
