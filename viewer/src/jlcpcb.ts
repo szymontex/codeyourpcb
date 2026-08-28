@@ -7,7 +7,6 @@
  * 3. 3D model fetch via EasyEDA API: LCSC ID → component data → 3D UUID → OBJ text
  */
 
-import type { PadInfo } from './types';
 import { parseEasyEDAFootprint, type EasyEDAFootprint } from './easyeda-footprint-parser';
 
 /** Component result from jlcsearch API */
@@ -58,7 +57,7 @@ const JLCSEARCH_BASE = 'https://jlcsearch.tscircuit.com';
  * VITE_EASYEDA_PROXY_URL, or fall back to direct URLs (which will fail
  * on CORS in browsers but work in Tauri desktop).
  */
-export const EASYEDA_PROXY_URL = (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_EASYEDA_PROXY_URL) || '';
+const EASYEDA_PROXY_URL = (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_EASYEDA_PROXY_URL) || '';
 
 const EASYEDA_API_BASE = EASYEDA_PROXY_URL
   ? EASYEDA_PROXY_URL       // production: Cloudflare Worker proxy
@@ -220,31 +219,6 @@ async function fetchAllCategories(): Promise<any[]> {
     all.push(...items);
   }
   return all;
-}
-
-/**
- * Fetch a 3D model OBJ text for a given LCSC part number.
- * Pipeline: LCSC ID → EasyEDA component API → extract 3D UUID → fetch OBJ.
- * Returns null if no 3D model is available or on any error — never throws.
- */
-export async function fetch3DModel(lcscId: number): Promise<string | null> {
-  try {
-    // Step 1: Fetch component data from EasyEDA (use cached if available)
-    const compData = await fetchEasyEDAComponentData(lcscId);
-    if (!compData) return null;
-
-    // Step 2: Extract 3D model UUID from shape array
-    const uuid = extract3DModelUUID(compData);
-    if (!uuid) {
-      return null; // No 3D model available for this component
-    }
-
-    // Step 3: Fetch the OBJ text for that UUID
-    return await fetch3DModelByUuid(uuid);
-  } catch (error) {
-    console.error(`[JLCPCB] 3D fetch error: ${error}`);
-    return null;
-  }
 }
 
 /**
@@ -466,24 +440,6 @@ export async function fetchComponentFootprint(lcscId: number): Promise<EasyEDAFo
     console.error(`[JLCPCB] Footprint fetch error for C${lcscId}: ${error}`);
     return null;
   }
-}
-
-/**
- * Get cached footprint pads for an LCSC part number (synchronous).
- * Returns null if not yet fetched. Use fetchComponentFootprint() to populate.
- */
-export function getCachedFootprintPads(lcscId: number): PadInfo[] | null {
-  const fp = footprintCache.get(lcscId);
-  return fp ? fp.pads : null;
-}
-
-/**
- * Get cached 3D model UUID for an LCSC part number (synchronous).
- * Returns null if not yet fetched or no 3D model available.
- */
-export function getCached3DModelUuid(lcscId: number): string | null {
-  const fp = footprintCache.get(lcscId);
-  return fp ? fp.modelUuid : null;
 }
 
 /**

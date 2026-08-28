@@ -99,13 +99,6 @@ export function hasDynamicFootprint(packageName: string): boolean {
 }
 
 /**
- * Get all registered dynamic footprint names (for debugging).
- */
-export function getRegisteredFootprints(): string[] {
-  return Array.from(dynamicFootprintRegistry.keys());
-}
-
-/**
  * Registry mapping package names to 3D model UUIDs.
  *
  * Kept for the same reason the footprint registry is: a supplier's answer can
@@ -362,7 +355,7 @@ let engineInstance: PcbEngine | null = null;
  * Parse FreeRouting .ses (session) file to extract routing results.
  * Returns traces and vias that can be added to a BoardSnapshot.
  */
-export function parseSesFile(sesContent: string): { traces: BoardSnapshot['traces']; vias: BoardSnapshot['vias'] } {
+function parseSesFile(sesContent: string): { traces: BoardSnapshot['traces']; vias: BoardSnapshot['vias'] } {
   const traces: BoardSnapshot['traces'] = [];
   const vias: BoardSnapshot['vias'] = [];
 
@@ -1126,25 +1119,6 @@ export async function loadWasm(): Promise<PcbEngine> {
   replayRegisteredFootprints(engineInstance);
   replayRegisteredModels(engineInstance);
   return engineInstance;
-}
-
-/**
- * Get the current engine instance (if loaded)
- */
-export function getEngine(): PcbEngine | null {
-  return engineInstance;
-}
-
-/**
- * Helper to load source and get snapshot in one call
- */
-export function loadAndSnapshot(source: string): { snapshot: BoardSnapshot; errors: string } | null {
-  if (!engineInstance) return null;
-
-  const errors = engineInstance.load_source(source);
-  const snapshot = engineInstance.get_snapshot();
-
-  return { snapshot, errors };
 }
 
 /**
