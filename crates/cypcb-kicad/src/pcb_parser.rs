@@ -415,6 +415,26 @@ pub fn parse_kicad_pcb_str(content: &str) -> Result<KicadPcbParseResult, KicadPc
         }
     }
 
+    // 6b. Extract track arcs.
+    //
+    // KiCad holds a curve natively and this model holds straight segments, so
+    // an arc arrives as the chords it stands for plus the curve they came
+    // from. They are spawned here rather than handed over as reference routes
+    // because a `RouteSegment` has nowhere to carry a curve, and a curve that
+    // arrives as twelve anonymous segments is a curve the next save loses.
+    let mut arc_count = 0usize;
+    for elem in elements {
+        if list_name(elem).as_deref() != Some("arc") {
+            continue;
+        }
+        if let Some((trace, curve)) = parse_track_arc(elem, &kicad_net_map, board_origin)? {
+            let net_id = trace.net_id;
+            world.spawn_entity((trace, net_id, curve));
+            arc_count += 1;
+        }
+    }
+    let _ = arc_count;
+
     // 7. Extract vias
     let mut via_placements: Vec<ViaPlacement> = Vec::new();
     for elem in elements {
@@ -1735,6 +1755,113 @@ fn parse_segment(
         (Some(s), Some(e)) => Some(RouteSegment::new(net_id, layer, width, s, e)),
         _ => None,
     })
+}
+
+/// Read one `(arc ...)` - a track arc, which KiCad states as three points on
+/// the curve.
+///
+/// Comes back as the copper this model holds - the chords the curve flattens
+/// into - and the curve itself, so a board that arrives with a curve leaves
+/// with one.
+#[allow(clippy::type_complexity)]
+fn parse_track_arc(
+    sexp: &Sexp,
+    kicad_net_map: &NetIndex,
+    origin: (f64, f64),
+) -> Result<
+    Option<(
+        cypcb_world::components::trace::Trace,
+        cypcb_world::components::trace::Curve,
+    )>,
+    KicadPcbError,
+> {
+    let list = match sexp.list() {
+        Ok(l) => l,
+        Err(_) => return Ok(None),
+    };
+
+    let mut start: Option<Point> = None;
+    let mut mid: Option<Point> = None;
+    let mut end: Option<Point> = None;
+    let mut width = Nm::from_mm(0.25);
+    let mut layer = Layer::TopCopper;
+    let mut net_id = NetId::new(0);
+
+    for child in &list[1..] {
+        let Some(name) = list_name(child) else {
+            continue;
+        };
+        match name.as_str() {
+            "start" | "mid" | "end" => {
+                if let Ok(sub) = child.list() {
+                    if sub.len() >= 3 {
+                        let x = coordinate(&sub[1], "arc x")?;
+                        let y = coordinate(&sub[2], "arc y")?;
+                        let point = Point::from_mm(x - origin.0, y - origin.1);
+                        match name.as_str() {
+                            "start" => start = Some(point),
+                            "mid" => mid = Some(point),
+                            _ => end = Some(point),
+                        }
+                    }
+                }
+            }
+            "width" => {
+                if let Ok(sub) = child.list() {
+                    if sub.len() >= 2 {
+                        width = Nm::from_mm(get_f64(&sub[1]).unwrap_or(0.25));
+                    }
+                }
+            }
+            "layer" => {
+                if let Ok(sub) = child.list() {
+                    if sub.len() >= 2 {
+                        let named = get_string(&sub[1]).unwrap_or_default();
+                        layer = parse_layer_name(&named).unwrap_or(Layer::TopCopper);
+                    }
+                }
+            }
+            "net" => {
+                if let Some(id) = kicad_net_map.resolve(child) {
+                    net_id = id;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    let (Some(start), Some(mid), Some(end)) = (start, mid, end) else {
+        return Ok(None);
+    };
+    // Three points that are not on one circle describe no arc. Refusing beats
+    // spawning copper along a curve of radius near infinity.
+    let Some(arc) = cypcb_world::arc::Arc::through(start, mid, end) else {
+        return Ok(None);
+    };
+
+    let points = arc.flatten(cypcb_world::arc::Arc::DEFAULT_TOLERANCE);
+    let segments: Vec<cypcb_world::components::trace::TraceSegment> = points
+        .windows(2)
+        .map(|pair| cypcb_world::components::trace::TraceSegment::new(pair[0], pair[1]))
+        .collect();
+    if segments.is_empty() {
+        return Ok(None);
+    }
+
+    Ok(Some((
+        cypcb_world::components::trace::Trace {
+            segments,
+            width,
+            layer,
+            net_id,
+            locked: false,
+            source: cypcb_world::components::trace::TraceSource::Manual,
+        },
+        cypcb_world::components::trace::Curve {
+            centre: arc.centre,
+            sweep_millideg: arc.sweep_millideg,
+        },
+    )))
 }
 
 // ---------------------------------------------------------------------------

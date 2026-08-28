@@ -800,16 +800,59 @@ fn write_copper(
     net_number: &std::collections::HashMap<cypcb_world::NetId, usize>,
     out: &mut String,
 ) {
-    let traces: Vec<Trace> = {
+    // The curve comes with the copper. KiCad holds arcs natively - a track arc
+    // is `(arc (start ...) (mid ...) (end ...))` - and writing a curve out as
+    // the dozen chords it was flattened into hands a KiCad user copper they
+    // cannot edit as the one curve it is.
+    type CurvedTrace = (Trace, Option<cypcb_world::components::trace::Curve>);
+    let traces: Vec<CurvedTrace> = {
         let ecs = world.ecs_mut();
-        let mut query = ecs.query::<&Trace>();
-        query.iter(ecs).cloned().collect()
+        let mut query = ecs.query::<(&Trace, Option<&cypcb_world::components::trace::Curve>)>();
+        query
+            .iter(ecs)
+            .map(|(trace, curve)| (trace.clone(), curve.copied()))
+            .collect()
     };
-    for trace in traces {
+    for (trace, curve) in traces {
         let Some(layer) = copper_layer(trace.layer) else {
             continue;
         };
         let net = net_number.get(&trace.net_id).copied().unwrap_or(0);
+
+        if let Some(curve) = curve {
+            if let (Some(first), Some(last)) = (trace.segments.first(), trace.segments.last()) {
+                // The mid-point is the one thing this model does not hold, and
+                // deriving it is arithmetic about arcs rather than about
+                // KiCad, so `cypcb_world::arc` owns it.
+                let arc = cypcb_world::arc::Arc {
+                    centre: curve.centre,
+                    radius: {
+                        let dx = (first.start.x.0 - curve.centre.x.0) as f64;
+                        let dy = (first.start.y.0 - curve.centre.y.0) as f64;
+                        cypcb_core::Nm((dx * dx + dy * dy).sqrt().round() as i64)
+                    },
+                    start_millideg: {
+                        let dx = (first.start.x.0 - curve.centre.x.0) as f64;
+                        let dy = (first.start.y.0 - curve.centre.y.0) as f64;
+                        (dy.atan2(dx).to_degrees() * 1000.0).round() as i32
+                    },
+                    sweep_millideg: curve.sweep_millideg,
+                };
+                let mid = arc.mid();
+                let _ = writeln!(
+                    out,
+                    "  (arc (start {} {}) (mid {} {}) (end {} {}) (width {}) (layer \"{layer}\") (net {net}))",
+                    on_sheet(origin, first.start.x, first.start.y).0,
+                    on_sheet(origin, first.start.x, first.start.y).1,
+                    on_sheet(origin, mid.x, mid.y).0,
+                    on_sheet(origin, mid.x, mid.y).1,
+                    on_sheet(origin, last.end.x, last.end.y).0,
+                    on_sheet(origin, last.end.x, last.end.y).1,
+                    mm(trace.width)
+                );
+                continue;
+            }
+        }
         // A width per segment, not per trace. KiCad has always written one
         // `(width ...)` inside each `(segment ...)`, and this wrote the
         // trace's for all of them - so a board that came in with a neck into a

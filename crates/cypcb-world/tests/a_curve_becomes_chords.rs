@@ -197,3 +197,72 @@ fn a_curve_that_is_not_one_is_answered_rather_than_looped_over() {
         "and it closes back on where it started"
     );
 }
+
+#[test]
+fn three_points_on_the_curve_give_the_curve_back() {
+    // How a `.kicad_pcb` states an arc: start, a point half way round, and
+    // end. Going out and coming back has to land on the same curve, or a board
+    // that travels through KiCad comes home turning the wrong way or bulging
+    // the wrong side.
+    let arc = quarter();
+    let read = Arc::through(arc.start(), arc.mid(), arc.end()).expect("three points, one arc");
+
+    assert!(
+        (read.centre.x.0 - arc.centre.x.0).abs() <= 1_000
+            && (read.centre.y.0 - arc.centre.y.0).abs() <= 1_000,
+        "the same centre: {:?} against {:?}",
+        read.centre,
+        arc.centre
+    );
+    assert!(
+        (read.sweep_millideg - arc.sweep_millideg).abs() <= 100,
+        "and the same sweep: {} against {}",
+        read.sweep_millideg,
+        arc.sweep_millideg
+    );
+
+    let mut clockwise = quarter();
+    clockwise.sweep_millideg = -90_000;
+    let read = Arc::through(clockwise.start(), clockwise.mid(), clockwise.end())
+        .expect("three points, one arc");
+    assert!(
+        read.sweep_millideg < 0,
+        "and the way round comes from the point in the middle: {}",
+        read.sweep_millideg
+    );
+}
+
+#[test]
+fn three_points_in_a_line_are_not_an_arc() {
+    // A file can say anything. Three points on one straight line describe a
+    // circle of infinite radius, and taking them at their word would put
+    // copper somewhere near the far edge of the board.
+    let straight = Arc::through(
+        Point { x: Nm(0), y: Nm(0) },
+        Point {
+            x: Nm(5_000_000),
+            y: Nm(0),
+        },
+        Point {
+            x: Nm(10_000_000),
+            y: Nm(0),
+        },
+    );
+    assert!(straight.is_none(), "a straight line is not a curve");
+
+    let same_point = Arc::through(
+        Point {
+            x: Nm(1_000_000),
+            y: Nm(1_000_000),
+        },
+        Point {
+            x: Nm(1_000_000),
+            y: Nm(1_000_000),
+        },
+        Point {
+            x: Nm(1_000_000),
+            y: Nm(1_000_000),
+        },
+    );
+    assert!(same_point.is_none(), "and neither is one point three times");
+}

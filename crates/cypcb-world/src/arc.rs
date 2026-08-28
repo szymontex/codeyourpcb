@@ -122,6 +122,75 @@ impl Arc {
         Nm((self.radius.0 as f64 * (1.0 - (step / 2.0).cos())).round() as i64)
     }
 
+    /// The point half way round, which is how a `.kicad_pcb` states an arc.
+    ///
+    /// KiCad stores `(arc (start ...) (mid ...) (end ...))` - three points on
+    /// the curve - and this model stores a centre and a sweep. Neither is
+    /// wrong and the conversion belongs here rather than in the writer: it is
+    /// arithmetic about arcs, and a second format asking the same question
+    /// should get the same answer.
+    pub fn mid(&self) -> Point {
+        self.point_at(self.start_millideg as f64 + self.sweep_millideg as f64 / 2.0)
+    }
+
+    /// The arc through three points on it, as a centre and a sweep.
+    ///
+    /// The inverse of [`Arc::mid`], for reading a `.kicad_pcb` back. Three
+    /// points that are not on one circle - the same point twice, or three in a
+    /// line - describe no arc, and this says so rather than dividing by a
+    /// number close to zero.
+    pub fn through(start: Point, mid: Point, end: Point) -> Option<Arc> {
+        let (ax, ay) = (start.x.0 as f64, start.y.0 as f64);
+        let (bx, by) = (mid.x.0 as f64, mid.y.0 as f64);
+        let (cx, cy) = (end.x.0 as f64, end.y.0 as f64);
+
+        // Twice the signed area of the triangle: zero for three points in a
+        // line, and its sign is which way the curve turns.
+        let turn = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
+        if turn.abs() < 1.0 {
+            return None;
+        }
+
+        // The circumcentre, which is where the two perpendicular bisectors
+        // meet.
+        let a2 = ax * ax + ay * ay;
+        let b2 = bx * bx + by * by;
+        let c2 = cx * cx + cy * cy;
+        let centre_x = (a2 * (by - cy) + b2 * (cy - ay) + c2 * (ay - by)) / (2.0 * turn);
+        let centre_y = (a2 * (cx - bx) + b2 * (ax - cx) + c2 * (bx - ax)) / (2.0 * turn);
+        let centre = Point {
+            x: Nm(centre_x.round() as i64),
+            y: Nm(centre_y.round() as i64),
+        };
+
+        let radius = ((ax - centre_x).powi(2) + (ay - centre_y).powi(2)).sqrt();
+        let angle_of = |x: f64, y: f64| (y - centre_y).atan2(x - centre_x).to_degrees();
+        let start_degrees = angle_of(ax, ay);
+        let end_degrees = angle_of(cx, cy);
+
+        // The way round is the way the middle point lies: a sweep taken
+        // between the ends alone is the same number for both arcs a chord
+        // describes, and picking the short one draws the wrong copper on every
+        // curve past a half turn.
+        let mut sweep = end_degrees - start_degrees;
+        if turn > 0.0 {
+            while sweep <= 0.0 {
+                sweep += 360.0;
+            }
+        } else {
+            while sweep >= 0.0 {
+                sweep -= 360.0;
+            }
+        }
+
+        Some(Arc {
+            centre,
+            radius: Nm(radius.round() as i64),
+            start_millideg: (start_degrees * 1000.0).round() as i32,
+            sweep_millideg: (sweep * 1000.0).round() as i32,
+        })
+    }
+
     /// The arc as the chords that stand in for it, ends included.
     ///
     /// Every measurement in this project - clearance, length, the congestion
