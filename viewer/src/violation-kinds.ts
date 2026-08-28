@@ -46,6 +46,7 @@ export const VIOLATION_KIND_META: Record<string, ViolationKindMeta> = {
   'via-span':            { icon: '🕳️', label: 'Via span this build does not drill' },
   'flex-hole':           { icon: '📐', label: 'Hole where the board bends' },
   'empty-area':          { icon: '▭', label: 'Declared area with no area' },
+  'area-off-board':      { icon: '🚧', label: 'Declared area off the board' },
 };
 
 /** The icon and name for a kind, falling back to the slug the engine sent. */

@@ -173,6 +173,10 @@ pub fn run_drc(world: &mut BoardWorld, rules: &DesignRules) -> DrcResult {
         // document, the 3D view, the copper filler - is pointed at a shape
         // that is not there.
         Box::new(rules::EmptyAreaRule),
+        // And it has to be on the board. Copper pours are left to
+        // `edge-clearance`, which already measures copper against the edge; a
+        // second row for one fault teaches a reader to skim the panel.
+        Box::new(rules::AreaOffBoardRule),
     ];
 
     // Run each checker
