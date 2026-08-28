@@ -103,6 +103,14 @@ this board's own band of 34 - and this table was not, so the two disagreed for
 four days. The shorts figure, 169, did not move: a via span is not copper
 touching copper.
 
+**Re-baselined again on 2026-08-28, for a change in the router rather than in a
+rule.** A pad now blocks its own rectangle with two cells of reach instead of a
+disc of its longer half-side, and every board moved: routed values are
+`led_blink` **0 / 0**, `stm32_breakout` **187 / 104**, `multi_ic` **449 / 134**,
+`shift_driver` **7 / 5**, `qfp_fanout` **271 / 150**, `plane_board` **26 / 13**,
+and the ratchets are those plus each board's re-measured band. Four tighten and
+two loosen; the arithmetic and the reason for each are in `DRC_RATCHETS`.
+
 **`multi_ic` moved because its yardstick did, and that is separated from
 everything else that moved rather than asserted.** The harness graded all six
 boards on the two-layer table until 2026-08-21; `multi_ic` has four copper
@@ -237,6 +245,17 @@ and shorts:
 | 0.26 | 188 / 112 | 236 / 171 | 67 / 34 | 312 / 166 | 28 / 13 |
 | 0.28 | 182 / 104 | 245 / 176 | 50 / 27 | 311 / 167 | 28 / 13 |
 | **spread** | **59 / 61** | **65 / 56** | **17 / 8** | **57 / 44** | **0 / 0** |
+
+**This table was taken before 2026-08-28 and the router has moved since.** A
+pad blocks its own rectangle with two cells of reach now, rather than a disc of
+its longer half-side, and every board routes differently for it. The sweep was
+re-run that day and only the spreads are carried into
+`cypcb_autoroute::noise_band`, which is where anything reading a band should
+read it: **stm32_breakout 64 / 48, multi_ic 35 / 15, shift_driver 26 / 15,
+qfp_fanout 61 / 46, plane_board 0 / 0**. The per-price cells above are not
+re-run here - re-run
+`cargo test --release -p cypcb-autoroute --test via_price_sweep how_much_of_the_price_is_noise -- --ignored --nocapture`
+before quoting one.
 
 `plane_board` is the exception that sharpens the rule: it routes identically at
 every price in the range, to the violation. A board with a ground plane has far

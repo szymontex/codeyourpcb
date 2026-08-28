@@ -273,8 +273,27 @@ const DRC_RATCHETS: &[(&str, &str, u32, u32)] = &[
     // 175 + 49 = 224. The violation side loosens by 59 and the shorts side
     // **tightens by 19**, because both the routed shorts and the band came
     // down.
-    ("led_blink.kicad_pcb", "led_blink", 2, 0),
-    ("stm32_breakout.kicad_pcb", "stm32_breakout", 239, 154),
+    // Re-baselined 2026-08-28, after a pad stopped blocking a disc of its
+    // longer half-side and started blocking its own rectangle with two cells
+    // of reach. Every board moved and every band was re-measured with it, so
+    // each ratchet below is again the routed value plus that board's own band
+    // - the same arithmetic, on numbers that are all new.
+    //
+    // board            routed        band      ratchet was   ratchet is
+    // led_blink          0 /   0     0 /  0      2 /   0       0 /   0
+    // stm32_breakout   187 / 104    64 / 48    239 / 154     251 / 152
+    // multi_ic         449 / 134    35 / 15    471 / 224     484 / 149
+    // shift_driver       7 /   5    26 / 15     82 /  42      33 /  20
+    // qfp_fanout       271 / 150    61 / 46    366 / 191     332 / 196
+    // plane_board       26 /  13     0 /  0     28 /  13      26 /  13
+    //
+    // Four rows tighten and two loosen, and the two that loosen are not the
+    // router getting worse: `stm32_breakout` routes 12 violations better and
+    // its band widened by 5, `multi_ic` gives up 12 violations while losing 42
+    // shorts. A ratchet set inside a board's own noise fails on weather, which
+    // is why the band is added rather than the routed value used bare.
+    ("led_blink.kicad_pcb", "led_blink", 0, 0),
+    ("stm32_breakout.kicad_pcb", "stm32_breakout", 251, 152),
     // Re-baselined 2026-08-23 for `ViaSpanRule`, and the router did not move:
     // measured with the rule unregistered, `multi_ic` routes to **381**
     // violations, which is 34 *under* the old 415. Registered, the same run is
@@ -283,14 +302,14 @@ const DRC_RATCHETS: &[(&str, &str, u32, u32)] = &[
     // `buried_vias_allowed` were dropped before they reached a rule. New
     // ratchet is the routed value plus this board's own band of 34, the same
     // arithmetic as every other row: 437 + 34 = 471. Shorts unmoved at 175.
-    ("multi_ic.kicad_pcb", "multi_ic", 471, 224),
-    ("shift_driver.kicad_pcb", "shift_driver", 82, 42),
-    ("qfp_fanout.kicad_pcb", "qfp_fanout", 366, 191),
+    ("multi_ic.kicad_pcb", "multi_ic", 484, 149),
+    ("shift_driver.kicad_pcb", "shift_driver", 33, 20),
+    ("qfp_fanout.kicad_pcb", "qfp_fanout", 332, 196),
     // A band of zero is not a rounding: this board routes identically at every
     // via price from 0.22 to 0.28, 28 violations and 13 shorts each time. Its
     // ratchet is the measured value exactly, so any movement at all is a real
     // change rather than weather.
-    ("plane_board.kicad_pcb", "plane_board", 28, 13),
+    ("plane_board.kicad_pcb", "plane_board", 26, 13),
 ];
 
 /// Routes every fixture and holds the line on completeness and DRC count.

@@ -33,12 +33,25 @@
 /// an observation rather than a measurement, and it is written here as zero
 /// for the same reason the sweep skips it: there is nothing to spread.
 pub fn noise_band(filename: &str) -> (i64, i64) {
+    // Re-measured 2026-08-28 by the command named above, after a pad stopped
+    // blocking a disc of its longer half-side and started blocking its own
+    // rectangle with two cells of reach. The router moved on every board, so
+    // the bands had to be re-read rather than carried: a band measured on one
+    // router used to judge another is the drift this module exists to stop.
+    //
+    // board            band was      band is    routed was    routed is
+    // stm32_breakout   59 / 61       64 / 48    199 / 99      187 / 104
+    // multi_ic         34 / 49       35 / 15    437 / 176     449 / 134
+    // shift_driver     17 /  8       26 / 15     65 /  34       7 /   5
+    // qfp_fanout       60 / 46       61 / 46    318 / 149     271 / 150
+    // plane_board       0 /  0        0 /  0     28 /  13      26 /  13
+    // led_blink         0 /  0        0 /  0      2 /   0       0 /   0
     match filename {
         "led_blink.kicad_pcb" => (0, 0),
-        "stm32_breakout.kicad_pcb" => (59, 61),
-        "multi_ic.kicad_pcb" => (34, 49),
-        "shift_driver.kicad_pcb" => (17, 8),
-        "qfp_fanout.kicad_pcb" => (60, 46),
+        "stm32_breakout.kicad_pcb" => (64, 48),
+        "multi_ic.kicad_pcb" => (35, 15),
+        "shift_driver.kicad_pcb" => (26, 15),
+        "qfp_fanout.kicad_pcb" => (61, 46),
         "plane_board.kicad_pcb" => (0, 0),
         _ => (0, 0),
     }
@@ -60,12 +73,15 @@ pub fn noise_band(filename: &str) -> (i64, i64) {
 /// board that sweep skips; it routes four vias and stacks none of them, which
 /// is an observation rather than a spread.
 pub fn stacked_hole_band(filename: &str) -> i64 {
+    // Re-measured 2026-08-28 with the bands above. `qfp_fanout` is the one
+    // that moved far - 24 to 8 - because the router now reaches the fine-pitch
+    // fanout without stacking its way out of it.
     match filename {
         "led_blink.kicad_pcb" => 0,
-        "stm32_breakout.kicad_pcb" => 3,
+        "stm32_breakout.kicad_pcb" => 9,
         "multi_ic.kicad_pcb" => 5,
-        "shift_driver.kicad_pcb" => 0,
-        "qfp_fanout.kicad_pcb" => 24,
+        "shift_driver.kicad_pcb" => 1,
+        "qfp_fanout.kicad_pcb" => 8,
         "plane_board.kicad_pcb" => 0,
         _ => 0,
     }
