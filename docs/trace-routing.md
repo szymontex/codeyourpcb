@@ -15,7 +15,6 @@ Implemented in TypeScript (viewer) with WASM backend for trace storage.
 | `viewer/src/trace-edit.ts` | Segment/corner drag, hit-testing, rectangle selection |
 | `viewer/src/trace-optimize.ts` | Trace simplification (Ctrl+L) |
 | `viewer/src/interaction.ts` | Mouse/keyboard event wiring, T-junction logic |
-| `viewer/src/walkaround.ts` | Hull-based walkaround (legacy, not currently used — dodge.ts replaced it) |
 | `viewer/src/renderer.ts` | Preview rendering, obstacle markers, solder mask |
 
 ## Routing Behavior (KiCad-compatible)
@@ -186,7 +185,11 @@ Key files in `/workspace/competitors/kicad/`:
 - `pcbnew/router/pns_line.cpp` — dragSegment45, dragCorner45, Walkaround
 - `pcbnew/router/pns_dragger.cpp` — drag state machine
 - `pcbnew/router/pns_node.cpp` — collision world
-- `pcbnew/router/pns_walkaround.cpp` — obstacle walkaround
+- `pcbnew/router/pns_walkaround.cpp` — obstacle walkaround (the hull-based
+  port of this lived in `viewer/src/walkaround.ts` and was deleted on
+  2026-08-28: nothing imported it, no test exercised it, and `dodge.ts` had
+  replaced it. `git show 12e4ebf` has it if trace-to-trace avoidance is wanted
+  again)
 - `pcbnew/router/pns_shove.cpp` — push-and-shove
 - `pcbnew/router/pns_optimizer.cpp` — trace optimization
 - `libs/kimath/src/geometry/direction_45.cpp` — BuildInitialTrace
