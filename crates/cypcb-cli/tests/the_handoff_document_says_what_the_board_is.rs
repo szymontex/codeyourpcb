@@ -691,17 +691,33 @@ fn the_stack_the_board_states_is_in_the_document() {
 }
 
 #[test]
-fn the_run_says_the_tolerance_is_not_the_boards_own() {
-    // A tolerance is a number a fabricator holds the board to, and this
-    // language has nowhere to state one. Writing zero silently would be a
-    // reader taking zero for a promise.
-    let (xml, said) = document_and_run("blind-via.cypcb", &scratch("tolerance"));
+fn the_tolerance_comes_from_the_house_the_board_names() {
+    // A thickness tolerance is a house's published figure rather than a
+    // board's wish: JLCPCB publishes plus or minus ten percent. A 1.570mm
+    // stack at that house is 0.157mm either way, and the document says so.
+    let (xml, said) = document_and_run("four-layer.cypcb", &scratch("tolerance-known"));
     assert!(
-        xml.contains("tolPlus=\"0\" tolMinus=\"0\""),
+        xml.contains("tolPlus=\"0.157\" tolMinus=\"0.157\""),
+        "ten percent of the stack it wrote:\n{xml}"
+    );
+    assert!(
+        !said.contains("no published thickness tolerance"),
+        "and nothing is apologised for: {said}"
+    );
+}
+
+#[test]
+fn a_house_with_no_published_figure_gets_a_zero_and_a_word_about_it() {
+    // Writing zero silently would be a reader taking zero for a promise, and
+    // inventing a figure would be a fabricator held to a number nobody
+    // published.
+    let (xml, said) = document_and_run("blind-via.cypcb", &scratch("tolerance-unknown"));
+    assert!(
+        xml.contains("tolPlus=\"0.000\" tolMinus=\"0.000\""),
         "the document states zero:\n{xml}"
     );
     assert!(
-        said.contains("states no thickness tolerance"),
+        said.contains("no published thickness tolerance is known"),
         "and the run says why: {said}"
     );
 }
@@ -714,7 +730,7 @@ fn a_board_with_no_stack_gets_no_stack_section() {
         "a board that states no stack has none written for it:\n{xml}"
     );
     assert!(
-        !said.contains("states no thickness tolerance"),
+        !said.contains("no published thickness tolerance"),
         "and nothing is said about a tolerance it never needed: {said}"
     );
 }

@@ -69,10 +69,11 @@ pub fn two_layer() -> DesignConstraints {
         thermal_relief_spokes: 4,
 
         // Manufacturing
-        copper_weight_oz_x10: 10,             // 1.0 oz
-        board_thickness: Nm::from_mm(1.6),    // 63 mil (1.6mm)
-        min_hole_to_hole: Nm::from_mm(0.635), // 25 mil
-        min_hole_to_edge: Nm::from_mm(0.381), // 15 mil
+        copper_weight_oz_x10: 10,                // 1.0 oz
+        board_thickness: Nm::from_mm(1.6),       // 63 mil (1.6mm)
+        board_thickness_tolerance_percent: None, // no published figure read
+        min_hole_to_hole: Nm::from_mm(0.635),    // 25 mil
+        min_hole_to_edge: Nm::from_mm(0.381),    // 15 mil
         blind_vias_allowed: false,
         buried_vias_allowed: false,
         min_acid_trap: Nm::from_mm(0.15), // 6 mil
@@ -166,8 +167,9 @@ pub fn four_layer() -> DesignConstraints {
         // Manufacturing
         copper_weight_oz_x10: 10, // 1.0 oz outer
         board_thickness: Nm::from_mm(1.6),
-        min_hole_to_hole: Nm::from_mm(0.508), // 20 mil
-        min_hole_to_edge: Nm::from_mm(0.381), // 15 mil
+        board_thickness_tolerance_percent: None, // no published figure read
+        min_hole_to_hole: Nm::from_mm(0.508),    // 20 mil
+        min_hole_to_edge: Nm::from_mm(0.381),    // 15 mil
         blind_vias_allowed: false,
         buried_vias_allowed: false,
         min_acid_trap: Nm::from_mm(0.127), // 5 mil

@@ -92,10 +92,12 @@ fn copper_layers(count: usize) -> Vec<(String, &'static str)> {
 pub fn export_ipc2581_now(
     world: &mut BoardWorld,
     library: &FootprintLibrary,
+    thickness_tolerance_percent: Option<u32>,
 ) -> (String, Vec<String>) {
     export_ipc2581(
         world,
         library,
+        thickness_tolerance_percent,
         &chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%z").to_string(),
     )
 }
@@ -107,6 +109,7 @@ pub fn export_ipc2581_now(
 pub fn export_ipc2581(
     world: &mut BoardWorld,
     library: &FootprintLibrary,
+    thickness_tolerance_percent: Option<u32>,
     now: &str,
 ) -> (String, Vec<String>) {
     let (size, stack) = world.board_info().unwrap_or((
@@ -319,27 +322,39 @@ pub fn export_ipc2581(
                 stack.layers.len()
             ));
         }
-        // A tolerance is a number a fabricator holds the board to, and this
-        // language has nowhere to state one. Zero is what the document says,
-        // and the run says that is what happened rather than letting a reader
-        // take it for a promise.
-        warnings.push(
-            "the stackup states no thickness tolerance, so the document says zero: \
-             the language has no field for one yet"
-                .to_string(),
-        );
+        // A tolerance is a number a fabricator holds the board to. It belongs
+        // to the house rather than to the board - JLCPCB publishes plus or
+        // minus ten percent as its standard - so it comes from the fab table
+        // when that table has read a published figure, and is zero with a word
+        // said about it when it has not.
+        let tolerance = match thickness_tolerance_percent {
+            Some(percent) => Nm(overall.0 * percent as i64 / 100),
+            None => {
+                warnings.push(
+                    "no published thickness tolerance is known for this board's fab, so the \
+                     document says zero: a figure invented here is one a fabricator gets \
+                     held to"
+                        .to_string(),
+                );
+                Nm(0)
+            }
+        };
 
         let _ = writeln!(
             out,
-            "      <Stackup overallThickness=\"{}\" tolPlus=\"0\" tolMinus=\"0\" \
+            "      <Stackup overallThickness=\"{}\" tolPlus=\"{}\" tolMinus=\"{}\" \
              whereMeasured=\"LAMINATE\">",
-            mm(overall)
+            mm(overall),
+            mm(tolerance),
+            mm(tolerance)
         );
         let _ = writeln!(
             out,
-            "        <StackupGroup name=\"{board}\" thickness=\"{}\" tolPlus=\"0\" \
-             tolMinus=\"0\">",
-            mm(overall)
+            "        <StackupGroup name=\"{board}\" thickness=\"{}\" tolPlus=\"{}\" \
+             tolMinus=\"{}\">",
+            mm(overall),
+            mm(tolerance),
+            mm(tolerance)
         );
         for (index, entry) in stack.layers.iter().enumerate() {
             let material = match entry.kind {

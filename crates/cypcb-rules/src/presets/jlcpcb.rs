@@ -61,10 +61,11 @@ pub fn standard_2layer() -> DesignConstraints {
         thermal_relief_spokes: 4,
 
         // Manufacturing
-        copper_weight_oz_x10: 10,           // 1.0 oz
-        board_thickness: Nm::from_mm(1.6),  // 1.6mm standard
-        min_hole_to_hole: Nm::from_mm(0.5), // 0.5mm
-        min_hole_to_edge: Nm::from_mm(0.3), // 0.3mm
+        copper_weight_oz_x10: 10,                    // 1.0 oz
+        board_thickness: Nm::from_mm(1.6),           // 1.6mm standard
+        board_thickness_tolerance_percent: Some(10), // published as +/-10%
+        min_hole_to_hole: Nm::from_mm(0.5),          // 0.5mm
+        min_hole_to_edge: Nm::from_mm(0.3),          // 0.3mm
         blind_vias_allowed: false,
         buried_vias_allowed: false,
         min_acid_trap: Nm::from_mm(0.127), // 5 mil
@@ -152,11 +153,12 @@ pub fn standard_4layer() -> DesignConstraints {
         thermal_relief_spokes: 4,
 
         // Manufacturing
-        copper_weight_oz_x10: 10,            // 1.0 oz outer
-        board_thickness: Nm::from_mm(1.6),   // 1.6mm
-        min_hole_to_hole: Nm::from_mm(0.45), // 0.45mm
-        min_hole_to_edge: Nm::from_mm(0.25), // 0.25mm
-        blind_vias_allowed: false,           // not on standard
+        copper_weight_oz_x10: 10,                    // 1.0 oz outer
+        board_thickness: Nm::from_mm(1.6),           // 1.6mm
+        board_thickness_tolerance_percent: Some(10), // published as +/-10%
+        min_hole_to_hole: Nm::from_mm(0.45),         // 0.45mm
+        min_hole_to_edge: Nm::from_mm(0.25),         // 0.25mm
+        blind_vias_allowed: false,                   // not on standard
         buried_vias_allowed: false,
         min_acid_trap: Nm::from_mm(0.1), // 4 mil
         max_copper_layers: 4,
@@ -255,6 +257,7 @@ pub fn advanced_2layer() -> DesignConstraints {
         // Manufacturing
         copper_weight_oz_x10: 10, // 1.0 oz
         board_thickness: Nm::from_mm(1.6),
+        board_thickness_tolerance_percent: Some(10), // published as +/-10%
         min_hole_to_hole: Nm::from_mm(0.4),
         min_hole_to_edge: Nm::from_mm(0.2),
         blind_vias_allowed: false,
@@ -344,6 +347,7 @@ pub fn advanced_4layer() -> DesignConstraints {
         // Manufacturing
         copper_weight_oz_x10: 10, // 1.0 oz outer
         board_thickness: Nm::from_mm(1.6),
+        board_thickness_tolerance_percent: Some(10), // published as +/-10%
         min_hole_to_hole: Nm::from_mm(0.4),
         min_hole_to_edge: Nm::from_mm(0.2),
         blind_vias_allowed: true, // available on advanced 4L

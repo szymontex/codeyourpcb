@@ -496,8 +496,17 @@ impl ExportCommand {
             std::fs::create_dir_all(&handoff_dir)
                 .into_diagnostic()
                 .wrap_err("Creating the handoff directory failed")?;
-            let (document, handoff_warnings) =
-                cypcb_export::ipc2581::export_ipc2581_now(&mut world, &library);
+            // The tolerance is the fab's, so it comes from the fab the board
+            // names rather than from the flag that decides file naming.
+            let thickness_tolerance = world
+                .fab()
+                .and_then(cypcb_rules::presets::RulesPreset::from_name)
+                .and_then(|preset| preset.constraints().board_thickness_tolerance_percent);
+            let (document, handoff_warnings) = cypcb_export::ipc2581::export_ipc2581_now(
+                &mut world,
+                &library,
+                thickness_tolerance,
+            );
             // Before the file is announced, so a person reads what it could
             // not say before they read that it was written.
             for warning in handoff_warnings {

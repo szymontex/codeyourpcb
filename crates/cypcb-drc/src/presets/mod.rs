@@ -102,6 +102,7 @@ use cypcb_rules::DesignConstraints;
 ///     max_diff_pair_skew: Nm::from_mm(0.5),
 ///     max_drill_aspect_ratio: 800,
 ///     board_thickness: Nm::from_mm(1.6),
+///     board_thickness_tolerance_percent: Some(10),
 /// };
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -210,6 +211,13 @@ pub struct DesignRules {
     /// rather than a constant, because the aspect ratio a hole reaches is the
     /// thickness divided by the drill.
     pub board_thickness: Nm,
+    /// How far this fab lets the finished thickness be off, as a percentage.
+    ///
+    /// `None` where no published figure has been read for the house. A file
+    /// that wants a tolerance - IPC-2581's `Stackup` wants two - then says
+    /// zero and says that it is saying zero, because a figure invented here is
+    /// a figure a fabricator gets held to.
+    pub board_thickness_tolerance_percent: Option<u32>,
 }
 
 /// The land minimum this fab is held to: what it published, or what its own
@@ -292,6 +300,7 @@ impl DesignRules {
             max_diff_pair_skew: c.length_match_tolerance,
             max_drill_aspect_ratio: c.max_drill_aspect_ratio,
             board_thickness: c.board_thickness,
+            board_thickness_tolerance_percent: c.board_thickness_tolerance_percent,
         }
     }
 }
