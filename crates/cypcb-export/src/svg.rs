@@ -126,15 +126,49 @@ pub fn plot_layer(world: &mut BoardWorld, library: &FootprintLibrary, layer: Lay
     }
 
     // Tracks: one polyline per segment, at the width that segment runs at.
-    let traces: Vec<Trace> = {
-        let mut query = world.ecs_mut().query::<&Trace>();
+    // The curve comes with the copper, because SVG can draw one. A picture
+    // made of a dozen chords is a picture of the flattening rather than of the
+    // board, and the board states a curve.
+    type PlottedTrace = (Trace, Option<cypcb_world::components::trace::Curve>);
+    let traces: Vec<PlottedTrace> = {
+        let mut query = world
+            .ecs_mut()
+            .query::<(&Trace, Option<&cypcb_world::components::trace::Curve>)>();
         query
             .iter(world.ecs())
-            .filter(|trace| trace.layer == layer)
-            .cloned()
+            .filter(|(trace, _)| trace.layer == layer)
+            .map(|(trace, curve)| (trace.clone(), curve.copied()))
             .collect()
     };
-    for trace in traces {
+    for (trace, curve) in traces {
+        if let Some((curve, first, last)) = curve
+            .zip(trace.segments.first())
+            .and_then(|(curve, first)| trace.segments.last().map(|last| (curve, first, last)))
+        {
+            let dx = (first.start.x.0 - curve.centre.x.0) as f64;
+            let dy = (first.start.y.0 - curve.centre.y.0) as f64;
+            let radius = Nm((dx * dx + dy * dy).sqrt().round() as i64);
+            // `A` takes the two ends and how to get between them: the long way
+            // or the short one, and which way round. A sweep past a half turn
+            // is the long way; the direction is the sign, because the drawing
+            // is in the board's own coordinates and `x = cx + r cos t` is the
+            // same formula in both.
+            let long_way = curve.sweep_millideg.abs() > 180_000;
+            body.push_str(&format!(
+                "  <path d=\"M {} {} A {} {} 0 {} {} {} {}\" fill=\"none\" stroke=\"{ink}\" \
+                 stroke-width=\"{}\" stroke-linecap=\"round\"/>\n",
+                mm(first.start.x),
+                mm(first.start.y),
+                mm(radius),
+                mm(radius),
+                u8::from(long_way),
+                u8::from(curve.sweep_millideg > 0),
+                mm(last.end.x),
+                mm(last.end.y),
+                mm(trace.width)
+            ));
+            continue;
+        }
         for segment in &trace.segments {
             let width = segment.width.unwrap_or(trace.width);
             body.push_str(&format!(

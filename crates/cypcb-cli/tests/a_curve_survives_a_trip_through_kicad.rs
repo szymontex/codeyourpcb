@@ -158,7 +158,7 @@ fn the_copper_that_comes_home_is_the_copper_that_left() {
     to_kicad("curved-track.cypcb", &dir);
     from_kicad(&dir);
 
-    let plot = |design: &Path, out: &Path| -> usize {
+    let plot = |design: &Path, out: &Path| -> String {
         let status = cypcb()
             .arg("export")
             .arg(design)
@@ -172,10 +172,19 @@ fn the_copper_that_comes_home_is_the_copper_that_left() {
             .file_stem()
             .and_then(|stem| stem.to_str())
             .expect("a name");
-        std::fs::read_to_string(out.join("plot").join(format!("{name}-F_Cu.svg")))
-            .expect("the plot is readable")
-            .matches("<line")
-            .count()
+        let svg = std::fs::read_to_string(out.join("plot").join(format!("{name}-F_Cu.svg")))
+            .expect("the plot is readable");
+        // Everything the plot draws, sorted, with the board's own name and
+        // title left out: two plots of the same copper are the same drawing.
+        // Sorted because the order shapes come out in follows the world's
+        // archetypes rather than anything about the board, and a trip through
+        // KiCad spawns the curve at a different moment.
+        let mut drawn: Vec<&str> = svg
+            .lines()
+            .filter(|line| line.contains("<line") || line.contains("<path"))
+            .collect();
+        drawn.sort_unstable();
+        drawn.join("\n")
     };
 
     let before = plot(&example("curved-track.cypcb"), &dir.join("before"));
@@ -184,7 +193,10 @@ fn the_copper_that_comes_home_is_the_copper_that_left() {
         after, before,
         "the same copper is drawn after the trip as before it"
     );
-    assert!(before > 8, "and it really is a flattened curve: {before}");
+    assert!(
+        before.contains("A 4.000 4.000"),
+        "and the curve is still a curve on both sides of it:\n{before}"
+    );
 }
 
 #[test]

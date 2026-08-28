@@ -196,15 +196,57 @@ pub fn plot_layer(world: &mut BoardWorld, library: &FootprintLibrary, layer: Lay
 
     // Tracks: one polyline per segment, carrying the width that segment runs
     // at as the polyline's own width.
-    let traces: Vec<Trace> = {
-        let mut query = world.ecs_mut().query::<&Trace>();
+    type PlottedTrace = (Trace, Option<cypcb_world::components::trace::Curve>);
+    let traces: Vec<PlottedTrace> = {
+        let mut query = world
+            .ecs_mut()
+            .query::<(&Trace, Option<&cypcb_world::components::trace::Curve>)>();
         query
             .iter(world.ecs())
-            .filter(|trace| trace.layer == layer)
-            .cloned()
+            .filter(|(trace, _)| trace.layer == layer)
+            .map(|(trace, curve)| (trace.clone(), curve.copied()))
             .collect()
     };
-    for trace in traces {
+    for (trace, curve) in traces {
+        // R12 has an `ARC` entity and it holds exactly what this model holds:
+        // a centre, a radius and two angles. A mechanical tool receiving a
+        // dozen chords cannot fillet against them or measure the radius.
+        if let Some((curve, first, last)) = curve
+            .zip(trace.segments.first())
+            .and_then(|(curve, first)| trace.segments.last().map(|last| (curve, first, last)))
+        {
+            let angle = |point: Point| {
+                let dx = (point.x.0 - curve.centre.x.0) as f64;
+                let dy = (point.y.0 - curve.centre.y.0) as f64;
+                let degrees = dy.atan2(dx).to_degrees();
+                if degrees < 0.0 {
+                    degrees + 360.0
+                } else {
+                    degrees
+                }
+            };
+            let dx = (first.start.x.0 - curve.centre.x.0) as f64;
+            let dy = (first.start.y.0 - curve.centre.y.0) as f64;
+            let radius = (dx * dx + dy * dy).sqrt();
+            // DXF draws an arc counter-clockwise from the first angle to the
+            // second, always. A clockwise curve is the same arc read the other
+            // way round, so the two angles swap rather than the entity
+            // carrying a direction of its own.
+            let (from, to) = if curve.sweep_millideg >= 0 {
+                (angle(first.start), angle(last.end))
+            } else {
+                (angle(last.end), angle(first.start))
+            };
+            group(&mut body, 0, "ARC");
+            group(&mut body, 8, &copper);
+            group(&mut body, 10, &mm(curve.centre.x));
+            group(&mut body, 20, &mm(curve.centre.y));
+            group(&mut body, 30, "0.0");
+            group(&mut body, 40, &mm(Nm(radius.round() as i64)));
+            group(&mut body, 50, &format!("{from:.3}"));
+            group(&mut body, 51, &format!("{to:.3}"));
+            continue;
+        }
         for segment in &trace.segments {
             let width = segment.width.unwrap_or(trace.width);
             polyline(

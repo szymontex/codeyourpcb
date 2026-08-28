@@ -190,16 +190,60 @@ pub fn plot_layer(world: &mut BoardWorld, library: &FootprintLibrary, layer: Lay
 
     // Tracks: one stroked line per segment, at the width that segment runs at,
     // with the round ends copper has at a corner.
-    let traces: Vec<Trace> = {
-        let mut query = world.ecs_mut().query::<&Trace>();
+    type PlottedTrace = (Trace, Option<cypcb_world::components::trace::Curve>);
+    let traces: Vec<PlottedTrace> = {
+        let mut query = world
+            .ecs_mut()
+            .query::<(&Trace, Option<&cypcb_world::components::trace::Curve>)>();
         query
             .iter(world.ecs())
-            .filter(|trace| trace.layer == layer)
-            .cloned()
+            .filter(|(trace, _)| trace.layer == layer)
+            .map(|(trace, curve)| (trace.clone(), curve.copied()))
             .collect()
     };
     stream.push_str("1 J\n1 j\n");
-    for trace in traces {
+    for (trace, curve) in traces {
+        // A curve is drawn as the curve it is. PDF has no arc operator and
+        // does not need one: four Beziers approximate a whole circle to about
+        // one part in a thousand, which is finer than the chords the checker
+        // reads and far finer than a printer resolves.
+        if let Some(curve) = curve {
+            if let Some(first) = trace.segments.first() {
+                let dx = (first.start.x.0 - curve.centre.x.0) as f64;
+                let dy = (first.start.y.0 - curve.centre.y.0) as f64;
+                let radius = (dx * dx + dy * dy).sqrt();
+                let start = dy.atan2(dx);
+                let sweep = (curve.sweep_millideg as f64 / 1000.0).to_radians();
+                // A quarter turn at a time: the approximation is good to a
+                // part in a thousand there and worse as the piece grows.
+                let pieces = (sweep.abs() / std::f64::consts::FRAC_PI_2).ceil().max(1.0);
+                let step = sweep / pieces;
+                // The control-point distance for one piece of that angle.
+                let handle = 4.0 / 3.0 * (step / 4.0).tan();
+                let (cx, cy) = (points(curve.centre.x), points(curve.centre.y));
+                let radius_pt = radius / 1_000_000.0 * 72.0 / 25.4;
+                let on = |angle: f64| (cx + radius_pt * angle.cos(), cy + radius_pt * angle.sin());
+
+                stream.push_str(&format!("{} w\n", pt(trace.width)));
+                let (sx, sy) = on(start);
+                stream.push_str(&format!("{sx:.3} {sy:.3} m\n"));
+                for piece in 0..pieces as usize {
+                    let from = start + step * piece as f64;
+                    let to = from + step;
+                    let (x1, y1) = on(from);
+                    let (x2, y2) = on(to);
+                    stream.push_str(&format!(
+                        "{:.3} {:.3} {:.3} {:.3} {x2:.3} {y2:.3} c\n",
+                        x1 - handle * radius_pt * from.sin(),
+                        y1 + handle * radius_pt * from.cos(),
+                        x2 + handle * radius_pt * to.sin(),
+                        y2 - handle * radius_pt * to.cos(),
+                    ));
+                }
+                stream.push_str("S\n");
+                continue;
+            }
+        }
         for segment in &trace.segments {
             let width = segment.width.unwrap_or(trace.width);
             stream.push_str(&format!(
