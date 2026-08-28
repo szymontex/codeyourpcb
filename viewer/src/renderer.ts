@@ -381,7 +381,7 @@ export type ResizeHandle =
 
 const HANDLE_SIZE = 8;
 
-export function drawResizeHandles(
+function drawResizeHandles(
   ctx: CanvasRenderingContext2D,
   vp: Viewport,
   width: number,
@@ -1602,45 +1602,4 @@ function drawRoutingPreview(ctx: CanvasRenderingContext2D, vp: Viewport, routing
     if (routing.netName) label = `${routing.netName} [${routing.currentLayer}]`;
     ctx.fillText(label, ex + 12, ey + 6);
   }
-}
-
-// ---------------------------------------------------------------------------
-// State management helpers
-// ---------------------------------------------------------------------------
-
-export function createRenderState(viewport: Viewport, layers: LayerVisibility): RenderState {
-  return {
-    snapshot: null,
-    viewport,
-    layers,
-    selectedRefdes: null,
-    showViolations: true,
-    showRatsnest: true,
-    colorByNet: true,
-    selectedTraceId: null,
-    hoveredTraceId: null,
-    labelPosition: null,
-    routing: null,
-    highlightedNet: null,
-  };
-}
-
-export function updateSnapshot(state: RenderState, snapshot: BoardSnapshot): RenderState {
-  return { ...state, snapshot };
-}
-
-export function updateViewport(state: RenderState, viewport: Viewport): RenderState {
-  return { ...state, viewport };
-}
-
-export function updateLayers(state: RenderState, layers: LayerVisibility): RenderState {
-  return { ...state, layers };
-}
-
-export function updateSelection(state: RenderState, refdes: string | null): RenderState {
-  return { ...state, selectedRefdes: refdes };
-}
-
-export function updateHighlightedNet(state: RenderState, net: string | null): RenderState {
-  return { ...state, highlightedNet: net };
 }
