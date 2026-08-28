@@ -451,7 +451,33 @@ different set of routings:
 | `+ 10 x shorts` | 1/0 | 179/75 | 371/128 | 62/20 | 10/4 | 318/149 | 376 | 0 |
 | `+ 20 x shorts` | 1/0 | 179/75 | 371/128 | 62/20 | 10/4 | 318/149 | 376 | 0 |
 
-**No rule picks a dominated board, and three of the six fixtures separate them
+**Re-run 2026-08-28, on the router that blocks a pad as its own rectangle**, and
+the table below is what it now says. The conclusion holds and the evidence for
+it has narrowed:
+
+| rule | led_blink | stm32_breakout | multi_ic | shift_driver | plane_board | qfp_fanout | shorts | dominated |
+|---|---|---|---|---|---|---|---|---|
+| **lexicographic (shipped)** | 0/0 | 198/78 | 402/128 | 7/5 | 9/5 | 246/148 | **364** | 0 |
+| `+ 0 x shorts` | 0/0 | 163/100 | 402/128 | 7/5 | 9/5 | 246/148 | 386 | 0 |
+| `+ 1 x shorts` | 0/0 | 173/87 | 402/128 | 7/5 | 9/5 | 246/148 | 373 | 0 |
+| `+ 2 x shorts` | 0/0 | 173/87 | 402/128 | 7/5 | 9/5 | 246/148 | 373 | 0 |
+| `+ 5 x shorts` | 0/0 | 198/78 | 402/128 | 7/5 | 9/5 | 246/148 | **364** | 0 |
+| `+ 10 x shorts` | 0/0 | 198/78 | 402/128 | 7/5 | 9/5 | 246/148 | **364** | 0 |
+| `+ 20 x shorts` | 0/0 | 198/78 | 402/128 | 7/5 | 9/5 | 246/148 | **364** | 0 |
+
+**One fixture separates the seven rules now, not three.** `stm32_breakout` is
+the only board whose pick changes; `multi_ic`, `shift_driver`, `plane_board`,
+`qfp_fanout` and `led_blink` hand over the same variant whatever the rule. Its
+spread is 35 violations and 22 shorts, against that board's own band of 64 / 48
+- inside it on both axes, which is the same verdict the August table reached
+from three boards. No rule picks a dominated board, and the shipped rule still
+ties for fewest shorts at 364.
+
+The August table and its reading follow, kept because the argument is the point
+and because a table that says when it was taken is worth more than one that
+looks current.
+
+**No rule picked a dominated board, and three of the six fixtures separated them
 rather than one.** `shift_driver`, `qfp_fanout` and - at `W = 0` only -
 `multi_ic`. This file used to say the whole question rested on one board's
 opinion; it rests on three, and the shipped rule still wins the criterion it
