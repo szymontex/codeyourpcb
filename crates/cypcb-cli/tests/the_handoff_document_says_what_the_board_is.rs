@@ -506,3 +506,107 @@ fn a_curve_reaches_the_handoff_as_a_curve() {
         "only the two straight runs are lines"
     );
 }
+
+#[test]
+fn a_via_is_copper_and_a_hole_and_the_document_says_both() {
+    // A drill file carries the hole and says nothing about the copper around
+    // it; a Gerber carries the ring and says nothing about the hole. The whole
+    // reason this format exists is that one file says both.
+    let xml = document("stitched-plane.cypcb", &scratch("vias"));
+    let tags = tags(&xml);
+
+    let via_sets: Vec<&Tag> = tags
+        .iter()
+        .filter(|tag| tag.name == "Set" && tag.attributes.contains("padUsage=\"VIA\""))
+        .collect();
+    assert_eq!(via_sets.len(), 2, "one set of vias per outer layer");
+
+    let holes: Vec<&Tag> = tags.iter().filter(|tag| tag.name == "Hole").collect();
+    assert_eq!(holes.len(), 32, "sixteen vias, seen from both layers");
+    for hole in &holes {
+        assert_eq!(
+            attribute(hole, "platingStatus"),
+            "VIA",
+            "a via hole is not a mounting hole"
+        );
+        assert_eq!(attribute(hole, "diameter"), "0.300", "drilled at 0.3mm");
+    }
+
+    // The ring and the hole are at the same place: a hole beside its own
+    // copper is a board nobody can build.
+    let first_hole = holes[0];
+    let placed_at = tags
+        .iter()
+        .filter(|tag| tag.name == "Location" && tag.path.ends_with(&["Pad".to_string()]))
+        .map(|tag| (attribute(tag, "x"), attribute(tag, "y")))
+        .collect::<Vec<_>>();
+    assert!(
+        placed_at.contains(&(attribute(first_hole, "x"), attribute(first_hole, "y"))),
+        "the hole sits inside its own ring"
+    );
+
+    // And every shape the vias name is a shape the document defines.
+    let defined: Vec<String> = tags
+        .iter()
+        .filter(|tag| tag.name == "EntryStandard")
+        .map(|tag| attribute(tag, "id"))
+        .collect();
+    for used in tags
+        .iter()
+        .filter(|tag| tag.name == "StandardPrimitiveRef")
+        .map(|tag| attribute(tag, "id"))
+    {
+        assert!(
+            defined.contains(&used),
+            "`{used}` is placed and never defined"
+        );
+    }
+}
+
+#[test]
+fn a_pour_reaches_the_document_as_the_copper_it_became() {
+    // A pour is not the rectangle the design asked for: it is copper cut
+    // around every pad, track and clearance on the layer. The file should say
+    // what the filler laid down, which is what the checker measured.
+    let xml = document("stitched-plane.cypcb", &scratch("pour"));
+    let tags = tags(&xml);
+
+    let contours: Vec<&Tag> = tags.iter().filter(|tag| tag.name == "Contour").collect();
+    assert!(!contours.is_empty(), "the pour is in the document:\n{xml}");
+
+    // Every piece closes: an open contour is copper with a gap in its edge.
+    let begins: Vec<(String, String)> = tags
+        .iter()
+        .filter(|tag| tag.name == "PolyBegin" && tag.path.contains(&"Contour".to_string()))
+        .map(|tag| (attribute(tag, "x"), attribute(tag, "y")))
+        .collect();
+    assert_eq!(begins.len(), contours.len(), "one polygon per contour");
+
+    let pour_sets: Vec<String> = tags
+        .iter()
+        .filter(|tag| {
+            tag.name == "Set"
+                && tag.attributes.contains("net=")
+                && !tag.attributes.contains("padUsage")
+        })
+        .map(|tag| attribute(tag, "net"))
+        .collect();
+    assert!(
+        pour_sets.iter().any(|net| net == "GND"),
+        "and the pour says which net it is: {pour_sets:?}"
+    );
+}
+
+#[test]
+fn a_board_with_neither_says_neither() {
+    let xml = document("curved-track.cypcb", &scratch("neither"));
+    let tags = tags(&xml);
+    assert!(
+        !tags.iter().any(|tag| tag.name == "Hole"),
+        "no holes in a board that drills none"
+    );
+    assert!(
+        !tags.iter().any(|tag| tag.name == "Contour"),
+        "and no pour in a board that pours none"
+    );
+}

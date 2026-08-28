@@ -30,7 +30,7 @@
 
 use crate::gerber::copper::place_pad_millideg;
 use cypcb_core::{Nm, Point};
-use cypcb_world::components::trace::{Curve, Trace};
+use cypcb_world::components::trace::{Curve, Trace, Via};
 use cypcb_world::components::{FootprintRef, Position, Rotation};
 use cypcb_world::footprint::FootprintLibrary;
 use cypcb_world::{BoardWorld, Layer, PadShape};
@@ -176,6 +176,22 @@ pub fn export_ipc2581(world: &mut BoardWorld, library: &FootprintLibrary, now: &
                 ));
             }
         }
+    }
+
+    // The vias, gathered with the pads because that is what they are here: a
+    // ring of copper on every layer the hole passes through, and the hole
+    // itself. A drill file carries the hole today and says nothing about the
+    // copper around it; this document carries both, which is the point.
+    let vias: Vec<Via> = {
+        let mut query = world.ecs_mut().query::<&Via>();
+        query.iter(world.ecs()).copied().collect()
+    };
+    for via in &vias {
+        let id = format!("circle_{}", mm(via.outer_diameter).replace('.', "_"));
+        shapes.insert(
+            id,
+            format!("<Circle diameter=\"{}\"/>", mm(via.outer_diameter)),
+        );
     }
 
     // The copper, gathered the same way and for the same reason: a segment
@@ -340,19 +356,24 @@ pub fn export_ipc2581(world: &mut BoardWorld, library: &FootprintLibrary, now: &
             .iter()
             .filter(|(trace, _)| trace.layer == layer)
             .collect();
-        if on_layer.is_empty() && on_this_layer.is_empty() {
+        let carries_vias = vias.iter().any(|via| {
+            let spans = [via.start_layer, via.end_layer];
+            spans.contains(&layer)
+                || (matches!(via.start_layer, Layer::TopCopper)
+                    && matches!(via.end_layer, Layer::BottomCopper))
+        });
+        let carries_pour = world.zones().into_iter().any(|(_, zone)| {
+            zone.kind == cypcb_world::components::zone::ZoneKind::CopperPour
+                && zone.layer_mask & layer.to_copper_mask() != 0
+        });
+        if on_layer.is_empty() && on_this_layer.is_empty() && !carries_vias && !carries_pour {
             continue;
         }
         let _ = writeln!(out, "        <LayerFeature layerRef=\"{layer_name}\">");
-        if on_layer.is_empty() {
-            // A `LayerFeature` wants at least one `Set`, and a layer that
-            // carries copper but no pads still needs the pads' set skipped
-            // rather than written empty.
-            out.push_str("          <Set padUsage=\"NONE\">\n");
-        } else {
+        if !on_layer.is_empty() {
             out.push_str("          <Set padUsage=\"TERMINATION\">\n");
         }
-        for (_, centre, rotation, id) in on_layer {
+        for (_, centre, rotation, id) in &on_layer {
             out.push_str("            <Pad>\n");
             // Rotation is a non-negative number in this format, and a pad
             // turned by -90 degrees is the same copper as one turned by 270.
@@ -367,7 +388,9 @@ pub fn export_ipc2581(world: &mut BoardWorld, library: &FootprintLibrary, now: &
             let _ = writeln!(out, "              <StandardPrimitiveRef id=\"{id}\"/>");
             out.push_str("            </Pad>\n");
         }
-        out.push_str("          </Set>\n");
+        if !on_layer.is_empty() {
+            out.push_str("          </Set>\n");
+        }
 
         // The copper, one set per net so a reader can tell which run belongs
         // to which connection - which is the whole reason this format exists
@@ -431,6 +454,114 @@ pub fn export_ipc2581(world: &mut BoardWorld, library: &FootprintLibrary, now: &
             }
             out.push_str("          </Set>\n");
         }
+        // The vias that pass through this layer: the ring, and the hole.
+        let through: Vec<&Via> = vias
+            .iter()
+            .filter(|via| {
+                let spans = [via.start_layer, via.end_layer];
+                spans.contains(&layer)
+                    || (matches!(via.start_layer, Layer::TopCopper)
+                        && matches!(via.end_layer, Layer::BottomCopper))
+            })
+            .collect();
+        if !through.is_empty() {
+            out.push_str("          <Set padUsage=\"VIA\">\n");
+            for via in through {
+                out.push_str("            <Pad>\n");
+                let _ = writeln!(
+                    out,
+                    "              <Location x=\"{}\" y=\"{}\"/>",
+                    mm(via.position.x),
+                    mm(via.position.y)
+                );
+                let _ = writeln!(
+                    out,
+                    "              <StandardPrimitiveRef id=\"circle_{}\"/>",
+                    mm(via.outer_diameter).replace('.', "_")
+                );
+                out.push_str("            </Pad>\n");
+                // A hole states its own tolerance, and this project states
+                // none anywhere: writing a figure here would be inventing a
+                // number a fabricator can hold the board to.
+                let _ = writeln!(
+                    out,
+                    "            <Hole name=\"via_{}_{}\" diameter=\"{}\" \
+                     platingStatus=\"VIA\" plusTol=\"0\" minusTol=\"0\" x=\"{}\" y=\"{}\"/>",
+                    mm(via.position.x).replace('.', "_"),
+                    mm(via.position.y).replace('.', "_"),
+                    mm(via.drill),
+                    mm(via.position.x),
+                    mm(via.position.y)
+                );
+            }
+            out.push_str("          </Set>\n");
+        }
+
+        // The pour, as the pieces the filler actually laid down. A pour is not
+        // a rectangle a fabricator floods: it is copper cut around every pad,
+        // track and clearance on the layer, and the file should say what the
+        // checker measured rather than what the design asked for.
+        let pours: Vec<cypcb_world::components::zone::Zone> = world
+            .zones()
+            .into_iter()
+            .map(|(_, zone)| zone)
+            .filter(|zone| {
+                zone.kind == cypcb_world::components::zone::ZoneKind::CopperPour
+                    && zone.layer_mask & layer.to_copper_mask() != 0
+            })
+            .collect();
+        for zone in pours {
+            let filled = cypcb_world::copper::fill_zone(
+                world,
+                library,
+                layer,
+                &zone,
+                &crate::pour::PourOptions::default(),
+            );
+            let pieces: Vec<cypcb_core::Rect> = filled.all().copied().collect();
+            if pieces.is_empty() {
+                continue;
+            }
+            // A pour without a net is copper poured for its own sake -
+            // shielding, or a plane nobody named - and the format has no
+            // attribute to invent for it, so the set says nothing rather than
+            // guessing a name.
+            let net = zone
+                .net
+                .and_then(|net| world.net_name(net))
+                .unwrap_or("unknown")
+                .to_string();
+            let _ = writeln!(out, "          <Set net=\"{}\">", qualified(&net));
+            for piece in pieces {
+                out.push_str("            <Features>\n              <Contour>\n");
+                out.push_str("                <Polygon>\n");
+                let corners = [
+                    (piece.min.x, piece.min.y),
+                    (piece.max.x, piece.min.y),
+                    (piece.max.x, piece.max.y),
+                    (piece.min.x, piece.max.y),
+                    (piece.min.x, piece.min.y),
+                ];
+                let _ = writeln!(
+                    out,
+                    "                  <PolyBegin x=\"{}\" y=\"{}\"/>",
+                    mm(corners[0].0),
+                    mm(corners[0].1)
+                );
+                for (x, y) in corners.iter().skip(1) {
+                    let _ = writeln!(
+                        out,
+                        "                  <PolyStepSegment x=\"{}\" y=\"{}\"/>",
+                        mm(*x),
+                        mm(*y)
+                    );
+                }
+                out.push_str("                </Polygon>\n              </Contour>\n");
+                out.push_str("            </Features>\n");
+            }
+            out.push_str("          </Set>\n");
+        }
+
         out.push_str("        </LayerFeature>\n");
     }
 
