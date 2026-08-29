@@ -99,6 +99,46 @@ export function stackSummary(stack: StackupInfo): string[] {
   return lines;
 }
 
+/** One build of the board: the whole panel, or one area of it. */
+export interface StackBuild {
+  /** What this build is called: the board's own name, or an area's. */
+  name: string;
+  /** The layers pressed here, in stack order. */
+  rows: StackRow[];
+  /** How thick the board is here, ready to print, or an empty string. */
+  thickness: string;
+}
+
+/**
+ * The builds this board has: one, or one per area a layer stops at.
+ *
+ * A rigid-flex board is several stacks on one panel, and a table of layers
+ * says it is one. The areas come from the engine rather than from a filter
+ * written here: the same question the fabricator's document asks, asked once.
+ *
+ * A board whose layers stop nowhere gets a single build, which is the table
+ * this panel always showed.
+ */
+export function stackBuilds(stack: StackupInfo): StackBuild[] {
+  const rows = stackRows(stack);
+  const whole: StackBuild = {
+    name: 'whole board',
+    rows,
+    thickness: stack.total_thickness_nm != null ? mm(stack.total_thickness_nm) : '',
+  };
+  const areas = stack.areas ?? [];
+  if (areas.length === 0) return [whole];
+
+  return [
+    whole,
+    ...areas.map((area) => ({
+      name: area.name,
+      rows: area.layers.map((index) => rows[index]).filter((row) => row != null),
+      thickness: area.thickness_nm != null ? mm(area.thickness_nm) : '',
+    })),
+  ];
+}
+
 /** The colour a layer's bar is drawn in, by what it is made of. */
 const SWATCH: Record<string, string> = {
   copper: '#c07a3e',
@@ -130,9 +170,40 @@ export function renderStack(host: HTMLElement, stack?: StackupInfo): void {
     return;
   }
 
+  const builds = stackBuilds(stack);
+  for (const build of builds) {
+    // The heading is drawn only when there is more than one build: a rigid
+    // board has one, and a table with "whole board" written over it says
+    // nothing a reader did not already know.
+    if (builds.length > 1) {
+      const heading = document.createElement('div');
+      heading.className = 'sp-build';
+      heading.textContent = build.thickness
+        ? `${build.name} - ${build.thickness}`
+        : build.name;
+      host.appendChild(heading);
+    }
+    host.appendChild(buildTable(build));
+  }
+
+  const summary = stackSummary(stack);
+  if (summary.length > 0) {
+    const list = document.createElement('ul');
+    list.className = 'sp-summary';
+    for (const item of summary) {
+      const entry = document.createElement('li');
+      entry.textContent = item;
+      list.appendChild(entry);
+    }
+    host.appendChild(list);
+  }
+}
+
+/** One build as a table of rows. */
+function buildTable(build: StackBuild): HTMLElement {
   const table = document.createElement('div');
   table.className = 'sp-table';
-  for (const row of stackRows(stack)) {
+  for (const row of build.rows) {
     const line = document.createElement('div');
     line.className = 'sp-row';
 
@@ -167,17 +238,5 @@ export function renderStack(host: HTMLElement, stack?: StackupInfo): void {
     line.appendChild(thickness);
     table.appendChild(line);
   }
-  host.appendChild(table);
-
-  const summary = stackSummary(stack);
-  if (summary.length > 0) {
-    const list = document.createElement('ul');
-    list.className = 'sp-summary';
-    for (const item of summary) {
-      const entry = document.createElement('li');
-      entry.textContent = item;
-      list.appendChild(entry);
-    }
-    host.appendChild(list);
-  }
+  return table;
 }

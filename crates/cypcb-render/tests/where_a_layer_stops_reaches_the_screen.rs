@@ -41,8 +41,8 @@ fn snapshot(source: &str) -> cypcb_render::BoardSnapshot {
 
 #[test]
 fn the_clause_arrives_with_the_layer_it_bounds() {
-    let snapshot = snapshot(RIBBON);
-    let stackup = snapshot.stackup.expect("the board states a stackup");
+    let ribbon = snapshot(RIBBON);
+    let stackup = ribbon.stackup.expect("the board states a stackup");
 
     let coverlay = stackup
         .layers
@@ -77,4 +77,45 @@ fn the_clause_arrives_with_the_layer_it_bounds() {
         copper.coverage_region, "",
         "copper is pressed across the whole panel"
     );
+}
+
+#[test]
+fn the_build_over_each_area_arrives_worked_out() {
+    // The panel draws a column per area, and the filter that decides which
+    // layers are in one lives on the model - the same question the handoff
+    // document asks. Sending the answer rather than the ingredients is what
+    // stops the screen and the fabricator's file disagreeing about one board.
+    let ribbon = snapshot(RIBBON);
+    let stackup = ribbon.stackup.expect("the board states a stackup");
+
+    let names: Vec<&str> = stackup
+        .areas
+        .iter()
+        .map(|area| area.name.as_str())
+        .collect();
+    assert_eq!(names, vec!["bend"], "the one area a layer stops at");
+
+    let bend = &stackup.areas[0];
+    // Coverlay, both foils and the core: everything but the stiffener, which
+    // says `outside bend`.
+    assert_eq!(bend.layers, vec![0, 1, 2, 3]);
+    // 109_998nm rather than a round 110_000: the fixture states its foils in
+    // ounces, and half an ounce is 17.499 micrometres rather than 17.5. The
+    // figure is the design's own arithmetic, which is the point.
+    assert_eq!(
+        bend.thickness_nm,
+        Some(109_998),
+        "coverlay, both half-ounce foils and the core"
+    );
+
+    // And a board whose layers stop nowhere sends no areas at all, which is
+    // the panel's own case for drawing one table without a heading.
+    let plain = snapshot(
+        "version 1\n\nboard slab {\n    size 20mm x 20mm\n    layers 2\n    stackup {\n        copper 0.035mm\n        core 1mm\n        copper 0.035mm\n    }\n}\n",
+    );
+    assert!(plain
+        .stackup
+        .expect("that board states one too")
+        .areas
+        .is_empty());
 }

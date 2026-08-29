@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { stackRows, stackSummary } from '../stack-panel';
+import { stackBuilds, stackRows, stackSummary } from '../stack-panel';
 import type { StackupInfo } from '../types';
 
 /**
@@ -74,6 +74,7 @@ function stack(): StackupInfo {
     edge_connector: 'bevelled',
     impedance_controlled: true,
     drill_pairs: [['Top', 'Inner1']],
+    areas: [],
     total_thickness_nm: 206_097,
   };
 }
@@ -157,6 +158,7 @@ describe('what the fabricator is asked for beyond the layers', () => {
       edge_connector: '',
       impedance_controlled: false,
       drill_pairs: [],
+      areas: [],
     };
     expect(stackSummary(bare)).toEqual([]);
   });
@@ -212,6 +214,7 @@ function rigidFlexStack(): StackupInfo {
     edge_connector: '',
     impedance_controlled: false,
     drill_pairs: [],
+    areas: [],
     total_thickness_nm: 242_500,
   };
 }
@@ -257,6 +260,7 @@ describe('a layer that stops somewhere says so', () => {
       edge_connector: '',
       impedance_controlled: false,
       drill_pairs: [],
+      areas: [],
       total_thickness_nm: 1_195_000,
     })[0];
 
@@ -274,5 +278,54 @@ describe('a layer that stops somewhere says so', () => {
     ]) {
       expect(shown, `the row shows ${field}`).toContain(text);
     }
+  });
+});
+
+describe('a rigid-flex board is several builds', () => {
+  /** The same three layers, with the areas the engine works out beside them. */
+  function withAreas() {
+    const stack = rigidFlexStack();
+    // Indices into `layers`: the ribbon has the coverlay and the copper, the
+    // connector end has the copper and the stiffener. Sent by the engine, from
+    // the same filter the fabricator's document asks.
+    stack.areas = [
+      { name: 'bend', layers: [0, 1], thickness_nm: 42_500 },
+      { name: 'connector_end', layers: [1, 2], thickness_nm: 217_500 },
+    ];
+    return stack;
+  }
+
+  it('shows the whole panel first and then each area', () => {
+    const builds = stackBuilds(withAreas());
+    expect(builds.map((build) => build.name)).toEqual([
+      'whole board',
+      'bend',
+      'connector_end',
+    ]);
+  });
+
+  it('gives each build its own layers and its own thickness', () => {
+    const [whole, bend, end] = stackBuilds(withAreas());
+    expect(whole.rows).toHaveLength(3);
+    expect(whole.thickness).toBe('0.2425mm');
+
+    expect(bend.rows.map((row) => row.kind), 'no stiffener through the ribbon').toEqual([
+      'coverlay',
+      'copper',
+    ]);
+    expect(bend.thickness).toBe('0.0425mm');
+
+    expect(end.rows.map((row) => row.kind), 'and no coverlay on the rigid end').toEqual([
+      'copper',
+      'stiffener',
+    ]);
+    expect(end.thickness).toBe('0.2175mm');
+  });
+
+  it('a board whose layers stop nowhere is one build, as before', () => {
+    const builds = stackBuilds(stack());
+    expect(builds).toHaveLength(1);
+    expect(builds[0].name).toBe('whole board');
+    expect(builds[0].rows).toHaveLength(stack().layers.length);
   });
 });

@@ -76,6 +76,31 @@ pub struct StackupInfo {
     /// `Stackup::total_thickness` answers `None`: a number built from half the
     /// layers reads like a measurement rather than like a gap in the design.
     pub total_thickness_nm: Option<i64>,
+    /// The build over each area a layer stops at, in the order the stack names
+    /// them.
+    ///
+    /// A rigid-flex board is not one stack, and a panel showing one column of
+    /// layers says it is. Computed here rather than in the browser because the
+    /// filter that decides which layers are over an area lives on the model -
+    /// `Stackup::layers_in_area` - and the handoff document already asks it
+    /// the same question. Two copies of that filter would drift one clause at
+    /// a time and the screen and the fabricator's file would then disagree
+    /// about one board.
+    ///
+    /// Empty when no layer states where it stops, which is every rigid build.
+    pub areas: Vec<StackupAreaInfo>,
+}
+
+/// The stack over one named area of the board.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StackupAreaInfo {
+    /// The area's own name, as the design spelled it.
+    pub name: String,
+    /// Which entries of `StackupInfo::layers` are pressed over it, by index.
+    pub layers: Vec<usize>,
+    /// How thick the board is there, when every layer that is there states a
+    /// thickness.
+    pub thickness_nm: Option<i64>,
 }
 
 /// One entry of a stack, with every sheet it is pressed from.

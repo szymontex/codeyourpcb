@@ -300,6 +300,24 @@ export interface StackupInfo {
   drill_pairs: [string, string][];
   /** The whole stack in nanometres, absent when any layer stated no thickness. */
   total_thickness_nm?: number;
+  /**
+   * The build over each area a layer stops at, in the order the stack names
+   * them. Empty on a board whose layers stop nowhere.
+   *
+   * Computed in the engine, because the filter that decides which layers are
+   * over an area is the same one the fabricator's document asks.
+   */
+  areas: StackupAreaInfo[];
+}
+
+/** The stack over one named area of the board. */
+export interface StackupAreaInfo {
+  /** The area's own name, as the design spelled it. */
+  name: string;
+  /** Which entries of `StackupInfo.layers` are pressed over it, by index. */
+  layers: number[];
+  /** How thick the board is there, absent when a layer there stated nothing. */
+  thickness_nm?: number;
 }
 
 /** One entry of a stack, with every sheet it is pressed from. */

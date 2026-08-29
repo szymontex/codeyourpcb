@@ -1835,6 +1835,30 @@ impl PcbEngine {
                 None => String::new(),
             },
             impedance_controlled: stackup.impedance_controlled,
+            areas: stackup
+                .areas()
+                .into_iter()
+                .map(|area| {
+                    // By index rather than by value: a reader wants to know
+                    // which rows of the table are in this build, and the rows
+                    // are already on the way.
+                    let present = stackup.layers_in_area(&area);
+                    let layers = stackup
+                        .layers
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, layer)| {
+                            present.iter().any(|there| std::ptr::eq(*there, *layer))
+                        })
+                        .map(|(index, _)| index)
+                        .collect();
+                    crate::snapshot::StackupAreaInfo {
+                        thickness_nm: stackup.thickness_in_area(&area).map(|nm| nm.raw()),
+                        name: area,
+                        layers,
+                    }
+                })
+                .collect(),
             drill_pairs: stackup
                 .drill_pairs
                 .iter()
