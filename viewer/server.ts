@@ -354,6 +354,12 @@ function handleClientMessage(ws: WebSocket, message: ClientMessage): void {
  * Find CLI binary (release or debug)
  */
 function findCliBinary(): string | null {
+  // `CYPCB_CLI_BIN` names the binary outright, and a name that is not there is
+  // a machine with no binary. It exists so the guards above the spawn can be
+  // tested on a machine that has one: deleting the build to check the order of
+  // two `if`s is not a test anybody runs twice.
+  const named = process.env.CYPCB_CLI_BIN;
+  if (named) return existsSync(named) ? named : null;
   if (existsSync(CLI_PATH)) return CLI_PATH;
   if (existsSync(CLI_DEBUG_PATH)) return CLI_DEBUG_PATH;
   return null;
@@ -363,15 +369,17 @@ function findCliBinary(): string | null {
  * Handle routing request - runs cypcb route command
  */
 function handleRouteRequest(ws: WebSocket, message: { file?: string; content?: string }): void {
-  const cliBinary = findCliBinary();
-  if (!cliBinary) {
-    ws.send(JSON.stringify({
-      type: 'route-error',
-      error: 'CLI binary not found. Run: cargo build --release -p cypcb-cli'
-    }));
-    return;
-  }
-
+  // The path is checked before anything else about this request, including
+  // whether there is a binary to run.
+  //
+  // The check used to sit second, after the missing-binary bail-out, and a
+  // scheduled gate run against a fresh checkout found it: with no binary
+  // built, a request naming a file outside the watched directory was answered
+  // `CLI binary not found` and the guard never ran at all. Nothing escaped -
+  // there was nothing to run - but a guard that only runs when an earlier
+  // bail-out does not fire is a guard whose reach depends on the order of the
+  // lines above it, and the next bail-out added above would move it again.
+  //
   // Determine file path. The client names it, so it is checked like every
   // other path a client names: routing runs a program with this as its
   // argument and its directory as the working directory, and afterwards the
@@ -396,6 +404,15 @@ function handleRouteRequest(ws: WebSocket, message: { file?: string; content?: s
     ws.send(JSON.stringify({
       type: 'route-error',
       error: 'No file path or content provided'
+    }));
+    return;
+  }
+
+  const cliBinary = findCliBinary();
+  if (!cliBinary) {
+    ws.send(JSON.stringify({
+      type: 'route-error',
+      error: 'CLI binary not found. Run: cargo build --release -p cypcb-cli'
     }));
     return;
   }

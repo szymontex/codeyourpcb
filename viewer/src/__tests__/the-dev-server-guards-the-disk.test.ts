@@ -72,7 +72,17 @@ beforeAll(async () => {
   // of them accumulated.
   server = spawn('npx', ['tsx', 'server.ts', workspace], {
     cwd: join(__dirname, '..', '..'),
-    env: { ...process.env, CYPCB_NO_VITE: '1', CYPCB_WS_PORT: '0' },
+    // No binary, on purpose: the guards above the spawn have to answer before
+    // anything about the build does. The order used to be the other way round,
+    // and on a machine with nothing built the refusal was `CLI binary not
+    // found` - the path was never looked at. A scheduled gate run against a
+    // fresh checkout is what found it.
+    env: {
+      ...process.env,
+      CYPCB_NO_VITE: '1',
+      CYPCB_WS_PORT: '0',
+      CYPCB_CLI_BIN: join(tmpdir(), 'cypcb-no-such-binary'),
+    },
     stdio: ['ignore', 'pipe', 'pipe'],
     detached: true,
   });
@@ -247,5 +257,19 @@ describe('the dev server guards the disk', () => {
 
     expect(answer.type).toBe('save-complete');
     expect(readFileSync(join(workspace, 'board.cypcb'), 'utf8')).toBe('version 1\n');
+  });
+
+  it('really is a server with no binary, which is what makes the case above a test', () => {
+    // The guard on the guard: if the override were ignored and the machine's
+    // own build were found, the case above would pass whichever order the two
+    // checks are in - which is how its first version passed against the very
+    // ordering it was written to catch.
+    return ask(
+      { type: 'route', file: join(workspace, 'board.cypcb') },
+      (msg) => msg.type === 'route-start' || msg.type === 'route-error',
+    ).then((answer) => {
+      expect(answer.type).toBe('route-error');
+      expect(String(answer.error)).toContain('CLI binary not found');
+    });
   });
 });

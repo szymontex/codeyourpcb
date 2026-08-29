@@ -118,6 +118,11 @@ if [ -n "$DIRTY" ] && [ "${GATE_WORKTREE:-1}" = "1" ]; then
             ln -s "$REPO/viewer/node_modules" "$WORKTREE/viewer/node_modules"
         fi
         export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$LOG_DIR/target}"
+        # And under the name the tree itself uses, because a stage that looks
+        # for `target/release/cypcb` is asking about this checkout rather than
+        # about cargo's environment.
+        mkdir -p "$CARGO_TARGET_DIR"
+        [ -e "$WORKTREE/target" ] || ln -s "$CARGO_TARGET_DIR" "$WORKTREE/target"
         cd "$WORKTREE" || exit 2
         DIRTY=""
     else
