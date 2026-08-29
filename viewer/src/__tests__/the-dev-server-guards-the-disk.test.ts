@@ -1,6 +1,14 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { spawn, type ChildProcess } from 'node:child_process';
-import { mkdtempSync, writeFileSync, mkdirSync, existsSync, readFileSync, rmSync } from 'node:fs';
+import {
+  mkdtempSync,
+  writeFileSync,
+  mkdirSync,
+  existsSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { WebSocket } from 'ws';
@@ -26,6 +34,7 @@ let PORT = 0;
 let server: ChildProcess;
 let workspace: string;
 let outside: string;
+let sibling: string;
 
 function send(socket: WebSocket, message: object): void {
   socket.send(JSON.stringify(message));
@@ -66,6 +75,17 @@ beforeAll(async () => {
   writeFileSync(join(workspace, 'board.cypcb'), 'version 1\nimport "lib/blocks.cypcb"\n');
   writeFileSync(join(workspace, 'lib', 'blocks.cypcb'), 'version 1\nmodule Divider { pin IN }\n');
   writeFileSync(join(outside, 'secrets.txt'), 'the private key');
+  // A link inside the watched directory that leads out of it. The directory
+  // belongs to whoever runs the server; the requests do not, so a path that
+  // reads as local and opens as somebody else's file is the case worth having.
+  symlinkSync(join(outside, 'secrets.txt'), join(workspace, 'innocent.cypcb'));
+  symlinkSync(outside, join(workspace, 'elsewhere'));
+  // A directory whose name begins with the watched one's. `startsWith(root)`
+  // without the separator calls this inside; `startsWith(root + sep)` does
+  // not, and the difference is a whole neighbouring directory.
+  sibling = `${workspace}-evil`;
+  mkdirSync(sibling);
+  writeFileSync(join(sibling, 'secrets.txt'), 'the neighbour key');
 
   // `detached` so the whole group can be killed: `npx` is a wrapper, and
   // signalling it leaves the `tsx server.ts` underneath alive. That is how 39
@@ -271,5 +291,73 @@ describe('the dev server guards the disk', () => {
       expect(answer.type).toBe('route-error');
       expect(String(answer.error)).toContain('CLI binary not found');
     });
+  });
+
+  it('refuses a link that leads out of the watched directory', async () => {
+    // `resolve` is lexical: it collapses `..` and nothing else, so this path
+    // passed the guard and the handler read the file the link points at.
+    const answer = await ask(
+      { type: 'read-file', path: join(workspace, 'innocent.cypcb') },
+      (msg) => msg.type === 'file-content',
+    );
+    expect(String(answer.error ?? ''), `read: ${JSON.stringify(answer)}`).toContain('Cannot read');
+    expect(answer.content, 'nothing from outside comes back').toBeUndefined();
+  });
+
+  it('refuses a file reached through a linked directory', async () => {
+    const answer = await ask(
+      { type: 'open-file', file: join(workspace, 'elsewhere', 'secrets.txt') },
+      (msg) => msg.type === 'reload' || msg.type === 'route-error',
+    );
+    expect(answer.type).toBe('route-error');
+    expect(String(answer.error)).toContain('outside the watched directory');
+  });
+
+  it('refuses to write through a link that leads out', async () => {
+    const answer = await ask(
+      { type: 'save', file: join(workspace, 'innocent.cypcb'), content: 'overwritten' },
+      (msg) => msg.type === 'save-complete' || msg.type === 'save-error',
+    );
+    expect(answer.type).toBe('save-error');
+    expect(String(answer.error)).toContain('outside the watched directory');
+    expect(
+      readFileSync(join(outside, 'secrets.txt'), 'utf-8'),
+      'the file the link points at is untouched',
+    ).toBe('the private key');
+  });
+
+  it('still allows an ordinary file in the watched directory', () => {
+    // The half that keeps the guard from being a wall: every case above is a
+    // refusal, and a guard that refuses everything passes them all.
+    return ask(
+      { type: 'read-file', path: join(workspace, 'board.cypcb') },
+      (msg) => msg.type === 'file-content',
+    ).then((answer) => {
+      expect(String(answer.content ?? '')).toContain('version 1');
+    });
+  });
+
+  it('refuses to create a file through a linked directory', async () => {
+    // The file does not exist yet, so there is nothing to resolve: what
+    // decides is the directory a save would create it in, and that directory
+    // is a link out.
+    const target = join(workspace, 'elsewhere', 'planted.cypcb');
+    const answer = await ask(
+      { type: 'save', file: target, content: 'planted' },
+      (msg) => msg.type === 'save-complete' || msg.type === 'save-error',
+    );
+    expect(answer.type).toBe('save-error');
+    expect(existsSync(join(outside, 'planted.cypcb')), 'nothing was written outside').toBe(false);
+  });
+
+  it('refuses a neighbour whose name begins with the watched one', async () => {
+    // `/tmp/cypcb-ws-x` and `/tmp/cypcb-ws-x-evil`: a prefix test calls the
+    // second one inside the first.
+    const answer = await ask(
+      { type: 'read-file', path: join(sibling, 'secrets.txt') },
+      (msg) => msg.type === 'file-content',
+    );
+    expect(String(answer.error ?? ''), `read: ${JSON.stringify(answer)}`).toContain('Cannot read');
+    expect(answer.content, 'the neighbour stays shut').toBeUndefined();
   });
 });

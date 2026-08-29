@@ -8,7 +8,7 @@
  * Default watch directory: ../examples
  */
 
-import { readFileSync, existsSync, readdirSync, writeFileSync } from 'fs';
+import { readFileSync, existsSync, readdirSync, writeFileSync, realpathSync } from 'fs';
 import { resolve, join, basename, dirname, sep } from 'path';
 import { fileURLToPath } from 'url';
 import { WebSocketServer, WebSocket } from 'ws';
@@ -168,9 +168,37 @@ function reason(err: unknown): string {
 }
 
 function insideWatchDir(requested: string): string | null {
-  const root = resolve(WATCH_DIR);
-  const full = resolve(root, requested);
-  return full === root || full.startsWith(root + sep) ? full : null;
+  const root = realpathOr(resolve(WATCH_DIR));
+  const full = resolve(resolve(WATCH_DIR), requested);
+  if (!contains(root, full)) return null;
+
+  // And where the path actually leads, which is not the same question.
+  //
+  // `resolve` is lexical: it collapses `..` and nothing else, so a symlink
+  // sitting in the watched directory and pointing at `/etc` passes it and the
+  // handler above reads or writes through the link. The directory belongs to
+  // whoever runs the server, but the requests do not - a page in the browser
+  // can talk to this socket - so the answer has to be about the file the
+  // system would open rather than about the text of the path.
+  //
+  // A file that is not there yet is judged by its parent, because that is what
+  // a save creates it in.
+  const led = existsSync(full) ? realpathOr(full) : join(realpathOr(dirname(full)), basename(full));
+  return contains(root, led) ? full : null;
+}
+
+/** Whether `path` is `root` or sits under it, by directory rather than by prefix. */
+function contains(root: string, path: string): boolean {
+  return path === root || path.startsWith(root + sep);
+}
+
+/** The path a symlink leads to, or the path itself when it leads nowhere new. */
+function realpathOr(path: string): string {
+  try {
+    return realpathSync(path);
+  } catch {
+    return path;
+  }
 }
 
 function getCypcbFiles(): string[] {
