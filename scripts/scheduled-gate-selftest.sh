@@ -48,6 +48,11 @@ new_case() {
     mkdir -p scripts
     cp "$GATE" scripts/scheduled-gate.sh
     echo "a board" > board.txt
+    # A stage that fails if it can see somebody's work in progress. Committed,
+    # so the worktree has it too: this is what proves the stages ran where the
+    # half-edited file is not, rather than in the tree beside it.
+    printf '#!/bin/sh\ngrep -q "half an edit" board.txt && exit 1\nexit 0\n' > gate-probe.sh
+    chmod +x gate-probe.sh
     git add -A
     git commit -qm "the first commit"
     git push -q origin main
@@ -141,13 +146,40 @@ else
     bad "main did not move on a red run" "main's tip is '$BEHIND'"
 fi
 
-# 5. A tree somebody is working in is skipped rather than measured, and the
-#    run that skips does not publish either.
-new_case busy-tree-skips
+# 5. A tree somebody is working in is measured anyway, from the commit it has.
+#
+#    The first version of this waited an hour and then skipped. Three of the
+#    four nights after it skipped: a fire is mid-edit most of the night, so the
+#    gate the waiting was protecting never ran at all. The tip gets its own
+#    directory now, and the half-edited file is not in it.
+new_case busy-tree-measures-the-tip
 echo "half an edit" >> "$CASE/work/board.txt"
-run_gate true
-says "VERDICT: skipped" "a busy tree is skipped"
-says_not "published:" "a skipped run publishes nothing"
+# The stage itself refuses to pass if it can see the edit, so a green verdict
+# is proof of which directory it ran in rather than a claim about it.
+run_gate ./gate-probe.sh
+says "VERDICT: green" "a busy tree no longer stops the gate, and the stages ran where the edit is not"
+says "measures the committed tip" "and the run says what it measured instead"
+says "published: main fast-forwarded by 1 commit(s)" "a green run on the tip publishes it"
+if [ -n "$(cd "$CASE/work" && git status --porcelain)" ]; then
+    ok "the work in progress is still there afterwards"
+else
+    bad "the work in progress is still there afterwards" "the tree came back clean"
+fi
+if [ -d "$CASE/logs/tip" ]; then
+    bad "the scratch worktree is cleaned up" "$CASE/logs/tip is still there"
+else
+    ok "the scratch worktree is cleaned up"
+fi
+
+# 5b. And the switch that brings the old behaviour back, for a machine where a
+#     second checkout is not wanted.
+new_case busy-tree-can-still-skip
+echo "half an edit" >> "$CASE/work/board.txt"
+( cd "$CASE/work" && GATE_WORKTREE=0 GATE_COMMAND=true GATE_RETRY_ATTEMPTS=1 \
+  ./scripts/scheduled-gate.sh "$CASE/logs" >/dev/null 2>&1 )
+LOG="$CASE/logs/latest.log"
+says "VERDICT: skipped" "GATE_WORKTREE=0 skips a busy tree"
+says_not "published:" "and a skipped run publishes nothing"
 
 # 6. The switch exists for a reason: a run that is asked not to publish does
 #    not, and still says the gate was green.

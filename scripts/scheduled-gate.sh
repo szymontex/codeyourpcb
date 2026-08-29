@@ -92,6 +92,41 @@ while [ -n "$DIRTY" ] && [ "$ATTEMPTS" -gt 1 ]; do
     ATTEMPTS=$(( ATTEMPTS - 1 ))
     DIRTY=$(git status --porcelain | grep -v "^.. viewer/pkg/" || true)
 done
+# A tree still busy after the waiting is measured anyway, from the commit it
+# has rather than from the files somebody is editing.
+#
+# The waiting was written for a fire that finishes; three of the four runs
+# after it skipped, because a fire is mid-edit most of the night and the gate
+# it was protecting simply never ran. A skip is quiet, and a quiet gate is the
+# shape of failure this whole runner exists to prevent - so the tree stops
+# being the thing measured. `git worktree` gives the committed tip its own
+# directory: nothing there is half-edited, nothing this writes can trample the
+# work in progress, and the commit it grades is the commit the publish step
+# would push.
+#
+# What it borrows rather than builds: the viewer's `node_modules`, which is
+# hundreds of megabytes and identical, and a cargo target directory of its own
+# so a fire compiling at the same time neither waits for this nor is waited
+# for. `GATE_WORKTREE=0` turns it off and the old skip comes back.
+WORKTREE=""
+if [ -n "$DIRTY" ] && [ "${GATE_WORKTREE:-1}" = "1" ]; then
+    WORKTREE="$LOG_DIR/tip"
+    rm -rf "$WORKTREE"
+    if git worktree add --detach -f "$WORKTREE" HEAD >>"$BODY" 2>&1; then
+        say "the tree is busy, so this run measures the committed tip in $WORKTREE"
+        if [ -d "$REPO/viewer/node_modules" ] && [ ! -e "$WORKTREE/viewer/node_modules" ]; then
+            ln -s "$REPO/viewer/node_modules" "$WORKTREE/viewer/node_modules"
+        fi
+        export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$LOG_DIR/target}"
+        cd "$WORKTREE" || exit 2
+        DIRTY=""
+    else
+        say "the tip could not be checked out, so this run has nothing clean to measure"
+        rm -rf "$WORKTREE"
+        WORKTREE=""
+    fi
+fi
+
 if [ -n "$DIRTY" ]; then
     echo "$DIRTY" | sed 's/^/  /' >> "$BODY"
     VERDICT="VERDICT: skipped - the working tree is busy after waiting ${WAITED}s"
@@ -110,8 +145,19 @@ $GATE_COMMAND >>"$BODY" 2>&1
 CODE=$?
 ELAPSED=$(( $(date +%s) - START ))
 
+# The worktree is a scratch copy, and leaving it behind would have the next
+# run remove a directory somebody might be reading. It goes as soon as the
+# stages are done, before anything is published or said.
+if [ -n "$WORKTREE" ]; then
+    cd "$REPO" || exit 2
+    git worktree remove --force "$WORKTREE" >>"$BODY" 2>&1 || rm -rf "$WORKTREE"
+fi
+
 if [ "$CODE" -eq 0 ]; then
     VERDICT="VERDICT: green, all stages passed, ${ELAPSED}s"
+    if [ -n "$WORKTREE" ]; then
+        VERDICT="$VERDICT, measured from the committed tip"
+    fi
 
     # A green run moves `main` up to the commit it just proved.
     #
