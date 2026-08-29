@@ -161,3 +161,118 @@ describe('what the fabricator is asked for beyond the layers', () => {
     expect(stackSummary(bare)).toEqual([]);
   });
 });
+
+/**
+ * A rigid-flex stack: two layers that stop somewhere, and one that does not.
+ *
+ * The panel's job here is to say the board is more than one stack. A table
+ * that showed the layers and not their areas would read as a single sandwich,
+ * which is the thing a rigid-flex design is not.
+ */
+function rigidFlexStack(): StackupInfo {
+  return {
+    layers: [
+      {
+        kind: 'coverlay',
+        name: 'cover top',
+        thickness_nm: 25_000,
+        sheets_nm: [25_000],
+        slot_thickness_nm: 25_000,
+        material: 'Kapton',
+        color: '',
+        coverage_region: 'bend',
+        coverage_covers: true,
+      },
+      {
+        kind: 'copper',
+        name: 'F.Cu',
+        thickness_nm: 17_500,
+        sheets_nm: [17_500],
+        slot_thickness_nm: 17_500,
+        material: '',
+        color: '',
+        coverage_region: '',
+        coverage_covers: false,
+      },
+      {
+        kind: 'stiffener',
+        name: 'stiffener',
+        thickness_nm: 200_000,
+        sheets_nm: [200_000],
+        slot_thickness_nm: 200_000,
+        material: 'FR4',
+        color: '',
+        coverage_region: 'connector_end',
+        coverage_covers: false,
+      },
+    ],
+    finish: '',
+    edges_plated: false,
+    castellated_pads: false,
+    edge_connector: '',
+    impedance_controlled: false,
+    drill_pairs: [],
+    total_thickness_nm: 242_500,
+  };
+}
+
+describe('a layer that stops somewhere says so', () => {
+  it('names the area and which side of it the layer is on', () => {
+    const rows = stackRows(rigidFlexStack());
+    expect(rows[0].detail, 'the coverlay is over the ribbon').toContain('covers bend');
+    expect(rows[2].detail, 'the stiffener is everywhere but it').toContain(
+      'outside connector_end',
+    );
+  });
+
+  it('says nothing about a layer pressed across the whole panel', () => {
+    const rows = stackRows(rigidFlexStack());
+    expect(rows[1].detail, 'copper runs the whole board and states no area').toBe('');
+  });
+
+  it('shows every field the model holds about a layer', () => {
+    // The census the panel kept failing: `covers` was in the model, in the
+    // handoff document, in the 3D view and in the checker for a week while
+    // this table showed the same eleven rows it always had. A field added to
+    // `StackupLayerInfo` and not to a row is a fact the one place a person
+    // reads the build cannot show.
+    const layer = {
+      kind: 'core',
+      name: 'dielectric 2',
+      thickness_nm: 1_095_000,
+      sheets_nm: [1_095_000, 100_000],
+      slot_thickness_nm: 1_195_000,
+      material: 'FR4',
+      color: 'Red',
+      dk_x1000: 4500,
+      df_x1000000: 20_000,
+      coverage_region: 'rigid_left',
+      coverage_covers: true,
+    };
+    const row = stackRows({
+      layers: [layer],
+      finish: '',
+      edges_plated: false,
+      castellated_pads: false,
+      edge_connector: '',
+      impedance_controlled: false,
+      drill_pairs: [],
+      total_thickness_nm: 1_195_000,
+    })[0];
+
+    const shown = `${row.label} ${row.kind} ${row.thickness} ${row.detail}`;
+    for (const [field, text] of [
+      ['name', 'dielectric 2'],
+      ['slot_thickness_nm', '1.195mm'],
+      ['material', 'FR4'],
+      ['color', 'Red'],
+      ['dk_x1000', 'dk 4.5'],
+      ['df_x1000000', 'df 0.02'],
+      ['sheets_nm', '2 sheets'],
+      ['coverage_region', 'rigid_left'],
+      ['coverage_covers', 'covers'],
+    ]) {
+      expect(shown, `the row shows ${field}`).toContain(text);
+    }
+  });
+});

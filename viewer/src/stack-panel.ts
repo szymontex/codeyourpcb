@@ -56,6 +56,13 @@ export function stackRows(stack: StackupInfo): StackRow[] {
     if (layer.color) detail.push(layer.color);
     if (layer.dk_x1000 != null) detail.push(`dk ${layer.dk_x1000 / 1000}`);
     if (layer.df_x1000000 != null) detail.push(`df ${layer.df_x1000000 / 1_000_000}`);
+    // Where the layer stops, when it does not run the whole panel. A
+    // rigid-flex build is several stacks on one board, and a table that showed
+    // only the layers would tell a reader it is one - which is what this panel
+    // did for the week between the language gaining `covers` and this line.
+    if (layer.coverage_region) {
+      detail.push(`${layer.coverage_covers ? 'covers' : 'outside'} ${layer.coverage_region}`);
+    }
     if (layer.sheets_nm.length > 1) {
       detail.push(`${layer.sheets_nm.length} sheets: ${layer.sheets_nm.map(mm).join(' + ')}`);
     }
