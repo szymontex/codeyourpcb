@@ -730,6 +730,26 @@ module.exports = grammar({
       $.zone_net,
       $.zone_stitch,
       $.zone_radius,
+      $.zone_hatch,
+    ),
+
+    // hatch 0.3mm pitch 1mm
+    //
+    // Fill this pour as a mesh rather than as a sheet: copper lines of the
+    // stated width, centre to centre at the stated pitch, crossing at right
+    // angles. IPC-2223 asks for one in a flex area - a sheet of copper over a
+    // fold takes the strain across an unbroken surface and cracks where the
+    // fold begins - and a hatch is also how a plane is kept light on a board
+    // that has to flex or lose weight.
+    //
+    // Two dimensions rather than one: the width is the copper and the pitch is
+    // the spacing, and a design that states only one of them has said nothing
+    // about the other.
+    zone_hatch: $ => seq(
+      'hatch',
+      field('width', $.dimension),
+      'pitch',
+      field('pitch', $.dimension),
     ),
 
     // radius 3mm

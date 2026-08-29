@@ -66,11 +66,15 @@ fn the_command_names_the_region_it_cannot_carry() {
          it:\n{said}"
     );
 
-    // And it is not in the file under another name.
+    // And it is not in the file under another name. The design does have a
+    // copper pour - a hatched ground plane over the ribbon - so the count is
+    // what carries this rather than the absence of the word: one zone for the
+    // plane, and none for the region.
     let written = std::fs::read_to_string(&kicad).expect("the KiCad board was written");
-    assert!(
-        !written.contains("(zone"),
-        "this design has no copper pour, so the file has no zone in it:\n{}",
+    assert_eq!(
+        written.matches("(zone").count(),
+        1,
+        "one zone, and it is the ground plane:\n{}",
         written
             .lines()
             .filter(|l| l.contains("zone"))
@@ -134,9 +138,11 @@ fn a_named_area_is_named_too_and_is_not_written_as_copper() {
     );
 
     let written = std::fs::read_to_string(&kicad).expect("the KiCad board was written");
-    assert!(
-        !written.contains("(zone"),
-        "a named area is not copper, so the file still has no zone in it"
+    assert_eq!(
+        written.matches("(zone").count(),
+        1,
+        "a named area is not copper: the only zone in the file is the design's \
+         own ground plane"
     );
     assert!(
         !written.contains("connector_end"),

@@ -99,6 +99,24 @@ pub struct StitchPitch(pub cypcb_core::Nm);
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BendRadius(pub cypcb_core::Nm);
 
+/// Fill this pour as a mesh rather than as a sheet.
+///
+/// A component beside the zone for the reason [`StitchPitch`] is one: a pour
+/// that says nothing is the ordinary case, and this is what a hatched one has
+/// that a solid one does not.
+///
+/// IPC-2223 asks for a hatched polygon in a flex area - a sheet of copper over
+/// a fold takes the strain across an unbroken surface and cracks where the
+/// fold begins - and a hatch is also how a plane is kept light on a board that
+/// has to flex or lose weight.
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Hatch {
+    /// How wide each line of copper is.
+    pub width: cypcb_core::Nm,
+    /// Centre to centre between lines.
+    pub pitch: cypcb_core::Nm,
+}
+
 /// A via this tool placed to stitch a pour, rather than one a person put there.
 ///
 /// The writer skips these. A stitched pour states a rule and the vias are what

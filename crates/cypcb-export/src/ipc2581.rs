@@ -723,21 +723,28 @@ pub fn export_ipc2581(
         // a rectangle a fabricator floods: it is copper cut around every pad,
         // track and clearance on the layer, and the file should say what the
         // checker measured rather than what the design asked for.
-        let pours: Vec<cypcb_world::components::zone::Zone> = world
+        let pours: Vec<(
+            bevy_ecs::entity::Entity,
+            cypcb_world::components::zone::Zone,
+        )> = world
             .zones()
             .into_iter()
-            .map(|(_, zone)| zone)
-            .filter(|zone| {
+            .filter(|(_, zone)| {
                 zone.kind == cypcb_world::components::zone::ZoneKind::CopperPour
                     && zone.layer_mask & layer.to_copper_mask() != 0
             })
             .collect();
-        for zone in pours {
+        for (entity, zone) in pours {
+            let hatch = world
+                .ecs()
+                .get::<cypcb_world::components::Hatch>(entity)
+                .copied();
             let filled = cypcb_world::copper::fill_zone(
                 world,
                 library,
                 layer,
                 &zone,
+                hatch,
                 &crate::pour::PourOptions::default(),
             );
             let pieces: Vec<cypcb_core::Rect> = filled.all().copied().collect();

@@ -388,6 +388,31 @@ be two readings of one line.
 KiCad's board file has a row per stackup layer and no area on it, so
 `cypcb to-kicad` names this among the things it cannot carry.
 
+#### A plane that has to bend
+
+A sheet of copper over a fold cracks the way a trace along one does, at the
+width of the whole plane, so IPC-2223 asks for a hatched polygon in the flex
+area. A pour states the mesh it wants:
+
+```
+zone GND {
+    bounds 18mm, 0mm to 30mm, 16mm
+    layer top
+    net GND
+    hatch 0.3mm pitch 1mm
+}
+```
+
+The first figure is the copper - each line is 0.3mm wide - and the second is
+centre to centre between lines, which run both ways and cross at right angles.
+The filler cuts that mesh out of the plane it would otherwise have laid down,
+so the Gerber, the viewer and the checker all get the same copper. A pour that
+says nothing is filled solid, as before.
+
+`cypcb check` reports a solid pour that reaches into a flexible region -
+`solid-pour-in-bend`, with the copper in the fold measured - and says nothing
+about a hatched one, because a hatched one is what the standard asks for.
+
 #### How tightly it is folded
 
 A `flex` region takes one more word, and it is the figure a flex board is
@@ -931,8 +956,9 @@ Define keepout areas or copper pour zones:
 
 Four words open one of these blocks - `zone`, `keepout`, `flex` and `region` -
 and the properties inside are shared: `bounds`, `layer`, `net` for a pour,
-`stitch` for a pour that ties its two sides together, and `radius` for a `flex`
-region that says how tightly it is folded. The two rigid-flex words have their
+`stitch` for a pour that ties its two sides together, `hatch` for a pour filled
+as a mesh rather than as a sheet, and `radius` for a `flex` region that says how
+tightly it is folded. The two rigid-flex words have their
 own section above: **A board that bends**.
 
 ### Keepout Zone

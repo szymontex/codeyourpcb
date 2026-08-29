@@ -1640,6 +1640,16 @@ fn sync_zone(zone_def: &ZoneDef, world: &mut BoardWorld, _result: &mut SyncResul
         let radius = crate::components::BendRadius(radius.to_nm());
         world.ecs_mut().entity_mut(entity).insert(radius);
     }
+
+    // And the hatch, which is what the filler reads to make a mesh rather than
+    // a sheet.
+    if let Some(hatch) = &zone_def.hatch {
+        let hatch = crate::components::Hatch {
+            width: hatch.width.to_nm(),
+            pitch: hatch.pitch.to_nm(),
+        };
+        world.ecs_mut().entity_mut(entity).insert(hatch);
+    }
 }
 
 /// Place the vias every stitched pour asked for.

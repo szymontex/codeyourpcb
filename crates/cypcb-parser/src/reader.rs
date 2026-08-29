@@ -20,12 +20,13 @@
 use crate::ast::{
     format_pad_number, AssertDef, AssertExpression, AssertOperand, BoardDef, ComparisonOp,
     ComponentDef, ComponentKind, CoverageSense, Definition, DiffPairDef, Dimension, DimensionDef,
-    EdgeConnectorDef, FootprintDef, Identifier, ImplementsClause, ImportDef, InterfaceDef,
-    LayerCoverageDef, LayerType, ModuleDef, ModuleInstance, NetAssignment, NetClassDef,
-    NetConstraints, NetDef, OutlineDef, PadDef, PadShape, PhysicalValue, PinDeclaration, PinId,
-    PinRef, PortConnection, PositionExpr, RotationExpr, SilkDef, SizeProperty, SourceFile, Span,
-    StackupDef, StackupLayer, StackupSheetDef, StringLit, TeardropsProperty, TextDef, Tolerance,
-    ToleranceKind, TraceArc, TraceDef, TraceDirective, TracePath, TraceVia, ZoneDef, ZoneKind,
+    EdgeConnectorDef, FootprintDef, HatchDef, Identifier, ImplementsClause, ImportDef,
+    InterfaceDef, LayerCoverageDef, LayerType, ModuleDef, ModuleInstance, NetAssignment,
+    NetClassDef, NetConstraints, NetDef, OutlineDef, PadDef, PadShape, PhysicalValue,
+    PinDeclaration, PinId, PinRef, PortConnection, PositionExpr, RotationExpr, SilkDef,
+    SizeProperty, SourceFile, Span, StackupDef, StackupLayer, StackupSheetDef, StringLit,
+    TeardropsProperty, TextDef, Tolerance, ToleranceKind, TraceArc, TraceDef, TraceDirective,
+    TracePath, TraceVia, ZoneDef, ZoneKind,
 };
 use crate::errors::{ParseError, ParseResult};
 use crate::lexer::{tokenize, Token, TokenKind};
@@ -1643,6 +1644,7 @@ impl<'a> Reader<'a> {
         let mut net = None;
         let mut stitch = None;
         let mut radius = None;
+        let mut hatch = None;
 
         while !self.done() && !self.eat(&TokenKind::RBrace) {
             match self.peek_ident() {
@@ -1685,6 +1687,27 @@ impl<'a> Reader<'a> {
                         None => self.unexpected("a pitch like `5mm`"),
                     }
                 }
+                Some("hatch") => {
+                    self.bump();
+                    let clause_start = self.here();
+                    let Some(width) = self.dimension() else {
+                        self.unexpected("a line width like `0.3mm`");
+                        continue;
+                    };
+                    if !self.eat_word("pitch") {
+                        self.unexpected("`pitch` and a spacing after the hatch width");
+                        continue;
+                    }
+                    let Some(pitch) = self.dimension() else {
+                        self.unexpected("a spacing like `1mm` after `pitch`");
+                        continue;
+                    };
+                    hatch = Some(HatchDef {
+                        width,
+                        pitch,
+                        span: Span::new(clause_start, self.behind()),
+                    });
+                }
                 Some("radius") => {
                     self.bump();
                     match self.dimension() {
@@ -1692,7 +1715,10 @@ impl<'a> Reader<'a> {
                         None => self.unexpected("a radius like `3mm`"),
                     }
                 }
-                _ => self.unknown_property("zone", &["bounds", "layer", "net", "stitch", "radius"]),
+                _ => self.unknown_property(
+                    "zone",
+                    &["bounds", "layer", "net", "stitch", "radius", "hatch"],
+                ),
             }
         }
 
@@ -1709,6 +1735,7 @@ impl<'a> Reader<'a> {
             net,
             stitch,
             radius,
+            hatch,
             span: Span::new(start, self.behind()),
         })
     }

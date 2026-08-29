@@ -1109,7 +1109,24 @@ pub struct ZoneDef {
     /// it is stated where the bend is named. `None` is a design that has not
     /// said, and nothing invents one for it.
     pub radius: Option<Dimension>,
+    /// Fill this pour as a mesh rather than as a sheet: `hatch 0.3mm pitch 1mm`.
+    ///
+    /// The width is the copper and the pitch is centre to centre, so a design
+    /// that states one has said nothing about the other - which is why the
+    /// grammar takes both or neither.
+    pub hatch: Option<HatchDef>,
     /// Source span.
+    pub span: Span,
+}
+
+/// `hatch 0.3mm pitch 1mm` on a pour.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HatchDef {
+    /// How wide each line of copper is.
+    pub width: Dimension,
+    /// Centre to centre between lines.
+    pub pitch: Dimension,
+    /// Source span of the clause.
     pub span: Span,
 }
 

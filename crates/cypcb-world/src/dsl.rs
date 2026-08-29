@@ -497,6 +497,7 @@ fn zone_as_dsl(
     zone: &crate::components::zone::Zone,
     stitch: Option<cypcb_core::Nm>,
     radius: Option<cypcb_core::Nm>,
+    hatch: Option<crate::components::Hatch>,
     net_names: &std::collections::HashMap<u32, String>,
 ) -> String {
     use crate::components::zone::ZoneKind;
@@ -559,6 +560,17 @@ fn zone_as_dsl(
     // measure against the stack.
     if let Some(radius) = radius {
         let _ = writeln!(out, "    radius {}mm", format_mm(radius.to_mm()));
+    }
+    // The mesh, when the pour asked for one. Written as the two figures the
+    // design gave rather than as the copper they produce: a hatch is a rule,
+    // and the lines it makes are what the filler does with it.
+    if let Some(hatch) = hatch {
+        let _ = writeln!(
+            out,
+            "    hatch {}mm pitch {}mm",
+            format_mm(hatch.width.to_mm()),
+            format_mm(hatch.pitch.to_mm())
+        );
     }
     let _ = writeln!(out, "}}");
     let _ = writeln!(out);
@@ -868,20 +880,30 @@ pub fn board_as_dsl(world: &mut BoardWorld) -> String {
 
     // With the pitch beside each one: a stitched pour keeps its rule through a
     // round trip, and the vias it produced are not written as copper.
-    let zones: Vec<(
+    type WrittenZone = (
         crate::components::zone::Zone,
         Option<cypcb_core::Nm>,
         Option<cypcb_core::Nm>,
-    )> = {
+        Option<crate::components::Hatch>,
+    );
+    let zones: Vec<WrittenZone> = {
         let ecs = world.ecs_mut();
         let mut query = ecs.query::<(
             &crate::components::zone::Zone,
             Option<&crate::components::StitchPitch>,
             Option<&crate::components::BendRadius>,
+            Option<&crate::components::Hatch>,
         )>();
         query
             .iter(ecs)
-            .map(|(zone, pitch, radius)| (zone.clone(), pitch.map(|p| p.0), radius.map(|r| r.0)))
+            .map(|(zone, pitch, radius, hatch)| {
+                (
+                    zone.clone(),
+                    pitch.map(|p| p.0),
+                    radius.map(|r| r.0),
+                    hatch.copied(),
+                )
+            })
             .collect()
     };
 
@@ -1285,8 +1307,8 @@ pub fn board_as_dsl(world: &mut BoardWorld) -> String {
     // takes bounds, a layer and a net, and `sync_zone` reads all three. A board
     // imported from KiCad with a ground plane lost that plane on its first save
     // through the editor, under a note claiming the loss was unavoidable.
-    for (zone, stitch, radius) in &zones {
-        out.push_str(&zone_as_dsl(zone, *stitch, *radius, &net_names));
+    for (zone, stitch, radius, hatch) in &zones {
+        out.push_str(&zone_as_dsl(zone, *stitch, *radius, *hatch, &net_names));
     }
 
     // The measurements, before the words: a reader meets the board's size

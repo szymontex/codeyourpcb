@@ -33,13 +33,13 @@
 use crate::ast::{
     format_pad_number, AssertDef, AssertExpression, AssertOperand, BoardDef, ComparisonOp,
     ComponentDef, ComponentKind, CoverageSense, CurrentUnit, CurrentValue, Definition, DiffPairDef,
-    Dimension, DimensionDef, EdgeConnectorDef, FootprintDef, Identifier, ImplementsClause,
-    ImportDef, InterfaceDef, LayerCoverageDef, LayerType, ModuleDef, ModuleInstance, NeckDef,
-    NetAssignment, NetClassDef, NetConstraints, NetDef, OutlineDef, PadDef, PadShape,
-    PhysicalValue, PinDeclaration, PinId, PinRef, PortConnection, PositionExpr, RotationExpr,
-    SilkDef, SizeProperty, SourceFile, Span, StackupDef, StackupLayer, StackupSheetDef, StringLit,
-    TeardropsProperty, TextDef, Tolerance, ToleranceKind, TraceArc, TraceDef, TraceDirective,
-    TracePath, TraceVia, ZoneDef, ZoneKind,
+    Dimension, DimensionDef, EdgeConnectorDef, FootprintDef, HatchDef, Identifier,
+    ImplementsClause, ImportDef, InterfaceDef, LayerCoverageDef, LayerType, ModuleDef,
+    ModuleInstance, NeckDef, NetAssignment, NetClassDef, NetConstraints, NetDef, OutlineDef,
+    PadDef, PadShape, PhysicalValue, PinDeclaration, PinId, PinRef, PortConnection, PositionExpr,
+    RotationExpr, SilkDef, SizeProperty, SourceFile, Span, StackupDef, StackupLayer,
+    StackupSheetDef, StringLit, TeardropsProperty, TextDef, Tolerance, ToleranceKind, TraceArc,
+    TraceDef, TraceDirective, TracePath, TraceVia, ZoneDef, ZoneKind,
 };
 use crate::errors::{ParseError, ParseResult};
 use crate::node_kinds;
@@ -1361,6 +1361,7 @@ impl CypcbParser {
         let mut net: Option<Identifier> = None;
         let mut stitch: Option<Dimension> = None;
         let mut radius: Option<Dimension> = None;
+        let mut hatch: Option<HatchDef> = None;
 
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
@@ -1397,6 +1398,19 @@ impl CypcbParser {
                         stitch = get_child_by_field(&prop, "pitch")
                             .and_then(|n| self.convert_dimension(source, &n, errors));
                     }
+                    "zone_hatch" => {
+                        let width = get_child_by_field(&prop, "width")
+                            .and_then(|n| self.convert_dimension(source, &n, errors));
+                        let pitch = get_child_by_field(&prop, "pitch")
+                            .and_then(|n| self.convert_dimension(source, &n, errors));
+                        if let (Some(width), Some(pitch)) = (width, pitch) {
+                            hatch = Some(HatchDef {
+                                width,
+                                pitch,
+                                span: span_of(&prop),
+                            });
+                        }
+                    }
                     "zone_radius" => {
                         radius = get_child_by_field(&prop, "radius")
                             .and_then(|n| self.convert_dimension(source, &n, errors));
@@ -1426,6 +1440,7 @@ impl CypcbParser {
             net,
             stitch,
             radius,
+            hatch,
             span: span_of(node),
         })
     }

@@ -2736,6 +2736,32 @@
     }
   },
   {
+    "type": "zone_hatch",
+    "named": true,
+    "fields": {
+      "pitch": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "dimension",
+            "named": true
+          }
+        ]
+      },
+      "width": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "dimension",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "zone_layer",
     "named": true,
     "fields": {
@@ -2777,6 +2803,10 @@
       "types": [
         {
           "type": "zone_bounds",
+          "named": true
+        },
+        {
+          "type": "zone_hatch",
           "named": true
         },
         {
@@ -3136,6 +3166,10 @@
     "named": false
   },
   {
+    "type": "hatch",
+    "named": false
+  },
+  {
     "type": "height",
     "named": false
   },
@@ -3346,6 +3380,10 @@
   },
   {
     "type": "pin",
+    "named": false
+  },
+  {
+    "type": "pitch",
     "named": false
   },
   {

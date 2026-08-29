@@ -99,6 +99,25 @@ fn a_plane_on_a_layer_the_ribbon_does_not_reach_is_left_alone() {
 }
 
 #[test]
+fn a_pour_that_states_a_hatch_is_already_the_mesh_the_standard_asks_for() {
+    // The way out of the fault, and the reason the rule exists: the design
+    // says `hatch 0.3mm pitch 1mm`, the filler lays down a mesh, and there is
+    // nothing left to report.
+    let hatched = REACHING_IN.replace(
+        "    net GND
+}",
+        "    net GND
+    hatch 0.3mm pitch 1mm
+}",
+    );
+    let said = check(&board(&hatched), "hatched");
+    assert!(
+        !said.contains("solid-pour-in-bend"),
+        "a hatched plane over a fold is what IPC-2223 asks for:\n{said}"
+    );
+}
+
+#[test]
 fn a_board_that_does_not_bend_hears_nothing() {
     let source = board(REACHING_IN).replace(
         "flex bend {\n    bounds 22mm, 0mm to 38mm, 16mm\n    layer all\n}",

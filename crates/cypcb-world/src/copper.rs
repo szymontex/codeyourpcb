@@ -16,7 +16,7 @@ use cypcb_core::pour::{self, PourOptions};
 use cypcb_core::{Nm, Point, Rect};
 
 use crate::components::trace::{Trace, Via};
-use crate::components::zone::Zone;
+use crate::components::zone::{Hatch, Zone};
 use crate::components::{Layer, NetId};
 use crate::footprint::FootprintLibrary;
 use crate::world::BoardWorld;
@@ -49,6 +49,7 @@ pub fn fill_zone(
     library: &FootprintLibrary,
     layer: Layer,
     zone: &Zone,
+    hatch: Option<Hatch>,
     options: &PourOptions,
 ) -> FilledPour {
     let (obstacles, own_pads) = copper_on_layer(world, library, layer, zone.net);
@@ -84,7 +85,70 @@ pub fn fill_zone(
         }
     }
 
+    // A mesh rather than a sheet, when the pour asked for one.
+    //
+    // Cut last, against the copper the plane already became: hatching first
+    // and then subtracting obstacles would give the same answer more slowly,
+    // and hatching the spokes would cut the bridges a pad is soldered through.
+    // A spoke is 0.25mm of copper reaching a pin; there is nothing in it to
+    // relieve.
+    if let Some(hatch) = hatch {
+        pieces = hatched(&pieces, hatch);
+    }
+
     FilledPour { pieces, spokes }
+}
+
+/// The copper a hatch leaves of a solid fill: lines of `width`, centre to
+/// centre at `pitch`, running both ways.
+///
+/// Measured from the origin rather than from each piece, so two pieces of one
+/// plane are cut by the same mesh and the lines line up across a pad that
+/// splits the pour in two.
+///
+/// A pitch no larger than the width is a mesh with no gaps in it, which is a
+/// sheet: the pieces come back untouched rather than as a plane cut into
+/// lines that touch each other. The checker is where a design that states such
+/// a hatch gets told, not here.
+fn hatched(pieces: &[Rect], hatch: Hatch) -> Vec<Rect> {
+    if hatch.width.0 <= 0 || hatch.pitch.0 <= hatch.width.0 {
+        return pieces.to_vec();
+    }
+
+    let mut out = Vec::new();
+    for piece in pieces {
+        // Every line of the mesh that reaches this piece, in both directions.
+        // The first line at or before the piece's own edge, so the mesh is the
+        // board's rather than the piece's.
+        for (horizontal, low, high) in [
+            (true, piece.min.y.0, piece.max.y.0),
+            (false, piece.min.x.0, piece.max.x.0),
+        ] {
+            let first = low.div_euclid(hatch.pitch.0) * hatch.pitch.0;
+            let mut at = first;
+            while at <= high {
+                let start = at.max(low);
+                let end = (at + hatch.width.0).min(high);
+                at += hatch.pitch.0;
+                if end <= start {
+                    continue;
+                }
+                let line = if horizontal {
+                    Rect::new(
+                        Point::new(piece.min.x, Nm(start)),
+                        Point::new(piece.max.x, Nm(end)),
+                    )
+                } else {
+                    Rect::new(
+                        Point::new(Nm(start), piece.min.y),
+                        Point::new(Nm(end), piece.max.y),
+                    )
+                };
+                out.push(line);
+            }
+        }
+    }
+    out
 }
 
 /// Every piece of copper on this layer that a pour on `pour_net` must keep away
@@ -276,6 +340,7 @@ mod tests {
             &library,
             Layer::TopCopper,
             &ground_zone(),
+            None,
             &PourOptions::default(),
         );
 
@@ -307,6 +372,7 @@ mod tests {
             &library,
             Layer::TopCopper,
             &ground_zone(),
+            None,
             &PourOptions::default(),
         );
 

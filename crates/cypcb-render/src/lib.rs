@@ -1928,14 +1928,13 @@ impl PcbEngine {
             .world
             .zones()
             .into_iter()
-            .map(|(_, zone)| zone)
-            .filter(|zone| zone.kind == ZoneKind::CopperPour)
+            .filter(|(_, zone)| zone.kind == ZoneKind::CopperPour)
             .collect();
 
         let options = cypcb_core::pour::PourOptions::default();
         let mut pours = Vec::new();
 
-        for zone in zones {
+        for (entity, zone) in zones {
             let net = zone
                 .net
                 .and_then(|id| self.world.net_name(id).map(|name| name.to_string()))
@@ -1948,11 +1947,17 @@ impl PcbEngine {
                     continue;
                 }
                 let library = self.footprint_lib.clone();
+                let hatch = self
+                    .world
+                    .ecs()
+                    .get::<cypcb_world::components::Hatch>(entity)
+                    .copied();
                 let filled = cypcb_world::copper::fill_zone(
                     &mut self.world,
                     &library,
                     layer,
                     &zone,
+                    hatch,
                     &options,
                 );
                 let rects: Vec<[i64; 4]> = filled

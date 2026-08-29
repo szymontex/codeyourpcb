@@ -57,8 +57,15 @@ impl DrcRule for PourIslandRule {
                     continue;
                 }
 
+                // The mesh the pour asked for, if it asked for one: a hatched
+                // plane is islands by construction, and filling it solid here
+                // would measure a plane nobody is getting.
+                let hatch = world
+                    .ecs()
+                    .get::<cypcb_world::components::Hatch>(entity)
+                    .copied();
                 let filled =
-                    cypcb_world::copper::fill_zone(world, &library, layer, &zone, &options);
+                    cypcb_world::copper::fill_zone(world, &library, layer, &zone, hatch, &options);
                 if filled.pieces.is_empty() {
                     continue;
                 }

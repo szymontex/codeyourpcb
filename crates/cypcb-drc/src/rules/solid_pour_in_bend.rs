@@ -50,6 +50,16 @@ impl DrcRule for SolidPourInBendRule {
 
         let mut violations = Vec::new();
         for (entity, pour) in zones.iter().filter(|(_, zone)| zone.is_copper_pour()) {
+            // A pour that states a hatch is already the mesh IPC-2223 asks
+            // for, and the filler lays it down that way: there is nothing left
+            // to report about it.
+            if world
+                .ecs()
+                .get::<cypcb_world::components::Hatch>(*entity)
+                .is_some()
+            {
+                continue;
+            }
             for (fold_entity, fold) in &folds {
                 // The two have to share copper, not only ground: a plane on
                 // the top layer and a ribbon stated on the bottom are not over

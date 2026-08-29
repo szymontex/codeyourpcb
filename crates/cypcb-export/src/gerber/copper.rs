@@ -349,12 +349,17 @@ fn export_pours(
     let zones: Vec<_> = world
         .zones()
         .into_iter()
-        .map(|(_, zone)| zone)
-        .filter(|zone| zone.kind == ZoneKind::CopperPour && zone.layer_mask & mask != 0)
+        .filter(|(_, zone)| zone.kind == ZoneKind::CopperPour && zone.layer_mask & mask != 0)
         .collect();
 
-    for zone in zones {
-        let filled = cypcb_world::copper::fill_zone(world, library, layer, &zone, options);
+    for (entity, zone) in zones {
+        // A hatched pour is a mesh rather than a sheet, and the Gerber carries
+        // what the board gets.
+        let hatch = world
+            .ecs()
+            .get::<cypcb_world::components::Hatch>(entity)
+            .copied();
+        let filled = cypcb_world::copper::fill_zone(world, library, layer, &zone, hatch, options);
         for piece in filled.all() {
             emit_region(*piece, output, format);
         }

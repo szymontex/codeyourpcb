@@ -2507,6 +2507,39 @@
         {
           "type": "SYMBOL",
           "name": "zone_radius"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "zone_hatch"
+        }
+      ]
+    },
+    "zone_hatch": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "STRING",
+          "value": "hatch"
+        },
+        {
+          "type": "FIELD",
+          "name": "width",
+          "content": {
+            "type": "SYMBOL",
+            "name": "dimension"
+          }
+        },
+        {
+          "type": "STRING",
+          "value": "pitch"
+        },
+        {
+          "type": "FIELD",
+          "name": "pitch",
+          "content": {
+            "type": "SYMBOL",
+            "name": "dimension"
+          }
         }
       ]
     },

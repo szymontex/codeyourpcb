@@ -108,3 +108,16 @@ trace GND {
     layer Top
     width 0.2mm
 }
+
+// The ground plane, and it is a mesh rather than a sheet.
+//
+// A sheet of copper over a fold takes the strain across an unbroken surface
+// and cracks where the fold begins, so IPC-2223 asks for a hatched polygon in
+// a flex area. `cypcb check` reports a solid pour that reaches into a
+// flexible region - `solid-pour-in-bend` - and says nothing about this one.
+zone GND {
+    bounds 2mm, 2mm to 58mm, 14mm
+    layer top
+    net GND
+    hatch 0.3mm pitch 1mm
+}
