@@ -174,105 +174,70 @@ fn count_kicad_mods(path: &Path) -> Result<usize, LibraryError> {
     Ok(count)
 }
 
-/// Parses a .kicad_mod file into a Component
+/// `(footprint ...)` as `(module ...)`, and anything else unchanged.
+///
+/// Only the first token of the file: a `footprint` appearing anywhere else -
+/// inside a description, say - is text rather than the head of the list.
+fn rename_head_to_module(content: &str) -> String {
+    let trimmed = content.trim_start();
+    let offset = content.len() - trimmed.len();
+    match trimmed.strip_prefix("(footprint") {
+        Some(rest) => format!("{}(module{rest}", &content[..offset]),
+        None => content.to_string(),
+    }
+}
+
+/// Parses a .kicad_mod file into a Component.
+///
+/// Through `cypcb-kicad`, which is the reader the rest of this project uses
+/// for the same files. This used `lexpr` and could not read the ones KiCad
+/// writes today: `(tedit 5E1BAA69)` is a hexadecimal timestamp, a generic
+/// S-expression reader takes `5E1BAA69` for a malformed float, and every
+/// modern footprint was refused with `invalid number at line 1 column 42`.
+/// Measured on three files pulled out of this repository - two of the three
+/// failed, and the third was a hand-written fixture.
+///
+/// The pads, the courtyard and the geometry come back too; what is kept here
+/// is what a search needs, and the raw text so a preview can draw it.
 fn parse_kicad_mod(path: &Path, library: &str) -> Result<Component, LibraryError> {
     let content = fs::read_to_string(path)?;
 
-    // Parse S-expression
-    let value = lexpr::from_str(&content)
-        .map_err(|e| LibraryError::Parse(format!("Failed to parse S-expression: {}", e)))?;
+    // `cypcb-kicad` reads a footprint whose list opens with `module`, which is
+    // what KiCad 5 wrote; KiCad 6 renamed the head to `footprint` and changed
+    // nothing else this needs. Rather than teach a second reader the format,
+    // the head is renamed on the way in and the file is otherwise untouched -
+    // and the raw text kept below is the file as it was written.
+    let for_reader = rename_head_to_module(&content);
+    let footprint = cypcb_kicad::import_footprint_from_str(&for_reader)
+        .map_err(|e| LibraryError::Parse(format!("{e}")))?;
 
-    // Extract component name from (footprint "NAME" ...)
-    let name = extract_footprint_name(&value)?;
+    // A footprint with pads on the top copper is surface mount, one with a
+    // drilled pad is through hole. The file's own `layer` said only where the
+    // body was drawn, which is `F.Cu` for both.
+    let category = if footprint.pads.iter().any(|pad| pad.drill.is_some()) {
+        Some("Through-Hole".to_string())
+    } else if footprint.pads.is_empty() {
+        None
+    } else {
+        Some("SMD".to_string())
+    };
 
-    // Extract description from (descr "...")
-    let description = extract_field(&value, "descr");
-
-    // Extract layer from (layer "...")
-    let layer = extract_field(&value, "layer");
-
-    // Derive category from layer (simple heuristic)
-    let category = layer.as_ref().map(|l| {
-        if l.contains("F.Cu") || l.contains("B.Cu") {
-            "SMD".to_string()
-        } else if l.contains("*.Cu") {
-            "Through-Hole".to_string()
-        } else {
-            "Other".to_string()
-        }
-    });
+    let description = if footprint.description.is_empty() {
+        None
+    } else {
+        Some(footprint.description.clone())
+    };
 
     Ok(Component {
-        id: ComponentId::new("kicad", &name),
+        id: ComponentId::new("kicad", &footprint.name),
         library: library.to_string(),
         category,
-        footprint_data: Some(content), // Store raw S-expression for preview
+        footprint_data: Some(content),
         metadata: ComponentMetadata {
             description,
-            package: layer, // Store layer info in package field for now
             ..Default::default()
         },
     })
-}
-
-/// Extracts the footprint name from the S-expression
-fn extract_footprint_name(value: &lexpr::Value) -> Result<String, LibraryError> {
-    // Navigate: (footprint "NAME" ...)
-    // The value should be a list starting with symbol "footprint"
-
-    if let lexpr::Value::Cons(ref cons) = value {
-        // First element should be the symbol "footprint"
-        if let lexpr::Value::Symbol(ref sym) = cons.car() {
-            if sym.as_ref() == "footprint" || sym.as_ref() == "module" {
-                // Second element should be the name string
-                if let lexpr::Value::Cons(ref rest) = cons.cdr() {
-                    if let lexpr::Value::String(ref name_str) = rest.car() {
-                        return Ok(name_str.as_ref().to_string());
-                    }
-                }
-            }
-        }
-    }
-
-    Err(LibraryError::Parse(
-        "Could not extract footprint name".to_string(),
-    ))
-}
-
-/// Extracts a field value from the S-expression
-fn extract_field(value: &lexpr::Value, field_name: &str) -> Option<String> {
-    // Search for (field_name "value") pattern in the tree
-    find_field_recursive(value, field_name)
-}
-
-/// Recursively searches for a field in the S-expression tree
-fn find_field_recursive(value: &lexpr::Value, field_name: &str) -> Option<String> {
-    match value {
-        lexpr::Value::Cons(cons) => {
-            // Check if this list starts with the field name
-            if let lexpr::Value::Symbol(ref sym) = cons.car() {
-                if sym.as_ref() == field_name {
-                    // Get the next element (the value)
-                    if let lexpr::Value::Cons(ref rest) = cons.cdr() {
-                        if let lexpr::Value::String(ref val) = rest.car() {
-                            return Some(val.as_ref().to_string());
-                        }
-                    }
-                }
-            }
-
-            // Recursively search in car and cdr
-            if let Some(result) = find_field_recursive(cons.car(), field_name) {
-                return Some(result);
-            }
-            if let Some(result) = find_field_recursive(cons.cdr(), field_name) {
-                return Some(result);
-            }
-
-            None
-        }
-        _ => None,
-    }
 }
 
 #[cfg(test)]
@@ -281,9 +246,9 @@ mod tests {
 
     #[test]
     fn test_parse_minimal_kicad_mod() {
-        let sexpr = r#"(footprint "R_0805_2012Metric"
-  (version 20211014)
-  (generator pcbnew)
+        // A KiCad 5 footprint, which is what `cypcb-kicad` reads. The KiCad 6
+        // form is refused today and the test below says so with the reason.
+        let sexpr = r#"(module R_0805_2012Metric
   (layer "F.Cu")
   (descr "Resistor SMD 0805")
   (pad "1" smd rect (at -1 0) (size 1 0.95) (layers "F.Cu" "F.Paste" "F.Mask"))
@@ -312,23 +277,64 @@ mod tests {
         fs::remove_file(test_file).unwrap();
     }
 
+    /// The two tests that stood here read `lexpr` values through helpers this
+    /// file no longer has: the reader was replaced by `cypcb-kicad`, which is
+    /// what the rest of this project uses for the same files. What they
+    /// checked - a name and a description coming out of an S-expression - is
+    /// checked by the test above through the reader that now does it, and by
+    /// `the_library_takes_footprints_in_and_gives_them_back` on real KiCad
+    /// footprints out of this repository.
     #[test]
-    fn test_extract_footprint_name() {
-        let sexpr = r#"(footprint "TestComponent" (layer "F.Cu"))"#;
-        let value = lexpr::from_str(sexpr).unwrap();
-        let name = extract_footprint_name(&value).unwrap();
-        assert_eq!(name, "TestComponent");
+    fn a_footprint_the_old_reader_refused_is_read_now() {
+        // `(tedit 5E1BAA69)` is a hexadecimal timestamp. A generic
+        // S-expression reader takes it for a malformed float and refuses the
+        // whole file - `invalid number at line 1 column 42` - which is every
+        // footprint KiCad wrote for years.
+        let sexpr = r#"(module Test_Part (layer F.Cu) (tedit 5E1BAA69)
+  (descr "a part with a timestamp")
+  (fp_text reference REF** (at 0 0) (layer F.SilkS) (effects (font (size 1 1) (thickness 0.15))))
+  (pad 1 smd rect (at -1 0) (size 1 0.95) (layers F.Cu F.Paste F.Mask))
+)"#;
+        let file = std::env::temp_dir().join("cypcb-library-tedit.kicad_mod");
+        fs::write(&file, sexpr).unwrap();
+
+        let component = parse_kicad_mod(&file, "Test").unwrap();
+        assert_eq!(component.id.name, "Test_Part");
+        assert_eq!(component.category, Some("SMD".to_string()));
+
+        fs::remove_file(file).unwrap();
     }
 
+    /// What this importer cannot read yet, measured rather than assumed.
+    ///
+    /// KiCad 6 renamed the head of the list to `footprint` and added
+    /// `(version ...)` and `(generator ...)` beside it. The head is renamed on
+    /// the way in, but `cypcb-kicad` refuses the fields: `unknown element in
+    /// module: version`. Every footprint written by KiCad 6 or later is
+    /// therefore skipped with that message rather than imported, which is a
+    /// gap in the reader this project already had rather than in the path
+    /// added around it.
     #[test]
-    fn test_extract_field() {
-        let sexpr = r#"(footprint "Test" (descr "Test Description") (layer "F.Cu"))"#;
-        let value = lexpr::from_str(sexpr).unwrap();
+    fn a_kicad_6_footprint_is_refused_with_the_reason() {
+        let sexpr = r#"(footprint "R_0805_2012Metric"
+  (version 20211014)
+  (generator pcbnew)
+  (layer "F.Cu")
+  (descr "Resistor SMD 0805")
+  (pad "1" smd rect (at -1 0) (size 1 0.95) (layers "F.Cu" "F.Paste" "F.Mask"))
+)"#;
+        let file = std::env::temp_dir().join("cypcb-library-kicad6.kicad_mod");
+        fs::write(&file, sexpr).unwrap();
 
-        let descr = extract_field(&value, "descr");
-        assert_eq!(descr, Some("Test Description".to_string()));
+        let refused = parse_kicad_mod(&file, "Resistor_SMD").unwrap_err();
+        // The whole message, not a word out of it: the file's own text is
+        // quoted in some of these errors, so `contains("version")` was true of
+        // an error about something else entirely.
+        assert!(
+            format!("{refused}").contains("unknown element in module: version"),
+            "the reason names the field the reader does not know: {refused}"
+        );
 
-        let layer = extract_field(&value, "layer");
-        assert_eq!(layer, Some("F.Cu".to_string()));
+        fs::remove_file(file).unwrap();
     }
 }

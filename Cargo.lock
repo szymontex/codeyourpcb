@@ -1030,6 +1030,7 @@ dependencies = [
  "cypcb-export",
  "cypcb-fixtures",
  "cypcb-kicad",
+ "cypcb-library",
  "cypcb-parser",
  "cypcb-render",
  "cypcb-router",
@@ -1130,6 +1131,7 @@ version = "0.1.0-beta"
 dependencies = [
  "async-trait",
  "chrono",
+ "cypcb-kicad",
  "lexpr",
  "reqwest",
  "rusqlite",

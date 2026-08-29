@@ -20,6 +20,7 @@ cypcb-drc = { path = "../cypcb-drc" }
 cypcb-rules = { path = "../cypcb-rules" }
 cypcb-export = { path = "../cypcb-export" }
 cypcb-watcher = { path = "../cypcb-watcher" }
+cypcb-library = { path = "../cypcb-library" }
 clap = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

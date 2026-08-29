@@ -1,28 +1,28 @@
 //! A local component library: SQLite, a schema, a search, and importers.
 //!
-//! **Nothing in this workspace calls this crate, and that is a decision rather
-//! than an oversight.** `no_crate_is_written_and_never_called` has listed it
-//! since the census was written, and the question it left open - is this work
-//! that has not landed yet, or work nothing will ever reach again - is
-//! answered here: it is the first, and it is kept.
+//! **`cypcb library` is what calls this**, and the day it did is the day this
+//! crate stopped being 3751 lines nothing reached. `import` walks a directory
+//! for `<name>.pretty` folders and indexes the `.kicad_mod` files in them;
+//! `search` finds one again by name, description, package or manufacturer;
+//! `list` says what is indexed. The index is a file the command writes where
+//! it was run.
 //!
-//! What is here, measured on 2026-08-29: **3751 lines and 41 passing tests**
-//! (`cargo test -p cypcb-library`), a schema and a manager over `rusqlite`, a
-//! search by field, metadata and preview, and importers under `sources` - the
-//! KiCad one reads `.pretty` folders and `.kicad_mod` files, which is the
-//! format every footprint this project already parses comes in.
+//! Two things the first caller found, both now measured rather than assumed:
 //!
-//! Why it is kept rather than deleted: the parts a component library needs are
-//! written and tested, and the tool has the other half - `cypcb-kicad` reads
-//! footprints, the viewer has a search panel over JLCPCB's catalogue. What is
-//! missing is one path between them, not a body of work.
+//! - The search handed what a person typed straight to FTS5, so `SOT-23-5` was
+//!   read as a query language rather than a phrase and
+//!   `nothing-is-called-this` failed with `no such column: is`. A plain query
+//!   is a quoted phrase now; `field:value` and a trailing `*` still mean what
+//!   they mean.
+//! - The importer read footprints with a generic S-expression reader that
+//!   refused every file carrying `(tedit 5E1BAA69)` - a hexadecimal timestamp
+//!   it took for a malformed float. It reads them through `cypcb-kicad` now,
+//!   the same reader the rest of this project uses.
 //!
-//! What would make it live, in one sentence: a `cypcb library` subcommand that
-//! imports a `.pretty` folder and searches what it imported, which is the
-//! smallest thing that would give the crate a caller and a user at once.
-//!
-//! Until then it builds and its tests run in the gate, which is what keeps it
-//! from rotting while it waits.
+//! What it still cannot do, held by a test that names the message: a KiCad 6
+//! footprint - `(footprint ...)` with `(version ...)` beside it - is refused
+//! with `unknown element in module: version`. The head is renamed on the way
+//! in; the fields are a gap in `cypcb-kicad` rather than here.
 
 pub mod error;
 pub mod manager;

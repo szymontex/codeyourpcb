@@ -116,6 +116,16 @@ enum Commands {
     /// over is named - a curve is not a line or a polyline, and this reads
     /// only those two.
     FromDxf(commands::FromDxfCommand),
+    /// Index and search the KiCad footprint libraries on this machine
+    ///
+    /// `cypcb library import <directory>` reads every `<name>.pretty` folder
+    /// under it - the format a KiCad footprint library comes in - and
+    /// `cypcb library search <query>` finds one again by name, description,
+    /// package or manufacturer. The index is a file: `cypcb-library.db` in the
+    /// working directory unless `--db` names another, because a tool that
+    /// writes outside the directory it was run in surprises the person who ran
+    /// it.
+    Library(commands::LibraryCommand),
     /// Route a .cypcb or .kicad_pcb board and print quality metrics as JSON
     ///
     /// The shipped defaults, once - no variant search. `route` ranks thirteen
@@ -188,6 +198,7 @@ fn main() -> Result<()> {
         Commands::ParseKicad(cmd) => cmd.run(),
         Commands::FromKicad(cmd) => cmd.run(),
         Commands::FromDxf(cmd) => cmd.run(),
+        Commands::Library(cmd) => cmd.run(),
         Commands::ToKicad(cmd) => cmd.run(),
         Commands::Watch(cmd) => cmd.run(),
         Commands::Score(cmd) => cmd.run(),

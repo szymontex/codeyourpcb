@@ -22,9 +22,19 @@ pub fn search_components(
         return Ok(Vec::new());
     }
 
-    // For FTS5, plain text search just uses the query as-is
-    // FTS5 will tokenize and search across all indexed fields
-    // For field-specific queries, the caller should pass "field:value" format
+    // What a person types is a phrase, not a query language.
+    //
+    // FTS5 reads `-`, `+`, `(`, `*` and `NEAR` as syntax, so a plain
+    // `SOT-23-5` is a NOT of three terms and `nothing-is-called-this` fails
+    // outright: `no such column: is`. Measured through the command line the
+    // day this crate gained its first caller - the first search a person ran
+    // returned a database error rather than nothing.
+    //
+    // So a plain query is quoted and given to FTS5 as one phrase, with any
+    // quotation marks in it doubled the way SQLite wants. The two forms that
+    // mean something on purpose - `field:value` and a trailing `*` - are still
+    // passed through, because a caller writing either is asking for the query
+    // language rather than for a phrase.
     let fts_query = if query.contains(':') {
         // Field-specific query, pass through
         query.to_string()
@@ -32,8 +42,7 @@ pub fn search_components(
         // Prefix query, pass through
         query.to_string()
     } else {
-        // Plain text query - escape double quotes for safety
-        query.replace('"', "\"\"")
+        format!("\"{}\"", query.replace('"', "\"\""))
     };
 
     // Build base SQL with FTS5 MATCH and BM25 ranking
