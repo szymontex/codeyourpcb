@@ -177,6 +177,10 @@ pub fn run_drc(world: &mut BoardWorld, rules: &DesignRules) -> DrcResult {
         // `edge-clearance`, which already measures copper against the edge; a
         // second row for one fault teaches a reader to skim the panel.
         Box::new(rules::AreaOffBoardRule),
+        // And two areas the stack states a build for cannot cover the same
+        // strip: the handoff writes a group for each, so a fabricator reading
+        // both is told the board is two thicknesses in one place.
+        Box::new(rules::AreaOverlapRule),
     ];
 
     // Run each checker

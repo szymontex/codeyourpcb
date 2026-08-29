@@ -5,6 +5,7 @@
 
 pub mod annular_ring;
 pub mod area_off_board;
+pub mod area_overlap;
 pub mod assertion;
 pub mod clearance;
 pub mod connectivity;
@@ -68,6 +69,7 @@ use crate::violation::DrcViolation;
 
 pub use annular_ring::AnnularRingRule;
 pub use area_off_board::AreaOffBoardRule;
+pub use area_overlap::AreaOverlapRule;
 pub use assertion::AssertionRule;
 pub use clearance::ClearanceRule;
 pub use connectivity::UnconnectedPinRule;

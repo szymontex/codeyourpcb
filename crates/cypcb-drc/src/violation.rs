@@ -108,6 +108,8 @@ pub enum ViolationKind {
     EmptyArea,
     /// A declared area hangs off the board, or sits nowhere near it.
     AreaOffBoard,
+    /// Two areas the stack states a build for cover the same strip of board.
+    AreaOverlap,
 }
 
 /// The two features a clearance message is about.
@@ -223,6 +225,7 @@ impl std::fmt::Display for ViolationKind {
             ViolationKind::FlexHole => write!(f, "flex-hole"),
             ViolationKind::EmptyArea => write!(f, "empty-area"),
             ViolationKind::AreaOffBoard => write!(f, "area-off-board"),
+            ViolationKind::AreaOverlap => write!(f, "area-overlap"),
         }
     }
 }
@@ -869,6 +872,25 @@ impl DrcViolation {
     ///
     /// No `actual`/`required` pair: nothing was measured against a limit. A
     /// hole is either in the bend or it is not.
+    /// Two stack-bearing areas over the same strip of board.
+    ///
+    /// The location is the corner of the overlap nearest the origin - the
+    /// contested strip itself rather than either area, because that is what
+    /// the designer has to look at.
+    pub fn area_overlap(entity: Entity, other: Entity, message: String, location: Point) -> Self {
+        DrcViolation {
+            kind: ViolationKind::AreaOverlap,
+            actual: None,
+            required: None,
+            area: None,
+            location,
+            entity,
+            other_entity: Some(other),
+            source_span: None,
+            message,
+        }
+    }
+
     /// An area whose rectangle is not on the board.
     ///
     /// The location is the corner the design wrote first, the same one

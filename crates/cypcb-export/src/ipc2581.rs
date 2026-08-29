@@ -439,30 +439,21 @@ pub fn export_ipc2581(
         // element that carries it. That is said out loud rather than guessed:
         // an invented boundary reference would be read by a fabricator's tool
         // as a link to something that is not there.
-        let mut areas: Vec<String> = Vec::new();
-        for entry in &stack.layers {
-            if let Some(coverage) = &entry.coverage {
-                let area = coverage.region().to_string();
-                if !areas.contains(&area) {
-                    areas.push(area);
-                }
-            }
-        }
+        let areas = stack.areas();
         for area in &areas {
-            // Paired with its place in the whole stack, because that is what
-            // names an unnamed layer: `copper_3` is the fourth entry of the
-            // board's stack, and numbering each group from zero would give one
-            // physical layer two names and a reader two layers.
+            // Which layers are there is `Stackup`'s own question, asked in one
+            // place so this document and the checker cannot answer it
+            // differently. Paired here with each layer's place in the whole
+            // stack, because that is what names an unnamed layer: `copper_3`
+            // is the fourth entry of the board's stack, and numbering each
+            // group from zero would give one physical layer two names and a
+            // reader two layers.
+            let present = stack.layers_in_area(area);
             let layers: Vec<(usize, &cypcb_world::components::StackupLayer)> = stack
                 .layers
                 .iter()
                 .enumerate()
-                .filter(|(_, entry)| match &entry.coverage {
-                    // A layer that says nothing runs the whole panel, so it is
-                    // in every area of it.
-                    None => true,
-                    Some(coverage) => (coverage.region() == area) == coverage.includes_region(),
-                })
+                .filter(|(_, entry)| present.iter().any(|layer| std::ptr::eq(*layer, *entry)))
                 .collect();
             let thickness = Nm(layers
                 .iter()

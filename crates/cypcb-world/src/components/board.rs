@@ -865,6 +865,50 @@ impl Stackup {
             .try_fold(Nm(0), |total, layer| Some(total + layer.slot_thickness()?))
     }
 
+    /// The layers pressed over one named area, in stack order.
+    ///
+    /// A rigid-flex build is not one stack: a layer states where it stops -
+    /// `stiffener 0.2mm covers connector_end`, `coverlay 0.025mm covers bend` -
+    /// and a layer that states nothing runs the whole panel and is in every
+    /// area of it. This is that filter, in one place: the handoff document
+    /// writes a stackup group per area from it, and the checker measures two
+    /// areas against each other with it, so the two cannot answer differently.
+    pub fn layers_in_area(&self, area: &str) -> Vec<&StackupLayer> {
+        self.layers
+            .iter()
+            .filter(|layer| match &layer.coverage {
+                None => true,
+                Some(coverage) => (coverage.region() == area) == coverage.includes_region(),
+            })
+            .collect()
+    }
+
+    /// How thick the board is over one named area.
+    ///
+    /// `None` when any layer that is there states no thickness, for the reason
+    /// [`Stackup::total_thickness`] answers `None`: a partial sum reads like a
+    /// measurement rather than like a gap in the design.
+    pub fn thickness_in_area(&self, area: &str) -> Option<Nm> {
+        self.layers_in_area(area)
+            .into_iter()
+            .try_fold(Nm(0), |total, layer| Some(total + layer.slot_thickness()?))
+    }
+
+    /// Every area a layer of this stack stops at, in the order the stack names
+    /// them.
+    pub fn areas(&self) -> Vec<String> {
+        let mut areas: Vec<String> = Vec::new();
+        for layer in &self.layers {
+            if let Some(coverage) = &layer.coverage {
+                let area = coverage.region().to_string();
+                if !areas.contains(&area) {
+                    areas.push(area);
+                }
+            }
+        }
+        areas
+    }
+
     /// The copper weight of the nth copper layer, in ounces.
     ///
     /// Derived from thickness rather than from how it was written: `copper
