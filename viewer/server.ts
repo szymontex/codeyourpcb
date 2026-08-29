@@ -145,19 +145,6 @@ function allowedOrigin(origin: string, host: string | undefined): boolean {
 }
 
 /**
- * The file a client asked for, if it is really inside the watched directory.
- *
- * This server speaks WebSocket on localhost with no authentication and no
- * origin check, so anything it will do, any page in the browser can ask it to
- * do. It used to read whatever path a message named and write whatever a
- * message named - `readFileSync(message.file)` and
- * `writeFileSync(message.file, message.content)` with nothing in between - so
- * a page could have read a developer's keys or written over their shell
- * profile. Every path a client names goes through here now: relative paths
- * are resolved against the watched directory and anything that climbs out of
- * it with `..` or an absolute path is refused.
- */
-/**
  * What went wrong, out of whatever was thrown.
  *
  * `catch (err: any)` reads `err.message` off anything at all; an `Error` is
@@ -167,6 +154,32 @@ function reason(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+/**
+ * The file a client asked for, if it is really inside the watched directory.
+ *
+ * This server speaks WebSocket on localhost with no authentication, and it
+ * used to read whatever path a message named and write whatever a message
+ * named - `readFileSync(message.file)` and `writeFileSync(message.file,
+ * message.content)` with nothing in between - so a page could have read a
+ * developer's keys or written over their shell profile.
+ *
+ * Two things stand between a request and the disk now, and this is the second
+ * of them. `allowedOrigin` decides whether a page may ask at all; this decides
+ * what it may name. Relative paths are resolved against the watched directory,
+ * anything that climbs out with `..` or an absolute path is refused, and the
+ * answer is about the file the system would open rather than about the text of
+ * the path - a symlink out of the directory is refused too.
+ *
+ * The sentence this comment used to open with was "no authentication and no
+ * origin check", which stopped being true when `allowedOrigin` landed above.
+ * It stayed wrong long enough to send a later reader looking for a guard that
+ * was already there, which is what a stale comment costs.
+ *
+ * The block also sat above `reason` rather than above the function it
+ * describes: something was inserted between the two and the comment stayed
+ * where it was. A test now reads the block directly above `insideWatchDir`,
+ * which is the only reason that was noticed.
+ */
 function insideWatchDir(requested: string): string | null {
   const root = realpathOr(resolve(WATCH_DIR));
   const full = resolve(resolve(WATCH_DIR), requested);
