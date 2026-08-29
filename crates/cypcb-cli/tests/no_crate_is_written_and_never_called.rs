@@ -79,9 +79,14 @@ fn the_crates_nobody_calls_are_the_ones_written_down_here() {
     // not a `use`. It builds and its tests pass, which is why it survived a
     // question that only looked at four other crates.
     //
-    // It is listed rather than deleted because deleting a crate is the owner's
-    // call, and listed rather than ignored because a category nobody counts is
-    // how it got here.
+    // The question this list left open - work that has not landed, or work
+    // nothing will reach again - is answered in the crate's own header as of
+    // 2026-08-29: it is the first, it is kept, and the one path that would
+    // give it a caller is named there. So it stays on this list on purpose,
+    // and the list is where a reader finds out that the decision exists.
+    //
+    // A second name appearing here is a different matter: it would be a crate
+    // nobody has decided about, which is what this test is for.
     let expected: BTreeSet<String> = ["cypcb-library".to_string()].into_iter().collect();
     assert_eq!(
         uncalled(),
@@ -89,6 +94,20 @@ fn the_crates_nobody_calls_are_the_ones_written_down_here() {
         "a crate that is neither called nor a program is either new work \
          nothing reaches yet or work nothing will ever reach again - and \
          either way this list has to say which"
+    );
+
+    // And the decision is in the crate rather than only in this comment: a
+    // reader who lands on the header has to find the answer there, because
+    // that is where somebody opening the crate looks first.
+    let header = std::fs::read_to_string(workspace().join("crates/cypcb-library/src/lib.rs"))
+        .expect("the crate this test names is in the repo");
+    assert!(
+        header.starts_with("//!"),
+        "the crate nobody calls says why it is kept, in its own header"
+    );
+    assert!(
+        header.contains("Nothing in this workspace calls this crate"),
+        "and says so in the words this list uses"
     );
 }
 
