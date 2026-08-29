@@ -388,6 +388,32 @@ be two readings of one line.
 KiCad's board file has a row per stackup layer and no area on it, so
 `cypcb to-kicad` names this among the things it cannot carry.
 
+#### How tightly it is folded
+
+A `flex` region takes one more word, and it is the figure a flex board is
+actually refused for:
+
+```
+flex bend {
+    bounds 22mm, 0mm to 38mm, 16mm
+    layer all
+    radius 2mm
+}
+```
+
+`radius` is a fact about the product rather than about the outline - the same
+ribbon is folded flat in one case and round a battery in another. The checker
+holds it against the ribbon's **own** thickness, which is the layers that are
+there: a stiffener bonded under the rigid end does not thicken the bend.
+
+The limit is the fabricator's, published as a multiple rather than a length,
+because the copper on the outside of a fold is stretched and a thicker ribbon
+stretches it further. JLCPCB states `>= 6x total thickness` for a single copper
+layer and `>= 10x` for more than one, so the 0.135mm ribbon above may be folded
+to 1.35mm and no tighter. A design that states no radius, a stack that states no
+thickness for the ribbon, or a house with no published figure each mean nothing
+is checked - a number invented here is one a designer gets turned away for.
+
 A flexible region is not a keepout - copper crosses it, that is what it is for
 - and it is not a pour. What it is, is an area the board is bent in during
 service, and the checker holds one rule about it: **nothing is drilled there**.
@@ -902,6 +928,12 @@ manufactures from ever carries it.
 ## Zone Definition
 
 Define keepout areas or copper pour zones:
+
+Four words open one of these blocks - `zone`, `keepout`, `flex` and `region` -
+and the properties inside are shared: `bounds`, `layer`, `net` for a pour,
+`stitch` for a pour that ties its two sides together, and `radius` for a `flex`
+region that says how tightly it is folded. The two rigid-flex words have their
+own section above: **A board that bends**.
 
 ### Keepout Zone
 

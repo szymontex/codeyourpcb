@@ -181,6 +181,11 @@ pub fn run_drc(world: &mut BoardWorld, rules: &DesignRules) -> DrcResult {
         // strip: the handoff writes a group for each, so a fabricator reading
         // both is told the board is two thicknesses in one place.
         Box::new(rules::AreaOverlapRule),
+        // And a fold no tighter than the ribbon takes: the copper on the
+        // outside of a tight bend is stretched past what the laminate holds,
+        // and every house publishes the limit as a multiple of the ribbon's
+        // own thickness.
+        Box::new(rules::BendRadiusRule),
     ];
 
     // Run each checker

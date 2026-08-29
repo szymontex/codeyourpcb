@@ -86,6 +86,19 @@ pub struct Zone {
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct StitchPitch(pub cypcb_core::Nm);
 
+/// How tightly the board is folded where it bends.
+///
+/// A component beside the zone rather than a field of [`Zone`], for the reason
+/// [`StitchPitch`] is one: a region that says nothing is the ordinary case,
+/// and this is what a folded one has that a flat one does not.
+///
+/// A fact about the product rather than about the outline. The same ribbon is
+/// folded flat in one case and round a battery in another, and a fabricator
+/// refuses the first: a flex board has a minimum bend radius, stated as a
+/// multiple of its own thickness.
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BendRadius(pub cypcb_core::Nm);
+
 /// A via this tool placed to stitch a pour, rather than one a person put there.
 ///
 /// The writer skips these. A stitched pour states a rule and the vias are what

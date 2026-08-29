@@ -2503,6 +2503,27 @@
         {
           "type": "SYMBOL",
           "name": "zone_stitch"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "zone_radius"
+        }
+      ]
+    },
+    "zone_radius": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "STRING",
+          "value": "radius"
+        },
+        {
+          "type": "FIELD",
+          "name": "radius",
+          "content": {
+            "type": "SYMBOL",
+            "name": "dimension"
+          }
         }
       ]
     },

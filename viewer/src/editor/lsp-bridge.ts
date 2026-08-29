@@ -346,6 +346,8 @@ export const BLOCK_PROPERTIES: Record<string, { label: string; snippet: string; 
     { label: 'bounds', snippet: 'bounds ${1:0}mm, ${2:0}mm to ${3:50}mm, ${4:30}mm', detail: 'Zone boundary' },
     { label: 'layer', snippet: 'layer ${1|top,bottom,all|}', detail: 'Copper layer' },
     { label: 'net', snippet: 'net ${1:GND}', detail: 'Net for copper pour' },
+    { label: 'stitch', snippet: 'stitch ${1:5}mm', detail: 'Tie the two sides of a pour together with vias at this pitch' },
+    { label: 'radius', snippet: 'radius ${1:3}mm', detail: 'How tightly the board is folded here' },
   ],
 };
 
@@ -524,6 +526,7 @@ const KEYWORD_DOCS: Record<string, string> = {
   net: 'Electrical net.\n\nSyntax:\n```\nnet <name> [width 0.25mm  current 2A] {\n  R1.1\n  C1.1\n}\n```',
   trace: 'Copper trace.\n\nSyntax:\n```\ntrace <net> {\n  layer Top\n  width 0.25mm\n  path 10mm,20mm -> 30mm,20mm\n}\n```',
   footprint: 'Custom footprint.\n\nSyntax:\n```\nfootprint <name> {\n  pad 1 rect at 0mm,0mm size 1mm x 1mm\n}\n```',
+  radius: 'How tightly the board is folded where it bends.\n\nSyntax: `flex bend { bounds 22mm, 0mm to 38mm, 16mm layer all radius 3mm }`. A fact about the product rather than the outline - the same ribbon is folded flat in one case and round a battery in another. The checker holds it against the thickness of the ribbon itself: JLCPCB bends a single copper layer no tighter than 6x that and more than one no tighter than 10x.',
   zone: 'Copper zone (pour).\n\nSyntax:\n```\nzone <name> {\n  bounds 0mm,0mm to 50mm,30mm\n  layer bottom\n  net GND\n}\n```',
   keepout: 'Keepout area.\n\nSyntax:\n```\nkeepout <name> {\n  bounds 0mm,0mm to 10mm,10mm\n}\n```',
   resistor: 'Resistor. Value in ohms: `"330"`, `"10k"`, `"4.7M"`',

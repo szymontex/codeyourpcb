@@ -184,6 +184,21 @@ pub struct DesignConstraints {
     /// published. The material is the design's own word - `stiffener 0.2mm
     /// material "FR4"` - matched without case or spaces.
     pub stiffener_thickness_um: Vec<(String, Vec<u32>)>,
+    /// The smallest bend radius this house folds a one-copper-layer flex to,
+    /// as a multiple of the ribbon's own thickness.
+    ///
+    /// JLCPCB publishes two figures on its flex capabilities page
+    /// (<https://jlcpcb.com/capabilities/flex-pcb-capabilities>): "Single
+    /// layer: >= 6x total thickness" and "Multi-layer: >= 10x total
+    /// thickness". A multiple rather than a length, because the figure is
+    /// about the copper's strain over the fold and a thicker ribbon bends
+    /// worse.
+    ///
+    /// `None` means no published figure has been read for the house, and the
+    /// checker holds a design to none.
+    pub bend_radius_multiple_single: Option<u32>,
+    /// The same figure for a ribbon with more than one copper layer.
+    pub bend_radius_multiple_multilayer: Option<u32>,
 }
 
 impl DesignConstraints {
@@ -194,7 +209,7 @@ impl DesignConstraints {
     /// count is a regression. It said 35 while the struct had 34, because
     /// nothing checked it - `field_count_matches_the_struct` does now, and a
     /// field added or removed without touching this line fails to compile.
-    pub const FIELD_COUNT: usize = 42;
+    pub const FIELD_COUNT: usize = 44;
 }
 
 impl Default for DesignConstraints {
@@ -263,6 +278,8 @@ impl Default for DesignConstraints {
             // has no stiffener. The flex lists are stated by the presets that
             // read them.
             stiffener_thickness_um: Vec::new(),
+            bend_radius_multiple_single: None,
+            bend_radius_multiple_multilayer: None,
         }
     }
 }
@@ -346,9 +363,11 @@ mod tests {
             max_current_per_width_x100: _,
             copper_weight_oz_x10: _,
             stiffener_thickness_um: _,
+            bend_radius_multiple_single: _,
+            bend_radius_multiple_multilayer: _,
         } = DesignConstraints::default();
 
-        let named = 42;
+        let named = 44;
         assert_eq!(
             DesignConstraints::FIELD_COUNT,
             named,

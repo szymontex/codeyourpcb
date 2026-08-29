@@ -110,6 +110,8 @@ pub enum ViolationKind {
     AreaOffBoard,
     /// Two areas the stack states a build for cover the same strip of board.
     AreaOverlap,
+    /// A flexible region is folded tighter than its own thickness takes.
+    BendRadius,
 }
 
 /// The two features a clearance message is about.
@@ -226,6 +228,7 @@ impl std::fmt::Display for ViolationKind {
             ViolationKind::EmptyArea => write!(f, "empty-area"),
             ViolationKind::AreaOffBoard => write!(f, "area-off-board"),
             ViolationKind::AreaOverlap => write!(f, "area-overlap"),
+            ViolationKind::BendRadius => write!(f, "bend-radius"),
         }
     }
 }
@@ -872,6 +875,31 @@ impl DrcViolation {
     ///
     /// No `actual`/`required` pair: nothing was measured against a limit. A
     /// hole is either in the bend or it is not.
+    /// A fold tighter than the ribbon's own thickness takes.
+    ///
+    /// `actual` is the radius the design states and `required` the smallest
+    /// the house publishes for that ribbon, so a reader gets both numbers
+    /// without reading the sentence.
+    pub fn bend_radius(
+        entity: Entity,
+        radius: cypcb_core::Nm,
+        least: cypcb_core::Nm,
+        message: String,
+        location: Point,
+    ) -> Self {
+        DrcViolation {
+            kind: ViolationKind::BendRadius,
+            actual: Some(radius),
+            required: Some(least),
+            area: None,
+            location,
+            entity,
+            other_entity: None,
+            source_span: None,
+            message,
+        }
+    }
+
     /// Two stack-bearing areas over the same strip of board.
     ///
     /// The location is the corner of the overlap nearest the origin - the

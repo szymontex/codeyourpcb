@@ -1102,6 +1102,13 @@ pub struct ZoneDef {
     /// planes until a field of vias joins them, and where those go is a
     /// decision a design makes rather than a tool.
     pub stitch: Option<Dimension>,
+    /// How tightly the board is folded here: `radius 3mm`.
+    ///
+    /// A fact about the product rather than about the outline - the same
+    /// ribbon is folded flat in one case and round a battery in another - so
+    /// it is stated where the bend is named. `None` is a design that has not
+    /// said, and nothing invents one for it.
+    pub radius: Option<Dimension>,
     /// Source span.
     pub span: Span,
 }

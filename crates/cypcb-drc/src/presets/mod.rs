@@ -100,6 +100,8 @@ use cypcb_rules::DesignConstraints;
 ///     buried_vias_allowed: false,
 ///     castellated_holes_allowed: false,
 ///     stiffener_thickness_um: Vec::new(),
+///     bend_radius_multiple_single: Some(6),
+///     bend_radius_multiple_multilayer: Some(10),
 ///     max_diff_pair_skew: Nm::from_mm(0.5),
 ///     max_drill_aspect_ratio: 800,
 ///     board_thickness: Nm::from_mm(1.6),
@@ -200,6 +202,12 @@ pub struct DesignRules {
     /// has been read for the house, and the checker holds a design to none:
     /// a figure invented here is one a designer gets turned away for.
     pub stiffener_thickness_um: Vec<(String, Vec<u32>)>,
+    /// The smallest bend radius this house folds a one-copper-layer flex to,
+    /// as a multiple of the ribbon's own thickness. `None` when no published
+    /// figure has been read for the house.
+    pub bend_radius_multiple_single: Option<u32>,
+    /// The same figure for a ribbon with more than one copper layer.
+    pub bend_radius_multiple_multilayer: Option<u32>,
     /// How far apart the two halves of a differential pair may end up.
     ///
     /// The fab's number, from the same table the router is priced with. A pair
@@ -316,6 +324,8 @@ impl DesignRules {
             buried_vias_allowed: c.buried_vias_allowed,
             castellated_holes_allowed: c.castellated_holes_allowed,
             stiffener_thickness_um: c.stiffener_thickness_um.clone(),
+            bend_radius_multiple_single: c.bend_radius_multiple_single,
+            bend_radius_multiple_multilayer: c.bend_radius_multiple_multilayer,
             max_diff_pair_skew: c.length_match_tolerance,
             max_drill_aspect_ratio: c.max_drill_aspect_ratio,
             board_thickness: c.board_thickness,

@@ -729,6 +729,20 @@ module.exports = grammar({
       $.zone_layer,
       $.zone_net,
       $.zone_stitch,
+      $.zone_radius,
+    ),
+
+    // radius 3mm
+    //
+    // How tightly the board is folded here. A fact about the product rather
+    // than about the outline - the same ribbon is folded flat in one case and
+    // round a battery in another - so it is said where the bend is named.
+    //
+    // Only a `flex` region has one. Nothing is folded along a pour or a
+    // keepout, and a named area is a rectangle with a name on it.
+    zone_radius: $ => seq(
+      'radius',
+      field('radius', $.dimension),
     ),
 
     // stitch 5mm

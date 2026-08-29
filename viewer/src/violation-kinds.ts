@@ -48,6 +48,7 @@ export const VIOLATION_KIND_META: Record<string, ViolationKindMeta> = {
   'empty-area':          { icon: '▭', label: 'Declared area with no area' },
   'area-off-board':      { icon: '🚧', label: 'Declared area off the board' },
   'area-overlap':        { icon: '🔀', label: 'Two stacks over one strip of board' },
+  'bend-radius':         { icon: '🌀', label: 'Fold tighter than the ribbon takes' },
 };
 
 /** The icon and name for a kind, falling back to the slug the engine sent. */

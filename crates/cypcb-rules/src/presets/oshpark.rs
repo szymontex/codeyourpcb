@@ -98,6 +98,10 @@ pub fn two_layer() -> DesignConstraints {
         // No published flex stiffener list has been read for this house, so
         // the checker holds a design to none.
         stiffener_thickness_um: Vec::new(),
+
+        // No published flex figures have been read for this house.
+        bend_radius_multiple_single: None,
+        bend_radius_multiple_multilayer: None,
     }
 }
 
@@ -207,6 +211,10 @@ pub fn four_layer() -> DesignConstraints {
         // No published flex stiffener list has been read for this house, so
         // the checker holds a design to none.
         stiffener_thickness_um: Vec::new(),
+
+        // No published flex figures have been read for this house.
+        bend_radius_multiple_single: None,
+        bend_radius_multiple_multilayer: None,
     }
 }
 

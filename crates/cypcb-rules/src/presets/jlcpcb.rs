@@ -103,6 +103,11 @@ pub fn standard_2layer() -> DesignConstraints {
         min_courtyard_clearance: None,
 
         stiffener_thickness_um: jlcpcb_stiffeners(),
+
+        // Published on the flex capabilities page as "Single layer: >= 6x
+        // total thickness" and "Multi-layer: >= 10x total thickness".
+        bend_radius_multiple_single: Some(6),
+        bend_radius_multiple_multilayer: Some(10),
     }
 }
 
@@ -200,6 +205,11 @@ pub fn standard_4layer() -> DesignConstraints {
         min_courtyard_clearance: None,
 
         stiffener_thickness_um: jlcpcb_stiffeners(),
+
+        // Published on the flex capabilities page as "Single layer: >= 6x
+        // total thickness" and "Multi-layer: >= 10x total thickness".
+        bend_radius_multiple_single: Some(6),
+        bend_radius_multiple_multilayer: Some(10),
     }
 }
 
@@ -307,6 +317,11 @@ pub fn advanced_2layer() -> DesignConstraints {
         min_courtyard_clearance: None,
 
         stiffener_thickness_um: jlcpcb_stiffeners(),
+
+        // Published on the flex capabilities page as "Single layer: >= 6x
+        // total thickness" and "Multi-layer: >= 10x total thickness".
+        bend_radius_multiple_single: Some(6),
+        bend_radius_multiple_multilayer: Some(10),
     }
 }
 
@@ -402,6 +417,11 @@ pub fn advanced_4layer() -> DesignConstraints {
         min_courtyard_clearance: None,
 
         stiffener_thickness_um: jlcpcb_stiffeners(),
+
+        // Published on the flex capabilities page as "Single layer: >= 6x
+        // total thickness" and "Multi-layer: >= 10x total thickness".
+        bend_radius_multiple_single: Some(6),
+        bend_radius_multiple_multilayer: Some(10),
     }
 }
 

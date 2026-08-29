@@ -2788,10 +2788,30 @@
           "named": true
         },
         {
+          "type": "zone_radius",
+          "named": true
+        },
+        {
           "type": "zone_stitch",
           "named": true
         }
       ]
+    }
+  },
+  {
+    "type": "zone_radius",
+    "named": true,
+    "fields": {
+      "radius": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "dimension",
+            "named": true
+          }
+        ]
+      }
     }
   },
   {

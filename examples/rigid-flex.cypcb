@@ -49,6 +49,12 @@ board wearable {
 flex bend {
     bounds 22mm, 0mm to 38mm, 16mm
     layer all
+
+    // How tightly it is folded in the case. The ribbon is 0.135mm of
+    // laminate and foil - the stiffener is bonded elsewhere and the checker
+    // knows it - and JLCPCB bends two copper layers no tighter than ten times
+    // that, so anything from 1.35mm up is a fold this house makes.
+    radius 2mm
 }
 
 // The end J1 is soldered to. A `region` means nothing on its own: nothing is

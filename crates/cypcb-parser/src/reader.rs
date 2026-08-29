@@ -1642,6 +1642,7 @@ impl<'a> Reader<'a> {
         let mut layer = None;
         let mut net = None;
         let mut stitch = None;
+        let mut radius = None;
 
         while !self.done() && !self.eat(&TokenKind::RBrace) {
             match self.peek_ident() {
@@ -1684,7 +1685,14 @@ impl<'a> Reader<'a> {
                         None => self.unexpected("a pitch like `5mm`"),
                     }
                 }
-                _ => self.unknown_property("zone", &["bounds", "layer", "net", "stitch"]),
+                Some("radius") => {
+                    self.bump();
+                    match self.dimension() {
+                        Some(bend) => radius = Some(bend),
+                        None => self.unexpected("a radius like `3mm`"),
+                    }
+                }
+                _ => self.unknown_property("zone", &["bounds", "layer", "net", "stitch", "radius"]),
             }
         }
 
@@ -1700,6 +1708,7 @@ impl<'a> Reader<'a> {
             layer,
             net,
             stitch,
+            radius,
             span: Span::new(start, self.behind()),
         })
     }

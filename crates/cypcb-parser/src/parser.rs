@@ -1360,6 +1360,7 @@ impl CypcbParser {
         let mut layer: Option<String> = None;
         let mut net: Option<Identifier> = None;
         let mut stitch: Option<Dimension> = None;
+        let mut radius: Option<Dimension> = None;
 
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
@@ -1396,6 +1397,10 @@ impl CypcbParser {
                         stitch = get_child_by_field(&prop, "pitch")
                             .and_then(|n| self.convert_dimension(source, &n, errors));
                     }
+                    "zone_radius" => {
+                        radius = get_child_by_field(&prop, "radius")
+                            .and_then(|n| self.convert_dimension(source, &n, errors));
+                    }
                     "zone_net" => {
                         if let Some(net_node) = get_child_by_field(&prop, "net") {
                             // Through `net_name_of`, which takes the quotes off
@@ -1420,6 +1425,7 @@ impl CypcbParser {
             layer,
             net,
             stitch,
+            radius,
             span: span_of(node),
         })
     }

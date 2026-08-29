@@ -1630,6 +1630,16 @@ fn sync_zone(zone_def: &ZoneDef, world: &mut BoardWorld, _result: &mut SyncResul
         let pitch = crate::components::StitchPitch(pitch.to_nm());
         world.ecs_mut().entity_mut(entity).insert(pitch);
     }
+
+    // The radius rides the same way, and for the same reason: a region that
+    // says nothing is the ordinary case. It is kept whatever the region's kind
+    // is - a `radius` on a pour is a line the checker can then say something
+    // about, and dropping it here would leave the reader with a file whose
+    // words vanish on the next save.
+    if let Some(radius) = &zone_def.radius {
+        let radius = crate::components::BendRadius(radius.to_nm());
+        world.ecs_mut().entity_mut(entity).insert(radius);
+    }
 }
 
 /// Place the vias every stitched pour asked for.
