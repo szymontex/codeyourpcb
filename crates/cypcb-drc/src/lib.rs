@@ -194,6 +194,10 @@ pub fn run_drc(world: &mut BoardWorld, rules: &DesignRules) -> DrcResult {
         // bend cracks the way a trace along one does, at the width of the
         // whole plane, which is why IPC-2223 asks for a hatched polygon there.
         Box::new(rules::SolidPourInBendRule),
+        // And a mesh the house can actually etch: a line of a hatch is copper
+        // like any other and the space between two lines is clearance, so both
+        // are held to the table every other feature is held to.
+        Box::new(rules::HatchEtchableRule),
     ];
 
     // Run each checker

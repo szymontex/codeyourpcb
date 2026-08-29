@@ -116,6 +116,8 @@ pub enum ViolationKind {
     FlexTraceAngle,
     /// A copper pour crosses a fold, and this tool fills a pour solid.
     SolidPourInBend,
+    /// A hatched pour states a mesh the fabricator cannot etch.
+    HatchTooFine,
 }
 
 /// The two features a clearance message is about.
@@ -235,6 +237,7 @@ impl std::fmt::Display for ViolationKind {
             ViolationKind::BendRadius => write!(f, "bend-radius"),
             ViolationKind::FlexTraceAngle => write!(f, "flex-trace-angle"),
             ViolationKind::SolidPourInBend => write!(f, "solid-pour-in-bend"),
+            ViolationKind::HatchTooFine => write!(f, "hatch-too-fine"),
         }
     }
 }
@@ -881,6 +884,31 @@ impl DrcViolation {
     ///
     /// No `actual`/`required` pair: nothing was measured against a limit. A
     /// hole is either in the bend or it is not.
+    /// A mesh the fabricator cannot etch.
+    ///
+    /// `actual` is the figure the design states - a line width, a gap, or the
+    /// pitch - and `required` the one the house holds, so a reader gets both
+    /// numbers without reading the sentence.
+    pub fn hatch_too_fine(
+        entity: Entity,
+        actual: cypcb_core::Nm,
+        required: cypcb_core::Nm,
+        message: String,
+        location: Point,
+    ) -> Self {
+        DrcViolation {
+            kind: ViolationKind::HatchTooFine,
+            actual: Some(actual),
+            required: Some(required),
+            area: None,
+            location,
+            entity,
+            other_entity: None,
+            source_span: None,
+            message,
+        }
+    }
+
     /// A plane poured solid across a fold.
     ///
     /// Both entities are named: the pour is what the designer changes and the
