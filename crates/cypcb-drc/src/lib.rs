@@ -186,6 +186,10 @@ pub fn run_drc(world: &mut BoardWorld, rules: &DesignRules) -> DrcResult {
         // and every house publishes the limit as a multiple of the ribbon's
         // own thickness.
         Box::new(rules::BendRadiusRule),
+        // And copper that crosses a fold rather than following it: IPC-2223
+        // routes a bend area perpendicular to the bend, so every conductor
+        // takes the same strain over it.
+        Box::new(rules::FlexTraceAngleRule),
     ];
 
     // Run each checker
