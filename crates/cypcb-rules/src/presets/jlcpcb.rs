@@ -14,6 +14,27 @@ use cypcb_core::Nm;
 use crate::constraints::DesignConstraints;
 use crate::stackup::{LayerStackEntry, Stackup};
 
+/// The stiffener sheets this house bonds, per material, in micrometres.
+///
+/// Published on <https://jlcpcb.com/capabilities/flex-pcb-capabilities> as
+/// three lists of thickness options rather than as a range: PI "0.1 mm, 0.15
+/// mm, 0.20 mm, 0.225 mm, 0.25 mm", FR4 "0.1 mm, 0.2 mm, 0.4mm, 0.6mm, 0.8mm,
+/// 1.0mm, 1.2mm, 1.6mm", stainless steel "0.1 mm, 0.2 mm, 0.3 mm". A house
+/// bonds the sheets it stocks, so this is a set and not a minimum.
+///
+/// One table for every process here, because the page states one: the lists
+/// are the fabricator's stock rather than a property of the layer count.
+fn jlcpcb_stiffeners() -> Vec<(String, Vec<u32>)> {
+    vec![
+        ("pi".to_string(), vec![100, 150, 200, 225, 250]),
+        (
+            "fr4".to_string(),
+            vec![100, 200, 400, 600, 800, 1000, 1200, 1600],
+        ),
+        ("stainlesssteel".to_string(), vec![100, 200, 300]),
+    ]
+}
+
 /// JLCPCB standard 2-layer process.
 ///
 /// Source: <https://jlcpcb.com/capabilities/pcb-capabilities>
@@ -80,6 +101,8 @@ pub fn standard_2layer() -> DesignConstraints {
         min_via_diameter: None,
         min_silk_clearance: None,
         min_courtyard_clearance: None,
+
+        stiffener_thickness_um: jlcpcb_stiffeners(),
     }
 }
 
@@ -175,6 +198,8 @@ pub fn standard_4layer() -> DesignConstraints {
         min_via_diameter: None,
         min_silk_clearance: None,
         min_courtyard_clearance: None,
+
+        stiffener_thickness_um: jlcpcb_stiffeners(),
     }
 }
 
@@ -280,6 +305,8 @@ pub fn advanced_2layer() -> DesignConstraints {
         min_via_diameter: None,
         min_silk_clearance: None,
         min_courtyard_clearance: None,
+
+        stiffener_thickness_um: jlcpcb_stiffeners(),
     }
 }
 
@@ -373,6 +400,8 @@ pub fn advanced_4layer() -> DesignConstraints {
         min_via_diameter: None,
         min_silk_clearance: None,
         min_courtyard_clearance: None,
+
+        stiffener_thickness_um: jlcpcb_stiffeners(),
     }
 }
 

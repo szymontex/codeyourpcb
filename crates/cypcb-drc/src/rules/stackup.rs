@@ -90,6 +90,56 @@ impl DrcRule for StackupRule {
             ));
         }
 
+        // A stiffener a house does not bond.
+        //
+        // A stiffener is a sheet of FR4, polyimide or steel laminated under the
+        // rigid part of a flex board, and a fabricator bonds the sheets it
+        // stocks rather than any figure a design asks for. JLCPCB publishes
+        // three lists of thickness options; a table that has read none says
+        // nothing here, because a design held to a figure nobody published is
+        // worse than a design held to nothing.
+        for layer in stackup
+            .layers
+            .iter()
+            .filter(|layer| matches!(layer.kind, StackupLayerKind::Stiffener))
+        {
+            let (Some(thickness), Some(material)) = (layer.thickness, layer.material.as_ref())
+            else {
+                continue;
+            };
+            let asked_for = normalised(material);
+            let Some((_, stocked)) = rules
+                .stiffener_thickness_um
+                .iter()
+                .find(|(named, _)| *named == asked_for)
+            else {
+                // A material this house publishes no list for. The design may
+                // well be right, and this rule has nothing to measure it with.
+                continue;
+            };
+            if stocked
+                .iter()
+                .any(|um| Nm(i64::from(*um) * 1_000) == thickness)
+            {
+                continue;
+            }
+            violations.push(DrcViolation::stackup(
+                board,
+                format!(
+                    "the stackup asks for a {:.3}mm {material} stiffener and this house bonds \
+                     {}: a stiffener is a sheet the fabricator stocks rather than a figure a \
+                     design picks",
+                    thickness.to_mm(),
+                    stocked
+                        .iter()
+                        .map(|um| format!("{:.3}mm", f64::from(*um) / 1_000.0))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ),
+                at,
+            ));
+        }
+
         for first in stackup.copper_touching_copper() {
             violations.push(DrcViolation::stackup(
                 board,
@@ -105,6 +155,20 @@ impl DrcRule for StackupRule {
 
         violations
     }
+}
+
+/// A material name as the fab table spells it: lower case, nothing but
+/// letters and digits.
+///
+/// The design writes what a datasheet writes - `"FR4"`, `"Stainless Steel"`,
+/// `"PI"` - and a table that only matched one spelling would hold half the
+/// designs that state a stiffener to nothing at all.
+fn normalised(material: &str) -> String {
+    material
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .map(|c| c.to_ascii_lowercase())
+        .collect()
 }
 
 /// The stackup's total thickness, for the message, when every layer states one.

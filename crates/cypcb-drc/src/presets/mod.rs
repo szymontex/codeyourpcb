@@ -99,6 +99,7 @@ use cypcb_rules::DesignConstraints;
 ///     blind_vias_allowed: false,
 ///     buried_vias_allowed: false,
 ///     castellated_holes_allowed: false,
+///     stiffener_thickness_um: Vec::new(),
 ///     max_diff_pair_skew: Nm::from_mm(0.5),
 ///     max_drill_aspect_ratio: 800,
 ///     board_thickness: Nm::from_mm(1.6),
@@ -191,6 +192,14 @@ pub struct DesignRules {
     /// noticed. Both halves exist now: `stackup { pads castellated }` states
     /// the want, this states whether the fab does it.
     pub castellated_holes_allowed: bool,
+    /// The stiffener sheets this house bonds, per material, in micrometres.
+    ///
+    /// A stiffener is laminated under the rigid part of a flex board, and a
+    /// fabricator bonds the sheets it stocks - JLCPCB publishes three lists of
+    /// thickness options rather than a range. Empty means no published list
+    /// has been read for the house, and the checker holds a design to none:
+    /// a figure invented here is one a designer gets turned away for.
+    pub stiffener_thickness_um: Vec<(String, Vec<u32>)>,
     /// How far apart the two halves of a differential pair may end up.
     ///
     /// The fab's number, from the same table the router is priced with. A pair
@@ -306,6 +315,7 @@ impl DesignRules {
             blind_vias_allowed: c.blind_vias_allowed,
             buried_vias_allowed: c.buried_vias_allowed,
             castellated_holes_allowed: c.castellated_holes_allowed,
+            stiffener_thickness_um: c.stiffener_thickness_um.clone(),
             max_diff_pair_skew: c.length_match_tolerance,
             max_drill_aspect_ratio: c.max_drill_aspect_ratio,
             board_thickness: c.board_thickness,

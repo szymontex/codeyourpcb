@@ -96,6 +96,10 @@ pub fn class1() -> DesignConstraints {
         min_via_diameter: None,
         min_silk_clearance: None,
         min_courtyard_clearance: None,
+
+        // No published flex stiffener list has been read for this house, so
+        // the checker holds a design to none.
+        stiffener_thickness_um: Vec::new(),
     }
 }
 
@@ -170,6 +174,10 @@ pub fn class2() -> DesignConstraints {
         min_via_diameter: None,
         min_silk_clearance: None,
         min_courtyard_clearance: None,
+
+        // No published flex stiffener list has been read for this house, so
+        // the checker holds a design to none.
+        stiffener_thickness_um: Vec::new(),
     }
 }
 
@@ -244,6 +252,10 @@ pub fn class3() -> DesignConstraints {
         min_via_diameter: None,
         min_silk_clearance: None,
         min_courtyard_clearance: None,
+
+        // No published flex stiffener list has been read for this house, so
+        // the checker holds a design to none.
+        stiffener_thickness_um: Vec::new(),
     }
 }
 

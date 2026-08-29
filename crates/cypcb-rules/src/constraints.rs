@@ -169,6 +169,21 @@ pub struct DesignConstraints {
     pub max_copper_layers: u8,
     /// Whether castellated holes are allowed.
     pub castellated_holes_allowed: bool,
+    /// The stiffener thicknesses this house presses, per material, in
+    /// micrometres.
+    ///
+    /// A stiffener is bonded under the rigid part of a flex board, and a house
+    /// bonds the sheets it stocks rather than any figure a design asks for.
+    /// JLCPCB publishes three lists on its flex capabilities page
+    /// (<https://jlcpcb.com/capabilities/flex-pcb-capabilities>): PI at 0.1,
+    /// 0.15, 0.20, 0.225 and 0.25mm; FR4 at 0.1, 0.2, 0.4, 0.6, 0.8, 1.0, 1.2
+    /// and 1.6mm; stainless steel at 0.1, 0.2 and 0.3mm.
+    ///
+    /// Empty means no published list has been read for this house, and the
+    /// checker says nothing rather than holding a design to a figure nobody
+    /// published. The material is the design's own word - `stiffener 0.2mm
+    /// material "FR4"` - matched without case or spaces.
+    pub stiffener_thickness_um: Vec<(String, Vec<u32>)>,
 }
 
 impl DesignConstraints {
@@ -179,7 +194,7 @@ impl DesignConstraints {
     /// count is a regression. It said 35 while the struct had 34, because
     /// nothing checked it - `field_count_matches_the_struct` does now, and a
     /// field added or removed without touching this line fails to compile.
-    pub const FIELD_COUNT: usize = 41;
+    pub const FIELD_COUNT: usize = 42;
 }
 
 impl Default for DesignConstraints {
@@ -243,6 +258,11 @@ impl Default for DesignConstraints {
             min_via_diameter: None,
             min_silk_clearance: None,
             min_courtyard_clearance: None,
+
+            // The default table is JLCPCB's rigid process, and a rigid board
+            // has no stiffener. The flex lists are stated by the presets that
+            // read them.
+            stiffener_thickness_um: Vec::new(),
         }
     }
 }
@@ -325,9 +345,10 @@ mod tests {
             default_impedance_ohms_x100: _,
             max_current_per_width_x100: _,
             copper_weight_oz_x10: _,
+            stiffener_thickness_um: _,
         } = DesignConstraints::default();
 
-        let named = 41;
+        let named = 42;
         assert_eq!(
             DesignConstraints::FIELD_COUNT,
             named,
