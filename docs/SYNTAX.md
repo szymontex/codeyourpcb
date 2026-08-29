@@ -365,13 +365,17 @@ rigid-flex order - so an end needs a name too, and it is not a pour, not a
 keepout and does not bend. That is what `region` is:
 
 ```
+board wearable {
+    size 60mm x 16mm
+    layers 2
+    stackup {
+        stiffener 0.2mm material "FR4" covers connector_end
+    }
+}
+
 region connector_end {
     bounds 0mm, 0mm to 22mm, 16mm
     layer all
-}
-
-stackup {
-    stiffener 0.2mm material "FR4" covers connector_end
 }
 ```
 
