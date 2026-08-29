@@ -958,10 +958,15 @@ impl PadShape {
 ///
 /// # Example DSL
 ///
+/// A pad is written inside the footprint it belongs to, which is what makes
+/// this a file the reader accepts rather than three lines that look like one.
+///
 /// ```cypcb
-/// pad 1 rect at -2.7mm, -1.905mm size 1.5mm x 0.6mm
-/// pad 2 circle at 0mm, 0mm size 1.8mm x 1.8mm drill 1.0mm
-/// pad 3 oblong at 0mm, 3mm size 3.2mm x 1.8mm drill 2.4mm x 1.0mm
+/// footprint SO8 {
+///     pad 1 rect at -2.7mm, -1.905mm size 1.5mm x 0.6mm
+///     pad 2 circle at 0mm, 0mm size 1.8mm x 1.8mm drill 1.0mm
+///     pad 3 oblong at 0mm, 3mm size 3.2mm x 1.8mm drill 2.4mm x 1.0mm
+/// }
 /// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PadDef {
