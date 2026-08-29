@@ -114,6 +114,8 @@ pub enum ViolationKind {
     BendRadius,
     /// Copper in a bend runs along the fold rather than across it.
     FlexTraceAngle,
+    /// A copper pour crosses a fold, and this tool fills a pour solid.
+    SolidPourInBend,
 }
 
 /// The two features a clearance message is about.
@@ -232,6 +234,7 @@ impl std::fmt::Display for ViolationKind {
             ViolationKind::AreaOverlap => write!(f, "area-overlap"),
             ViolationKind::BendRadius => write!(f, "bend-radius"),
             ViolationKind::FlexTraceAngle => write!(f, "flex-trace-angle"),
+            ViolationKind::SolidPourInBend => write!(f, "solid-pour-in-bend"),
         }
     }
 }
@@ -878,6 +881,30 @@ impl DrcViolation {
     ///
     /// No `actual`/`required` pair: nothing was measured against a limit. A
     /// hole is either in the bend or it is not.
+    /// A plane poured solid across a fold.
+    ///
+    /// Both entities are named: the pour is what the designer changes and the
+    /// region is what makes it a fault, the same way a clearance violation
+    /// names the pair of features it is about.
+    pub fn solid_pour_in_bend(
+        entity: Entity,
+        fold: Entity,
+        message: String,
+        location: Point,
+    ) -> Self {
+        DrcViolation {
+            kind: ViolationKind::SolidPourInBend,
+            actual: None,
+            required: None,
+            area: None,
+            location,
+            entity,
+            other_entity: Some(fold),
+            source_span: None,
+            message,
+        }
+    }
+
     /// Copper following a fold instead of crossing it.
     pub fn flex_trace_angle(entity: Entity, message: String, location: Point) -> Self {
         DrcViolation {

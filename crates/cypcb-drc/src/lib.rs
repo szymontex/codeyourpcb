@@ -190,6 +190,10 @@ pub fn run_drc(world: &mut BoardWorld, rules: &DesignRules) -> DrcResult {
         // routes a bend area perpendicular to the bend, so every conductor
         // takes the same strain over it.
         Box::new(rules::FlexTraceAngleRule),
+        // And a plane poured solid across a fold: a sheet of copper over a
+        // bend cracks the way a trace along one does, at the width of the
+        // whole plane, which is why IPC-2223 asks for a hatched polygon there.
+        Box::new(rules::SolidPourInBendRule),
     ];
 
     // Run each checker
