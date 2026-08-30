@@ -43,19 +43,26 @@
 # own rebuild rather than against another machine's bytes, which is the
 # comparison `rust-toolchain.toml` and an unpinned binaryen make meaningless.
 #
-# The question is asked of the committed state on purpose, so a run before the
-# commit answers about the tree as it stands - which means the commit that
-# moves an input turns this red on the *next* run rather than its own. The
-# nightly gate is what catches that, and it is how this was found.
+# The question is asked of the committed state on purpose, so the commit that
+# moves an input would be graded by the *next* run: `315b227` shipped a module
+# the gate then called stale, and four runs said green before the nightly said
+# otherwise. Asking the working tree instead answers the wrong question - a
+# fire is mid-edit whenever it runs the gate, and a red for every uncommitted
+# change to a crate the module links would only mean running the gate twice for
+# every such change. So the working tree gets a **notice** rather than a
+# verdict: nothing committed has moved, but rebuilding what is in the tree
+# changed the module, so `viewer/pkg` belongs in the same commit as the edit.
+# That is the sentence that was missing when `315b227` was committed.
 #
 # Prints nothing and exits 0 when the committed module is current; says which
 # input moved and exits 1 when it is not.
 #
 # `--print-inputs` prints the paths the first half asks about, one per line,
 # and answers nothing else. `--lock-packages OLD NEW` prints the closure
-# packages whose `Cargo.lock` entries differ between two lock files. Both exist
-# so the two halves can be tested without a repository whose history is a
-# fixture.
+# packages whose `Cargo.lock` entries differ between two lock files.
+# `--verdict MOVED REBUILT` prints `stale`, `notice` or `current` for the two
+# answers given to it. All three exist so the parts can be tested without a
+# repository whose history is a fixture.
 set -uo pipefail
 
 cd "$(dirname "$0")/.."
@@ -135,6 +142,27 @@ for name in sorted(set(sys.argv[3:])):
 PY
 }
 
+# What the two halves add up to.
+#
+#   an input moved and the rebuild changes the module  -> stale
+#   an input moved and the rebuild changes nothing     -> current
+#   nothing committed moved and the rebuild changes it -> notice
+#   neither                                            -> current
+verdict() {
+  local moved="$1" rebuilt="$2"
+  if [ -n "$moved" ]; then
+    if [ -n "$rebuilt" ]; then
+      echo stale
+    else
+      echo current
+    fi
+  elif [ -n "$rebuilt" ]; then
+    echo notice
+  else
+    echo current
+  fi
+}
+
 case "${1:-}" in
   --print-inputs)
     printf '%s\n' "${SOURCES[@]}"
@@ -144,9 +172,13 @@ case "${1:-}" in
     lock_packages_changed "${2:?old lock file}" "${3:?new lock file}"
     exit 0
     ;;
+  --verdict)
+    verdict "${2-}" "${3-}"
+    exit 0
+    ;;
   "") ;;
   *)
-    echo "usage: $(basename "$0") [--print-inputs | --lock-packages OLD NEW]" >&2
+    echo "usage: $(basename "$0") [--print-inputs | --lock-packages OLD NEW | --verdict MOVED REBUILT]" >&2
     exit 2
     ;;
 esac
@@ -178,17 +210,22 @@ if ! git diff --quiet "$PKG_COMMIT" HEAD -- Cargo.lock; then
   fi
 fi
 
-if [ -z "$MOVED" ] && [ -z "$LOCK_REASON" ]; then
-  exit 0
-fi
-
-# An input moved. Did it reach the module? A rebuild that leaves `viewer/pkg`
-# untouched is a rebuild that reproduced what is committed, and the answer is
-# no, whatever the history says.
+# Whether rebuilding this source changes what is committed. Cheap enough to
+# ask before the answer is needed, and needed by two of the three verdicts.
 REBUILT=$(git status --porcelain -- viewer/pkg)
-if [ -z "$REBUILT" ]; then
-  exit 0
-fi
+
+case "$(verdict "$MOVED$LOCK_REASON" "$REBUILT")" in
+  current)
+    exit 0
+    ;;
+  notice)
+    echo "  note: nothing committed has moved, and rebuilding this source changes"
+    echo "        what is committed:"
+    echo "$REBUILT" | sed 's/^/    /'
+    echo "        commit viewer/pkg with the change, or the next run reds on it."
+    exit 0
+    ;;
+esac
 
 echo "  the committed viewer/pkg predates a build input:"
 echo "    viewer/pkg last committed by $(git log -1 --format='%h %s' "$PKG_COMMIT")"

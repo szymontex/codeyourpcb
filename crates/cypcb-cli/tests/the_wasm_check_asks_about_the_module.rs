@@ -224,3 +224,39 @@ fn the_module_does_not_carry_the_directory_it_was_built_in() {
          the same commit built in two directories is two different modules"
     );
 }
+
+#[test]
+fn a_rebuild_that_changes_the_module_is_said_before_the_commit_that_ships_it() {
+    // The check asks about the committed tree, so the commit that moves an
+    // input is graded by the next run - `315b227` shipped a module the gate
+    // then called stale, and four runs said green before the nightly said
+    // otherwise. Asking the working tree instead would red every uncommitted
+    // change to a crate the module links, which is a second full gate run for
+    // every one of them. The tree gets a notice instead, and the notice is
+    // what was missing when `315b227` was committed.
+    let verdict = |moved: &str, rebuilt: &str| {
+        let output = Command::new(script())
+            .args(["--verdict", moved, rebuilt])
+            .output()
+            .unwrap_or_else(|error| panic!("running {} failed: {error}", script().display()));
+        String::from_utf8_lossy(&output.stdout).trim().to_string()
+    };
+
+    // An input moved and rebuilding changes the committed module: a clone of
+    // this branch serves an engine this source does not build.
+    assert_eq!(
+        verdict(
+            "crates/cypcb-world/src/lib.rs",
+            " M viewer/pkg/cypcb_render_bg.wasm"
+        ),
+        "stale"
+    );
+    // An input moved and rebuilding reproduces it: a doc comment, and nothing
+    // to commit. This is the answer no history-only check could give.
+    assert_eq!(verdict("crates/cypcb-parser/src/ast.rs", ""), "current");
+    // Nothing committed has moved and the rebuild changes the module: the edit
+    // is still in the tree, and `viewer/pkg` belongs in its commit.
+    assert_eq!(verdict("", " M viewer/pkg/cypcb_render_bg.wasm"), "notice");
+    // Neither.
+    assert_eq!(verdict("", ""), "current");
+}
