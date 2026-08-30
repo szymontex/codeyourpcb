@@ -205,3 +205,22 @@ fn a_source_that_rebuilds_into_the_committed_module_is_not_stale() {
         String::from_utf8_lossy(&output.stdout)
     );
 }
+
+#[test]
+fn the_module_does_not_carry_the_directory_it_was_built_in() {
+    // The rebuild answer above is only worth something if a rebuild is the
+    // same wherever the checkout lives. It was not: rustc records source paths
+    // for panic messages, so this commit built in `/workspace/codeyourpcb` and
+    // in the scheduled gate's worktree produced two different modules, and the
+    // gate reads that difference as a stale artifact. Measured 2026-08-31 by
+    // building both: without the remap the two files differ, with it both are
+    // `b0e94102cef39dec22557fc78f717e3d`.
+    let build = std::fs::read_to_string(repo_root().join("viewer/build-wasm.sh"))
+        .expect("the wasm build is a script in this repository");
+
+    assert!(
+        build.contains("--remap-path-prefix="),
+        "the build no longer remaps the checkout's path out of the module, so \
+         the same commit built in two directories is two different modules"
+    );
+}

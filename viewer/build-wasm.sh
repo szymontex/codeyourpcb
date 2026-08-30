@@ -49,6 +49,21 @@ fi
 # Work around TLS allocation issue on some Linux systems
 export GLIBC_TUNABLES=glibc.rtld.optional_static_tls=2048
 
+# The directory this is built in used to end up inside the module. rustc
+# records source paths - panic messages name the file they came from - so the
+# same commit built in `/workspace/codeyourpcb` and in the scheduled gate's
+# worktree produced two different files, and the gate reads that difference as
+# a stale artifact. Measured 2026-08-31: without this line the two builds'
+# `cypcb_render_bg.wasm` differ; with it both are
+# `b0e94102cef39dec22557fc78f717e3d`.
+#
+# It is the checkout that is remapped and not the home directory, so this says
+# nothing about two machines: the registry and the toolchain still live at
+# their own paths. What it buys is that one machine's answer to "does
+# rebuilding this source change the committed module" no longer depends on
+# which directory the source is sitting in.
+export RUSTFLAGS="${RUSTFLAGS:-} --remap-path-prefix=$(pwd)=/cypcb"
+
 # The `wasm` feature carries the Rust reader, so this module parses .cypcb
 # itself and PcbEngine::load_source is exported to JS.
 #
