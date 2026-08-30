@@ -204,35 +204,25 @@ echo ""
 # run failed here because another repository's dev server in this container
 # held it. `CYPCB_E2E_PORT` overrides, and the default is 4327.
 echo "[7/10] playwright (rebuilding viewer/pkg first)"
-# Before rebuilding, ask whether the *committed* bundle is the one this source
-# builds. The rebuild below makes the suite honest about the working tree and
-# says nothing about what a clean clone carries, and on 2026-08-27 those were
-# different: `viewer/pkg/cypcb_render_bg.wasm` was last committed by 19b88db
-# and `d27ad56` added two lines to Cargo.lock afterwards, so every clone of
-# this branch served an engine built against an older dependency set - 5,241
-# bytes of difference nobody had looked at.
+# The module is rebuilt, and then asked whether the committed one is the same.
+# The rebuild makes the browser suite honest about the working tree; the
+# question afterwards is about what a clean clone carries, and on 2026-08-27
+# those were different - a module built against an older dependency set, 5,241
+# bytes nobody had looked at.
 #
-# The question is asked of the history rather than of the bytes on purpose.
-# `rust-toolchain.toml` pins the channel and not a version, and binaryen is not
-# pinned at all, so two machines can build the same source into different
-# bytes; a comparison would then fail for the wrong reason. What is not
-# toolchain-dependent is the order of commits: the newest commit that changed a
-# build input must not be newer than the commit that last changed viewer/pkg.
-INPUTS_COMMIT=$(git log -1 --format=%H -- 'crates/*/src' Cargo.lock viewer/build-wasm.sh)
-PKG_COMMIT=$(git log -1 --format=%H -- viewer/pkg)
-if [ -n "$INPUTS_COMMIT" ] && [ -n "$PKG_COMMIT" ] \
-  && ! git merge-base --is-ancestor "$INPUTS_COMMIT" "$PKG_COMMIT"; then
-  echo ""
-  echo "  the committed viewer/pkg predates a build input:"
-  echo "    inputs last changed by $(git log -1 --format='%h %s' "$INPUTS_COMMIT")"
-  echo "    viewer/pkg last changed by $(git log -1 --format='%h %s' "$PKG_COMMIT")"
-  echo "  rebuild with ./viewer/build-wasm.sh and commit viewer/pkg."
-  fail "stale viewer/pkg"
-fi
+# Both halves of that question live in the script: which sources can reach the
+# module, and whether rebuilding them changes what is committed. Asked here
+# until 2026-08-31, it was asked of the file history alone and of every crate
+# in the workspace, so it sent the nightly gate red over two crates the module
+# never links and over a doc comment that changes no byte of it.
 if ./viewer/build-wasm.sh >/dev/null 2>&1; then
   :
 else
   fail "build-wasm"
+fi
+if ! ./scripts/wasm-pkg-stale.sh; then
+  echo ""
+  fail "stale viewer/pkg"
 fi
 # The bindings beside the module, compared byte for byte against what the
 # rebuild just wrote. The history check above cannot see this one: it asks when
