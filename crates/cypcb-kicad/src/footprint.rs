@@ -24,13 +24,11 @@ use std::fs;
 use std::path::Path;
 
 use cypcb_core::{Nm, Point, Rect};
-use cypcb_world::components::{Layer as InternalLayer, PadShape as InternalPadShape};
 use cypcb_world::footprint::{Footprint, PadDef};
-use kicad_parse_gen::footprint::{
-    self as kicad_fp, Element, LayerSide, LayerType as KicadLayerType, Module, Pad, PadShape,
-    PadType,
-};
+use symbolic_expressions::Sexp;
 use thiserror::Error;
+
+use crate::pcb_parser::{find_xy_child, get_string, list_name, parse_pad, NetIndex};
 
 /// Errors that can occur during KiCad footprint import.
 #[derive(Error, Debug)]
@@ -85,33 +83,63 @@ pub fn import_footprint(path: &Path) -> Result<Footprint, KicadImportError> {
 ///
 /// This is useful for testing or when the content is already in memory.
 pub fn import_footprint_from_str(content: &str) -> Result<Footprint, KicadImportError> {
-    let module: Module =
-        kicad_fp::parse(content).map_err(|e| KicadImportError::ParseError(format!("{}", e)))?;
-
-    convert_module(&module)
+    let sexp = symbolic_expressions::parser::parse_str(content)
+        .map_err(|e| KicadImportError::ParseError(format!("{e}")))?;
+    footprint_from_sexp(&sexp)
 }
 
-/// Convert a KiCad Module to internal Footprint.
-fn convert_module(module: &Module) -> Result<Footprint, KicadImportError> {
+/// Read a footprint out of the file's S-expression tree.
+///
+/// This crate has two readers for KiCad's format: `kicad_parse_gen`, which
+/// this function used, and the one in `pcb_parser.rs`, which reads the boards
+/// KiCad writes today. The first knows the KiCad 5 spelling and nothing since:
+/// the list's head was renamed from `module` to `footprint` in 6.0, the format
+/// version and the writing program's name were put at the top of it, the
+/// reference and value became `property` lists in 7.0, and `roundrect` became
+/// the shape almost every generated pad uses. Any one of those is
+/// `unknown element in module: <name>` and the whole file is refused.
+///
+/// Measured on the six footprints in this repository that KiCad 6 or later
+/// wrote - `viewer/kicad-tools` and `viewer/faebryk` carry them as their own
+/// fixtures - **five were refused**, the sixth being a hand-written file with
+/// none of those fields. The same six through the reader that reads boards:
+/// six read.
+///
+/// So the footprint path now uses that reader too, and this crate has one
+/// answer to what a KiCad file says rather than two. What is read here is what
+/// a footprint file holds and a board file does not repeat: the name, the
+/// description, the pads, and the courtyard drawn on `F.CrtYd` or `B.CrtYd`.
+fn footprint_from_sexp(sexp: &Sexp) -> Result<Footprint, KicadImportError> {
+    let list = sexp
+        .list()
+        .map_err(|e| KicadImportError::ParseError(format!("{e}")))?;
+
+    let head = list.first().and_then(get_string).unwrap_or_default();
+    if head != "footprint" && head != "module" {
+        return Err(KicadImportError::ParseError(format!(
+            "a footprint file opens with `footprint` or `module`, this one opens with `{head}`"
+        )));
+    }
+
+    let name = list.get(1).and_then(get_string).unwrap_or_default();
     let mut pads = Vec::new();
     let mut description = String::new();
     let mut courtyard_bounds: Option<Rect> = None;
 
-    for element in &module.elements {
-        match element {
-            Element::Pad(pad) => {
-                pads.push(convert_pad(pad)?);
+    for child in list.iter().skip(2) {
+        match list_name(child).as_deref() {
+            Some("descr") => {
+                if let Ok(items) = child.list() {
+                    description = items.get(1).and_then(get_string).unwrap_or_default();
+                }
             }
-            Element::Descr(desc) => {
-                description = desc.clone();
+            Some("pad") => {
+                if let Some(pad) = read_pad(child)? {
+                    pads.push(pad);
+                }
             }
-            Element::FpLine(line) => {
-                // Check for courtyard lines (F.CrtYd or B.CrtYd)
-                if matches!(line.layer.t, KicadLayerType::CrtYd) {
-                    let rect = Rect::from_points(
-                        Point::from_mm(line.start.x, line.start.y),
-                        Point::from_mm(line.end.x, line.end.y),
-                    );
+            Some("fp_line") => {
+                if let Some(rect) = courtyard_line(child) {
                     courtyard_bounds = Some(match courtyard_bounds {
                         Some(existing) => existing.union(&rect),
                         None => rect,
@@ -122,7 +150,6 @@ fn convert_module(module: &Module) -> Result<Footprint, KicadImportError> {
         }
     }
 
-    // Calculate bounds from pads
     let bounds = calculate_pad_bounds(&pads);
 
     // Use courtyard if found, otherwise add IPC-7351B margin (0.5mm)
@@ -135,7 +162,7 @@ fn convert_module(module: &Module) -> Result<Footprint, KicadImportError> {
     });
 
     Ok(Footprint {
-        name: module.name.clone(),
+        name,
         description,
         pads,
         bounds,
@@ -144,116 +171,75 @@ fn convert_module(module: &Module) -> Result<Footprint, KicadImportError> {
     })
 }
 
-/// Convert a KiCad Pad to internal PadDef.
-fn convert_pad(pad: &Pad) -> Result<PadDef, KicadImportError> {
-    let shape = convert_pad_shape(&pad.shape)?;
-    let position = Point::from_mm(pad.at.x, pad.at.y);
-    let size = (Nm::from_mm(pad.size.x), Nm::from_mm(pad.size.y));
+/// The pad shapes this project has a shape for.
+///
+/// The board reader falls back to a rectangle for anything else, which is the
+/// right answer for a board - one pad of an unknown shape should not cost a
+/// person the other nine hundred. A footprint file is one part, so an unknown
+/// shape is refused by name instead: `custom` is a polygon somebody drew and a
+/// rectangle is not a conservative reading of it.
+const KNOWN_SHAPES: [&str; 4] = ["rect", "circle", "oval", "roundrect"];
 
-    // A KiCad drill carries two dimensions, and they differ when the hole is
-    // a slot - milled along its length rather than drilled. Taking the width
-    // and calling the height "for oval drills", which is what stood here,
-    // turned the slot every USB connector and barrel jack holds itself down
-    // with into a round hole, silently, at import.
-    let hole = match pad.t {
-        PadType::Pth | PadType::NpPth => pad.drill.as_ref(),
-        PadType::Smd => None,
+/// Read one `(pad ...)`, through the reader boards are read with.
+fn read_pad(pad: &Sexp) -> Result<Option<PadDef>, KicadImportError> {
+    let items = pad
+        .list()
+        .map_err(|e| KicadImportError::ParseError(format!("{e}")))?;
+
+    let shape = items.get(3).and_then(get_string).unwrap_or_default();
+    if !KNOWN_SHAPES.contains(&shape.as_str()) {
+        return Err(KicadImportError::UnsupportedFeature(format!(
+            "pad shape `{shape}`"
+        )));
+    }
+
+    let Some(parsed) = parse_pad(&items[1..], &NetIndex::default())
+        .map_err(|e| KicadImportError::ParseError(format!("{e}")))?
+    else {
+        return Ok(None);
     };
-    // The narrow dimension is what every rule about a drill means.
-    let drill = hole.map(|d| Nm::from_mm(d.width.min(d.height)));
-    let slot = hole
-        .filter(|d| d.width != d.height)
-        .map(|d| (Nm::from_mm(d.width), Nm::from_mm(d.height)));
 
-    // Convert layers
-    let layers = convert_layers(&pad.layers, &pad.t);
+    // A hole the file does not state is a hole this crate does not invent. The
+    // board reader gives a through-hole pad a 0.8mm drill when the file names
+    // none, which keeps a board routable; a footprint read for a library is
+    // read to be measured, and a made-up hole is a number nobody wrote.
+    let states_drill = items
+        .iter()
+        .skip(1)
+        .any(|item| list_name(item).as_deref() == Some("drill"));
 
-    Ok(PadDef {
-        number: pad.name.clone(),
-        shape,
-        position,
-        size,
-        drill,
-        slot,
-        layers,
-    })
+    Ok(Some(PadDef {
+        number: parsed.number,
+        shape: parsed.shape,
+        position: parsed.local_position,
+        size: parsed.size,
+        drill: if states_drill { parsed.drill } else { None },
+        slot: parsed.slot,
+        layers: parsed.layers,
+    }))
 }
 
-/// Convert KiCad pad shape to internal PadShape.
-fn convert_pad_shape(shape: &PadShape) -> Result<InternalPadShape, KicadImportError> {
-    match shape {
-        PadShape::Rect => Ok(InternalPadShape::Rect),
-        PadShape::Circle => Ok(InternalPadShape::Circle),
-        PadShape::Oval => Ok(InternalPadShape::Oblong),
-        PadShape::Trapezoid => {
-            // Log warning and use bounding rect
-            Err(KicadImportError::UnsupportedFeature(
-                "Trapezoid pads not supported, use rect approximation".to_string(),
-            ))
-        }
-    }
-}
-
-/// Convert KiCad layers to internal Layer list.
-fn convert_layers(layers: &kicad_fp::Layers, pad_type: &PadType) -> Vec<InternalLayer> {
-    let mut result = Vec::new();
-
-    for layer in &layers.layers {
-        if let Some(internal) = convert_single_layer(layer) {
-            result.push(internal);
-        }
+/// The rectangle an `(fp_line ...)` on a courtyard layer spans, if it is one.
+fn courtyard_line(line: &Sexp) -> Option<Rect> {
+    let items = line.list().ok()?;
+    let on_courtyard = items.iter().any(|item| {
+        list_name(item).as_deref() == Some("layer")
+            && item
+                .list()
+                .ok()
+                .and_then(|layer| layer.get(1).and_then(get_string))
+                .is_some_and(|name| name.ends_with("CrtYd"))
+    });
+    if !on_courtyard {
+        return None;
     }
 
-    // If we couldn't map any layers, use defaults based on pad type
-    if result.is_empty() {
-        match pad_type {
-            PadType::Pth | PadType::NpPth => {
-                // Through-hole defaults to top and bottom copper
-                result.push(InternalLayer::TopCopper);
-                result.push(InternalLayer::BottomCopper);
-            }
-            PadType::Smd => {
-                // SMD defaults to top copper, paste, and mask
-                result.push(InternalLayer::TopCopper);
-                result.push(InternalLayer::TopPaste);
-                result.push(InternalLayer::TopMask);
-            }
-        }
-    }
-
-    result
-}
-
-/// Convert a single KiCad layer to internal Layer.
-fn convert_single_layer(layer: &kicad_fp::Layer) -> Option<InternalLayer> {
-    match (&layer.side, &layer.t) {
-        // Copper layers
-        (LayerSide::Front, KicadLayerType::Cu) => Some(InternalLayer::TopCopper),
-        (LayerSide::Back, KicadLayerType::Cu) => Some(InternalLayer::BottomCopper),
-        (LayerSide::Both, KicadLayerType::Cu) => Some(InternalLayer::TopCopper), // Return one, caller handles both
-        (LayerSide::In1, KicadLayerType::Cu) => Some(InternalLayer::Inner(1)),
-        (LayerSide::In2, KicadLayerType::Cu) => Some(InternalLayer::Inner(2)),
-
-        // Paste layers
-        (LayerSide::Front, KicadLayerType::Paste) => Some(InternalLayer::TopPaste),
-        (LayerSide::Back, KicadLayerType::Paste) => Some(InternalLayer::BottomPaste),
-        (LayerSide::Both, KicadLayerType::Paste) => Some(InternalLayer::TopPaste),
-
-        // Mask layers
-        (LayerSide::Front, KicadLayerType::Mask) => Some(InternalLayer::TopMask),
-        (LayerSide::Back, KicadLayerType::Mask) => Some(InternalLayer::BottomMask),
-        (LayerSide::Both, KicadLayerType::Mask) => Some(InternalLayer::TopMask),
-
-        // Silkscreen layers
-        (LayerSide::Front, KicadLayerType::SilkS) => Some(InternalLayer::TopSilk),
-        (LayerSide::Back, KicadLayerType::SilkS) => Some(InternalLayer::BottomSilk),
-
-        // Edge cuts (board outline)
-        (LayerSide::Edge, KicadLayerType::Cuts) => Some(InternalLayer::Outline),
-
-        // Other layers we don't map
-        _ => None,
-    }
+    let (start_x, start_y) = find_xy_child(line, "start")?;
+    let (end_x, end_y) = find_xy_child(line, "end")?;
+    Some(Rect::from_points(
+        Point::from_mm(start_x, start_y),
+        Point::from_mm(end_x, end_y),
+    ))
 }
 
 /// Calculate bounding box from pad definitions.
@@ -286,6 +272,7 @@ fn calculate_pad_bounds(pads: &[PadDef]) -> Rect {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use cypcb_world::components::{Layer as InternalLayer, PadShape as InternalPadShape};
 
     /// Minimal 0402 footprint for testing
     const MINIMAL_0402: &str = r#"(module R_0402 (layer F.Cu)

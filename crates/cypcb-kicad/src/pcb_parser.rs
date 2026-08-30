@@ -1303,19 +1303,19 @@ fn parse_footprint(
 // Internal: pad parsing
 // ---------------------------------------------------------------------------
 
-struct ParsedPad {
-    number: String,
-    shape: PadShape,
-    local_position: Point,
-    size: (Nm, Nm),
-    drill: Option<Nm>,
+pub(crate) struct ParsedPad {
+    pub(crate) number: String,
+    pub(crate) shape: PadShape,
+    pub(crate) local_position: Point,
+    pub(crate) size: (Nm, Nm),
+    pub(crate) drill: Option<Nm>,
     /// The hole's full size when KiCad wrote `(drill oval W H)`.
-    slot: Option<(Nm, Nm)>,
-    layers: Vec<Layer>,
-    net_id: Option<NetId>,
+    pub(crate) slot: Option<(Nm, Nm)>,
+    pub(crate) layers: Vec<Layer>,
+    pub(crate) net_id: Option<NetId>,
 }
 
-fn parse_pad(
+pub(crate) fn parse_pad(
     elements: &[Sexp],
     kicad_net_map: &NetIndex,
 ) -> Result<Option<ParsedPad>, KicadPcbError> {
@@ -2004,7 +2004,7 @@ fn parse_layer_names(name: &str, layers: &mut Vec<Layer>) {
 // ---------------------------------------------------------------------------
 
 /// Get the name of a list S-expression (first element as string).
-fn list_name(sexp: &Sexp) -> Option<String> {
+pub(crate) fn list_name(sexp: &Sexp) -> Option<String> {
     if let Ok(list) = sexp.list() {
         if !list.is_empty() {
             return get_string(&list[0]);
@@ -2014,7 +2014,7 @@ fn list_name(sexp: &Sexp) -> Option<String> {
 }
 
 /// Extract a string from a Sexp.
-fn get_string(sexp: &Sexp) -> Option<String> {
+pub(crate) fn get_string(sexp: &Sexp) -> Option<String> {
     sexp.string().ok().cloned()
 }
 
@@ -2029,7 +2029,7 @@ fn get_i64(sexp: &Sexp) -> Option<i64> {
 }
 
 /// Find a child list with name `child_name` that contains (name X Y).
-fn find_xy_child(sexp: &Sexp, child_name: &str) -> Option<(f64, f64)> {
+pub(crate) fn find_xy_child(sexp: &Sexp, child_name: &str) -> Option<(f64, f64)> {
     if let Ok(list) = sexp.list() {
         for child in list {
             if list_name(child).as_deref() == Some(child_name) {

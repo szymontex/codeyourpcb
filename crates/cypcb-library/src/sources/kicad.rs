@@ -174,19 +174,6 @@ fn count_kicad_mods(path: &Path) -> Result<usize, LibraryError> {
     Ok(count)
 }
 
-/// `(footprint ...)` as `(module ...)`, and anything else unchanged.
-///
-/// Only the first token of the file: a `footprint` appearing anywhere else -
-/// inside a description, say - is text rather than the head of the list.
-fn rename_head_to_module(content: &str) -> String {
-    let trimmed = content.trim_start();
-    let offset = content.len() - trimmed.len();
-    match trimmed.strip_prefix("(footprint") {
-        Some(rest) => format!("{}(module{rest}", &content[..offset]),
-        None => content.to_string(),
-    }
-}
-
 /// Parses a .kicad_mod file into a Component.
 ///
 /// Through `cypcb-kicad`, which is the reader the rest of this project uses
@@ -202,13 +189,7 @@ fn rename_head_to_module(content: &str) -> String {
 fn parse_kicad_mod(path: &Path, library: &str) -> Result<Component, LibraryError> {
     let content = fs::read_to_string(path)?;
 
-    // `cypcb-kicad` reads a footprint whose list opens with `module`, which is
-    // what KiCad 5 wrote; KiCad 6 renamed the head to `footprint` and changed
-    // nothing else this needs. Rather than teach a second reader the format,
-    // the head is renamed on the way in and the file is otherwise untouched -
-    // and the raw text kept below is the file as it was written.
-    let for_reader = rename_head_to_module(&content);
-    let footprint = cypcb_kicad::import_footprint_from_str(&for_reader)
+    let footprint = cypcb_kicad::import_footprint_from_str(&content)
         .map_err(|e| LibraryError::Parse(format!("{e}")))?;
 
     // A footprint with pads on the top copper is surface mount, one with a
@@ -305,17 +286,16 @@ mod tests {
         fs::remove_file(file).unwrap();
     }
 
-    /// What this importer cannot read yet, measured rather than assumed.
+    /// A footprint written by KiCad 6 or later, which is most of what a
+    /// person has on disk.
     ///
-    /// KiCad 6 renamed the head of the list to `footprint` and added
-    /// `(version ...)` and `(generator ...)` beside it. The head is renamed on
-    /// the way in, but `cypcb-kicad` refuses the fields: `unknown element in
-    /// module: version`. Every footprint written by KiCad 6 or later is
-    /// therefore skipped with that message rather than imported, which is a
-    /// gap in the reader this project already had rather than in the path
-    /// added around it.
+    /// This was the gap: KiCad 6 renamed the head of the list to `footprint`
+    /// and put `(version ...)` and `(generator ...)` at the top of it, and the
+    /// reader refused the file with `unknown element in module: version`. It
+    /// reads them now, and the head is no longer renamed here - the reader
+    /// takes both spellings, so this path has nothing to translate.
     #[test]
-    fn a_kicad_6_footprint_is_refused_with_the_reason() {
+    fn a_kicad_6_footprint_is_read() {
         let sexpr = r#"(footprint "R_0805_2012Metric"
   (version 20211014)
   (generator pcbnew)
@@ -326,14 +306,13 @@ mod tests {
         let file = std::env::temp_dir().join("cypcb-library-kicad6.kicad_mod");
         fs::write(&file, sexpr).unwrap();
 
-        let refused = parse_kicad_mod(&file, "Resistor_SMD").unwrap_err();
-        // The whole message, not a word out of it: the file's own text is
-        // quoted in some of these errors, so `contains("version")` was true of
-        // an error about something else entirely.
-        assert!(
-            format!("{refused}").contains("unknown element in module: version"),
-            "the reason names the field the reader does not know: {refused}"
+        let component = parse_kicad_mod(&file, "Resistor_SMD").unwrap();
+        assert_eq!(component.id.name, "R_0805_2012Metric");
+        assert_eq!(
+            component.metadata.description.as_deref(),
+            Some("Resistor SMD 0805")
         );
+        assert_eq!(component.category, Some("SMD".to_string()));
 
         fs::remove_file(file).unwrap();
     }
