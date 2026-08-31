@@ -107,6 +107,64 @@ owner's name on it is reading history.
 
 ## Vectors (parallel branches - keep ALL moving)
 
+### V10 - GroupDIY: a forum this project has never read, and nobody has archived
+
+The owner asked for it on 2026-08-31: look at GroupDIY and archive what can be
+archived, because a long-running DIY audio board is two things this project
+wants - domain knowledge about circuits people actually build, and a supply of
+real designs to check the tool against. **Nothing is archived yet.** Everything
+below was measured with `curl` on 2026-08-31, so this vector starts from what
+the site returns rather than from what a forum of its kind usually holds.
+
+**Measured, with the command beside each figure.**
+
+- It is a XenForo board titled `GroupDIY Audio Forum` at `https://groupdiy.com`.
+  Its index links twenty-one forum nodes and the sitemap lists twenty-two - the
+  extra one, `groupdiy-mobile-app-feedback-gather.49`, is reachable but not on
+  the front page. The ones a board tool cares about are
+  `the-lab.2`, `drawing-board.5`, `technical-documents.19`, `machine-shop.20`,
+  `magnetics.38`, and the circuit-type nodes `preamplifiers.30`,
+  `filters-equalizers.28`, `dynamic-processors.27`, `microphones.29`,
+  `mixers-monitoring-systems.32`, `musical-instruments.47`, `truth-table.31`.
+- **71 301 threads**, from the site's own sitemap rather than an estimate:
+  `sitemap-1.xml` carries 50 000 URLs and `sitemap-2.xml` 21 394, of which
+  71 301 are `/threads/`, 22 `/forums/` and 70 `/media/`
+  (`curl -sS -A "<browser UA>" https://groupdiy.com/sitemap-N.xml | grep -o '<loc>' | wc -l`).
+  That number is the size of the job.
+- **The Internet Archive holds none of it.** `https://archive.org/wayback/available?url=groupdiy.com`
+  returns `{"archived_snapshots": {}}`, and the CDX index returns **0** rows for
+  the whole domain over all time
+  (`http://web.archive.org/cdx/search/cdx?url=groupdiy.com&matchType=domain&fl=original&collapse=urlkey`).
+  So there is no existing archive to copy, and nothing taken here duplicates
+  work somebody else has done.
+- **Cloudflare refuses a default `curl`.** `https://groupdiy.com/robots.txt`
+  answers `403` with a challenge page; the same URL with a browser
+  `User-Agent` answers `200`. Two things follow. A fetcher needs a real UA, and
+  **`robots.txt` has still not been read** - what came back was the challenge
+  body, not a rules file. Read it first: a robots file that says no ends this
+  vector, and this entry must not be used as evidence that it says yes.
+- **Pictures are public and are not XenForo attachments.** A sampled thread has
+  zero `/attachments/` links and its images come from
+  `cdn.imagearchive.com/groupdiy/data/uploads/<hash>.jpg`, served to a
+  logged-out reader. What is **not** known is where a non-image upload lives - a
+  schematic PDF, a Gerber zip, a `.kicad_pcb` - and that unknown is what decides
+  whether this vector supplies test boards or only prose.
+- `threads/meta-docs-index.93577` in `technical-documents` is the board's own
+  index of documents, so it is the cheapest first read.
+
+- DONE: the recon above. No page has been stored, no fetcher written.
+- NEXT-ACTION: **answer the two questions that decide the shape of the archive,
+  before any fetcher exists.** First, read `robots.txt` and the board's terms
+  with a browser UA and record what they permit - if they refuse, this vector
+  stops there and the entry says so. Second, open one thread known to carry a
+  schematic and find where its non-image upload is served from; a board whose
+  designs are login-walled is worth prose alone, and that changes what is worth
+  taking. Only then decide scope: the eleven technical nodes or all 71 301
+  threads. **Where the archive lives is an owner call** - 71 301 threads plus
+  images is not repository material, and this repo should hold at most the few
+  boards that become fixtures, with their thread URL beside them. Fetch politely:
+  one request at a time, seconds apart, and stop on the first 429.
+
 ### V9 - KiCad parity: what a board editor has and this does not
 
 The owner asked for the list on 2026-08-27 and then asked for it to be worked
