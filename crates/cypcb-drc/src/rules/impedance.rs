@@ -94,6 +94,15 @@ impl DrcRule for ImpedanceRule {
                 continue;
             };
             let net_name = world.net_name(net_id).unwrap_or("unnamed").to_string();
+            // A layer this stack does not have. The only way a trace reaches
+            // one is a stack that disagrees with the board - `layers 4` over a
+            // stackup describing two coppers - and `StackupRule` reports that
+            // in as many words: *board says 4 copper layers and the stackup
+            // describes 2*. Silence here would be wrong if nobody said it, and
+            // that is exactly what the exception above this loop turned out to
+            // be, so it is checked rather than asserted:
+            // `cargo test -p cypcb-cli --test
+            // a_layer_the_stack_does_not_have_is_reported_by_the_stack`.
             let Some(index) = copper_index(layer, copper_count) else {
                 continue;
             };
