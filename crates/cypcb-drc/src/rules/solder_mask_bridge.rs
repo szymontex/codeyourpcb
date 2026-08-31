@@ -1,10 +1,19 @@
 //! Solder mask bridge rule.
 //!
 //! The mask opening around a pad is the pad grown by
-//! [`DesignRules::solder_mask_expansion`] on every side. Where two openings come
-//! closer than [`DesignRules::min_solder_mask_bridge`], the fab cannot hold a web
-//! of mask between them and the pads bridge with solder during reflow.
-//! Fine-pitch parts are where this bites.
+//! [`DesignRules::solder_mask_expansion`] on every side, unless the pad asks
+//! for its own - `mask 0.1016mm` in this language, `(solder_mask_margin ...)`
+//! in KiCad's. Where two openings come closer than
+//! [`DesignRules::min_solder_mask_bridge`], the fab cannot hold a web of mask
+//! between them and the pads bridge with solder during reflow. Fine-pitch
+//! parts are where this bites.
+//!
+//! Measured 2026-08-31: of this crate's 37 rules, **this is the only one that
+//! measures a mask opening at all**, and it grew every pad by the board's
+//! figure. A pad asking for more than the fabricator's default - 124 pads in
+//! this repository's KiCad files ask for 4 mil, against a 2 mil default -
+//! therefore had its web measured wider than it is, and the checker passed a
+//! board the exporter then made with openings that touch.
 
 use cypcb_core::{Nm, Point};
 use cypcb_world::components::{FootprintRef, Layer, Position, Rotation};
@@ -33,7 +42,7 @@ impl DrcRule for SolderMaskBridgeRule {
     }
 
     fn check(&self, world: &mut BoardWorld, rules: &DesignRules) -> Vec<DrcViolation> {
-        let expansion = rules.solder_mask_expansion.0;
+        let board_expansion = rules.solder_mask_expansion.0;
         let min_bridge = rules.min_solder_mask_bridge.0;
 
         let components: Vec<_> = {
@@ -72,6 +81,13 @@ impl DrcRule for SolderMaskBridgeRule {
                 } else {
                     (pad.size.0 .0, pad.size.1 .0)
                 };
+
+                // The opening this pad gets made with: its own margin where
+                // it asks for one, the board's where it does not. The same
+                // question the mask exporter asks, so the checker measures the
+                // board the exporter writes. `None` is the board's figure and
+                // is not a zero.
+                let expansion = pad.mask_margin.map_or(board_expansion, |m| m.0);
 
                 for top_side in [true, false] {
                     let layer = if top_side {
