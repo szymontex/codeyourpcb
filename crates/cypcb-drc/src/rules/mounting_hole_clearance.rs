@@ -102,6 +102,14 @@ impl DrcRule for MountingHoleClearanceRule {
         // same reason the edge rule adds them: a pour is not in the spatial
         // index, and a plane poured across a mounting hole is exactly the case
         // worth catching.
+        // A component sits in the spatial index as its **courtyard**, and a
+        // courtyard is not copper. Measuring that box reported a part whose
+        // plastic body reaches over a mounting hole while its pads stay well
+        // clear - the drill cuts nothing of that part. `ClearanceRule` and the
+        // edge rule both measure pads through this collector; so does this one
+        // now.
+        let pad_map = super::clearance::component_pads(world);
+
         let mut entries: Vec<cypcb_world::SpatialEntry> = world.spatial().iter().cloned().collect();
         for (entity, zone) in world.zones() {
             if zone.is_keepout() {
@@ -126,7 +134,17 @@ impl DrcRule for MountingHoleClearanceRule {
                     continue;
                 }
 
-                let gap = distance_to_box(hole.centre, entry) - hole.radius.raw();
+                // The copper this entry stands for: a component's pads where
+                // it has them, its own box otherwise - a trace, a via or a
+                // pour is copper already.
+                let gap = match pad_map.get(&entry.entity.index()) {
+                    Some(pads) if !pads.is_empty() => pads
+                        .iter()
+                        .map(|pad| distance_to_pad(hole.centre, pad))
+                        .min()
+                        .unwrap_or(i64::MAX),
+                    _ => distance_to_box(hole.centre, entry),
+                } - hole.radius.raw();
                 if gap < required.raw() {
                     violations.push(DrcViolation::edge_clearance(
                         entry.entity,
@@ -148,6 +166,20 @@ impl DrcRule for MountingHoleClearanceRule {
 
         violations
     }
+}
+
+/// Distance in nanometres from a point to one pad's copper.
+fn distance_to_pad(point: Point, pad: &super::clearance::PadBox) -> i64 {
+    let (min_x, min_y) = (pad.box_.lower()[0], pad.box_.lower()[1]);
+    let (max_x, max_y) = (pad.box_.upper()[0], pad.box_.upper()[1]);
+
+    let dx = (min_x - point.x.raw()).max(0).max(point.x.raw() - max_x);
+    let dy = (min_y - point.y.raw()).max(0).max(point.y.raw() - max_y);
+
+    if dx == 0 && dy == 0 {
+        return 0;
+    }
+    (((dx as i128 * dx as i128 + dy as i128 * dy as i128) as f64).sqrt()) as i64
 }
 
 /// Distance in nanometres from a point to the nearest edge of a box, or zero
