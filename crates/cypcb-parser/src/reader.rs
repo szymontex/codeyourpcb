@@ -1570,6 +1570,15 @@ impl<'a> Reader<'a> {
             None
         };
 
+        // `mask 0.1016mm` is the opening this pad asks for, instead of the
+        // board's. Stating none is not the same as stating zero: none is the
+        // fabricator's figure, zero is an opening the size of the copper.
+        let mask_margin = if self.eat_word("mask") {
+            Some(self.dimension()?)
+        } else {
+            None
+        };
+
         Some(PadDef {
             number,
             shape,
@@ -1580,6 +1589,7 @@ impl<'a> Reader<'a> {
             drill,
             drill_height,
             corner_ratio,
+            mask_margin,
             span: Span::new(start, self.behind()),
         })
     }

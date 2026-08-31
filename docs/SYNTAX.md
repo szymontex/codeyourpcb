@@ -1143,7 +1143,7 @@ Define custom footprints inline:
 footprint <name> {
     description "<text>"
     courtyard <width> x <height>
-    pad <number> <shape> at <x>, <y> size <w> x <h> [drill <d> [x <d2>]] [corner <n>%]
+    pad <number> <shape> at <x>, <y> size <w> x <h> [drill <d> [x <d2>]] [corner <n>%] [mask <m>]
     silk line <x>, <y> to <x>, <y> [width <w>]
     silk circle <x>, <y> radius <r> [width <w>]
     ...
@@ -1214,6 +1214,16 @@ footprint POLARISED {
   refused rather than quietly reduced
 - KiCad states this on every rounded pad it writes, so a board imported with
   `from-kicad` carries the corners it was drawn with
+
+**Mask opening:**
+- `mask <m>` says how far this pad's solder mask opening runs past its copper:
+  `pad 1 rect at 0mm, 0mm size 1mm x 1mm mask 0.1016mm`
+- A pad that states none takes the board's expansion, one figure from the
+  fabricator's table for every pad on it
+- Saying nothing is not saying `mask 0mm`: zero opens the mask to the edge of
+  the copper, which is a different board
+- KiCad states this per pad, and a through-hole connector asks for 4 mil so the
+  mask does not creep onto copper a hand-soldered joint has to wet
 
 **Drill:**
 - If `drill` is specified, pad is through-hole (THT)

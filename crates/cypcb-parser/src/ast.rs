@@ -1017,6 +1017,20 @@ pub struct PadDef {
     /// `None` on any other shape, and on a `roundrect` that states none, which
     /// keeps the 25% this project has always used.
     pub corner_ratio: Option<u8>,
+    /// How far this pad's solder mask opening runs past its copper, when the
+    /// pad asks for its own.
+    ///
+    /// `mask 0.1016mm`. `None` is the ordinary case and means the board's
+    /// expansion, one figure from the fabricator's table for every pad on it.
+    /// It is not the same as a zero, which is a pad asking for an opening the
+    /// size of its own copper.
+    ///
+    /// KiCad states this per pad and 124 of the 2623 pads in this repository's
+    /// KiCad files do - a through-hole connector asks for 4 mil so the mask
+    /// does not creep onto copper a hand-soldered joint has to wet. The
+    /// importer has read it since 2026-08-31; without this the figure survived
+    /// an import and not a save.
+    pub mask_margin: Option<Dimension>,
     /// Source span.
     pub span: Span,
 }

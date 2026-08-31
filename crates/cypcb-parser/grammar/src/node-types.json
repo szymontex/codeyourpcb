@@ -821,6 +821,22 @@
     }
   },
   {
+    "type": "mask_spec",
+    "named": true,
+    "fields": {
+      "margin": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "dimension",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "module_definition",
     "named": true,
     "fields": {
@@ -1176,6 +1192,16 @@
         "types": [
           {
             "type": "dimension",
+            "named": true
+          }
+        ]
+      },
+      "mask": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "mask_spec",
             "named": true
           }
         ]

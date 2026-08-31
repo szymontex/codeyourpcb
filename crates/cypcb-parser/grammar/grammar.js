@@ -681,6 +681,7 @@ module.exports = grammar({
       field('height', $.dimension),
       optional(field('drill', $.drill_spec)),
       optional(field('corner', $.corner_spec)),
+      optional(field('mask', $.mask_spec)),
     ),
 
     // `drill 0.9mm` is a round hole; `drill 2.4mm x 1.0mm` is a slot, milled
@@ -700,6 +701,14 @@ module.exports = grammar({
     // arithmetic behind a rounded word: the reader knew 20%, the writer wrote
     // `roundrect`, and reading that back gave 25%.
     corner_spec: $ => seq('corner', field('ratio', $.number), '%'),
+
+    // `mask 0.1016mm` is how far this pad's solder mask opening runs past its
+    // copper, when the pad asks for its own instead of the board's. KiCad
+    // writes `(solder_mask_margin 0.1016)` inside a pad - 4 mil on a
+    // through-hole connector, so the mask does not creep onto copper a
+    // hand-soldered joint has to wet - and 124 of the 2623 pads in this
+    // repository's KiCad files ask for one.
+    mask_spec: $ => seq('mask', field('margin', $.dimension)),
 
     pad_shape: $ => choice('rect', 'circle', 'roundrect', 'oblong'),
 

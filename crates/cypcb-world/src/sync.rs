@@ -2175,6 +2175,11 @@ fn convert_footprint_def(fp_def: &FootprintDef, copper_layers: u8) -> Footprint 
                             (width != height).then_some((width, height))
                         },
                     ),
+                    // The opening this pad asks for, or the board's when it
+                    // asks for nothing. `None` and `Some(zero)` are different
+                    // boards: the first takes the fabricator's figure, the
+                    // second opens the mask to the edge of the copper.
+                    mask_margin: p.mask_margin.as_ref().map(|m| m.to_nm()),
                     layers: if is_tht {
                         // A drilled hole goes through the whole board, so its
                         // copper is on every copper layer the board has - not just
@@ -2193,7 +2198,6 @@ fn convert_footprint_def(fp_def: &FootprintDef, copper_layers: u8) -> Footprint 
                         // SMD pads on top copper with paste and mask
                         vec![Layer::TopCopper, Layer::TopPaste, Layer::TopMask]
                     },
-                    mask_margin: None,
                 }
             })
             .collect();

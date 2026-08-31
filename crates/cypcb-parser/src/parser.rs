@@ -1235,6 +1235,13 @@ impl CypcbParser {
             None => None,
         };
 
+        // `mask 0.1016mm`, the same field the hand reader takes.
+        let mask_margin = match get_child_by_field(node, "mask") {
+            Some(spec) => get_child_by_field(&spec, "margin")
+                .and_then(|n| self.convert_dimension(source, &n, errors)),
+            None => None,
+        };
+
         Some(PadDef {
             number,
             shape,
@@ -1245,6 +1252,7 @@ impl CypcbParser {
             drill,
             drill_height,
             corner_ratio,
+            mask_margin,
             span: span_of(node),
         })
     }
@@ -2939,6 +2947,33 @@ footprint ROUNDED {
             // A pad that states none carries none, and the 25% a board is
             // drawn with is decided where the design becomes a board.
             assert_eq!(fp.pads[1].corner_ratio, None);
+        } else {
+            panic!("expected footprint definition");
+        }
+    }
+
+    /// The mask opening a pad asks for, through the tree-sitter reader.
+    #[test]
+    fn a_pad_states_the_mask_opening_it_asks_for() {
+        let source = r#"
+footprint HEADER {
+    pad 1 rect at 0mm, 0mm size 1mm x 1mm mask 0.1016mm
+    pad 2 rect at 2mm, 0mm size 1mm x 1mm
+}
+"#;
+        let result = parse(source);
+        assert!(result.is_ok(), "errors: {:?}", result.errors);
+
+        if let Definition::Footprint(fp) = &result.value.definitions[0] {
+            let margin = fp.pads[0]
+                .mask_margin
+                .as_ref()
+                .expect("the first pad asks for its own opening");
+            assert!((margin.value - 0.1016).abs() < 1e-9);
+            assert_eq!(margin.unit, Unit::Mm);
+            // Asking for nothing is not asking for zero: the board's figure
+            // covers this pad, and `None` is what says so.
+            assert!(fp.pads[1].mask_margin.is_none());
         } else {
             panic!("expected footprint definition");
         }

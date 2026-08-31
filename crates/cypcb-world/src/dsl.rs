@@ -1105,6 +1105,13 @@ pub fn board_as_dsl(world: &mut BoardWorld) -> String {
             if let crate::components::PadShape::RoundRect { corner_ratio } = pad.shape {
                 let _ = write!(out, " corner {corner_ratio}%");
             }
+            // The opening this pad asks for. Written only when the pad asks
+            // for one: a design that says nothing takes the fabricator's
+            // figure, and writing a zero here would order a mask cut back to
+            // the copper's edge on every pad that never asked.
+            if let Some(margin) = pad.mask_margin {
+                let _ = write!(out, " mask {}mm", format_mm(margin.0 as f64 / 1e6));
+            }
             let _ = writeln!(out);
         }
 
