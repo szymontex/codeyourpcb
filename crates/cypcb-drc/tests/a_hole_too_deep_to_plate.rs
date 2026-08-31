@@ -94,6 +94,7 @@ fn board_with_mounting_hole(drill_mm: f64, thickness_mm: f64) -> BoardWorld {
             // No copper layers, so nothing plates it. `PadDef::is_non_plated`
             // reads exactly this, and so does the drill file.
             layers: Vec::new(),
+            mask_margin: None,
         }],
         ..base
     });

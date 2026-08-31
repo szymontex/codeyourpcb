@@ -64,6 +64,7 @@ fn board_with_mounting_hole(x_mm: f64) -> BoardWorld {
             drill: Some(Nm::from_mm(3.2)),
             slot: None,
             layers: Vec::new(),
+            mask_margin: None,
         }],
         ..base
     });

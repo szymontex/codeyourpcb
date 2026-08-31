@@ -37,6 +37,7 @@ fn board(locked: bool) -> (BoardWorld, cypcb_world::footprint::FootprintLibrary)
             drill: None,
             slot: None,
             layers: vec![Layer::TopCopper],
+            mask_margin: None,
         }],
     });
     world.set_footprints(library.clone());
@@ -139,6 +140,7 @@ fn a_net_a_hand_trace_already_joins_is_not_routed_again() {
             drill: None,
             slot: None,
             layers: vec![Layer::TopCopper],
+            mask_margin: None,
         }],
     });
     world.set_footprints(library.clone());
@@ -206,6 +208,7 @@ fn copper_on_another_layer_does_not_count_as_a_connection() {
             slot: None,
             // Top only: a surface-mount pad.
             layers: vec![Layer::TopCopper],
+            mask_margin: None,
         }],
     });
     world.set_footprints(library.clone());
@@ -273,6 +276,7 @@ fn a_via_joins_two_traces_into_one_piece_of_copper() {
             drill: Some(Nm::from_mm(0.3)),
             slot: None,
             layers: vec![Layer::TopCopper, Layer::BottomCopper],
+            mask_margin: None,
         }],
     });
     world.set_footprints(library.clone());
@@ -360,6 +364,7 @@ fn a_ground_plane_connects_the_pins_that_sit_in_it() {
             drill: None,
             slot: None,
             layers: vec![Layer::TopCopper],
+            mask_margin: None,
         }],
     });
     world.set_footprints(library.clone());

@@ -30,6 +30,7 @@ use crate::components::{Layer, PadShape};
 ///     drill: None,
 ///     slot: None,
 ///     layers: vec![Layer::TopCopper, Layer::TopPaste, Layer::TopMask],
+///     mask_margin: None,
 /// };
 ///
 /// // Through-hole pad (with drill)
@@ -41,6 +42,7 @@ use crate::components::{Layer, PadShape};
 ///     drill: Some(Nm::from_mm(1.0)),
 ///     slot: None,
 ///     layers: vec![Layer::TopCopper, Layer::BottomCopper],
+///     mask_margin: None,
 /// };
 /// ```
 #[derive(Debug, Clone)]
@@ -74,6 +76,21 @@ pub struct PadDef {
     pub slot: Option<(Nm, Nm)>,
     /// Layers this pad appears on.
     pub layers: Vec<Layer>,
+    /// How far the solder mask opening runs past this pad's copper, when the
+    /// pad states its own figure.
+    ///
+    /// `None` is the ordinary case: the opening is the board's expansion, one
+    /// figure from the fabricator's table for every pad on it. A pad states
+    /// its own when the part needs one - KiCad writes
+    /// `(solder_mask_margin 0.1016)` inside the pad, which is 4 mil, and a
+    /// through-hole connector's pads carry it so the mask does not creep onto
+    /// copper a hand-soldered joint has to wet.
+    ///
+    /// Measured 2026-08-31 across the KiCad files in this repository: **124
+    /// pads of 2623 state one**, all of them in the footprint library under
+    /// `viewer/svg-pcb/kicad-components`. Dropped until now, so those pads
+    /// were exported with the board's figure instead of their own.
+    pub mask_margin: Option<Nm>,
 }
 
 impl PadDef {
@@ -502,6 +519,7 @@ pub fn mirrored_to_bottom(footprint: &Footprint) -> Footprint {
                 drill: pad.drill,
                 slot: None,
                 layers: pad.layers.iter().map(|layer| flip(*layer)).collect(),
+                mask_margin: None,
             })
             .collect(),
         bounds: mirror_rect(footprint.bounds),
@@ -714,6 +732,7 @@ mod tests {
             drill: None,
             slot: None,
             layers: vec![Layer::TopCopper],
+            mask_margin: None,
         };
         assert!(smd.is_smd());
         assert!(!smd.is_through_hole());
@@ -726,6 +745,7 @@ mod tests {
             drill: Some(Nm::from_mm(0.8)),
             slot: None,
             layers: vec![Layer::TopCopper, Layer::BottomCopper],
+            mask_margin: None,
         };
         assert!(!tht.is_smd());
         assert!(tht.is_through_hole());

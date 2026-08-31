@@ -525,6 +525,7 @@ mod tests {
                 drill: None,
                 slot: None,
                 layers: vec![Layer::TopCopper],
+                mask_margin: None,
             }],
         };
         library.register(footprint);

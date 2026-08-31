@@ -41,6 +41,7 @@ fn board_with_pad_gap(gap_mm: f64, drilled: bool) -> BoardWorld {
         drill: drilled.then(|| Nm::from_mm(0.4)),
         slot: None,
         layers: vec![Layer::TopCopper, Layer::TopMask, Layer::TopPaste],
+        mask_margin: None,
     };
 
     let mut library = FootprintLibrary::new();

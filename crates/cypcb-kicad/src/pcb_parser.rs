@@ -1222,6 +1222,7 @@ fn parse_footprint(
             drill: p.drill,
             slot: p.slot,
             layers: p.layers.clone(),
+            mask_margin: None,
         })
         .collect();
 
@@ -1313,6 +1314,8 @@ pub(crate) struct ParsedPad {
     pub(crate) slot: Option<(Nm, Nm)>,
     pub(crate) layers: Vec<Layer>,
     pub(crate) net_id: Option<NetId>,
+    /// The mask opening this pad asks for, when it asks for its own.
+    pub(crate) mask_margin: Option<Nm>,
 }
 
 /// The corner a `roundrect` pad states, as a percentage of its short side.
@@ -1383,6 +1386,7 @@ pub(crate) fn parse_pad(
     let mut slot: Option<(Nm, Nm)> = None;
     let mut layers: Vec<Layer> = Vec::new();
     let mut net_id: Option<NetId> = None;
+    let mut mask_margin: Option<Nm> = None;
 
     for prop in &elements[3..] {
         if let Some(name) = list_name(prop) {
@@ -1446,6 +1450,21 @@ pub(crate) fn parse_pad(
                 "net" => {
                     net_id = kicad_net_map.resolve(prop);
                 }
+                // How far this pad's mask opening runs past its copper, when
+                // the pad states its own instead of taking the board's. KiCad
+                // writes `(solder_mask_margin 0.1016)` - 4 mil - and a
+                // through-hole connector's pads carry it so the mask does not
+                // creep onto copper a hand-soldered joint has to wet. Dropped
+                // until now: 124 pads of the 2623 in this repository's KiCad
+                // files state one, and every one of them was exported with the
+                // board's figure instead.
+                "solder_mask_margin" => {
+                    if let Ok(list) = prop.list() {
+                        if let Some(mm) = list.get(1).and_then(get_f64) {
+                            mask_margin = Some(Nm::from_mm(mm));
+                        }
+                    }
+                }
                 _ => {}
             }
         }
@@ -1483,6 +1502,7 @@ pub(crate) fn parse_pad(
         slot,
         layers,
         net_id,
+        mask_margin,
     }))
 }
 

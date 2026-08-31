@@ -53,6 +53,7 @@ fn board() -> (BoardWorld, FootprintLibrary) {
             drill: Some(Nm::from_mm(0.9)),
             slot: None,
             layers: vec![Layer::TopCopper, Layer::BottomCopper],
+            mask_margin: None,
         }],
         ..base
     });

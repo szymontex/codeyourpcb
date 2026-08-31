@@ -48,6 +48,7 @@ fn mounting_hole(name: &str, screw: &str, drill: Nm) -> Footprint {
             // The whole point. `PadDef::is_non_plated` reads this, the drill
             // file splits on it, and the router blocks the hole because of it.
             layers: Vec::new(),
+            mask_margin: None,
         }],
         bounds: Rect::from_center_size(Point::ORIGIN, (drill, drill)),
         courtyard: Rect::from_center_size(Point::ORIGIN, (outer, outer)),

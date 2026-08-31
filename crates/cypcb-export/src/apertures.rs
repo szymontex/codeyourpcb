@@ -205,6 +205,7 @@ impl ApertureManager {
 ///     drill: None,
 ///     slot: None,
 ///     layers: vec![Layer::TopCopper],
+///     mask_margin: None,
 /// };
 ///
 /// let aperture = aperture_for_pad(&pad);
@@ -376,6 +377,7 @@ mod tests {
             drill: None,
             slot: None,
             layers: vec![Layer::TopCopper],
+            mask_margin: None,
         };
 
         let aperture = aperture_for_pad(&pad);
@@ -397,6 +399,7 @@ mod tests {
             drill: None,
             slot: None,
             layers: vec![Layer::TopCopper],
+            mask_margin: None,
         };
 
         let aperture = aperture_for_pad(&pad);
@@ -419,6 +422,7 @@ mod tests {
             drill: None,
             slot: None,
             layers: vec![Layer::TopCopper],
+            mask_margin: None,
         };
 
         let aperture = aperture_for_pad(&pad);
@@ -441,6 +445,7 @@ mod tests {
             drill: None,
             slot: None,
             layers: vec![Layer::TopCopper],
+            mask_margin: None,
         };
 
         let aperture = aperture_for_pad(&pad);

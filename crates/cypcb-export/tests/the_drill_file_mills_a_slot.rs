@@ -49,6 +49,7 @@ fn board_with_hole(
             drill: Some(drill),
             slot,
             layers: vec![Layer::TopCopper, Layer::BottomCopper],
+            mask_margin: None,
         }],
         ..base
     });

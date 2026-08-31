@@ -124,6 +124,7 @@ mod tests {
                 drill: Some(Nm::from_mm(drill_mm)),
                 slot: None,
                 layers: vec![Layer::TopCopper, Layer::BottomCopper],
+                mask_margin: None,
             }],
             ..base
         });
@@ -212,6 +213,7 @@ mod tests {
                 drill: None,
                 slot: None,
                 layers: vec![Layer::TopCopper],
+                mask_margin: None,
             }],
             ..base
         });

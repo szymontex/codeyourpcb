@@ -1533,6 +1533,7 @@ impl PcbEngine {
                 drill: pad.drill_nm.map(Nm),
                 slot: pad.slot_nm.map(|(w, h)| (Nm(w), Nm(h))),
                 layers,
+                mask_margin: None,
             });
         }
 

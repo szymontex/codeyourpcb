@@ -216,6 +216,7 @@ fn read_pad(pad: &Sexp) -> Result<Option<PadDef>, KicadImportError> {
         drill: if states_drill { parsed.drill } else { None },
         slot: parsed.slot,
         layers: parsed.layers,
+        mask_margin: parsed.mask_margin,
     }))
 }
 

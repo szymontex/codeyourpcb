@@ -117,6 +117,7 @@ pub fn gullwing_footprint(
             drill: None,
             slot: None,
             layers: layers.clone(),
+            mask_margin: None,
         });
     }
 
@@ -133,6 +134,7 @@ pub fn gullwing_footprint(
             drill: None,
             slot: None,
             layers: layers.clone(),
+            mask_margin: None,
         });
     }
 
@@ -269,6 +271,7 @@ pub fn sot23() -> Footprint {
                 drill: None,
                 slot: None,
                 layers: layers.clone(),
+                mask_margin: None,
             },
             // Pin 2: right side bottom
             PadDef {
@@ -279,6 +282,7 @@ pub fn sot23() -> Footprint {
                 drill: None,
                 slot: None,
                 layers: layers.clone(),
+                mask_margin: None,
             },
             // Pin 3: top center
             PadDef {
@@ -289,6 +293,7 @@ pub fn sot23() -> Footprint {
                 drill: None,
                 slot: None,
                 layers,
+                mask_margin: None,
             },
         ],
         bounds: Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(3.0), Nm::from_mm(2.5))),
@@ -351,6 +356,7 @@ pub fn sot23_5() -> Footprint {
                 drill: None,
                 slot: None,
                 layers: layers.clone(),
+                mask_margin: None,
             },
             PadDef {
                 number: "2".into(),
@@ -360,6 +366,7 @@ pub fn sot23_5() -> Footprint {
                 drill: None,
                 slot: None,
                 layers: layers.clone(),
+                mask_margin: None,
             },
             PadDef {
                 number: "3".into(),
@@ -369,6 +376,7 @@ pub fn sot23_5() -> Footprint {
                 drill: None,
                 slot: None,
                 layers: layers.clone(),
+                mask_margin: None,
             },
             // Pins 4-5: right side, top to bottom
             PadDef {
@@ -379,6 +387,7 @@ pub fn sot23_5() -> Footprint {
                 drill: None,
                 slot: None,
                 layers: layers.clone(),
+                mask_margin: None,
             },
             PadDef {
                 number: "5".into(),
@@ -388,6 +397,7 @@ pub fn sot23_5() -> Footprint {
                 drill: None,
                 slot: None,
                 layers,
+                mask_margin: None,
             },
         ],
         bounds: Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(3.0), Nm::from_mm(3.0))),
@@ -462,6 +472,7 @@ pub fn tqfp32() -> Footprint {
             drill: None,
             slot: None,
             layers: layers.clone(),
+            mask_margin: None,
         });
         pin_num += 1;
     }
@@ -477,6 +488,7 @@ pub fn tqfp32() -> Footprint {
             drill: None,
             slot: None,
             layers: layers.clone(),
+            mask_margin: None,
         });
         pin_num += 1;
     }
@@ -492,6 +504,7 @@ pub fn tqfp32() -> Footprint {
             drill: None,
             slot: None,
             layers: layers.clone(),
+            mask_margin: None,
         });
         pin_num += 1;
     }
@@ -507,6 +520,7 @@ pub fn tqfp32() -> Footprint {
             drill: None,
             slot: None,
             layers: layers.clone(),
+            mask_margin: None,
         });
         pin_num += 1;
     }

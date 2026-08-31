@@ -275,8 +275,16 @@ fn export_mask_openings(
             // Get base aperture shape for this pad
             let base_shape = aperture_for_pad(pad);
 
-            // Apply mask expansion
-            let expanded_shape = apply_expansion(base_shape, config.mask_expansion);
+            // How far the opening runs past the copper. The board's figure
+            // comes from the fabricator's table and covers every pad on it;
+            // a pad that states its own is a pad whose part needs one, and
+            // KiCad writes that per pad - `(solder_mask_margin 0.1016)` on a
+            // through-hole connector, so the mask does not creep onto copper
+            // a hand-soldered joint has to wet. Read since 2026-08-31 and
+            // dropped before it, which meant those pads were made with the
+            // board's figure instead of the one their footprint asked for.
+            let expansion = pad.mask_margin.unwrap_or(config.mask_expansion);
+            let expanded_shape = apply_expansion(base_shape, expansion);
 
             let dcode = apertures.get_or_create(expanded_shape);
 
@@ -471,6 +479,7 @@ mod tests {
                 drill: None, // SMD pad
                 slot: None,
                 layers: vec![Layer::TopCopper],
+                mask_margin: None,
             }],
         };
         library.register(footprint);
@@ -519,6 +528,7 @@ mod tests {
                 drill: Some(Nm::from_mm(0.6)), // THT pad with drill
                 slot: None,
                 layers: vec![Layer::TopCopper],
+                mask_margin: None,
             }],
         };
         library.register(footprint);

@@ -31,6 +31,7 @@ fn two_pad_footprint() -> Footprint {
         drill: None,
         slot: None,
         layers: vec![Layer::TopCopper],
+        mask_margin: None,
     };
 
     Footprint {

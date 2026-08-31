@@ -73,6 +73,7 @@ fn chip_footprint(
                 drill: None,
                 slot: None,
                 layers: smd_layers.clone(),
+                mask_margin: None,
             },
             PadDef {
                 number: "2".into(),
@@ -82,6 +83,7 @@ fn chip_footprint(
                 drill: None,
                 slot: None,
                 layers: smd_layers,
+                mask_margin: None,
             },
         ],
         bounds: Rect::from_center_size(Point::ORIGIN, (body_width, body_height)),

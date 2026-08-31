@@ -502,6 +502,7 @@ mod tests {
             layers: vec![Layer::TopCopper],
             drill: None,
             slot: None,
+            mask_margin: None,
         };
 
         let pad2 = PadDef {
@@ -512,6 +513,7 @@ mod tests {
             layers: vec![Layer::TopCopper],
             drill: None,
             slot: None,
+            mask_margin: None,
         };
 
         Footprint {
@@ -637,6 +639,7 @@ mod tests {
             layers: vec![Layer::BottomCopper], // Bottom side only
             drill: None,
             slot: None,
+            mask_margin: None,
         };
 
         let footprint = Footprint {

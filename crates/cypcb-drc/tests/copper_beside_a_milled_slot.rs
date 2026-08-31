@@ -54,6 +54,7 @@ fn board_with_a_slot_rotated(x: f64, y: f64, rotation: Rotation) -> (BoardWorld,
             drill: Some(Nm::from_mm(1.0)),
             slot: Some((Nm::from_mm(2.4), Nm::from_mm(1.0))),
             layers: vec![Layer::TopCopper, Layer::BottomCopper],
+            mask_margin: None,
         }],
         ..base
     });
