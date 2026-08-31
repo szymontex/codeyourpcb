@@ -1315,6 +1315,34 @@ pub(crate) struct ParsedPad {
     pub(crate) net_id: Option<NetId>,
 }
 
+/// The corner a `roundrect` pad states, as a percentage of its short side.
+///
+/// KiCad writes `(roundrect_rratio 0.25)` inside the pad, and this read 25 for
+/// every rounded pad whatever the file said. Measured on the KiCad files in
+/// this repository: **427 pads state 0.25 and four state 0.2**, and those four
+/// came back with corners a fifth larger than the ones their board was drawn
+/// with. A pad's corner is the copper nearest its neighbour, so it is the
+/// figure a clearance is measured from.
+///
+/// A pad that states no ratio keeps the 25% this reader has always used, which
+/// is a fallback rather than a reading: nothing in the file says it.
+///
+/// Half the short side is a stadium and there is nothing past it to draw, so a
+/// larger ratio is held to half - by `PadShape::round_rect`, which is why the
+/// shape is built through it rather than by naming the variant.
+fn corner_ratio(elements: &[Sexp]) -> u8 {
+    for element in elements {
+        if list_name(element).as_deref() == Some("roundrect_rratio") {
+            if let Ok(list) = element.list() {
+                if let Some(ratio) = list.get(1).and_then(get_f64) {
+                    return (ratio * 100.0).round() as u8;
+                }
+            }
+        }
+    }
+    25
+}
+
 pub(crate) fn parse_pad(
     elements: &[Sexp],
     kicad_net_map: &NetIndex,
@@ -1337,8 +1365,8 @@ pub(crate) fn parse_pad(
         "rect" => PadShape::Rect,
         "circle" => PadShape::Circle,
         "oval" => PadShape::Oblong,
-        "roundrect" => PadShape::round_rect(25), // Default corner ratio
-        _ => PadShape::Rect,                     // Fallback
+        "roundrect" => PadShape::round_rect(corner_ratio(elements)),
+        _ => PadShape::Rect, // Fallback
     };
 
     let is_through_hole = pad_type_str == "thru_hole" || pad_type_str == "np_thru_hole";
