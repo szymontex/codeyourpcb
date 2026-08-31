@@ -509,6 +509,21 @@ pub fn parse_kicad_pcb_str(content: &str) -> Result<KicadPcbParseResult, KicadPc
     let mut world = world;
     world.set_footprints(library.clone());
 
+    // And the board goes into the spatial index before anybody is handed it.
+    //
+    // Every rule that pairs one thing with another - clearance first among
+    // them - walks `world.spatial()`, and an index nobody filled is an index
+    // with nothing in it: `ClearanceRule` on a board imported here compared
+    // **no pairs at all** and reported a clean board every time. Measured
+    // 2026-08-31 on the four KiCad boards in this repository: 0 entries before
+    // this line, 4 to 14 after it, and the same 0 violations either way - the
+    // boards really are clean, which is exactly why nothing noticed.
+    //
+    // The command-line path filled the index itself (`board_source.rs`), so
+    // the shipped `cypcb check` was never blind; anything holding this crate
+    // directly was. Filling it here means a caller cannot get it wrong.
+    world.rebuild_spatial_index_from_library(&library);
+
     Ok(KicadPcbParseResult {
         world,
         library,

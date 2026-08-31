@@ -206,6 +206,15 @@ fn nothing_in_this_repository_is_refused_for_a_corner_today() {
     // no board here is being refused at all - with corners or without them.
     // The day one of them is refused, the case above says whether a corner is
     // the reason.
+    //
+    // When this case was written the rule reported nothing for a different
+    // reason: `parse_kicad_pcb` handed back a world whose spatial index was
+    // empty, and every rule that pairs two things walks that index. The
+    // reading was true and the reason was not established, which is the same
+    // shape as a passing check that never ran. The index is filled where the
+    // board is read now, and the control that proves this rule can report on
+    // these boards at all lives in
+    // `a_board_read_from_kicad_is_in_the_index`.
     let rules = DesignRules::jlcpcb_2layer();
     for board in BOARDS {
         let parsed = cypcb_kicad::parse_kicad_pcb(&repo_root().join(board))
