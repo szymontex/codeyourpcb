@@ -1004,6 +1004,19 @@ pub struct PadDef {
     /// the model, the drill file, the KiCad file and the screen, from KiCad
     /// imports only.
     pub drill_height: Option<Dimension>,
+    /// How round the corners of a `roundrect` pad are, in percent of its short
+    /// side.
+    ///
+    /// `corner 20%`. KiCad states this on every rounded pad it writes -
+    /// `(roundrect_rratio 0.2)` - and this language could not, so a board
+    /// imported from KiCad and written back out lost it: the importer read
+    /// 20%, the writer wrote the word `roundrect`, and reading that back gave
+    /// the 25% fallback. A pad's corner is the copper nearest its neighbour,
+    /// which is what a clearance is measured from.
+    ///
+    /// `None` on any other shape, and on a `roundrect` that states none, which
+    /// keeps the 25% this project has always used.
+    pub corner_ratio: Option<u8>,
     /// Source span.
     pub span: Span,
 }

@@ -560,7 +560,7 @@ const KEYWORD_DOCS: Record<string, string> = {
   layer: 'Copper layer.\n\nTrace: `layer Top` / `layer Bottom`\nZone: `layer top` / `layer bottom` / `layer all`',
   locked: 'Prevent autorouter modification.\n\nSyntax: `locked`',
   bounds: 'Zone boundary.\n\nSyntax: `bounds <x1>mm,<y1>mm to <x2>mm,<y2>mm`',
-  pad: 'Footprint pad.\n\nSyntax: `pad <n> <rect|circle|roundrect|oblong> at <x>mm,<y>mm size <w>mm x <h>mm [drill <d>mm]`\n\nTwo drill numbers make a slot, milled along its length rather than drilled: `drill 2.4mm x 1.0mm`. That is how a USB receptacle, a barrel jack or a latching header anchors itself.',
+  pad: 'Footprint pad.\n\nSyntax: `pad <n> <rect|circle|roundrect|oblong> at <x>mm,<y>mm size <w>mm x <h>mm [drill <d>mm] [corner <n>%]`\n\nTwo drill numbers make a slot, milled along its length rather than drilled: `drill 2.4mm x 1.0mm`. That is how a USB receptacle, a barrel jack or a latching header anchors itself.\n\n`corner 20%` is how round a `roundrect` pad is, as a percentage of its short side - the figure KiCad writes on every rounded pad. A pad that states none is drawn at 25%.',
   courtyard: 'Courtyard.\n\nSyntax: `courtyard <w>mm x <h>mm`',
   description: 'Description.\n\nSyntax: `description "<text>"`',
   stackup: 'Layer stackup.\n\nSyntax: `stackup { copper ... prepreg ... }`',

@@ -680,6 +680,7 @@ module.exports = grammar({
       'x',
       field('height', $.dimension),
       optional(field('drill', $.drill_spec)),
+      optional(field('corner', $.corner_spec)),
     ),
 
     // `drill 0.9mm` is a round hole; `drill 2.4mm x 1.0mm` is a slot, milled
@@ -691,6 +692,14 @@ module.exports = grammar({
       field('width', $.dimension),
       optional(seq('x', field('height', $.dimension))),
     ),
+
+    // `corner 20%` is how round the corners of a `roundrect` pad are, as a
+    // percentage of the pad's short side. KiCad states it on every rounded pad
+    // - `(roundrect_rratio 0.2)` - and this language could not, so a board
+    // imported from KiCad and written back out carried square-cornered
+    // arithmetic behind a rounded word: the reader knew 20%, the writer wrote
+    // `roundrect`, and reading that back gave 25%.
+    corner_spec: $ => seq('corner', field('ratio', $.number), '%'),
 
     pad_shape: $ => choice('rect', 'circle', 'roundrect', 'oblong'),
 

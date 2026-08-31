@@ -1099,6 +1099,12 @@ pub fn board_as_dsl(world: &mut BoardWorld) -> String {
                     }
                 }
             }
+            // How round the corners are, which the word `roundrect` does not
+            // say. A board imported from KiCad states this per pad, and a
+            // design saved without it read back as 25% whatever it had been.
+            if let crate::components::PadShape::RoundRect { corner_ratio } = pad.shape {
+                let _ = write!(out, " corner {corner_ratio}%");
+            }
             let _ = writeln!(out);
         }
 

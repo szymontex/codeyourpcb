@@ -1544,6 +1544,32 @@ impl<'a> Reader<'a> {
             (None, None)
         };
 
+        // `corner 20%` is how round a rounded pad's corners are, as a
+        // percentage of its short side. KiCad writes one on every `roundrect`
+        // pad and this language could not, so a board imported from KiCad and
+        // saved from here came back with 25% corners whatever the board said.
+        //
+        // Half the short side is a stadium and there is nothing past it to
+        // draw, so a larger figure is refused rather than quietly held to
+        // half: a number somebody wrote and the tool changed is worse than one
+        // it would not take.
+        let corner_ratio = if self.eat_word("corner") {
+            let (value, _) = self.number()?;
+            if self.peek() == Some(&TokenKind::Op("%".to_string())) {
+                self.bump();
+            } else {
+                self.unexpected("`%` after a corner ratio");
+                return None;
+            }
+            if !(0.0..=50.0).contains(&value) {
+                self.unexpected("a corner of at most 50% - half the pad's short side is a stadium");
+                return None;
+            }
+            Some(value.round() as u8)
+        } else {
+            None
+        };
+
         Some(PadDef {
             number,
             shape,
@@ -1553,6 +1579,7 @@ impl<'a> Reader<'a> {
             height,
             drill,
             drill_height,
+            corner_ratio,
             span: Span::new(start, self.behind()),
         })
     }

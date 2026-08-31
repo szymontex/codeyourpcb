@@ -293,6 +293,22 @@
     }
   },
   {
+    "type": "corner_spec",
+    "named": true,
+    "fields": {
+      "ratio": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "number",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "courtyard_property",
     "named": true,
     "fields": {
@@ -1134,6 +1150,16 @@
     "type": "pad_definition",
     "named": true,
     "fields": {
+      "corner": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "corner_spec",
+            "named": true
+          }
+        ]
+      },
       "drill": {
         "multiple": false,
         "required": false,
@@ -3071,6 +3097,10 @@
   },
   {
     "type": "core",
+    "named": false
+  },
+  {
+    "type": "corner",
     "named": false
   },
   {

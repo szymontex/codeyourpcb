@@ -2152,7 +2152,7 @@ fn convert_footprint_def(fp_def: &FootprintDef, copper_layers: u8) -> Footprint 
                 let is_tht = p.drill.is_some();
                 FootprintPadDef {
                     number: p.number.to_string(),
-                    shape: convert_pad_shape(p.shape),
+                    shape: convert_pad_shape(p.shape, p.corner_ratio),
                     position: Point::new(p.x.to_nm(), p.y.to_nm()),
                     size: (p.width.to_nm(), p.height.to_nm()),
                     // `drill 2.4mm x 1.0mm` is a slot; the narrow dimension is
@@ -2246,11 +2246,13 @@ fn convert_footprint_def(fp_def: &FootprintDef, copper_layers: u8) -> Footprint 
 }
 
 /// Convert AST PadShape to ECS PadShape.
-fn convert_pad_shape(shape: AstPadShape) -> EcsPadShape {
+fn convert_pad_shape(shape: AstPadShape, corner_ratio: Option<u8>) -> EcsPadShape {
     match shape {
         AstPadShape::Rect => EcsPadShape::Rect,
         AstPadShape::Circle => EcsPadShape::Circle,
-        AstPadShape::RoundRect => EcsPadShape::RoundRect { corner_ratio: 25 }, // Default 25%
+        // The corner the design states, and 25% when it states none - which is
+        // this project's fallback rather than a figure anybody wrote.
+        AstPadShape::RoundRect => EcsPadShape::round_rect(corner_ratio.unwrap_or(25)),
         AstPadShape::Oblong => EcsPadShape::Oblong,
     }
 }

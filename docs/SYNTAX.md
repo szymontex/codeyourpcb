@@ -1143,7 +1143,7 @@ Define custom footprints inline:
 footprint <name> {
     description "<text>"
     courtyard <width> x <height>
-    pad <number> <shape> at <x>, <y> size <w> x <h> [drill <d> [x <d2>]]
+    pad <number> <shape> at <x>, <y> size <w> x <h> [drill <d> [x <d2>]] [corner <n>%]
     silk line <x>, <y> to <x>, <y> [width <w>]
     silk circle <x>, <y> radius <r> [width <w>]
     ...
@@ -1203,6 +1203,17 @@ footprint POLARISED {
 - `circle`: Circular pad
 - `roundrect`: Rounded rectangle
 - `oblong`: Oval/stadium shape
+
+**Corner:**
+- `corner <n>%` says how round a `roundrect` pad's corners are, as a
+  percentage of the pad's short side: `pad 1 roundrect at 0mm, 0mm size 1mm x
+  1mm corner 20%`
+- A `roundrect` that states none is drawn at 25%, which is this project's
+  fallback rather than a figure the design gave
+- At most 50%: half the short side is a stadium, and a larger figure is
+  refused rather than quietly reduced
+- KiCad states this on every rounded pad it writes, so a board imported with
+  `from-kicad` carries the corners it was drawn with
 
 **Drill:**
 - If `drill` is specified, pad is through-hole (THT)

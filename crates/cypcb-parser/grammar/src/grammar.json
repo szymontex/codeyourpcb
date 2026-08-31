@@ -2329,6 +2329,22 @@
               "type": "BLANK"
             }
           ]
+        },
+        {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "FIELD",
+              "name": "corner",
+              "content": {
+                "type": "SYMBOL",
+                "name": "corner_spec"
+              }
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
         }
       ]
     },
@@ -2371,6 +2387,27 @@
               "type": "BLANK"
             }
           ]
+        }
+      ]
+    },
+    "corner_spec": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "STRING",
+          "value": "corner"
+        },
+        {
+          "type": "FIELD",
+          "name": "ratio",
+          "content": {
+            "type": "SYMBOL",
+            "name": "number"
+          }
+        },
+        {
+          "type": "STRING",
+          "value": "%"
         }
       ]
     },

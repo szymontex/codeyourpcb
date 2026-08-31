@@ -1225,6 +1225,16 @@ impl CypcbParser {
             .and_then(|spec| get_child_by_field(spec, "height"))
             .and_then(|n| self.convert_dimension(source, &n, errors));
 
+        // `corner 20%`, the same field the hand reader takes: a rounded pad's
+        // corner as a percentage of its short side.
+        let corner_ratio = match get_child_by_field(node, "corner") {
+            Some(spec) => get_child_by_field(&spec, "ratio")
+                .and_then(|n| node_text(source, &n).parse::<f64>().ok())
+                .filter(|value| (0.0..=50.0).contains(value))
+                .map(|value| value.round() as u8),
+            None => None,
+        };
+
         Some(PadDef {
             number,
             shape,
@@ -1234,6 +1244,7 @@ impl CypcbParser {
             height,
             drill,
             drill_height,
+            corner_ratio,
             span: span_of(node),
         })
     }
@@ -2902,6 +2913,32 @@ footprint THT_2PIN {
             let drill = pad1.drill.as_ref().expect("drill should be present");
             assert!((drill.value - 1.0).abs() < 0.001);
             assert_eq!(drill.unit, Unit::Mm);
+        } else {
+            panic!("expected footprint definition");
+        }
+    }
+
+    /// The corner a rounded pad states, through the tree-sitter reader.
+    ///
+    /// Both readers take `corner 20%` and the hand reader is the one the
+    /// binary uses, so this side had no case at all until it was written -
+    /// which is how a grammar and a converter drift apart.
+    #[test]
+    fn a_rounded_pad_states_its_corner() {
+        let source = r#"
+footprint ROUNDED {
+    pad 1 roundrect at 0mm, 0mm size 1mm x 1mm corner 20%
+    pad 2 roundrect at 2mm, 0mm size 1mm x 1mm
+}
+"#;
+        let result = parse(source);
+        assert!(result.is_ok(), "errors: {:?}", result.errors);
+
+        if let Definition::Footprint(fp) = &result.value.definitions[0] {
+            assert_eq!(fp.pads[0].corner_ratio, Some(20));
+            // A pad that states none carries none, and the 25% a board is
+            // drawn with is decided where the design becomes a board.
+            assert_eq!(fp.pads[1].corner_ratio, None);
         } else {
             panic!("expected footprint definition");
         }
