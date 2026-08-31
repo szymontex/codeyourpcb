@@ -73,6 +73,14 @@ impl DrcRule for EdgeClearanceRule {
         // zone's own outline can answer, and a plane hanging off the board is
         // copper the router will cut through - which nothing reported before,
         // because nothing looked.
+        // A component sits in the index as its **courtyard**, and a courtyard
+        // is not copper. This rule measured that box until 2026-08-31, so a
+        // part whose body overhangs the edge while its pads stay well inside
+        // was refused for copper it does not have - the same defect
+        // `ClearanceRule` was fixed for, and the same collector fixes it:
+        // where a component has pad geometry, its pads are what gets measured.
+        let pad_map = super::clearance::component_pads(world);
+
         let mut entries: Vec<_> = world.spatial().iter().cloned().collect();
         for (entity, zone) in world.zones() {
             // `is_copper_pour`, not `!is_keepout`: this measures copper against
@@ -93,12 +101,30 @@ impl DrcRule for EdgeClearanceRule {
         }
 
         for entry in &entries {
-            let min_x = entry.envelope.lower()[0];
-            let min_y = entry.envelope.lower()[1];
-            let max_x = entry.envelope.upper()[0];
-            let max_y = entry.envelope.upper()[1];
+            // The copper this entry stands for: a component's pads where it
+            // has them, the entry's own box otherwise - a trace or a pour is
+            // copper already.
+            let boxes: Vec<(i64, i64, i64, i64)> = match pad_map.get(&entry.entity.index()) {
+                Some(pads) if !pads.is_empty() => pads
+                    .iter()
+                    .map(|pad| {
+                        (
+                            pad.box_.lower()[0],
+                            pad.box_.lower()[1],
+                            pad.box_.upper()[0],
+                            pad.box_.upper()[1],
+                        )
+                    })
+                    .collect(),
+                _ => vec![(
+                    entry.envelope.lower()[0],
+                    entry.envelope.lower()[1],
+                    entry.envelope.upper()[0],
+                    entry.envelope.upper()[1],
+                )],
+            };
 
-            let min_dist = match &outline {
+            let distance_of = |(min_x, min_y, max_x, max_y): (i64, i64, i64, i64)| match &outline {
                 Some(outline) => distance_to_outline(outline, min_x, min_y, max_x, max_y),
                 None => {
                     // Distance to each edge (negative means outside board)
@@ -109,6 +135,16 @@ impl DrcRule for EdgeClearanceRule {
                     dist_left.min(dist_bottom).min(dist_right).min(dist_top)
                 }
             };
+
+            // The nearest piece of this entry's copper, and one report per
+            // entry rather than one per pad: a part too close to the edge is
+            // one fault however many of its pads are out.
+            let Some((min_x, min_y, max_x, max_y)) =
+                boxes.into_iter().min_by_key(|&box_| distance_of(box_))
+            else {
+                continue;
+            };
+            let min_dist = distance_of((min_x, min_y, max_x, max_y));
 
             if min_dist < min_edge.0 {
                 let center = Point::new(Nm((min_x + max_x) / 2), Nm((min_y + max_y) / 2));
