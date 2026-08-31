@@ -12,9 +12,11 @@
 //
 // Each half states the impedance it wants - 90ohm is what a USB pair is
 // specified at - and the checker measures that against the stack. This board
-// declares no stackup, so there is nothing to measure it with and the checker
-// says nothing rather than guessing; give the board a `stackup` and the same
-// line becomes a number.
+// states the stack that holds them - 0.41mm of FR4 under 1oz copper - so the
+// 0.2mm traces really are near 90 ohm and the checker measures it rather than
+// taking the number on faith. A board that states no stackup gets one
+// `impedance` line per net instead: `Not checked - not passed`, because
+// silence from a checker reads as a pass.
 //
 // The gap between the halves is not checked: that is the other half of a
 // differential-pair rule and needs the router to place them alongside each
@@ -32,6 +34,17 @@ board usb_diff_pair {
     size 30mm x 20mm
     layers 2
     fab jlcpcb
+
+    // What the traces below are measured against. A microstrip's impedance is
+    // its width, its height above the plane under it and what is in between;
+    // without these three the checker can only say it was not asked.
+    stackup {
+        copper "F.Cu" 1oz
+        core "dielectric 1" 0.41mm material "FR4" dk 4.6 df 0.018
+        copper "B.Cu" 1oz
+
+        finish "HASL"
+    }
 }
 
 component J1 connector "PIN-HDR-1x2" {

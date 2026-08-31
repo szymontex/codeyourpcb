@@ -51,9 +51,15 @@ impl DrcRule for ImpedanceRule {
     fn check(&self, world: &mut BoardWorld, _rules: &DesignRules) -> Vec<DrcViolation> {
         let Some(stackup) = world.stackup().cloned() else {
             // A board that describes no stack cannot be asked what it
-            // delivers. That is reported by `stackup`'s own rule rather than
-            // repeated per trace here.
-            return Vec::new();
+            // delivers, and until 2026-08-31 that was the end of it: this
+            // returned nothing and said the `stackup` rule would speak
+            // instead. It does not - that rule reports nothing when a design
+            // states no stack, because taking the fab's is ordinary and not a
+            // fault. So a net asking for 90 ohm on a stackless board passed in
+            // silence, which is the exact failure this rule's own header names:
+            // a controlled-impedance net that goes unchecked looks like one
+            // that passed.
+            return unchecked_without_a_stack(world);
         };
         let copper_count = stackup.copper_count();
 
@@ -178,6 +184,45 @@ pub fn width_for(environment: CopperEnvironment, target_x100: u32) -> Option<Nm>
 }
 
 /// The impedance a trace of this width gets in these surroundings.
+/// Every net that asks for an impedance on a board that states no stack.
+///
+/// One report per net rather than per trace: a net is routed in many segments
+/// and the reason is the same for all of them. Reported at the first segment
+/// of that net, so the coordinate points at copper the reader can find.
+fn unchecked_without_a_stack(world: &mut BoardWorld) -> Vec<DrcViolation> {
+    let traces: Vec<(bevy_ecs::entity::Entity, NetId, Point)> = {
+        let ecs = world.ecs_mut();
+        let mut query = ecs.query::<(bevy_ecs::entity::Entity, &Trace)>();
+        query
+            .iter(ecs)
+            .filter_map(|(entity, trace)| Some((entity, trace.net_id, midpoint(trace)?)))
+            .collect()
+    };
+
+    let mut said: BTreeSet<(u32, String)> = BTreeSet::new();
+    let mut violations = Vec::new();
+    for (entity, net_id, at) in traces {
+        let Some(target) = world
+            .net_constraints(net_id)
+            .and_then(|c| c.impedance_ohms_x100)
+        else {
+            continue;
+        };
+        if !said.insert((net_id.0, String::new())) {
+            continue;
+        }
+        let net_name = world.net_name(net_id).unwrap_or("unnamed").to_string();
+        let mut violation = DrcViolation::impedance(entity, at);
+        violation.message = format!(
+            "net '{net_name}' asks for {} and this design states no stackup, so nothing can be asked what it delivers. \
+             Give the board a `stackup` and this becomes a measurement. Not checked - not passed",
+            format_ohms(target)
+        );
+        violations.push(violation);
+    }
+    violations
+}
+
 fn impedance_of(environment: CopperEnvironment, width: Nm) -> Option<u32> {
     match environment {
         CopperEnvironment::Microstrip {
