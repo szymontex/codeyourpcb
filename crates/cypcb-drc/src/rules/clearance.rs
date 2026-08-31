@@ -629,6 +629,21 @@ fn canonical_pair(a: u32, b: u32) -> (u32, u32) {
 ///
 /// Returns 0 if the AABBs touch or overlap.
 /// Uses i128 intermediates to prevent overflow during distance calculation.
+/// The gap between two boxes, which is the gap between two sharp corners when
+/// the pair is diagonal.
+///
+/// A `roundrect` pad has no sharp corner, so its copper is further from a
+/// diagonal neighbour than this says - by `r * (sqrt(2) - 1)` per pad, which
+/// on `charlieplex_3x3` is 207 microns against a 127 micron clearance. The
+/// error only ever refuses a board that is fine; it cannot pass one that is
+/// not.
+///
+/// Measured rather than argued about, and the measurement is a test:
+/// `cargo test -p cypcb-cli --test a_rounded_pad_is_measured_by_its_box`. On
+/// every KiCad board in this repository, **no pad pair sits inside the limit
+/// by its boxes and outside it by its copper**, so the boxes are left alone.
+/// That test fails on the first board where the two disagree, and then this
+/// function is worth teaching about arcs.
 fn aabb_distance(a: &AABB<[i64; 2]>, b: &AABB<[i64; 2]>) -> i64 {
     // Calculate gap in each dimension
     // If boxes overlap in a dimension, the gap is 0
