@@ -181,8 +181,12 @@ the site returns rather than from what a forum of its kind usually holds.
   **1856**, `layout` **216**, `eagle` **102**, `bom` **73**, `gerber` **50**,
   `kicad` **25**, `altium` **4**. A title is a weak proxy for what a thread
   holds, so this is the shape of the board and not a file count.
-- **A guest sees pictures, not files - and that is the answer that costs this
-  project the most.** Five pages sampled across the board's whole age:
+- **WRONG, and corrected on 2026-09-02 by the fetch below - read the correction
+  before using this bullet.** It generalised from five pages to 71301 threads.
+  The five do have no attachments; `technical-documents.19` has 921 of them in
+  the half of it fetched so far. Left standing rather than deleted because the
+  method fault is the lesson: five pages chosen by their titles is not a sample.
+  Original wording follows. Five pages sampled across the board's whole age:
   `v376-schematic.94465` (2026), `pultec-gerber-files.8472` (2009),
   `meta-docs-index.93577`, `bang-olufsen-b-o-bm5-stereo-ribbon-mic-disassembly.94556`,
   and the `technical-documents.19` listing. **Zero `/attachments/` links in all
@@ -252,20 +256,53 @@ board keeps of itself turns out to be incomplete.**
   than one page. This corrects the 3.2 hours in the entry above, which counted
   threads and not pages.
 
-- DONE: the catalogue, the intersection with the board's own index, and the
-  page-count model. **The fetch of all 413 pages was started at 2026-09-02
-  14:58 local** - resumable, skipping any page already on disk, stopping on the
-  first refusal, 32 seconds between requests.
-- NEXT-ACTION: **when the fetch lands, measure what a thread is actually worth
-  before deciding whether the next node follows.** Each page gives text and a
-  list of `cdn.imagearchive.com` URLs, so the two figures that matter are bytes
-  of prose per thread and images per thread - the second sizes a job this entry
-  has never costed, because the CDN is a different host and `groupdiy.com`'s
-  `robots.txt` does not speak for it. Read that host's own rules before fetching
-  one image. **The two owner calls still gate the rest**: whether to register an
-  account, which is the only way to learn whether members are served design
-  files rather than pictures, and where the mirror lives - the fetch currently
-  writes to a laptop cache that no backup covers.
+**Read 2026-09-02 out of the fetch itself, 219 pages in. The entry above was
+wrong about the thing that matters most, and the correction is the finding.**
+
+- **The node is full of attachments.** Across 217 fetched pages covering 194 of
+  its 389 threads: **921 distinct attachments**, on **125 of the 194** threads,
+  a mean of 7.4 and a maximum of 74 per thread. By extension: 669 `.jpg`, 98
+  `.png`, 89 `.gif`, **33 `.zip`**, 29 `.jpeg`, one `.txt`, one `.mp4`, one
+  `.webp`. The 917 whose size the page states come to **1126 MB**.
+- **The zips are what this project came for.** `TRIDENT SCHEMATICS BUNDLE.zip`
+  7.8 MB, `Neve1080 Manual.pdf.zip` 8.8 MB, `ssl_bargraph_schematics.zip` 13.9
+  MB, `Ampex ATR-100 Series Manuals (Searchable).zip` 24.4 MB, `dbx 900 and 400
+  Series.zip` 41.3 MB, `Sony DPS Series SM and OM.zip` 47.9 MB, a Cadac G-type
+  schematic bundle at 98.3 MB.
+- **The listing is public; the file is not.** A guest reading a thread gets each
+  attachment's name, its size and a thumbnail from
+  `cdn.groupdiy.com/attachments/`. Asking for the file itself is refused:
+  `GET /attachments/korg-polysix-klm8049-klm8048-rom-files-zip.154495/` answers
+  **403** with the login page and the words `You must be logged-in to do that.`
+- **Prose is not where the value is, which is why the text-only reading of this
+  node looked empty.** Median thread prose is **264 characters**: these are
+  document threads, a line and a file. The AKG thread's first post is the string
+  `C414B-ULS` and an attachment named `AKG_C414B-ULS.gif`. An archive of the
+  text alone captures the card catalogue and none of the library.
+- **Neither CDN states a rule.** `cdn.imagearchive.com/robots.txt` and
+  `cdn.groupdiy.com/robots.txt` are byte-identical (md5
+  `3f95773253df085be0d6fd831ae2195f`), 1248 bytes of Cloudflare content-signal
+  boilerplate carrying **no directive and no signal set** - by its own clause
+  (c), permission is neither granted nor restricted. No crawl-delay is stated
+  there, so the parent site's 30 seconds is the rate to keep.
+- Embedded pictures, as opposed to attachments, are almost absent: of 29 distinct
+  `imagearchive.com` upload paths across 219 pages, **four appear on every
+  page** and are site furniture, and only 19 appear on fewer than ten.
+
+- DONE: the catalogue, the intersection with the board's own index, the
+  page-count model, and the attachment census over the first 219 pages. The
+  fetch started 2026-09-02 14:58 local is still running - resumable, skipping
+  any page already on disk, stopping on the first refusal, 32 seconds apart.
+- NEXT-ACTION: **finish the census when the fetch lands and put one number in
+  front of the owner.** Over all 389 threads: how many attachments, and how many
+  declared megabytes. That figure is the whole of the account question, because
+  the answer above sharpens it - **without an account this vector collects a
+  catalogue of file names; with one it collects the files.** Nothing else in
+  this entry is blocked, and no download should be attempted before the owner
+  decides, since every one of them is a 403 today. The second owner call stands
+  unchanged: where the mirror lives, given the fetch writes to a laptop cache
+  that no backup covers and the files themselves would be another gigabyte per
+  half-node.
 
 ### V9 - KiCad parity: what a board editor has and this does not
 
