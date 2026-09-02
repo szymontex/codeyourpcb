@@ -12,6 +12,7 @@
 //! So the two claims that name code are held here. Neither case reads prose:
 //! each asks the file the entry points at.
 
+use cypcb_autoroute::AutorouteConfig;
 use std::path::{Path, PathBuf};
 
 fn repo_root() -> PathBuf {
@@ -28,20 +29,34 @@ fn read(path: &str) -> String {
 
 #[test]
 fn k011_is_true_while_it_says_it_is() {
-    // K011 says the router still marks a pad as a circle of max(w, h) / 2
-    // while the checker uses rotated bounds. The day somebody fixes that, this
-    // fails and the entry gets its update in the same commit.
+    // K011 used to say the router marks every pad as a circle of max(w, h) / 2,
+    // and this case used to confirm it by grepping grid.rs for that expression.
+    // Both were wrong from 2026-08-28: the expression is the `None` arm of a
+    // choice whose shipped default is the rectangle, so the grep answered yes
+    // about a fallback while the entry described behaviour nobody gets. Ask the
+    // default instead - it is what `cypcb route` uses, and it is the only thing
+    // that can make the entry false again.
     let knowledge = read(".gsd/KNOWLEDGE.md");
-    let grid = read("crates/cypcb-autoroute/src/grid.rs");
 
-    let claims_violated =
-        knowledge.contains("### K011") && knowledge.contains("Still violated in one place");
-    let still_a_circle = grid.contains("pad.size.0.raw().max(pad.size.1.raw()) / 2");
+    let ships_the_rectangle = AutorouteConfig::default().pad_rect_extra_cells.is_some();
+    let entry_says_fixed =
+        knowledge.contains("### K011") && !knowledge.contains("Still violated in one place");
 
     assert_eq!(
-        claims_violated, still_a_circle,
-        "K011 says the router marks pads as circles ({claims_violated}) and \
-         grid.rs does ({still_a_circle}) - one of the two has moved"
+        entry_says_fixed, ships_the_rectangle,
+        "K011 says the pad shape is fixed ({entry_says_fixed}) and the shipped \
+         default marks a rectangle ({ships_the_rectangle}) - one of the two has moved"
+    );
+
+    assert!(
+        knowledge.contains("the_pad_shape_is_the_one_asked_for"),
+        "K011 no longer names the case that holds its claim"
+    );
+    assert!(
+        repo_root()
+            .join("crates/cypcb-autoroute/tests/the_pad_shape_is_the_one_asked_for.rs")
+            .exists(),
+        "K011 names a case that no longer exists"
     );
 }
 
