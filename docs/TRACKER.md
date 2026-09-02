@@ -315,18 +315,39 @@ number the account question turns on.**
   rest: this is the node the board built for documents, so it is the densest,
   and `the-lab.2` at 29700 threads is a different kind of place.
 
-- DONE: the node read end to end, its 1113 attachments catalogued, and the two
-  measurements the owner needs to answer. Nothing was downloaded: every
-  attachment is a 403 without an account.
-- NEXT-ACTION: **this vector is now waiting on the owner and should not be
-  advanced by fetching more.** The question is one line: **1113 files, 1.4 GB,
-  53 of them zipped schematic and service-manual bundles, all of it behind a
-  free forum registration - do we register?** No, and the archive is the 122581
-  bytes of file names already on disk. Yes, and it is 1.4 GB from this node
-  alone, which makes the second call - where the mirror lives - a storage
-  decision rather than a filing one. Until one of those is answered, spend fires
-  on the other vectors; fetching `the-lab.2` would cost 10 days to learn the
-  same thing.
+**The owner answered on 2026-09-03: register, and put the mirror on ZFS.**
+
+- **The mirror has a home and a convention.**
+  `/mnt/ZFSflightcore/all/!_ARCHIWA/groupdiy.com/` - `!_` and a capitalised word
+  is how every project directory on that pool is named. Inside: `katalogi/`
+  (`watki.tsv` 389 rows, `zalaczniki.tsv` 1113 rows), `technical-documents.19/`
+  with `threads/` (413 pages, 69 MB) and an empty `attachments/`, `skrypty/`
+  with the four fetchers, and a `README.md` that states the rules, the sample
+  and the verification commands. Verified on the pool: 413 HTML files, 389
+  distinct threads, 390 and 1114 TSV lines.
+- **The session cookie is not there yet.** Firefox's store, read at 2026-09-03
+  00:19, holds three cookies for the domain: `cf_clearance`, `__adblocker` and
+  `xf_fs_gu_reg_email` - a saved registration-form field. **No `xf_user`, no
+  `xf_session`**, so the browser is not logged in and the registration has not
+  completed into a session.
+- **The fetch of attachments has to run from the laptop, not the server.**
+  `cf_clearance` is bound to the IP and User-Agent that solved the challenge, so
+  a cookie taken from the owner's browser and used from the build host would
+  meet the challenge again. Pages fetch to the laptop cache, then rsync to the
+  pool - 57.7 MB moved in 41 seconds, so the 1.4 GB of attachments is about 17
+  minutes of transfer on top of the fetch.
+
+- DONE: the node read end to end, its 1113 attachments catalogued, the mirror
+  moved to ZFS under the pool's own naming convention with a README that states
+  the rules it was taken under, and the cookie store read. Nothing downloaded:
+  every attachment is a 403 without a session.
+- NEXT-ACTION: **waiting on one browser action, not on a decision.** The owner
+  has to finish logging in to `groupdiy.com` in Firefox with `Stay logged in`
+  ticked, so an `xf_user` cookie exists; `xf_session` alone expires too fast for
+  a nine-hour fetch. Then the cookie is read from the profile, one 2.9 KB zip is
+  fetched as a positive control, and the run starts: 1113 files at 30 seconds is
+  9.3 hours, or 53 zips alone at 27 minutes if the owner prefers the small
+  version. Nothing else in this vector moves until that cookie exists.
 
 ### V9 - KiCad parity: what a board editor has and this does not
 
