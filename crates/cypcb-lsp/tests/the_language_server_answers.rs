@@ -250,6 +250,39 @@ fn it_starts_and_says_what_it_can_do() {
     }
 }
 
+/// And it advertises nothing it has not implemented, which is the half a
+/// source grep cannot see.
+///
+/// `the_matrix_is_honest_about_us` decides what the comparison matrix may claim
+/// about this server by looking for `<name>_provider: Some(` in `backend.rs`.
+/// A field set in that struct and a capability the server answers with are not
+/// the same thing, and the difference is how K011 stayed false for five days: a
+/// line that exists is not a line that runs. Four of the seven capabilities
+/// that test knows about have no implementation here, so the wire is asked
+/// about them directly. The day one of them is written into `initialize`, this
+/// case fails and whoever wrote it has to make the server answer the request an
+/// editor will now send.
+#[test]
+fn it_advertises_nothing_it_has_not_implemented() {
+    let mut server = Server::start();
+    let result = server.initialize();
+
+    for capability in [
+        "referencesProvider",
+        "renameProvider",
+        "documentFormattingProvider",
+        "semanticTokensProvider",
+    ] {
+        assert!(
+            result
+                .pointer(&format!("/result/capabilities/{capability}"))
+                .is_none(),
+            "{capability} has no implementation in this crate, so the server must not \
+             advertise it - an editor that sees it will send the request: {result}"
+        );
+    }
+}
+
 #[test]
 fn a_file_it_cannot_read_comes_back_as_a_diagnostic() {
     let uri = "file:///virtual/lsp-probe/broken.cypcb";
