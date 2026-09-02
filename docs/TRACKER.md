@@ -289,20 +289,44 @@ wrong about the thing that matters most, and the correction is the finding.**
   `imagearchive.com` upload paths across 219 pages, **four appear on every
   page** and are site furniture, and only 19 appear on fewer than ten.
 
-- DONE: the catalogue, the intersection with the board's own index, the
-  page-count model, and the attachment census over the first 219 pages. The
-  fetch started 2026-09-02 14:58 local is still running - resumable, skipping
-  any page already on disk, stopping on the first refusal, 32 seconds apart.
-- NEXT-ACTION: **finish the census when the fetch lands and put one number in
-  front of the owner.** Over all 389 threads: how many attachments, and how many
-  declared megabytes. That figure is the whole of the account question, because
-  the answer above sharpens it - **without an account this vector collects a
-  catalogue of file names; with one it collects the files.** Nothing else in
-  this entry is blocked, and no download should be attempted before the owner
-  decides, since every one of them is a 403 today. The second owner call stands
-  unchanged: where the mirror lives, given the fetch writes to a laptop cache
-  that no backup covers and the files themselves would be another gigabyte per
-  half-node.
+**The fetch landed 2026-09-02 18:40. The node is read whole, and here is the
+number the account question turns on.**
+
+- **413 pages, 413 answers of 200, no refusal at any point.** 14:58:27 to
+  18:40:45, three hours forty-two minutes at 32 seconds a request, which is the
+  3.4-hour model plus the two extra seconds per request. The count matches the
+  predicted 413 exactly, so the page model above is now confirmed rather than
+  estimated. 56 MB of HTML on disk.
+- **1113 distinct attachments across the node's 389 threads.** **195 of the
+  389** carry at least one, so half this node is documents and half is talk. Per
+  carrying thread: median 3, mean 5.7, maximum **74**. Declared sizes total
+  **1.4 GB** over the 1107 that state one; 6 state none.
+- **By extension**: 790 `.jpg`, 112 `.png`, 105 `.gif`, **53 `.zip`**, 46
+  `.jpeg`, 4 `.txt`, 2 `.mp4`, 1 `.webp`. The 53 zips are service manuals and
+  schematic bundles.
+- **The heaviest threads are the names a person would want**: `Neve` 74
+  attachments, `Helios` 50, `RCA` 44, `Quad Eight` 30, `TRIDENT` 23, `Neumann`
+  21, `Ampex` 21, `Auditronics` 21, `Amek` 20, `Microtech Gefell` 19.
+- **The catalogue exists and is the whole of what an account-less archive can
+  hold**: thread, title, file name, declared size and URL for all 1113, 122581
+  bytes, outside the repository with the thread catalogue.
+- **One node of twelve, and the smallest one.** `technical-documents.19` is 389
+  of the board's 71301 threads. Nothing here should be multiplied out to the
+  rest: this is the node the board built for documents, so it is the densest,
+  and `the-lab.2` at 29700 threads is a different kind of place.
+
+- DONE: the node read end to end, its 1113 attachments catalogued, and the two
+  measurements the owner needs to answer. Nothing was downloaded: every
+  attachment is a 403 without an account.
+- NEXT-ACTION: **this vector is now waiting on the owner and should not be
+  advanced by fetching more.** The question is one line: **1113 files, 1.4 GB,
+  53 of them zipped schematic and service-manual bundles, all of it behind a
+  free forum registration - do we register?** No, and the archive is the 122581
+  bytes of file names already on disk. Yes, and it is 1.4 GB from this node
+  alone, which makes the second call - where the mirror lives - a storage
+  decision rather than a filing one. Until one of those is answered, spend fires
+  on the other vectors; fetching `the-lab.2` would cost 10 days to learn the
+  same thing.
 
 ### V9 - KiCad parity: what a board editor has and this does not
 
