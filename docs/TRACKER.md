@@ -337,17 +337,60 @@ number the account question turns on.**
   pool - 57.7 MB moved in 41 seconds, so the 1.4 GB of attachments is about 17
   minutes of transfer on top of the fetch.
 
-- DONE: the node read end to end, its 1113 attachments catalogued, the mirror
-  moved to ZFS under the pool's own naming convention with a README that states
-  the rules it was taken under, and the cookie store read. Nothing downloaded:
-  every attachment is a 403 without a session.
-- NEXT-ACTION: **waiting on one browser action, not on a decision.** The owner
-  has to finish logging in to `groupdiy.com` in Firefox with `Stay logged in`
-  ticked, so an `xf_user` cookie exists; `xf_session` alone expires too fast for
-  a nine-hour fetch. Then the cookie is read from the profile, one 2.9 KB zip is
-  fetched as a positive control, and the run starts: 1113 files at 30 seconds is
-  9.3 hours, or 53 zips alone at 27 minutes if the owner prefers the small
-  version. Nothing else in this vector moves until that cookie exists.
+**The owner answered the rest of it on 2026-09-03, and the vector changed shape:
+not one node, the whole board - every thread, every picture. Plus two
+constraints, both now in the code rather than in anybody's memory: be gentle
+enough not to get blocked, and never fetch from the studio's address.**
+
+- **The account works.** The cookie store carries `xf_user`, 49 bytes, made
+  00:26; `xf_session` is not in it and is not needed, because XenForo mints a
+  session from `xf_user`. Positive control:
+  `GET /attachments/korg-polysix-klm8049-klm8048-rom-files-zip.154495/` -> **200,
+  2996 bytes, a real zip** holding `Korg PolySix - klm8049.bin` and `klm8048.bin`
+  - the same URL that answered 403 an hour earlier. The honest agent
+  `User-Agent` still suffices; no `cf_clearance` and no browser name.
+- **The studio's address is refused in code.** Measured: this laptop leaves at
+  `88.156.176.122`, the build host at `213.76.112.25` - the studio. Every
+  GroupDIY request this project has ever made went from the laptop, so the board
+  has never seen the studio, and `guard()` checks the egress address before
+  every request and waits rather than continuing if it ever reads the forbidden
+  one. That also settles where the fetcher may run: `cf_clearance` binds to the
+  address that solved the challenge, so moving the job to the build host would
+  fail anyway.
+- **Gentler than asked.** 75 seconds between requests where robots states 30 for
+  AI agents and 5 for everyone else, a 250 kB/s ceiling so no single 98 MB zip
+  takes their pipe, a **30-minute** pause on any refusal, three attempts and
+  then a stop.
+- **`gdiy_mirror.py`, four phases, resumable from what is on disk**: the index,
+  every listing page of every node, then a node at a time - its threads and then
+  every attachment and embedded picture they carry. Finishing one node is worth
+  more than starting twenty-three. It runs as the user service `gdiy-mirror`
+  with `Restart=always` and lingering enabled, so a logout, a sleep or a reboot
+  costs nothing.
+- **The pool gets it hourly.** `gdiy-sync.timer` at `:17` rsyncs to
+  `/mnt/ZFSflightcore/all/!_ARCHIWA/groupdiy.com/mirror/` and never deletes on
+  the far side: the pool is the copy that survives, the laptop is only where
+  fetching happens.
+- **Three lists of nodes disagree, and the runner takes the largest.** The front
+  page links 21, the sitemap carries 22, and `/forums/` links **23** - the extra
+  two being `political-controversy.46` and
+  `rules-forum-help-forum-issues-announcements.40`, while the sitemap's
+  `groupdiy-mobile-app-feedback-gather.49` appears in neither page. The union is
+  24 and the gap is worth a look once the listings land.
+- The 413 pages and 10 zips already fetched (236 MB) were moved into the
+  runner's layout, so it skips them rather than paying for them twice.
+
+- DONE: the account proved with a positive control, the whole-board mirror
+  written, guarded, installed as a service and running, and the pool wired to
+  receive it hourly.
+- NEXT-ACTION: **let it run, and get the one number nobody has yet.** Every
+  listing row carries its thread's reply count, so when the listing phase lands
+  the exact page count of the whole board can be computed rather than guessed -
+  and that is the first honest answer to how long this takes. Until then the
+  only true statement is the order of magnitude: 71301 threads at 75 seconds is
+  weeks, not days, and the owner was told that rather than a number. Nothing
+  here needs a fire; check `~/.cache/cypcb/gdiy-archive/mirror.log` and act only
+  if it stopped.
 
 ### V9 - KiCad parity: what a board editor has and this does not
 
