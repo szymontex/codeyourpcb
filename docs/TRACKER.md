@@ -193,21 +193,50 @@ the site returns rather than from what a forum of its kind usually holds.
   not a supply of boards this tool can parse. Whether a member sees a zip is
   unmeasured, and measuring it means registering an account.
 
-- DONE: the recon above, and both questions the first NEXT-ACTION asked. Nothing
-  is stored yet and no fetcher exists.
-- NEXT-ACTION: **the answer changed what this vector is worth, so it should
-  change the scope before it changes anything else.** Mirroring 71301 threads
-  over 24.8 polite days to obtain pictures is the wrong shape. Turn the scope
-  question into arithmetic instead: walk the listing pages of
-  `technical-documents.19`, `the-lab.2`, `drawing-board.5` and `machine-shop.20`
-  and read each node's own thread count off the page - four requests, 30 seconds
-  apart, and it replaces every estimate in this entry with the number that
-  decides how much of the twelve technical nodes is reachable in a day. Store
-  outside the repository; this repo takes at most the few boards that become
-  fixtures, each with its thread URL beside it. **Two owner calls gate the
-  rest**: whether to register an account, since that is the only way to learn
-  whether members are served design files, and where a mirror of this size
-  lives.
+**Counted 2026-09-02, second pass. The scope question is arithmetic now.**
+
+- **An honest agent `User-Agent` is enough.** The four nodes were walked with
+  `cypcb-research/0.1 (AI agent, single-user survey; honors Crawl-delay 30)` at
+  32-second gaps and **all four answered 200**. So reaching this board needs
+  only that the fetcher not be a bare `curl/8`; it does not need a browser's
+  name, and the 30-second rate the site states for AI agents can be kept while
+  saying what the fetcher is.
+- **Listing pages, read off each node's own pagination**: `the-lab.2` **743**,
+  `drawing-board.5` **259**, `machine-shop.20` **22**,
+  `technical-documents.19` **10**.
+- **Forty threads to a page, measured rather than assumed.** Page 1 of
+  `technical-documents.19` carries 43 thread rows, page 2 carries 40, and the
+  two share **no thread id** - so the extra three are stickies, not repeats, and
+  40 is the interior figure. Its last page carries 26.
+- **`technical-documents.19` is 389 threads exactly**: 43 + 40x8 + 26. The other
+  three are bounded rather than exact, because their last page was not fetched:
+  `the-lab.2` **29683 to 29722**, `drawing-board.5` **10322 to 10361**,
+  `machine-shop.20` **841 to 880**. The four together are roughly **41300
+  threads, 58 per cent of the board**, and `the-lab.2` by itself is 42 per cent
+  of it.
+- **What each slice costs at the stated 30 seconds - the table this vector was
+  missing.** `technical-documents.19` alone: **3.2 hours**. With
+  `machine-shop.20`: **10.4 hours**. Adding `drawing-board.5`: **4.0 days**. All
+  four: **14.3 days**. The whole board: 24.8 days. Only the first two of those
+  are a decision somebody can take without thinking about it.
+- **The catalogue costs a fraction of the content.** Walking all 1034 listing
+  pages of the four nodes costs **8.6 hours** and yields every thread's title
+  and URL without opening one thread - an index of 41300 threads for less than
+  the price of reading the second-smallest node. Whatever else is decided, the
+  index is the cheap half and should come first.
+
+- DONE: the arithmetic the previous NEXT-ACTION asked for, from six requests at
+  the stated rate. Still nothing stored, still no fetcher.
+- NEXT-ACTION: **spend five minutes before spending three hours.** Walk the ten
+  listing pages of `technical-documents.19` at 30 seconds - 300 seconds - and
+  keep the 389 titles and URLs as the first catalogue, then read
+  `threads/meta-docs-index.93577` against it. That answers whether this node's
+  contents are worth its 3.2 hours before those hours are spent, and it is the
+  largest step available that needs neither owner call. Hold the catalogue
+  outside the repository until the owner says where a mirror lives. **The two
+  owner calls still gate everything past that**: whether to register an account,
+  which is the only way to learn whether members are served design files rather
+  than pictures, and where the mirror lives.
 
 ### V9 - KiCad parity: what a board editor has and this does not
 
