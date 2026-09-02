@@ -1,6 +1,6 @@
 # CodeYourPCB tracker - the control center
 
-Last updated: 2026-08-31. Update after every material step: add to DONE, pull the next item into NEXT-ACTION, in the same commit as the change.
+Last updated: 2026-09-02. Update after every material step: add to DONE, pull the next item into NEXT-ACTION, in the same commit as the change.
 
 Read this file first. It is the source of truth for what is in flight and what comes next.
 
@@ -139,31 +139,75 @@ the site returns rather than from what a forum of its kind usually holds.
   work somebody else has done.
 - **Cloudflare refuses a default `curl`.** `https://groupdiy.com/robots.txt`
   answers `403` with a challenge page; the same URL with a browser
-  `User-Agent` answers `200`. Two things follow. A fetcher needs a real UA, and
-  **`robots.txt` has still not been read** - what came back was the challenge
-  body, not a rules file. Read it first: a robots file that says no ends this
-  vector, and this entry must not be used as evidence that it says yes.
+  `User-Agent` answers `200`. So a fetcher needs a real UA to reach anything at
+  all, `robots.txt` included - which is why the first version of this entry had
+  not read it.
 - **Pictures are public and are not XenForo attachments.** A sampled thread has
   zero `/attachments/` links and its images come from
   `cdn.imagearchive.com/groupdiy/data/uploads/<hash>.jpg`, served to a
-  logged-out reader. What is **not** known is where a non-image upload lives - a
-  schematic PDF, a Gerber zip, a `.kicad_pcb` - and that unknown is what decides
-  whether this vector supplies test boards or only prose.
+  logged-out reader.
 - `threads/meta-docs-index.93577` in `technical-documents` is the board's own
   index of documents, so it is the cheapest first read.
 
-- DONE: the recon above. No page has been stored, no fetcher written.
-- NEXT-ACTION: **answer the two questions that decide the shape of the archive,
-  before any fetcher exists.** First, read `robots.txt` and the board's terms
-  with a browser UA and record what they permit - if they refuse, this vector
-  stops there and the entry says so. Second, open one thread known to carry a
-  schematic and find where its non-image upload is served from; a board whose
-  designs are login-walled is worth prose alone, and that changes what is worth
-  taking. Only then decide scope: the eleven technical nodes or all 71 301
-  threads. **Where the archive lives is an owner call** - 71 301 threads plus
-  images is not repository material, and this repo should hold at most the few
-  boards that become fixtures, with their thread URL beside them. Fetch politely:
-  one request at a time, seconds apart, and stop on the first 429.
+**Read 2026-09-02, which closes both questions the first NEXT-ACTION asked.**
+
+- **`robots.txt` permits this, and it took a browser `User-Agent` to read it** -
+  8263 bytes, 200. The default group is `User-agent: *` with `Allow: /` and
+  **`Crawl-delay: 5`**, and what it refuses is machinery rather than content:
+  `/account/`, `/admin.php`, `/find-new/`, `/goto/`, `/login/`,
+  `/lost-password/`, `/register/`, `/search/`, `/whats-new/`,
+  `/conversations/`, `/posts/*/bookmark`, `/posts/*/react`, any URL carrying
+  `order=` or `direction=`, and `/misc/style-variation`. `/threads/`,
+  `/forums/`, `/media/` and `/attachments/` are refused by no group at all.
+- **The file names this crawler, and gives it a slower rate than the default.**
+  `ClaudeBot`, `Claude-Web` and `anthropic-ai` each get `Allow: /` with
+  **`Crawl-delay: 30`**, under a heading the file writes for itself:
+  `AI CRAWLERS - THROTTLED (hedge your bets)`. **Thirty-eight** agents are
+  refused outright - `CCBot`, `Scrapy`, `Bytespider`, `Meta-ExternalAgent`,
+  `YandexBot`, `AhrefsBot` and `SemrushBot` among them - against fifteen groups
+  that are allowed. The board's owner has thought
+  about this and said yes with a rate attached, so 30 seconds is the rate to
+  keep - and to keep honestly, rather than by wearing a browser's name to buy
+  the 5-second one.
+- **What that rate costs, which is what makes scope a decision rather than a
+  preference.** 71301 threads at 30s is 2139030 seconds: **594 hours, 24.8
+  days** of continuous fetching for a single page per thread, and a long thread
+  is several pages. At the default 5s it is 99 hours, 4.1 days.
+- **No site search.** `/search/` is disallowed for every group, so a fetcher's
+  work list has to come from the sitemap or from walking the node listings.
+  Neither costs a search request.
+- **The slug census, free, from the sitemap already on disk.** Of the 71301
+  thread URLs, the number whose title carries: `schematic` **2375**, `pcb`
+  **1856**, `layout` **216**, `eagle` **102**, `bom` **73**, `gerber` **50**,
+  `kicad` **25**, `altium` **4**. A title is a weak proxy for what a thread
+  holds, so this is the shape of the board and not a file count.
+- **A guest sees pictures, not files - and that is the answer that costs this
+  project the most.** Five pages sampled across the board's whole age:
+  `v376-schematic.94465` (2026), `pultec-gerber-files.8472` (2009),
+  `meta-docs-index.93577`, `bang-olufsen-b-o-bm5-stereo-ribbon-mic-disassembly.94556`,
+  and the `technical-documents.19` listing. **Zero `/attachments/` links in all
+  five**, and every upload on them is a `.jpg` or `.webp` from
+  `cdn.imagearchive.com/groupdiy/data/uploads/`. The thread titled *Pultec
+  gerber files* renders six images and links no archive. So to a logged-out
+  reader this board holds schematics **as pictures**: it is a knowledge source,
+  not a supply of boards this tool can parse. Whether a member sees a zip is
+  unmeasured, and measuring it means registering an account.
+
+- DONE: the recon above, and both questions the first NEXT-ACTION asked. Nothing
+  is stored yet and no fetcher exists.
+- NEXT-ACTION: **the answer changed what this vector is worth, so it should
+  change the scope before it changes anything else.** Mirroring 71301 threads
+  over 24.8 polite days to obtain pictures is the wrong shape. Turn the scope
+  question into arithmetic instead: walk the listing pages of
+  `technical-documents.19`, `the-lab.2`, `drawing-board.5` and `machine-shop.20`
+  and read each node's own thread count off the page - four requests, 30 seconds
+  apart, and it replaces every estimate in this entry with the number that
+  decides how much of the twelve technical nodes is reachable in a day. Store
+  outside the repository; this repo takes at most the few boards that become
+  fixtures, each with its thread URL beside it. **Two owner calls gate the
+  rest**: whether to register an account, since that is the only way to learn
+  whether members are served design files, and where a mirror of this size
+  lives.
 
 ### V9 - KiCad parity: what a board editor has and this does not
 
