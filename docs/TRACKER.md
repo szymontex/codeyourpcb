@@ -225,18 +225,47 @@ the site returns rather than from what a forum of its kind usually holds.
   the price of reading the second-smallest node. Whatever else is decided, the
   index is the cheap half and should come first.
 
-- DONE: the arithmetic the previous NEXT-ACTION asked for, from six requests at
-  the stated rate. Still nothing stored, still no fetcher.
-- NEXT-ACTION: **spend five minutes before spending three hours.** Walk the ten
-  listing pages of `technical-documents.19` at 30 seconds - 300 seconds - and
-  keep the 389 titles and URLs as the first catalogue, then read
-  `threads/meta-docs-index.93577` against it. That answers whether this node's
-  contents are worth its 3.2 hours before those hours are spent, and it is the
-  largest step available that needs neither owner call. Hold the catalogue
-  outside the repository until the owner says where a mirror lives. **The two
-  owner calls still gate everything past that**: whether to register an account,
-  which is the only way to learn whether members are served design files rather
-  than pictures, and where the mirror lives.
+**Catalogued 2026-09-02, third pass. The node is enumerated, and the index the
+board keeps of itself turns out to be incomplete.**
+
+- **389 threads, counted rather than computed.** The ten listing pages hold 43,
+  40, 40, 40, 40, 40, 40, 40, 40 and 26 rows, which enumerates to exactly the
+  389 the formula predicted. The catalogue holds thread id, URL, title and
+  reply count, is 29643 bytes, and lives outside the repository until the owner
+  says where a mirror lives.
+- **`meta-docs-index.93577` is an index of this node and nothing else.** It
+  links **336** threads from its three posts, and **all 336 are inside
+  `technical-documents.19`**; none points anywhere else on the board. So it is a
+  table of contents, not a cross-board bibliography.
+- **It is also incomplete, which is why the node and not the index is the work
+  list.** **53** of the node's 389 threads are absent from it, and they are not
+  leftovers: `Fairchild`, `Western Electric -- Schematics`, `McIntosh`, `BBC
+  (British Broadcasting Corporation)`, `Rane -- Schematics`, `Microtech Gefell`,
+  `Benchmark`, `Presonus`. Taking the curated list would have silently dropped
+  them.
+- **Thirty posts to a page, derived rather than assumed.** The listing's page
+  jumps constrain it: a 126-post thread shows 5 pages, an 85-post thread 3, a
+  57-post thread 2, and only a figure between 28.5 and 31.5 satisfies all three.
+  XenForo's default of 20 does not.
+- **The node is 2604 replies, 2992 posts, 413 thread pages.** At the stated 30
+  seconds that is **3.4 hours**, and only **19** of the 389 threads span more
+  than one page. This corrects the 3.2 hours in the entry above, which counted
+  threads and not pages.
+
+- DONE: the catalogue, the intersection with the board's own index, and the
+  page-count model. **The fetch of all 413 pages was started at 2026-09-02
+  14:58 local** - resumable, skipping any page already on disk, stopping on the
+  first refusal, 32 seconds between requests.
+- NEXT-ACTION: **when the fetch lands, measure what a thread is actually worth
+  before deciding whether the next node follows.** Each page gives text and a
+  list of `cdn.imagearchive.com` URLs, so the two figures that matter are bytes
+  of prose per thread and images per thread - the second sizes a job this entry
+  has never costed, because the CDN is a different host and `groupdiy.com`'s
+  `robots.txt` does not speak for it. Read that host's own rules before fetching
+  one image. **The two owner calls still gate the rest**: whether to register an
+  account, which is the only way to learn whether members are served design
+  files rather than pictures, and where the mirror lives - the fetch currently
+  writes to a laptop cache that no backup covers.
 
 ### V9 - KiCad parity: what a board editor has and this does not
 
