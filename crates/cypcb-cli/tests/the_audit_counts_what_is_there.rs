@@ -121,8 +121,7 @@ fn the_paragraph_states_the_number_of_rules_the_registry_holds() {
     let paragraph = measured_paragraph();
 
     assert!(
-        paragraph.contains(&format!("holds {registered}\nrules"))
-            || paragraph.contains(&format!("holds {registered} rules")),
+        flat(&paragraph).contains(&format!("holds {registered} rules")),
         "the registry holds {registered} rules and the audit does not say so:\n{paragraph}"
     );
 }
@@ -149,4 +148,88 @@ fn the_paragraph_this_reads_is_the_paragraph_it_means() {
         "the help parse found {} commands, which is not a command list",
         subcommands().len()
     );
+}
+
+/// The same text with every run of whitespace collapsed to one space.
+///
+/// The paragraph is hard-wrapped, so "a bill of materials" arrives with a
+/// newline inside it and a plain `contains` says the audit never mentions it.
+fn flat(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// A file the export writes, and the word the audit has to use for it.
+///
+/// Ordered: the first marker a name carries decides its kind, so the specific
+/// ones come before `.json`.
+const KINDS: &[(&str, &str)] = &[
+    ("_Cu.gbr", "copper"),
+    ("_Mask.gbr", "mask"),
+    ("_Paste.gbr", "paste"),
+    ("_SilkS.gbr", "silk"),
+    ("Edge_Cuts.gbr", "outline"),
+    (".drl", "Excellon"),
+    (".gbrjob", "job file"),
+    ("-BOM.csv", "bill of materials"),
+    ("-CPL.csv", "pick-and-place"),
+    (".json", "assembly summary"),
+];
+
+#[test]
+fn the_paragraph_names_every_file_the_export_writes() {
+    // "and nothing else" is a claim about a directory, so a directory is what
+    // answers it. The audit said Gerber, Excellon, a job file, a BOM and a
+    // pick-and-place file; it wrote those, plus solder paste stencils and an
+    // assembly summary in JSON, and said neither.
+    let out = std::env::temp_dir().join("cypcb-audit-export");
+    let _ = std::fs::remove_dir_all(&out);
+
+    let status = Command::new(env!("CARGO_BIN_EXE_cypcb"))
+        .arg("export")
+        .arg(repo_root().join("examples/blink.cypcb"))
+        .arg("-o")
+        .arg(&out)
+        .output()
+        .expect("the binary runs");
+    assert!(
+        status.status.success(),
+        "export failed: {}",
+        String::from_utf8_lossy(&status.stderr)
+    );
+
+    let mut written = Vec::new();
+    let mut stack = vec![out.clone()];
+    while let Some(dir) = stack.pop() {
+        for entry in std::fs::read_dir(&dir).expect("the export wrote a directory") {
+            let path = entry.expect("a readable entry").path();
+            if path.is_dir() {
+                stack.push(path);
+            } else {
+                written.push(path);
+            }
+        }
+    }
+
+    assert!(
+        written.len() > 5,
+        "the export wrote {} files, which is not an export",
+        written.len()
+    );
+
+    let paragraph = flat(&measured_paragraph());
+    for path in &written {
+        let name = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or_default();
+        let kind = KINDS
+            .iter()
+            .find(|(marker, _)| name.ends_with(marker))
+            .unwrap_or_else(|| panic!("`{name}` is a kind of file nothing here has a word for"));
+        assert!(
+            paragraph.contains(kind.1),
+            "the export writes `{name}` and the audit does not say `{}`:\n{paragraph}",
+            kind.1
+        );
+    }
 }
