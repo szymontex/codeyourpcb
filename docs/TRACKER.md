@@ -407,11 +407,17 @@ feature to live in - the zone model and the Gerber writer - rather than the
 repository, so a feature implemented one crate over read as absent. Every row
 was re-measured repo-wide on 2026-08-27 and the two that moved are marked.
 
-**Measured on our side.** `cypcb --help` lists ten subcommands: `parse`,
-`check`, `route`, `export`, `parse-kicad`, `from-kicad`, `score`, `to-kicad`,
-`watch`, `help`. `crates/cypcb-export/src/` writes Gerber (copper, mask, silk,
-outline), Excellon, a job file, a bill of materials and a pick-and-place file -
-and nothing else. `crates/cypcb-drc/src/rules/` holds twenty rules. The
+**Measured on our side, and re-measured on 2026-09-03 because two of these
+numbers had gone stale where an audit's numbers must not.** `cypcb --help`
+lists 12 subcommands: `parse`, `check`, `route`, `export`, `parse-kicad`,
+`from-kicad`, `from-dxf`, `library`, `score`, `to-kicad`, `watch`, `help`. It said ten, and the two it left out were `from-dxf` and
+`library`, both wired in `main.rs` and both with help text. `crates/cypcb-export/src/` writes Gerber
+(copper, mask, silk, outline), Excellon, a job file, a bill of materials and a
+pick-and-place file - and nothing else. `crates/cypcb-drc/src/rules/` holds 37
+rules - it said twenty, and `ls crates/cypcb-drc/src/rules/*.rs | wc -l` and
+`grep -c 'Box::new(rules::' crates/cypcb-drc/src/lib.rs` both answer 37, so
+every rule written is a rule registered. Both figures are held by
+`cargo test -p cypcb-cli --test the_audit_counts_what_is_there`. The
 grammar's keyword list carries `zone`, `keepout`, `via`, `trace`, `netclass`,
 `diffpair`, `stackup`, `coverlay`, `stiffener` and the fabrication vocabulary
 V8 added.
@@ -1331,6 +1337,8 @@ answered, not as they were found. Every one of them is closed.
 - **A ternary in the same switch had both arms identical**: `shape = drillNm ? 'circle' : 'circle'`, a question somebody meant to ask and never did. It is one `'circle'` now, and a case asserts both answers - drilled and not - so removing it cannot have changed one of them.
 - Proof: `npx vitest run src/__tests__/an-easyeda-pad-shape-we-cannot-carry-is-named.test.ts src/__tests__/easyeda-footprint-parser.test.ts` -> 11 passed, the parser's own eight untouched. Mutations, each alone and restored by md5: the recording removed -> 1 failed; `RECT` recorded as approximated too -> 2 failed, the control among them. `./scripts/quality-gate.sh` -> `=== All stages passed ===`.
 - **Method note, because it nearly cost a false claim.** The first sweep for this parser's callers ran through `head` and showed only its own test file, which reads as dead code. `jlcpcb.ts` imports it, and the line was below the cut. A truncated search answers a question it was not asked.
+- DONE: **V9's own foundation had two stale numbers, and V9 exists to hold measured claims.** Its "Measured on our side" paragraph said `cypcb --help` lists **ten** subcommands; it lists **twelve** - `from-dxf` and `library` are both wired in `main.rs` with help text and neither was in the sentence. It said the rules directory holds **twenty**; `ls crates/cypcb-drc/src/rules/*.rs | wc -l` and `grep -c 'Box::new(rules::' crates/cypcb-drc/src/lib.rs` both answer **37**, which also says every rule written is a rule registered. Both are corrected and both are counted now rather than remembered.
+- **A mutation caught the first version of the guard passing for the wrong reason.** It looked for each command name anywhere in the paragraph, and removing `library` from the list left it green - because the prose beside the list explains that `library` was one of the two left out. The case reads the enumeration itself now, and the count the sentence states. Proof: `cargo test -p cypcb-cli --test the_audit_counts_what_is_there` -> 3 passed. Mutations, each alone and restored by md5: `library` dropped from the list -> 1 failed; the count written as 11 -> 1 failed; the rules figure back to twenty -> 1 failed. There is a control too, because two of the three cases are text lookups: it asserts the slice is one paragraph rather than the file, that it carries both subjects, and that the help parse found more than five commands.
 - NEXT-ACTION: **none in this vector.** Every helper the census listed is asserted by a test that names it, and the one aperture the Gerber writer could not draw is drawn.
 - DONE: **my own "the census is empty" was false, and checking my own claim is what found it.** The entry that closed this census said every helper it had listed now had a test naming it. Three did not: `width_in_glyphs`, `distance_to_outline` and `index_to_layer` were named by an **earlier** NEXT-ACTION than the three pad helpers that fire actually took, and the closing sentence generalised. `grep -rl <name> crates/*/tests` returned nothing for all three.
 - **Two of the three are named now, and both are the shape that has cost this project before.** `index_to_layer` maps a grid index back to a copper layer - the off-by-two that has shipped three times here, because the grid counts the outer faces first, the language counts inner layers from one, and the model counts them from zero. `width_in_glyphs` is what the silkscreen exporter asks before placing any label: glyphs plus the gaps **between** them, so a one-character designator has no trailing gap and an empty string is zero rather than an underflow.
