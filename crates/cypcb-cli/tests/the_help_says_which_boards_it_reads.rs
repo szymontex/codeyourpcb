@@ -12,8 +12,12 @@
 //! So each command is handed a board KiCad itself wrote and asked. What it
 //! does with the file is the fact; the help line is checked against that.
 
+use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::sync::mpsc;
+use std::thread;
+use std::time::{Duration, Instant};
 
 /// The phrase a dual-format command's help line carries.
 const BOTH_FORMATS: &str = ".cypcb or .kicad_pcb";
@@ -73,9 +77,9 @@ fn help_line(subcommand: &str) -> String {
 
 #[test]
 fn the_help_line_matches_what_the_command_does() {
-    // `watch` is not here and cannot be: it does not return. Its help line is
-    // held by the reader below instead, which is the weaker check this test
-    // exists to replace everywhere it can.
+    // `watch` is not in this loop because it does not return; it is asked the
+    // same question by the case at the end of this file, which reads its first
+    // pass and then kills it.
     for subcommand in ["parse", "check", "export", "score"] {
         let takes = takes_a_kicad_board(subcommand);
         let line = help_line(subcommand);
@@ -113,19 +117,62 @@ fn parse_is_the_one_that_turns_a_kicad_board_away() {
 }
 
 #[test]
-fn watch_is_the_one_command_this_can_only_read() {
-    // It watches a file forever, so it cannot be handed a board and asked.
-    // The source is the fallback: it opens with the same format check the
-    // others do, and its line says both formats.
-    let body = std::fs::read_to_string(repo_root().join("crates/cypcb-cli/src/commands/watch.rs"))
-        .expect("watch.rs is readable");
+fn watch_reads_the_kicad_board_it_is_pointed_at() {
+    // This used to grep `watch.rs` for `is_kicad(`, because a command that
+    // never returns cannot be run and waited for. That is the weaker check
+    // this file exists to replace: the same grep would pass on `parse`, which
+    // calls `is_kicad` in order to refuse.
+    //
+    // A watch can be asked after all. It prints one check before it starts
+    // watching, so the run is given a board KiCad wrote, read until that first
+    // verdict appears, and killed. A verdict is proof the file was understood;
+    // a KiCad board read as the .cypcb language cannot produce one.
+    let board = kicad_board("watch");
+    let mut child = Command::new(env!("CARGO_BIN_EXE_cypcb"))
+        .arg("watch")
+        .arg(&board)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("the binary runs");
+
+    let stdout = child.stdout.take().expect("stdout was piped");
+    let (sender, receiver) = mpsc::channel();
+    thread::spawn(move || {
+        for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+            if sender.send(line).is_err() {
+                return;
+            }
+        }
+    });
+
+    let deadline = Instant::now() + Duration::from_secs(60);
+    let mut said = Vec::new();
+    let mut verdict = None;
+    while Instant::now() < deadline && verdict.is_none() {
+        match receiver.recv_timeout(Duration::from_millis(500)) {
+            Ok(line) => {
+                if line.starts_with("OK:") || line.contains("DRC violation(s) against") {
+                    verdict = Some(line.clone());
+                }
+                said.push(line);
+            }
+            Err(mpsc::RecvTimeoutError::Timeout) => {}
+            Err(mpsc::RecvTimeoutError::Disconnected) => break,
+        }
+    }
+
+    let _ = child.kill();
+    let _ = child.wait();
+
     assert!(
-        body.contains("is_kicad("),
-        "watch checks the format it was handed"
+        verdict.is_some(),
+        "`watch` had to check the KiCad board it was handed and say so; it said:\n{}",
+        said.join("\n")
     );
     assert!(
         help_line("watch").contains(BOTH_FORMATS),
-        "and says so: {}",
+        "and its help line has to say it reads one: {}",
         help_line("watch")
     );
 }
