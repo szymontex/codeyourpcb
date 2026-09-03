@@ -127,6 +127,8 @@ impl ApertureManager {
     /// assert_eq!(defs, "%ADD10C,1.000000*%\n");
     /// ```
     pub fn to_definitions(&self, format: &CoordinateFormat) -> String {
+        // Macros come first: a `%ADD` naming one has to follow its `%AM`.
+        let mut macros = String::new();
         let mut result = String::new();
         let mut sorted_apertures: Vec<_> = self.apertures.iter().collect();
         // Sort by D-code for deterministic output
@@ -153,20 +155,32 @@ impl ApertureManager {
                     height,
                     corner_ratio,
                 } => {
-                    // RoundRect is not a standard Gerber aperture type
-                    // Fall back to rectangle for now (TODO: implement polygon approximation)
-                    let w = nm_to_decimal(*width, format);
-                    let h = nm_to_decimal(*height, format);
-                    format!(
-                        "%ADD{}R,{}X{}*% G04 RoundRect corner_ratio={}%\n",
-                        dcode, w, h, corner_ratio
-                    )
+                    // Gerber has no rounded-rectangle aperture, and this used
+                    // to flash a hard-cornered `R` with the corner written
+                    // after it as `G04 RoundRect corner_ratio=25%` - which
+                    // dropped the corners from the copper and was not a legal
+                    // comment either: a `G04` has to end in `*`, and that
+                    // trailing `%` opened an extended command nothing closed.
+                    //
+                    // What the format does have is the aperture macro, which
+                    // is how KiCad draws the same pad. One macro per aperture,
+                    // written with the numbers already worked out rather than
+                    // with parameters and arithmetic, so no reader has to
+                    // agree with us about operator precedence.
+                    macros.push_str(&round_rect_macro(
+                        dcode,
+                        *width,
+                        *height,
+                        *corner_ratio,
+                        format,
+                    ));
+                    format!("%ADD{dcode}RR{dcode}*%\n")
                 }
             };
             result.push_str(&definition);
         }
 
-        result
+        macros + &result
     }
 
     /// Get the number of registered apertures.
@@ -230,6 +244,62 @@ pub fn aperture_for_pad(pad: &PadDef) -> ApertureShape {
             corner_ratio,
         },
     }
+}
+
+/// One aperture macro drawing a rounded rectangle, named after its D-code.
+///
+/// Two overlapping centre-line rectangles fill the body, four circles round
+/// the corners. The corner radius is the shorter side times the ratio, which
+/// is what the SVG writer draws and what KiCad's `roundrect_rratio` means.
+///
+/// ```
+/// use cypcb_export::apertures::round_rect_macro;
+/// use cypcb_export::coords::CoordinateFormat;
+/// use cypcb_core::Nm;
+///
+/// let text = round_rect_macro(
+///     10u16,
+///     Nm::from_mm(2.0).0,
+///     Nm::from_mm(1.0).0,
+///     25,
+///     &CoordinateFormat::FORMAT_MM_2_6,
+/// );
+/// assert!(text.starts_with("%AMRR10*\n"));
+/// assert!(text.ends_with("%\n"));
+/// ```
+pub fn round_rect_macro(
+    dcode: u16,
+    width: i64,
+    height: i64,
+    corner_ratio: u8,
+    format: &CoordinateFormat,
+) -> String {
+    let radius = width.min(height) * i64::from(corner_ratio) / 100;
+    let d = |value: i64| nm_to_decimal(value, format);
+
+    let mut text = format!("%AMRR{dcode}*\n");
+    // The body, as two rectangles that overlap in the middle.
+    text.push_str(&format!(
+        "21,1,{},{},0,0,0*\n",
+        d(width),
+        d(height - 2 * radius)
+    ));
+    text.push_str(&format!(
+        "21,1,{},{},0,0,0*\n",
+        d(width - 2 * radius),
+        d(height)
+    ));
+    // A circle on each corner, centred a radius in from both edges.
+    for (x, y) in [
+        (width / 2 - radius, height / 2 - radius),
+        (-(width / 2 - radius), height / 2 - radius),
+        (width / 2 - radius, -(height / 2 - radius)),
+        (-(width / 2 - radius), -(height / 2 - radius)),
+    ] {
+        text.push_str(&format!("1,1,{},{},{},0*\n", d(2 * radius), d(x), d(y)));
+    }
+    text.push_str("%\n");
+    text
 }
 
 #[cfg(test)]
@@ -344,9 +414,26 @@ mod tests {
         });
 
         let defs = manager.to_definitions(&format);
-        // RoundRect falls back to rectangle with comment
-        assert!(defs.contains("%ADD10R,1.000000X0.500000*%"));
-        assert!(defs.contains("RoundRect corner_ratio=25%"));
+        // This case asserted the fallback until 2026-09-03 - a hard-cornered
+        // `R` and a comment that was not one - which is how a defect stays put
+        // for months: the test agreed with it. A 1.0 by 0.5 pad at 25% has a
+        // 0.125mm radius, and every number below follows from that.
+        assert!(defs.starts_with("%AMRR10*\n"), "{defs}");
+        assert!(defs.contains("21,1,1.000000,0.250000,0,0,0*\n"), "{defs}");
+        assert!(defs.contains("21,1,0.750000,0.500000,0,0,0*\n"), "{defs}");
+        assert!(
+            defs.contains("1,1,0.250000,0.375000,0.125000,0*\n"),
+            "{defs}"
+        );
+        assert!(
+            defs.contains("1,1,0.250000,-0.375000,-0.125000,0*\n"),
+            "{defs}"
+        );
+        assert!(defs.contains("%ADD10RR10*%\n"), "{defs}");
+        assert!(
+            !defs.contains("%ADD10R,"),
+            "no bare rectangle any more: {defs}"
+        );
     }
 
     #[test]
