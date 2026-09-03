@@ -89,6 +89,13 @@ pub fn load_kicad(path: &Path) -> Result<LoadedBoard> {
     for refusal in &parsed.metadata.zone_refusals {
         eprintln!("warning: {refusal}");
     }
+    // A pad this importer had no word for arrived as a rectangle. Said out
+    // loud for the same reason a refused pour is: the checker, the router and
+    // the Gerber writer all take that rectangle for the shape in the file, and
+    // a board that quietly changes copper is worse than one that complains.
+    for approximation in &parsed.metadata.pad_approximations {
+        eprintln!("warning: {approximation}");
+    }
 
     let mut world = parsed.world;
     let library = parsed.library;

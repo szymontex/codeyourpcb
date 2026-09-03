@@ -108,6 +108,14 @@ pub struct KicadPcbMetadata {
     /// one. This is also the channel a KiCad release that adds a layer kind
     /// will arrive through.
     pub stackup_refusals: Vec<String>,
+    /// Pads whose shape this importer has no word for, read as rectangles.
+    ///
+    /// The board reader approximates rather than refuses, because one pad of
+    /// an unknown shape should not cost a person the other nine hundred - but
+    /// it approximates *copper*, and a `custom` pad is a polygon somebody drew
+    /// for a reason. Silence here put a rectangle through the checker, the
+    /// router and the Gerber writer as though it were the shape in the file.
+    pub pad_approximations: Vec<String>,
 }
 
 /// Complete result of parsing a KiCad PCB file.
@@ -385,6 +393,7 @@ pub fn parse_kicad_pcb_str(content: &str) -> Result<KicadPcbParseResult, KicadPc
     // 5. Extract footprints (handles both `footprint` and `module` keywords)
     let mut library = FootprintLibrary::new();
     let mut component_count = 0usize;
+    let mut pad_approximations: Vec<String> = Vec::new();
 
     for elem in elements {
         if let Some(name) = list_name(elem) {
@@ -396,6 +405,7 @@ pub fn parse_kicad_pcb_str(content: &str) -> Result<KicadPcbParseResult, KicadPc
                         &mut library,
                         &kicad_net_map,
                         board_origin,
+                        &mut pad_approximations,
                     )?;
                     component_count += 1;
                 }
@@ -489,6 +499,7 @@ pub fn parse_kicad_pcb_str(content: &str) -> Result<KicadPcbParseResult, KicadPc
     let net_numbers = kicad_net_map.numbers();
 
     let metadata = KicadPcbMetadata {
+        pad_approximations,
         zone_count,
         zone_refusals,
         stackup_refusals,
@@ -1132,6 +1143,7 @@ fn parse_footprint(
     library: &mut FootprintLibrary,
     kicad_net_map: &NetIndex,
     board_origin_mm: (f64, f64),
+    approximations: &mut Vec<String>,
 ) -> Result<(), KicadPcbError> {
     // First element is the library link name (e.g., "Resistor_SMD:R_0402")
     let lib_link = if !elements.is_empty() {
@@ -1226,6 +1238,16 @@ fn parse_footprint(
     } else {
         lib_link.clone()
     };
+
+    for pad in &pads {
+        if let Some(stated) = &pad.approximated_from {
+            approximations.push(format!(
+                "`{fp_name}` pad {} states shape `{stated}`, which this importer has no word \
+                 for; it is read as the rectangle its `(size ...)` gives",
+                pad.number
+            ));
+        }
+    }
 
     let pad_defs: Vec<PadDef> = pads
         .iter()
@@ -1331,6 +1353,8 @@ pub(crate) struct ParsedPad {
     pub(crate) net_id: Option<NetId>,
     /// The mask opening this pad asks for, when it asks for its own.
     pub(crate) mask_margin: Option<Nm>,
+    /// The shape the file stated, when this importer had no word for it.
+    pub(crate) approximated_from: Option<String>,
 }
 
 /// The corner a `roundrect` pad states, as a percentage of its short side.
@@ -1379,12 +1403,16 @@ pub(crate) fn parse_pad(
     let pad_type_str = get_string(&elements[1]).unwrap_or_default();
     let shape_str = get_string(&elements[2]).unwrap_or_default();
 
-    let shape = match shape_str.as_str() {
-        "rect" => PadShape::Rect,
-        "circle" => PadShape::Circle,
-        "oval" => PadShape::Oblong,
-        "roundrect" => PadShape::round_rect(corner_ratio(elements)),
-        _ => PadShape::Rect, // Fallback
+    // A shape this importer has no word for becomes a rectangle, and says so.
+    // `trapezoid` and `custom` are the two KiCad writes that land here, and a
+    // custom pad is a polygon somebody drew - reading it as its bounding size
+    // is a guess about copper, not a smaller description of the same pad.
+    let (shape, approximated_from) = match shape_str.as_str() {
+        "rect" => (PadShape::Rect, None),
+        "circle" => (PadShape::Circle, None),
+        "oval" => (PadShape::Oblong, None),
+        "roundrect" => (PadShape::round_rect(corner_ratio(elements)), None),
+        other => (PadShape::Rect, Some(other.to_string())),
     };
 
     let is_through_hole = pad_type_str == "thru_hole" || pad_type_str == "np_thru_hole";
@@ -1518,6 +1546,7 @@ pub(crate) fn parse_pad(
         layers,
         net_id,
         mask_margin,
+        approximated_from,
     }))
 }
 
