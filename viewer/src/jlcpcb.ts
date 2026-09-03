@@ -435,6 +435,15 @@ export async function fetchComponentFootprint(lcscId: number): Promise<EasyEDAFo
 
     footprintCache.set(lcscId, footprint);
     console.log(`[JLCPCB] Parsed footprint for C${lcscId}: ${footprint.pads.length} pads, 3D: ${footprint.modelUuid ? 'yes' : 'no'}`);
+    // A pad shape this parser had no word for arrived as a rectangle. Placing
+    // this part puts that rectangle on the board, so it is copper the checker
+    // will measure and the Gerber will flash.
+    if (footprint.approximations.length > 0) {
+      console.warn(
+        `[JLCPCB] C${lcscId}: ${footprint.approximations.length} pad shape(s) read as rectangles - ` +
+          footprint.approximations.join('; '),
+      );
+    }
     return footprint;
   } catch (error) {
     console.error(`[JLCPCB] Footprint fetch error for C${lcscId}: ${error}`);

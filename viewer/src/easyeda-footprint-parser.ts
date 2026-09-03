@@ -30,6 +30,16 @@ export interface EasyEDAFootprint {
   originX: number;
   /** Footprint origin Y in nm (from LIB header) */
   originY: number;
+  /**
+   * Pads whose EasyEDA shape this parser has no word for, read as rectangles.
+   *
+   * A part placed from the JLCPCB panel brings its pads onto the board, so
+   * this substitution is copper: the checker measures the rectangle, the
+   * router blocks it and the Gerber flashes it. `POLYGON` is a shape somebody
+   * drew, and reading it as its bounding rectangle is a guess rather than a
+   * smaller description of the same pad. Named here so the caller can say so.
+   */
+  approximations: string[];
 }
 
 /**
@@ -58,6 +68,7 @@ export function parseEasyEDAFootprint(compData: any): EasyEDAFootprint | null {
 
       let modelUuid: string | null = null;
       const allPads: PadInfo[] = [];
+      const allApproximations: string[] = [];
       const allSilk: SilkShape[] = [];
       let originX = headOriginX;
       let originY = headOriginY;
@@ -76,7 +87,7 @@ export function parseEasyEDAFootprint(compData: any): EasyEDAFootprint | null {
 
         // Parse LIB blocks (footprint containers — older format)
         if (shape.startsWith('LIB~')) {
-          const { pads, silk, ox, oy } = parseLIBBlock(shape);
+          const { pads, silk, ox, oy } = parseLIBBlock(shape, allApproximations);
           if (pads.length > 0) {
             allPads.push(...pads);
             originX = ox;
@@ -92,7 +103,7 @@ export function parseEasyEDAFootprint(compData: any): EasyEDAFootprint | null {
 
         // Standalone PAD entries (v6 format — no LIB wrapper)
         if (shape.startsWith('PAD~')) {
-          const pad = parsePADShape(shape, ox, oy);
+          const pad = parsePADShape(shape, ox, oy, allApproximations);
           if (pad) allPads.push(pad);
         }
 
@@ -112,7 +123,14 @@ export function parseEasyEDAFootprint(compData: any): EasyEDAFootprint | null {
       }
 
       if (allPads.length > 0) {
-        return { pads: allPads, silk: allSilk, modelUuid, originX, originY };
+        return {
+          pads: allPads,
+          silk: allSilk,
+          modelUuid,
+          originX,
+          originY,
+          approximations: allApproximations,
+        };
       }
     }
 
@@ -128,7 +146,10 @@ export function parseEasyEDAFootprint(compData: any): EasyEDAFootprint | null {
  * LIB format: LIB~X~Y~package`NAME`...~...~gId~...
  * Sub-shapes: #@$PAD~SHAPE~X~Y~W~H~LAYER~NET~NUM~HOLER~...~GID
  */
-function parseLIBBlock(libStr: string): { pads: PadInfo[]; silk: SilkShape[]; ox: number; oy: number } {
+function parseLIBBlock(
+  libStr: string,
+  approximated: string[],
+): { pads: PadInfo[]; silk: SilkShape[]; ox: number; oy: number } {
   const pads: PadInfo[] = [];
   const silk: SilkShape[] = [];
 
@@ -142,7 +163,7 @@ function parseLIBBlock(libStr: string): { pads: PadInfo[]; silk: SilkShape[]; ox
   for (let i = 1; i < parts.length; i++) {
     const subShape = parts[i];
     if (subShape.startsWith('PAD~')) {
-      const pad = parsePADShape(subShape, ox, oy);
+      const pad = parsePADShape(subShape, ox, oy, approximated);
       if (pad) pads.push(pad);
     }
     if (subShape.startsWith('TRACK~')) {
@@ -174,7 +195,12 @@ function parseLIBBlock(libStr: string): { pads: PadInfo[]; silk: SilkShape[]; ox
  * LAYERID: 1=TopCopper, 2=BottomCopper, 11=MultiLayer(THT)
  * Coordinates are absolute in EasyEDA units; we subtract origin to get relative.
  */
-function parsePADShape(padStr: string, originX: number, originY: number): PadInfo | null {
+function parsePADShape(
+  padStr: string,
+  originX: number,
+  originY: number,
+  approximated: string[],
+): PadInfo | null {
   const fields = padStr.split('~');
   if (fields.length < 10) return null;
 
@@ -201,10 +227,14 @@ function parsePADShape(padStr: string, originX: number, originY: number): PadInf
   const drillNm = holeR > 0 ? Math.round(holeR * 2 * EEDA_TO_NM) : null;
 
   // Map EasyEDA shape to our shape names
+  // A shape this parser has no word for becomes a rectangle and says which
+  // pad it was. `POLYGON` is the one EasyEDA writes for a pad somebody drew,
+  // and the ternary here used to be `drillNm ? 'circle' : 'circle'` - both
+  // arms the same, which is a question somebody meant to ask and never did.
   let shape: string;
   switch (shapeType) {
     case 'ELLIPSE':
-      shape = drillNm ? 'circle' : 'circle';
+      shape = 'circle';
       break;
     case 'RECT':
       shape = 'rect';
@@ -212,11 +242,9 @@ function parsePADShape(padStr: string, originX: number, originY: number): PadInf
     case 'OVAL':
       shape = 'oblong';
       break;
-    case 'POLYGON':
-      shape = 'rect'; // approximate
-      break;
     default:
       shape = 'rect';
+      approximated.push(`pad ${number} states shape ${shapeType}`);
   }
 
   // Layer mask: 1=TopCopper(SMD top), 2=BottomCopper(SMD bottom), 3=both(THT)
