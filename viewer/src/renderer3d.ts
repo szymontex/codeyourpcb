@@ -83,6 +83,35 @@ const MASK_THICKNESS_MM = 0.025;
 let BOARD_TOP_Z = BOARD_THICKNESS_MM / 2;
 let BOARD_BOT_Z = -BOARD_THICKNESS_MM / 2;
 
+/**
+ * Where a part's body and its label sit.
+ *
+ * Two things were wrong here and both were visible. The board slab is centred
+ * on `z = 0`, so its faces are at plus and minus half its thickness - and the
+ * body was placed at `BOARD_THICKNESS_MM`, half a board too high, which is
+ * 0.8mm of air under every part on a 1.6mm board. And the side was ignored, so
+ * a part on the back had its body floating above the board while its pads and
+ * its silkscreen were drawn underneath it.
+ *
+ * The faces are passed in rather than read from module state so this can be
+ * asked about a board of any thickness.
+ */
+export function bodyPlacement(
+  side: ComponentInfo['side'],
+  bodyHeightMm: number,
+  boardTopZ: number,
+  boardBotZ: number,
+): { onBottom: boolean; centreZ: number; labelZ: number } {
+  const onBottom = side === 'bottom';
+  const face = onBottom ? boardBotZ : boardTopZ;
+  const away = onBottom ? -1 : 1;
+  return {
+    onBottom,
+    centreZ: face + (away * bodyHeightMm) / 2,
+    labelZ: face + away * (bodyHeightMm + 0.3),
+  };
+}
+
 // Front copper: sits on board top surface
 let F_COPPER_BOT_Z = BOARD_TOP_Z;
 let F_COPPER_TOP_Z = BOARD_TOP_Z + COPPER_THICKNESS_MM;
@@ -451,8 +480,8 @@ export class Renderer3D {
     // Build solder mask — green layer covering copper with openings at pads
     this.buildSolderMask(widthMm, heightMm, snapshot.components || [], topGroup, bottomGroup);
 
-    // Build component bodies (on top layer group for now — all top-side)
-    this.buildComponents(snapshot.components || [], topGroup);
+    // Build component bodies, each on the side of the board its part is on.
+    this.buildComponents(snapshot.components || [], topGroup, bottomGroup);
 
     // Build silkscreen outlines from EasyEDA footprint data
     this.buildSilkscreen(snapshot.components || [], topGroup, bottomGroup);
@@ -728,7 +757,10 @@ export class Renderer3D {
 
     const pos = (placeholder as THREE.Mesh).position.clone();
     const rot = (placeholder as THREE.Mesh).rotation.clone();
-    model.position.set(pos.x, pos.y, BOARD_THICKNESS_MM);
+    // The face the placeholder was on, at the height the placeholder was at:
+    // this read `BOARD_THICKNESS_MM`, which is half a board above the top face
+    // and always the top one.
+    model.position.set(pos.x, pos.y, pos.z < 0 ? BOARD_BOT_Z : BOARD_TOP_Z);
     model.rotation.copy(rot);
 
     // Dispose and remove placeholder
@@ -1516,7 +1548,11 @@ export class Renderer3D {
    * SMD parts get 1.2mm height, THT parts get 5mm height.
    * IC packages (U/IC prefix) are dark gray, passives (R/C/L) are tan.
    */
-  private buildComponents(components: ComponentInfo[], topGroup: THREE.Group): void {
+  private buildComponents(
+    components: ComponentInfo[],
+    topGroup: THREE.Group,
+    bottomGroup: THREE.Group,
+  ): void {
     let smdCount = 0;
     let thtCount = 0;
 
@@ -1575,27 +1611,28 @@ export class Renderer3D {
       const geo = new THREE.BoxGeometry(bodyW, bodyH, compHeight);
       const mesh = new THREE.Mesh(geo, mat);
 
-      // Position: component center, on top of board
+      // Position: component centre, on the face of the board it is placed on.
       const cx = comp.x_nm * NM_TO_MM;
       const cy = comp.y_nm * NM_TO_MM;
-      const cz = BOARD_THICKNESS_MM + compHeight / 2;
+      const place = bodyPlacement(comp.side, compHeight, BOARD_TOP_Z, BOARD_BOT_Z);
+      const group = place.onBottom ? bottomGroup : topGroup;
 
-      mesh.position.set(cx, cy, cz);
+      mesh.position.set(cx, cy, place.centreZ);
 
       // Rotation around Z-axis
       const radians = (comp.rotation_mdeg / 1000) * (Math.PI / 180);
       mesh.rotation.z = radians;
 
       mesh.name = `component-${comp.refdes}`;
-      topGroup.add(mesh);
+      group.add(mesh);
 
       // Refdes label as sprite
       const label = this.createRefdesLabel(comp.refdes);
-      label.position.set(cx, cy, BOARD_THICKNESS_MM + compHeight + 0.3);
+      label.position.set(cx, cy, place.labelZ);
       // Scale sprite relative to body size for readability
       const labelScale = Math.max(bodyW, bodyH) * 0.8;
       label.scale.set(labelScale, labelScale * 0.5, 1);
-      topGroup.add(label);
+      group.add(label);
     }
 
     this._componentCount = smdCount + thtCount;
