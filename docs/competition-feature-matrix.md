@@ -290,15 +290,15 @@ a cell is downgraded or if the construct behind it stops working.
 
 | Claim | Command |
 |---|---|
-| modules, interfaces, assertions, pours | `./target/release/cypcb check examples/{v2-modules,v2-interfaces,v2-constraints,pour-island}.cypcb` |
+| modules, interfaces, assertions, pours | `cargo run -q --release --bin cypcb -- check examples/{v2-modules,v2-interfaces,v2-constraints,pour-island}.cypcb` |
 | physical units | `crates/cypcb-parser/src/reader.rs` reads `mm`, `mil` and `oz`; a bare number is millimetres |
 | 4-layer boards | `examples/four-layer.cypcb`, `examples/blind-via.cypcb`, `tests/fixtures/benchmark/multi_ic.kicad_pcb` |
-| in-house autorouter | `./target/release/cypcb route --help` - `--in-house` is what a run does anyway; D1 closed on 2026-08-09 in favour of it |
+| in-house autorouter | `cargo run -q --release --bin cypcb -- route --help` - `--in-house` is what a run does anyway; D1 closed on 2026-08-09 in favour of it |
 | LCSC in the BOM | `crates/cypcb-export/src/bom/csv.rs` writes the `LCSC Part #` column |
-| what export does **not** write | `./target/release/cypcb export --dry-run examples/blink.cypcb` - Gerber, Excellon, BOM, CPL and a job file, and nothing else |
+| what export does **not** write | `cargo run -q --release --bin cypcb -- export --dry-run examples/blink.cypcb` - Gerber, Excellon, BOM, CPL and a job file, and nothing else |
 | what the language server answers | `cargo test -p cypcb-lsp --test the_manual_matches_the_server` - the manual and the server's `initialize` result are held to each other in both directions. Hover, completion and go-to-definition are what it advertises; references, rename, formatting and semantic tokens are not implemented |
 | what the 3D view draws | A part placed from the JLCPCB panel registers its EasyEDA model uuid: `viewer/src/main.ts` calls `register3DModel(pkg, footprint.modelUuid)`, `viewer/src/wasm.ts` hands it to the engine (replaying whatever arrived before the engine existed), the snapshot carries it as `model_3d`, and `renderer3d.ts` fetches the OBJ and replaces the placeholder mesh named for that component's refdes. Nothing assigns a model from the language |
 | what the browser API exposes | `cargo test -p cypcb-cli --test the_matrix_is_honest_about_us` holds the row against `crates/cypcb-render/src/lib.rs`, where `PcbEngine`'s `#[wasm_bindgen]` methods are declared. `Browser (zero install)` is the one row here nobody can test from a command line: it is a claim about how the thing is delivered, not about what it does |
 | the desktop binary's size | `cargo build --release -p cypcb-desktop && ls -l target/release/cypcb-desktop` -> **9,333,064 bytes** on x86_64 Linux, 2026-08-26. That is the executable; a packaged bundle carries more |
 
-Last verified: 2026-08-26.
+Last verified: 2026-08-26. Commands changed 2026-09-03 to build what they run: a prebuilt binary under `target/release` is only as new as the last build.

@@ -4535,6 +4535,9 @@ cypcb::parse::unknown_property
 - DONE: **the same failure mode was one capability away in the comparison matrix, and now it is not.** `the_matrix_is_honest_about_us` decides what the matrix may claim about the language server by looking for `<name>_provider: Some(` in `backend.rs` - seven capabilities. `the_language_server_answers` drove the real binary and checked three of them on the wire: `hoverProvider`, `completionProvider`, `definitionProvider`. The other four - references, rename, formatting, semantic tokens - were held by the source line alone, which is what K011 was. They are absent from `backend.rs` today, so nothing is claimed falsely; the gap was latent, waiting for the first person to set a field.
 - **The wire is asked both ways now.** `it_advertises_nothing_it_has_not_implemented` spawns the server, sends `initialize`, and asserts those four are **not** in the answer. A field written into `ServerCapabilities` fails this case before it can reach the matrix, and whoever wrote it has to make the server answer the request an editor will now send. Proof: `cargo test -p cypcb-lsp --test the_language_server_answers` -> 13 passed. Mutation: `rename_provider: Some(OneOf::Left(true))` added to `initialize` -> 1 failed, restored by md5 against the saved file.
 - DONE: **the sentence above was written one grep too early, and the last one is gone.** `the_help_says_which_boards_it_reads` held `watch` by reading `watch.rs` for `is_kicad(`, on the stated grounds that a command which never returns cannot be run and asked. It can: `watch` prints one check before it starts watching. The case hands it a board KiCad 10 wrote, reads until the first verdict line appears, and kills it. **The mutation is the point**: leaving `is_kicad(` in place and replacing what it guards with a refusal - the shape `parse` really has - still satisfies the grep (`grep -c "is_kicad(" -> 1`) and fails the new case. Proof: `cargo test -p cypcb-cli --test the_help_says_which_boards_it_reads` -> 3 passed in 0.09s; under the mutation, 1 failed. `watch.rs` restored by md5 against the saved copy.
+- DONE: **the two blocks that tell a reader how to check this project told them to run a binary that can predate the claim.** The tracker's own Verification block and four rows of `docs/competition-feature-matrix.md` invoked a prebuilt executable under `target/release`, which is only as new as the last `cargo build`. It is not a hypothetical: the one in the container was five days behind on 2026-09-03 and rejected a `corner` the grammar had accepted since August, and this file already records the same trap costing a measurement - a DRC reading taken from a binary three commits old and written up as two code paths disagreeing. Both blocks go through `cargo run` now, which cannot be stale.
+- **The block was also re-run rather than re-dated.** `check examples/drc-test.cypcb` -> **16 violations**, the figure it claims; `grep -c 'Box::new(rules::' crates/cypcb-drc/src/lib.rs` -> **37**.
+- **The guard has a control, and the control is the case that earns its keep.** Two of the three assertions are absences, and an absence passes for free if the slice is empty or the heading moves - so the third asserts the tracker's *history* still quotes the old path (it does, 26 times, and should: it records commands as they were run), that the section read is the tail rather than the file, and that it carries the commands being checked. Proof: `cargo test -p cypcb-cli --test a_verification_command_builds_what_it_runs` -> 3 passed. Mutations, each alone and restored by md5: the old path back in the Verification block -> 2 failed; back in the matrix -> 1 failed; the history stripped of it so the control controls nothing -> 1 failed.
 - NEXT-ACTION: **none in this vector, and this time the claim was checked instead of asserted.** The three source-reading cases left in the workspace all read a document rather than code: `every_definition_has_an_example` reads `reader.rs` to enumerate the language's own definitions, and `the_matrix_is_honest_about_us` reads `backend.rs` and `render/src/lib.rs` for capability names whose wire behaviour the LSP case now holds. None of them stands in for a behaviour that can be run. What is live elsewhere: V10's mirror is running and needs watching, not fires.
 
 - DONE: **the guide's guard was reading a list of keywords that was two words short, and a broken example had been sitting in `docs/SYNTAX.md` since the day `region` shipped.** `the_syntax_guide_parses` decided which blocks to parse from a `TOP_LEVEL` array in its own file. `flex` and `region` landed in the language and nothing updated it, so every example opening with either was counted as "not a top-level construct" and skipped. The keywords come out of the generated grammar now, the way the sibling guard has always read them.
@@ -5282,9 +5285,19 @@ Re-check the central claims of this file:
 cd /workspace/codeyourpcb
 cargo test --workspace --exclude cypcb-desktop -j 12      # test status
 cargo clippy --workspace --exclude cypcb-desktop -j 12    # gate status
-./target/release/cypcb check examples/drc-test.cypcb      # V1 DONE claim, expect 16 violations rc=1
+cargo run -q --release --bin cypcb -- check examples/drc-test.cypcb   # 16 violations, rc=1
 grep -c 'Box::new(rules::' crates/cypcb-drc/src/lib.rs    # rule registry size, as a number rather than a claim
 git log --oneline -10                                     # what actually landed
 ```
 
-Last verified: 2026-08-09.
+**Every command here builds what it runs.** A prebuilt binary under
+`target/release` was in this block until 2026-09-03, and one of those is only
+as new as the last `cargo build`: the one in the container was five days and a
+language feature behind, and it rejected a `corner` the grammar had accepted
+since August. This file already records the same trap costing a measurement - "the
+binary I measured them with was three commits old" - so the path is gone rather
+than the lesson repeated. Held by
+`cargo test -p cypcb-cli --test a_verification_command_builds_what_it_runs`.
+
+Last verified: 2026-09-03. `check examples/drc-test.cypcb` -> 16 violations;
+`grep -c 'Box::new(rules::'` -> 37.
