@@ -233,3 +233,94 @@ fn the_paragraph_names_every_file_the_export_writes() {
         );
     }
 }
+
+/// Every keyword the grammar opens a construct with.
+///
+/// The same convention `every_definition_has_an_example` uses, because the two
+/// must agree about what a keyword is: a rule name with `_definition` or
+/// `_statement` trimmed, `module_instance` read as `use`, and the zone rule
+/// replaced by the four words it chooses between.
+fn grammar_keywords() -> BTreeSet<String> {
+    let grammar = read("crates/cypcb-parser/grammar/grammar.js");
+
+    let list = grammar
+        .split("_definition: $ => choice(")
+        .nth(1)
+        .expect("the grammar names its top-level definitions in one place")
+        .split("),")
+        .next()
+        .expect("that list ends");
+
+    let kinds = grammar
+        .split("field('kind', choice(")
+        .nth(1)
+        .expect("the zone block chooses between its four words")
+        .split(')')
+        .next()
+        .expect("that choice ends");
+
+    let mut found: BTreeSet<String> = kinds
+        .split(',')
+        .map(|word| word.trim().trim_matches('\'').to_string())
+        .filter(|word| !word.is_empty())
+        .collect();
+
+    found.extend(
+        list.lines()
+            .filter_map(|line| line.trim().strip_prefix("$."))
+            .filter_map(|rest| rest.split(',').next())
+            .map(|rule| match rule.trim() {
+                "module_instance" => "use".to_string(),
+                other => other
+                    .trim_end_matches("_definition")
+                    .trim_end_matches("_statement")
+                    .to_string(),
+            })
+            .filter(|word| word != "zone"),
+    );
+    found
+}
+
+#[test]
+fn the_paragraph_names_every_keyword_the_grammar_opens_with() {
+    // The sentence this replaced listed `via`, `stackup`, `coverlay` and
+    // `stiffener` as the grammar's keywords. None of them opens a definition -
+    // they are nested inside the board block - and it named none of the eleven
+    // that do. Vague enough that nothing could check it, which is how it
+    // stayed.
+    let paragraph = flat(&measured_paragraph());
+    let after = paragraph
+        .split("keywords: ")
+        .nth(1)
+        .expect("the sentence enumerates them");
+    let list = after.split('.').next().expect("the sentence ends");
+    let named: BTreeSet<String> = list
+        .split('`')
+        .skip(1)
+        .step_by(2)
+        .map(|word| word.trim().to_string())
+        .collect();
+    let stated: usize = paragraph
+        .split("opens a design with ")
+        .nth(1)
+        .and_then(|rest| rest.split_whitespace().next())
+        .and_then(|word| word.parse().ok())
+        .expect("the sentence states how many");
+
+    let actual = grammar_keywords();
+    assert_eq!(
+        named, actual,
+        "the audit's keyword list disagrees with the grammar"
+    );
+    assert_eq!(
+        stated,
+        actual.len(),
+        "the audit says {stated} keywords and the grammar has {}",
+        actual.len()
+    );
+    assert!(
+        actual.len() > 10,
+        "the grammar parse found {} keywords, which is not a language",
+        actual.len()
+    );
+}

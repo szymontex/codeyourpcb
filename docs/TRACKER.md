@@ -419,10 +419,14 @@ else. It named neither of the two extra kinds it writes; exporting
 rules - it said twenty, and `ls crates/cypcb-drc/src/rules/*.rs | wc -l` and
 `grep -c 'Box::new(rules::' crates/cypcb-drc/src/lib.rs` both answer 37, so
 every rule written is a rule registered. Both figures are held by
-`cargo test -p cypcb-cli --test the_audit_counts_what_is_there`. The
-grammar's keyword list carries `zone`, `keepout`, `via`, `trace`, `netclass`,
-`diffpair`, `stackup`, `coverlay`, `stiffener` and the fabrication vocabulary
-V8 added.
+`cargo test -p cypcb-cli --test the_audit_counts_what_is_there`. The grammar
+opens a design with 19 keywords: `board`, `outline`, `text`, `dimension`,
+`component`, `net`, `netclass`, `diffpair`, `footprint`, `trace`, `module`,
+`use`, `interface`, `import`, `assert`, and the four a zone block takes -
+`zone`, `keepout`, `flex`, `region`. The sentence this replaced named `via`,
+`stackup`, `coverlay` and `stiffener` among them; none of those opens a
+definition. They are nested inside the board block, which is where the
+fabrication vocabulary V8 added lives.
 
 | # | What KiCad has | What is here | Measured by |
 |---|---|---|---|
@@ -1344,6 +1348,9 @@ answered, not as they were found. Every one of them is closed.
 - DONE: **the third claim in the same paragraph, and the one that says "nothing else".** It listed what `crates/cypcb-export/src/` writes as Gerber (copper, mask, silk, outline), Excellon, a job file, a BOM and a pick-and-place file. Exporting `examples/blink.cypcb` writes **14** files, and two kinds were missing from that list: **solder paste stencils** (`blink-F_Paste.gbr`, `blink-B_Paste.gbr`) and an **assembly summary in JSON** (`assembly/blink.json`, a component table grouped by designator). "Nothing else" was wrong about a directory anybody can list.
 - **The case answers the claim the way the claim is phrased.** It exports the board, walks the output tree, and matches every file against a table of kind markers - so a file nothing has a word for fails by name, which is the "nothing else" half - then asserts the paragraph carries the word for each kind found.
 - **The same trap caught it twice, so it is written down.** A `contains` over a paragraph is satisfied by prose *about* the omission: removing `paste` from the list left the case green because the correction beside it said "It said neither paste nor the summary". Corrective prose must not repeat the tokens the guard looks for. Reworded, the mutation kills it. Proof: `cargo test -p cypcb-cli --test the_audit_counts_what_is_there` -> 4 passed. Mutations, each alone and restored by md5: `paste` dropped from the list -> 1 failed; the assembly summary dropped -> 1 failed.
+- DONE: **the fourth and last claim in that paragraph, and the only one nothing could have checked.** It said the grammar's keyword list carries `zone`, `keepout`, `via`, `trace`, `netclass`, `diffpair`, `stackup`, `coverlay`, `stiffener` "and the fabrication vocabulary V8 added" - a sentence with no edge. Four of those nine open no definition at all: `via`, `stackup`, `coverlay` and `stiffener` are nested inside the board block. And eleven that do open one were missing. The grammar opens a design with **19** keywords, and the paragraph lists all nineteen now: fifteen top-level definitions, with `module_instance` read as `use`, plus the four a zone block chooses between.
+- **The extraction is the one `every_definition_has_an_example` already uses**, because the two files have to agree about what a keyword is. Proof: `cargo test -p cypcb-cli --test the_audit_counts_what_is_there` -> 5 passed. Mutations, each alone and restored by md5: `use` dropped from the list -> 1 failed; the count written as 18 -> 1 failed.
+- **That closes the paragraph the whole V9 audit is read against.** Four claims, four of them stale or uncheckable, all four now counted from the binary, the tree or the grammar: 12 subcommands, 37 rules, the 14 files an export writes and nothing else, and these 19 keywords.
 - NEXT-ACTION: **none in this vector.** Every helper the census listed is asserted by a test that names it, and the one aperture the Gerber writer could not draw is drawn.
 - DONE: **my own "the census is empty" was false, and checking my own claim is what found it.** The entry that closed this census said every helper it had listed now had a test naming it. Three did not: `width_in_glyphs`, `distance_to_outline` and `index_to_layer` were named by an **earlier** NEXT-ACTION than the three pad helpers that fire actually took, and the closing sentence generalised. `grep -rl <name> crates/*/tests` returned nothing for all three.
 - **Two of the three are named now, and both are the shape that has cost this project before.** `index_to_layer` maps a grid index back to a copper layer - the off-by-two that has shipped three times here, because the grid counts the outer faces first, the language counts inner layers from one, and the model counts them from zero. `width_in_glyphs` is what the silkscreen exporter asks before placing any label: glyphs plus the gaps **between** them, so a one-character designator has no trailing gap and an empty string is zero rather than an underflow.
