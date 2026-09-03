@@ -229,9 +229,19 @@ impl RouteCommand {
         // Create runner
         let runner = FreeRoutingRunner::new(config);
 
-        // Set up Ctrl+C handler for cancellation
-        let cancel_flag = runner.cancel_flag();
-        ctrlc_cancel_setup(&cancel_flag);
+        // Nothing arms the runner's cancel flag, and this used to look as
+        // though something did: a call to `ctrlc_cancel_setup`, whose whole
+        // body was `let _ = flag;`. The flag itself is real - `route_with_progress`
+        // reads it twice and answers `RoutingError::Cancelled`, which the match
+        // below turns into "Routing cancelled by user" and a pointer at the
+        // partial `.ses`. A library caller gets all of that by storing `true`
+        // into `runner.cancel_flag()`. What this command cannot do is arm it
+        // from a signal, because catching SIGINT needs a crate and the
+        // workspace has none: `ctrlc` is not in `Cargo.lock`, and `libc` and
+        // `signal-hook-registry` are there only as somebody else's
+        // dependency. So Ctrl+C kills the process group - this command and the
+        // Java child together - and the partial-results line never prints.
+        // Whether to take that dependency is D13.
 
         // Build net name to ID lookup
         let net_lookup = build_net_lookup(&mut world);
@@ -411,22 +421,6 @@ fn build_net_lookup(world: &mut BoardWorld) -> HashMap<String, cypcb_world::NetI
     }
 
     lookup
-}
-
-/// Set up Ctrl+C handler for cancellation.
-fn ctrlc_cancel_setup(cancel_flag: &std::sync::Arc<std::sync::atomic::AtomicBool>) {
-    let flag = std::sync::Arc::clone(cancel_flag);
-
-    // Note: We can't use ctrlc crate without adding it as a dependency
-    // For now, rely on process termination
-    // A proper implementation would use ctrlc::set_handler
-    let _ = flag;
-
-    // Signal handler would be:
-    // ctrlc::set_handler(move || {
-    //     flag.store(true, Ordering::SeqCst);
-    //     eprintln!("\nCancelling routing...");
-    // }).ok();
 }
 
 /// Print routing progress to stderr.

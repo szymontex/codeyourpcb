@@ -2770,7 +2770,9 @@ multi_ic        0.26: 13 iterations, converged false, [553, 339, 269, 270, 258, 
 - DONE: **the ratchets and the bands are tied together by arithmetic rather than by a comment.** A ratchet is the routed value plus that board's own noise band, which has been the convention since 2026-08-08 and lived only in prose - a mutation two fires ago proved it: a band edited without its ratchet **killed nothing**, because `noise_band` feeds diagnostics and `DRC_RATCHETS` is a constant. Each row now carries the routed pair it was derived from, and `the_ratchets_are_the_routed_values_plus_their_bands` checks the addition.
 - **It routes nothing.** Three numbers per board, so it runs in the ordinary `cargo test` rather than behind `--ignored` - the gate catches a mismatched baseline in the second stage rather than the eighth.
 - Proof: `cargo test -p cypcb-autoroute --test benchmark_validation the_ratchets_are` -> **1 passed**. Mutations, each alone and restored from the saved file: a band edited without its ratchet -> **1 failed**; a ratchet moved without a measurement -> **1 failed**; a routed value recorded wrong -> **1 failed**. That is the unkilled mutation from 2026-08-28 closed. `./scripts/quality-gate.sh` -> **All stages passed**, 9 of 9.
-- NEXT-ACTION: **none pulled in this vector.** What is left in V2 is the variants session, which wants a decision rather than a fire.
+- DONE: **`route --freerouting` looked as though Ctrl+C cancelled it. Nothing did.** The call site read `// Set up Ctrl+C handler for cancellation` and called `ctrlc_cancel_setup(&cancel_flag)`, whose entire body was `let _ = flag;` beside a commented-out `ctrlc::set_handler`. Everything **around** it is real: `route_with_progress` reads the flag twice and answers `RoutingError::Cancelled`, and the command turns that into `Routing cancelled by user` plus a pointer at the partial `.ses`. So a library caller storing `true` into `runner.cancel_flag()` gets the whole path; the CLI could never reach it, and a person who hit Ctrl+C killed the process group - this command and the Java child together - and never saw the partial-results line.
+- **The no-op is gone and the call site says what is wired.** Deleting it cannot change behaviour, which is the point: the body was `let _ = flag;`. `cargo clippy -p cypcb-cli --all-targets` clean, `./scripts/quality-gate.sh` -> `=== All stages passed ===`.
+- NEXT-ACTION: **none pulled in this vector.** What is left in V2 is the variants session, which wants a decision rather than a fire, and **D13**, which is a dependency question rather than a fire.
 - DONE: **the variant table is re-measured, and `docs/routing.md` is current end to end for the first time since the pad obstacle changed.** Four tables were measured on the disc-shaped pad; this is the last of them. **The default is first on two boards of six now and second on two more** - it was first on one and nobody's best on five. `led_blink` and `shift_driver` pick it outright, `multi_ic` and `qfp_fanout` put it second behind `Low-Via`, `stm32_breakout` fifth behind `High-Density`, `plane_board` tenth behind `Eager Pads`.
 - **One row is worth reading twice and it is not a contradiction.** On `stm32_breakout` the default has **fewer violations than the winner** - 187 against 198 - and loses on **shorts**, 104 against 78. That is the documented ranking doing what it says: complete first, then fewest shorts, then composite, because a short is the fault a board cannot be built around.
 - **`Low-Via` wins two boards and won none in August.** With pads blocking their own rectangle there is room to route without changing layer, so the variant that prices vias highly is the one that finds it - which is the same mechanism the weight sweep saw from the other side when its 31% speed-up disappeared.
@@ -5191,7 +5193,19 @@ this list whenever a piece of work runs into a missing concept.
 | M5 | ~~Net classes.~~ **Closed.** `netclass Power [width 0.5mm] { VCC GND }` states a rule once for a group; a net's own block overrides it field by field. | - | - |
 | M6 | ~~Silkscreen artwork per footprint.~~ **Closed.** Carried by `Footprint`, written in the DSL, accepted from a supplier, measured by the checker and printed by the gerber. | - | The viewer cannot call `register_footprint` - see the note under V4. |
 
-## Owner-decision queue - D1 to D12 answered
+## Owner-decision queue - D1 to D12 answered, D13 open
+
+**D13 (open, 2026-09-03): may `cypcb-cli` take a dependency to catch Ctrl+C?**
+`route --freerouting` runs an external Java router for as long as the board
+takes, and the cancellation path behind it is complete except for the one line
+that arms it - catching SIGINT, which std cannot do. Measured: **`ctrlc` is not
+in `Cargo.lock`**; `libc` and `signal-hook-registry` are, but only as somebody
+else's dependency, and reaching for `signal-hook-registry` means `unsafe` and
+Unix alone, where D2 says Windows has to work. So the choice is `ctrlc` as a
+new direct dependency, or leaving Ctrl+C to kill the process group as it does
+today. Nothing is blocked on this: the in-house router is what a plain `route`
+uses, and the flag works for any library caller.
+
 
 The owner answered the whole queue in one pass. What each answer means, and
 what it turns into, is below. **D11 was added and answered on 2026-08-28**, and the
