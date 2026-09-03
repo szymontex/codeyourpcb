@@ -383,7 +383,10 @@ enough not to get blocked, and never fetch from the studio's address.**
 - DONE: the account proved with a positive control, the whole-board mirror
   written, guarded, installed as a service and running, and the pool wired to
   receive it hourly.
-- NEXT-ACTION: **let it run, and get the one number nobody has yet.** Every
+- DONE: **the arithmetic V10 has been waiting for, from 19 of the 23 nodes.** The listing phase has catalogued **40885 threads** so far, and every catalogue row carries its thread's reply count, so the page count is a sum rather than an estimate: **51894 thread pages** at the measured 30 posts to a page. At the 75 seconds this mirror keeps, that is **1081 hours - 45 days** - and `the-lab.2`, which the listing has not reached yet, is about 29700 threads on its own. So the whole board at this rate is on the order of **three months**, not the week the owner was told to expect.
+- **That is a choice to put in front of the owner rather than one to make quietly.** The rate was set to 75 seconds because the instruction was "be gentle so they don't get us blocked"; the site's own `robots.txt` states 30 for AI agents, which would be 2.5 times faster and still slower than what it asks of everyone else. Nothing else changes the figure: the pages are small, the delay is the whole cost.
+- **One anomaly worth a look before anybody trusts a total**: `political-controversy.46` catalogued **0 threads**. Either it is empty, or its listing does not have the row markup every other node has.
+- NEXT-ACTION: **finish the listing phase, then re-run the same sum over all 23.** Four nodes are left - `the-chamber.37`, `the-lab.2`, `truth-table.31`, `white-market.14` - and `the-lab.2` is the one that moves the number. The command is the sum over `~/.cache/cypcb/gdiy-archive/state/threads-*.tsv`, so it costs nothing to repeat.
   listing row carries its thread's reply count, so when the listing phase lands
   the exact page count of the whole board can be computed rather than guessed -
   and that is the first honest answer to how long this takes. Until then the
