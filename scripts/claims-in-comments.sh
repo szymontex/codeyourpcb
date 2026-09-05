@@ -22,6 +22,14 @@
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 2
 
+# Figures stated in a comment that no test names, counted on 2026-09-05. The
+# gate runs this and holds the count to the number, in both directions: a new
+# unread figure fails until somebody asserts it somewhere or raises this on
+# purpose, and asserting one fails until the number comes down with it. The
+# script was written on 2026-08-29 and nothing ran it, which is how a census
+# becomes a number nobody has looked at since the day it was measured.
+BASELINE_UNREAD=35
+
 MODE=${1:-count}
 
 # Every figure that appears in a comment, in the source directories a reader
@@ -58,8 +66,17 @@ FIGURES=$(comment_figures)
 TESTED=$(tested_figures)
 UNREAD=$(comm -23 <(echo "$FIGURES") <(echo "$TESTED"))
 
+# A figure on its own cannot be looked at. The first comment that states it
+# can, so `--unread` names the file and the line as well: a census whose output
+# is a column of numbers is a census nobody acts on.
 if [ "$MODE" = "--unread" ]; then
-    echo "$UNREAD"
+    for figure in $UNREAD; do
+        printf '%-12s %s\n' "$figure" \
+            "$(grep -rnE "^\s*(//|///|\*|#).*${figure//./\\.}" \
+                --include=*.rs --include=*.ts \
+                crates/*/src viewer/src viewer/server.ts 2>/dev/null \
+                | head -1 | cut -c1-140)"
+    done
     exit 0
 fi
 
@@ -68,3 +85,12 @@ unread=$(echo "$UNREAD" | grep -c . || true)
 echo "figures stated in comments: $total"
 echo "of those, named by no test:  $unread"
 echo "read back by a test:         $((total - unread))"
+
+if [ "$unread" -ne "$BASELINE_UNREAD" ]; then
+    direction=$([ "$unread" -gt "$BASELINE_UNREAD" ] && echo more || echo fewer)
+    echo ""
+    echo "scripts/claims-in-comments.sh: $unread unread figures, $direction than"
+    echo "the $BASELINE_UNREAD this file records. Run it with --unread to see"
+    echo "which, then assert the figure or move BASELINE_UNREAD in the same commit."
+    exit 1
+fi
