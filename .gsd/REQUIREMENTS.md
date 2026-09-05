@@ -225,7 +225,7 @@ This file is the explicit capability and coverage contract for the project.
 - Source: user
 - Primary owning slice: M005/S02
 - Supporting slices: M005/S03
-- Validation (2026-08-06): mapped and met. `benchmark_validation` asserts `unrouted == 0` before it looks at any quality metric, and all three benchmark fixtures route `Complete`. `tests/abandoned_connections.rs` names any connection the router gives up on, so a regression says which net rather than only how many.
+- Validation (2026-08-06): mapped and met. `benchmark_validation` asserts `unrouted == 0` before it looks at any quality metric, and all three benchmark fixtures route `Complete`. `crates/cypcb-autoroute/tests/abandoned_connections.rs` names any connection the router gives up on, so a regression says which net rather than only how many.
 - Notes: the suspected root cause - convergence failure on multi-pad nets - was the right shape but the wrong mechanism. `net_path_cells` gathered every connection of a net into one list and marked each cell once per connection, so a net's own junctions counted as overuse and it negotiated against itself forever. Deduplicating the net's cells fixed it.
 
 ### R205 — E2E Test: UI Responsive During Routing
@@ -398,7 +398,7 @@ in the viewer's tests fails if this list and the specs disagree.
 | Suite | Why it is skipped |
 |---|---|
 | `viewer/e2e/tuning-panel.spec.ts` | The Route split-button and its dropdown are `display:none` in `viewer/index.html`. D5. |
-| `viewer/e2e/variant-panel.spec.ts` | The panel has no code path that can show it. `showVariants()` in `src/variant-panel.ts` has no caller anywhere in the viewer - `main.ts` imports `initVariantPanel`, `hideVariants` and `isVariantPanelVisible` and routes through `auto_route_with_params`, a single run. The engine's `auto_route_variants()` exists and the bridge declares it; nothing calls it. Unhiding the button (D5) is necessary and not sufficient. |
+| `viewer/e2e/variant-panel.spec.ts` | **The panel is gone, not merely unreachable.** It was deleted in `a9e8c7a`, "delete the variant panel, which nothing could reach", so `showVariants`, `initVariantPanel`, `hideVariants` and `isVariantPanelVisible` are in no file under `viewer/src/`. The engine still has `auto_route_variants()` at `crates/cypcb-render/src/lib.rs:916` and `viewer/src/wasm.ts` still declares it; nothing calls either. The spec is kept because the requirement is not withdrawn, and it asserts against a screen no build produces. D5. |
 | `viewer/e2e/benchmark-screenshots.spec.ts` | Routes boards through the same hidden button. D5. |
 
 ## Coverage Summary

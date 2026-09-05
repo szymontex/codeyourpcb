@@ -41,7 +41,16 @@ fn run(args: &[&str]) -> (Option<i32>, String) {
 
 /// The imported design, written where the repository is not.
 fn imported() -> (PathBuf, String) {
-    let dir = std::env::temp_dir().join("cypcb-usb-names");
+    // One directory per case. All three cases call this, and it begins by
+    // deleting the directory - so on a shared path they delete each other's
+    // work under load. Seen once in a full workspace run from a fresh clone:
+    // two of the three failed with an empty design and passed on every rerun.
+    // libtest names a test thread after the case it runs.
+    let case = std::thread::current()
+        .name()
+        .unwrap_or("unnamed")
+        .replace("::", "-");
+    let dir = std::env::temp_dir().join(format!("cypcb-usb-names-{case}"));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).expect("a place to work");
     let out = dir.join("usb.cypcb");

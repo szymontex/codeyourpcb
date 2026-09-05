@@ -51,19 +51,20 @@ async function routeAndWaitForVariants(page: Page, minimum = 2): Promise<Variant
   return variantDebug(page);
 }
 
-// Skipped, and the reason is worse than the one that used to be written here.
+// Skipped, and the reason has moved on twice.
 //
 // The Route split-button is `display:none` in index.html pending D5, which is
-// why this was skipped. Rewriting these assertions and running them with the
-// wrapper unhidden showed the rest: **the panel has no code path that can show
-// it.** `showVariants()` in `src/variant-panel.ts` has no caller anywhere in
-// the viewer - `main.ts` imports `initVariantPanel`, `hideVariants` and
-// `isVariantPanelVisible`, and routes through `auto_route_with_params`, which
-// is a single run and produces no variants to show. The engine's
-// `auto_route_variants()` exists and `src/wasm.ts` declares it; nothing calls
-// it. Measured 2026-08-08: routing this board from the unhidden button gives
-// `[Routing] Routed 1 segments in 0s` and leaves `__variantPanel` at
-// `{visible: false, variantCount: 0}`.
+// why this was skipped first. Running these assertions with the wrapper
+// unhidden then showed that the panel had no code path that could show it:
+// measured 2026-08-08, routing this board gave `[Routing] Routed 1 segments in
+// 0s` and left `__variantPanel` at `{visible: false, variantCount: 0}`.
+//
+// **The panel has since been deleted** - `a9e8c7a`, "delete the variant panel,
+// which nothing could reach". `showVariants`, `initVariantPanel`,
+// `hideVariants` and `isVariantPanelVisible` are in no file under `src/`. The
+// engine keeps `auto_route_variants()` and `src/wasm.ts` still declares it;
+// nothing calls either. This file asserts against a screen no build produces,
+// and is kept only because the requirement behind it is not withdrawn.
 //
 // So unhiding the button is necessary and not sufficient. What is written
 // below is what the panel has to do the day somebody wires it up.
