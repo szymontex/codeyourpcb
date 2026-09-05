@@ -94,6 +94,18 @@ export default defineConfig({
       },
     },
   },
+  // The routing worker is an ES module - main.ts builds it with
+  // `new Worker(new URL('./routing-worker.ts', import.meta.url), { type:
+  // 'module' })` - and it imports the wasm engine, which splits its bundle.
+  // Vite's default worker format is `iife`, and rollup refuses a code-split
+  // iife build: `Invalid value "iife" for option "worker.format"`. So
+  // `npm run build` failed from the day the worker landed, and nothing said
+  // so: the browser suite drives `npm run dev`, and no gate stage built the
+  // bundle at all. `viewer/dist` in the tree was from 2026-08-27.
+  worker: {
+    format: 'es',
+    plugins: () => [wasm(), topLevelAwait()],
+  },
   envPrefix: ['VITE_', 'TAURI_ENV_*'],
   build: {
     target: process.env.TAURI_ENV_PLATFORM === 'windows'

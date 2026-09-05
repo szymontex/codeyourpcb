@@ -34,8 +34,36 @@ for tool in xvfb-run import; do
     }
 done
 
+# A binary and a bundle are only as new as the last build, and this script
+# photographs both. On 2026-09-05 the tree had `viewer/dist` from 2026-08-27
+# and `viewer/src` from 2026-09-03: a hand run would have started today's
+# binary onto a frontend a week old and called the result a passing smoke
+# test. The same trap has cost this project two measurements already, both
+# recorded in docs/TRACKER.md - a DRC reading from a stale `target/release`,
+# and a `corner` the shipped grammar accepted and the built binary refused.
+newest_mtime() {
+    find "$@" -type f -printf '%T@\n' 2>/dev/null | sort -rn | head -1 | cut -d. -f1
+}
+
+fresher_than() {
+    # $1 artifact, $2 what to call it, rest: the sources it is built from
+    local artifact="$1" name="$2"
+    shift 2
+    local built sources
+    built=$(newest_mtime "$artifact")
+    sources=$(newest_mtime "$@")
+    [ -n "$built" ] && [ -n "$sources" ] || return 0
+    [ "$built" -ge "$sources" ]
+}
+
 [ -x "$APP" ] || {
     echo "[ERROR] $APP is not built. cargo build -p cypcb-desktop"
+    exit 1
+}
+
+fresher_than "$APP" "the desktop binary" src-tauri crates || {
+    echo "[ERROR] $APP is older than the Rust it is built from."
+    echo "        cargo build -p cypcb-desktop"
     exit 1
 }
 
@@ -44,6 +72,13 @@ done
 # absence is an error rather than something to discover from a white screen.
 [ -d "$FRONTEND" ] && [ -n "$(ls -A "$FRONTEND" 2>/dev/null)" ] || {
     echo "[ERROR] $FRONTEND is empty; the app would open onto nothing."
+    echo "        cd viewer && npm run build"
+    exit 1
+}
+
+fresher_than "$FRONTEND" "the frontend bundle" viewer/src viewer/index.html || {
+    echo "[ERROR] $FRONTEND is older than viewer/src; the window would show"
+    echo "        a build nobody wrote today."
     echo "        cd viewer && npm run build"
     exit 1
 }

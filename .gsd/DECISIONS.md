@@ -140,11 +140,12 @@ that has changed since, and both were read the way the DRC table below was.
   what the exclusion cost: `cypcb-desktop` went unbuilt long enough to collect
   nine compile errors from the Tauri v1 to v2 move, plus an icon the macro
   refused, all found the first time anybody compiled it.
-- **"Quality gate script runs 6 stages": the gate runs 11 stages as of
+- **"Quality gate script runs 6 stages": the gate runs 12 stages as of
   2026-09-05** - `grep -c '^echo "\[' scripts/quality-gate.sh`. The six named
-  here are all still there, and five ran up behind them: `tsc --noEmit` after
+  here are all still there, and six ran up behind them: `tsc --noEmit` after
   `cargo test`, then `autorouter benchmark`, `jscpd`, the reach of the engine
-  API and a selftest of the scheduled gate after `playwright`. The count is held by
+  API, a smoke test of the desktop application and a selftest of the scheduled
+  gate after `playwright`. The count is held by
   `crates/cypcb-cli/tests/the_decision_log_is_current_where_it_says_it_is.rs`.
 
 
