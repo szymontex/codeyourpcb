@@ -3,8 +3,14 @@
 ## Current State
 
 **Version:** 0.2.0-beta (M004 complete 2026-03-14)
-**Status:** Production-grade autorouter with multi-strategy routing, quality scoring, realtime tuning, and variant preview — on top of professional 2D/3D renderer, routing UX, and full tool stack
-**Codebase:** ~44,000 lines (Rust + TypeScript)
+**Status:** Production-grade autorouter with multi-strategy routing, quality scoring and realtime tuning, on top of a 2D/3D renderer, routing UX and the tool stack. **Variant preview is not in this list any more**: the engine keeps `auto_route_variants()`, the panel that showed its output was deleted in `a9e8c7a`, and nothing calls either.
+**Codebase:** count it rather than reading a number here:
+`find crates -path "*/src/*" -name "*.rs" | xargs wc -l | tail -1` and the same
+for `crates/*/tests`, `src-tauri`, `viewer/src` and `viewer/e2e`.
+_Read 2026-09-05: **113648 lines of production code** - 93345 Rust under
+`crates/*/src`, 393 in `src-tauri`, 19910 TypeScript in `viewer/src` - and
+**72120 lines of tests** - 59300, 8123 and 4697. The `~44,000` that stood here
+was written in March and was never a total of anything measurable today._
 
 **What works:**
 - Write .cypcb files → see board in 2D and 3D viewers with hot reload
@@ -79,8 +85,8 @@
 - ✅ DSL v2: modules, typed interfaces, physical units (23 variants), constraints (parse-level)
 - ✅ Undo/redo, net highlighting, component rotation, board resize infrastructure
 - ✅ PCB design rule database (IPC standards, manufacturer presets)
-- ✅ E2E test suite: 41 tests, 8-stage quality gate
-- ✅ Performance: autorouter 0.05s/500 components, web load 105ms
+- ✅ E2E test suite and quality gate. **Both figures that stood here were wrong**: `npx playwright test --list` reports **141 tests in 32 files**, not 41, and `scripts/quality-gate.sh` runs **10 stages**, not 8 - its own output numbers them `[1/10]` to `[10/10]`.
+- ✅ Performance. **The two numbers that stood here are from March and nothing has re-measured them**, so they are not repeated. The autorouter's current figures come from the gate's own stage 8, `[8/10] autorouter benchmark`; the page load has no measurement in this repository at all.
 
 ## Completed Milestone: M003 "From Prototype to Tool" ✅
 
