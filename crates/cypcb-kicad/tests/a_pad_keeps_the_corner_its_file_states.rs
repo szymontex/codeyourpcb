@@ -63,8 +63,9 @@ fn a_ratio_beyond_half_the_pad_is_held_to_half() {
 
 #[test]
 fn a_real_footprint_kicad_wrote_carries_its_own_corners() {
-    let file = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../viewer/kicad-tools/tests/fixtures/Test_Library.pretty/SOT-23-5.kicad_mod");
+    let file = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(
+        "../../tests/fixtures/kicad-tools/tests/fixtures/Test_Library.pretty/SOT-23-5.kicad_mod",
+    );
     let footprint = cypcb_kicad::import_footprint(&file).expect("the fixture reads");
     assert_eq!(footprint.pads.len(), 5);
     for pad in &footprint.pads {

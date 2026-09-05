@@ -38,19 +38,19 @@ fn repo_root() -> PathBuf {
 /// entries each one puts in the index.
 const BOARDS: [(&str, usize); 4] = [
     (
-        "viewer/kicad-tools/boards/03-usb-joystick/output/usb_joystick_routed.kicad_pcb",
+        "tests/fixtures/kicad-tools/boards/03-usb-joystick/usb_joystick_routed.kicad_pcb",
         12,
     ),
     (
-        "viewer/kicad-tools/boards/01-voltage-divider/output/voltage_divider.kicad_pcb",
+        "tests/fixtures/kicad-tools/boards/01-voltage-divider/voltage_divider.kicad_pcb",
         4,
     ),
     (
-        "viewer/kicad-tools/boards/02-charlieplex-led/output/charlieplex_3x3.kicad_pcb",
+        "tests/fixtures/kicad-tools/boards/02-charlieplex-led/charlieplex_3x3.kicad_pcb",
         14,
     ),
     (
-        "viewer/kicad-tools/tests/fixtures/routing-diagnostic.kicad_pcb",
+        "tests/fixtures/kicad-tools/tests/fixtures/routing-diagnostic.kicad_pcb",
         4,
     ),
 ];

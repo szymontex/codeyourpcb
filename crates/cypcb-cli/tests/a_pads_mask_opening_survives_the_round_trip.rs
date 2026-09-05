@@ -112,7 +112,7 @@ fn a_footprint_out_of_kicad_keeps_the_opening_it_asked_for() {
     // The importer reads it, the model carries it, and this is the half that
     // was missing: the design written from that model says it too.
     let file = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../viewer/svg-pcb/kicad-components/fab-1X04.kicad_mod");
+        .join("../../tests/fixtures/svg-pcb/kicad-components/fab-1X04.kicad_mod");
     let footprint = cypcb_kicad::import_footprint(&file).expect("the fixture reads");
 
     let mut world = BoardWorld::new();

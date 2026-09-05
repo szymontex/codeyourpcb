@@ -121,7 +121,8 @@ fn the_writer_says_the_corner_the_reader_read() {
 fn a_board_out_of_kicad_keeps_the_corners_it_was_drawn_with() {
     // Four pads on this board state `(roundrect_rratio 0.2)`; every other
     // rounded pad in this repository states 0.25.
-    let board = repo_root().join("viewer/kicad-tools/tests/fixtures/routing-diagnostic.kicad_pcb");
+    let board =
+        repo_root().join("tests/fixtures/kicad-tools/tests/fixtures/routing-diagnostic.kicad_pcb");
     let out = std::env::temp_dir().join("cypcb-corner-round-trip.cypcb");
     let run = cypcb()
         .arg("from-kicad")

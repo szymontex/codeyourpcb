@@ -43,10 +43,10 @@ fn repo_root() -> PathBuf {
 
 /// Every KiCad board in this repository that this reader can read.
 const BOARDS: [&str; 4] = [
-    "viewer/kicad-tools/boards/03-usb-joystick/output/usb_joystick_routed.kicad_pcb",
-    "viewer/kicad-tools/boards/01-voltage-divider/output/voltage_divider.kicad_pcb",
-    "viewer/kicad-tools/boards/02-charlieplex-led/output/charlieplex_3x3.kicad_pcb",
-    "viewer/kicad-tools/tests/fixtures/routing-diagnostic.kicad_pcb",
+    "tests/fixtures/kicad-tools/boards/03-usb-joystick/usb_joystick_routed.kicad_pcb",
+    "tests/fixtures/kicad-tools/boards/01-voltage-divider/voltage_divider.kicad_pcb",
+    "tests/fixtures/kicad-tools/boards/02-charlieplex-led/charlieplex_3x3.kicad_pcb",
+    "tests/fixtures/kicad-tools/tests/fixtures/routing-diagnostic.kicad_pcb",
 ];
 
 /// One pad in board coordinates: centre, half-size, and the radius its corners
@@ -147,7 +147,7 @@ fn the_correction_is_larger_than_the_clearance_it_is_measured_against() {
     // beside the limit - which is why this file exists rather than a sentence
     // in the tracker saying the difference is negligible.
     let (worst, _) = corner_effect(
-        "viewer/kicad-tools/boards/02-charlieplex-led/output/charlieplex_3x3.kicad_pcb",
+        "tests/fixtures/kicad-tools/boards/02-charlieplex-led/charlieplex_3x3.kicad_pcb",
     );
     assert!(
         worst > MIN_CLEARANCE_NM,
@@ -179,7 +179,7 @@ fn a_pad_with_no_corner_stated_corrects_by_nothing() {
     // The guard above is only worth its cost while the radius is real. A
     // reader that lost the ratio would make every correction zero and both
     // cases above would pass while saying nothing.
-    let pads = pads_of("viewer/kicad-tools/tests/fixtures/routing-diagnostic.kicad_pcb");
+    let pads = pads_of("tests/fixtures/kicad-tools/tests/fixtures/routing-diagnostic.kicad_pcb");
     let rounded = pads.iter().filter(|pad| pad.radius > 0.0).count();
     assert!(
         rounded > 0,

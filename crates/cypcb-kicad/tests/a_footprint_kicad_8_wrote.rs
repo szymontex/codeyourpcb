@@ -27,32 +27,32 @@ fn repo_root() -> PathBuf {
 /// the pad count each file states.
 const FOOTPRINTS: [(&str, &str, usize); 6] = [
     (
-        "viewer/kicad-tools/tests/fixtures/Test_Library.pretty/SOT-23-5.kicad_mod",
+        "tests/fixtures/kicad-tools/tests/fixtures/Test_Library.pretty/SOT-23-5.kicad_mod",
         "SOT-23-5",
         5,
     ),
     (
-        "viewer/kicad-tools/tests/fixtures/Test_Library.pretty/C_0402_1005Metric.kicad_mod",
+        "tests/fixtures/kicad-tools/tests/fixtures/Test_Library.pretty/C_0402_1005Metric.kicad_mod",
         "C_0402_1005Metric",
         2,
     ),
     (
-        "viewer/kicad-tools/tests/fixtures/Test_Library.pretty/R_0603_1608Metric.kicad_mod",
+        "tests/fixtures/kicad-tools/tests/fixtures/Test_Library.pretty/R_0603_1608Metric.kicad_mod",
         "R_0603_1608Metric",
         2,
     ),
     (
-        "viewer/faebryk/test/common/resources/test.kicad_mod",
+        "tests/fixtures/faebryk/test/common/resources/test.kicad_mod",
         "LED_0201_0603Metric",
         4,
     ),
     (
-        "viewer/faebryk/test/common/libs/footprints/logos.pretty/faebryk_logo.kicad_mod",
+        "tests/fixtures/faebryk/test/common/libs/footprints/logos.pretty/faebryk_logo.kicad_mod",
         "faebryk_logo",
         0,
     ),
     (
-        "viewer/kicad-tools/tests/fixtures/purge_test_project/my_project_lib.pretty/UsedFootprint.kicad_mod",
+        "tests/fixtures/kicad-tools/tests/fixtures/purge_test_project/my_project_lib.pretty/UsedFootprint.kicad_mod",
         "UsedFootprint",
         1,
     ),

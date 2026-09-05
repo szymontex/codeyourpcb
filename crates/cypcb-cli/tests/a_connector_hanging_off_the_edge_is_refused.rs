@@ -45,7 +45,7 @@ fn repo_root() -> PathBuf {
         .expect("the workspace root is two directories above this crate")
 }
 
-const BOARD: &str = "viewer/kicad-tools/tests/fixtures/routing-diagnostic.kicad_pcb";
+const BOARD: &str = "tests/fixtures/kicad-tools/tests/fixtures/routing-diagnostic.kicad_pcb";
 
 #[test]
 fn the_board_is_the_square_its_own_edge_cuts_draw() {

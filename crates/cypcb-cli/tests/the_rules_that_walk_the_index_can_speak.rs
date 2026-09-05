@@ -54,7 +54,8 @@ fn the_edge_rule_speaks_on_a_board_that_is_too_close_to_its_own_edge() {
     let mut loud = honest.clone();
     loud.min_edge_clearance = Nm::from_mm(20.0);
 
-    let mut diagnostic = board("viewer/kicad-tools/tests/fixtures/routing-diagnostic.kicad_pcb");
+    let mut diagnostic =
+        board("tests/fixtures/kicad-tools/tests/fixtures/routing-diagnostic.kicad_pcb");
     assert_eq!(
         EdgeClearanceRule.check(&mut diagnostic, &honest).len(),
         1,
@@ -62,9 +63,9 @@ fn the_edge_rule_speaks_on_a_board_that_is_too_close_to_its_own_edge() {
     );
 
     for path in [
-        "viewer/kicad-tools/boards/03-usb-joystick/output/usb_joystick_routed.kicad_pcb",
-        "viewer/kicad-tools/boards/01-voltage-divider/output/voltage_divider.kicad_pcb",
-        "viewer/kicad-tools/boards/02-charlieplex-led/output/charlieplex_3x3.kicad_pcb",
+        "tests/fixtures/kicad-tools/boards/03-usb-joystick/usb_joystick_routed.kicad_pcb",
+        "tests/fixtures/kicad-tools/boards/01-voltage-divider/voltage_divider.kicad_pcb",
+        "tests/fixtures/kicad-tools/boards/02-charlieplex-led/charlieplex_3x3.kicad_pcb",
     ] {
         let mut world = board(path);
         assert!(
@@ -88,8 +89,9 @@ fn the_mounting_hole_rule_speaks_on_the_one_board_here_that_has_holes() {
     let mut loud = honest.clone();
     loud.min_edge_clearance = Nm::from_mm(20.0);
 
-    let mut world =
-        board("viewer/kicad-tools/examples/06-intelligent-placement/fixtures/mcu_board.kicad_pcb");
+    let mut world = board(
+        "tests/fixtures/kicad-tools/examples/06-intelligent-placement/fixtures/mcu_board.kicad_pcb",
+    );
     assert!(
         MountingHoleClearanceRule
             .check(&mut world, &honest)

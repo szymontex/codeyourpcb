@@ -27,9 +27,9 @@ fn repo_root() -> PathBuf {
 /// true of those six and said nothing about the command. These three are real
 /// KiCad footprints that `cypcb-kicad` reads today.
 const PARTS: &[&str] = &[
-    "viewer/svg-pcb/kicad-components/SOT-23-5.kicad_mod",
-    "viewer/svg-pcb/kicad-components/Microchip_RN4871.kicad_mod",
-    "viewer/svg-pcb/kicad-components/10-SOIC-EP_3.9x4.9mm_P1mm_EP2.41x3.3mm.kicad_mod",
+    "tests/fixtures/svg-pcb/kicad-components/SOT-23-5.kicad_mod",
+    "tests/fixtures/svg-pcb/kicad-components/Microchip_RN4871.kicad_mod",
+    "tests/fixtures/svg-pcb/kicad-components/10-SOIC-EP_3.9x4.9mm_P1mm_EP2.41x3.3mm.kicad_mod",
 ];
 
 /// A scratch directory holding one `.pretty` library of those footprints.
