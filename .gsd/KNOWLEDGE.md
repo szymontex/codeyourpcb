@@ -35,7 +35,7 @@ Append-only register of project-specific rules, patterns, and lessons learned.
 **Applies to:** `viewer/src/project-manager.ts` `generateThumbnail()`.
 
 ### K007: Port conflicts when running dev server
-**Context:** `server.ts` spawns Vite as child process. If a previous Vite or server is still running, it fails with "Port XXXX already in use".
+**Context:** `viewer/server.ts` spawns Vite as child process. If a previous Vite or server is still running, it fails with "Port XXXX already in use".
 **Rule:** Kill existing processes on ports 4321, 4322, 5173 before starting dev server. Check with `netstat -tlnp | grep -E "4321|4322|5173"`.
 **Applies to:** Development workflow.
 
@@ -75,10 +75,10 @@ What is still true from the original entry is the storage: the spatial index hol
 **Rule:** DRC (`run_drc_internal()`) must be called after: `load_snapshot`, `add_trace`, `remove_trace`, `autoroute*`, `sync_from_source`, `rotate_component`, `set_board_size`. JS-side: all `BoardCommand.execute()` and `.undo()` methods call `engine.run_drc_incremental()`. When adding new mutation APIs, always add DRC trigger.
 **Applies to:** `crates/cypcb-render/src/lib.rs`, `viewer/src/undo.ts`.
 
-### K014: Silk clearance check runs in JS, not WASM
-**Context:** Silk shapes (`SilkShape[]`) live only in JS snapshot — they come from EasyEDA footprint data parsed client-side. Rust ECS has no silk geometry.
-**Rule:** Silk-to-pad clearance is checked in `checkSilkClearance()` in `viewer/src/wasm.ts`. Results are merged with WASM violations in `get_snapshot()`. When silk geometry is eventually modeled in Rust, this should move to the Rust DRC engine.
-**Applies to:** `viewer/src/wasm.ts` `WasmPcbEngineAdapter.get_snapshot()`.
+### K014: The engine checks the silkscreen, the viewer does not
+**Context:** `checkSilkClearance()` in `viewer/src/wasm.ts` re-implemented the silk rule in TypeScript and appended its findings to what Rust returned. The two copies drifted: the Rust rule learned about printed designators and about clipping the legend off copper, the TypeScript one knew about neither, and a board that tripped both was told about it twice under two names. The function is gone; `WasmPcbEngineAdapter.get_snapshot()` now returns the engine's violations and adds none of its own.
+**Rule:** Silk-to-pad clearance belongs to `crates/cypcb-drc/src/rules/silk_clearance.rs` and nowhere else. Do not re-implement a DRC rule in the viewer to work around missing geometry - give the geometry to the engine instead.
+**Applies to:** `crates/cypcb-drc/src/rules/silk_clearance.rs`, `viewer/src/wasm.ts` `WasmPcbEngineAdapter.get_snapshot()`. Held by `crates/cypcb-cli/tests/the_legend_is_checked_against_what_it_prints.rs`.
 
 ### K015: Routing clearance must come from DesignRules, not hardcoded
 **Context:** Routing obstacle detection had `150_000` (0.15mm) hardcoded. If user changes DRC preset (e.g. JLCPCB 4-layer 0.1mm), routing would use wrong clearance.

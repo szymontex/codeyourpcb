@@ -82,3 +82,33 @@ fn k010_names_the_cases_that_hold_it() {
         );
     }
 }
+
+#[test]
+fn every_path_the_knowledge_base_names_exists() {
+    // K014 told the next reader to look for `checkSilkClearance()` in
+    // viewer/src/wasm.ts, a function deleted when the engine became the only
+    // checker, and K007 named `server.ts` from a directory it is not in. A
+    // document whose references do not resolve sends people to the wrong file
+    // with confidence, so the references are checked rather than trusted.
+    let knowledge = read(".gsd/KNOWLEDGE.md");
+    let mut named = 0;
+    for chunk in knowledge.split('`').skip(1).step_by(2) {
+        let looks_like_a_path = chunk.contains('/')
+            && !chunk.contains(' ')
+            && [".rs", ".ts", ".md", ".json", ".toml"]
+                .iter()
+                .any(|ext| chunk.ends_with(ext));
+        if !looks_like_a_path {
+            continue;
+        }
+        named += 1;
+        assert!(
+            repo_root().join(chunk).exists(),
+            "the knowledge base names {chunk} and the repository has no such file"
+        );
+    }
+    assert!(
+        named >= 10,
+        "only {named} paths were recognised, so this case is not reading the document it thinks it is"
+    );
+}
