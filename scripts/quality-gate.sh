@@ -14,7 +14,7 @@ echo "=== Quality Gate ==="
 echo ""
 
 # Stage 1: Rust formatting
-echo "[1/10] cargo fmt --check"
+echo "[1/11] cargo fmt --check"
 if cargo fmt --check 2>&1; then
   pass "cargo-fmt"
 else
@@ -30,7 +30,7 @@ echo ""
 # icon the macro refused, all found the first time anybody ran it. The
 # dependencies are in `scripts/setup-dev.sh` now, so the exclusion has nothing
 # left to protect and a crate nobody compiles is a crate nobody maintains.
-echo "[2/10] cargo clippy"
+echo "[2/11] cargo clippy"
 # The second reader is behind a feature, so the plain run does not lint it
 # either - the same gap the test stage below had.
 if cargo clippy --workspace --all-targets -- -D warnings 2>&1 \
@@ -104,7 +104,7 @@ if [ -n "$UNTRACKED_PARSER" ]; then
   fail "untracked tree-sitter output"
 fi
 
-echo "[3/10] cargo test"
+echo "[3/11] cargo test"
 # The Rust reader is what `parse` is now. The tests that check it against the
 # tree-sitter parser need that parser as well, which the plain run does not
 # build - named explicitly, because a test nobody runs is not a test.
@@ -142,7 +142,7 @@ echo ""
 #
 # tsconfig.json includes `src`, `e2e` and the root `*.ts`, which is what makes
 # this worth a stage: the specs and the dev server are code too.
-echo "[4/10] tsc --noEmit"
+echo "[4/11] tsc --noEmit"
 TSC_LOG=$(mktemp)
 if (cd viewer && npx tsc --noEmit 2>&1 | tee "$TSC_LOG"); then
   pass "tsc"
@@ -156,7 +156,7 @@ fi
 rm -f "$TSC_LOG"
 echo ""
 
-echo "[5/10] eslint"
+echo "[5/11] eslint"
 if (cd viewer && npx eslint src/ e2e/ *.ts) 2>&1; then
   pass "eslint"
 else
@@ -165,7 +165,7 @@ fi
 echo ""
 
 # Stage 5: Vitest
-echo "[6/10] vitest"
+echo "[6/11] vitest"
 VITEST_LOG=$(mktemp)
 if (cd viewer && npx vitest run 2>&1 | tee "$VITEST_LOG"); then
   pass "vitest"
@@ -203,7 +203,7 @@ echo ""
 # That port is no longer 4321. It was, and 4321 is Astro's default, so a gate
 # run failed here because another repository's dev server in this container
 # held it. `CYPCB_E2E_PORT` overrides, and the default is 4327.
-echo "[7/10] playwright (rebuilding viewer/pkg first)"
+echo "[7/11] playwright (rebuilding viewer/pkg first)"
 # The module is rebuilt, and then asked whether the committed one is the same.
 # The rebuild makes the browser suite honest about the working tree; the
 # question afterwards is about what a clean clone carries, and on 2026-08-27
@@ -306,7 +306,7 @@ rm -f "$PLAYWRIGHT_LOG"
 echo ""
 
 # Stage 7: Autorouter benchmark — regression gate + performance benchmark
-echo "[8/10] autorouter benchmark"
+echo "[8/11] autorouter benchmark"
 if cargo test --release -p cypcb-autoroute -- benchmark_regression 2>&1; then
   pass "benchmark-regression"
 else
@@ -347,11 +347,26 @@ fi
 echo ""
 
 # Stage 8: Code duplication check
-echo "[9/10] jscpd"
+echo "[9/11] jscpd"
 if (cd viewer && npx jscpd --exitCode 1) 2>&1; then
   pass "jscpd"
 else
   fail "jscpd"
+fi
+echo ""
+
+# Stage 10: engine methods the browser never reaches
+#
+# `scripts/unused-engine-api.sh` was written as a report and nothing ran it,
+# so the thing it was written to find - a variant search whose panel had been
+# deleted - was found again by hand five weeks later. It keeps its list and
+# gains a number: the count of unreached methods has to be the one the script
+# records, so neither a new dead wrapper nor a deletion can pass unremarked.
+echo "[10/11] engine API reach"
+if ./scripts/unused-engine-api.sh 2>&1; then
+  pass "unused-engine-api"
+else
+  fail "unused-engine-api"
 fi
 echo ""
 
@@ -362,7 +377,7 @@ echo ""
 # branch happened to line up, so four of its five publish outcomes had never
 # happened at all. This stage makes them happen, against throwaway
 # repositories in a temporary directory.
-echo "[10/10] scheduled-gate selftest"
+echo "[11/11] scheduled-gate selftest"
 if ./scripts/scheduled-gate-selftest.sh 2>&1; then
   pass "scheduled-gate-selftest"
 else
