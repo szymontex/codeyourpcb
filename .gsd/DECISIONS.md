@@ -128,6 +128,26 @@
 - "JLCPCBSearchError class exported for instanceof-check — network-level failures (fetch throws) return [] silently, but HTTP errors (4xx/5xx) throw JLCPCBSearchError so the panel can show distinct error states"
 - "Prefs-theme E2E test asserts button label change, not data-theme attribute — theme cycle light→dark→auto→light means auto resolves to same data-theme as light in headless Chromium, making attribute comparison unreliable"
 
+### Status of the quoted decisions, read against the code on 2026-09-05
+
+The list above records what was decided. Two of its lines describe a build
+that has changed since, and both were read the way the DRC table below was.
+
+- **"Desktop crates (cypcb-cli, cypcb-desktop) excluded from quality gates":
+  the exclusion is gone, and taking it out is what found the rot.** Both
+  crates are in every workspace stage now, and `scripts/setup-dev.sh` installs
+  the GTK and WebKit the desktop crate needs. The gate says in its own comment
+  what the exclusion cost: `cypcb-desktop` went unbuilt long enough to collect
+  nine compile errors from the Tauri v1 to v2 move, plus an icon the macro
+  refused, all found the first time anybody compiled it.
+- **"Quality gate script runs 6 stages": the gate runs 10 stages as of
+  2026-09-05** - `grep -c '^echo "\[' scripts/quality-gate.sh`. The six named
+  here are all still there, and four ran up behind them: `tsc --noEmit` after
+  `cargo test`, then `autorouter benchmark`, `jscpd` and a selftest of the
+  scheduled gate after `playwright`. The count is held by
+  `crates/cypcb-cli/tests/the_decision_log_is_current_where_it_says_it_is.rs`.
+
+
 ## M004 Decisions
 
 | # | When | Scope | Decision | Choice | Rationale | Revisable? |
@@ -170,6 +190,22 @@
 | D-M004-036 | S06 | observability | console_error_panic_hook added for WASM diagnostics | console_error_panic_hook::set_once() in PcbEngine::new() | WASM panics show only "unreachable" without this hook. With it, full Rust panic message + stack trace appears in browser console. Essential for debugging WASM issues. | No |
 | D-M004-037 | S07 | quality | Regression gate uses ±10% composite threshold, not exact match | `composite ≤ baseline × 1.1` (5501) instead of `composite == 5001` | Floating-point variation across platforms and minor algorithm changes would make exact-match tests flaky. 10% margin absorbs normal variation while still catching real regressions. | Yes — tighten if scores stabilize |
 | D-M004-038 | S07 | scope | Benchmark screenshots are artifacts for human review, not pixel-diffed | Playwright captures PNGs to `test-results/benchmark/`, no pixel comparison assertions | D-M004 DECISIONS note "headless WebGL rendering varies" — pixel comparison would be flaky. Screenshots serve R115 (visual comparison) via human inspection. | No |
+
+### Status of the M004 decisions, read against the code on 2026-09-05
+
+- **D-M004-003, auto-apply the best and hover the alternatives: the surface it
+  describes was deleted in `a9e8c7a`.** The engine half is untouched -
+  `auto_route_variants` is at `crates/cypcb-render/src/lib.rs:916` and
+  `viewer/src/wasm.ts` still declares and wraps it - but **nothing calls it**:
+  a search of `viewer/src` and `viewer/e2e` for the name finds only that
+  wrapper and a comment. Variants are code that runs on request from nowhere.
+- **D-M004-035, the fallback that hides the variant panel: half of it is
+  gone.** `triggerRouting()` is still in `viewer/src/main.ts`, and the word
+  `variant` does not appear in that file at all, so there is no call to catch
+  and no panel to hide. `REQUIREMENTS.md`, `viewer/e2e/variant-panel.spec.ts`
+  and `PROJECT.md`'s status line were corrected on 2026-09-04; this table is
+  the fourth page that had been telling a reader the panel is there.
+
 
 ## M005 Decisions
 
@@ -225,15 +261,23 @@ for months.
   (`component_pads` in `crates/cypcb-drc/src/rules/clearance.rs`), including
   the per-pad net that D-DRC-001 wanted the entities for - so the behaviour the
   decision was after is there, without the entities. See KNOWLEDGE.md K010.
-- **D-DRC-002, tight rotated AABB: half true.** The checker does it. The
-  router does not: `RoutingGrid::populate_pads` still marks every pad as a
-  circle of `max(w, h) / 2`. Replacing it was measured on its own and cost
-  more than it saved, so it waits for the rule that needs it. See K011.
-- **D-DRC-005, 12 rules with 2 stubs: superseded.** Fifteen rules are
-  registered and none is a stub -
-  `grep -c "Box::new(rules::" crates/cypcb-drc/src/lib.rs`. `via_drill`,
-  `trace_current` and `assertion` joined after this was written, and the two
-  stubs named here were implemented.
+- **D-DRC-002, tight rotated AABB: true on both sides since 2026-08-28.** The
+  checker does it, and so does the router: `populate_pads` marks the pad's own
+  rectangle at the part's rotation through `mark_pad_rect_at_nm`, and the
+  shipped `AutorouteConfig::default().pad_rect_extra_cells` is `Some(2)`, so
+  every route `cypcb route` runs takes that path. The disc of `max(w, h) / 2`
+  survives as the `None` arm nobody ships. This entry said the router still
+  drew discs until 2026-09-05 - the same sentence K011 carried, gone stale the
+  same way, on a second page. See K011.
+- **D-DRC-005, 12 rules with 2 stubs: superseded.** **37 rules are registered
+  as of 2026-09-05** and none is a stub -
+  `grep -c "Box::new(rules::" crates/cypcb-drc/src/lib.rs`. This section said
+  fifteen when it was written on 2026-08-06 and nobody re-read it, so the
+  number is held by
+  `crates/cypcb-cli/tests/the_decision_log_is_current_where_it_says_it_is.rs`
+  now rather than by the next person to notice. `via_drill`, `trace_current`
+  and `assertion` joined after the decision was written, and the two stubs it
+  named were implemented.
 - **D-DRC-006, silk clearance in JS not WASM: superseded.** There is a Rust
   rule, `crates/cypcb-drc/src/rules/silk_clearance.rs`, and footprints carry
   silk geometry in the ECS. The JS check still sees artwork that arrives with
