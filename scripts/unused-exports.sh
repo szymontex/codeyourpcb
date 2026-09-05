@@ -8,17 +8,28 @@
 # is the finer question - a module that is imported for one thing can still
 # export six others nobody wants.
 #
-# It prints rather than deletes, and it is a diagnostic rather than a gate: an
-# export can be unused today and part of a public shape tomorrow, and deciding
-# which is which is a person's job. What the script removes is the excuse that
-# nobody knows how many there are.
+# The two halves of what it prints are not the same question, and the first
+# hand run said so: **33 exports nothing else names, and 0 of them are
+# values**. An exported `interface` beside the function that returns it is
+# ordinary style, and a gate on that number would fire on every new type. An
+# exported function, const, class or enum that no other file names is dead
+# code, and `walkaround.ts` is what that costs.
+#
+# So the type half stays a diagnostic - it prints, a person decides - and the
+# value half is a gate: `--values-only` holds the count to `BASELINE_VALUES`,
+# which the gate runs. Nothing was deleted to reach zero; zero is where the
+# viewer already was, and this is what keeps it there.
 #
 # Usage: ./scripts/unused-exports.sh [--values-only]
 set -euo pipefail
 
+# Exported values in `viewer/src` that no other file names, counted on
+# 2026-09-06. Only a person moves this, in the commit that moves the code.
+BASELINE_VALUES=0
+
 cd "$(dirname "$0")/.."
 
-python3 - "$@" <<'PY'
+BASELINE_VALUES="$BASELINE_VALUES" python3 - "$@" <<'PY'
 import os, re, sys
 
 values_only = "--values-only" in sys.argv
@@ -46,4 +57,15 @@ for path, text in texts.items():
 for path, name in sorted(found):
     print(f"{path}: {name}")
 print(f"total {len(found)}")
+
+if values_only:
+    baseline = int(os.environ["BASELINE_VALUES"])
+    if len(found) != baseline:
+        direction = "more" if len(found) > baseline else "fewer"
+        print(
+            f"scripts/unused-exports.sh: {len(found)} exported values nothing "
+            f"else names, {direction} than the {baseline} this file records. "
+            f"Call it, delete it, or move BASELINE_VALUES in the same commit."
+        )
+        raise SystemExit(1)
 PY
