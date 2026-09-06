@@ -49,7 +49,8 @@ fn preset_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("src/presets")
 }
 
-fn sources() -> Vec<String> {
+/// Every preset module, as (file stem, source).
+fn sources() -> Vec<(String, String)> {
     let mut files: Vec<PathBuf> = std::fs::read_dir(preset_dir())
         .expect("the preset modules are beside this crate's source")
         .filter_map(|entry| entry.ok().map(|entry| entry.path()))
@@ -58,7 +59,15 @@ fn sources() -> Vec<String> {
     files.sort();
     files
         .iter()
-        .map(|path| std::fs::read_to_string(path).expect("a module this crate compiles"))
+        .map(|path| {
+            let stem = path
+                .file_stem()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string();
+            let text = std::fs::read_to_string(path).expect("a module this crate compiles");
+            (stem, text)
+        })
         .collect()
 }
 
@@ -92,7 +101,7 @@ fn millimetres(cell: &str) -> Option<f64> {
 /// The rows of the table above `pub fn <name>() -> Self`, in every module.
 fn table_of(name: &str) -> Vec<(String, f64)> {
     let opening = format!("pub fn {name}() -> Self");
-    for source in sources() {
+    for (_, source) in sources() {
         let Some(at) = source.find(&opening) else {
             continue;
         };
@@ -164,7 +173,7 @@ fn every_figure_a_preset_table_states_is_the_figure_the_preset_returns() {
 #[test]
 fn no_preset_is_missing_from_the_list_above() {
     let mut in_source = Vec::new();
-    for source in sources() {
+    for (_, source) in sources() {
         for line in source.lines() {
             if let Some(rest) = line.trim_start().strip_prefix("pub fn ") {
                 if let Some(name) = rest.strip_suffix("() -> Self {") {
@@ -181,5 +190,44 @@ fn no_preset_is_missing_from_the_list_above() {
     assert_eq!(
         in_source, listed,
         "the preset modules and the list in this case have drifted apart"
+    );
+}
+
+#[test]
+fn a_preset_named_after_a_fab_lives_in_that_fab_s_module() {
+    // `jlcpcb_advanced_2layer` and `jlcpcb_advanced_4layer` were defined in
+    // `oshpark.rs`, whose own header says "OSHPark manufacturer design rules".
+    // Anybody looking for the advanced JLCPCB rules grepped `jlcpcb.rs` and
+    // found two of the four.
+    let modules: Vec<String> = sources().into_iter().map(|(stem, _)| stem).collect();
+    let mut checked = 0;
+
+    for (name, _) in PRESETS {
+        let Some(fab) = name.split('_').next() else {
+            continue;
+        };
+        if !modules.iter().any(|stem| stem == fab) {
+            // A preset named after no module - `prototype` - is nobody's fab.
+            continue;
+        }
+        let opening = format!("pub fn {name}() -> Self");
+        let holder = sources()
+            .into_iter()
+            .find(|(_, source)| source.contains(&opening))
+            .map(|(stem, _)| stem)
+            .unwrap_or_else(|| panic!("{name} is in the list and in no module"));
+
+        checked += 1;
+        assert_eq!(
+            holder, fab,
+            "{name} is defined in {holder}.rs, and {fab}.rs is the module named after its fab"
+        );
+    }
+
+    // Every preset but `prototype` is named after a fab with a module, so a
+    // run that checked fewer than seven skipped its way to a pass.
+    assert!(
+        checked >= 7,
+        "only {checked} presets were placed, so the reader is broken"
     );
 }
