@@ -22,11 +22,11 @@ impl DesignRules {
     ///
     /// | Parameter | Value | Notes |
     /// |-----------|-------|-------|
-    /// | Min clearance | 0.15mm (6 mil) | Standard tolerance |
-    /// | Min trace width | 0.15mm (6 mil) | Standard tolerance |
+    /// | Min clearance | 0.127mm (5 mil) | Published |
+    /// | Min trace width | 0.127mm (5 mil) | Published |
     /// | Min drill | 0.3mm | Mechanical drilling |
-    /// | Min via drill | 0.2mm | Via holes |
-    /// | Min annular ring | 0.15mm (6 mil) | Copper around drill |
+    /// | Min via drill | 0.3mm | Same as the mechanical drill |
+    /// | Min annular ring | 0.18mm | Published absolute minimum |
     /// | Min silk width | 0.15mm (6 mil) | Silkscreen lines |
     /// | Min edge clearance | 0.3mm | Copper to board edge |
     ///
@@ -58,7 +58,7 @@ impl DesignRules {
     /// | Min trace width | 0.1mm (4 mil) | Tighter tolerance |
     /// | Min drill | 0.2mm | Smaller drills available |
     /// | Min via drill | 0.2mm | Via holes |
-    /// | Min annular ring | 0.125mm (5 mil) | Tighter tolerance |
+    /// | Min annular ring | 0.2mm | Published for multilayer, and larger than 2-layer |
     /// | Min silk width | 0.15mm (6 mil) | Same as 2-layer |
     /// | Min edge clearance | 0.25mm | Tighter than 2-layer |
     ///

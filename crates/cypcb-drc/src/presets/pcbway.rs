@@ -33,8 +33,8 @@ impl DesignRules {
     /// | Min drill | 0.2mm | Advanced normal process |
     /// | Min via drill | 0.2mm | Advanced normal process |
     /// | Min annular ring | 0.15mm (6 mil) | Published, vias and pads alike |
-    /// | Min silk width | 0.22mm (8.66 mil) | Wider than JLCPCB |
-    /// | Min edge clearance | 0.3mm | Copper to board edge |
+    /// | Min silk width | 0.15mm (6 mil) | Published |
+    /// | Min edge clearance | 0.25mm | Advanced normal process |
     ///
     /// # Examples
     ///

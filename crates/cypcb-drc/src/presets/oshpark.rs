@@ -53,7 +53,7 @@ impl DesignRules {
     /// | Min trace width | 0.127mm (5 mil) | Tighter than 2L |
     /// | Min drill | 0.254mm (10 mil) | Same as 2L |
     /// | Min via drill | 0.254mm (10 mil) | Same as 2L |
-    /// | Min annular ring | 0.1mm (4 mil) | Tighter than 2L |
+    /// | Min annular ring | 0.1016mm (4 mil) | Tighter than 2L |
     /// | Min silk width | 0.127mm (5 mil) | Same as 2L |
     /// | Min edge clearance | 0.381mm (15 mil) | Same as 2L |
     ///
@@ -113,8 +113,8 @@ impl DesignRules {
     /// | Min trace width | 0.09mm (3.5 mil) | Advanced process |
     /// | Min drill | 0.15mm | Micro-drill |
     /// | Min via drill | 0.15mm | Micro-via |
-    /// | Min annular ring | 0.1mm (4 mil) | |
-    /// | Min silk width | 0.1mm | |
+    /// | Min annular ring | 0.20mm | One published figure, no tier under it |
+    /// | Min silk width | 0.15mm | Likewise |
     /// | Min edge clearance | 0.2mm | |
     ///
     /// # Examples
