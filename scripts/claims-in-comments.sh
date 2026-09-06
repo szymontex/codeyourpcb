@@ -22,13 +22,16 @@
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 2
 
-# Figures stated in a comment that no test names, counted on 2026-09-05. The
+# Figures stated in a comment that no test names, counted on 2026-09-06 - it
+# was 35 on 2026-09-05, and `a_footprint_is_the_size_its_doc_block_says.rs`
+# quotes `soic8`'s block in its own header, which gives 5.0mm and 4.0mm a
+# reader. The ratchet said so before the commit that caused it landed. The
 # gate runs this and holds the count to the number, in both directions: a new
 # unread figure fails until somebody asserts it somewhere or raises this on
 # purpose, and asserting one fails until the number comes down with it. The
 # script was written on 2026-08-29 and nothing ran it, which is how a census
 # becomes a number nobody has looked at since the day it was measured.
-BASELINE_UNREAD=35
+BASELINE_UNREAD=33
 
 MODE=${1:-count}
 
