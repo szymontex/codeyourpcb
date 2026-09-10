@@ -29,6 +29,8 @@ trace VCC {
 ```
 
 <p align="center">
+    <img width="1280" height="831" alt="image" src="https://github.com/user-attachments/assets/6c1ffab8-a2da-40db-8ff9-7ec225e76496" />
+
   <img src="docs/images/editor-split.png" alt="Split view — code editor + live board preview" width="720">
 </p>
 
