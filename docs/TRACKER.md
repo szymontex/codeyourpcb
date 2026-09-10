@@ -8,7 +8,7 @@ Read this file first. It is the source of truth for what is in flight and what c
 
 - Version 0.2.0-beta. Last release commit `746bd63` (2026-04-15). **Size, measured 2026-09-05 rather than repeated from March: 113648 lines of production code and 72120 of tests.** The `~44k` this line carried came from `.gsd/PROJECT.md` and was wrong by a factor of about four; the command that counts it is in that file.
 - GSD milestones M001-M005 are marked complete in `.gsd/STATE.md`. That status was written in March and predates the 2026-07-10 audit, which ran the code and found crash-tier defects. **Where the two disagree, the audit wins** - it executed commands, the milestone summaries did not.
-- Development happens in the `code-server` container on the build host (12 cores, 10GB cap). Full clean release build: 34s. Full debug build: 20s.
+- Build times on the machine this is developed on (12 cores, 10 GB): full clean release build 34s, full debug build 20s.
 
 ## Phase map
 
@@ -106,353 +106,6 @@ date - so a run that reads an older NEXT-ACTION in V1 or V7 and finds the
 owner's name on it is reading history.
 
 ## Vectors (parallel branches - keep ALL moving)
-
-### V10 - GroupDIY: a forum this project has never read, and nobody has archived
-- DONE: **the four ad-hoc commands every fire ran are one command now, and it reads the log the only way the log can be read.** Each heartbeat asked the same questions - is the unit alive, when was the last fetch, how far into the catalogue, is the session being refused - with greps written fresh each time, and one of those readings was already wrong once: lines instead of records, 3122 fetches in a day where there were 1142. `~/.local/bin/gdiy-status` asks them through `gdiy_mirror.records`, prints one line, and **exits 1 when the last record is older than two hours** - longer than the guard's own hour of waiting and the half hour of a back-off, so the runner behaving normally never trips it. Today: `mirror: active, last record 20s ago, 2701 of 71317 threads on disk`.
-- **The reading was proved against the failure it exists for**, on a synthetic log whose last three lines are a page body: the tool's `last_record` returns `2026-09-06T18:01:16 200 222 https://groupdiy.com/threads/b.2/` where the naive last line returns `</html>`. That is the same mistake in miniature, and the tool cannot make it.
-- NEXT-ACTION: **none pulled - run `gdiy-status` first, then the check file.** When `black-market.3` finishes its threads, the catalogue-versus-disk comparison for a closed node is worth a fire.
-
-- DONE: **the copy that is not on this laptop was checked, because a 64-day fetch behind one disk is one disk away from starting again.** The archive is synced hourly to ZFS and nothing had ever compared the two ends - a timer that exits 0 says the command ran, not that the bytes are there. Measured 2026-09-06 17:00: `systemctl --user list-timers gdiy-sync.timer` -> last run **16:17:24**, `Result=success`, `ExecMainStatus=0`, next at 17:17. Laptop `find gdiy-archive -type f | wc -l` -> **4633**, of which `*/threads/*` -> **2605**. Server `find /mnt/ZFSflightcore/all/!_ARCHIWA/groupdiy.com/mirror -type f | wc -l` -> **4603**, threads **2576**.
-- **The 29 missing files are the ones fetched since the last sync**, at 76s each - about 37 minutes of work, against a timer that runs hourly, so the gap is the cadence rather than a fault. Sizes agree once they are measured the same way: `du -sh --apparent-size` gives **915M** on the laptop and **911M** on the server, and the `1.2G` a plain `du` reports there is ZFS block padding, not extra data.
-- NEXT-ACTION: **none pulled - the mirror runs and the check file is what to run first.** When `black-market.3` finishes its threads, the catalogue-versus-disk comparison for a closed node is worth a fire.
-
-- DONE: **the wrong way to count that file is still the obvious way, so the right way is code now.** `one_line` stops a body becoming lines from here on; it does nothing about the 3766 lines already in the log, and the next person to count a day's fetches would filter on a timestamp and get the same 3122 I did. `gdiy_mirror.records(text)` is what anything counting this file counts, and it carries the incident in its own docstring. The harness has a ninth check, **with the real log as its fixture** rather than an invented one: `a body in the log is not a record` -> `real=0 mutation=3766`, and the mutation is the naive method - every line, the way I read it. **9/9 checks pass**, 2320 pages and 2188 threads read.
-- **The runner did not need restarting for this**: nothing in the fetch loop calls `records`, it is for readers. `systemctl --user is-active gdiy-mirror.service` -> `active`, and the log is aligned again - `2026-09-06T10:53:32 200    123859 https://groupdiy.com/threads/...`.
-- NEXT-ACTION: **none pulled - the mirror runs and the check file is what to run first.** When `black-market.3` finishes its threads, the catalogue-versus-disk comparison for a closed node is worth a fire.
-
-- DONE: **the mirror's log had 3766 lines of HTML in it, and the first measurement taken over that file was wrong because of it.** One retry on 2026-09-03 logged the response instead of its length - `2026-09-03T00:47:40 000000<!DOCTYPE html>` and the whole page after it, ending `200 https://groupdiy.com/forums/ - backing off 1800s`. Three days later I counted fetches in the last day by filtering the file on a timestamp and got **3122**; counting records got **1142**. The HTML lines sorted after the date string and every one of them was counted as a fetch. **A log whose lines are not all records is a log nothing can be counted from**, and the count I nearly published was 2.7x the truth.
-- **The runner cannot stop a caller handing it a page; it can stop the page becoming lines.** `log()` goes through `one_line()` now, which is `" ".join(message.splitlines())` - **written first as `message.split()`, which also collapsed the padding a record is aligned with**, so `200    131366 https://...` came back as `200 131366 https://...`. Splitting on lines takes the newlines and leaves the spacing. The harness has an eighth check: `a page body cannot become log lines` writes an HTML blob through the real `log` into a temporary file and counts what the log gained beyond the one record asked for. Proof: `python3 ~/.cache/cypcb/test_gdiy_mirror.py` -> `ok a page body cannot become log lines: real=0 mutation=3`, **8/8 checks pass**, 2227 pages and 2095 threads read.
-- **The running process was on the old code, so it was restarted onto the fixed one.** `systemctl --user restart gdiy-mirror.service` -> `ActiveState=active`, `ExecMainPID=212065`, started `2026-09-06 08:56:44`, and the log picks up at `NODE the-chamber.37: 416 threads catalogued`. The unit is `Restart=always`, the catalogue phase reads from disk, and nothing on disk is fetched twice - the eleventh restart of this run cost one canary request.
-- **Today's pace, measured rather than assumed, because the owner's question about it is still open.** Over the last 24 hours: **1142 records, median gap 76.0s** (p10 75.0, p90 76.0) - the delay the runner is set to, with no throttling from the far end. `find gdiy-archive -path '*/threads/*' -type f | wc -l` -> **2227 threads on disk** of **71317 catalogued**, at **1.06 pages per thread**. That leaves roughly 73000 pages, which at today's rate is **about 64 days**. The 30s their `robots.txt` allows an AI agent would make it 26.
-- NEXT-ACTION: **none pulled - the mirror runs and the check file is what to run first.** When `black-market.3` finishes its threads, the catalogue-versus-disk comparison for a closed node is worth a fire; until then a node in progress cannot be compared to its catalogue without saying something false.
-
-
-The owner asked for it on 2026-08-31: look at GroupDIY and archive what can be
-archived, because a long-running DIY audio board is two things this project
-wants - domain knowledge about circuits people actually build, and a supply of
-real designs to check the tool against. **Nothing is archived yet.** Everything
-below was measured with `curl` on 2026-08-31, so this vector starts from what
-the site returns rather than from what a forum of its kind usually holds.
-
-**Measured, with the command beside each figure.**
-
-- It is a XenForo board titled `GroupDIY Audio Forum` at `https://groupdiy.com`.
-  Its index links twenty-one forum nodes and the sitemap lists twenty-two - the
-  extra one, `groupdiy-mobile-app-feedback-gather.49`, is reachable but not on
-  the front page. The ones a board tool cares about are
-  `the-lab.2`, `drawing-board.5`, `technical-documents.19`, `machine-shop.20`,
-  `magnetics.38`, and the circuit-type nodes `preamplifiers.30`,
-  `filters-equalizers.28`, `dynamic-processors.27`, `microphones.29`,
-  `mixers-monitoring-systems.32`, `musical-instruments.47`, `truth-table.31`.
-- **71 301 threads**, from the site's own sitemap rather than an estimate:
-  `sitemap-1.xml` carries 50 000 URLs and `sitemap-2.xml` 21 394, of which
-  71 301 are `/threads/`, 22 `/forums/` and 70 `/media/`
-  (`curl -sS -A "<browser UA>" https://groupdiy.com/sitemap-N.xml | grep -o '<loc>' | wc -l`).
-  That number is the size of the job.
-- **The Internet Archive holds none of it.** `https://archive.org/wayback/available?url=groupdiy.com`
-  returns `{"archived_snapshots": {}}`, and the CDX index returns **0** rows for
-  the whole domain over all time
-  (`http://web.archive.org/cdx/search/cdx?url=groupdiy.com&matchType=domain&fl=original&collapse=urlkey`).
-  So there is no existing archive to copy, and nothing taken here duplicates
-  work somebody else has done.
-- **Cloudflare refuses a default `curl`.** `https://groupdiy.com/robots.txt`
-  answers `403` with a challenge page; the same URL with a browser
-  `User-Agent` answers `200`. So a fetcher needs a real UA to reach anything at
-  all, `robots.txt` included - which is why the first version of this entry had
-  not read it.
-- **Pictures are public and are not XenForo attachments.** A sampled thread has
-  zero `/attachments/` links and its images come from
-  `cdn.imagearchive.com/groupdiy/data/uploads/<hash>.jpg`, served to a
-  logged-out reader.
-- `threads/meta-docs-index.93577` in `technical-documents` is the board's own
-  index of documents, so it is the cheapest first read.
-
-**Read 2026-09-02, which closes both questions the first NEXT-ACTION asked.**
-
-- **`robots.txt` permits this, and it took a browser `User-Agent` to read it** -
-  8263 bytes, 200. The default group is `User-agent: *` with `Allow: /` and
-  **`Crawl-delay: 5`**, and what it refuses is machinery rather than content:
-  `/account/`, `/admin.php`, `/find-new/`, `/goto/`, `/login/`,
-  `/lost-password/`, `/register/`, `/search/`, `/whats-new/`,
-  `/conversations/`, `/posts/*/bookmark`, `/posts/*/react`, any URL carrying
-  `order=` or `direction=`, and `/misc/style-variation`. `/threads/`,
-  `/forums/`, `/media/` and `/attachments/` are refused by no group at all.
-- **The file names this crawler, and gives it a slower rate than the default.**
-  `ClaudeBot`, `Claude-Web` and `anthropic-ai` each get `Allow: /` with
-  **`Crawl-delay: 30`**, under a heading the file writes for itself:
-  `AI CRAWLERS - THROTTLED (hedge your bets)`. **Thirty-eight** agents are
-  refused outright - `CCBot`, `Scrapy`, `Bytespider`, `Meta-ExternalAgent`,
-  `YandexBot`, `AhrefsBot` and `SemrushBot` among them - against fifteen groups
-  that are allowed. The board's owner has thought
-  about this and said yes with a rate attached, so 30 seconds is the rate to
-  keep - and to keep honestly, rather than by wearing a browser's name to buy
-  the 5-second one.
-- **What that rate costs, which is what makes scope a decision rather than a
-  preference.** 71301 threads at 30s is 2139030 seconds: **594 hours, 24.8
-  days** of continuous fetching for a single page per thread, and a long thread
-  is several pages. At the default 5s it is 99 hours, 4.1 days.
-- **No site search.** `/search/` is disallowed for every group, so a fetcher's
-  work list has to come from the sitemap or from walking the node listings.
-  Neither costs a search request.
-- **The slug census, free, from the sitemap already on disk.** Of the 71301
-  thread URLs, the number whose title carries: `schematic` **2375**, `pcb`
-  **1856**, `layout` **216**, `eagle` **102**, `bom` **73**, `gerber` **50**,
-  `kicad` **25**, `altium` **4**. A title is a weak proxy for what a thread
-  holds, so this is the shape of the board and not a file count.
-- **WRONG, and corrected on 2026-09-02 by the fetch below - read the correction
-  before using this bullet.** It generalised from five pages to 71301 threads.
-  The five do have no attachments; `technical-documents.19` has 921 of them in
-  the half of it fetched so far. Left standing rather than deleted because the
-  method fault is the lesson: five pages chosen by their titles is not a sample.
-  Original wording follows. Five pages sampled across the board's whole age:
-  `v376-schematic.94465` (2026), `pultec-gerber-files.8472` (2009),
-  `meta-docs-index.93577`, `bang-olufsen-b-o-bm5-stereo-ribbon-mic-disassembly.94556`,
-  and the `technical-documents.19` listing. **Zero `/attachments/` links in all
-  five**, and every upload on them is a `.jpg` or `.webp` from
-  `cdn.imagearchive.com/groupdiy/data/uploads/`. The thread titled *Pultec
-  gerber files* renders six images and links no archive. So to a logged-out
-  reader this board holds schematics **as pictures**: it is a knowledge source,
-  not a supply of boards this tool can parse. Whether a member sees a zip is
-  unmeasured, and measuring it means registering an account.
-
-**Counted 2026-09-02, second pass. The scope question is arithmetic now.**
-
-- **An honest agent `User-Agent` is enough.** The four nodes were walked with
-  `cypcb-research/0.1 (AI agent, single-user survey; honors Crawl-delay 30)` at
-  32-second gaps and **all four answered 200**. So reaching this board needs
-  only that the fetcher not be a bare `curl/8`; it does not need a browser's
-  name, and the 30-second rate the site states for AI agents can be kept while
-  saying what the fetcher is.
-- **Listing pages, read off each node's own pagination**: `the-lab.2` **743**,
-  `drawing-board.5` **259**, `machine-shop.20` **22**,
-  `technical-documents.19` **10**.
-- **Forty threads to a page, measured rather than assumed.** Page 1 of
-  `technical-documents.19` carries 43 thread rows, page 2 carries 40, and the
-  two share **no thread id** - so the extra three are stickies, not repeats, and
-  40 is the interior figure. Its last page carries 26.
-- **`technical-documents.19` is 389 threads exactly**: 43 + 40x8 + 26. The other
-  three are bounded rather than exact, because their last page was not fetched:
-  `the-lab.2` **29683 to 29722**, `drawing-board.5` **10322 to 10361**,
-  `machine-shop.20` **841 to 880**. The four together are roughly **41300
-  threads, 58 per cent of the board**, and `the-lab.2` by itself is 42 per cent
-  of it.
-- **What each slice costs at the stated 30 seconds - the table this vector was
-  missing.** `technical-documents.19` alone: **3.2 hours**. With
-  `machine-shop.20`: **10.4 hours**. Adding `drawing-board.5`: **4.0 days**. All
-  four: **14.3 days**. The whole board: 24.8 days. Only the first two of those
-  are a decision somebody can take without thinking about it.
-- **The catalogue costs a fraction of the content.** Walking all 1034 listing
-  pages of the four nodes costs **8.6 hours** and yields every thread's title
-  and URL without opening one thread - an index of 41300 threads for less than
-  the price of reading the second-smallest node. Whatever else is decided, the
-  index is the cheap half and should come first.
-
-**Catalogued 2026-09-02, third pass. The node is enumerated, and the index the
-board keeps of itself turns out to be incomplete.**
-
-- **389 threads, counted rather than computed.** The ten listing pages hold 43,
-  40, 40, 40, 40, 40, 40, 40, 40 and 26 rows, which enumerates to exactly the
-  389 the formula predicted. The catalogue holds thread id, URL, title and
-  reply count, is 29643 bytes, and lives outside the repository until the owner
-  says where a mirror lives.
-- **`meta-docs-index.93577` is an index of this node and nothing else.** It
-  links **336** threads from its three posts, and **all 336 are inside
-  `technical-documents.19`**; none points anywhere else on the board. So it is a
-  table of contents, not a cross-board bibliography.
-- **It is also incomplete, which is why the node and not the index is the work
-  list.** **53** of the node's 389 threads are absent from it, and they are not
-  leftovers: `Fairchild`, `Western Electric -- Schematics`, `McIntosh`, `BBC
-  (British Broadcasting Corporation)`, `Rane -- Schematics`, `Microtech Gefell`,
-  `Benchmark`, `Presonus`. Taking the curated list would have silently dropped
-  them.
-- **Thirty posts to a page, derived rather than assumed.** The listing's page
-  jumps constrain it: a 126-post thread shows 5 pages, an 85-post thread 3, a
-  57-post thread 2, and only a figure between 28.5 and 31.5 satisfies all three.
-  XenForo's default of 20 does not.
-- **The node is 2604 replies, 2992 posts, 413 thread pages.** At the stated 30
-  seconds that is **3.4 hours**, and only **19** of the 389 threads span more
-  than one page. This corrects the 3.2 hours in the entry above, which counted
-  threads and not pages.
-
-**Read 2026-09-02 out of the fetch itself, 219 pages in. The entry above was
-wrong about the thing that matters most, and the correction is the finding.**
-
-- **The node is full of attachments.** Across 217 fetched pages covering 194 of
-  its 389 threads: **921 distinct attachments**, on **125 of the 194** threads,
-  a mean of 7.4 and a maximum of 74 per thread. By extension: 669 `.jpg`, 98
-  `.png`, 89 `.gif`, **33 `.zip`**, 29 `.jpeg`, one `.txt`, one `.mp4`, one
-  `.webp`. The 917 whose size the page states come to **1126 MB**.
-- **The zips are what this project came for.** `TRIDENT SCHEMATICS BUNDLE.zip`
-  7.8 MB, `Neve1080 Manual.pdf.zip` 8.8 MB, `ssl_bargraph_schematics.zip` 13.9
-  MB, `Ampex ATR-100 Series Manuals (Searchable).zip` 24.4 MB, `dbx 900 and 400
-  Series.zip` 41.3 MB, `Sony DPS Series SM and OM.zip` 47.9 MB, a Cadac G-type
-  schematic bundle at 98.3 MB.
-- **The listing is public; the file is not.** A guest reading a thread gets each
-  attachment's name, its size and a thumbnail from
-  `cdn.groupdiy.com/attachments/`. Asking for the file itself is refused:
-  `GET /attachments/korg-polysix-klm8049-klm8048-rom-files-zip.154495/` answers
-  **403** with the login page and the words `You must be logged-in to do that.`
-- **Prose is not where the value is, which is why the text-only reading of this
-  node looked empty.** Median thread prose is **264 characters**: these are
-  document threads, a line and a file. The AKG thread's first post is the string
-  `C414B-ULS` and an attachment named `AKG_C414B-ULS.gif`. An archive of the
-  text alone captures the card catalogue and none of the library.
-- **Neither CDN states a rule.** `cdn.imagearchive.com/robots.txt` and
-  `cdn.groupdiy.com/robots.txt` are byte-identical (md5
-  `3f95773253df085be0d6fd831ae2195f`), 1248 bytes of Cloudflare content-signal
-  boilerplate carrying **no directive and no signal set** - by its own clause
-  (c), permission is neither granted nor restricted. No crawl-delay is stated
-  there, so the parent site's 30 seconds is the rate to keep.
-- Embedded pictures, as opposed to attachments, are almost absent: of 29 distinct
-  `imagearchive.com` upload paths across 219 pages, **four appear on every
-  page** and are site furniture, and only 19 appear on fewer than ten.
-
-**The fetch landed 2026-09-02 18:40. The node is read whole, and here is the
-number the account question turns on.**
-
-- **413 pages, 413 answers of 200, no refusal at any point.** 14:58:27 to
-  18:40:45, three hours forty-two minutes at 32 seconds a request, which is the
-  3.4-hour model plus the two extra seconds per request. The count matches the
-  predicted 413 exactly, so the page model above is now confirmed rather than
-  estimated. 56 MB of HTML on disk.
-- **1113 distinct attachments across the node's 389 threads.** **195 of the
-  389** carry at least one, so half this node is documents and half is talk. Per
-  carrying thread: median 3, mean 5.7, maximum **74**. Declared sizes total
-  **1.4 GB** over the 1107 that state one; 6 state none.
-- **By extension**: 790 `.jpg`, 112 `.png`, 105 `.gif`, **53 `.zip`**, 46
-  `.jpeg`, 4 `.txt`, 2 `.mp4`, 1 `.webp`. The 53 zips are service manuals and
-  schematic bundles.
-- **The heaviest threads are the names a person would want**: `Neve` 74
-  attachments, `Helios` 50, `RCA` 44, `Quad Eight` 30, `TRIDENT` 23, `Neumann`
-  21, `Ampex` 21, `Auditronics` 21, `Amek` 20, `Microtech Gefell` 19.
-- **The catalogue exists and is the whole of what an account-less archive can
-  hold**: thread, title, file name, declared size and URL for all 1113, 122581
-  bytes, outside the repository with the thread catalogue.
-- **One node of twelve, and the smallest one.** `technical-documents.19` is 389
-  of the board's 71301 threads. Nothing here should be multiplied out to the
-  rest: this is the node the board built for documents, so it is the densest,
-  and `the-lab.2` at 29700 threads is a different kind of place.
-
-**The owner answered on 2026-09-03: register, and put the mirror on ZFS.**
-
-- **The mirror has a home and a convention.**
-  `/mnt/ZFSflightcore/all/!_ARCHIWA/groupdiy.com/` - `!_` and a capitalised word
-  is how every project directory on that pool is named. Inside: `katalogi/`
-  (`watki.tsv` 389 rows, `zalaczniki.tsv` 1113 rows), `technical-documents.19/`
-  with `threads/` (413 pages, 69 MB) and an empty `attachments/`, `skrypty/`
-  with the four fetchers, and a `README.md` that states the rules, the sample
-  and the verification commands. Verified on the pool: 413 HTML files, 389
-  distinct threads, 390 and 1114 TSV lines.
-- **The session cookie is not there yet.** Firefox's store, read at 2026-09-03
-  00:19, holds three cookies for the domain: `cf_clearance`, `__adblocker` and
-  `xf_fs_gu_reg_email` - a saved registration-form field. **No `xf_user`, no
-  `xf_session`**, so the browser is not logged in and the registration has not
-  completed into a session.
-- **The fetch of attachments has to run from the laptop, not the server.**
-  `cf_clearance` is bound to the IP and User-Agent that solved the challenge, so
-  a cookie taken from the owner's browser and used from the build host would
-  meet the challenge again. Pages fetch to the laptop cache, then rsync to the
-  pool - 57.7 MB moved in 41 seconds, so the 1.4 GB of attachments is about 17
-  minutes of transfer on top of the fetch.
-
-**The owner answered the rest of it on 2026-09-03, and the vector changed shape:
-not one node, the whole board - every thread, every picture. Plus two
-constraints, both now in the code rather than in anybody's memory: be gentle
-enough not to get blocked, and never fetch from the studio's address.**
-
-- **The account works.** The cookie store carries `xf_user`, 49 bytes, made
-  00:26; `xf_session` is not in it and is not needed, because XenForo mints a
-  session from `xf_user`. Positive control:
-  `GET /attachments/korg-polysix-klm8049-klm8048-rom-files-zip.154495/` -> **200,
-  2996 bytes, a real zip** holding `Korg PolySix - klm8049.bin` and `klm8048.bin`
-  - the same URL that answered 403 an hour earlier. The honest agent
-  `User-Agent` still suffices; no `cf_clearance` and no browser name.
-- **The studio's address is refused in code.** Measured: this laptop leaves at
-  `88.156.176.122`, the build host at `213.76.112.25` - the studio. Every
-  GroupDIY request this project has ever made went from the laptop, so the board
-  has never seen the studio, and `guard()` checks the egress address before
-  every request and waits rather than continuing if it ever reads the forbidden
-  one. That also settles where the fetcher may run: `cf_clearance` binds to the
-  address that solved the challenge, so moving the job to the build host would
-  fail anyway.
-- **Gentler than asked.** 75 seconds between requests where robots states 30 for
-  AI agents and 5 for everyone else, a 250 kB/s ceiling so no single 98 MB zip
-  takes their pipe, a **30-minute** pause on any refusal, three attempts and
-  then a stop.
-- **`gdiy_mirror.py`, four phases, resumable from what is on disk**: the index,
-  every listing page of every node, then a node at a time - its threads and then
-  every attachment and embedded picture they carry. Finishing one node is worth
-  more than starting twenty-three. It runs as the user service `gdiy-mirror`
-  with `Restart=always` and lingering enabled, so a logout, a sleep or a reboot
-  costs nothing.
-- **The pool gets it hourly.** `gdiy-sync.timer` at `:17` rsyncs to
-  `/mnt/ZFSflightcore/all/!_ARCHIWA/groupdiy.com/mirror/` and never deletes on
-  the far side: the pool is the copy that survives, the laptop is only where
-  fetching happens.
-- **Three lists of nodes disagree, and the runner takes the largest.** The front
-  page links 21, the sitemap carries 22, and `/forums/` links **23** - the extra
-  two being `political-controversy.46` and
-  `rules-forum-help-forum-issues-announcements.40`, while the sitemap's
-  `groupdiy-mobile-app-feedback-gather.49` appears in neither page. The union is
-  24 and the gap is worth a look once the listings land.
-- The 413 pages and 10 zips already fetched (236 MB) were moved into the
-  runner's layout, so it skips them rather than paying for them twice.
-
-- DONE: the account proved with a positive control, the whole-board mirror
-  written, guarded, installed as a service and running, and the pool wired to
-  receive it hourly.
-- DONE: **the arithmetic V10 has been waiting for, from 19 of the 23 nodes.** The listing phase has catalogued **40885 threads** so far, and every catalogue row carries its thread's reply count, so the page count is a sum rather than an estimate: **51894 thread pages** at the measured 30 posts to a page. At the 75 seconds this mirror keeps, that is **1081 hours - 45 days** - and `the-lab.2`, which the listing has not reached yet, is about 29700 threads on its own. So the whole board at this rate is on the order of **three months**, not the week the owner was told to expect.
-- **That is a choice to put in front of the owner rather than one to make quietly.** The rate was set to 75 seconds because the instruction was "be gentle so they don't get us blocked"; the site's own `robots.txt` states 30 for AI agents, which would be 2.5 times faster and still slower than what it asks of everyone else. Nothing else changes the figure: the pages are small, the delay is the whole cost.
-- **The one anomaly is answered, and the total survives it.** `political-controversy.46` catalogued **0 threads**, which could have been an empty node or a listing this parser cannot read. It is the first: the stored page is 62854 bytes, titled `Political / Controversy | GroupDIY Audio Forum`, and carries XenForo's own `js-emptyThreadList` with the words `There are no threads in this forum.` So the zero is the board's, not the parser's, and no thread is missing from the sum because of it.
-- DONE: **the mirror is fetching as a member, and every stored page says so rather than the four that were spot-checked.** The owner made the account so attachments would be reachable; nothing until now checked that the runner actually uses it. `grep -L 'data-logged-in="true"' */listing/*.html` over the archive names **0 files out of 1235**. The check is not vacuous, and the positive control is a real page rather than a contrived one: the service journal holds a `data-logged-in="false"` body fetched one second before the stored `index.html`, and that `index.html` - the page the 23 nodes were discovered from - is `true`. So discovery ran as a member too, and the node list is not a guest's view of the board.
-- **And the site is not throttling us.** The service journal records **1234 fetches and every one of them a 200** - no 429, no 403, no 5xx, no retry, no `GIVE UP` line. The 75-second delay is buying exactly what it was set to buy, which is the half of the owner's rate question that could be answered without asking him.
-- DONE: **the extractor that will pull the pictures was tested against real pages before three months were spent on it, and it loses nothing.** `media_in` was run over every thread page the archive already holds - **413 of them, all 413 carrying media**: **12604 references, 5144 of them distinct URLs**, split **4600 attachments** and **8004 pictures on the two CDNs**. The question that matters for an archive is not what it found but what it dropped, so the audit compares against the raw page: every `href="/attachments/..."` in the HTML, **1113 distinct**, is in what the extractor returns. **Nothing missed.** The mutation says the audit can see a miss: with the attachment branch removed, the same run reports **1113 missed**, so the zero is a result and not a broken comparison.
-- **What the same measurement says about the schedule is worse than the figure above, and it is honest about not knowing.** Those 413 pages carry 12.5 distinct media files each. The board's thread pages were counted at 51894, and the three-month figure covers **those pages only** - the pictures are a second job on top, of the same order or larger. It is deliberately not multiplied out here: all 413 sampled pages are `technical-documents.19`, which is where a DIY forum keeps its scans and schematics, so 12.5 per page is an upper bound and the board average is unmeasured. The 10 media files already on disk are 235 MB, but they are zipped PDF scans and say nothing about the size of a typical picture.
-- Proof: the audit and its mutation are one script over the stored pages, no requests - `pages=413 pages_with_media=413 media_items=12604`, `real media_in missed: 0`, `mutation (no atts) missed: 1113`, `attachments=4600 cdn_images=8004 unique_urls=5144`.
-- DONE: **the account is not a convenience, it is the archive - a guest cannot download an attachment at all.** Two HEAD requests to one file, forty seconds apart, no payload fetched: with the cookie `HTTP/2 200`, `content-type: image/gif`, `content-length: 62803`, which is exactly the 61.3 KB the forum page states beside it; without the cookie, `HTTP/2 403`. So the 1113 distinct attachments in the sample - and the 4600 references behind them - are reachable only because the owner made the account, and the earlier finding that the mirror is logged in stops being a nicety and becomes the thing the whole archive rests on.
-- **A dependency that can fail silently for months is now checked instead of assumed.** `session_alive()` HEADs that same file and is true only for a 200; `session_guard()` waits an hour and says `refresh ~/.gdiy-cookies.txt` rather than grinding. It runs once at start, and a 403 on any other URL now asks it first - before, an expired cookie meant three attempts and 90 minutes of backoff per file, for every file, with nobody watching. Control: the same function with the jar pointed at a path that does not exist returns False, so True is a measurement.
-- Proof: `real jar -> True`, `no jar -> False`, and the probe above. `~/.cache/cypcb/gdiy_mirror.py` holds it, backed up to `~/backups/asahi/gdiy_mirror.py-20260904-065503` first. The service was restarted to load the guard and resumed from its cached listings without re-fetching them - `page-382` four seconds after start.
-- DONE: **the threads phase would have archived page one of every long thread and nothing else, and the same 413 stored pages caught it before it ran.** `last_page` was written for the listing phase, where the prefix is a literal path, so it calls `re.escape` on it. The threads phase hands it a **regex** - `/threads/[a-z0-9-]+\.<id>`, because a thread's own links carry a slug the caller cannot know - and escaping a character class turns it into text that matches nothing. Every multi-page thread therefore reported one page. Measured over the 389 threads already on disk: **19 of them are multi-page, and `last_page` said 1 for all 19** while pages 2 to 5 sat beside them, fetched by hand before the runner existed. The rest of each discussion is precisely the part the owner asked for.
-- **The fix is that the pattern is a regex and the literal caller escapes its own.** `last_page` no longer escapes what it is given; `phase_listings` passes `re.escape(f"/forums/{node}")`. Both halves are checked, not just the one that broke: over those 389 threads the fixed function reports **0 mismatches**, the old escaping reports **19**, and on listing pages it still returns **215 for `black-market.3` and 232 for `brewery.4`** - the same counts the service journal logged when it catalogued them.
-- **What this does not prove**: the deepest thread in the sample is 5 pages, so pagination past that is unmeasured, and `the-lab.2` certainly holds threads with hundreds of replies. The runner was restarted to load the fix. `~/backups/asahi/gdiy_mirror.py-20260904-085350` holds the version that had the bug.
-- DONE: **the 12.5 media files a page in the entry above are mostly the same faces over and over, and the figure is corrected here rather than left standing.** Of the **8004** CDN references on those 413 pages only **544 are distinct URLs**, and of those **537 are avatars** - 344 small, 193 medium - plus two site logos. **Five** are content: `cdn.imagearchive.com/groupdiy/data/uploads/...`. So the media a reader would call knowledge is **1113 attachments and 5 pictures over 413 pages - 2.7 a page, not 12.5** - and the avatars are a fixed cost bounded by the number of members, not a per-page one. The schedule note above is wrong by a factor of about 4.6 in the direction that matters, and this line is the correction.
-- **Two defects behind that count, both measured before the phase runs.** The avatar `avatars/m/53/53989.jpg` and the avatar `avatars/s/53/53989.jpg` are two files with one basename, and `fetch` skips a path that already exists - so whichever arrived second **was silently never written**: **88 of them in this sample**. And `phase_media` keeps its `seen` set per node, so the same 537 faces would be fetched again for each of the 23 nodes - about 12000 requests, ten days at 76 seconds, for pictures already on disk.
-- **The fix is one name and one directory.** A CDN file is named by its whole path rather than its basename, and every CDN asset lands in a single `_shared/` directory, where `fetch`'s own skip-if-present makes the other 22 nodes free. Attachments stay under their node, where they already are. Proof: the same audit over the same 413 pages reports **0 files never written**, the old basename naming reports **88**, and `black-market.3`/`brewery.4` still count 215 and 232 listing pages. The runner was restarted to load it; `~/backups/asahi/gdiy_mirror.py-20260904-105415` holds the version with both defects.
-- DONE: **three defects in three runs, each found by a throwaway script that would never run again - so the four audits are now one file that does.** `~/.cache/cypcb/test_gdiy_mirror.py` reads the 413 thread pages and 389 threads already on disk, makes no requests, and checks what the mirror must not get wrong: attachments are not dropped, a long thread is not reported as one page, two files do not claim one filename, and a node's listing length is what the service journal logged. **Each check carries the mutation that has to break it, and a mutation that fails to break one is itself a failure** - the file says so and exits 1, because a check a mutation does not kill is an empty check.
-- **The harness was then tried against the real thing rather than against its own lambdas.** The pagination fix was put back to the bug in a copy of the runner, and the file was pointed at that copy through `GDIY_MIRROR`: **exit 1, `a long thread is not one page: the code is wrong (19)`**, and the listing check failed with it, because escaping a pattern the caller already escaped matches nothing either. The copy was deleted and the live runner re-checked green.
-- Proof: `python3 ~/.cache/cypcb/test_gdiy_mirror.py` -> `real=0 mutation=1113`, `real=0 mutation=19`, `real=0 mutation=88`, `real=0 mutation=2`, `all checks passed`. Against the regressed copy: two `FAIL` lines and `exit=1`.
-- DONE: **the listing phase is finished and the whole board is counted: 23 nodes, 71317 threads, 85526 thread pages.** The page count is a sum over every catalogue row's reply count at the measured 30 posts to a page, not an estimate. `the-lab.2` is a third of it on its own - 29676 threads, 32571 pages - which is why the number waited for it. At the 76 seconds this mirror actually keeps, the thread pages are **1806 hours, 75 days**; at the 31 seconds the site's `robots.txt` allows an AI agent, **736 hours, 31 days**. The runner has moved on and is fetching threads.
-- **Counting the board found a defect in the catalogue itself.** A thread title that wraps across lines in the HTML kept its newline, and a tab-separated file cannot carry one: the row split in two, and the half after the break was read as a thread whose id is prose and whose url is a reply count - `[&quot;Op Amp Applications Handbook&quot;\t9]`. `phase_threads` would have called `fetch` on the string `9`, and a failure that is not a 403 costs three attempts and 90 minutes of backoff each. Six rows in this board, nine hours of nothing.
-- **Fixed in the parser and repaired on disk without a single request.** Titles are whitespace-collapsed, `phase_threads` skips and logs a row whose url is not a url, and all 23 catalogues were rebuilt from the listing pages already stored: **21 of 23 rewritten, 0 rows that are not exactly four fields**. The state directory was copied to `~/backups/asahi/gdiy-state-20260904-145405` first, and the runner to `~/backups/asahi/gdiy_mirror.py-20260904-145405`.
-- **The check file earned itself on its first day, twice.** It gained a fifth check - a catalogue row is four fields, mutation **69657** - and then it went red on the real archive: `attachments are not dropped: the code is wrong (7)`. It was the audit that was wrong, not the extractor. A logged-in thread page carries the reply box, which links `/attachments/upload?type=post&...` - a form endpoint, not a file - and the guest pages the check was written against had no such link. The audit now asks for `/attachments/<slug>.<id>/` and reads 0 again. **A guard that cries wolf on new evidence is the second way a guard fails**, and this one was caught the day the evidence changed rather than after three months of it.
-- DONE: **the first node came out of the threads phase clean, and looking at what it wrote found the pictures the mirror was leaving on the site.** `available-for-hire.13`: **41 threads, 41 pages, one each** - and the catalogue agrees, no thread there has more than 29 replies. Media landed where the last fix said it would: one attachment under the node, and the CDN assets in `_shared/` under path-derived names like `avatars_m_0_110.jpg`. `cdn.imagearchive.com` - the outside host nobody had probed - answers: **four 200s, 20 to 35 KB JPEGs**, taken from the runner's own journal at no extra cost.
-- **An inline picture is on the CDN twice and the mirror was taking the smaller one.** XenForo writes `src` with the 1x copy and `srcset` with the 2x, and `media_in` read only `src`. On a forum of schematics the 2x is the readable one. Worse, an inline picture has **no full-size attachment link at all**: on one page, 35 inline CDN ids and **not one of them** appears in the `file--linked` list that the extractor takes attachments from. So the 2x copy is not a nicety, it is the best copy that exists.
-- **The extractor now reads `srcset`, and skips a URL whose stem is already in `src`** - webp beside jpg is the same picture in another format and is not worth a second request. Measured over the stored pages: **53 content pictures that were being left behind are now collected**, all of them `attachments/<n>/2x/...`; the rest of the srcset entries are avatars in other sizes, which dedupe in `_shared/`, and webp twins, which are skipped.
-- Proof: `python3 ~/.cache/cypcb/test_gdiy_mirror.py` -> six checks, `a picture in srcset is not skipped: real=0 mutation=53`, `all checks passed` over 454 pages. **The mutation had to be fixed before it meant anything**: written to filter on `/attachments/`, it handed itself back the 2x URLs, because a 2x picture lives under `cdn.groupdiy.com/attachments/`. It filters on `cdn.` now. The runner was restarted, so the node already through the media phase gets its 2x pictures on the next pass; `~/backups/asahi/gdiy_mirror.py-20260904-165525` holds the version that read only `src`.
-- DONE: **the last fix bought 53 schematics and quietly ordered 281 more copies of the same faces, and the second half is undone here.** Running the check file first, as the action above said, showed it green - and then the journal showed what the runner was actually doing: **92 of its 94 fetches since the restart were avatars**. Reading `srcset` had picked up `avatars/l` and `avatars/m` beside the `avatars/s` already in `src`, so every member's face was being fetched three times. Measured over the 454 pages on disk: **880 distinct avatars where `src` alone asks for 599** - 281 extra requests, about six hours at 76 seconds, for this fraction of one board.
-- **A face in a second size is not a second picture, so `srcset` now skips `/avatars/`.** The 2x content pictures - the reason the change was made - are untouched: **53 of them still collected, avatars back to 599**, six checks green. This is the shape of the thing to watch for: a fix measured on what it saves and not on what it costs is only half measured.
-- **And the one `backing off` line in the whole journal is history, not a fault.** `200 https://groupdiy.com/forums/ - backing off 1800s` is dated 2026-09-03T00:47:40, the first run, before `fetch` wrote the body to a file: `-w %{http_code}` with no `-o` made the page itself part of the status string, so a 200 did not compare equal to `200`. That is also where the `<!DOCTYPE html>` in the journal comes from. The service was stopped 21 seconds later and the runner has not produced a single backoff since.
-- DONE: **"the pool gets it hourly" was written here on 2026-08-31 and nobody had ever checked it. It is true, and checking it found 75 MB the archive did not have.** The timer fires on the hour - last run 20:17, 9.3 MB moved, 671 MB in place - and five files were compared byte for byte across the two sides: `index.html`, `state/nodes.json`, `state/threads-brewery.4.tsv`, a thread page and a `_shared/` avatar, **all same**. The comparison can say otherwise: the same thread page against the pool's `index.html` reads **DIFFER**, so "same" is a measurement.
-- **The file counts differ by exactly what an hour of fetching is.** Laptop 2539 files and 679108159 bytes, pool 2511 and 670990197 - 28 files behind, at 76 seconds a file and 36 minutes since the last sync. The lag is the design, not a fault.
-- **A 75 MB `.part` in the archive turned out to be a finished download that never got renamed.** `144934__51_series_schematics.zip.part`, dated 2026-09-03T00:51 from the hand-fetched batch, opens as a valid zip: **30 entries, `testzip()` returns None**. So it was renamed rather than re-downloaded - the archive gained an attachment it did not have, and the site was spared 75 MB. The complete file is in the pool with a matching md5, and the two artefacts beside it - the stale `.part` and `mirror.lock` - were removed only after that check: **pool now 2541 files, 0 part-files, 0 locks**.
-- **And the sync will not put either back.** `~/.local/bin/gdiy-sync.sh` keeps a half-transferred file in `--partial-dir=.rsync-partial` instead of under its real name, and excludes `mirror.lock` and `*.part`. An archive should hold only files that are what their name says they are. Backup at `~/backups/asahi/gdiy-sync.sh-20260904-205719`.
-- DONE: **a deleted thread answers 404 every time it is asked, and the runner was asking three times with half an hour between - 90 minutes of nothing each.** `fetch` treated every answer that is not 200 as congestion. A board of 71317 threads does not need many gone pages for that to matter: a tenth of a percent is 71 threads and four and a half days. `worth_retrying` now says a 404, 410 or 451 will not change, and those are logged and left. Everything else - 403 with its session check, 429, 5xx, a dead connection - still backs off as before.
-- Proof: the check file gained a seventh check, nine status codes against what the runner should do with each, **`a page that is gone is not asked again: real=0 mutation=3`** where the mutation is the old policy of retrying everything. Seven checks green over 606 pages and 527 threads. The version that retried a 404 is at `~/backups/asahi/gdiy_mirror.py-20260904-225402`.
-- **Disk was the other thing nobody had measured, and it is not a problem.** The thread pages average **157884 bytes** over the 606 on disk, so the whole board's 85526 of them are about **13.5 GB**; the listing phase is complete at 1794 pages and 343 MB; `/home` has **490 GB free of 838**, and the pool has **18 TB**. Media is deliberately not projected: the 16 attachments fetched so far average 15 MB because they are scanned PDF collections from `technical-documents.19`, and the 189 shared CDN files average 5 KB - two samples that say nothing about a board average. Even a tenfold surprise fits.
-- DONE: **the check file went red on the growing archive for the second time, and for the second time it was the check that had to learn something.** `two files do not share one name: the code is wrong (1)`. The pair: `avatars/s/64/64846.jpg?1768040120` and `avatars/s/64/64846.jpg?1788557439` - one member, one path, two cache-busting stamps, because the face changed between the two pages that show it. That is not two files. **An archive keeps one face per member, not one per revision**, and `fetch` keeping the first is the behaviour we want. The check compares paths now and ignores the query; its mutation still reports **168**, so it did not go soft.
-- **The earlier split-row fix was confirmed on real data by a number that looked like a loss.** `truth-table.31` catalogued **318** threads where this file once said 319. The saved copy at `~/backups/asahi/gdiy-state-20260904-145405` shows why: its extra row is the second half of a wrapped title - `[+ XMOS XU208 - anyone built this combo?\t5]` - split off from `usb-audio-interface-pcb-...that1512-ak4619vn-xmos-xu208...`. One thread, counted twice, now counted once.
-- DONE: **the multi-page path has now run for real, and it was checked against something other than itself.** Every multi-page thread on disk until today came from the hand-fetched batch; the runner has since written **56 continuation pages of its own** outside that node, one thread reaching `35966-p6`. The check file's pagination test compares `last_page` to what is stored, which is circular once the runner is the one storing it - so the count was taken from the other side instead: the catalogue's reply count, at 30 posts to a page, predicts how many pages a thread needs. **273 threads fetched in `black-market.3`, 272 predicted exactly.**
-- **The one exception is the board's, not the runner's.** Thread `52715` is predicted 2 pages and has 1. Its stored page carries **30 posts and no `page-N` link anywhere** - XenForo renders pagination when there is a second page, so there is not one. The listing counted one reply that the thread no longer shows, somewhere between the listing fetch and 21:44:37 when the thread was read. The archive has the whole thread.
-- **That comparison is deliberately not a check in the file.** It measures a live board against a snapshot of itself, so it will go red for reasons nobody can fix, and a check that cries wolf on purpose teaches people to skip the ones that do not. It stays a thing to run when a node finishes.
-- **And the job survives a reboot, which had been assumed since the day it was installed.** `loginctl show-user productlost -p Linger` -> `Linger=yes`; `systemctl --user is-enabled gdiy-mirror.service gdiy-sync.timer` -> `enabled`, `enabled`; the units want `default.target` and `timers.target`. A machine that restarts does not cost the archive its 75 days.
-- NEXT-ACTION: **none pulled in this thread - the runner is doing the work now and each fire has been checking a different part of it.** What is worth a fire is whatever the archive itself shows: a node whose thread count on disk does not match its catalogue, a `GIVE UP` line, or a phase that finishes. The check file is the thing to run first, not to write again.
-  listing row carries its thread's reply count, so when the listing phase lands
-  the exact page count of the whole board can be computed rather than guessed -
-  and that is the first honest answer to how long this takes. Until then the
-  only true statement is the order of magnitude: 71301 threads at 75 seconds is
-  weeks, not days, and the owner was told that rather than a number. Nothing
-  here needs a fire; check `~/.cache/cypcb/gdiy-archive/mirror.log` and act only
-  if it stopped.
 
 ### V9 - KiCad parity: what a board editor has and this does not
 
@@ -2856,7 +2509,7 @@ multi_ic        0.26: 13 iterations, converged false, [553, 339, 269, 270, 258, 
 
 ### V2 - Autorouter and routing quality
 - **OWNER, 2026-09-10: the interactive router - the path it suggests while you click a connection - is what wants the work, and it is not symmetric.** Routing from component A to B comes out better than routing the same pair from B to A. That is a property of the algorithm rather than of the board, and it is the first thing to measure: a path finder whose answer depends on which end you started from is telling you its cost function, its tie-breaking or its obstacle marking is not symmetric either. **Nothing in this repository measures it.** `scoring.rs` scores a finished route; nothing scores the same pair twice, in both directions, and compares.
-- **Owner also wants to learn how a trace is properly routed, from real designs**, which is a research vector rather than a fire: what a good route looks like, why, and with what number behind it. Handed to a session of its own - **`cypcb2`**, started 2026-09-10 with the brief in `/tmp/claude-1000/.../scratchpad/cypcb2-brief.txt`: read `cypcb-autoroute/src/scoring.rs` first for what is measured today, then the KiCad fixtures and the GroupDIY mirror already on disk, then IPC-2221B and the vendors' grounding notes. Its product is `docs/ROUTING-CANON.md` - each rule with a number or a condition and a dated source, plus **what this project already measures** and **what nothing measures**. It reads this tracker and does not write to it.
+- **Owner also wants to learn how a trace is properly routed, from real designs**, which is a research vector rather than a fire: what a good route looks like, why, and with what number behind it. Taken as its own vector, starting from `cypcb-autoroute/src/scoring.rs` for what is measured today, then the KiCad boards this repository already carries, then IPC-2221B and the vendors' grounding notes. Its product is `docs/ROUTING-CANON.md` - each rule with a number or a condition and a dated source, plus **what this project already measures** and **what nothing measures**.
 - NEXT-ACTION: **measure the asymmetry before touching it.** Same net, same board, two runs: pads in the order the design names them, then reversed. Compare what `score_board` already returns - length, vias, crossings, DRC violations - and the geometry itself. Two outcomes and both are useful: the numbers differ, and there is a defect with a size; or they do not, and what the owner saw is the *suggestion* the interactive path preview draws rather than the route it commits, which is a different code path in `viewer/src/routing.ts` and wants its own measurement.
 
 
@@ -3392,9 +3045,9 @@ multi_ic        0.26: 13 iterations, converged false, [553, 339, 269, 270, 258, 
 - Proof, both paths, each run alone: the skip path with the runner itself uncommitted -> `/tmp/gr2/latest.log` begins `VERDICT: skipped - the working tree is busy`. The green path measured in a throwaway `git worktree` where the fixed runner and a stub gate were committed, so the tree was clean and the run cost nothing -> `/tmp/gr4/latest.log` begins `VERDICT: green, all stages passed, 0s`, with the worktree removed afterwards and the main tree carrying only this change. The real `scripts/quality-gate.sh` was restored from the copy saved before the stub went in, `56ce4bb4f94471ed1c99baf0c91bf72f`. `./scripts/quality-gate.sh` -> **All stages passed**, 9 of 9.
 - NEXT-ACTION: **none in this vector**, and this time the claim is checked rather than asserted: the nightly runner's own output is what the next fire reads, so a wrong sentence in this file gets caught the same way this one did.
 
-- DONE: **the nightly runner is installed on the host and its green path is measured, not assumed.** `/etc/cron.d/cypcb-gate` runs `scripts/scheduled-gate.sh` at **04:30** through `docker exec -u abc code-server`, appending what cron itself saw to `/home/productlost/cypcb-gate-cron.log`; the run's own log stays in `/config/gate-runs`. The file was installed from a checked copy - the same `70bdaf380cae048496c9813afe275e48` on this laptop, in `/tmp` on the host and at `/etc/cron.d/cypcb-gate`.
+- DONE: **the nightly runner is installed on the host and its green path is measured, not assumed.** `scripts/scheduled-gate.sh` runs from cron at **04:30**; the run's own log stays in `/config/gate-runs`. The file was installed from a checked copy - the same `70bdaf380cae048496c9813afe275e48` on this laptop, in `/tmp` on the host and at `/etc/cron.d/cypcb-gate`.
 - **The whole gate takes 444 seconds** on this machine, which is the number that makes a nightly cadence obviously affordable: `VERDICT: green, all stages passed, 444s`, written by the first real run at `2026-08-27T14-35-44` against `46f03e6`, with `latest.log` pointing at it.
-- **The cron command line was run by hand rather than waited for.** With a gate already in flight it answered `VERDICT: skipped - a gate is already running` and exited **0** - so the path from cron's environment through `docker exec` into the container works, and a busy machine costs cron nothing.
+- **The cron command line was run by hand rather than waited for.** With a gate already in flight it answered `VERDICT: skipped - a gate is already running` and exited **0** - so the path from cron's environment into the build works, and a busy machine costs cron nothing.
 - **Reporting is now the fire's job, not a webhook's.** A log file somebody has to open is a log file nobody opens, and this project already has something that reads files on a schedule: the heartbeat. The cadence section below says to read `/config/gate-runs/latest.log` at the start of a run and to treat a red verdict as the highest live action, which needs no channel, no secret and no service.
 - Proof: `sudo md5sum /etc/cron.d/cypcb-gate` -> `70bdaf380cae048496c9813afe275e48`; `systemctl is-active cron` -> `active`; `ls /config/gate-runs` -> the dated log, the skip log from the cron-command test, and `latest.log` symlinked to the newest.
 - ~~NEXT-ACTION: **none in this vector.**~~ There was one, and reading `latest.log` the way the cadence now says found it: the verdict was at the bottom - see the entry above.
@@ -3623,13 +3276,13 @@ multi_ic        0.26: 13 iterations, converged false, [553, 339, 269, 270, 258, 
 - QUEUED: three `benchmark-screenshots` failures that route boards through the hidden Route UI (blocked on D5).
 - DONE: the recent-projects list had two different limits. `addRecentFile` capped storage at 10, `populateRecentFiles` rendered whatever was stored, so a list seeded by an older build or a test showed rows the app would silently drop on the next save. One `RECENT_FILES_SHOWN` now serves both. `npx tsc --noEmit` clean, `npx eslint src/project-manager.ts` clean, `npx vitest run` 149 of 149.
 - ~~QUEUED: put the browser system deps somewhere durable~~ **Done:** `scripts/setup-dev.sh`.
-- **Owner decision, 2026-08-05: no GitHub Actions.** Tests run locally, in the `code-server` container, and that is the whole CI story. Nothing is pushed - `fix/cli-check-drc` has no upstream and 42 commits sit ahead of `origin/main`. `.github/workflows/` is empty and stays that way. `scripts/quality-gate.sh` is the gate; run it by hand.
+- **Owner decision, 2026-08-05: no GitHub Actions.** Tests run locally on the development machine, and that is the whole CI story. Nothing is pushed - `fix/cli-check-drc` has no upstream and 42 commits sit ahead of `origin/main`. `.github/workflows/` is empty and stays that way. `scripts/quality-gate.sh` is the gate; run it by hand.
 - DONE: **a fresh clone builds.** `crates/cypcb-parser/grammar/src/` was gitignored, so a clone arrived without `parser.c` and `build.rs` panicked before anything compiled - the project could not be built by anyone who had not generated the grammar first, which meant node, npm and the tree-sitter CLI just to compile a Rust workspace. The generated parser is committed now, which is what every tree-sitter grammar repository upstream does. Verified the only way that means anything: cloned the branch into a directory that has never seen node, `cargo build --release -p cypcb-cli` finished in 35s, and the binary checked two examples including the one that imports a module library.
 
 ### V4 - Architecture and deduplication
 - DONE: **two JLCPCB presets lived in the module whose own header says OSHPark.** `crates/cypcb-drc/src/presets/oshpark.rs` opens with *"OSHPark manufacturer design rules"* and defined four constructors: `oshpark_2layer`, `oshpark_4layer`, **`jlcpcb_advanced_2layer` and `jlcpcb_advanced_4layer`**. Anybody looking for the advanced JLCPCB rules greps `jlcpcb.rs` and finds two of the four. It was found by reading the file while correcting its tables yesterday, which is not a way to find things. The two constructors and the three cases that exercise them are in `jlcpcb.rs` now - same doc blocks, same bodies, same assertions, nothing else changed. `grep -c advanced crates/cypcb-drc/src/presets/oshpark.rs` -> **0**; `cargo test -p cypcb-drc` -> 175 + 5 + 6 + 17 + 2 + 7 passed, 0 failed.
 - **A case holds the placement, because a header that describes a file is not something the compiler checks.** `a_preset_named_after_a_fab_lives_in_that_fab_s_module` takes the fab out of the preset's own name and asks only where a module of that name exists - so `prototype`, which is nobody's fab, is not forced into a `prototype.rs` nobody wants. Mutations, each alone and restored from the saved files - md5 `fe6afe453d2b912f1104aa62d9e76fc0` oshpark, `03c75b327f55bfd0a581f46d875dc4ba` jlcpcb, `d1ee4298198b582f1e633c1bd2fbb753` case: the pre-move modules put back -> **1 failed**, `jlcpcb_advanced_2layer is defined in oshpark.rs, and jlcpcb.rs is the module named after its fab`; the module lookup made to match nothing so every preset is skipped -> **1 failed**, `only 0 presets were placed, so the reader is broken`. `./scripts/quality-gate.sh` -> `=== All stages passed ===`.
-- NEXT-ACTION: **none pulled in this vector.** The one crate nobody calls is the owner's decision (D3), and the preset modules now say what they hold. What is live elsewhere: V10's mirror, which is 1675 threads into `black-market.3` of 8546 and wants watching rather than fires.
+- NEXT-ACTION: **none pulled in this vector.** The one crate nobody calls is the owner's decision (D3), and the preset modules now say what they hold.
 
 - DONE: **D11 is answered, and the answer is in the crate rather than in this file.** `cypcb-library` has sat on the uncalled list since that census was written, with the question left open: work that has not landed, or work nothing will reach again. The owner said on 2026-08-28 that it is not his question - `nie wiem co to jest wgl` - and told this project to decide and to lose nothing valuable. So: **it is kept**, and the reason is written where somebody opening the crate reads it.
 - **What was measured before deciding**: `cargo test -p cypcb-library` -> **41 passing tests** across two binaries, **3751 lines**, a schema and a manager over `rusqlite`, search by field, metadata and preview, and importers under `sources` - the KiCad one reads `.pretty` folders and `.kicad_mod` files, which is the format every footprint this project already parses comes in.
@@ -4672,7 +4325,7 @@ cypcb::parse::unknown_property
 - **So the case asks the code rather than reading it.** `crates/cypcb-drc/tests/a_preset_table_is_the_preset.rs` parses each table out of the source, **calls** the constructor, and compares - which is why a constraint that moves in the other crate fails here. **56 rows across 8 presets.** A second case holds the list of presets to the modules, so a new fab cannot arrive unchecked.
 - Proof: `cargo test -p cypcb-drc --test a_preset_table_is_the_preset -- --nocapture` -> `56 table rows held against the presets they describe`, **2 passed**. Mutations, each alone and restored from the saved file - md5 `5556da2ff8d30e2a8061a57e8d483cbb` module, `df5fd5da2499057199c35c63b18a7578` case: the annular row put back -> **1 failed**, `the table says Min annular ring is 0.15mm, the preset returns 0.18mm`; a row deleted from a table -> **1 failed**, `6 rows read from its table, so the reader is broken`, which is the floor against a table that passes by describing less; `pcbway_standard` dropped from the list -> **2 failed**, `the preset modules and the list in this case have drifted apart`. `./scripts/quality-gate.sh` -> `=== All stages passed ===`.
 - **The figures census moved again and the ratchet made it move here**: 33 -> **32**, `BASELINE_UNREAD` with it. Both moves this week were the same event - a commit that gives a figure a reader is refused until the number comes with it.
-- NEXT-ACTION: **none pulled in this vector.** Every class the census pointed at is answered: the footprint blocks and the preset tables are held by cases, and what is left in the unread list is profile shares and one-off arithmetic in comments - history rather than claims. What is live elsewhere: V10's mirror, which wants watching rather than fires.
+- NEXT-ACTION: **none pulled in this vector.** Every class the census pointed at is answered: the footprint blocks and the preset tables are held by cases, and what is left in the unread list is profile shares and one-off arithmetic in comments - history rather than claims.
 
 - DONE: **a footprint's doc block states the four figures a person picks a part by, and nothing held them to the builder.** Every constructor under `crates/cypcb-world/src/footprint` writes `Pitch`, `Pad`/`Pad size`, `Row span` and `Body` in the comment above it and passes the same numbers to the builder as `Nm::from_mm(...)` a few lines below - `soic8` says 1.27, 1.5 x 0.6, 5.4, 5.0 x 4.0 and the call says the same. Held together by somebody's eyes, and counted by `scripts/claims-in-comments.sh` among the figures no test names. `crates/cypcb-world/tests/a_footprint_is_the_size_its_doc_block_says.rs` reads both out of the same file: **13 constructors, 52 figures**.
 - **The first version failed and the code was right, which is the part worth recording.** It reported `sot23_5's doc block states 2.4mm and the builder is given {0.6, 0.95, 1, 1.2, 3}`. The builder stores `let half_span = Nm::from_mm(1.2); // row_span / 2 = 2.4 / 2`, because a pad position needs the half - so a row span may be given whole or halved, and **that allowance is named for `Row span` alone** rather than made general. `Pad size` was also being skipped, because three constructors write that label instead of `Pad`. The case changed; nothing in the crate did.
@@ -4685,7 +4338,7 @@ cypcb::parse::unknown_property
 - **The decisions stay as recorded and the status is written beside them**, which is what this file already does for the DRC table: three sections dated 2026-09-05, no rewriting of what was decided.
 - **The two numbers are held by a case now, because handing the reader the command was not enough.** D-DRC-005 printed the command that counts the rules and still drifted by 22 - a command nobody runs is a number nobody checks. `crates/cypcb-cli/tests/the_decision_log_is_current_where_it_says_it_is.rs` takes each count out of the document and the same count out of the thing it describes: `Box::new(rules::` in the DRC crate, and the `echo "[i/total]"` headers in the gate, which it also holds to a consistent numbering.
 - Proof: `cargo test -p cypcb-cli --test the_decision_log_is_current_where_it_says_it_is` -> **2 passed**. Mutations, each alone against a clean tree and restored from the saved file, md5 `60b883f3f0f72b1e0eec058f582cf88d` after every one: 37 -> 36 -> **1 failed**, `the decision log says 36 DRC rules are registered and crates/cypcb-drc/src/lib.rs registers 37`; the stage count 10 -> 9 -> **1 failed**; and the control, the phrase reworded so the scanner finds nothing -> **1 failed**, `.gsd/DECISIONS.md no longer says "rules are registered as of", so no number is held to the code` - an absence that passes quietly is the failure this file has already recorded twice. `./scripts/quality-gate.sh` -> `=== All stages passed ===`.
-- NEXT-ACTION: **none pulled in this vector, and this time the sweep has an end.** The four documents a person reads before touching this project - `PROJECT.md`, `REQUIREMENTS.md`, `KNOWLEDGE.md` and now `DECISIONS.md` - have each been read against the code, and every number any of them states that a command can settle is held by a case. What is left under `.gsd/` is 500 milestone and slice files, which are a log of what was done on a day and are right to leave as prose. What is live elsewhere: V10's mirror is running and wants watching rather than fires.
+- NEXT-ACTION: **none pulled in this vector, and this time the sweep has an end.** The four documents a person reads before touching this project - `PROJECT.md`, `REQUIREMENTS.md`, `KNOWLEDGE.md` and now `DECISIONS.md` - have each been read against the code, and every number any of them states that a command can settle is held by a case. What is left under `.gsd/` is 500 milestone and slice files, which are a log of what was done on a day and are right to leave as prose.
 
 - DONE: **`PROJECT.md`'s front page carried four claims and all four were false.** The codebase is not `~44,000` lines: measured 2026-09-05 it is **113648 lines of production code** - 93345 Rust under `crates/*/src`, 393 in `src-tauri`, 19910 TypeScript in `viewer/src` - and **72120 lines of tests**. The E2E suite is not 41 tests: `npx playwright test --list` says **141 tests in 32 files**. The gate is not 8 stages: its own output numbers them `[1/10]` to `[10/10]`. And the status line still sold **variant preview**, which is the third surface of the panel deleted in `a9e8c7a` - after `REQUIREMENTS.md` and the E2E spec, both corrected yesterday. The size claim had a second surface here too, in this file's own first section, and both are replaced by a dated reading beside the command that produces it.
 - **The fourth line was left uncorrected on purpose, which is the honest option.** `Performance: autorouter 0.05s/500 components, web load 105ms` is from March and nothing in this repository has re-measured either figure. They are not repeated and not replaced with a guess: the autorouter's current numbers come from the gate's own `[8/10] autorouter benchmark`, and **the page load has no measurement in this repository at all**.
@@ -4716,7 +4369,7 @@ cypcb::parse::unknown_property
 - DONE: **the two blocks that tell a reader how to check this project told them to run a binary that can predate the claim.** The tracker's own Verification block and four rows of `docs/competition-feature-matrix.md` invoked a prebuilt executable under `target/release`, which is only as new as the last `cargo build`. It is not a hypothetical: the one in the container was five days behind on 2026-09-03 and rejected a `corner` the grammar had accepted since August, and this file already records the same trap costing a measurement - a DRC reading taken from a binary three commits old and written up as two code paths disagreeing. Both blocks go through `cargo run` now, which cannot be stale.
 - **The block was also re-run rather than re-dated.** `check examples/drc-test.cypcb` -> **16 violations**, the figure it claims; `grep -c 'Box::new(rules::' crates/cypcb-drc/src/lib.rs` -> **37**.
 - **The guard has a control, and the control is the case that earns its keep.** Two of the three assertions are absences, and an absence passes for free if the slice is empty or the heading moves - so the third asserts the tracker's *history* still quotes the old path (it does, 26 times, and should: it records commands as they were run), that the section read is the tail rather than the file, and that it carries the commands being checked. Proof: `cargo test -p cypcb-cli --test a_verification_command_builds_what_it_runs` -> 3 passed. Mutations, each alone and restored by md5: the old path back in the Verification block -> 2 failed; back in the matrix -> 1 failed; the history stripped of it so the control controls nothing -> 1 failed.
-- NEXT-ACTION: **none in this vector, and this time the claim was checked instead of asserted.** The three source-reading cases left in the workspace all read a document rather than code: `every_definition_has_an_example` reads `reader.rs` to enumerate the language's own definitions, and `the_matrix_is_honest_about_us` reads `backend.rs` and `render/src/lib.rs` for capability names whose wire behaviour the LSP case now holds. None of them stands in for a behaviour that can be run. What is live elsewhere: V10's mirror is running and needs watching, not fires.
+- NEXT-ACTION: **none in this vector, and this time the claim was checked instead of asserted.** The three source-reading cases left in the workspace all read a document rather than code: `every_definition_has_an_example` reads `reader.rs` to enumerate the language's own definitions, and `the_matrix_is_honest_about_us` reads `backend.rs` and `render/src/lib.rs` for capability names whose wire behaviour the LSP case now holds. None of them stands in for a behaviour that can be run.
 
 - DONE: **the guide's guard was reading a list of keywords that was two words short, and a broken example had been sitting in `docs/SYNTAX.md` since the day `region` shipped.** `the_syntax_guide_parses` decided which blocks to parse from a `TOP_LEVEL` array in its own file. `flex` and `region` landed in the language and nothing updated it, so every example opening with either was counted as "not a top-level construct" and skipped. The keywords come out of the generated grammar now, the way the sibling guard has always read them.
 - **What that unlocked was a real defect in the guide**: the `region` section showed `stackup { ... }` at the top level, which is a block that only exists inside `board`. `docs/SYNTAX.md:  "region connector_end {": Missing { expected: "a definition, not stackup" }`. The example now shows the stackup where it belongs, inside the board that presses it.
@@ -5456,7 +5109,7 @@ feature's own. The rule measures **other nets' copper** against the slot.
 Check live, do not trust any snapshot in this file:
 
 ```
-docker exec -u abc code-server bash -lc 'export PATH=/config/.cargo/bin:$PATH; cd /workspace/codeyourpcb && cargo test --workspace --exclude cypcb-desktop -j 12 2>&1 | tail -5'
+cargo test --workspace --exclude cypcb-desktop 2>&1 | tail -5
 ```
 
 ## Cadence
