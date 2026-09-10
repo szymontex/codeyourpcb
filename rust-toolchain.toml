@@ -1,2 +1,6 @@
 [toolchain]
 channel = "stable"
+# The browser module is built for wasm32, and `rustup target add` was left to
+# whoever read the error. Naming it here means a fresh clone has it before the
+# first build asks.
+targets = ["wasm32-unknown-unknown"]

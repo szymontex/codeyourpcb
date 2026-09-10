@@ -157,15 +157,41 @@ board.
 ### Web (development)
 
 ```bash
-# Prerequisites: Rust, Node.js 18+, wasm-pack
-cargo install wasm-pack
-
-# Clone and start
 git clone https://github.com/szymontex/codeyourpcb.git
-cd codeyourpcb/viewer
+cd codeyourpcb
+./scripts/setup-dev.sh   # Rust target, wasm-bindgen at the pinned version, binaryen, browsers
+
+cd viewer
 npm install
-npm start          # builds WASM + starts dev server
+npm start                # builds WASM + starts dev server
 ```
+
+**Prerequisites**: Rust (stable), Node.js 18+, and two tools the WASM build
+runs directly - the `wasm-bindgen` CLI and `wasm-opt` from binaryen.
+`./scripts/setup-dev.sh` installs both and is safe to run again; every step
+checks before it installs. By hand:
+
+```bash
+# wasm-bindgen must match the version Cargo.lock pins, or the bindings it
+# writes will not load the module the build produced.
+cargo install wasm-bindgen-cli --version \
+  "$(grep -A1 '^name = "wasm-bindgen"$' Cargo.lock | grep '^version' | cut -d'"' -f2)"
+
+# binaryen, for wasm-opt. The build refuses to run without it rather than
+# shipping a module a third larger.
+sudo apt install binaryen     # Debian/Ubuntu
+brew install binaryen         # macOS
+```
+
+`cargo binstall wasm-bindgen-cli --version ...` fetches a prebuilt binary and
+takes seconds where `cargo install` takes minutes; `cargo install
+cargo-binstall` first, and fall back to `cargo install` on a platform it has no
+build for.
+
+**`wasm-pack` is not used.** `viewer/build-wasm.sh` runs cargo, wasm-bindgen
+and wasm-opt as three steps of its own, because wasm-pack 0.14 cannot be told
+about this project's `wasm-release` profile and runs a `wasm-opt -O` that
+refuses the module. The script says so at the top.
 
 Open http://localhost:4321 — pick a template or open a `.cypcb` file.
 

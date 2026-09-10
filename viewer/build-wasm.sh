@@ -24,20 +24,36 @@ cd "$(dirname "$0")/.."
 
 echo "Building WASM module..."
 
+# Both tools are checked before either failure is reported. Missing one used to
+# end the script, so a machine without either was told about `wasm-bindgen`,
+# installed it, ran the build again and was then told about `wasm-opt`. One run
+# should name everything it needs.
+#
+# wasm-opt is not optional and never was after 2026-08: the script used to warn
+# and carry on, which shipped an unoptimized module the moment binaryen was
+# missing from the machine, silently and a third larger.
+MISSING=""
+
 if ! command -v wasm-bindgen &> /dev/null; then
-    echo "wasm-bindgen not found. Install the CLI at the version the workspace"
-    echo "pins: cargo install wasm-bindgen-cli --version \$(grep -A1 '^name = \"wasm-bindgen\"' Cargo.lock | grep version | cut -d'\"' -f2)"
-    exit 1
+    PINNED=$(grep -A1 '^name = "wasm-bindgen"$' Cargo.lock | grep '^version' | cut -d'"' -f2)
+    MISSING="${MISSING}
+  wasm-bindgen, at the version Cargo.lock pins:
+      cargo install wasm-bindgen-cli --version ${PINNED}
+      cargo binstall wasm-bindgen-cli --version ${PINNED}   # prebuilt, seconds"
 fi
 
-# wasm-opt is not optional. It used to be - the script warned and carried on,
-# which shipped an unoptimized module the moment binaryen was missing from the
-# machine, silently and a third larger.
 if ! command -v wasm-opt &> /dev/null; then
-    echo "wasm-opt not found, and this build needs it."
-    echo "  Debian/Ubuntu: apt-get install binaryen"
-    echo "  macOS:         brew install binaryen"
-    echo "  Or:            cargo install wasm-opt"
+    MISSING="${MISSING}
+  wasm-opt, from binaryen:
+      Debian/Ubuntu: apt-get install binaryen
+      macOS:         brew install binaryen"
+fi
+
+if [ -n "$MISSING" ]; then
+    echo "This build needs tools this machine does not have:"
+    echo "$MISSING"
+    echo ""
+    echo "Or install everything at once: ./scripts/setup-dev.sh"
     exit 1
 fi
 
