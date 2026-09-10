@@ -393,6 +393,15 @@ async function init(): Promise<void> {
     if (stackBody) {
       renderStack(stackBody, s.stackup);
     }
+    // And so does the layer panel, for the same reason and after the same
+    // defect: it builds one row per copper layer from `board.layer_count`, and
+    // it was only rebuilt where a person did something - a preference, a
+    // colour, the active layer. Opening a four-layer board changed the board
+    // and nothing else, so the panel kept the two rows a blank editor starts
+    // with and a design that declares four offered two. The rebuild compares
+    // the names it already drew, so calling it on every snapshot costs a
+    // string compare.
+    syncLayerPicker();
     return s;
   }
 
