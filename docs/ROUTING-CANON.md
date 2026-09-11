@@ -84,8 +84,23 @@ In this repo: the table exists and nothing calls it. See "Blocked on the model".
 
 *Applies when:* always. Two trace segments meet at a junction; no declaration needed.
 
-No corner of a trace, and no junction of a trace with a land, forms an internal
-angle below 90 degrees.
+No two runs of copper on one net and one layer meet at an internal angle below
+90 degrees. The angle is the one between the two arms of the junction, so a
+straight run is 180 degrees and a 45 degree turn leaves 135. Where copper
+meets a land the wedge is measured the other way round - between the edge of
+the trace and the edge of the land, where square-on is 90 - and that case is
+R-08. The same wedge therefore carries two different numbers in the two
+rules, and both are right.
+
+**Two cases sit between this rule and R-08 and neither owns them.** A trace
+that crosses its own land and carries on has no junction here and no entry
+there - R-08 defines an entry as a segment *ending* inside the land's copper
+- yet its edges cut the land's edge twice and each crossing is the same
+wedge. Unowned, and named here so it is not mistaken for covered. And a
+junction whose vertex lies inside a land's copper is reported by this rule
+today although the copper there is merged and has no wedge: `AcuteAngleRule`
+queries `(Entity, &Trace, Option<&Curve>)` and has no pad geometry at all, so
+that is a known false positive rather than a finding.
 
 Etchant sits in the wedge of an acute corner longer than it sits on open
 copper, and undercuts the trace from inside the corner. The accepted fix is two
@@ -748,9 +763,9 @@ nobody reads a four-layer rule onto a two-layer board:
 records. The three pieces needed - pour geometry, stackup-derived reference
 layer, spatial index - are all present and none is called for this purpose.
 
-### R-14 Via stitching, measured but not yet bounded `[P]`
+### R-14 Via stitching `[P]`
 
-*Applies when:* the board has two pours of one net on different layers, or a via that changes which pour is a signal's reference. Thresholds additionally need a declared frequency, which nothing declares - so on every board today this is a measurement without a threshold.
+*Applies when:* the board has two pours of one net on different layers, or a via that changes which pour is a signal's reference. Where the design declares no frequency the rule screens at a stated stand-in of 1 GHz and says so in every row - see part 5.
 
 Two pours of one net on different layers are tied together by a field of vias,
 and a signal via that changes reference has a return via beside it. R-05 states
@@ -844,6 +859,32 @@ return-via condition applies unchanged, because a signal going top to bottom
 changes which pour is its reference. What two layers change is which number is
 trustworthy: on a pour perforated by its own routing the declared pitch says
 least and the measured maximum gap says most.
+
+**The stand-in, so this rule can fail a board.** Both thresholds need a
+frequency and nothing in this model declares one, which left R-14 as a
+measurement with no line to cross. Its own sources supply the stand-in: where a
+design does not state a frequency, screen at **1 GHz**. At that frequency, with
+an effective dielectric constant of 4, the wavelength inside the board is
+`lambda = c / (f * sqrt(eps))` = 150 mm, so the two published fractions give
+**7.5 mm at lambda/20 and 15 mm at lambda/10**, and the return-via figure that
+applies below 5 GHz is **1.27 mm**.
+
+Conditions under the stand-in: the largest nearest-neighbour gap in a pour's
+**placed** stitching field is at most 7.5 mm - the placed field, per "Declared
+is not measured", never the declared pitch - and the distance from a signal via
+to the nearest reference via spanning the same layer pair is at most 1.27 mm.
+
+Every report from this rule states the frequency it assumed. A board that
+declares one is measured against that; a board that declares nothing is measured
+against 1 GHz and told so in the row, because a threshold nobody chose is a
+number the reader has to be able to argue with. **The stand-in is a screen, not
+an acceptance criterion.**
+
+At 1 GHz a 7.5 mm gap passes almost any real pour, so this rule will catch
+nothing until a board declares a frequency or until a stitching field is thinned
+by routing - which is the second case, and the reason the gap is measured on the
+placed field rather than read off the declaration. A first run reporting zero is
+the rule working, not the rule missing.
 
 **In this repo:** the declaration and the generator exist; no check exists.
 
