@@ -33,6 +33,9 @@
 #
 # Usage: scripts/no-invented-numbers.sh [file ...]
 #   with no arguments, the writers listed below
+#
+# Not every writer belongs on that list - see the note at the foot of this file
+# about the formats where this check cannot fail and therefore proves nothing.
 
 set -uo pipefail
 
@@ -130,5 +133,20 @@ done
 
 if [ $status -eq 0 ]; then
     echo "no-invented-numbers: every number in emitted text is the board's or has a reason"
+    echo "  Checked: ${FILES[*]}"
 fi
+
+# What this check is NOT evidence about, said here rather than left to be
+# assumed. Pointed at the Gerber or drill writers it reports nothing, and the
+# silence means the trigger cannot fire there rather than that those files are
+# clean: a dimension in those formats has no dot by design. A Gerber coordinate
+# is `X1000000Y500000` and an Excellon one under `TZ` is `X0150`, because the
+# decimal point is implied by a format the header declares. The decimal trigger
+# works in the KiCad writer only because a length there passes through a
+# millimetre conversion at the file boundary.
+#
+# A check that cannot fail is not evidence. Guarding those two formats needs a
+# different shape - every coordinate reaching them has to pass through the one
+# helper that knows the format - and until that exists the honest verdict for
+# them is "not applicable", which is why they are not in the default list.
 exit $status

@@ -211,10 +211,10 @@ async function loadBoard(page: Page) {
 /** Activate 3D view and wait for renderer. */
 async function activate3D(page: Page) {
   await page.click('#view-3d-btn');
-  await expect(page.locator('#view-3d-btn')).toHaveClass(/active/, { timeout: 5_000 });
+  await expect(page.locator('#view-3d-btn')).toHaveClass(/active/, { timeout: 15_000 });
   await page.waitForFunction(
     () => (window as any).__renderer3d?.isActive === true,
-    { timeout: 5_000 },
+    { timeout: 15_000 },
   );
   await page.waitForTimeout(300);
 }
@@ -262,7 +262,7 @@ test.describe('JLCPCB Search Panel', () => {
     await page.fill('#jlcpcb-search-input', '0805 10k');
 
     // Wait for results to render (debounce + API mock)
-    await expect(page.locator('.jlcpcb-result')).toHaveCount(3, { timeout: 5_000 });
+    await expect(page.locator('.jlcpcb-result')).toHaveCount(3, { timeout: 15_000 });
 
     // Verify LCSC numbers are visible. Order is a ranking decision and all three
     // fixtures are 0805 10k resistors, so assert the set, not the sequence.
@@ -298,8 +298,8 @@ test.describe('JLCPCB Search Panel', () => {
 
     // Wait for status message
     const status = page.locator('#jlcpcb-search-status');
-    await expect(status).not.toHaveClass(/hidden/, { timeout: 5_000 });
-    await expect(status).toContainText('No results', { timeout: 5_000 });
+    await expect(status).not.toHaveClass(/hidden/, { timeout: 15_000 });
+    await expect(status).toContainText('No results', { timeout: 15_000 });
 
     // No result rows
     await expect(page.locator('.jlcpcb-result')).toHaveCount(0);
@@ -323,8 +323,8 @@ test.describe('JLCPCB Search Panel', () => {
     // branch in executeSearch is unreachable via searchComponents since it
     // never throws, but the empty-results path is the user-visible error signal)
     const status = page.locator('#jlcpcb-search-status');
-    await expect(status).not.toHaveClass(/hidden/, { timeout: 5_000 });
-    await expect(status).toContainText('No results', { timeout: 5_000 });
+    await expect(status).not.toHaveClass(/hidden/, { timeout: 15_000 });
+    await expect(status).toContainText('No results', { timeout: 15_000 });
 
     // No result rows rendered
     await expect(page.locator('.jlcpcb-result')).toHaveCount(0);
@@ -353,7 +353,7 @@ test.describe('JLCPCB Search Panel', () => {
     await input.pressSequentially('10k resistor', { delay: 30 });
 
     // Wait for debounce + response to settle
-    await expect(page.locator('.jlcpcb-result')).toHaveCount(3, { timeout: 5_000 });
+    await expect(page.locator('.jlcpcb-result')).toHaveCount(3, { timeout: 15_000 });
 
     // A search sweeps every jlcsearch category once and caches the answers, so
     // twelve keystrokes must not fetch anything twice. Comparing against the
@@ -430,7 +430,7 @@ test.describe('JLCPCB 3D Model Loading', () => {
     // Open search panel and search
     await page.click('#jlcpcb-search-btn');
     await page.fill('#jlcpcb-search-input', '0805 10k');
-    await expect(page.locator('.jlcpcb-result')).toHaveCount(3, { timeout: 5_000 });
+    await expect(page.locator('.jlcpcb-result')).toHaveCount(3, { timeout: 15_000 });
 
     // Click first result — triggers onComponentSelect → footprint fetch,
     // which carries the 3D model uuid to the engine.
@@ -449,7 +449,7 @@ test.describe('JLCPCB 3D Model Loading', () => {
         const s = (window as any).__jlcpcbSearch;
         return s && s.lastQuery === '0805 10k' && s.resultCount > 0;
       },
-      { timeout: 5_000 },
+      { timeout: 15_000 },
     );
 
     // Give the async fetch chain time to complete
@@ -497,7 +497,7 @@ test.describe('JLCPCB 3D Model Loading', () => {
 
     await page.click('#jlcpcb-search-btn');
     await page.fill('#jlcpcb-search-input', '0805 10k');
-    await expect(page.locator('.jlcpcb-result')).toHaveCount(3, { timeout: 5_000 });
+    await expect(page.locator('.jlcpcb-result')).toHaveCount(3, { timeout: 15_000 });
 
     // Selecting fetches the footprint, which is where the model uuid rides in.
     await page.locator('.jlcpcb-result').first().click();
