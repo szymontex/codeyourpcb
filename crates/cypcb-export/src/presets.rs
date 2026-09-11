@@ -45,6 +45,22 @@ pub struct ExportPreset {
     /// PCBWay both publish 0.254mm and the default is 0.3mm, so every plane
     /// shipped 0.046mm smaller on every edge than the fab asked for.
     pub pour_clearance: Nm,
+    /// The gap a pour cuts around a pad on its own net, before the spokes go
+    /// back across it.
+    ///
+    /// Same discipline as `pour_clearance`, and the same failure it was found
+    /// by: the pour drew its relief from `PourOptions::default()` whatever the
+    /// house asked for, so a fab publishing anything other than 0.254mm got a
+    /// joint drawn to a constant. The figure here is the one that house's
+    /// design rules carry as `thermal_relief_gap`, and a test holds the two
+    /// together.
+    pub pour_thermal_gap: Nm,
+    /// The width of each spoke bridging that gap.
+    ///
+    /// The house's `thermal_relief_spoke_width`. A spoke narrower than the fab
+    /// allows is a joint that may not survive the etch; a spoke wider than it
+    /// needs carries heat away from the iron.
+    pub pour_spoke_width: Nm,
     /// How far the solder mask opening extends beyond the pad, per side.
     ///
     /// Same discipline as `silk_clearance`: a number the fabricator publishes,
@@ -133,6 +149,8 @@ pub fn jlcpcb_2layer() -> ExportPreset {
         silk_clearance: Nm::from_mm(0.127),
         mask_expansion: Nm::from_mm(0.05),
         pour_clearance: Nm::from_mm(0.254),
+        pour_thermal_gap: Nm::from_mm(0.254),
+        pour_spoke_width: Nm::from_mm(0.254),
     }
 }
 
@@ -184,6 +202,8 @@ pub fn pcbway_standard() -> ExportPreset {
         // `the_mask_opening_is_the_fabs_number_in_both_writers` asserts.
         mask_expansion: Nm::from_mm(0.0508),
         pour_clearance: Nm::from_mm(0.254),
+        pour_thermal_gap: Nm::from_mm(0.254),
+        pour_spoke_width: Nm::from_mm(0.254),
     }
 }
 

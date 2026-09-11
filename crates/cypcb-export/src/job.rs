@@ -105,13 +105,18 @@ pub enum ExportError {
 /// `PourOptions::default()`, whose 0.3mm is generous rather than published,
 /// so every plane shipped smaller on every edge than the house asked for.
 ///
-/// The thermal numbers stay as the pour's own defaults, which are already the
-/// fabs' published figures; only the clearance is per-house data this preset
-/// carries.
+/// The thermal numbers had the same hole and it was hidden by a coincidence:
+/// they stayed at the pour's own defaults, which happen to equal what both
+/// shipped houses publish. A house asking for anything else - JLCPCB's
+/// advanced process asks 0.2mm, IPC class 3 asks 0.2mm with 0.3mm spokes -
+/// would have had its relief drawn to 0.254mm anyway. Every figure the pour
+/// uses now comes from the preset, so the coincidence cannot hide a
+/// disagreement again.
 fn pour_options(job: &ExportJob) -> crate::pour::PourOptions {
     crate::pour::PourOptions {
         clearance: job.preset.pour_clearance,
-        ..Default::default()
+        thermal_gap: job.preset.pour_thermal_gap,
+        spoke_width: job.preset.pour_spoke_width,
     }
 }
 

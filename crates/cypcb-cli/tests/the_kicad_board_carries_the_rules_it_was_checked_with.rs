@@ -249,3 +249,35 @@ fn the_pour_clearance_is_the_fabs_number_too() {
         );
     }
 }
+
+#[test]
+fn the_relief_is_the_fabs_number_too() {
+    // The pour clearance above had a third state - the exporter never read its
+    // own field - and the thermal figures had the same one, hidden better. The
+    // pour drew its relief from `PourOptions::default()`, and both shipped
+    // houses publish exactly what that default happens to be, so the two
+    // agreed by coincidence rather than by plumbing. A house asking for
+    // anything else - JLCPCB's advanced process asks 0.2mm, IPC class 3 asks
+    // 0.2mm with 0.3mm spokes - would have been drawn to 0.254mm regardless.
+    //
+    // `thermal_relief_gap` and `thermal_relief_spoke_width` were two of seven
+    // constraint fields with no reader at all, measured on 2026-09-11. These
+    // two have one now.
+    use cypcb_rules::presets::RulesPreset;
+
+    for (export_name, rules_preset) in [
+        ("jlcpcb", RulesPreset::JlcpcbStandard2Layer),
+        ("pcbway", RulesPreset::PcbWayStandard),
+    ] {
+        let export = cypcb_export::presets::from_name(export_name).expect("the preset is there");
+        let constraints = rules_preset.constraints();
+        assert_eq!(
+            export.pour_thermal_gap, constraints.thermal_relief_gap,
+            "{export_name}: the exporter and the fab table disagree about the relief gap"
+        );
+        assert_eq!(
+            export.pour_spoke_width, constraints.thermal_relief_spoke_width,
+            "{export_name}: the exporter and the fab table disagree about the spoke"
+        );
+    }
+}

@@ -429,3 +429,86 @@ fn a_pour_keeps_clear_of_other_nets_and_reaches_its_own() {
         "the pad is flooded solid instead of relieved: {corner:?} is covered by {rects:?}"
     );
 }
+
+/// The relief a pour cuts is the one the preset asks for.
+///
+/// `pour_clearance` reached the geometry from 2026-08-30; the thermal figures
+/// did not, and the coincidence that hid it is worth stating: both shipped
+/// houses publish 0.254mm, which is also what `PourOptions::default()` uses.
+/// A house asking for anything else - JLCPCB's advanced process asks 0.2mm,
+/// IPC class 3 asks 0.2mm with 0.3mm spokes - would have had its relief drawn
+/// to the default anyway, and no test would have noticed.
+///
+/// So this drives the preset rather than the pour: the same board, exported
+/// twice through `run_export`, with nothing different but the two numbers.
+#[test]
+fn the_relief_a_pour_cuts_is_the_one_the_preset_asks_for() {
+    use cypcb_core::Rect;
+    use cypcb_world::components::zone::{Zone, ZoneKind};
+
+    fn top_copper(gap_mm: f64, spoke_mm: f64, scratch: &str) -> String {
+        let (mut world, library) = board();
+        // R1 and R2 both have pin 1 on net 1, so the pour meets its own pads
+        // and has to cut a relief around each of them.
+        world.spawn_entity(Zone {
+            bounds: Rect::from_center_size(
+                Point::from_mm(10.0, 10.0),
+                (Nm::from_mm(16.0), Nm::from_mm(16.0)),
+            ),
+            kind: ZoneKind::CopperPour,
+            layer_mask: Layer::TopCopper.to_copper_mask(),
+            name: Some("GND_POUR".to_string()),
+            net: Some(NetId::new(1)),
+        });
+
+        let mut preset = from_name("jlcpcb").expect("the jlcpcb preset");
+        preset.pour_thermal_gap = Nm::from_mm(gap_mm);
+        preset.pour_spoke_width = Nm::from_mm(spoke_mm);
+
+        let output_dir = scratch_dir(scratch);
+        let job = ExportJob {
+            source_path: PathBuf::from("delivery.cypcb"),
+            output_dir,
+            preset,
+            board_name: "delivery".to_string(),
+        };
+        let exported = run_export(&job, &mut world, &library).expect("the export runs");
+        let top = exported
+            .files
+            .iter()
+            .find(|file| {
+                file.path
+                    .file_name()
+                    .map(|name| name.to_string_lossy().ends_with("-F_Cu.gbr"))
+                    .unwrap_or(false)
+            })
+            .expect("the top copper is written");
+        let gerber = std::fs::read_to_string(&top.path).expect("the top copper reads back");
+        // Drop the comment block: it carries the creation timestamp, so two
+        // exports a second apart differ in a line that is not copper.
+        gerber
+            .lines()
+            .filter(|line| !line.starts_with("G04"))
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    let published = top_copper(0.254, 0.254, "relief-published");
+    let wider = top_copper(0.4, 0.4, "relief-wider");
+    let again = top_copper(0.254, 0.254, "relief-again");
+
+    // The control: the same two numbers twice give the same copper, so a
+    // difference below is the preset and not the export being unrepeatable.
+    assert_eq!(
+        published, again,
+        "the same preset exported two different planes"
+    );
+    assert!(
+        published.contains("G36*"),
+        "the pour produced no copper to compare"
+    );
+    assert_ne!(
+        published, wider,
+        "the relief figures changed and not one coordinate moved - the preset is not reaching the pour"
+    );
+}
