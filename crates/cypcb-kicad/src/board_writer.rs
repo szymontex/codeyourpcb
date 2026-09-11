@@ -141,6 +141,8 @@ pub struct KicadDesignRules {
     pub annular_ring: Nm,
     /// Distance a pour keeps from copper it does not connect to.
     pub pour_clearance: Nm,
+    /// Narrowest silkscreen line the house will print.
+    pub silk_width: Nm,
     /// Gap cut around a pad on the pour's own net, before the spokes go back.
     pub thermal_relief_gap: Nm,
     /// Width of each spoke bridging that gap.
@@ -466,13 +468,16 @@ pub fn write_board_with_rules(
         let (x2, y2) = corners[(index + 1) % corners.len()];
         let (sx1, sy1) = on_sheet(origin, x1, y1);
         let (sx2, sy2) = on_sheet(origin, x2, y2);
+        // literal: how KiCad draws the outline, not where the board ends -
+        // the edge is the geometry in the coordinates, and the stroke is the
+        // pen it is drawn with. No fab table states one.
         let _ = writeln!(
             out,
             "  (gr_line (start {sx1} {sy1}) (end {sx2} {sy2}) (stroke (width 0.1) (type solid)) (layer \"Edge.Cuts\"))"
         );
     }
 
-    write_footprints(world, origin, &net_number, &mut out);
+    write_footprints(world, origin, &net_number, rules.as_ref(), &mut out);
     write_copper(world, origin, &net_number, &mut out);
     write_zones(world, origin, &net_number, rules.as_ref(), &mut out);
 
@@ -484,6 +489,7 @@ fn write_footprints(
     world: &mut BoardWorld,
     origin: cypcb_core::Point,
     net_number: &std::collections::HashMap<cypcb_world::NetId, usize>,
+    rules: Option<&KicadDesignRules>,
     out: &mut String,
 ) {
     let library = world.footprints().clone();
@@ -572,13 +578,22 @@ fn write_footprints(
             on_sheet(origin, position.x, position.y).1,
             rotation as f64 / 1000.0
         );
+        // The stroke a legend is printed with is a fab number: a line thinner
+        // than the house's minimum is a legend that does not come out. Stated
+        // only when a table was chosen; otherwise the node carries the size and
+        // KiCad supplies its own stroke, which is the same policy the zone node
+        // follows.
+        let effects = match rules {
+            Some(rules) => format!("(font (size 1 1) (thickness {}))", mm(rules.silk_width)),
+            None => "(font (size 1 1))".to_string(),
+        };
         let _ = writeln!(
             out,
-            "    (fp_text reference \"{refdes}\" (at 0 -1) (layer \"{silk_layer}\") (effects (font (size 1 1) (thickness 0.15))))"
+            "    (fp_text reference \"{refdes}\" (at 0 -1) (layer \"{silk_layer}\") (effects {effects}))"
         );
         let _ = writeln!(
             out,
-            "    (fp_text value \"{value}\" (at 0 1) (layer \"{fab_layer}\") (effects (font (size 1 1) (thickness 0.15))))"
+            "    (fp_text value \"{value}\" (at 0 1) (layer \"{fab_layer}\") (effects {effects}))"
         );
 
         for pad in &footprint.pads {
@@ -635,7 +650,7 @@ fn write_footprints(
             let _ = writeln!(out, ")");
         }
 
-        write_legend(footprint, silk_layer, out);
+        write_legend(footprint, silk_layer, rules, out);
 
         let _ = writeln!(out, "  )");
     }
@@ -653,7 +668,12 @@ fn write_footprints(
 /// The geometry is the footprint's own, unmirrored: a bottom part is written
 /// under `(layer "B.Cu")` with `B.SilkS` here, and KiCad mirrors both from the
 /// layer.
-fn write_legend(footprint: &cypcb_world::footprint::Footprint, layer: &str, out: &mut String) {
+fn write_legend(
+    footprint: &cypcb_world::footprint::Footprint,
+    layer: &str,
+    rules: Option<&KicadDesignRules>,
+    out: &mut String,
+) {
     if !footprint.silk.is_empty() {
         for shape in &footprint.silk {
             match *shape {
@@ -697,14 +717,26 @@ fn write_legend(footprint: &cypcb_world::footprint::Footprint, layer: &str, out:
         (max.x, max.y, min.x, max.y),
         (min.x, max.y, min.x, min.y),
     ];
+    // The same fab number the footprint's own silk shapes twenty lines above
+    // carry in their own `width` field: this outline is silkscreen too, and a
+    // line thinner than the house's minimum does not print.
+    //
+    // literal: 0.12mm is KiCad's own default silk stroke and is used only when
+    // no fab table was chosen. A line has to have a width, so unlike the zone
+    // node there is nothing to leave out.
+    let stroke = match rules {
+        Some(rules) => mm(rules.silk_width),
+        None => "0.12".to_string(),
+    };
     for (x1, y1, x2, y2) in corners {
         let _ = writeln!(
             out,
-            "    (fp_line (start {} {}) (end {} {}) (stroke (width 0.12) (type solid)) (layer \"{layer}\"))",
+            "    (fp_line (start {} {}) (end {} {}) (stroke (width {}) (type solid)) (layer \"{layer}\"))",
             mm(x1),
             mm(y1),
             mm(x2),
-            mm(y2)
+            mm(y2),
+            stroke
         );
     }
 }

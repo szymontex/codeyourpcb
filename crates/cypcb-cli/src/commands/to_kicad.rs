@@ -106,6 +106,7 @@ impl ToKicadCommand {
                 // the board was checked against without widening a struct in
                 // another crate first.
                 pour_clearance: preset.constraints().min_copper_pour_clearance,
+                silk_width: rules.min_silk_width,
                 thermal_relief_gap: rules.thermal_relief_gap,
                 thermal_relief_spoke_width: rules.thermal_relief_spoke_width,
             })

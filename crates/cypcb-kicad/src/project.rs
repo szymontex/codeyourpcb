@@ -300,6 +300,7 @@ mod tests {
             silk_clearance: Nm::from_mm(0.15),
             annular_ring: Nm::from_mm(0.13),
             pour_clearance: Nm::from_mm(0.254),
+            silk_width: Nm::from_mm(0.15),
             thermal_relief_gap: Nm::from_mm(0.254),
             thermal_relief_spoke_width: Nm::from_mm(0.254),
         }

@@ -54,6 +54,7 @@ fn jlcpcb() -> (cypcb_core::Nm, cypcb_core::Nm, KicadDesignRules) {
                 .unwrap_or(cypcb_core::Nm::from_mm(0.15)),
             annular_ring: rules.min_annular_ring,
             pour_clearance: rules.min_copper_pour_clearance,
+            silk_width: rules.min_silk_width,
             thermal_relief_gap: rules.thermal_relief_gap,
             thermal_relief_spoke_width: rules.thermal_relief_spoke_width,
         },
