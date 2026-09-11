@@ -44,6 +44,21 @@ fn copper_layer(layer: Layer) -> Option<String> {
 }
 
 /// Millimetres, printed the way pcbnew writes them.
+/// The optional token that says a person pinned this copper.
+///
+/// The format defines it as a bare `(locked)` for a track segment, a track arc
+/// and a via, in each case after the layer and before the net (KiCad board file
+/// format, all versions from 6.0, read 2026-09-11). Writing a token in the
+/// wrong shape is how this file once produced a `(setup (rules ...))` node
+/// pcbnew refused to open at all, so the position was read rather than assumed.
+fn locked_token(locked: bool) -> &'static str {
+    if locked {
+        " (locked)"
+    } else {
+        ""
+    }
+}
+
 fn mm(nm: Nm) -> String {
     let value = nm.0 as f64 / 1_000_000.0;
     let text = format!("{value:.6}");
@@ -873,14 +888,15 @@ fn write_copper(
                 let mid = arc.mid();
                 let _ = writeln!(
                     out,
-                    "  (arc (start {} {}) (mid {} {}) (end {} {}) (width {}) (layer \"{layer}\") (net {net}))",
+                    "  (arc (start {} {}) (mid {} {}) (end {} {}) (width {}) (layer \"{layer}\"){} (net {net}))",
                     on_sheet(origin, first.start.x, first.start.y).0,
                     on_sheet(origin, first.start.x, first.start.y).1,
                     on_sheet(origin, mid.x, mid.y).0,
                     on_sheet(origin, mid.x, mid.y).1,
                     on_sheet(origin, last.end.x, last.end.y).0,
                     on_sheet(origin, last.end.x, last.end.y).1,
-                    mm(trace.width)
+                    mm(trace.width),
+                    locked_token(trace.locked)
                 );
                 continue;
             }
@@ -895,12 +911,13 @@ fn write_copper(
         for (index, segment) in trace.segments.iter().enumerate() {
             let _ = writeln!(
                 out,
-                "  (segment (start {} {}) (end {} {}) (width {}) (layer \"{layer}\") (net {net}))",
+                "  (segment (start {} {}) (end {} {}) (width {}) (layer \"{layer}\"){} (net {net}))",
                 on_sheet(origin, segment.start.x, segment.start.y).0,
                 on_sheet(origin, segment.start.x, segment.start.y).1,
                 on_sheet(origin, segment.end.x, segment.end.y).0,
                 on_sheet(origin, segment.end.x, segment.end.y).1,
-                mm(trace.width_at(index))
+                mm(trace.width_at(index)),
+                locked_token(trace.locked)
             );
         }
     }
@@ -918,7 +935,8 @@ fn write_copper(
         let net = net_number.get(&via.net_id).copied().unwrap_or(0);
         let _ = writeln!(
             out,
-            "  (via (at {} {}) (size {}) (drill {}) (layers \"{start}\" \"{end}\") (net {net}))",
+            "  (via{} (at {} {}) (size {}) (drill {}) (layers \"{start}\" \"{end}\") (net {net}))",
+            locked_token(via.locked),
             on_sheet(origin, via.position.x, via.position.y).0,
             on_sheet(origin, via.position.x, via.position.y).1,
             mm(via.outer_diameter),
