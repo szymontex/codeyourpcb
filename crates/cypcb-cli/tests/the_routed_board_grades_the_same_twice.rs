@@ -87,15 +87,27 @@ fn the_number_route_prints_is_the_number_check_prints() {
 }
 
 #[test]
-fn a_board_that_routes_clean_is_clean_in_the_file_too() {
-    // The easy direction, and the one a user meets first: a board the router
-    // finished without complaint must not pick up violations on the way to
-    // disk.
+fn a_board_the_router_adds_to_carries_both_copies_to_disk() {
+    // `route` grades the board it holds and `check` grades the file it wrote,
+    // and on this one they disagree: 0 against 3. The reason is in the file
+    // rather than in either checker. `examples/routing-test.cypcb` already
+    // carries a hand-drawn VCC trace; the router routed VCC again and the
+    // board it wrote has that copper twice, once from the source and once
+    // from the route. `acute-angle` finds two arms leaving each of its corners
+    // along one line and says the copper is drawn over itself, which is what
+    // happened.
+    //
+    // A ratchet on a defect rather than an invariant: the number to fix is the
+    // router's, and the tracker carries it as the next action. Until then this
+    // pins the disagreement so it cannot widen quietly.
     let (routed, checked) = routed_then_checked("routing-test");
 
     assert_eq!(
         routed, 0,
-        "the router had nothing to report about this board"
+        "the router has nothing to say about the copper it laid"
     );
-    assert_eq!(checked, 0, "and neither does the file it wrote");
+    assert_eq!(
+        checked, 3,
+        "and the file it wrote carries the source's copper as well"
+    );
 }

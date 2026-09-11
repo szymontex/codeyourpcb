@@ -118,6 +118,8 @@ pub enum ViolationKind {
     SolidPourInBend,
     /// A hatched pour states a mesh the fabricator cannot etch.
     HatchTooFine,
+    /// Copper meets copper at less than a right angle, and traps etchant.
+    AcidTrap,
 }
 
 /// The two features a clearance message is about.
@@ -236,6 +238,7 @@ impl std::fmt::Display for ViolationKind {
             ViolationKind::AreaOverlap => write!(f, "area-overlap"),
             ViolationKind::BendRadius => write!(f, "bend-radius"),
             ViolationKind::FlexTraceAngle => write!(f, "flex-trace-angle"),
+            ViolationKind::AcidTrap => write!(f, "acid-trap"),
             ViolationKind::SolidPourInBend => write!(f, "solid-pour-in-bend"),
             ViolationKind::HatchTooFine => write!(f, "hatch-too-fine"),
         }
@@ -900,6 +903,26 @@ impl DrcViolation {
             kind: ViolationKind::HatchTooFine,
             actual: Some(actual),
             required: Some(required),
+            area: None,
+            location,
+            entity,
+            other_entity: None,
+            source_span: None,
+            message,
+        }
+    }
+
+    /// Copper meeting copper at less than a right angle.
+    ///
+    /// The angle stays in the message and `actual`/`required` stay empty, the
+    /// way `impedance` leaves them: both fields are `Nm`, an angle is not a
+    /// length, and a rule that put degrees in a nanometre field would be read
+    /// back as a distance by everything that counts shorts.
+    pub fn acid_trap(entity: Entity, message: String, location: Point) -> Self {
+        DrcViolation {
+            kind: ViolationKind::AcidTrap,
+            actual: None,
+            required: None,
             area: None,
             location,
             entity,

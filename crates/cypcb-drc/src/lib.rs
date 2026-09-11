@@ -190,6 +190,10 @@ pub fn run_drc(world: &mut BoardWorld, rules: &DesignRules) -> DrcResult {
         // routes a bend area perpendicular to the bend, so every conductor
         // takes the same strain over it.
         Box::new(rules::FlexTraceAngleRule),
+        // And copper that meets copper at less than a right angle: etchant
+        // trapped in the corner keeps working after the rest of the board is
+        // finished, and undercuts the trace where it was drawn full width.
+        Box::new(rules::AcuteAngleRule),
         // And a plane poured solid across a fold: a sheet of copper over a
         // bend cracks the way a trace along one does, at the width of the
         // whole plane, which is why IPC-2223 asks for a hatched polygon there.

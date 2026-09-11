@@ -3,6 +3,7 @@
 //! This module defines the [`DrcRule`] trait that all rules implement.
 //! Design rules configuration is defined in the [`presets`](crate::presets) module.
 
+pub mod acute_angle;
 pub mod annular_ring;
 pub mod area_off_board;
 pub mod area_overlap;
@@ -71,6 +72,7 @@ pub(crate) fn copper_index(layer: cypcb_world::Layer, copper_count: usize) -> Op
 use crate::presets::DesignRules;
 use crate::violation::DrcViolation;
 
+pub use acute_angle::AcuteAngleRule;
 pub use annular_ring::AnnularRingRule;
 pub use area_off_board::AreaOffBoardRule;
 pub use area_overlap::AreaOverlapRule;

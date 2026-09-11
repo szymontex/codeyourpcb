@@ -230,13 +230,14 @@ cargo run -p cypcb-cli -- watch examples/blink.cypcb          # check again on e
 
 `check`, `route` and `score` all take `--preset`, and an unknown
 name prints the list. They use the same rules and agree on the same board:
-`examples/blink.routed.cypcb` is 2 violations to `check --preset pcbway` and 2
+`examples/blink.routed.cypcb` is 6 violations to `check --preset pcbway` and 6
 to `score --preset pcbway`.
 
 On an **unrouted** file they will not agree, and that is not a disagreement
 about the rules. `score` routes the board before measuring it, so it reports
 what its own routing came to - `examples/blink.cypcb` is 24 violations to
-`check` and 4 to `score`, because the second one laid copper first.
+`check` and 7 to `score`, because the second one laid copper first - three of
+those seven are corners the router drew itself.
 
 `--preset` means two things, though, and the lists are not the same length.
 `check`, `route` and `score` take a **design-rule** preset - what a house can
