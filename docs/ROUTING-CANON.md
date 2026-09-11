@@ -27,6 +27,8 @@ Dates are the day the source was read, not the day it was published.
 
 ### R-01 Trace width against current and temperature rise `[R]`
 
+*Applies when:* a net declares a `current`. Silent on every net that does not, which today is every net on every fixture.
+
 A trace must have enough cross section for the current its net carries at the
 temperature rise the design accepts.
 
@@ -48,6 +50,8 @@ registered in `run_drc`, computed through `cypcb-calc`. Silent unless the net
 declares `current`.
 
 ### R-02 Conductor spacing against working voltage `[R]`
+
+*Applies when:* a net declares a working voltage. **Nothing can declare one**, so this rule is silent on every board - see "Blocked on the model".
 
 Spacing between conductors of different nets must grow with the peak voltage
 between them.
@@ -78,6 +82,8 @@ In this repo: the table exists and nothing calls it. See "Blocked on the model".
 
 ### R-03 Acute angles in copper `[P]`
 
+*Applies when:* always. Two trace segments meet at a junction; no declaration needed.
+
 No corner of a trace, and no junction of a trace with a land, forms an internal
 angle below 90 degrees.
 
@@ -97,6 +103,8 @@ The cut that removes such a junction, and the floor below which cutting is
 cosmetic, are R-10.
 
 ### R-04 Stub length `[O]`
+
+*Applies when:* a net declares a signal speed **and** the copper has a connectivity graph. Neither exists, so this rule is silent on every board.
 
 An unterminated branch resonates at a quarter wavelength and notches the
 signal's own band out of it.
@@ -121,6 +129,8 @@ declared signal speed. `max_stub_length`
 on the model".
 
 ### R-05 Return path under a signal trace `[O]`
+
+*Applies when:* the board has a pour on a copper layer adjacent to the trace, and the net declares a controlled impedance. A board with no pour has no reference copper and this rule says nothing.
 
 Return current takes the path of least impedance: least resistance at low
 frequency, least inductance above the crossover, which is a band directly under
@@ -150,6 +160,8 @@ avoided, and what a two-layer board changes.
 
 ### R-06 Violations are reported per rule, not as one total `[O]`
 
+*Applies when:* always, because it is about the shape of the output rather than the board.
+
 A ranking that adds every rule together at the same price cannot tell a trace
 that will overheat from a trace 10 um under the fab's minimum.
 
@@ -172,6 +184,8 @@ the defect they were written against - a count per kind that is then added up
 again is the single total under another name.
 
 ### R-07 Annular ring and hole-to-hole spacing `[R]`
+
+*Applies when:* the board has holes - a via, a through-hole pad, a mounting hole.
 
 A land must exceed its hole by two annular rings plus the fabrication
 allowance, and laminate must remain between holes.
@@ -200,6 +214,8 @@ In this repo: enforced, and the only rule of this group that is. `AnnularRingRul
 
 ### R-08 Trace entry into a land `[P]`
 
+*Applies when:* a trace ends on a pad. Every routed board.
+
 A trace enters a land square on or at 45 degrees; an acute angle between trace
 and land edge is not allowed.
 
@@ -222,6 +238,8 @@ there - `teardrops` is a DSL property with length and width ratios
 the KiCad export.
 
 ### R-09 Thermal relief at a pad in a pour `[P]`
+
+*Applies when:* a pad sits inside a pour on its own net. A board with no pour says nothing here.
 
 A pad tied into a pour needs spokes, or the pour sinks the soldering heat and
 the joint comes out cold.
@@ -265,6 +283,8 @@ drawn copper agreed with the published table by coincidence, not by wiring, and
 a house publishing anything else would have been silently ignored.
 
 ### R-10 Mitring an acute junction `[P]`
+
+*Applies when:* R-03 reported an acute junction. This rule is what to do about one, not how to find it.
 
 An interior angle below 90 degrees is cut away, not left, and the cut is
 asymmetric.
@@ -376,6 +396,19 @@ the same finding as part 1 seen from the tool side.
 
 ### R-11 Acceptance classes `[R]`
 
+*Applies when:* the board is graded. The full four-tier form needs a declared acceptance class; for a board graded by a house table see part 4 below.
+
+**A board that declares no class.** Found by walking this canon against a real
+fixture: a board graded by a house table declares no acceptance class, and tiers
+1, 2 and 4 work without one while tier 3 has no ladder to climb. The rule is
+therefore: **tier 3 reads the house table's own figures when no class is
+declared**, and the report says which of the two it used. It does not report
+"not checked" - a board graded against a fabricator's numbers is graded, and the
+tier that prices how far under those numbers a feature sits works the same way
+either side. Only the three `IpcClass` presets
+(`crates/cypcb-rules/src/presets/mod.rs:58`, `:60`, `:62`) declare a class; every
+house preset does not.
+
 A violation is weighed against the acceptance class the board declares, and the
 score publishes a tuple rather than one price per violation.
 
@@ -468,6 +501,8 @@ about which kind moved.
 the tiers below have nowhere to live in a row of output. See R-18.
 
 ### R-12 Rip-up and reroute `[O]`
+
+*Applies when:* never, to a board. This is a rule about the router's loop, and it is here rather than in the routing document for now - see R-16's entry conditions, which it does not meet.
 
 A negotiated-congestion router tears at the granularity its data structure can
 restore, and every departure from the published algorithm is named as a
@@ -600,6 +635,8 @@ dependency field but the rooted tree the published routers keep.
 
 ### R-13 Return path, the threshold that does not exist `[P]`
 
+*Applies when:* as R-05. A pour on the adjacent layer, and a net that declares a controlled impedance.
+
 R-05 states the rule and its two conditions. This section answers three
 questions it leaves open: what fraction of a trace may run without reference
 copper, what to do where a gap has to be crossed, and how much of either this
@@ -705,7 +742,9 @@ nobody reads a four-layer rule onto a two-layer board:
 records. The three pieces needed - pour geometry, stackup-derived reference
 layer, spatial index - are all present and none is called for this purpose.
 
-### R-14 Via stitching `[P]`
+### R-14 Via stitching, measured but not yet bounded `[P]`
+
+*Applies when:* the board has two pours of one net on different layers, or a via that changes which pour is a signal's reference. Thresholds additionally need a declared frequency, which nothing declares - so on every board today this is a measurement without a threshold.
 
 Two pours of one net on different layers are tied together by a field of vias,
 and a signal via that changes reference has a return via beside it. R-05 states
@@ -804,6 +843,8 @@ least and the measured maximum gap says most.
 
 ### R-15 One component, one connection style `[P]`
 
+*Applies when:* a two-terminal component has both pads inside pours. A board with no pour says nothing here.
+
 R-09 states thermal relief as geometry - spoke width floor, spoke count, the
 per-package pairs, the 3 A threshold and the bottom-terminated exception - and
 none of that is repeated here. R-15 is the manufacturing consequence: what the
@@ -876,6 +917,8 @@ rule in this canon whose gap is that nobody wrote the check, rather than that
 the model cannot answer.
 
 ### R-16 What a rule must carry to be enforceable here `[O]`
+
+*Applies when:* never, to a board. This is the canon reading itself.
 
 Fifteen rules, three states. This section is the canon reading itself: which
 rules the board is held to, which wait on somebody writing a check, and which
@@ -968,6 +1011,8 @@ bucket 2 from bucket 3 in practice, not from principle.
 
 ### R-17 The grid the router actually searches `[O]`
 
+*Applies when:* always, before routing. It needs pad positions and a fab table, both of which exist on every board.
+
 Every other rule here is about copper. This one is about the tool, and it
 belongs in the canon because entry condition 1 puts it there: the grid is
 derived from the fab table, which is as much a property of the board as the
@@ -1037,6 +1082,8 @@ fails it produces violations whose cause is the grid, and every number measured
 on such a board describes the grid rather than the router.
 
 ### R-18 What a violation report owes its reader `[P]`
+
+*Applies when:* never, to a board. This is about a row of output.
 
 A report says what was measured, where, against what, by which rule, and what to
 change - and it names what it did not check. R-06 says the counts must be per
@@ -1135,6 +1182,83 @@ category, which is the argument for deciding rather than leaving it.
 field, rule identity is not carried on the row, and two distance-measuring
 constructors report no distance. The first two are each a one-field change; the
 third is two lines.
+
+### R-19 The flat clearance minimum `[P]`
+
+*Applies when:* always. Two pieces of copper on one layer belonging to two
+different nets. No declaration needed, which is why this is the rule that fires
+most.
+
+Copper of two different nets on one layer keeps at least the minimum the
+fabricator publishes. The minimum is a property of the **net pair**, not of the
+board, and it is the floor R-02 scales above rather than a rule beside it.
+
+**1. What varies the minimum, in what the houses publish.** Layer count, carried
+here by having a separate preset per layer count. Copper weight, which at least
+one house publishes as a track-and-space table per 1, 2 and 3 oz and which this
+project does **not** model - one preset carries one figure whatever the copper.
+And the board edge, which is published separately everywhere and modelled
+separately here as `min_edge_clearance`.
+
+**2. Every fab preset states where its figure came from, and the three IPC ones
+state that they came from nowhere.** That distinction is the point of the row,
+so it is written out rather than tabulated: `crates/cypcb-rules/src/presets/`
+carries a sourcing comment above each clearance figure - what the house
+publishes, and for two of them what the number used to be and why it was
+changed. The three `IpcClass` presets carry the opposite note, and it is
+accurate: their ladder is *"this project's, not a table anybody can open"*.
+IPC-2221's spacing table is voltage-based, which is R-02, and IPC-6012's classes
+are acceptance criteria, which is R-11. **Neither publishes a flat spacing
+ladder by class**, so the 0.2 / 0.15 / 0.1 mm figures are a house-style default
+and the file says so where a reader will meet them.
+
+**3. The figure is per pair, not per board.** `clearance_between`
+(`crates/cypcb-rules/src/presets/mod.rs:419-427`) takes the stricter of the two
+nets' constraints, so a net class can raise the floor for every pair that
+touches it. Condition: **the required distance for a pair is the larger of the
+two nets' minima, and the board-level figure is only the default neither net
+overrode.**
+
+**4. Relation to R-02, stated so neither rule can be read alone.** The flat
+minimum applies to every pair of different nets, declared or not. R-02 applies
+only where a net declares a working voltage, and it can only raise the figure.
+Where both apply the required distance is the larger of the two. Where R-02 is
+silent - which today is every board, because nothing declares a voltage - the
+required distance is this rule's figure alone. R-19 is the floor; R-02 is the
+part of the floor that moves with volts.
+
+**5. What the rule skips before it measures anything.** Opened rather than
+grepped: `crates/cypcb-drc/src/rules/clearance.rs`. Four skips, in order - the
+same entity against itself, because a trace has several boxes in the spatial
+index (`:164-167`); pairs whose layer masks do not overlap (`:169-172`); pairs
+already checked, by canonical ordering (`:174-178`); and pairs on the same net
+(`:180-222`). The same-net test has three branches and they are the rule rather
+than an aside: two sides carrying a `NetId` compare directly; a trace against a
+component passes when the trace's net appears in that component's pin
+connections; two components pass when they share a net.
+
+One refusal is deliberate and documented at `:197-201`: where pad geometry
+exists the exemption is decided **per pad** further down, not for the whole
+component, because a part with one GND pin is not a GND part and exempting the
+component would hide a trace crossing its VCC pad.
+
+**6. This rule cannot see copper drawn over copper, and that is why the fault
+took three sessions to find.** Two runs of one net lying on each other are
+same-net by construction and leave at `:222` before any distance is measured.
+That is correct for this rule - same-net copper touching is a connection, not a
+fault - but it means the rule that fires most in this project was structurally
+blind to the defect that produced **142 of 195** acute reports on the benchmark
+set. The rule that surfaced it was R-03, which counts junctions and does not ask
+whose net they belong to.
+
+Condition, and it generalises beyond this one case: **a fault between two pieces
+of copper on one net is outside R-19's scope by definition, and any rule that
+needs to see one has to measure geometry rather than clearance.**
+
+**In this repo:** enforced. `ClearanceRule` is the first entry in the registry
+(`crates/cypcb-drc/src/lib.rs:129`). Measured on one board rather than claimed
+for all six: on `shift_driver` with `stop_at_own_copper` on, **27 of 32 rows**
+are this rule.
 
 ## Declared is not measured
 
@@ -1436,9 +1560,21 @@ grep -rln thermal_relief_spokes --include=*.rs crates/ \
 
 # R-15: the data a symmetry check would walk already has a rule walking it
 ls crates/cypcb-drc/src/rules/unrouted_pin.rs crates/cypcb-drc/src/rules/trace_current.rs
+
+# R-19: the four skips, and the per-pad refusal with its documented reason
+sed -n '162,180p;195,202p' crates/cypcb-drc/src/rules/clearance.rs
+
+# R-19: the required distance is the stricter of the two nets, not the board's
+sed -n '419,427p' crates/cypcb-rules/src/presets/mod.rs
+
+# R-19: every fab preset sources its figure; the IPC ones say they cannot
+grep -n "min_clearance" crates/cypcb-rules/src/presets/*.rs
+
+# R-19: the rule that fires most is the first one the registry runs
+sed -n '129p' crates/cypcb-drc/src/lib.rs
 ```
 
-Last verified: 2026-09-11, including R-10 through R-18. Web sources were
+Last verified: 2026-09-11, including R-10 through R-19. Web sources were
 read on 2026-09-11, and every repository claim in those four rules was read
 against the working tree on the same day by opening the file rather than
 grepping for the name: `DEFAULT_TOLERANCE`, `is_90_bend`, `compute_composite`
