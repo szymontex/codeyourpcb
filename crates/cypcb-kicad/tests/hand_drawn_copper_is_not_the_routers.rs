@@ -26,7 +26,7 @@
 
 use std::path::{Path, PathBuf};
 
-use cypcb_world::components::trace::{Trace, TraceSource};
+use cypcb_world::components::trace::{Trace, TraceSource, Via};
 
 fn fixture() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -167,5 +167,66 @@ fn the_same_copper_marked_as_the_routers_own_is_deleted() {
         "the survivor has to be the arc, which never went through this \
          function; if the straight run is what survived, the asymmetry is \
          somewhere else than this test says"
+    );
+}
+
+/// How many vias are on the board.
+fn via_count(world: &mut cypcb_world::BoardWorld) -> usize {
+    let ecs = world.ecs_mut();
+    let mut query = ecs.query::<&Via>();
+    query.iter(ecs).count()
+}
+
+#[test]
+fn a_via_that_came_out_of_the_file_survives_a_routing_pass() {
+    // The other half of the same defect, and it was worse: the deletion filter
+    // for vias asked only `!via.locked`, with no question about who put the via
+    // there - so every via a person placed was removed on the next route, and
+    // nothing on the import path could set a lock to save one.
+    //
+    // A via is not "theirs" the way a trace is. A trace's shape is a decision;
+    // a via is usually a consequence of one, and a via imported from somebody
+    // else's autorouter has no author this model could name. So the question
+    // the filter asks is not who drew it but whether this router laid it down
+    // in this pass - which is what `RouterPlaced` records.
+    let parsed = cypcb_kicad::parse_kicad_pcb(&fixture()).expect("the fixture parses");
+    let mut world = parsed.world;
+    let routes = parsed.reference_routes.expect("the fixture carries copper");
+    cypcb_router::apply_routes_as(&mut world, &routes, TraceSource::Manual);
+
+    let before = via_count(&mut world);
+    let empty = cypcb_router::types::RoutingResult::complete(Vec::new(), Vec::new());
+    cypcb_router::apply_routes(&mut world, &empty);
+    let after = via_count(&mut world);
+    println!("{before} via(s) from the file, {after} after a routing pass");
+
+    assert_eq!(before, 1, "the fixture puts one via on the board");
+    assert_eq!(
+        after, before,
+        "a routing pass deleted a via that came out of the file"
+    );
+}
+
+#[test]
+fn a_via_this_router_placed_is_removed() {
+    // The control. If the filter deleted nothing at all, the test above would
+    // hold for a reason that has nothing to do with provenance - so a via this
+    // router really did lay down has to go.
+    let parsed = cypcb_kicad::parse_kicad_pcb(&fixture()).expect("the fixture parses");
+    let mut world = parsed.world;
+    let routes = parsed.reference_routes.expect("the fixture carries copper");
+    cypcb_router::apply_routes(&mut world, &routes);
+
+    let before = via_count(&mut world);
+    let empty = cypcb_router::types::RoutingResult::complete(Vec::new(), Vec::new());
+    cypcb_router::apply_routes(&mut world, &empty);
+    let after = via_count(&mut world);
+    println!("{before} via(s) the router placed, {after} after a routing pass");
+
+    assert_eq!(before, 1, "the same fixture, materialised as router output");
+    assert_eq!(
+        after, 0,
+        "a routing pass has to remove the vias this router put down, or the \
+         test above proves nothing about the marker"
     );
 }

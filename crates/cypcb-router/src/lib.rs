@@ -53,7 +53,7 @@ pub mod freerouting;
 pub mod ses;
 pub mod types;
 
-use cypcb_world::components::trace::{Trace, TraceSegment, TraceSource, Via};
+use cypcb_world::components::trace::{RouterPlaced, Trace, TraceSegment, TraceSource, Via};
 use cypcb_world::{BoardWorld, Entity};
 
 pub use dsn::{export_dsn, DsnExportError};
@@ -118,14 +118,21 @@ pub fn apply_routes_as(world: &mut BoardWorld, result: &RoutingResult, source: T
             .collect()
     };
 
-    // Also remove existing autorouted vias (not locked)
+    // Vias this router put down, and only those.
+    //
+    // The filter used to ask `!via.locked`, which deletes every via a person
+    // placed as well - nothing on the import path can set a lock, so there was
+    // no way to keep one. A lock and provenance say different things: a lock
+    // says do not touch this ever, provenance says do not delete this, it is
+    // not yours. Most boards lock nothing, so a defence built on locks protects
+    // only the people who already knew to defend themselves.
     let via_entities_to_remove: Vec<Entity> = {
         let ecs = world.ecs_mut();
-        let mut query = ecs.query::<(Entity, &Via)>();
+        let mut query = ecs.query::<(Entity, &Via, &RouterPlaced)>();
         query
             .iter(ecs)
-            .filter(|(_, via)| !via.locked)
-            .map(|(entity, _)| entity)
+            .filter(|(_, via, _)| !via.locked)
+            .map(|(entity, _, _)| entity)
             .collect()
     };
 
@@ -228,7 +235,14 @@ pub fn apply_routes_as(world: &mut BoardWorld, result: &RoutingResult, source: T
             locked: false,
         };
 
-        world.spawn_entity((via, via_placement.net_id));
+        // Marked only when this really is router output. An import goes
+        // through the same function with `TraceSource::Manual`, and what it
+        // materialises is the file's copper, not ours.
+        if source == TraceSource::Autorouted {
+            world.spawn_entity((via, via_placement.net_id, RouterPlaced));
+        } else {
+            world.spawn_entity((via, via_placement.net_id));
+        }
     }
 }
 

@@ -1065,3 +1065,24 @@ pub struct TraceNeck {
     /// How far it may run at that width.
     pub length: Nm,
 }
+
+/// An entity this tool laid down in this run, rather than one it found.
+///
+/// Not authorship - provenance. A trace has an author in a strong sense,
+/// because its shape is a decision, and `TraceSource` answers "who drew this".
+/// A via is usually a consequence: it exists because a route changed layer, and
+/// even a person placing one is choosing a rule - stitch this pour, tie this
+/// plane - rather than a hole. Asking a via who drew it has no stable answer,
+/// and a via imported from somebody else's autorouter would have to be called
+/// `Manual` to survive, which is false in the letter and right only in effect.
+///
+/// What the router actually needs to know before it deletes something is
+/// narrower and has a stable answer: did I put this here, in this pass. Copper
+/// that came out of a file, out of the language, or out of a hand never carries
+/// this, and is never removed.
+///
+/// `Stitched` is the same shape for a different producer - a via the stitcher
+/// generated from a rule - so this is a second marker of a kind the model
+/// already has, not a new idea in it.
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RouterPlaced;

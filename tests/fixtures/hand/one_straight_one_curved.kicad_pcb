@@ -23,4 +23,6 @@
   (segment (start 104.0 104.0) (end 112.0 104.0) (width 0.25) (layer "F.Cu") (net 1))
 
   (arc (start 112.0 104.0) (mid 114.828427 105.171573) (end 116.0 108.0) (width 0.25) (layer "F.Cu") (net 1))
+
+  (via (at 116.0 108.0) (size 0.6) (drill 0.3) (layers "F.Cu" "B.Cu") (net 1))
 )
