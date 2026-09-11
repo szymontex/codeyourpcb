@@ -460,6 +460,137 @@ with a tier-4 improvement of 7, which is a bad trade stated in one line; under
 a flat price per violation the same board reads as 19 to 32 and says nothing
 about which kind moved.
 
+### R-12 Rip-up and reroute `[O]`
+
+A negotiated-congestion router tears at the granularity its data structure can
+restore, and every departure from the published algorithm is named as a
+departure and measured.
+
+**What PathFinder specifies.** Source: L. McMurchie and C. Ebeling, *PathFinder:
+A Negotiation-Based Performance-Driven Router for FPGAs*, ACM/SIGDA FPGA 1995,
+read in full 2026-09-11.
+
+*Granularity.* "Only one net is ripped up at a time, but every net is ripped up
+and rerouted on every iteration, even if the net does not pass through a
+congested area." The reason is negotiation rather than economy: "In this way
+nets passing through uncongested areas can be diverted to make room for other
+nets currently in congested regions." The paper also fixes the order: "Nets are
+ripped up and rerouted in the same order every [iteration]."
+
+*The cost.* `c_n = (b_n + h_n) * p_n` (equation 1): `b_n` the base cost of node
+`n`, set in the paper to its intrinsic delay `d_n`; `h_n` "related to the
+history of congestion on `n` during previous iterations"; `p_n` "related to the
+number of other signals presently using `n`". Update rule, in the paper's
+words: "Each iteration that node C is shared, `h_n` is increased slightly", and
+"The effect of `h_n` is to permanently increase the cost of using congested
+nodes so that routes through other nodes are attempted."
+
+*The loop, as written.* Rip up routing tree `RT_i` [3]; `RT_i <- s_i` [4]; loop
+until all sinks are found [5]; "Initialize priority queue PQ to `RT_i` at cost
+0" [6]; on finding a sink, backtrace and add every node of the path to `RT_i`
+[13]-[16].
+
+*Multi-terminal nets.* "this updated `RT_i` is the source for the search for the
+next sink (step 6). In this way, all locations on routes to previously-found
+sinks are used as potential sources for routes to subsequent sinks. This is
+similar to Prim's algorithm for determining a minimum spanning tree over an
+undirected graph. This algorithm for constructing the routing tree is identical
+to an algorithm suggested by [Takahashi80]."
+
+*The order sinks are visited is not a requirement.* In the base algorithm the
+next sink is whichever the wave reaches first - "A breadth-first search for the
+closest sink `t_ij` is performed" - so the order is emergent, not chosen. The
+timing variant does choose it: sinks are routed in decreasing slack-ratio order
+and the queue is seeded at `A_ij * d_j`, which the paper introduces to hold the
+critical path rather than to make routing succeed. A project ordering its pads
+by a greedy nearest-neighbour spanning tree on Manhattan distance is therefore
+choosing a performance heuristic, not violating the algorithm - but it is also
+precomputing an order that the published form derives from the search itself.
+
+*Timing variant, for completeness.* `C_n = A_ij * d_n + (1 - A_ij) * c_n`
+(equation 2), slack ratio `A_ij = D_ij / D_max`. Theorem 1: if `h_n <= d_n` for
+all nodes, no routed path exceeds `D_max`.
+
+**What VPR does differently.** Source: Verilog-to-Routing documentation,
+command-line options page, read 2026-09-11 - the page carries no version
+string, which is recorded here because it limits what can be claimed from it.
+VPR exposes `--min_incremental_reroute_fanout`, default 16: "Incrementally
+re-route nets with fanout above the specified threshold. This attempts to reuse
+the legal (i.e. non-congested) parts of the routing tree for high fanout nets,
+with the aim of reducing router execution time." Partial tearing therefore
+exists in practice and its unit is a pruned branch of the routing tree.
+
+**The claim this project makes about VPR is not supported by what was read.**
+`crates/cypcb-autoroute/src/pathfinder_v2.rs` describes re-routing only the nets
+that pass through an overused cell as the VPR optimisation. The primary paper
+says the opposite for PathFinder, and the VTR documentation read here does not
+state the narrower rule either; ripping up only the illegal routes is published,
+but for a different router - a just-in-time FPGA routing paper describes
+ripping up only illegal routes and then adjusting costs across the resource
+graph (read 2026-09-11). Condition: either that comment gains a citation naming
+the router it came from, or it drops the words "the VPR optimisation" and
+stands as this project's own departure with its own measurement, tagged `[D]`.
+
+**Decomposition: the multi-sink wave is the standard and pad-to-pad is the
+deviation.** PathFinder seeds the frontier with the whole partial tree at cost 0
+(step [6]); this project seeds it with one pad and searches to another pad.
+Ending a connection on the net's own copper fixes the far end of that search and
+leaves the near end where it was, which is half of the published form. Checkable
+condition for full adoption: the first expansion frontier of connection `k`
+contains every cell the net already owns, not one cell. This project's own
+measurement says why the half-step is not enough - with the end test removed and
+only the start-and-end swap left, `led_blink` goes from zero shorts to one, so
+the asymmetry the swap introduces is a defect of having a start pad to choose at
+all, which the seeded frontier does not have.
+
+**Three departures this project has, stated as conditions.**
+
+1. *Net order: met.* `order_nets`
+   (`crates/cypcb-autoroute/src/orchestrator.rs:192-216`) sorts net indices with
+   a stable `sort_by` on two keys - power nets last, then Manhattan span
+   ascending - and `pathfinder_loop` receives that `Vec<usize>` once and reuses
+   the same slice every iteration. No map iteration takes part. Condition: the
+   order a run starts with is the order every iteration uses.
+2. *Every net every iteration: not met, and this is the departure.*
+   `nets_needing_reroute` (`crates/cypcb-autoroute/src/pathfinder_v2.rs:1399`,
+   called at `:596`) keeps only the nets touching an overused cell, so a subset
+   is re-routed each iteration where the paper re-routes all of them and gives
+   the reason - a net in clear space can be diverted to make room for one that
+   is stuck. Condition: the departure is measured against the paper's form on
+   the benchmark set, or it is named in the code as this project's own choice
+   rather than as somebody else's optimisation.
+3. *Cost shape: multiplicative inside, additive outside.* `congestion_cost`
+   (`crates/cypcb-autoroute/src/congestion.rs:214-228`) returns
+   `(1.0 + history) * (1.0 + overuse) - 1.0 + ring_penalty * ring`, which is the
+   shape of equation (1) with the base normalised to 1: history multiplies
+   present overuse. But the value enters the total additively - the successor
+   cost in `find_path_congestion_augmented` is base plus congestion plus
+   crowding plus pad crossing plus stacking - so the node's own base cost is
+   never scaled by present congestion, which equation (1) does scale. Condition:
+   a sweep that compares the additive form against `(b + h) * p` on the
+   benchmark set, or the difference stands recorded here and unmeasured.
+
+**The dependency question, and why it does not appear in the literature.** In
+PathFinder it cannot arise: step [3] erases the entire routing tree of the net
+before its sinks are re-routed, so no connection outlives the one it grew from.
+In VPR's incremental reroute it is answered structurally rather than by a rule -
+a net's routing is a tree rooted at the source, so pruning an illegal branch
+leaves every surviving node with its path to the root. Nothing read here states
+a rule for the case where connection `k` ends on connection `j`'s copper,
+because in both published designs that relation is the tree edge itself.
+Searches on 2026-09-11 that returned no such rule: rip-up of a connection
+another connection terminates on; partial rip-up semantics for a net routed as
+independent two-pin connections.
+
+**In this repo:** tearing is net-wide -
+`crates/cypcb-autoroute/src/pathfinder_v2.rs:610-623` clears the net's cells,
+rings and holes, drops `routed_paths` for that net and rebuilds its spanning
+tree - and that is the only tearing with defined semantics here, because
+`routed_paths` is `HashMap<u32, Vec<Vec<GridNode>>>`
+(`crates/cypcb-autoroute/src/pathfinder_v2.rs:288`): a flat list of paths with
+no parent relation to prune. The prerequisite for partial tearing is not a
+dependency field but the rooted tree the published routers keep.
+
 ## What this project already measures
 
 ### Board score
@@ -658,9 +789,21 @@ sed -n '565,590p' crates/cypcb-autoroute/src/scoring.rs
 
 # R-11: the tiered ordering that already exists for variants
 sed -n '496,512p' crates/cypcb-autoroute/src/variant.rs
+
+# R-12: net order - two keys, stable sort, no map iteration
+sed -n '192,216p' crates/cypcb-autoroute/src/orchestrator.rs
+
+# R-12: the subset that is re-routed each iteration
+grep -n "nets_needing_reroute" crates/cypcb-autoroute/src/pathfinder_v2.rs
+
+# R-12: the congestion term, and where it enters the total
+sed -n '214,228p' crates/cypcb-autoroute/src/congestion.rs
+
+# R-12: what a net's routing is stored as
+grep -n "pub routed_paths" crates/cypcb-autoroute/src/pathfinder_v2.rs
 ```
 
-Last verified: 2026-09-11, including R-10 and R-11. Web sources were read on
+Last verified: 2026-09-11, including R-10, R-11 and R-12. Web sources were read on
 2026-09-11; every repository claim in those two rules was read against the
 working tree on the same day, and the four file references they carry -
 `DEFAULT_TOLERANCE`, `is_90_bend`, `compute_composite` and the variant sort -
