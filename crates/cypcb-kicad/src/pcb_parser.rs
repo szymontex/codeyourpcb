@@ -101,6 +101,16 @@ pub struct KicadPcbMetadata {
     /// arrives without its ground plane and says nothing is a board whose
     /// Gerber ships without a ground plane.
     pub zone_refusals: Vec<String>,
+    /// Copper the file put on a layer this importer has no word for.
+    ///
+    /// Same rule as `zone_refusals`. The layer used to be read with
+    /// `unwrap_or(Layer::TopCopper)`, so a name this parser did not know moved
+    /// the copper to the top layer and said nothing - and this file already
+    /// argues against exactly that, in the note on `coordinate`: putting a part
+    /// 50mm from where the file says is worse than refusing to read the file at
+    /// all. Copper on the wrong layer is the same mistake with a shorter
+    /// distance. A newer KiCad that adds a layer name arrives through here.
+    pub track_refusals: Vec<String>,
     /// Stackup entries whose `(type ...)` this importer has no word for.
     ///
     /// Same rule as `zone_refusals`, and the same reason: a stackup short two
@@ -414,11 +424,15 @@ pub fn parse_kicad_pcb_str(content: &str) -> Result<KicadPcbParseResult, KicadPc
     }
 
     // 6. Extract trace segments
+    // Copper on a layer this importer has no word for, named rather than moved.
+    let mut track_refusals: Vec<String> = Vec::new();
     let mut route_segments: Vec<RouteSegment> = Vec::new();
     for elem in elements {
         if let Some(name) = list_name(elem) {
             if name == "segment" {
-                if let Some(seg) = parse_segment(elem, &kicad_net_map, board_origin)? {
+                if let Some(seg) =
+                    parse_segment(elem, &kicad_net_map, board_origin, &mut track_refusals)?
+                {
                     route_segments.push(seg);
                 }
             }
@@ -437,7 +451,9 @@ pub fn parse_kicad_pcb_str(content: &str) -> Result<KicadPcbParseResult, KicadPc
         if list_name(elem).as_deref() != Some("arc") {
             continue;
         }
-        if let Some((trace, curve)) = parse_track_arc(elem, &kicad_net_map, board_origin)? {
+        if let Some((trace, curve)) =
+            parse_track_arc(elem, &kicad_net_map, board_origin, &mut track_refusals)?
+        {
             let net_id = trace.net_id;
             world.spawn_entity((trace, net_id, curve));
             arc_count += 1;
@@ -450,7 +466,9 @@ pub fn parse_kicad_pcb_str(content: &str) -> Result<KicadPcbParseResult, KicadPc
     for elem in elements {
         if let Some(name) = list_name(elem) {
             if name == "via" {
-                if let Some(via) = parse_via(elem, &kicad_net_map, board_origin)? {
+                if let Some(via) =
+                    parse_via(elem, &kicad_net_map, board_origin, &mut track_refusals)?
+                {
                     via_placements.push(via);
                 }
             }
@@ -502,6 +520,7 @@ pub fn parse_kicad_pcb_str(content: &str) -> Result<KicadPcbParseResult, KicadPc
         pad_approximations,
         zone_count,
         zone_refusals,
+        track_refusals,
         stackup_refusals,
         version,
         component_count,
@@ -1788,6 +1807,7 @@ fn parse_segment(
     sexp: &Sexp,
     kicad_net_map: &NetIndex,
     origin: (f64, f64),
+    refusals: &mut Vec<String>,
 ) -> Result<Option<RouteSegment>, KicadPcbError> {
     let list = match sexp.list() {
         Ok(l) => l,
@@ -1798,6 +1818,10 @@ fn parse_segment(
     let mut end: Option<Point> = None;
     let mut width = Nm::from_mm(0.25); // Default trace width
     let mut layer = Layer::TopCopper;
+    // Set when the file names a layer this parser has no word for. The copper
+    // is then refused rather than moved, because moving it is silent and a
+    // refusal is not.
+    let mut unknown_layer: Option<String> = None;
     let mut net_id = NetId::new(0);
 
     for child in &list[1..] {
@@ -1833,7 +1857,10 @@ fn parse_segment(
                     if let Ok(sub) = child.list() {
                         if sub.len() >= 2 {
                             let l = get_string(&sub[1]).unwrap_or_default();
-                            layer = parse_layer_name(&l).unwrap_or(Layer::TopCopper);
+                            match parse_layer_name(&l) {
+                                Some(known) => layer = known,
+                                None => unknown_layer = Some(l),
+                            }
                         }
                     }
                 }
@@ -1845,6 +1872,13 @@ fn parse_segment(
                 _ => {}
             }
         }
+    }
+
+    if let Some(named) = unknown_layer {
+        refusals.push(format!(
+            "a track segment on layer '{named}', which this importer has no word for - the copper is left out rather than moved to another layer"
+        ));
+        return Ok(None);
     }
 
     Ok(match (start, end) {
@@ -1864,6 +1898,7 @@ fn parse_track_arc(
     sexp: &Sexp,
     kicad_net_map: &NetIndex,
     origin: (f64, f64),
+    refusals: &mut Vec<String>,
 ) -> Result<
     Option<(
         cypcb_world::components::trace::Trace,
@@ -1881,6 +1916,10 @@ fn parse_track_arc(
     let mut end: Option<Point> = None;
     let mut width = Nm::from_mm(0.25);
     let mut layer = Layer::TopCopper;
+    // Set when the file names a layer this parser has no word for. The copper
+    // is then refused rather than moved, because moving it is silent and a
+    // refusal is not.
+    let mut unknown_layer: Option<String> = None;
     let mut net_id = NetId::new(0);
 
     for child in &list[1..] {
@@ -1913,7 +1952,10 @@ fn parse_track_arc(
                 if let Ok(sub) = child.list() {
                     if sub.len() >= 2 {
                         let named = get_string(&sub[1]).unwrap_or_default();
-                        layer = parse_layer_name(&named).unwrap_or(Layer::TopCopper);
+                        match parse_layer_name(&named) {
+                            Some(known) => layer = known,
+                            None => unknown_layer = Some(named),
+                        }
                     }
                 }
             }
@@ -1924,6 +1966,13 @@ fn parse_track_arc(
             }
             _ => {}
         }
+    }
+
+    if let Some(named) = unknown_layer {
+        refusals.push(format!(
+            "a track arc on layer '{named}', which this importer has no word for - the copper is left out rather than moved to another layer"
+        ));
+        return Ok(None);
     }
 
     let (Some(start), Some(mid), Some(end)) = (start, mid, end) else {
@@ -1970,6 +2019,7 @@ fn parse_via(
     sexp: &Sexp,
     kicad_net_map: &NetIndex,
     origin: (f64, f64),
+    refusals: &mut Vec<String>,
 ) -> Result<Option<ViaPlacement>, KicadPcbError> {
     let list = match sexp.list() {
         Ok(l) => l,
@@ -1985,6 +2035,9 @@ fn parse_via(
                                       // router's own 2:1 is then the honest fallback rather than a guess about
                                       // somebody else's board.
     let mut outer_diameter: Option<Nm> = None;
+    // As in the two track parsers: a layer name this importer has no word for
+    // refuses the via rather than moving it.
+    let mut unknown_layer: Option<String> = None;
     let mut start_layer = Layer::TopCopper;
     let mut end_layer = Layer::BottomCopper;
     let mut net_id = NetId::new(0);
@@ -2023,8 +2076,19 @@ fn parse_via(
                         if sub.len() >= 3 {
                             let l1 = get_string(&sub[1]).unwrap_or_default();
                             let l2 = get_string(&sub[2]).unwrap_or_default();
-                            start_layer = parse_layer_name(&l1).unwrap_or(Layer::TopCopper);
-                            end_layer = parse_layer_name(&l2).unwrap_or(Layer::BottomCopper);
+                            // A via spans two named layers and both have to be
+                            // known. Defaulting either one moved the hole to a
+                            // layer pair the file never stated, which changes
+                            // what the via connects - and `ViaSpanRule` grades
+                            // a board on exactly that span.
+                            match (parse_layer_name(&l1), parse_layer_name(&l2)) {
+                                (Some(a), Some(b)) => {
+                                    start_layer = a;
+                                    end_layer = b;
+                                }
+                                (None, _) => unknown_layer = Some(l1),
+                                (_, None) => unknown_layer = Some(l2),
+                            }
                         }
                     }
                 }
@@ -2036,6 +2100,14 @@ fn parse_via(
                 _ => {}
             }
         }
+    }
+
+    if let Some(named) = unknown_layer {
+        refusals.push(format!(
+            "a via spanning layer '{named}', which this importer has no word for \
+             - the hole is left out rather than moved to another layer pair"
+        ));
+        return Ok(None);
     }
 
     Ok(position.map(|pos| match outer_diameter {

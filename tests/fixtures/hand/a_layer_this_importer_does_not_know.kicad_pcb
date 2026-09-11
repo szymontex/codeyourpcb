@@ -1,0 +1,28 @@
+(kicad_pcb (version 20240108) (generator "pcbnew") (generator_version "8.0.0")
+
+  (general
+    (thickness 1.6)
+  )
+
+  (paper "A4")
+
+  (layers
+    (0 "F.Cu" signal)
+    (31 "B.Cu" signal)
+    (44 "Edge.Cuts" user)
+  )
+
+  (net 0 "")
+  (net 1 "HAND")
+
+  (gr_line (start 100.0 100.0) (end 120.0 100.0) (layer "Edge.Cuts") (width 0.05))
+  (gr_line (start 120.0 100.0) (end 120.0 112.0) (layer "Edge.Cuts") (width 0.05))
+  (gr_line (start 120.0 112.0) (end 100.0 112.0) (layer "Edge.Cuts") (width 0.05))
+  (gr_line (start 100.0 112.0) (end 100.0 100.0) (layer "Edge.Cuts") (width 0.05))
+
+  (segment (start 104.0 104.0) (end 112.0 104.0) (width 0.25) (layer "F.Cu") (net 1))
+
+  (segment (start 104.0 106.0) (end 112.0 106.0) (width 0.25) (layer "In7.Signal") (net 1))
+
+  (via (at 116.0 108.0) (size 0.7) (drill 0.4) (layers "F.Cu" "In7.Signal") (net 1))
+)
