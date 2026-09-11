@@ -144,7 +144,9 @@ against lateral distance, so this canon states no number for the width of the
 band. `sigcon.com/Pubs/news/3_7.htm` was checked on 2026-09-11 and does not
 carry one.
 
-In this repo: nothing measures either condition.
+In this repo: nothing measures either condition. See R-13 for why no
+source states a permitted fraction, what bridges a crossing that cannot be
+avoided, and what a two-layer board changes.
 
 ### R-06 Violations are reported per rule, not as one total `[O]`
 
@@ -591,6 +593,113 @@ tree - and that is the only tearing with defined semantics here, because
 no parent relation to prune. The prerequisite for partial tearing is not a
 dependency field but the rooted tree the published routers keep.
 
+### R-13 Return path, the threshold that does not exist `[P]`
+
+R-05 states the rule and its two conditions. This section answers three
+questions it leaves open: what fraction of a trace may run without reference
+copper, what to do where a gap has to be crossed, and how much of either this
+project could measure.
+
+**There is no published fraction, and the reason is that the published
+condition is binary.** Searching on 2026-09-11 for a percentage of trace length
+permitted without reference copper beneath it - three query families, on plane
+coverage thresholds, on percent-of-length rules and on high-speed design-rule
+lists - returned no threshold of that shape. What the sources state instead is
+continuity over the whole length and an absolute prohibition on crossing a gap:
+route a high-speed signal adjacent to a solid reference, never across a split,
+because the return current has to detour around the gap and the detour is the
+loop that radiates (high-speed design guides from several vendors, read
+2026-09-11). R-05's two conditions are therefore counts and not ratios, and
+that is not an omission in them. The uncovered share belongs in the report as a
+diagnostic - it says how badly a board fails, which a count does not - but it
+carries no threshold, because no source read here supplies one.
+
+**Crossing a split, and what to do instead `[P]`.** A signal that must cross a
+gap in its reference is bridged by a stitching capacitor at the crossing, so
+the return has a path across the gap rather than around it. Published numbers:
+values of 10 nF to 100 nF, 0.1 uF being the value used in the measured study
+below; placement within 0.1 in (2.54 mm) of the trace; spacing between bridges
+no more than a twentieth of a wavelength at the highest frequency of concern
+(high-speed routing guides, read 2026-09-11). The measured case: an article on
+stitching capacitors across an imperfect reference, dated 2020-02-04 and read
+2026-09-11, reports crosstalk alleviation of as much as 10 dB, far-end
+crosstalk noise falling from 135 mVpp with no capacitor to 72 mVpp with two,
+and - the number that decides part selection - an ESL of 0.5 nH intensifying
+far-end crosstalk by 1.1 dB near 500 MHz.
+
+Condition: for each crossing, a component bridging the two pour regions with a
+pad on each, within 2.54 mm of the crossing point. A crossing without one is
+the fault; a crossing with one is a reported bridge.
+
+**Loop area has no published bound `[R]`.** What is published is a
+proportionality: the field radiated by a differential-mode current loop rises
+with the loop area and with the square of the frequency, so a larger loop
+radiates more at the same current (Henry W. Ott, *Electromagnetic Compatibility
+Engineering*, as reproduced in a vendor EMC tutorial, read 2026-09-11 - the
+equation's constant was not accessible in what was read, so no figure is
+carried here). A proportionality ranks two layouts; it does not pass or fail
+one. Loop area therefore enters this canon as a comparative number and never as
+a threshold, and any claim about an emission level in volts per metre needs a
+field solver and is out of scope for this project.
+
+**What is measurable from what this project already holds.**
+
+1. *Coverage: measurable.* Pours are zones of kind `CopperPour` carrying a net
+   and a layer mask, the reference layer for a trace is the one `ImpedanceRule`
+   already derives from the stackup through `CopperEnvironment`
+   (`crates/cypcb-drc/src/rules/impedance.rs:30`), and `query_region_on_layers`
+   already answers what copper lies in a region - it is what `compute_crossings`
+   uses (`crates/cypcb-autoroute/src/scoring.rs:423`). Measure the share of each
+   segment's footprint that projects onto reference copper on the adjacent
+   copper layer.
+2. *Split crossings: measurable.* Intersect the segment footprint with the
+   boundary of the reference copper and count the crossings. One modelling limit
+   belongs here rather than in a surprise later: a zone in this model is a
+   rectangle (`bounds: Rect`, `crates/cypcb-world/src/components/zone.rs:64`),
+   so a gap here is the absence of pour or a cut made by other copper, not an
+   arbitrary slot drawn inside a polygon.
+3. *Loop area: an estimate, and mostly not a routing variable at all.* Above the
+   crossover the return runs in a band directly beneath the trace, so where the
+   reference is continuous the loop area is set by the dielectric separation in
+   the stackup and not by where the router put the copper: area is about length
+   times layer separation whatever the route. It becomes a routing variable
+   exactly where coverage fails, and there the estimate is the uncovered length
+   times the separation plus the detour the return takes around the gap. Report
+   it for uncovered spans only, labelled an estimate. This is why R-05 gives the
+   router two numbers to chase and not three.
+4. *Anything that needs a field solver is not a rule this project can carry.*
+   That is a finding rather than a gap: coverage and crossings are geometry and
+   this project holds the geometry; emission levels are physics this project
+   does not model.
+
+**The gate this rule needs is already in the model.** R-05 is stated against
+nets that declare controlled impedance, and `impedance_ohms_x100` in the
+per-net constraints is exactly that declaration -
+`crates/cypcb-drc/src/rules/impedance.rs:92` and `:216` read it. Unlike R-04,
+which waits on a signal speed the model does not hold, R-13 needs no new field
+and does not belong under "Blocked on the model". For every other net the two
+conditions are a report and not a fault.
+
+**On a two-layer board the strict form does not apply, and that is every
+fixture in this project's benchmark set.** Three consequences, stated so that
+nobody reads a four-layer rule onto a two-layer board:
+
+- The reference is not a plane but a pour, and the pour is cut by the traces
+  routed on that same layer. Coverage has to be measured against the filled
+  geometry - the pieces and spokes `fill_zone` returns
+  (`crates/cypcb-world/src/copper.rs:47`) - and never against the zone's
+  declared rectangle, which covers copper that is not there.
+- Every trace on the opposite layer is itself a gap in the reference of the
+  trace above it. A two-layer board with any routing on the reference layer
+  therefore has crossings by construction, and a rule that fails the board for
+  having them fails every board this project ships.
+- In its strict form, zero crossings and zero uncovered length, R-13 is a
+  four-layer rule.
+
+**In this repo:** nothing measures either condition - the same finding R-05
+records. The three pieces needed - pour geometry, stackup-derived reference
+layer, spatial index - are all present and none is called for this purpose.
+
 ## What this project already measures
 
 ### Board score
@@ -665,7 +774,9 @@ Checked by grep over `crates/*/src` on 2026-09-11: no hits for "return path",
 2. Plane split crossings - intersect the segment footprint with the edges of
    the reference pour and count the crossings.
 3. Loop area - once coverage exists, take the area between the trace axis and
-   the nearest continuous return copper.
+   the nearest continuous return copper. R-13 bounds what this is worth:
+   under continuous reference the area is set by the stackup and not by the
+   route, so it is a number for uncovered spans only.
 4. Acute angles - `shared_corner` (`scoring.rs:362`) already yields the angle
    between the two arms of a junction; count the junctions below 90 degrees.
 5. Stub length - see R-04; needs the connectivity graph described below.
@@ -801,10 +912,28 @@ sed -n '214,228p' crates/cypcb-autoroute/src/congestion.rs
 
 # R-12: what a net's routing is stored as
 grep -n "pub routed_paths" crates/cypcb-autoroute/src/pathfinder_v2.rs
+
+# R-13: the gate the rule keys on, and that the rule already reads it
+grep -n "impedance_ohms_x100" crates/cypcb-drc/src/rules/impedance.rs
+
+# R-13: the reference layer comes from the stackup, not from a guess
+grep -n "CopperEnvironment" crates/cypcb-drc/src/rules/impedance.rs
+
+# R-13: a zone is a rectangle, so a gap is absent pour and not a slot
+sed -n '60,66p' crates/cypcb-world/src/components/zone.rs
+
+# R-13: coverage has to be measured against the filled geometry
+grep -n "pub fn fill_zone" crates/cypcb-world/src/copper.rs
+
+# R-13: the spatial query coverage would reuse, and its one caller today
+grep -n "query_region_on_layers" crates/cypcb-autoroute/src/scoring.rs
 ```
 
-Last verified: 2026-09-11, including R-10, R-11 and R-12. Web sources were read on
-2026-09-11; every repository claim in those two rules was read against the
-working tree on the same day, and the four file references they carry -
-`DEFAULT_TOLERANCE`, `is_90_bend`, `compute_composite` and the variant sort -
-were each opened rather than grepped for by name.
+Last verified: 2026-09-11, including R-10, R-11, R-12 and R-13. Web sources were
+read on 2026-09-11, and every repository claim in those four rules was read
+against the working tree on the same day by opening the file rather than
+grepping for the name: `DEFAULT_TOLERANCE`, `is_90_bend`, `compute_composite`
+and the variant sort for R-10 and R-11; `nets_needing_reroute`, the tear block,
+`congestion_cost` and the type of `routed_paths` for R-12; and
+`impedance_ohms_x100`, `CopperEnvironment`, the zone's `bounds`, `fill_zone`
+and `query_region_on_layers` for R-13.
