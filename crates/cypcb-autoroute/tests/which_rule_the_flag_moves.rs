@@ -18,7 +18,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use cypcb_autoroute::{route_board, AutorouteConfig};
-use cypcb_drc::{preset_for_world, ruleset_for_world, run_drc, DesignRules};
+use cypcb_drc::{preset_for_world, ruleset_for_world, run_drc, shorts, DesignRules};
 use cypcb_kicad::parse_kicad_pcb;
 use cypcb_router::apply_routes;
 
@@ -73,6 +73,38 @@ fn by_kind(fixture: &str, stop_at_own_copper: bool) -> BTreeMap<String, usize> {
         *counts.entry(format!("{:?}", violation.kind)).or_default() += 1;
     }
     counts
+}
+
+/// Route one board with the flag in one position and count the copper that
+/// touches other copper.
+///
+/// `shorts` is the checker's own definition - a clearance report measured at
+/// 0.00 mm - rather than a kind of its own, which is why it cannot be read off
+/// the per-kind table above.
+fn shorts_of(fixture: &str, stop_at_own_copper: bool) -> usize {
+    let parsed = parse_kicad_pcb(&fixture_path(fixture))
+        .unwrap_or_else(|e| panic!("failed to parse {fixture}: {e:?}"));
+    let mut world = parsed.world;
+    let library = parsed.library;
+    let preset = preset_for_world(
+        cypcb_rules::presets::RulesPreset::JlcpcbStandard2Layer,
+        &world,
+    );
+    let rules = ruleset_for_world(preset, &world);
+    let config = AutorouteConfig {
+        stop_at_own_copper,
+        ..AutorouteConfig::default()
+    };
+
+    let result = route_board(&mut world, &library, &rules, &config);
+    apply_routes(&mut world, &result);
+    world.rebuild_spatial_index_from_library(&library);
+
+    let report = run_drc(
+        &mut world,
+        &DesignRules::from_constraints(&preset.constraints()),
+    );
+    shorts(&report.violations)
 }
 
 /// Every kind either side names, so a kind that appears only with the flag on
@@ -161,5 +193,46 @@ fn the_holes_come_off_the_boards_that_had_the_most() {
     assert!(
         after_total * 2 < before_total,
         "HoleToHole {before_total} -> {after_total}"
+    );
+}
+
+#[test]
+fn the_flag_puts_copper_on_copper_and_that_is_why_it_is_not_the_default() {
+    // The reason the default did not move on 2026-09-11, and the reason is
+    // R-11's own tier order rather than a preference. Counting violation rows
+    // says the flag is a clear win: 1135 reports become 844. Counting copper
+    // touching copper says something the row count hides - `led_blink`, the
+    // simplest board here and the only one that routes clean, comes out with a
+    // short. Under R-11 a short is tier 2 and no quantity of tier 3 or tier 4
+    // offsets one: a board with a short does not work, while a board with a
+    // gap under minimum is a yield risk a fabricator may still build.
+    //
+    // This test is a pin on a defect rather than a claim that the defect is
+    // right. When the short is found and removed it fails, which is what
+    // forces the default to be reconsidered instead of forgotten.
+    let mut clean_boards_that_short = Vec::new();
+    let mut off_total = 0;
+    let mut on_total = 0;
+
+    for fixture in FIXTURES {
+        let off = shorts_of(fixture, false);
+        let on = shorts_of(fixture, true);
+        println!("{fixture:<26} shorts {off:>4} -> {on:>4}");
+        if off == 0 && on > 0 {
+            clean_boards_that_short.push(*fixture);
+        }
+        off_total += off;
+        on_total += on;
+    }
+    println!("all six boards: shorts {off_total} -> {on_total}");
+
+    assert!(
+        !clean_boards_that_short.is_empty(),
+        "no board goes from no shorts to shorts, so the reason recorded for \
+         keeping the default off no longer holds"
+    );
+    assert!(
+        !AutorouteConfig::default().stop_at_own_copper,
+        "the default was switched on while a board it routes clean still shorts"
     );
 }
