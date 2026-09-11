@@ -53,6 +53,7 @@ fn jlcpcb() -> (cypcb_core::Nm, cypcb_core::Nm, KicadDesignRules) {
                 .min_silk_clearance
                 .unwrap_or(cypcb_core::Nm::from_mm(0.15)),
             annular_ring: rules.min_annular_ring,
+            pour_clearance: rules.min_copper_pour_clearance,
             thermal_relief_gap: rules.thermal_relief_gap,
             thermal_relief_spoke_width: rules.thermal_relief_spoke_width,
         },
@@ -133,5 +134,82 @@ fn the_two_figures_are_not_the_same_number_by_accident() {
         file.lines()
             .find(|line| line.contains("(fill "))
             .unwrap_or("none")
+    );
+}
+
+#[test]
+fn the_pour_keeps_the_distance_and_the_width_the_fab_table_states() {
+    // Two more literals are gone from the zone node, both fab numbers the
+    // design rules already carry.
+    //
+    // `connect_pads` clearance is the antipad - how far the pour stands off a
+    // pad it does not connect to - and is a different number from the thermal
+    // gap above it. The literal was 0.5 mm against tables holding 0.2 to 0.3,
+    // so an exported pour stood roughly twice as far off every pad as the house
+    // asks for.
+    //
+    // `min_thickness` is the narrowest fill the pour will keep. The literal was
+    // 0.25 mm, wider than `min_trace_width` in every fab preset - 0.09 to
+    // 0.1524 - and equal to it only in the prototype table, so on a real board
+    // it threw away copper the fabricator would have made.
+    let rules = RulesPreset::JlcpcbStandard2Layer.constraints();
+    let (_, _, kicad_rules) = jlcpcb();
+    let mut world = plane_board();
+    let file = write_board_with_rules(&mut world, "cypcb", Some(kicad_rules));
+
+    let antipad = format!(
+        "(connect_pads (clearance {}))",
+        rules.min_copper_pour_clearance.to_mm()
+    );
+    let narrowest = format!("(min_thickness {})", rules.min_trace_width.to_mm());
+    println!("expected from the fab table: {antipad} and {narrowest}");
+
+    assert!(
+        file.contains(&antipad),
+        "the antipad is not the table's: {antipad}"
+    );
+    assert!(
+        file.contains(&narrowest),
+        "the fill floor is not the table's: {narrowest}"
+    );
+
+    // The controls that name the defects rather than the fixes.
+    assert!(
+        !file.contains("(clearance 0.5)"),
+        "the 0.5mm antipad literal is still there"
+    );
+    assert!(
+        !file.contains("min_thickness 0.25"),
+        "the 0.25mm fill literal is still there"
+    );
+}
+
+#[test]
+fn the_outline_hatch_is_not_this_boards_business() {
+    // `(hatch edge ...)` sets how KiCad draws the zone outline on screen. It is
+    // a property of a reader's view, not of the board, so this writer states
+    // nothing and lets KiCad draw it however its reader prefers. The bar is the
+    // one `(version ...)` meets from the other side: not a property of the
+    // board at all.
+    let (_, _, kicad_rules) = jlcpcb();
+    let mut world = plane_board();
+    let with_rules = write_board_with_rules(&mut world, "cypcb", Some(kicad_rules));
+    let mut world = plane_board();
+    let without = write_board_with_rules(&mut world, "cypcb", None);
+
+    for (label, file) in [("with a preset", &with_rules), ("with none", &without)] {
+        println!("{label}: {} lines", file.lines().count());
+        assert!(
+            !file.contains("(hatch "),
+            "{label}: the writer states a display setting it has no business stating"
+        );
+    }
+
+    // And with no preset chosen it states neither fab number either, which is
+    // the same policy the relief already follows.
+    assert!(!without.contains("connect_pads"), "no preset, no antipad");
+    assert!(
+        !without.contains("min_thickness"),
+        "no preset, no fill floor"
     );
 }

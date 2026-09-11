@@ -95,6 +95,17 @@ impl ToKicadCommand {
                 edge_clearance: rules.min_edge_clearance,
                 silk_clearance: rules.min_silk_clearance,
                 annular_ring: rules.min_annular_ring,
+                // Straight off the fab table rather than out of `rules`: the
+                // antipad a pour keeps from foreign copper reaches
+                // `DesignConstraints` with the tables and is dropped on the way
+                // to `DesignRules` - `min_copper_pour_clearance` appears zero
+                // times in `crates/cypcb-drc/src/presets/mod.rs`. That is the
+                // same journey the relief gap once failed to finish, and the
+                // note on `thermal_relief_gap` there records what it cost.
+                // Reading the constraints keeps the exported pour on the number
+                // the board was checked against without widening a struct in
+                // another crate first.
+                pour_clearance: preset.constraints().min_copper_pour_clearance,
                 thermal_relief_gap: rules.thermal_relief_gap,
                 thermal_relief_spoke_width: rules.thermal_relief_spoke_width,
             })

@@ -139,6 +139,8 @@ pub struct KicadDesignRules {
     pub silk_clearance: Nm,
     /// Narrowest ring of copper left around a drilled hole.
     pub annular_ring: Nm,
+    /// Distance a pour keeps from copper it does not connect to.
+    pub pour_clearance: Nm,
     /// Gap cut around a pad on the pour's own net, before the spokes go back.
     pub thermal_relief_gap: Nm,
     /// Width of each spoke bridging that gap.
@@ -767,7 +769,14 @@ fn write_zones(
             if let Some(name) = &zone.name {
                 let _ = writeln!(out, "    (name \"{name}\")");
             }
-            let _ = writeln!(out, "    (hatch edge 0.5)");
+            // `(hatch edge ...)` used to be written here as a literal. It sets
+            // how KiCad *draws* the zone outline on screen - the format calls it
+            // the outline display hatch style and pitch - so it is a property of
+            // somebody else's view of this board rather than of the board. The
+            // bar a literal has to meet is the one `(version ...)` meets: not a
+            // property of the board at all. A display setting fails it from the
+            // other side - it is not ours to state - so nothing is written and
+            // KiCad draws the outline however its reader prefers.
             if keepout {
                 // A keepout is an area rule rather than copper: KiCad calls it
                 // a zone with nothing allowed in it, and fills nothing.
@@ -776,8 +785,29 @@ fn write_zones(
                     "    (keepout (tracks not_allowed) (vias not_allowed) (pads not_allowed) (copperpour not_allowed) (footprints not_allowed))"
                 );
             } else {
-                let _ = writeln!(out, "    (connect_pads (clearance 0.5))");
-                let _ = writeln!(out, "    (min_thickness 0.25)");
+                // Both of these were literals, and both are fab numbers the design
+                // rules already carry.
+                //
+                // `connect_pads` clearance is the distance the pour keeps from
+                // pads it does not connect to - an antipad, not the thermal gap,
+                // which is a different number written below. The literal was
+                // 0.5mm against tables holding 0.2 to 0.3, so an exported pour
+                // stood roughly twice as far off every pad as the house asks.
+                //
+                // `min_thickness` is the narrowest fill the pour will keep, and
+                // anything thinner is not drawn - the same question as the
+                // narrowest trace the house will etch. The literal was 0.25mm,
+                // wider than `min_trace_width` in every fab preset (0.09 to
+                // 0.1524) and equal to it only in the prototype table, so on a
+                // real board it threw away copper the fabricator would have made.
+                if let Some(rules) = rules {
+                    let _ = writeln!(
+                        out,
+                        "    (connect_pads (clearance {}))",
+                        mm(rules.pour_clearance)
+                    );
+                    let _ = writeln!(out, "    (min_thickness {})", mm(rules.track_width));
+                }
                 // The relief comes from the fab table, not from here. It used
                 // to be two literals of 0.5mm, which is what a reader of this
                 // file got whatever the board was checked against - and both
