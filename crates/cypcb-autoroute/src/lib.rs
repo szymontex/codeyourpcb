@@ -254,6 +254,24 @@ pub struct AutorouteConfig {
     /// can pay for the copper it adds.
     pub pad_zone_blocks_foreign_copper: bool,
 
+    /// Whether a connection may finish on the copper its own net already
+    /// holds, instead of running all the way to the pad at the far end.
+    ///
+    /// Each connection of a net is searched pad to pad, and copper the net has
+    /// already laid is cheap to walk along rather than a place to stop - so
+    /// the second connection follows the first down the same corridor and
+    /// writes a second copy of it. Measured on the six benchmark boards:
+    /// **635 grid cells shared between two paths of one net, against 0 cells
+    /// repeated inside one path**, which is a shared trunk and not a path
+    /// doubling back. With this on, the search for a connection stops at the
+    /// first cell of its own net's copper it reaches, so the second copy is
+    /// impossible to draw rather than removed afterwards.
+    ///
+    /// **Off by default** until the four figures a fabricated board is judged
+    /// on - duplicated junctions, total length, via count and wall clock -
+    /// are measured on all six boards with it on.
+    pub stop_at_own_copper: bool,
+
     /// Whether a routed trace reserves the copper it covers, or only the
     /// centre line the search walked.
     ///
@@ -337,6 +355,7 @@ impl Default for AutorouteConfig {
             pad_zone_margin_cells: crate::orchestrator::DEFAULT_PAD_ZONE_MARGIN_CELLS,
             pad_rect_extra_cells: Some(2),
             pad_zone_blocks_foreign_copper: false,
+            stop_at_own_copper: false,
             reserve_trace_footprint: true,
             via_foreign_copper_penalty: 0.25,
             foreign_pad_penalty: 0.0,
