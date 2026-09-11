@@ -235,7 +235,9 @@ the connection should be solid. Bottom terminated parts - QFN, DFN, DPAK - take
 a solid connection and a via array under IPC-7093.
 
 Conditions: spoke count between 2 and 4, each spoke at least 0.2 mm wide, and
-no relief on a net declaring more than 3 A.
+no relief on a net declaring more than 3 A. See R-15 for what the relief
+costs in service, what the via array under a bottom-terminated part actually
+requires, and the one condition that spans two pads rather than one.
 
 Source: JLCPCB thermal relief design article, read 2026-09-11. Vendor material
 citing IPC-2221B and IPC-7093; not the text of either standard.
@@ -700,6 +702,198 @@ nobody reads a four-layer rule onto a two-layer board:
 records. The three pieces needed - pour geometry, stackup-derived reference
 layer, spatial index - are all present and none is called for this purpose.
 
+### R-14 Via stitching `[P]`
+
+Two pours of one net on different layers are tied together by a field of vias,
+and a signal via that changes reference has a return via beside it. R-05 states
+why the return path matters and R-13 states how coverage and splits are
+measured; the conditions here are distances.
+
+**1. Spacing of a stitching field - the sources do not agree, and both forms
+are carried.** The published form is a fraction of a wavelength at the highest
+frequency of concern, with the wavelength taken inside the board,
+`lambda = c / (f * sqrt(effective dielectric constant))`, and the guidance to
+assume 1 GHz where the design does not say (via-stitching guides, read
+2026-09-11).
+
+- `lambda / 20` is the figure most often given, on the argument that a gap in
+  the ground network is then electrically small at the frequency of concern.
+- `lambda / 10` is given for high-frequency work as the practical compromise,
+  explicitly at the cost of some EMI performance.
+
+Worked from the sources' own formula at an effective dielectric constant of 4:
+at 1 GHz `lambda` is 150 mm, so `lambda / 20` is 7.5 mm and `lambda / 10` is
+15 mm; at 10 GHz the same arithmetic gives 0.75 mm and 1.5 mm, and the sources
+name those two figures themselves.
+
+Condition: a pitch is checked against the frequency the design declares, not
+against a house default. Where the design declares no frequency, 1 GHz is the
+stated stand-in and the check is a report rather than a failure.
+
+**2. A return via beside a signal via - the published distances differ by an
+order of magnitude, so all three are given.** When a signal changes layer its
+return has to change reference with it, and the published fix is a via on the
+reference net placed next to the signal via (high-speed routing guides, read
+2026-09-11).
+
+- Within 50 mil (1.27 mm) of the signal via for designs up to 5 GHz.
+- Within 20 mil (0.51 mm) above 10 GHz, and the same figure for critical
+  signals generally.
+- A device vendor's interface design guide asks for ground stitching vias
+  placed symmetrically within 200 mil (5.08 mm) centre to centre of the signal
+  transition vias.
+
+The three do not reconcile and this canon does not reconcile them: the ratio
+between the loosest and the tightest is ten to one. Condition: the distance
+from each signal via to the nearest reference via spanning the same layer pair
+is measured and reported per via; a threshold is applied only where the design
+declares a frequency, and then it is the figure for that frequency with its
+source named.
+
+**3. What this project holds, and the finding that changes the question.** Both
+conditions are geometry this project already carries, and the first is further
+along than expected.
+
+*What exists.* A pour declares its stitch pitch in the language - `stitch
+<pitch>` inside a zone (`crates/cypcb-parser/src/parser.rs:1416`,
+`crates/cypcb-parser/src/ast.rs:1136`) - and it is carried on the zone's entity
+as `StitchPitch` (`crates/cypcb-world/src/components/zone.rs:87`). A generator
+places the field: `stitching_vias` (`crates/cypcb-world/src/stitch.rs:56`)
+walks the pour's rectangle on a grid at `StitchSpec::pitch`, starting half a
+pitch inside the edge so the field is symmetric, and keeps a point only where
+the pour is present on both sides and nothing foreign is in the way on either
+outer layer. The via itself is fixed at a 0.3 mm hole in a 0.6 mm pad with
+0.3 mm clearance (`StitchSpec::at`, `crates/cypcb-world/src/stitch.rs:32-42`).
+Generated vias are marked `Stitched` so the writer does not emit them back as
+hand-placed copper (`crates/cypcb-world/src/dsl.rs:266`).
+
+*The finding.* Because the generator drops every grid point that is blocked,
+**the declared pitch is not the spacing the board gets.** Where routing is
+dense the field thins out, and the number that matters - the largest gap the
+return current has to cross - is a property of the placed field and not of the
+declaration. Checking the declaration against `lambda / 20` therefore checks
+something that is not on the board. Condition: measure the maximum
+nearest-neighbour distance over a pour's placed stitching vias and compare
+that. Nothing computes it today. See "Declared is not measured".
+
+*The second condition needs nothing new either.* A via carries its net, its
+position and the layers it spans - `Via { position, drill, outer_diameter,
+start_layer, end_layer, net_id, locked }`
+(`crates/cypcb-world/src/components/trace.rs:727-742`) - so the distance from a
+signal via to the nearest reference-net via spanning the same layer pair is a
+query over data already in the world. Nothing computes it today, and no rule in
+`crates/cypcb-drc` asks for it: `grep -rln stitch crates/cypcb-drc/src/`
+returns nothing at all.
+
+**4. Unlike R-13, this is not a four-layer rule.** R-13's strict form fails on
+two layers because the reference is a pour cut by the traces on its own layer.
+R-14 is the opposite case, and this project's own code says why: a plane on a
+two-layer board is two planes, one per side, and what ties them into one is a
+field of vias through the pour (`crates/cypcb-world/src/stitch.rs:1-12`). The
+field condition applies more strongly rather than less, because the two halves
+of the reference are only as connected as the vias make them; and the
+return-via condition applies unchanged, because a signal going top to bottom
+changes which pour is its reference. What two layers change is which number is
+trustworthy: on a pour perforated by its own routing the declared pitch says
+least and the measured maximum gap says most.
+
+**In this repo:** the declaration and the generator exist; no check exists.
+
+### R-15 One component, one connection style `[P]`
+
+R-09 states thermal relief as geometry - spoke width floor, spoke count, the
+per-package pairs, the 3 A threshold and the bottom-terminated exception - and
+none of that is repeated here. R-15 is the manufacturing consequence: what the
+relief costs in service, what the exception actually requires, and the failure
+that neither number predicts.
+
+**1. What the relief costs, worked out rather than quoted.** R-09 carries the
+1 to 3 milliohms a four-spoke relief adds. At 5 A that is 5 to 15 mV dropped
+and 25 to 75 mW dissipated in the joint's own copper - which is what makes
+R-09's 3 A threshold a rule rather than a preference, and it is the only
+arithmetic needed to see why.
+
+**2. What the bottom-terminated exception requires `[P]`.** R-09 says a QFN,
+DFN or DPAK takes a solid connection and a via array under IPC-7093. The
+array's own published numbers, read 2026-09-11: holes of 0.25 to 0.33 mm,
+because larger ones wick solder away during reflow; spacing 1.0 to 1.2 mm;
+typically 9 to 25 vias depending on pad size; voiding held below the IPC-7093
+limit of 50 percent. Without those, "a via array" is not a condition anything
+can check.
+
+**3. Mixing the two styles on one component is what actually breaks joints
+`[P]`.** A pad tied straight into a pour has more thermal mass than a relieved
+one beside it, so during reflow the solder on the plane side melts later; the
+free end lifts and the part rotates off its pad. That is tombstoning, and the
+published guidance is symmetry rather than any particular pattern: apply the
+same connection style to both pads of a chip component, and treat it as
+mandatory for 0603 and smaller, where the part is light enough for the torque
+to win (thermal-relief and tombstoning guides, read 2026-09-11).
+
+Condition, and it is the one this canon adds that no other rule states: **for a
+two-terminal component whose pads both sit in pours, both pads have the same
+connection style.** One relieved and one solid is a defect even where each pad
+on its own satisfies R-09.
+
+This is also the only rule in this canon that looks at a **component** rather
+than at a feature of copper. Every other condition here - clearance, angle,
+ring, coverage, spacing - is a property of one feature or of a pair of
+features. Symmetry is a property of a pair of pads that belong to one part, so
+a registry built to walk copper cannot express it without walking components
+too.
+
+**4. What this project holds - and three of these are a fire, not a gap.**
+
+- *Spoke width and gap against the house table:* geometry from the filled pour,
+  numbers from the design rules. `PourOptions` carries `thermal_gap`
+  (`crates/cypcb-core/src/pour.rs:246`) and `spoke_width` (`:248`). Checkable
+  today.
+- *Surviving spoke count:* the arm mapping R-09 specifies, on the same filled
+  pour. `thermal_spokes` (`crates/cypcb-core/src/pour.rs:272`) cuts a fixed
+  cross of four whatever any table says, and `thermal_relief_spokes` still has
+  zero readers outside its own crate - `grep -rln thermal_relief_spokes
+  --include=*.rs crates/ | grep -v cypcb-rules | wc -l` returns `0`. So the
+  count that matters is the one that survives clipping, not the one declared.
+  See "Declared is not measured". Checkable today.
+- *Symmetry across a component's pads:* the pads, their nets and their
+  component are all in the world already - the same data
+  `crates/cypcb-drc/src/rules/unrouted_pin.rs` walks. Checkable today.
+- *The 3 A rule:* a net's current is declarable and already read by
+  `crates/cypcb-drc/src/rules/trace_current.rs`, so the **violation** is
+  detectable today. What is missing is the cure: nothing can ask for a solid
+  connection, so a board can be told it is wrong and given no way to be right.
+  That gap is R-09's.
+- *The bottom-terminated case:* nothing in the model marks a thermal pad as the
+  thermal pad of a QFN or DPAK, so this half is not checkable and should not be
+  faked with a size heuristic.
+
+**In this repo:** three conditions are enforceable against data already
+present, with no new field and no new declaration - which makes R-15 the first
+rule in this canon whose gap is that nobody wrote the check, rather than that
+the model cannot answer.
+
+## Declared is not measured
+
+Three rules in a row had to be rewritten around the same mistake, which makes
+it a design rule for this canon rather than three coincidences.
+
+- **R-13, loop area.** Under continuous reference the area is length times the
+  dielectric separation in the stackup, whatever path the router takes. The
+  number is real and the router cannot move it, so checking it checks the
+  stackup and calls it routing.
+- **R-14, stitch pitch.** The pitch is declared on the pour and the generator
+  drops every grid point that is blocked, so a dense board gets a thinner field
+  than it asked for. The number that matters is the largest gap in the placed
+  field, not the pitch in the source.
+- **R-15, spoke count.** `thermal_spokes` cuts a fixed cross of four and the
+  filler clips whatever the pour cannot carry, so the count a joint actually
+  has is the count that survived, not the count in any table.
+
+In each case the declared or theoretical quantity is available, cheap and
+wrong, and the measured one takes work. A rule that takes the cheap number is
+not a weaker rule - it is a rule about something else. R-16 carries this as the
+fourth entry condition a new rule has to meet.
+
 ## What this project already measures
 
 ### Board score
@@ -808,8 +1002,9 @@ question will not build.
 
 ## Blocked on the model
 
-Two of the nine rules cannot be enforced without a change to the data model.
-The other seven are waiting on code.
+Two rules cannot be enforced without a change to the data model. The rest are
+waiting on code; R-16 sorts all fifteen and counts the missing fields rather
+than the blocked rules.
 
 **R-02, working voltage.** Nets have no voltage field: "voltage" does not
 appear in `crates/cypcb-parser/src/ast.rs` or
@@ -927,13 +1122,42 @@ grep -n "pub fn fill_zone" crates/cypcb-world/src/copper.rs
 
 # R-13: the spatial query coverage would reuse, and its one caller today
 grep -n "query_region_on_layers" crates/cypcb-autoroute/src/scoring.rs
+
+# R-14: the pitch is declared on the pour and carried on its entity
+grep -n "zone_stitch" crates/cypcb-parser/src/parser.rs
+sed -n '85,88p' crates/cypcb-world/src/components/zone.rs
+
+# R-14: the generator drops every blocked point, which is the finding
+sed -n '44,60p' crates/cypcb-world/src/stitch.rs
+
+# R-14: the via a stitching field is made of
+sed -n '32,42p' crates/cypcb-world/src/stitch.rs
+
+# R-14: nothing in the checker asks about any of it
+grep -rln stitch crates/cypcb-drc/src/ | wc -l          # expect 0
+
+# R-15: the two relief numbers the export path carries
+sed -n '244,249p' crates/cypcb-core/src/pour.rs
+
+# R-15: the spoke count is a fixed cross, and the constant has no reader
+grep -n "fn thermal_spokes" crates/cypcb-core/src/pour.rs
+grep -rln thermal_relief_spokes --include=*.rs crates/ \
+  | grep -v cypcb-rules | wc -l                         # expect 0
+
+# R-15: the data a symmetry check would walk already has a rule walking it
+ls crates/cypcb-drc/src/rules/unrouted_pin.rs crates/cypcb-drc/src/rules/trace_current.rs
 ```
 
-Last verified: 2026-09-11, including R-10, R-11, R-12 and R-13. Web sources were
+Last verified: 2026-09-11, including R-10 through R-15. Web sources were
 read on 2026-09-11, and every repository claim in those four rules was read
 against the working tree on the same day by opening the file rather than
 grepping for the name: `DEFAULT_TOLERANCE`, `is_90_bend`, `compute_composite`
 and the variant sort for R-10 and R-11; `nets_needing_reroute`, the tear block,
 `congestion_cost` and the type of `routed_paths` for R-12; and
 `impedance_ohms_x100`, `CopperEnvironment`, the zone's `bounds`, `fill_zone`
-and `query_region_on_layers` for R-13.
+and `query_region_on_layers` for R-13. For R-14 and R-15: `StitchPitch`,
+`StitchSpec::at`, `stitching_vias` and its doc comment, the `Via` struct's
+seven fields, `zone_stitch`, `thermal_gap`, `spoke_width` and
+`thermal_spokes`. Two negative claims were run rather than assumed - no file
+under `crates/cypcb-drc` mentions stitching, and `thermal_relief_spokes` has
+no reader outside its own crate.
