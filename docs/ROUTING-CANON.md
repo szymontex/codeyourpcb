@@ -525,6 +525,14 @@ the tiers below have nowhere to live in a row of output. See R-18.
 
 *Applies when:* never, to a board. This is a rule about the router's loop, and it is here rather than in the routing document for now - see R-16's entry conditions, which it does not meet.
 
+*And it should not become a check.* Asked which of the checkable rules to write
+first, the answer for this one was to write none of it: its three conditions -
+a constant net order, the shape of the cost against the paper's equation, the
+subset re-routed rather than everything - are three separate measurements on
+code, two of them already taken, and not one check on a board. Implementing it
+would add a registry entry that can never fire on any board and say nothing the
+three measurements do not already say.
+
 A negotiated-congestion router tears at the granularity its data structure can
 restore, and every departure from the published algorithm is named as a
 departure and measured.
@@ -985,7 +993,11 @@ either of them.
 | R-07 annular ring and hole spacing | six rules - `AnnularRingRule`, `HoleToHoleRule`, `ViaDiameterRule`, `ViaDrillRule`, `PadLandRule`, `DrillAspectRatioRule` |
 | R-19 the flat clearance minimum | `ClearanceRule`, first in the registry, firing more than the rest together |
 
-**Bucket 2 - checkable today, nobody wrote the check. Eleven.** Every quantity
+**Bucket 2 - checkable today, nobody wrote the check. Eleven.** Checkable is
+not the same as testable: see "A rule with no subject cannot be tested" for
+which of these have anything to fire on, measured on the fixtures rather than
+argued. R-08 is the one to write first, and it is the only one of the eleven
+whose subject exists on all six boards. Every quantity
 these need is in the world already.
 
 | rule | why it is checkable, in one clause |
@@ -1316,6 +1328,38 @@ needs to see one has to measure geometry rather than clearance.**
 for all six: on `shift_driver` with `stop_at_own_copper` on, **27 of 32 rows**
 are this rule.
 
+## A rule with no subject cannot be tested
+
+Measured on the six benchmark fixtures on 2026-09-11, before any of the rules
+below were ranked: **780 pads, one pour, zero `.kicad_pro` files.** Pads per
+board are 14, 278, 51, 140, 156 and 141; `plane_board` carries the only zone;
+and net constraints reach the model only through a project file, so **no net on
+any of these boards declares an impedance, a current or a voltage.**
+
+That measurement sorts the rules this canon says are checkable today into three
+states, and the third one is a trap:
+
+1. **A subject on every board.** R-08 is the only one: every routed connection
+   ends on two pads, and there are 780 of them.
+2. **A subject on one board.** R-09, whose subject is the pads sitting inside
+   `plane_board`'s single pour.
+3. **No subject at all.** R-05, R-13 and R-14 are gated on declarations no
+   fixture makes, or need a second pour that no fixture has. R-12 is not about
+   a board.
+
+**The trap is that a rule with no subject has no positive control.** A correct
+implementation and one that returns an empty list are indistinguishable, so the
+first green run means nothing - the same disease as a gate whose trigger cannot
+fire, which is why this project's own checks now say "not applicable" rather
+than "clean". For R-05, R-13 and R-14 the remedy is not code but a fixture: a
+four-layer board with a pour, and for R-14 one with two pours of one net.
+Writing them first would mean writing blind and verifying nothing.
+
+**So every rule this project implements publishes its denominator** - the number
+of things it examined beside the number it reported. Without it, "no findings"
+cannot be told from "found nothing to look at", and on `qfp_fanout` those two
+answers differ by several hundred.
+
 ## Declared is not measured
 
 Three rules in a row had to be rewritten around the same mistake, which makes
@@ -1627,9 +1671,18 @@ grep -n "min_clearance" crates/cypcb-rules/src/presets/*.rs
 
 # R-19: the rule that fires most is the first one the registry runs
 sed -n '129p' crates/cypcb-drc/src/lib.rs
+
+# A rule with no subject: what the fixtures actually carry
+for f in tests/fixtures/benchmark/*.kicad_pcb; do
+  printf '%-30s pads=%-4s zones=%s\n' "$(basename "$f")" \
+    "$(grep -c '(pad ' "$f")" "$(grep -c '^  (zone' "$f")"
+done
+
+# and why no net on them declares anything: constraints arrive by project file
+ls tests/fixtures/benchmark/*.kicad_pro 2>/dev/null | wc -l   # expect 0
 ```
 
-Last verified: 2026-09-11, including R-10 through R-19. Web sources were
+Last verified: 2026-09-11, including R-10 through R-19 and the two sections on what a measurement is worth. Web sources were
 read on 2026-09-11, and every repository claim in those four rules was read
 against the working tree on the same day by opening the file rather than
 grepping for the name: `DEFAULT_TOLERANCE`, `is_90_bend`, `compute_composite`
