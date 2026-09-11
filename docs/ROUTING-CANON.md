@@ -521,146 +521,28 @@ about which kind moved.
 *The field R-11 would need does not exist:* `DrcViolation` has no severity, so
 the tiers below have nowhere to live in a row of output. See R-18.
 
-### R-12 Rip-up and reroute `[O]`
+### R-12 Rip-up and reroute - moved out `[O]`
 
-*Applies when:* never, to a board. This is a rule about the router's loop, and it is here rather than in the routing document for now - see R-16's entry conditions, which it does not meet.
+*Applies when:* never, to a board.
 
-*And it should not become a check.* Asked which of the checkable rules to write
-first, the answer for this one was to write none of it: its three conditions -
-a constant net order, the shape of the cost against the paper's equation, the
-subset re-routed rather than everything - are three separate measurements on
-code, two of them already taken, and not one check on a board. Implementing it
-would add a registry entry that can never fire on any board and say nothing the
-three measurements do not already say.
+**This section has moved to `docs/routing.md`.** It read the primary paper on
+negotiated-congestion routing and found three places where this router departs
+from the algorithm it is named after: the published loop seeds the search
+frontier with the whole partial routing tree, so a multi-terminal net is never
+decomposed into pad-to-pad searches; it re-routes every net every iteration and
+says why; and the congestion term there scales a node's own cost rather than
+being added to it. All three still stand, and all three are about this router
+rather than about a board.
 
-A negotiated-congestion router tears at the granularity its data structure can
-restore, and every departure from the published algorithm is named as a
-departure and measured.
+It leaves because it fails this canon's own first entry condition - every
+quantity a rule compares is in the world or derivable from it - and because
+asked which rules to implement, the answer for this one was none of it: its
+three conditions are three separate measurements on code, two already taken,
+and not one check on a board. A registry entry that can never fire on any board
+would say nothing the measurements do not.
 
-**What PathFinder specifies.** Source: L. McMurchie and C. Ebeling, *PathFinder:
-A Negotiation-Based Performance-Driven Router for FPGAs*, ACM/SIGDA FPGA 1995,
-read in full 2026-09-11.
-
-*Granularity.* "Only one net is ripped up at a time, but every net is ripped up
-and rerouted on every iteration, even if the net does not pass through a
-congested area." The reason is negotiation rather than economy: "In this way
-nets passing through uncongested areas can be diverted to make room for other
-nets currently in congested regions." The paper also fixes the order: "Nets are
-ripped up and rerouted in the same order every [iteration]."
-
-*The cost.* `c_n = (b_n + h_n) * p_n` (equation 1): `b_n` the base cost of node
-`n`, set in the paper to its intrinsic delay `d_n`; `h_n` "related to the
-history of congestion on `n` during previous iterations"; `p_n` "related to the
-number of other signals presently using `n`". Update rule, in the paper's
-words: "Each iteration that node C is shared, `h_n` is increased slightly", and
-"The effect of `h_n` is to permanently increase the cost of using congested
-nodes so that routes through other nodes are attempted."
-
-*The loop, as written.* Rip up routing tree `RT_i` [3]; `RT_i <- s_i` [4]; loop
-until all sinks are found [5]; "Initialize priority queue PQ to `RT_i` at cost
-0" [6]; on finding a sink, backtrace and add every node of the path to `RT_i`
-[13]-[16].
-
-*Multi-terminal nets.* "this updated `RT_i` is the source for the search for the
-next sink (step 6). In this way, all locations on routes to previously-found
-sinks are used as potential sources for routes to subsequent sinks. This is
-similar to Prim's algorithm for determining a minimum spanning tree over an
-undirected graph. This algorithm for constructing the routing tree is identical
-to an algorithm suggested by [Takahashi80]."
-
-*The order sinks are visited is not a requirement.* In the base algorithm the
-next sink is whichever the wave reaches first - "A breadth-first search for the
-closest sink `t_ij` is performed" - so the order is emergent, not chosen. The
-timing variant does choose it: sinks are routed in decreasing slack-ratio order
-and the queue is seeded at `A_ij * d_j`, which the paper introduces to hold the
-critical path rather than to make routing succeed. A project ordering its pads
-by a greedy nearest-neighbour spanning tree on Manhattan distance is therefore
-choosing a performance heuristic, not violating the algorithm - but it is also
-precomputing an order that the published form derives from the search itself.
-
-*Timing variant, for completeness.* `C_n = A_ij * d_n + (1 - A_ij) * c_n`
-(equation 2), slack ratio `A_ij = D_ij / D_max`. Theorem 1: if `h_n <= d_n` for
-all nodes, no routed path exceeds `D_max`.
-
-**What VPR does differently.** Source: Verilog-to-Routing documentation,
-command-line options page, read 2026-09-11 - the page carries no version
-string, which is recorded here because it limits what can be claimed from it.
-VPR exposes `--min_incremental_reroute_fanout`, default 16: "Incrementally
-re-route nets with fanout above the specified threshold. This attempts to reuse
-the legal (i.e. non-congested) parts of the routing tree for high fanout nets,
-with the aim of reducing router execution time." Partial tearing therefore
-exists in practice and its unit is a pruned branch of the routing tree.
-
-**The claim this project makes about VPR is not supported by what was read.**
-`crates/cypcb-autoroute/src/pathfinder_v2.rs` describes re-routing only the nets
-that pass through an overused cell as the VPR optimisation. The primary paper
-says the opposite for PathFinder, and the VTR documentation read here does not
-state the narrower rule either; ripping up only the illegal routes is published,
-but for a different router - a just-in-time FPGA routing paper describes
-ripping up only illegal routes and then adjusting costs across the resource
-graph (read 2026-09-11). Condition: either that comment gains a citation naming
-the router it came from, or it drops the words "the VPR optimisation" and
-stands as this project's own departure with its own measurement, tagged `[D]`.
-
-**Decomposition: the multi-sink wave is the standard and pad-to-pad is the
-deviation.** PathFinder seeds the frontier with the whole partial tree at cost 0
-(step [6]); this project seeds it with one pad and searches to another pad.
-Ending a connection on the net's own copper fixes the far end of that search and
-leaves the near end where it was, which is half of the published form. Checkable
-condition for full adoption: the first expansion frontier of connection `k`
-contains every cell the net already owns, not one cell. This project's own
-measurement says why the half-step is not enough - with the end test removed and
-only the start-and-end swap left, `led_blink` goes from zero shorts to one, so
-the asymmetry the swap introduces is a defect of having a start pad to choose at
-all, which the seeded frontier does not have.
-
-**Three departures this project has, stated as conditions.**
-
-1. *Net order: met.* `order_nets`
-   (`crates/cypcb-autoroute/src/orchestrator.rs:192-216`) sorts net indices with
-   a stable `sort_by` on two keys - power nets last, then Manhattan span
-   ascending - and `pathfinder_loop` receives that `Vec<usize>` once and reuses
-   the same slice every iteration. No map iteration takes part. Condition: the
-   order a run starts with is the order every iteration uses.
-2. *Every net every iteration: not met, and this is the departure.*
-   `nets_needing_reroute` (`crates/cypcb-autoroute/src/pathfinder_v2.rs:1399`,
-   called at `:596`) keeps only the nets touching an overused cell, so a subset
-   is re-routed each iteration where the paper re-routes all of them and gives
-   the reason - a net in clear space can be diverted to make room for one that
-   is stuck. Condition: the departure is measured against the paper's form on
-   the benchmark set, or it is named in the code as this project's own choice
-   rather than as somebody else's optimisation.
-3. *Cost shape: multiplicative inside, additive outside.* `congestion_cost`
-   (`crates/cypcb-autoroute/src/congestion.rs:214-228`) returns
-   `(1.0 + history) * (1.0 + overuse) - 1.0 + ring_penalty * ring`, which is the
-   shape of equation (1) with the base normalised to 1: history multiplies
-   present overuse. But the value enters the total additively - the successor
-   cost in `find_path_congestion_augmented` is base plus congestion plus
-   crowding plus pad crossing plus stacking - so the node's own base cost is
-   never scaled by present congestion, which equation (1) does scale. Condition:
-   a sweep that compares the additive form against `(b + h) * p` on the
-   benchmark set, or the difference stands recorded here and unmeasured.
-
-**The dependency question, and why it does not appear in the literature.** In
-PathFinder it cannot arise: step [3] erases the entire routing tree of the net
-before its sinks are re-routed, so no connection outlives the one it grew from.
-In VPR's incremental reroute it is answered structurally rather than by a rule -
-a net's routing is a tree rooted at the source, so pruning an illegal branch
-leaves every surviving node with its path to the root. Nothing read here states
-a rule for the case where connection `k` ends on connection `j`'s copper,
-because in both published designs that relation is the tree edge itself.
-Searches on 2026-09-11 that returned no such rule: rip-up of a connection
-another connection terminates on; partial rip-up semantics for a net routed as
-independent two-pin connections.
-
-**In this repo:** tearing is net-wide -
-`crates/cypcb-autoroute/src/pathfinder_v2.rs:610-623` clears the net's cells,
-rings and holes, drops `routed_paths` for that net and rebuilds its spanning
-tree - and that is the only tearing with defined semantics here, because
-`routed_paths` is `HashMap<u32, Vec<Vec<GridNode>>>`
-(`crates/cypcb-autoroute/src/pathfinder_v2.rs:288`): a flat list of paths with
-no parent relation to prune. The prerequisite for partial tearing is not a
-dependency field but the rooted tree the published routers keep.
+The number after it is not reused. R-13 is still R-13, so a reference written
+before today still lands where its author meant.
 
 ### R-13 Return path, the threshold that does not exist `[P]`
 
@@ -1008,16 +890,16 @@ these need is in the world already.
 | R-09 thermal relief geometry | the filled pour gives the spokes, the design rules give the numbers - but the 3 A case has no cure |
 | R-10 mitring | the junction is already reported by R-03 and the cut is geometry on two arms |
 | R-11 acceptance classes | `ViolationKind` gives the kinds and `clearance_contacts` the count tier 3 needs; the class gate exists only when the board picks `IpcClass1`, `IpcClass2` or `IpcClass3` (`crates/cypcb-rules/src/presets/mod.rs:58`, `:60`, `:62`) and is absent for a house preset |
-| R-12 rip-up and reroute | its three conditions are properties of code, two of them already measured |
+| R-12 rip-up and reroute | **moved to `docs/routing.md`** - its three conditions are measurements on code, not a check on a board |
 | R-13 return path, measured | same data as R-05; coverage and crossings are geometry, loop area an estimate by design |
 | R-14 via stitching | vias carry net, position and layer span, pours carry their pitch; the measurement is available, the thresholds are not |
 | R-15 thermal relief in manufacturing | spoke width, surviving spoke count and pad symmetry all read from data already present |
 | R-17 the search grid | pad positions and a fab table are on every board; the check is a loop over pads with the router's own snap |
 
-**Not about a board at all. Three.** R-12 is about the router's loop, R-16 is
-this section, and R-18 is about a row of output. Each says so in its own
-*applies when* line, and R-12 fails entry condition 1 below - which is the
-argument for moving it out of this document.
+**Not about a board at all. Two, since R-12 left.** R-16 is this section and
+R-18 is about a row of output; each says so in its own *applies when* line.
+R-12 failed entry condition 1 below and has moved to `docs/routing.md`, which
+is what that argument was for.
 
 **Bucket 3 - the model cannot answer. Two.**
 
