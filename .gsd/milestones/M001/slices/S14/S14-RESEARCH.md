@@ -154,11 +154,11 @@ Not applicable -- this is documentation authoring, not technology selection.
 ## Sources
 
 ### Primary (HIGH confidence)
-- `/workspace/codeyourpcb/docs/SYNTAX.md` - Existing DSL reference (419 lines)
-- `/workspace/codeyourpcb/examples/*.cypcb` - 11 example files
-- `/workspace/codeyourpcb/DESKTOP-SETUP.md` - Existing setup guide
-- `/workspace/codeyourpcb/crates/` - 14 crate structure examined
-- `/workspace/codeyourpcb/.planning/research/FEATURES.md` - Feature inventory
+- `docs/SYNTAX.md` - Existing DSL reference (419 lines)
+- `examples/*.cypcb` - 11 example files
+- `DESKTOP-SETUP.md` - Existing setup guide
+- `crates/` - 14 crate structure examined
+- `.planning/research/FEATURES.md` - Feature inventory
 
 ## Metadata
 

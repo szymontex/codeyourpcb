@@ -17,7 +17,7 @@
 ## Smoke Test
 
 ```bash
-cd /workspace/codeyourpcb && cargo test -p cypcb-parser -- test_backward_compat_all_example_files
+cd <checkout> && cargo test -p cypcb-parser -- test_backward_compat_all_example_files
 ```
 Must pass — proves all v1 .cypcb files still parse correctly after grammar changes.
 

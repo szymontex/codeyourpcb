@@ -17,13 +17,20 @@
 # Everything it learns goes in one line at the top of the log, so a reader who
 # opens the newest file sees the verdict before the scrollback.
 #
+# The log directory is an argument and not a constant. It used to be a constant,
+# and the constant was the one on the machine this runs on, which put a private
+# path in a public repository - see scripts/no-private-paths.sh. The fallback
+# below is the portable place a tool keeps state on Linux, so a stranger's clone
+# writes somewhere sane; the scheduled entry that runs this passes its own
+# directory, because that is where the reader of the verdict is looking.
+#
 # Usage: scripts/scheduled-gate.sh [log-directory]
-#   default log directory: /config/gate-runs
+#   default: $XDG_STATE_HOME/cypcb-gate, or $HOME/.local/state/cypcb-gate
 
 set -uo pipefail
 
 REPO=$(cd "$(dirname "$0")/.." && pwd)
-LOG_DIR=${1:-/config/gate-runs}
+LOG_DIR=${1:-${XDG_STATE_HOME:-$HOME/.local/state}/cypcb-gate}
 
 # The nine stages, named rather than hard-coded, so the decision around them
 # can be tested without paying for them. `scripts/scheduled-gate-selftest.sh`

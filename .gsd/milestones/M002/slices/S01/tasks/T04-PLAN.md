@@ -56,7 +56,7 @@ Each document covers a specific topic area with practical rules, tables, formula
 
 - S01 research findings: manufacturer specs, IPC standards, competitor analysis notes
 - `crates/cypcb-rules/` — the implemented types that these docs describe and contextualize
-- `/workspace/competitors/` — previously analyzed competitor source patterns (referenced but not copied)
+- `competitor-sources/` — previously analyzed competitor source patterns (referenced but not copied)
 
 ## Expected Output
 

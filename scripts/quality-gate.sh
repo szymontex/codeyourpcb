@@ -14,7 +14,7 @@ echo "=== Quality Gate ==="
 echo ""
 
 # Stage 1: Rust formatting
-echo "[1/14] cargo fmt --check"
+echo "[1/15] cargo fmt --check"
 if cargo fmt --check 2>&1; then
   pass "cargo-fmt"
 else
@@ -30,7 +30,7 @@ echo ""
 # icon the macro refused, all found the first time anybody ran it. The
 # dependencies are in `scripts/setup-dev.sh` now, so the exclusion has nothing
 # left to protect and a crate nobody compiles is a crate nobody maintains.
-echo "[2/14] cargo clippy"
+echo "[2/15] cargo clippy"
 # The second reader is behind a feature, so the plain run does not lint it
 # either - the same gap the test stage below had.
 if cargo clippy --workspace --all-targets -- -D warnings 2>&1 \
@@ -104,7 +104,7 @@ if [ -n "$UNTRACKED_PARSER" ]; then
   fail "untracked tree-sitter output"
 fi
 
-echo "[3/14] cargo test"
+echo "[3/15] cargo test"
 # The Rust reader is what `parse` is now. The tests that check it against the
 # tree-sitter parser need that parser as well, which the plain run does not
 # build - named explicitly, because a test nobody runs is not a test.
@@ -142,7 +142,7 @@ echo ""
 #
 # tsconfig.json includes `src`, `e2e` and the root `*.ts`, which is what makes
 # this worth a stage: the specs and the dev server are code too.
-echo "[4/14] tsc --noEmit"
+echo "[4/15] tsc --noEmit"
 TSC_LOG=$(mktemp)
 if (cd viewer && npx tsc --noEmit 2>&1 | tee "$TSC_LOG"); then
   pass "tsc"
@@ -156,7 +156,7 @@ fi
 rm -f "$TSC_LOG"
 echo ""
 
-echo "[5/14] eslint"
+echo "[5/15] eslint"
 if (cd viewer && npx eslint src/ e2e/ *.ts) 2>&1; then
   pass "eslint"
 else
@@ -165,7 +165,7 @@ fi
 echo ""
 
 # Stage 5: Vitest
-echo "[6/14] vitest"
+echo "[6/15] vitest"
 VITEST_LOG=$(mktemp)
 if (cd viewer && npx vitest run 2>&1 | tee "$VITEST_LOG"); then
   pass "vitest"
@@ -203,7 +203,7 @@ echo ""
 # That port is no longer 4321. It was, and 4321 is Astro's default, so a gate
 # run failed here because another repository's dev server in this container
 # held it. `CYPCB_E2E_PORT` overrides, and the default is 4327.
-echo "[7/14] playwright (rebuilding viewer/pkg first)"
+echo "[7/15] playwright (rebuilding viewer/pkg first)"
 # The module is rebuilt, and then asked whether the committed one is the same.
 # The rebuild makes the browser suite honest about the working tree; the
 # question afterwards is about what a clean clone carries, and on 2026-08-27
@@ -306,7 +306,7 @@ rm -f "$PLAYWRIGHT_LOG"
 echo ""
 
 # Stage 7: Autorouter benchmark — regression gate + performance benchmark
-echo "[8/14] autorouter benchmark"
+echo "[8/15] autorouter benchmark"
 if cargo test --release -p cypcb-autoroute -- benchmark_regression 2>&1; then
   pass "benchmark-regression"
 else
@@ -347,7 +347,7 @@ fi
 echo ""
 
 # Stage 8: Code duplication check
-echo "[9/14] jscpd"
+echo "[9/15] jscpd"
 if (cd viewer && npx jscpd --exitCode 1) 2>&1; then
   pass "jscpd"
 else
@@ -362,7 +362,7 @@ echo ""
 # deleted - was found again by hand five weeks later. It keeps its list and
 # gains a number: the count of unreached methods has to be the one the script
 # records, so neither a new dead wrapper nor a deletion can pass unremarked.
-echo "[10/14] engine API reach"
+echo "[10/15] engine API reach"
 if ./scripts/unused-engine-api.sh 2>&1; then
   pass "unused-engine-api"
 else
@@ -377,7 +377,7 @@ echo ""
 # nothing here started. It builds what it photographs first: the smoke test
 # refuses a bundle older than `viewer/src`, and the tree it was wired into had
 # a `viewer/dist` a week behind.
-echo "[11/14] desktop smoke"
+echo "[11/15] desktop smoke"
 if (cd viewer && npm run build) >/dev/null 2>&1 \
     && cargo build -p cypcb-desktop >/dev/null 2>&1 \
     && ./scripts/desktop-smoke.sh; then
@@ -395,7 +395,7 @@ echo ""
 # and nothing ran it either, so the census was a number nobody had looked at
 # since the day it was taken. The list stays a person's call; the count is
 # held here, the way the engine API's is.
-echo "[12/14] claims in comments"
+echo "[12/15] claims in comments"
 if ./scripts/claims-in-comments.sh; then
   pass "claims-in-comments"
 else
@@ -411,7 +411,7 @@ echo ""
 # The types it lists stay a diagnostic, because an exported interface beside
 # its function is ordinary style. The values are the gate, and the viewer is
 # already at zero.
-echo "[13/14] unused exports"
+echo "[13/15] unused exports"
 if ./scripts/unused-exports.sh --values-only; then
   pass "unused-exports"
 else
@@ -426,11 +426,26 @@ echo ""
 # branch happened to line up, so four of its five publish outcomes had never
 # happened at all. This stage makes them happen, against throwaway
 # repositories in a temporary directory.
-echo "[14/14] scheduled-gate selftest"
+echo "[14/15] scheduled-gate selftest"
 if ./scripts/scheduled-gate-selftest.sh 2>&1; then
   pass "scheduled-gate-selftest"
 else
   fail "scheduled-gate-selftest"
+fi
+echo ""
+
+# Stage 15: the repository does not name the machine it is built on
+#
+# This repository is public and the machine is not. On 2026-09-11 a grep found
+# a host name, a container home, a log directory and a checkout path across
+# thirty-two tracked files written over four months - none of it about circuit
+# boards, all of it pasted out of a terminal by somebody who could see it and
+# forgot that a reader cannot. A patch would have let the next paste back in.
+echo "[15/15] no private paths"
+if ./scripts/no-private-paths.sh; then
+  pass "no-private-paths"
+else
+  fail "no-private-paths"
 fi
 echo ""
 

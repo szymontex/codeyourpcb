@@ -14,7 +14,7 @@ Research and document a comprehensive feature matrix comparing CodeYourPCB again
 
 ## Steps
 
-1. Audit open-source competitors from cloned repos: atopile (`/workspace/competitors/atopile/`), diodeinc/pcb (`/workspace/competitors/pcb/`), and existing KiCad analysis in `docs/pcb-knowledge/competitors/`. Extract feature lists across all 11 categories.
+1. Audit open-source competitors from cloned repos: atopile (`competitor-sources/atopile/`), diodeinc/pcb (`competitor-sources/pcb/`), and existing KiCad analysis in `docs/pcb-knowledge/competitors/`. Extract feature lists across all 11 categories.
 2. Research commercial tools (Altium, Allegro, OrCAD, EAGLE, EasyEDA, Flux.ai) via web search — official feature pages, manuals, and tutorial references. Focus on feature presence/absence, not deep implementation details.
 3. Catalogue CodeYourPCB's current capabilities by reviewing existing crates, viewer features, DSL constructs, and export formats. Be honest about what's implemented vs stubbed.
 4. Write `docs/competition-feature-matrix.md` with: executive summary, per-category comparison tables (rows=features, columns=tools), parity status icons (✅ parity, 🔶 partial, ❌ missing, 🚀 advantage), and a prioritized gap list for S07/S08.
@@ -34,8 +34,8 @@ Research and document a comprehensive feature matrix comparing CodeYourPCB again
 
 ## Inputs
 
-- `/workspace/competitors/atopile/` — cloned atopile repo
-- `/workspace/competitors/pcb/` — cloned diodeinc/pcb repo
+- `competitor-sources/atopile/` — cloned atopile repo
+- `competitor-sources/pcb/` — cloned diodeinc/pcb repo
 - `docs/pcb-knowledge/competitors/` — existing KiCad/competitor analysis
 - Web research for commercial tools
 

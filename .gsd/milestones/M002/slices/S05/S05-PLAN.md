@@ -25,10 +25,10 @@
 
 ## Verification
 
-- `cd /workspace/codeyourpcb && cargo test --manifest-path crates/cypcb-parser/Cargo.toml` — all existing + new tests pass
-- `cd /workspace/codeyourpcb && cargo test --manifest-path crates/cypcb-core/Cargo.toml` — PhysicalUnit tests pass
-- `cd /workspace/codeyourpcb && cargo build` — full workspace compiles (sync.rs, LSP, render all handle new variants)
-- `cd /workspace/codeyourpcb && cargo build --target wasm32-unknown-unknown -p cypcb-render` — WASM build succeeds
+- `cd <checkout> && cargo test --manifest-path crates/cypcb-parser/Cargo.toml` — all existing + new tests pass
+- `cd <checkout> && cargo test --manifest-path crates/cypcb-core/Cargo.toml` — PhysicalUnit tests pass
+- `cd <checkout> && cargo build` — full workspace compiles (sync.rs, LSP, render all handle new variants)
+- `cd <checkout> && cargo build --target wasm32-unknown-unknown -p cypcb-render` — WASM build succeeds
 - Backward compat: dedicated test parses all 10 v1 `.cypcb` files and asserts zero parse errors
 - Forward test: v2 example files parse to expected AST structure
 

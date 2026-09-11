@@ -62,8 +62,8 @@ To call this milestone complete, we must prove:
 - `crates/cypcb-world/` — ECS board model with spatial index
 - `crates/cypcb-drc/` — DRC engine
 - `viewer/src/renderer.ts` — Canvas 2D renderer
-- `/workspace/competitors/atopile/` — reference for DSL features, 3D viewer, constraint solver
-- `/workspace/competitors/pcb/` — reference for Rust PCB tooling patterns
+- `competitor-sources/atopile/` — reference for DSL features, 3D viewer, constraint solver
+- `competitor-sources/pcb/` — reference for Rust PCB tooling patterns
 - `.gsd/research/` — existing architecture, features, pitfalls, stack research
 
 ## Scope
@@ -71,7 +71,7 @@ To call this milestone complete, we must prove:
 ### In Scope
 
 - Massive PCB design knowledge collection (IPC standards, textbooks, Reddit community tips, manufacturer docs)
-- Clone and analyze KiCad, LibrePCB, Horizon EDA repos in /workspace/competitors/
+- Clone and analyze KiCad, LibrePCB, Horizon EDA repos in competitor-sources/
 - Deep research of closed-source tools via manuals/tutorials (Altium, Allegro, OrCAD, EAGLE)
 - Custom autorouter (A*, constraint-aware, multi-layer) informed by knowledge base
 - 3D board viewer (Three.js/WebGPU with JLCPCB models)
@@ -99,7 +99,7 @@ To call this milestone complete, we must prove:
 - WASM for browser deployment
 - Must maintain backward compatibility with existing .cypcb files
 - No git commits mentioning AI/claude/gsd — author: szymontex <szymontex@gmail.com>
-- All competition analysis stays in /workspace/competitors/
+- All competition analysis stays in competitor-sources/
 - Performance: autorouter <30s for 500-component boards, 3D render at 60fps
 - No questionable/dubious content goes into the repo — clean, professional code only
 - License compliance: if any pattern resembles competitor code, add attribution in ATTRIBUTION.md with license reference

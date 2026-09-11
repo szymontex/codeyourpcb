@@ -7,7 +7,7 @@ import { dirname, join } from 'node:path';
  * Two faults a setup script can carry that no compiler will ever see.
  *
  * **A developer's own path.** `setup-linux.sh` step 6 read
- * `cd /workspace/codeyourpcb` - the directory this project happens to be
+ * `cd <checkout>` - the directory this project happens to be
  * checked out in on one build host. On anyone else's machine that line ends
  * the script, and it is the last step before the summary that tells the reader
  * what to run next.

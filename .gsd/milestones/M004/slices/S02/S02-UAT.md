@@ -11,7 +11,7 @@
 ## Preconditions
 
 - Rust toolchain installed with `wasm32-unknown-unknown` target
-- Working directory is the project root (`/workspace/codeyourpcb`)
+- Working directory is the project root (`<checkout>`)
 - Test fixture files exist: `tests/fixtures/blink.cypcb`, `tests/fixtures/routing-test.cypcb`
 
 ## Smoke Test

@@ -12,7 +12,7 @@
 
 - Rust toolchain installed (rustfmt, clippy)
 - Node.js installed with npm
-- `cd /workspace/codeyourpcb/viewer && npm install` completed
+- `cd viewer && npm install` completed
 - Playwright browsers installed (`npx playwright install chromium`)
 - WASM build available (Vite dev server can start)
 
@@ -24,37 +24,37 @@ Run `./scripts/quality-gate.sh` from repo root — should exit 0 with all 6 stag
 
 ### 1. Rust formatting is clean
 
-1. `cd /workspace/codeyourpcb && cargo fmt --check`
+1. `cd <checkout> && cargo fmt --check`
 2. **Expected:** Exit 0, zero diffs
 
 ### 2. Rust lints are clean
 
-1. `cd /workspace/codeyourpcb && cargo clippy --workspace --exclude cypcb-cli --exclude cypcb-desktop -- -D warnings`
+1. `cd <checkout> && cargo clippy --workspace --exclude cypcb-cli --exclude cypcb-desktop -- -D warnings`
 2. **Expected:** Exit 0, zero warnings
 
 ### 3. All Rust tests pass
 
-1. `cd /workspace/codeyourpcb && cargo test --workspace --exclude cypcb-cli --exclude cypcb-desktop`
+1. `cd <checkout> && cargo test --workspace --exclude cypcb-cli --exclude cypcb-desktop`
 2. **Expected:** All tests pass, zero failures
 
 ### 4. ESLint passes on viewer TypeScript
 
-1. `cd /workspace/codeyourpcb/viewer && npx eslint src/`
+1. `cd viewer && npx eslint src/`
 2. **Expected:** Exit 0, zero errors
 
 ### 5. Vitest unit tests pass
 
-1. `cd /workspace/codeyourpcb/viewer && npx vitest run`
+1. `cd viewer && npx vitest run`
 2. **Expected:** 40 tests pass across 4 test files
 
 ### 6. Playwright E2E tests pass
 
-1. `cd /workspace/codeyourpcb/viewer && npx playwright test`
+1. `cd viewer && npx playwright test`
 2. **Expected:** 39 tests pass across 8 spec files, screenshot artifacts in `test-results/`
 
 ### 7. Quality gate script runs end-to-end
 
-1. `cd /workspace/codeyourpcb && ./scripts/quality-gate.sh`
+1. `cd <checkout> && ./scripts/quality-gate.sh`
 2. **Expected:** All 6 stages pass with ✓ labels, exit 0
 
 ### 8. XSS vulnerability is fixed

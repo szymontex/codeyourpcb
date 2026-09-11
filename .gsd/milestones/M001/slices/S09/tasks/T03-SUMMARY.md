@@ -218,11 +218,11 @@ pub fn component_count(conn: &Connection) -> Result<usize, LibraryError>;
 ## Documentation
 
 **Files Created:**
-- `/workspace/codeyourpcb/crates/cypcb-library/src/search.rs` - 415 lines including tests
+- `crates/cypcb-library/src/search.rs` - 415 lines including tests
 
 **Files Modified:**
-- `/workspace/codeyourpcb/crates/cypcb-library/src/lib.rs` - Added pub mod search
-- `/workspace/codeyourpcb/crates/cypcb-library/src/models.rs` - Fixed SearchFilters::default()
+- `crates/cypcb-library/src/lib.rs` - Added pub mod search
+- `crates/cypcb-library/src/models.rs` - Fixed SearchFilters::default()
 
 **Total Impact:**
 - 415 lines of new code (search.rs)

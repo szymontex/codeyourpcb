@@ -234,13 +234,13 @@ manager.get_footprint_preview(source, name) -> Result<Option<FootprintPreview>, 
 ## Documentation
 
 **Files Created:**
-- `/workspace/codeyourpcb/crates/cypcb-library/src/metadata.rs` - Version tracking and 3D model association (400 lines)
-- `/workspace/codeyourpcb/crates/cypcb-library/src/preview.rs` - Footprint preview extraction (662 lines)
+- `crates/cypcb-library/src/metadata.rs` - Version tracking and 3D model association (400 lines)
+- `crates/cypcb-library/src/preview.rs` - Footprint preview extraction (662 lines)
 
 **Files Modified:**
-- `/workspace/codeyourpcb/crates/cypcb-library/src/schema.rs` - Added METADATA_SCHEMA with library_versions table
-- `/workspace/codeyourpcb/crates/cypcb-library/src/manager.rs` - Added get_footprint_preview() method
-- `/workspace/codeyourpcb/crates/cypcb-library/src/lib.rs` - Added metadata and preview modules
+- `crates/cypcb-library/src/schema.rs` - Added METADATA_SCHEMA with library_versions table
+- `crates/cypcb-library/src/manager.rs` - Added get_footprint_preview() method
+- `crates/cypcb-library/src/lib.rs` - Added metadata and preview modules
 
 **Total Impact:**
 - 1,062 lines of new code (metadata + preview)

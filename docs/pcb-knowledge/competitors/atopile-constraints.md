@@ -266,7 +266,7 @@ different problems.
 - atopile repository: <https://github.com/atopile/atopile>
 - atopile documentation: <https://docs.atopile.io>
 - atopile package registry: <https://packages.atopile.io>
-- Competitor analysis: `/workspace/competitors/atopile-vs-us.md`
+- Competitor analysis: `competitor-sources/atopile-vs-us.md`
 - faebryk library (atopile's Python core): `src/faebryk/library/`
 
 **License:** atopile is MIT licensed. This analysis describes architectural

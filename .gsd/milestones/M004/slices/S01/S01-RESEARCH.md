@@ -223,7 +223,7 @@ pub enum BenchmarkComplexity {
 ## Sources
 
 - KiCad .kicad_pcb S-expression format documentation (source: [KiCad Developer Docs](https://dev-docs.kicad.org/en/file-formats/sexpr-pcb/index))
-- `kicad_parse_gen` v0.7.3 source code — layout module handles `module` but not `footprint` keyword; segments/vias are `Other(Sexp)` (source: cargo registry `/config/.cargo/registry/src/.../kicad_parse_gen-0.7.3/`)
+- `kicad_parse_gen` v0.7.3 source code — layout module handles `module` but not `footprint` keyword; segments/vias are `Other(Sexp)` (source: cargo registry `<cargo-home>/registry/src/.../kicad_parse_gen-0.7.3/`)
 - Existing `cypcb-kicad` crate — complete `.kicad_mod` footprint parser, layer mapping, courtyard extraction (source: `crates/cypcb-kicad/src/footprint.rs`)
 - KiCad track segment format: `(segment (start X Y) (end X Y) (width W) (layer L) (net N))` (source: KiCad docs)
 - KiCad via format: `(via (at X Y) (size D) (drill D) (layers L1 L2) (net N))` (source: KiCad docs)

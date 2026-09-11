@@ -180,7 +180,7 @@ All snapshot values are sanitized via `JSON.stringify` replacer:
 
 ## KiCad Source Reference
 
-Key files in `/workspace/competitors/kicad/`:
+Key files in `competitor-sources/kicad/`:
 - `pcbnew/router/pns_line_placer.cpp` — interactive routing
 - `pcbnew/router/pns_line.cpp` — dragSegment45, dragCorner45, Walkaround
 - `pcbnew/router/pns_dragger.cpp` — drag state machine

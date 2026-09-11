@@ -11,7 +11,7 @@
 ## Preconditions
 
 - Rust toolchain installed (`cargo` available)
-- Working directory is workspace root (`/workspace/codeyourpcb`)
+- Working directory is workspace root (`<checkout>`)
 - All crate dependencies resolved (`cargo fetch` or first build succeeds)
 - Benchmark fixtures exist at `tests/fixtures/benchmark/*.kicad_pcb` (3 files)
 - Synthetic test fixture exists at `crates/cypcb-kicad/tests/fixtures/minimal.kicad_pcb`

@@ -67,7 +67,7 @@ export GLIBC_TUNABLES=glibc.rtld.optional_static_tls=2048
 
 # The directory this is built in used to end up inside the module. rustc
 # records source paths - panic messages name the file they came from - so the
-# same commit built in `/workspace/codeyourpcb` and in the scheduled gate's
+# same commit built in `<checkout>` and in the scheduled gate's
 # worktree produced two different files, and the gate reads that difference as
 # a stale artifact. Measured 2026-08-31: without this line the two builds'
 # `cypcb_render_bg.wasm` differ; with it both are

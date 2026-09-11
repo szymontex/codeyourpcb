@@ -194,13 +194,13 @@ let components = source.import_library("Resistor_SMD")?; // Parses Resistor_SMD.
 ## Documentation
 
 **Files Created:**
-- `/workspace/codeyourpcb/crates/cypcb-library/src/sources/mod.rs` - LibrarySource trait (17 lines)
-- `/workspace/codeyourpcb/crates/cypcb-library/src/sources/kicad.rs` - KiCad parser and tests (361 lines)
+- `crates/cypcb-library/src/sources/mod.rs` - LibrarySource trait (17 lines)
+- `crates/cypcb-library/src/sources/kicad.rs` - KiCad parser and tests (361 lines)
 
 **Files Modified:**
-- `/workspace/codeyourpcb/crates/cypcb-library/Cargo.toml` - Added lexpr dependency
-- `/workspace/codeyourpcb/crates/cypcb-library/src/lib.rs` - Added sources module and re-export
-- `/workspace/codeyourpcb/Cargo.lock` - Dependency resolution
+- `crates/cypcb-library/Cargo.toml` - Added lexpr dependency
+- `crates/cypcb-library/src/lib.rs` - Added sources module and re-export
+- `Cargo.lock` - Dependency resolution
 
 **Total Impact:**
 - 378 lines of new code (trait + parser + tests)

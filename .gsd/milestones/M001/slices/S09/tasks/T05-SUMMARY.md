@@ -306,10 +306,10 @@ impl LibraryManager {
 ## Documentation
 
 **Files Created:**
-- `/workspace/codeyourpcb/crates/cypcb-library/src/manager.rs` - LibraryManager implementation (538 lines)
+- `crates/cypcb-library/src/manager.rs` - LibraryManager implementation (538 lines)
 
 **Files Modified:**
-- `/workspace/codeyourpcb/crates/cypcb-library/src/lib.rs` - Added manager module and re-export
+- `crates/cypcb-library/src/lib.rs` - Added manager module and re-export
 
 **Total Impact:**
 - 538 lines of new code (manager.rs)

@@ -44,7 +44,7 @@ Phase 1 is the slice deliverable. Phases 2-3 can start in this slice but are str
 - `crates/cypcb-render/src/snapshot.rs` — Rust `BoardSnapshot` struct. `ComponentInfo` has `footprint` name and `pads` but no `model_3d` field yet.
 - `crates/cypcb-world/src/footprint/library.rs` — `Footprint` struct has `bounds: Rect` and `courtyard: Rect`. These give component body dimensions for procedural fallback shapes.
 - `viewer/vite.config.ts` — Vite config with WASM plugin, Monaco chunking. Three.js should get its own chunk for code-splitting.
-- Atopile reference: `/workspace/competitors/atopile/src/vscode-atopile/src/ui/modelviewer.ts` — Their Three.js viewer pattern: scene + camera + OrbitControls + GLTFLoader + MeshPhysicalMaterial + RoomEnvironment. Good reference for materials and lighting setup.
+- Atopile reference: `competitor-sources/atopile/src/vscode-atopile/src/ui/modelviewer.ts` — Their Three.js viewer pattern: scene + camera + OrbitControls + GLTFLoader + MeshPhysicalMaterial + RoomEnvironment. Good reference for materials and lighting setup.
 
 ## Constraints
 
@@ -134,7 +134,7 @@ The `threejs-fundamentals` and `threejs-geometry` skills are directly relevant a
 
 ## Sources
 
-- Atopile uses KiCad CLI `pcb export glb` for 3D, then Three.js GLTFLoader with MeshPhysicalMaterial + RoomEnvironment + DRACOLoader (source: `/workspace/competitors/atopile/src/vscode-atopile/src/ui/modelviewer.ts`)
+- Atopile uses KiCad CLI `pcb export glb` for 3D, then Three.js GLTFLoader with MeshPhysicalMaterial + RoomEnvironment + DRACOLoader (source: `competitor-sources/atopile/src/vscode-atopile/src/ui/modelviewer.ts`)
 - JLCPCB 3D models available via CDFER/JLCPCB-Kicad-Library on GitHub with STEP files for basic/preferred parts (source: Google Search — github.com/CDFER/JLCPCB-Kicad-Library)
 - OpenCascade.js can convert STEP to mesh in browser (2.4MB compressed custom build) but has performance concerns with `TransferRoots()` (source: Google Search — ocjs.org, medium.com)
 - Three.js PCB visualization: ExtrudeGeometry for traces, merged BufferGeometry for performance, procedural board layers with Z-offset (source: Google Search — github.com/jglim/PurpleVisualizer)

@@ -190,14 +190,14 @@ use cypcb_library::schema::{
 ## Documentation
 
 **Files Created:**
-- `/workspace/codeyourpcb/crates/cypcb-library/Cargo.toml` - Crate manifest with rusqlite dependency
-- `/workspace/codeyourpcb/crates/cypcb-library/src/lib.rs` - Public API with re-exports
-- `/workspace/codeyourpcb/crates/cypcb-library/src/models.rs` - Data models (146 lines)
-- `/workspace/codeyourpcb/crates/cypcb-library/src/error.rs` - Error types (34 lines)
-- `/workspace/codeyourpcb/crates/cypcb-library/src/schema.rs` - Schema + CRUD + tests (449 lines)
+- `crates/cypcb-library/Cargo.toml` - Crate manifest with rusqlite dependency
+- `crates/cypcb-library/src/lib.rs` - Public API with re-exports
+- `crates/cypcb-library/src/models.rs` - Data models (146 lines)
+- `crates/cypcb-library/src/error.rs` - Error types (34 lines)
+- `crates/cypcb-library/src/schema.rs` - Schema + CRUD + tests (449 lines)
 
 **Files Modified:**
-- `/workspace/codeyourpcb/Cargo.toml` - Added cypcb-library to workspace members
+- `Cargo.toml` - Added cypcb-library to workspace members
 
 **Total Impact:**
 - 629 lines of new code (models + error + schema)

@@ -78,7 +78,7 @@ This approach keeps backward compatibility with existing code that uses `DesignR
 - **Manufacturer spec drift** — JLCPCB and PCBWay change capabilities without notice. Presets could become inaccurate over time. Mitigate with source URLs and date stamps.
 - **cypcb-rules API stability** — This is a new crate consumed by S02's autorouter. If the trait design is wrong, S02 will force a rework. Mitigate by designing the API with autorouter cost-function needs in mind from the start.
 - **Scope creep into simulation** — Signal integrity rules could expand into full SI simulation (IBIS, S-parameters). Keep S01 focused on classification and constraint tables, not simulation.
-- **KiCad/LibrePCB repo cloning** — The roadmap says to clone these repos to `/workspace/competitors/`. These are large repos (KiCad is 1GB+). Only clone the relevant DRC/router subdirectories or analyze via GitHub search.
+- **KiCad/LibrePCB repo cloning** — The roadmap says to clone these repos to `competitor-sources/`. These are large repos (KiCad is 1GB+). Only clone the relevant DRC/router subdirectories or analyze via GitHub search.
 
 ## Skills Discovered
 
@@ -142,4 +142,4 @@ The autorouter (S02) needs signal classes to apply differentiated routing rules:
 - OSHPark: 6mil on 2-layer, 5mil on 4/6-layer, 10mil min drill on 2L, 8mil on 6L (source: [OSHPark design rules](https://docs.oshpark.com/design-tools/))
 - PCBWay: 6mil recommended, 3mil achievable, 0.2mm min drill (source: [PCBWay capabilities](https://www.pcbway.com/capabilities.html))
 - Signal integrity classification and best practices compiled from AllPCB, ProtoExpress, EMA-EDA references
-- Competitor router patterns analyzed from `/workspace/competitors/pcb/` (DeepPCB cloud router, KiCad integration) and `/workspace/competitors/atopile/` (constraint solver in `faebryk.core.solver`)
+- Competitor router patterns analyzed from `competitor-sources/pcb/` (DeepPCB cloud router, KiCad integration) and `competitor-sources/atopile/` (constraint solver in `faebryk.core.solver`)

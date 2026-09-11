@@ -11,7 +11,7 @@
 ## Preconditions
 
 - Rust toolchain installed with `wasm32-unknown-unknown` target
-- Working directory is the project root (`/workspace/codeyourpcb`)
+- Working directory is the project root (`<checkout>`)
 - KiCad benchmark fixtures exist in `tests/fixtures/benchmark/` (created by S01)
 - Scoring module exists in `cypcb-autoroute::scoring` (created by S02)
 - Release profile recommended for strategy comparison tests (debug builds are 5-10× slower)

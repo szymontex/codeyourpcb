@@ -10,7 +10,7 @@
 
 ## Preconditions
 
-- `cd /workspace/codeyourpcb`
+- `cd <checkout>`
 - Node.js, Rust toolchain, and Playwright browsers available
 - Dev server not required (Playwright launches its own via webServer config)
 

@@ -61,9 +61,9 @@ The competition feature matrix needs to cover these tools:
 
 | Tool | License | Our Access |
 |------|---------|------------|
-| atopile | Apache-2.0 | Cloned in `/workspace/competitors/atopile/` |
+| atopile | Apache-2.0 | Cloned in `competitor-sources/atopile/` |
 | KiCad | GPL-3.0 | Docs + architecture analysis in `docs/pcb-knowledge/competitors/` |
-| diodeinc/pcb | MIT/Apache | Cloned in `/workspace/competitors/pcb/` |
+| diodeinc/pcb | MIT/Apache | Cloned in `competitor-sources/pcb/` |
 | Altium Designer | Commercial | Manuals, tutorials, feature lists (web research) |
 | Cadence Allegro | Commercial | Manuals, tutorials (web research) |
 | Cadence OrCAD | Commercial | Manuals, tutorials (web research) |
@@ -188,7 +188,7 @@ Categories to compare: DSL/schematic, PCB layout editing, autorouter, DRC, 3D vi
 ## Sources
 
 - KiCad grid snap behavior: grid settings with configurable spacing, components snap on placement and during move (source: KiCad docs, existing analysis in `docs/pcb-knowledge/competitors/kicad-drc.md`)
-- atopile feature set: constraint solver, module system, typed interfaces, physical units, LCSC auto-pick, package registry, VS Code extension (source: `/workspace/competitors/atopile-vs-us.md`)
-- diodeinc/pcb crate structure: pcb-layout, pcb-ui (terminal only), pcb-kicad, pcb-mcp — no graphical viewer (source: `/workspace/competitors/pcb/`)
+- atopile feature set: constraint solver, module system, typed interfaces, physical units, LCSC auto-pick, package registry, VS Code extension (source: `competitor-sources/atopile-vs-us.md`)
+- diodeinc/pcb crate structure: pcb-layout, pcb-ui (terminal only), pcb-kicad, pcb-mcp — no graphical viewer (source: `competitor-sources/pcb/`)
 - Existing undo/redo in Monaco: Monaco editor handles text undo internally — board mutations need separate stack
 - Board outline format: currently `(Nm, Nm)` tuple in `BoardSize`, drawn as rect in 2D, `BoxGeometry` in 3D (source: `crates/cypcb-world/src/world.rs`, `viewer/src/renderer.ts`, `viewer/src/renderer3d.ts`)

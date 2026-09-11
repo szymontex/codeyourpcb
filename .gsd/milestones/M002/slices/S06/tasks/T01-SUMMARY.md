@@ -28,7 +28,7 @@ blocker_discovered: false
 
 ## What Happened
 
-Audited three open-source competitors from cloned repos (atopile features from `/workspace/competitors/atopile/`, diodeinc/pcb from `/workspace/competitors/pcb/`, KiCad from existing `docs/pcb-knowledge/competitors/` analysis) and built on the existing `atopile-vs-us.md` competitive analysis. Catalogued CodeYourPCB's actual capabilities from crate structure, viewer source, DSL examples, and WASM API surface — marked features as present only when implemented and functional.
+Audited three open-source competitors from cloned repos (atopile features from `competitor-sources/atopile/`, diodeinc/pcb from `competitor-sources/pcb/`, KiCad from existing `docs/pcb-knowledge/competitors/` analysis) and built on the existing `atopile-vs-us.md` competitive analysis. Catalogued CodeYourPCB's actual capabilities from crate structure, viewer source, DSL examples, and WASM API surface — marked features as present only when implemented and functional.
 
 Produced `docs/competition-feature-matrix.md` with: executive summary, tool overview table, 11 per-category comparison tables with parity status icons, a summary heatmap, and a prioritized 12-item gap list split into three priority tiers for S07/S08.
 

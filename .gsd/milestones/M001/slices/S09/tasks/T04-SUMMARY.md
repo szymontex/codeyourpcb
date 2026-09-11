@@ -240,13 +240,13 @@ impl JLCPCBSource {
 ## Documentation
 
 **Files Created:**
-- `/workspace/codeyourpcb/crates/cypcb-library/src/sources/custom.rs` - CustomSource implementation (370 lines)
-- `/workspace/codeyourpcb/crates/cypcb-library/src/sources/jlcpcb.rs` - JLCPCBSource implementation (250 lines)
+- `crates/cypcb-library/src/sources/custom.rs` - CustomSource implementation (370 lines)
+- `crates/cypcb-library/src/sources/jlcpcb.rs` - JLCPCBSource implementation (250 lines)
 
 **Files Modified:**
-- `/workspace/codeyourpcb/crates/cypcb-library/src/sources/mod.rs` - Added custom and jlcpcb modules
-- `/workspace/codeyourpcb/crates/cypcb-library/Cargo.toml` - Added chrono, reqwest, jlcpcb feature
-- `/workspace/codeyourpcb/crates/cypcb-library/src/schema.rs` - Fixed FTS5 triggers, added test_direct_update
+- `crates/cypcb-library/src/sources/mod.rs` - Added custom and jlcpcb modules
+- `crates/cypcb-library/Cargo.toml` - Added chrono, reqwest, jlcpcb feature
+- `crates/cypcb-library/src/schema.rs` - Fixed FTS5 triggers, added test_direct_update
 
 **Total Impact:**
 - 620 lines of new code (custom + jlcpcb)

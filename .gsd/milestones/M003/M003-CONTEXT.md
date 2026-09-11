@@ -75,7 +75,7 @@ To call this milestone complete, we must prove:
 - `viewer/src/types.ts` — BoardSnapshot types (pad, trace, via, component — data model is solid)
 - `crates/cypcb-render/src/snapshot.rs` — Rust side of snapshot generation
 - `crates/cypcb-render/src/lib.rs` — WASM bridge
-- `/workspace/competitors/` — KiCad, atopile repos for visual reference
+- `competitor-sources/` — KiCad, atopile repos for visual reference
 
 > See `.gsd/DECISIONS.md` for all architectural and pattern decisions — it is an append-only register; read it during planning, append to it during execution.
 

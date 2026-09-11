@@ -22,12 +22,12 @@
 
 ## Verification
 
-- `cd /workspace/codeyourpcb && cargo fmt --check` — zero diffs
-- `cd /workspace/codeyourpcb && cargo clippy --workspace --exclude cypcb-cli --exclude cypcb-desktop -- -D warnings` — zero warnings
-- `cd /workspace/codeyourpcb/viewer && npx eslint src/` — zero errors
-- `cd /workspace/codeyourpcb/viewer && npx vitest run` — all pass
-- `cd /workspace/codeyourpcb/viewer && npx playwright test` — all pass, screenshot artifacts in `test-results/`
-- `cd /workspace/codeyourpcb && ./scripts/quality-gate.sh` — exits 0
+- `cd <checkout> && cargo fmt --check` — zero diffs
+- `cd <checkout> && cargo clippy --workspace --exclude cypcb-cli --exclude cypcb-desktop -- -D warnings` — zero warnings
+- `cd viewer && npx eslint src/` — zero errors
+- `cd viewer && npx vitest run` — all pass
+- `cd viewer && npx playwright test` — all pass, screenshot artifacts in `test-results/`
+- `cd <checkout> && ./scripts/quality-gate.sh` — exits 0
 
 ## Observability / Diagnostics
 

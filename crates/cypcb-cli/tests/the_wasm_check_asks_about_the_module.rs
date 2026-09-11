@@ -210,7 +210,7 @@ fn a_source_that_rebuilds_into_the_committed_module_is_not_stale() {
 fn the_module_does_not_carry_the_directory_it_was_built_in() {
     // The rebuild answer above is only worth something if a rebuild is the
     // same wherever the checkout lives. It was not: rustc records source paths
-    // for panic messages, so this commit built in `/workspace/codeyourpcb` and
+    // for panic messages, so this commit built in `<checkout>` and
     // in the scheduled gate's worktree produced two different modules, and the
     // gate reads that difference as a stale artifact. Measured 2026-08-31 by
     // building both: without the remap the two files differ, with it both are
