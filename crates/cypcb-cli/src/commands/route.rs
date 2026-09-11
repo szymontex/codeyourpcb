@@ -759,7 +759,11 @@ impl RouteCommand {
             }
         }
 
-        let traces = cypcb_world::dsl::traces_as_dsl(&mut world);
+        // Only what the router drew. The file this writes is a copy of the
+        // source with copper appended, so the source's own traces are already
+        // in it: writing the whole world on top of that put every hand-drawn
+        // trace in twice.
+        let traces = cypcb_world::dsl::routed_traces_as_dsl(&mut world);
         if traces.is_empty() {
             return Err(miette::miette!("The router produced nothing to write"));
         }

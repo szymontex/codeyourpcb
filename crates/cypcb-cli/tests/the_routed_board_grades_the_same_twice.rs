@@ -19,9 +19,12 @@
 
 use std::process::Command;
 
-/// Route the named example in-house and hand back both numbers: what `route`
-/// says about the board, and what `check` says about the file it wrote.
-fn routed_then_checked(example: &str) -> (usize, usize) {
+/// Route the named example in-house and hand back both numbers - what `route`
+/// says about the board, and what `check` says about the file it wrote - along
+/// with the file itself, because the disagreement between the two has twice
+/// turned out to be something the writer did rather than something either
+/// checker measured.
+fn routed_then_checked(example: &str) -> (usize, usize, String) {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .and_then(|path| path.parent())
@@ -72,12 +75,14 @@ fn routed_then_checked(example: &str) -> (usize, usize) {
             .unwrap_or_else(|| panic!("check did not say how many:\n{report}"))
     };
 
-    (route_count, check_count)
+    let written = std::fs::read_to_string(&out).expect("route wrote the board it named");
+
+    (route_count, check_count, written)
 }
 
 #[test]
 fn the_number_route_prints_is_the_number_check_prints() {
-    let (routed, checked) = routed_then_checked("blink");
+    let (routed, checked, _) = routed_then_checked("blink");
 
     assert_eq!(
         routed, checked,
@@ -87,27 +92,42 @@ fn the_number_route_prints_is_the_number_check_prints() {
 }
 
 #[test]
-fn a_board_the_router_adds_to_carries_both_copies_to_disk() {
-    // `route` grades the board it holds and `check` grades the file it wrote,
-    // and on this one they disagree: 0 against 3. The reason is in the file
-    // rather than in either checker. `examples/routing-test.cypcb` already
-    // carries a hand-drawn VCC trace; the router routed VCC again and the
-    // board it wrote has that copper twice, once from the source and once
-    // from the route. `acute-angle` finds two arms leaving each of its corners
-    // along one line and says the copper is drawn over itself, which is what
-    // happened.
+fn copper_the_source_drew_is_kept_and_not_written_again() {
+    // The rule, decided here: copper already on a net is kept and left alone.
+    // `route` writes its answer by appending trace blocks to a copy of the
+    // source, so the source's copper is in the file before the writer adds a
+    // character - and the writer used to append the whole world on top of it,
+    // which put every hand-drawn trace in the file twice.
     //
-    // A ratchet on a defect rather than an invariant: the number to fix is the
-    // router's, and the tracker carries it as the next action. Until then this
-    // pins the disagreement so it cannot widen quietly.
-    let (routed, checked) = routed_then_checked("routing-test");
+    // `examples/routing-test.cypcb` is the board that shows it: it declares
+    // one `trace VCC` by hand, the router finds that net already connected and
+    // routes only GND. The written file used to carry VCC twice, and the two
+    // commands disagreed about it - `route` said 0 violations because the
+    // world it measured held one copy, `check` said 3 because the file it read
+    // held two and `acute-angle` calls copper drawn over itself exactly that.
+    let (routed, checked, written) = routed_then_checked("routing-test");
 
     assert_eq!(
-        routed, 0,
-        "the router has nothing to say about the copper it laid"
+        written.matches("trace VCC {").count(),
+        1,
+        "the hand-drawn trace belongs in the file once:\n{written}"
     );
+    assert!(
+        written.contains("path 9.5mm,12mm -> 9.5mm,8mm -> 16.5mm,8mm"),
+        "and it is the source's own line, untouched, not a re-written copy:\n{written}"
+    );
+
+    // The positive control. A writer that appended nothing at all would pass
+    // both assertions above and produce a board with no routing in it.
     assert_eq!(
-        checked, 3,
-        "and the file it wrote carries the source's copper as well"
+        written.matches("trace GND {").count(),
+        1,
+        "the copper the router did lay has to be in the file:\n{written}"
+    );
+
+    assert_eq!(
+        (routed, checked),
+        (0, 0),
+        "route says {routed} about the board and check says {checked} about the file"
     );
 }

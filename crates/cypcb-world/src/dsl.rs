@@ -203,7 +203,30 @@ pub(crate) fn net_name_as_written(name: &str) -> String {
     }
 }
 
+/// Every piece of copper in the world, whoever drew it.
 pub fn traces_as_dsl(world: &mut BoardWorld) -> String {
+    traces_as_dsl_filtered(world, false)
+}
+
+/// Only the copper the router put there.
+///
+/// `cypcb route` writes its answer by appending trace blocks to a copy of the
+/// source, so the source's own copper is already in the file: writing the
+/// whole world on top of it produces the same trace twice. The board carried
+/// it - `examples/routing-test.cypcb` declares one `trace VCC` by hand, the
+/// router leaves it alone, and the written file held two identical blocks that
+/// `cypcb check` reported as three violations of copper drawn over itself
+/// while `cypcb route` reported none, because the world it measured held one.
+///
+/// Copper already on a net is kept and left alone. `apply_routes` despawns
+/// every autorouted trace and every unlocked via before it spawns its own, so
+/// after it has run the world's autorouted traces are exactly this run's, and
+/// the rest is what the source said.
+pub fn routed_traces_as_dsl(world: &mut BoardWorld) -> String {
+    traces_as_dsl_filtered(world, true)
+}
+
+fn traces_as_dsl_filtered(world: &mut BoardWorld, only_routed: bool) -> String {
     // Collect all traces grouped by net name
     // The neck comes with the trace. It is a separate component, and reading
     // the two in separate passes would pair them by iteration order - which is
@@ -226,6 +249,9 @@ pub fn traces_as_dsl(world: &mut BoardWorld) -> String {
         )>();
         query
             .iter(ecs)
+            .filter(|(trace, _, _)| {
+                !only_routed || trace.source == crate::components::trace::TraceSource::Autorouted
+            })
             .map(|(trace, neck, curve)| (trace.clone(), neck.copied(), curve.copied()))
             .collect()
     };
@@ -238,7 +264,13 @@ pub fn traces_as_dsl(world: &mut BoardWorld) -> String {
         let ecs = world.ecs_mut();
         let mut query =
             ecs.query_filtered::<&Via, bevy_ecs::prelude::Without<crate::components::Stitched>>();
-        query.iter(ecs).copied().collect()
+        // A locked via is one the source declared and `apply_routes` kept, so
+        // it is already in the copy of the source this run appends to.
+        query
+            .iter(ecs)
+            .filter(|via| !only_routed || !via.locked)
+            .copied()
+            .collect()
     };
 
     if trace_data.is_empty() && via_data.is_empty() {
