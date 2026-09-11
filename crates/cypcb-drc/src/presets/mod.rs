@@ -65,6 +65,7 @@ use cypcb_rules::DesignConstraints;
 /// - `max_diff_pair_skew`: How far apart the halves of a differential pair may end up
 /// - `max_drill_aspect_ratio`: Deepest hole the plating chemistry reaches, in hundredths
 /// - `board_thickness`: How thick the fab builds a board that does not say
+/// - `thermal_relief_gap`, `thermal_relief_spoke_width`: The relief a pour cuts around a pad of its own net
 ///
 /// # Examples
 ///
@@ -95,6 +96,8 @@ use cypcb_rules::DesignConstraints;
 ///     solder_mask_expansion: Nm::from_mm(0.05),
 ///     min_silk_clearance: Nm::from_mm(0.15),
 ///     min_courtyard_clearance: Nm::from_mm(0.25),
+///     thermal_relief_gap: Nm::from_mm(0.254),
+///     thermal_relief_spoke_width: Nm::from_mm(0.254),
 ///     copper_weight_oz_x10: 10,
 ///     blind_vias_allowed: false,
 ///     buried_vias_allowed: false,
@@ -164,6 +167,24 @@ pub struct DesignRules {
     pub min_silk_clearance: Nm,
     /// Minimum courtyard clearance between components.
     pub min_courtyard_clearance: Nm,
+    /// The gap a pour cuts around a pad of its own net.
+    ///
+    /// A plane that touches a pad on every side carries the iron's heat away
+    /// faster than the iron puts it in, and the joint never wets. The cure is
+    /// to cut the plane back and leave spokes, and the two numbers that
+    /// describe the cut - this gap and the spoke's width - are published by
+    /// the fab: 0.2mm on JLCPCB's advanced process against 0.254mm on its
+    /// standard one.
+    ///
+    /// It reached `DesignConstraints` with the tables and was dropped on the
+    /// way here, so `PourIslandRule` filled its planes from
+    /// `PourOptions::default()` and measured a plane 0.054mm narrower around
+    /// every own-net pad than the one the fab will make. The same field was
+    /// missing from the export preset until 2026-09-11, which is how the
+    /// pattern was found.
+    pub thermal_relief_gap: Nm,
+    /// How wide each spoke bridging that gap is.
+    pub thermal_relief_spoke_width: Nm,
     /// How thick the copper is, in tenths of an ounce.
     ///
     /// The fab's number, and what IPC-2221 needs to say how wide a trace must
@@ -319,6 +340,8 @@ impl DesignRules {
             solder_mask_expansion: c.solder_mask_expansion,
             min_silk_clearance: c.min_silk_clearance.unwrap_or(c.min_silk_width),
             min_courtyard_clearance: c.min_courtyard_clearance.unwrap_or(Nm::from_mm(0.25)),
+            thermal_relief_gap: c.thermal_relief_gap,
+            thermal_relief_spoke_width: c.thermal_relief_spoke_width,
             copper_weight_oz_x10: c.copper_weight_oz_x10,
             blind_vias_allowed: c.blind_vias_allowed,
             buried_vias_allowed: c.buried_vias_allowed,

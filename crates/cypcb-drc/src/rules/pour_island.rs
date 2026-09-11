@@ -26,6 +26,23 @@ use super::DrcRule;
 /// Rule for pour copper that connects to nothing.
 pub struct PourIslandRule;
 
+/// The pour this checker measures, as the fab will make it.
+///
+/// Every number here is the house's. `PourOptions::default()` carries a
+/// deliberately generous 0.254mm relief, which is not what JLCPCB's advanced
+/// process makes: it publishes 0.2mm, so its plane reaches 0.054mm further
+/// around every pad of the pour's own net. A checker filling from the default
+/// measures a plane nobody is being sent, which is the same defect the
+/// exporter carried until 2026-09-11 - there the numbers never left the
+/// preset, here they never reached `DesignRules` at all.
+fn pour_options(rules: &DesignRules) -> PourOptions {
+    PourOptions {
+        clearance: rules.min_clearance,
+        thermal_gap: rules.thermal_relief_gap,
+        spoke_width: rules.thermal_relief_spoke_width,
+    }
+}
+
 impl DrcRule for PourIslandRule {
     fn name(&self) -> &'static str {
         "pour-island"
@@ -44,10 +61,7 @@ impl DrcRule for PourIslandRule {
         }
 
         let library = world.footprints().clone();
-        let options = PourOptions {
-            clearance: rules.min_clearance,
-            ..PourOptions::default()
-        };
+        let options = pour_options(rules);
 
         let mut violations = Vec::new();
 
@@ -205,5 +219,29 @@ mod tests {
         // and a designer needs to be told once rather than per rectangle.
         let pieces = vec![rect(0.0, 0.0, 5.0, 5.0), rect(5.0, 0.0, 10.0, 5.0)];
         assert_eq!(unconnected_islands(&pieces, &[]).len(), 1);
+    }
+
+    #[test]
+    fn the_relief_this_rule_fills_with_is_the_fabs() {
+        use crate::presets::{Preset, PresetRules};
+
+        // Two houses that publish different reliefs, so a constant cannot
+        // satisfy both: JLCPCB's standard process 0.254mm, its advanced one
+        // 0.2mm. The pair is the control - one number alone would pass against
+        // `PourOptions::default()`, which happens to hold 0.254mm too.
+        let standard = pour_options(&Preset::JlcpcbStandard2Layer.rules());
+        assert_eq!(standard.thermal_gap, Nm::from_mm(0.254));
+        assert_eq!(standard.spoke_width, Nm::from_mm(0.254));
+
+        let advanced = pour_options(&Preset::JlcpcbAdvanced2Layer.rules());
+        assert_eq!(advanced.thermal_gap, Nm::from_mm(0.2));
+        assert_eq!(advanced.spoke_width, Nm::from_mm(0.2));
+
+        assert_ne!(
+            advanced.thermal_gap,
+            PourOptions::default().thermal_gap,
+            "the advanced process publishes a relief the default does not carry"
+        );
+        assert_eq!(advanced.clearance, Nm::from_mm(0.1));
     }
 }
