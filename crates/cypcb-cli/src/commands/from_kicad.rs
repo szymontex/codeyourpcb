@@ -39,7 +39,11 @@ impl FromKicadCommand {
         // missing and said nothing: led_blink went in with one segment and came
         // out with none.
         if let Some(routes) = parsed.reference_routes {
-            cypcb_router::apply_routes(&mut world, &routes);
+            cypcb_router::apply_routes_as(
+                &mut world,
+                &routes,
+                cypcb_world::components::trace::TraceSource::Manual,
+            );
         }
 
         // The house the board was written for, out of the project file beside

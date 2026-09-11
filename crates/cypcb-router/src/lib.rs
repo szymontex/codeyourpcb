@@ -86,6 +86,27 @@ pub use types::{
 /// apply_routes(&mut world, &result);
 /// ```
 pub fn apply_routes(world: &mut BoardWorld, result: &RoutingResult) {
+    apply_routes_as(world, result, TraceSource::Autorouted);
+}
+
+/// The same, saying who drew the copper.
+///
+/// Two callers materialise copper that came out of a `.kicad_pcb` rather than
+/// out of this router, and both used to go through `apply_routes` - which marks
+/// everything it spawns `Autorouted`. The first act of the next run is to
+/// delete every trace that is `Autorouted` and not locked, so a straight
+/// segment a person drew in KiCad was imported as machine-made and then
+/// removed, while an arc from the same board survived: `parse_track_arc` spawns
+/// a `Trace` directly and calls it `Manual`. Same board, same hand, two fates
+/// decided by whether the line was straight or curved.
+///
+/// Measured on a two-element board before this existed: the arc came back
+/// `Manual` in twelve segments, the straight segment came back `Autorouted`.
+///
+/// `Autorouted` is a claim, and it is the claim the deletion above acts on. A
+/// board file records what is on the board, not who put it there, so the
+/// honest mark for imported copper is the one the arc path already used.
+pub fn apply_routes_as(world: &mut BoardWorld, result: &RoutingResult, source: TraceSource) {
     // Remove existing autorouted traces (not locked)
     let entities_to_remove: Vec<Entity> = {
         let ecs = world.ecs_mut();
@@ -176,7 +197,7 @@ pub fn apply_routes(world: &mut BoardWorld, result: &RoutingResult) {
             layer,
             net_id,
             locked: false,
-            source: TraceSource::Autorouted,
+            source,
         };
 
         // A neck the net declares becomes copper here, the same way

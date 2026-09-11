@@ -106,7 +106,11 @@ pub fn load_kicad(path: &Path) -> Result<LoadedBoard> {
     // routed reads as unrouted: every trace in the file would be dropped on
     // the floor and the checker would report every pin as unreached.
     if let Some(routes) = parsed.reference_routes {
-        cypcb_router::apply_routes(&mut world, &routes);
+        cypcb_router::apply_routes_as(
+            &mut world,
+            &routes,
+            cypcb_world::components::trace::TraceSource::Manual,
+        );
         world.rebuild_spatial_index_from_library(&library);
     }
 
