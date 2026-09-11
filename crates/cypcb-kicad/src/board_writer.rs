@@ -124,6 +124,10 @@ pub struct KicadDesignRules {
     pub silk_clearance: Nm,
     /// Narrowest ring of copper left around a drilled hole.
     pub annular_ring: Nm,
+    /// Gap cut around a pad on the pour's own net, before the spokes go back.
+    pub thermal_relief_gap: Nm,
+    /// Width of each spoke bridging that gap.
+    pub thermal_relief_spoke_width: Nm,
 }
 
 /// What KiCad calls each entry of a stackup, and what it says the entry is.
@@ -453,7 +457,7 @@ pub fn write_board_with_rules(
 
     write_footprints(world, origin, &net_number, &mut out);
     write_copper(world, origin, &net_number, &mut out);
-    write_zones(world, origin, &net_number, &mut out);
+    write_zones(world, origin, &net_number, rules.as_ref(), &mut out);
 
     let _ = writeln!(out, ")");
     out
@@ -705,6 +709,7 @@ fn write_zones(
     world: &mut BoardWorld,
     origin: cypcb_core::Point,
     net_number: &std::collections::HashMap<cypcb_world::NetId, usize>,
+    rules: Option<&KicadDesignRules>,
     out: &mut String,
 ) {
     let zones: Vec<Zone> = {
@@ -758,10 +763,32 @@ fn write_zones(
             } else {
                 let _ = writeln!(out, "    (connect_pads (clearance 0.5))");
                 let _ = writeln!(out, "    (min_thickness 0.25)");
-                let _ = writeln!(
-                    out,
-                    "    (fill yes (thermal_gap 0.5) (thermal_bridge_width 0.5))"
-                );
+                // The relief comes from the fab table, not from here. It used
+                // to be two literals of 0.5mm, which is what a reader of this
+                // file got whatever the board was checked against - and both
+                // shipped export presets order 0.254mm, so the Gerbers and the
+                // KiCad file stated reliefs differing by a factor of about two
+                // for one board.
+                //
+                // With no rules chosen, nothing is stated: this file's own
+                // policy is that KiCad fills its defaults for what is left out
+                // and inventing a value here would be inventing a board. The
+                // same reasoning the export command already applies to the
+                // whole `(setup ...)` node - rules nobody chose are worse than
+                // none, because KiCad believes them.
+                match rules {
+                    Some(rules) => {
+                        let _ = writeln!(
+                            out,
+                            "    (fill yes (thermal_gap {}) (thermal_bridge_width {}))",
+                            mm(rules.thermal_relief_gap),
+                            mm(rules.thermal_relief_spoke_width)
+                        );
+                    }
+                    None => {
+                        let _ = writeln!(out, "    (fill yes)");
+                    }
+                }
             }
             let _ = writeln!(out, "    (polygon");
             let _ = writeln!(

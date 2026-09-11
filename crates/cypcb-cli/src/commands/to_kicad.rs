@@ -95,6 +95,8 @@ impl ToKicadCommand {
                 edge_clearance: rules.min_edge_clearance,
                 silk_clearance: rules.min_silk_clearance,
                 annular_ring: rules.min_annular_ring,
+                thermal_relief_gap: rules.thermal_relief_gap,
+                thermal_relief_spoke_width: rules.thermal_relief_spoke_width,
             })
         };
 
