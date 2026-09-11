@@ -213,4 +213,24 @@ fn the_outline_hatch_is_not_this_boards_business() {
         !without.contains("min_thickness"),
         "no preset, no fill floor"
     );
+
+    // The one number the writer still states with no table behind it, read
+    // back here so it is a figure a test knows rather than a figure a comment
+    // asserts. A legend line has to have a width - unlike the zone node there
+    // is nothing to leave out - so with no fab table the fallback is KiCad's
+    // own default silk stroke.
+    let legend = without
+        .lines()
+        .map(str::trim)
+        .find(|line| line.starts_with("(fp_line "));
+    match legend {
+        Some(line) => {
+            println!("with no preset, the legend line reads: {line}");
+            assert!(
+                line.contains("(width 0.12)"),
+                "the fallback silk stroke is 0.12mm, KiCad's own default: {line}"
+            );
+        }
+        None => panic!("a footprint draws its legend, so there is an fp_line to read"),
+    }
 }

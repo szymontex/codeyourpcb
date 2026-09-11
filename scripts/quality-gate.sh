@@ -14,7 +14,7 @@ echo "=== Quality Gate ==="
 echo ""
 
 # Stage 1: Rust formatting
-echo "[1/16] cargo fmt --check"
+echo "[1/17] cargo fmt --check"
 if cargo fmt --check 2>&1; then
   pass "cargo-fmt"
 else
@@ -30,7 +30,7 @@ echo ""
 # icon the macro refused, all found the first time anybody ran it. The
 # dependencies are in `scripts/setup-dev.sh` now, so the exclusion has nothing
 # left to protect and a crate nobody compiles is a crate nobody maintains.
-echo "[2/16] cargo clippy"
+echo "[2/17] cargo clippy"
 # The second reader is behind a feature, so the plain run does not lint it
 # either - the same gap the test stage below had.
 if cargo clippy --workspace --all-targets -- -D warnings 2>&1 \
@@ -104,7 +104,7 @@ if [ -n "$UNTRACKED_PARSER" ]; then
   fail "untracked tree-sitter output"
 fi
 
-echo "[3/16] cargo test"
+echo "[3/17] cargo test"
 # The Rust reader is what `parse` is now. The tests that check it against the
 # tree-sitter parser need that parser as well, which the plain run does not
 # build - named explicitly, because a test nobody runs is not a test.
@@ -142,7 +142,7 @@ echo ""
 #
 # tsconfig.json includes `src`, `e2e` and the root `*.ts`, which is what makes
 # this worth a stage: the specs and the dev server are code too.
-echo "[4/16] tsc --noEmit"
+echo "[4/17] tsc --noEmit"
 TSC_LOG=$(mktemp)
 if (cd viewer && npx tsc --noEmit 2>&1 | tee "$TSC_LOG"); then
   pass "tsc"
@@ -156,7 +156,7 @@ fi
 rm -f "$TSC_LOG"
 echo ""
 
-echo "[5/16] eslint"
+echo "[5/17] eslint"
 if (cd viewer && npx eslint src/ e2e/ *.ts) 2>&1; then
   pass "eslint"
 else
@@ -165,7 +165,7 @@ fi
 echo ""
 
 # Stage 5: Vitest
-echo "[6/16] vitest"
+echo "[6/17] vitest"
 VITEST_LOG=$(mktemp)
 if (cd viewer && npx vitest run 2>&1 | tee "$VITEST_LOG"); then
   pass "vitest"
@@ -203,7 +203,7 @@ echo ""
 # That port is no longer 4321. It was, and 4321 is Astro's default, so a gate
 # run failed here because another repository's dev server in this container
 # held it. `CYPCB_E2E_PORT` overrides, and the default is 4327.
-echo "[7/16] playwright (rebuilding viewer/pkg first)"
+echo "[7/17] playwright (rebuilding viewer/pkg first)"
 # The module is rebuilt, and then asked whether the committed one is the same.
 # The rebuild makes the browser suite honest about the working tree; the
 # question afterwards is about what a clean clone carries, and on 2026-08-27
@@ -306,7 +306,7 @@ rm -f "$PLAYWRIGHT_LOG"
 echo ""
 
 # Stage 7: Autorouter benchmark — regression gate + performance benchmark
-echo "[8/16] autorouter benchmark"
+echo "[8/17] autorouter benchmark"
 if cargo test --release -p cypcb-autoroute -- benchmark_regression 2>&1; then
   pass "benchmark-regression"
 else
@@ -347,7 +347,7 @@ fi
 echo ""
 
 # Stage 8: Code duplication check
-echo "[9/16] jscpd"
+echo "[9/17] jscpd"
 if (cd viewer && npx jscpd --exitCode 1) 2>&1; then
   pass "jscpd"
 else
@@ -362,7 +362,7 @@ echo ""
 # deleted - was found again by hand five weeks later. It keeps its list and
 # gains a number: the count of unreached methods has to be the one the script
 # records, so neither a new dead wrapper nor a deletion can pass unremarked.
-echo "[10/16] engine API reach"
+echo "[10/17] engine API reach"
 if ./scripts/unused-engine-api.sh 2>&1; then
   pass "unused-engine-api"
 else
@@ -377,7 +377,7 @@ echo ""
 # nothing here started. It builds what it photographs first: the smoke test
 # refuses a bundle older than `viewer/src`, and the tree it was wired into had
 # a `viewer/dist` a week behind.
-echo "[11/16] desktop smoke"
+echo "[11/17] desktop smoke"
 if (cd viewer && npm run build) >/dev/null 2>&1 \
     && cargo build -p cypcb-desktop >/dev/null 2>&1 \
     && ./scripts/desktop-smoke.sh; then
@@ -395,7 +395,7 @@ echo ""
 # and nothing ran it either, so the census was a number nobody had looked at
 # since the day it was taken. The list stays a person's call; the count is
 # held here, the way the engine API's is.
-echo "[12/16] claims in comments"
+echo "[12/17] claims in comments"
 if ./scripts/claims-in-comments.sh; then
   pass "claims-in-comments"
 else
@@ -411,7 +411,7 @@ echo ""
 # The types it lists stay a diagnostic, because an exported interface beside
 # its function is ordinary style. The values are the gate, and the viewer is
 # already at zero.
-echo "[13/16] unused exports"
+echo "[13/17] unused exports"
 if ./scripts/unused-exports.sh --values-only; then
   pass "unused-exports"
 else
@@ -426,7 +426,7 @@ echo ""
 # branch happened to line up, so four of its five publish outcomes had never
 # happened at all. This stage makes them happen, against throwaway
 # repositories in a temporary directory.
-echo "[14/16] scheduled-gate selftest"
+echo "[14/17] scheduled-gate selftest"
 if ./scripts/scheduled-gate-selftest.sh 2>&1; then
   pass "scheduled-gate-selftest"
 else
@@ -441,7 +441,7 @@ echo ""
 # thirty-two tracked files written over four months - none of it about circuit
 # boards, all of it pasted out of a terminal by somebody who could see it and
 # forgot that a reader cannot. A patch would have let the next paste back in.
-echo "[15/16] no private paths"
+echo "[15/17] no private paths"
 if ./scripts/no-private-paths.sh; then
   pass "no-private-paths"
 else
@@ -457,11 +457,26 @@ echo ""
 # width, a relief at nearly double what the Gerbers carried for the same board.
 # Each was found by hand, months apart, and the third only because the first
 # two made somebody look.
-echo "[16/16] no invented numbers"
+echo "[16/17] no invented numbers"
 if ./scripts/no-invented-numbers.sh; then
   pass "no-invented-numbers"
 else
   fail "no-invented-numbers"
+fi
+echo ""
+
+# Stage 17: one door out of nanometres
+#
+# A Gerber coordinate is `X1000000Y500000` and an Excellon one is `X0150`: the
+# decimal point is implied by a format the header declares, so a dimension in
+# those files carries no dot and stage 16 cannot see it. This check asks about
+# the act instead - turning a length into text happens in `coords.rs` and
+# nowhere else - which is the only shape that can fail there.
+echo "[17/17] one door out of nanometres"
+if ./scripts/one-door-coordinates.sh; then
+  pass "one-door-coordinates"
+else
+  fail "one-door-coordinates"
 fi
 echo ""
 
