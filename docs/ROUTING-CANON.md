@@ -464,6 +464,9 @@ with a tier-4 improvement of 7, which is a bad trade stated in one line; under
 a flat price per violation the same board reads as 19 to 32 and says nothing
 about which kind moved.
 
+*The field R-11 would need does not exist:* `DrcViolation` has no severity, so
+the tiers below have nowhere to live in a row of output. See R-18.
+
 ### R-12 Rip-up and reroute `[O]`
 
 A negotiated-congestion router tears at the granularity its data structure can
@@ -872,6 +875,267 @@ present, with no new field and no new declaration - which makes R-15 the first
 rule in this canon whose gap is that nobody wrote the check, rather than that
 the model cannot answer.
 
+### R-16 What a rule must carry to be enforceable here `[O]`
+
+Fifteen rules, three states. This section is the canon reading itself: which
+rules the board is held to, which wait on somebody writing a check, and which
+wait on the data model - and then it counts the missing **fields** rather than
+the blocked rules, because a field that unblocks two rules is worth more than
+either of them.
+
+**Bucket 1 - enforced today. Three.** The registry has 38 entries
+(`crates/cypcb-drc/src/lib.rs`); three of them serve this canon.
+
+| rule | what enforces it |
+|---|---|
+| R-01 width against current | `TraceCurrentRule` (`lib.rs:143`), silent on a net that declares no `current` |
+| R-03 acute angles | `AcuteAngleRule` (`lib.rs:196`), reporting `ViolationKind::AcidTrap` |
+| R-07 annular ring and hole spacing | six rules - `AnnularRingRule`, `HoleToHoleRule`, `ViaDiameterRule`, `ViaDrillRule`, `PadLandRule`, `DrillAspectRatioRule` |
+
+**Bucket 2 - checkable today, nobody wrote the check. Ten.** Every quantity
+these need is in the world already.
+
+| rule | why it is checkable, in one clause |
+|---|---|
+| R-05 return path | pours, stackup-derived reference layer and the spatial index are present, gated on the net's declared impedance |
+| R-06 reporting per kind | `DrcViolation` carries its kind and its measured distance; only the aggregation is missing |
+| R-08 trace entry into a land | pad geometry, rotation and teardrop ratios are in the model; the entry angle is arithmetic on them |
+| R-09 thermal relief geometry | the filled pour gives the spokes, the design rules give the numbers - but the 3 A case has no cure |
+| R-10 mitring | the junction is already reported by R-03 and the cut is geometry on two arms |
+| R-11 acceptance classes | `ViolationKind` gives the kinds and `clearance_contacts` the count tier 3 needs; the class gate exists only when the board picks `IpcClass1`, `IpcClass2` or `IpcClass3` (`crates/cypcb-rules/src/presets/mod.rs:58`, `:60`, `:62`) and is absent for a house preset |
+| R-12 rip-up and reroute | its three conditions are properties of code, two of them already measured |
+| R-13 return path, measured | same data as R-05; coverage and crossings are geometry, loop area an estimate by design |
+| R-14 via stitching | vias carry net, position and layer span, pours carry their pitch; the measurement is available, the thresholds are not |
+| R-15 thermal relief in manufacturing | spoke width, surviving spoke count and pad symmetry all read from data already present |
+
+**Bucket 3 - the model cannot answer. Two.**
+
+| rule | what is missing |
+|---|---|
+| R-02 spacing against voltage | no working voltage on a net; the IPC table is written and has no caller |
+| R-04 stub length | two things at once - no copper connectivity graph, and no declared signal speed |
+
+**The fields, counted rather than the rules.** Six, and the first two tie on
+count, so the ranking turns on what each one costs to obtain.
+
+1. **A copper connectivity graph.** It gives R-04 half of its blocker and R-05
+   and R-13 their per-net restriction. It also fixes two defects in the router's
+   own output that have nothing to do with this canon: the flat
+   `HashMap<u32, Vec<Vec<GridNode>>>` has no parent relation, which is why
+   tearing can only be net-wide (R-12), and why
+   `crates/cypcb-autoroute/tests/abandoned_connections.rs` has to switch on a
+   log subscriber to name the connections that were dropped. *Derived from data
+   already present - segments, vias, pads, nets - and the only field on this
+   list nobody has to declare.* That is the ranking argument, not the count.
+2. **Signal speed per net, as a bit rate or a rise time.** It gives R-04 its
+   divisor and R-14 both of its thresholds, and it sharpens R-13, which leans on
+   declared impedance as a stand-in for "this net cares about its reference".
+   Two rules and three thresholds - a tie with the graph on hard counting, and
+   R-04 needs both, so neither releases it alone. *A declaration the designer
+   makes, and a net without one stays unchecked forever; R-01 is the precedent,
+   enforced and silent on every net that declares no current.*
+3. **Working voltage per net.** One rule, and the cheapest of the six: the table
+   R-02 needs is already implemented and unused, so this field turns dead code
+   into an enforced rule with no new arithmetic. *A declaration.*
+4. **A way to ask for a solid connection.** No new check, two cures: neither
+   R-09 nor R-15 can be complied with on a high-current pad today, because the
+   violation is detectable and the fix is inexpressible. *A declaration, per pad
+   or per net.*
+5. **A bottom-terminated marker on a footprint.** Half of one rule - R-15's
+   IPC-7093 clause. The honest alternative is a size heuristic, which this canon
+   declines. *A marker on a part.*
+6. **An acceptance class on the board.** R-11 grades against a class; a board
+   picking an IPC preset already declares one, a house preset does not. *A
+   declaration, half of which exists.*
+
+**The entry condition a future rule has to meet.** Drawn from what separated
+bucket 2 from bucket 3 in practice, not from principle.
+
+1. **Every quantity it compares is in the world or derivable without a solver.**
+   Coverage and crossings pass; an emission level in volts per metre does not,
+   which is why R-13 carries a proportionality and no threshold.
+2. **The threshold has a dated source and an applicability gate the model can
+   evaluate from a declaration.** R-01 passes because `current` is declared and
+   the rule is silent without it. R-14's thresholds fail because nothing
+   declares a frequency, even though the geometry is fully available.
+3. **A compliant board can express the cure.** The clause nobody would write
+   from principle, and the one that bites: the 3 A rule is checkable and
+   incurable, so enforcing it would produce a report no designer can act on.
+   R-18 states the same condition for a row of output.
+4. **The quantity checked is the measured one, not the declared one.** See
+   "Declared is not measured" - four rules in a row had to be rewritten around
+   it, and a fifth will unless it is an entry condition.
+
+### R-17 The grid the router actually searches `[O]`
+
+Every other rule here is about copper. This one is about the tool, and it
+belongs in the canon because entry condition 1 puts it there: the grid is
+derived from the fab table, which is as much a property of the board as the
+clearance it comes from. A board whose pads collide on the grid is a board
+fault; the grid is only how it is detected.
+
+**1. What the resolution is a function of.** One cell is one legal track
+position. `resolve_grid_resolution` (`crates/cypcb-autoroute/src/lib.rs:372`)
+takes the fab table for net 0 and returns `min_trace_width + min_clearance`,
+floored at 10 um. The comment records the measurement that settled it: a
+half-clearance grid let two nets sit in adjacent cells whose copper overlapped -
+238 DRC violations in 127.8 s against 124 in 9.7 s at track pitch, same board,
+both fully routed.
+
+`resolve_adaptive_grid_resolution` (`:398`) then applies three things in order.
+An explicit `grid_resolution_nm` **returns immediately**, before anything else
+in the function - it is an instruction and not a hint, and the comment says a
+caller asking for 0.254 mm on a 100 mm board used to get 0.508 mm in silence.
+Otherwise a board wider or taller than 80 mm is coarsened by 2, and above 200 mm
+by 3. Finally `params.density`, clamped to 0.5 to 2.0, divides the result, so
+density above 1 gives a finer grid. The 10 um floor applies throughout.
+
+So the resolution is a function of the fab table, the board's larger dimension
+and one tuning parameter - and of nothing about the parts on the board. That
+last clause is the rule.
+
+**2. What the grid costs in accuracy, and it is worse than half a cell.** A pad
+centre is snapped by integer division, not by rounding: `nm_to_grid_x`
+(`crates/cypcb-autoroute/src/grid.rs:470`) computes `(nm - origin) / resolution`,
+which truncates toward zero. The node therefore sits at or below the pad centre
+on each axis, and the error approaches a whole cell per axis rather than half of
+one. Worst case radially is `resolution * sqrt(2)`.
+
+| table | pitch = width + clearance | worst-case snap |
+|---|---|---|
+| JLCPCB standard, 2 layer (0.127 + 0.127) | 0.254 mm | 0.359 mm |
+| JLCPCB standard, 4 layer (0.100 + 0.100) | 0.200 mm | 0.283 mm |
+| JLCPCB advanced, 4 layer (0.090 + 0.090) | 0.180 mm | 0.255 mm |
+| any of the above on a board over 80 mm | doubled | doubled |
+
+The comparison is the point: on the two-layer table the worst-case snap of
+0.359 mm is 72 percent of the 0.5 mm pad pitch of the LQFP-64 that `qfp_fanout`
+is built around. Rounding rather than truncating would halve every number in
+that column. Stated as a fact about the grid, not as a proposal.
+
+**3. Nothing published fixes a router grid against the minimum feature size.**
+Searched 2026-09-11. The published grid guidance is about the design grid a
+designer places parts on, not the search grid a router walks. One line, and no
+further looking - that answer has now been the right one three times.
+
+**4. The rule this suggests, and this project can evaluate it today.**
+
+> A board is not routable on the grid it was given when two pads of different
+> nets snap to the same grid node, or when the worst-case snap exceeds half the
+> smallest pad pitch on the board.
+
+The first clause is the hard failure: two pads sharing one node cannot be told
+apart by the search, so one of them is reachable only through the other. The
+second is the warning: above half the pitch the snapped position can land closer
+to the neighbouring pad than to its own.
+
+Evaluable with no new field - pad positions come from the footprint library
+placed by component position and rotation, the resolution from the two functions
+above, and `nm_to_grid_x` is the same snap the router uses. The check is a loop
+over pads, and it belongs **before** routing rather than after: a board that
+fails it produces violations whose cause is the grid, and every number measured
+on such a board describes the grid rather than the router.
+
+### R-18 What a violation report owes its reader `[P]`
+
+A report says what was measured, where, against what, by which rule, and what to
+change - and it names what it did not check. R-06 says the counts must be per
+kind and R-16 says a rule must have an expressible cure; R-18 is what a single
+row has to carry for either of those to be readable.
+
+**1. No standard specifies the contents of a violation report; the tools
+converge.** Searching on 2026-09-11 for an IPC clause on report content returned
+nothing - acceptance standards grade features, they do not specify the file a
+checker writes. What the most documented tool publishes: a violation type, a
+severity of error, warning, exclusion or ignore, a description, the positions of
+the items involved, and item ids; severity configurable per rule type,
+violations excludable individually, and the same set emitted as JSON from the
+command line (KiCad documentation and issue tracker, read 2026-09-11). One thing
+is a standing request there rather than a feature, and it is a gap this canon
+names elsewhere: a report should state which checks were **not** performed
+because their severity was set to ignore, since an ignored rule produces no rows
+and therefore looks exactly like a rule that passed.
+
+**2. What this project's violation carries today.** `DrcViolation`
+(`crates/cypcb-drc/src/violation.rs:14-45`): `kind` at `:16`, `location` at
+`:18`, `entity` at `:20`, `other_entity` at `:22`, `source_span` at `:24`,
+`message` at `:26`, `actual` at `:34`, `required` at `:36`, `area` at `:44`.
+
+- *Location:* carried, and better than the tools in one respect - `source_span`
+  points at the line of the design file that caused it, which a coordinate
+  cannot.
+- *Items involved:* carried as `entity` and `other_entity`, stable within a run
+  and meaningless across runs.
+- *Measured and required values:* carried, optionally. See part 4.
+- *Rule identity:* **partial.** `kind` is a category; the rule's own name exists
+  only as `DrcRule::name()` and is never stored on the violation it produced, so
+  a report cannot say which rule fired when two rules share a kind.
+- *Severity:* **absent.** There is no field. Every violation leaves the checker
+  equal, and the four tiers R-11 describes have nowhere to live in the row. This
+  is the same absence R-11 names from the ranking side, and it is cheaper to fix
+  than it looks, because R-11 already defines the tiers - what is missing is one
+  mapping from kind to tier, beside `kind`.
+- *Exclusion state:* absent, which follows from severity being absent.
+
+**3. A report may not name a fault the model cannot cure.** R-16's third entry
+condition, stated for output rather than for rules. Condition: **a kind is
+registered as a defect only when some change expressible in the design clears
+it; a kind with no such change is emitted as an advisory and labelled so in the
+row.** The live instance is relief on a pad above 3 A - detectable today, with
+no way to ask for a solid connection, so shipping it as a defect produces a row
+a designer can read and cannot answer.
+
+**4. Two violations measure a distance and throw it away.** Counted on
+2026-09-11 across every constructor in `crates/cypcb-drc/src/violation.rs`:
+seventeen kinds whose fault is a distance record it, fourteen whose fault is not
+a distance correctly record nothing, and **two take the measurement as a
+parameter and then set the field to `None`**:
+
+- `hole_to_hole` (`:617-627`) - `actual: Nm` at `:620` and `required: Nm` at
+  `:621`, both discarded at `:626-627`.
+- `solder_mask_bridge` (`:683-693`) - the same, at `:686-687` and `:692-693`.
+
+Both print the numbers into `message`, which is why no compiler warning ever
+flagged the unused parameters, and why the fault is invisible to a reader of the
+source but not to a reader of the output.
+
+The consequence is measurable rather than theoretical. `cypcb check` ranks
+violations worst-first by `shortfall(violation).unwrap_or(-1.0)`
+(`crates/cypcb-cli/src/commands/check.rs:228-244`), and its own comment says
+rules that measure no distance keep their order at the end, because a number
+invented for them would sort them among the ones that have one. So these two
+rows sort to the end beside the unrouted pins - **not because they measure
+nothing, but because they measured and did not record it.** A hole 0.05 mm from
+another where 0.15 mm was required is a two-thirds miss, and it sorts below a
+trace that missed by five percent.
+
+Condition, narrower than "every violation carries a number", because most of the
+fourteen are right to carry none:
+
+> Every violation whose kind measures a distance carries the distance it
+> measured and the distance it required. A kind that measures a distance and
+> reports `None` is a defect in the rule, not a property of the board.
+
+**One kind escapes that condition and is worth naming rather than forcing.**
+`DiffPairSkew` covers two different faults: a measured skew, which passes
+`Some` (`crates/cypcb-drc/src/rules/diff_pair.rs:106`), and a pair naming a net
+that is not on the board, which passes `None` (`:79`) and is right to. So "does
+this kind measure a distance" is a property of the **call site** there, not of
+the kind, and any table built on kinds needs this one exception written into it.
+
+**5. Three numbers exist and no field can hold them.** `impedance` (`:1145`)
+measures ohms, `acid_trap` (`:921`) measures degrees, and `neck_down` (`:1164`)
+carries a comment saying the `actual`/`required` pair cannot say which of two
+dimensions it means. In all three the number exists and lives only inside the
+`message` string, where no ranking will ever see it. `acid_trap` is the only
+rule this project wrote itself in the last week and it already falls into this
+category, which is the argument for deciding rather than leaving it.
+
+**In this repo, three conditions are unmet and countable:** severity has no
+field, rule identity is not carried on the row, and two distance-measuring
+constructors report no distance. The first two are each a one-field change; the
+third is two lines.
+
 ## Declared is not measured
 
 Three rules in a row had to be rewritten around the same mistake, which makes
@@ -888,6 +1152,11 @@ it a design rule for this canon rather than three coincidences.
 - **R-15, spoke count.** `thermal_spokes` cuts a fixed cross of four and the
   filler clips whatever the pour cannot carry, so the count a joint actually
   has is the count that survived, not the count in any table.
+
+- **R-17, the grid position of a pad.** `nm_to_grid_x` snaps by integer
+  division, so the node the search uses sits at or below the pad centre on
+  each axis. The position the design declares is not the position the router
+  works from, and the error always points the same way.
 
 In each case the declared or theoretical quantity is available, cheap and
 wrong, and the measured one takes work. A rule that takes the cheap number is
@@ -1003,7 +1272,7 @@ question will not build.
 ## Blocked on the model
 
 Two rules cannot be enforced without a change to the data model. The rest are
-waiting on code; R-16 sorts all fifteen and counts the missing fields rather
+waiting on code; R-16 sorts every rule and counts the missing fields rather
 than the blocked rules.
 
 **R-02, working voltage.** Nets have no voltage field: "voltage" does not
@@ -1123,6 +1392,27 @@ grep -n "pub fn fill_zone" crates/cypcb-world/src/copper.rs
 # R-13: the spatial query coverage would reuse, and its one caller today
 grep -n "query_region_on_layers" crates/cypcb-autoroute/src/scoring.rs
 
+# R-16: the registry's size, against the three rules bucket 1 names
+grep -c "Box::new(rules::" crates/cypcb-drc/src/lib.rs
+
+# R-16: the acceptance classes that gate R-11, and the house presets that do not
+sed -n '56,63p' crates/cypcb-rules/src/presets/mod.rs
+
+# R-17: an explicit resolution returns before anything else touches it
+sed -n '398,412p' crates/cypcb-autoroute/src/lib.rs
+
+# R-17: the snap truncates, which is why the error is a cell and not half of one
+sed -n '468,478p' crates/cypcb-autoroute/src/grid.rs
+
+# R-18: the two constructors that take a measurement and discard it
+sed -n '617,628p;683,694p' crates/cypcb-drc/src/violation.rs
+
+# R-18: what that costs - both rows sort to the end of the report
+sed -n '228,244p' crates/cypcb-cli/src/commands/check.rs
+
+# R-18: the kind that measures a distance at one call site and not the other
+grep -n "diff_pair_skew" crates/cypcb-drc/src/rules/diff_pair.rs
+
 # R-14: the pitch is declared on the pour and carried on its entity
 grep -n "zone_stitch" crates/cypcb-parser/src/parser.rs
 sed -n '85,88p' crates/cypcb-world/src/components/zone.rs
@@ -1148,7 +1438,7 @@ grep -rln thermal_relief_spokes --include=*.rs crates/ \
 ls crates/cypcb-drc/src/rules/unrouted_pin.rs crates/cypcb-drc/src/rules/trace_current.rs
 ```
 
-Last verified: 2026-09-11, including R-10 through R-15. Web sources were
+Last verified: 2026-09-11, including R-10 through R-18. Web sources were
 read on 2026-09-11, and every repository claim in those four rules was read
 against the working tree on the same day by opening the file rather than
 grepping for the name: `DEFAULT_TOLERANCE`, `is_90_bend`, `compute_composite`
@@ -1158,6 +1448,12 @@ and the variant sort for R-10 and R-11; `nets_needing_reroute`, the tear block,
 and `query_region_on_layers` for R-13. For R-14 and R-15: `StitchPitch`,
 `StitchSpec::at`, `stitching_vias` and its doc comment, the `Via` struct's
 seven fields, `zone_stitch`, `thermal_gap`, `spoke_width` and
-`thermal_spokes`. Two negative claims were run rather than assumed - no file
-under `crates/cypcb-drc` mentions stitching, and `thermal_relief_spokes` has
-no reader outside its own crate.
+`thermal_spokes`. For R-16 through R-18: the registry's 38 entries, the three
+`IpcClass` variants, the early return for an explicit resolution, the integer
+division in `nm_to_grid_x`, both constructors that discard their measurement,
+the ranking comment in `check.rs`, and both `diff_pair_skew` call sites.
+Negative claims were run rather than assumed: no file under `crates/cypcb-drc`
+mentions stitching, `thermal_relief_spokes` has no reader outside its own
+crate, and no search on 2026-09-11 found a published permitted fraction for
+R-13, a router-grid rule for R-17, or a standard specifying report contents
+for R-18.
