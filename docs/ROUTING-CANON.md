@@ -96,8 +96,14 @@ Condition: the count of junctions with an internal angle below 90 degrees is 0.
 Source: nextpcb and pcbsync acid trap articles, read 2026-09-11. The threshold
 is an angle, not a dimension; no source gives a length.
 
-In this repo: not enforced. `min_acid_trap` exists in
-`crates/cypcb-rules/src/constraints.rs:167` and no code reads it.
+In this repo: **enforced.** `AcuteAngleRule` is in the registry
+(`crates/cypcb-drc/src/lib.rs:196`) and reports `ViolationKind::AcidTrap`;
+every wedge count in this document came out of running it. What has no
+reader is the constant: `min_acid_trap`
+(`crates/cypcb-rules/src/constraints.rs:167`) is named nowhere outside its
+own crate, so the rule enforces a threshold of its own rather than the fab
+table's. This paragraph read "not enforced" until 2026-09-11, which made
+the one rule this project has been measuring with deny its own existence.
 
 The cut that removes such a junction, and the floor below which cutting is
 cosmetic, are R-10.
@@ -130,7 +136,7 @@ on the model".
 
 ### R-05 Return path under a signal trace `[O]`
 
-*Applies when:* the board has a pour on a copper layer adjacent to the trace, and the net declares a controlled impedance. A board with no pour has no reference copper and this rule says nothing.
+*Applies when:* the board has a pour on a copper layer adjacent to the trace. A board with no pour has no reference copper and this rule says nothing. R-13 adds the impedance gate; this rule states none, and the two are kept apart on purpose.
 
 Return current takes the path of least impedance: least resistance at low
 frequency, least inductance above the crossover, which is a band directly under
@@ -920,13 +926,15 @@ the model cannot answer.
 
 *Applies when:* never, to a board. This is the canon reading itself.
 
-Fifteen rules, three states. This section is the canon reading itself: which
+Nineteen rules, three states - and the four that read the canon rather than a
+board (R-12, R-16, R-18) or arrived after this census was written (R-17, R-19)
+are placed at the end of it. This section is the canon reading itself: which
 rules the board is held to, which wait on somebody writing a check, and which
 wait on the data model - and then it counts the missing **fields** rather than
 the blocked rules, because a field that unblocks two rules is worth more than
 either of them.
 
-**Bucket 1 - enforced today. Three.** The registry has 38 entries
+**Bucket 1 - enforced today. Four.** R-19 is the fourth and the loudest; it was written last because a rule that fires on every board leaves no gap to notice. The registry has 38 entries
 (`crates/cypcb-drc/src/lib.rs`); three of them serve this canon.
 
 | rule | what enforces it |
@@ -934,8 +942,9 @@ either of them.
 | R-01 width against current | `TraceCurrentRule` (`lib.rs:143`), silent on a net that declares no `current` |
 | R-03 acute angles | `AcuteAngleRule` (`lib.rs:196`), reporting `ViolationKind::AcidTrap` |
 | R-07 annular ring and hole spacing | six rules - `AnnularRingRule`, `HoleToHoleRule`, `ViaDiameterRule`, `ViaDrillRule`, `PadLandRule`, `DrillAspectRatioRule` |
+| R-19 the flat clearance minimum | `ClearanceRule`, first in the registry, firing more than the rest together |
 
-**Bucket 2 - checkable today, nobody wrote the check. Ten.** Every quantity
+**Bucket 2 - checkable today, nobody wrote the check. Eleven.** Every quantity
 these need is in the world already.
 
 | rule | why it is checkable, in one clause |
@@ -950,6 +959,12 @@ these need is in the world already.
 | R-13 return path, measured | same data as R-05; coverage and crossings are geometry, loop area an estimate by design |
 | R-14 via stitching | vias carry net, position and layer span, pours carry their pitch; the measurement is available, the thresholds are not |
 | R-15 thermal relief in manufacturing | spoke width, surviving spoke count and pad symmetry all read from data already present |
+| R-17 the search grid | pad positions and a fab table are on every board; the check is a loop over pads with the router's own snap |
+
+**Not about a board at all. Three.** R-12 is about the router's loop, R-16 is
+this section, and R-18 is about a row of output. Each says so in its own
+*applies when* line, and R-12 fails entry condition 1 below - which is the
+argument for moving it out of this document.
 
 **Bucket 3 - the model cannot answer. Two.**
 
@@ -1364,8 +1379,6 @@ Checked by grep over `crates/*/src` on 2026-09-11: no hits for "return path",
    the nearest continuous return copper. R-13 bounds what this is worth:
    under continuous reference the area is set by the stackup and not by the
    route, so it is a number for uncovered spans only.
-4. Acute angles - `shared_corner` (`scoring.rs:362`) already yields the angle
-   between the two arms of a junction; count the junctions below 90 degrees.
 5. Stub length - see R-04; needs the connectivity graph described below.
 6. Parallel run length - for segment pairs on one layer, on different nets,
    whose directions differ by less than 10 degrees, sum the projected length
@@ -1406,8 +1419,9 @@ there is nothing to ask it with. `ClearanceRule` holds a flat `min_clearance`
 instead.
 
 **R-04, stub length.** Two gaps. First, copper has no connectivity graph. What
-exists is geometry: `Trace { segments, width, layer, net_id }` and
-`Via { position, drill, outer_diameter, start_layer, end_layer, net_id }`
+exists is geometry: `Trace { segments, width, layer, net_id, locked, source }`
+and
+`Via { position, drill, outer_diameter, start_layer, end_layer, net_id, locked }`
 (`crates/cypcb-world/src/components/trace.rs:727-742`). The ratsnest in the
 renderer is a star over pins, not over copper, and `UnroutedPinRule` is a
 geometric touch test with no graph behind it. A stub needs connected components
