@@ -191,9 +191,17 @@ pub fn shortfall(violation: &DrcViolation) -> Option<f64> {
 /// up in the total. A stencil aperture with no web left is a torn stencil, not
 /// a short, and the difference is what the sentence beside the number claims.
 ///
-/// The kind is the guard. Every rule that measures a distance now carries it
-/// as a number, so "actual is zero" alone would count a via with no annular
-/// ring and a trace of no width as copper touching copper.
+/// The kind is the guard, and it has to be, because the number alone is not
+/// enough in either direction: "actual is zero" would count a via with no
+/// annular ring and a trace of no width as copper touching copper, and a
+/// missing number would hide a real short.
+///
+/// This comment used to say every rule that measures a distance carries it as
+/// a number. That was not true when it was written: `hole_to_hole` and
+/// `solder_mask_bridge` took the measurement as a parameter, printed it into
+/// the message and set the field to `None`, so neither ever reached
+/// `shortfall` and both sorted to the end of `cypcb check` beside the faults
+/// that genuinely have no number. Fixed 2026-09-11.
 pub fn shorts(violations: &[DrcViolation]) -> usize {
     violations
         .iter()
@@ -623,8 +631,8 @@ impl DrcViolation {
     ) -> Self {
         DrcViolation {
             kind: ViolationKind::HoleToHole,
-            actual: None,
-            required: None,
+            actual: Some(actual),
+            required: Some(required),
             area: None,
             location,
             entity,
@@ -689,8 +697,8 @@ impl DrcViolation {
     ) -> Self {
         DrcViolation {
             kind: ViolationKind::SolderMaskBridge,
-            actual: None,
-            required: None,
+            actual: Some(actual),
+            required: Some(required),
             area: None,
             location,
             entity,
