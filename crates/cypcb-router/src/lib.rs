@@ -228,7 +228,7 @@ pub fn apply_routes_as(world: &mut BoardWorld, result: &RoutingResult, source: T
         let via = Via {
             position: via_placement.position,
             drill: via_placement.drill,
-            outer_diameter: cypcb_core::Nm(via_placement.drill.0 * 2), // Default annular ring
+            outer_diameter: via_placement.outer_diameter,
             start_layer: via_placement.start_layer,
             end_layer: via_placement.end_layer,
             net_id: via_placement.net_id,

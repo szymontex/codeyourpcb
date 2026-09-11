@@ -1978,6 +1978,13 @@ fn parse_via(
 
     let mut position: Option<Point> = None;
     let mut drill = Nm::from_mm(0.3); // Default drill
+                                      // The ring the file states. KiCad writes `(size ...)` on every via and this
+                                      // parser used to skip it, so a via came back with whatever `drill * 2`
+                                      // happened to give - right for a 0.6/0.3 via by coincidence, wrong for
+                                      // every other ring. `None` here means the file really said nothing, and the
+                                      // router's own 2:1 is then the honest fallback rather than a guess about
+                                      // somebody else's board.
+    let mut outer_diameter: Option<Nm> = None;
     let mut start_layer = Layer::TopCopper;
     let mut end_layer = Layer::BottomCopper;
     let mut net_id = NetId::new(0);
@@ -1991,6 +1998,15 @@ fn parse_via(
                             let x = coordinate(&sub[1], "via position x")?;
                             let y = coordinate(&sub[2], "via position y")?;
                             position = Some(Point::from_mm(x - origin.0, y - origin.1));
+                        }
+                    }
+                }
+                "size" => {
+                    if let Ok(sub) = child.list() {
+                        if sub.len() >= 2 {
+                            if let Some(d) = get_f64(&sub[1]) {
+                                outer_diameter = Some(Nm::from_mm(d));
+                            }
                         }
                     }
                 }
@@ -2022,7 +2038,10 @@ fn parse_via(
         }
     }
 
-    Ok(position.map(|pos| ViaPlacement::new(net_id, pos, drill, start_layer, end_layer)))
+    Ok(position.map(|pos| match outer_diameter {
+        Some(size) => ViaPlacement::from_file(net_id, pos, drill, size, start_layer, end_layer),
+        None => ViaPlacement::new(net_id, pos, drill, start_layer, end_layer),
+    }))
 }
 
 // ---------------------------------------------------------------------------

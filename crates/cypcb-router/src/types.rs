@@ -97,6 +97,14 @@ pub struct ViaPlacement {
     pub position: Point,
     /// Drill hole diameter in nanometers.
     pub drill: Nm,
+    /// Total via diameter including the annular ring.
+    ///
+    /// A file states this and the model has a field for it, but this type did
+    /// not - so `(size ...)` could not reach `Via` and `apply_routes` computed
+    /// `drill * 2` instead, with the comment "Default annular ring". A 0.6/0.3
+    /// via came home right by coincidence, because it happens to be 2:1; any
+    /// other ring came home with a number nobody chose.
+    pub outer_diameter: Nm,
     /// Upper layer connection (typically TopCopper).
     pub start_layer: Layer,
     /// Lower layer connection (typically BottomCopper).
@@ -112,10 +120,36 @@ impl ViaPlacement {
         start_layer: Layer,
         end_layer: Layer,
     ) -> Self {
+        // Twice the drill is this project's own ring for a via it places
+        // itself, which is a choice rather than an invention: nothing else
+        // states a size for a hole the router just decided to make. It is not
+        // a default for a via that came out of a file - that one states its
+        // size, and `from_file` is how it says so.
+        Self::from_file(
+            net_id,
+            position,
+            drill,
+            Nm(drill.0 * 2),
+            start_layer,
+            end_layer,
+        )
+    }
+
+    /// A via whose size the board file states.
+    #[allow(clippy::too_many_arguments)]
+    pub fn from_file(
+        net_id: NetId,
+        position: Point,
+        drill: Nm,
+        outer_diameter: Nm,
+        start_layer: Layer,
+        end_layer: Layer,
+    ) -> Self {
         ViaPlacement {
             net_id,
             position,
             drill,
+            outer_diameter,
             start_layer,
             end_layer,
         }
@@ -123,13 +157,13 @@ impl ViaPlacement {
 
     /// Create a through-hole via (top to bottom copper).
     pub fn through_hole(net_id: NetId, position: Point, drill: Nm) -> Self {
-        ViaPlacement {
+        Self::new(
             net_id,
             position,
             drill,
-            start_layer: Layer::TopCopper,
-            end_layer: Layer::BottomCopper,
-        }
+            Layer::TopCopper,
+            Layer::BottomCopper,
+        )
     }
 }
 

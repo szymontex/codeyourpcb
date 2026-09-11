@@ -230,3 +230,51 @@ fn a_via_this_router_placed_is_removed() {
          test above proves nothing about the marker"
     );
 }
+
+#[test]
+fn a_via_keeps_the_ring_the_file_gave_it() {
+    // `ViaPlacement` had no outer diameter, so `(size ...)` could not reach the
+    // model and `apply_routes` computed `drill * 2` with the comment "Default
+    // annular ring". That is right for a 0.6/0.3 via by coincidence, because it
+    // happens to be 2:1, and wrong for every other ring - which is why the via
+    // in this fixture is 0.7 over 0.4, a ring of 0.15 per side. Under the old
+    // arithmetic it came home as 0.8: 0.1 mm of copper nobody drew.
+    let parsed = cypcb_kicad::parse_kicad_pcb(&fixture()).expect("the fixture parses");
+    let mut world = parsed.world;
+    let routes = parsed.reference_routes.expect("the fixture carries copper");
+    cypcb_router::apply_routes_as(&mut world, &routes, TraceSource::Manual);
+
+    let vias: Vec<Via> = {
+        let ecs = world.ecs_mut();
+        let mut query = ecs.query::<&Via>();
+        query.iter(ecs).cloned().collect()
+    };
+    assert_eq!(vias.len(), 1, "the fixture puts one via on the board");
+    let via = vias[0];
+    println!(
+        "drill {:.2}mm, outer {:.2}mm, ring {:.3}mm per side",
+        via.drill.to_mm(),
+        via.outer_diameter.to_mm(),
+        (via.outer_diameter.to_mm() - via.drill.to_mm()) / 2.0
+    );
+
+    assert_eq!(
+        via.drill,
+        cypcb_core::Nm::from_mm(0.4),
+        "the drill is what the file says"
+    );
+    assert_eq!(
+        via.outer_diameter,
+        cypcb_core::Nm::from_mm(0.7),
+        "the ring is what the file says, not what arithmetic on the drill gives"
+    );
+
+    // The control that names the defect rather than the fix: the old number has
+    // to be gone, not merely different. Without it an off-by-anything would
+    // satisfy the assertion above only by luck.
+    assert_ne!(
+        via.outer_diameter,
+        cypcb_core::Nm(via.drill.0 * 2),
+        "the via came home with twice its drill, which is the invented ring"
+    );
+}
