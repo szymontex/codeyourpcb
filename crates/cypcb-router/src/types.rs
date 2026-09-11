@@ -13,7 +13,12 @@ pub enum RoutingStatus {
     Complete,
     /// Some nets could not be routed.
     Partial {
-        /// Number of connections that could not be routed.
+        /// Number of two-pin connections that could not be routed.
+        ///
+        /// Connections, not nets: a net short of three of them counts three.
+        /// The two numbers were conflated until 2026-09-11, when every producer
+        /// put `unrouted.len()` here - a count of nets - into a field whose
+        /// own documentation said connections.
         unrouted_count: usize,
     },
     /// Routing failed completely.
@@ -222,7 +227,7 @@ impl Default for RoutingResult {
 ///     total_length: Nm::from_mm(150.0),
 ///     via_count: 5,
 ///     layer_changes: 5,
-///     unrouted_nets: 0,
+///     unrouted_connections: 0,
 /// };
 ///
 /// assert!(metrics.is_complete());
@@ -239,13 +244,13 @@ pub struct RoutingMetrics {
     pub layer_changes: u32,
 
     /// Number of nets that could not be routed.
-    pub unrouted_nets: u32,
+    pub unrouted_connections: u32,
 }
 
 impl RoutingMetrics {
     /// Check if all nets were successfully routed.
     pub fn is_complete(&self) -> bool {
-        self.unrouted_nets == 0
+        self.unrouted_connections == 0
     }
 
     /// Calculate a simple quality score (lower is better).
@@ -253,13 +258,13 @@ impl RoutingMetrics {
     /// Scoring formula:
     /// - Base: total_length in mm
     /// - Penalty: +5mm per via
-    /// - Penalty: +1000mm per unrouted net
+    /// - Penalty: +1000mm per unrouted connection
     ///
     /// This provides a rough measure for comparing routing solutions.
     pub fn quality_score(&self) -> f64 {
         let length_mm = self.total_length.0 as f64 / 1_000_000.0;
         let via_penalty = self.via_count as f64 * 5.0;
-        let unrouted_penalty = self.unrouted_nets as f64 * 1000.0;
+        let unrouted_penalty = self.unrouted_connections as f64 * 1000.0;
 
         length_mm + via_penalty + unrouted_penalty
     }
@@ -295,8 +300,8 @@ pub fn calculate_metrics(result: &RoutingResult) -> RoutingMetrics {
     // Count layer changes (each via represents a layer change)
     let layer_changes = via_count;
 
-    // Count unrouted nets from status
-    let unrouted_nets = match &result.status {
+    // Connections, not nets - see `RoutingStatus::Partial`.
+    let unrouted_connections = match &result.status {
         RoutingStatus::Complete => 0,
         RoutingStatus::Partial { unrouted_count } => *unrouted_count as u32,
         RoutingStatus::Failed { .. } => u32::MAX, // Unknown, assume worst
@@ -306,7 +311,7 @@ pub fn calculate_metrics(result: &RoutingResult) -> RoutingMetrics {
         total_length,
         via_count,
         layer_changes,
-        unrouted_nets,
+        unrouted_connections,
     }
 }
 
@@ -439,7 +444,7 @@ mod tests {
             total_length: Nm::from_mm(100.0),
             via_count: 3,
             layer_changes: 3,
-            unrouted_nets: 0,
+            unrouted_connections: 0,
         };
 
         assert!(metrics.is_complete());
@@ -451,7 +456,7 @@ mod tests {
             total_length: Nm::from_mm(50.0),
             via_count: 1,
             layer_changes: 1,
-            unrouted_nets: 2,
+            unrouted_connections: 2,
         };
 
         assert!(!metrics.is_complete());
@@ -464,7 +469,7 @@ mod tests {
             total_length: Nm::from_mm(100.0),
             via_count: 0,
             layer_changes: 0,
-            unrouted_nets: 0,
+            unrouted_connections: 0,
         };
 
         // Score should be just the length
@@ -475,7 +480,7 @@ mod tests {
             total_length: Nm::from_mm(100.0),
             via_count: 2,
             layer_changes: 2,
-            unrouted_nets: 0,
+            unrouted_connections: 0,
         };
 
         // Score = 100 + (2 * 5) = 110
@@ -512,7 +517,7 @@ mod tests {
         assert_eq!(metrics.total_length, Nm::from_mm(20.0));
         assert_eq!(metrics.via_count, 1);
         assert_eq!(metrics.layer_changes, 1);
-        assert_eq!(metrics.unrouted_nets, 0);
+        assert_eq!(metrics.unrouted_connections, 0);
         assert!(metrics.is_complete());
     }
 
@@ -531,7 +536,7 @@ mod tests {
 
         assert_eq!(metrics.total_length, Nm::from_mm(5.0));
         assert_eq!(metrics.via_count, 0);
-        assert_eq!(metrics.unrouted_nets, 3);
+        assert_eq!(metrics.unrouted_connections, 3);
         assert!(!metrics.is_complete());
     }
 
@@ -542,7 +547,7 @@ mod tests {
         assert_eq!(metrics.total_length, Nm(0));
         assert_eq!(metrics.via_count, 0);
         assert_eq!(metrics.layer_changes, 0);
-        assert_eq!(metrics.unrouted_nets, 0);
+        assert_eq!(metrics.unrouted_connections, 0);
         assert!(metrics.is_complete());
     }
 }

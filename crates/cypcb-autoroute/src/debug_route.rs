@@ -261,7 +261,7 @@ pub fn route_with_debug(
         ratsnest_count: ratsnest.len(),
         net_count: order.len(),
         stages: vec![stage_postprocess, stage_smooth, stage_viaopt],
-        unrouted_count: loop_result.unrouted.len(),
+        unrouted_count: loop_result.unrouted_connections,
         iterations: loop_result.iterations,
         converged: loop_result.converged,
     }

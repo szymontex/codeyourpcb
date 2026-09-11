@@ -324,6 +324,11 @@ pub struct RoutingLoopResult {
     pub routed_paths: HashMap<u32, Vec<Vec<GridNode>>>,
     /// Net IDs that could not be routed.
     pub unrouted: Vec<u32>,
+    /// How many two-pin connections those nets are still short of.
+    ///
+    /// Never smaller than `unrouted.len()`, and larger whenever one net lost
+    /// more than one connection.
+    pub unrouted_connections: usize,
     /// Total via count across all nets.
     pub total_vias: usize,
 }
@@ -341,6 +346,7 @@ pub fn route_all_nets(
     // Track routed paths per net (net_id -> list of paths)
     let mut routed_paths: HashMap<u32, Vec<Vec<GridNode>>> = HashMap::new();
     let mut unrouted: Vec<u32> = Vec::new();
+    let mut unrouted_connections: usize = 0;
 
     for &net_idx in order {
         let net = &ratsnest[net_idx];
@@ -443,6 +449,10 @@ pub fn route_all_nets(
                 net_name = %net.net_name,
                 "Net partially routed"
             );
+            // The shortfall, not just the fact of one. A net short of three
+            // connections is three things a designer has to finish, and
+            // reporting it as one net understates the work by two.
+            unrouted_connections += connections.len().saturating_sub(net_paths.len());
             routed_paths.insert(net_id, net_paths);
             unrouted.push(net_id);
         }
@@ -466,6 +476,7 @@ pub fn route_all_nets(
     RoutingLoopResult {
         routed_paths,
         unrouted,
+        unrouted_connections,
         total_vias,
     }
 }

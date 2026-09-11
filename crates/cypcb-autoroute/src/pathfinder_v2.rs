@@ -271,13 +271,14 @@ impl PathFinderStrategy {
             RoutingResult::complete(all_segments, all_vias)
         } else {
             tracing::warn!(
-                unrouted = loop_result.unrouted.len(),
+                unrouted_nets = loop_result.unrouted.len(),
+                unrouted_connections = loop_result.unrouted_connections,
                 iterations = loop_result.iterations,
                 converged = loop_result.converged,
                 routing_strategy = self.name(),
                 "Some nets could not be routed"
             );
-            RoutingResult::partial(all_segments, all_vias, loop_result.unrouted.len())
+            RoutingResult::partial(all_segments, all_vias, loop_result.unrouted_connections)
         }
     }
 }
@@ -288,6 +289,12 @@ pub struct PathFinderLoopResult {
     pub routed_paths: HashMap<u32, Vec<Vec<GridNode>>>,
     /// Net IDs that could not be routed after all iterations.
     pub unrouted: Vec<u32>,
+    /// How many two-pin connections those nets are still short of.
+    ///
+    /// Never smaller than `unrouted.len()`, and larger whenever one net lost
+    /// more than one connection. This is the number `RoutingStatus::Partial`
+    /// reports, because that is what its field says it holds.
+    pub unrouted_connections: usize,
     /// Number of iterations run.
     pub iterations: u32,
     /// Whether the algorithm converged (zero overused cells).
@@ -937,26 +944,32 @@ pub fn pathfinder_loop(
         }
     }
 
-    // Determine unrouted nets
-    let unrouted: Vec<u32> = ratsnest
-        .iter()
-        .filter(|net| {
-            let net_id = net.net_id.id();
-            let connections = build_spanning_tree(&net.pads);
-            if connections.is_empty() {
-                return false; // Single-pad or no connections needed
-            }
-            match routed_paths.get(&net_id) {
-                Some(paths) => paths.len() < connections.len(),
-                None => true,
-            }
-        })
-        .map(|net| net.net_id.id())
-        .collect();
+    // What is left unrouted, counted two ways because the two numbers are not
+    // the same and a caller that asks for one and gets the other is misled.
+    // A net with eight pins is seven connections; leaving three of them out
+    // makes one unrouted net and three unrouted connections. The shortfall is
+    // available right here - the filter below already compares the two counts
+    // to decide whether a net is finished - and throwing it away is what left
+    // `RoutingStatus::Partial` naming connections while carrying nets.
+    let mut unrouted: Vec<u32> = Vec::new();
+    let mut unrouted_connections: usize = 0;
+    for net in ratsnest.iter() {
+        let net_id = net.net_id.id();
+        let connections = build_spanning_tree(&net.pads);
+        if connections.is_empty() {
+            continue; // Single-pad or no connections needed
+        }
+        let routed = routed_paths.get(&net_id).map_or(0, |paths| paths.len());
+        if routed < connections.len() {
+            unrouted.push(net_id);
+            unrouted_connections += connections.len() - routed;
+        }
+    }
 
     PathFinderLoopResult {
         routed_paths,
         unrouted,
+        unrouted_connections,
         iterations: final_iteration,
         converged,
         overuse_per_iteration,

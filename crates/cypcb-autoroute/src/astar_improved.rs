@@ -177,11 +177,12 @@ impl RoutingStrategy for ImprovedAStarStrategy {
             RoutingResult::complete(all_segments, all_vias)
         } else {
             tracing::warn!(
-                unrouted = loop_result.unrouted.len(),
+                unrouted_nets = loop_result.unrouted.len(),
+                unrouted_connections = loop_result.unrouted_connections,
                 routing_strategy = self.name(),
                 "Some nets could not be routed"
             );
-            RoutingResult::partial(all_segments, all_vias, loop_result.unrouted.len())
+            RoutingResult::partial(all_segments, all_vias, loop_result.unrouted_connections)
         }
     }
 }
@@ -288,6 +289,8 @@ fn manhattan_span(pads: &[PadTarget]) -> i64 {
 pub struct ImprovedRoutingResult {
     pub routed_paths: HashMap<u32, Vec<Vec<GridNode>>>,
     pub unrouted: Vec<u32>,
+    /// How many two-pin connections those nets are still short of.
+    pub unrouted_connections: usize,
     pub total_vias: usize,
 }
 
@@ -304,6 +307,7 @@ fn route_all_nets_improved(
 
     let mut routed_paths: HashMap<u32, Vec<Vec<GridNode>>> = HashMap::new();
     let mut unrouted: Vec<u32> = Vec::new();
+    let mut unrouted_connections: usize = 0;
 
     for &net_idx in order {
         let net = &ratsnest[net_idx];
@@ -394,6 +398,7 @@ fn route_all_nets_improved(
                 net_name = %net.net_name,
                 "Net partially routed"
             );
+            unrouted_connections += connections.len().saturating_sub(net_paths.len());
             routed_paths.insert(net_id, net_paths);
             unrouted.push(net_id);
         }
@@ -416,6 +421,7 @@ fn route_all_nets_improved(
     ImprovedRoutingResult {
         routed_paths,
         unrouted,
+        unrouted_connections,
         total_vias,
     }
 }
