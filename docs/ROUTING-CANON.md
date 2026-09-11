@@ -93,6 +93,9 @@ is an angle, not a dimension; no source gives a length.
 In this repo: not enforced. `min_acid_trap` exists in
 `crates/cypcb-rules/src/constraints.rs:167` and no code reads it.
 
+The cut that removes such a junction, and the floor below which cutting is
+cosmetic, are R-10.
+
 ### R-04 Stub length `[O]`
 
 An unterminated branch resonates at a quarter wavelength and notches the
@@ -161,6 +164,10 @@ In this repo: the data is there and the aggregation is not. `DrcViolation`
 carries `kind: ViolationKind` with 35 variants
 (`crates/cypcb-drc/src/violation.rs:51-120`) plus `actual` and `required` as
 numbers rather than prose.
+
+This rule gives the vector; R-11 says how to read it. Split apart they invite
+the defect they were written against - a count per kind that is then added up
+again is the single total under another name.
 
 ### R-07 Annular ring and hole-to-hole spacing `[R]`
 
@@ -252,6 +259,206 @@ publish 0.254 mm for gap and for spoke width, which is exactly what
 `PourOptions::default()` uses (`crates/cypcb-core/src/pour.rs:242-261`). The
 drawn copper agreed with the published table by coincidence, not by wiring, and
 a house publishing anything else would have been silently ignored.
+
+### R-10 Mitring an acute junction `[P]`
+
+An interior angle below 90 degrees is cut away, not left, and the cut is
+asymmetric.
+
+**The geometry of the cut.** Two arms leave one point 45 degrees apart. Trim
+`a` from one arm and `a * sqrt(2)` from the other; the chord between the two
+new points then runs on a multiple of 45 degrees and the two joints it creates
+are 90 and 135 degrees. A symmetric cut - equal trim on both arms - puts the
+chord at 112.5 degrees, which is not a multiple of 45 and which this project's
+own `is_valid_angle` (`crates/cypcb-autoroute/src/smoother.rs:22`) rejects.
+
+**The floor.** `a >= 1.5 * w`, where `w` is trace width. Two bands of width `w`
+whose centre lines meet at 45 degrees have already merged into one piece of
+copper within `w / (2 * sin 22.5 degrees) = 1.307 * w` of the apex, so a cut
+closer than that lands inside solid copper and moves the wedge rather than
+removing it. 1.5 is 1.307 rounded to a number that can be written without a
+square root beside it.
+
+**When not to cut at all.** An interior angle below 45 degrees is copper
+doubling back on itself. That is a path defect, not a corner defect, and the
+connection is rerouted rather than mitred; cutting it hides the detour and
+keeps it.
+
+**What this project measured.** 53 wedges across the six benchmark boards,
+every one of them at exactly 45 degrees. Of 58 wedges scanned for room, 58
+clear the `1.5 * w` floor; the median shortest arm is `4.00 * w`, and the
+per-board medians are 2.00, 5.66, 11.31, 2.00, 2.00 and 2.83 times the trace
+width. This is this project's own measurement, the same status as the split
+behind `shorts` and `clearance_contacts` in R-06, and it is a snapshot of the
+router's defaults rather than a constant - the command that reproduces it is in
+the verification block, and `stop_at_own_copper` moves it.
+
+**In this repo:** the junctions are counted and none are cut. `acute-angle`
+(`crates/cypcb-drc/src/rules/acute_angle.rs`) reports them; no pass in
+`crates/cypcb-autoroute` rewrites them. `chamfer_corners`
+(`crates/cypcb-autoroute/src/smoother.rs:342`) acts only on a 90 degree bend
+and cannot reach this case: it classifies both segments and proceeds only when
+one is horizontal and the other vertical - `is_90_bend = (dir_a == Horizontal
+&& dir_b == Vertical) || (dir_a == Vertical && dir_b == Horizontal)`, and `if
+!is_90_bend` pushes the segment through untouched
+(`crates/cypcb-autoroute/src/smoother.rs:378-388`).
+
+#### What the sources bound, and what they do not
+
+**1. No published source found that bounds the angle at a junction of two
+traces.** What is published is the 90 degree threshold for a corner of one
+trace and for a trace meeting a land, stated repeatedly as a fabrication rule:
+avoid angles below 90 degrees where a trace changes direction or meets a pad,
+use a 45 degree chamfer or a curve instead (fabricator DFM guides, read
+2026-09-11). Two things are absent from everything read. First, no clause
+number: searching for IPC-2221 or IPC-2222 text on acute conductors returns
+vendor articles that assert the rule and no standard text that states it, so
+the 90 degree figure is `[P]` and not `[R]`. Second, nothing bounds the angle
+where two separately routed runs of one net meet, which is exactly the geometry
+this router produces. The searches that returned nothing, on 2026-09-11: IPC
+clause text for acute conductors; DRC rules for a trace-to-trace junction
+angle; fabricator rule lists for a minimum angle between traces. The same
+sources are also explicit that this class of rule sits in DFM rather than in
+DRC - a board can pass DRC and fail DFM on an acid trap - which is why no tool
+reports it.
+
+**2. No published mitre dimension covers this geometry.** The compensation
+literature solves a 90 degree bend in a single trace, and generic fabrication
+guidance gives the shape of the fix without a dimension - replace one 90 degree
+corner with two 45 degree corners, or round it (fabricator DFM guides, read
+2026-09-11). The only number available for a 45 degree junction between two
+arms is this project's own `1.307 * w` merge distance.
+
+An arc is the other accepted fix and removes the internal angle entirely. This
+project flattens an arc to chords at a default tolerance of 10 microns
+(`DEFAULT_TOLERANCE`, `crates/cypcb-world/src/arc.rs:62`), and the step that
+follows from a tolerance is documented with it: `step = 2 * acos(1 - tolerance
+/ radius)` (`crates/cypcb-world/src/arc.rs:20-23`). The interior angle between
+two consecutive chords is `180 degrees - step`, so it stays at or above 90
+degrees exactly when `radius >= tolerance * (2 + sqrt 2)`, which is
+`3.414 * tolerance`. At the default tolerance that is a radius of 0.0341 mm -
+below it the flattening itself draws the wedge this rule forbids.
+
+**3. The 45 degree taboo is a manufacturing rule, not a signal-integrity one,
+and the numbers are not close.** The etching mechanism is the documented
+reason: etchant sits in an acute wedge longer than on open copper and undercuts
+the trace (fabricator articles on acid traps, read 2026-09-11). The
+signal-integrity reason does not survive measurement: for an 8 mil wide 50 ohm
+microstrip in FR-4, a right-angle bend adds about 0.012 pF of excess
+capacitance and about 1 ps of delay, and at a 100 ps rise time the reflection
+off that discontinuity is 0.003 of the incoming step - right-angle bends are
+fine to 2 Gbps and corners only begin to matter for 10 Gbps serial links
+(Howard Johnson, *Who's Afraid of the Big Bad Bend?*, sigcon.com, read
+2026-09-11). R-10 therefore belongs with the manufacturing rules and not in a
+signal-integrity section.
+
+A widely cited article states that etching is now done with alkaline rather
+than acid, so acid traps are no longer a problem (Altium on routing-angle
+myths, read 2026-09-11) `[P]`. On this project's boards the reason to cut a 45
+degree junction is therefore not that etchant still pools in it - it is that
+such a junction is a symptom of the search doubling back.
+
+**4. What documented tools do at a corner.** KiCad 8.0, read 2026-09-11: the
+router offers sharp and rounded corner modes, switched with Ctrl+/; Shove and
+Walk Around modes always emit horizontal, vertical and 45 degree segments, and
+free angles are available only in Highlight Collisions mode. FreeRouting, its
+routing-options page, read 2026-09-11: a "45 Grad" setting restricts
+interactive angles to multiples of 45 degrees and a "none" setting removes the
+restriction; a pull-tight region from 0, which switches the algorithm off, to
+999, which leaves it unrestricted; and an optional postroute pass that reduces
+via count and cumulative trace length. Both constrain the direction a segment
+may run. Neither documents a bound on the angle between two segments, which is
+the same finding as part 1 seen from the tool side.
+
+### R-11 Acceptance classes `[R]`
+
+A violation is weighed against the acceptance class the board declares, and the
+score publishes a tuple rather than one price per violation.
+
+**What the classes are.** IPC-6012 states performance requirements for rigid
+boards in three classes, with IPC-A-600 as the visual acceptance companion that
+says what each condition looks like. The worked example where the classes
+visibly differ is the annular ring: Class 2 permits breakout of up to 90
+degrees of the land's circumference on internal layers, Class 3 permits none,
+and the Class 3 minima are 0.050 mm on external layers measured from the inner
+diameter of the finished plated hole, and 0.0248 mm on internal layers measured
+from the drill diameter. Sources: vendor reproductions of the standard - a
+fabricator's land-size article and a class 2 against class 3 comparison, both
+read 2026-09-11. The clause text itself was not accessible, so every figure
+here is a reproduction rather than the standard's own words. The second example
+usually quoted, conductor width and spacing per class, is not carried here:
+searching on 2026-09-11 returned vendor pages asserting that Class 3 requires
+larger widths and spacing and none that gives the figure.
+
+**Which class each rule in this canon belongs to.** One of eleven is graded by
+class at all:
+
+| rule | where it lives |
+|---|---|
+| R-01 width against current | design standard (IPC-2221), class-independent |
+| R-02 spacing against voltage | design standard (IPC-2221 table 6-1), class-independent |
+| R-03 acute angles | DFM guidance only, no acceptance standard |
+| R-04 stub length | a design author's rule of thumb, no standard |
+| R-05 return path | EMC practice, no standard |
+| R-06 reporting per kind | this project's own rule |
+| R-07 annular ring and hole spacing | **graded by class** - Class 2 permits breakout, Class 3 does not |
+| R-08 trace entry into a land | DFM guidance; teardrops are discussed against Class 3 and are not themselves an acceptance criterion |
+| R-09 thermal relief | design guidance (IPC-2221, IPC-7093 for bottom-terminated parts), not class-graded |
+| R-10 mitring | DFM guidance only, like R-03 |
+| R-11 this rule | this project's own reading of the standards above |
+
+Five of the eleven exist only in DFM guidance or practice. That is not a defect
+in the canon - it is the reason this section exists, because a board can pass
+every acceptance criterion and still be refused at DFM review, and the two
+facts have to be reported separately rather than added together.
+
+**Nothing published ranks defect kinds against each other.** IPC-A-600 grades
+each feature on a three-step ladder - acceptable, process indicator, defect -
+where a process indicator does not affect form, fit or function and is not
+grounds for rejection, and a defect is nonconforming and requires disposition.
+The ladder is per feature and per class: the same condition can be acceptable
+in Class 1, a process indicator in Class 2 and a defect in Class 3 (vendor
+explainers of IPC-A-600 and IPC-A-610, read 2026-09-11) `[R]`. What no source
+read here provides is a rate of exchange between kinds - nothing says what a
+spacing under minimum is worth against an angle a fabricator dislikes, because
+acceptance is decided feature by feature and not by a total. It follows that
+the weighted composite in `crates/cypcb-autoroute/src/scoring.rs` is this
+project's own invention and has to be defended as a decision rather than cited.
+
+**The weighting this project adopts `[D]`: an order, not a sum.** Four tiers,
+compared one after another, never added:
+
+1. **A connection not made.** No class permits an open circuit, and no quantity
+   of anything else offsets one.
+2. **Copper touching copper**, measured at 0.00 mm. A board with a short does
+   not work; a board with a gap under minimum is a yield risk a fabricator may
+   still build.
+3. **Class-graded features under minimum** - annular ring, spacing, hole
+   spacing. These are what the acceptance ladder is for: report them per kind,
+   against the class the board declares, and let the class decide whether each
+   is a defect or a process indicator. Counted as **contacts, not rows**: one
+   contact along a parallel run produces a dozen clearance rows, so a tier
+   ranked on rows outweighs itself by accident. `clearance_contacts`
+   (`crates/cypcb-drc/src/violation.rs:156`) already computes the contact
+   count and the composite does not read it.
+4. **Findings with no acceptance standard behind them** - acute angles, trace
+   entry, mitring. Real, worth fixing, and never allowed to outweigh tier 3.
+
+Condition: of two routed boards, the one with fewer tier-1 findings ranks
+better whatever the other tiers say; ties fall to tier 2, then tier 3, then
+tier 4. Precedent in this repository for the form, not for the tiers:
+`generate_variants` already ranks complete boards first, then by shorts, then
+by composite (`crates/cypcb-autoroute/src/variant.rs:496-510`).
+
+**In this repo:** the score prices every violation at 1000 regardless of kind
+(`compute_composite`, `crates/cypcb-autoroute/src/scoring.rs:583`), so tiers 3
+and 4 are indistinguishable inside it, and tier 1 is absent from the score
+altogether. The board that makes this concrete is `shift_driver` under
+`stop_at_own_copper`: its clearance reports go 7 to 27 while its acute-angle
+count falls 12 to 5. Under this rule that is a tier-3 regression of 20 bought
+with a tier-4 improvement of 7, which is a bad trade stated in one line; under
+a flat price per violation the same board reads as 19 to 32 and says nothing
+about which kind moved.
 
 ## What this project already measures
 
@@ -433,7 +640,28 @@ grep -rn "thermal_relief" crates/cypcb-rules/src/presets/
 
 # The gate these numbers are held to
 cargo test -p cypcb-autoroute --test benchmark_validation
+
+# R-10: the wedge count and the room each one has (R-10 is a snapshot of the
+# router's defaults, not a constant)
+cargo test --release -p cypcb-autoroute \
+  --test can_a_wedge_be_cut_where_it_stands -- --nocapture
+
+# R-10: the arc tolerance the mitring alternative is bounded by
+sed -n '58,63p' crates/cypcb-world/src/arc.rs
+
+# R-10: chamfer_corners refuses anything that is not a 90 degree bend
+sed -n '376,390p' crates/cypcb-autoroute/src/smoother.rs
+
+# R-11: the composite prices violation rows at 1000 and never reads the
+# contact count
+sed -n '565,590p' crates/cypcb-autoroute/src/scoring.rs
+
+# R-11: the tiered ordering that already exists for variants
+sed -n '496,512p' crates/cypcb-autoroute/src/variant.rs
 ```
 
-Last verified: 2026-09-11. Web sources were read on 2026-09-11; repository
-claims were read against the working tree on the same day.
+Last verified: 2026-09-11, including R-10 and R-11. Web sources were read on
+2026-09-11; every repository claim in those two rules was read against the
+working tree on the same day, and the four file references they carry -
+`DEFAULT_TOLERANCE`, `is_90_bend`, `compute_composite` and the variant sort -
+were each opened rather than grepped for by name.
