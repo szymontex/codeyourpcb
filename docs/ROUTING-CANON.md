@@ -196,8 +196,9 @@ runs the case that makes the total misleading: one contact, two terms, 1500
 points.
 
 In this repo: the data is there and the aggregation is not. `DrcViolation`
-carries `kind: ViolationKind` with 35 variants
-(`crates/cypcb-drc/src/violation.rs:51-120`) plus `actual` and `required` as
+carries `kind: ViolationKind` with 36 variants, `Clearance` at `:51` through
+`AcidTrap` at `:122` in an enum spanning `:49-123`
+(`crates/cypcb-drc/src/violation.rs`), plus `actual` and `required` as
 numbers rather than prose.
 
 This rule gives the vector; R-11 says how to read it. Split apart they invite
@@ -869,7 +870,7 @@ the model cannot answer.
 
 *Applies when:* never, to a board. This is the canon reading itself.
 
-Nineteen rules, three states - and the four that read the canon rather than a
+Nineteen rules, three states - and the five that read the canon rather than a
 board (R-12, R-16, R-18) or arrived after this census was written (R-17, R-19)
 are placed at the end of it. This section is the canon reading itself: which
 rules the board is held to, which wait on somebody writing a check, and which
@@ -878,7 +879,11 @@ the blocked rules, because a field that unblocks two rules is worth more than
 either of them.
 
 **Bucket 1 - enforced today. Four.** R-19 is the fourth and the loudest; it was written last because a rule that fires on every board leaves no gap to notice. The registry has 38 entries
-(`crates/cypcb-drc/src/lib.rs`); three of them serve this canon.
+(`crates/cypcb-drc/src/lib.rs`) and nine of them serve these four rules:
+`ClearanceRule` at `:129`, `AnnularRingRule` at `:135`, `HoleToHoleRule` at
+`:136`, `ViaDiameterRule` at `:138`, `ViaDrillRule` at `:139`,
+`TraceCurrentRule` at `:143`, `PadLandRule` at `:159`, `DrillAspectRatioRule`
+at `:160` and `AcuteAngleRule` at `:196`.
 
 | rule | what enforces it |
 |---|---|
@@ -1178,6 +1183,17 @@ are acceptance criteria, which is R-11. **Neither publishes a flat spacing
 ladder by class**, so the 0.2 / 0.15 / 0.1 mm figures are a house-style default
 and the file says so where a reader will meet them.
 
+Source: JLCPCB capabilities page, read 2026-09-12 - minimum track width and
+spacing at 1 oz copper is 0.10 / 0.10 mm (4 / 4 mil) for one and two layers and
+0.09 / 0.09 mm (3.5 / 3.5 mil) multilayer, with 3 mil accepted only inside BGA
+fan-outs. The house figures in this project carry their provenance unevenly, and
+the difference is worth stating rather than smoothing: `pcbway.rs:27` records the
+day its page was read, 2026-08-13; the three JLCPCB blocks name the page and no
+date; `oshpark.rs:29-30` says "published" and names nothing; and the three
+`IpcClass` presets say outright that their ladder is this project's own. A figure
+with a URL and no date is not sourced, it is attributed - the page can change
+under it and nothing in the file would notice.
+
 **3. The figure is per pair, not per board.** `clearance_between`
 (`crates/cypcb-rules/src/presets/mod.rs:419-427`) takes the stricter of the two
 nets' constraints, so a net class can raise the floor for every pair that
@@ -1295,14 +1311,23 @@ fields. Six of them enter the composite.
 | field | unit | computed in | in composite |
 |---|---|---|---|
 | `total_length` | nm | `TraceData::total_length`, `scoring.rs:239` | yes, divided by board diagonal |
-| `via_count` | count | `scoring.rs:148` | yes, weight 1 |
-| `drc_violations` | violation rows | `scoring.rs:155` | yes, x1000 |
-| `clearance_contacts` | feature pairs | `scoring.rs:161` | no |
-| `shorts` | violations measured at 0.00 mm | `scoring.rs:160` | no |
+| `via_count` | count | `scoring.rs:156` | yes, weight 1 |
+| `drc_violations` | violation rows | `scoring.rs:163` | yes, x1000 |
+| `clearance_contacts` | feature pairs | `scoring.rs:168` | no |
+| `shorts` | violations measured at 0.00 mm | `scoring.rs:167` | no |
 | `smoothness` | 0.0 to 1.0 | `compute_smoothness`, `scoring.rs:281` | yes, `(1-s) * 100` |
 | `crossings` | segment intersections | `compute_crossings`, `scoring.rs:387` | yes, x500 |
 | `layer_balance` | 0.0 to 1.0 | `compute_layer_balance`, `scoring.rs:494` | yes, `(1-b) * 50` |
 | `composite` | dimensionless, lower is better | `compute_composite`, `scoring.rs:565` | - |
+
+Every term is multiplied by its `ScoreWeights` field before it is summed
+(`scoring.rs:88-108` for the struct and its defaults, `:581-586` for the sum),
+and all six default to 1.0. So the "in composite" column is the term a default
+run computes, not the formula: `via_count` enters as `weights.via * via_count`,
+and a caller that sets `drc` to 2.0 prices a violation row at 2000 with nothing
+in this table changing. The multipliers that are the formula's own, and that no
+weight can move, are the 1000 on a violation row, the 500 on a crossing, the 100
+on `(1 - smoothness)` and the 50 on `(1 - layer_balance)`.
 
 The bend penalty is the distance from the nearest multiple of 45 degrees over
 22.5 degrees (`angle_penalty`, `scoring.rs:253`). Length is normalised by the
@@ -1345,7 +1370,7 @@ connections, at least 70.0 mm of copper, composite at most 2100.0, at most 2
 Every violation weighs 1000 in the composite regardless of kind, so a trace
 that will cook ranks level with a trace slightly under the fab's minimum. The
 fix is mechanical: `DrcViolation` already carries its kind, so a count per kind
-is built in the same place `shorts` is built today (`scoring.rs:160`).
+is built in the same place `shorts` is built today (`scoring.rs:167`).
 
 ### Properties nothing in the workspace computes
 
@@ -1362,15 +1387,62 @@ Checked by grep over `crates/*/src` on 2026-09-11: no hits for "return path",
    the nearest continuous return copper. R-13 bounds what this is worth:
    under continuous reference the area is set by the stackup and not by the
    route, so it is a number for uncovered spans only.
-5. Stub length - see R-04; needs the connectivity graph described below.
-6. Parallel run length - for segment pairs on one layer, on different nets,
+4. Stub length - see R-04; needs the connectivity graph described below.
+5. Parallel run length - for segment pairs on one layer, on different nets,
    whose directions differ by less than 10 degrees, sum the projected length
    within a corridor of N times the clearance.
-7. Vias per net - `via_count` is a board total; group vias by `net_id` and
+6. Vias per net - `via_count` is a board total; group vias by `net_id` and
    publish the maximum and the distribution.
-8. Direction symmetry - route the same pad pair A to B and B to A and compare
+7. Direction symmetry - route the same pad pair A to B and B to A and compare
    cost, copper length, via count, and the intersection over union of the two
    cell sets.
+
+### The wedge beside a corner, which R-08 measures and can miss
+
+R-08's measurement asks one question - which side of the land does the trace's
+edge cross - and beside a corner that question has two answers a hair apart.
+Entering the middle of a 2.0 mm square land with a 0.25 mm trace at 39.9
+degrees, the upper edge leaves by the right side and the angle reads 50 100
+millidegrees; a tenth of a degree later the same edge leaves by the top and it
+reads 40 000. Nothing about the copper changed by ten degrees. Swept across
+every direction from an end off the land's centre line, in tenth-degree
+samples, the largest step between consecutive answers is 42 500 millidegrees,
+where a continuous measurement would step by about the sample size.
+
+Both figures are pinned: the flip in
+`the_answer_jumps_where_the_leaving_side_changes`
+(`crates/cypcb-drc/src/rules/pad_entry.rs:708`, its two assertions at
+`:723-724`), and the sweep in `the_answer_is_not_continuous_as_the_arm_sweeps`
+(`:661`, its assertion at `:688`), which also asserts that not one of its 901
+directions was refused - so it cannot pass by measuring nothing. This is a
+measured property of the rule and not a suspicion about it.
+
+What is not measured is the wedge against the side the edge does not cross. It
+is there on both sides of the flip - the copper does not care which boundary
+piece the arithmetic picked - and the rule sees it only once the leaving side
+changes. The half that matters is the one just before: a real trap, and a
+number that reads clean. The two coordinates in the first test sit either side of
+the 45 degree threshold, 50 100 passing and 40 000 failing, which is the whole
+defect in one assertion.
+
+What would have to exist to measure it is a distance: how near the trace edge
+comes to the boundary pieces it never crosses, and how near is near enough to
+count. Neither is published. Every source this canon read gives an angle where
+copper meets the land and none gives a clearance to the next side, so closing
+this means inventing a distance and presenting it as a standard. This project
+does not invent distances - the same refusal keeps R-13 carrying a
+proportionality and no threshold, and keeps R-14 screening at a stand-in it
+names in every row.
+
+The cost of getting it wrong is one-directional: this rule under-reports beside
+a corner and never over-reports. A junction can be a defect and read clean, and
+the report will then say nothing rather than say something wrong - which is why
+the limit belongs in this section rather than as a caveat inside R-08. A rule
+that under-reports silently cannot be told from a board with nothing wrong,
+which is the disease "A rule with no subject cannot be tested" describes from
+the other end. It follows that every count this rule publishes carries its
+denominator - entries examined and entries refused - or a reader cannot tell a
+quiet board from a quiet rule.
 
 ### Constants a fab preset promises and nothing checks
 
@@ -1513,8 +1585,13 @@ grep -n "pub fn fill_zone" crates/cypcb-world/src/copper.rs
 # R-13: the spatial query coverage would reuse, and its one caller today
 grep -n "query_region_on_layers" crates/cypcb-autoroute/src/scoring.rs
 
-# R-16: the registry's size, against the three rules bucket 1 names
-grep -c "Box::new(rules::" crates/cypcb-drc/src/lib.rs
+# R-16: the registry's size, against the nine entries bucket 1 names.
+# The second grep is anchored on the registry line rather than the rule name:
+# an unanchored search for those names answers 15, because each is also
+# declared and re-exported, and a check whose output contradicts its own
+# comment is worse than no check.
+grep -c "Box::new(rules::" crates/cypcb-drc/src/lib.rs   # expect 38
+grep -cE "Box::new\(rules::(ClearanceRule|AnnularRingRule|HoleToHoleRule|ViaDiameterRule|ViaDrillRule|TraceCurrentRule|PadLandRule|DrillAspectRatioRule|AcuteAngleRule)\)" crates/cypcb-drc/src/lib.rs   # expect 9
 
 # R-16: the acceptance classes that gate R-11, and the house presets that do not
 sed -n '56,63p' crates/cypcb-rules/src/presets/mod.rs
