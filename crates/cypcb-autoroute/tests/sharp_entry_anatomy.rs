@@ -80,6 +80,9 @@ struct EntryFact {
     count: usize,
     /// Which trace on its board carried it.
     trace: usize,
+    /// Whether the end in the land is an end of the whole track, which is the
+    /// only junction the Gerber writer grows a fillet from.
+    trace_end: bool,
     /// The length of the entering segment itself, in millimetres.
     length_mm: f64,
 }
@@ -145,6 +148,7 @@ fn pad_facts(fixture: &str) -> (i64, Vec<PadFact>, Vec<EntryFact>) {
             index: r.segment_index,
             count: r.segment_count,
             trace: r.trace_index,
+            trace_end: r.inside_is_trace_end,
             length_mm: {
                 let dx = (r.inside.x.raw() - r.outside.x.raw()) as f64;
                 let dy = (r.inside.y.raw() - r.outside.y.raw()) as f64;
@@ -274,6 +278,13 @@ fn the_sharp_entries_against_every_pad_that_could_have_been_one() {
     };
     let clean_entries: Vec<&EntryFact> = all_entries.iter().filter(|e| !e.sharp).collect();
     eprintln!();
+    let ends_total = all_entries.iter().filter(|e| e.trace_end).count();
+    let sharp_ends = sharp_entries.iter().filter(|e| e.trace_end).count();
+    eprintln!(
+        "track ends landing in a land: {ends_total} of {entries_total} entries, \
+         {sharp_ends} of the {} sharp",
+        sharp_entries.len()
+    );
     let entries_first = all_entries.iter().filter(|e| e.first).count();
     let sharp_first = sharp_entries.iter().filter(|e| e.first).count();
     eprintln!(
@@ -363,6 +374,18 @@ fn the_sharp_entries_against_every_pad_that_could_have_been_one() {
         sharp.iter().filter(|f| f.shape == "rect").count(),
         0,
         "every sharp land is a roundrect or an oblong, so a rectangle's edge arithmetic does not apply to any of them"
+    );
+
+    // R-08's two halves are not about the same junctions, and this is the
+    // number that says so. The angle half measures every crossing of a land's
+    // boundary; the teardrop half can only ever fillet a track's own end
+    // landing inside a pad, which the Gerber writer says in as many words. A
+    // condition written as though the two sets were one would be a condition
+    // about a set that does not exist.
+    assert!(
+        ends_total < entries_total,
+        "a track end in a land is a narrower thing than a crossing of its boundary: \
+         {ends_total} of {entries_total}"
     );
 
     // The reading the grid measurement left: that the sharp entries are the

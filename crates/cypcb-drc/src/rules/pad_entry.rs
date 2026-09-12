@@ -516,6 +516,14 @@ pub struct EntryRecord {
     /// whole net's copper rather than one pad-to-pad route, so two entries
     /// sharing this index are two lands entered by the same net.
     pub trace_index: usize,
+    /// Whether the end inside the land is also an end of the whole trace.
+    ///
+    /// The Gerber writer fillets only a track *end* that lands inside a pad -
+    /// "a track crossing a pad on its way elsewhere is not an entry and gets
+    /// nothing", in `crates/cypcb-export/src/gerber/copper.rs`. That is a
+    /// narrower set than the crossings this rule measures, and R-08's two
+    /// halves are about different junctions unless this says otherwise.
+    pub inside_is_trace_end: bool,
     /// Where this segment sits in its trace.
     pub segment_index: usize,
     /// How many segments that trace has.
@@ -600,12 +608,19 @@ pub fn entry_records(world: &mut BoardWorld) -> Vec<EntryRecord> {
                     // the trace's width would measure the wrong wedge on the
                     // commonest entry this rule exists for.
                     let width = segment.width.unwrap_or(trace.width);
+                    // The polyline's own two ends, which are the only points
+                    // the exporter's fillet can grow from.
+                    let same =
+                        |a: Point, b: Point| a.x.raw() == b.x.raw() && a.y.raw() == b.y.raw();
+                    let inside_is_trace_end = (segment_index == 0 && same(inside, segment.start))
+                        || (segment_index + 1 == trace.segments.len() && same(inside, segment.end));
                     records.push(EntryRecord {
                         entity: *entity,
                         pin: format!("{}.{}", refdes.as_str(), pad.number),
                         inside,
                         outside,
                         width,
+                        inside_is_trace_end,
                         trace_index,
                         segment_index,
                         segment_count: trace.segments.len(),
@@ -1220,6 +1235,14 @@ mod tests {
             "the three segment trace enters on its third segment and the one segment trace on its first"
         );
 
+        // Both tracks end in the land, so both would be filleted - the
+        // positive arm of the pass-through case below, without which a reader
+        // that always answered "not an end" would pass it.
+        assert!(
+            records.iter().all(|r| r.inside_is_trace_end),
+            "both tracks have their own end inside the land"
+        );
+
         // The two earlier segments of the long trace are not entries: neither
         // end of them is in the land's copper, so the walk never reaches them.
         assert!(
@@ -1227,6 +1250,35 @@ mod tests {
                 .iter()
                 .all(|r| r.segment_index + 1 == r.segment_count),
             "both entries are the last segment of their own trace"
+        );
+    }
+
+    #[test]
+    fn a_track_passing_through_a_land_ends_nowhere_in_it() {
+        // Two crossings of one land by a track that carries on past it. The
+        // rule measures both, and the Gerber writer fillets neither: it grows
+        // a teardrop from a track's own end, and this track's ends are four
+        // millimetres away on either side. R-08's two halves are not about the
+        // same junctions, and this is the case that says so.
+        let (mut world, net) = board_with_land(
+            1.6,
+            (0.0, 0.0),
+            Rotation::ZERO,
+            vec![Layer::TopCopper, Layer::BottomCopper],
+        );
+        add_polyline(
+            &mut world,
+            net,
+            Layer::TopCopper,
+            0.2,
+            &[(6.0, 6.0), (10.0, 10.0), (14.0, 6.0)],
+        );
+
+        let records = entry_records(&mut world);
+        assert_eq!(records.len(), 2, "the track crosses the boundary twice");
+        assert!(
+            records.iter().all(|r| !r.inside_is_trace_end),
+            "neither crossing is an end of the track, so neither would be filleted"
         );
     }
 

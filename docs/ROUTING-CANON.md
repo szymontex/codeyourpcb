@@ -334,10 +334,43 @@ on a layer the pad is on and the net the pad is on - and returns an
 cannot say whether anything was looked at. The rows it writes carry
 `ViolationKind::PadEntry` (`crates/cypcb-drc/src/violation.rs:104`). What the rule cannot see is the
 wedge beside a corner; see "What nothing measures". `grep -c '#\[test\]'
-crates/cypcb-drc/src/rules/pad_entry.rs` answers 28 at `f9a7556`. The teardrop condition has no check at all, though half its model is already there - `teardrops` is a DSL property with length and width ratios
-(`crates/cypcb-parser/src/parser.rs:331-345`), reachable as `world.teardrops()`
-(`crates/cypcb-world/src/dsl.rs:922`), and honoured by the Gerber writer and
-the KiCad export.
+crates/cypcb-drc/src/rules/pad_entry.rs` answers 29 at `4ff318c` and 30 with the pass-through case this measurement added.
+
+**The teardrop condition has no check, and measuring it on 2026-09-12 found
+three reasons that go deeper than "nobody wrote the rule".**
+
+First, nothing declares one. `ls examples/*.cypcb | wc -l` gives 33 and
+`grep -l teardrop examples/*.cypcb | wc -l` gives 1, and that one is
+`examples/teardrops.cypcb`, the file that exists to document the property. A
+rule reading `world.teardrops()` would find it unset on 32 boards out of 33.
+
+Second, no rule could read the copper even if it were drawn, because the copper
+is not in the board. every mention of a teardrop in the DRC crate is a
+comment - `grep -rn teardrop crates/cypcb-drc/src/` finds no code, only prose,
+and a count would rot the next time somebody writes the word. The fillet is synthesised at export time by
+`export_teardrops` in `crates/cypcb-export/src/gerber/copper.rs`, from the
+ratios and the pad geometry; the world the checker walks holds pads, traces and
+vias, and no teardrop. A condition on a teardrop's shape is a condition on
+something that exists only in a Gerber file.
+
+Third, and this is the one that changes what the rule can honestly say: **the
+two halves of R-08 are not about the same junctions.** The angle half measures
+every segment crossing a land's boundary. The teardrop half can only ever reach
+a track's own end landing inside a pad - the exporter says so in its own words,
+"a track crossing a pad on its way elsewhere is not an entry and gets nothing".
+Counted on the six routed fixtures by `sharp_entry_anatomy`: **302 of the 897
+entries are track ends, and 3 of the 14 sharp ones are.** Two thirds of what
+the angle half measures could never receive a fillet, and a teardrop rule would
+reach three of the fourteen entries this vector has been chasing.
+
+Half the model is there - `teardrops` is a DSL property carrying length and
+width ratios (`crates/cypcb-parser/src/parser.rs`, `convert_teardrops`),
+reachable as `world.teardrops()` (`crates/cypcb-world/src/world.rs:207`), and
+the Gerber writer honours it. **The KiCad export does not:** `to_kicad` prints
+a warning that the fillets the design asks for are not in the board it writes,
+because KiCad keeps its own teardrop settings. So a board exported both ways
+ships two different pieces of copper, and only one of the two paths carries
+what the design stated.
 
 ### R-09 Thermal relief at a pad in a pour `[P]`
 
@@ -965,7 +998,7 @@ either of them.
 | R-01 width against current | `TraceCurrentRule` (`lib.rs:143`), silent on a net that declares no `current` |
 | R-03 acute angles | `AcuteAngleRule` (`lib.rs:197`), reporting `ViolationKind::AcidTrap` |
 | R-07 annular ring and hole spacing | six rules - `AnnularRingRule`, `HoleToHoleRule`, `ViaDiameterRule`, `ViaDrillRule`, `PadLandRule`, `DrillAspectRatioRule` |
-| R-08 trace entry into a land | `PadEntryRule` (`lib.rs:160`), reporting `ViolationKind::PadEntry`; the angle only, not the teardrop |
+| R-08 trace entry into a land | `PadEntryRule` (`lib.rs:160`), reporting `ViolationKind::PadEntry`; the angle only. The teardrop half is not merely unwritten - the copper it would check is synthesised in the Gerber writer and is not in the board the checker walks |
 | R-19 the flat clearance minimum | `ClearanceRule`, first in the registry, firing more than the rest together |
 
 **Bucket 2 - checkable today, nobody wrote the check. Ten.** Checkable is
