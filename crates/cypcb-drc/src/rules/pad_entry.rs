@@ -35,7 +35,10 @@
 //! has no epsilon to choose.
 
 use cypcb_core::{Nm, Point};
+use cypcb_world::footprint::PadDef;
 use cypcb_world::{Pad, PadShape};
+
+use super::rotate_point;
 
 /// Below this angle the entry is a violation. Strict: exactly this value is
 /// clean, the way R-03 treats exactly ninety.
@@ -189,6 +192,42 @@ pub fn entry_angle(outline: PadOutline, end: Point, arm: Point, width: Nm) -> En
         },
         None => Entry::NotChecked(EntryRefusal::EdgeMissesLand),
     }
+}
+
+/// The same measurement for a pad the board has placed.
+///
+/// The geometry above works in the pad's own frame and knows nothing about
+/// placement. This is the change of frame and nothing else: the pad's centre
+/// is where the footprint puts it once the component is turned, and the
+/// trace's two points are carried into that frame rather than the outline
+/// being carried out of it - a rectangle stays a rectangle that way, and only
+/// two points pay for the rotation.
+pub fn entry_angle_placed(
+    pad: &PadDef,
+    at: Point,
+    rotation_deg: f64,
+    end: Point,
+    arm: Point,
+    width: Nm,
+) -> Entry {
+    let offset = rotate_point(pad.position, rotation_deg);
+    let centre = Point::from_raw(at.x.raw() + offset.x.raw(), at.y.raw() + offset.y.raw());
+    let into_pad = |p: Point| {
+        rotate_point(
+            Point::from_raw(p.x.raw() - centre.x.raw(), p.y.raw() - centre.y.raw()),
+            -rotation_deg,
+        )
+    };
+    entry_angle(
+        PadOutline {
+            shape: pad.shape,
+            width: pad.size.0,
+            height: pad.size.1,
+        },
+        into_pad(end),
+        into_pad(arm),
+        width,
+    )
 }
 
 /// The angle in degrees where one ray leaves the outline, or `None` if it
@@ -347,6 +386,7 @@ fn rounded(w: f64, h: f64, radius: f64) -> Vec<Boundary> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use cypcb_world::components::Layer;
 
     fn round_land(diameter: i64) -> PadOutline {
         PadOutline {
@@ -513,6 +553,96 @@ mod tests {
         );
         assert_eq!(entry, Entry::Measured { millideg: 26_565 });
         assert!(entry.is_violation());
+    }
+
+    fn square_pad(offset: Point) -> PadDef {
+        PadDef {
+            number: "1".to_string(),
+            shape: PadShape::Rect,
+            position: offset,
+            size: (Nm::new(2_000_000), Nm::new(2_000_000)),
+            drill: None,
+            slot: None,
+            layers: vec![Layer::TopCopper],
+            mask_margin: None,
+        }
+    }
+
+    /// The change of frame, exercised where it can go wrong: a pad that sits
+    /// away from its footprint's origin, on a component that has been turned.
+    /// The entry is the thirty-degree one above, carried into board
+    /// coordinates, and every rotation must read it back unchanged.
+    ///
+    /// Turning the trace's two points rather than the outline is what keeps
+    /// this exact: a rectangle stays axis-aligned in its own frame, and two
+    /// points rounded to the nanometre move the direction by less than a
+    /// thousandth of a degree.
+    #[test]
+    fn a_rotated_pad_reads_the_same_angle() {
+        let pad = square_pad(Point::from_raw(1_000_000, 0));
+        let at = Point::from_raw(10_000_000, 4_000_000);
+        for rotation in [0.0f64, 90.0, 180.0, 37.0, -45.0] {
+            let offset = rotate_point(pad.position, rotation);
+            let centre = Point::from_raw(at.x.raw() + offset.x.raw(), at.y.raw() + offset.y.raw());
+            let place = |p: Point| {
+                let turned = rotate_point(p, rotation);
+                Point::from_raw(
+                    centre.x.raw() + turned.x.raw(),
+                    centre.y.raw() + turned.y.raw(),
+                )
+            };
+            let entry = entry_angle_placed(
+                &pad,
+                at,
+                rotation,
+                place(Point::from_raw(0, 422_650)),
+                place(Point::from_raw(866_025, 922_650)),
+                Nm::new(250_000),
+            );
+            assert_eq!(
+                entry,
+                Entry::Measured { millideg: 30_000 },
+                "rotation {rotation}"
+            );
+        }
+    }
+
+    /// A known limit, pinned rather than left to be discovered.
+    ///
+    /// The measurement asks which side of the land the trace's edge crosses,
+    /// and near a corner that question flips with a hair's movement. Entering
+    /// the middle of a square land at 39.9 degrees, the upper edge still
+    /// leaves by the right side and the answer is 50 100; a tenth of a degree
+    /// later it leaves by the top instead and the answer is 40 000. Nothing
+    /// about the copper changed by ten degrees.
+    ///
+    /// The wedge against the other side is real on both sides of that
+    /// threshold - it is simply not the side the edge crosses. So this rule
+    /// under-reports beside a corner, and the case that matters is the one
+    /// just before the flip, where a trap is present and the number is clean.
+    /// Fixing it means measuring against boundary pieces the edge does not
+    /// cross, which needs a distance to be invented, and this project does not
+    /// invent distances.
+    #[test]
+    fn the_answer_jumps_where_the_leaving_side_changes() {
+        let land = rect_land(2_000_000, 2_000_000);
+        let end = Point::from_raw(0, 0);
+        let just_before = entry_angle(
+            land,
+            end,
+            Point::from_raw(3_835_826, 3_207_248),
+            Nm::new(250_000),
+        );
+        let just_after = entry_angle(
+            land,
+            end,
+            Point::from_raw(3_830_222, 3_213_938),
+            Nm::new(250_000),
+        );
+        assert_eq!(just_before, Entry::Measured { millideg: 50_100 });
+        assert_eq!(just_after, Entry::Measured { millideg: 40_000 });
+        assert!(!just_before.is_violation());
+        assert!(just_after.is_violation());
     }
 
     #[test]
