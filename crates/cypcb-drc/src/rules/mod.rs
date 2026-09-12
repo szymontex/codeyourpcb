@@ -70,6 +70,25 @@ pub(crate) fn copper_index(layer: cypcb_world::Layer, copper_count: usize) -> Op
     }
 }
 
+/// One bit per copper layer, for asking whether two features share one.
+///
+/// A pad carries a list of layers and a trace carries one; the cheap way to
+/// ask whether they meet is a mask. `Layer::Inner` is zero-based here too, and
+/// the two low bits are already spoken for by the outer layers.
+///
+/// This was private to `unrouted_pin` until `pad_entry` needed the same
+/// question. Two copies of a layer numbering is how an off-by-one gets fixed
+/// in one rule and left standing in the other, which this file has already
+/// said once about `copper_index`.
+pub(crate) fn layer_bit(layer: cypcb_world::Layer) -> Option<u32> {
+    match layer {
+        cypcb_world::Layer::TopCopper => Some(0b01),
+        cypcb_world::Layer::BottomCopper => Some(0b10),
+        cypcb_world::Layer::Inner(n) if n < 30 => Some(1 << (n + 2)),
+        _ => None,
+    }
+}
+
 use crate::presets::DesignRules;
 use crate::violation::DrcViolation;
 
@@ -95,6 +114,7 @@ pub use hole_to_hole::HoleToHoleRule;
 pub use impedance::ImpedanceRule;
 pub use mounting_hole_clearance::MountingHoleClearanceRule;
 pub use neck_down::NeckDownRule;
+pub use pad_entry::PadEntryRule;
 pub use pad_land::PadLandRule;
 pub use paste_clearance::PasteClearanceRule;
 pub use pour_island::PourIslandRule;

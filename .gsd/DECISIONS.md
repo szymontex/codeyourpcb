@@ -275,8 +275,8 @@ for months.
   survives as the `None` arm nobody ships. This entry said the router still
   drew discs until 2026-09-05 - the same sentence K011 carried, gone stale the
   same way, on a second page. See K011.
-- **D-DRC-005, 12 rules with 2 stubs: superseded.** **38 rules are registered
-  as of 2026-09-11** and none is a stub -
+- **D-DRC-005, 12 rules with 2 stubs: superseded.** **39 rules are registered
+  as of 2026-09-12** and none is a stub -
   `grep -c "Box::new(rules::" crates/cypcb-drc/src/lib.rs`. This section said
   fifteen when it was written on 2026-08-06 and nobody re-read it, so the
   number is held by

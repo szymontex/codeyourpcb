@@ -203,8 +203,8 @@ makes the total misleading - one contact, two terms, 1500 points - and landed in
 re-runs it against whatever the reader has.
 
 In this repo: the data is there and the aggregation is not. `DrcViolation`
-carries `kind: ViolationKind` with 36 variants, `Clearance` at `:51` through
-`AcidTrap` at `:122` in an enum spanning `:49-123`
+carries `kind: ViolationKind` with 37 variants, `Clearance` at `:51` through
+`AcidTrap` at `:124` in an enum spanning `:49-125`
 (`crates/cypcb-drc/src/violation.rs`), plus `actual` and `required` as
 numbers rather than prose.
 
@@ -270,10 +270,19 @@ Sources: Altium DFM guidance on trace routing and solder joints; kingsunpcb
 trace angle guide; nwengineeringllc on teardrops under class 3. All read
 2026-09-11.
 
-In this repo: the angle is measured but no rule is registered yet -
-`entry_angle` in `crates/cypcb-drc/src/rules/pad_entry.rs` returns it in
-millidegrees or names why it refused, and nothing calls it. The teardrop
-condition has no check at all, though half its model is already there - `teardrops` is a DSL property with length and width ratios
+In this repo: enforced. `PadEntryRule` is in the registry
+(`crates/cypcb-drc/src/lib.rs:160`) and reports through `entry_angle`
+(`crates/cypcb-drc/src/rules/pad_entry.rs:211`) and `entry_angle_placed`
+(`:257`), the second of which is the change of frame and nothing else: it
+carries the trace's two points into a placed and rotated pad's own frame rather
+than carrying the outline out of it. `measure_entries` (`:486`) walks the
+board - every segment with one end in a land's copper and the other outside it,
+on a layer the pad is on and the net the pad is on - and returns an
+`EntryReport` (`:463`) beside the violations, because an empty violation list
+cannot say whether anything was looked at. What the rule cannot see is the
+wedge beside a corner; see "What nothing measures". `grep -c '#\[test\]'
+crates/cypcb-drc/src/rules/pad_entry.rs` answers 28 at the commit that
+registered it. The teardrop condition has no check at all, though half its model is already there - `teardrops` is a DSL property with length and width ratios
 (`crates/cypcb-parser/src/parser.rs:331-345`), reachable as `world.teardrops()`
 (`crates/cypcb-world/src/dsl.rs:922`), and honoured by the Gerber writer and
 the KiCad export.
@@ -892,12 +901,12 @@ wait on the data model - and then it counts the missing **fields** rather than
 the blocked rules, because a field that unblocks two rules is worth more than
 either of them.
 
-**Bucket 1 - enforced today. Four.** R-19 is the fourth and the loudest; it was written last because a rule that fires on every board leaves no gap to notice. The registry has 38 entries
+**Bucket 1 - enforced today. Four.** R-19 is the fourth and the loudest; it was written last because a rule that fires on every board leaves no gap to notice. The registry has 39 entries
 (`crates/cypcb-drc/src/lib.rs`) and nine of them serve these four rules:
 `ClearanceRule` at `:129`, `AnnularRingRule` at `:135`, `HoleToHoleRule` at
 `:136`, `ViaDiameterRule` at `:138`, `ViaDrillRule` at `:139`,
 `TraceCurrentRule` at `:143`, `PadLandRule` at `:159`, `DrillAspectRatioRule`
-at `:160` and `AcuteAngleRule` at `:196`.
+at `:161` and `AcuteAngleRule` at `:197`.
 
 | rule | what enforces it |
 |---|---|
@@ -1126,8 +1135,8 @@ a designer can read and cannot answer.
 **4. Two violations measured a distance and threw it away, and both now record
 it.** Counted again on 2026-09-12 across every constructor in
 `crates/cypcb-drc/src/violation.rs`, all of them above the test module at
-`:1266`: nineteen set `actual: Some(`, sixteen set `actual: None` because their
-fault is not a distance, and **none takes a measurement and discards it**. The
+`:1302`: nineteen set `actual: Some(`, seventeen set `actual: None` because
+their fault is not a distance, and **none takes a measurement and discards it**. The
 two that did:
 
 - `hole_to_hole`, now at `:625`, passes `Some(actual)` and `Some(required)`.
@@ -1165,13 +1174,20 @@ that is not on the board, which passes `None` (`:79`) and is right to. So "does
 this kind measure a distance" is a property of the **call site** there, not of
 the kind, and any table built on kinds needs this one exception written into it.
 
-**5. Three numbers exist and no field can hold them.** `impedance` (`:1145`)
-measures ohms, `acid_trap` (`:921`) measures degrees, and `neck_down` (`:1164`)
+**5. Four numbers exist and no field can hold them.** `impedance` (`:1188`)
+measures ohms, `acid_trap` (`:964`) measures degrees, `neck_down` (`:1207`)
 carries a comment saying the `actual`/`required` pair cannot say which of two
-dimensions it means. In all three the number exists and lives only inside the
-`message` string, where no ranking will ever see it. `acid_trap` is the only
-rule this project wrote itself in the last week and it already falls into this
-category, which is the argument for deciding rather than leaving it.
+dimensions it means, and `pad_entry` (`:842`) measures an entry angle in
+millidegrees. In all four the number exists and lives only inside the `message`
+string, where no ranking will ever see it. **Two of the four are angles now**,
+which turns this from a list into an argument: `actual` and `required` are
+typed `Nm`, and a second `Nm` field would not hold either of them. Writing
+45000 into an `Nm` prints `0.045mm`, which is not a rounding error but a false
+statement about the board, so `pad_entry` sets both fields to `None` on
+purpose. This is a missing field rather than a discarded measurement, which is
+the distinction part 4 draws from the other side. `acid_trap` and `pad_entry`
+are the two rules this project wrote itself most recently and both landed here,
+which is the argument for deciding rather than leaving it.
 
 **In this repo, two conditions are unmet and countable:** severity has no field,
 and rule identity is not carried on the row. Each is a one-field change. The
@@ -1614,7 +1630,7 @@ grep -n "query_region_on_layers" crates/cypcb-autoroute/src/scoring.rs
 # an unanchored search for those names answers 15, because each is also
 # declared and re-exported, and a check whose output contradicts its own
 # comment is worse than no check.
-grep -c "Box::new(rules::" crates/cypcb-drc/src/lib.rs   # expect 38
+grep -c "Box::new(rules::" crates/cypcb-drc/src/lib.rs   # expect 39
 grep -cE "Box::new\(rules::(ClearanceRule|AnnularRingRule|HoleToHoleRule|ViaDiameterRule|ViaDrillRule|TraceCurrentRule|PadLandRule|DrillAspectRatioRule|AcuteAngleRule)\)" crates/cypcb-drc/src/lib.rs   # expect 9
 
 # R-16: the acceptance classes that gate R-11, and the house presets that do not
@@ -1630,8 +1646,8 @@ sed -n '468,478p' crates/cypcb-autoroute/src/grid.rs
 grep -n -A12 "pub fn hole_to_hole\|pub fn solder_mask_bridge" crates/cypcb-drc/src/violation.rs | grep "actual:"
 
 # R-18: the census in part 4, counted rather than recalled
-grep -c "actual: Some(" crates/cypcb-drc/src/violation.rs   # expect 19, all above the test module at :1266
-grep -c "actual: None" crates/cypcb-drc/src/violation.rs    # expect 16
+grep -c "actual: Some(" crates/cypcb-drc/src/violation.rs   # expect 19, all above the test module at :1302
+grep -c "actual: None" crates/cypcb-drc/src/violation.rs    # expect 17
 
 # R-18: what that costs - both rows sort to the end of the report
 sed -n '228,244p' crates/cypcb-cli/src/commands/check.rs

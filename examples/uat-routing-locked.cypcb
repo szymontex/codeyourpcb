@@ -17,7 +17,11 @@ component R2 resistor "0402" {
 
 component C1 capacitor "0402" {
     value "100nF"
-    at 20mm, 10mm
+    // In line with R1, not 5mm below it. The VCC trace is a straight run
+    // between the two, and off-axis it met both lands at 29.1 degrees against
+    // the 45 this project checks - the wedge under the copper that R-08 is
+    // about. An example that ships one teaches it.
+    at 20mm, 15mm
 }
 
 net VCC {

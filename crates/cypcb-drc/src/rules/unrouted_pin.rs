@@ -11,13 +11,13 @@
 use cypcb_core::{Nm, Point};
 use cypcb_world::components::trace::{Trace, Via};
 use cypcb_world::components::zone::{Zone, ZoneKind};
-use cypcb_world::components::{FootprintRef, Layer, NetConnections, NetId, Position, RefDes};
+use cypcb_world::components::{FootprintRef, NetConnections, NetId, Position, RefDes};
 use cypcb_world::BoardWorld;
 
 use crate::presets::DesignRules;
 use crate::violation::DrcViolation;
 
-use super::{rotate_point, DrcRule};
+use super::{layer_bit, rotate_point, DrcRule};
 
 /// Rule for pins a net names and no copper reaches.
 pub struct UnroutedPinRule;
@@ -125,15 +125,6 @@ impl DrcRule for UnroutedPinRule {
         }
 
         violations
-    }
-}
-
-fn layer_bit(layer: Layer) -> Option<u32> {
-    match layer {
-        Layer::TopCopper => Some(0b01),
-        Layer::BottomCopper => Some(0b10),
-        Layer::Inner(n) if n < 30 => Some(1 << (n + 2)),
-        _ => None,
     }
 }
 

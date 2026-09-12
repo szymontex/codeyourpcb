@@ -157,6 +157,7 @@ pub fn run_drc(world: &mut BoardWorld, rules: &DesignRules) -> DrcResult {
         Box::new(rules::HoleToEdgeRule),
         Box::new(rules::SlotClearanceRule),
         Box::new(rules::PadLandRule),
+        Box::new(rules::PadEntryRule),
         Box::new(rules::DrillAspectRatioRule),
         // A blind or buried via is a hole drilled in its own lamination
         // cycle. Both flags a fab table sets for them had been dropped before

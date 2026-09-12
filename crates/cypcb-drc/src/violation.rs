@@ -100,6 +100,8 @@ pub enum ViolationKind {
     SlotClearance,
     /// The land around a drilled hole is smaller than the fab will image.
     PadLand,
+    /// A trace meets a land at too sharp a wedge.
+    PadEntry,
     /// A via joins two layers by a route the build does not make.
     ViaSpan,
     /// A drilled hole sits where the board bends.
@@ -239,6 +241,7 @@ impl std::fmt::Display for ViolationKind {
             ViolationKind::DrillAspectRatio => write!(f, "drill-aspect-ratio"),
             ViolationKind::SlotClearance => write!(f, "slot-clearance"),
             ViolationKind::PadLand => write!(f, "pad-land"),
+            ViolationKind::PadEntry => write!(f, "pad-entry"),
             ViolationKind::ViaSpan => write!(f, "via-span"),
             ViolationKind::FlexHole => write!(f, "flex-hole"),
             ViolationKind::EmptyArea => write!(f, "empty-area"),
@@ -828,6 +831,38 @@ impl DrcViolation {
         }
     }
 
+    /// A trace meets a land at too sharp a wedge.
+    ///
+    /// R-08. The angle is in millidegrees and `actual` is an `Nm`, so the
+    /// measurement stays in the message and both distance fields are `None`.
+    /// Writing 45000 into an `Nm` would print `0.045mm`, which is not a
+    /// rounding error but a false statement about the board. This is the
+    /// fourth measurement in this file with no field to hold it, and the
+    /// second of those four that is an angle.
+    pub fn pad_entry(
+        entity: Entity,
+        pin: String,
+        millideg: u32,
+        required_mdeg: u32,
+        location: Point,
+    ) -> Self {
+        DrcViolation {
+            kind: ViolationKind::PadEntry,
+            actual: None,
+            required: None,
+            area: None,
+            location,
+            entity,
+            other_entity: None,
+            source_span: None,
+            message: format!(
+                "{pin}: trace enters the land at {:.1} degrees, {:.1} required",
+                f64::from(millideg) / 1000.0,
+                f64::from(required_mdeg) / 1000.0,
+            ),
+        }
+    }
+
     /// Another net's copper too close to a milled slot.
     ///
     /// The same physical question `edge_clearance` asks about the board
@@ -1266,6 +1301,20 @@ impl DrcViolation {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_angle_written_into_a_distance_field_prints_a_distance() {
+        // Why `pad_entry` sets `actual` and `required` to `None` rather than
+        // carrying the millidegrees. `ENTRY_ANGLE_MIN_MDEG` is 45000, and
+        // 45000 nanometres formatted the way every other violation formats a
+        // distance reads 0.045mm - a false statement about the board rather
+        // than a rounding error.
+        assert_eq!(
+            format!("{:.3}mm", Nm(45_000).to_mm()),
+            "0.045mm",
+            "the number an Nm field would have shown"
+        );
+    }
 
     #[test]
     fn test_violation_kind_display() {

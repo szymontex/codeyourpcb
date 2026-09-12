@@ -347,7 +347,27 @@ const DRC_RATCHETS: &[Ratchet] = &[
     // via price from 0.22 to 0.28, 28 violations and 13 shorts each time. Its
     // ratchet is the measured value exactly, so any movement at all is a real
     // change rather than weather.
-    ("plane_board.kicad_pcb", "plane_board", 34, 13, 34, 13),
+    //
+    // 34 to 37 on 2026-09-12, and the router did not get worse: `PadEntryRule`
+    // was registered and started counting something nothing counted before.
+    // Measured both ways in one sitting, the same fixtures with the registry
+    // entry deleted and restored:
+    //
+    //   fixture          without  with   sharp entries
+    //   led_blink              1     1     0
+    //   stm32_breakout       205   206     1
+    //   multi_ic             505   507     2
+    //   shift_driver          19    22     3
+    //   qfp_fanout           371   376     5
+    //   plane_board           34    37     3
+    //
+    // Fourteen entries across 4 349 routes, and shorts did not move on any
+    // board, which is the check that says these are wedges and not copper
+    // touching copper. The five other rows sit inside their bands and are left
+    // where they are; this one has no band, so it moves by exactly the three
+    // it gained. **The router emits sharp entries and nobody knew** - that is a
+    // routing-quality item, not a threshold to file away.
+    ("plane_board.kicad_pcb", "plane_board", 37, 13, 37, 13),
 ];
 
 /// Routes every fixture and holds the line on completeness and DRC count.

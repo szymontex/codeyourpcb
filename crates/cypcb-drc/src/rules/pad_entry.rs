@@ -34,11 +34,17 @@
 //! project already uses for rotations and arc sweeps, so an assertion on it
 //! has no epsilon to choose.
 
+use bevy_ecs::entity::Entity;
 use cypcb_core::{Nm, Point};
+use cypcb_world::components::trace::Trace;
+use cypcb_world::components::{FootprintRef, NetConnections, Position, RefDes, Rotation};
 use cypcb_world::footprint::PadDef;
+use cypcb_world::BoardWorld;
 use cypcb_world::{Pad, PadShape};
 
-use super::rotate_point;
+use super::{layer_bit, rotate_point, DrcRule};
+use crate::presets::DesignRules;
+use crate::violation::DrcViolation;
 
 /// Below this angle the entry is a violation. Strict: exactly this value is
 /// clean, the way R-03 treats exactly ninety.
@@ -256,23 +262,43 @@ pub fn entry_angle_placed(
     arm: Point,
     width: Nm,
 ) -> Entry {
+    entry_angle(
+        outline_of(pad),
+        into_pad_frame(pad, at, rotation_deg, end),
+        into_pad_frame(pad, at, rotation_deg, arm),
+        width,
+    )
+}
+
+/// Whether a board point lies in a placed pad's copper.
+///
+/// The board walk asks this of both ends of every segment, and it has to be
+/// the same containment the boundary walk uses or the walk would hand
+/// `entry_angle` a pair of points it disagrees with about which one is inside.
+pub fn pad_contains(pad: &PadDef, at: Point, rotation_deg: f64, p: Point) -> bool {
+    outline_contains(outline_of(pad), into_pad_frame(pad, at, rotation_deg, p))
+}
+
+/// The outline a footprint's pad definition describes, without its placement.
+fn outline_of(pad: &PadDef) -> PadOutline {
+    PadOutline {
+        shape: pad.shape,
+        width: pad.size.0,
+        height: pad.size.1,
+    }
+}
+
+/// A board point carried into the pad's own frame.
+///
+/// One transform, used by the angle and by the containment test, because two
+/// copies of it are two chances for a point to be inside for one of them and
+/// outside for the other.
+fn into_pad_frame(pad: &PadDef, at: Point, rotation_deg: f64, p: Point) -> Point {
     let offset = rotate_point(pad.position, rotation_deg);
     let centre = Point::from_raw(at.x.raw() + offset.x.raw(), at.y.raw() + offset.y.raw());
-    let into_pad = |p: Point| {
-        rotate_point(
-            Point::from_raw(p.x.raw() - centre.x.raw(), p.y.raw() - centre.y.raw()),
-            -rotation_deg,
-        )
-    };
-    entry_angle(
-        PadOutline {
-            shape: pad.shape,
-            width: pad.size.0,
-            height: pad.size.1,
-        },
-        into_pad(end),
-        into_pad(arm),
-        width,
+    rotate_point(
+        Point::from_raw(p.x.raw() - centre.x.raw(), p.y.raw() - centre.y.raw()),
+        -rotation_deg,
     )
 }
 
@@ -423,6 +449,163 @@ fn rounded(w: f64, h: f64, radius: f64) -> Vec<Boundary> {
         });
     }
     pieces
+}
+
+/// What a board walk looked at, so a clean board can be told from an
+/// unexamined one.
+///
+/// `DrcRule::check` returns a bare vector. An empty vector says "nothing is
+/// wrong" and has no way to say "nothing was measured", and those are the two
+/// readings a rule full of refusals sits between. Every figure here comes from
+/// the same pass that produced the violations, so the denominator cannot drift
+/// from the numerator.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct EntryReport {
+    /// Segment ends found in a land's copper with the other end outside it, on
+    /// a layer the pad is on and the net the pad is on.
+    pub examined: usize,
+    /// Of those, the ones `entry_angle` would not measure. Each is a named
+    /// refusal, not a silence.
+    pub refused: usize,
+    /// Of those, the ones below [`ENTRY_ANGLE_MIN_MDEG`].
+    pub violations: usize,
+}
+
+/// Every entry on the board, measured, with the count of what was looked at.
+///
+/// A segment is an entry when one end lies in a pad's copper and the other
+/// does not. Both ends inside is copper crossing a land without leaving it -
+/// there is no boundary in that segment to make a wedge against. Both ends
+/// outside is a segment that passes over the land, which is a clearance
+/// question and belongs to a different rule.
+///
+/// The pad's net and the pad's layers both have to match. A trace of another
+/// net crossing a land is a short, reported by `ClearanceRule`; measuring its
+/// entry angle would answer a question nobody asked about a board that is
+/// already wrong.
+pub fn measure_entries(world: &mut BoardWorld) -> (Vec<DrcViolation>, EntryReport) {
+    let traces: Vec<Trace> = {
+        let ecs = world.ecs_mut();
+        let mut query = ecs.query::<&Trace>();
+        query.iter(ecs).cloned().collect()
+    };
+    let components: Vec<_> = {
+        let ecs = world.ecs_mut();
+        let mut query = ecs.query::<(
+            Entity,
+            &RefDes,
+            &FootprintRef,
+            &NetConnections,
+            &Position,
+            &Rotation,
+        )>();
+        query
+            .iter(ecs)
+            .map(|(e, r, f, n, p, rot)| (e, r.clone(), f.clone(), n.clone(), *p, *rot))
+            .collect()
+    };
+
+    let library = world.footprints();
+    let mut violations = Vec::new();
+    let mut report = EntryReport::default();
+
+    for (entity, refdes, footprint_ref, nets, position, rotation) in &components {
+        let Some(footprint) = library.get(footprint_ref.as_str()) else {
+            continue; // Unknown footprint - sync already reported it
+        };
+        let rotation_deg = rotation.to_degrees();
+
+        for pad in &footprint.pads {
+            let Some(net) = nets.pin_net(&pad.number) else {
+                continue; // No net - `UnconnectedPinRule`'s question
+            };
+            // A pad whose layer list names no copper this code understands is
+            // treated as being on every layer rather than on none, the way
+            // `UnroutedPinRule` treats it: refusing to measure because the
+            // footprint spells its layers unfamiliarly would be reporting the
+            // reader rather than the board.
+            let mask: u32 = pad
+                .layers
+                .iter()
+                .filter_map(|layer| layer_bit(*layer))
+                .fold(0, |mask, bit| mask | bit);
+            let mask = if mask == 0 { u32::MAX } else { mask };
+
+            for trace in &traces {
+                if trace.net_id != net {
+                    continue;
+                }
+                match layer_bit(trace.layer) {
+                    Some(bit) if mask & bit != 0 => {}
+                    _ => continue,
+                }
+
+                for segment in &trace.segments {
+                    let start_in = pad_contains(pad, position.0, rotation_deg, segment.start);
+                    let end_in = pad_contains(pad, position.0, rotation_deg, segment.end);
+                    let (inside, outside) = match (start_in, end_in) {
+                        (true, false) => (segment.start, segment.end),
+                        (false, true) => (segment.end, segment.start),
+                        _ => continue,
+                    };
+
+                    report.examined += 1;
+                    // The segment's own width, not the trace's, when it has
+                    // one. The stretch that enters a pad is exactly the one a
+                    // `neck` declaration makes thinner, so a walk that reads
+                    // the trace's width would measure the wrong wedge on the
+                    // commonest entry this rule exists for.
+                    let width = segment.width.unwrap_or(trace.width);
+                    let entry =
+                        entry_angle_placed(pad, position.0, rotation_deg, inside, outside, width);
+                    // `Entry::is_violation` owns the comparison against the
+                    // threshold. A second `millideg < ENTRY_ANGLE_MIN_MDEG`
+                    // here would be a two-place decision, which is how a
+                    // strict bound gets loosened in one place and left in the
+                    // other.
+                    match entry {
+                        Entry::NotChecked(_) => report.refused += 1,
+                        Entry::Measured { millideg } if entry.is_violation() => {
+                            report.violations += 1;
+                            violations.push(DrcViolation::pad_entry(
+                                *entity,
+                                format!("{}.{}", refdes.as_str(), pad.number),
+                                millideg,
+                                ENTRY_ANGLE_MIN_MDEG,
+                                inside,
+                            ));
+                        }
+                        Entry::Measured { .. } => {}
+                    }
+                }
+            }
+        }
+    }
+
+    (violations, report)
+}
+
+/// Rule that reports a trace meeting a land too sharply.
+///
+/// R-08. The threshold is [`ENTRY_ANGLE_MIN_MDEG`] and it is not a
+/// `DesignRules` field, because no fabricator publishes it: it is what R-08's
+/// own sources say, and a value read from a fab table would be a number
+/// nobody stated.
+///
+/// The rule drops the denominator [`measure_entries`] returns, because
+/// `DrcRule::check` has nowhere to put one. That is why the function is public
+/// and tested on the report directly - the count exists and is checked, even
+/// where the trait cannot carry it.
+pub struct PadEntryRule;
+
+impl DrcRule for PadEntryRule {
+    fn name(&self) -> &'static str {
+        "pad-entry"
+    }
+
+    fn check(&self, world: &mut BoardWorld, _rules: &DesignRules) -> Vec<DrcViolation> {
+        measure_entries(world).0
+    }
 }
 
 #[cfg(test)]
@@ -807,5 +990,416 @@ mod tests {
             Nm::new(250_000),
         );
         assert_eq!(entry, Entry::NotChecked(EntryRefusal::PadHasNoSize));
+    }
+
+    // ---- the board walk ----------------------------------------------------
+    //
+    // The geometry above is tested in the pad's own frame. These test the walk
+    // that finds the pairs of points to hand it, which is a different thing
+    // and fails differently: it can look at the wrong copper, or at none.
+
+    use cypcb_world::components::trace::TraceSegment;
+    use cypcb_world::components::{PinConnection, Value};
+    use cypcb_world::footprint::{Footprint, FootprintLibrary};
+    use cypcb_world::NetId;
+
+    /// A board with one part carrying one round land of `land_mm`, placed at
+    /// `offset_mm` in the footprint and turned by `rotation`.
+    fn board_with_land(
+        land_mm: f64,
+        offset_mm: (f64, f64),
+        rotation: Rotation,
+        layers: Vec<Layer>,
+    ) -> (BoardWorld, NetId) {
+        board_with_shaped_land(
+            PadShape::Circle,
+            (land_mm, land_mm),
+            offset_mm,
+            rotation,
+            layers,
+        )
+    }
+
+    /// The same, for a land that is not round and not square, so that turning
+    /// the geometry round is not the identity.
+    fn board_with_shaped_land(
+        shape: PadShape,
+        size_mm: (f64, f64),
+        offset_mm: (f64, f64),
+        rotation: Rotation,
+        layers: Vec<Layer>,
+    ) -> (BoardWorld, NetId) {
+        let mut world = BoardWorld::new();
+        world.set_board("entry".into(), (Nm::from_mm(20.0), Nm::from_mm(20.0)), 2);
+        let net = world.intern_net("N");
+
+        let mut library = FootprintLibrary::new();
+        let base = library
+            .get("0402")
+            .expect("the library has an 0402")
+            .clone();
+        library.register_design(Footprint {
+            name: "pin".to_string(),
+            pads: vec![PadDef {
+                number: "1".to_string(),
+                shape,
+                position: Point::from_mm(offset_mm.0, offset_mm.1),
+                size: (Nm::from_mm(size_mm.0), Nm::from_mm(size_mm.1)),
+                drill: None,
+                slot: None,
+                layers,
+                mask_margin: None,
+            }],
+            ..base
+        });
+        world.set_footprints(library);
+
+        let mut nets = NetConnections::new();
+        nets.add(PinConnection::new("1", net));
+        world.spawn_component(
+            RefDes::new("J1"),
+            Value::new(""),
+            Position::from_mm(10.0, 10.0),
+            rotation,
+            FootprintRef::new("pin"),
+            NetConnections::clone(&nets),
+        );
+        (world, net)
+    }
+
+    /// One straight run of `width_mm` from `from_mm` to `to_mm`.
+    fn add_trace(
+        world: &mut BoardWorld,
+        net: NetId,
+        layer: Layer,
+        width_mm: f64,
+        from_mm: (f64, f64),
+        to_mm: (f64, f64),
+    ) {
+        let mut trace = Trace::new(net);
+        trace.layer = layer;
+        trace.width = Nm::from_mm(width_mm);
+        trace.segments.push(TraceSegment::new(
+            Point::from_mm(from_mm.0, from_mm.1),
+            Point::from_mm(to_mm.0, to_mm.1),
+        ));
+        world.spawn_entity((trace,));
+    }
+
+    #[test]
+    fn a_sharp_entry_on_a_board_is_reported() {
+        // The 41.410 degree case from the geometry tests, put on a board: a
+        // 1.2mm trace leaving the centre of a 1.6mm round land radially.
+        // 90 - asin(0.6 / 0.8) = 41.410, and the threshold is 45.
+        let (mut world, net) = board_with_land(
+            1.6,
+            (0.0, 0.0),
+            Rotation::ZERO,
+            vec![Layer::TopCopper, Layer::BottomCopper],
+        );
+        add_trace(
+            &mut world,
+            net,
+            Layer::TopCopper,
+            1.2,
+            (10.0, 10.0),
+            (10.0, 15.0),
+        );
+
+        let (violations, report) = measure_entries(&mut world);
+        assert_eq!(report.examined, 1, "one segment enters the land");
+        assert_eq!(report.refused, 0);
+        assert_eq!(report.violations, 1);
+        assert_eq!(violations.len(), 1, "{violations:?}");
+        assert_eq!(violations[0].kind, crate::ViolationKind::PadEntry);
+        assert!(
+            violations[0].message.contains("J1.1") && violations[0].message.contains("41.4"),
+            "the message names the pin and the angle: {}",
+            violations[0].message
+        );
+        // An angle is not a distance and there is no field for it.
+        assert_eq!(violations[0].actual, None);
+        assert_eq!(violations[0].required, None);
+    }
+
+    #[test]
+    fn a_clean_entry_is_examined_and_not_reported() {
+        // The control that separates a clean board from an unexamined one.
+        // The same land with a 0.25mm trace: 90 - asin(0.125 / 0.8) = 81.021.
+        // An empty violation list proves nothing on its own; the denominator
+        // does.
+        let (mut world, net) = board_with_land(
+            1.6,
+            (0.0, 0.0),
+            Rotation::ZERO,
+            vec![Layer::TopCopper, Layer::BottomCopper],
+        );
+        add_trace(
+            &mut world,
+            net,
+            Layer::TopCopper,
+            0.25,
+            (10.0, 10.0),
+            (10.0, 15.0),
+        );
+
+        let (violations, report) = measure_entries(&mut world);
+        assert!(violations.is_empty(), "{violations:?}");
+        assert_eq!(report.examined, 1, "it was looked at, and it was clean");
+        assert_eq!(report.refused, 0);
+        assert_eq!(report.violations, 0);
+    }
+
+    #[test]
+    fn a_refused_entry_is_not_a_clean_one() {
+        // A 2.0mm trace into a 1.6mm land: `TraceWiderThanLand`, which is
+        // `NeckDownRule`'s question. The violation list is empty and the board
+        // has not been cleared - that difference is the whole reason the
+        // report exists.
+        let (mut world, net) = board_with_land(
+            1.6,
+            (0.0, 0.0),
+            Rotation::ZERO,
+            vec![Layer::TopCopper, Layer::BottomCopper],
+        );
+        add_trace(
+            &mut world,
+            net,
+            Layer::TopCopper,
+            2.0,
+            (10.0, 10.0),
+            (10.0, 15.0),
+        );
+
+        let (violations, report) = measure_entries(&mut world);
+        assert!(violations.is_empty(), "{violations:?}");
+        assert_eq!(report.examined, 1);
+        assert_eq!(report.refused, 1, "measured nothing, and says so");
+        assert_eq!(report.violations, 0);
+    }
+
+    #[test]
+    fn the_segments_own_width_is_the_one_that_enters() {
+        // The stretch that reaches a pad is exactly the one `neck` makes
+        // thinner. The trace says 0.25mm and this segment says 1.2mm; reading
+        // the trace's figure would report 81 degrees on a board that enters at
+        // 41.410.
+        let (mut world, net) = board_with_land(
+            1.6,
+            (0.0, 0.0),
+            Rotation::ZERO,
+            vec![Layer::TopCopper, Layer::BottomCopper],
+        );
+        let mut trace = Trace::new(net);
+        trace.layer = Layer::TopCopper;
+        trace.width = Nm::from_mm(0.25);
+        trace.segments.push(TraceSegment {
+            start: Point::from_mm(10.0, 10.0),
+            end: Point::from_mm(10.0, 15.0),
+            width: Some(Nm::from_mm(1.2)),
+        });
+        world.spawn_entity((trace,));
+
+        let (violations, report) = measure_entries(&mut world);
+        assert_eq!(report.examined, 1);
+        assert_eq!(violations.len(), 1, "{violations:?}");
+        assert!(
+            violations[0].message.contains("41.4"),
+            "the segment's width, not the trace's: {}",
+            violations[0].message
+        );
+    }
+
+    #[test]
+    fn a_rotated_part_is_found_where_the_board_puts_it() {
+        // The pad sits 1mm along x in the footprint and the part is turned a
+        // quarter turn, so the land is at (10, 11) on the board. A walk that
+        // ignored the rotation would look at (11, 10), find the trace's end
+        // 1.414mm away from a land of radius 0.8mm, and examine nothing.
+        let (mut world, net) = board_with_land(
+            1.6,
+            (1.0, 0.0),
+            Rotation::DEG_90,
+            vec![Layer::TopCopper, Layer::BottomCopper],
+        );
+        add_trace(
+            &mut world,
+            net,
+            Layer::TopCopper,
+            1.2,
+            (10.0, 11.0),
+            (10.0, 16.0),
+        );
+
+        let (violations, report) = measure_entries(&mut world);
+        assert_eq!(report.examined, 1, "the land is at (10, 11), not (11, 10)");
+        assert_eq!(violations.len(), 1, "{violations:?}");
+        assert!(
+            violations[0].message.contains("41.4"),
+            "{}",
+            violations[0].message
+        );
+    }
+
+    #[test]
+    fn another_nets_copper_over_a_land_is_not_an_entry() {
+        // That is a short, and `ClearanceRule` reports it. An entry angle for
+        // it would answer a question nobody asked about a board already wrong.
+        let (mut world, _net) = board_with_land(
+            1.6,
+            (0.0, 0.0),
+            Rotation::ZERO,
+            vec![Layer::TopCopper, Layer::BottomCopper],
+        );
+        let other = world.intern_net("OTHER");
+        add_trace(
+            &mut world,
+            other,
+            Layer::TopCopper,
+            1.2,
+            (10.0, 10.0),
+            (10.0, 15.0),
+        );
+
+        let (violations, report) = measure_entries(&mut world);
+        assert!(violations.is_empty(), "{violations:?}");
+        assert_eq!(report.examined, 0);
+    }
+
+    #[test]
+    fn copper_on_a_layer_the_pad_is_not_on_is_not_an_entry() {
+        // An SMD land on the top and its net's copper on the bottom do not
+        // touch. They meet through a via, and the entry is wherever that via's
+        // copper reaches the land - not here.
+        let (mut world, net) =
+            board_with_land(1.6, (0.0, 0.0), Rotation::ZERO, vec![Layer::TopCopper]);
+        add_trace(
+            &mut world,
+            net,
+            Layer::BottomCopper,
+            1.2,
+            (10.0, 10.0),
+            (10.0, 15.0),
+        );
+
+        let (violations, report) = measure_entries(&mut world);
+        assert!(violations.is_empty(), "{violations:?}");
+        assert_eq!(report.examined, 0);
+    }
+
+    #[test]
+    fn a_segment_with_both_ends_in_the_land_crosses_no_boundary() {
+        // And one with both ends outside passes over the land rather than
+        // entering it. Neither has a wedge; both would have one if the walk
+        // asked "does this segment touch the pad" instead of "does it cross
+        // out of it".
+        let (mut world, net) = board_with_land(
+            1.6,
+            (0.0, 0.0),
+            Rotation::ZERO,
+            vec![Layer::TopCopper, Layer::BottomCopper],
+        );
+        add_trace(
+            &mut world,
+            net,
+            Layer::TopCopper,
+            0.25,
+            (9.8, 10.0),
+            (10.2, 10.0),
+        );
+        add_trace(
+            &mut world,
+            net,
+            Layer::TopCopper,
+            0.25,
+            (5.0, 10.0),
+            (15.0, 10.0),
+        );
+
+        let (violations, report) = measure_entries(&mut world);
+        assert!(violations.is_empty(), "{violations:?}");
+        assert_eq!(report.examined, 0, "one stays inside, one passes over");
+    }
+
+    #[test]
+    fn the_rule_is_in_the_registry_and_reports_what_the_walk_found() {
+        let (mut world, net) = board_with_land(
+            1.6,
+            (0.0, 0.0),
+            Rotation::ZERO,
+            vec![Layer::TopCopper, Layer::BottomCopper],
+        );
+        add_trace(
+            &mut world,
+            net,
+            Layer::TopCopper,
+            1.2,
+            (10.0, 10.0),
+            (10.0, 15.0),
+        );
+
+        assert_eq!(PadEntryRule.name(), "pad-entry");
+        let violations = PadEntryRule.check(&mut world, &DesignRules::default());
+        assert_eq!(violations.len(), 1, "{violations:?}");
+        assert_eq!(violations[0].kind, crate::ViolationKind::PadEntry);
+
+        // Registered, not merely written. `run_drc` builds the registry
+        // itself, so this fails if the entry in `lib.rs` is missing - which is
+        // the state R-08 sat in for four commits, geometry complete and
+        // reporting nothing.
+        let result = crate::run_drc(&mut world, &DesignRules::default());
+        assert!(
+            result
+                .violations
+                .iter()
+                .any(|v| v.kind == crate::ViolationKind::PadEntry),
+            "the registry has to carry it for it to fire: {:?}",
+            result.violations.iter().map(|v| v.kind).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn the_end_in_the_land_is_the_one_the_wedge_is_measured_from() {
+        // A round land entered radially cannot tell the two ends apart: the
+        // land is symmetric about the trace, so starting from the far end and
+        // travelling back through it leaves by the mirror crossing at the same
+        // angle. Every other board-walk test here is that symmetric, and a
+        // mutation that swapped the two ends survived all of them.
+        //
+        // This is the geometry that mutation cannot survive, and it is not
+        // invented: it is what `uat-routing-locked.cypcb` shipped. A 0402 land
+        // is 0.6 by 0.5mm, and a 0.2mm trace leaving its centre for a pad
+        // 9mm right and 5mm down runs at atan(5 / 9) = 29.0546 degrees. The
+        // upper edge leaves by the right side at 60.945; the lower edge
+        // reaches the bottom side first and leaves at 29.055, and the answer
+        // is the smaller of the two.
+        let (mut world, net) = board_with_shaped_land(
+            PadShape::Rect,
+            (0.6, 0.5),
+            (0.0, 0.0),
+            Rotation::ZERO,
+            vec![Layer::TopCopper, Layer::BottomCopper],
+        );
+        add_trace(
+            &mut world,
+            net,
+            Layer::TopCopper,
+            0.2,
+            (10.0, 10.0),
+            (19.0, 5.0),
+        );
+
+        let (violations, report) = measure_entries(&mut world);
+        assert_eq!(report.examined, 1);
+        assert_eq!(report.refused, 0);
+        assert_eq!(violations.len(), 1, "{violations:?}");
+        assert!(
+            violations[0].message.contains("29.1"),
+            "29.055 degrees, printed to one decimal: {}",
+            violations[0].message
+        );
+        // The wedge is reported where the copper meets the land, not at the
+        // other end of a 10mm run.
+        assert_eq!(violations[0].location, Point::from_mm(10.0, 10.0));
     }
 }
