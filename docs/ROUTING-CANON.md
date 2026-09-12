@@ -1474,19 +1474,16 @@ this here rather than an argument:
   into a 1.6 mm one. Same defect, other sign, and it stood in the file until
   somebody worked the arithmetic.
 
-The test that catches all four is one number and its denominator, published
-together: how many things the rule examined and how many it reported. A rule
-that fires on none of N, or on all of N, has not graded the population - it has
-described it. The ratio is the diagnostic and neither end of it is a pass.
+The test that catches all four is the denominator this section already
+requires, read as a ratio rather than as a count: a rule that reports on none
+of N, or on all of N, has described its population instead of grading it, and
+neither end of that ratio is a pass.
 
-The denominator is also what keeps the check honest when the measurement itself
-fails, and that is the sharper half of the rule. Deleting the board walk behind
-R-08 leaves its sharp count green on all six fixtures, because a count of
-violations with nothing under it passes hardest when nothing is measured; what
-fails is the floor under the examined count, on all six. **A number without a
-denominator beneath it passes most easily exactly when the measurement
-disappears.** That is why every rule this project implements publishes both, and
-why a green run with no denominator beside it is not a result that can be read.
+The denominator is also what keeps a check honest when the measurement itself
+fails, which is the sharper half of it: **a number without a denominator
+beneath it passes most easily exactly when the measurement disappears.** The
+worked case is the census under R-08 and it is recorded where that census
+lives, in "The router's own output" below, rather than twice.
 
 The repair for a constant clause is to move it rather than to delete it. A
 condition true of the whole population is often a definition rather than a
@@ -1643,6 +1640,49 @@ the other end. It follows that every count this rule publishes carries its
 denominator - entries examined and entries refused - or a reader cannot tell a
 quiet board from a quiet rule.
 
+### The branch a reconstruction missed, and what it does not prove `[S]`
+
+Rebuilding R-08's answer from geometry, to check the instrument before using
+it, disagreed with the rule on two rows out of 175. The disagreement was in the
+reconstruction, and saying so precisely matters more than the number.
+
+`entry_angle` offsets the trace's end half a width to each side, asks each of
+the two edges where it leaves the land, and reduces with `f64::min` over the
+answers it got - `edges.iter().flatten()` drops an edge for which
+`leaving_angle` returned nothing. An end shallow enough that one offset point
+falls outside the copper leaves one answer, and one answer is the whole
+minimum. The rule has always done this. The reconstruction assumed the further
+edge always answers, and that assumption was false on two rows:
+
+| | |
+|---|---|
+| entries into a circular land | 175 |
+| answered by one edge because the other's own end is outside the copper | 2 |
+| J2.2, inside end 0.0389 mm past the rim | rule reads 72 154 |
+| J1.6, inside end 0.0115 mm past the rim | rule reads 53 193 |
+
+**What is not established here is that those two readings are wrong.** An edge
+whose own end lies outside the land may never have been in the copper at all,
+and calling the rule's answer an under-report would need an argument about
+which edge is physically the entry - an argument this reading does not make and
+did not set out to make. What it establishes is narrower and is enough for its
+purpose: once the branch is reproduced, **all 175 rows agree to the
+millidegree**, so the geometry and the rule measure the same thing and a
+reading built on that geometry can be believed.
+
+The two rows are also not explained by depth. The third shallowest entry,
+0.0457 mm, agrees exactly. What separates them is whether the point half a
+trace width sideways from the end still lies in copper - which means the
+threshold for this branch is set by the trace's width against the land's
+radius, not by how shallow the entry was, and that a wider trace reaches it at
+entries that are not shallow at all.
+
+The check is `a_circular_land_reads_the_same_from_its_own_geometry` in
+`crates/cypcb-autoroute/tests/sharp_entry_anatomy.rs`, which reads nothing the
+rule computed and requires every row to agree within a tenth of a degree. Two
+mutations kill it: dropping the guard that skips an edge starting outside the
+land, and taking the nearer edge rather than the further one.
+
 ### The router's own output, against the rules this canon states
 
 Nothing measured how much of this canon the router satisfies on boards the
@@ -1731,7 +1771,98 @@ figures per fixture, each failing in its own direction: **sharp is a ratchet**
 that may fall and not rise, **examined is a floor** that may rise and not fall,
 and **refused is a ceiling**. The floor is the load-bearing one - without it a
 change that made the rule see no copper at all would turn the ratchet green,
-which is the failure `EntryReport` was written to make impossible.
+which is the failure `EntryReport` was written to make impossible. This is the
+case the section on a condition the whole population satisfies states in
+general.
+
+The outline reading was tested on the circular lands and survived, and the two
+halves of that sentence rest on very different numbers. Of **175 entries into
+the four circular lands, 4 are sharp**; the instrument was checked first, and
+after one branch of the measurement was reproduced in the checker - the rule
+reports the inner edge when the outer one leaves no crossing to measure - all
+175 rows agreed with the recomputation to the millidegree, with two mutations
+killing the check. On the **171 clean entries the median `p_far / R` is 0.158**
+against a death line of 0.5, so arriving off-centre is not ordinary on these
+lands and the four sharp rows are a tail rather than the population: that claim
+was falsifiable, was tested against 171 rows, and stands. The second claim -
+that a sharp entry on a circle clips the rim rather than crossing the land -
+had a death line of one radius and **the deepest of the four reaches 0.508 of
+one**, so nothing contradicted it. Four rows are four rows: that is not a
+distribution and this canon does not call it one. What can be said is exact -
+no sharp circular entry on these six boards passed the middle of the land it
+entered - and what cannot be said is that this is how circular lands behave.
+
+**One statement about these entries is forced and must never be reported as
+evidence.** The distance from a pad centre to the line of a segment is at most
+the distance to either of its ends, so a sharp entry necessarily has its inside
+end at least `R / sqrt(2) - w / 2` from the centre. That is arithmetic, not a
+finding, and a run that reports it as confirmation has measured its own
+definition - the failure this canon names two sections above.
+
+Both death lines above are tied to this fixture set, the first through the pool
+and the second through a length, so both are restated in a form a seventh board
+could kill. **Claim two, per board rather than per pool:** it dies if the median
+`p_far / R` over the clean circular entries of any single board exceeds 0.5,
+because a pool of six hides the one board whose entries are routinely off the
+axis, which is the board that would teach something. **Claim three,
+dimensionless rather than in millimetres:** the entry's chord is
+`2 * sqrt(R^2 - p_axis^2)`, and clipping the rim means the segment stops short
+of the deepest point of its own crossing, so it dies if any sharp circular entry
+has `depth / chord` above 0.5 - a ratio that carries to a land of another size
+and a trace of another width without a threshold being recomputed, which
+`depth < R` does not. **And neither can do more than survive.** Turning "not
+refuted" into "measured" needs a fixture whose circular land is entered near
+its edge on purpose - a board, not more code, and the same prescription already
+recorded for R-05, R-13 and R-14.
+
+### A rule about a writer, which is not a rule about a board `[S]`
+
+Every rule above grades an artefact: copper that exists, measured where it
+lies. The teardrop half of R-08 cannot be written that way, and the reason is
+now measured rather than argued - one example in 33 declares the property, the
+fillet is synthesised by the Gerber writer so the copper is not in the board the
+checker walks, and the design-side condition is true of all 897 entries on all
+six fixtures. What survives all three is not a statement about copper at all:
+**a design that declares `teardrops` and leaves through `to_kicad` ships a board
+whose copper does not carry what the design asked for**, while the same design
+through the Gerber path does. One design, two outputs, two different pieces of
+copper, and nothing in this project notices.
+
+A rule of that shape has a different subject, a different denominator and a
+different failure, and the three are worth separating before any code is
+written.
+
+- **Its subject is a pair, not a feature.** Not "this land", but "this design
+  through this path". A board rule can be run on any board at any time; a writer
+  rule needs an execution - inputs, a command, and the file it produced.
+- **Its denominator is that pair set, and it is small enough to publish
+  exactly.** How many designs declare the property, and how many paths claim to
+  carry it. Today that is one design of 33 and two paths, and a run that reports
+  no failures over one design is "not applicable", not "clean" - the same verdict
+  this canon already requires of a rule with no subject.
+- **Its failure has no location.** There is no entity, no coordinate, no
+  measured distance against a required one, so it does not fit `DrcViolation` and
+  must not be bent into it. R-18 asks every violation whose kind measures a
+  distance to carry one; this kind measures no distance at all, and forcing it
+  into that row would produce exactly the empty `actual` R-18 was written
+  against. It belongs with the export gate that already asserts no number in a
+  file this project writes comes from nowhere, not in the registry that walks
+  copper.
+- **What it asserts.** For each property a design declares, and each path the
+  design is exported through: the output carries the property, or the path tells
+  the operator it cannot, once per property rather than once per board. Silence
+  is not a pass. Today `to_kicad` warns only when a design declares teardrops,
+  which is correct - a board that asked for nothing is not owed a warning - but
+  it means the absence of a warning says nothing about whether fillets are there.
+
+**And the temptation to refuse, named before somebody takes it.** A check could
+read the exported Gerber back and confirm the fillets are present. That measures
+the writer against itself: the same code decides both what to draw and what the
+reader will find, so the check passes by construction and would keep passing if
+both were wrong together. A writer rule compares the **declaration** against the
+output, in the output format's own terms, with a reader that is not the writer -
+and where no such reader exists, the honest form is the warning, stated once per
+declared property, rather than a check that cannot fail.
 
 ### Constants a fab preset promises and nothing checks
 

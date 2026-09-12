@@ -91,6 +91,21 @@ struct EntryFact {
     /// the pad this entry names is not among the netted pads described above,
     /// which would mean the two walks disagree about what is on the board.
     land_min_mm: Option<f64>,
+    /// The land's outline, joined from the pad walk by the same name.
+    shape: &'static str,
+    /// The land's larger dimension, so a square land can be told from an
+    /// oblong one without measuring the pad a second time.
+    land_max_mm: Option<f64>,
+    /// The pad's centre, from `pad_centre` - the same centre the rule's own
+    /// measurement used.
+    centre_mm: Option<(f64, f64)>,
+    /// The segment's end inside the land's copper, in millimetres.
+    inside_mm: (f64, f64),
+    /// Its end outside, in millimetres.
+    outside_mm: (f64, f64),
+    /// The angle R-08 reported for this entry, in millidegrees. `None` when
+    /// the rule refused to measure it.
+    reported_millideg: Option<u32>,
 }
 
 fn shape_name(shape: &PadShape) -> &'static str {
@@ -162,6 +177,12 @@ fn pad_facts(fixture: &str) -> (i64, Vec<PadFact>, Vec<EntryFact>) {
             },
             width_mm: r.width.to_mm(),
             land_min_mm: None,
+            shape: "unjoined",
+            land_max_mm: None,
+            centre_mm: None,
+            inside_mm: (r.inside.x.to_mm(), r.inside.y.to_mm()),
+            outside_mm: (r.outside.x.to_mm(), r.outside.y.to_mm()),
+            reported_millideg: r.entry.millideg(),
         })
         .collect();
 
@@ -213,14 +234,30 @@ fn pad_facts(fixture: &str) -> (i64, Vec<PadFact>, Vec<EntryFact>) {
     // A width means nothing without the land it is being called narrow
     // against, and measuring the pad a second time here is how two readings of
     // one pad start to disagree.
-    let land_min: std::collections::BTreeMap<&str, f64> = facts
+    type LandFacts = (f64, f64, &'static str, (f64, f64));
+    let land: std::collections::BTreeMap<&str, LandFacts> = facts
         .iter()
-        .map(|f| (f.pin.as_str(), f.size_mm.0.min(f.size_mm.1)))
+        .map(|f| {
+            (
+                f.pin.as_str(),
+                (
+                    f.size_mm.0.min(f.size_mm.1),
+                    f.size_mm.0.max(f.size_mm.1),
+                    f.shape,
+                    f.centre_mm,
+                ),
+            )
+        })
         .collect();
     for entry in &mut entries {
-        entry.land_min_mm = land_min.get(entry.pin.as_str()).copied();
+        if let Some((min, max, shape, centre)) = land.get(entry.pin.as_str()).copied() {
+            entry.land_min_mm = Some(min);
+            entry.land_max_mm = Some(max);
+            entry.shape = shape;
+            entry.centre_mm = Some(centre);
+        }
     }
-    drop(land_min);
+    drop(land);
 
     (resolution, facts, entries)
 }
@@ -476,5 +513,254 @@ fn the_sharp_entries_against_every_pad_that_could_have_been_one() {
     assert!(
         most_lands_on_one_trace > 1,
         "one trace enters more than one land, so segment position is not approach position"
+    );
+}
+
+/// One entry into a land that is a circle, measured from the land's own
+/// geometry instead of from the rule's answer.
+///
+/// The radius is the land's own dimension halved, and it is only defined when
+/// both dimensions are equal: an oblong whose sides differ has two straight
+/// flanks and a reading taken against a circle would be a reading of the wrong
+/// shape. `PadShape::Oblong` with equal sides degenerates to a circle, which is
+/// why the outline alone does not decide it.
+struct CircularReading {
+    pin: String,
+    sharp: bool,
+    width_mm: f64,
+    radius_mm: f64,
+    /// The centre's distance from the line through both ends of the segment.
+    p_axis_mm: f64,
+    /// The far edge of the copper: the axis distance plus half the width.
+    p_far_mm: f64,
+    reported_millideg: Option<u32>,
+    /// `None` when `p_far` exceeds the radius, which is the edge missing the
+    /// land entirely rather than a disagreement.
+    recomputed_millideg: Option<i64>,
+    /// How far past the rim the inside end sits, along the direction of travel.
+    depth_mm: Option<f64>,
+    /// How many of the trace's two edges start inside the land. One means the
+    /// rule had only the inner edge to read, which is a blunter angle than the
+    /// entry actually makes.
+    edges_inside: usize,
+}
+
+fn circular_reading(e: &EntryFact) -> Option<CircularReading> {
+    let (min, max) = (e.land_min_mm?, e.land_max_mm?);
+    if (max - min).abs() > 1e-9 {
+        return None; // two straight flanks, not a circle
+    }
+    if e.shape != "circle" && e.shape != "oblong" {
+        return None; // a square roundrect still has flat sides
+    }
+    let centre = e.centre_mm?;
+    let radius_mm = min / 2.0;
+    let u = (
+        e.outside_mm.0 - e.inside_mm.0,
+        e.outside_mm.1 - e.inside_mm.1,
+    );
+    let length = (u.0 * u.0 + u.1 * u.1).sqrt();
+    if length == 0.0 {
+        return None;
+    }
+    let to_centre = (centre.0 - e.inside_mm.0, centre.1 - e.inside_mm.1);
+    let p_axis_mm = (u.0 * to_centre.1 - u.1 * to_centre.0).abs() / length;
+    let p_far_mm = p_axis_mm + e.width_mm / 2.0;
+    let unit = (u.0 / length, u.1 / length);
+
+    // The rule takes the smaller of the two trace edges' angles, and an edge
+    // whose own end is not inside the land has no angle to give. Reproducing
+    // that is not fitting the arithmetic to the answer: `entry_angle` asks
+    // `leaving_angle` for each edge in turn and reduces with `f64::min` over
+    // the ones that returned something. An edge offset half a width sideways
+    // from an end that barely crossed the rim starts outside the copper, and
+    // the reading falls back to the other edge.
+    let perpendicular = (-unit.1, unit.0);
+    let half = e.width_mm / 2.0;
+    let mut best_distance: Option<f64> = None;
+    let mut edges_inside = 0usize;
+    for side in [1.0_f64, -1.0] {
+        let start = (
+            e.inside_mm.0 + perpendicular.0 * half * side,
+            e.inside_mm.1 + perpendicular.1 * half * side,
+        );
+        let from_centre = (start.0 - centre.0, start.1 - centre.1);
+        if (from_centre.0 * from_centre.0 + from_centre.1 * from_centre.1).sqrt() >= radius_mm {
+            continue; // this edge never was in the land, so it leaves nothing
+        }
+        edges_inside += 1;
+        let offset = (centre.0 - start.0, centre.1 - start.1);
+        let distance = (unit.0 * offset.1 - unit.1 * offset.0).abs();
+        // The smaller angle belongs to the edge further from the centre.
+        best_distance = Some(best_distance.map_or(distance, |seen: f64| seen.max(distance)));
+    }
+    let recomputed_millideg =
+        best_distance
+            .filter(|distance| *distance <= radius_mm)
+            .map(|distance| {
+                (1_000.0 * (90.0 - (distance / radius_mm).asin().to_degrees())).round() as i64
+            });
+    let from_centre = (e.inside_mm.0 - centre.0, e.inside_mm.1 - centre.1);
+    let along = from_centre.0 * unit.0 + from_centre.1 * unit.1;
+    let discriminant = along * along + radius_mm * radius_mm
+        - (from_centre.0 * from_centre.0 + from_centre.1 * from_centre.1);
+    let depth_mm = (discriminant >= 0.0).then(|| -along + discriminant.sqrt());
+    Some(CircularReading {
+        pin: e.pin.clone(),
+        sharp: e.sharp,
+        width_mm: e.width_mm,
+        radius_mm,
+        p_axis_mm,
+        p_far_mm,
+        reported_millideg: e.reported_millideg,
+        recomputed_millideg,
+        depth_mm,
+        edges_inside,
+    })
+}
+
+fn median(values: &mut [f64]) -> Option<f64> {
+    if values.is_empty() {
+        return None;
+    }
+    values.sort_by(|a, b| a.partial_cmp(b).expect("no NaN in a measured distance"));
+    let middle = values.len() / 2;
+    Some(if values.len().is_multiple_of(2) {
+        (values[middle - 1] + values[middle]) / 2.0
+    } else {
+        values[middle]
+    })
+}
+
+/// The instrument check the circular-land reading rests on.
+///
+/// Before any claim is made about why an entry into a round land reads sharp,
+/// the arithmetic that would carry the claim has to agree with the rule that
+/// is already measuring. `90 - arcsin(p_far / R)` reconstructs R-08's answer
+/// from the land's radius, the segment's two ends and its width - nothing it
+/// reads comes from the rule. A row differing by more than a tenth of a degree
+/// means the two are not measuring the same thing, and nothing downstream of
+/// it can be believed.
+///
+/// It is a check on the instrument and never a finding about boards. The
+/// denominator is published for the same reason every other one here is: an
+/// agreement over zero rows is what a deleted measurement looks like.
+#[test]
+#[ignore = "slow: routes all six benchmark fixtures"]
+fn a_circular_land_reads_the_same_from_its_own_geometry() {
+    let mut readings: Vec<CircularReading> = Vec::new();
+    for benchmark in BENCHMARKS {
+        let (_, _, entries) = pad_facts(benchmark.filename);
+        readings.extend(entries.iter().filter_map(circular_reading));
+    }
+
+    let sharp = readings.iter().filter(|r| r.sharp).count();
+    let misses = readings
+        .iter()
+        .filter(|r| r.recomputed_millideg.is_none())
+        .count();
+    let one_edge = readings.iter().filter(|r| r.edges_inside == 1).count();
+    eprintln!(
+        "entries into a circular land: {} in all, {sharp} of them sharp, \
+         {misses} whose far edge misses the land, \
+         {one_edge} read from one trace edge because the other starts outside",
+        readings.len()
+    );
+    for reading in readings.iter().filter(|r| r.edges_inside == 1) {
+        eprintln!(
+            "  one edge only: {:<8} depth {:.4}mm  reported {:>6}  \
+             a far-edge reading would have been {:>6}",
+            reading.pin,
+            reading.depth_mm.unwrap_or(f64::NAN),
+            reading.reported_millideg.unwrap_or_default(),
+            (1_000.0
+                * (90.0
+                    - ((reading.p_far_mm / reading.radius_mm).min(1.0))
+                        .asin()
+                        .to_degrees()))
+            .round() as i64
+        );
+    }
+
+    let mut compared = 0usize;
+    let mut worst: Option<(&str, i64)> = None;
+    for reading in &readings {
+        let (Some(reported), Some(recomputed)) =
+            (reading.reported_millideg, reading.recomputed_millideg)
+        else {
+            continue;
+        };
+        compared += 1;
+        let gap = (i64::from(reported) - recomputed).abs();
+        if worst.is_none_or(|(_, seen)| gap > seen) {
+            worst = Some((reading.pin.as_str(), gap));
+        }
+        eprintln!(
+            "  {:<8} {} R {:.3}mm  w {:.3}mm  p_axis {:.4}mm  p_far {:.4}mm  \
+             p_far/R {:.3}  depth {:.4}mm  reported {:>6}  recomputed {:>6}  gap {:>5}",
+            reading.pin,
+            if reading.sharp { "SHARP" } else { "clean" },
+            reading.radius_mm,
+            reading.width_mm,
+            reading.p_axis_mm,
+            reading.p_far_mm,
+            reading.p_far_mm / reading.radius_mm,
+            reading.depth_mm.unwrap_or(f64::NAN),
+            reported,
+            recomputed,
+            gap
+        );
+    }
+
+    // What the two claims behind this reading would be tested against. They are
+    // printed rather than asserted: this test establishes the instrument, and a
+    // verdict drawn from four lands on six boards needs its denominator read
+    // first.
+    let mut clean_ratio: Vec<f64> = readings
+        .iter()
+        .filter(|r| !r.sharp)
+        .map(|r| r.p_far_mm / r.radius_mm)
+        .collect();
+    let deepest = readings
+        .iter()
+        .filter(|r| r.sharp)
+        .filter_map(|r| r.depth_mm.map(|d| d / r.radius_mm))
+        .fold(f64::NEG_INFINITY, f64::max);
+    eprintln!(
+        "median p_far/R over {} clean circular entries: {:?}; deepest sharp entry: {:.3} R",
+        clean_ratio.len(),
+        median(&mut clean_ratio),
+        deepest
+    );
+
+    assert!(
+        compared > 0,
+        "an agreement over no rows at all is what a deleted measurement looks like"
+    );
+    let (pin, gap) = worst.expect("compared is above zero, so a worst row exists");
+    assert!(
+        gap <= 100,
+        "the geometry and the rule must answer the same question: {pin} differs by \
+         {gap} millidegrees over {compared} circular entries"
+    );
+
+    // The branch that had to be reproduced before the two agreed. It is a
+    // property of the rule, not a fault found in it: `entry_angle` reduces
+    // with `f64::min` over the edges that answered, and an edge whose own end
+    // lies outside the copper answers nothing. Whether the surviving reading
+    // is the right one is a separate question this test does not settle - an
+    // edge that ends outside the land may never have been inside it. What is
+    // asserted here is only that the branch is exercised, so reproducing it
+    // was not a guess fitted to two stubborn rows.
+    assert!(
+        one_edge > 0,
+        "the one-edge branch is exercised by these fixtures, so reproducing it is \
+         not a guess: {one_edge} of {}",
+        readings.len()
+    );
+    assert!(
+        one_edge * 10 < readings.len(),
+        "and it is the exception rather than the reading: {one_edge} of {}",
+        readings.len()
     );
 }
