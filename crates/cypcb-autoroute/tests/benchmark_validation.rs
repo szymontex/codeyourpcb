@@ -16,6 +16,7 @@ use cypcb_autoroute::pathfinder_v2::PathFinderStrategy;
 use cypcb_autoroute::scoring::{score_board, RoutingScore, ScoreWeights};
 use cypcb_autoroute::strategy::RoutingStrategy;
 use cypcb_autoroute::{route_board, AutorouteConfig};
+use cypcb_drc::rules::pad_entry::{measure_entries, EntryReport};
 use cypcb_drc::{preset_for_world, ruleset_for_world, DesignRules};
 use cypcb_kicad::{parse_kicad_pcb, BENCHMARKS};
 use cypcb_router::apply_routes;
@@ -46,7 +47,14 @@ fn fixture_path(filename: &str) -> std::path::PathBuf {
 /// rule set, so the board searched a 0.508mm grid where the shipped tool
 /// searches 0.400mm. Its numbers below are a re-baseline, not a regression and
 /// not an improvement; neither word applies when the question changed.
-fn route_and_score(strategy: &dyn RoutingStrategy, fixture: &str) -> (RoutingScore, usize, usize) {
+/// Routes a fixture and measures it. The fourth value is the census this
+/// project owed itself: every entry angle the router's own copper leaves
+/// behind, in the same pass that counts the violations, so the two cannot
+/// disagree about which board was measured.
+fn route_and_score(
+    strategy: &dyn RoutingStrategy,
+    fixture: &str,
+) -> (RoutingScore, usize, usize, (EntryReport, Vec<String>)) {
     let parsed = parse_kicad_pcb(&fixture_path(fixture))
         .unwrap_or_else(|e| panic!("Failed to parse {}: {:?}", fixture, e));
     let mut world = parsed.world;
@@ -78,7 +86,17 @@ fn route_and_score(strategy: &dyn RoutingStrategy, fixture: &str) -> (RoutingSco
     let drc_rules = DesignRules::from_constraints(&preset.constraints());
     let score = score_board(&mut world, &drc_rules, &ScoreWeights::default());
 
-    (score, route_count, unrouted)
+    // The entries by name, and the denominator beside them. `score_board`
+    // reports how many violations there are and not which, and a count of
+    // sharp entries with nothing under it cannot say whether the board has few
+    // of them or few entries at all. `measure_entries` is called rather than
+    // the registry because only it returns the report; the violations it hands
+    // back are the same rows `PadEntryRule` puts in a DRC run, which is what
+    // makes the census comparable to the ratchets above.
+    let (entries, report) = measure_entries(&mut world);
+    let sharp: Vec<String> = entries.into_iter().map(|v| v.message).collect();
+
+    (score, route_count, unrouted, (report, sharp))
 }
 
 // ============================================================================
@@ -240,6 +258,31 @@ fn print_table_footer() {
 /// comment. `the_ratchets_are_the_routed_values_plus_their_bands` ties them.
 type Ratchet = (&'static str, &'static str, u32, u32, u32, u32);
 
+/// The entry census, in the order of `DRC_RATCHETS`: entries examined, entries
+/// refused, entries sharper than R-08 allows. Measured on 2026-09-12, the run
+/// after `PadEntryRule` was registered.
+///
+/// Held three different ways on purpose, because the three numbers fail in
+/// three different directions:
+///
+/// - **sharp is a ratchet**: it may fall and may not rise. More sharp entries
+///   than this is the router getting worse at the thing R-08 measures.
+/// - **examined is a floor**: it may rise and may not fall. A rule that stops
+///   looking reports nothing and looks exactly like a rule that found nothing,
+///   which is the distinction `EntryReport` exists to make. Without this line
+///   a change that made `measure_entries` see no copper at all would turn the
+///   ratchet above green.
+/// - **refused is a ceiling**: five today, all on `multi_ic`. A refusal is an
+///   entry with no angle, so a rise here is measurement quietly going missing.
+const ENTRY_CENSUS: [(usize, usize, usize); 6] = [
+    (14, 0, 0),  // led_blink
+    (180, 0, 1), // stm32_breakout
+    (287, 5, 2), // multi_ic
+    (178, 0, 3), // shift_driver
+    (178, 0, 5), // qfp_fanout
+    (60, 0, 3),  // plane_board
+];
+
 const DRC_RATCHETS: &[Ratchet] = &[
     // Every entry re-measured 2026-08-08, and every band with it, on boards
     // that are all fabricable for the first time: no copper outside an
@@ -384,7 +427,7 @@ fn benchmark_all_fixtures_drc() {
     print_table_header();
     let mut measured = Vec::new();
     for (filename, label, _, _, _, _) in DRC_RATCHETS {
-        let (score, route_count, unrouted) = route_and_score(&pathfinder, filename);
+        let (score, route_count, unrouted, entries) = route_and_score(&pathfinder, filename);
         print_table_row(&BenchmarkResult::from_score(
             label,
             "PathFinder",
@@ -398,6 +441,7 @@ fn benchmark_all_fixtures_drc() {
             score.shorts,
             unrouted,
             route_count,
+            entries,
         ));
     }
     print_table_footer();
@@ -409,15 +453,41 @@ fn benchmark_all_fixtures_drc() {
     // be read off one row.
     let mut failures: Vec<String> = Vec::new();
 
+    let mut sharp_total = 0usize;
+    let mut examined_total = 0usize;
+    let mut refused_total = 0usize;
+
     for (
-        (label, violations, shorts, unrouted, route_count),
-        (_, _, ratchet, shorts_ratchet, _, _),
-    ) in measured.iter().zip(DRC_RATCHETS)
+        (
+            (label, violations, shorts, unrouted, route_count, (report, sharp)),
+            (_, _, ratchet, shorts_ratchet, _, _),
+        ),
+        (examined_floor, refused_ceiling, sharp_ratchet),
+    ) in measured.iter().zip(DRC_RATCHETS).zip(ENTRY_CENSUS)
     {
         eprintln!(
             "  {}: {} routes, {} violations against {}, {} shorts against {}, {} unrouted",
             label, route_count, violations, ratchet, shorts, shorts_ratchet, unrouted
         );
+
+        // The census, printed rather than counted away. Every entry the
+        // router's own copper leaves too sharp, named by its pin and its
+        // angle, over the number of entries the rule was able to look at - so
+        // the question "is this the router or the fixtures" has something to
+        // be answered from, and a board with no sharp entries can be told from
+        // a board with no entries.
+        sharp_total += sharp.len();
+        examined_total += report.examined;
+        refused_total += report.refused;
+        eprintln!(
+            "      entries: {} examined, {} refused, {} sharp",
+            report.examined,
+            report.refused,
+            sharp.len()
+        );
+        for entry in sharp {
+            eprintln!("      sharp entry: {entry}");
+        }
 
         if *unrouted != 0 {
             failures.push(format!(
@@ -437,7 +507,30 @@ fn benchmark_all_fixtures_drc() {
                 "{label}: {shorts} of the violations are copper touching copper, threshold {shorts_ratchet} - the router started shorting the board"
             ));
         }
+        if sharp.len() > sharp_ratchet {
+            failures.push(format!(
+                "{label}: {} entries sharper than R-08 allows, ratchet {sharp_ratchet} - the router is meeting more lands at a wedge",
+                sharp.len()
+            ));
+        }
+        if report.examined < examined_floor {
+            failures.push(format!(
+                "{label}: only {} entries examined, floor {examined_floor} - the rule stopped looking, so the ratchet above proves nothing",
+                report.examined
+            ));
+        }
+        if report.refused > refused_ceiling {
+            failures.push(format!(
+                "{label}: {} entries refused, ceiling {refused_ceiling} - entries are losing their angle",
+                report.refused
+            ));
+        }
     }
+
+    eprintln!();
+    eprintln!(
+        "  across all fixtures: {examined_total} entries examined, {refused_total} refused, {sharp_total} sharp"
+    );
 
     assert!(
         failures.is_empty(),
@@ -451,7 +544,7 @@ fn benchmark_all_fixtures_drc() {
 #[test]
 fn benchmark_regression() {
     let pathfinder = PathFinderStrategy;
-    let (score, route_count, unrouted) = route_and_score(&pathfinder, "led_blink.kicad_pcb");
+    let (score, route_count, unrouted, _) = route_and_score(&pathfinder, "led_blink.kicad_pcb");
 
     // Print score table
     eprintln!();
@@ -573,7 +666,7 @@ fn benchmark_full_matrix() {
         for strategy in &strategies {
             eprintln!("  [{}] routing {} ...", strategy.name(), fixture_label);
 
-            let (score, route_count, unrouted) =
+            let (score, route_count, unrouted, _) =
                 route_and_score(strategy.as_ref(), benchmark.filename);
 
             let br = BenchmarkResult::from_score(

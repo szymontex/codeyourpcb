@@ -270,7 +270,8 @@ Sources: Altium DFM guidance on trace routing and solder joints; kingsunpcb
 trace angle guide; nwengineeringllc on teardrops under class 3. All read
 2026-09-11.
 
-In this repo: enforced. `PadEntryRule` is in the registry
+In this repo: the angle is enforced and the teardrop is not. `PadEntryRule`
+is in the registry
 (`crates/cypcb-drc/src/lib.rs:160`) and reports through `entry_angle`
 (`crates/cypcb-drc/src/rules/pad_entry.rs:211`) and `entry_angle_placed`
 (`:257`), the second of which is the change of frame and nothing else: it
@@ -279,10 +280,10 @@ than carrying the outline out of it. `measure_entries` (`:486`) walks the
 board - every segment with one end in a land's copper and the other outside it,
 on a layer the pad is on and the net the pad is on - and returns an
 `EntryReport` (`:463`) beside the violations, because an empty violation list
-cannot say whether anything was looked at. What the rule cannot see is the
+cannot say whether anything was looked at. The rows it writes carry
+`ViolationKind::PadEntry` (`crates/cypcb-drc/src/violation.rs:104`). What the rule cannot see is the
 wedge beside a corner; see "What nothing measures". `grep -c '#\[test\]'
-crates/cypcb-drc/src/rules/pad_entry.rs` answers 28 at the commit that
-registered it. The teardrop condition has no check at all, though half its model is already there - `teardrops` is a DSL property with length and width ratios
+crates/cypcb-drc/src/rules/pad_entry.rs` answers 28 at `f9a7556`. The teardrop condition has no check at all, though half its model is already there - `teardrops` is a DSL property with length and width ratios
 (`crates/cypcb-parser/src/parser.rs:331-345`), reachable as `world.teardrops()`
 (`crates/cypcb-world/src/dsl.rs:922`), and honoured by the Gerber writer and
 the KiCad export.
@@ -901,32 +902,32 @@ wait on the data model - and then it counts the missing **fields** rather than
 the blocked rules, because a field that unblocks two rules is worth more than
 either of them.
 
-**Bucket 1 - enforced today. Four.** R-19 is the fourth and the loudest; it was written last because a rule that fires on every board leaves no gap to notice. The registry has 39 entries
-(`crates/cypcb-drc/src/lib.rs`) and nine of them serve these four rules:
+**Bucket 1 - enforced today. Five.** R-19 is the loudest, written last because a rule that fires on every board leaves no gap to notice; R-08 is the newest, registered after this census was taken. The registry has 39 entries
+(`crates/cypcb-drc/src/lib.rs`) and ten of them serve these five rules:
 `ClearanceRule` at `:129`, `AnnularRingRule` at `:135`, `HoleToHoleRule` at
 `:136`, `ViaDiameterRule` at `:138`, `ViaDrillRule` at `:139`,
-`TraceCurrentRule` at `:143`, `PadLandRule` at `:159`, `DrillAspectRatioRule`
-at `:161` and `AcuteAngleRule` at `:197`.
+`TraceCurrentRule` at `:143`, `PadLandRule` at `:159`, `PadEntryRule` at
+`:160`, `DrillAspectRatioRule` at `:161` and `AcuteAngleRule` at `:197`.
 
 | rule | what enforces it |
 |---|---|
 | R-01 width against current | `TraceCurrentRule` (`lib.rs:143`), silent on a net that declares no `current` |
-| R-03 acute angles | `AcuteAngleRule` (`lib.rs:196`), reporting `ViolationKind::AcidTrap` |
+| R-03 acute angles | `AcuteAngleRule` (`lib.rs:197`), reporting `ViolationKind::AcidTrap` |
 | R-07 annular ring and hole spacing | six rules - `AnnularRingRule`, `HoleToHoleRule`, `ViaDiameterRule`, `ViaDrillRule`, `PadLandRule`, `DrillAspectRatioRule` |
+| R-08 trace entry into a land | `PadEntryRule` (`lib.rs:160`), reporting `ViolationKind::PadEntry`; the angle only, not the teardrop |
 | R-19 the flat clearance minimum | `ClearanceRule`, first in the registry, firing more than the rest together |
 
-**Bucket 2 - checkable today, nobody wrote the check. Eleven.** Checkable is
+**Bucket 2 - checkable today, nobody wrote the check. Ten.** Checkable is
 not the same as testable: see "A rule with no subject cannot be tested" for
 which of these have anything to fire on, measured on the fixtures rather than
-argued. R-08 is the one to write first, and it is the only one of the eleven
-whose subject exists on all six boards. Every quantity
-these need is in the world already.
+argued. R-08 was the eleventh and the one this section said to write first,
+because its subject exists on all six boards; it was written, and it is in
+bucket 1 now. Every quantity these need is in the world already.
 
 | rule | why it is checkable, in one clause |
 |---|---|
 | R-05 return path | pours, stackup-derived reference layer and the spatial index are present, gated on the net's declared impedance |
 | R-06 reporting per kind | `DrcViolation` carries its kind and its measured distance; only the aggregation is missing |
-| R-08 trace entry into a land | pad geometry, rotation and teardrop ratios are in the model; the entry angle is arithmetic on them |
 | R-09 thermal relief geometry | the filled pour gives the spokes, the design rules give the numbers - but the 3 A case has no cure |
 | R-10 mitring | the junction is already reported by R-03 and the cut is geometry on two arms |
 | R-11 acceptance classes | `ViolationKind` gives the kinds and `clearance_contacts` the count tier 3 needs; the class gate exists only when the board picks `IpcClass1`, `IpcClass2` or `IpcClass3` (`crates/cypcb-rules/src/presets/mod.rs:58`, `:60`, `:62`) and is absent for a house preset |
@@ -1011,7 +1012,10 @@ measurement in part 1 - 238 violations in 127.8 s at half a clearance against
 made the grid a track pitch. The rule in part 4 is this canon's own and landed
 with R-16 and R-18 in `643346d` on 2026-09-11. The exception is part 3, a search
 that found nothing, which is dated there because it is a fact about the world
-rather than about this repository.
+rather than about this repository. The pitches in part 2's table are the
+houses' own figures, carried from the fab presets and sourced where R-19
+sources them; what is this project's there is the arithmetic on them and the
+rule it suggests.
 
 Every other rule here is about copper. This one is about the tool, and it
 belongs in the canon because entry condition 1 puts it there: the grid is
@@ -1449,13 +1453,16 @@ every direction from an end off the land's centre line, in tenth-degree
 samples, the largest step between consecutive answers is 42 500 millidegrees,
 where a continuous measurement would step by about the sample size.
 
-Both figures are pinned: the flip in
-`the_answer_jumps_where_the_leaving_side_changes`
-(`crates/cypcb-drc/src/rules/pad_entry.rs:708`, its two assertions at
-`:723-724`), and the sweep in `the_answer_is_not_continuous_as_the_arm_sweeps`
-(`:661`, its assertion at `:688`), which also asserts that not one of its 901
-directions was refused - so it cannot pass by measuring nothing. This is a
-measured property of the rule and not a suspicion about it.
+Both figures are pinned, by test name and not by line number: the flip in
+`the_answer_jumps_where_the_leaving_side_changes` and the sweep in
+`the_answer_is_not_continuous_as_the_arm_sweeps`, both in
+`crates/cypcb-drc/src/rules/pad_entry.rs`, either of which
+`cargo test -p cypcb-drc --lib <name>` will run. The sweep also asserts that
+not one of its 901 directions was refused - so it cannot pass by measuring
+nothing. **The line numbers that used to stand here went stale three times in
+one day**, because a line number is found by nothing and rots on every
+insertion above it, while a test name is found by the command that runs it.
+This is a measured property of the rule and not a suspicion about it.
 
 What is not measured is the wedge against the side the edge does not cross. It
 is there on both sides of the flip - the copper does not care which boundary
@@ -1483,6 +1490,41 @@ which is the disease "A rule with no subject cannot be tested" describes from
 the other end. It follows that every count this rule publishes carries its
 denominator - entries examined and entries refused - or a reader cannot tell a
 quiet board from a quiet rule.
+
+### The router's own output, against the rules this canon states
+
+Nothing measured how much of this canon the router satisfies on boards the
+router itself produced. R-08 is the first rule to answer that question, and it
+answered it by accident: registering it changed what the benchmark set reports.
+
+Measured on 2026-09-12, the six fixtures routed twice in one sitting with the
+registry entry deleted and restored between runs -
+`cargo test -p cypcb-autoroute --test benchmark_validation benchmark_all_fixtures_drc -- --ignored --nocapture` -
+the violation counts read 1 / 205 / 505 / 19 / 371 / 34 without the rule and
+1 / 206 / 507 / 22 / 376 / 37 with it. The short count is unmoved on every
+board, which is what says these are wedges and not copper touching copper.
+
+**Fourteen entries out of 897 examined, with 5 refused.** The denominator is
+the rule's own `EntryReport`, not a count of routes: a segment is an entry only
+when one of its ends lies in a land's copper and the other does not, and 4 349
+routes across the six boards produce 897 of those. Seven of the fourteen - half
+of them - are between 41 and 45 degrees, within four degrees of the threshold, and two pairs
+repeat a figure exactly on the same part - `U1.6` and `U1.18` both at 44.5,
+`U1.4` and `U1.45` both at 22.1, on the QFP that `qfp_fanout` exists to fan out.
+That is a pattern in how the router approaches a land, not scatter.
+
+The cause is not known and this paragraph does not name one. Two readings fit
+and neither has been tested: the router works on a grid at a track pitch and a
+pad centre need not sit on it, or the fixtures place parts where no approach on
+that grid can meet a land squarely.
+
+The census is held rather than remembered. `ENTRY_CENSUS` in
+`crates/cypcb-autoroute/tests/benchmark_validation.rs` carries all three
+figures per fixture, each failing in its own direction: **sharp is a ratchet**
+that may fall and not rise, **examined is a floor** that may rise and not fall,
+and **refused is a ceiling**. The floor is the load-bearing one - without it a
+change that made the rule see no copper at all would turn the ratchet green,
+which is the failure `EntryReport` was written to make impossible.
 
 ### Constants a fab preset promises and nothing checks
 
