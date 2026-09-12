@@ -19,9 +19,13 @@ fabricator disputes it.
   text. Not the text of the standard.
 - `[P]` Board house or vendor material.
 - `[O]` The original article by the author of the rule.
+- `[S]` This project's own reasoning or measurement. Carries the commit it
+  landed in rather than a read date, because no outside page can confirm it.
 - `[D]` Practice reported in discussion, with no number attached.
 
-Dates are the day the source was read, not the day it was published.
+Dates are the day the source was read, not the day it was published. An `[S]`
+entry carries a commit instead: our own reasoning is dated by when it landed,
+and a reader with the repository can see what it looked like then.
 
 ## The rules
 
@@ -179,7 +183,7 @@ In this repo: nothing measures either condition. See R-13 for why no
 source states a permitted fraction, what bridges a crossing that cannot be
 avoided, and what a two-layer board changes.
 
-### R-06 Violations are reported per rule, not as one total `[O]`
+### R-06 Violations are reported per rule, not as one total `[S]`
 
 *Applies when:* always, because it is about the shape of the output rather than the board.
 
@@ -189,11 +193,14 @@ that will overheat from a trace 10 um under the fab's minimum.
 Condition: the score carries a count per violation kind, not a single
 `drc_violations` total.
 
-Source: this project's own measurement - see `shorts` and `clearance_contacts`
-in `crates/cypcb-autoroute/src/scoring.rs`, which are exactly this split done
-twice by hand. `crates/cypcb-autoroute/tests/a_crossing_is_charged_twice.rs`
-runs the case that makes the total misleading: one contact, two terms, 1500
-points.
+Source: this project's own measurement, and no outside page will ever confirm
+it - see `shorts` and `clearance_contacts` in
+`crates/cypcb-autoroute/src/scoring.rs`, which are exactly this split done twice
+by hand, landed in `779f1fd` on 2026-08-23.
+`crates/cypcb-autoroute/tests/a_crossing_is_charged_twice.rs` runs the case that
+makes the total misleading - one contact, two terms, 1500 points - and landed in
+`cc1aaeb` on 2026-08-08. `cargo test -p cypcb-autoroute --test a_crossing_is_charged_twice`
+re-runs it against whatever the reader has.
 
 In this repo: the data is there and the aggregation is not. `DrcViolation`
 carries `kind: ViolationKind` with 36 variants, `Clearance` at `:51` through
@@ -866,9 +873,16 @@ present, with no new field and no new declaration - which makes R-15 the first
 rule in this canon whose gap is that nobody wrote the check, rather than that
 the model cannot answer.
 
-### R-16 What a rule must carry to be enforceable here `[O]`
+### R-16 What a rule must carry to be enforceable here `[S]`
 
 *Applies when:* never, to a board. This is the canon reading itself.
+
+Source: none outside this document, which is what `[S]` says. Every count here
+is taken from the canon itself or from the registry it names, and the entry
+conditions at the end are this project's reasoning about its own rules rather
+than anybody's published criteria. The section landed in `643346d` on
+2026-09-11; the greps in the verification block re-take its counts against
+whatever commit the reader has.
 
 Nineteen rules, three states - and the five that read the canon rather than a
 board (R-12, R-16, R-18) or arrived after this census was written (R-17, R-19)
@@ -976,9 +990,19 @@ bucket 2 from bucket 3 in practice, not from principle.
    "Declared is not measured" - four rules in a row had to be rewritten around
    it, and a fifth will unless it is an entry condition.
 
-### R-17 The grid the router actually searches `[O]`
+### R-17 The grid the router actually searches `[S]`
 
 *Applies when:* always, before routing. It needs pad positions and a fab table, both of which exist on every board.
+
+Source: this project, which is what `[S]` says, with one dated exception. The
+grid arithmetic and both function readings are code in this repository. The
+measurement in part 1 - 238 violations in 127.8 s at half a clearance against
+124 in 9.7 s at track pitch, same board, both fully routed - is the comment
+`a0ee08f` left at `crates/cypcb-autoroute/src/lib.rs:380` on 2026-08-05 when it
+made the grid a track pitch. The rule in part 4 is this canon's own and landed
+with R-16 and R-18 in `643346d` on 2026-09-11. The exception is part 3, a search
+that found nothing, which is dated there because it is a fact about the world
+rather than about this repository.
 
 Every other rule here is about copper. This one is about the tool, and it
 belongs in the canon because entry condition 1 puts it there: the grid is
