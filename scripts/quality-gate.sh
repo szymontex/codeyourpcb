@@ -7,6 +7,45 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_ROOT"
 
+# One gate at a time per build directory.
+#
+# Two gates in one checkout fight over `target/` and over `viewer/pkg`, which
+# stage 7 rebuilds. On 2026-09-12 two of them ran at once and the fix applied
+# was worse than the contention: `pkill -f quality-gate.sh` matched both, and
+# because that pattern kills the shell and not the `cargo test` child it had
+# already spawned, one log went quiet immediately while the other kept growing
+# for seven minutes from an orphan. Neither log carried an `EXIT=` line,
+# because the line is written by the shell after this script returns.
+#
+# This project had already learned the lesson once, in the scheduled runner:
+# its first guard was a `pgrep` on this script's name, replaced because a name
+# matches anything whose command line contains it. The answer there was a lock
+# on the thing being contended, and it is the answer here.
+#
+# The key is the build directory rather than the checkout, so the scheduled
+# runner - which builds in its own worktree with its own `CARGO_TARGET_DIR` -
+# does not serialise against a gate somebody runs by hand in the main tree.
+#
+# Waiting rather than skipping: a gate that skipped would hand its caller a
+# silence indistinguishable from a pass. If the wait runs out, this fails and
+# says why, because a gate that ran alongside another proves nothing about
+# either tree.
+GATE_BUILD_DIR="${CARGO_TARGET_DIR:-$REPO_ROOT/target}"
+mkdir -p "$GATE_BUILD_DIR"
+exec 9>"$GATE_BUILD_DIR/.gate.lock"
+if ! flock -n 9; then
+  echo "=== Quality Gate ==="
+  echo "  waiting: another gate holds $GATE_BUILD_DIR/.gate.lock"
+  echo "  started waiting at $(date +%H:%M:%S); giving up after 30 minutes"
+  if ! flock -w 1800 9; then
+    echo "  ✗ another gate still holds the lock after 30 minutes - not running"
+    echo "    Nothing was checked. Find the other run before reading this as a result."
+    exit 1
+  fi
+  echo "  lock acquired at $(date +%H:%M:%S)"
+  echo ""
+fi
+
 pass() { echo "  ✓ $1"; }
 fail() { echo "  ✗ $1"; exit 1; }
 
