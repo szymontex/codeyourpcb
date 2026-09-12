@@ -1580,6 +1580,67 @@ The rule this leaves for a new test is one sentence: **a test named after what a
 command writes opens what the command wrote**, and reads it with something that
 is not the writer. Where that is impossible, the test says so in its own name.
 
+That rule is a check now rather than a paragraph -
+`a_test_that_drives_a_writing_command_opens_what_it_wrote`. It walks every test
+of the command-line crate, follows helpers three hops through one map built over
+the whole test directory, and reports what it found with its denominator:
+
+| | |
+|---|---|
+| tests driving a command that writes | 205 |
+| reaching the artefact | 182 |
+| message-only by right | 18 |
+| nothing on disk can carry the claim | 1 |
+| owed a reading, named and counted | 4 |
+
+**The set of writing subcommands is read off the binary's own help, not listed
+in the check.** A subcommand writes when its output option documents a
+destination with a default path; `check -o json` names stdout in the same
+breath, and a format selector is not a file. A writing command added next year
+joins the set without anybody remembering to - which is this whole section's
+defect, one level up, and the one place it would have been easiest to commit
+again.
+
+Classifying the debt split it in two, and only one half owed anything. **"The
+writer says X was dropped" and "the writer stays quiet when there was nothing to
+drop" are not one claim.** The first is two statements with two subjects - the
+writer emits a message under a condition, which the stream settles, and the
+property really is absent from the file, which only the file settles - and its
+name promises the second while asserting the first. The second has no artefact
+half at all: the design asked for nothing, so there is no absence that could
+mean anything, and a file not carrying a thing nobody requested is true of every
+file ever written. Three tests moved to message-only on that reasoning, and the
+debt fell from seven to four.
+
+**And a bare absence would not have paid it anyway.** "The file does not contain
+X" is satisfied by an empty file, by a truncated write, and by a file that was
+never created - it passes most easily exactly when the writer stops writing,
+which is this section's own defect one layer further down. What pays the debt is
+a difference: the same design down two paths with the property present in one
+output and absent in the other, or, where there is only one path, the same
+design exported twice - once declaring the property, once not - asserting the
+two written files are identical. Both halves of any such difference have to
+clear a floor in the same test, because two empty files are also identical.
+
+Three lists, each entry a name and its reason in one clause. Two of them are
+verdicts and the third is a debt: **`OWED_AN_ARTEFACT_READING` may fall and may
+not rise**, and the failure message says in as many words that there is no
+fourth door. A name collision between files resolves against the test, because
+for a gate holding an allow-list the only safe direction of error is to accuse -
+an accusation reaches the author and a pardon disappears. **That caution applies
+to the ambiguous name and not to the verdict:** a first version flagged the
+whole test whenever any helper it called was ambiguous, and read 50 offenders
+where there were 23. Caution belongs to the evidence that is missing, not to
+everything standing beside it.
+
+Three mutations kill it: a `reads_artefact` that always answers no leaves 194
+offenders; dropping one name from the by-right list makes that test an offender;
+and a list entry naming a test that does not exist fails on its own. One further
+limit is worth stating because trying to mutate it is what found it: **the check
+cannot tell the artefact from any other file.** A test that opens a document
+instead of the output it wrote reads as reaching it. It finds tests that read
+nothing, not tests that read the wrong thing.
+
 ## What this project already measures
 
 ### Board score
