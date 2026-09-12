@@ -85,6 +85,12 @@ struct EntryFact {
     trace_end: bool,
     /// The length of the entering segment itself, in millimetres.
     length_mm: f64,
+    /// The width of the entering segment, in millimetres.
+    width_mm: f64,
+    /// The smaller of the land's two dimensions, in millimetres. `None` when
+    /// the pad this entry names is not among the netted pads described above,
+    /// which would mean the two walks disagree about what is on the board.
+    land_min_mm: Option<f64>,
 }
 
 fn shape_name(shape: &PadShape) -> &'static str {
@@ -138,7 +144,7 @@ fn pad_facts(fixture: &str) -> (i64, Vec<PadFact>, Vec<EntryFact>) {
     // A route that ends by leaving the lattice ends on a segment whose
     // direction the grid never constrained, so "is the entry the last
     // segment" is the question the grid measurement left behind.
-    let entries: Vec<EntryFact> = records
+    let mut entries: Vec<EntryFact> = records
         .iter()
         .map(|r| EntryFact {
             pin: r.pin.clone(),
@@ -154,6 +160,8 @@ fn pad_facts(fixture: &str) -> (i64, Vec<PadFact>, Vec<EntryFact>) {
                 let dy = (r.inside.y.raw() - r.outside.y.raw()) as f64;
                 (dx * dx + dy * dy).sqrt() / 1_000_000.0
             },
+            width_mm: r.width.to_mm(),
+            land_min_mm: None,
         })
         .collect();
 
@@ -201,6 +209,19 @@ fn pad_facts(fixture: &str) -> (i64, Vec<PadFact>, Vec<EntryFact>) {
             });
         }
     }
+    // The land each entry went into, joined by the name the two walks share.
+    // A width means nothing without the land it is being called narrow
+    // against, and measuring the pad a second time here is how two readings of
+    // one pad start to disagree.
+    let land_min: std::collections::BTreeMap<&str, f64> = facts
+        .iter()
+        .map(|f| (f.pin.as_str(), f.size_mm.0.min(f.size_mm.1)))
+        .collect();
+    for entry in &mut entries {
+        entry.land_min_mm = land_min.get(entry.pin.as_str()).copied();
+    }
+    drop(land_min);
+
     (resolution, facts, entries)
 }
 
@@ -285,6 +306,29 @@ fn the_sharp_entries_against_every_pad_that_could_have_been_one() {
          {sharp_ends} of the {} sharp",
         sharp_entries.len()
     );
+    // The population a declaration-side teardrop rule would speak about. R-08's
+    // second condition implies it: a track end landing in a land wider than the
+    // track is the junction a fillet exists to thicken. The count is read
+    // against two denominators - every track end, and every entry - because a
+    // property most entries have is not a property of the ends.
+    let narrower = |e: &&EntryFact| e.land_min_mm.is_some_and(|land| e.width_mm < land);
+    let ends: Vec<&EntryFact> = all_entries.iter().filter(|e| e.trace_end).collect();
+    let ends_joined = ends.iter().filter(|e| e.land_min_mm.is_some()).count();
+    let ends_narrow = ends.iter().copied().filter(narrower).count();
+    let entries_narrow = all_entries.iter().filter(narrower).count();
+    let sharp_ends_narrow = sharp_entries
+        .iter()
+        .copied()
+        .filter(|e| e.trace_end)
+        .filter(narrower)
+        .count();
+    eprintln!(
+        "track narrower than its land: {ends_narrow} of the {ends_total} track ends, \
+         {entries_narrow} of {entries_total} entries, \
+         {sharp_ends_narrow} of the {sharp_ends} sharp track ends; \
+         {ends_joined} of the ends name a land this walk described"
+    );
+
     let entries_first = all_entries.iter().filter(|e| e.first).count();
     let sharp_first = sharp_entries.iter().filter(|e| e.first).count();
     eprintln!(
@@ -386,6 +430,30 @@ fn the_sharp_entries_against_every_pad_that_could_have_been_one() {
         ends_total < entries_total,
         "a track end in a land is a narrower thing than a crossing of its boundary: \
          {ends_total} of {entries_total}"
+    );
+
+    // The join itself, before any conclusion is drawn from it. Every track end
+    // names a land the pad walk also described; a count of "narrower than its
+    // land" computed over entries whose land was never found would be a count
+    // of how many lookups succeeded.
+    assert_eq!(
+        ends_joined, ends_total,
+        "every track end names a land this test described: {ends_joined} of {ends_total}"
+    );
+
+    // And the measurement that decides where a teardrop rule can stand. R-08's
+    // second condition, read as a property of the design, says a track end
+    // landing in a land wider than the track wants a fillet. Every entry on
+    // all six boards satisfies it - 897 of 897 - which is what a land is for:
+    // a pad narrower than the track it receives would be a pad the track
+    // covers. A condition the whole population meets picks out no subset of
+    // it, so it cannot stand in front of the `teardrops` declaration without
+    // flagging every junction on every board nobody flags. It stands behind
+    // the declaration or it is not a rule.
+    assert_eq!(
+        entries_narrow, entries_total,
+        "a track narrower than its land is what every junction on these boards looks like: \
+         {entries_narrow} of {entries_total}"
     );
 
     // The reading the grid measurement left: that the sharp entries are the

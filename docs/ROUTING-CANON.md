@@ -345,7 +345,7 @@ First, nothing declares one. `ls examples/*.cypcb | wc -l` gives 33 and
 rule reading `world.teardrops()` would find it unset on 32 boards out of 33.
 
 Second, no rule could read the copper even if it were drawn, because the copper
-is not in the board. every mention of a teardrop in the DRC crate is a
+is not in the board. Every mention of a teardrop in the DRC crate is a
 comment - `grep -rn teardrop crates/cypcb-drc/src/` finds no code, only prose,
 and a count would rot the next time somebody writes the word. The fillet is synthesised at export time by
 `export_teardrops` in `crates/cypcb-export/src/gerber/copper.rs`, from the
@@ -363,12 +363,31 @@ entries are track ends, and 3 of the 14 sharp ones are.** Two thirds of what
 the angle half measures could never receive a fillet, and a teardrop rule would
 reach three of the fourteen entries this vector has been chasing.
 
+Fourth, and this one settles where such a rule could stand: **the design-side
+condition R-08 implies is true of every junction on every board.** Read as a
+property of the design rather than of the output, the second condition says a
+track end landing in a land wider than the track it carries is where a fillet
+belongs. `sharp_entry_anatomy` measures that population: **897 of the 897
+entries on the six fixtures enter a land wider than the entering track, and so
+do all 302 of the track ends.** That is what a land is for - a pad narrower
+than the track arriving at it is a pad the track covers - so the condition
+selects no subset of anything. A rule placed in front of the `teardrops`
+declaration would report every junction on six boards that no fabricator
+flags, which is the mirror image of the threshold that never fired: one is
+silent everywhere, the other speaks everywhere, and neither carries
+information. **A teardrop rule stands behind the declaration or it is not a
+rule.** What is left decidable is a board that states `teardrops` and an export
+path that does not carry them.
+
 Half the model is there - `teardrops` is a DSL property carrying length and
 width ratios (`crates/cypcb-parser/src/parser.rs`, `convert_teardrops`),
 reachable as `world.teardrops()` (`crates/cypcb-world/src/world.rs:207`), and
 the Gerber writer honours it. **The KiCad export does not:** `to_kicad` prints
 a warning that the fillets the design asks for are not in the board it writes,
-because KiCad keeps its own teardrop settings. So a board exported both ways
+because KiCad keeps its own teardrop settings. The warning sits inside
+`if let Some(teardrops) = world.teardrops()`, one per board, so a board that
+declares nothing is told nothing: **silence from the export does not mean the
+fillets are there, only that nobody asked for them.** So a board exported both ways
 ships two different pieces of copper, and only one of the two paths carries
 what the design stated.
 
@@ -1428,6 +1447,55 @@ In each case the declared or theoretical quantity is available, cheap and
 wrong, and the measured one takes work. A rule that takes the cheap number is
 not a weaker rule - it is a rule about something else. R-16 carries this as the
 fourth entry condition a new rule has to meet.
+
+### A condition the whole population satisfies `[S]`
+
+A condition nothing satisfies and a condition everything satisfies are the same
+defect wearing opposite signs. Neither separates anything, so neither can be
+evidence about a board, and both look like a working rule from the outside: one
+reports on every board and the other on none. Four readings taken between
+2026-09-11 and 2026-09-12, each measured before it was believed, are what put
+this here rather than an argument:
+
+- **Off the lattice.** None of the 14 sharp entries sits on a grid cell centre,
+  and neither do 772 of the 775 netted pads. The property is true of very nearly
+  the whole population, so it explains no part of it.
+- **Footprint rotation.** No footprint on any of the six fixtures is turned: 174
+  placements, two of which carry a rotation field and both read zero. A reader
+  that always answered zero would be indistinguishable from a correct one here,
+  so the fixtures cannot test the code that reads rotations either.
+- **Trace narrower than its land.** Every one of the 897 entries is narrower
+  than the land it enters, and so are all 302 that are a track's own end. That is
+  not a finding about these boards; it is what a land is for. A teardrop rule
+  placed in front of the declaration would have reported every junction on every
+  board.
+- **The threshold nothing could meet.** R-08 once required 90 degrees, which no
+  trace of any width can reach on a round land - 81.0 degrees for a 0.25 mm trace
+  into a 1.6 mm one. Same defect, other sign, and it stood in the file until
+  somebody worked the arithmetic.
+
+The test that catches all four is one number and its denominator, published
+together: how many things the rule examined and how many it reported. A rule
+that fires on none of N, or on all of N, has not graded the population - it has
+described it. The ratio is the diagnostic and neither end of it is a pass.
+
+The denominator is also what keeps the check honest when the measurement itself
+fails, and that is the sharper half of the rule. Deleting the board walk behind
+R-08 leaves its sharp count green on all six fixtures, because a count of
+violations with nothing under it passes hardest when nothing is measured; what
+fails is the floor under the examined count, on all six. **A number without a
+denominator beneath it passes most easily exactly when the measurement
+disappears.** That is why every rule this project implements publishes both, and
+why a green run with no denominator beside it is not a result that can be read.
+
+The repair for a constant clause is to move it rather than to delete it. A
+condition true of the whole population is often a definition rather than a
+check, and its place is in front of the rule, choosing the population, instead
+of inside it, pretending to grade one. R-08's teardrop half is the worked
+example: "the trace is narrower than its land" is true of all 897 entries, so it
+selects nothing when used as a fault and everything when used as a trigger, and
+it belongs behind the design's own declaration, where the population it defines
+is the boards that asked for fillets.
 
 ## What this project already measures
 
