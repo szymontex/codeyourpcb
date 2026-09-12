@@ -492,7 +492,44 @@ pub struct EntryReport {
 /// net crossing a land is a short, reported by `ClearanceRule`; measuring its
 /// entry angle would answer a question nobody asked about a board that is
 /// already wrong.
-pub fn measure_entries(world: &mut BoardWorld) -> (Vec<DrcViolation>, EntryReport) {
+/// One segment crossing one land's boundary, and everything the walk saw
+/// about it.
+///
+/// [`measure_entries`] is a fold over these. Two walks over the same board are
+/// two chances to disagree about which segments were entries at all, and a
+/// denominator is only worth having when nothing can quietly count a different
+/// set - so a diagnostic that asks a further question about the entries asks
+/// it of these records rather than by walking the board again.
+#[derive(Debug, Clone)]
+pub struct EntryRecord {
+    /// The component carrying the land.
+    pub entity: Entity,
+    /// `RefDes.pad`, spelled as a violation spells it.
+    pub pin: String,
+    /// The end of the segment that lies in the land's copper.
+    pub inside: Point,
+    /// The end that does not.
+    pub outside: Point,
+    /// The width this segment runs at, which is not always the trace's.
+    pub width: Nm,
+    /// Which trace on the board this segment belongs to. One `Trace` carries a
+    /// whole net's copper rather than one pad-to-pad route, so two entries
+    /// sharing this index are two lands entered by the same net.
+    pub trace_index: usize,
+    /// Where this segment sits in its trace.
+    pub segment_index: usize,
+    /// How many segments that trace has.
+    pub segment_count: usize,
+    /// What the measurement made of the crossing.
+    pub entry: Entry,
+}
+
+/// Every segment on the board that crosses a land's boundary, measured.
+///
+/// The walk: each placed component, each pad of its footprint that has a net,
+/// each trace on that net and on a layer the pad is on, each segment with one
+/// end in the land's copper and one end out of it.
+pub fn entry_records(world: &mut BoardWorld) -> Vec<EntryRecord> {
     let traces: Vec<Trace> = {
         let ecs = world.ecs_mut();
         let mut query = ecs.query::<&Trace>();
@@ -515,8 +552,7 @@ pub fn measure_entries(world: &mut BoardWorld) -> (Vec<DrcViolation>, EntryRepor
     };
 
     let library = world.footprints();
-    let mut violations = Vec::new();
-    let mut report = EntryReport::default();
+    let mut records = Vec::new();
 
     for (entity, refdes, footprint_ref, nets, position, rotation) in &components {
         let Some(footprint) = library.get(footprint_ref.as_str()) else {
@@ -540,7 +576,7 @@ pub fn measure_entries(world: &mut BoardWorld) -> (Vec<DrcViolation>, EntryRepor
                 .fold(0, |mask, bit| mask | bit);
             let mask = if mask == 0 { u32::MAX } else { mask };
 
-            for trace in &traces {
+            for (trace_index, trace) in traces.iter().enumerate() {
                 if trace.net_id != net {
                     continue;
                 }
@@ -549,7 +585,7 @@ pub fn measure_entries(world: &mut BoardWorld) -> (Vec<DrcViolation>, EntryRepor
                     _ => continue,
                 }
 
-                for segment in &trace.segments {
+                for (segment_index, segment) in trace.segments.iter().enumerate() {
                     let start_in = pad_contains(pad, position.0, rotation_deg, segment.start);
                     let end_in = pad_contains(pad, position.0, rotation_deg, segment.end);
                     let (inside, outside) = match (start_in, end_in) {
@@ -558,36 +594,62 @@ pub fn measure_entries(world: &mut BoardWorld) -> (Vec<DrcViolation>, EntryRepor
                         _ => continue,
                     };
 
-                    report.examined += 1;
                     // The segment's own width, not the trace's, when it has
                     // one. The stretch that enters a pad is exactly the one a
                     // `neck` declaration makes thinner, so a walk that reads
                     // the trace's width would measure the wrong wedge on the
                     // commonest entry this rule exists for.
                     let width = segment.width.unwrap_or(trace.width);
-                    let entry =
-                        entry_angle_placed(pad, position.0, rotation_deg, inside, outside, width);
-                    // `Entry::is_violation` owns the comparison against the
-                    // threshold. A second `millideg < ENTRY_ANGLE_MIN_MDEG`
-                    // here would be a two-place decision, which is how a
-                    // strict bound gets loosened in one place and left in the
-                    // other.
-                    match entry {
-                        Entry::NotChecked(_) => report.refused += 1,
-                        Entry::Measured { millideg } if entry.is_violation() => {
-                            report.violations += 1;
-                            violations.push(DrcViolation::pad_entry(
-                                *entity,
-                                format!("{}.{}", refdes.as_str(), pad.number),
-                                millideg,
-                                ENTRY_ANGLE_MIN_MDEG,
-                                inside,
-                            ));
-                        }
-                        Entry::Measured { .. } => {}
-                    }
+                    records.push(EntryRecord {
+                        entity: *entity,
+                        pin: format!("{}.{}", refdes.as_str(), pad.number),
+                        inside,
+                        outside,
+                        width,
+                        trace_index,
+                        segment_index,
+                        segment_count: trace.segments.len(),
+                        entry: entry_angle_placed(
+                            pad,
+                            position.0,
+                            rotation_deg,
+                            inside,
+                            outside,
+                            width,
+                        ),
+                    });
                 }
             }
+        }
+    }
+
+    records
+}
+
+/// The violations R-08 reports, and the denominator they came out of.
+pub fn measure_entries(world: &mut BoardWorld) -> (Vec<DrcViolation>, EntryReport) {
+    let mut violations = Vec::new();
+    let mut report = EntryReport::default();
+
+    for record in entry_records(world) {
+        report.examined += 1;
+        // `Entry::is_violation` owns the comparison against the threshold. A
+        // second `millideg < ENTRY_ANGLE_MIN_MDEG` here would be a two-place
+        // decision, which is how a strict bound gets loosened in one place and
+        // left in the other.
+        match record.entry {
+            Entry::NotChecked(_) => report.refused += 1,
+            Entry::Measured { millideg } if record.entry.is_violation() => {
+                report.violations += 1;
+                violations.push(DrcViolation::pad_entry(
+                    record.entity,
+                    record.pin,
+                    millideg,
+                    ENTRY_ANGLE_MIN_MDEG,
+                    record.inside,
+                ));
+            }
+            Entry::Measured { .. } => {}
         }
     }
 
@@ -1093,6 +1155,79 @@ mod tests {
             Point::from_mm(to_mm.0, to_mm.1),
         ));
         world.spawn_entity((trace,));
+    }
+
+    /// A trace of several segments, built one point at a time.
+    fn add_polyline(
+        world: &mut BoardWorld,
+        net: NetId,
+        layer: Layer,
+        width_mm: f64,
+        points: &[(f64, f64)],
+    ) {
+        let mut trace = Trace::new(net);
+        trace.layer = layer;
+        trace.width = Nm::from_mm(width_mm);
+        for pair in points.windows(2) {
+            trace.segments.push(TraceSegment::new(
+                Point::from_mm(pair[0].0, pair[0].1),
+                Point::from_mm(pair[1].0, pair[1].1),
+            ));
+        }
+        world.spawn_entity((trace,));
+    }
+
+    #[test]
+    fn a_record_says_where_in_its_trace_the_entering_segment_sits() {
+        // Two traces into the same land, both entering on their own last
+        // segment, one after a three segment run and one after none. Both
+        // arrive radially and both therefore read the same angle, so the
+        // position in the trace is the only thing that tells the records
+        // apart - which is what a question about segment order needs.
+        let (mut world, net) = board_with_land(
+            1.6,
+            (0.0, 0.0),
+            Rotation::ZERO,
+            vec![Layer::TopCopper, Layer::BottomCopper],
+        );
+        add_polyline(
+            &mut world,
+            net,
+            Layer::TopCopper,
+            0.2,
+            &[(4.0, 4.0), (6.0, 6.0), (8.0, 8.0), (10.0, 10.0)],
+        );
+        add_trace(
+            &mut world,
+            net,
+            Layer::TopCopper,
+            0.2,
+            (10.0, 15.0),
+            (10.0, 10.0),
+        );
+
+        let records = entry_records(&mut world);
+        assert_eq!(records.len(), 2, "two traces cross the land's boundary");
+
+        let mut seen: Vec<(usize, usize)> = records
+            .iter()
+            .map(|r| (r.segment_index, r.segment_count))
+            .collect();
+        seen.sort_unstable();
+        assert_eq!(
+            seen,
+            vec![(0, 1), (2, 3)],
+            "the three segment trace enters on its third segment and the one segment trace on its first"
+        );
+
+        // The two earlier segments of the long trace are not entries: neither
+        // end of them is in the land's copper, so the walk never reaches them.
+        assert!(
+            records
+                .iter()
+                .all(|r| r.segment_index + 1 == r.segment_count),
+            "both entries are the last segment of their own trace"
+        );
     }
 
     #[test]

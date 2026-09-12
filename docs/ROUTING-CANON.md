@@ -1588,7 +1588,11 @@ answers zero. Answering the rotation question needs a board with turned parts
 on it. These are not those boards.
 
 What the fourteen do share is their outline: **ten rounded rectangles and four
-oblongs, and not one plain rectangle.** The rectangle arithmetic above therefore
+oblongs, and not one plain rectangle** - and the four oblongs are square,
+1.000 x 1.000, 1.600 x 1.600 twice and 1.700 x 1.700, so `PadShape::Oblong`
+degenerates there to a circle with no straight side anywhere on it. The
+fourteen are therefore two populations, not one: ten lands with sides and four
+with none. The rectangle arithmetic above therefore
 reaches none of them directly - every one of these lands curves somewhere a
 trace can cross it, so each figure carries an `arcsin` term whose size depends
 on where on the boundary the edge left. The two repeated pairs survive that
@@ -1597,11 +1601,28 @@ turned to 0.300 x 1.500, `U1.4` and `U1.45` are identical 1.500 x 0.300 fingers,
 so each pair is the same outline twice and the repeated figure is a real
 repetition rather than two different measurements landing on one number.
 
-The cause is still not known, and the next question the measurement leaves is
-narrower than the two it closed: the pad centres are off-grid by up to half a
-cell, so every route ends by leaving the lattice, and whether the sharp entries
-are those final off-lattice segments is a question about segment order that
-nothing has asked yet.
+The third reading - that the sharp entries are the final off-lattice segments,
+the ones whose direction the grid never constrained - was measured on
+2026-09-12 and is out with the other two. **Of the 14 sharp entries 1 is the
+last segment of its trace, against 184 of all 897 entries; 3 are a first
+segment, against 189.** Sharp entries are if anything rarer at a trace's end
+than entries in general, and the entering segment is not a short stub either:
+its mean length is 2.743 mm where a clean entry's is 2.343 mm.
+
+**And the question was the wrong instrument, which the same run says: one trace
+on these boards enters as many as 95 lands.** A `Trace` here carries a whole
+net's copper, not one pad-to-pad route, so a segment's position in it was never
+the position of an approach - the first and last segments of a 201-segment net
+are two pads out of twenty, and the other eighteen are entered in the middle by
+construction. The numbers above are still worth having, because they say the
+sharp entries are not concentrated where a final-approach story needs them; but
+a test of that story needs a route, and nothing in this model retains one after
+`apply_routes`.
+
+So the cause is still not known, and three readings are closed rather than one.
+What is now established about the fourteen is negative and specific: not the
+grid, not the footprints' rotations, not the final segment - and shared by
+outline, which is the only positive thing the anatomy found.
 
 The census is held rather than remembered. `ENTRY_CENSUS` in
 `crates/cypcb-autoroute/tests/benchmark_validation.rs` carries all three

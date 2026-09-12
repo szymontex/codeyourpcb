@@ -26,7 +26,7 @@ use std::path::Path;
 
 use cypcb_autoroute::grid::RoutingGrid;
 use cypcb_autoroute::{route_board, AutorouteConfig};
-use cypcb_drc::rules::pad_entry::{measure_entries, pad_centre};
+use cypcb_drc::rules::pad_entry::{entry_records, pad_centre};
 use cypcb_drc::{preset_for_world, ruleset_for_world};
 use cypcb_kicad::{parse_kicad_pcb, BENCHMARKS};
 use cypcb_router::apply_routes;
@@ -66,6 +66,24 @@ impl PadFact {
     }
 }
 
+/// One segment that crossed a land's boundary, reduced to the two facts the
+/// segment-order question needs.
+struct EntryFact {
+    pin: String,
+    sharp: bool,
+    /// Whether it is the last segment of its own trace.
+    last: bool,
+    /// Whether it is the first.
+    first: bool,
+    /// Its position in the trace, and the trace's length in segments.
+    index: usize,
+    count: usize,
+    /// Which trace on its board carried it.
+    trace: usize,
+    /// The length of the entering segment itself, in millimetres.
+    length_mm: f64,
+}
+
 fn shape_name(shape: &PadShape) -> &'static str {
     match shape {
         PadShape::Circle => "circle",
@@ -76,7 +94,7 @@ fn shape_name(shape: &PadShape) -> &'static str {
 }
 
 /// Route a fixture, then describe every netted pad on it.
-fn pad_facts(fixture: &str) -> (i64, Vec<PadFact>) {
+fn pad_facts(fixture: &str) -> (i64, Vec<PadFact>, Vec<EntryFact>) {
     let parsed = parse_kicad_pcb(&fixture_path(fixture))
         .unwrap_or_else(|e| panic!("Failed to parse {}: {:?}", fixture, e));
     let mut world = parsed.world;
@@ -100,27 +118,38 @@ fn pad_facts(fixture: &str) -> (i64, Vec<PadFact>) {
     let grid = RoutingGrid::from_board(&mut world, &library, &rules, resolution)
         .expect("every benchmark fixture has a board entity");
 
-    // The reported set comes from the rule itself rather than a second walk:
-    // a diagnostic that measured its own entries could disagree with the
-    // census about which pads are sharp, which is the one thing it must not do.
-    let (violations, _report) = measure_entries(&mut world);
-    let sharp: Vec<(String, f64)> = violations
+    // The entries come from the rule's own walk rather than a second one, so
+    // the set this test describes and the set the census counts cannot differ.
+    let records = entry_records(&mut world);
+    let sharp: Vec<(String, f64)> = records
         .iter()
-        .map(|v| {
-            let pin = v
-                .message
-                .split(':')
-                .next()
-                .expect("a pad-entry message opens with the pin")
-                .to_string();
-            let degrees = v
-                .message
-                .split(" at ")
-                .nth(1)
-                .and_then(|rest| rest.split(' ').next())
-                .and_then(|number| number.parse::<f64>().ok())
-                .expect("a pad-entry message states the angle it measured");
-            (pin, degrees)
+        .filter(|r| r.entry.is_violation())
+        .filter_map(|r| {
+            r.entry
+                .millideg()
+                .map(|millideg| (r.pin.clone(), f64::from(millideg) / 1_000.0))
+        })
+        .collect();
+
+    // Where in its own trace each entering segment sits, and how long it is.
+    // A route that ends by leaving the lattice ends on a segment whose
+    // direction the grid never constrained, so "is the entry the last
+    // segment" is the question the grid measurement left behind.
+    let entries: Vec<EntryFact> = records
+        .iter()
+        .map(|r| EntryFact {
+            pin: r.pin.clone(),
+            sharp: r.entry.is_violation(),
+            last: r.segment_index + 1 == r.segment_count,
+            first: r.segment_index == 0,
+            index: r.segment_index,
+            count: r.segment_count,
+            trace: r.trace_index,
+            length_mm: {
+                let dx = (r.inside.x.raw() - r.outside.x.raw()) as f64;
+                let dy = (r.inside.y.raw() - r.outside.y.raw()) as f64;
+                (dx * dx + dy * dy).sqrt() / 1_000_000.0
+            },
         })
         .collect();
 
@@ -168,7 +197,7 @@ fn pad_facts(fixture: &str) -> (i64, Vec<PadFact>) {
             });
         }
     }
-    (resolution, facts)
+    (resolution, facts, entries)
 }
 
 #[test]
@@ -178,18 +207,32 @@ fn the_sharp_entries_against_every_pad_that_could_have_been_one() {
     let mut netted_total = 0usize;
     let mut netted_on_grid = 0usize;
     let mut netted_turned = 0usize;
+    let mut all_entries: Vec<EntryFact> = Vec::new();
+    let mut most_lands_on_one_trace = 0usize;
 
     for benchmark in BENCHMARKS {
         let label = benchmark
             .filename
             .strip_suffix(".kicad_pcb")
             .unwrap_or(benchmark.filename);
-        let (resolution, facts) = pad_facts(benchmark.filename);
+        let (resolution, facts, entries) = pad_facts(benchmark.filename);
 
         let on_grid = facts.iter().filter(|f| f.on_grid()).count();
         netted_total += facts.len();
         netted_on_grid += on_grid;
         netted_turned += facts.iter().filter(|f| f.part_rotation_deg != 0.0).count();
+        // How many lands one trace enters. One `Trace` carries a whole net's
+        // copper, so this is what says that a segment's position in a trace is
+        // not its position in an approach to a pad - and it is counted rather
+        // than assumed.
+        let mut per_trace: std::collections::BTreeMap<usize, usize> =
+            std::collections::BTreeMap::new();
+        for entry in &entries {
+            *per_trace.entry(entry.trace).or_default() += 1;
+        }
+        most_lands_on_one_trace =
+            most_lands_on_one_trace.max(per_trace.values().copied().max().unwrap_or(0));
+        all_entries.extend(entries);
 
         eprintln!();
         eprintln!(
@@ -218,6 +261,41 @@ fn the_sharp_entries_against_every_pad_that_could_have_been_one() {
         }
     }
 
+    let entries_total = all_entries.len();
+    let entries_last = all_entries.iter().filter(|e| e.last).count();
+    let sharp_entries: Vec<&EntryFact> = all_entries.iter().filter(|e| e.sharp).collect();
+    let sharp_last = sharp_entries.iter().filter(|e| e.last).count();
+    let mean = |set: &[&EntryFact]| -> f64 {
+        if set.is_empty() {
+            0.0
+        } else {
+            set.iter().map(|e| e.length_mm).sum::<f64>() / set.len() as f64
+        }
+    };
+    let clean_entries: Vec<&EntryFact> = all_entries.iter().filter(|e| !e.sharp).collect();
+    eprintln!();
+    let entries_first = all_entries.iter().filter(|e| e.first).count();
+    let sharp_first = sharp_entries.iter().filter(|e| e.first).count();
+    eprintln!(
+        "entering segments: last {entries_last} of {entries_total}, first {entries_first}; \
+         of the {} sharp ones, last {sharp_last}, first {sharp_first}",
+        sharp_entries.len()
+    );
+    for e in &sharp_entries {
+        eprintln!(
+            "  {:<8} segment {} of {}  length {:.3}mm",
+            e.pin,
+            e.index + 1,
+            e.count,
+            e.length_mm
+        );
+    }
+    eprintln!(
+        "entering segment length: sharp mean {:.3}mm, clean mean {:.3}mm",
+        mean(&sharp_entries),
+        mean(&clean_entries)
+    );
+
     let sharp_on_grid = sharp.iter().filter(|f| f.on_grid()).count();
     let sharp_turned = sharp.iter().filter(|f| f.part_rotation_deg != 0.0).count();
     eprintln!();
@@ -234,6 +312,8 @@ fn the_sharp_entries_against_every_pad_that_could_have_been_one() {
             sharp.iter().filter(|f| f.shape == outline).count()
         );
     }
+
+    eprintln!("most entries carried by one trace: {most_lands_on_one_trace}");
 
     // The census this is read beside. If the two disagree, one of them
     // measured a different board.
@@ -283,5 +363,27 @@ fn the_sharp_entries_against_every_pad_that_could_have_been_one() {
         sharp.iter().filter(|f| f.shape == "rect").count(),
         0,
         "every sharp land is a roundrect or an oblong, so a rectangle's edge arithmetic does not apply to any of them"
+    );
+
+    // The reading the grid measurement left: that the sharp entries are the
+    // final off-lattice segments, the ones whose direction the grid never
+    // constrained. They are not. Sharp entries are if anything rarer at a
+    // trace's end than entries in general, and the comparison is a ratio
+    // rather than a count because 1 of 14 means nothing without the 184 of
+    // 897 beside it.
+    assert!(
+        sharp_last * entries_total < entries_last * sharp_entries.len(),
+        "sharp entries are rarer at a trace's end than entries in general: {sharp_last} of {} against \
+         {entries_last} of {entries_total}",
+        sharp_entries.len()
+    );
+
+    // And the reason that comparison is the end of this line of questioning
+    // rather than the start of another: a trace here is a net's copper, not a
+    // pad-to-pad route, so a segment's position in it was never the position
+    // of an approach. One trace enters many lands.
+    assert!(
+        most_lands_on_one_trace > 1,
+        "one trace enters more than one land, so segment position is not approach position"
     );
 }
