@@ -70,6 +70,47 @@ fn a_design_that_states_its_drill_spans_is_told_they_are_dropped() {
         said.contains("Top to Bottom"),
         "and it has to name which one:\n{said}"
     );
+
+    // The warning stands for an absence, and until now nothing opened the board
+    // to see it. Asserting the absence directly would be worthless: "the file
+    // does not name a span" is satisfied by an empty file, by a truncated
+    // write, and by a file that was never created - it passes most easily
+    // exactly when the writer stops writing.
+    //
+    // So the claim is put positively, as a difference that is not there. The
+    // same design goes out twice, once stating the span and once with the line
+    // removed, and the two boards are compared. A format that could carry the
+    // statement would write something different for the two.
+    let plain_source = std::fs::read_to_string(example("rigid-flex.cypcb"))
+        .expect("the example is readable")
+        .lines()
+        .filter(|line| !line.trim().starts_with("drill Top to Bottom"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let plain = std::env::temp_dir().join("cypcb-kicad-no-spans.cypcb");
+    std::fs::write(&plain, &plain_source).expect("the board is writable");
+
+    let stated = scratch("spans-stated").join("board.kicad_pcb");
+    let silent = scratch("spans-silent").join("board.kicad_pcb");
+    to_kicad(&example("rigid-flex.cypcb"), &stated);
+    to_kicad(&plain, &silent);
+    let stated_text = std::fs::read_to_string(&stated).expect("the board was written");
+    let silent_text = std::fs::read_to_string(&silent).expect("the board was written");
+
+    // Both sides clear a floor in the same test, because two empty files are
+    // also identical and would pass the comparison below saying nothing.
+    for (label, text) in [("stated", &stated_text), ("silent", &silent_text)] {
+        assert!(
+            text.contains("(kicad_pcb") && text.matches("(segment").count() > 1,
+            "the {label} board is a board with copper on it, or the comparison \
+             below compares two absences"
+        );
+    }
+    assert_eq!(
+        stated_text, silent_text,
+        "the design that states its spans and the design that states none write \
+         the same KiCad board, which is what `dropped` means"
+    );
 }
 
 /// A design that asks for the fillets, built from an example rather than

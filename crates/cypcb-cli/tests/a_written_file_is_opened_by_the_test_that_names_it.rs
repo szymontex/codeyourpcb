@@ -108,6 +108,13 @@ const MESSAGE_ONLY_BY_RIGHT: &[(&str, &str)] = &[
         "a_board_with_no_stiffener_is_told_nothing_about_one",
         "the board declares no stiffener, so the silence is the whole subject",
     ),
+    // Its artefact half exists and lives beside it: the message and the files
+    // are two claims, and each is checked where it belongs.
+    (
+        "a_stated_stiffener_is_named_with_its_thickness_and_material",
+        "the message half, with the file half in \
+         `the_stiffener_reaches_exactly_one_file_and_it_is_not_the_copper`",
+    ),
 ];
 
 /// Tests where nothing on disk can carry the claim. Not the same as the above:
@@ -137,16 +144,7 @@ const NOTHING_TO_OPEN: &[(&str, &str)] = &[(
 /// not, asserting the two written files are identical. Both halves of any such
 /// difference have to clear a floor in the same test, because two empty files
 /// are also identical.
-const OWED_AN_ARTEFACT_READING: &[(&str, &str)] = &[
-    (
-        "a_design_that_states_its_drill_spans_is_told_they_are_dropped",
-        "the warning stands for spans absent from the board it wrote, and nothing opens it",
-    ),
-    (
-        "a_stated_stiffener_is_named_with_its_thickness_and_material",
-        "the warning names what the files cannot carry, and the files are not read",
-    ),
-];
+const OWED_AN_ARTEFACT_READING: &[(&str, &str)] = &[];
 
 fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))

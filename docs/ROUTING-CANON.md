@@ -1587,11 +1587,11 @@ the whole test directory, and reports what it found with its denominator:
 
 | | |
 |---|---|
-| tests driving a command that writes | 205 |
-| reaching the artefact | 184 |
-| message-only by right | 18 |
+| tests driving a command that writes | 206 |
+| reaching the artefact | 186 |
+| message-only by right | 19 |
 | nothing on disk can carry the claim | 1 |
-| owed a reading, named and counted | 2 |
+| owed a reading, named and counted | 0 |
 
 **The set of writing subcommands is read off the binary's own help, not listed
 in the check.** A subcommand writes when its output option documents a
@@ -1622,8 +1622,9 @@ design exported twice - once declaring the property, once not - asserting the
 two written files are identical. Both halves of any such difference have to
 clear a floor in the same test, because two empty files are also identical.
 
-Two of the four debts are paid, and both were paid positively rather than by
-asserting an absence. The job file a rigid-flex export writes is opened: it
+**The debt is paid in full and the list is empty.** All four were settled
+positively rather than by asserting an absence, and the last two changed what
+the canon says. The job file a rigid-flex export writes is opened: it
 holds **exactly one `MaterialStackup` array, with nine layers in it**, and
 neither of the design's two area names appears anywhere in the document - the
 count first, because "the job file does not mention an area" is equally true of
@@ -1633,6 +1634,24 @@ positive readings, because a silent importer and an importer that wrote nothing
 look identical from the message stream. A stack emptied in the job-file writer
 fails the first at "0 layers in it"; a pour that comes back as a keepout fails
 the second at "the design that came back carries the pour".
+
+The last two had no second export path, so they took the other form: **the same
+design exported twice, once stating the property and once with the line
+removed.** For the drill spans the two written KiCad boards are byte for byte
+identical, which is what "dropped" means said positively - and both sides clear
+a floor in the same test, because two empty files are also identical. Emptying
+the segment writer fails that floor rather than the comparison, which is the
+point of having it.
+
+**The stiffener answered differently, and corrected the canon.** Exporting the
+same design with and without the line leaves thirteen of the fourteen files
+identical and changes one: the job file's `BoardThickness`, by **0.200 mm** -
+exactly what the design declared. So the warning is right that the file set
+cannot carry a stiffener, and incomplete: its thickness is folded into the
+board's, and a fabricator quoting from those files reads the correct total with
+no idea why. That is not a fact anybody would have found by asserting an
+absence; it came from asking which file differed. Pinning the board thickness to
+a constant fails it at "exactly one file carries the stiffener at all: []".
 
 Three lists, each entry a name and its reason in one clause. Two of them are
 verdicts and the third is a debt: **`OWED_AN_ARTEFACT_READING` may fall and may
