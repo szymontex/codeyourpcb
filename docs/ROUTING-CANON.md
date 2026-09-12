@@ -1094,29 +1094,33 @@ row.** The live instance is relief on a pad above 3 A - detectable today, with
 no way to ask for a solid connection, so shipping it as a defect produces a row
 a designer can read and cannot answer.
 
-**4. Two violations measure a distance and throw it away.** Counted on
-2026-09-11 across every constructor in `crates/cypcb-drc/src/violation.rs`:
-seventeen kinds whose fault is a distance record it, fourteen whose fault is not
-a distance correctly record nothing, and **two take the measurement as a
-parameter and then set the field to `None`**:
+**4. Two violations measured a distance and threw it away, and both now record
+it.** Counted again on 2026-09-12 across every constructor in
+`crates/cypcb-drc/src/violation.rs`, all of them above the test module at
+`:1266`: nineteen set `actual: Some(`, sixteen set `actual: None` because their
+fault is not a distance, and **none takes a measurement and discards it**. The
+two that did:
 
-- `hole_to_hole` (`:617-627`) - `actual: Nm` at `:620` and `required: Nm` at
-  `:621`, both discarded at `:626-627`.
-- `solder_mask_bridge` (`:683-693`) - the same, at `:686-687` and `:692-693`.
+- `hole_to_hole`, now at `:625`, passes `Some(actual)` and `Some(required)`.
+- `solder_mask_bridge`, now at `:691`, the same.
 
-Both print the numbers into `message`, which is why no compiler warning ever
-flagged the unused parameters, and why the fault is invisible to a reader of the
-source but not to a reader of the output.
+Both printed the numbers into `message`, which is why no compiler warning ever
+flagged the unused parameters, and why the fault was invisible to a reader of
+the source but not to a reader of the output. That is the shape of defect this
+section exists to catch: the value was present, the field was empty, and the
+code compiled.
 
-The consequence is measurable rather than theoretical. `cypcb check` ranks
-violations worst-first by `shortfall(violation).unwrap_or(-1.0)`
+The consequence was measurable rather than theoretical, which is why it was
+worth fixing. `cypcb check` ranks violations worst-first by
+`shortfall(violation).unwrap_or(-1.0)`
 (`crates/cypcb-cli/src/commands/check.rs:228-244`), and its own comment says
 rules that measure no distance keep their order at the end, because a number
-invented for them would sort them among the ones that have one. So these two
-rows sort to the end beside the unrouted pins - **not because they measure
-nothing, but because they measured and did not record it.** A hole 0.05 mm from
-another where 0.15 mm was required is a two-thirds miss, and it sorts below a
-trace that missed by five percent.
+invented for them would sort them among the ones that have one. While the field
+was `None` those two rows sorted to the end beside the unrouted pins - not
+because they measured nothing, but because they measured and did not record it.
+A hole 0.05 mm from another where 0.15 mm was required is a two-thirds miss, and
+it sorted below a trace that missed by five percent. Both now sort on their own
+shortfall.
 
 Condition, narrower than "every violation carries a number", because most of the
 fourteen are right to carry none:
@@ -1140,10 +1144,10 @@ dimensions it means. In all three the number exists and lives only inside the
 rule this project wrote itself in the last week and it already falls into this
 category, which is the argument for deciding rather than leaving it.
 
-**In this repo, three conditions are unmet and countable:** severity has no
-field, rule identity is not carried on the row, and two distance-measuring
-constructors report no distance. The first two are each a one-field change; the
-third is two lines.
+**In this repo, two conditions are unmet and countable:** severity has no field,
+and rule identity is not carried on the row. Each is a one-field change. The
+third, two distance-measuring constructors reporting no distance, was closed on
+2026-09-12, and part 4 records what it cost while it stood.
 
 ### R-19 The flat clearance minimum `[P]`
 
@@ -1521,8 +1525,12 @@ sed -n '398,412p' crates/cypcb-autoroute/src/lib.rs
 # R-17: the snap truncates, which is why the error is a cell and not half of one
 sed -n '468,478p' crates/cypcb-autoroute/src/grid.rs
 
-# R-18: the two constructors that take a measurement and discard it
-sed -n '617,628p;683,694p' crates/cypcb-drc/src/violation.rs
+# R-18: the two constructors that used to discard their measurement - expect Some on both
+grep -n -A12 "pub fn hole_to_hole\|pub fn solder_mask_bridge" crates/cypcb-drc/src/violation.rs | grep "actual:"
+
+# R-18: the census in part 4, counted rather than recalled
+grep -c "actual: Some(" crates/cypcb-drc/src/violation.rs   # expect 19, all above the test module at :1266
+grep -c "actual: None" crates/cypcb-drc/src/violation.rs    # expect 16
 
 # R-18: what that costs - both rows sort to the end of the report
 sed -n '228,244p' crates/cypcb-cli/src/commands/check.rs
