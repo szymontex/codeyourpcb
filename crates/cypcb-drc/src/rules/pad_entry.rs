@@ -118,6 +118,52 @@ impl PadOutline {
     }
 }
 
+/// Whether a point lies in the land's copper, in the pad's own frame.
+///
+/// The boundary counts as inside. A trace ending perfectly on the edge of a
+/// land should not fall out of this rule and out of the exporter's teardrop at
+/// once, for one reason nobody chose.
+///
+/// This shares the corner radius with `boundary_of` rather than restating it,
+/// because a point the boundary walk thinks is outside and this thinks is
+/// inside is a wedge measured against a land the copper never entered.
+pub fn outline_contains(outline: PadOutline, p: Point) -> bool {
+    if outline.width.raw() <= 0 || outline.height.raw() <= 0 {
+        return false;
+    }
+    let w = outline.width.raw() as f64 / 2.0;
+    let h = outline.height.raw() as f64 / 2.0;
+    let x = (p.x.raw() as f64).abs();
+    let y = (p.y.raw() as f64).abs();
+    if let PadShape::Circle = outline.shape {
+        return x * x + y * y <= w * w + EPS_NM;
+    }
+    if x > w + EPS_NM || y > h + EPS_NM {
+        return false;
+    }
+    let r = corner_radius(outline, w, h);
+    if r <= 0.0 {
+        return true;
+    }
+    // Outside the corner's quarter only when the point is past both inner
+    // edges; anywhere else the straight sides already answered.
+    let (dx, dy) = (x - (w - r), y - (h - r));
+    if dx <= 0.0 || dy <= 0.0 {
+        return true;
+    }
+    dx * dx + dy * dy <= r * r + EPS_NM
+}
+
+/// The corner radius each shape rounds its rectangle by, in nanometres.
+fn corner_radius(outline: PadOutline, w: f64, h: f64) -> f64 {
+    let radius = match outline.shape {
+        PadShape::Circle | PadShape::Rect => 0.0,
+        PadShape::RoundRect { corner_ratio } => w.min(h) * 2.0 * f64::from(corner_ratio) / 100.0,
+        PadShape::Oblong => w.min(h),
+    };
+    radius.min(w).min(h).max(0.0)
+}
+
 /// One piece of a land's boundary.
 ///
 /// A tangent to a circle is the radius turned ninety degrees, so the arc case
@@ -341,13 +387,9 @@ fn boundary_of(outline: PadOutline) -> Vec<Boundary> {
             from: 0.0,
             to: std::f64::consts::TAU,
         }],
-        PadShape::Rect => rounded(w, h, 0.0),
-        PadShape::RoundRect { corner_ratio } => {
-            rounded(w, h, w.min(h) * 2.0 * f64::from(corner_ratio) / 100.0)
-        }
-        // A stadium: the flat sides run along the longer axis and the ends are
-        // half circles of the shorter half-dimension.
-        PadShape::Oblong => rounded(w, h, w.min(h)),
+        // Every other shape is a rectangle with its corners rounded by some
+        // radius, and `corner_radius` is the one place that says by how much.
+        _ => rounded(w, h, corner_radius(outline, w, h)),
     }
 }
 
@@ -607,6 +649,45 @@ mod tests {
         }
     }
 
+    /// The property the specification asked for, measured rather than
+    /// asserted - and it is false.
+    ///
+    /// Sweeping the arm across every direction from an end off the land's
+    /// centre line, the largest step between consecutive tenth-degree samples
+    /// is 42 500 millidegrees. A continuous measurement would step by about
+    /// the sample size. This is the same defect as the case below, sized: the
+    /// answer does not drift at a corner, it changes side.
+    #[test]
+    fn the_answer_is_not_continuous_as_the_arm_sweeps() {
+        let land = rect_land(2_000_000, 2_000_000);
+        let end = Point::from_raw(0, 422_650);
+        let mut previous: Option<u32> = None;
+        let mut largest_step = 0u32;
+        let mut refused = 0usize;
+        for step in 0..=900 {
+            let degrees = 0.5 + f64::from(step) * 0.1;
+            let radians = degrees.to_radians();
+            let arm = Point::from_raw(
+                end.x.raw() + (5_000_000.0 * radians.cos()).round() as i64,
+                end.y.raw() + (5_000_000.0 * radians.sin()).round() as i64,
+            );
+            match entry_angle(land, end, arm, Nm::new(250_000)).millideg() {
+                Some(measured) => {
+                    if let Some(before) = previous {
+                        largest_step = largest_step.max(before.abs_diff(measured));
+                    }
+                    previous = Some(measured);
+                }
+                None => {
+                    refused += 1;
+                    previous = None;
+                }
+            }
+        }
+        assert_eq!(refused, 0, "every direction from inside the land measures");
+        assert_eq!(largest_step, 42_500);
+    }
+
     /// A known limit, pinned rather than left to be discovered.
     ///
     /// The measurement asks which side of the land the trace's edge crosses,
@@ -643,6 +724,67 @@ mod tests {
         assert_eq!(just_after, Entry::Measured { millideg: 40_000 });
         assert!(!just_before.is_violation());
         assert!(just_after.is_violation());
+    }
+
+    /// The boundary counts as inside, on the straight side and on the corner
+    /// arc alike.
+    #[test]
+    fn a_point_on_the_boundary_is_inside() {
+        assert!(outline_contains(
+            rect_land(2_000_000, 1_000_000),
+            Point::from_raw(1_000_000, 0)
+        ));
+        assert!(outline_contains(
+            round_land(1_600_000),
+            Point::from_raw(800_000, 0)
+        ));
+        assert!(!outline_contains(
+            round_land(1_600_000),
+            Point::from_raw(800_001, 0)
+        ));
+    }
+
+    /// The corner of a rounded rectangle is the case a bounding box gets
+    /// wrong: the point is inside the rectangle and outside the copper.
+    #[test]
+    fn a_rounded_corner_is_not_its_bounding_box() {
+        let land = PadOutline {
+            shape: PadShape::RoundRect { corner_ratio: 25 },
+            width: Nm::new(2_000_000),
+            height: Nm::new(2_000_000),
+        };
+        // The radius is a quarter of the smaller dimension: 0.5 of 2.0.
+        assert!(outline_contains(land, Point::from_raw(0, 0)));
+        assert!(outline_contains(land, Point::from_raw(999_999, 0)));
+        assert!(!outline_contains(
+            land,
+            Point::from_raw(1_000_000, 1_000_000)
+        ));
+        // Just inside the corner arc, on its diagonal.
+        assert!(outline_contains(land, Point::from_raw(853_000, 853_000)));
+        assert!(!outline_contains(land, Point::from_raw(860_000, 860_000)));
+    }
+
+    /// An oblong is a stadium, so past the flat part it curves away well
+    /// before its bounding box does.
+    #[test]
+    fn an_oblong_ends_in_a_half_circle() {
+        let land = PadOutline {
+            shape: PadShape::Oblong,
+            width: Nm::new(3_200_000),
+            height: Nm::new(1_600_000),
+        };
+        assert!(outline_contains(land, Point::from_raw(1_600_000, 0)));
+        assert!(outline_contains(land, Point::from_raw(800_000, 800_000)));
+        assert!(!outline_contains(land, Point::from_raw(1_500_000, 700_000)));
+    }
+
+    #[test]
+    fn a_land_with_no_size_contains_nothing() {
+        assert!(!outline_contains(
+            rect_land(0, 1_000_000),
+            Point::from_raw(0, 0)
+        ));
     }
 
     #[test]
