@@ -173,4 +173,36 @@ fn nothing_comes_back_as_a_pour_that_connects_to_nothing() {
         "a region that bends is not a pour with a missing net, and the import \
          should have nothing to refuse:\n{said}"
     );
+
+    // Silence from the importer is not the design coming back whole, and the
+    // design is right there. It carries a pour, that pour names a net, and the
+    // checker reads the whole file back - three positive readings, because
+    // "the warning did not fire" is also what an import that wrote nothing
+    // looks like.
+    let design = std::fs::read_to_string(&back).expect("the import wrote a design");
+    let pours: Vec<&str> = design
+        .lines()
+        .map(str::trim)
+        .filter(|line| line.starts_with("zone "))
+        .collect();
+    assert!(
+        !pours.is_empty(),
+        "the design that came back carries the pour:\n{design}"
+    );
+    for pour in &pours {
+        let named = pour
+            .trim_start_matches("zone ")
+            .split_whitespace()
+            .next()
+            .unwrap_or("");
+        assert!(
+            !named.is_empty() && named != "{",
+            "and the pour names its net rather than coming back to no net: {pour}"
+        );
+    }
+    let read_back = cypcb(&["check", back.to_str().expect("a path that is text")]);
+    assert!(
+        !read_back.contains("poured to no net"),
+        "and the checker reading the written design finds no netless pour either:\n{read_back}"
+    );
 }

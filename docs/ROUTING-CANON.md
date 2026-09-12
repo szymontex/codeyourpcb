@@ -116,7 +116,7 @@ Source: nextpcb and pcbsync acid trap articles, read 2026-09-11. The threshold
 is an angle, not a dimension; no source gives a length.
 
 In this repo: **enforced.** `AcuteAngleRule` is in the registry
-(`crates/cypcb-drc/src/lib.rs:196`) and reports `ViolationKind::AcidTrap`;
+(`crates/cypcb-drc/src/lib.rs:197`) and reports `ViolationKind::AcidTrap`;
 every wedge count in this document came out of running it. What has no
 reader is the constant: `min_acid_trap`
 (`crates/cypcb-rules/src/constraints.rs:167`) is named nowhere outside its
@@ -1588,10 +1588,10 @@ the whole test directory, and reports what it found with its denominator:
 | | |
 |---|---|
 | tests driving a command that writes | 205 |
-| reaching the artefact | 182 |
+| reaching the artefact | 184 |
 | message-only by right | 18 |
 | nothing on disk can carry the claim | 1 |
-| owed a reading, named and counted | 4 |
+| owed a reading, named and counted | 2 |
 
 **The set of writing subcommands is read off the binary's own help, not listed
 in the check.** A subcommand writes when its output option documents a
@@ -1621,6 +1621,18 @@ output and absent in the other, or, where there is only one path, the same
 design exported twice - once declaring the property, once not - asserting the
 two written files are identical. Both halves of any such difference have to
 clear a floor in the same test, because two empty files are also identical.
+
+Two of the four debts are paid, and both were paid positively rather than by
+asserting an absence. The job file a rigid-flex export writes is opened: it
+holds **exactly one `MaterialStackup` array, with nine layers in it**, and
+neither of the design's two area names appears anywhere in the document - the
+count first, because "the job file does not mention an area" is equally true of
+an empty file. The design `from-kicad` writes is opened too: it **carries the
+pour, the pour names its net, and `check` reads the whole file back** - three
+positive readings, because a silent importer and an importer that wrote nothing
+look identical from the message stream. A stack emptied in the job-file writer
+fails the first at "0 layers in it"; a pour that comes back as a keepout fails
+the second at "the design that came back carries the pour".
 
 Three lists, each entry a name and its reason in one clause. Two of them are
 verdicts and the third is a debt: **`OWED_AN_ARTEFACT_READING` may fall and may
@@ -2217,13 +2229,13 @@ grep -n "pub fn fill_zone" crates/cypcb-world/src/copper.rs
 # R-13: the spatial query coverage would reuse, and its one caller today
 grep -n "query_region_on_layers" crates/cypcb-autoroute/src/scoring.rs
 
-# R-16: the registry's size, against the nine entries bucket 1 names.
+# R-16: the registry's size, against the ten entries bucket 1 names.
 # The second grep is anchored on the registry line rather than the rule name:
 # an unanchored search for those names answers 15, because each is also
 # declared and re-exported, and a check whose output contradicts its own
 # comment is worse than no check.
 grep -c "Box::new(rules::" crates/cypcb-drc/src/lib.rs   # expect 39
-grep -cE "Box::new\(rules::(ClearanceRule|AnnularRingRule|HoleToHoleRule|ViaDiameterRule|ViaDrillRule|TraceCurrentRule|PadLandRule|DrillAspectRatioRule|AcuteAngleRule)\)" crates/cypcb-drc/src/lib.rs   # expect 9
+grep -cE "Box::new\(rules::(ClearanceRule|AnnularRingRule|HoleToHoleRule|ViaDiameterRule|ViaDrillRule|TraceCurrentRule|PadLandRule|DrillAspectRatioRule|AcuteAngleRule|PadEntryRule)\)" crates/cypcb-drc/src/lib.rs   # expect 10
 
 # R-16: the acceptance classes that gate R-11, and the house presets that do not
 sed -n '56,63p' crates/cypcb-rules/src/presets/mod.rs
@@ -2314,7 +2326,7 @@ and the variant sort for R-10 and R-11; `nets_needing_reroute`, the tear block,
 and `query_region_on_layers` for R-13. For R-14 and R-15: `StitchPitch`,
 `StitchSpec::at`, `stitching_vias` and its doc comment, the `Via` struct's
 seven fields, `zone_stitch`, `thermal_gap`, `spoke_width` and
-`thermal_spokes`. For R-16 through R-18: the registry's 38 entries, the three
+`thermal_spokes`. For R-16 through R-18: the registry's 39 entries, the three
 `IpcClass` variants, the early return for an explicit resolution, the integer
 division in `nm_to_grid_x`, both constructors that discard their measurement,
 the ranking comment in `check.rs`, and both `diff_pair_skew` call sites.

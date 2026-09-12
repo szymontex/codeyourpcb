@@ -146,14 +146,6 @@ const OWED_AN_ARTEFACT_READING: &[(&str, &str)] = &[
         "a_stated_stiffener_is_named_with_its_thickness_and_material",
         "the warning names what the files cannot carry, and the files are not read",
     ),
-    (
-        "nothing_comes_back_as_a_pour_that_connects_to_nothing",
-        "the claim is about the design `from-kicad` wrote, and the design is not read",
-    ),
-    (
-        "the_job_file_says_it_is_flattening_the_stack",
-        "the job file is a written file and the claim is about its contents",
-    ),
 ];
 
 fn repo_root() -> PathBuf {

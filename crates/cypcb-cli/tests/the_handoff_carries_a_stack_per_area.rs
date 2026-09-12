@@ -221,6 +221,31 @@ fn the_job_file_says_it_is_flattening_the_stack() {
         "and points at the document that can:\n{said}"
     );
 
+    // The warning is about a file, and until now only the warning was read. The
+    // file says the same thing, and it says it positively: one `MaterialStackup`
+    // array, nine layers in it, and not one of the design's two area names
+    // anywhere in the document. The count comes first - "the job file does not
+    // mention an area" is true of an empty file, of a truncated write, and of a
+    // file that was never created.
+    let written = job_file("job-file");
+    assert_eq!(
+        written.matches("\"MaterialStackup\"").count(),
+        1,
+        "the job file holds exactly one stack, which is the whole difficulty:\n{written}"
+    );
+    let layers = written.matches("\"Type\"").count();
+    assert!(
+        layers >= 5,
+        "and that one stack really describes a build - {layers} layers in it"
+    );
+    for area in ["bend", "connector_end"] {
+        assert!(
+            !written.contains(area),
+            "the design states a build for `{area}` and the job file has no way to \
+             carry it, so the name is not in the file either"
+        );
+    }
+
     // A board whose layers stop nowhere is described by the job file exactly,
     // and says nothing about areas.
     let plain = RIGID_FLEX
@@ -231,4 +256,19 @@ fn the_job_file_says_it_is_flattening_the_stack() {
         !said.contains("states a different one per area"),
         "one stack, nothing to say:\n{said}"
     );
+}
+
+/// The job file a run of `gerbers` left behind, read from the directory that
+/// run wrote into.
+fn job_file(who: &str) -> String {
+    let out = std::env::temp_dir()
+        .join(format!("cypcb-stack-per-area-{who}"))
+        .join("out");
+    let path = std::fs::read_dir(&out)
+        .expect("the export wrote its directory")
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .find(|path| path.extension().and_then(|e| e.to_str()) == Some("gbrjob"))
+        .expect("the export wrote a job file");
+    std::fs::read_to_string(path).expect("the job file is readable")
 }
