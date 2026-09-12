@@ -40,6 +40,22 @@ use cypcb_world::PadShape;
 /// anything.
 const ON_GRID_NM: i64 = 1_000;
 
+/// How many clean entries a board needs before its median is judged rather than
+/// only printed.
+///
+/// Twenty is this project's convention and no source states it. Below that
+/// count the median is printed with its denominator beside it and no death line
+/// is applied to it: the verdict for that board is "not applicable", which is
+/// what this project says everywhere else that a number has too little under it
+/// to lean on. It is written down so a later reader argues with a choice rather
+/// than with an accident.
+const CLEAN_ENTRIES_TO_JUDGE_A_BOARD: usize = 20;
+
+/// Above this share of the radius, a clean entry's far edge is routinely off
+/// the land's axis - and a board whose median sits there is not a board whose
+/// sharp entries are a tail.
+const OFF_AXIS_DEATH_LINE: f64 = 0.5;
+
 fn fixture_path(filename: &str) -> std::path::PathBuf {
     let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
     manifest_dir
@@ -524,6 +540,7 @@ fn the_sharp_entries_against_every_pad_that_could_have_been_one() {
 /// flanks and a reading taken against a circle would be a reading of the wrong
 /// shape. `PadShape::Oblong` with equal sides degenerates to a circle, which is
 /// why the outline alone does not decide it.
+#[derive(Clone)]
 struct CircularReading {
     pin: String,
     sharp: bool,
@@ -649,9 +666,16 @@ fn median(values: &mut [f64]) -> Option<f64> {
 #[ignore = "slow: routes all six benchmark fixtures"]
 fn a_circular_land_reads_the_same_from_its_own_geometry() {
     let mut readings: Vec<CircularReading> = Vec::new();
+    let mut per_board: Vec<(&str, Vec<CircularReading>)> = Vec::new();
     for benchmark in BENCHMARKS {
+        let label = benchmark
+            .filename
+            .strip_suffix(".kicad_pcb")
+            .unwrap_or(benchmark.filename);
         let (_, _, entries) = pad_facts(benchmark.filename);
-        readings.extend(entries.iter().filter_map(circular_reading));
+        let board: Vec<CircularReading> = entries.iter().filter_map(circular_reading).collect();
+        readings.extend(board.iter().map(CircularReading::clone));
+        per_board.push((label, board));
     }
 
     let sharp = readings.iter().filter(|r| r.sharp).count();
@@ -712,26 +736,75 @@ fn a_circular_land_reads_the_same_from_its_own_geometry() {
         );
     }
 
-    // What the two claims behind this reading would be tested against. They are
-    // printed rather than asserted: this test establishes the instrument, and a
-    // verdict drawn from four lands on six boards needs its denominator read
-    // first.
+    // The reading per board, because a pool of six hides the one board whose
+    // entries are routinely off the axis - and that is the board that would
+    // teach something. The pooled row is kept underneath so the figure the
+    // canon already carries stays readable beside the rows it came from.
+    eprintln!();
+    eprintln!(
+        "{:<16} {:>7} {:>7} {:>8} {:>8} {:>6}  verdict",
+        "board", "entries", "clean", "median", "max", "sharp"
+    );
+    let mut boards_under_the_line = 0usize;
+    let mut boards_judged = 0usize;
+    let mut worst_board: Option<(&str, f64, usize)> = None;
+    for (label, board) in &per_board {
+        let mut ratios: Vec<f64> = board
+            .iter()
+            .filter(|r| !r.sharp)
+            .map(|r| r.p_far_mm / r.radius_mm)
+            .collect();
+        let clean = ratios.len();
+        let sharp_here = board.iter().filter(|r| r.sharp).count();
+        let largest = ratios.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+        let middle = median(&mut ratios);
+        let judged = clean >= CLEAN_ENTRIES_TO_JUDGE_A_BOARD;
+        if let (true, Some(middle)) = (judged, middle) {
+            boards_judged += 1;
+            if middle <= OFF_AXIS_DEATH_LINE {
+                boards_under_the_line += 1;
+            }
+            if worst_board.is_none_or(|(_, seen, _)| middle > seen) {
+                worst_board = Some((label, middle, clean));
+            }
+        }
+        eprintln!(
+            "{:<16} {:>7} {:>7} {:>8} {:>8} {:>6}  {}",
+            label,
+            board.len(),
+            clean,
+            middle.map_or("-".to_string(), |m| format!("{m:.3}")),
+            if clean == 0 {
+                "-".to_string()
+            } else {
+                format!("{largest:.3}")
+            },
+            sharp_here,
+            if judged { "judged" } else { "not applicable" }
+        );
+    }
+
     let mut clean_ratio: Vec<f64> = readings
         .iter()
         .filter(|r| !r.sharp)
         .map(|r| r.p_far_mm / r.radius_mm)
         .collect();
+    let pooled_clean = clean_ratio.len();
     let deepest = readings
         .iter()
         .filter(|r| r.sharp)
         .filter_map(|r| r.depth_mm.map(|d| d / r.radius_mm))
         .fold(f64::NEG_INFINITY, f64::max);
     eprintln!(
-        "median p_far/R over {} clean circular entries: {:?}; deepest sharp entry: {:.3} R",
-        clean_ratio.len(),
-        median(&mut clean_ratio),
-        deepest
+        "{:<16} {:>7} {:>7} {:>8} {:>8} {:>6}  pooled",
+        "all six",
+        readings.len(),
+        pooled_clean,
+        median(&mut clean_ratio).map_or("-".to_string(), |m| format!("{m:.3}")),
+        "-",
+        sharp
     );
+    eprintln!("deepest sharp entry: {deepest:.3} R");
 
     assert!(
         compared > 0,
@@ -762,5 +835,22 @@ fn a_circular_land_reads_the_same_from_its_own_geometry() {
         one_edge * 10 < readings.len(),
         "and it is the exception rather than the reading: {one_edge} of {}",
         readings.len()
+    );
+
+    // Falsifier one, per board rather than per pool. A pooled median can sit
+    // well under the line while one board's entries are routinely off the axis,
+    // and that board is the interesting one. The floor beneath it says how many
+    // boards were judged at all - without it, a change that dropped every board
+    // below the denominator would turn this green by measuring nothing.
+    assert!(
+        boards_judged > 0,
+        "at least one board carries {CLEAN_ENTRIES_TO_JUDGE_A_BOARD} clean circular \
+         entries, or this assertion is about nothing"
+    );
+    let (label, middle, clean) = worst_board.expect("a judged board exists");
+    assert_eq!(
+        boards_under_the_line, boards_judged,
+        "no judged board arrives off the axis as a matter of course: {label} reads \
+         {middle:.3} over {clean} clean entries against a line of {OFF_AXIS_DEATH_LINE}"
     );
 }

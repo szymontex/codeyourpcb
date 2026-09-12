@@ -1507,15 +1507,30 @@ exported file back with the code that wrote it, entering by a quieter door - the
 account is cheaper to read than the artefact, and it is always available.
 
 How large the population is was counted twice, by two implementations of one
-stated rule, and **the two disagree: 52, 39 and an interval of 18 to 23 against
-53, 46, 27 and 19.** The rule - a test function that drives a command that
-writes something, that asserts on the message stream, that opens no file - is
-not tight enough to pin a number, because "asserts on the message stream" and
-"opens a file" each admit more than one grep. So the honest reading is the one
-both runs agree on: **of the 523 command-line tests, dozens drive a writing
-command and never open what it wrote.** That is a population worth walking, and
-its exact size is not a figure this canon will publish until a single check
-computes it.
+stated rule, and the two disagreed - 52, 39 and an interval of 18 to 23 against
+53, 46, 27 and 19 - because "asserts on the message stream" and "opens a file"
+each admit more than one grep. The interval was then closed the only way it
+could be. **Twenty-seven tests, the union of both rules, were read one by one
+rather than counted: 17 are message tests by right** - help text, a refusal that
+writes nothing, or a command whose whole output is the stream - **4 should open
+a file and cheaply can, 2 cannot because the run under test is a dry run that
+writes nothing by contract, and 4 were detection errors** where the test reaches
+the artefact through a helper neither grep could see.
+
+So the population that needs work is four tests, and the number a gate can hold
+is the seventeen: **a new test that drives a writing command and never reaches a
+file joins that list by name, or it is a defect.** A list of names is what this
+can be checked as; a grep count is what it could not, and the reason is written
+here so nobody re-derives it - neither rule can see a helper defined in another
+file.
+
+One distinction the four detection errors force, before somebody reads this as a
+wider prohibition than it is. Three of them open the written artefact with this
+project's own reader - the importer reading what the exporter wrote, `check`
+reading a board `route` saved. That is two subsystems meeting, not one piece of
+code confirming itself, and it is a weaker reading than an outside reader only
+because both halves share this project's idea of the format. The defect named
+here is a check whose only evidence is the command's own account of what it did.
 
 The worked example is `the_export_file_count_is_what_export_writes` in
 `crates/cypcb-cli/tests/the_architecture_counts_what_is_there.rs`. It runs
@@ -1827,7 +1842,42 @@ reports the inner edge when the outer one leaves no crossing to measure - all
 killing the check. On the **171 clean entries the median `p_far / R` is 0.158**
 against a death line of 0.5, so arriving off-centre is not ordinary on these
 lands and the four sharp rows are a tail rather than the population: that claim
-was falsifiable, was tested against 171 rows, and stands. The second claim -
+was falsifiable, was tested against 171 rows, and stands - and it is now tested
+per board as well, because a pool of six can sit well under the line while one
+board's entries are routinely off the axis, and that board is the one that
+would teach something.
+
+| board | entries | clean | median | max | sharp | verdict |
+|---|---|---|---|---|---|---|
+| led_blink | 1 | 1 | 0.141 | 0.141 | 0 | not applicable |
+| stm32_breakout | 28 | 28 | 0.221 | 0.674 | 0 | judged |
+| multi_ic | 22 | 21 | 0.224 | 0.608 | 1 | judged |
+| shift_driver | 68 | 66 | 0.193 | 0.749 | 2 | judged |
+| plane_board | 11 | 11 | 0.076 | 0.189 | 0 | not applicable |
+| qfp_fanout | 45 | 44 | 0.090 | 0.675 | 1 | judged |
+| all six | 175 | 171 | 0.158 | - | 4 | pooled |
+
+Four boards are judged and none of the four exceeds the line; the highest
+median is 0.224. The `max` column is why the median is the statistic and not
+the extreme: single clean entries do arrive at 0.6 and 0.7 of the radius on
+three of these boards, and a rule read off the worst row would call every board
+off-axis. The median is not the gentler statistic, though - it is a different
+question. The maximum answers "is there an entry at the edge"; the median
+answers "is this what the board looks like". The claim under test is about the
+board, so it takes the median, and the maximum stands in the table already for
+the day somebody states a claim about existence.
+
+**Twenty clean entries is this project's convention and no source states it.**
+Below that count a board's median is printed with its denominator beside it and
+the death line is not applied to it: the verdict for that board is "not
+applicable", which is what this file says everywhere else that a number has too
+little under it to lean on. The threshold is written here so that a later reader
+argues with a choice rather than with an accident. Two of the six boards fall
+below it, so it is not decorative. A floor under the count of judged boards is
+asserted beside the line itself - without it, a change that pushed every board
+under the threshold would turn the check green by judging nothing.
+
+The second claim -
 that a sharp entry on a circle clips the rim rather than crossing the land -
 is tested as the share of its own chord the segment consumes,
 `depth / (2 * sqrt(R^2 - p_axis^2))`, with a death line of 0.5, because a
