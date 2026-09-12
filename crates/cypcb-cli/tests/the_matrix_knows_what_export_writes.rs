@@ -164,4 +164,44 @@ fn the_list_is_the_commands_own() {
         said.contains(".gbr"),
         "`--no-assembly` should keep the gerbers:\n{said}"
     );
+
+    // The name of this test is about what export writes and everything above it
+    // is about what export says under `--dry-run`. `--no-assembly` is a flag
+    // about files, so the run that settles it is a real one: the assembly files
+    // are absent from the disk, not only from the listing.
+    let real = std::env::temp_dir().join("cypcb-matrix-export-bare-run");
+    let _ = std::fs::remove_dir_all(&real);
+    let run = Command::new(env!("CARGO_BIN_EXE_cypcb"))
+        .arg("export")
+        .arg("--no-assembly")
+        .arg("--output")
+        .arg(&real)
+        .arg(&board)
+        .output()
+        .expect("the binary runs");
+    assert!(run.status.success(), "the export failed");
+    let mut names: Vec<String> = Vec::new();
+    let mut stack = vec![real.clone()];
+    while let Some(dir) = stack.pop() {
+        for entry in std::fs::read_dir(&dir).into_iter().flatten().flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+            } else if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                names.push(name.to_string());
+            }
+        }
+    }
+    assert!(
+        !names.is_empty(),
+        "the export wrote nothing, so its silence about a BOM means nothing"
+    );
+    assert!(
+        !names.iter().any(|name| name.ends_with("-BOM.csv")),
+        "`--no-assembly` wrote a BOM to disk: {names:?}"
+    );
+    assert!(
+        names.iter().any(|name| name.ends_with(".gbr")),
+        "and it still writes the gerbers: {names:?}"
+    );
 }

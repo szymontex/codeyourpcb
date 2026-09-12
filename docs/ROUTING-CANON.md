@@ -1519,7 +1519,35 @@ the artefact through a helper neither grep could see.
 
 So the population that needs work is four tests, and the number a gate can hold
 is the seventeen: **a new test that drives a writing command and never reaches a
-file joins that list by name, or it is a defect.** A list of names is what this
+file joins that list by name, or it is a defect.**
+
+Those four were then written, and writing them moved one of them and taught
+something with the fourth.
+
+- `the_export_file_count_is_what_export_writes` runs the same board through a
+  real export into the same directory and counts the files on disk against the
+  lines the dry run printed. **14 listed, 14 written.**
+- `export_resolves_imports_the_way_check_does` opens the gerber directory and
+  counts the copper: a run that resolved every import and then wrote nothing
+  used to pass it, because "did not refuse" is not "produced".
+- `route_says_how_many_vias_are_blind_or_buried` opens the board it just wrote
+  and reads the vias. Its sentence is that a two-layer board has none blind or
+  buried; the board says the same, with **no via naming an inner layer out of
+  the four it carries**, and the count is asserted first because that claim is
+  free on a board with no vias.
+- `the_ranked_line_says_how_many_contacts_the_violations_describe` **cannot open
+  anything, and finding out why is the useful part.** A default route ranks its
+  candidates and writes one: thirteen lines, one board. Twelve of the thirteen
+  describe copper that never reached a disk. It belongs with the dry runs, and
+  its name is already honest - it is about a line.
+
+`the_list_is_the_commands_own` was the one whose name was not. It asserted that
+`--no-assembly` keeps the BOM out of a `--dry-run` listing, under a name about
+what export writes; it now also runs a real export and reads the directory. The
+mutation that proves it is the whole argument of this section in one line: make
+`--no-assembly` apply to the listing and not to the write, and **every
+pre-existing assertion stays green while only the new one fires.** The command's
+account of itself was still perfectly correct. A list of names is what this
 can be checked as; a grep count is what it could not, and the reason is written
 here so nobody re-derives it - neither rule can see a helper defined in another
 file.

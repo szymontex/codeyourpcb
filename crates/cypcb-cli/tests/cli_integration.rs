@@ -429,6 +429,24 @@ fn export_resolves_imports_the_way_check_does() {
         "the imported modules should resolve, got:\n{stderr}"
     );
 
+    // "Did not refuse" is not "produced". The deliverable is copper, so the
+    // directory is opened and the copper counted: a run that resolved every
+    // import and then wrote nothing would pass the two assertions above.
+    let copper = std::fs::read_dir(out.join("gerber"))
+        .expect("an export that succeeded wrote a gerber directory")
+        .filter_map(Result::ok)
+        .filter(|entry| {
+            entry
+                .file_name()
+                .to_str()
+                .is_some_and(|name| name.ends_with("_Cu.gbr"))
+        })
+        .count();
+    assert!(
+        copper >= 2,
+        "a two-layer board exports copper for both sides, got {copper} files"
+    );
+
     let _ = std::fs::remove_dir_all(&out);
 }
 
@@ -527,6 +545,29 @@ fn route_says_how_many_vias_are_blind_or_buried() {
     assert!(
         !stderr.contains("blind or buried"),
         "a two-layer board has no such vias to report:\n{stderr}"
+    );
+
+    // The sentence above is about the board this command just wrote, and until
+    // now only the sentence was read. The board says it too: every via it
+    // carries is a through via, either by stating `Bottom to Top` or by saying
+    // nothing, and none names an inner layer. The count is asserted first,
+    // because "no via names an inner layer" is free on a board with no vias.
+    let written = std::fs::read_to_string(&out).expect("route wrote the board");
+    let vias: Vec<&str> = written
+        .lines()
+        .map(str::trim)
+        .filter(|line| line.starts_with("via "))
+        .collect();
+    assert!(
+        !vias.is_empty(),
+        "the routed board carries vias, or this reading is about nothing:\n{written}"
+    );
+    let inner: Vec<&&str> = vias.iter().filter(|line| line.contains("Inner")).collect();
+    assert!(
+        inner.is_empty(),
+        "a two-layer board has no via on an inner layer: {} of {} - {inner:?}",
+        inner.len(),
+        vias.len()
     );
 
     let _ = std::fs::remove_file(&out);

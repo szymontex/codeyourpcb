@@ -72,6 +72,27 @@ fn the_export_file_count_is_what_export_writes() {
         .count();
     assert!(listed > 5, "a dry run lists the files it would write");
 
+    // The dry run is what the document is checked against, and until now it was
+    // also the only thing this test read. A test named after what export writes
+    // opens what export wrote: the same board through a real run, into the same
+    // directory, counted on disk. Without it the document and the listing could
+    // agree perfectly while the command wrote something else.
+    let written = Command::new(env!("CARGO_BIN_EXE_cypcb"))
+        .arg("export")
+        .arg("-o")
+        .arg(&dir)
+        .arg("examples/blink.cypcb")
+        .current_dir(repo_root())
+        .output()
+        .expect("the binary runs");
+    assert!(written.status.success(), "the export failed");
+    assert_eq!(
+        files_under(&dir),
+        listed,
+        "the dry run listed {listed} files and the run wrote {}",
+        files_under(&dir)
+    );
+
     let doc = architecture();
     assert!(
         doc.contains(&format!("-> **{listed}** on")),
@@ -81,4 +102,23 @@ fn the_export_file_count_is_what_export_writes() {
             .collect::<Vec<_>>()
             .join("\n")
     );
+}
+
+/// Every file under a directory, at any depth - an export writes into
+/// subdirectories and a count of the top level would miss most of them.
+fn files_under(dir: &std::path::Path) -> usize {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return 0;
+    };
+    entries
+        .filter_map(Result::ok)
+        .map(|entry| {
+            let path = entry.path();
+            if path.is_dir() {
+                files_under(&path)
+            } else {
+                1
+            }
+        })
+        .sum()
 }
