@@ -293,9 +293,18 @@ fn outline_of(pad: &PadDef) -> PadOutline {
 /// One transform, used by the angle and by the containment test, because two
 /// copies of it are two chances for a point to be inside for one of them and
 /// outside for the other.
-fn into_pad_frame(pad: &PadDef, at: Point, rotation_deg: f64, p: Point) -> Point {
+/// Where a pad's centre lands once the part is placed and turned.
+///
+/// Public because a diagnostic that asks where the sharp entries sit needs
+/// the centre the measurement itself used. Computing it a second time in the
+/// caller is how two readings of the same pad start to disagree.
+pub fn pad_centre(pad: &PadDef, at: Point, rotation_deg: f64) -> Point {
     let offset = rotate_point(pad.position, rotation_deg);
-    let centre = Point::from_raw(at.x.raw() + offset.x.raw(), at.y.raw() + offset.y.raw());
+    Point::from_raw(at.x.raw() + offset.x.raw(), at.y.raw() + offset.y.raw())
+}
+
+fn into_pad_frame(pad: &PadDef, at: Point, rotation_deg: f64, p: Point) -> Point {
+    let centre = pad_centre(pad, at, rotation_deg);
     rotate_point(
         Point::from_raw(p.x.raw() - centre.x.raw(), p.y.raw() - centre.y.raw()),
         -rotation_deg,

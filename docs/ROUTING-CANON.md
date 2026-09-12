@@ -241,7 +241,7 @@ In this repo: enforced, and the only rule of this group that is. `AnnularRingRul
 `DrillAspectRatioRule` all sit in the `run_drc` registry, and the router reads
 `min_via_annular_ring` in `pathfinder_v2.rs`.
 
-### R-08 Trace entry into a land `[P]`
+### R-08 Trace entry into a land `[P]` figure, `[S]` measurement
 
 *Applies when:* a trace ends on a pad. Every routed board.
 
@@ -266,9 +266,60 @@ land reads 81.0 degrees. The rule would have fired on every trace into every
 round pad on a board with nothing wrong with it. 45 is what this rule's own
 first sentence says and what the sources above support.
 
-Sources: Altium DFM guidance on trace routing and solder joints; kingsunpcb
-trace angle guide; nwengineeringllc on teardrops under class 3. All read
-2026-09-11.
+What the reading depends on, because the two land shapes do not behave alike.
+The rule measures where a trace *edge* leaves the land, not where its axis does.
+On a round land of radius R the edges sit `w / 2` off the axis, so a trace of
+width w whose axis passes through the centre reads `90 - arcsin(w / 2R)` - 81.0
+degrees for 0.25 mm into a 1.6 mm land, and never 90 for any width above zero.
+On a rectangle there is no such offset: both edges are parallel to the axis and
+the sides are straight, so each edge crosses at exactly the angle the axis makes
+with the side it leaves by, `theta` against a side parallel to x and
+`90 - theta` against one parallel to y, and the rule takes the smaller of the
+two readings. **On a rectangle the reading does not depend on trace width at
+all.** Width decides only which side an edge leaves by - which is the whole of
+the discontinuity recorded in "What nothing measures", because the two
+candidates differ by `|90 - 2 theta|` and a flip therefore jumps by that
+quantity and nothing smaller. At the 39.9 degree arm the corner test pins,
+`|90 - 2 theta|` is 10.2 and the test reads 50 100 then 40 000, a step of
+10 100: the formula and the fixture agree to the sample spacing.
+
+A census of sharp entries therefore states each pad's outline beside its angle or
+it states nothing a reader can compare. A figure from a rectangle is the approach
+angle itself; a figure from the rounded end of an oblong is the approach angle
+less `arcsin(w / 2R)` at that end's radius; and a figure from the flat side of
+the same oblong is a rectangle's again. A cluster read across a mixture of those
+is an artefact of the mixture.
+
+Sources, and the number does not all come from one place. The figure: Altium DFM
+guidance on trace routing and solder joints; kingsunpcb trace angle guide;
+nwengineeringllc on teardrops under class 3, all read 2026-09-11, and the acid
+trap articles behind R-03 re-read 2026-09-12 against the question below. What
+those sources publish is 90 degrees as the floor for the angle between two runs
+of copper, and two 45-degree bends as the fix for a corner below it. **45 is
+published as the cure, not as a threshold on the angle this rule measures.** No
+source read here measures an angle between a trace edge and a land boundary at
+all, so applying 45 to that quantity is this project's - which is why the heading
+carries both tags.
+
+Searched again on 2026-09-12 for a threshold stated for a rectangular land
+specifically: three query families, on pad entry angle, on the acute angle at a
+trace-to-pad junction, and on fabricator DFM checklists. The only
+rectangular-specific published rule found is a shape rule with no number, quoted
+whole so a later reader can see that we looked and it was not there - PCBCart's
+SMT design requirements page, read 2026-09-12: "The traces connected with
+rectangular pads should be drawn from the center of the long side of pad with
+angle generation avoided." Zuken documents an acute-angle wiring check for
+CR-8000 and states neither a threshold nor whether pads are in its subject (read
+2026-09-12), which is the third tool-side search to return a rule with no number.
+
+One phrase collision, written down before it costs anything. A flex teardrop and
+pad-anchoring guide, read 2026-09-12, says "avoid 90-degree entries without large
+fillets" and, a clause later, "Traces enter pads perpendicularly or with large
+fillets; no acute angles". Its "90-degree entry" is the step in copper width
+where a narrow trace meets a wide land, which is why its cure is a fillet; this
+rule's 90 is the trace arriving square on, which the same page recommends. The
+previous unremarked change of frame is what put 90 into this rule's condition
+where 45 belonged.
 
 In this repo: the angle is enforced and the teardrop is not. `PadEntryRule`
 is in the registry
@@ -1513,10 +1564,44 @@ repeat a figure exactly on the same part - `U1.6` and `U1.18` both at 44.5,
 `U1.4` and `U1.45` both at 22.1, on the QFP that `qfp_fanout` exists to fan out.
 That is a pattern in how the router approaches a land, not scatter.
 
-The cause is not known and this paragraph does not name one. Two readings fit
-and neither has been tested: the router works on a grid at a track pitch and a
-pad centre need not sit on it, or the fixtures place parts where no approach on
-that grid can meet a land squarely.
+Both readings that fitted have now been measured, and both are out.
+`cargo test --release -p cypcb-autoroute --test sharp_entry_anatomy -- --ignored --nocapture`
+routes the six boards, rebuilds the grid each was routed on at the resolution
+the router resolves for it - 0.254 mm on five of them, 0.400 mm on multi_ic -
+and asks where every netted pad's centre sits relative to the centre of the cell
+it falls in.
+
+**No sharp entry is on a grid cell centre, and neither is almost any other pad:
+3 of 775.** The reading was that the router searches a lattice the pads do not
+sit on, and that is true - it is true of 772 pads, 761 of which are entered
+cleanly. A property the whole population has explains no subset of it, so the
+grid does not distinguish the fourteen and no repair aimed at it can be
+justified by them.
+
+The second reading is not refuted here but ruled out of court: **not one part on
+any of the six boards is turned.** Of the 174 footprints in the fixtures, two
+placements carry a rotation field at all and both of them read zero - counted
+with `grep -cE "^\s*\(at [-0-9.]+ [-0-9.]+ [-0-9.]+\)" *.kicad_pcb` in
+`tests/fixtures/benchmark`, which is outside the code under test because the
+test's own rotation figure cannot tell a correct reader from one that always
+answers zero. Answering the rotation question needs a board with turned parts
+on it. These are not those boards.
+
+What the fourteen do share is their outline: **ten rounded rectangles and four
+oblongs, and not one plain rectangle.** The rectangle arithmetic above therefore
+reaches none of them directly - every one of these lands curves somewhere a
+trace can cross it, so each figure carries an `arcsin` term whose size depends
+on where on the boundary the edge left. The two repeated pairs survive that
+test: `U1.6` is a 1.500 x 0.300 mm rounded rectangle and `U1.18` the same land
+turned to 0.300 x 1.500, `U1.4` and `U1.45` are identical 1.500 x 0.300 fingers,
+so each pair is the same outline twice and the repeated figure is a real
+repetition rather than two different measurements landing on one number.
+
+The cause is still not known, and the next question the measurement leaves is
+narrower than the two it closed: the pad centres are off-grid by up to half a
+cell, so every route ends by leaving the lattice, and whether the sharp entries
+are those final off-lattice segments is a question about segment order that
+nothing has asked yet.
 
 The census is held rather than remembered. `ENTRY_CENSUS` in
 `crates/cypcb-autoroute/tests/benchmark_validation.rs` carries all three
@@ -1741,9 +1826,20 @@ done
 
 # and why no net on them declares anything: constraints arrive by project file
 ls tests/fixtures/benchmark/*.kicad_pro 2>/dev/null | wc -l   # expect 0
+
+# R-08: the census, and the anatomy of what it counted. The second prints the
+# grid offset and the outline of every sharp land, and asserts the three
+# statements the section above makes about them.
+cargo test --release -p cypcb-autoroute --test benchmark_validation benchmark_all_fixtures_drc -- --ignored --nocapture
+cargo test --release -p cypcb-autoroute --test sharp_entry_anatomy -- --ignored --nocapture
+
+# no part on any fixture is turned: two placements carry a rotation, both zero
+grep -hE "^\s*\(at [-0-9.]+ [-0-9.]+ [-0-9.]+\)" tests/fixtures/benchmark/*.kicad_pcb
 ```
 
-Last verified: 2026-09-11, including R-10 through R-19 and the two sections on what a measurement is worth. Web sources were
+Last verified: 2026-09-12 for R-08 - its threshold's provenance, what the
+reading depends on, and the anatomy of the fourteen sharp entries - and
+2026-09-11 for R-10 through R-19 and the two sections on what a measurement is worth. Web sources were
 read on 2026-09-11, and every repository claim in those four rules was read
 against the working tree on the same day by opening the file rather than
 grepping for the name: `DEFAULT_TOLERANCE`, `is_90_bend`, `compute_composite`
