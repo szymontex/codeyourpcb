@@ -25,6 +25,7 @@ pub mod hole_to_hole;
 pub mod impedance;
 pub mod mounting_hole_clearance;
 mod neck_down;
+pub mod pad_entry;
 pub mod pad_land;
 pub mod paste_clearance;
 pub mod pour_island;

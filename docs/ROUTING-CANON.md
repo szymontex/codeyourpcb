@@ -244,16 +244,28 @@ Two failure modes, not one. The wedge traps etchant the way any acute corner
 does, and a drill that wanders breaks the trace off the land. A teardrop
 removes the internal angle and adds copper at the transition.
 
-Conditions: the count of trace-to-land junctions with an internal angle below
-90 degrees is 0; a teardrop is present wherever trace width is below land
+Conditions: the count of trace-to-land junctions whose angle between the trace
+edge and the land boundary, where that edge leaves the land, is below 45
+degrees is 0; a teardrop is present wherever trace width is below land
 diameter.
+
+The threshold was 90 and no board could have satisfied it. 90 is R-03's
+number, where the angle is between the two arms of a junction and a straight
+run reads 180. Here the angle is between an edge and a boundary, and on a
+round land of radius R a trace of width w crosses at `90 - arcsin(w / 2R)`,
+which is below 90 for every width above zero - a 0.25 mm trace into a 1.6 mm
+land reads 81.0 degrees. The rule would have fired on every trace into every
+round pad on a board with nothing wrong with it. 45 is what this rule's own
+first sentence says and what the sources above support.
 
 Sources: Altium DFM guidance on trace routing and solder joints; kingsunpcb
 trace angle guide; nwengineeringllc on teardrops under class 3. All read
 2026-09-11.
 
-In this repo: no rule checks either condition, but half the model is already
-there - `teardrops` is a DSL property with length and width ratios
+In this repo: the angle is measured but no rule is registered yet -
+`entry_angle` in `crates/cypcb-drc/src/rules/pad_entry.rs` returns it in
+millidegrees or names why it refused, and nothing calls it. The teardrop
+condition has no check at all, though half its model is already there - `teardrops` is a DSL property with length and width ratios
 (`crates/cypcb-parser/src/parser.rs:331-345`), reachable as `world.teardrops()`
 (`crates/cypcb-world/src/dsl.rs:922`), and honoured by the Gerber writer and
 the KiCad export.
