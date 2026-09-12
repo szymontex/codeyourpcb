@@ -72,12 +72,9 @@ fn a_design_that_states_its_drill_spans_is_told_they_are_dropped() {
     );
 }
 
-#[test]
-fn a_design_that_asks_for_teardrops_is_told_kicad_keeps_its_own() {
-    // KiCad has teardrops - per board, per net class and per pad since 7.0 -
-    // and keeps the settings in the project's design settings rather than in
-    // the board file. A request written into a `.kicad_pcb` would sit where
-    // nothing reads it, so the writer says so instead.
+/// A design that asks for the fillets, built from an example rather than
+/// written here so the two tests below cannot drift apart in what they asked.
+fn a_design_asking_for_teardrops() -> String {
     let source =
         std::fs::read_to_string(example("usb-diff-pair.cypcb")).expect("the example is readable");
     let asked = source.replace("    fab jlcpcb", "    fab jlcpcb\n    teardrops");
@@ -85,14 +82,92 @@ fn a_design_that_asks_for_teardrops_is_told_kicad_keeps_its_own() {
         asked, source,
         "the example carries the line this test edits"
     );
+    asked
+}
 
+/// The top copper the other path writes for the same design.
+fn top_copper(board: &Path, out: &Path) -> String {
+    let status = cypcb()
+        .arg("export")
+        .arg(board)
+        .arg("-o")
+        .arg(out)
+        .status()
+        .expect("the binary runs");
+    assert!(status.success(), "the export failed");
+    let gerber = out.join("gerber");
+    let top = std::fs::read_dir(&gerber)
+        .expect("the gerber directory is there")
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .find(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.ends_with("F_Cu.gbr"))
+        })
+        .expect("the top copper was written");
+    std::fs::read_to_string(top).expect("the top copper is readable")
+}
+
+#[test]
+fn a_design_that_asks_for_teardrops_is_told_kicad_keeps_its_own() {
+    // KiCad has teardrops - per board, per net class and per pad since 7.0 -
+    // and keeps the settings in the project's design settings rather than in
+    // the board file. A request written into a `.kicad_pcb` would sit where
+    // nothing reads it, so the writer says so instead.
     let board = std::env::temp_dir().join("cypcb-kicad-teardrops.cypcb");
-    std::fs::write(&board, &asked).expect("the board is writable");
+    std::fs::write(&board, a_design_asking_for_teardrops()).expect("the board is writable");
 
     let warnings = to_kicad(&board, &scratch("teardrops").join("board.kicad_pcb"));
     assert!(
         warnings.contains("teardrops") && warnings.contains("design settings"),
         "the writer names what it could not carry: {warnings}"
+    );
+}
+
+#[test]
+fn what_this_path_drops_is_not_in_the_board_it_writes() {
+    // The test above reads stderr and nothing else, which means the warning has
+    // been standing in for the absence it describes. A change that began
+    // writing fillets into the KiCad board while leaving the sentence in place
+    // would pass it and ship a sentence that is false. So this one opens both
+    // files.
+    //
+    // The subject is a pair - this design through this path - and not a land or
+    // a fillet, because that is the only level at which the question has an
+    // answer. One design, exported twice: the Gerber path carries what was
+    // asked for, the KiCad path does not, and the operator is told which.
+    let board = std::env::temp_dir().join("cypcb-pair-teardrops.cypcb");
+    std::fs::write(&board, a_design_asking_for_teardrops()).expect("the board is writable");
+
+    let kicad = scratch("pair-kicad").join("board.kicad_pcb");
+    let warnings = to_kicad(&board, &kicad);
+    let written = std::fs::read_to_string(&kicad).expect("the board was written");
+    let polygons = written.matches("gr_poly").count() + written.matches("fp_poly").count();
+
+    let gerber = top_copper(&board, &scratch("pair-gerber"));
+    let regions = gerber.lines().filter(|line| *line == "G36*").count();
+
+    assert!(
+        warnings.contains("teardrops"),
+        "a path that cannot carry a declared property has to say so: {warnings}"
+    );
+    // The limit of this half, said rather than hidden: it looks for a polygon,
+    // which is the shape a fillet takes in the Gerber the other path writes. A
+    // future writer emitting the same copper as something else would slip past
+    // it. That is why the warning is asserted beside this and not replaced by
+    // it - two weak readings of one claim, from different sides.
+    assert_eq!(
+        polygons, 0,
+        "the KiCad path says it drops the fillets, so the board it writes carries none"
+    );
+    // And the other half, without which the first is a statement about a writer
+    // that draws nothing at all: the same design through the export path does
+    // carry them, so the two outputs of one design really do differ.
+    assert!(
+        regions > 0,
+        "the same design through the export path carries the fillets: \
+         {regions} regions in the top copper against {polygons} polygons in the KiCad board"
     );
 }
 

@@ -1494,6 +1494,49 @@ selects nothing when used as a fault and everything when used as a trigger, and
 it belongs behind the design's own declaration, where the population it defines
 is the boards that asked for fillets.
 
+### A check that reads what the system says, not what it wrote `[S]`
+
+The same defect has now been found in two layers, and the second one hides
+better. A count without a denominator passes most easily exactly when the
+measurement disappears. **A message asserted without reading the output passes
+most easily exactly when the output stops matching the message.** Both are one
+thing: a check whose evidence is the system's own account of itself is the
+system checking itself, and it holds whatever the system does, which is the
+definition of a check that cannot fail. It is the same temptation as reading an
+exported file back with the code that wrote it, entering by a quieter door - the
+account is cheaper to read than the artefact, and it is always available.
+
+How large the population is was counted twice, by two implementations of one
+stated rule, and **the two disagree: 52, 39 and an interval of 18 to 23 against
+53, 46, 27 and 19.** The rule - a test function that drives a command that
+writes something, that asserts on the message stream, that opens no file - is
+not tight enough to pin a number, because "asserts on the message stream" and
+"opens a file" each admit more than one grep. So the honest reading is the one
+both runs agree on: **of the 523 command-line tests, dozens drive a writing
+command and never open what it wrote.** That is a population worth walking, and
+its exact size is not a figure this canon will publish until a single check
+computes it.
+
+The worked example is `the_export_file_count_is_what_export_writes` in
+`crates/cypcb-cli/tests/the_architecture_counts_what_is_there.rs`. It runs
+`export --dry-run`, counts the lines the command prints, and asserts the
+architecture document carries that count. Nothing opens the export directory,
+and under `--dry-run` nothing is written to open. The test is named after what
+export writes and its subject is what export says - a fair check of the document
+against the command, and not a check of either against the files. Other rows in
+that population are message tests by right: a help text, a refusal that writes
+nothing. That is why it is a population to look at rather than a list of faults,
+and why nobody should turn the count into a gate before the rows have been read
+one by one.
+
+The pattern done right is `what_this_path_drops_is_not_in_the_board_it_writes`,
+which exports one design through both paths and compares the two outputs against
+each other rather than against what either command said about itself.
+
+The rule this leaves for a new test is one sentence: **a test named after what a
+command writes opens what the command wrote**, and reads it with something that
+is not the writer. Where that is impossible, the test says so in its own name.
+
 ## What this project already measures
 
 ### Board score
@@ -1786,9 +1829,17 @@ against a death line of 0.5, so arriving off-centre is not ordinary on these
 lands and the four sharp rows are a tail rather than the population: that claim
 was falsifiable, was tested against 171 rows, and stands. The second claim -
 that a sharp entry on a circle clips the rim rather than crossing the land -
-had a death line of one radius and **the deepest of the four reaches 0.508 of
-one**, so nothing contradicted it. Four rows are four rows: that is not a
-distribution and this canon does not call it one. What can be said is exact -
+is tested as the share of its own chord the segment consumes,
+`depth / (2 * sqrt(R^2 - p_axis^2))`, with a death line of 0.5, because a
+segment that passes the deepest point of its own crossing is not clipping
+anything. **Over the 4 sharp entries among the 175, the four ratios are 0.375,
+0.154, 0.122 and 0.111**, so the deepest of them stops at 37 percent of its
+chord and nothing contradicted the reading. The threshold is a ratio rather
+than a length because a length does not carry: 0.15 mm is a third of the way
+across a 0.5 mm land and a ninth of the way across a 0.85 mm one. On these four
+the two forms agree row for row - the ratio changes no answer here and buys
+only that the next board can be measured against the same line. Four rows are
+four rows: that is not a distribution and this canon does not call it one. What can be said is exact -
 no sharp circular entry on these six boards passed the middle of the land it
 entered - and what cannot be said is that this is how circular lands behave.
 
@@ -1819,7 +1870,8 @@ recorded for R-05, R-13 and R-14.
 
 Every rule above grades an artefact: copper that exists, measured where it
 lies. The teardrop half of R-08 cannot be written that way, and the reason is
-now measured rather than argued - one example in 33 declares the property, the
+now measured rather than argued - one example declares the property, out of
+every example in `examples/`, the
 fillet is synthesised by the Gerber writer so the copper is not in the board the
 checker walks, and the design-side condition is true of all 897 entries on all
 six fixtures. What survives all three is not a statement about copper at all:
@@ -1837,7 +1889,12 @@ written.
   rule needs an execution - inputs, a command, and the file it produced.
 - **Its denominator is that pair set, and it is small enough to publish
   exactly.** How many designs declare the property, and how many paths claim to
-  carry it. Today that is one design of 33 and two paths, and a run that reports
+  carry it. That pair is counted rather than remembered -
+  `grep -rln teardrops examples/*.cypcb | wc -l` against
+  `ls examples/*.cypcb | wc -l`, which is the pair a reader re-runs - and what
+  is worth pinning is not either number but that the declaring population is
+  not empty, because a design-side check with no design to fire on has quietly
+  lost its subject. A run that reports
   no failures over one design is "not applicable", not "clean" - the same verdict
   this canon already requires of a rule with no subject.
 - **Its failure has no location.** There is no entity, no coordinate, no
@@ -1863,6 +1920,22 @@ both were wrong together. A writer rule compares the **declaration** against the
 output, in the output format's own terms, with a reader that is not the writer -
 and where no such reader exists, the honest form is the warning, stated once per
 declared property, rather than a check that cannot fail.
+
+**Its first instance is checked now, and writing the check found the gap the
+shape predicts.** Both halves already existed, in two files that did not know
+about each other: the Gerber path's fillets in
+`a_track_gets_a_fillet_where_it_meets_a_pad`, and the KiCad path's warning in
+`a_design_that_asks_for_teardrops_is_told_kicad_keeps_its_own`. The second read
+stderr and nothing else - **the warning was standing in for the absence it
+describes**, so a change that began writing fillets into the KiCad board while
+leaving the sentence in place would have passed it and shipped a sentence that
+was false. `what_this_path_drops_is_not_in_the_board_it_writes`, in
+`crates/cypcb-cli/tests/what_a_kicad_board_cannot_carry.rs`, exports one design
+through both paths and opens both files: **4 fillet regions in the top copper
+Gerber against 0 polygons in the KiCad board**, with the warning naming the
+property. Two mutations kill it - silencing the warning, and making
+`export_teardrops` draw nothing - and the second kills only this test, because
+it is the only one that reads the two outputs of one design side by side.
 
 ### Constants a fab preset promises and nothing checks
 
