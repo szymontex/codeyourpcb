@@ -719,3 +719,221 @@ fn a_measured_figure_says_when_it_was_measured() {
          that re-reads it."
     );
 }
+
+/// The directories a name cited in the canon may resolve into. `docs/` is not
+/// among them on purpose: a name that resolves only in prose resolves to the
+/// sentence that cited it, and the check would be reading its own input.
+const SEARCHED: &[&str] = &["crates", "viewer/src", "viewer/e2e", "scripts"];
+
+/// Directories that hold no source anybody wrote.
+const NOT_SOURCE: &[&str] = &["target", "node_modules", "pkg", "dist", ".git"];
+
+/// The prefixes that make a backticked span a path rather than a phrase.
+const PATH_ROOTS: &[&str] = &[
+    "crates/",
+    "viewer/",
+    "docs/",
+    "tests/",
+    "scripts/",
+    "examples/",
+];
+
+/// Four names the canon asserts are **not** in the rules - the section on what
+/// nothing measures says nothing keys on a bit rate or an edge rate. They are
+/// the positive control this check would otherwise lack: a walk that had
+/// stopped reading the tree would report every cited name resolved and these
+/// four absent, and the two halves cannot both be satisfied by reading nothing.
+/// They are looked for in the two rule crates rather than in the whole tree,
+/// because this file names them itself.
+const ASSERTED_ABSENT: &[&str] = &["bit_rate", "bitrate", "data_rate", "rise_time"];
+
+/// Below these the walk has lost the file rather than found it clean. The canon
+/// cites 67 paths and 48 long names today.
+const PATHS_FLOOR: usize = 50;
+const NAMES_FLOOR: usize = 40;
+
+/// Every file under `dir` that is not build output: its stem into `stems`, and
+/// its text onto `text` when it is source and is not `skip`.
+///
+/// `skip` is this file. Leaving it in cost the filename pass its whole reason to
+/// exist: the comment justifying that pass named `sharp_entry_anatomy`, the one
+/// test whose name appears in no other file, and the check then found the name
+/// in its own justification. The stem still goes in - what is excluded is the
+/// text, not the file.
+fn read_source_tree(dir: &Path, stems: &mut BTreeSet<String>, text: &mut String, skip: &Path) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let name = entry.file_name().to_string_lossy().to_string();
+        if NOT_SOURCE.contains(&name.as_str()) {
+            continue;
+        }
+        if path.is_dir() {
+            read_source_tree(&path, stems, text, skip);
+            continue;
+        }
+        if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
+            stems.insert(stem.to_string());
+        }
+        let source = path != skip
+            && matches!(
+                path.extension().and_then(|e| e.to_str()),
+                Some("rs" | "ts" | "tsx" | "js" | "sh" | "toml")
+            );
+        if source {
+            if let Ok(body) = std::fs::read_to_string(&path) {
+                text.push_str(&body);
+                text.push('\n');
+            }
+        }
+    }
+}
+
+/// The text between backticks, which is how this document cites anything.
+fn backticked(canon: &str) -> Vec<&str> {
+    canon.split('`').skip(1).step_by(2).collect()
+}
+
+fn is_long_name(token: &str) -> bool {
+    token.matches('_').count() >= 2
+        && token.starts_with(|c: char| c.is_ascii_lowercase())
+        && token
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
+}
+
+#[test]
+fn every_path_and_name_the_canon_cites_is_in_the_tree() {
+    let root = repo_root();
+    let canon =
+        std::fs::read_to_string(root.join("docs/ROUTING-CANON.md")).expect("the canon is there");
+
+    let itself = root.join(file!());
+    let mut stems = BTreeSet::new();
+    let mut text = String::new();
+    for dir in SEARCHED {
+        read_source_tree(&root.join(dir), &mut stems, &mut text, &itself);
+    }
+
+    // The checks this file defines are cited by name in the canon and exist
+    // nowhere else. They resolve to a function declared here - not to a mention
+    // of one, which is the difference between the two.
+    let own = std::fs::read_to_string(&itself).expect("this test file is readable");
+    let declared_here: BTreeSet<&str> = own
+        .lines()
+        .filter_map(|line| line.trim().strip_prefix("fn "))
+        .filter_map(|rest| rest.split('(').next())
+        .collect();
+
+    // The control is read from the two crates a rule would be written in, not
+    // from the whole tree. The first run of this check reported all four names
+    // present because it had read the constant on the line above them, which is
+    // the same defect as a document citing itself.
+    let mut rule_stems = BTreeSet::new();
+    let mut rule_text = String::new();
+    for dir in ["crates/cypcb-drc/src", "crates/cypcb-rules/src"] {
+        read_source_tree(&root.join(dir), &mut rule_stems, &mut rule_text, &itself);
+    }
+
+    let mut paths = 0usize;
+    let mut with_a_line = 0usize;
+    let mut globs = 0usize;
+    let mut missing_paths: Vec<String> = Vec::new();
+    let mut names: BTreeSet<&str> = BTreeSet::new();
+    for token in backticked(&canon) {
+        if token.contains(char::is_whitespace) {
+            continue;
+        }
+        if is_long_name(token) {
+            names.insert(token);
+            continue;
+        }
+        if !PATH_ROOTS.iter().any(|r| token.starts_with(r)) {
+            continue;
+        }
+        if token.contains('*') {
+            // `crates/*/src` is prose about a search, not a path to a file.
+            globs += 1;
+            continue;
+        }
+        // A `:line` or `:from-to` suffix is held by the line-number ceiling
+        // above; what this check asks is whether the file is still there.
+        let file = token.split(':').next().unwrap_or(token);
+        if file.len() != token.len() {
+            with_a_line += 1;
+        }
+        paths += 1;
+        if !root.join(file).exists() {
+            missing_paths.push(token.to_string());
+        }
+    }
+
+    // Three passes, because they answer three different questions and each one
+    // carries names the other two miss. `sharp_entry_anatomy` is a test file
+    // whose name appears inside no other file, so contents alone would call it
+    // missing; five of the checks over this document are declared in this file
+    // and named in no other, so a walk that skips this file to stay honest
+    // would call them missing too.
+    let mut unresolved: Vec<&str> = Vec::new();
+    let mut by_filename = 0usize;
+    let mut by_declaration = 0usize;
+    for name in &names {
+        if stems.contains(*name) {
+            by_filename += 1;
+        } else if declared_here.contains(*name) {
+            by_declaration += 1;
+        } else if !text.contains(*name) {
+            unresolved.push(name);
+        }
+    }
+
+    let present_but_asserted_absent: Vec<&str> = ASSERTED_ABSENT
+        .iter()
+        .copied()
+        .filter(|n| rule_stems.contains(*n) || rule_text.contains(n))
+        .collect();
+
+    eprintln!(
+        "paths cited: {paths} ({with_a_line} with a line number, {globs} globs skipped), \
+         missing {}; long names cited: {} (by filename {by_filename}, declared here \
+         {by_declaration}), unresolved {}; \
+         names the canon says are absent: {} of {} found in the tree",
+        missing_paths.len(),
+        names.len(),
+        unresolved.len(),
+        present_but_asserted_absent.len(),
+        ASSERTED_ABSENT.len()
+    );
+
+    assert!(
+        paths >= PATHS_FLOOR && names.len() >= NAMES_FLOOR,
+        "this check read {paths} paths and {} names, below the floors of {PATHS_FLOOR} and \
+         {NAMES_FLOOR}. Either the canon shrank by a third, or backticks stopped being how it \
+         cites things and the two clean reports below are over nothing.",
+        names.len()
+    );
+    assert!(
+        missing_paths.is_empty(),
+        "the canon points at a file that is not there: {missing_paths:#?}\n\
+         \n  A file moved in the code leaves its old path in this document, where nothing \
+         breaks and nobody looks - the same failure the rule-name check stops for symbols. The \
+         line number after the colon is not what this asks about; the file is."
+    );
+    assert!(
+        unresolved.is_empty(),
+        "the canon names something that is in no file and in no filename: {unresolved:#?}\n\
+         \n  Both passes ran: the name is not a file's own name under {SEARCHED:?}, and it is \
+         not in the text of any source there. If it was renamed, the sentence citing it now \
+         describes something that does not exist."
+    );
+    assert!(
+        present_but_asserted_absent.is_empty(),
+        "the canon says this workspace has no such thing and the workspace now does: \
+         {present_but_asserted_absent:#?}\n\
+         \n  These four are the control on the walk above, and they are also a claim in the \
+         section on what nothing measures. If one of them has been implemented, that section is \
+         wrong and the rule it excuses is now checkable."
+    );
+}
