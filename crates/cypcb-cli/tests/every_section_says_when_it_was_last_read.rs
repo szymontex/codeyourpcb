@@ -16,6 +16,7 @@
 //! found together with the section holding it - the document publishing its own
 //! weakest point instead of asserting collectively that it is sound.
 
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -187,5 +188,99 @@ fn line_numbers_in_this_file_only_fall() {
          quoted beside it. The ceiling falls as they go, and it does not rise. All of them, \
          in file order, so the new one can be found by comparing against the last run: {found:?}",
         found.len()
+    );
+}
+
+/// The one name in the canon that is not a registry entry.
+///
+/// `DrcRule` is the trait every entry implements, so it appears in prose about
+/// the shape of a rule rather than about a rule. Any other exception has to be
+/// argued for here, in the open, rather than added to a regex.
+const NOT_A_REGISTRY_ENTRY: &[&str] = &["DrcRule"];
+
+/// How many entries the registry must hold before this check believes it read
+/// the registry at all. It holds thirty-nine today.
+const REGISTRY_FLOOR: usize = 30;
+
+/// Every rule name in `Box::new(rules::...)`, which is the registry itself.
+fn registry() -> BTreeSet<String> {
+    let source = std::fs::read_to_string(repo_root().join("crates/cypcb-drc/src/lib.rs"))
+        .expect("the registry is there");
+    let mut names = BTreeSet::new();
+    for line in source.lines() {
+        let Some(rest) = line.trim().strip_prefix("Box::new(rules::") else {
+            continue;
+        };
+        if let Some(name) = rest.split(')').next() {
+            names.insert(name.to_string());
+        }
+    }
+    names
+}
+
+/// Every `SomethingRule` the canon's prose names, and where.
+fn names_in_canon(canon: &str) -> BTreeMap<String, BTreeSet<String>> {
+    let mut found: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    let mut section = String::from("(before the first heading)");
+    for line in canon.lines() {
+        if let Some(rest) = line.strip_prefix("### ") {
+            section = rest.replace('`', "");
+        } else if let Some(rest) = line.strip_prefix("## ") {
+            section = rest.replace('`', "");
+        }
+        let chars: Vec<char> = line.chars().collect();
+        let mut start = 0;
+        while start < chars.len() {
+            if !chars[start].is_ascii_uppercase() {
+                start += 1;
+                continue;
+            }
+            let mut end = start;
+            while end < chars.len() && (chars[end].is_ascii_alphanumeric()) {
+                end += 1;
+            }
+            let word: String = chars[start..end].iter().collect();
+            if word.len() > 4 && word.ends_with("Rule") {
+                found.entry(word).or_default().insert(section.clone());
+            }
+            start = end.max(start + 1);
+        }
+    }
+    found
+}
+
+#[test]
+fn every_rule_the_canon_names_is_one_the_registry_runs() {
+    let canon = std::fs::read_to_string(repo_root().join("docs/ROUTING-CANON.md"))
+        .expect("the canon is there");
+    let registry = registry();
+    assert!(
+        registry.len() >= REGISTRY_FLOOR,
+        "this check read {} registry entries and expected at least {REGISTRY_FLOOR}. Either          the registry shrank, or `Box::new(rules::` stopped being how an entry is written and          this check is now comparing the canon against nothing.",
+        registry.len()
+    );
+
+    let named = names_in_canon(&canon);
+    let unknown: Vec<(&String, &BTreeSet<String>)> = named
+        .iter()
+        .filter(|(name, _)| !registry.contains(name.as_str()))
+        .filter(|(name, _)| !NOT_A_REGISTRY_ENTRY.contains(&name.as_str()))
+        .collect();
+
+    eprintln!(
+        "rule names in the canon: {} against a registry of {}; {} allowed as not an entry",
+        named.len(),
+        registry.len(),
+        NOT_A_REGISTRY_ENTRY.len()
+    );
+
+    assert!(
+        unknown.is_empty(),
+        "the canon names a rule the registry does not run: {unknown:?}\n\
+         \n  A rule renamed in the code leaves its old name in this document, where nothing \
+         breaks and nobody looks. If the name is right and the rule is genuinely not a \
+         registry entry - a trait, a helper, a rule that was never registered - say so in \
+         NOT_A_REGISTRY_ENTRY with the reason, so the exception is argued rather than \
+         pattern-matched."
     );
 }
