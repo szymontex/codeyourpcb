@@ -2317,22 +2317,41 @@ it is the only one that reads the two outputs of one design side by side.
 
 ### Constants a fab preset promises and nothing checks
 
-*Verified: never*
+*Verified: 2026-09-13*
 
-Five fields in `crates/cypcb-rules/src/constraints.rs` have no reader anywhere
-outside their own crate: `min_acid_trap`, `max_stub_length`,
-`thermal_relief_spokes`, `max_vias_per_high_speed_net`, `diff_pair_gap`.
-Control for the method: `min_hole_to_hole` and
-`min_annular_ring` do show readers under the same grep, so the silence is real
-and not an artefact.
+**Eight of the 44 fields of `DesignConstraints` have no reader anywhere outside
+their own crate.** `min_acid_trap`, `max_stub_length`, `thermal_relief_spokes`,
+`max_vias_per_high_speed_net`, `diff_pair_gap`, `diff_pair_tolerance`,
+`max_copper_layers` and `max_current_per_width_x100`. Every one of them is set
+by four or five preset files: the fab states a number, the preset records it,
+and nothing reads it back.
+
+**This section said five until 2026-09-13, and the three it missed had never
+had a reader** - unlike every other stale claim found in this file this week,
+that list was not overtaken by new code, it was incomplete when it was written.
+It was found by walking the struct rather than by re-checking the five, which is
+the only direction that can test a list of absences for completeness. The
+command is in the verification block, and reading a figure out of it into this
+prose is what went wrong here the first time.
+
+**`max_copper_layers` is the loudest of the three.** A board declaring more
+copper layers than the chosen house can build passes `cypcb check` without a
+word.
+
+"No reader" means here that no `.rs` file outside `crates/cypcb-rules` mentions
+the field by name. A field read by destructuring, or defaulted past without
+being named, would slip through - the rule is stated so the count can be
+argued with. Control for the method: `min_annular_ring` answers 13 files and
+`min_hole_to_hole` 8 under the same grep, so the silence is real rather than an
+artefact of it.
 
 `crates/cypcb-rules/src/clearance_table.rs` implements the R-02 table as
 `voltage_clearance(voltage_v, coating)`. Outside its own file the module is
 named twice in the whole repository: once in a doc line and once as `pub mod`.
 
-The pattern is one pattern, not five accidents: a fab preset states a number,
-nothing enforces it, and `cypcb check` reports a clean board that the fab in
-question will not build.
+The pattern is one pattern rather than a handful of accidents: a fab preset
+states a number, nothing enforces it, and `cypcb check` reports a clean board
+that the fab in question will not build.
 
 ## Blocked on the model
 
@@ -2538,6 +2557,18 @@ done
 
 # and why no net on them declares anything: constraints arrive by project file
 ls tests/fixtures/benchmark/*.kicad_pro 2>/dev/null | wc -l   # expect 0
+
+# Constants a fab preset promises and nothing checks: every field a preset can
+# state, and how many files outside its own crate read it. The zero block is the
+# list that section names - read it from here rather than copying the count into
+# prose, which is how that list came to be three short.
+awk '/pub struct DesignConstraints/,/^}/' crates/cypcb-rules/src/constraints.rs \
+  | grep -oE '^    pub [a-z0-9_]+' | awk '{print $2}' \
+  | while read -r field; do
+      printf '%s %s\n' \
+        "$(grep -rln "$field" --include=*.rs crates/ | grep -cv '^crates/cypcb-rules/')" \
+        "$field"
+    done | sort -n
 
 # R-08: the census, and the anatomy of what it counted. The second prints the
 # grid offset and the outline of every sharp land, and asserts the three
