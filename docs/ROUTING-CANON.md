@@ -41,7 +41,7 @@ page, and a page read is not a tree read.
 
 ### R-01 Trace width against current and temperature rise `[R]`
 
-*Verified: never*
+*Verified: 2026-09-13*
 
 *Applies when:* a net declares a `current`. Silent on every net that does not, which today is every net on every fixture.
 
@@ -67,7 +67,7 @@ declares `current`.
 
 ### R-02 Conductor spacing against working voltage `[R]`
 
-*Verified: never*
+*Verified: 2026-09-13*
 
 *Applies when:* a net declares a working voltage. **Nothing can declare one**, so this rule is silent on every board - see "Blocked on the model".
 
@@ -252,7 +252,7 @@ again is the single total under another name.
 
 ### R-07 Annular ring and hole-to-hole spacing `[R]`
 
-*Verified: never*
+*Verified: 2026-09-13*
 
 *Applies when:* the board has holes - a via, a through-hole pad, a mounting hole.
 
@@ -276,10 +276,18 @@ edge-to-edge distance between any two holes at least 0.15 mm.
 Sources: summitinterconnect land size article; allpcb via-to-via spacing guide;
 Altium "Vias 101". All read 2026-09-11.
 
-In this repo: enforced, and the only rule of this group that is. `AnnularRingRule`,
-`PadLandRule`, `HoleToHoleRule`, `ViaDiameterRule`, `ViaDrillRule` and
-`DrillAspectRatioRule` all sit in the `run_drc` registry, and the router reads
-`min_via_annular_ring` in `pathfinder_v2.rs`.
+In this repo: enforced by six registry entries - `AnnularRingRule`,
+`HoleToHoleRule`, `ViaDiameterRule`, `ViaDrillRule`, `PadLandRule` and
+`DrillAspectRatioRule` - and the router reads `min_via_annular_ring` in
+`pathfinder_v2.rs`, in three places, so the constraint shapes the search as well
+as judging the result.
+
+**This paragraph used to end "and the only rule of this group that is", and that
+clause is gone because nothing in the section says what the group was.** Read as
+the canon's rules it is false - bucket 1 under R-16 names five that are
+enforced. Read as the six entries above it is a tautology. Neither reading can
+be checked, which is the defect this file describes two sections down under a
+rule with no subject, arriving here as a sentence rather than as a rule.
 
 ### R-08 Trace entry into a land `[P]` figure, `[S]` measurement
 
