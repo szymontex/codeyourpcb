@@ -257,10 +257,10 @@ rotted in the score section in a single week, and R-03's rule text carried
 it - `grep -n` prints one - not out of this document's memory of the file.
 
 **The rule is stated ahead of the file, and the file says by how much.** Forty
-three of them remain in the prose here, none inside the command blocks, and
+two of them remain in the prose here, none inside the command blocks, and
 `line_numbers_in_this_file_only_fall` holds that count as a ceiling: it may drop
-and it may not rise, and it has twice - forty eight when it was written, forty
-six a commit later. Writing the rule without the count would have been the
+and it may not rise, and it has three times - forty eight when it was written,
+then forty six and forty three as sections were read. Writing the rule without the count would have been the
 defect the rule is about - a claim about this repository that nothing checks and
 that was false in forty eight places the day it was written.
 
@@ -781,7 +781,7 @@ before today still lands where its author meant.
 
 ### R-13 Return path, the threshold that does not exist `[P]`
 
-*Verified: never*
+*Verified: 2026-09-13*
 
 *Applies when:* as R-05. A pour on the adjacent layer, and a net that declares a controlled impedance.
 
@@ -836,12 +836,18 @@ field solver and is out of scope for this project.
 
 1. *Coverage: measurable.* Pours are zones of kind `CopperPour` carrying a net
    and a layer mask, the reference layer for a trace is the one `ImpedanceRule`
-   already derives from the stackup through `CopperEnvironment`
-   (`crates/cypcb-drc/src/rules/impedance.rs:30`), and `query_region_on_layers`
+   already derives from the stackup through `CopperEnvironment` in
+   `crates/cypcb-drc/src/rules/impedance.rs`, and `query_region_on_layers`
    already answers what copper lies in a region - it is what `compute_crossings`
-   uses (`compute_layer_balance` in `crates/cypcb-autoroute/src/scoring.rs`). Measure the share of each
+   uses, in `crates/cypcb-autoroute/src/scoring.rs`. Measure the share of each
    segment's footprint that projects onto reference copper on the adjacent
    copper layer.
+
+   The parenthesis here named `compute_layer_balance` until 2026-09-13, which is
+   a different function in the same file. It arrived when a line number was
+   swapped for a symbol name the day before: **a name is only the more durable
+   reference when it is the right name**, and that one was never checked against
+   the file.
 2. *Split crossings: measurable.* Intersect the segment footprint with the
    boundary of the reference copper and count the crossings. One modelling limit
    belongs here rather than in a surprise later: a zone in this model is a
@@ -870,9 +876,20 @@ which waits on a signal speed the model does not hold, R-13 needs no new field
 and does not belong under "Blocked on the model". For every other net the two
 conditions are a report and not a fault.
 
-**On a two-layer board the strict form does not apply, and that is every
-fixture in this project's benchmark set.** Three consequences, stated so that
-nobody reads a four-layer rule onto a two-layer board:
+**On a two-layer board the strict form does not apply, and five of the six
+fixtures are two-layer.** The sixth, `multi_ic`, declares `In1.Cu` and `In2.Cu`
+and is a four-layer board - the sentence here read "that is every fixture" until
+2026-09-13, which was false and would have been caught by anyone counting the
+blind and buried vias the CLI reports on it.
+
+**The conclusion survives on a different fact, and it is a sharper one:
+`multi_ic` carries no zone at all.** The only pour in the benchmark set is on
+two-layer `plane_board`. So R-13 has no subject on any of the six, not because
+they are all two-layer, but because the one board with inner layers has no
+reference copper to measure against.
+
+Three consequences of the two-layer form, stated so that nobody reads a
+four-layer rule onto a two-layer board:
 
 - The reference is not a plane but a pour, and the pour is cut by the traces
   routed on that same layer. Coverage has to be measured against the filled
@@ -887,12 +904,16 @@ nobody reads a four-layer rule onto a two-layer board:
   four-layer rule.
 
 **In this repo:** nothing measures either condition - the same finding R-05
-records. The three pieces needed - pour geometry, stackup-derived reference
-layer, spatial index - are all present and none is called for this purpose.
+records. Three of the pieces are present and none is called for this purpose:
+pour geometry, the stackup-derived reference layer, the spatial index. **A
+fourth is required and it is not geometry:** this rule is gated on nets that
+declare an impedance, and without `impedance_ohms_x100` there is nothing to
+measure even with all three. The sentence here counted three and called them
+what was needed, two paragraphs after the section itself named the gate.
 
 ### R-14 Via stitching `[P]`
 
-*Verified: never*
+*Verified: 2026-09-13*
 
 *Applies when:* the board has two pours of one net on different layers, or a via that changes which pour is a signal's reference. Where the design declares no frequency the rule screens at a stated stand-in of 1 GHz and says so in every row - see part 5.
 
@@ -1019,7 +1040,7 @@ the rule working, not the rule missing.
 
 ### R-15 One component, one connection style `[P]`
 
-*Verified: never*
+*Verified: 2026-09-13*
 
 *Applies when:* a two-terminal component has both pads inside pours. A board with no pour says nothing here.
 
@@ -1057,8 +1078,12 @@ two-terminal component whose pads both sit in pours, both pads have the same
 connection style.** One relieved and one solid is a defect even where each pad
 on its own satisfies R-09.
 
-This is also the only rule in this canon that looks at a **component** rather
-than at a feature of copper. Every other condition here - clearance, angle,
+This is the only rule here whose **condition** spans two pads of one part, and
+that is a narrower claim than the one this paragraph made until 2026-09-13. It
+said this was the only rule that looks at a component at all, and that is false
+twice: R-08 measures through `entry_angle_placed(pad, at, rotation)`, which is
+the part's position and turn, and R-17 takes pad positions from footprints laid
+out by the same two. Both were written after this sentence was. Every other condition here - clearance, angle,
 ring, coverage, spacing - is a property of one feature or of a pair of
 features. Symmetry is a property of a pair of pads that belong to one part, so
 a registry built to walk copper cannot express it without walking components
