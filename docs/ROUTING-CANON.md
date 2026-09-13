@@ -152,10 +152,16 @@ and that is deleted rather than corrected, in `127ea2c`.** There are three ways 
 the only true one is empty. Read as every figure this file calls a wedge, it is
 false twice over: the 50 100, 40 000 and 42 500 millidegrees beside a corner
 come from `entry_angle` in `rules/pad_entry.rs`, which is R-08's geometry, and
-R-10's 53 wedges of 58 scanned come from
+R-10's wedge count comes from
 `crates/cypcb-autoroute/tests/can_a_wedge_be_cut_where_it_stands.rs`, which
 mentions neither this rule nor `acid_trap` nor `is_acute` and computes the
-geometry itself. Read as every count of acute junctions on the benchmark boards,
+geometry itself. **This sentence carried "53 wedges of 58 scanned" until
+2026-09-13, which is the shape R-10 records two hundred lines below as a defect
+it had already repaired** - the scan has one counter, 53 was its answer on
+2026-09-11 and 58 is the count today. The figure is gone rather than corrected,
+because what this paragraph needs is where the number comes from and not what it
+is: **a fact copied into a second section is a fact that has to be repaired
+twice, and the copy is always the one that still reads as current.** Read as every count of acute junctions on the benchmark boards,
 it is narrower and unsupported: nothing in this file or its verification block
 ties those figures to a run of this rule. Read as the wedge counts in this
 section, it is true and says nothing, because this section states none.
