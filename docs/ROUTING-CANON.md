@@ -1240,7 +1240,7 @@ bucket 2 from bucket 3 in practice, not from principle.
 
 ### R-17 The grid the router actually searches `[S]`
 
-*Verified: 2026-08-05*
+*Verified: 2026-09-13*
 
 *Applies when:* always, before routing. It needs pad positions and a fab table, both of which exist on every board.
 
@@ -1257,10 +1257,16 @@ houses' own figures, carried from the fab presets and sourced where R-19
 sources them; what is this project's there is the arithmetic on them and the
 rule it suggests.
 
-Every other rule here is about copper. This one is about the tool, and it
-belongs in the canon because entry condition 1 puts it there: the grid is
-derived from the fab table, which is as much a property of the board as the
-clearance it comes from. A board whose pads collide on the grid is a board
+This rule is about the tool rather than about copper, and it belongs in the
+canon because entry condition 1 puts it there: the grid is derived from the fab
+table, which is as much a property of the board as the clearance it comes from.
+
+**It said "every other rule here is about copper" until 2026-09-13, and that
+was false the day it was written.** Four other sections say otherwise in their
+own *applies when* lines - R-06 is about the shape of the output, R-12 about the
+router, R-16 about this canon reading itself, R-18 about a row of a report - and
+two of those four, R-16 and R-18, arrived in the very commit that added this
+sentence. A board whose pads collide on the grid is a board
 fault; the grid is only how it is detected.
 
 **1. What the resolution is a function of.** One cell is one legal track
@@ -1268,8 +1274,15 @@ position. `resolve_grid_resolution` (`crates/cypcb-autoroute/src/lib.rs:372`)
 takes the fab table for net 0 and returns `min_trace_width + min_clearance`,
 floored at 10 um. The comment records the measurement that settled it: a
 half-clearance grid let two nets sit in adjacent cells whose copper overlapped -
-238 DRC violations in 127.8 s against 124 in 9.7 s at track pitch, same board,
-both fully routed.
+238 DRC violations in 127.8 s against 124 in 9.7 s at track pitch, both fully
+routed, on `stm32_breakout` - the board the comment names and this paragraph
+used not to.
+
+**Neither figure can be re-run, and that is worth saying rather than leaving a
+reader to hunt for a command.** Half the measurement is of a half-clearance grid
+the code no longer has. It is archaeology, and the honest citation is the commit
+and day it was taken: `a0ee08f`, 2026-08-05, which is what the source line below
+already gives.
 
 `resolve_adaptive_grid_resolution` (`:398`) then applies three things in order.
 An explicit `grid_resolution_nm` **returns immediately**, before anything else
@@ -1305,7 +1318,13 @@ that column. Stated as a fact about the grid, not as a proposal.
 **3. Nothing published fixes a router grid against the minimum feature size.**
 Searched 2026-09-11. The published grid guidance is about the design grid a
 designer places parts on, not the search grid a router walks. One line, and no
-further looking - that answer has now been the right one three times.
+further looking.
+
+That sentence used to end "and that answer has now been the right one three
+times". Nothing in this file or this repository records those three occasions,
+so the tally cannot be checked by anyone reading either - which is the same
+objection this canon makes to a count with no denominator, arriving as a
+reassurance instead of a measurement.
 
 **4. The rule this suggests, and this project can evaluate it today.**
 
