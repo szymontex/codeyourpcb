@@ -257,9 +257,10 @@ rotted in the score section in a single week, and R-03's rule text carried
 it - `grep -n` prints one - not out of this document's memory of the file.
 
 **The rule is stated ahead of the file, and the file says by how much.** Forty
-six of them remain in the prose here, none inside the command blocks, and
+three of them remain in the prose here, none inside the command blocks, and
 `line_numbers_in_this_file_only_fall` holds that count as a ceiling: it may drop
-and it may not rise, and it has - it stood at forty eight when it was written. Writing the rule without the count would have been the
+and it may not rise, and it has twice - forty eight when it was written, forty
+six a commit later. Writing the rule without the count would have been the
 defect the rule is about - a claim about this repository that nothing checks and
 that was false in forty eight places the day it was written.
 
@@ -460,7 +461,7 @@ what the design stated.
 
 ### R-09 Thermal relief at a pad in a pour `[P]`
 
-*Verified: never*
+*Verified: 2026-09-13*
 
 *Applies when:* a pad sits inside a pour on its own net. A board with no pour says nothing here.
 
@@ -501,13 +502,21 @@ which asserts `pour_thermal_gap` against `thermal_relief_gap` and
 
 This went unseen for a long time because the two shipped export presets both
 publish 0.254 mm for gap and for spoke width, which is exactly what
-`PourOptions::default()` uses (`crates/cypcb-core/src/pour.rs:242-261`). The
-drawn copper agreed with the published table by coincidence, not by wiring, and
-a house publishing anything else would have been silently ignored.
+`PourOptions::default()` uses. The drawn copper agreed with the published table
+by coincidence, not by wiring, and a house publishing anything else would have
+been silently ignored.
+
+**And the thing this section never said, which a reader would take from its
+silence: no rule in the registry checks a thermal relief at all.** Everything
+above is about the copper the export path draws. Nothing walks a board and asks
+whether a pad in a pour has spokes, how wide they are, or how much gap surrounds
+them - `grep -ci thermal crates/cypcb-drc/src/lib.rs` answers 0 against
+thirty-nine entries. "Partly enforced" was true of the drawing and read as
+though it covered the checking.
 
 ### R-10 Mitring an acute junction `[P]`
 
-*Verified: never*
+*Verified: 2026-09-13*
 
 *Applies when:* R-03 reported an acute junction. This rule is what to do about one, not how to find it.
 
@@ -533,11 +542,19 @@ doubling back on itself. That is a path defect, not a corner defect, and the
 connection is rerouted rather than mitred; cutting it hides the detour and
 keeps it.
 
-**What this project measured.** 53 wedges across the six benchmark boards,
-every one of them at exactly 45 degrees. Of 58 wedges scanned for room, 58
-clear the `1.5 * w` floor; the median shortest arm is `4.00 * w`, and the
-per-board medians are 2.00, 5.66, 11.31, 2.00, 2.00 and 2.83 times the trace
-width. This is this project's own measurement, the same status as the split
+**What this project measured.** 58 wedges across the six benchmark boards on
+2026-09-13, all 58 clearing the `1.5 * w` floor, with a median shortest arm of
+`4.00 * w` and per-board medians of 2.00, 5.66, 11.31, 2.00, 2.00 and 2.83
+times the trace width.
+
+**This paragraph used to give two numbers, 53 and 58, side by side with nothing
+saying how the populations differed.** They do not differ: the scan has one
+counter, and 53 was its answer on 2026-09-11. The reader had three readings
+available and no way to choose - one figure stale, two populations never
+described, or two dates never given - which is the same defect as a list that
+claims to be complete and has been overtaken. What holds the figure is a floor,
+`total >= 50`, so the number in this prose is a snapshot and the assertion
+beneath it is deliberately looser. This is this project's own measurement, the same status as the split
 behind `shorts` and `clearance_contacts` in R-06, and it is a snapshot of the
 router's defaults rather than a constant - the command that reproduces it is in
 the verification block, and `stop_at_own_copper` moves it.
@@ -621,7 +638,7 @@ the same finding as part 1 seen from the tool side.
 
 ### R-11 Acceptance classes `[R]`
 
-*Verified: never*
+*Verified: 2026-09-13*
 
 *Applies when:* the board is graded. The full four-tier form needs a declared acceptance class; for a board graded by a house table see part 4 below.
 
@@ -654,7 +671,12 @@ usually quoted, conductor width and spacing per class, is not carried here:
 searching on 2026-09-11 returned vendor pages asserting that Class 3 requires
 larger widths and spacing and none that gives the figure.
 
-**Which class each rule in this canon belongs to.** One of eleven is graded by
+**Which class the first eleven rules of this canon belong to.** The table below
+covers R-01 to R-11 and the counts under it are out of those eleven. It said
+"each rule in this canon" until 2026-09-13, when the canon had nineteen: the
+same shape as the registry section naming seven rules where bucket 1 named ten -
+a list written when it was complete and left standing after it was not. One of
+eleven is graded by
 class at all:
 
 | rule | where it lives |
@@ -703,7 +725,7 @@ compared one after another, never added:
    is a defect or a process indicator. Counted as **contacts, not rows**: one
    contact along a parallel run produces a dozen clearance rows, so a tier
    ranked on rows outweighs itself by accident. `clearance_contacts`
-   (`crates/cypcb-drc/src/violation.rs:156`) already computes the contact
+   (`clearance_contacts` in `crates/cypcb-drc/src/violation.rs`) already computes the contact
    count and the composite does not read it.
 4. **Findings with no acceptance standard behind them** - acute angles, trace
    entry, mitring. Real, worth fixing, and never allowed to outweigh tier 3.
@@ -712,7 +734,7 @@ Condition: of two routed boards, the one with fewer tier-1 findings ranks
 better whatever the other tiers say; ties fall to tier 2, then tier 3, then
 tier 4. Precedent in this repository for the form, not for the tiers:
 `generate_variants` already ranks complete boards first, then by shorts, then
-by composite (`crates/cypcb-autoroute/src/variant.rs:496-510`).
+by composite (`generate_variants` in `crates/cypcb-autoroute/src/variant.rs`).
 
 **In this repo:** the score prices every violation at 1000 regardless of kind
 (`compute_composite` in `crates/cypcb-autoroute/src/scoring.rs`), so tiers 3
