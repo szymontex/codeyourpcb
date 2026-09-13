@@ -1261,3 +1261,71 @@ fn a_recorded_search_of_the_tree_still_returns_what_it_says() {
          measurement of it - but the sentence stating the count is, and it says what it found."
     );
 }
+
+/// The three tables R-17 quotes, and what each row is computed from.
+///
+/// A pair of figures copied out of a preset is the cheapest kind of rot: the
+/// preset moves in another crate, nothing here fails, and the table goes on
+/// describing a grid the router no longer builds. So the row is not compared
+/// against a stored expectation - it is **built** from the preset and the
+/// arithmetic the section states, and the canon has to contain the result.
+const SNAP_TABLE: &[(&str, cypcb_rules::presets::RulesPreset)] = &[
+    (
+        "JLCPCB standard, 2 layer",
+        cypcb_rules::presets::RulesPreset::JlcpcbStandard2Layer,
+    ),
+    (
+        "JLCPCB standard, 4 layer",
+        cypcb_rules::presets::RulesPreset::JlcpcbStandard4Layer,
+    ),
+    (
+        "JLCPCB advanced, 4 layer",
+        cypcb_rules::presets::RulesPreset::JlcpcbAdvanced4Layer,
+    ),
+];
+
+#[test]
+fn the_snap_table_is_recomputed_from_the_presets_it_quotes() {
+    let canon = std::fs::read_to_string(repo_root().join("docs/ROUTING-CANON.md"))
+        .expect("the canon is there");
+
+    let mut built = Vec::new();
+    let mut missing = Vec::new();
+    for (label, preset) in SNAP_TABLE {
+        let constraints = preset.constraints();
+        let width = constraints.min_trace_width.to_mm();
+        let clearance = constraints.min_clearance.to_mm();
+        let pitch = width + clearance;
+        // The section states the worst case as `resolution * sqrt(2)`, because
+        // the snap truncates on each axis rather than rounding.
+        let snap = pitch * std::f64::consts::SQRT_2;
+        let row =
+            format!("| {label} ({width:.3} + {clearance:.3}) | {pitch:.3} mm | {snap:.3} mm |");
+        built.push(row.clone());
+        if !canon.contains(&row) {
+            missing.push(row);
+        }
+    }
+
+    eprintln!(
+        "snap rows rebuilt from the presets: {}; not in the canon: {}",
+        built.len(),
+        missing.len()
+    );
+
+    assert_eq!(
+        built.len(),
+        SNAP_TABLE.len(),
+        "one row per preset, and the table has {} of them",
+        SNAP_TABLE.len()
+    );
+    assert!(
+        missing.is_empty(),
+        "R-17's table quotes a grid these presets no longer describe. Rebuilt from the presets \
+         and the section's own arithmetic, these rows are not in the file: {missing:#?}\n\
+         \n  Every figure in them comes from `min_trace_width` and `min_clearance` in \
+         `cypcb-rules`, which is another crate: it can move without anything here failing, and \
+         then this table describes a grid the router does not build. Copy the rows above into \
+         the section, or say why the arithmetic changed."
+    );
+}
