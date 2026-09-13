@@ -704,7 +704,7 @@ the tiers below have nowhere to live in a row of output. See R-18.
 
 ### R-12 Rip-up and reroute - moved out `[O]`
 
-*Verified: never*
+*Verified: 2026-09-13*
 
 *Applies when:* never, to a board.
 
@@ -714,8 +714,13 @@ from the algorithm it is named after: the published loop seeds the search
 frontier with the whole partial routing tree, so a multi-terminal net is never
 decomposed into pad-to-pad searches; it re-routes every net every iteration and
 says why; and the congestion term there scales a node's own cost rather than
-being added to it. All three still stand, and all three are about this router
-rather than about a board.
+being added to it. All three are about this router rather than about a board.
+
+Whether they still hold is not a question this file answers, and the date above
+does not cover it: the three live in `docs/routing.md` under that document's own
+verification line. **A pointer that repeats the claim it points at is two copies
+of a fact with one place to correct it**, which is how the registry section came
+to name seven rules where bucket 1 named ten.
 
 It leaves because it fails this canon's own first entry condition - every
 quantity a rule compares is in the world or derivable from it - and because
@@ -1855,12 +1860,14 @@ will.
 
 ### Rules that DRC checks and the ranking cannot see
 
-*Verified: never*
+*Verified: 2026-09-13*
 
-Every violation weighs 1000 in the composite regardless of kind, so a trace
-that will cook ranks level with a trace slightly under the fab's minimum. The
-fix is mechanical: `DrcViolation` already carries its kind, so a count per kind
-is built in the same place `shorts` is built today, inside `score_board`.
+Every violation weighs 1000 in the composite regardless of kind - the composite
+adds `weights.drc * drc_violations * 1000.0` and asks nothing about what the
+violations were - so a trace that will cook ranks level with a trace slightly
+under the fab's minimum. The fix is mechanical: `DrcViolation` already carries
+its kind, and `shorts` shows the shape, being counted from the same result
+inside `score_board` by asking the violations a question the total does not.
 
 ### Properties nothing in the workspace computes
 
@@ -1891,7 +1898,7 @@ Checked by grep over `crates/*/src` on 2026-09-11: no hits for "return path",
 
 ### The wedge beside a corner, which R-08 measures and can miss
 
-*Verified: never*
+*Verified: 2026-09-13*
 
 R-08's measurement asks one question - which side of the land does the trace's
 edge cross - and beside a corner that question has two answers a hair apart.
