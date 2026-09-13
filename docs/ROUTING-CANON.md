@@ -100,7 +100,7 @@ In this repo: the table exists and nothing calls it. See "Blocked on the model".
 
 ### R-03 Acute angles in copper `[P]`
 
-*Verified: never*
+*Verified: 2026-09-13*
 
 *Applies when:* always. Two trace segments meet at a junction; no declaration needed.
 
@@ -131,13 +131,30 @@ Condition: the count of junctions with an internal angle below 90 degrees is 0.
 Source: nextpcb and pcbsync acid trap articles, read 2026-09-11. The threshold
 is an angle, not a dimension; no source gives a length.
 
-In this repo: **enforced.** `AcuteAngleRule` is in the registry
-(`crates/cypcb-drc/src/lib.rs:197`) and reports `ViolationKind::AcidTrap`;
-every wedge count in this document came out of running it. What has no
-reader is the constant: `min_acid_trap`
-(`crates/cypcb-rules/src/constraints.rs:167`) is named nowhere outside its
-own crate, so the rule enforces a threshold of its own rather than the fab
-table's. This paragraph read "not enforced" until 2026-09-11, which made
+In this repo: **enforced.** `AcuteAngleRule` is in the registry and reports
+`ViolationKind::AcidTrap`.
+
+**It used to add "every wedge count in this document came out of running it",
+and that is deleted rather than corrected.** There are three ways to read it and
+the only true one is empty. Read as every figure this file calls a wedge, it is
+false twice over: the 50 100, 40 000 and 42 500 millidegrees beside a corner
+come from `entry_angle` in `rules/pad_entry.rs`, which is R-08's geometry, and
+R-10's 53 wedges of 58 scanned come from
+`crates/cypcb-autoroute/tests/can_a_wedge_be_cut_where_it_stands.rs`, which
+mentions neither this rule nor `acid_trap` nor `is_acute` and computes the
+geometry itself. Read as every count of acute junctions on the benchmark boards,
+it is narrower and unsupported: nothing in this file or its verification block
+ties those figures to a run of this rule. Read as the wedge counts in this
+section, it is true and says nothing, because this section states none.
+
+What has no reader is the constant: `min_acid_trap` in
+`crates/cypcb-rules/src/constraints.rs` is named nowhere outside its own crate.
+**And it could not be read here even if somebody wired it up**, which is a
+better reason than nobody having done so: `is_acute` compares directions, an
+integer dot product of the two arms greater than zero, so the rule tests whether
+the internal angle is under 90 degrees and never asks how long anything is. The
+fab table's figure is a length. The `degrees()` beside it carries its own note -
+for the message only. This paragraph read "not enforced" until 2026-09-11, which made
 the one rule this project has been measuring with deny its own existence.
 
 The cut that removes such a junction, and the floor below which cutting is
@@ -145,7 +162,7 @@ cosmetic, are R-10.
 
 ### R-04 Stub length `[O]`
 
-*Verified: never*
+*Verified: 2026-09-13*
 
 *Applies when:* a net declares a signal speed **and** the copper has a connectivity graph. Neither exists, so this rule is silent on every board.
 
@@ -173,7 +190,7 @@ on the model".
 
 ### R-05 Return path under a signal trace `[O]`
 
-*Verified: never*
+*Verified: 2026-09-13*
 
 *Applies when:* the board has a pour on a copper layer adjacent to the trace. A board with no pour has no reference copper and this rule says nothing. R-13 adds the impedance gate; this rule states none, and the two are kept apart on purpose.
 
@@ -240,9 +257,9 @@ rotted in the score section in a single week, and R-03's rule text carried
 it - `grep -n` prints one - not out of this document's memory of the file.
 
 **The rule is stated ahead of the file, and the file says by how much.** Forty
-eight of them remain in the prose here, none inside the command blocks, and
+six of them remain in the prose here, none inside the command blocks, and
 `line_numbers_in_this_file_only_fall` holds that count as a ceiling: it may drop
-and it may not rise. Writing the rule without the count would have been the
+and it may not rise, and it has - it stood at forty eight when it was written. Writing the rule without the count would have been the
 defect the rule is about - a claim about this repository that nothing checks and
 that was false in forty eight places the day it was written.
 

@@ -140,7 +140,7 @@ fn every_section_says_when_it_was_last_read() {
 /// not a reference - and states this number in the same breath, because the
 /// rule was false in forty eight places on the day it was written and a rule
 /// with no count under it is the defect it describes.
-const LINE_NUMBER_REFERENCES: usize = 48;
+const LINE_NUMBER_REFERENCES: usize = 46;
 
 #[test]
 fn line_numbers_in_this_file_only_fall() {
