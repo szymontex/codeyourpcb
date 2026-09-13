@@ -447,6 +447,27 @@ fn the_sharp_entries_against_every_pad_that_could_have_been_one() {
          netted pads sit on a cell centre, so being off-grid cannot distinguish the fourteen"
     );
 
+    // The pair behind that ratio, pinned exactly, because the ratio alone does
+    // not hold either half of it. "Fewer than one in a hundred" stays true if
+    // the walk finds two pads instead of seven hundred and seventy-five, which
+    // is what a measurement that quietly disappeared looks like. The canon
+    // quotes these two as 772 of 775 and nothing else checked them.
+    //
+    // A ratchet, like `ENTRY_CENSUS`: they move when a fixture changes and not
+    // otherwise, and a fixture change should be loud. Widening `ON_GRID_NM` to
+    // a millimetre makes the second read 775 of 775, so the pin is not empty -
+    // an earlier assertion happens to fail first on that mutation, which is two
+    // claims breaking together rather than one shielding the other.
+    assert_eq!(
+        netted_total, 775,
+        "the walk reaches the whole population of netted pads across the six fixtures"
+    );
+    assert_eq!(
+        netted_on_grid, 3,
+        "and this many of them sit on a cell centre, which is the figure the canon \
+         quotes as 772 of 775"
+    );
+
     // The second reading does not get refuted here - it gets ruled out of
     // court. Not one part on any of the six boards is turned, so their
     // footprints' rotations cannot explain a subset of anything on them. This

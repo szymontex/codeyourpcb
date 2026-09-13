@@ -203,10 +203,20 @@ makes the total misleading - one contact, two terms, 1500 points - and landed in
 re-runs it against whatever the reader has.
 
 In this repo: the data is there and the aggregation is not. `DrcViolation`
-carries `kind: ViolationKind` with 37 variants, `Clearance` at `:51` through
-`AcidTrap` at `:124` in an enum spanning `:49-125`
-(`crates/cypcb-drc/src/violation.rs`), plus `actual` and `required` as
-numbers rather than prose.
+carries `kind: ViolationKind`, an enum running from `Clearance` to `AcidTrap`
+in `crates/cypcb-drc/src/violation.rs`, plus `actual` and `required` as numbers
+rather than prose. How many kinds it holds is counted by the command in the
+verification block rather than written here: it has been 35, then 36, then 37
+inside one week.
+
+**Line numbers are not used as references anywhere in this file, and that is a
+rule rather than a style.** A symbol name is found by grep and breaks loudly
+when somebody renames it; a line number is found by nothing and breaks silently
+on every insertion above it. Four of them rotted in the score section in a
+single week, and R-03's rule text carried `:196` while its own registry row two
+hundred lines away carried the correct `:197`. Where a number is worth seeing,
+it comes out of a command quoted beside it - `grep -n` prints one - not out of
+this document's memory of the file.
 
 This rule gives the vector; R-11 says how to read it. Split apart they invite
 the defect they were written against - a count per kind that is then added up
@@ -2255,6 +2265,12 @@ grep -n "query_region_on_layers" crates/cypcb-autoroute/src/scoring.rs
 # comment is worse than no check.
 grep -c "Box::new(rules::" crates/cypcb-drc/src/lib.rs   # expect 39
 grep -cE "Box::new\(rules::(ClearanceRule|AnnularRingRule|HoleToHoleRule|ViaDiameterRule|ViaDrillRule|TraceCurrentRule|PadLandRule|DrillAspectRatioRule|AcuteAngleRule|PadEntryRule)\)" crates/cypcb-drc/src/lib.rs   # expect 10
+
+# R-06: how many fault kinds the enum carries, with its own control beneath it.
+# An awk range that stopped matching would answer 0 to the count and 0 to the
+# control, and a check that can only answer zero is not a check.
+awk '/pub enum ViolationKind \{/,/^}/' crates/cypcb-drc/src/violation.rs | grep -c '^    [A-Z]'   # expect 37
+awk '/pub enum ViolationKind \{/,/^}/' crates/cypcb-drc/src/violation.rs | grep -c '^    AcidTrap,$'   # expect 1
 
 # R-16: the acceptance classes that gate R-11, and the house presets that do not
 sed -n '56,63p' crates/cypcb-rules/src/presets/mod.rs
