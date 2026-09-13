@@ -223,6 +223,42 @@ async function activate3D(page: Page) {
 // Tests
 // ---------------------------------------------------------------------------
 
+/**
+ * How long the search may take before the machine, rather than the app, is what
+ * is being measured.
+ *
+ * This guards a hang. It is not a statement about how fast the search is, and
+ * nothing in this file asserts a duration.
+ */
+const SEARCH_MAY_TAKE = 60_000;
+
+/**
+ * Wait for the search to settle, then let the caller assert what it found.
+ *
+ * The panel shows a spinner while it fans out over the jlcsearch categories -
+ * thirty-four of them - and hides it the moment the merged results are in.
+ * Waiting for the spinner waits for the app. Waiting for a result count waits
+ * for the app **and** for the host to give it enough processor to get there,
+ * which is a different thing and is what turned this stage red twice on a busy
+ * machine while every one of its specs passed when run alone.
+ *
+ * Separating the two also makes the failure say which happened: a spinner still
+ * on screen at the end of the budget is a machine that never got there, and a
+ * spinner gone with no results is the app answering nothing - which is a defect
+ * and should read like one.
+ */
+async function searchSettles(page: Page): Promise<void> {
+  await expect(page.locator('.jlcpcb-spinner')).toHaveCount(0, {
+    timeout: SEARCH_MAY_TAKE,
+  });
+}
+
+// The budget above is longer than the default per-test timeout, so the tests
+// that spend it need room to. Raised here rather than in the shared config: it
+// is this file's fan-out that wants the room, and a longer default would slow
+// every genuine hang in the suite.
+test.describe.configure({ timeout: 150_000 });
+
 test.describe('JLCPCB Search Panel', () => {
   test.beforeEach(async ({ page }) => {
     await interceptAPIs(page);
@@ -262,7 +298,8 @@ test.describe('JLCPCB Search Panel', () => {
     await page.fill('#jlcpcb-search-input', '0805 10k');
 
     // Wait for results to render (debounce + API mock)
-    await expect(page.locator('.jlcpcb-result')).toHaveCount(3, { timeout: 15_000 });
+    await searchSettles(page);
+    await expect(page.locator('.jlcpcb-result')).toHaveCount(3);
 
     // Verify LCSC numbers are visible. Order is a ranking decision and all three
     // fixtures are 0805 10k resistors, so assert the set, not the sequence.
@@ -302,6 +339,7 @@ test.describe('JLCPCB Search Panel', () => {
     await expect(status).toContainText('No results', { timeout: 15_000 });
 
     // No result rows
+    await searchSettles(page);
     await expect(page.locator('.jlcpcb-result')).toHaveCount(0);
 
     // Debug surface confirms
@@ -327,6 +365,7 @@ test.describe('JLCPCB Search Panel', () => {
     await expect(status).toContainText('No results', { timeout: 15_000 });
 
     // No result rows rendered
+    await searchSettles(page);
     await expect(page.locator('.jlcpcb-result')).toHaveCount(0);
 
     // Debug surface confirms zero results
@@ -353,7 +392,8 @@ test.describe('JLCPCB Search Panel', () => {
     await input.pressSequentially('10k resistor', { delay: 30 });
 
     // Wait for debounce + response to settle
-    await expect(page.locator('.jlcpcb-result')).toHaveCount(3, { timeout: 15_000 });
+    await searchSettles(page);
+    await expect(page.locator('.jlcpcb-result')).toHaveCount(3);
 
     // A search sweeps every jlcsearch category once and caches the answers, so
     // twelve keystrokes must not fetch anything twice. Comparing against the
@@ -424,13 +464,21 @@ test.describe('JLCPCB 3D Model Loading', () => {
     await expect(page.locator('#status-text')).toContainText('Ready', { timeout: 15_000 });
     await loadBoard(page);
 
-    // Activate 3D view first
-    await activate3D(page);
-
-    // Open search panel and search
+    // Search first, and turn the 3D view on afterwards.
+    //
+    // The order used to be the other way round, and it is the whole of why this
+    // stage went red on a loaded host while the other 124 specs passed: with
+    // the render loop running, the panel's fan-out over thirty-four jlcsearch
+    // categories does not settle inside a minute and the spinner is still on
+    // screen when the budget runs out. Nothing about the claim needs the view
+    // to be up while the search runs - it needs to be up when the result is
+    // clicked, which is where the model reaches the engine.
     await page.click('#jlcpcb-search-btn');
     await page.fill('#jlcpcb-search-input', '0805 10k');
-    await expect(page.locator('.jlcpcb-result')).toHaveCount(3, { timeout: 15_000 });
+    await searchSettles(page);
+    await expect(page.locator('.jlcpcb-result')).toHaveCount(3);
+
+    await activate3D(page);
 
     // Click first result — triggers onComponentSelect → footprint fetch,
     // which carries the 3D model uuid to the engine.
@@ -488,16 +536,29 @@ test.describe('JLCPCB 3D Model Loading', () => {
     await page.evaluate((src) => (window as any).__editor?.setValue(src), BOARD_WITH_ROOM);
     await page.waitForTimeout(600);
 
+    // Search first, and turn the 3D view on afterwards.
+    //
+    // The order used to be the other way round, and it is the whole of why this
+    // stage went red on a loaded host while the other 124 specs passed: with
+    // the render loop running, the panel's fan-out over thirty-four jlcsearch
+    // categories does not settle inside a minute and the spinner is still on
+    // screen when the budget runs out. Nothing about the claim needs the view
+    // to be up while the search runs - it needs to be up when the result is
+    // clicked, which is where the model reaches the engine.
+    // The control moves with it. It says the board carried no model before the
+    // part was inserted, and for that it has to run after the view is up and
+    // before the click - not before the search.
+    await page.click('#jlcpcb-search-btn');
+    await page.fill('#jlcpcb-search-input', '0805 10k');
+    await searchSettles(page);
+    await expect(page.locator('.jlcpcb-result')).toHaveCount(3);
+
     await activate3D(page);
 
     expect(
       await page.evaluate(() => (window as any).__renderer3d?.objModelCount ?? 0),
       'an empty board has no models',
     ).toBe(0);
-
-    await page.click('#jlcpcb-search-btn');
-    await page.fill('#jlcpcb-search-input', '0805 10k');
-    await expect(page.locator('.jlcpcb-result')).toHaveCount(3, { timeout: 15_000 });
 
     // Selecting fetches the footprint, which is where the model uuid rides in.
     await page.locator('.jlcpcb-result').first().click();
