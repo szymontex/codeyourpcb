@@ -1693,7 +1693,7 @@ fourth entry condition a new rule has to meet.
 
 ### A condition the whole population satisfies `[S]`
 
-*Verified: 2026-09-11*
+*Verified: 2026-09-13*
 
 A condition nothing satisfies and a condition everything satisfies are the same
 defect wearing opposite signs. Neither separates anything, so neither can be
@@ -2174,7 +2174,7 @@ quiet board from a quiet rule.
 
 ### The branch a reconstruction missed, and what it does not prove `[S]`
 
-*Verified: 2026-09-12*
+*Verified: 2026-09-13*
 
 Rebuilding R-08's answer from geometry, to check the instrument before using
 it, disagreed with the rule on two rows out of 175. The disagreement was in the

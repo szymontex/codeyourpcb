@@ -383,6 +383,23 @@ if cargo test --release -p cypcb-autoroute -- benchmark_500 --ignored 2>&1; then
 else
   fail "benchmark-500"
 fi
+
+# The two ratchets under R-08's anatomy, which ran in no stage until
+# 2026-09-13. `cargo test --workspace` skips an ignored test and this file
+# named four of them by hand; these two were not among the four, so
+# `netted_total == 775`, `netted_on_grid == 3`, `netted_turned == 0`,
+# `entries_narrow == entries_total` and `sharp_on_grid == 0` were assertions
+# nothing executed. Their own comment calls them "a ratchet, like
+# ENTRY_CENSUS" - and ENTRY_CENSUS runs, because `benchmark_all_fixtures_drc`
+# is named above. **A ratchet nobody runs is a comment**, and the two canon
+# sections these hold carried the oldest `Verified:` dates in the file for
+# exactly that reason: nothing could move them, so nobody had cause to read
+# them. Both together cost under four seconds in release.
+if cargo test --release -p cypcb-autoroute --test sharp_entry_anatomy -- --ignored 2>&1; then
+  pass "the-anatomy-ratchets"
+else
+  fail "the-anatomy-ratchets"
+fi
 echo ""
 
 # Stage 8: Code duplication check
