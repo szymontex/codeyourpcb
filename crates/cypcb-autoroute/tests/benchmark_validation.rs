@@ -410,7 +410,20 @@ const DRC_RATCHETS: &[Ratchet] = &[
     // where they are; this one has no band, so it moves by exactly the three
     // it gained. **The router emits sharp entries and nobody knew** - that is a
     // routing-quality item, not a threshold to file away.
-    ("plane_board.kicad_pcb", "plane_board", 37, 13, 37, 13),
+    //
+    // 37 -> 38 on 2026-09-13, and this one is not the router. `PourIslandRule`
+    // filled its planes at `min_clearance` and now fills them at
+    // `min_copper_pour_clearance`, which every preset publishes as the wider
+    // figure; on this fixture, the only one carrying a pour, the plane is cut
+    // further back from the copper crossing it and one more piece comes away
+    // unreached. Measured both ways on the same tree: 37 violations with the
+    // old field, 38 with the new one, and 217 routes, 13 shorts and 0 unrouted
+    // in both. **Only `pour_island.rs` reads that field**, so the row that
+    // arrived is a pour island and cannot be anything else. Raising a ratchet
+    // needs that much: the count moved because the checker measures the plane
+    // the fab will make, and the router's own three numbers did not move at
+    // all.
+    ("plane_board.kicad_pcb", "plane_board", 38, 13, 38, 13),
 ];
 
 /// Routes every fixture and holds the line on completeness and DRC count.

@@ -66,6 +66,7 @@ use cypcb_rules::DesignConstraints;
 /// - `max_drill_aspect_ratio`: Deepest hole the plating chemistry reaches, in hundredths
 /// - `board_thickness`: How thick the fab builds a board that does not say
 /// - `thermal_relief_gap`, `thermal_relief_spoke_width`: The relief a pour cuts around a pad of its own net
+/// - `min_copper_pour_clearance`: How far a pour keeps from copper on another net, which is not `min_clearance`
 ///
 /// # Examples
 ///
@@ -98,6 +99,7 @@ use cypcb_rules::DesignConstraints;
 ///     min_courtyard_clearance: Nm::from_mm(0.25),
 ///     thermal_relief_gap: Nm::from_mm(0.254),
 ///     thermal_relief_spoke_width: Nm::from_mm(0.254),
+///     min_copper_pour_clearance: Nm::from_mm(0.254),
 ///     copper_weight_oz_x10: 10,
 ///     blind_vias_allowed: false,
 ///     buried_vias_allowed: false,
@@ -185,6 +187,22 @@ pub struct DesignRules {
     pub thermal_relief_gap: Nm,
     /// How wide each spoke bridging that gap is.
     pub thermal_relief_spoke_width: Nm,
+    /// How far a pour keeps from copper on another net.
+    ///
+    /// Not `min_clearance`, and every preset this project ships says so: a
+    /// house publishes one figure for two traces and a wider one for a plane
+    /// beside a track. On JLCPCB's standard two-layer process they are
+    /// 0.127mm and 0.254mm, on its advanced four-layer 0.09mm and 0.2mm, and
+    /// on IPC class 1 0.2mm and 0.3mm. Ten of the ten presets disagree with
+    /// themselves across the two fields, so a pour filled at `min_clearance`
+    /// is wider than the one the house will pour on every board this tool
+    /// can check.
+    ///
+    /// It reached `DesignConstraints` with the tables and stopped there, in
+    /// the same way `thermal_relief_gap` did until 2026-09-11 - and this time
+    /// the code that read the wrong field carried a comment saying every
+    /// number in it was the house's.
+    pub min_copper_pour_clearance: Nm,
     /// How thick the copper is, in tenths of an ounce.
     ///
     /// The fab's number, and what IPC-2221 needs to say how wide a trace must
@@ -342,6 +360,7 @@ impl DesignRules {
             min_courtyard_clearance: c.min_courtyard_clearance.unwrap_or(Nm::from_mm(0.25)),
             thermal_relief_gap: c.thermal_relief_gap,
             thermal_relief_spoke_width: c.thermal_relief_spoke_width,
+            min_copper_pour_clearance: c.min_copper_pour_clearance,
             copper_weight_oz_x10: c.copper_weight_oz_x10,
             blind_vias_allowed: c.blind_vias_allowed,
             buried_vias_allowed: c.buried_vias_allowed,

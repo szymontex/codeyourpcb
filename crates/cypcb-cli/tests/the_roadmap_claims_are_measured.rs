@@ -49,8 +49,14 @@ fn a_pour_is_filled_and_its_islands_are_reported() {
         said.contains("pour-island: 1"),
         "the rule that finds orphaned copper has to fire on the example written for it:\n{said}"
     );
+    // The same figure is asserted in `cli_integration`, which is one fact in
+    // two files - and both had to move on 2026-09-13 when the fill started
+    // keeping the pour clearance the house publishes rather than the trace
+    // clearance. Two places for one measurement is the shape this project
+    // keeps finding; here at least both places are tests, so neither can rot
+    // in silence.
     assert!(
-        said.contains("copper 30.000mm x 14.773mm"),
+        said.contains("copper 30.000mm x 14.646mm"),
         "and it has to say how much copper is stranded:\n{said}"
     );
 }

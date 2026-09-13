@@ -326,12 +326,19 @@ fn check_gives_a_pour_island_its_size_and_corners() {
         stderr.contains("pour-island"),
         "the island should be reported, got:\n{stderr}"
     );
+    // These figures moved on 2026-09-13 and the distance they moved is the
+    // whole finding: the sheet was 14.773mm from y=20.227mm while the fill kept
+    // `min_clearance` from the crossing trace, and it is 14.646mm from
+    // y=20.354mm now that it keeps `min_copper_pour_clearance`. JLCPCB's
+    // standard process publishes 0.127mm for two traces and 0.254mm for a pour
+    // beside foreign copper, and 0.254 - 0.127 is exactly the 0.127mm the edge
+    // came down by. The island reported is the one the board house will make.
     assert!(
-        stderr.contains("copper 30.000mm x 14.773mm"),
+        stderr.contains("copper 30.000mm x 14.646mm"),
         "the report should carry the size of the stranded sheet, got:\n{stderr}"
     );
     assert!(
-        stderr.contains("from (5.000mm, 20.227mm) to (35.000mm, 35.000mm)"),
+        stderr.contains("from (5.000mm, 20.354mm) to (35.000mm, 35.000mm)"),
         "and its corners, got:\n{stderr}"
     );
 }

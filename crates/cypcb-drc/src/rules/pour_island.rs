@@ -28,16 +28,24 @@ pub struct PourIslandRule;
 
 /// The pour this checker measures, as the fab will make it.
 ///
-/// Every number here is the house's. `PourOptions::default()` carries a
-/// deliberately generous 0.254mm relief, which is not what JLCPCB's advanced
-/// process makes: it publishes 0.2mm, so its plane reaches 0.054mm further
-/// around every pad of the pour's own net. A checker filling from the default
-/// measures a plane nobody is being sent, which is the same defect the
+/// Every number here is the house's, and one of them said so for two days
+/// while being the wrong one of the house's numbers. `PourOptions::default()`
+/// carries a deliberately generous 0.254mm relief, which is not what JLCPCB's
+/// advanced process makes: it publishes 0.2mm, so its plane reaches 0.054mm
+/// further around every pad of the pour's own net. A checker filling from the
+/// default measures a plane nobody is being sent, which is the same defect the
 /// exporter carried until 2026-09-11 - there the numbers never left the
 /// preset, here they never reached `DesignRules` at all.
+///
+/// The clearance was that defect twice over. It read `min_clearance`, which is
+/// what a house publishes for two traces, where a pour beside foreign copper
+/// is a wider figure the same house publishes separately - and every preset
+/// this project ships states the two differently. The comment above claimed
+/// the number was the house's, which is what made it hard to see: the sentence
+/// was true of the field's origin and false of the question it answers.
 fn pour_options(rules: &DesignRules) -> PourOptions {
     PourOptions {
-        clearance: rules.min_clearance,
+        clearance: rules.min_copper_pour_clearance,
         thermal_gap: rules.thermal_relief_gap,
         spoke_width: rules.thermal_relief_spoke_width,
     }
@@ -186,6 +194,58 @@ mod tests {
         }
     }
 
+    /// Every preset states one clearance for two traces and a wider one for a
+    /// pour beside foreign copper, and the fill has to take the second.
+    ///
+    /// The denominator is the point: if a preset ever set the two equal, this
+    /// test would keep passing on that preset while measuring nothing, so the
+    /// count of presets that distinguish them is asserted beside the values.
+    #[test]
+    fn the_pour_is_filled_at_the_distance_the_house_states_for_a_pour() {
+        let presets: [(&str, DesignRules); 8] = [
+            ("jlcpcb_2layer", DesignRules::jlcpcb_2layer()),
+            ("jlcpcb_4layer", DesignRules::jlcpcb_4layer()),
+            (
+                "jlcpcb_advanced_2layer",
+                DesignRules::jlcpcb_advanced_2layer(),
+            ),
+            (
+                "jlcpcb_advanced_4layer",
+                DesignRules::jlcpcb_advanced_4layer(),
+            ),
+            ("oshpark_2layer", DesignRules::oshpark_2layer()),
+            ("oshpark_4layer", DesignRules::oshpark_4layer()),
+            ("pcbway_standard", DesignRules::pcbway_standard()),
+            ("prototype", DesignRules::prototype()),
+        ];
+
+        let mut distinguishing = 0usize;
+        for (name, rules) in &presets {
+            let filled = pour_options(rules).clearance;
+            assert_eq!(
+                filled, rules.min_copper_pour_clearance,
+                "{name} fills its pour at {filled:?} where the house publishes \
+                 {:?} for a pour",
+                rules.min_copper_pour_clearance
+            );
+            if rules.min_copper_pour_clearance != rules.min_clearance {
+                distinguishing += 1;
+            }
+            eprintln!(
+                "{name}: trace {:?}, pour {:?}",
+                rules.min_clearance, rules.min_copper_pour_clearance
+            );
+        }
+
+        assert_eq!(
+            distinguishing,
+            presets.len(),
+            "every preset here states a different figure for a pour than for two traces, which \
+             is why the fill cannot take `min_clearance`. If this drops, one preset has set the \
+             two equal and this test measures nothing on it."
+        );
+    }
+
     #[test]
     fn a_piece_a_spoke_reaches_is_not_an_island() {
         let pieces = vec![rect(0.0, 0.0, 5.0, 5.0)];
@@ -242,6 +302,15 @@ mod tests {
             PourOptions::default().thermal_gap,
             "the advanced process publishes a relief the default does not carry"
         );
-        assert_eq!(advanced.clearance, Nm::from_mm(0.1));
+        // This read 0.1mm until 2026-09-13, which is what the same house
+        // publishes for two traces. A test can pin a defect as firmly as it
+        // pins a behaviour, and this one did for two days.
+        assert_eq!(advanced.clearance, Nm::from_mm(0.2));
+        assert_ne!(
+            advanced.clearance,
+            Preset::JlcpcbAdvanced2Layer.rules().min_clearance,
+            "the figure a pour keeps from foreign copper is not the figure two traces keep \
+             from each other, and this house publishes both"
+        );
     }
 }
