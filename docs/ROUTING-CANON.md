@@ -148,7 +148,7 @@ In this repo: **enforced.** `AcuteAngleRule` is in the registry and reports
 `ViolationKind::AcidTrap`.
 
 **It used to add "every wedge count in this document came out of running it",
-and that is deleted rather than corrected.** There are three ways to read it and
+and that is deleted rather than corrected, in `127ea2c`.** There are three ways to read it and
 the only true one is empty. Read as every figure this file calls a wedge, it is
 false twice over: the 50 100, 40 000 and 42 500 millidegrees beside a corner
 come from `entry_angle` in `rules/pad_entry.rs`, which is R-08's geometry, and
@@ -317,7 +317,8 @@ In this repo: enforced by six registry entries - `AnnularRingRule`,
 as judging the result.
 
 **This paragraph used to end "and the only rule of this group that is", and that
-clause is gone because nothing in the section says what the group was.** Read as
+clause went in `06195e8` because nothing in the section says what the group
+was.** Read as
 the canon's rules it is false - bucket 1 under R-16 names five that are
 enforced. Read as the six entries above it is a tautology. Neither reading can
 be checked, which is the defect this file describes two sections down under a
@@ -516,11 +517,11 @@ What the export preset orders is held to the house's own design rules by
 which asserts `pour_thermal_gap` against `thermal_relief_gap` and
 `pour_spoke_width` against `thermal_relief_spoke_width` for the same house.
 
-This went unseen for a long time because the two shipped export presets both
-publish 0.254 mm for gap and for spoke width, which is exactly what
-`PourOptions::default()` uses. The drawn copper agreed with the published table
-by coincidence, not by wiring, and a house publishing anything else would have
-been silently ignored.
+Both shipped export presets publish 0.254 mm for gap and for spoke width, which
+is exactly what `PourOptions::default()` uses, so the drawn copper agreed with
+the published table by coincidence rather than by wiring, and a house publishing
+anything else would have been silently ignored. How long that went unseen is not
+recorded anywhere, so the sentence does not say.
 
 **And the thing this section never said, which a reader would take from its
 silence: no rule in the registry checks a thermal relief at all.** Everything
@@ -1171,8 +1172,8 @@ is holes. **copper 12, output row 3, the tool 2, the canon 1, a component 1.**
 
 Those five words are the whole vocabulary and `every_rule_says_what_its_condition_runs_over`
 holds this line to them. It exists because the two sentences in this file that
-were false the day they were written were both claims about what every other
-rule does - the one kind of claim a writer cannot check while writing, because
+were false the day they were written - R-15's, corrected in `405b3c4`, and
+R-17's, in `34edb07` - were both claims about what every other rule does - the one kind of claim a writer cannot check while writing, because
 it is a claim about the eighteen sections they are not looking at. A count on
 this page is a counter-example to that sentence on the same page.
 
@@ -1357,7 +1358,8 @@ designer places parts on, not the search grid a router walks. One line, and no
 further looking.
 
 That sentence used to end "and that answer has now been the right one three
-times". Nothing in this file or this repository records those three occasions,
+times", and it came out in `34edb07`. Nothing in this file or this repository
+records those three occasions,
 so the tally cannot be checked by anyone reading either - which is the same
 objection this canon makes to a count with no denominator, arriving as a
 reassurance instead of a measurement.
@@ -1570,8 +1572,9 @@ exists the exemption is decided **per pad** further down, not for the whole
 component, because a part with one GND pin is not a GND part and exempting the
 component would hide a trace crossing its VCC pad.
 
-**6. This rule cannot see copper drawn over copper, and that is why the fault
-took three sessions to find.** Two runs of one net lying on each other are
+**6. This rule cannot see copper drawn over copper, and that is why it cannot
+surface that fault at all.** The rule that did surface it is R-03, which counts
+junctions and never asks whose net they belong to. Two runs of one net lying on each other are
 same-net by construction and leave at `:222` before any distance is measured.
 That is correct for this rule - same-net copper touching is a connection, not a
 fault - but it means the rule that fires most in this project was structurally
@@ -1673,7 +1676,7 @@ this here rather than an argument:
 - **The threshold nothing could meet.** R-08 once required 90 degrees, which no
   trace of any width can reach on a round land - 81.0 degrees for a 0.25 mm trace
   into a 1.6 mm one. Same defect, other sign, and it stood in the file until
-  somebody worked the arithmetic.
+  the arithmetic was worked in `65c5ccc`.
 
 The test that catches all four is the denominator this section already
 requires, read as a ratio rather than as a count: a rule that reports on none
@@ -1988,7 +1991,8 @@ re-discovered:
 counted by the command in the verification block rather than described here.
 **Which of those entries back a canon rule is answered in one place and one
 place only - bucket 1 under R-16**, which names all ten with the rules they
-serve. This section used to answer it too, and named seven: it was missing
+serve. This section used to answer it too, and named seven until `027faee`: it was
+missing
 `ClearanceRule` (R-19), `AcuteAngleRule` (R-03) and `PadEntryRule` (R-08), so
 one question had two answers in one file and the shorter one read as exhaustive.
 
@@ -2008,8 +2012,9 @@ against, standing in the registry unremarked until 2026-09-13.
 
 `generate_variants` in `crates/cypcb-autoroute/src/variant.rs` sorts by
 unrouted connections ascending, then by `shorts`, then by `composite`. It used
-to be described here as sorting complete boards first, which is a special case
-of that order rather than the order itself: a board with one connection left
+to be described here as sorting complete boards first - corrected in `027faee`
+here, and in `f77c4cb` where R-11 carried the same description - which is a
+special case of that order rather than the order itself: a board with one connection left
 beats a board with three, and neither is complete.
 
 The CI gate in `crates/cypcb-autoroute/tests/benchmark_validation.rs` asserts a
@@ -2083,8 +2088,12 @@ Both figures are pinned, by test name and not by line number: the flip in
 `cargo test -p cypcb-drc --lib <name>` will run. The sweep also asserts that
 not one of its 901 directions was refused - so it cannot pass by measuring
 nothing. **The line numbers that used to stand here went stale three times in
-one day**, because a line number is found by nothing and rots on every
-insertion above it, while a test name is found by the command that runs it.
+one day**: the ceiling in `line_numbers_in_this_file_only_fall` came down in
+`127ea2c`, `7d04ee2` and `02b7f4a`, all dated 2026-09-13. What git records is
+three removals rather than three rots - the repair is in the history and the
+decay is not - and the reason is that a line number is found by nothing and rots
+on every insertion above it, while a test name is found by the command that runs
+it.
 This is a measured property of the rule and not a suspicion about it.
 
 What is not measured is the wedge against the side the edge does not cross. It

@@ -1116,3 +1116,69 @@ fn a_claim_that_nothing_is_published_says_when_somebody_looked() {
          out."
     );
 }
+
+/// Below this the extraction has stopped finding hashes rather than found them
+/// all good. The canon cites fourteen today.
+const HASHES_FLOOR: usize = 10;
+
+/// A backticked token that is an abbreviated object name: hex, long enough to
+/// be one, and not a plain number - `0254` is a clearance in hundredths of a
+/// millimetre and appears in this document more often than any commit does.
+fn looks_like_a_commit(token: &str) -> bool {
+    (7..=40).contains(&token.len())
+        && token
+            .chars()
+            .all(|c| c.is_ascii_digit() || ('a'..='f').contains(&c))
+        && token.chars().any(|c| !c.is_ascii_digit())
+}
+
+#[test]
+fn every_commit_the_canon_cites_is_a_commit_in_this_repository() {
+    let root = repo_root();
+    let canon =
+        std::fs::read_to_string(root.join("docs/ROUTING-CANON.md")).expect("the canon is there");
+
+    let cited: BTreeSet<&str> = backticked(&canon)
+        .into_iter()
+        .filter(|t| looks_like_a_commit(t))
+        .collect();
+
+    let mut unresolved: Vec<&str> = Vec::new();
+    for hash in &cited {
+        let output = Command::new("git")
+            .arg("-C")
+            .arg(&root)
+            .arg("rev-parse")
+            .arg("--verify")
+            .arg("--quiet")
+            .arg(format!("{hash}^{{commit}}"))
+            .output()
+            .expect("git runs");
+        if !output.status.success() {
+            unresolved.push(hash);
+        }
+    }
+
+    eprintln!(
+        "commits cited by the canon: {}; not a commit in this repository: {}",
+        cited.len(),
+        unresolved.len()
+    );
+
+    assert!(
+        cited.len() >= HASHES_FLOOR,
+        "this check found {} cited commits and expected at least {HASHES_FLOOR}. Either the \
+         references were taken out, or backticks stopped being how they are written and the \
+         clean report below is over nothing.",
+        cited.len()
+    );
+    assert!(
+        unresolved.is_empty(),
+        "the canon cites something that is not a commit here: {unresolved:#?}\n\
+         \n  A hash is the reference this document uses for its own history, and it is the one \
+         kind that breaks in silence: a rebase, a squash or a cherry-pick leaves the sentence \
+         reading perfectly well and pointing at nothing. If the history moved, the sentence \
+         follows it; if the event was never recorded, the sentence says what happened without \
+         a figure nobody can reproduce."
+    );
+}
