@@ -409,8 +409,11 @@ fn test_coordinate_conversion() {
 /// Fixture: Generate DSN file for manual FreeRouting testing.
 ///
 /// This test creates a DSN file that can be manually opened in FreeRouting
-/// to verify compatibility. The file is written to /tmp/test_board.dsn
-/// which can be loaded into FreeRouting GUI for visual verification.
+/// to verify compatibility. The file goes into the platform's temporary
+/// directory under this process's own id: it used to be a fixed
+/// `test_board.dsn` there, which two runs on one machine write over each
+/// other, and which another check found lying about on 2026-09-13 and read as
+/// a fixture the repository does not carry.
 #[test]
 #[ignore] // Run manually with: cargo test --test dsn_integration test_generate_freerouting_fixture -- --ignored
 fn test_generate_freerouting_fixture() {
@@ -420,10 +423,12 @@ fn test_generate_freerouting_fixture() {
     export_dsn(&mut world, &library, &mut output).unwrap();
     let dsn = String::from_utf8(output).unwrap();
 
-    // Write to temp file for manual inspection
-    let path = "/tmp/test_board.dsn";
-    std::fs::write(path, &dsn).expect("Failed to write DSN fixture");
+    // Write to a temp file for manual inspection, under this process's own id
+    // so two runs on one machine do not write over each other.
+    let path = std::env::temp_dir().join(format!("cypcb-dsn-{}.dsn", std::process::id()));
+    std::fs::write(&path, &dsn).expect("Failed to write DSN fixture");
 
+    let path = path.display();
     println!("DSN fixture written to: {}", path);
     println!("To test with FreeRouting:");
     println!("  java -jar freerouting.jar -de {}", path);

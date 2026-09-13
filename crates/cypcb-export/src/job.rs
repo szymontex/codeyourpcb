@@ -663,7 +663,10 @@ mod tests {
         let preset = from_name("jlcpcb").unwrap();
         let job = ExportJob {
             source_path: PathBuf::from("test.cypcb"),
-            output_dir: PathBuf::from("/tmp/test-export"),
+            // A relative name: this case only reads the field back, and a
+            // machine's temporary directory in a portable test is a path that
+            // means something different on every machine that runs it.
+            output_dir: PathBuf::from("target/test-export"),
             preset,
             board_name: "test".to_string(),
         };
