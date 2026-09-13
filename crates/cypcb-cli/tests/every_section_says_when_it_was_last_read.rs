@@ -1329,3 +1329,160 @@ fn the_snap_table_is_recomputed_from_the_presets_it_quotes() {
          the section, or say why the arithmetic changed."
     );
 }
+
+/// A number this document copied out of the code, and the line it came from.
+///
+/// The snap table above could be rebuilt, because R-17 states the arithmetic
+/// beside it. These cannot: each is one number in one sentence with no formula
+/// to recompute, so the pair is the instrument. **Both halves are load-bearing.**
+/// If the constant moves, `in_code` stops matching and the row fails; if the
+/// sentence is reworded, `in_canon` stops matching and whoever reworded it has
+/// to come back and say which constant the new words are about.
+struct Copied {
+    what: &'static str,
+    file: &'static str,
+    in_code: &'static str,
+    in_canon: &'static str,
+    /// Digits that must appear in both needles. `None` where the two are in
+    /// different units - the tree counts nanometres and the prose reads
+    /// microns or millimetres - and there the pairing is held by the two
+    /// needles alone.
+    shared: Option<&'static str>,
+}
+
+const COPIED_FIGURES: &[Copied] = &[
+    Copied {
+        what: "the relief a pour cuts, which the shipped presets happen to match",
+        file: "crates/cypcb-core/src/pour.rs",
+        in_code: "thermal_gap: Nm::from_mm(0.254)",
+        in_canon: "publish 0.254 mm for gap and for spoke width",
+        shared: Some("0.254"),
+    },
+    Copied {
+        what: "the via a stitching field is made of",
+        file: "crates/cypcb-world/src/stitch.rs",
+        in_code: "diameter: Nm::from_mm(0.6)",
+        in_canon: "0.3 mm hole in a 0.6 mm pad",
+        shared: Some("0.6"),
+    },
+    Copied {
+        what: "the floor under a routing grid",
+        file: "crates/cypcb-autoroute/src/lib.rs",
+        in_code: "pitch.max(10_000)",
+        in_canon: "floored at 10 um",
+        shared: None,
+    },
+    Copied {
+        what: "the board size that coarsens the grid",
+        file: "crates/cypcb-autoroute/src/lib.rs",
+        in_code: "let threshold_nm: i64 = 80_000_000;",
+        in_canon: "wider or taller than 80 mm is coarsened by 2",
+        shared: None,
+    },
+    Copied {
+        what: "the board size that coarsens it again",
+        file: "crates/cypcb-autoroute/src/lib.rs",
+        in_code: "if max_dim > 200_000_000 { 3 } else { 2 }",
+        in_canon: "above 200 mm by 3",
+        shared: None,
+    },
+    Copied {
+        what: "how far a caller may scale the grid",
+        file: "crates/cypcb-autoroute/src/lib.rs",
+        in_code: "self.params.density.clamp(0.5, 2.0)",
+        in_canon: "clamped to 0.5 to 2.0",
+        shared: Some("0.5"),
+    },
+    Copied {
+        what: "the chord tolerance an arc is flattened to",
+        file: "crates/cypcb-world/src/arc.rs",
+        in_code: "pub const DEFAULT_TOLERANCE: Nm = Nm(10_000);",
+        in_canon: "a default tolerance of 10 microns",
+        shared: None,
+    },
+    Copied {
+        what: "what the score charges for a violation row",
+        file: "crates/cypcb-autoroute/src/scoring.rs",
+        in_code: "* drc_violations as f64 * 1000.0",
+        in_canon: "the 1000 on a violation row",
+        shared: Some("1000"),
+    },
+    Copied {
+        what: "what the score charges for a crossing",
+        file: "crates/cypcb-autoroute/src/scoring.rs",
+        in_code: "* crossings as f64 * 500.0",
+        in_canon: "the 500 on a crossing",
+        shared: Some("500"),
+    },
+    Copied {
+        what: "the middle rung of the IPC clearance ladder",
+        file: "crates/cypcb-rules/src/presets/ipc.rs",
+        in_code: "min_clearance: Nm::from_mm(0.15)",
+        in_canon: "0.2 / 0.15 / 0.1 mm figures",
+        shared: Some("0.15"),
+    },
+];
+
+/// Whitespace flattened, because both the canon and the source are hard-wrapped
+/// and a needle that crosses a wrap is a needle nothing finds.
+fn flattened(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+#[test]
+fn a_number_copied_out_of_the_code_still_matches_the_line_it_came_from() {
+    let root = repo_root();
+    let canon = flattened(
+        &std::fs::read_to_string(root.join("docs/ROUTING-CANON.md")).expect("the canon is there"),
+    );
+
+    let mut broken: Vec<String> = Vec::new();
+    let mut paired = 0usize;
+    for row in COPIED_FIGURES {
+        let source = flattened(
+            &std::fs::read_to_string(root.join(row.file))
+                .unwrap_or_else(|_| panic!("{} is there", row.file)),
+        );
+        let in_code = flattened(row.in_code);
+        let in_canon = flattened(row.in_canon);
+        if !source.contains(&in_code) {
+            broken.push(format!(
+                "{}: {} is no longer in {}",
+                row.what, row.in_code, row.file
+            ));
+            continue;
+        }
+        if !canon.contains(&in_canon) {
+            broken.push(format!(
+                "{}: the canon no longer says {:?}",
+                row.what, row.in_canon
+            ));
+            continue;
+        }
+        if let Some(digits) = row.shared {
+            if !(in_code.contains(digits) && in_canon.contains(digits)) {
+                broken.push(format!(
+                    "{}: {digits} is not in both halves of this pair, so the row pairs two \
+                     different numbers",
+                    row.what
+                ));
+                continue;
+            }
+        }
+        paired += 1;
+    }
+
+    eprintln!(
+        "figures the canon copies out of the code: {}; still matching the line they came from: {paired}",
+        COPIED_FIGURES.len()
+    );
+
+    assert!(
+        broken.is_empty(),
+        "a number in this document no longer matches the code it was copied from: {broken:#?}\n\
+         \n  These are the figures with no formula beside them, so nothing can recompute them - \
+         the pair of needles is the instrument. A constant that moved leaves the prose reading \
+         perfectly well and describing a tool that no longer behaves that way; a sentence \
+         reworded without the constant in front of it leaves this row pairing nothing."
+    );
+}
