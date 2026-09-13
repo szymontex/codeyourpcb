@@ -937,3 +937,182 @@ fn every_path_and_name_the_canon_cites_is_in_the_tree() {
          wrong and the rule it excuses is now checkable."
     );
 }
+
+/// The section whose subject is this rule. A paragraph explaining what a claim
+/// about the published world owes its reader states the pattern it describes,
+/// so it matches it - the way a section about superlatives would have to use
+/// one. One name, argued here, rather than a shape in the matcher: the rule can
+/// be stated in one place and that place is known.
+const THE_SECTION_THAT_STATES_THE_RULE: &str = "A claim that the world publishes nothing [S]";
+
+/// The three parts of a claim that the world publishes nothing. All three have
+/// to be in one sentence: a negation alone is half this document, and a noun
+/// for somebody else's page without one is every source line in it.
+const ABSENCE_NEGATIONS: &[&str] = &["no", "none", "nothing", "neither", "nobody"];
+const SOMEBODY_ELSES_PUBLICATION: &[&str] = &[
+    "source",
+    "sources",
+    "standard",
+    "standards",
+    "published",
+    "publishes",
+    "clause",
+    "literature",
+    "page",
+    "pages",
+    "vendor",
+    "guide",
+    "guidance",
+];
+const VERBS_OF_STATING: &[&str] = &[
+    "states",
+    "gives",
+    "publishes",
+    "specifies",
+    "bounds",
+    "covers",
+    "found",
+    "ranks",
+    "supplies",
+    "provides",
+    "fixes",
+];
+
+/// Below these the walk has lost the file. It reads 944 sentences and matches
+/// 15 of them today; a matcher that had stopped matching would report every
+/// claim dated and be believed.
+const SENTENCES_FLOOR: usize = 700;
+const ABSENCE_CLAIMS_FLOOR: usize = 10;
+
+/// The prose of the canon, paragraph by paragraph, with the section each one
+/// sits under. Fenced code, indented commands and table rows are not prose and
+/// carry no claims; a heading is a title rather than a claim.
+fn prose_paragraphs(canon: &str) -> Vec<(String, String)> {
+    let mut out: Vec<(String, String)> = Vec::new();
+    let mut section = String::from("(before the first heading)");
+    let mut buffer: Vec<&str> = Vec::new();
+    let mut fenced = false;
+    let flush = |buffer: &mut Vec<&str>, section: &str, out: &mut Vec<(String, String)>| {
+        if !buffer.is_empty() {
+            out.push((section.to_string(), buffer.join(" ")));
+            buffer.clear();
+        }
+    };
+    for line in canon.lines() {
+        if line.starts_with("```") {
+            fenced = !fenced;
+            flush(&mut buffer, &section, &mut out);
+            continue;
+        }
+        if fenced || line.starts_with("    ") || line.trim_start().starts_with('|') {
+            flush(&mut buffer, &section, &mut out);
+            continue;
+        }
+        if let Some(rest) = line
+            .strip_prefix("### ")
+            .or_else(|| line.strip_prefix("## "))
+        {
+            flush(&mut buffer, &section, &mut out);
+            section = rest.replace('`', "").trim().to_string();
+            continue;
+        }
+        if line.trim().is_empty() {
+            flush(&mut buffer, &section, &mut out);
+        } else {
+            buffer.push(line);
+        }
+    }
+    flush(&mut buffer, &section, &mut out);
+    out
+}
+
+/// A paragraph split where a full stop is followed by something that starts a
+/// sentence in this document - a capital, a bold marker, a backtick or a tag.
+fn sentences(paragraph: &str) -> Vec<&str> {
+    let flat = paragraph;
+    let bytes = flat.as_bytes();
+    let mut out = Vec::new();
+    let mut start = 0usize;
+    let mut index = 0usize;
+    while index + 2 < bytes.len() {
+        let ends = matches!(bytes[index], b'.' | b'!' | b'?') && bytes[index + 1] == b' ';
+        if ends {
+            let next = bytes[index + 2];
+            if next.is_ascii_uppercase() || matches!(next, b'*' | b'`' | b'[') {
+                out.push(flat[start..=index].trim());
+                start = index + 2;
+            }
+        }
+        index += 1;
+    }
+    if start < flat.len() {
+        out.push(flat[start..].trim());
+    }
+    out
+}
+
+fn any_word(haystack: &str, words: &[&str]) -> bool {
+    words.iter().any(|w| contains_phrase(haystack, w))
+}
+
+fn carries_a_date(text: &str) -> bool {
+    text.split(|c: char| !(c.is_ascii_digit() || c == '-'))
+        .any(is_iso_date)
+}
+
+#[test]
+fn a_claim_that_nothing_is_published_says_when_somebody_looked() {
+    let canon = std::fs::read_to_string(repo_root().join("docs/ROUTING-CANON.md"))
+        .expect("the canon is there");
+
+    let mut read = 0usize;
+    let mut claims = 0usize;
+    let mut undated: Vec<String> = Vec::new();
+    for (section, paragraph) in prose_paragraphs(&canon) {
+        let flat = paragraph.split_whitespace().collect::<Vec<_>>().join(" ");
+        for sentence in sentences(&flat) {
+            read += 1;
+            if section == THE_SECTION_THAT_STATES_THE_RULE {
+                continue;
+            }
+            let lowered = sentence.to_ascii_lowercase();
+            let is_a_claim = any_word(&lowered, ABSENCE_NEGATIONS)
+                && any_word(&lowered, SOMEBODY_ELSES_PUBLICATION)
+                && any_word(&lowered, VERBS_OF_STATING);
+            if !is_a_claim {
+                continue;
+            }
+            claims += 1;
+            if !carries_a_date(sentence) && !carries_a_date(&flat) {
+                undated.push(format!(
+                    "{section}: {}",
+                    &sentence[..sentence.len().min(140)]
+                ));
+            }
+        }
+    }
+
+    eprintln!(
+        "sentences read: {read}; claiming the world publishes nothing: {claims}; \
+         without a date in the sentence or its paragraph: {}",
+        undated.len()
+    );
+
+    assert!(
+        read >= SENTENCES_FLOOR && claims >= ABSENCE_CLAIMS_FLOOR,
+        "this walk read {read} sentences and matched {claims} claims, below the floors of \
+         {SENTENCES_FLOOR} and {ABSENCE_CLAIMS_FLOOR}. A matcher that has stopped matching \
+         reports every claim dated, which is the same clean answer as a document with nothing \
+         wrong in it."
+    );
+    assert!(
+        undated.is_empty(),
+        "a sentence here says the world publishes nothing and does not say when somebody \
+         looked: {undated:#?}\n\
+         \n  That is evidence about a search rather than about copper or about this \
+         repository, and nothing in this checkout can settle it: no walk can ask the world \
+         whether a page exists. The date is the whole of the evidence, in the sentence or in \
+         its paragraph. If no search was made, the claim is not a finding and the clause comes \
+         out."
+    );
+}

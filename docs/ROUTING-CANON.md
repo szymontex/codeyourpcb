@@ -20,7 +20,8 @@ fabricator disputes it.
 - `[P]` Board house or vendor material.
 - `[O]` The original article by the author of the rule.
 - `[S]` This project's own reasoning or measurement. Carries the commit it
-  landed in rather than a read date, because no outside page can confirm it.
+  landed in rather than a read date, because it is this project's own reasoning
+  rather than a reading of somebody else's page.
 - `[D]` Practice reported in discussion, with no number attached.
 
 Dates are the day the source was read, not the day it was published. An `[S]`
@@ -228,9 +229,9 @@ against lateral distance, so this canon states no number for the width of the
 band. `sigcon.com/Pubs/news/3_7.htm` was checked on 2026-09-11 and does not
 carry one.
 
-In this repo: nothing measures either condition. See R-13 for why no
-source states a permitted fraction, what bridges a crossing that cannot be
-avoided, and what a two-layer board changes.
+In this repo: nothing measures either condition. See R-13 for why the search
+on 2026-09-11 found no source stating a permitted fraction, what bridges a
+crossing that cannot be avoided, and what a two-layer board changes.
 
 ### R-06 Violations are reported per rule, not as one total `[S]`
 
@@ -504,8 +505,8 @@ relief numbers from the house preset - `pour_thermal_gap` and `pour_spoke_width`
 on `ExportPreset`, handed to the filler by `pour_options`
 (`crates/cypcb-export/src/job.rs:115-119`). Two things are still outside that
 wiring. The spoke count is not a parameter at all: `thermal_spokes()`
-(`crates/cypcb-core/src/pour.rs:272`) cuts a fixed cross of four whatever the
-house publishes, and `thermal_relief_spokes` has no reader. And the pour the
+(`crates/cypcb-core/src/pour.rs:272`) cuts a fixed cross of four whatever a house
+preset asks for, and `thermal_relief_spokes` has no reader. And the pour the
 viewer draws still fills from `PourOptions::default()`
 (`crates/cypcb-render/src/lib.rs:1959`), so what a designer sees on screen is
 not what the preset orders.
@@ -743,7 +744,10 @@ compared one after another, never added:
    (`clearance_contacts` in `crates/cypcb-drc/src/violation.rs`) already computes the contact
    count and the composite does not read it.
 4. **Findings with no acceptance standard behind them** - acute angles, trace
-   entry, mitring. Real, worth fixing, and never allowed to outweigh tier 3.
+   entry, mitring. The searches behind those three ran on 2026-09-11, and the
+   trace-entry half was searched again on 2026-09-12; a claim about all three is
+   only as fresh as the oldest of them. Real, worth fixing, and never allowed to
+   outweigh tier 3.
 
 Condition: of two routed boards, the one with fewer tier-1 findings ranks
 better whatever the other tiers say; ties fall to tier 2, then tier 3, then
@@ -1518,9 +1522,12 @@ publishes, and for two of them what the number used to be and why it was
 changed. The three `IpcClass` presets carry the opposite note, and it is
 accurate: their ladder is *"this project's, not a table anybody can open"*.
 IPC-2221's spacing table is voltage-based, which is R-02, and IPC-6012's classes
-are acceptance criteria, which is R-11. **Neither publishes a flat spacing
+are acceptance criteria, which is R-11. **Neither reproduction read on 2026-09-11 - IPC-2221's
+table in R-02 and the IPC-6012 class material in R-11 - carries a flat spacing
 ladder by class**, so the 0.2 / 0.15 / 0.1 mm figures are a house-style default
-and the file says so where a reader will meet them.
+and the file says so where a reader will meet them. The evidence is the
+reproductions rather than the standards' own text, which R-11 already says of
+itself.
 
 Source: JLCPCB capabilities page, read 2026-09-12 - minimum track width and
 spacing at 1 oz copper is 0.10 / 0.10 mm (4 / 4 mil) for one and two layers and
@@ -1687,6 +1694,42 @@ example: "the trace is narrower than its land" is true of all 897 entries, so it
 selects nothing when used as a fault and everything when used as a trigger, and
 it belongs behind the design's own declaration, where the population it defines
 is the boards that asked for fillets.
+
+### A claim that the world publishes nothing `[S]`
+
+*Verified: 2026-09-13*
+
+A claim that nothing published states something is evidence about a search
+rather than about copper or about this repository: it carries the day the
+search was made, in its own sentence or in the paragraph around it, and it is
+re-run rather than inherited when somebody wants it again.
+
+It cannot be settled the way a claim about the tree is settled.
+`every_path_and_name_the_canon_cites_is_in_the_tree` asks the checkout whether
+a name is there and the checkout answers; nothing can ask the world whether a
+page exists, so the day of the search is the whole of the evidence, and a
+search that found nothing then is not a search that would find nothing now.
+
+`a_claim_that_nothing_is_published_says_when_somebody_looked` holds part of
+this class rather than all of it, and the gap belongs beside it rather than out
+of sight. Its pattern wants all three parts in one sentence - a negation, a
+noun for somebody else's publication, and a verb of stating - and its run on
+2026-09-13 reads 903 sentences, matches 15 and finds all 15 dated. What it
+cannot reach is an absence written as a noun: R-11's fourth tier says
+"findings with no acceptance standard behind them", which carries no verb of
+stating, matches nothing, and was dated by hand the same day. The count this
+check holds and the count a reader would make are two different counts, and
+neither one bounds the other.
+
+Six sentences were dated or withdrawn to bring it to zero on 2026-09-13. Five
+inherited a date from the search they already pointed at - R-05 from R-13's
+search, R-11's fourth tier from the two behind acute angles and mitring, R-19
+from the two reproductions it compares, the wedge section from the queries
+R-08's source block records, and the `[S]` tag by dropping a claim about
+outside pages it had never gone looking for. The sixth lost a clause: nobody
+had searched for a published convention on the smallest sample a median means
+anything over, so the clause asserted a search that never happened. **An
+absence nobody looked for is not a finding, it is a sentence.**
 
 ### A check that reads what the system says, not what it wrote `[S]`
 
@@ -2054,9 +2097,11 @@ defect in one assertion.
 
 What would have to exist to measure it is a distance: how near the trace edge
 comes to the boundary pieces it never crosses, and how near is near enough to
-count. Neither is published. Every source this canon read gives an angle where
-copper meets the land and none gives a clearance to the next side, so closing
-this means inventing a distance and presenting it as a standard. This project
+count. Neither is published, and that was searched for on 2026-09-12 in the
+three query families R-08's source block records. Every source read there gives
+an angle where copper meets the land and none gives a clearance to the next
+side, so closing this means inventing a distance and presenting it as a
+standard. This project
 does not invent distances - the same refusal keeps R-13 carrying a
 proportionality and no threshold, and keeps R-14 screening at a stand-in it
 names in every row.
@@ -2244,7 +2289,7 @@ answers "is this what the board looks like". The claim under test is about the
 board, so it takes the median, and the maximum stands in the table already for
 the day somebody states a claim about existence.
 
-**Twenty clean entries is this project's convention and no source states it.**
+**Twenty clean entries is this project's convention.**
 Below that count a board's median is printed with its denominator beside it and
 the death line is not applied to it: the verdict for that board is "not
 applicable", which is what this file says everywhere else that a number has too
