@@ -37,6 +37,18 @@ oldest one on every run. The dates web sources carry live in the sections
 themselves and are a different claim: those are days somebody read a vendor's
 page, and a page read is not a tree read.
 
+**Three shapes of sentence this file is not allowed to carry**, each held by a
+check beside the dating one. `a_superlative_about_the_other_rules_cites_the_check_that_holds_it`
+stops a sentence claiming something about the rules a writer is not looking at,
+unless it names the instrument holding the claim - a check, or R-16's tally.
+`nothing_here_quantifies_over_the_document_itself` stops a sentence quantified
+over the whole of this text at once, which nothing in the repository can
+confirm. `a_measured_figure_says_when_it_was_measured` requires an ISO date or a
+check name beside a figure the prose calls measured. All three read paragraphs
+with the wrapping flattened and quoted text dropped, so a line break cannot hide
+a match and a corrected sentence quoted in place is not punished for being
+recorded.
+
 ## The rules
 
 ### R-01 Trace width against current and temperature rise `[R]`
@@ -1036,8 +1048,8 @@ an acceptance criterion.**
 
 At 1 GHz a 7.5 mm gap passes almost any real pour, so this rule will catch
 nothing until a board declares a frequency or until a stitching field is thinned
-by routing - which is the second case, and the reason the gap is measured on the
-placed field rather than read off the declaration. A first run reporting zero is
+by routing - which is the second case, and the reason the gap is measured across
+the placed field rather than read off the declaration. A first run reporting zero is
 the rule working, not the rule missing.
 
 **In this repo:** the declaration and the generator exist; no check exists.
@@ -1177,8 +1189,8 @@ this page is a counter-example to that sentence on the same page.
 
 **Bucket 2 - checkable today, nobody wrote the check. Ten.** Checkable is
 not the same as testable: see "A rule with no subject cannot be tested" for
-which of these have anything to fire on, measured on the fixtures rather than
-argued. R-08 was the eleventh and the one this section said to write first,
+which of these have anything to fire on, measured on the six fixtures on
+2026-09-11 rather than argued. R-08 was the eleventh and the one this section said to write first,
 because its subject exists on all six boards; it was written, and it is in
 bucket 1 now. Every quantity these need is in the world already.
 

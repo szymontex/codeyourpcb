@@ -380,3 +380,342 @@ fn every_rule_says_what_its_condition_runs_over() {
          cases of that going wrong."
     );
 }
+
+/// The three forms below all read prose rather than code, so they share one
+/// reading of the file.
+///
+/// Two exclusions, and measurement forced both. **Whitespace is flattened
+/// first**, because the canon is hard-wrapped and one match hid across a line
+/// break. **Text inside double quotes is dropped**, because this file records
+/// its own corrections by quoting the sentence it replaced - a document that
+/// documents its repairs would otherwise be punished for it.
+fn canon_paragraphs(canon: &str) -> Vec<String> {
+    let mut paragraphs = Vec::new();
+    let mut buffer: Vec<&str> = Vec::new();
+    for line in canon.lines() {
+        if line.trim().is_empty() {
+            if !buffer.is_empty() {
+                paragraphs.push(buffer.join(" "));
+                buffer.clear();
+            }
+        } else {
+            buffer.push(line);
+        }
+    }
+    if !buffer.is_empty() {
+        paragraphs.push(buffer.join(" "));
+    }
+    paragraphs
+        .into_iter()
+        .map(|p| {
+            let mut out = String::with_capacity(p.len());
+            let mut quoted = false;
+            for c in p.chars() {
+                if c == '"' {
+                    quoted = !quoted;
+                    out.push(' ');
+                } else if quoted {
+                    out.push(' ');
+                } else {
+                    out.push(c);
+                }
+            }
+            out.split_whitespace().collect::<Vec<_>>().join(" ")
+        })
+        .collect()
+}
+
+/// Every byte offset in `haystack` where `needle` starts on a word boundary.
+fn word_starts(haystack: &str, needle: &str) -> Vec<usize> {
+    let mut out = Vec::new();
+    let mut from = 0usize;
+    while let Some(offset) = haystack[from..].find(needle) {
+        let at = from + offset;
+        if at == 0 || !haystack.as_bytes()[at - 1].is_ascii_alphanumeric() {
+            out.push(at);
+        }
+        from = at + 1;
+    }
+    out
+}
+
+/// The largest char boundary at or below `at`, so a window cut by length never
+/// splits a multi-byte character.
+fn boundary_at_or_below(text: &str, mut at: usize) -> usize {
+    at = at.min(text.len());
+    while at > 0 && !text.is_char_boundary(at) {
+        at -= 1;
+    }
+    at
+}
+
+/// Word offsets and the words themselves, so a window can be measured from the
+/// end of a word rather than from a search that would find the wrong instance.
+fn words_with_offsets(text: &str) -> Vec<(usize, &str)> {
+    let mut out = Vec::new();
+    let mut start = None;
+    for (index, c) in text.char_indices() {
+        if c.is_whitespace() {
+            if let Some(from) = start.take() {
+                out.push((from, &text[from..index]));
+            }
+        } else if start.is_none() {
+            start = Some(index);
+        }
+    }
+    if let Some(from) = start {
+        out.push((from, &text[from..]));
+    }
+    out
+}
+
+/// `contains`, but on whole words. Without this, `the measured one takes work`
+/// carries the substring `measured on` and a paragraph about a preposition is
+/// asked for a date - which is exactly what it did on the first run.
+fn contains_phrase(haystack: &str, phrase: &str) -> bool {
+    word_starts(haystack, phrase).into_iter().any(|at| {
+        let end = at + phrase.len();
+        end == haystack.len() || !haystack.as_bytes()[end].is_ascii_alphanumeric()
+    })
+}
+
+fn bare(word: &str) -> &str {
+    word.trim_matches(|c: char| !c.is_ascii_alphanumeric())
+}
+
+/// The parts of this document a sentence can quantify over. A superlative about
+/// a *pad* or a *fixture* is a claim about the board; a superlative about a
+/// *rule* is a claim about the eighteen sections the writer is not looking at.
+const DOCUMENT_PARTS: &[&str] = &[
+    "rule",
+    "rules",
+    "section",
+    "sections",
+    "paragraph",
+    "paragraphs",
+    "claim",
+    "claims",
+];
+
+/// A word that says the rule belongs to somebody else. `The only
+/// rectangular-specific published rule found` is a claim about a search of
+/// vendor pages, not about the eighteen sections beside it, and the two are
+/// opposite in kind: one is checkable only by reading this file, the other only
+/// by reading the web. One word, because a second one should be argued for here
+/// rather than appended - the list is the exception, and an exception nobody
+/// has to justify stops being one.
+const SOMEBODY_ELSES: &[&str] = &["published"];
+
+/// `the first eleven rules` is a range, not a superlative: a count immediately
+/// after the word turns "first" into an ordinal over an enumeration.
+const COUNTS: &[&str] = &[
+    "one",
+    "two",
+    "three",
+    "four",
+    "five",
+    "six",
+    "seven",
+    "eight",
+    "nine",
+    "ten",
+    "eleven",
+    "twelve",
+    "thirteen",
+    "fourteen",
+    "fifteen",
+    "sixteen",
+    "seventeen",
+    "eighteen",
+    "nineteen",
+    "twenty",
+];
+
+fn is_count(word: &str) -> bool {
+    let word = bare(word);
+    !word.is_empty() && (word.chars().all(|c| c.is_ascii_digit()) || COUNTS.contains(&word))
+}
+
+/// A backticked `snake_case_name_with_underscores` - the way this canon writes
+/// the name of a check.
+fn names_a_check(paragraph: &str) -> bool {
+    paragraph.split('`').skip(1).step_by(2).any(|token| {
+        token.matches('_').count() >= 2
+            && token
+                .chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
+    })
+}
+
+/// The content escape hatch: a paragraph may make a claim about the other
+/// sections **if it points at the instrument that holds the claim** - a check
+/// by name, or R-16's tally. Not a syntactic hatch: "used to" and "until 2026"
+/// were both proposed and both refused, because anybody can type them and
+/// neither one puts a number under the sentence.
+fn cites_an_instrument(paragraph: &str) -> bool {
+    names_a_check(paragraph) || paragraph.to_ascii_lowercase().contains("tally")
+}
+
+#[test]
+fn a_superlative_about_the_other_rules_cites_the_check_that_holds_it() {
+    let canon = std::fs::read_to_string(repo_root().join("docs/ROUTING-CANON.md"))
+        .expect("the canon is there");
+
+    const SUPERLATIVES: &[&str] = &[
+        "the only ",
+        "no other ",
+        "every other ",
+        "the sole ",
+        "the first ",
+        "the last ",
+    ];
+
+    let mut claiming = 0usize;
+    let mut hatched = 0usize;
+    let mut blocked: Vec<String> = Vec::new();
+    for paragraph in canon_paragraphs(&canon) {
+        let lowered = paragraph.to_ascii_lowercase();
+        let mut hits: Vec<String> = Vec::new();
+        for phrase in SUPERLATIVES {
+            for at in word_starts(&lowered, phrase) {
+                let after = &lowered[at + phrase.len()..];
+                let words: Vec<&str> = after.split_whitespace().take(3).collect();
+                let Some(first) = words.first() else { continue };
+                if is_count(first) {
+                    continue;
+                }
+                if words.iter().any(|w| SOMEBODY_ELSES.contains(&bare(w))) {
+                    continue;
+                }
+                if words.iter().any(|w| DOCUMENT_PARTS.contains(&bare(w))) {
+                    let end = boundary_at_or_below(&lowered, at + phrase.len() + 40);
+                    hits.push(lowered[at..end].to_string());
+                }
+            }
+        }
+        if hits.is_empty() {
+            continue;
+        }
+        claiming += 1;
+        if cites_an_instrument(&paragraph) {
+            hatched += 1;
+        } else {
+            blocked.push(format!(
+                "{hits:?} in: {}",
+                &paragraph[..paragraph.len().min(120)]
+            ));
+        }
+    }
+
+    eprintln!(
+        "paragraphs claiming something about the other rules: {claiming}; \
+         citing the check that holds it: {hatched}; blocked: {}",
+        blocked.len()
+    );
+
+    assert!(
+        blocked.is_empty(),
+        "a sentence here claims something about the other rules and names nothing that checks \
+         it: {blocked:#?}\n\
+         \n  This is the one claim a writer cannot verify while writing, because it is a claim \
+         about the eighteen sections they are not looking at - and both sentences in this file \
+         that were false the day they were typed had this shape. Two cures, and neither is a \
+         rewording: name the check or the tally that holds the claim, or narrow the sentence to \
+         what you read."
+    );
+}
+
+#[test]
+fn nothing_here_quantifies_over_the_document_itself() {
+    let canon = std::fs::read_to_string(repo_root().join("docs/ROUTING-CANON.md"))
+        .expect("the canon is there");
+
+    const QUANTIFIERS: &[&str] = &["every ", "each ", "all ", "no ", "none of the ", "nothing "];
+    const THE_DOCUMENT: &[&str] = &[
+        "this file",
+        "this canon",
+        "this document",
+        "the file",
+        "the canon",
+        "the document",
+    ];
+
+    let mut scanned = 0usize;
+    let mut offenders: Vec<String> = Vec::new();
+    for paragraph in canon_paragraphs(&canon) {
+        scanned += 1;
+        let lowered = paragraph.to_ascii_lowercase();
+        for quantifier in QUANTIFIERS {
+            for at in word_starts(&lowered, quantifier) {
+                let base = at + quantifier.len();
+                let after = &lowered[base..];
+                for (offset, word) in words_with_offsets(after).into_iter().take(2) {
+                    if !DOCUMENT_PARTS.contains(&bare(word)) {
+                        continue;
+                    }
+                    let cursor = base + offset + word.len();
+                    let window: String = lowered[cursor..].chars().take(60).collect();
+                    if THE_DOCUMENT.iter().any(|d| window.contains(d)) {
+                        let end = boundary_at_or_below(&lowered, cursor + 60);
+                        offenders.push(lowered[at..end].to_string());
+                    }
+                }
+            }
+        }
+    }
+
+    eprintln!(
+        "paragraphs read: {scanned}; quantifying over the document itself: {}",
+        offenders.len()
+    );
+
+    assert!(
+        offenders.is_empty(),
+        "a sentence here says something about every rule, section or claim in this document: \
+         {offenders:#?}\n\
+         \n  Nothing in this repository can check that, and the two false sentences this file \
+         has carried were both of this shape. If the claim is worth making it is worth counting: \
+         R-16 carries a tally the walk holds it to, and a count on the page is a counter-example \
+         to the sentence beside it."
+    );
+}
+
+#[test]
+fn a_measured_figure_says_when_it_was_measured() {
+    let canon = std::fs::read_to_string(repo_root().join("docs/ROUTING-CANON.md"))
+        .expect("the canon is there");
+
+    const MEASURING: &[&str] = &["measured on", "counted on", "this scan sees"];
+
+    let mut stating = 0usize;
+    let mut unsourced: Vec<String> = Vec::new();
+    for paragraph in canon_paragraphs(&canon) {
+        let lowered = paragraph.to_ascii_lowercase();
+        let states_a_measurement = MEASURING.iter().any(|m| contains_phrase(&lowered, m))
+            && paragraph.chars().any(|c| c.is_ascii_digit());
+        if !states_a_measurement {
+            continue;
+        }
+        stating += 1;
+        let dated = paragraph
+            .split(|c: char| !(c.is_ascii_digit() || c == '-'))
+            .any(is_iso_date);
+        if !dated && !names_a_check(&paragraph) {
+            unsourced.push(paragraph[..paragraph.len().min(140)].to_string());
+        }
+    }
+
+    eprintln!(
+        "paragraphs stating a measured figure: {stating}; without a date or a check name: {}",
+        unsourced.len()
+    );
+
+    assert!(
+        unsourced.is_empty(),
+        "a figure here is called measured and nothing says when or by what: {unsourced:#?}\n\
+         \n  A measurement without a date is a claim about the working tree on a day nobody \
+         recorded, and this file has already been caught seven times holding a figure that was \
+         true when it was written. Either carry the ISO date it was read on, or name the check \
+         that re-reads it."
+    );
+}
