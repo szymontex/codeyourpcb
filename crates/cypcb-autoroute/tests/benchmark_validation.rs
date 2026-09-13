@@ -283,6 +283,16 @@ const ENTRY_CENSUS: [(usize, usize, usize); 6] = [
     (60, 0, 3),  // plane_board
 ];
 
+// The fifth and sixth fields are a **baseline**, not a reading of today's
+// router: they record what the board routed to on the day the band beside them
+// was measured, and the threshold is the two added together. Nothing compared
+// them against a routed board until 2026-09-13, and four of the six had drifted
+// by then - stm32_breakout by 1, multi_ic by 2, shift_driver by 3, qfp_fanout
+// by 5. Every one was still under its threshold, which is what the band is for;
+// what was missing was anybody being told the headroom was going. The walk in
+// `benchmark_all_fixtures_drc` prints the drift now and fails at half a band,
+// so a baseline is re-measured while there is still room rather than after the
+// gate turns red.
 const DRC_RATCHETS: &[Ratchet] = &[
     // Every entry re-measured 2026-08-08, and every band with it, on boards
     // that are all fabricable for the first time: no copper outside an
@@ -473,7 +483,7 @@ fn benchmark_all_fixtures_drc() {
     for (
         (
             (label, violations, shorts, unrouted, route_count, (report, sharp)),
-            (_, _, ratchet, shorts_ratchet, _, _),
+            (filename, _, ratchet, shorts_ratchet, baseline, _),
         ),
         (examined_floor, refused_ceiling, sharp_ratchet),
     ) in measured.iter().zip(DRC_RATCHETS).zip(ENTRY_CENSUS)
@@ -482,6 +492,33 @@ fn benchmark_all_fixtures_drc() {
             "  {}: {} routes, {} violations against {}, {} shorts against {}, {} unrouted",
             label, route_count, violations, ratchet, shorts, shorts_ratchet, unrouted
         );
+
+        // How far the router has walked from the baseline the threshold was
+        // built on. The threshold is that baseline plus a band, and until
+        // 2026-09-13 nothing compared the baseline against a routed board:
+        // `the_ratchets_are_the_routed_values_plus_their_bands` checks
+        // `ratchet == baseline + band`, which is arithmetic between two stored
+        // numbers and green whatever the router does. Four of the six had
+        // drifted - stm32_breakout by 1, multi_ic by 2, shift_driver by 3,
+        // qfp_fanout by 5 - every one still under its threshold, and nothing
+        // said the headroom was shrinking.
+        //
+        // So the drift is printed, and half the band is where it fails. A
+        // threshold reached is a cliff; half a band is a warning with room
+        // left to act on it.
+        let (band, _) = cypcb_autoroute::noise_band::noise_band(filename);
+        let drift = violations.saturating_sub(*baseline);
+        eprintln!(
+            "      baseline {baseline} set when the band was measured, drift +{drift} of a band of {band}"
+        );
+        if i64::from(drift) * 2 > band {
+            failures.push(format!(
+                "{label}: routed {violations} against a baseline of {baseline}, which is +{drift} \
+                 of a band of {band}. The threshold of {ratchet} is not reached yet and that is \
+                 the point - more than half the band is spent, so the baseline is re-measured \
+                 now rather than after the gate goes red."
+            ));
+        }
 
         // The census, printed rather than counted away. Every entry the
         // router's own copper leaves too sharp, named by its pin and its
