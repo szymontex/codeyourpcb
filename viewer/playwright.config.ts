@@ -21,6 +21,20 @@ export default defineConfig({
     timeout: 10_000,
   },
   fullyParallel: false, // serial — WASM + canvas state is shared
+
+  // Two browsers at a time, and the line has to be here or there are six.
+  //
+  // `fullyParallel: false` serialises the tests inside one file and nothing
+  // else: files still run across workers, and with `workers` unset Playwright
+  // takes half the cores. On a twelve-core host that is six headless browsers,
+  // each with its own renderer and GPU process, on a machine that is also
+  // compiling Rust and running somebody else's containers. The config said
+  // serial and behaved six ways.
+  //
+  // Two rather than one: the stage is a hundred and twenty-six specs and one
+  // worker makes the gate a great deal longer for a saving nobody asked for.
+  // Two keeps the peak at two browsers, which is what this host can spare.
+  workers: 2,
   // One retry, and it is a report rather than a cover.
   //
   // Stage 7 of the quality gate failed on three consecutive runs of one tree -
