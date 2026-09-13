@@ -43,7 +43,7 @@ page, and a page read is not a tree read.
 
 *Verified: 2026-09-13*
 
-*Applies when:* a net declares a `current`. Silent on every net that does not, which today is every net on every fixture.
+*Applies when:* [copper] a net declares a `current`. Silent on every net that does not, which today is every net on every fixture.
 
 A trace must have enough cross section for the current its net carries at the
 temperature rise the design accepts.
@@ -69,7 +69,7 @@ declares `current`.
 
 *Verified: 2026-09-13*
 
-*Applies when:* a net declares a working voltage. **Nothing can declare one**, so this rule is silent on every board - see "Blocked on the model".
+*Applies when:* [copper] a net declares a working voltage. **Nothing can declare one**, so this rule is silent on every board - see "Blocked on the model".
 
 Spacing between conductors of different nets must grow with the peak voltage
 between them.
@@ -102,7 +102,7 @@ In this repo: the table exists and nothing calls it. See "Blocked on the model".
 
 *Verified: 2026-09-13*
 
-*Applies when:* always. Two trace segments meet at a junction; no declaration needed.
+*Applies when:* [copper] always. Two trace segments meet at a junction; no declaration needed.
 
 No two runs of copper on one net and one layer meet at an internal angle below
 90 degrees. The angle is the one between the two arms of the junction, so a
@@ -164,7 +164,7 @@ cosmetic, are R-10.
 
 *Verified: 2026-09-13*
 
-*Applies when:* a net declares a signal speed **and** the copper has a connectivity graph. Neither exists, so this rule is silent on every board.
+*Applies when:* [copper] a net declares a signal speed **and** the copper has a connectivity graph. Neither exists, so this rule is silent on every board.
 
 An unterminated branch resonates at a quarter wavelength and notches the
 signal's own band out of it.
@@ -192,7 +192,7 @@ on the model".
 
 *Verified: 2026-09-13*
 
-*Applies when:* the board has a pour on a copper layer adjacent to the trace. A board with no pour has no reference copper and this rule says nothing. R-13 adds the impedance gate; this rule states none, and the two are kept apart on purpose.
+*Applies when:* [copper] the board has a pour on a copper layer adjacent to the trace. A board with no pour has no reference copper and this rule says nothing. R-13 adds the impedance gate; this rule states none, and the two are kept apart on purpose.
 
 Return current takes the path of least impedance: least resistance at low
 frequency, least inductance above the crossover, which is a band directly under
@@ -224,7 +224,7 @@ avoided, and what a two-layer board changes.
 
 *Verified: 2026-09-13*
 
-*Applies when:* always, because it is about the shape of the output rather than the board.
+*Applies when:* [output row] always, because it is about the shape of the output rather than the board.
 
 A ranking that adds every rule together at the same price cannot tell a trace
 that will overheat from a trace 10 um under the fab's minimum.
@@ -275,7 +275,7 @@ again is the single total under another name.
 
 *Verified: 2026-09-13*
 
-*Applies when:* the board has holes - a via, a through-hole pad, a mounting hole.
+*Applies when:* [copper] the board has holes - a via, a through-hole pad, a mounting hole.
 
 A land must exceed its hole by two annular rings plus the fabrication
 allowance, and laminate must remain between holes.
@@ -314,7 +314,7 @@ rule with no subject, arriving here as a sentence rather than as a rule.
 
 *Verified: 2026-09-11*
 
-*Applies when:* a trace ends on a pad. Every routed board.
+*Applies when:* [copper] a trace ends on a pad. Every routed board.
 
 A trace enters a land square on or at 45 degrees; an acute angle between trace
 and land edge is not allowed.
@@ -466,7 +466,7 @@ what the design stated.
 
 *Verified: 2026-09-13*
 
-*Applies when:* a pad sits inside a pour on its own net. A board with no pour says nothing here.
+*Applies when:* [copper] a pad sits inside a pour on its own net. A board with no pour says nothing here.
 
 A pad tied into a pour needs spokes, or the pour sinks the soldering heat and
 the joint comes out cold.
@@ -521,7 +521,7 @@ though it covered the checking.
 
 *Verified: 2026-09-13*
 
-*Applies when:* R-03 reported an acute junction. This rule is what to do about one, not how to find it.
+*Applies when:* [copper] R-03 reported an acute junction. This rule is what to do about one, not how to find it.
 
 An interior angle below 90 degrees is cut away, not left, and the cut is
 asymmetric.
@@ -643,7 +643,7 @@ the same finding as part 1 seen from the tool side.
 
 *Verified: 2026-09-13*
 
-*Applies when:* the board is graded. The full four-tier form needs a declared acceptance class; for a board graded by a house table see part 4 below.
+*Applies when:* [output row] the board is graded. The full four-tier form needs a declared acceptance class; for a board graded by a house table see part 4 below.
 
 **A board that declares no class.** Found by walking this canon against a real
 fixture: a board graded by a house table declares no acceptance class, and tiers
@@ -757,7 +757,7 @@ the tiers below have nowhere to live in a row of output. See R-18.
 
 *Verified: 2026-09-13*
 
-*Applies when:* never, to a board.
+*Applies when:* [the tool] never, to a board.
 
 **This section has moved to `docs/routing.md`.** It read the primary paper on
 negotiated-congestion routing and found three places where this router departs
@@ -787,7 +787,7 @@ before today still lands where its author meant.
 
 *Verified: 2026-09-13*
 
-*Applies when:* as R-05. A pour on the adjacent layer, and a net that declares a controlled impedance.
+*Applies when:* [copper] as R-05. A pour on the adjacent layer, and a net that declares a controlled impedance.
 
 R-05 states the rule and its two conditions. This section answers three
 questions it leaves open: what fraction of a trace may run without reference
@@ -919,7 +919,7 @@ what was needed, two paragraphs after the section itself named the gate.
 
 *Verified: 2026-09-13*
 
-*Applies when:* the board has two pours of one net on different layers, or a via that changes which pour is a signal's reference. Where the design declares no frequency the rule screens at a stated stand-in of 1 GHz and says so in every row - see part 5.
+*Applies when:* [copper] the board has two pours of one net on different layers, or a via that changes which pour is a signal's reference. Where the design declares no frequency the rule screens at a stated stand-in of 1 GHz and says so in every row - see part 5.
 
 Two pours of one net on different layers are tied together by a field of vias,
 and a signal via that changes reference has a return via beside it. R-05 states
@@ -1046,7 +1046,7 @@ the rule working, not the rule missing.
 
 *Verified: 2026-09-13*
 
-*Applies when:* a two-terminal component has both pads inside pours. A board with no pour says nothing here.
+*Applies when:* [a component] a two-terminal component has both pads inside pours. A board with no pour says nothing here.
 
 R-09 states thermal relief as geometry - spoke width floor, spoke count, the
 per-package pairs, the 3 A threshold and the bottom-terminated exception - and
@@ -1127,7 +1127,7 @@ the model cannot answer.
 
 *Verified: 2026-09-11*
 
-*Applies when:* never, to a board. This is the canon reading itself.
+*Applies when:* [the canon] never, to a board. This is the canon reading itself.
 
 Source: none outside this document, which is what `[S]` says. Every count here
 is taken from the canon itself or from the registry it names, and the entry
@@ -1143,6 +1143,19 @@ rules the board is held to, which wait on somebody writing a check, and which
 wait on the data model - and then it counts the missing **fields** rather than
 the blocked rules, because a field that unblocks two rules is worth more than
 either of them.
+
+**What the nineteen rules are about, counted rather than described.** Each
+`*Applies when:*` line opens with the subject its **condition** runs over -
+not what the rule reads on the way there, which is why R-08 is `copper` though
+it reads a part's position and turn, and R-07 is `copper` though its subject
+is holes. **copper 12, output row 3, the tool 2, the canon 1, a component 1.**
+
+Those five words are the whole vocabulary and `every_rule_says_what_its_condition_runs_over`
+holds this line to them. It exists because the two sentences in this file that
+were false the day they were written were both claims about what every other
+rule does - the one kind of claim a writer cannot check while writing, because
+it is a claim about the eighteen sections they are not looking at. A count on
+this page is a counter-example to that sentence on the same page.
 
 **Bucket 1 - enforced today. Five.** R-19 is the loudest, written last because a rule that fires on every board leaves no gap to notice; R-08 is the newest, registered after this census was taken. The registry has 39 entries
 (`crates/cypcb-drc/src/lib.rs`) and ten of them serve these five rules:
@@ -1246,7 +1259,7 @@ bucket 2 from bucket 3 in practice, not from principle.
 
 *Verified: 2026-09-13*
 
-*Applies when:* always, before routing. It needs pad positions and a fab table, both of which exist on every board.
+*Applies when:* [the tool] always, before routing. It needs pad positions and a fab table, both of which exist on every board.
 
 Source: this project, which is what `[S]` says, with one dated exception. The
 grid arithmetic and both function readings are code in this repository. The
@@ -1352,7 +1365,7 @@ on such a board describes the grid rather than the router.
 
 *Verified: 2026-09-11*
 
-*Applies when:* never, to a board. This is about a row of output.
+*Applies when:* [output row] never, to a board. This is about a row of output.
 
 A report says what was measured, where, against what, by which rule, and what to
 change - and it names what it did not check. R-06 says the counts must be per
@@ -1467,7 +1480,7 @@ third, two distance-measuring constructors reporting no distance, was closed on
 
 *Verified: 2026-09-11*
 
-*Applies when:* always. Two pieces of copper on one layer belonging to two
+*Applies when:* [copper] always. Two pieces of copper on one layer belonging to two
 different nets. No declaration needed, which is why this is the rule that fires
 most.
 

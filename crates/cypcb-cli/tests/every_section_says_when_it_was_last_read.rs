@@ -284,3 +284,99 @@ fn every_rule_the_canon_names_is_one_the_registry_runs() {
          pattern-matched."
     );
 }
+
+/// The whole vocabulary a rule's condition may run over.
+///
+/// Closed on purpose. A sixth value bought for one rule costs a decision on
+/// every rule after it, and the point of the tag is that the count on the page
+/// can be compared with the count in the file - which needs the categories to
+/// stay the same length.
+const SUBJECTS: &[&str] = &[
+    "copper",
+    "output row",
+    "the tool",
+    "the canon",
+    "a component",
+];
+
+/// The line in R-16 that states the tally, in the form the check reads back.
+const TALLY: &str = "**copper 12, output row 3, the tool 2, the canon 1, a component 1.**";
+
+#[test]
+fn every_rule_says_what_its_condition_runs_over() {
+    let canon = std::fs::read_to_string(repo_root().join("docs/ROUTING-CANON.md"))
+        .expect("the canon is there");
+    let lines: Vec<&str> = canon.lines().collect();
+
+    let mut rules = 0usize;
+    let mut tags: BTreeMap<String, usize> = BTreeMap::new();
+    let mut untagged: Vec<String> = Vec::new();
+    for (index, line) in lines.iter().enumerate() {
+        let Some(rest) = line.strip_prefix("### ") else {
+            continue;
+        };
+        if !rest.starts_with("R-") {
+            continue;
+        }
+        rules += 1;
+        let name = rest.replace('`', "");
+        let applies = lines[index + 1..]
+            .iter()
+            .take_while(|l| !l.starts_with("### ") && !l.starts_with("## "))
+            .find(|l| l.starts_with("*Applies when:*"));
+        let tag = applies
+            .and_then(|l| l.strip_prefix("*Applies when:* ["))
+            .and_then(|rest| rest.split(']').next());
+        match tag {
+            Some(tag) if SUBJECTS.contains(&tag) => *tags.entry(tag.to_string()).or_default() += 1,
+            _ => untagged.push(name),
+        }
+    }
+
+    let counted: usize = tags.values().sum();
+    eprintln!(
+        "rule sections: {rules}; tagged {counted}; {}",
+        SUBJECTS
+            .iter()
+            .map(|s| format!("{s} {}", tags.get(*s).copied().unwrap_or(0)))
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+
+    assert!(
+        rules >= 19,
+        "this check found {rules} rule sections and the canon has nineteen. Either rules were          deleted, or the heading it walks changed shape and the tally below is over nothing."
+    );
+    assert!(
+        untagged.is_empty(),
+        "every rule opens its `*Applies when:*` with the subject its condition runs over, in          square brackets, from {SUBJECTS:?} - and these do not: {untagged:?}\n\
+         \n  The tag names what the **condition** runs over, not what the rule reads on the \
+         way there: R-08 is `copper` though it reads a part's position, and R-07 is `copper` \
+         though its subject is holes. If none of the five fits, that is worth an argument in \
+         the section rather than a sixth word here - the vocabulary is closed so that the \
+         count on the page and the count in the file stay comparable."
+    );
+    assert_eq!(
+        counted, rules,
+        "the tally covers every rule section: {counted} tagged against {rules} sections"
+    );
+
+    // The number the prose states, held to the number the walk finds. This is
+    // the half that makes a claim about the other eighteen sections checkable
+    // by the person writing the nineteenth.
+    let stated = format!(
+        "**copper {}, output row {}, the tool {}, the canon {}, a component {}.**",
+        tags.get("copper").copied().unwrap_or(0),
+        tags.get("output row").copied().unwrap_or(0),
+        tags.get("the tool").copied().unwrap_or(0),
+        tags.get("the canon").copied().unwrap_or(0),
+        tags.get("a component").copied().unwrap_or(0),
+    );
+    assert!(
+        canon.contains(&stated),
+        "R-16 states the tally and the walk disagrees with it.\n  the file says: {stated}\n           and the line there reads: {TALLY}\n\
+         \n  Whichever moved, the other follows in the same commit: a count in prose beside a \
+         count in a walk is two places for one fact, and this document has seven recorded \
+         cases of that going wrong."
+    );
+}
