@@ -3,12 +3,17 @@
 //! `cargo test -p cypcb-autoroute --test smoothness_measures_the_corners`
 //!
 //! `compute_smoothness` walked `trace.segments.windows(2)` and skipped any
-//! trace with fewer than two segments. `apply_routes` builds one entity per
-//! route segment - `segments: vec![TraceSegment::new(..)]` in all four places
-//! it does so - so every trace had exactly one segment, every trace was
-//! skipped, and the function returned its `total_bends == 0` default of 1.0.
-//! Every board ever scored read as perfectly smooth without a single corner
-//! being examined.
+//! trace with fewer than two segments. `apply_routes` built one entity per
+//! route segment at the time, so every trace had exactly one segment, every
+//! trace was skipped, and the function returned its `total_bends == 0` default
+//! of 1.0. Every board ever scored read as perfectly smooth without a single
+//! corner being examined.
+//!
+//! `apply_routes` collects segments into one `Trace` per net and layer now.
+//! That is not what makes the measurement sound: `compute_smoothness` regroups
+//! by net and layer itself, so the router's choice of entity shape cannot reach
+//! it either way. The sentence above described the router as it was, and stayed
+//! in the present tense here and in the canon until 2026-09-13.
 //!
 //! It still reads 1.0 on boards the in-house router produces, because that
 //! router works on a 45-degree grid and a 45-degree turn costs nothing. The

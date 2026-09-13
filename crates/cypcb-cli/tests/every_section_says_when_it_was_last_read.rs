@@ -133,3 +133,59 @@ fn every_section_says_when_it_was_last_read() {
         sections.len() - never
     );
 }
+
+/// How many line-number references the canon's prose still carries.
+///
+/// A ceiling, and it may only fall. The file states the rule - a line number is
+/// not a reference - and states this number in the same breath, because the
+/// rule was false in forty eight places on the day it was written and a rule
+/// with no count under it is the defect it describes.
+const LINE_NUMBER_REFERENCES: usize = 48;
+
+#[test]
+fn line_numbers_in_this_file_only_fall() {
+    let canon = std::fs::read_to_string(repo_root().join("docs/ROUTING-CANON.md"))
+        .expect("the canon is there");
+
+    // Command blocks are exempt and the count says so: `grep -n` prints a line
+    // number, and a number that came out of a run quoted beside it is the form
+    // the rule asks for.
+    let mut in_block = false;
+    let mut found: Vec<String> = Vec::new();
+    for line in canon.lines() {
+        if line.starts_with("```") {
+            in_block = !in_block;
+            continue;
+        }
+        if in_block {
+            continue;
+        }
+        let bytes: Vec<char> = line.chars().collect();
+        let mut index = 0;
+        while index < bytes.len() {
+            if bytes[index] == ':'
+                && index >= 3
+                && bytes[index - 3..index].iter().collect::<String>() == ".rs"
+                && bytes.get(index + 1).is_some_and(char::is_ascii_digit)
+            {
+                let start = line[..index].rfind(['`', ' ']).map_or(0, |i| i + 1);
+                found.push(line[start..].chars().take(48).collect());
+            }
+            index += 1;
+        }
+    }
+
+    eprintln!(
+        "line-number references in the canon's prose: {} of a ceiling of {LINE_NUMBER_REFERENCES}",
+        found.len()
+    );
+    assert!(
+        found.len() <= LINE_NUMBER_REFERENCES,
+        "the canon carries {} line-number references and the ceiling is \
+         {LINE_NUMBER_REFERENCES}. A line number is found by nothing and breaks silently on \
+         every insertion above it: name the symbol instead, or print the number from a command \
+         quoted beside it. The ceiling falls as they go, and it does not rise. All of them, \
+         in file order, so the new one can be found by comparing against the last run: {found:?}",
+        found.len()
+    );
+}

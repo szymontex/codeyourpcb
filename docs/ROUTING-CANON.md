@@ -231,14 +231,20 @@ rather than prose. How many kinds it holds is counted by the command in the
 verification block rather than written here: it has been 35, then 36, then 37
 inside one week.
 
-**Line numbers are not used as references anywhere in this file, and that is a
-rule rather than a style.** A symbol name is found by grep and breaks loudly
-when somebody renames it; a line number is found by nothing and breaks silently
-on every insertion above it. Four of them rotted in the score section in a
-single week, and R-03's rule text carried `:196` while its own registry row two
-hundred lines away carried the correct `:197`. Where a number is worth seeing,
-it comes out of a command quoted beside it - `grep -n` prints one - not out of
-this document's memory of the file.
+**A line number is not a reference, and that is a rule rather than a style.** A
+symbol name is found by grep and breaks loudly when somebody renames it; a line
+number is found by nothing and breaks silently on every insertion above it. Four
+rotted in the score section in a single week, and R-03's rule text carried
+`:196` while its own registry row two hundred lines away carried the correct
+`:197`. Where a number is worth seeing, it comes out of a command quoted beside
+it - `grep -n` prints one - not out of this document's memory of the file.
+
+**The rule is stated ahead of the file, and the file says by how much.** Forty
+eight of them remain in the prose here, none inside the command blocks, and
+`line_numbers_in_this_file_only_fall` holds that count as a ceiling: it may drop
+and it may not rise. Writing the rule without the count would have been the
+defect the rule is about - a claim about this repository that nothing checks and
+that was false in forty eight places the day it was written.
 
 This rule gives the vector; R-11 says how to read it. Split apart they invite
 the defect they were written against - a count per kind that is then added up
@@ -684,7 +690,7 @@ tier 4. Precedent in this repository for the form, not for the tiers:
 by composite (`crates/cypcb-autoroute/src/variant.rs:496-510`).
 
 **In this repo:** the score prices every violation at 1000 regardless of kind
-(`compute_composite`, `crates/cypcb-autoroute/src/scoring.rs:583`), so tiers 3
+(`compute_composite` in `crates/cypcb-autoroute/src/scoring.rs`), so tiers 3
 and 4 are indistinguishable inside it, and tier 1 is absent from the score
 altogether. The board that makes this concrete is `shift_driver` under
 `stop_at_own_copper`: its clearance reports go 7 to 27 while its acute-angle
@@ -781,7 +787,7 @@ field solver and is out of scope for this project.
    already derives from the stackup through `CopperEnvironment`
    (`crates/cypcb-drc/src/rules/impedance.rs:30`), and `query_region_on_layers`
    already answers what copper lies in a region - it is what `compute_crossings`
-   uses (`crates/cypcb-autoroute/src/scoring.rs:423`). Measure the share of each
+   uses (`compute_layer_balance` in `crates/cypcb-autoroute/src/scoring.rs`). Measure the share of each
    segment's footprint that projects onto reference copper on the adjacent
    copper layer.
 2. *Split crossings: measurable.* Intersect the segment footprint with the
@@ -1750,26 +1756,26 @@ nothing, not tests that read the wrong thing.
 
 ### Board score
 
-*Verified: never*
+*Verified: 2026-09-13*
 
 `crates/cypcb-autoroute/src/scoring.rs` returns `RoutingScore` with nine
 fields. Six of them enter the composite.
 
 | field | unit | computed in | in composite |
 |---|---|---|---|
-| `total_length` | nm | `TraceData::total_length`, `scoring.rs:239` | yes, divided by board diagonal |
-| `via_count` | count | `scoring.rs:156` | yes, weight 1 |
-| `drc_violations` | violation rows | `scoring.rs:163` | yes, x1000 |
-| `clearance_contacts` | feature pairs | `scoring.rs:168` | no |
-| `shorts` | violations measured at 0.00 mm | `scoring.rs:167` | no |
-| `smoothness` | 0.0 to 1.0 | `compute_smoothness`, `scoring.rs:281` | yes, `(1-s) * 100` |
-| `crossings` | segment intersections | `compute_crossings`, `scoring.rs:387` | yes, x500 |
-| `layer_balance` | 0.0 to 1.0 | `compute_layer_balance`, `scoring.rs:494` | yes, `(1-b) * 50` |
-| `composite` | dimensionless, lower is better | `compute_composite`, `scoring.rs:565` | - |
+| `total_length` | nm | `TraceData::total_length` | yes, divided by board diagonal |
+| `via_count` | count | `score_board`, counting `Via` entities | yes, weight 1 |
+| `drc_violations` | violation rows | `score_board`, from the `DrcResult` | yes, x1000 |
+| `clearance_contacts` | feature pairs | `score_board`, from the same result | no |
+| `shorts` | violations measured at 0.00 mm | `score_board`, the zero-distance rows | no |
+| `smoothness` | 0.0 to 1.0 | `compute_smoothness` | yes, `(1-s) * 100` |
+| `crossings` | segment intersections | `compute_crossings` | yes, x500 |
+| `layer_balance` | 0.0 to 1.0 | `compute_layer_balance` | yes, `(1-b) * 50` |
+| `composite` | dimensionless, lower is better | `compute_composite` | - |
 
-Every term is multiplied by its `ScoreWeights` field before it is summed
-(`scoring.rs:88-108` for the struct and its defaults, `:581-586` for the sum),
-and all six default to 1.0. So the "in composite" column is the term a default
+Every term is multiplied by its `ScoreWeights` field before it is summed - the
+struct with its defaults, and the sum inside `compute_composite` - and all six
+default to 1.0. So the "in composite" column is the term a default
 run computes, not the formula: `via_count` enters as `weights.via * via_count`,
 and a caller that sets `drc` to 2.0 prices a violation row at 2000 with nothing
 in this table changing. The multipliers that are the formula's own, and that no
@@ -1777,9 +1783,13 @@ weight can move, are the 1000 on a violation row, the 500 on a crossing, the 100
 on `(1 - smoothness)` and the 50 on `(1 - layer_balance)`.
 
 The bend penalty is the distance from the nearest multiple of 45 degrees over
-22.5 degrees (`angle_penalty`, `scoring.rs:253`). Length is normalised by the
-board diagonal, which falls back to 100 mm when no board is set
-(`board_diagonal_nm`, `scoring.rs:542`).
+22.5 degrees (`angle_penalty`). Length is normalised by the board diagonal,
+which falls back to 100 mm when no board is set (`board_diagonal_nm`).
+
+Eleven line numbers stood in the three paragraphs above until 2026-09-13, and
+four of them had rotted inside a week. They are gone for the reason stated where
+sources are tagged: a function name is found by grep and breaks loudly, a line
+number is found by nothing.
 
 Three things about this score are already measured and should not be
 re-discovered:
@@ -1790,29 +1800,56 @@ re-discovered:
 - `layer_balance` divides by the board's copper layers, not by the layers the
   route happened to use, so a single-layer route on a two-layer board scores 0 -
   `crates/cypcb-autoroute/tests/layer_balance_means_what_it_says.rs`.
-- `smoothness` looks for corners between trace entities, because `apply_routes`
-  emits one entity per segment - `crates/cypcb-autoroute/tests/smoothness_measures_the_corners.rs`.
+- `smoothness` groups the segments by net and layer itself before it counts a
+  corner, so how `apply_routes` happens to shape its entities does not reach the
+  measurement - `crates/cypcb-autoroute/tests/smoothness_measures_the_corners.rs`.
+  **This paragraph said the opposite until 2026-09-13**, and it was inherited: it
+  claimed one entity per segment, which `apply_routes` stopped doing when it
+  began collecting segments into one `Trace` per net and layer. The same
+  sentence still stood in the function's own comment and in that test's header,
+  which is why correcting the canon alone would have left the source in place.
 
 ### Rule registry
 
-*Verified: never*
+*Verified: 2026-09-13*
 
-`run_drc` (`crates/cypcb-drc/src/lib.rs:128-200`) runs more than thirty rules.
-The ones that back a canon rule are `TraceCurrentRule` (R-01), `AnnularRingRule`,
-`PadLandRule`, `HoleToHoleRule`, `ViaDiameterRule`, `ViaDrillRule`,
-`DrillAspectRatioRule` (R-07). `ImpedanceRule`, `DiffPairSkewRule` and
-`BendRadiusRule` measure related properties and report "not checked" rather
-than passing silently when the design does not describe the case.
+`run_drc` in `crates/cypcb-drc/src/lib.rs` runs the whole registry; its size is
+counted by the command in the verification block rather than described here.
+**Which of those entries back a canon rule is answered in one place and one
+place only - bucket 1 under R-16**, which names all ten with the rules they
+serve. This section used to answer it too, and named seven: it was missing
+`ClearanceRule` (R-19), `AcuteAngleRule` (R-03) and `PadEntryRule` (R-08), so
+one question had two answers in one file and the shorter one read as exhaustive.
+
+What only this section says is what the quiet rules do when they have nothing to
+measure, and it was overstated as well. **`ImpedanceRule` reports "not checked",
+once per net and layer, and it is the only one of the three that does.**
+`DiffPairSkewRule` reports something different in kind - a declared pair naming
+a net the board does not have, which is a typo rather than an unmeasured
+property. `BendRadiusRule` is documented as silent: a region with no radius, a
+stack with no thickness or a table with no multiplier means it has nothing to
+measure, and it says nothing at all. That is the behaviour this canon argues
+against, standing in the registry unremarked until 2026-09-13.
 
 ### Ranking and gate
 
-*Verified: never*
+*Verified: 2026-09-13*
 
-`generate_variants` sorts complete boards first, then by `shorts`, then by
-`composite` (`crates/cypcb-autoroute/src/variant.rs:496-510`). The CI gate in
-`crates/cypcb-autoroute/tests/benchmark_validation.rs` asserts 0 unrouted
-connections, at least 70.0 mm of copper, composite at most 2100.0, at most 2
-`drc_violations`, and smoothness at least 0.95.
+`generate_variants` in `crates/cypcb-autoroute/src/variant.rs` sorts by
+unrouted connections ascending, then by `shorts`, then by `composite`. It used
+to be described here as sorting complete boards first, which is a special case
+of that order rather than the order itself: a board with one connection left
+beats a board with three, and neither is complete.
+
+The CI gate in `crates/cypcb-autoroute/tests/benchmark_validation.rs` asserts a
+complete solution - 0 unrouted connections and at least 20 routes - then at
+least 70.0 mm of copper, composite at most 2100.0, at most 2 `drc_violations`,
+and smoothness at least 0.95. **Those five thresholds are not what holds the
+line today.** `DRC_RATCHETS` and `ENTRY_CENSUS` in the same file carry per
+fixture figures that may fall and not rise, and the census carries a floor under
+its examined count as well as a ratchet over its violations - which is the pair
+that catches a rule that stopped measuring, and a threshold on a total never
+will.
 
 ## What nothing measures
 
@@ -1823,7 +1860,7 @@ connections, at least 70.0 mm of copper, composite at most 2100.0, at most 2
 Every violation weighs 1000 in the composite regardless of kind, so a trace
 that will cook ranks level with a trace slightly under the fab's minimum. The
 fix is mechanical: `DrcViolation` already carries its kind, so a count per kind
-is built in the same place `shorts` is built today (`scoring.rs:167`).
+is built in the same place `shorts` is built today, inside `score_board`.
 
 ### Properties nothing in the workspace computes
 

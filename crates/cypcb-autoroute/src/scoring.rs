@@ -268,11 +268,19 @@ pub(crate) fn angle_penalty(angle_rad: f64) -> f64 {
 ///
 /// **This reads 1.0 on every board the in-house router produces, and that is
 /// now an answer rather than an accident.** The old version looked for bends
-/// inside a single trace entity, and `apply_routes` gives every entity exactly
-/// one segment, so it never examined a single corner. The value was the
-/// `total_bends == 0` default. Measuring properly gives 1.0 too, because the
-/// router works on a 45-degree grid - but it would stop being 1.0 the moment
-/// anything laid copper off that grid, which is what a metric is for.
+/// inside a single trace entity, and at that time `apply_routes` gave every
+/// entity exactly one segment, so it never examined a single corner. The value
+/// was the `total_bends == 0` default. Measuring properly gives 1.0 too,
+/// because the router works on a 45-degree grid - but it would stop being 1.0
+/// the moment anything laid copper off that grid, which is what a metric is
+/// for.
+///
+/// `apply_routes` no longer shapes its entities that way: it collects segments
+/// into one `Trace` per net and layer. That is not why this function is
+/// correct. It regroups by net and layer itself, below, so whatever granularity
+/// the router hands it does not reach the measurement - which is the property
+/// worth having, and the reason the sentence above is written in the past
+/// tense.
 ///
 /// Edge cases:
 /// - Empty board (no traces) → 1.0 (perfect)
@@ -282,12 +290,15 @@ fn compute_smoothness(traces: &[TraceData]) -> f64 {
     // Bends live between trace entities, not inside them.
     //
     // This walked `trace.segments.windows(2)` and skipped any trace with fewer
-    // than two segments. `apply_routes` builds one entity per route segment -
-    // `segments: vec![TraceSegment::new(..)]`, in all four places it does so -
-    // so every trace had exactly one segment, every trace was skipped,
-    // `total_bends` stayed 0, and the function returned its 1.0 default. It
-    // reported a perfectly smooth board for every board ever routed, on every
-    // fixture, in every table.
+    // than two segments. `apply_routes` built one entity per route segment at
+    // the time, so every trace had exactly one segment, every trace was
+    // skipped, `total_bends` stayed 0, and the function returned its 1.0
+    // default. It reported a perfectly smooth board for every board ever
+    // routed, on every fixture, in every table.
+    //
+    // `apply_routes` groups by net and layer now, so that particular shape is
+    // gone - and this function does not depend on its being gone, because it
+    // regroups below regardless.
     //
     // A bend is where two pieces of copper on the same net and layer meet at a
     // point. Grouped by net and layer first, because comparing every segment
