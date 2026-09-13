@@ -1531,6 +1531,20 @@ and the file says so where a reader will meet them. The evidence is the
 reproductions rather than the standards' own text, which R-11 already says of
 itself.
 
+**This rule is about two traces, and a house publishes a second, wider figure
+for poured copper beside a foreign net.** Every preset here states both and
+states them differently: on 2026-09-13 the eight in `DesignRules` read
+`min_clearance` against `min_copper_pour_clearance` as 0.127 / 0.254,
+0.1 / 0.2, 0.1 / 0.2, 0.09 / 0.2, 0.1524 / 0.254, 0.127 / 0.254, 0.1 / 0.254
+and 0.2 / 0.3 mm, which is eight of eight. The second figure had reached
+`DesignConstraints` and gone no further, so `PourIslandRule` filled its planes
+at the trace figure and the viewer at a constant; both read the pour figure
+now, and `the_pour_is_filled_at_the_distance_the_house_states_for_a_pour` holds
+them to it. **A rule can be right about the number it names and silent about
+the number beside it** - that silence is not a stale claim and no check over
+this document would have found it, because there was nothing written down to
+be wrong.
+
 Source: JLCPCB capabilities page, read 2026-09-12 - minimum track width and
 spacing at 1 oz copper is 0.10 / 0.10 mm (4 / 4 mil) for one and two layers and
 0.09 / 0.09 mm (3.5 / 3.5 mil) multilayer, with 3 mil accepted only inside BGA

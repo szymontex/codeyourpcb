@@ -1956,7 +1956,19 @@ impl PcbEngine {
             .filter(|(_, zone)| zone.kind == ZoneKind::CopperPour)
             .collect();
 
-        let options = cypcb_core::pour::PourOptions::default();
+        // The fab's three numbers, not the pour's own defaults. Those defaults
+        // are 0.3mm clearance with a 0.254mm relief, and until 2026-09-13 the
+        // screen drew every board with them whatever house it was for - so a
+        // designer on JLCPCB's advanced process saw a plane 0.1mm short of its
+        // neighbours and a relief 0.054mm too wide, and nothing said so. The
+        // checker and the exporter both read these from the rule set already;
+        // this was the third reader and the only one a person looks at.
+        let rules = DesignRules::from_constraints(&self.preset().constraints());
+        let options = cypcb_core::pour::PourOptions {
+            clearance: rules.min_copper_pour_clearance,
+            thermal_gap: rules.thermal_relief_gap,
+            spoke_width: rules.thermal_relief_spoke_width,
+        };
         let mut pours = Vec::new();
 
         for (entity, zone) in zones {

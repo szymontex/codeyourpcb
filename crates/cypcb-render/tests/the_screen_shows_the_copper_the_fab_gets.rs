@@ -247,3 +247,62 @@ fn overlapping_planes_are_reported_to_whoever_holds_the_snapshot() {
         "two planes that do not touch are not a short"
     );
 }
+
+/// The same board, told which house is making it.
+fn for_fab(name: &str) -> String {
+    SOURCE.replace("    layers 2\n", &format!("    layers 2\n    fab {name}\n"))
+}
+
+/// Every square nanometre of copper the snapshot carries for its pours.
+fn copper_area(source: &str) -> i128 {
+    pours(source)
+        .iter()
+        .flat_map(|pour| pour["rects"].as_array().cloned().unwrap_or_default())
+        .map(|rect| {
+            let r: Vec<i128> = rect
+                .as_array()
+                .expect("four numbers")
+                .iter()
+                .map(|v| v.as_i64().expect("a number") as i128)
+                .collect();
+            (r[2] - r[0]) * (r[3] - r[1])
+        })
+        .sum()
+}
+
+/// The plane a person sees is the plane the house named on the board will pour.
+///
+/// It was not, until 2026-09-13: `collect_pours` built `PourOptions::default()`,
+/// so every board was drawn at 0.3mm whatever it asked for. The exporter and
+/// the checker had both been moved off that default already, which left the
+/// screen as the one reader still showing a board nobody was being sent.
+///
+/// Two houses, because one would not catch it - the default happens to sit
+/// near the shipped figures, and a single board drawn at the right number
+/// cannot be told from one drawn at a constant.
+#[test]
+fn the_plane_on_screen_is_the_one_the_named_house_will_pour() {
+    use cypcb_rules::presets::RulesPreset;
+
+    let standard = RulesPreset::JlcpcbStandard2Layer.constraints();
+    let advanced = RulesPreset::JlcpcbAdvanced4Layer.constraints();
+    assert_ne!(
+        standard.min_copper_pour_clearance, advanced.min_copper_pour_clearance,
+        "this test needs two houses that publish different pour clearances; if these two ever \
+         agree it passes while measuring nothing"
+    );
+
+    let wide = copper_area(&for_fab("jlcpcb_standard_2layer"));
+    let narrow = copper_area(&for_fab("jlcpcb_advanced_4layer"));
+    eprintln!(
+        "pour clearance {:?} draws {wide} nm2, {:?} draws {narrow} nm2, difference {}",
+        standard.min_copper_pour_clearance,
+        advanced.min_copper_pour_clearance,
+        narrow - wide
+    );
+
+    assert!(
+        narrow > wide,
+        "the house that keeps less clearance pours more copper: {narrow} against {wide}"
+    );
+}
