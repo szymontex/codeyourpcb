@@ -222,7 +222,7 @@ avoided, and what a two-layer board changes.
 
 ### R-06 Violations are reported per rule, not as one total `[S]`
 
-*Verified: 2026-08-08*
+*Verified: 2026-09-13*
 
 *Applies when:* always, because it is about the shape of the output rather than the board.
 
@@ -245,13 +245,16 @@ In this repo: the data is there and the aggregation is not. `DrcViolation`
 carries `kind: ViolationKind`, an enum running from `Clearance` to `AcidTrap`
 in `crates/cypcb-drc/src/violation.rs`, plus `actual` and `required` as numbers
 rather than prose. How many kinds it holds is counted by the command in the
-verification block rather than written here: it has been 35, then 36, then 37
-inside one week.
+verification block rather than written here, and the reason is its own history:
+35 on 2026-08-29, 36 on 2026-09-11, 37 on 2026-09-12. **That said "inside one
+week" until 2026-09-13 and the span is a fortnight** - a figure loose enough
+that nobody would check it, attached to an argument about figures nobody
+checks.
 
 **A line number is not a reference, and that is a rule rather than a style.** A
 symbol name is found by grep and breaks loudly when somebody renames it; a line
 number is found by nothing and breaks silently on every insertion above it. Four
-rotted in the score section in a single week, and R-03's rule text carried
+rotted in the score section in a matter of days, and R-03's rule text carried
 `:196` while its own registry row two hundred lines away carried the correct
 `:197`. Where a number is worth seeing, it comes out of a command quoted beside
 it - `grep -n` prints one - not out of this document's memory of the file.
@@ -733,7 +736,8 @@ compared one after another, never added:
 Condition: of two routed boards, the one with fewer tier-1 findings ranks
 better whatever the other tiers say; ties fall to tier 2, then tier 3, then
 tier 4. Precedent in this repository for the form, not for the tiers:
-`generate_variants` already ranks complete boards first, then by shorts, then
+`generate_variants` already ranks by unrouted connections ascending, then by
+shorts, then
 by composite (`generate_variants` in `crates/cypcb-autoroute/src/variant.rs`).
 
 **In this repo:** the score prices every violation at 1000 regardless of kind
