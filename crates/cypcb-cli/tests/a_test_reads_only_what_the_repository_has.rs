@@ -115,6 +115,19 @@ fn paths_the_tests_read() -> Vec<(String, String)> {
                 // the root, or `../../tests/fixtures/y` from its own crate.
                 let literal = literal.strip_prefix("./").unwrap_or(literal);
                 let literal = literal.strip_prefix("../../").unwrap_or(literal);
+                // An absolute literal is not a fixture and `root.join` does not
+                // make it one: joining an absolute path throws the base away, so
+                // `/tmp/test_board.dsn` was tested for existence at `/tmp`, found
+                // there whenever the case that writes it had run on this machine,
+                // and reported as a fixture the repository does not carry. This
+                // check went red on 2026-09-13 for that reason and had been green
+                // on the same tree an hour earlier - **a check whose answer depends
+                // on what is lying in a temporary directory is not measuring the
+                // repository.** A case writing to a fixed absolute path is a
+                // separate defect and belongs to a separate check.
+                if literal.starts_with('/') {
+                    continue;
+                }
                 if looks_like_a_path && root.join(literal).is_file() {
                     found.push((name.clone(), literal.to_owned()));
                 }
