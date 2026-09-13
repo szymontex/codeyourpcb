@@ -1182,3 +1182,82 @@ fn every_commit_the_canon_cites_is_a_commit_in_this_repository() {
          a figure nobody can reproduce."
     );
 }
+
+/// Below this the extraction has stopped reading the sentence rather than found
+/// its list clean. One sentence carries six names today.
+const NAMES_SEARCHED_FOR_FLOOR: usize = 5;
+
+#[test]
+fn a_recorded_search_of_the_tree_still_returns_what_it_says() {
+    let root = repo_root();
+    let canon =
+        std::fs::read_to_string(root.join("docs/ROUTING-CANON.md")).expect("the canon is there");
+
+    // A sentence of the form: no hits for "a", "b" or "c", with the scope it
+    // searched in backticks earlier in the same paragraph.
+    let mut searched: Vec<(String, String)> = Vec::new();
+    for (_, paragraph) in prose_paragraphs(&canon) {
+        let flat = paragraph.split_whitespace().collect::<Vec<_>>().join(" ");
+        let Some(at) = flat.find("no hits for") else {
+            continue;
+        };
+        let scope = flat[..at]
+            .split('`')
+            .rev()
+            .nth(1)
+            .unwrap_or("crates")
+            .to_string();
+        // Only the sentence that records the search. The paragraph around it
+        // may quote one of the same names again to say what changed since -
+        // reading on to the end of the paragraph put `antipad` back into the
+        // list the moment the sentence was corrected for it.
+        let rest = &flat[at..];
+        let end = rest.find("\". ").map(|i| i + 1).unwrap_or(rest.len());
+        for name in rest[..end].split('"').skip(1).step_by(2) {
+            searched.push((scope.clone(), name.to_string()));
+        }
+    }
+
+    assert!(
+        searched.len() >= NAMES_SEARCHED_FOR_FLOOR,
+        "this check read {} names out of the canon's recorded searches and expected at least \
+         {NAMES_SEARCHED_FOR_FLOOR}. Either the sentence was rewritten into another shape, or \
+         the extraction is reading nothing and every search below passed by not happening.",
+        searched.len()
+    );
+
+    let mut answering: Vec<String> = Vec::new();
+    for (scope, name) in &searched {
+        let output = Command::new("sh")
+            .arg("-c")
+            .arg(format!(
+                "grep -rlF -- \"$1\" --include=*.rs {scope} 2>/dev/null",
+            ))
+            .arg("sh")
+            .arg(name)
+            .current_dir(&root)
+            .output()
+            .expect("grep runs");
+        let hits = String::from_utf8_lossy(&output.stdout);
+        let hits: Vec<&str> = hits.lines().collect();
+        if !hits.is_empty() {
+            answering.push(format!("{name:?} in {scope}: {hits:?}"));
+        }
+    }
+
+    eprintln!(
+        "names the canon records as absent from the tree: {}; answering today: {}",
+        searched.len(),
+        answering.len()
+    );
+
+    assert!(
+        answering.is_empty(),
+        "the canon records a search of this tree that no longer returns what it says: \
+         {answering:#?}\n\
+         \n  A recorded grep result is a claim about the tree on the day it ran, and it is the \
+         only kind this document can re-run rather than re-read. The word arriving in the tree \
+         does not by itself make the section wrong - a comment naming a property is not a \
+         measurement of it - but the sentence stating the count is, and it says what it found."
+    );
+}

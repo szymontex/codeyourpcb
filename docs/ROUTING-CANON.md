@@ -326,7 +326,7 @@ rule with no subject, arriving here as a sentence rather than as a rule.
 
 ### R-08 Trace entry into a land `[P]` figure, `[S]` measurement
 
-*Verified: 2026-09-11*
+*Verified: 2026-09-13*
 
 *Applies when:* [copper] a trace ends on a pad. Every routed board.
 
@@ -1145,7 +1145,7 @@ construction.
 
 ### R-16 What a rule must carry to be enforceable here `[S]`
 
-*Verified: 2026-09-11*
+*Verified: 2026-09-13*
 
 *Applies when:* [the canon] never, to a board. This is the canon reading itself.
 
@@ -1384,7 +1384,7 @@ on such a board describes the grid rather than the router.
 
 ### R-18 What a violation report owes its reader `[P]`
 
-*Verified: 2026-09-11*
+*Verified: 2026-09-13*
 
 *Applies when:* [output row] never, to a board. This is about a row of output.
 
@@ -1454,7 +1454,7 @@ code compiled.
 The consequence was measurable rather than theoretical, which is why it was
 worth fixing. `cypcb check` ranks violations worst-first by
 `shortfall(violation).unwrap_or(-1.0)`
-(`crates/cypcb-cli/src/commands/check.rs:228-244`), and its own comment says
+(`crates/cypcb-cli/src/commands/check.rs:229-244`), and its own comment says
 rules that measure no distance keep their order at the end, because a number
 invented for them would sort them among the ones that have one. While the field
 was `None` those two rows sorted to the end beside the unrouted pins - not
@@ -2042,11 +2042,17 @@ inside `score_board` by asking the violations a question the total does not.
 
 ### Properties nothing in the workspace computes
 
-*Verified: 2026-09-11*
+*Verified: 2026-09-13*
 
-Checked by grep over `crates/*/src` on 2026-09-11: no hits for "return path",
-"return current", "loop area", "split plane", "antipad", "crosstalk" or
-"parallel run".
+Checked by grep over `crates/*/src` on 2026-09-13: no hits for "return path",
+"return current", "loop area", "split plane", "crosstalk" or "parallel run".
+"antipad" answers twice, in `crates/cypcb-cli/src/commands/to_kicad.rs` and in
+`crates/cypcb-kicad/src/board_writer.rs`, and both are comments about what a
+pour keeps from foreign copper: the word arrived in the tree and the
+measurement did not. **This sentence listed seven names and no hits until
+2026-09-13.** A recorded search result is a claim about the tree on the day it
+ran, and it is the one shape of claim this document holds ten checks over and
+still cannot re-run.
 
 1. Return path coverage - for each segment, ask the spatial index whether
    continuous reference copper lies under its footprint on the adjacent layer,
@@ -2172,7 +2178,7 @@ land, and taking the nearer edge rather than the further one.
 
 ### The router's own output, against the rules this canon states
 
-*Verified: 2026-09-12*
+*Verified: 2026-09-13*
 
 Nothing measured how much of this canon the router satisfies on boards the
 router itself produced. R-08 answered it, and
