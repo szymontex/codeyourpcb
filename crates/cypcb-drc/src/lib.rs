@@ -10,20 +10,25 @@
 //!
 //! # Usage
 //!
-//! ```rust,ignore
-//! use cypcb_drc::{run_drc, DesignRules, DrcResult, Preset};
+//! `no_run` rather than `ignore`: the example needs a board to say anything, so
+//! it is not run, but it is compiled. It was `ignore` until 2026-09-14 and it
+//! did not compile - it passed `&world` where `run_drc` takes `&mut`, on the
+//! front page of this crate, where a reader copies from.
+//!
+//! ```no_run
+//! use cypcb_drc::{run_drc, DesignRules, Preset, PresetRules};
 //! use cypcb_world::BoardWorld;
 //!
-//! let world = BoardWorld::new();
+//! let mut world = BoardWorld::new();
 //! // ... load board ...
 //!
 //! // Use a manufacturer preset
 //! let rules = DesignRules::jlcpcb_2layer();
-//! let result = run_drc(&world, &rules);
+//! let result = run_drc(&mut world, &rules);
 //!
 //! // Or lookup by name (from DSL parsing)
 //! let preset = Preset::from_name("pcbway").unwrap();
-//! let rules = preset.rules();
+//! let _rules = preset.rules();
 //!
 //! if result.passed() {
 //!     println!("Board passes DRC!");
