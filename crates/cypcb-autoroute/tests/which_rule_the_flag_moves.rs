@@ -2,10 +2,10 @@
 //!
 //! `cargo test --release -p cypcb-autoroute --test which_rule_the_flag_moves -- --nocapture`
 //!
-//! The flag was measured on totals first: 1135 violations across the six
-//! benchmark boards become 844, and the copper drawn over copper falls from
-//! 142 junctions to 21. One board went the other way - `shift_driver` from 19
-//! to 32 - and a total that improves while one board gets worse is a total
+//! The flag was measured on totals first: 1150 violations across the six
+//! benchmark boards become 859, and the copper drawn over copper falls from
+//! 142 junctions to 21. One board went the other way - `shift_driver` from 22
+//! to 33 - and a total that improves while one board gets worse is a total
 //! that has to be broken down before a default is moved, because a board is
 //! fabricated on its own and not as a sixth of an average.
 //!
@@ -156,6 +156,41 @@ fn the_board_that_gets_worse_gets_worse_at_one_other_rule() {
     let off = by_kind("shift_driver.kicad_pcb", false);
     let on = by_kind("shift_driver.kicad_pcb", true);
 
+    // The figures R-11 and R-19 quote off this board, held here because this
+    // test already routes it twice and nothing else was holding them. They are
+    // exact on purpose: a change to the via price, the grid or the weights will
+    // move them, and when it does the two sections in the canon have to be read
+    // again rather than quietly left behind.
+    const CANON_FIGURES: &[(&str, usize, usize)] = &[
+        ("AcidTrap", 12, 5),
+        ("Clearance", 7, 27),
+        ("PadEntry", 3, 1),
+    ];
+    for (kind, before, after) in CANON_FIGURES {
+        assert_eq!(
+            (
+                off.get(*kind).copied().unwrap_or(0),
+                on.get(*kind).copied().unwrap_or(0)
+            ),
+            (*before, *after),
+            "R-11 states {kind} {before} to {after} on this board; if the router moved, the \
+             sentence in the canon moves with it"
+        );
+    }
+
+    // R-19's share of this board's report, as a floor rather than as the pair
+    // it used to state. The pair was `27 of 32` and `PadEntryRule` joining the
+    // registry made it `27 of 33` without touching the rule R-19 is about: an
+    // exact denominator fails on the next rule anybody registers, which is the
+    // event that already broke that sentence once.
+    let total: usize = on.values().sum();
+    let clearance = on.get("Clearance").copied().unwrap_or(0);
+    println!("shift_driver clearance share {clearance} of {total}");
+    assert!(
+        clearance * 4 >= total * 3,
+        "R-19 says this one rule is most of this board's report: {clearance} of {total}"
+    );
+
     for kind in kinds_of(&off, &on) {
         let before = off.get(&kind).copied().unwrap_or(0);
         let after = on.get(&kind).copied().unwrap_or(0);
@@ -200,7 +235,7 @@ fn the_holes_come_off_the_boards_that_had_the_most() {
 fn the_flag_puts_copper_on_copper_and_that_is_why_it_is_not_the_default() {
     // The reason the default did not move on 2026-09-11, and the reason is
     // R-11's own tier order rather than a preference. Counting violation rows
-    // says the flag is a clear win: 1135 reports become 844. Counting copper
+    // says the flag is a clear win: 1150 reports become 859. Counting copper
     // touching copper says something the row count hides - `led_blink`, the
     // simplest board here and the only one that routes clean, comes out with a
     // short. Under R-11 a short is tier 2 and no quantity of tier 3 or tier 4

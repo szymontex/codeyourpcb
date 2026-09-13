@@ -234,7 +234,11 @@ fn what_ending_on_its_own_copper_costs_and_saves() {
     // too loose to mean anything: with the end test deleted, so that the flag
     // only reverses the direction the search runs in, the count still falls
     // 142 -> 126 while every other figure gets worse - 1135 violations become
-    // 1182 and the copper gets 91mm longer. Turning a search round is not the
+    // 1182 and the copper gets 91mm longer. Those two are the mutation's own
+    // figures, measured against a tree whose baseline was 1135; the baseline is
+    // 1150 today, after `PadEntryRule` joined the registry, and the mutation
+    // has not been re-run since. The direction is what the paragraph argues
+    // and the direction is not in doubt. Turning a search round is not the
     // mechanism; ending it on the net's own copper is.
     //
     // So the rule is what the mechanism claims. A connection that stops at the
