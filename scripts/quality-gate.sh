@@ -400,6 +400,34 @@ if cargo test --release -p cypcb-autoroute --test sharp_entry_anatomy -- --ignor
 else
   fail "the-anatomy-ratchets"
 fi
+
+# The two ignored cases that assert something and were reached by no filter.
+# The census behind this: 50 tests in this repository carry `#[ignore]` and
+# **40 of them contain no assertion at all** - they print a run rather than
+# judge it, and adding one to a gate buys only that it still compiles. Six more
+# are named above. Of the four that assert and were not run, these two cost
+# 2.07s and 4.94s measured on 2026-09-13; the other two cost 98s and 100s
+# between them for three assertions, which is a question about the price of a
+# stage rather than about technique and is left for the owner.
+#
+# Each is run on its own and the stage reads the count back. libtest takes one
+# filter, and the first version of this stage passed two names in one
+# invocation: it ran **zero tests across four binaries and exited 0**, which
+# this stage would have reported as a pass. Every other named stage above has
+# that same shape - a filter that matches nothing is a stage that passes -
+# and this is the first one that checks.
+one_ignored_case() {
+  local target="$1" name="$2" out
+  out=$(cargo test --release -p cypcb-autoroute --test "$target" -- --exact "$name" --ignored 2>&1)
+  echo "$out"
+  echo "$out" | grep -q "test result: ok. 1 passed"
+}
+if one_ignored_case routed_copper_reaches_the_files which_layers_the_router_joins_with_a_via \
+  && one_ignored_case benchmark_validation benchmark_full_matrix; then
+  pass "the-cheap-ignored-assertions"
+else
+  fail "the-cheap-ignored-assertions"
+fi
 echo ""
 
 # Stage 8: Code duplication check

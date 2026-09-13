@@ -250,7 +250,7 @@ fn walk(dir: &Path) -> Vec<PathBuf> {
 }
 
 #[test]
-#[ignore = "diagnostic: routes the four-layer fixture and counts via spans"]
+#[ignore = "2s: routes the four-layer fixture and asserts its via spans; named by the gate"]
 fn which_layers_the_router_joins_with_a_via() {
     // The claim on record was that the router places through vias only. The
     // pieces say otherwise - `postprocess` builds each `ViaPlacement` from the

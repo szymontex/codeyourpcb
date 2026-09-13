@@ -698,7 +698,7 @@ fn benchmark_regression() {
 /// Comprehensive benchmark: all 3 fixtures × 2 strategies.
 /// Produces comparison table + JSON report. Confirms PathFinder as default.
 #[test]
-#[ignore = "slow: full matrix routes all fixtures with both strategies"]
+#[ignore = "5s: routes all fixtures with both strategies; named by the gate"]
 fn benchmark_full_matrix() {
     let strategies: Vec<Box<dyn RoutingStrategy>> = vec![
         Box::new(PathFinderStrategy),
