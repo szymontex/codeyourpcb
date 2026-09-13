@@ -1077,19 +1077,21 @@ same connection style to both pads of a chip component, and treat it as
 mandatory for 0603 and smaller, where the part is light enough for the torque
 to win (thermal-relief and tombstoning guides, read 2026-09-11).
 
-Condition, and it is the one this canon adds that no other rule states: **for a
-two-terminal component whose pads both sit in pours, both pads have the same
-connection style.** One relieved and one solid is a defect even where each pad
+Condition, and it is the one this canon adds of its own: **for a two-terminal
+component whose pads both sit in pours, both pads have the same connection
+style.** One relieved and one solid is a defect even where each pad
 on its own satisfies R-09.
 
-This is the only rule here whose **condition** spans two pads of one part, and
-that is a narrower claim than the one this paragraph made until 2026-09-13. It
-said this was the only rule that looks at a component at all, and that is false
-twice: R-08 measures through `entry_angle_placed(pad, at, rotation)`, which is
-the part's position and turn, and R-17 takes pad positions from footprints laid
-out by the same two. Both were written after this sentence was. Every other condition here - clearance, angle,
-ring, coverage, spacing - is a property of one feature or of a pair of
-features. Symmetry is a property of a pair of pads that belong to one part, so
+Its condition runs over **a component**, which is why its `*Applies when:*`
+opens with that word: R-16's tally says how many rules do, and the answer today
+is one. That is a checked number rather than a sentence about the neighbours,
+and it replaces two claims this paragraph made until 2026-09-13. The first was
+that no other rule states this condition; the second, that this is the only rule
+that looks at a component at all. **The second was false twice over** - R-08
+measures through `entry_angle_placed(pad, at, rotation)`, which is the part's
+position and turn, and R-17 takes pad positions from footprints laid out by the
+same two, and both were written after that sentence was. A condition over a
+feature, or over a pair of features, is what the other eighteen run on. Symmetry is a property of a pair of pads that belong to one part, so
 a registry built to walk copper cannot express it without walking components
 too.
 
@@ -1119,9 +1121,10 @@ too.
   faked with a size heuristic.
 
 **In this repo:** three conditions are enforceable against data already
-present, with no new field and no new declaration - which makes R-15 the first
-rule in this canon whose gap is that nobody wrote the check, rather than that
-the model cannot answer.
+present, with no new field and no new declaration. Its gap is that
+nobody wrote the check, rather than that the model cannot answer - a different
+kind from R-04, R-05 and R-13, where the quantity is absent from the model by
+construction.
 
 ### R-16 What a rule must carry to be enforceable here `[S]`
 
@@ -2106,7 +2109,7 @@ land, and taking the nearer edge rather than the further one.
 *Verified: 2026-09-12*
 
 Nothing measured how much of this canon the router satisfies on boards the
-router itself produced. R-08 is the first rule to answer that question, and it
+router itself produced. R-08 answered it, and
 answered it by accident: registering it changed what the benchmark set reports.
 
 Measured on 2026-09-12, the six fixtures routed twice in one sitting with the
@@ -2363,8 +2366,8 @@ by four or five preset files: the fab states a number, the preset records it,
 and nothing reads it back.
 
 **This section said five until 2026-09-13, and the three it missed had never
-had a reader** - unlike every other stale claim found in this file this week,
-that list was not overtaken by new code, it was incomplete when it was written.
+had a reader.** The six other stale claims read out of this file that week were
+overtaken by new code; this list was incomplete when it was written.
 It was found by walking the struct rather than by re-checking the five, which is
 the only direction that can test a list of absences for completeness. The
 command is in the verification block, and reading a figure out of it into this
