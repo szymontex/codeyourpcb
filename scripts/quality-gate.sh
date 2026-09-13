@@ -351,17 +351,31 @@ if cargo test --release -p cypcb-autoroute -- benchmark_regression 2>&1; then
 else
   fail "benchmark-regression"
 fi
+# Every stage below names ignored cases with a filter, and a filter that
+# matches nothing is a stage that passes: `cargo test` exits 0 having run no
+# test at all. That is not hypothetical - a stage added on 2026-09-13 passed
+# two names in one invocation, which libtest reads as one filter, and it ran
+# zero tests across four binaries and reported a pass. So the count is read
+# back: at least one case has to say it passed, and no binary may say FAILED.
+ignored_cases() {
+  local out
+  out=$(cargo test --release -p cypcb-autoroute "$@" --ignored 2>&1)
+  echo "$out"
+  echo "$out" | grep -q "test result: FAILED" && return 1
+  echo "$out" | grep -qE "test result: ok\. [1-9][0-9]* passed"
+}
+
 # DRC ratchets across every fixture. led_blink alone reported 3 violations
 # while stm32_breakout sat at 312 and multi_ic at 383 - the gate could not see
 # the router's real output.
-if cargo test --release -p cypcb-autoroute -- benchmark_all_fixtures_drc --ignored 2>&1; then
+if ignored_cases -- benchmark_all_fixtures_drc; then
   pass "benchmark-all-fixtures-drc"
 else
   fail "benchmark-all-fixtures-drc"
 fi
 # What the router lays has to arrive in the fabrication files. The fixtures are
 # already routed in this stage, so the check costs one export each.
-if cargo test --release -p cypcb-autoroute -- what_the_router_lays --ignored 2>&1; then
+if ignored_cases -- what_the_router_lays; then
   pass "routed-copper-reaches-the-files"
 else
   fail "routed-copper-reaches-the-files"
@@ -372,13 +386,13 @@ fi
 # differences between single runs. Rust randomises HashMap iteration order per
 # process, so one map walked to order work would make every one of those
 # numbers a coin toss - and nothing else here would notice.
-if cargo test --release -p cypcb-autoroute -- the_same_board_routed_twice --ignored 2>&1; then
+if ignored_cases -- the_same_board_routed_twice; then
   pass "router-is-repeatable"
 else
   fail "router-is-repeatable"
 fi
 
-if cargo test --release -p cypcb-autoroute -- benchmark_500 --ignored 2>&1; then
+if ignored_cases -- benchmark_500; then
   pass "benchmark-500"
 else
   fail "benchmark-500"
@@ -395,7 +409,7 @@ fi
 # sections these hold carried the oldest `Verified:` dates in the file for
 # exactly that reason: nothing could move them, so nobody had cause to read
 # them. Both together cost under four seconds in release.
-if cargo test --release -p cypcb-autoroute --test sharp_entry_anatomy -- --ignored 2>&1; then
+if ignored_cases --test sharp_entry_anatomy --; then
   pass "the-anatomy-ratchets"
 else
   fail "the-anatomy-ratchets"
@@ -410,20 +424,11 @@ fi
 # between them for three assertions, which is a question about the price of a
 # stage rather than about technique and is left for the owner.
 #
-# Each is run on its own and the stage reads the count back. libtest takes one
-# filter, and the first version of this stage passed two names in one
-# invocation: it ran **zero tests across four binaries and exited 0**, which
-# this stage would have reported as a pass. Every other named stage above has
-# that same shape - a filter that matches nothing is a stage that passes -
-# and this is the first one that checks.
-one_ignored_case() {
-  local target="$1" name="$2" out
-  out=$(cargo test --release -p cypcb-autoroute --test "$target" -- --exact "$name" --ignored 2>&1)
-  echo "$out"
-  echo "$out" | grep -q "test result: ok. 1 passed"
-}
-if one_ignored_case routed_copper_reaches_the_files which_layers_the_router_joins_with_a_via \
-  && one_ignored_case benchmark_validation benchmark_full_matrix; then
+# Each is run on its own, because libtest takes one filter and passing two
+# names in one invocation matches nothing.
+if ignored_cases --test routed_copper_reaches_the_files \
+      -- --exact which_layers_the_router_joins_with_a_via \
+  && ignored_cases --test benchmark_validation -- --exact benchmark_full_matrix; then
   pass "the-cheap-ignored-assertions"
 else
   fail "the-cheap-ignored-assertions"
