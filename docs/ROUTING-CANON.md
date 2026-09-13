@@ -27,9 +27,21 @@ Dates are the day the source was read, not the day it was published. An `[S]`
 entry carries a commit instead: our own reasoning is dated by when it landed,
 and a reader with the repository can see what it looked like then.
 
+**What `Verified:` under a heading means, and what it does not.** It records the
+day somebody read that section's claims against the working tree - opening the
+file rather than grepping for a name - and nothing else. It is not the day the
+words were written: a commit date says somebody typed, and this line says
+somebody checked. A section nobody has re-read says `never`, which sorts oldest
+and so surfaces first, and `every_section_says_when_it_was_last_read` prints the
+oldest one on every run. The dates web sources carry live in the sections
+themselves and are a different claim: those are days somebody read a vendor's
+page, and a page read is not a tree read.
+
 ## The rules
 
 ### R-01 Trace width against current and temperature rise `[R]`
+
+*Verified: never*
 
 *Applies when:* a net declares a `current`. Silent on every net that does not, which today is every net on every fixture.
 
@@ -54,6 +66,8 @@ registered in `run_drc`, computed through `cypcb-calc`. Silent unless the net
 declares `current`.
 
 ### R-02 Conductor spacing against working voltage `[R]`
+
+*Verified: never*
 
 *Applies when:* a net declares a working voltage. **Nothing can declare one**, so this rule is silent on every board - see "Blocked on the model".
 
@@ -85,6 +99,8 @@ the reproduction and are a gap in this canon.
 In this repo: the table exists and nothing calls it. See "Blocked on the model".
 
 ### R-03 Acute angles in copper `[P]`
+
+*Verified: never*
 
 *Applies when:* always. Two trace segments meet at a junction; no declaration needed.
 
@@ -129,6 +145,8 @@ cosmetic, are R-10.
 
 ### R-04 Stub length `[O]`
 
+*Verified: never*
+
 *Applies when:* a net declares a signal speed **and** the copper has a connectivity graph. Neither exists, so this rule is silent on every board.
 
 An unterminated branch resonates at a quarter wavelength and notches the
@@ -154,6 +172,8 @@ declared signal speed. `max_stub_length`
 on the model".
 
 ### R-05 Return path under a signal trace `[O]`
+
+*Verified: never*
 
 *Applies when:* the board has a pour on a copper layer adjacent to the trace. A board with no pour has no reference copper and this rule says nothing. R-13 adds the impedance gate; this rule states none, and the two are kept apart on purpose.
 
@@ -184,6 +204,8 @@ source states a permitted fraction, what bridges a crossing that cannot be
 avoided, and what a two-layer board changes.
 
 ### R-06 Violations are reported per rule, not as one total `[S]`
+
+*Verified: 2026-08-08*
 
 *Applies when:* always, because it is about the shape of the output rather than the board.
 
@@ -224,6 +246,8 @@ again is the single total under another name.
 
 ### R-07 Annular ring and hole-to-hole spacing `[R]`
 
+*Verified: never*
+
 *Applies when:* the board has holes - a via, a through-hole pad, a mounting hole.
 
 A land must exceed its hole by two annular rings plus the fabrication
@@ -252,6 +276,8 @@ In this repo: enforced, and the only rule of this group that is. `AnnularRingRul
 `min_via_annular_ring` in `pathfinder_v2.rs`.
 
 ### R-08 Trace entry into a land `[P]` figure, `[S]` measurement
+
+*Verified: 2026-09-11*
 
 *Applies when:* a trace ends on a pad. Every routed board.
 
@@ -403,6 +429,8 @@ what the design stated.
 
 ### R-09 Thermal relief at a pad in a pour `[P]`
 
+*Verified: never*
+
 *Applies when:* a pad sits inside a pour on its own net. A board with no pour says nothing here.
 
 A pad tied into a pour needs spokes, or the pour sinks the soldering heat and
@@ -447,6 +475,8 @@ drawn copper agreed with the published table by coincidence, not by wiring, and
 a house publishing anything else would have been silently ignored.
 
 ### R-10 Mitring an acute junction `[P]`
+
+*Verified: never*
 
 *Applies when:* R-03 reported an acute junction. This rule is what to do about one, not how to find it.
 
@@ -560,6 +590,8 @@ the same finding as part 1 seen from the tool side.
 
 ### R-11 Acceptance classes `[R]`
 
+*Verified: never*
+
 *Applies when:* the board is graded. The full four-tier form needs a declared acceptance class; for a board graded by a house table see part 4 below.
 
 **A board that declares no class.** Found by walking this canon against a real
@@ -666,6 +698,8 @@ the tiers below have nowhere to live in a row of output. See R-18.
 
 ### R-12 Rip-up and reroute - moved out `[O]`
 
+*Verified: never*
+
 *Applies when:* never, to a board.
 
 **This section has moved to `docs/routing.md`.** It read the primary paper on
@@ -688,6 +722,8 @@ The number after it is not reused. R-13 is still R-13, so a reference written
 before today still lands where its author meant.
 
 ### R-13 Return path, the threshold that does not exist `[P]`
+
+*Verified: never*
 
 *Applies when:* as R-05. A pour on the adjacent layer, and a net that declares a controlled impedance.
 
@@ -797,6 +833,8 @@ records. The three pieces needed - pour geometry, stackup-derived reference
 layer, spatial index - are all present and none is called for this purpose.
 
 ### R-14 Via stitching `[P]`
+
+*Verified: never*
 
 *Applies when:* the board has two pours of one net on different layers, or a via that changes which pour is a signal's reference. Where the design declares no frequency the rule screens at a stated stand-in of 1 GHz and says so in every row - see part 5.
 
@@ -923,6 +961,8 @@ the rule working, not the rule missing.
 
 ### R-15 One component, one connection style `[P]`
 
+*Verified: never*
+
 *Applies when:* a two-terminal component has both pads inside pours. A board with no pour says nothing here.
 
 R-09 states thermal relief as geometry - spoke width floor, spoke count, the
@@ -997,6 +1037,8 @@ rule in this canon whose gap is that nobody wrote the check, rather than that
 the model cannot answer.
 
 ### R-16 What a rule must carry to be enforceable here `[S]`
+
+*Verified: 2026-09-11*
 
 *Applies when:* never, to a board. This is the canon reading itself.
 
@@ -1115,6 +1157,8 @@ bucket 2 from bucket 3 in practice, not from principle.
 
 ### R-17 The grid the router actually searches `[S]`
 
+*Verified: 2026-08-05*
+
 *Applies when:* always, before routing. It needs pad positions and a fab table, both of which exist on every board.
 
 Source: this project, which is what `[S]` says, with one dated exception. The
@@ -1199,6 +1243,8 @@ fails it produces violations whose cause is the grid, and every number measured
 on such a board describes the grid rather than the router.
 
 ### R-18 What a violation report owes its reader `[P]`
+
+*Verified: 2026-09-11*
 
 *Applies when:* never, to a board. This is about a row of output.
 
@@ -1312,6 +1358,8 @@ third, two distance-measuring constructors reporting no distance, was closed on
 2026-09-12, and part 4 records what it cost while it stood.
 
 ### R-19 The flat clearance minimum `[P]`
+
+*Verified: 2026-09-11*
 
 *Applies when:* always. Two pieces of copper on one layer belonging to two
 different nets. No declaration needed, which is why this is the rule that fires
@@ -1460,6 +1508,8 @@ fourth entry condition a new rule has to meet.
 
 ### A condition the whole population satisfies `[S]`
 
+*Verified: 2026-09-11*
+
 A condition nothing satisfies and a condition everything satisfies are the same
 defect wearing opposite signs. Neither separates anything, so neither can be
 evidence about a board, and both look like a working rule from the outside: one
@@ -1505,6 +1555,8 @@ it belongs behind the design's own declaration, where the population it defines
 is the boards that asked for fillets.
 
 ### A check that reads what the system says, not what it wrote `[S]`
+
+*Verified: 2026-09-13*
 
 The same defect has now been found in two layers, and the second one hides
 better. A count without a denominator passes most easily exactly when the
@@ -1589,6 +1641,18 @@ each other rather than against what either command said about itself.
 The rule this leaves for a new test is one sentence: **a test named after what a
 command writes opens what the command wrote**, and reads it with something that
 is not the writer. Where that is impossible, the test says so in its own name.
+
+A third form of the same defect, and the cheapest to commit: **an assertion
+nobody has watched fire is an unmeasured assertion.** A mutation that kills the
+test proves the test fails; it does not prove that *this* line in it does
+anything, because another assertion may have fired first and hidden it. The
+proof is the printout - run the mutation, read what the check prints, and see
+the number the new line guards actually move. Measured on 2026-09-13: widening
+the on-grid tolerance to a millimetre makes an older assertion fire first, while
+the printout underneath shows 775 of 775 pads on the lattice, which is the new
+line's own evidence that it would have fired too. Write that in the test beside
+the assertion, so the next reader asking "does this line bite" is answered
+without repeating the mutation.
 
 That rule is a check now rather than a paragraph -
 `a_test_that_drives_a_writing_command_opens_what_it_wrote`. It walks every test
@@ -1686,6 +1750,8 @@ nothing, not tests that read the wrong thing.
 
 ### Board score
 
+*Verified: never*
+
 `crates/cypcb-autoroute/src/scoring.rs` returns `RoutingScore` with nine
 fields. Six of them enter the composite.
 
@@ -1729,6 +1795,8 @@ re-discovered:
 
 ### Rule registry
 
+*Verified: never*
+
 `run_drc` (`crates/cypcb-drc/src/lib.rs:128-200`) runs more than thirty rules.
 The ones that back a canon rule are `TraceCurrentRule` (R-01), `AnnularRingRule`,
 `PadLandRule`, `HoleToHoleRule`, `ViaDiameterRule`, `ViaDrillRule`,
@@ -1737,6 +1805,8 @@ The ones that back a canon rule are `TraceCurrentRule` (R-01), `AnnularRingRule`
 than passing silently when the design does not describe the case.
 
 ### Ranking and gate
+
+*Verified: never*
 
 `generate_variants` sorts complete boards first, then by `shorts`, then by
 `composite` (`crates/cypcb-autoroute/src/variant.rs:496-510`). The CI gate in
@@ -1748,12 +1818,16 @@ connections, at least 70.0 mm of copper, composite at most 2100.0, at most 2
 
 ### Rules that DRC checks and the ranking cannot see
 
+*Verified: never*
+
 Every violation weighs 1000 in the composite regardless of kind, so a trace
 that will cook ranks level with a trace slightly under the fab's minimum. The
 fix is mechanical: `DrcViolation` already carries its kind, so a count per kind
 is built in the same place `shorts` is built today (`scoring.rs:167`).
 
 ### Properties nothing in the workspace computes
+
+*Verified: 2026-09-11*
 
 Checked by grep over `crates/*/src` on 2026-09-11: no hits for "return path",
 "return current", "loop area", "split plane", "antipad", "crosstalk" or
@@ -1779,6 +1853,8 @@ Checked by grep over `crates/*/src` on 2026-09-11: no hits for "return path",
    cell sets.
 
 ### The wedge beside a corner, which R-08 measures and can miss
+
+*Verified: never*
 
 R-08's measurement asks one question - which side of the land does the trace's
 edge cross - and beside a corner that question has two answers a hair apart.
@@ -1830,6 +1906,8 @@ quiet board from a quiet rule.
 
 ### The branch a reconstruction missed, and what it does not prove `[S]`
 
+*Verified: 2026-09-12*
+
 Rebuilding R-08's answer from geometry, to check the instrument before using
 it, disagreed with the rule on two rows out of 175. The disagreement was in the
 reconstruction, and saying so precisely matters more than the number.
@@ -1872,6 +1950,8 @@ mutations kill it: dropping the guard that skips an edge starting outside the
 land, and taking the nearer edge rather than the further one.
 
 ### The router's own output, against the rules this canon states
+
+*Verified: 2026-09-12*
 
 Nothing measured how much of this canon the router satisfies on boards the
 router itself produced. R-08 is the first rule to answer that question, and it
@@ -2048,6 +2128,8 @@ recorded for R-05, R-13 and R-14.
 
 ### A rule about a writer, which is not a rule about a board `[S]`
 
+*Verified: 2026-09-13*
+
 Every rule above grades an artefact: copper that exists, measured where it
 lies. The teardrop half of R-08 cannot be written that way, and the reason is
 now measured rather than argued - one example declares the property, out of
@@ -2118,6 +2200,8 @@ property. Two mutations kill it - silencing the warning, and making
 it is the only one that reads the two outputs of one design side by side.
 
 ### Constants a fab preset promises and nothing checks
+
+*Verified: never*
 
 Five fields in `crates/cypcb-rules/src/constraints.rs` have no reader anywhere
 outside their own crate: `min_acid_trap`, `max_stub_length`,
@@ -2348,25 +2432,3 @@ cargo test --release -p cypcb-autoroute --test sharp_entry_anatomy -- --ignored 
 # no part on any fixture is turned: two placements carry a rotation, both zero
 grep -hE "^\s*\(at [-0-9.]+ [-0-9.]+ [-0-9.]+\)" tests/fixtures/benchmark/*.kicad_pcb
 ```
-
-Last verified: 2026-09-12 for R-08 - its threshold's provenance, what the
-reading depends on, and the anatomy of the fourteen sharp entries - and
-2026-09-11 for R-10 through R-19 and the two sections on what a measurement is worth. Web sources were
-read on 2026-09-11, and every repository claim in those four rules was read
-against the working tree on the same day by opening the file rather than
-grepping for the name: `DEFAULT_TOLERANCE`, `is_90_bend`, `compute_composite`
-and the variant sort for R-10 and R-11; `nets_needing_reroute`, the tear block,
-`congestion_cost` and the type of `routed_paths` for R-12; and
-`impedance_ohms_x100`, `CopperEnvironment`, the zone's `bounds`, `fill_zone`
-and `query_region_on_layers` for R-13. For R-14 and R-15: `StitchPitch`,
-`StitchSpec::at`, `stitching_vias` and its doc comment, the `Via` struct's
-seven fields, `zone_stitch`, `thermal_gap`, `spoke_width` and
-`thermal_spokes`. For R-16 through R-18: the registry's 39 entries, the three
-`IpcClass` variants, the early return for an explicit resolution, the integer
-division in `nm_to_grid_x`, both constructors that discard their measurement,
-the ranking comment in `check.rs`, and both `diff_pair_skew` call sites.
-Negative claims were run rather than assumed: no file under `crates/cypcb-drc`
-mentions stitching, `thermal_relief_spokes` has no reader outside its own
-crate, and no search on 2026-09-11 found a published permitted fraction for
-R-13, a router-grid rule for R-17, or a standard specifying report contents
-for R-18.
