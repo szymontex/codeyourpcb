@@ -32,13 +32,52 @@ cd "$REPO_ROOT"
 # either tree.
 GATE_BUILD_DIR="${CARGO_TARGET_DIR:-$REPO_ROOT/target}"
 mkdir -p "$GATE_BUILD_DIR"
+
+# Who is holding it, and is anybody still watching them.
+#
+# `exec 9>` opens the descriptor without close-on-exec, so every child inherits
+# it, and a `flock` hangs on the open file description rather than on the
+# process that took it. Kill the shell and the description lives on in
+# `cargo test`: the lock stays held by a process nobody is waiting for, and the
+# next gate waits the full thirty minutes below for it. Reproduced in this
+# container - parent killed, child alive with `ppid 1`, lock still held,
+# released only when the child died.
+#
+# So the message names the holder instead of naming the file. There is no
+# `lsof` and no `fuser` here; walking `/proc/[0-9]*/fd` as this user finds it,
+# and **`ppid 1` is what tells an orphan from a running gate** - a gate that is
+# genuinely working has its own shell above it. Waiting for a real gate is
+# correct and waiting for an orphan is half an hour thrown away, and until
+# 2026-09-14 the two looked identical from here.
+lock_holders() {
+  local target
+  target=$(readlink -f "$GATE_BUILD_DIR/.gate.lock")
+  local fd pid ppid args
+  for fd in /proc/[0-9]*/fd/*; do
+    pid=${fd#/proc/}
+    pid=${pid%%/*}
+    [ "$pid" = "$$" ] && continue
+    [ "$(readlink "$fd" 2>/dev/null)" = "$target" ] || continue
+    ppid=$(awk '/^PPid:/{print $2}' "/proc/$pid/status" 2>/dev/null)
+    [ "$ppid" = "$$" ] && continue
+    args=$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null | cut -c1-70)
+    if [ "$ppid" = "1" ]; then
+      echo "    pid $pid, ppid 1 - ORPHAN, nothing is waiting for it: $args"
+    else
+      echo "    pid $pid, ppid $ppid: $args"
+    fi
+  done
+}
+
 exec 9>"$GATE_BUILD_DIR/.gate.lock"
 if ! flock -n 9; then
   echo "=== Quality Gate ==="
   echo "  waiting: another gate holds $GATE_BUILD_DIR/.gate.lock"
+  lock_holders
   echo "  started waiting at $(date +%H:%M:%S); giving up after 30 minutes"
   if ! flock -w 1800 9; then
     echo "  ✗ another gate still holds the lock after 30 minutes - not running"
+    lock_holders
     echo "    Nothing was checked. Find the other run before reading this as a result."
     exit 1
   fi
