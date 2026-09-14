@@ -55,9 +55,54 @@ finish() {
     { echo "$1"; cat "$BODY"; } > "$LOG"
     rm -f "$BODY"
     ln -sf "$LOG" "$LOG_DIR/latest.log"
-    ls -1t "$LOG_DIR"/*.log 2>/dev/null | tail -n +31 | while read -r old; do
-        [ "$old" = "$LOG_DIR/latest.log" ] || rm -f "$old"
+    # Thirty of this runner's own logs. Two things this used to get wrong:
+    # the glob took `manual-*` as well, so a burst of runs started by hand
+    # would age out the scheduled history it is meant to keep; and only
+    # `latest.log` was spared, while `manual-latest.log` - a symlink the same
+    # glob matches - would have been removed the moment its own timestamp aged
+    # far enough. A symlink removed here breaks a reader that follows it, and
+    # this directory had 29 files when that was found, two short of the first
+    # deletion.
+    ls -1t "$LOG_DIR"/*.log 2>/dev/null | while read -r old; do
+        [ -L "$old" ] && continue
+        case ${old##*/} in manual-*) continue ;; esac
+        echo "$old"
+    done | tail -n +31 | while read -r old; do
+        rm -f "$old"
     done
+}
+
+# A run log records one run. A file with no verdict is a record that ends in the
+# middle of itself, and a file with two is two runs in one place - neither is a
+# record anybody can read a month later.
+#
+# `manual-*` is excluded because a run somebody starts by hand writes no verdict
+# line; symlinks point at files already counted; `$2` is the run being written
+# right now, which has no verdict yet and must not be judged by the rule it is
+# about to satisfy.
+every_run_log_carries_one_verdict() {
+    local dir=$1 current=${2:-} bad=0 seen=0 f n
+    for f in "$dir"/*.log; do
+        [ -e "$f" ] || continue
+        [ -L "$f" ] && continue
+        case ${f##*/} in manual-*) continue ;; esac
+        [ "$f" = "$current" ] && continue
+        seen=$((seen + 1))
+        n=$(grep -c '^VERDICT:' "$f" 2>/dev/null || true)
+        [ "$n" -eq 1 ] && continue
+        bad=$((bad + 1))
+        if [ "$n" -eq 0 ]; then
+            echo "  x ${f##*/}: no verdict line - this runner writes the verdict"
+            echo "      first and assembles the file once, so a file without one"
+            echo "      was written over by something else"
+        else
+            echo "  x ${f##*/}: $n verdict lines - more than one run in one file"
+        fi
+    done
+    # Printed on every run, including the runs with nothing to report: a line
+    # that appears only on damage makes its absence unreadable.
+    echo "LOG-INTEGRITY checked=$seen without_one_verdict=$bad"
+    [ "$bad" -eq 0 ]
 }
 
 cd "$REPO" || exit 2
@@ -75,6 +120,20 @@ if ! flock -n 9; then
     echo "VERDICT: skipped - a gate is already running"
     exit 0
 fi
+
+# Read after the lock, not before: another scheduled run in flight has a file
+# with no verdict in it yet, which is a false red by construction. After
+# `flock -n 9` this run is the only scheduled writer, and a run started by hand
+# cannot raise it either because the rule skips `manual-*`.
+#
+# It does not stop the run. The damage has already happened and stopping does
+# not undo it; stopping would trade today's good record for no record at all,
+# which makes the check worse than the thing it guards; and a gate that is red
+# for history nobody can repair is a gate somebody switches off. The count
+# rides on the verdict instead, where a reader is already looking.
+LOG_INTEGRITY=$(every_run_log_carries_one_verdict "$LOG_DIR" "$LOG" || true)
+say "$LOG_INTEGRITY"
+LOG_INTEGRITY_BAD=$(printf '%s' "$LOG_INTEGRITY" | sed -n 's/.*without_one_verdict=\([0-9]*\).*/\1/p')
 
 # viewer/pkg is a committed artifact the gate itself rebuilds, so a difference
 # there is the gate's own doing and not somebody's work in progress.
@@ -167,6 +226,7 @@ fi
 
 if [ "$CODE" -eq 0 ]; then
     VERDICT="VERDICT: green, all stages passed, ${ELAPSED}s"
+    [ "${LOG_INTEGRITY_BAD:-0}" -gt 0 ] && VERDICT="$VERDICT, ${LOG_INTEGRITY_BAD} damaged log(s) in this directory"
     if [ -n "$WORKTREE" ]; then
         VERDICT="$VERDICT, measured from the committed tip"
     fi
@@ -214,6 +274,7 @@ if [ "$CODE" -eq 0 ]; then
 else
     STAGE=$(grep -E "^\[[0-9]+/[0-9]+\]" "$BODY" | tail -1)
     VERDICT="VERDICT: red, exit $CODE after ${ELAPSED}s, last stage: ${STAGE:-unknown}"
+    [ "${LOG_INTEGRITY_BAD:-0}" -gt 0 ] && VERDICT="$VERDICT, ${LOG_INTEGRITY_BAD} damaged log(s) in this directory"
 fi
 
 finish "$VERDICT"

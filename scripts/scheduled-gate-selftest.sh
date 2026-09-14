@@ -200,6 +200,36 @@ git -C "$CASE/work" remote set-url origin "$CASE/there-is-no-repository-here.git
 run_gate true
 says "the fetch from origin failed" "a refresh that fails is said out loud"
 
+# 8. A run log records one run. This runner writes the verdict first and
+#    assembles the file once, so a file with no verdict was written over by
+#    something else - which happened twice in this project, because
+#    `latest.log` is a symlink and a shell redirect follows one. The rule says
+#    so without stopping the run: the damage has already happened, and a gate
+#    that goes red for history nobody can repair is a gate somebody switches
+#    off.
+new_case damaged-log-is-named-not-fatal
+mkdir -p "$CASE/logs"
+printf 'work\nVERDICT: green, all stages passed, 500s\n' > "$CASE/logs/2026-09-01T04-30-00.log"
+printf 'somebody elses output\nEXIT=0\n' > "$CASE/logs/2026-09-02T04-30-00.log"
+printf 'one\nVERDICT: a\nVERDICT: b\n' > "$CASE/logs/2026-09-03T04-30-00.log"
+printf 'by hand, no verdict here\n' > "$CASE/logs/manual-2026-09-04T10-00-00.log"
+run_gate true
+says "LOG-INTEGRITY checked=3 without_one_verdict=2" "the rule counts the runner's own logs and skips a manual one"
+says "2026-09-02T04-30-00.log: no verdict line" "a file with no verdict is named"
+says "2026-09-03T04-30-00.log: 2 verdict lines" "a file with two verdicts is named"
+says_not "manual-2026-09-04" "a log written by hand is not judged"
+says "VERDICT: green" "and the run still finishes"
+says "2 damaged log(s)" "with the count on the verdict, where a reader looks"
+
+# 8b. A directory with nothing wrong says so, because a line that appears only
+#     on damage makes its absence unreadable.
+new_case clean-log-directory-says-so
+mkdir -p "$CASE/logs"
+printf 'work\nVERDICT: green, all stages passed, 500s\n' > "$CASE/logs/2026-09-01T04-30-00.log"
+run_gate true
+says "LOG-INTEGRITY checked=1 without_one_verdict=0" "a clean directory is counted out loud"
+says_not "damaged log(s)" "and the verdict carries no count"
+
 echo ""
 if [ "$FAILURES" -eq 0 ]; then
     echo "=== the scheduled gate decides what it says it decides ==="
