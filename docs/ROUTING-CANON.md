@@ -2099,7 +2099,14 @@ still cannot re-run.
    continuous reference copper lies under its footprint on the adjacent layer,
    and report the share of length that has none.
 2. Plane split crossings - intersect the segment footprint with the edges of
-   the reference pour and count the crossings.
+   the reference pour and count the crossings. **The quantity is unmeasured and
+   the impression this item leaves is wrong**, which is worth separating.
+   `PourIslandRule` has been registered since `fae82cb` on 2026-08-07 and runs
+   on every board this tool checks; `a_plane_cut_in_two_is_reported` is built
+   on exactly this case. It counts the orphaned pieces a cut leaves, not how
+   many times a segment crosses the split beneath it - the same situation on
+   the copper, a different number. A reader who took this item at face value
+   would write a crossing counter to catch a case the checker already reports.
 3. Loop area - once coverage exists, take the area between the trace axis and
    the nearest continuous return copper. R-13 bounds what this is worth:
    under continuous reference the area is set by the stackup and not by the
