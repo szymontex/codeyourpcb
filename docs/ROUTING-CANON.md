@@ -2112,7 +2112,14 @@ still cannot re-run.
    publish the maximum and the distribution.
 7. Direction symmetry - route the same pad pair A to B and B to A and compare
    cost, copper length, via count, and the intersection over union of the two
-   cell sets.
+   cell sets. **Two of those four are measured and this list said none of them
+   were until 2026-09-14.** `the_same_pair_routed_from_either_end` builds the
+   grid the way `PathFinderStrategy` does and searches each connection both
+   ways, comparing the path in cells and the via count - **not** the copper
+   length in nanometres and **not** the intersection over union, which are the
+   two this item still names correctly. It entered on 2026-09-11 and ran in no
+   stage until the same day this line was corrected, so for three days the
+   answer existed and nothing asked for it.
 
 ### The wedge beside a corner, which R-08 measures and can miss
 
@@ -2471,8 +2478,12 @@ it is the only one that reads the two outputs of one design side by side.
 
 *Verified: 2026-09-13*
 
-**Eight of the 44 fields of `DesignConstraints` have no reader anywhere outside
-their own crate.** `min_acid_trap`, `max_stub_length`, `thermal_relief_spokes`,
+**Eight of the 45 fields of `DesignConstraints` have no reader anywhere outside
+their own crate.** It said 44 until 2026-09-14, and the field that arrived is
+`min_copper_pour_clearance` - which was never a candidate for this list and
+could not be: three production readers take it today, in the renderer, in the
+KiCad writer and in `PourIslandRule`. **The list did not change and the sentence
+was false anyway**, because the denominator is a claim of its own. `min_acid_trap`, `max_stub_length`, `thermal_relief_spokes`,
 `max_vias_per_high_speed_net`, `diff_pair_gap`, `diff_pair_tolerance`,
 `max_copper_layers` and `max_current_per_width_x100`. Every one of them is set
 by four or five preset files: the fab states a number, the preset records it,

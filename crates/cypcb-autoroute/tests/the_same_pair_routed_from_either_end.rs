@@ -6,7 +6,10 @@
 //! to component B comes out better than routing the same pair from B to A. A
 //! path finder whose answer depends on which end it started from is telling
 //! you that its cost function, its tie-breaking or its obstacle marking is not
-//! symmetric either - and nothing in this repository measured it.
+//! symmetric either - and nothing in this repository **had** measured it. The
+//! tense matters: this file is the thing that measures it, and the canon's
+//! list of what nothing measures quoted this sentence's first half as still
+//! true until 2026-09-14.
 //!
 //! This measures it at the level the shipped router uses: one grid built the
 //! way `PathFinderStrategy` builds it, and `find_path_with_zones` called twice

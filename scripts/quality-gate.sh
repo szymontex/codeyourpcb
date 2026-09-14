@@ -513,11 +513,20 @@ fi
 # between them for three assertions, which is a question about the price of a
 # stage rather than about technique and is left for the owner.
 #
+# A third joined them on 2026-09-14, found by re-reading the canon rather than
+# by the census: `how_much_does_the_answer_depend_on_the_direction` carries two
+# assertions, costs 0.68s, and had run in no stage since it was written on
+# 2026-09-11. The canon's list of what nothing measures still named its subject
+# as unmeasured - a test nothing runs and a document that does not know it
+# exists are the same omission seen from two sides.
+#
 # Each is run on its own, because libtest takes one filter and passing two
 # names in one invocation matches nothing.
 if ignored_cases --test routed_copper_reaches_the_files \
       -- --exact which_layers_the_router_joins_with_a_via \
-  && ignored_cases --test benchmark_validation -- --exact benchmark_full_matrix; then
+  && ignored_cases --test benchmark_validation -- --exact benchmark_full_matrix \
+  && ignored_cases --test the_same_pair_routed_from_either_end \
+      -- --exact how_much_does_the_answer_depend_on_the_direction; then
   pass "the-cheap-ignored-assertions"
 else
   fail "the-cheap-ignored-assertions"
