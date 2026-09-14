@@ -138,6 +138,10 @@ afterAll(() => {
   }
   rmSync(workspace, { recursive: true, force: true });
   rmSync(outside, { recursive: true, force: true });
+  // The neighbour too. It was made here and removed nowhere, so every
+  // `cypcb-ws-*` left in the machine's temporary directory ended in `-evil` -
+  // one per run of this file since it was written.
+  rmSync(sibling, { recursive: true, force: true });
 });
 
 describe('the dev server guards the disk', () => {

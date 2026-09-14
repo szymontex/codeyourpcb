@@ -56,15 +56,25 @@ fn repo_root() -> PathBuf {
 /// The name carries the process id so two `cargo test` runs at once do not
 /// meet in the same place, and neither test removes the directory when it
 /// finishes - the one that finished first would be deleting what the other
-/// is still reading. The leftovers are cleared by the next run that claims
-/// the same name.
+/// is still reading. Nothing else can remove it either: the pair share it
+/// through a `OnceLock` static, and a static is never dropped, so there is no
+/// scope whose end means "both are done".
+///
+/// So it goes under `CARGO_TARGET_TMPDIR` rather than the machine's temporary
+/// directory. **That one line left 860 directories and 301 MB behind**, one
+/// per process id since 2026-08-08: the `remove_dir_all` below runs before the
+/// `create_dir_all`, so it clears the *previous* run's name and never its own,
+/// and a name carrying a pid is a new name every time. Under the target
+/// directory the same leftovers are swept by `cargo clean` and are never in a
+/// directory shared with anything else on the machine.
 fn drill_files() -> &'static DrillFiles {
     static ROUTED: OnceLock<DrillFiles> = OnceLock::new();
     ROUTED.get_or_init(route_and_export)
 }
 
 fn route_and_export() -> DrillFiles {
-    let dir = std::env::temp_dir().join(format!("cypcb-drill-passes-{}", std::process::id()));
+    let dir = std::path::Path::new(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("drill-passes-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).expect("a place to work");
 
