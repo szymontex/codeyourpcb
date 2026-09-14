@@ -2150,10 +2150,12 @@ inside `score_board` by asking the violations a question the total does not.
 
 ### Properties nothing in the workspace computes
 
-*Verified: 2026-09-13*
+*Verified: 2026-09-14*
 
-Checked by grep over `crates/*/src` on 2026-09-13: no hits for "return path",
-"return current", "loop area", "split plane", "crosstalk" or "parallel run".
+Checked by grep over `crates/*/src` on 2026-09-14: no hits for "return path",
+"return current", "loop area", "split plane", "crosstalk", "parallel run",
+"return_path_coverage", "split_crossings", "loop_area", "parallel_run_length",
+"vias_per_net" or "cell_set_iou".
 "antipad" answers twice, in `crates/cypcb-cli/src/commands/to_kicad.rs` and in
 `crates/cypcb-kicad/src/board_writer.rs`, and both are comments about what a
 pour keeps from foreign copper: the word arrived in the tree and the
@@ -2164,9 +2166,11 @@ still cannot re-run.
 
 1. Return path coverage - for each segment, ask the spatial index whether
    continuous reference copper lies under its footprint on the adjacent layer,
-   and report the share of length that has none.
+   and report the share of length that has none. A measurement would be held
+   as return_path_coverage, and that name answers no file today.
 2. Plane split crossings - intersect the segment footprint with the edges of
-   the reference pour and count the crossings. **The quantity is unmeasured and
+   the reference pour and count the crossings, a measurement that would be held
+   as split_crossings and that answers no file today. **The quantity is unmeasured and
    the impression this item leaves is wrong**, which is worth separating.
    `PourIslandRule` has been registered since `fae82cb` on 2026-08-07 and runs
    on every board this tool checks; `a_plane_cut_in_two_is_reported` is built
@@ -2175,18 +2179,25 @@ still cannot re-run.
    the copper, a different number. A reader who took this item at face value
    would write a crossing counter to catch a case the checker already reports.
 3. Loop area - once coverage exists, take the area between the trace axis and
-   the nearest continuous return copper. R-13 bounds what this is worth:
+   the nearest continuous return copper, a measurement that would be held as
+   loop_area and that answers no file today. R-13 bounds what this is worth:
    under continuous reference the area is set by the stackup and not by the
    route, so it is a number for uncovered spans only.
-4. Stub length - see R-04; needs the connectivity graph described below.
+4. Stub length - see R-04; needs the connectivity graph described below. A
+   measurement would be held as longest_stub rather than under the name of the
+   fab's own figure, because that string is already part of the constant R-04
+   names and a search for it answers five files.
 5. Parallel run length - for segment pairs on one layer, on different nets,
    whose directions differ by less than 10 degrees, sum the projected length
-   within a corridor of N times the clearance.
+   within a corridor of N times the clearance. A measurement would be held as
+   parallel_run_length, and that name answers no file today.
 6. Vias per net - `via_count` is a board total; group vias by `net_id` and
-   publish the maximum and the distribution.
+   publish the maximum and the distribution. The per-net quantity would be held
+   as vias_per_net, and that name answers no file today.
 7. Direction symmetry - route the same pad pair A to B and B to A and compare
    cost, copper length, via count, and the intersection over union of the two
-   cell sets. **Two of those four are measured and this list said none of them
+   cell sets, the last of which would be held as cell_set_iou and answers no
+   file today. **Two of those four are measured and this list said none of them
    were until 2026-09-14.** `the_same_pair_routed_from_either_end` builds the
    grid the way `PathFinderStrategy` does and searches each connection both
    ways, comparing the path in cells and the via count - **not** the copper
