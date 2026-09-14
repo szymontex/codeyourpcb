@@ -49,10 +49,14 @@ mkdir -p "$GATE_BUILD_DIR"
 # genuinely working has its own shell above it. Waiting for a real gate is
 # correct and waiting for an orphan is half an hour thrown away, and until
 # 2026-09-14 the two looked identical from here.
-lock_holders() {
-  local target
-  target=$(readlink -f "$GATE_BUILD_DIR/.gate.lock")
-  local fd pid ppid args
+GATE_LOCK="$GATE_BUILD_DIR/.gate.lock"
+
+# One scan, read before blocking: after the lock is taken the holder is gone.
+# `comm` rather than the full command line, so the answer is one token with no
+# spaces and the line below stays parsable without quoting.
+gate_lock_holder() {
+  local target fd pid ppid
+  target=$(readlink -f "$GATE_LOCK")
   for fd in /proc/[0-9]*/fd/*; do
     pid=${fd#/proc/}
     pid=${pid%%/*}
@@ -60,30 +64,49 @@ lock_holders() {
     [ "$(readlink "$fd" 2>/dev/null)" = "$target" ] || continue
     ppid=$(awk '/^PPid:/{print $2}' "/proc/$pid/status" 2>/dev/null)
     [ "$ppid" = "$$" ] && continue
-    args=$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null | cut -c1-70)
-    if [ "$ppid" = "1" ]; then
-      echo "    pid $pid, ppid 1 - ORPHAN, nothing is waiting for it: $args"
-    else
-      echo "    pid $pid, ppid $ppid: $args"
-    fi
+    printf '%s %s %s' "$pid" "${ppid:-0}" "$(cat "/proc/$pid/comm" 2>/dev/null || echo unknown)"
+    return 0
   done
+  printf 'none 0 none'
 }
 
-exec 9>"$GATE_BUILD_DIR/.gate.lock"
+exec 9>"$GATE_LOCK"
+GATE_LOCK_START=$(date +%s)
+GATE_LOCK_HOLDER="none 0 none"
 if ! flock -n 9; then
+  GATE_LOCK_HOLDER=$(gate_lock_holder)
+  read -r _hpid _hppid _hcmd <<<"$GATE_LOCK_HOLDER"
   echo "=== Quality Gate ==="
-  echo "  waiting: another gate holds $GATE_BUILD_DIR/.gate.lock"
-  lock_holders
+  echo "  waiting: another gate holds $GATE_LOCK"
+  if [ "$_hppid" = "1" ]; then
+    echo "    pid $_hpid, ppid 1 - ORPHAN, nothing is waiting for it: $_hcmd"
+  else
+    echo "    pid $_hpid, ppid $_hppid: $_hcmd"
+  fi
   echo "  started waiting at $(date +%H:%M:%S); giving up after 30 minutes"
   if ! flock -w 1800 9; then
     echo "  ✗ another gate still holds the lock after 30 minutes - not running"
-    lock_holders
     echo "    Nothing was checked. Find the other run before reading this as a result."
     exit 1
   fi
   echo "  lock acquired at $(date +%H:%M:%S)"
   echo ""
 fi
+
+# One line on every run, including the runs that waited for nothing.
+#
+# A line printed only when waiting makes its absence unreadable: "nobody
+# waited" and "nobody measures this" look the same, and that is what the first
+# twenty-four logs in this project's run directory look like. `waited=0` is the
+# whole point of it. There is no `holder_orphan` field because `holder_ppid=1`
+# already says that, and one fact in two places is one fact that goes wrong in
+# one of them. The time is UTC and ISO 8601, so sorting these lines as text
+# sorts them by when they happened.
+read -r GATE_LOCK_PID GATE_LOCK_PPID GATE_LOCK_CMD <<<"$GATE_LOCK_HOLDER"
+printf 'GATE-LOCK waited=%s holder_pid=%s holder_ppid=%s holder_cmd=%s acquired=%s\n' \
+  "$(( $(date +%s) - GATE_LOCK_START ))" \
+  "$GATE_LOCK_PID" "$GATE_LOCK_PPID" "$GATE_LOCK_CMD" \
+  "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 pass() { echo "  ✓ $1"; }
 fail() { echo "  ✗ $1"; exit 1; }
