@@ -1514,7 +1514,7 @@ third, two distance-measuring constructors reporting no distance, was closed on
 
 ### R-19 The flat clearance minimum `[P]`
 
-*Verified: 2026-09-11*
+*Verified: 2026-09-14*
 
 *Applies when:* [copper] always. Two pieces of copper on one layer belonging to two
 different nets. No declaration needed, which is why this is the rule that fires
