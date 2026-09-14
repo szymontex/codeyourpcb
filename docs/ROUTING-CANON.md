@@ -2076,6 +2076,67 @@ will.
 
 ## What nothing measures
 
+*Verified: 2026-09-14*
+
+**A sentence saying nothing measures something is exactly as strong as the name
+it used, and that strength has a number now.** Six quantities this project does
+measure were searched for on 2026-09-14 by the phrase a reader of this canon
+would write, and set beside the name the code uses. One command, one scope -
+`grep -ril "<term>" --include=*.rs crates/` over the 551 tracked `.rs` files in
+the crates, tests included, because the question is whether this project
+measures the quantity and a test measures it too:
+
+| the phrase a reader would search | files | the name the code uses | files |
+|---|---|---|---|
+| "bend penalty" | 1 | `angle_penalty` | 1 |
+| "direction symmetry" | 0 | `the_same_pair_routed_from_either_end` | 1 |
+| "plane split crossings" | 0 | `pour_island` | 7 |
+| "board diagonal" | 1 | `board_diagonal_nm` | 1 |
+| "segment intersections" | 1 | `compute_crossings` | 1 |
+| "copper touching copper" | 14 | `shorts` | 51 |
+
+**Two of the six phrases return nothing while the measurement is there**, and a
+third only just answers: "bend penalty" finds one file, and that file is a test
+whose header comment happens to use the words. The phrase reaches that
+measurement through prose rather than through code. So an absence recorded below
+is an absence of a name, and a reader who needs to know whether the quantity
+exists has to go looking for the quantity.
+
+**The scope above is wider than the one the recorded search further down uses,
+and the difference is the point rather than an oversight.** That search asks what
+the crates' own sources compute and counts 204 files under `crates/*/src`; this
+table asks whether anything in the project measures the quantity at all, and a
+test does. Reading one of the two numbers into the other is the error this
+paragraph exists to prevent - the direction-symmetry row is the case, because
+the only thing that measures it lives in a tests directory and the narrower
+scope cannot see it.
+
+**There are three kinds of control on a claim like this, and the third cannot
+exist.** A control on the instrument - the same command, the same scope, a word
+known to be present - says the search works: "clearance" answers 185 of those
+551 files. A control on the neighbourhood - the same command over a measurement
+of the same kind that does exist - says a measurement of that shape would be
+found if it carried this document's name for it. **A control on the quantity
+itself is impossible by construction: it would have to be code computing the
+quantity whose absence is being claimed, and if that code existed the claim
+would be false.** Every item below has the first, five of them have the second,
+and none of them can have the third.
+
+**Two claims in this section are free of that limit, and they are checked to the
+end.** The first is that the composite is blind to what a violation was: the body
+of `compute_composite` names `kind` zero times, and the control is that `shorts`
+reads it in the same codebase, so the zero is a zero rather than a missing word.
+The second is the list of preset fields nothing reads: those are named
+identifiers rather than described quantities, and an identifier has no synonym,
+so walking all 45 fields of `DesignConstraints` and asking which are named in no
+file outside their own crate answers completely - eight of them, on 2026-09-14,
+with `min_annular_ring` at 13 files and `min_hole_to_hole` at 8 under the same
+command as the control that the question is answerable.
+
+**The scope of all of this is the source tree, not this document.** A phrase
+written here does not become a measurement, and every count above was taken over
+the crates' own files.
+
 ### Rules that DRC checks and the ranking cannot see
 
 *Verified: 2026-09-13*

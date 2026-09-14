@@ -108,6 +108,14 @@ printf 'GATE-LOCK waited=%s holder_pid=%s holder_ppid=%s holder_cmd=%s acquired=
   "$GATE_LOCK_PID" "$GATE_LOCK_PPID" "$GATE_LOCK_CMD" \
   "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
+# And who else is writing into the build directory, which the lock above
+# cannot answer: it serialises the runs that take it, and a command somebody
+# types by hand takes nothing. A red that came from a shared target directory
+# reads exactly like a red that came from the tree, and on 2026-09-14 one of
+# them cost a morning to tell apart. Diagnostic only - it never fails a run.
+printf 'GATE-BUILDS %s dir=%s\n' \
+  "$("$REPO_ROOT/scripts/who-is-building.sh" "$GATE_BUILD_DIR")" "$GATE_BUILD_DIR"
+
 pass() { echo "  ✓ $1"; }
 fail() { echo "  ✗ $1"; exit 1; }
 
@@ -618,6 +626,14 @@ if ./scripts/scheduled-gate-selftest.sh 2>&1; then
   pass "scheduled-gate-selftest"
 else
   fail "scheduled-gate-selftest"
+fi
+# The neighbour scan printed at the top of every run. A diagnostic that has
+# stopped working reports the same zero as a quiet machine, which is the one
+# failure a reader of `GATE-BUILDS sharing=0` cannot see.
+if ./scripts/who-is-building.sh --selftest 2>&1; then
+  pass "who-is-building"
+else
+  fail "who-is-building"
 fi
 echo ""
 
