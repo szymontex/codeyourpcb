@@ -328,6 +328,13 @@ function startVite() {
 }
 
 // Clean shutdown
+/// Children this server started and has not seen exit.
+///
+/// A child that outlives its parent keeps whatever the parent was holding -
+/// here a board mid-route, and on a busy machine a core. `shutdown` had a list
+/// of one, written when Vite was the only thing spawned.
+const running = new Set<ReturnType<typeof spawn>>();
+
 function shutdown(): void {
   console.log('\n[Server] Shutting down...');
 
@@ -339,6 +346,11 @@ function shutdown(): void {
 
   // Kill Vite, when there is one
   vite?.kill();
+
+  // And anything this server started that is still running.
+  for (const child of running) {
+    child.kill();
+  }
 
   process.exit(0);
 }
@@ -466,6 +478,12 @@ function handleRouteRequest(ws: WebSocket, message: { file?: string; content?: s
     cwd: dirname(filePath),
     env: { ...process.env, FREEROUTING_JAR },
   });
+  // Registered so `shutdown` can kill it. Until 2026-09-14 only Vite was
+  // killed there, so a server stopped in the middle of a route left the
+  // `cypcb route` behind - and routing a board is the longest thing this
+  // server ever starts, which makes it the likeliest moment to stop it.
+  running.add(routeProcess);
+  routeProcess.on('close', () => running.delete(routeProcess));
 
   let stdout = '';
   let stderr = '';

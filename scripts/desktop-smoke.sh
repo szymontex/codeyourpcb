@@ -85,7 +85,14 @@ fresher_than "$FRONTEND" "the frontend bundle" viewer/src viewer/index.html || {
 
 echo "[1/2] starting $APP on a virtual display for ${SECONDS_UP}s"
 
+# Both temporary files, removed however this script ends. The two `rm -f "$LOG"`
+# lines further down cover the paths that reach them; `set -e` is on, so any
+# failure before them exits without cleaning up, and an interrupted run never
+# reaches them either. A trap runs on the way out whatever the way out is, and
+# the runner script had no `rm` on those paths at all.
 RUNNER=$(mktemp)
+LOG=$(mktemp)
+trap 'rm -f "$RUNNER" "$LOG"' EXIT
 cat > "$RUNNER" <<EOF
 #!/bin/bash
 "$PWD/$APP" &
@@ -104,13 +111,11 @@ chmod +x "$RUNNER"
 # because the only output is two libEGL warnings about the container having no
 # hardware acceleration. The first version of this script did exactly that and
 # called a running application dead.
-LOG=$(mktemp)
 set +e
 xvfb-run -a -s "-screen 0 1280x900x24" "$RUNNER" > "$LOG" 2>&1
 STATUS=$?
 set -e
 grep -v "libEGL warning" "$LOG" || true
-rm -f "$RUNNER"
 if [ "$STATUS" -ne 0 ]; then
     echo "[FAIL] the app did not survive ${SECONDS_UP}s (exit $STATUS)"
     cat "$LOG"

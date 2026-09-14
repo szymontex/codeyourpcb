@@ -128,15 +128,30 @@ fn watch_reads_the_kicad_board_it_is_pointed_at() {
     // verdict appears, and killed. A verdict is proof the file was understood;
     // a KiCad board read as the .cypcb language cannot produce one.
     let board = kicad_board("watch");
-    let mut child = Command::new(env!("CARGO_BIN_EXE_cypcb"))
-        .arg("watch")
-        .arg(&board)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("the binary runs");
+    // Held by a guard rather than killed at the end of the body. `watch` runs
+    // until it is told to stop, and the `kill` that used to sit below the
+    // assertions is an ordinary statement: any assertion failing before it
+    // leaves the process alive, watching a directory, for as long as this
+    // machine is up. A `Drop` runs while the stack unwinds, so it kills the
+    // process on the failing path as well as on the passing one.
+    struct Watched(std::process::Child);
+    impl Drop for Watched {
+        fn drop(&mut self) {
+            let _ = self.0.kill();
+            let _ = self.0.wait();
+        }
+    }
+    let mut watched = Watched(
+        Command::new(env!("CARGO_BIN_EXE_cypcb"))
+            .arg("watch")
+            .arg(&board)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("the binary runs"),
+    );
 
-    let stdout = child.stdout.take().expect("stdout was piped");
+    let stdout = watched.0.stdout.take().expect("stdout was piped");
     let (sender, receiver) = mpsc::channel();
     thread::spawn(move || {
         for line in BufReader::new(stdout).lines().map_while(Result::ok) {
@@ -161,9 +176,6 @@ fn watch_reads_the_kicad_board_it_is_pointed_at() {
             Err(mpsc::RecvTimeoutError::Disconnected) => break,
         }
     }
-
-    let _ = child.kill();
-    let _ = child.wait();
 
     assert!(
         verdict.is_some(),
