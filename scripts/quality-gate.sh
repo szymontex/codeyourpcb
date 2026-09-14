@@ -52,8 +52,13 @@ fail() { echo "  ✗ $1"; exit 1; }
 echo "=== Quality Gate ==="
 echo ""
 
-# Stage 1: Rust formatting
-echo "[1/17] cargo fmt --check"
+# The stage headings below carry no number. They used to, and the numbers had
+# drifted: two comments both said "Stage 10", nothing said 9 or 14, and the
+# `[n/N]` labels a reader actually sees were counting something else. One fact
+# in two places is one fact that goes wrong in one of them, and the label is
+# the place a reader looks.
+# Rust formatting
+echo "[1/18] cargo fmt --check"
 if cargo fmt --check 2>&1; then
   pass "cargo-fmt"
 else
@@ -61,7 +66,7 @@ else
 fi
 echo ""
 
-# Stage 2: Clippy (strict, whole workspace)
+# Clippy (strict, whole workspace)
 #
 # `cypcb-desktop` used to be excluded here and in stage 3 because it needs
 # system GTK and WebKit. Nothing installed those, so the crate went unbuilt for
@@ -69,7 +74,7 @@ echo ""
 # icon the macro refused, all found the first time anybody ran it. The
 # dependencies are in `scripts/setup-dev.sh` now, so the exclusion has nothing
 # left to protect and a crate nobody compiles is a crate nobody maintains.
-echo "[2/17] cargo clippy"
+echo "[2/18] cargo clippy"
 # The second reader is behind a feature, so the plain run does not lint it
 # either - the same gap the test stage below had.
 if cargo clippy --workspace --all-targets -- -D warnings 2>&1 \
@@ -80,7 +85,29 @@ else
 fi
 echo ""
 
-# Stage 3: Rust tests
+echo "[3/18] cargo check --all-features"
+# Every feature this workspace declares, compiled. Eleven features exist and
+# **five are switched on by nothing** - not a stage, not a `default`, not a
+# dependent crate: `cypcb-drc/parallel`, `cypcb-library/jlcpcb` and the three
+# on `cypcb-platform`. `jlcpcb` is not dead wood - it gates five places that
+# really call `reqwest` - so this is production code that nothing compiled
+# until 2026-09-14. `parallel` is the other kind: it buys `rayon` and
+# `grep -rn 'feature = "parallel"' crates/cypcb-drc/src` answers nothing.
+#
+# `--workspace --all-features` cannot be run whole: `cypcb-platform` carries a
+# deliberate `compile_error!` refusing `desktop` and `web` at once, so that
+# crate is excluded here and checked once per exclusive feature instead. Warm,
+# the three commands cost about fourteen seconds together.
+if cargo check --workspace --all-features --exclude cypcb-platform 2>&1 \
+  && cargo check -p cypcb-platform --features desktop 2>&1 \
+  && cargo check -p cypcb-platform --features web 2>&1; then
+  pass "all-features-compile"
+else
+  fail "all-features-compile"
+fi
+echo ""
+
+# Rust tests
 # The generated Tree-sitter parser, asked the same question as viewer/pkg and
 # for the same reason: `crates/cypcb-parser/grammar/src/parser.c` is committed
 # and `build.rs` compiles whatever is there - it does not regenerate, it panics
@@ -143,7 +170,7 @@ if [ -n "$UNTRACKED_PARSER" ]; then
   fail "untracked tree-sitter output"
 fi
 
-echo "[3/17] cargo test"
+echo "[4/18] cargo test"
 # The Rust reader is what `parse` is now. The tests that check it against the
 # tree-sitter parser need that parser as well, which the plain run does not
 # build - named explicitly, because a test nobody runs is not a test.
@@ -170,7 +197,7 @@ else
 fi
 echo ""
 
-# Stage 4: ESLint
+# ESLint
 # Nothing here type-checked the viewer until 2026-08-27. `npm run build` is
 # `build:wasm && tsc && vite build`, and the gate ran neither: Vite strips types
 # rather than checking them and Playwright starts its server the same way, so a
@@ -181,7 +208,7 @@ echo ""
 #
 # tsconfig.json includes `src`, `e2e` and the root `*.ts`, which is what makes
 # this worth a stage: the specs and the dev server are code too.
-echo "[4/17] tsc --noEmit"
+echo "[5/18] tsc --noEmit"
 TSC_LOG=$(mktemp)
 if (cd viewer && npx tsc --noEmit 2>&1 | tee "$TSC_LOG"); then
   pass "tsc"
@@ -195,7 +222,7 @@ fi
 rm -f "$TSC_LOG"
 echo ""
 
-echo "[5/17] eslint"
+echo "[6/18] eslint"
 if (cd viewer && npx eslint src/ e2e/ *.ts) 2>&1; then
   pass "eslint"
 else
@@ -203,8 +230,8 @@ else
 fi
 echo ""
 
-# Stage 5: Vitest
-echo "[6/17] vitest"
+# Vitest
+echo "[7/18] vitest"
 VITEST_LOG=$(mktemp)
 if (cd viewer && npx vitest run 2>&1 | tee "$VITEST_LOG"); then
   pass "vitest"
@@ -221,7 +248,7 @@ fi
 rm -f "$VITEST_LOG"
 echo ""
 
-# Stage 6: Playwright E2E
+# Playwright E2E
 #
 # The wasm bundle is rebuilt first, on purpose. `viewer/pkg` is a committed
 # artifact and nothing else in this gate regenerates it, so the browser suite
@@ -242,7 +269,7 @@ echo ""
 # That port is no longer 4321. It was, and 4321 is Astro's default, so a gate
 # run failed here because another repository's dev server in this container
 # held it. `CYPCB_E2E_PORT` overrides, and the default is 4327.
-echo "[7/17] playwright (rebuilding viewer/pkg first)"
+echo "[8/18] playwright (rebuilding viewer/pkg first)"
 # The module is rebuilt, and then asked whether the committed one is the same.
 # The rebuild makes the browser suite honest about the working tree; the
 # question afterwards is about what a clean clone carries, and on 2026-08-27
@@ -344,8 +371,8 @@ fi
 rm -f "$PLAYWRIGHT_LOG"
 echo ""
 
-# Stage 7: Autorouter benchmark — regression gate + performance benchmark
-echo "[8/17] autorouter benchmark"
+# Autorouter benchmark — regression gate + performance benchmark
+echo "[9/18] autorouter benchmark"
 if cargo test --release -p cypcb-autoroute -- benchmark_regression 2>&1; then
   pass "benchmark-regression"
 else
@@ -435,8 +462,8 @@ else
 fi
 echo ""
 
-# Stage 8: Code duplication check
-echo "[9/17] jscpd"
+# Code duplication check
+echo "[10/18] jscpd"
 if (cd viewer && npx jscpd --exitCode 1) 2>&1; then
   pass "jscpd"
 else
@@ -444,14 +471,14 @@ else
 fi
 echo ""
 
-# Stage 10: engine methods the browser never reaches
+# engine methods the browser never reaches
 #
 # `scripts/unused-engine-api.sh` was written as a report and nothing ran it,
 # so the thing it was written to find - a variant search whose panel had been
 # deleted - was found again by hand five weeks later. It keeps its list and
 # gains a number: the count of unreached methods has to be the one the script
 # records, so neither a new dead wrapper nor a deletion can pass unremarked.
-echo "[10/17] engine API reach"
+echo "[11/18] engine API reach"
 if ./scripts/unused-engine-api.sh 2>&1; then
   pass "unused-engine-api"
 else
@@ -459,14 +486,14 @@ else
 fi
 echo ""
 
-# Stage 11: the desktop application starts and draws something
+# the desktop application starts and draws something
 #
 # `scripts/desktop-smoke.sh` was written on 2026-08-12 and nothing ran it, so
 # the only crate that reaches a person's machine as an application was the one
 # nothing here started. It builds what it photographs first: the smoke test
 # refuses a bundle older than `viewer/src`, and the tree it was wired into had
 # a `viewer/dist` a week behind.
-echo "[11/17] desktop smoke"
+echo "[12/18] desktop smoke"
 if (cd viewer && npm run build) >/dev/null 2>&1 \
     && cargo build -p cypcb-desktop >/dev/null 2>&1 \
     && ./scripts/desktop-smoke.sh; then
@@ -476,7 +503,7 @@ else
 fi
 echo ""
 
-# Stage 12: figures a comment states and nothing reads back
+# figures a comment states and nothing reads back
 #
 # `scripts/claims-in-comments.sh` was written on 2026-08-29 after a comment
 # about the dev server's origin check was believed for as long as the check
@@ -484,7 +511,7 @@ echo ""
 # and nothing ran it either, so the census was a number nobody had looked at
 # since the day it was taken. The list stays a person's call; the count is
 # held here, the way the engine API's is.
-echo "[12/17] claims in comments"
+echo "[13/18] claims in comments"
 if ./scripts/claims-in-comments.sh; then
   pass "claims-in-comments"
 else
@@ -492,7 +519,7 @@ else
 fi
 echo ""
 
-# Stage 13: exported values in the viewer that nothing else names
+# exported values in the viewer that nothing else names
 #
 # `walkaround.ts` was 680 lines nothing imported and it survived a year of
 # green runs. Whole modules are guarded by a vitest case; this is the finer
@@ -500,7 +527,7 @@ echo ""
 # The types it lists stay a diagnostic, because an exported interface beside
 # its function is ordinary style. The values are the gate, and the viewer is
 # already at zero.
-echo "[13/17] unused exports"
+echo "[14/18] unused exports"
 if ./scripts/unused-exports.sh --values-only; then
   pass "unused-exports"
 else
@@ -508,14 +535,14 @@ else
 fi
 echo ""
 
-# Stage 10: the scheduled runner's own decisions
+# the scheduled runner's own decisions
 #
 # `scripts/scheduled-gate.sh` pushes to a shared branch at 04:30 with nobody
 # watching, and it was proved by one hand run on one day - the day every
 # branch happened to line up, so four of its five publish outcomes had never
 # happened at all. This stage makes them happen, against throwaway
 # repositories in a temporary directory.
-echo "[14/17] scheduled-gate selftest"
+echo "[15/18] scheduled-gate selftest"
 if ./scripts/scheduled-gate-selftest.sh 2>&1; then
   pass "scheduled-gate-selftest"
 else
@@ -523,14 +550,14 @@ else
 fi
 echo ""
 
-# Stage 15: the repository does not name the machine it is built on
+# the repository does not name the machine it is built on
 #
 # This repository is public and the machine is not. On 2026-09-11 a grep found
 # a host name, a container home, a log directory and a checkout path across
 # thirty-two tracked files written over four months - none of it about circuit
 # boards, all of it pasted out of a terminal by somebody who could see it and
 # forgot that a reader cannot. A patch would have let the next paste back in.
-echo "[15/17] no private paths"
+echo "[16/18] no private paths"
 if ./scripts/no-private-paths.sh; then
   pass "no-private-paths"
 else
@@ -538,7 +565,7 @@ else
 fi
 echo ""
 
-# Stage 16: no number in a file this project writes comes from nowhere
+# no number in a file this project writes comes from nowhere
 #
 # Three literals in the KiCad writer's zone node turned out to be somebody's
 # safety margin rather than the fab table - a pour standing twice as far off
@@ -546,7 +573,7 @@ echo ""
 # width, a relief at nearly double what the Gerbers carried for the same board.
 # Each was found by hand, months apart, and the third only because the first
 # two made somebody look.
-echo "[16/17] no invented numbers"
+echo "[17/18] no invented numbers"
 if ./scripts/no-invented-numbers.sh; then
   pass "no-invented-numbers"
 else
@@ -554,14 +581,14 @@ else
 fi
 echo ""
 
-# Stage 17: one door out of nanometres
+# one door out of nanometres
 #
 # A Gerber coordinate is `X1000000Y500000` and an Excellon one is `X0150`: the
 # decimal point is implied by a format the header declares, so a dimension in
 # those files carries no dot and stage 16 cannot see it. This check asks about
 # the act instead - turning a length into text happens in `coords.rs` and
 # nowhere else - which is the only shape that can fail there.
-echo "[17/17] one door out of nanometres"
+echo "[18/18] one door out of nanometres"
 if ./scripts/one-door-coordinates.sh; then
   pass "one-door-coordinates"
 else
