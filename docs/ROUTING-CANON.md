@@ -332,7 +332,7 @@ rule with no subject, arriving here as a sentence rather than as a rule.
 
 ### R-08 Trace entry into a land `[P]` figure, `[S]` measurement
 
-*Verified: 2026-09-13*
+*Verified: 2026-09-14*
 
 *Applies when:* [copper] a trace ends on a pad. Every routed board.
 
@@ -474,8 +474,14 @@ Half the model is there - `teardrops` is a DSL property carrying length and
 width ratios (`crates/cypcb-parser/src/parser.rs`, `convert_teardrops`),
 reachable as `world.teardrops()` (`crates/cypcb-world/src/world.rs:207`), and
 the Gerber writer honours it. **The KiCad export does not:** `to_kicad` prints
-a warning that the fillets the design asks for are not in the board it writes,
-because KiCad keeps its own teardrop settings. The warning sits inside
+a warning that the fillets the design asks for are not in the board it writes.
+The reason that warning used to give - that KiCad keeps its own teardrop
+settings somewhere this writer cannot reach - was not true, and the source was
+corrected on 2026-09-14 in f239ebc: KiCad takes the parameters from the board's
+own design settings and adds the fillet copper to the board as a zone, read
+that day from the KiCad doxygen source. **A `.kicad_pcb` has somewhere to put
+this and this writer does not put it there**, which is a statement about this
+writer rather than about the format. The warning sits inside
 `if let Some(teardrops) = world.teardrops()`, one per board, so a board that
 declares nothing is told nothing: **silence from the export does not mean the
 fillets are there, only that nobody asked for them.** So a board exported both ways

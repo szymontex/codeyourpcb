@@ -71,8 +71,8 @@ run_gate() {
     local gate_command=${1:-true}
     ( cd "$CASE/work" && \
       GATE_COMMAND="$gate_command" \
-      GATE_RETRY_ATTEMPTS=1 \
-      GATE_RETRY_SECONDS=0 \
+      GATE_RETRY_ATTEMPTS=${RETRY_ATTEMPTS_OVERRIDE:-1} \
+      GATE_RETRY_SECONDS=${RETRY_SECONDS_OVERRIDE:-0} \
       ./scripts/scheduled-gate.sh "$CASE/logs" >/dev/null 2>&1 )
     LOG="$CASE/logs/latest.log"
 }
@@ -229,6 +229,47 @@ printf 'work\nVERDICT: green, all stages passed, 500s\n' > "$CASE/logs/2026-09-0
 run_gate true
 says "LOG-INTEGRITY checked=1 without_one_verdict=0" "a clean directory is counted out loud"
 says_not "damaged log(s)" "and the verdict carries no count"
+
+# 9. The waiting is when a fire commits, so the log has to name the commit the
+#    stages actually saw.
+#
+#    On 2026-09-14 a run's header said one commit and its stages ran against
+#    the next one: the tree "went quiet" because somebody had committed during
+#    the twenty minutes of waiting, and the header had been written before the
+#    waiting started. The verdict was a red filed against a tree the red did
+#    not come from. The commit lands here while the script sleeps, which is the
+#    only way to reproduce that.
+new_case commit-lands-during-the-wait
+echo "half an edit" >> "$CASE/work/board.txt"
+STARTED_AT=$(git -C "$CASE/work" rev-parse --short HEAD)
+# The commit has to land after the script has looked at the tree once and
+# before it looks again, and a bare `sleep` racing the script's own start is
+# how a case becomes flaky. The lock file is the script saying it has begun.
+( while [ ! -e "$CASE/logs/.lock" ]; do sleep 0.05; done
+  sleep 0.3
+  cd "$CASE/work" && git commit -qam "the commit that landed during the wait" ) &
+LANDER=$!
+RETRY_ATTEMPTS_OVERRIDE=3 RETRY_SECONDS_OVERRIDE=3 run_gate ./gate-probe.sh
+wait "$LANDER"
+LANDED_AT=$(git -C "$CASE/work" rev-parse --short HEAD)
+if [ "$STARTED_AT" = "$LANDED_AT" ]; then
+    bad "the commit really changed during the wait" "the case did not reproduce: still $STARTED_AT"
+else
+    ok "the commit really changed during the wait"
+fi
+says "measuring commit: $LANDED_AT" "the run names the commit its stages saw"
+says "the commit changed while this run waited: $STARTED_AT -> $LANDED_AT" "and says the commit moved under it"
+# The verdict line specifically, not the body: the body says both commits by
+# design, and a check that reads the whole file would pass on either.
+VERDICT_LINE=$(head -1 "$LOG")
+case $VERDICT_LINE in
+    *"commit $LANDED_AT") ok "the verdict names the commit the stages saw" ;;
+    *) bad "the verdict names the commit the stages saw" "the verdict reads '$VERDICT_LINE'" ;;
+esac
+case $VERDICT_LINE in
+    *"commit $STARTED_AT"*) bad "the verdict does not name the commit from before the wait" "the verdict reads '$VERDICT_LINE'" ;;
+    *) ok "the verdict does not name the commit from before the wait" ;;
+esac
 
 echo ""
 if [ "$FAILURES" -eq 0 ]; then

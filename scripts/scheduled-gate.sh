@@ -108,7 +108,9 @@ every_run_log_carries_one_verdict() {
 cd "$REPO" || exit 2
 
 say "scheduled gate, $STAMP, $REPO"
-say "branch: $(git rev-parse --abbrev-ref HEAD), commit: $(git rev-parse --short HEAD)"
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+COMMIT_AT_START=$(git rev-parse --short HEAD)
+say "branch: $BRANCH, commit at start: $COMMIT_AT_START"
 
 # A lock rather than a process name. The first version of this asked `pgrep -f
 # scripts/quality-gate.sh`, which matched the shell that had the string in its
@@ -210,6 +212,21 @@ if [ "$WAITED" -gt 0 ]; then
     say "the tree went quiet after ${WAITED}s"
 fi
 
+# The commit in the header was read before the waiting, and the waiting is
+# exactly when a fire commits. On 2026-09-14 the header said one commit while
+# the stages ran against the next one: the tree went quiet because somebody had
+# committed, and the verdict was filed against the commit before theirs. A
+# reader chasing that red opens a tree the red did not come from, which is
+# worse than a log with no commit in it at all.
+#
+# So the commit is read again here, from the directory the stages are about to
+# run in - the worktree when there is one, because that is the tree they see.
+COMMIT=$(git rev-parse --short HEAD)
+if [ "$COMMIT" != "$COMMIT_AT_START" ]; then
+    say "the commit changed while this run waited: $COMMIT_AT_START -> $COMMIT"
+fi
+say "measuring commit: $COMMIT"
+
 say "running $GATE_COMMAND"
 START=$(date +%s)
 $GATE_COMMAND >>"$BODY" 2>&1
@@ -225,7 +242,7 @@ if [ -n "$WORKTREE" ]; then
 fi
 
 if [ "$CODE" -eq 0 ]; then
-    VERDICT="VERDICT: green, all stages passed, ${ELAPSED}s"
+    VERDICT="VERDICT: green, all stages passed, ${ELAPSED}s, commit $COMMIT"
     [ "${LOG_INTEGRITY_BAD:-0}" -gt 0 ] && VERDICT="$VERDICT, ${LOG_INTEGRITY_BAD} damaged log(s) in this directory"
     if [ -n "$WORKTREE" ]; then
         VERDICT="$VERDICT, measured from the committed tip"
@@ -273,7 +290,7 @@ if [ "$CODE" -eq 0 ]; then
     fi
 else
     STAGE=$(grep -E "^\[[0-9]+/[0-9]+\]" "$BODY" | tail -1)
-    VERDICT="VERDICT: red, exit $CODE after ${ELAPSED}s, last stage: ${STAGE:-unknown}"
+    VERDICT="VERDICT: red, exit $CODE after ${ELAPSED}s, last stage: ${STAGE:-unknown}, commit $COMMIT"
     [ "${LOG_INTEGRITY_BAD:-0}" -gt 0 ] && VERDICT="$VERDICT, ${LOG_INTEGRITY_BAD} damaged log(s) in this directory"
 fi
 
