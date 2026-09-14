@@ -1231,7 +1231,7 @@ fn a_recorded_search_of_the_tree_still_returns_what_it_says() {
         let output = Command::new("sh")
             .arg("-c")
             .arg(format!(
-                "grep -rlF -- \"$1\" --include=*.rs {scope} 2>/dev/null",
+                "grep -rlF --include=*.rs -- \"$1\" {scope} 2>/dev/null",
             ))
             .arg("sh")
             .arg(name)
@@ -1484,5 +1484,280 @@ fn a_number_copied_out_of_the_code_still_matches_the_line_it_came_from() {
          the pair of needles is the instrument. A constant that moved leaves the prose reading \
          perfectly well and describing a tool that no longer behaves that way; a sentence \
          reworded without the constant in front of it leaves this row pairing nothing."
+    );
+}
+
+/// The header of the table this check re-runs. Found by its header rather than
+/// by the shape of a row: this document has three other tables, and a match on
+/// row shape alone either takes them too or misses this one.
+const RECORDED_TABLE_HEADER: &str =
+    "| the phrase a reader would search | files | the name the code uses | files |";
+
+/// Below this the reader has stopped recognising the rows rather than found the
+/// table shortened. Without it the check passes hardest exactly when it has
+/// stopped finding anything: rename the header and it reads zero rows, makes
+/// zero comparisons and reports green.
+const RECORDED_TABLE_ROWS_FLOOR: usize = 6;
+
+/// The numbers a sentence can spell instead of writing.
+const SPELLED: &[(&str, usize)] = &[
+    ("no", 0),
+    ("none", 0),
+    ("one", 1),
+    ("two", 2),
+    ("three", 3),
+    ("four", 4),
+    ("five", 5),
+    ("six", 6),
+    ("seven", 7),
+    ("eight", 8),
+];
+
+/// A table of counts, re-run rather than read.
+///
+/// **Nothing this check looks for is written here.** Every string it searches
+/// for comes out of the document at run time, and the reason is the search
+/// itself: a term spelled in this file would be found by the command it is
+/// checking, and the figure it moved would be the one it exists to hold. Three
+/// checks in this repository have had that defect, and all three had the same
+/// shape - the comment explaining the check named the thing the check looked
+/// for. So the comments here describe the shape of a row and never its content.
+///
+/// **What is asserted and what is only reported are different questions.** The
+/// claim the table makes is which side of a pair is empty: a zero that stopped
+/// being a zero is a claim coming apart, and 51 that became 52 is a tree
+/// growing. Holding twelve magnitudes as equalities would fail on work that has
+/// nothing to do with this section, and a check that fails for the wrong reason
+/// three times is a check somebody weakens. So the zeros are a gate, the
+/// magnitudes are a drift line, and the sentence above the table is a gate
+/// because it is the number a reader acts on.
+///
+/// The scope comes from the command the paragraph prints. It is not executed -
+/// the terms are passed as arguments, the way the neighbouring check does it -
+/// because the document says what to search for and where, not what to run.
+#[test]
+fn the_table_of_searches_is_re_run_rather_than_read() {
+    let root = repo_root();
+    let canon =
+        std::fs::read_to_string(root.join("docs/ROUTING-CANON.md")).expect("the canon is there");
+    let lines: Vec<&str> = canon.lines().collect();
+
+    let header_at = lines
+        .iter()
+        .position(|line| line.trim() == RECORDED_TABLE_HEADER)
+        .expect("the table this check re-runs is found by its header row");
+
+    let command = lines[..header_at]
+        .iter()
+        .rev()
+        .find_map(|line| {
+            line.split('`')
+                .skip(1)
+                .step_by(2)
+                .find(|span| span.starts_with("grep -ril") && span.contains("--include="))
+        })
+        .expect(
+            "the paragraph above the table prints the command it ran, in backticks, and this \
+             check takes its scope from there. A table of counts with no command beside it is \
+             unreproducible by construction, and a scope kept here instead would be the copy \
+             that goes stale while the section moves.",
+        );
+    let include = command
+        .split_whitespace()
+        .find(|token| token.starts_with("--include="))
+        .expect("the command names what it searched");
+    let scope = command
+        .split_whitespace()
+        .last()
+        .expect("the command names where it searched");
+
+    struct Row {
+        phrase: String,
+        phrase_says: usize,
+        name: String,
+        name_says: usize,
+    }
+
+    let mut rows: Vec<Row> = Vec::new();
+    let mut malformed: Vec<String> = Vec::new();
+    for line in lines[header_at + 1..]
+        .iter()
+        .map(|line| line.trim())
+        .skip_while(|line| {
+            line.starts_with("|-") || line.starts_with("|:") || line.starts_with("|-")
+        })
+        .take_while(|line| line.starts_with('|'))
+    {
+        let cells: Vec<&str> = line
+            .trim_matches('|')
+            .split('|')
+            .map(|cell| cell.trim())
+            .collect();
+        let parsed = if cells.len() == 4 {
+            match (cells[1].parse::<usize>(), cells[3].parse::<usize>()) {
+                (Ok(phrase_says), Ok(name_says))
+                    if cells[0].starts_with('"')
+                        && cells[0].ends_with('"')
+                        && cells[2].starts_with('`')
+                        && cells[2].ends_with('`') =>
+                {
+                    Some(Row {
+                        phrase: cells[0].trim_matches('"').to_string(),
+                        phrase_says,
+                        name: cells[2].trim_matches('`').to_string(),
+                        name_says,
+                    })
+                }
+                _ => None,
+            }
+        } else {
+            None
+        };
+        // A row in this table that does not parse is an error and not a skip.
+        // Skipping it would let a typo remove a row from the measurement in
+        // silence, which is the same defect as a search that misses its term.
+        match parsed {
+            Some(row) => rows.push(row),
+            None => malformed.push(line.to_string()),
+        }
+    }
+
+    assert!(
+        malformed.is_empty(),
+        "a row of this table is not in the shape the rest of it uses: {malformed:#?}\n\
+         \n  Four cells: a quoted term, a count, a name in backticks, a count. A row that does \
+         not parse is not measured, and a row nobody measures is a figure nobody checks."
+    );
+    assert!(
+        rows.len() >= RECORDED_TABLE_ROWS_FLOOR,
+        "this check read {} rows of the table and expected at least {RECORDED_TABLE_ROWS_FLOOR}. \
+         Either the table was rewritten into another shape, or the reader is finding nothing and \
+         every figure below agreed by not being looked at.",
+        rows.len()
+    );
+
+    let files_naming = |term: &str| -> Vec<String> {
+        let output = Command::new("sh")
+            .arg("-c")
+            .arg(format!(
+                "grep -rilF {include} -- \"$1\" {scope} 2>/dev/null"
+            ))
+            .arg("sh")
+            .arg(term)
+            .current_dir(&root)
+            .output()
+            .expect("grep runs");
+        String::from_utf8_lossy(&output.stdout)
+            .lines()
+            .map(|line| line.to_string())
+            .collect()
+    };
+
+    let mut broken: Vec<String> = Vec::new();
+    let mut drift: Vec<String> = Vec::new();
+    let mut found_itself: Vec<String> = Vec::new();
+    let mut measured_silent = 0usize;
+
+    for row in &rows {
+        for (what, term, says) in [
+            ("the phrase of", &row.phrase, row.phrase_says),
+            ("the name", &row.name, row.name_says),
+        ] {
+            let hits = files_naming(term);
+            // This file is inside the scope, so a term written into it would be
+            // counted by the search it belongs to.
+            if hits.iter().any(|hit| hit.ends_with(file!())) {
+                found_itself.push(format!("{what} the row for {:?}", row.name));
+            }
+            let now = hits.len();
+            match (says, now) {
+                (0, 0) => {}
+                (0, _) => broken.push(format!(
+                    "{what} the row for {:?}: the table records nothing in the tree, the search \
+                     answers {now} file(s)",
+                    row.name
+                )),
+                (_, 0) => broken.push(format!(
+                    "{what} the row for {:?}: the table records {says} file(s), the search \
+                     answers nothing",
+                    row.name
+                )),
+                _ if says != now => drift.push(format!(
+                    "{what} the row for {:?}: {says} in the canon, {now} today - non-zero either \
+                     way, so the claim holds and the figure has moved",
+                    row.name
+                )),
+                _ => {}
+            }
+        }
+        if row.phrase_says == 0 {
+            measured_silent += 1;
+        }
+    }
+
+    // Re-count from the tree rather than from the table, so the sentence is
+    // checked against what was measured and not against what was written.
+    let silent_now = rows
+        .iter()
+        .filter(|row| files_naming(&row.phrase).is_empty())
+        .count();
+
+    let flat = canon.split_whitespace().collect::<Vec<_>>().join(" ");
+    let marker = "phrases return nothing";
+    let at = flat
+        .find(marker)
+        .expect("the sentence under the table says how many of the terms answered nothing");
+    let before: Vec<String> = flat[..at]
+        .split_whitespace()
+        .rev()
+        .take(4)
+        .map(|word| word.trim_matches('*').to_ascii_lowercase())
+        .collect();
+    let spelled = |word: &str| SPELLED.iter().find(|(w, _)| *w == word).map(|(_, n)| *n);
+    let sentence_silent = spelled(&before[3]);
+    let sentence_total = spelled(&before[0]);
+
+    eprintln!(
+        "recorded-search table rows read: {}; figures re-measured: {}; claims broken: {}; \
+         drifted: {}; silent in the tree: {silent_now}, in the table: {measured_silent}, in the \
+         sentence: {sentence_silent:?} of {sentence_total:?}",
+        rows.len(),
+        rows.len() * 2,
+        broken.len(),
+        drift.len(),
+    );
+    for line in &drift {
+        eprintln!("  drift: {line}");
+    }
+
+    assert!(
+        found_itself.is_empty(),
+        "this check found its own source file in the results of a search it is checking: \
+         {found_itself:#?}\n\
+         \n  The term has been written into this file, so the count it holds now includes the \
+         holder. Read the term from the document instead of spelling it here."
+    );
+    assert!(
+        broken.is_empty(),
+        "the table records which side of a pair the tree is silent on, and that has changed: \
+         {broken:#?}\n\
+         \n  A zero here is the claim: this document's own word for a quantity finds nothing \
+         while the code's name for it finds something. A zero that stopped being zero, or a \
+         figure that became one, is that claim coming apart rather than a number drifting."
+    );
+    assert_eq!(
+        sentence_silent,
+        Some(silent_now),
+        "the sentence under the table and the tree do not agree on how many terms answer \
+         nothing: the searches say {silent_now}. A document that says one number in prose and \
+         another in a row is wrong in the half a reader believes, and the prose is the half they \
+         read."
+    );
+    assert_eq!(
+        sentence_total,
+        Some(rows.len()),
+        "the sentence under the table names a number of terms the table does not have: it has \
+         {} rows.",
+        rows.len()
     );
 }
