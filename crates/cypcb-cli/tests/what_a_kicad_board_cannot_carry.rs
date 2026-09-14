@@ -153,9 +153,11 @@ fn top_copper(board: &Path, out: &Path) -> String {
 #[test]
 fn a_design_that_asks_for_teardrops_is_told_kicad_keeps_its_own() {
     // KiCad has teardrops - per board, per net class and per pad since 7.0 -
-    // and keeps the settings in the project's design settings rather than in
-    // the board file. A request written into a `.kicad_pcb` would sit where
-    // nothing reads it, so the writer says so instead.
+    // and keeps both the parameters and the resulting copper in the board:
+    // `teardrop.cpp` reads `m_board->GetDesignSettings().GetTeadropParamsList()`
+    // and adds a `ZONE` to the board. **This comment said the opposite until
+    // 2026-09-14.** The writer still does not put ours there, so it says so -
+    // which is a statement about this writer and not about the format.
     let board = std::env::temp_dir().join("cypcb-kicad-teardrops.cypcb");
     std::fs::write(&board, a_design_asking_for_teardrops()).expect("the board is writable");
 
