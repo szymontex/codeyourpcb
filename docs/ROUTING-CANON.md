@@ -17,6 +17,18 @@ fabricator disputes it.
 
 - `[R]` A reproduction of a standard's table or formula in somebody else's
   text. Not the text of the standard.
+
+**Six citations here carry a read date and name nothing openable**, always as a
+plural with a topic in front of it - *high-speed routing guides*,
+*via-stitching guides*, *fabricator articles on acid traps*. The session that
+read those pages on 2026-09-11 wrote down the conclusions and the figures and
+not the addresses, and when it was asked for the titles on 2026-09-16 it had
+none of the six. **The figure survived and the source did not**, so a reader who
+wants to check one of those claims has to read the topic again rather than
+follow a link. No check counts them: the names that do survive here are as often
+lowercase - `kingsunpcb`, `nwengineeringllc` - as capitalised, and every cheap
+test for "does this name something" called three of those a miss. A number that
+counts wrong hits is not a measurement, so this is written down instead.
 - `[P]` Board house or vendor material.
 - `[O]` The original article by the author of the rule.
 - `[S]` This project's own reasoning or measurement. Carries the commit it
