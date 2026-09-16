@@ -2152,3 +2152,273 @@ fn a_line_number_beside_a_name_still_points_at_that_name() {
         pairs.len()
     );
 }
+
+/// The programs this canon records a command for. A backticked span whose first
+/// word is one of these and which carries an argument is a command; anything
+/// else in backticks is a name, a path or a phrase.
+const RECORDED_TOOLS: &[&str] = &[
+    "grep", "rg", "cargo", "git", "wc", "find", "sed", "awk", "ls", "python3", "jq", "npx", "cat",
+];
+
+/// Commands this check records but does not run. A `cargo test` belongs to the
+/// quality gate, which already runs it; running it again from inside a test
+/// over prose would build the workspace to re-read a sentence.
+const NOT_RUN_HERE: &[&str] = &["cargo"];
+
+/// Rust's primitive type names, which are the one thing that looks like a
+/// placeholder and is not: `Vec<String>` is a type in a pattern somebody
+/// greps for, `<term>` is a hole the reader has to fill.
+const PRIMITIVE_TYPES: &[&str] = &[
+    "u8", "u16", "u32", "u64", "u128", "i8", "i16", "i32", "i64", "i128", "usize", "isize", "f32",
+    "f64", "bool", "char", "str",
+];
+
+/// Words that stand between a command and the figure it answers with. The set
+/// is closed on purpose: the first word outside it that is not a number ends
+/// the search, so a sentence that wanders off into prose is read as pointing at
+/// nothing rather than at the next number that happens along.
+const LINKING: &[&str] = &[
+    "answers", "gives", "returns", "says", "reports", "gave", "is", "was", "for", "the", "and",
+    "to", "at", "over", "against", "of", "in", "on", "it", "that", "which", "a", "an", "this",
+];
+
+/// Numbers this canon writes as words. None of the twenty is needed today -
+/// every figure a recorded command points at is written in digits - and they
+/// are here because the day one is written out, a check without them would let
+/// that command **leave the class in silence** rather than fail.
+const NUMERALS: &[&str] = &[
+    "one",
+    "two",
+    "three",
+    "four",
+    "five",
+    "six",
+    "seven",
+    "eight",
+    "nine",
+    "ten",
+    "eleven",
+    "twelve",
+    "thirteen",
+    "fourteen",
+    "fifteen",
+    "sixteen",
+    "seventeen",
+    "eighteen",
+    "nineteen",
+    "twenty",
+];
+
+const COMMANDS_EXAMINED_FLOOR: usize = 9;
+const COMMANDS_POINTING_FLOOR: usize = 7;
+
+/// A `<hole>` a reader has to fill. The angle brackets alone are not the test -
+/// `grep -rn "Vec<String>"` carries a type, not a hole - so the word inside has
+/// to start lowercase and not be one of Rust's primitives.
+fn carries_a_placeholder(command: &str) -> bool {
+    let mut rest = command;
+    while let Some(open) = rest.find('<') {
+        rest = &rest[open + 1..];
+        let Some(close) = rest.find('>') else {
+            return false;
+        };
+        let inside = &rest[..close];
+        if inside.starts_with(|c: char| c.is_ascii_lowercase())
+            && !inside.is_empty()
+            && !PRIMITIVE_TYPES.contains(&inside)
+        {
+            return true;
+        }
+    }
+    false
+}
+
+/// A command with nothing to act on: every word is the tool, an option, or a
+/// shell connector. `grep -n` in a sentence about line numbers is prose about
+/// an option rather than a command anybody could run.
+fn is_a_fragment(command: &str) -> bool {
+    !command.split_whitespace().skip(1).any(|word| {
+        !word.starts_with('-')
+            && !RECORDED_TOOLS.contains(&word)
+            && !matches!(word, "|" | "&&" | ";")
+    })
+}
+
+/// The figure a sentence says a command answers with, taken from the words
+/// after it. A seven-character hex token is skipped because this canon states
+/// what a figure **used to be** at a commit, and that historical value sits
+/// exactly where the current one would: the first pass read `29 at 4ff318c`
+/// and pointed at 29 for a command that answers 30.
+fn figure_pointed_at(after: &str) -> Option<String> {
+    let words: Vec<&str> = after.split_whitespace().take(14).collect();
+    for (at, word) in words.iter().enumerate() {
+        let bare = word.trim_matches(|c: char| !c.is_ascii_alphanumeric());
+        if bare.is_empty() {
+            continue;
+        }
+        let lowered = bare.to_ascii_lowercase();
+        if LINKING.contains(&lowered.as_str()) || looks_like_a_commit(bare) {
+            continue;
+        }
+        let is_a_figure = bare.chars().all(|c| c.is_ascii_digit())
+            || NUMERALS.contains(&lowered.as_str())
+            || lowered == "nothing";
+        if !is_a_figure {
+            return None;
+        }
+        // A figure followed by `at <hash>` is what this figure **used to be**,
+        // and it sits exactly where the current one would. The first version of
+        // this check read `29 at 4ff318c and 30 with the case this measurement
+        // added` and pointed at 29 for a command that answers 30.
+        let historical = words.get(at + 1).is_some_and(|w| {
+            w.trim_matches(|c: char| !c.is_ascii_alphanumeric())
+                .eq_ignore_ascii_case("at")
+        }) && words.get(at + 2).is_some_and(|w| {
+            looks_like_a_commit(w.trim_matches(|c: char| !c.is_ascii_alphanumeric()))
+        });
+        if historical {
+            continue;
+        }
+        return Some(lowered);
+    }
+    None
+}
+
+/// What the sentence's word means as an answer: a count, or no output at all.
+fn as_an_answer(figure: &str) -> Option<Option<usize>> {
+    if figure == "nothing" {
+        return Some(None);
+    }
+    if let Ok(count) = figure.parse::<usize>() {
+        return Some(Some(count));
+    }
+    NUMERALS
+        .iter()
+        .position(|n| *n == figure)
+        .map(|at| Some(at + 1))
+}
+
+#[test]
+fn a_recorded_command_beside_a_figure_still_prints_it() {
+    let root = repo_root();
+    let canon =
+        std::fs::read_to_string(root.join("docs/ROUTING-CANON.md")).expect("the canon is there");
+
+    let mut examined = 0usize;
+    let mut pointing = 0usize;
+    let mut wrong: Vec<String> = Vec::new();
+
+    // **Read off the canon itself, not off its flattened paragraphs.**
+    // `canon_paragraphs` blanks anything between double quotes, which is right
+    // for prose - this file quotes the sentences it replaced - and wrong for a
+    // command, whose pattern lives inside those quotes. The first run of this
+    // check ran `grep -h tests/fixtures/benchmark/*.kicad_pcb` with the pattern
+    // gone and watched it answer 0 where the sentence says 174.
+    let prose = canon_prose_only(&canon);
+    // Only the hard wrap is normalised: a newline inside a backticked span is
+    // the canon's line break and means a space. Every other run of whitespace
+    // is the command's own - `grep -h "^  (footprint "` matches two spaces, and
+    // collapsing them made it answer 0 where the sentence says 174.
+    let parts: Vec<String> = prose
+        .split('`')
+        .map(|part| part.replace('\n', " "))
+        .collect();
+    {
+        for index in (1..parts.len()).step_by(2) {
+            let command = parts[index].as_str();
+            let Some(tool) = command.split_whitespace().next() else {
+                continue;
+            };
+            if !RECORDED_TOOLS.contains(&tool) || !command.contains(' ') {
+                continue;
+            }
+            if NOT_RUN_HERE.contains(&tool)
+                || carries_a_placeholder(command)
+                || is_a_fragment(command)
+            {
+                continue;
+            }
+            examined += 1;
+
+            // A shell, because the canon records pipes, globs and quoted
+            // patterns, and because the order of the arguments has to reach
+            // the tool exactly as the canon prints it - `--include` after `--`
+            // stops being an option, which is a defect this project has
+            // already shipped twice.
+            let output = std::process::Command::new("sh")
+                .arg("-c")
+                .arg(command)
+                .current_dir(&root)
+                .output()
+                .expect("a shell runs");
+
+            // **Exit code 1 is an answer, not a failure.** grep says 1 when it
+            // matched nothing, and the two commands here that answer with
+            // nothing are the two sentences claiming an absence - the ones
+            // telling the truth are the ones the shell calls failures. Only 2
+            // means the command could not read what it was pointed at.
+            assert_ne!(
+                output.status.code(),
+                Some(2),
+                "the canon records a command that cannot run: `{command}`\n  {}",
+                String::from_utf8_lossy(&output.stderr).trim()
+            );
+
+            let printed = String::from_utf8_lossy(&output.stdout);
+            let printed = printed.trim();
+            let single_token = !printed.contains('\n') && !printed.contains(' ');
+            if !single_token && !printed.is_empty() {
+                // It ran and printed something a sentence cannot restate as one
+                // figure - the rotations, for instance, which the canon quotes
+                // rather than counts.
+                continue;
+            }
+
+            // The words after the command, and the two spans behind them: the
+            // hash that marks a figure as historical is itself backticked, so a
+            // reach that stops at the next backtick cannot see it.
+            let after = parts[index + 1..(index + 4).min(parts.len())].join(" ");
+            let Some(figure) = figure_pointed_at(&after) else {
+                continue;
+            };
+            let Some(answer) = as_an_answer(&figure) else {
+                continue;
+            };
+            pointing += 1;
+
+            let agrees = match answer {
+                None => printed.is_empty(),
+                Some(count) => printed.parse::<usize>() == Ok(count),
+            };
+            if !agrees {
+                wrong.push(format!(
+                    "`{command}` -> {:?}, and the sentence says {figure}",
+                    printed
+                ));
+            }
+        }
+    }
+
+    eprintln!(
+        "recorded commands run: {examined} (floor {COMMANDS_EXAMINED_FLOOR}); \
+         pointing at a figure: {pointing} (floor {COMMANDS_POINTING_FLOOR}); \
+         disagreeing: {}",
+        wrong.len()
+    );
+
+    assert!(
+        wrong.is_empty(),
+        "a command recorded beside a figure no longer prints it: {wrong:#?}\n\
+         \n  A command written next to a number looks like provenance and is decoration until \
+         somebody runs it. Re-read the sentence against what the command answers now."
+    );
+
+    assert!(
+        examined >= COMMANDS_EXAMINED_FLOOR && pointing >= COMMANDS_POINTING_FLOOR,
+        "this check ran {examined} commands and re-read {pointing} figures, below the floors \
+         of {COMMANDS_EXAMINED_FLOOR} and {COMMANDS_POINTING_FLOOR}\n\
+         \n  A command leaves this scan when its sentence stops naming the figure it answers \
+         with, or when a directory moves out of the command and into the prose beside it - and \
+         both read as tidying. If one really did go, lower the floor in the same commit."
+    );
+}
