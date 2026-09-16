@@ -1982,7 +1982,7 @@ nothing, not tests that read the wrong thing.
 
 ### Board score
 
-*Verified: 2026-09-13*
+*Verified: 2026-09-16*
 
 `crates/cypcb-autoroute/src/scoring.rs` returns `RoutingScore` with nine
 fields. Six of them enter the composite.
@@ -1992,8 +1992,8 @@ fields. Six of them enter the composite.
 | `total_length` | nm | `TraceData::total_length` | yes, divided by board diagonal |
 | `via_count` | count | `score_board`, counting `Via` entities | yes, weight 1 |
 | `drc_violations` | violation rows | `score_board`, from the `DrcResult` | yes, x1000 |
-| `clearance_contacts` | feature pairs | `score_board`, from the same result | no |
-| `shorts` | violations measured at 0.00 mm | `score_board`, the zero-distance rows | no |
+| `clearance_contacts` | distinct feature pairs | `score_board`, through `cypcb_drc::clearance_contacts` | no |
+| `shorts` | clearance rows measured at 0.00 mm | `score_board`, through `cypcb_drc::shorts`, which is guarded on the kind | no |
 | `smoothness` | 0.0 to 1.0 | `compute_smoothness` | yes, `(1-s) * 100` |
 | `crossings` | segment intersections | `compute_crossings` | yes, x500 |
 | `layer_balance` | 0.0 to 1.0 | `compute_layer_balance` | yes, `(1-b) * 50` |
@@ -2170,8 +2170,10 @@ Checked by grep over `crates/*/src` on 2026-09-14: no hits for "return path",
 pour keeps from foreign copper: the word arrived in the tree and the
 measurement did not. **This sentence listed seven names and no hits until
 2026-09-13.** A recorded search result is a claim about the tree on the day it
-ran, and it is the one shape of claim this document holds ten checks over and
-still cannot re-run.
+ran, and this one is not left standing on its date:
+`a_recorded_search_of_the_tree_still_returns_what_it_says` runs the names below
+again at every gate, so the day any of them answers is the day this section
+goes red.
 
 1. Return path coverage - for each segment, ask the spatial index whether
    continuous reference copper lies under its footprint on the adjacent layer,

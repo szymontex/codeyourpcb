@@ -817,7 +817,7 @@ const NOT_A_MEASUREMENT: &[(&str, &str)] = &[
         "hands its provenance to the verification block and names the commit",
     ),
     (
-        "violations measured at 0.00 mm",
+        "clearance rows measured at 0.00 mm",
         // The word this row names is deliberately not written here: the
         // table's own figures are re-measured by a search over this tree,
         // and a term typed into this file is found by the search it checks.
