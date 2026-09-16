@@ -2494,3 +2494,114 @@ fn a_recorded_range_still_prints_code() {
          quietly, while the prose around it still reads as current."
     );
 }
+
+/// The tools the verification blocks use. `cargo` is left out: the gate already
+/// runs the workspace, and a test over prose that builds it to read a sentence
+/// would cost minutes to learn nothing new.
+const VERIFICATION_TOOLS: &[&str] = &[
+    "grep", "sed", "awk", "ls", "wc", "find", "python3", "jq", "cat", "git", "rg",
+];
+
+const VERIFICATION_COMMANDS_FLOOR: usize = 46;
+
+/// **The verification block is the canon's own instrument and nothing ran it.**
+/// Every section ends by naming the commands a reader can use to re-check it,
+/// 51 of them, and until now the only ones anybody ran were the 11 written in
+/// prose. A path that moves breaks these silently: the block still reads as a
+/// way to check the section.
+///
+/// What is asserted is that the command **could run at all** - exit code 2,
+/// which is what GNU grep, sed and awk return for a missing file or a bad
+/// option, as against 1, which is an honest "no match" and is how this canon
+/// states an absence. It does not check what the output says; the range check
+/// above does that for the 19 that print code.
+///
+/// A line that does not parse on its own is a fragment of a larger shell
+/// construct - one block builds a loop - and is skipped rather than guessed at.
+#[test]
+fn every_command_in_a_verification_block_still_runs() {
+    let root = repo_root();
+    let canon =
+        std::fs::read_to_string(root.join("docs/ROUTING-CANON.md")).expect("the canon is there");
+
+    let mut fenced = false;
+    let mut pending = String::new();
+    let mut commands: Vec<String> = Vec::new();
+    for line in canon.lines() {
+        if line.starts_with("```") {
+            fenced = !fenced;
+            continue;
+        }
+        if !fenced {
+            continue;
+        }
+        let first = line.split(' ').next().unwrap_or("");
+        if pending.is_empty() && !VERIFICATION_TOOLS.contains(&first) {
+            continue;
+        }
+        if pending.is_empty() {
+            pending.push_str(line);
+        } else {
+            pending.push(' ');
+            pending.push_str(line.trim());
+        }
+        // A trailing backslash is the canon's line break inside one command.
+        if let Some(without) = pending.trim_end().strip_suffix('\\') {
+            pending = without.trim_end().to_string();
+            continue;
+        }
+        commands.push(std::mem::take(&mut pending));
+    }
+
+    let mut ran = 0usize;
+    let mut fragments = 0usize;
+    let mut broken: Vec<String> = Vec::new();
+    for command in &commands {
+        let parses = std::process::Command::new("sh")
+            .arg("-n")
+            .arg("-c")
+            .arg(command)
+            .current_dir(&root)
+            .output()
+            .expect("a shell runs");
+        if !parses.status.success() {
+            fragments += 1;
+            continue;
+        }
+        ran += 1;
+        let output = std::process::Command::new("sh")
+            .arg("-c")
+            .arg(command)
+            .current_dir(&root)
+            .output()
+            .expect("a shell runs");
+        if output.status.code() == Some(2) {
+            broken.push(format!(
+                "{command}\n    {}",
+                String::from_utf8_lossy(&output.stderr).trim()
+            ));
+        }
+    }
+
+    eprintln!(
+        "verification commands run: {ran} (floor {VERIFICATION_COMMANDS_FLOOR}); \
+         fragments of a larger construct: {fragments}; cannot run: {}",
+        broken.len()
+    );
+
+    assert!(
+        broken.is_empty(),
+        "a verification block records a command that cannot read what it is pointed at: \
+         {broken:#?}\n\
+         \n  Exit code 2 is not 'no match' - it is a file that moved or an option that stopped \
+         being one. The block still reads as a way to re-check the section, and it is not."
+    );
+
+    assert!(
+        ran >= VERIFICATION_COMMANDS_FLOOR,
+        "this check ran {ran} verification commands, below the floor of \
+         {VERIFICATION_COMMANDS_FLOOR}\n\
+         \n  Commands leave this scan when a block is rewritten into a shape the joiner reads \
+         as a fragment, which looks like tidying and silently empties the instrument."
+    );
+}
