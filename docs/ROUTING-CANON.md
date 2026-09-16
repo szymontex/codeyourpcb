@@ -2178,7 +2178,12 @@ goes red.
 1. Return path coverage - for each segment, ask the spatial index whether
    continuous reference copper lies under its footprint on the adjacent layer,
    and report the share of length that has none. A measurement would be held
-   as return_path_coverage, and that name answers no file today.
+   as return_path_coverage, and that name answers no file today. **The stackup
+   half of this question is already asked**, which is worth separating from the
+   half that is not: `ImpedanceRule` refuses a net whose layer is not centred
+   between two planes of the same dielectric, reading `environment_of` off the
+   declared stack. What no file does is look at the copper actually under the
+   footprint, which is the measurement this item describes.
 2. Plane split crossings - intersect the segment footprint with the edges of
    the reference pour and count the crossings, a measurement that would be held
    as split_crossings and that answers no file today. **The quantity is unmeasured and
@@ -2204,7 +2209,11 @@ goes red.
    parallel_run_length, and that name answers no file today.
 6. Vias per net - `via_count` is a board total; group vias by `net_id` and
    publish the maximum and the distribution. The per-net quantity would be held
-   as vias_per_net, and that name answers no file today.
+   as vias_per_net, and that name answers no file today. **The grouping is not
+   what is missing**: `optimize_vias`
+   (`crates/cypcb-autoroute/src/via_optimizer.rs`) already groups vias by
+   `net_id`, does it to find pairs it can remove, and publishes no count. What
+   this item wants is the number and a place for it to live.
 7. Direction symmetry - route the same pad pair A to B and B to A and compare
    cost, copper length, via count, and the intersection over union of the two
    cell sets, the last of which would be held as cell_set_iou and answers no
