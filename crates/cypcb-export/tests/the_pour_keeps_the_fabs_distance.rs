@@ -197,3 +197,101 @@ fn the_handoff_document_pours_to_the_fabs_distance() {
          reaching no copper"
     );
 }
+
+/// **No production path may take the default, and today none does.**
+///
+/// Three readers of the pour's three numbers were fixed one at a time over
+/// three days - `ExportJob`, then the viewer, then the IPC-2581 handoff - and
+/// each looked exactly like this one before somebody read it: an entry point
+/// with a documented default and a comment saying the real caller passes the
+/// fab's figures. The comment on `export_copper_layer` said that for months
+/// while no caller did.
+///
+/// So the defaulting entry point is held to having no caller outside a test.
+/// The control matters more than the claim: a scan that had stopped reading
+/// files would report zero callers and look exactly like a clean tree, which is
+/// why the `_with` form has to be found in the same pass.
+#[test]
+fn no_shipping_path_pours_to_the_default() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(|crates| crates.parent())
+        .expect("the crate sits two levels below the repo root")
+        .to_path_buf();
+
+    fn walk(dir: &std::path::Path, found: &mut Vec<(String, usize, String)>, with: &mut usize) {
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                if path.file_name().is_some_and(|name| name == "target") {
+                    continue;
+                }
+                walk(&path, found, with);
+                continue;
+            }
+            if path.extension().is_none_or(|e| e != "rs") {
+                continue;
+            }
+            let Ok(source) = std::fs::read_to_string(&path) else {
+                continue;
+            };
+            // Everything from `#[cfg(test)]` on is a test module, and a test
+            // calling the defaulting form is the point of having one.
+            let shipping = source.split("#[cfg(test)]").next().unwrap_or(&source);
+            for (number, line) in shipping.lines().enumerate() {
+                let text = line.trim_start();
+                if text.starts_with("//") {
+                    continue;
+                }
+                // The definition is not a call. The first run of this check
+                // reported `pub fn export_copper_layer(` as a shipping caller,
+                // which is the function itself.
+                if text.starts_with("fn ") || text.starts_with("pub fn ") {
+                    continue;
+                }
+                if line.contains("export_copper_layer_with(") {
+                    *with += 1;
+                } else if line.contains("export_copper_layer(") {
+                    found.push((
+                        path.display().to_string(),
+                        number + 1,
+                        line.trim().to_string(),
+                    ));
+                }
+            }
+        }
+    }
+
+    let mut calling_the_default = Vec::new();
+    let mut calling_the_other = 0usize;
+    for crate_dir in std::fs::read_dir(root.join("crates")).expect("the crates are there") {
+        let src = crate_dir.expect("a crate").path().join("src");
+        if src.is_dir() {
+            walk(&src, &mut calling_the_default, &mut calling_the_other);
+        }
+    }
+
+    eprintln!(
+        "shipping calls to the defaulting form: {}; to the one that takes the fab's figures: \
+         {calling_the_other}",
+        calling_the_default.len()
+    );
+
+    assert!(
+        calling_the_other > 0,
+        "this scan found no call to export_copper_layer_with anywhere under crates/*/src, so it \
+         has stopped reading the tree and its other answer means nothing"
+    );
+
+    assert!(
+        calling_the_default.is_empty(),
+        "a shipping path pours to the default instead of the fabricator's figures: \
+         {calling_the_default:#?}\n\
+         \n  The default is for a caller who does not know the house. A path that has a preset \
+         in hand and takes it anyway ships a plane smaller on every edge than the house asked \
+         for, and says nothing."
+    );
+}
