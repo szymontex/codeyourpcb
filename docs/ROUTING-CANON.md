@@ -214,18 +214,25 @@ An unterminated branch resonates at a quarter wavelength and notches the
 signal's own band out of it.
 
     length [in] < 0.3 / bit rate [Gbps]
-    length [cm] < 0.75 / bit rate [Gbps]
+    length [cm] < 0.762 / bit rate [Gbps]
 
 At 1 Gbps in FR4 that is 0.3 in. Quarter-wave resonance in FR4 runs about
-1.5 GHz per inch of stub, or 3.8 GHz per cm. A residual stub of 5 to 10 mil
-pushes resonance near 150 GHz, which is out of the way of digital signalling.
+1.5 GHz per inch of stub, or 3.81 GHz per cm. A residual stub of 10 mil pushes
+resonance near 150 GHz and 5 mil puts it near 300, both out of the way of
+digital signalling - **the figure belongs to the long end of that range**, and
+the sentence used to hand it to the whole of it.
 
 Condition: on a net that declares a bit rate, the longest path from a branch
 point to an end that is neither a pad nor a via is shorter than `0.3 / BR`
-inches.
+inches **in FR4**. The constants the figure comes from are FR4's, and the
+condition said nothing about the material until 2026-09-16, which made it
+broader than the ground it stands on.
 
 Source: EDN, "How long a stub is too long?: Rule of Thumb #18", read
-2026-09-11.
+2026-09-11. **The author is not named there or here**, which is worth saying
+because `[O]` means the original article by the author of the rule: a title and
+a number in a series read like a magazine's column rather than one person's
+argument, and a reader cannot tell from this line which it is.
 
 In this repo: not enforceable yet, the model has no connectivity graph and no
 declared signal speed. `max_stub_length`
