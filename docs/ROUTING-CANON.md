@@ -2719,7 +2719,7 @@ sed -n '376,390p' crates/cypcb-autoroute/src/smoother.rs
 
 # R-11: the composite prices violation rows at 1000 and never reads the
 # contact count
-sed -n '565,590p' crates/cypcb-autoroute/src/scoring.rs
+sed -n '565,598p' crates/cypcb-autoroute/src/scoring.rs
 
 # R-11: the tiered ordering that already exists for variants
 sed -n '496,512p' crates/cypcb-autoroute/src/variant.rs
@@ -2821,7 +2821,7 @@ sed -n '419,427p' crates/cypcb-rules/src/presets/mod.rs
 grep -n "min_clearance" crates/cypcb-rules/src/presets/*.rs
 
 # R-19: the rule that fires most is the first one the registry runs
-sed -n '129p' crates/cypcb-drc/src/lib.rs
+sed -n '134p' crates/cypcb-drc/src/lib.rs
 
 # A rule with no subject: what the fixtures actually carry
 for f in tests/fixtures/benchmark/*.kicad_pcb; do

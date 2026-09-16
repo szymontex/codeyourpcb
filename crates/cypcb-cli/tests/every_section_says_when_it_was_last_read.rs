@@ -2422,3 +2422,75 @@ fn a_recorded_command_beside_a_figure_still_prints_it() {
          both read as tidying. If one really did go, lower the floor in the same commit."
     );
 }
+
+const RECORDED_RANGES_FLOOR: usize = 19;
+
+/// **A recorded `sed -n 'A,Bp'` is a line number with a command around it, and
+/// it drifts the same way one does - silently, and out of reach of the check
+/// that would have caught it.** `a_line_number_beside_a_name_still_points_at_that_name`
+/// reads a citation written ``name` (`path:line`)`; these live inside the
+/// verification block, where `canon_prose_only` blanks them, so nothing looked
+/// at them at all. One had already moved: the range that claims to show "the
+/// rule that fires most is the first one the registry runs" printed a blank
+/// line, five short of `ClearanceRule` - the same five that four citations had
+/// drifted by.
+///
+/// What is asserted is the weakest thing that catches that: a range has to
+/// print something that is not blank and not a comment. It cannot know what the
+/// range ought to show, and a range showing the wrong code is a defect this
+/// does not catch - but a range showing nothing at all is the one that happens
+/// when the lines above it move.
+#[test]
+fn a_recorded_range_still_prints_code() {
+    let root = repo_root();
+    let canon =
+        std::fs::read_to_string(root.join("docs/ROUTING-CANON.md")).expect("the canon is there");
+
+    let mut ranges = 0usize;
+    let mut silent: Vec<String> = Vec::new();
+    for line in canon.lines() {
+        let line = line.trim();
+        if !line.starts_with("sed -n ") {
+            continue;
+        }
+        ranges += 1;
+        let output = std::process::Command::new("sh")
+            .arg("-c")
+            .arg(line)
+            .current_dir(&root)
+            .output()
+            .expect("a shell runs");
+        assert_ne!(
+            output.status.code(),
+            Some(2),
+            "the canon records a range command that cannot run: `{line}`"
+        );
+        let printed = String::from_utf8_lossy(&output.stdout);
+        let says_something = printed.lines().any(|printed| {
+            let printed = printed.trim();
+            !printed.is_empty() && !printed.starts_with("//")
+        });
+        if !says_something {
+            silent.push(line.to_string());
+        }
+    }
+
+    eprintln!(
+        "recorded ranges read: {ranges} (floor {RECORDED_RANGES_FLOOR}); printing no code: {}",
+        silent.len()
+    );
+
+    assert!(
+        silent.is_empty(),
+        "a recorded range prints nothing a reader could check against: {silent:#?}\n\
+         \n  The lines above it moved and the range stayed where it was. Re-read the file and \
+         give the command the lines that now hold what its comment says it shows."
+    );
+
+    assert!(
+        ranges >= RECORDED_RANGES_FLOOR,
+        "this check read {ranges} recorded ranges, below the floor of {RECORDED_RANGES_FLOOR}\n\
+         \n  A verification block loses a command the same way a sentence loses a figure: \
+         quietly, while the prose around it still reads as current."
+    );
+}
