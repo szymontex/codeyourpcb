@@ -30,7 +30,12 @@ lowercase - `kingsunpcb`, `nwengineeringllc` - as capitalised, and every cheap
 test for "does this name something" called three of those a miss. A number that
 counts wrong hits is not a measurement, so this is written down instead.
 - `[P]` Board house or vendor material.
-- `[O]` The original article by the author of the rule.
+- `[O]` The original article by the author of the rule. **In practice this file
+  names the publication and not the person**: both rules that carry `[O]` and a
+  source - R-04 and R-05 - cite a title and a site and no human being, which was
+  noticed on 2026-09-16 and written into both. The third, R-12, cites nothing
+  because its content moved out. So a reader meeting this tag should expect an
+  article rather than an author, and the tag overpromises by exactly that much.
 - `[S]` This project's own reasoning or measurement. Carries the commit it
   landed in rather than a read date, because it is this project's own reasoning
   rather than a reading of somebody else's page.
