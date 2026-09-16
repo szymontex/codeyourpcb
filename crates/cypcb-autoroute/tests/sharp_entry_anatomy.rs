@@ -838,6 +838,22 @@ fn a_circular_land_reads_the_same_from_its_own_geometry() {
          {gap} millidegrees over {compared} circular entries"
     );
 
+    // **The canon says more than the line above holds, and on 2026-09-16 it was
+    // telling the truth**: all 175 rows agree exactly, not within a tenth of a
+    // degree. The two assertions are kept apart so the failure says which thing
+    // to change. Above this line a disagreement is a fault in one of the two
+    // readings. Here it is not - here the arithmetic moved by a rounding step
+    // and the sentence in the canon has to come down to what the tree holds.
+    // Reaching for the looser threshold instead is how a sentence quietly stops
+    // being true, which is the failure this file already has on record.
+    assert_eq!(
+        gap, 0,
+        "R-08's section says these two readings agree to the millidegree, and {pin} now \
+         differs by {gap} of them over {compared} circular entries. Either the arithmetic \
+         changed - in which case find out which side moved - or that sentence is no longer \
+         true and comes down to the tenth of a degree the assertion above holds."
+    );
+
     // The branch that had to be reproduced before the two agreed. It is a
     // property of the rule, not a fault found in it: `entry_angle` reduces
     // with `f64::min` over the edges that answered, and an edge whose own end

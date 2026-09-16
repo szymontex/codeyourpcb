@@ -28,6 +28,13 @@ fn architecture() -> String {
         .expect("the architecture document is there")
 }
 
+/// The routing canon states this count as well, in its own words, and the copy
+/// a reader meets first is the one that reads as current for longest.
+fn routing_canon() -> String {
+    std::fs::read_to_string(repo_root().join("docs/ROUTING-CANON.md"))
+        .expect("the routing canon is there")
+}
+
 #[test]
 fn the_crate_count_is_the_workspace_it_describes() {
     let crates = std::fs::read_dir(repo_root().join("crates"))
@@ -99,6 +106,23 @@ fn the_export_file_count_is_what_export_writes() {
         "the document has to say {listed} files:\n{}",
         doc.lines()
             .filter(|line| line.contains("wc -l"))
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
+
+    // **Two surfaces, one run.** The canon says this count in its own sentence,
+    // and until 2026-09-16 nothing read that sentence: the day the export
+    // writes a fifteenth file, the assertion above would have demanded a repair
+    // in one document and left the other reading fourteen. A number is allowed
+    // to stand in two places when the same run holds both copies.
+    let canon = routing_canon();
+    let said = format!("**{listed} listed, {listed} written.**");
+    assert!(
+        canon.contains(&said),
+        "the routing canon has to say {said}, and it says:\n{}",
+        canon
+            .lines()
+            .filter(|line| line.contains("listed,"))
             .collect::<Vec<_>>()
             .join("\n")
     );
