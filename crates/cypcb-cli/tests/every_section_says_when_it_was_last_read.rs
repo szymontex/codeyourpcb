@@ -2504,6 +2504,17 @@ const VERIFICATION_TOOLS: &[&str] = &[
 
 const VERIFICATION_COMMANDS_FLOOR: usize = 46;
 
+/// Figures this document states that its own verification blocks never print.
+/// Each comes from a standard, a vendor's page or one run of the router, and
+/// the legend says so - the blocks reach what the tree names, not what a figure
+/// is worth. The sentence that says this is held here rather than left to age.
+const BEYOND_THE_BLOCKS: &[&str] = &["7.5", "0.0248", "1.27", "9.7", "0.05", "1500"];
+
+/// The control the list above needs: figures the blocks **do** print. Without
+/// these, a scan that had stopped reading output would report all six absent
+/// and look exactly like a passing one.
+const WITHIN_THE_BLOCKS: &[&str] = &["0.254", "1000", "ClearanceRule", "10_000"];
+
 /// **The verification block is the canon's own instrument and nothing ran it.**
 /// Every section ends by naming the commands a reader can use to re-check it,
 /// 51 of them, and until now the only ones anybody ran were the 11 written in
@@ -2556,6 +2567,7 @@ fn every_command_in_a_verification_block_still_runs() {
     let mut ran = 0usize;
     let mut fragments = 0usize;
     let mut broken: Vec<String> = Vec::new();
+    let mut printed = String::new();
     for command in &commands {
         let parses = std::process::Command::new("sh")
             .arg("-n")
@@ -2575,6 +2587,7 @@ fn every_command_in_a_verification_block_still_runs() {
             .current_dir(&root)
             .output()
             .expect("a shell runs");
+        printed.push_str(&String::from_utf8_lossy(&output.stdout));
         if output.status.code() == Some(2) {
             broken.push(format!(
                 "{command}\n    {}",
@@ -2583,10 +2596,43 @@ fn every_command_in_a_verification_block_still_runs() {
         }
     }
 
+    let reached: Vec<&str> = BEYOND_THE_BLOCKS
+        .iter()
+        .copied()
+        .filter(|figure| printed.contains(figure))
+        .collect();
+    let unreached: Vec<&str> = WITHIN_THE_BLOCKS
+        .iter()
+        .copied()
+        .filter(|figure| !printed.contains(figure))
+        .collect();
+
     eprintln!(
         "verification commands run: {ran} (floor {VERIFICATION_COMMANDS_FLOOR}); \
-         fragments of a larger construct: {fragments}; cannot run: {}",
-        broken.len()
+         fragments of a larger construct: {fragments}; cannot run: {}; \
+         figures the legend says these blocks never print: {} of {}, control {} of {} found",
+        broken.len(),
+        reached.len(),
+        BEYOND_THE_BLOCKS.len(),
+        WITHIN_THE_BLOCKS.len() - unreached.len(),
+        WITHIN_THE_BLOCKS.len()
+    );
+
+    assert!(
+        unreached.is_empty(),
+        "the control says these figures are printed by the blocks and they are not: \
+         {unreached:#?}\n\
+         \n  Nothing below this line means anything if the output stopped being read: a scan \
+         over nothing reports every figure absent and looks like a passing one."
+    );
+
+    assert!(
+        reached.is_empty(),
+        "the legend says the verification blocks never print these, and now one does: \
+         {reached:#?}\n\
+         \n  That is good news and a stale sentence: a figure from a standard or a vendor's \
+         page has acquired a command that reaches it. Move the figure out of that list and say \
+         so in the legend."
     );
 
     assert!(

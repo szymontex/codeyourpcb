@@ -38,6 +38,18 @@ oldest one on every run. The dates web sources carry live in the sections
 themselves and are a different claim: those are days somebody read a vendor's
 page, and a page read is not a tree read.
 
+**What the verification block under each section buys, and what it cannot.**
+Every command in those blocks is run by
+`every_command_in_a_verification_block_still_runs`, so a path that moves stops
+the block rather than letting it read as a way to check the section. What the
+commands reach is what the tree names - a file, a symbol, a registry entry - and
+not what a figure is worth. Six figures this document states - 7.5 mm, 0.0248,
+1.27 mm, 9.7 s, 0.05 mm and 1500 - appear nowhere in the 532 lines those
+commands printed on 2026-09-16, because each of them comes from a standard, a
+vendor's page or one run of the router rather than from a name in the tree. So a
+`Verified:` date says somebody read both kinds, and the block below the section
+holds up only the first.
+
 **Three shapes of sentence this file is not allowed to carry**, each held by a
 check beside the dating one. `a_superlative_about_the_other_rules_cites_the_check_that_holds_it`
 stops a sentence claiming something about the rules a writer is not looking at,
