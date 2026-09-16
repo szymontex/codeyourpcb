@@ -269,7 +269,8 @@ it - see `shorts` and `clearance_contacts` in
 `crates/cypcb-autoroute/src/scoring.rs`, which are exactly this split done twice
 by hand, landed in `779f1fd` on 2026-08-23.
 `crates/cypcb-autoroute/tests/a_crossing_is_charged_twice.rs` runs the case that
-makes the total misleading - one contact, two terms, 1500 points - and landed in
+makes the total misleading - one contact, two terms, 1500 points, the 1000 on
+the violation row and the 500 on the crossing - and landed in
 `cc1aaeb` on 2026-08-08. `cargo test -p cypcb-autoroute --test a_crossing_is_charged_twice`
 re-runs it against whatever the reader has.
 
