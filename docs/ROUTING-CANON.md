@@ -168,7 +168,8 @@ Etchant sits in the wedge of an acute corner longer than it sits on open
 copper, and undercuts the trace from inside the corner. The accepted fix is two
 45 degree corners, or a radius, in place of one acute corner.
 
-Condition: the count of junctions with an internal angle below 90 degrees is 0.
+Condition: on one net and one layer, the count of junctions with an internal
+angle below 90 degrees is 0.
 
 Source: nextpcb and pcbsync acid trap articles, read 2026-09-11. The threshold
 is an angle, not a dimension; no source gives a length.
