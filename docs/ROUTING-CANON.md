@@ -1704,7 +1704,7 @@ fourth entry condition a new rule has to meet.
 
 ### A condition the whole population satisfies `[S]`
 
-*Verified: 2026-09-13*
+*Verified: 2026-09-16*
 
 A condition nothing satisfies and a condition everything satisfies are the same
 defect wearing opposite signs. Neither separates anything, so neither can be
@@ -2271,7 +2271,7 @@ quiet board from a quiet rule.
 
 ### The branch a reconstruction missed, and what it does not prove `[S]`
 
-*Verified: 2026-09-13*
+*Verified: 2026-09-16*
 
 Rebuilding R-08's answer from geometry, to check the instrument before using
 it, disagreed with the rule on two rows out of 175. The disagreement was in the
@@ -2354,8 +2354,10 @@ justified by them.
 
 The second reading is not refuted here but ruled out of court: **not one part on
 any of the six boards is turned.** Of the 174 footprints in the fixtures, two
-placements carry a rotation field at all and both of them read zero - counted
-with `grep -cE "^\s*\(at [-0-9.]+ [-0-9.]+ [-0-9.]+\)" *.kicad_pcb` in
+placements carry a rotation field at all and both of them read zero - counted with
+`grep -h "^  (footprint " tests/fixtures/benchmark/*.kicad_pcb | wc -l` for the 174
+and `grep -hE "^\s*\(at [-0-9.]+ [-0-9.]+ [-0-9.]+\)" tests/fixtures/benchmark/*.kicad_pcb`
+for the two, the second printing the rotations rather than counting them. Both read
 `tests/fixtures/benchmark`, which is outside the code under test because the
 test's own rotation figure cannot tell a correct reader from one that always
 answers zero. Answering the rotation question needs a board with turned parts
