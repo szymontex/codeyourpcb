@@ -251,7 +251,12 @@ the trace.
 
 The crossover, where plane resistance and inductive reactance are equal, is
 given as roughly 5 kHz; above it most of the return flows in a band a few trace
-heights wide beneath the signal trace.
+heights wide beneath the signal trace. **That figure motivates this rule and is
+used by neither of its conditions**, which ask for full coverage and no
+crossings whatever the frequency. It is also quoted without the plane thickness
+and geometry it depends on, so it is a reason to have the rule rather than a
+threshold anything is held to - said here because a number sitting in a rule
+reads like one that is.
 
 Two separate conditions, both measurable on a finished route:
 
@@ -260,7 +265,10 @@ Two separate conditions, both measurable on a finished route:
 2. Splits: the number of intersections between the trace's footprint and the
    edge of the reference pour is 0.
 
-Source: learnemc.com, "Tracing Electric Current Paths", read 2026-09-11.
+Source: learnemc.com, "Tracing Electric Current Paths", read 2026-09-11. **The
+author is not named there or here**, the same gap R-04 carries: `[O]` means the
+original article by the author of the rule, and a site with a title is not a
+person.
 
 Gap: no public source found with a closed form for return current density
 against lateral distance, so this canon states no number for the width of the
