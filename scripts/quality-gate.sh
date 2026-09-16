@@ -691,4 +691,15 @@ else
 fi
 echo ""
 
+# The same scan again, because the first one answers about an instant and a run
+# takes half an hour. A neighbour that starts after the top of the run is
+# invisible to the line printed there: on 2026-09-16 a run whose first sample
+# read `sharing=0` died in a doctest on *two different versions of crate
+# `cypcb_drc`*, which is what a target directory looks like after two builds
+# have written into it. Diagnostic only, like the first - it never fails a run,
+# and its value is that a red carries evidence about the window rather than
+# about one moment of it.
+printf 'GATE-BUILDS-AT-END %s dir=%s\n' \
+  "$("$REPO_ROOT/scripts/who-is-building.sh" "$GATE_BUILD_DIR")" "$GATE_BUILD_DIR"
+
 echo "=== All stages passed ==="
