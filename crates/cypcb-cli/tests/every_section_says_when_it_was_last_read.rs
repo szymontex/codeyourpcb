@@ -2209,8 +2209,8 @@ const NUMERALS: &[&str] = &[
     "twenty",
 ];
 
-const COMMANDS_EXAMINED_FLOOR: usize = 9;
-const COMMANDS_POINTING_FLOOR: usize = 7;
+const COMMANDS_EXAMINED_FLOOR: usize = 13;
+const COMMANDS_POINTING_FLOOR: usize = 9;
 
 /// A `<hole>` a reader has to fill. The angle brackets alone are not the test -
 /// `grep -rn "Vec<String>"` carries a type, not a hole - so the word inside has

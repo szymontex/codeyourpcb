@@ -2103,9 +2103,10 @@ will.
 it used, and that strength has a number now.** Six quantities this project does
 measure were searched for on 2026-09-14 by the phrase a reader of this canon
 would write, and set beside the name the code uses. One command, one scope -
-`grep -ril "<term>" --include=*.rs crates/` over the 551 tracked `.rs` files in
-the crates, tests included, because the question is whether this project
-measures the quantity and a test measures it too:
+`grep -ril "<term>" --include=*.rs crates/` over the tracked `.rs` files in the
+crates, tests included, because the question is whether this project measures
+the quantity and a test measures it too. `git ls-files crates | grep -c '\.rs$'`
+gives 552:
 
 | the phrase a reader would search | files | the name the code uses | files |
 |---|---|---|---|
@@ -2135,7 +2136,7 @@ scope cannot see it.
 **There are three kinds of control on a claim like this, and the third cannot
 exist.** A control on the instrument - the same command, the same scope, a word
 known to be present - says the search works: "clearance" answers 185 of those
-551 files. A control on the neighbourhood - the same command over a measurement
+552 files. A control on the neighbourhood - the same command over a measurement
 of the same kind that does exist - says a measurement of that shape would be
 found if it carried this document's name for it. **A control on the quantity
 itself is impossible by construction: it would have to be code computing the
@@ -2149,7 +2150,7 @@ of `compute_composite` names `kind` zero times, and the control is that `shorts`
 reads it in the same codebase, so the zero is a zero rather than a missing word.
 The second is the list of preset fields nothing reads: those are named
 identifiers rather than described quantities, and an identifier has no synonym,
-so walking all 45 fields of `DesignConstraints` and asking which are named in no
+so walking all 44 fields of `DesignConstraints` and asking which are named in no
 file outside their own crate answers completely - eight of them, on 2026-09-14,
 with `min_annular_ring` at 13 files and `min_hole_to_hole` at 8 under the same
 command as the control that the question is answerable.
@@ -2601,12 +2602,14 @@ it is the only one that reads the two outputs of one design side by side.
 
 *Verified: 2026-09-13*
 
-**Eight of the 45 fields of `DesignConstraints` have no reader anywhere outside
-their own crate.** It said 44 until 2026-09-14, and the field that arrived is
-`min_copper_pour_clearance` - which was never a candidate for this list and
-could not be: three production readers take it today, in the renderer, in the
-KiCad writer and in `PourIslandRule`. **The list did not change and the sentence
-was false anyway**, because the denominator is a claim of its own. `min_acid_trap`, `max_stub_length`, `thermal_relief_spokes`,
+**Eight of the 44 fields of `DesignConstraints` have no reader anywhere outside
+their own crate.** The denominator is a claim of its own and it was wrong twice
+over: this said 45, and it said the count had risen on 2026-09-14 because
+`min_copper_pour_clearance` arrived. That field has been in the struct since
+`b1e3ce0` on 2026-03-13, and the struct carries its own count -
+`grep -oE 'FIELD_COUNT: usize = [0-9]+' crates/cypcb-rules/src/constraints.rs | grep -oE '[0-9]+'`
+answers 44, the same figure `b42cb75` put there to stop this number being copied
+into prose at all. `min_acid_trap`, `max_stub_length`, `thermal_relief_spokes`,
 `max_vias_per_high_speed_net`, `diff_pair_gap`, `diff_pair_tolerance`,
 `max_copper_layers` and `max_current_per_width_x100`. Every one of them is set
 by four or five preset files: the fab states a number, the preset records it,
