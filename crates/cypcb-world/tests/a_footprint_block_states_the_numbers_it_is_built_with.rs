@@ -39,9 +39,9 @@ const DIMENSION_LABELS: &[&str] = &["Pitch:", "Pad:", "Row span:", "Body:"];
 const BLOCKS_FLOOR: usize = 13;
 
 /// Constructors whose doc comment is a sentence rather than a block, and states
-/// a figure in it anyway. The four mounting holes each say their drill in prose
-/// - "M2 mounting hole, 2.2mm drill." - and a reader picking a screw size reads
-/// that sentence, not the call under it.
+/// a figure in it anyway. The four mounting holes each say their drill in the
+/// prose above the call: "M2 mounting hole, 2.2mm drill." Somebody picking a
+/// screw size reads that sentence, not the call under it.
 const SENTENCES_FLOOR: usize = 4;
 
 fn footprint_dir() -> PathBuf {
