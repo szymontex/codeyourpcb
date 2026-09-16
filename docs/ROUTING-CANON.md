@@ -1103,7 +1103,7 @@ the rule working, not the rule missing.
 
 **In this repo:** the declaration and the generator exist; no check exists.
 
-### R-15 One component, one connection style `[P]`
+### R-15 One component, one connection style `[R]` figures, `[P]` guidance
 
 *Verified: 2026-09-13*
 
@@ -1136,7 +1136,9 @@ free end lifts and the part rotates off its pad. That is tombstoning, and the
 published guidance is symmetry rather than any particular pattern: apply the
 same connection style to both pads of a chip component, and treat it as
 mandatory for 0603 and smaller, where the part is light enough for the torque
-to win (thermal-relief and tombstoning guides, read 2026-09-11).
+to win (thermal-relief and tombstoning guides, read 2026-09-11). **Those guides
+are not named here and a reader has nothing to open** - the claim resting on
+them is the symmetry, which this rule then states as its own condition anyway.
 
 Condition, and it is the one this canon adds of its own: **for a two-terminal
 component whose pads both sit in pours, both pads have the same connection
