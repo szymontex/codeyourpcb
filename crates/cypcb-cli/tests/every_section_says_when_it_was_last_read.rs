@@ -927,6 +927,50 @@ const PATH_ROOTS: &[&str] = &[
     "examples/",
 ];
 
+/// Every extension this repository actually holds - 23 of them on 2026-09-16,
+/// read off the tree rather than listed here, because a list of extensions is a
+/// second place to keep the same fact.
+fn extensions_in_this_tree() -> BTreeSet<String> {
+    fn walk(dir: &Path, found: &mut BTreeSet<String>) {
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                let skip = path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .is_some_and(|n| NOT_SOURCE.contains(&n));
+                if !skip {
+                    walk(&path, found);
+                }
+                continue;
+            }
+            if let Some(extension) = path.extension().and_then(|e| e.to_str()) {
+                found.insert(extension.to_ascii_lowercase());
+            }
+        }
+    }
+    let mut found = BTreeSet::new();
+    walk(&repo_root(), &mut found);
+    found
+}
+
+/// A backticked span that reads as a file **of a kind this repository holds**.
+///
+/// The extension is what separates a citation from everything else shaped like
+/// one: `0.5` is a number, `0.1.0-beta` is a version, `params.density` is a
+/// field and `sigcon.com/Pubs/news/3_7.htm` is a source on the open web. The
+/// first draft asked only for a dot and letters after it and caught all four.
+fn looks_like_a_file(token: &str, extensions: &BTreeSet<String>) -> bool {
+    let Some((stem, extension)) = token.rsplit_once('.') else {
+        return false;
+    };
+    let extension = extension.split(':').next().unwrap_or(extension);
+    !stem.is_empty() && extensions.contains(extension)
+}
+
 /// Four names the canon asserts are **not** in the rules - the section on what
 /// nothing measures says nothing keys on a bit rate or an edge rate. They are
 /// the positive control this check would otherwise lack: a walk that had
@@ -1029,6 +1073,8 @@ fn every_path_and_name_the_canon_cites_is_in_the_tree() {
     let mut paths = 0usize;
     let mut with_a_line = 0usize;
     let mut globs = 0usize;
+    let mut unrooted: Vec<String> = Vec::new();
+    let extensions = extensions_in_this_tree();
     let mut missing_paths: Vec<String> = Vec::new();
     let mut names: BTreeSet<&str> = BTreeSet::new();
     for token in backticked(&canon) {
@@ -1039,7 +1085,11 @@ fn every_path_and_name_the_canon_cites_is_in_the_tree() {
             names.insert(token);
             continue;
         }
-        if !PATH_ROOTS.iter().any(|r| token.starts_with(r)) {
+        let rooted = PATH_ROOTS.iter().any(|r| token.starts_with(r));
+        if !rooted {
+            if looks_like_a_file(token, &extensions) {
+                unrooted.push(token.to_string());
+            }
             continue;
         }
         if token.contains('*') {
@@ -1088,12 +1138,22 @@ fn every_path_and_name_the_canon_cites_is_in_the_tree() {
         "paths cited: {paths} ({with_a_line} with a line number, {globs} globs skipped), \
          missing {}; long names cited: {} (by filename {by_filename}, declared here \
          {by_declaration}), unresolved {}; \
-         names the canon says are absent: {} of {} found in the tree",
+         names the canon says are absent: {} of {} found in the tree; \
+         file names cited without a directory: {}",
         missing_paths.len(),
         names.len(),
         unresolved.len(),
         present_but_asserted_absent.len(),
-        ASSERTED_ABSENT.len()
+        ASSERTED_ABSENT.len(),
+        unrooted.len()
+    );
+
+    assert!(
+        unrooted.is_empty(),
+        "the canon cites a file by name with no directory in front of it: {unrooted:#?}\n\
+         \n  A bare filename is out of reach of this check, which only reads a span that \
+         starts at a directory, and `lib.rs` names 17 files in this tree. Three line numbers \
+         drifted for weeks behind citations written that way. Spell the path out."
     );
 
     assert!(

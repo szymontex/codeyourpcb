@@ -151,7 +151,8 @@ In this repo: **enforced.** `AcuteAngleRule` is in the registry and reports
 and that is deleted rather than corrected, in `127ea2c`.** There are three ways to read it and
 the only true one is empty. Read as every figure this file calls a wedge, it is
 false twice over: the 50 100, 40 000 and 42 500 millidegrees beside a corner
-come from `entry_angle` in `rules/pad_entry.rs`, which is R-08's geometry, and
+come from `entry_angle` in `crates/cypcb-drc/src/rules/pad_entry.rs`, which is
+R-08's geometry, and
 R-10's wedge count comes from
 `crates/cypcb-autoroute/tests/can_a_wedge_be_cut_where_it_stands.rs`, which
 mentions neither this rule nor `acid_trap` nor `is_acute` and computes the
@@ -319,7 +320,8 @@ Altium "Vias 101". All read 2026-09-11.
 In this repo: enforced by six registry entries - `AnnularRingRule`,
 `HoleToHoleRule`, `ViaDiameterRule`, `ViaDrillRule`, `PadLandRule` and
 `DrillAspectRatioRule` - and the router reads `min_via_annular_ring` in
-`pathfinder_v2.rs`, in three places, so the constraint shapes the search as well
+`crates/cypcb-autoroute/src/pathfinder_v2.rs`, in three places, so the constraint
+shapes the search as well
 as judging the result.
 
 **This paragraph used to end "and the only rule of this group that is", and that
