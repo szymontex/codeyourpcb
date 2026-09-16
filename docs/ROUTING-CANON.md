@@ -1624,7 +1624,10 @@ needs to see one has to measure geometry rather than clearance.**
 **In this repo:** enforced. `ClearanceRule` is the first entry in the registry
 (`crates/cypcb-drc/src/lib.rs:134`). Measured on one board rather than claimed
 for all six: on `shift_driver` with `stop_at_own_copper` on, **27 of 33 rows**
-carry the `Clearance` kind, and on this board that kind is this rule - the
+carry the `Clearance` kind. That pair is held rather than quoted:
+`the_board_that_gets_worse_gets_worse_at_one_other_rule` asserts the 27 exactly
+and the share as a floor, printing `shift_driver clearance share 27 of 33`. On
+this board that kind is this rule - the
 fixture declares no zone, and `ZoneOverlapRule` is the only other rule that
 builds a clearance violation. Nineteen of the 27 are shorts, which R-11 ranks
 tier 2 rather than tier 3.

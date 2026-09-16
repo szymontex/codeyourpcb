@@ -536,15 +536,75 @@ fn is_count(word: &str) -> bool {
     !word.is_empty() && (word.chars().all(|c| c.is_ascii_digit()) || COUNTS.contains(&word))
 }
 
-/// A backticked `snake_case_name_with_underscores` - the way this canon writes
-/// the name of a check.
-fn names_a_check(paragraph: &str) -> bool {
-    paragraph.split('`').skip(1).step_by(2).any(|token| {
-        token.matches('_').count() >= 2
-            && token
-                .chars()
-                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
-    })
+/// Every name a **check** in this tree answers to: the function under each
+/// `#[test]`, and the stem of every integration test file - a file is a check a
+/// reader can run by name even when the function inside it is called something
+/// else.
+///
+/// Not every function: `fill_zone` and `by_kind` are real code and neither one
+/// re-runs anything. The first draft of this narrowing took every `fn` and
+/// **widened** the door rather than closing it - two paragraphs that had been
+/// failing started passing on the name of a helper.
+fn names_in_this_tree() -> BTreeSet<String> {
+    fn walk(dir: &Path, names: &mut BTreeSet<String>) {
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                if path.file_name().is_some_and(|n| n == "target") {
+                    continue;
+                }
+                walk(&path, names);
+                continue;
+            }
+            if path.extension().is_none_or(|e| e != "rs") {
+                continue;
+            }
+            if path.parent().is_some_and(|p| p.ends_with("tests")) {
+                if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
+                    names.insert(stem.to_string());
+                }
+            }
+            let Ok(source) = std::fs::read_to_string(&path) else {
+                continue;
+            };
+            for (at, _) in source.match_indices("#[test]") {
+                let Some(fn_at) = source[at..].find("fn ") else {
+                    continue;
+                };
+                let name: String = source[at + fn_at + 3..]
+                    .chars()
+                    .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+                    .collect();
+                if !name.is_empty() {
+                    names.insert(name);
+                }
+            }
+        }
+    }
+    let mut names = BTreeSet::new();
+    walk(&repo_root().join("crates"), &mut names);
+    names
+}
+
+/// A backticked `snake_case_name_with_underscores` **that this tree answers to**.
+///
+/// The shape alone was the whole test until 2026-09-16, and the shape is also
+/// how this project names a constraint: of the 55 tokens in the canon that look
+/// like a check, 35 are a function or a test file and **20 are field names** -
+/// `max_stub_length`, `min_annular_ring`, `pour_thermal_gap`,
+/// `stop_at_own_copper`. A field name re-runs nothing. One paragraph was
+/// carrying a measured figure - "27 of 33 rows" - through this door on
+/// `stop_at_own_copper`, and the same paragraph was carrying a superlative
+/// through `cites_an_instrument` on the same token: **one hole, two checks**.
+fn names_a_check(paragraph: &str, known: &BTreeSet<String>) -> bool {
+    paragraph
+        .split('`')
+        .skip(1)
+        .step_by(2)
+        .any(|token| known.contains(token))
 }
 
 /// The content escape hatch: a paragraph may make a claim about the other
@@ -552,8 +612,8 @@ fn names_a_check(paragraph: &str) -> bool {
 /// by name, or R-16's tally. Not a syntactic hatch: "used to" and "until 2026"
 /// were both proposed and both refused, because anybody can type them and
 /// neither one puts a number under the sentence.
-fn cites_an_instrument(paragraph: &str) -> bool {
-    names_a_check(paragraph) || paragraph.to_ascii_lowercase().contains("tally")
+fn cites_an_instrument(paragraph: &str, known: &BTreeSet<String>) -> bool {
+    names_a_check(paragraph, known) || paragraph.to_ascii_lowercase().contains("tally")
 }
 
 #[test]
@@ -570,6 +630,7 @@ fn a_superlative_about_the_other_rules_cites_the_check_that_holds_it() {
         "the last ",
     ];
 
+    let known = names_in_this_tree();
     let mut claiming = 0usize;
     let mut hatched = 0usize;
     let mut blocked: Vec<String> = Vec::new();
@@ -597,7 +658,7 @@ fn a_superlative_about_the_other_rules_cites_the_check_that_holds_it() {
             continue;
         }
         claiming += 1;
-        if cites_an_instrument(&paragraph) {
+        if cites_an_instrument(&paragraph, &known) {
             hatched += 1;
         } else {
             blocked.push(format!(
@@ -755,6 +816,13 @@ const NOT_A_MEASUREMENT: &[(&str, &str)] = &[
         "its size is counted by the command in the verification block",
         "hands its provenance to the verification block and names the commit",
     ),
+    (
+        "violations measured at 0.00 mm",
+        // The word this row names is deliberately not written here: the
+        // table's own figures are re-measured by a search over this tree,
+        // and a term typed into this file is found by the search it checks.
+        "the unit of the zero-distance row in R-12's table of what the score reads, not a reading",
+    ),
 ];
 
 #[test]
@@ -773,6 +841,7 @@ fn a_measured_figure_says_when_it_was_measured() {
         .collect();
 
     let paragraphs = canon_paragraphs(&canon_prose_only(&canon));
+    let known = names_in_this_tree();
 
     let mut stating = 0usize;
     let mut unsourced: Vec<String> = Vec::new();
@@ -787,7 +856,7 @@ fn a_measured_figure_says_when_it_was_measured() {
         let dated = paragraph
             .split(|c: char| !(c.is_ascii_digit() || c == '-'))
             .any(is_iso_date);
-        if !dated && !names_a_check(paragraph) {
+        if !dated && !names_a_check(paragraph, &known) {
             unsourced.push(paragraph.clone());
         }
     }
