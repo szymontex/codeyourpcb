@@ -680,18 +680,105 @@ fn nothing_here_quantifies_over_the_document_itself() {
     );
 }
 
+/// The canon's prose with fenced blocks blanked out. A verification block is a
+/// command, and a comment inside a command is not a claim the prose makes:
+/// `# R-13: coverage has to be measured against the filled geometry` sits in
+/// one. Counted both ways on 2026-09-16 - with the blocks 16 paragraphs state a
+/// measured figure and six carry no provenance, without them 15 and five. That
+/// shell comment is the whole difference.
+fn canon_prose_only(canon: &str) -> String {
+    let mut out = String::with_capacity(canon.len());
+    let mut fenced = false;
+    for line in canon.lines() {
+        if line.trim_start().starts_with("```") {
+            fenced = !fenced;
+            out.push('\n');
+            continue;
+        }
+        if fenced {
+            out.push('\n');
+        } else {
+            out.push_str(line);
+            out.push('\n');
+        }
+    }
+    out
+}
+
+/// **The dictionary is a product, not a list of sentences somebody met.** The
+/// narrow form of this check read `measured on`, `counted on` and `this scan
+/// sees`, and `bfeb92c` - the commit that introduced it - rewrote `the gap is
+/// measured on the placed field` to `measured across` in the same diff. The
+/// paragraph did not gain a date; it left the denominator. The check was born
+/// green partly by its own hand, and a ceiling with nothing under it reports
+/// that as progress.
+const MEASURING_VERBS: &[&str] = &["measured", "counted", "re-counted"];
+const MEASURING_PREPOSITIONS: &[&str] = &["on", "at", "across", "over", "against", "by", "in"];
+/// Phrases that state a measurement without taking a preposition at all.
+const MEASURING_PHRASES: &[&str] = &["this scan sees"];
+
+/// **The denominator, and the reason this file holds one at all.** Measured
+/// over twenty revisions of the canon, from `02b7f4a` to `67b4f87` - 279 lines
+/// and 26 paragraphs added across them - the product dictionary answered 15
+/// every single time. The narrow dictionary answered 8, then 7 from `bfeb92c`
+/// on, and that fall was a paragraph escaping rather than a sentence going
+/// away. Like `LINE_NUMBER_REFERENCES`, this number may only be lowered on
+/// purpose, in a commit that says which paragraph went and why.
+const STATING_FLOOR: usize = 15;
+
+/// Paragraphs that read as measurements to the dictionary and are not.
+///
+/// The key is a literal run of text **from the flattened paragraph**, and that
+/// distinction is the trap: `grep -cF` for each of these four against
+/// `docs/ROUTING-CANON.md` returns 0, 0, 0, 0, because the canon is hard-wrapped
+/// and every one of them breaks across a line. Match them against the raw file
+/// and all four go stale on day one; the repair somebody reaches for then is a
+/// shorter, looser key, which is the whole point of the list thrown away.
+///
+/// A key that no longer appears is an error, not a skip. Without that half the
+/// entry outlives the paragraph it excused and the list quietly rots into a
+/// blanket permission.
+const NOT_A_MEASUREMENT: &[(&str, &str)] = &[
+    (
+        "Coverage has to be measured against the filled geometry",
+        "says what the rule measures over and points at the code; states no figure of its own",
+    ),
+    (
+        "a board that declares nothing is measured against 1 GHz",
+        "1 GHz is the stand-in threshold the same paragraph defines, not a reading",
+    ),
+    (
+        "the gap is measured across the placed field",
+        "7.5 mm and 1 GHz are declared thresholds; the sentence explains where the gap comes from",
+    ),
+    (
+        "its size is counted by the command in the verification block",
+        "hands its provenance to the verification block and names the commit",
+    ),
+];
+
 #[test]
 fn a_measured_figure_says_when_it_was_measured() {
     let canon = std::fs::read_to_string(repo_root().join("docs/ROUTING-CANON.md"))
         .expect("the canon is there");
 
-    const MEASURING: &[&str] = &["measured on", "counted on", "this scan sees"];
+    let measuring: Vec<String> = MEASURING_VERBS
+        .iter()
+        .flat_map(|verb| {
+            MEASURING_PREPOSITIONS
+                .iter()
+                .map(move |preposition| format!("{verb} {preposition}"))
+        })
+        .chain(MEASURING_PHRASES.iter().map(|p| p.to_string()))
+        .collect();
+
+    let paragraphs = canon_paragraphs(&canon_prose_only(&canon));
 
     let mut stating = 0usize;
     let mut unsourced: Vec<String> = Vec::new();
-    for paragraph in canon_paragraphs(&canon) {
+    for paragraph in &paragraphs {
         let lowered = paragraph.to_ascii_lowercase();
-        let states_a_measurement = MEASURING.iter().any(|m| contains_phrase(&lowered, m))
+        let states_a_measurement = measuring.iter().any(|m| contains_phrase(&lowered, m))
             && paragraph.chars().any(|c| c.is_ascii_digit());
         if !states_a_measurement {
             continue;
@@ -700,23 +787,56 @@ fn a_measured_figure_says_when_it_was_measured() {
         let dated = paragraph
             .split(|c: char| !(c.is_ascii_digit() || c == '-'))
             .any(is_iso_date);
-        if !dated && !names_a_check(&paragraph) {
-            unsourced.push(paragraph[..paragraph.len().min(140)].to_string());
+        if !dated && !names_a_check(paragraph) {
+            unsourced.push(paragraph.clone());
         }
     }
 
+    let stale: Vec<&str> = NOT_A_MEASUREMENT
+        .iter()
+        .map(|(key, _)| *key)
+        .filter(|key| !paragraphs.iter().any(|p| p.contains(key)))
+        .collect();
+
+    let remaining: Vec<String> = unsourced
+        .iter()
+        .filter(|p| !NOT_A_MEASUREMENT.iter().any(|(key, _)| p.contains(key)))
+        .map(|p| p[..p.len().min(140)].to_string())
+        .collect();
+
     eprintln!(
-        "paragraphs stating a measured figure: {stating}; without a date or a check name: {}",
-        unsourced.len()
+        "paragraphs stating a measured figure: {stating} (floor {STATING_FLOOR}); \
+         without a date or a check name: {}; excused: {}; still answering nothing: {}",
+        unsourced.len(),
+        NOT_A_MEASUREMENT.len() - stale.len(),
+        remaining.len()
     );
 
     assert!(
-        unsourced.is_empty(),
-        "a figure here is called measured and nothing says when or by what: {unsourced:#?}\n\
+        stale.is_empty(),
+        "an entry here excuses a paragraph that is no longer in the canon: {stale:#?}\n\
+         \n  The paragraph was rewritten or removed and its excuse outlived it. Re-read the \
+         sentence as it stands now and either drop the entry or key it to the new text - an \
+         excuse nobody re-reads is a permission that widens on its own."
+    );
+
+    assert!(
+        remaining.is_empty(),
+        "a figure here is called measured and nothing says when or by what: {remaining:#?}\n\
          \n  A measurement without a date is a claim about the working tree on a day nobody \
          recorded, and this file has already been caught seven times holding a figure that was \
          true when it was written. Either carry the ISO date it was read on, or name the check \
          that re-reads it."
+    );
+
+    assert!(
+        stating >= STATING_FLOOR,
+        "the scan for measured figures now sees {stating} paragraphs, below the floor of \
+         {STATING_FLOOR}\n\
+         \n  Paragraphs do not usually leave this scan because the canon got shorter - they \
+         leave because a word was changed and the sentence stopped matching, which is exactly \
+         how this check was born green. If the text really did go away, lower the floor in the \
+         same commit and say which paragraph went."
     );
 }
 
