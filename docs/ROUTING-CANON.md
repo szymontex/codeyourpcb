@@ -1310,6 +1310,12 @@ bucket 2 from bucket 3 in practice, not from principle.
 4. **The quantity checked is the measured one, not the declared one.** See
    "Declared is not measured" - four rules in a row had to be rewritten around
    it, and a fifth will unless it is an entry condition.
+5. **A rule this project reasoned out for itself records a command.** A rule
+   read off a standard can stand on the standard; a `[S]` rule has nothing
+   behind it but this tree, so the verification block has to say how to look.
+   The asymmetry is already there and is held by
+   `a_rule_this_project_derived_itself_records_a_command`: every rule the block
+   does not name carries `[R]`, `[P]` or `[O]`, and not one of them is `[S]`.
 
 ### R-17 The grid the router actually searches `[S]`
 

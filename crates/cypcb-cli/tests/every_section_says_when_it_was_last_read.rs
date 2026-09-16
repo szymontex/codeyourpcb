@@ -2658,3 +2658,77 @@ fn every_command_in_a_verification_block_still_runs() {
          as a fragment, which looks like tidying and silently empties the instrument."
     );
 }
+
+/// Rules this project reasoned out for itself rather than reading somewhere.
+const DERIVED_RULES_FLOOR: usize = 4;
+
+/// **A rule nobody else published has to bring its own command.** Of the 19
+/// rules here, 12 are named by a `# R-NN` comment in the verification block and
+/// 7 are not - and every one of those 7 carries `[R]`, `[P]` or `[O]`, which is
+/// to say a standard, a vendor or an article vouches for it. Not one of them is
+/// `[S]`.
+///
+/// That asymmetry is the rule this check holds. A figure from a standard can
+/// stand on the standard; a rule this project derived from its own tree has
+/// nothing behind it but the tree, so the block has to say how to look. The
+/// check does not ask what the command shows - `every_command_in_a_verification_block_still_runs`
+/// runs them all - only that a self-derived rule is named by one at all.
+#[test]
+fn a_rule_this_project_derived_itself_records_a_command() {
+    let canon = std::fs::read_to_string(repo_root().join("docs/ROUTING-CANON.md"))
+        .expect("the canon is there");
+
+    let recorded: BTreeSet<&str> = canon
+        .lines()
+        .filter_map(|line| line.strip_prefix("# "))
+        .filter_map(|rest| {
+            rest.split(|c: char| !(c.is_ascii_alphanumeric() || c == '-'))
+                .next()
+        })
+        .filter(|token| token.starts_with("R-") && token.len() > 2)
+        .collect();
+
+    let mut derived: Vec<&str> = Vec::new();
+    let mut unrecorded: Vec<String> = Vec::new();
+    for line in canon.lines() {
+        let Some(heading) = line.strip_prefix("### ") else {
+            continue;
+        };
+        if !heading.contains("[S]") {
+            continue;
+        }
+        let Some(rule) = heading.split_whitespace().next() else {
+            continue;
+        };
+        if !rule.starts_with("R-") {
+            continue;
+        }
+        derived.push(rule);
+        if !recorded.contains(rule) {
+            unrecorded.push(heading.to_string());
+        }
+    }
+
+    eprintln!(
+        "rules this project derived itself: {} (floor {DERIVED_RULES_FLOOR}); \
+         with no command recorded for them: {}; rules named by a command at all: {}",
+        derived.len(),
+        unrecorded.len(),
+        recorded.len()
+    );
+
+    assert!(
+        unrecorded.is_empty(),
+        "a rule this project reasoned out for itself records no command: {unrecorded:#?}\n\
+         \n  A rule read off a standard can stand on the standard. One derived from this tree \
+         has nothing behind it but the tree, so the verification block has to say how to look."
+    );
+
+    assert!(
+        derived.len() >= DERIVED_RULES_FLOOR,
+        "this check found {} rules tagged `[S]`, below the floor of {DERIVED_RULES_FLOOR}\n\
+         \n  Either a rule stopped being this project's own - which is a change worth saying \
+         out loud - or the tag moved and this check is now reading nothing.",
+        derived.len()
+    );
+}
