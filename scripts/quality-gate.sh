@@ -635,6 +635,14 @@ if ./scripts/who-is-building.sh --selftest 2>&1; then
 else
   fail "who-is-building"
 fi
+# The other diagnostic that answers zero when it has stopped working. This one
+# answers the question a census asks - who tests this name - and the narrow
+# version of that question has now been asked wrongly four times here.
+if ./scripts/who-tests-this.sh --selftest 2>&1; then
+  pass "who-tests-this"
+else
+  fail "who-tests-this"
+fi
 echo ""
 
 # the repository does not name the machine it is built on
