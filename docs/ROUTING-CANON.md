@@ -2767,7 +2767,8 @@ sed -n '128,200p' crates/cypcb-drc/src/lib.rs
 
 # Constants no code reads: expect matches only under crates/cypcb-rules
 for f in min_acid_trap max_stub_length thermal_relief_spokes \
-         max_vias_per_high_speed_net diff_pair_gap; do
+         max_vias_per_high_speed_net diff_pair_gap diff_pair_tolerance \
+         max_copper_layers max_current_per_width_x100; do
   printf '%s: ' "$f"
   grep -rln "$f" --include=*.rs crates/ | grep -v '^crates/cypcb-rules/' | wc -l
 done

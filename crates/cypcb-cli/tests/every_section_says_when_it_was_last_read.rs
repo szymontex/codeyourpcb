@@ -594,8 +594,12 @@ fn names_in_this_tree() -> BTreeSet<String> {
 /// The shape alone was the whole test until 2026-09-16, and the shape is also
 /// how this project names a constraint: of the 55 tokens in the canon that look
 /// like a check, 35 are a function or a test file and **20 are field names** -
-/// `max_stub_length`, `min_annular_ring`, `pour_thermal_gap`,
-/// `stop_at_own_copper`. A field name re-runs nothing. One paragraph was
+/// a stub length, an annular ring, a pour's thermal gap, a flag about a pour's
+/// own copper. **Those four are described rather than spelled**, because the
+/// canon counts the files naming each of them and a name typed into this file
+/// is a file naming it: writing one here moved the count in a section that has
+/// nothing to do with this check, and made a true sentence there false. A field
+/// name re-runs nothing. One paragraph was
 /// carrying a measured figure - "27 of 33 rows" - through this door on
 /// `stop_at_own_copper`, and the same paragraph was carrying a superlative
 /// through `cites_an_instrument` on the same token: **one hole, two checks**.
