@@ -157,6 +157,28 @@ pub fn export_ipc2581_now(
     )
 }
 
+/// The same, filling any pour to the fabricator's own figures.
+///
+/// **The pour in this document was drawn to `PourOptions::default()` whatever
+/// house the board was for**, while the Gerber path has taken the fab's
+/// numbers since `ExportJob` started passing them and the viewer since
+/// 2026-09-13. This was the last of the three readers still pouring to a
+/// default - and the one a fabricator receives.
+pub fn export_ipc2581_now_with(
+    world: &mut BoardWorld,
+    library: &FootprintLibrary,
+    house: HouseTolerances,
+    pour: &crate::pour::PourOptions,
+) -> (String, Vec<String>) {
+    export_ipc2581_with(
+        world,
+        library,
+        house,
+        &chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%z").to_string(),
+        pour,
+    )
+}
+
 /// Write this board as an IPC-2581 document.
 ///
 /// `now` is the timestamp the document carries, passed in rather than read
@@ -166,6 +188,29 @@ pub fn export_ipc2581(
     library: &FootprintLibrary,
     house: HouseTolerances,
     now: &str,
+) -> (String, Vec<String>) {
+    export_ipc2581_with(
+        world,
+        library,
+        house,
+        now,
+        &crate::pour::PourOptions::default(),
+    )
+}
+
+/// Write this board as an IPC-2581 document, filling any pour to `pour`.
+///
+/// See [`export_ipc2581`] for the shape of the output. A caller who knows the
+/// fabricator passes its figures here; one who does not gets the generous
+/// default, on the same reasoning the Gerber writer states: a pour that keeps
+/// too much distance is a smaller board and one that keeps too little is a
+/// short.
+pub fn export_ipc2581_with(
+    world: &mut BoardWorld,
+    library: &FootprintLibrary,
+    house: HouseTolerances,
+    now: &str,
+    pour: &crate::pour::PourOptions,
 ) -> (String, Vec<String>) {
     let (size, stack) = world.board_info().unwrap_or((
         cypcb_world::components::BoardSize::new(Nm(0), Nm(0)),
@@ -739,14 +784,7 @@ pub fn export_ipc2581(
                 .ecs()
                 .get::<cypcb_world::components::Hatch>(entity)
                 .copied();
-            let filled = cypcb_world::copper::fill_zone(
-                world,
-                library,
-                layer,
-                &zone,
-                hatch,
-                &crate::pour::PourOptions::default(),
-            );
+            let filled = cypcb_world::copper::fill_zone(world, library, layer, &zone, hatch, pour);
             let pieces: Vec<cypcb_core::Rect> = filled.all().copied().collect();
             if pieces.is_empty() {
                 continue;

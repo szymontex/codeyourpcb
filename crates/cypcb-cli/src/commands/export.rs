@@ -512,8 +512,23 @@ impl ExportCommand {
                 hole_plus: published.as_ref().and_then(|c| c.hole_tolerance_plus),
                 hole_minus: published.as_ref().and_then(|c| c.hole_tolerance_minus),
             };
+            // The pour in the handoff document is the fabricator's, not the
+            // default. The renderer reads these three off the rule set and so
+            // does the Gerber path; this was the reader that did not, and it
+            // is the one that reaches a fab.
+            let pour = published
+                .as_ref()
+                .map(|constraints| {
+                    let rules = cypcb_drc::DesignRules::from_constraints(constraints);
+                    cypcb_export::pour::PourOptions {
+                        clearance: rules.min_copper_pour_clearance,
+                        thermal_gap: rules.thermal_relief_gap,
+                        spoke_width: rules.thermal_relief_spoke_width,
+                    }
+                })
+                .unwrap_or_default();
             let (document, handoff_warnings) =
-                cypcb_export::ipc2581::export_ipc2581_now(&mut world, &library, house);
+                cypcb_export::ipc2581::export_ipc2581_now_with(&mut world, &library, house, &pour);
             // Before the file is announced, so a person reads what it could
             // not say before they read that it was written.
             for warning in handoff_warnings {

@@ -151,3 +151,49 @@ fn the_pour_still_clears_the_foreign_pad() {
         nearest - pad_top
     );
 }
+
+/// The same board as an IPC-2581 document, filled to `clearance_mm`.
+///
+/// `now` is fixed so the two documents differ only where the pour does - a
+/// timestamp would make any two runs differ and turn the comparison below into
+/// a test of the clock.
+fn handed_off(clearance_mm: f64) -> String {
+    let (mut world, library) = board();
+    let options = PourOptions {
+        clearance: Nm::from_mm(clearance_mm),
+        ..Default::default()
+    };
+    let (document, _warnings) = cypcb_export::ipc2581::export_ipc2581_with(
+        &mut world,
+        &library,
+        cypcb_export::ipc2581::HouseTolerances::default(),
+        "2026-09-16T00:00:00+0000",
+        &options,
+    );
+    document
+}
+
+/// **The handoff document poured to the default whatever house it was for.**
+/// The Gerber path has taken the fab's clearance since `ExportJob` started
+/// passing it and the viewer since 2026-09-13; this was the third reader and
+/// the only one a fabricator receives.
+#[test]
+fn the_handoff_document_pours_to_the_fabs_distance() {
+    let tight = handed_off(0.254);
+    let generous = handed_off(0.3);
+
+    // The control, and it has to come first: with the stamp fixed, the same
+    // clearance has to give the same document twice. Without it, "these two
+    // differ" says nothing about the pour.
+    assert_eq!(
+        handed_off(0.254),
+        tight,
+        "two runs at one clearance disagree, so this comparison is measuring something else"
+    );
+
+    assert_ne!(
+        tight, generous,
+        "0.254mm and 0.3mm produced the same handoff document, so the figure passed in is \
+         reaching no copper"
+    );
+}
