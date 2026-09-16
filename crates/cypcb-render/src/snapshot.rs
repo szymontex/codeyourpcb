@@ -7,6 +7,21 @@
 //! cleanly to JavaScript numbers and strings.
 
 use cypcb_drc::DrcViolation;
+
+/// The violation type this module converts, re-exported so a doc example can
+/// name it without naming its crate.
+///
+/// **A doctest links its own externs.** When it writes `use cypcb_drc::...` it
+/// resolves that crate for itself, and if the target directory holds two builds
+/// of this path dependency - which is what happens when two cargos have written
+/// into it - the type it gets is not the type `cypcb_render` was compiled
+/// against. The compiler says so in as many words: *two different versions of
+/// crate `cypcb_drc` are being used*. Two of the four scheduled gate runs
+/// between 2026-09-11 and 2026-09-16 died there, on a tree that builds and
+/// tests clean by hand, and the failure moved with the build directory rather
+/// than with the code. Going through this re-export, the example can only see
+/// the build this crate was made from.
+pub use cypcb_drc::DrcViolation as ViolationFromDrc;
 use cypcb_world::BoardWorld;
 use serde::{Deserialize, Serialize};
 
@@ -261,12 +276,11 @@ impl ViolationInfo {
     /// # Examples
     ///
     /// ```
-    /// use cypcb_drc::{DrcViolation, ViolationKind};
     /// use cypcb_core::Point;
     /// use cypcb_world::Entity;
-    /// use cypcb_render::ViolationInfo;
+    /// use cypcb_render::{ViolationFromDrc, ViolationInfo};
     ///
-    /// let v = DrcViolation::unconnected_pin(
+    /// let v = ViolationFromDrc::unconnected_pin(
     ///     Entity::from_raw(1),
     ///     "1",
     ///     "R1",
