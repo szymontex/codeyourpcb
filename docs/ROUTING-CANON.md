@@ -2006,7 +2006,11 @@ run computes, not the formula: `via_count` enters as `weights.via * via_count`,
 and a caller that sets `drc` to 2.0 prices a violation row at 2000 with nothing
 in this table changing. The multipliers that are the formula's own, and that no
 weight can move, are the 1000 on a violation row, the 500 on a crossing, the 100
-on `(1 - smoothness)` and the 50 on `(1 - layer_balance)`.
+on `(1 - smoothness)` and the 50 on `(1 - layer_balance)`. All four are taken
+back off the function by `the_composite_charges_each_term_the_multiplier_the_canon_states`,
+which moves one input at a time against a baseline it asserts is zero; until
+2026-09-16 the first two were held by `a_crossing_is_charged_twice` and the last
+two by nothing at all.
 
 The bend penalty is the distance from the nearest multiple of 45 degrees over
 22.5 degrees (`angle_penalty`). Length is normalised by the board diagonal,

@@ -1208,4 +1208,56 @@ mod tests {
             "Different-layer crossings should not be counted"
         );
     }
+
+    /// **R-12's table states four multipliers and nothing was reading two of
+    /// them.** `a_crossing_is_charged_twice` holds the 1000 and the 500 by
+    /// computing its own expected difference; the 100 on the smoothness
+    /// shortfall and the 50 on the layer-balance shortfall were stated in the
+    /// canon, written here, and read by nothing. Each one is taken by moving a
+    /// single input and asking what the composite charged for it.
+    ///
+    /// The zero baseline is asserted rather than assumed: every figure below is
+    /// a difference from it, and a baseline that quietly stopped being zero
+    /// would leave four differences that still look right.
+    #[test]
+    fn the_composite_charges_each_term_the_multiplier_the_canon_states() {
+        let weights = ScoreWeights::default();
+        let composite = |drc: u32, smoothness: f64, crossings: u32, balance: f64| {
+            compute_composite(Nm(0), 0, drc, smoothness, crossings, balance, 0.0, &weights)
+        };
+
+        let baseline = composite(0, 1.0, 0, 1.0);
+        assert_eq!(
+            baseline, 0.0,
+            "a board with no length, no vias, nothing wrong and a perfect \
+             smoothness and balance has to score zero, or the four differences \
+             below are measured against something"
+        );
+
+        let charged: &[(&str, f64, f64)] = &[
+            ("a DRC violation", composite(1, 1.0, 0, 1.0), 1000.0),
+            ("a crossing", composite(0, 1.0, 1, 1.0), 500.0),
+            (
+                "the whole smoothness shortfall",
+                composite(0, 0.0, 0, 1.0),
+                100.0,
+            ),
+            (
+                "the whole layer-balance shortfall",
+                composite(0, 1.0, 0, 0.0),
+                50.0,
+            ),
+        ];
+
+        for (what, scored, stated) in charged {
+            let charged_for_it = scored - baseline;
+            println!("composite charges {charged_for_it} for {what}");
+            assert!(
+                (charged_for_it - stated).abs() < 1e-9,
+                "R-12 says the composite charges {stated} for {what} and it charged \
+                 {charged_for_it}. Either the weight moved and the canon's table has to \
+                 move with it, or the term stopped being multiplied at all."
+            );
+        }
+    }
 }
