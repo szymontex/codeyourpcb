@@ -561,6 +561,16 @@ fn the_sharp_entries_against_every_pad_that_could_have_been_one() {
 /// flanks and a reading taken against a circle would be a reading of the wrong
 /// shape. `PadShape::Oblong` with equal sides degenerates to a circle, which is
 /// why the outline alone does not decide it.
+/// The chord the segment crosses at its own offset from the centre: the land is
+/// a circle of radius R and the entry sits `p_axis` off the axis, so the copper
+/// it can cut through is `2*sqrt(R^2 - p_axis^2)` wide. A depth means little
+/// against the radius and everything against this.
+fn chord_mm(reading: &CircularReading) -> f64 {
+    let radius = reading.radius_mm;
+    let offset = reading.p_axis_mm;
+    2.0 * (radius * radius - offset * offset).max(0.0).sqrt()
+}
+
 #[derive(Clone)]
 struct CircularReading {
     pin: String,
@@ -742,7 +752,8 @@ fn a_circular_land_reads_the_same_from_its_own_geometry() {
         }
         eprintln!(
             "  {:<8} {} R {:.3}mm  w {:.3}mm  p_axis {:.4}mm  p_far {:.4}mm  \
-             p_far/R {:.3}  depth {:.4}mm  reported {:>6}  recomputed {:>6}  gap {:>5}",
+             p_far/R {:.3}  depth {:.4}mm  depth/chord {:.4}  reported {:>6}  \
+             recomputed {:>6}  gap {:>5}",
             reading.pin,
             if reading.sharp { "SHARP" } else { "clean" },
             reading.radius_mm,
@@ -751,6 +762,9 @@ fn a_circular_land_reads_the_same_from_its_own_geometry() {
             reading.p_far_mm,
             reading.p_far_mm / reading.radius_mm,
             reading.depth_mm.unwrap_or(f64::NAN),
+            reading
+                .depth_mm
+                .map_or(f64::NAN, |depth| depth / chord_mm(reading)),
             reported,
             recomputed,
             gap
@@ -825,7 +839,39 @@ fn a_circular_land_reads_the_same_from_its_own_geometry() {
         "-",
         sharp
     );
-    eprintln!("deepest sharp entry: {deepest:.3} R");
+    // **Both denominators, because the canon quotes the other one.** R-08's
+    // section states these ratios against the chord the segment consumes, and
+    // this line printed only the share of the radius - so the four figures in
+    // that section were a division somebody did by hand and wrote down.
+    let deepest_of_its_chord = readings
+        .iter()
+        .filter(|r| r.sharp)
+        .filter_map(|r| r.depth_mm.map(|depth| depth / chord_mm(r)))
+        .fold(f64::NEG_INFINITY, f64::max);
+    eprintln!("deepest sharp entry: {deepest:.3} R, {deepest_of_its_chord:.3} of its chord");
+
+    // R-08 quotes these four ratios in prose. They are held here rather than
+    // left to the reader because the section used to state the share of the
+    // radius while calling it the share of the chord - two denominators, one
+    // sentence, and no line anywhere that would notice.
+    const CANON_SHARP_RATIOS: &[f64] = &[0.375, 0.154, 0.122, 0.111];
+    let mut printed: Vec<f64> = readings
+        .iter()
+        .filter(|r| r.sharp)
+        .filter_map(|r| {
+            r.depth_mm
+                .map(|depth| (depth / chord_mm(r) * 1000.0).round() / 1000.0)
+        })
+        .collect();
+    printed.sort_by(|a, b| b.partial_cmp(a).expect("a ratio is a number"));
+    let mut stated = CANON_SHARP_RATIOS.to_vec();
+    stated.sort_by(|a, b| b.partial_cmp(a).expect("a ratio is a number"));
+    assert_eq!(
+        printed, stated,
+        "R-08 states the share of its own chord each sharp entry consumes, and this board now \
+         reads differently. Either the geometry moved, or that sentence is quoting the other \
+         denominator again."
+    );
 
     assert!(
         compared > 0,

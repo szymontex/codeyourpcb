@@ -2475,11 +2475,12 @@ is tested as the share of its own chord the segment consumes,
 `depth / (2 * sqrt(R^2 - p_axis^2))`, with a death line of 0.5, because a
 segment that passes the deepest point of its own crossing is not clipping
 anything. **Over the 4 sharp entries among the 175, the four ratios are 0.375,
-0.154, 0.122 and 0.111**, recomputed on 2026-09-16 from the four sharp rows
-`a_circular_land_reads_the_same_from_its_own_geometry` prints, which reports a
-depth against the radius rather than against the chord - its deepest, 0.508 R,
-is this same entry divided by the other length - so the deepest of them stops at
-37 percent of its chord and nothing contradicted the reading. The threshold is a ratio rather
+0.154, 0.122 and 0.111**, read on 2026-09-16 off the `depth/chord` column
+`a_circular_land_reads_the_same_from_its_own_geometry` prints for each sharp
+row - the same line also prints the depth against the radius, where the deepest
+of them reads 0.508 R, and the two denominators are why this figure used to be
+quoted as the wrong one - so the deepest stops at 37 percent of its chord and
+nothing contradicted the reading. The threshold is a ratio rather
 than a length because a length does not carry: 0.15 mm is a third of the way
 across a 0.5 mm land and a ninth of the way across a 0.85 mm one. On these four
 the two forms agree row for row - the ratio changes no answer here and buys
