@@ -1601,6 +1601,13 @@ struct Copied {
 
 const COPIED_FIGURES: &[Copied] = &[
     Copied {
+        what: "the entry angle a land refuses below, in the unit it is kept in",
+        file: "crates/cypcb-drc/src/rules/pad_entry.rs",
+        in_code: "pub const ENTRY_ANGLE_MIN_MDEG: u32 = 45_000;",
+        in_canon: "`ENTRY_ANGLE_MIN_MDEG` is 45_000 millidegrees",
+        shared: Some("45_000"),
+    },
+    Copied {
         what: "the relief a pour cuts, which the shipped presets happen to match",
         file: "crates/cypcb-core/src/pour.rs",
         in_code: "thermal_gap: Nm::from_mm(0.254)",

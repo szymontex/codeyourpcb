@@ -1519,10 +1519,11 @@ dimensions it means, and `pad_entry` (`:842`) measures an entry angle in
 millidegrees. In all four the number exists and lives only inside the `message`
 string, where no ranking will ever see it. **Two of the four are angles now**,
 which turns this from a list into an argument: `actual` and `required` are
-typed `Nm`, and a second `Nm` field would not hold either of them. Writing
-45000 into an `Nm` prints `0.045mm`, which is not a rounding error but a false
-statement about the board, so `pad_entry` sets both fields to `None` on
-purpose. This is a missing field rather than a discarded measurement, which is
+typed `Nm`, and a second `Nm` field would not hold either of them. The threshold
+this rule refuses below is named rather than loose - `ENTRY_ANGLE_MIN_MDEG` is
+45_000 millidegrees - and writing that number into an `Nm` prints `0.045mm`,
+which is not a rounding error but a false statement about the board, so
+`pad_entry` sets both fields to `None` on purpose. This is a missing field rather than a discarded measurement, which is
 the distinction part 4 draws from the other side. `acid_trap` and `pad_entry`
 are the two rules this project wrote itself most recently and both landed here,
 which is the argument for deciding rather than leaving it.
