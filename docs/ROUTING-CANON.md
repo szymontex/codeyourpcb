@@ -1816,6 +1816,15 @@ rather than about copper or about this repository: it carries the day the
 search was made, in its own sentence or in the paragraph around it, and it is
 re-run rather than inherited when somebody wants it again.
 
+**One thing makes such a claim checkable by a reader rather than only dated: an
+artefact.** R-05 states that no public source was found with a closed form for
+return current density and names the address it opened which does not carry one.
+A reader can open that page and see the absence for themselves; with a date
+alone they can only see that somebody says they looked. The artefact is not
+always available - a search for a length that nobody publishes has nothing to
+point at - which is why it is written here as the better shape rather than as a
+condition.
+
 It cannot be settled the way a claim about the tree is settled.
 `every_path_and_name_the_canon_cites_is_in_the_tree` asks the checkout whether
 a name is there and the checkout answers; nothing can ask the world whether a
