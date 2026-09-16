@@ -1015,7 +1015,7 @@ reference net placed next to the signal via (high-speed routing guides, read
 2026-09-11).
 
 - Within 50 mil (1.27 mm) of the signal via for designs up to 5 GHz.
-- Within 20 mil (0.51 mm) above 10 GHz, and the same figure for critical
+- Within 20 mil (0.508 mm) above 10 GHz, and the same figure for critical
   signals generally.
 - A device vendor's interface design guide asks for ground stitching vias
   placed symmetrically within 200 mil (5.08 mm) centre to centre of the signal

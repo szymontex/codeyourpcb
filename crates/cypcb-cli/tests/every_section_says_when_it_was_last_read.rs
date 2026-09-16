@@ -2732,3 +2732,82 @@ fn a_rule_this_project_derived_itself_records_a_command() {
         derived.len()
     );
 }
+
+const MIL_PAIRS_FLOOR: usize = 4;
+
+/// **A figure written in both units is two claims, and one of them is
+/// arithmetic.** R-07 said "6 mil (0.15 mm)" and made its own condition weaker
+/// than the standard it reproduces, because 6 mil is 0.1524; the rules crate
+/// had already been caught with that exact rounding and repaired while the
+/// canon kept it. A second pair said "20 mil (0.51 mm)" where 20 mil is 0.508.
+///
+/// Neither is a typo a reader would catch - both look like the number they are
+/// near - so the multiplication is done here instead. An inch is 25.4 mm by
+/// definition, so there is nothing to date and nothing to source: this is the
+/// one figure in the document a check can settle on its own.
+#[test]
+fn a_figure_written_in_both_units_converts_exactly() {
+    let canon = std::fs::read_to_string(repo_root().join("docs/ROUTING-CANON.md"))
+        .expect("the canon is there");
+
+    let mut pairs = 0usize;
+    let mut wrong: Vec<String> = Vec::new();
+    let bytes: Vec<char> = canon.chars().collect();
+    let text: String = bytes.iter().collect();
+    for (at, _) in text.match_indices(" mil") {
+        // The number before ` mil`.
+        let before = &text[..at];
+        let mils: String = before
+            .chars()
+            .rev()
+            .take_while(|c| c.is_ascii_digit() || *c == '.')
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .collect();
+        let Ok(mils) = mils.parse::<f64>() else {
+            continue;
+        };
+        // `(<number> mm)` after it, allowing the plural and a space.
+        let after = &text[at..];
+        let Some(open) = after.find('(') else {
+            continue;
+        };
+        if open > 8 {
+            continue;
+        }
+        let Some(close) = after[open..].find(')') else {
+            continue;
+        };
+        let inside = &after[open + 1..open + close];
+        let Some(number) = inside.strip_suffix(" mm") else {
+            continue;
+        };
+        let Ok(stated) = number.trim().parse::<f64>() else {
+            continue;
+        };
+        pairs += 1;
+        let exact = mils * 0.0254;
+        if (stated - exact).abs() > 1e-9 {
+            wrong.push(format!(
+                "{mils} mil is {exact} mm and the canon says {stated} mm"
+            ));
+        }
+    }
+
+    eprintln!("figures written in both units: {pairs} (floor {MIL_PAIRS_FLOOR}); not converting exactly: {}", wrong.len());
+
+    assert!(
+        pairs >= MIL_PAIRS_FLOOR,
+        "this check found {pairs} figures written in both units, below the floor of \
+         {MIL_PAIRS_FLOOR}. It reads `<n> mil (<x> mm)`; a sentence that stops writing them \
+         that way takes its arithmetic out of reach, which is how both of the first two got in."
+    );
+
+    assert!(
+        wrong.is_empty(),
+        "a figure written in both units does not convert: {wrong:#?}\n\
+         \n  An inch is 25.4 mm by definition. A rounded conversion is a second threshold, and \
+         rounding down makes a rule weaker than the source it cites."
+    );
+}
