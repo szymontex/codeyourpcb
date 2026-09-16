@@ -2811,3 +2811,71 @@ fn a_figure_written_in_both_units_converts_exactly() {
          rounding down makes a rule weaker than the source it cites."
     );
 }
+
+const STANDARD_TAGGED_RULES_FLOOR: usize = 5;
+
+/// **A tag is a claim about where a rule came from, and nothing was checking
+/// those claims.** The audit of 2026-09-16 read the six rules no machine can
+/// check and found three tags wrong in that one respect: R-15 wore `[P]`, board
+/// house material, over figures out of IPC-7093, and both rules tagged `[O]` -
+/// the original article by the author of the rule - cite a publication and no
+/// person.
+///
+/// Only one of those claims is mechanical. `[R]` says the rule reproduces a
+/// standard, so the rule has to name a standard: `IPC-`, `IEEE`, `JEDEC`, `ISO`
+/// and a number. A vendor's name is lowercase as often as not and an author is
+/// a person, so neither `[P]` nor `[O]` can be held this way - which is said
+/// here so the next reader does not take the silence for approval.
+#[test]
+fn a_rule_tagged_as_a_standard_names_one() {
+    let canon = std::fs::read_to_string(repo_root().join("docs/ROUTING-CANON.md"))
+        .expect("the canon is there");
+
+    let lines: Vec<&str> = canon.lines().collect();
+    let heads: Vec<usize> = lines
+        .iter()
+        .enumerate()
+        .filter(|(_, line)| line.starts_with("### R-"))
+        .map(|(at, _)| at)
+        .collect();
+
+    let mut tagged = 0usize;
+    let mut silent: Vec<String> = Vec::new();
+    for (nth, start) in heads.iter().enumerate() {
+        let end = heads.get(nth + 1).copied().unwrap_or(lines.len());
+        let head = lines[*start];
+        if !head.contains("`[R]`") {
+            continue;
+        }
+        tagged += 1;
+        let body = lines[*start..end].join(" ");
+        let names_one = ["IPC-", "IEEE", "JEDEC", "ISO "]
+            .iter()
+            .any(|standard| body.contains(standard));
+        if !names_one {
+            silent.push(head.trim_start_matches("### ").to_string());
+        }
+    }
+
+    eprintln!(
+        "rules tagged as reproducing a standard: {tagged} (floor {STANDARD_TAGGED_RULES_FLOOR}); \
+         naming no standard: {}",
+        silent.len()
+    );
+
+    assert!(
+        silent.is_empty(),
+        "a rule says it reproduces a standard and names none: {silent:#?}\n\
+         \n  `[R]` is a claim about provenance. A rule carrying it without a standard number is \
+         either mistagged - which this file has been three times - or citing something it has \
+         not named."
+    );
+
+    assert!(
+        tagged >= STANDARD_TAGGED_RULES_FLOOR,
+        "this check found {tagged} rules tagged `[R]`, below the floor of \
+         {STANDARD_TAGGED_RULES_FLOOR}\n\
+         \n  A tag that quietly disappears takes its rule out of every check keyed to it, and \
+         the tags are the only record of where these figures came from."
+    );
+}
