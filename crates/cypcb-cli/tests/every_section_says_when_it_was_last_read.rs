@@ -1881,3 +1881,145 @@ fn the_table_of_searches_is_re_run_rather_than_read() {
         rows.len()
     );
 }
+
+/// Language variants rather than names from this tree. `Some(skew)` is cited
+/// beside `crates/cypcb-drc/src/rules/diff_pair.rs:106`, and the sentence is
+/// true: line 106 opens the call and the `Some` is on line 116, inside it. A
+/// check reading the cited line literally would fail a sentence that is right,
+/// so these four are not identifiers for this purpose.
+const NOT_A_NAME_IN_THIS_TREE: &[&str] = &["Some", "None", "Ok", "Err"];
+
+/// **The pairs this check re-reads, and why there is a floor under them.** The
+/// canon cites 42 places as `path:line` and `LINE_NUMBER_REFERENCES` counts
+/// them; until this check nothing read a single one. Five had drifted by exactly
+/// five lines while the sections holding them carried `*Verified:*` stamps of
+/// 2026-09-13 and 2026-09-14 - **a date says somebody looked, not that the
+/// number is true.** Three of those five were written `lib.rs:160` rather than
+/// with a path, so this check could not see them at all until the citations were
+/// spelled out; a short citation is not only harder to follow, it is out of
+/// reach of the thing that would have caught it. 20 of the 42 name an identifier
+/// next to the citation and are re-read here; the rest cite a place without
+/// naming what is at it.
+const LINE_NUMBER_PAIRS_FLOOR: usize = 20;
+
+/// The gap between the name and the citation that opens it: `name` (`path:line`).
+/// Kept short and parenthesis-free on purpose - a longer reach starts pairing a
+/// name with the next citation in the sentence rather than its own. A looser
+/// version of this rule produced 25 pairs and three of them were artefacts.
+const NAME_TO_CITATION_GAP: usize = 70;
+
+/// A `path:line` citation, split into the file and the first line it names.
+/// `oshpark.rs:29-30` cites a pair of lines and the first one is read.
+fn path_and_line(token: &str) -> Option<(&str, usize)> {
+    let (path, rest) = token.rsplit_once(':')?;
+    if !path.contains('/') || !path.ends_with(".rs") {
+        return None;
+    }
+    let first = rest.split('-').next()?;
+    let line: usize = first.parse().ok()?;
+    if line == 0 {
+        return None;
+    }
+    Some((path, line))
+}
+
+/// A name this tree could hold: letters, digits and underscores, at least one
+/// letter, and no dot - `0.1524` and `R-08` are not names.
+fn looks_like_a_name(token: &str) -> bool {
+    !token.is_empty()
+        && token.chars().any(|c| c.is_ascii_alphabetic())
+        && token.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+        && !NOT_A_NAME_IN_THIS_TREE.contains(&token)
+}
+
+#[test]
+fn a_line_number_beside_a_name_still_points_at_that_name() {
+    let root = repo_root();
+    let canon =
+        std::fs::read_to_string(root.join("docs/ROUTING-CANON.md")).expect("the canon is there");
+
+    let mut pairs: Vec<(String, String, usize)> = Vec::new();
+    for paragraph in canon_paragraphs(&canon) {
+        let parts: Vec<&str> = paragraph.split('`').collect();
+        // Odd indices are backticked; between two of them sits one plain run.
+        for index in (1..parts.len()).step_by(2) {
+            if !looks_like_a_name(parts[index]) {
+                continue;
+            }
+            let Some(gap) = parts.get(index + 1) else {
+                continue;
+            };
+            if gap.len() > NAME_TO_CITATION_GAP
+                || !gap.trim_end().ends_with('(')
+                || gap.matches('(').count() != 1
+                || gap.contains(')')
+            {
+                continue;
+            }
+            let Some(citation) = parts.get(index + 2) else {
+                continue;
+            };
+            // The citation has to close its own parenthesis. R-11 names three
+            // presets and then cites three lines - "`IpcClass1`, `IpcClass2` or
+            // `IpcClass3` (`...mod.rs:58`, `:60`, `:62`)" - where the nearest
+            // name before the bracket belongs to the last of them and the first
+            // citation to the first. A list of names followed by a list of
+            // places is not a pair, and reading it as one produced two hits
+            // that were both the check being wrong.
+            if !parts
+                .get(index + 3)
+                .is_some_and(|after| after.starts_with(')'))
+            {
+                continue;
+            }
+            if let Some((path, line)) = path_and_line(citation) {
+                pairs.push((path.to_string(), parts[index].to_string(), line));
+            }
+        }
+    }
+
+    let mut missing: Vec<String> = Vec::new();
+    for (path, name, line) in &pairs {
+        let Ok(source) = std::fs::read_to_string(root.join(path)) else {
+            missing.push(format!(
+                "{path}:{line} - the file the canon cites is not there"
+            ));
+            continue;
+        };
+        match source.lines().nth(line - 1) {
+            None => missing.push(format!(
+                "{path}:{line} `{name}` - the file stops at line {}",
+                source.lines().count()
+            )),
+            Some(text) if !text.contains(name.as_str()) => missing.push(format!(
+                "{path}:{line} `{name}` - that line reads: {}",
+                text.trim()
+            )),
+            Some(_) => {}
+        }
+    }
+
+    eprintln!(
+        "line numbers cited beside a name: {} (floor {LINE_NUMBER_PAIRS_FLOOR}); \
+         not on the line the canon gives: {}",
+        pairs.len(),
+        missing.len()
+    );
+
+    assert!(
+        missing.is_empty(),
+        "the canon sends a reader to a line that no longer holds the name: {missing:#?}\n\
+         \n  A line number drifts every time something above it is edited, and the section's \
+         own *Verified:* stamp does not catch it - four of these were five lines stale under \
+         two stamps read after the shift. Re-read the citation, or cite the name without a line."
+    );
+
+    assert!(
+        pairs.len() >= LINE_NUMBER_PAIRS_FLOOR,
+        "this check now re-reads {} citations, below the floor of {LINE_NUMBER_PAIRS_FLOOR}\n\
+         \n  Pairs leave this scan when a citation loses its name or a name loses its full \
+         path, and both read as tidying. If a citation really did go, lower the floor in the \
+         same commit and say which one.",
+        pairs.len()
+    );
+}

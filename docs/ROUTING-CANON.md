@@ -414,7 +414,7 @@ where 45 belonged.
 
 In this repo: the angle is enforced and the teardrop is not. `PadEntryRule`
 is in the registry
-(`crates/cypcb-drc/src/lib.rs:160`) and reports through `entry_angle`
+(`crates/cypcb-drc/src/lib.rs:165`) and reports through `entry_angle`
 (`crates/cypcb-drc/src/rules/pad_entry.rs:211`) and `entry_angle_placed`
 (`:257`), the second of which is the change of frame and nothing else: it
 carries the trace's two points into a placed and rotated pad's own frame rather
@@ -1207,10 +1207,10 @@ this page is a counter-example to that sentence on the same page.
 
 | rule | what enforces it |
 |---|---|
-| R-01 width against current | `TraceCurrentRule` (`lib.rs:143`), silent on a net that declares no `current` |
-| R-03 acute angles | `AcuteAngleRule` (`lib.rs:197`), reporting `ViolationKind::AcidTrap` |
+| R-01 width against current | `TraceCurrentRule` (`crates/cypcb-drc/src/lib.rs:148`), silent on a net that declares no `current` |
+| R-03 acute angles | `AcuteAngleRule` (`crates/cypcb-drc/src/lib.rs:202`), reporting `ViolationKind::AcidTrap` |
 | R-07 annular ring and hole spacing | six rules - `AnnularRingRule`, `HoleToHoleRule`, `ViaDiameterRule`, `ViaDrillRule`, `PadLandRule`, `DrillAspectRatioRule` |
-| R-08 trace entry into a land | `PadEntryRule` (`lib.rs:160`), reporting `ViolationKind::PadEntry`; the angle only. The teardrop half is not merely unwritten - the copper it would check is synthesised in the Gerber writer and is not in the board the checker walks |
+| R-08 trace entry into a land | `PadEntryRule` (`crates/cypcb-drc/src/lib.rs:165`), reporting `ViolationKind::PadEntry`; the angle only. The teardrop half is not merely unwritten - the copper it would check is synthesised in the Gerber writer and is not in the board the checker walks |
 | R-19 the flat clearance minimum | `ClearanceRule`, first in the registry, firing more than the rest together |
 
 **Bucket 2 - checkable today, nobody wrote the check. Ten.** Checkable is
@@ -1570,9 +1570,9 @@ Source: JLCPCB capabilities page, read 2026-09-12 - minimum track width and
 spacing at 1 oz copper is 0.10 / 0.10 mm (4 / 4 mil) for one and two layers and
 0.09 / 0.09 mm (3.5 / 3.5 mil) multilayer, with 3 mil accepted only inside BGA
 fan-outs. The house figures in this project carry their provenance unevenly, and
-the difference is worth stating rather than smoothing: `pcbway.rs:27` records the
+the difference is worth stating rather than smoothing: `crates/cypcb-rules/src/presets/pcbway.rs:27` records the
 day its page was read, 2026-08-13; the three JLCPCB blocks name the page and no
-date; `oshpark.rs:29-30` says "published" and names nothing; and the three
+date; `crates/cypcb-rules/src/presets/oshpark.rs:29-30` says "published" and names nothing; and the three
 `IpcClass` presets say outright that their ladder is this project's own. A figure
 with a URL and no date is not sourced, it is attributed - the page can change
 under it and nothing in the file would notice.
@@ -1622,7 +1622,7 @@ of copper on one net is outside R-19's scope by definition, and any rule that
 needs to see one has to measure geometry rather than clearance.**
 
 **In this repo:** enforced. `ClearanceRule` is the first entry in the registry
-(`crates/cypcb-drc/src/lib.rs:129`). Measured on one board rather than claimed
+(`crates/cypcb-drc/src/lib.rs:134`). Measured on one board rather than claimed
 for all six: on `shift_driver` with `stop_at_own_copper` on, **27 of 33 rows**
 carry the `Clearance` kind, and on this board that kind is this rule - the
 fixture declares no zone, and `ZoneOverlapRule` is the only other rule that
