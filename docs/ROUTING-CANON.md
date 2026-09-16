@@ -1369,7 +1369,10 @@ bucket 2 from bucket 3 in practice, not from principle.
 Source: this project, which is what `[S]` says, with one dated exception. The
 grid arithmetic and both function readings are code in this repository. The
 measurement in part 1 - 238 violations in 127.8 s at half a clearance against
-124 in 9.7 s at track pitch, same board, both fully routed - is the comment
+124 in 9.7 s at track pitch, same board, both fully routed - **is one run and
+its times belong to the machine that made it**, which is why nothing asserts
+them: a violation count can be reproduced and a duration cannot. It is the
+comment
 `a0ee08f` left at `crates/cypcb-autoroute/src/lib.rs:380` on 2026-08-05 when it
 made the grid a track pitch. The rule in part 4 is this canon's own and landed
 with R-16 and R-18 in `643346d` on 2026-09-11. The exception is part 3, a search
