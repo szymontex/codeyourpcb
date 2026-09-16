@@ -2113,8 +2113,10 @@ measure were searched for on 2026-09-14 by the phrase a reader of this canon
 would write, and set beside the name the code uses. One command, one scope -
 `grep -ril "<term>" --include=*.rs crates/` over the tracked `.rs` files in the
 crates, tests included, because the question is whether this project measures
-the quantity and a test measures it too. `git ls-files crates | grep -c '\.rs$'`
-gives 552:
+the quantity and a test measures it too. **The count of those files is
+deliberately not stated here**: it moved the first time somebody added a test
+file, and a figure that changes whenever anybody adds a file is a tripwire on
+unrelated work rather than provenance for this sentence:
 
 | the phrase a reader would search | files | the name the code uses | files |
 |---|---|---|---|
