@@ -321,11 +321,19 @@ IPC-6012E minimum annular ring: 0.001969 in (0.050 mm) external, 0.000975 in
 0.0045 in at tangency for a single lamination, 0.006 in for class 3; multiple
 laminations take 0.006 in on the first cycle and 0.007 in after.
 
-Hole to hole, edge to edge: not below 6 mil (0.15 mm), preferably 8 mil.
+Hole to hole, edge to edge: not below 6 mil (0.1524 mm), preferably 8 mil.
 IPC-2221 section 9.2.4, section 9.2.7 in revision B.
 
 Conditions: `outer_diameter >= drill + 2 * min_annular_ring` for every via, and
-edge-to-edge distance between any two holes at least 0.15 mm.
+edge-to-edge distance between any two holes at least 0.1524 mm. **Both figures
+above said 0.15 mm until 2026-09-16**, which is 6 mil rounded down and therefore
+a condition weaker than the source it cites - the same rounding the rules crate
+had already been caught with and repaired, where `crates/cypcb-rules/src/presets/oshpark.rs` now carries
+`min_clearance: Nm::from_mm(0.1524)` under a comment saying the earlier 0.15
+disagreed with the source beside it. **The minima above are quoted without a
+class**, and the standard is classed: the class enters this project through a
+preset rather than through this rule, so a reader of the condition alone does
+not know which of the three it is.
 
 Sources: summitinterconnect land size article; allpcb via-to-via spacing guide;
 Altium "Vias 101". All read 2026-09-11.
