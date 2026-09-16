@@ -38,6 +38,12 @@ const DIMENSION_LABELS: &[&str] = &["Pitch:", "Pad:", "Row span:", "Body:"];
 /// directory shrunk. Thirteen carry a block today, across three files.
 const BLOCKS_FLOOR: usize = 13;
 
+/// Constructors whose doc comment is a sentence rather than a block, and states
+/// a figure in it anyway. The four mounting holes each say their drill in prose
+/// - "M2 mounting hole, 2.2mm drill." - and a reader picking a screw size reads
+/// that sentence, not the call under it.
+const SENTENCES_FLOOR: usize = 4;
+
 fn footprint_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("src/footprint")
 }
@@ -107,6 +113,8 @@ fn a_footprint_block_states_the_numbers_it_is_built_with() {
 
     let mut blocks = 0usize;
     let mut figures = 0usize;
+    let mut sentences = 0usize;
+    let mut in_sentences = 0usize;
     let mut missing: Vec<String> = Vec::new();
 
     for (file, source) in &sources {
@@ -121,8 +129,10 @@ fn a_footprint_block_states_the_numbers_it_is_built_with() {
                 .next()
                 .unwrap_or(line);
 
-            // The doc comment immediately above, and only the four labels.
+            // The doc comment immediately above: the four labels, and any
+            // figure the prose states when there is no block at all.
             let mut stated: Vec<(bool, i64)> = Vec::new();
+            let mut in_prose: Vec<i64> = Vec::new();
             for above in lines[..index].iter().rev() {
                 let above = above.trim();
                 if above.starts_with("///") {
@@ -132,6 +142,8 @@ fn a_footprint_block_states_the_numbers_it_is_built_with() {
                             let halved = rest.starts_with("Row span:");
                             stated.extend(millimetres(rest).into_iter().map(|mm| (halved, mm)));
                         }
+                    } else {
+                        in_prose.extend(millimetres(text));
                     }
                     continue;
                 }
@@ -140,11 +152,9 @@ fn a_footprint_block_states_the_numbers_it_is_built_with() {
                 }
                 break;
             }
-            if stated.is_empty() {
+            if stated.is_empty() && in_prose.is_empty() {
                 continue;
             }
-            blocks += 1;
-            figures += stated.len();
 
             // The constructor's own body: to the first line that closes it.
             let mut body = String::new();
@@ -157,6 +167,34 @@ fn a_footprint_block_states_the_numbers_it_is_built_with() {
             }
 
             let available: BTreeSet<i64> = built_with(&body).into_iter().collect();
+
+            if stated.is_empty() {
+                // A body that builds no figure at all is not a part being
+                // described - `mirrored_to_bottom` explains the flip with "a
+                // pad at +1mm ends up at -1mm", which is an illustration and
+                // not a dimension anybody could build with.
+                if available.is_empty() {
+                    continue;
+                }
+                // **A sentence carrying a figure is a block with no labels.**
+                // Nothing halves here: prose states what the call builds, or it
+                // is describing a different part.
+                sentences += 1;
+                in_sentences += in_prose.len();
+                for value in &in_prose {
+                    if !available.contains(value) {
+                        missing.push(format!(
+                            "{file}: the sentence above {what} states {} and the call below it \
+                             builds with no such figure",
+                            millimetres_of(*value)
+                        ));
+                    }
+                }
+                continue;
+            }
+
+            blocks += 1;
+            figures += stated.len();
             for (halved, value) in &stated {
                 // A row span is stated whole and built from its half.
                 let found =
@@ -174,8 +212,16 @@ fn a_footprint_block_states_the_numbers_it_is_built_with() {
 
     eprintln!(
         "footprint constructors carrying a dimension block: {blocks}; figures in those blocks: \
-         {figures}; not passed by the call below: {}",
+         {figures}; stating a figure in prose instead: {sentences} carrying {in_sentences}; \
+         not passed by the call below: {}",
         missing.len()
+    );
+
+    assert!(
+        sentences >= SENTENCES_FLOOR,
+        "this check read {sentences} constructors stating a figure in prose, below the floor of \
+         {SENTENCES_FLOOR}. A sentence loses its figure quietly - the word stays and the number \
+         goes - so if one really was rewritten, lower the floor in the same commit."
     );
 
     assert!(
