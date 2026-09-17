@@ -2306,7 +2306,12 @@ fn parse_layer(layer_str: &str) -> Result<Layer, String> {
             let num: u8 = num_str
                 .parse()
                 .map_err(|e| format!("Invalid inner layer: {}", e))?;
-            Ok(Layer::Inner(num.saturating_sub(1)))
+            // `Inner0` is a name nothing writes, and saturating the subtraction
+            // read it as the first inner layer instead of refusing it. The
+            // KiCad reader has always refused `In0.Cu` for the same reason.
+            num.checked_sub(1)
+                .map(Layer::Inner)
+                .ok_or_else(|| "Inner layers count from one: Inner0 is not a layer".to_string())
         }
         _ => Err(format!("Unknown layer: {}", layer_str)),
     }
@@ -2315,6 +2320,42 @@ fn parse_layer(layer_str: &str) -> Result<Layer, String> {
 #[cfg(all(test, feature = "native"))]
 mod tests {
     use super::*;
+
+    /// A layer written out and read back is the layer it started on.
+    ///
+    /// `layer_name` writes `Layer::Inner(0)` as `Inner1` and `parse_layer`
+    /// reads it back, and the two counts meet here: the enum from zero, the
+    /// name from one. The KiCad reader's prose records what the other
+    /// direction cost when it was wrong - every imported inner trace one layer
+    /// deeper than the file said, exported under the next layer's name.
+    #[test]
+    fn a_layer_written_out_reads_back_as_the_layer_it_was() {
+        let mut checked = 0;
+        for layer in [Layer::TopCopper, Layer::BottomCopper]
+            .into_iter()
+            .chain((0..30u8).map(Layer::Inner))
+        {
+            let written = layer_name(layer);
+            assert_eq!(
+                parse_layer(&written),
+                Ok(layer),
+                "{written} did not read back as the layer that wrote it"
+            );
+            checked += 1;
+        }
+        assert_eq!(
+            checked, 32,
+            "the round trip covered {checked} layers, not 32"
+        );
+
+        // The debug spelling arrives from other callers and is already
+        // zero-based, so it is not the same string as the name.
+        assert_eq!(parse_layer("Inner(0)"), Ok(Layer::Inner(0)));
+
+        // A name nothing writes is refused rather than rounded into the first
+        // inner layer, which is what the KiCad reader does with `In0.Cu`.
+        assert!(parse_layer("Inner0").is_err());
+    }
 
     /// A board that named a fab was still checked and routed against JLCPCB,
     /// because five places in this file reached for that preset by name.
