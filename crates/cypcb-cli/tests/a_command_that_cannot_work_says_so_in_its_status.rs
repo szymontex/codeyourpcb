@@ -30,6 +30,13 @@ const READS_A_FILE: &[(&str, &str)] = &[
     ("from-dxf", "broken.dxf"),
 ];
 
+/// Subcommands run below in a shape of their own rather than as `<command>
+/// <file>`, with what stands in for the bad input.
+const RUN_ANOTHER_WAY: &[(&str, &str)] = &[(
+    "library",
+    "takes a subcommand, and the directory an import reads is the thing that can be missing",
+)];
+
 /// Subcommands this does not run, and why.
 const NOT_RUN: &[(&str, &str)] = &[
     (
@@ -37,10 +44,6 @@ const NOT_RUN: &[(&str, &str)] = &[
         "waits for the file to change and never returns on its own - it is driven by \
          `a_saved_design_is_checked_again`, which saves a board and reads what the \
          watcher printed",
-    ),
-    (
-        "library",
-        "reads the footprint libraries installed on the machine rather than a file named here",
     ),
     ("help", "is the one command whose whole job is to succeed"),
 ];
@@ -83,6 +86,7 @@ fn a_command_that_cannot_work_says_so_in_its_status() {
     );
     for name in &names {
         let known = READS_A_FILE.iter().any(|(command, _)| command == name)
+            || RUN_ANOTHER_WAY.iter().any(|(command, _)| command == name)
             || NOT_RUN.iter().any(|(command, _)| command == name);
         assert!(
             known,
@@ -125,6 +129,21 @@ fn a_command_that_cannot_work_says_so_in_its_status() {
             if !said.contains(input) {
                 unnamed.push(format!("{command} on {what} never said {input}"));
             }
+        }
+    }
+
+    // `library` takes a subcommand rather than a file, and the directory it
+    // imports from is the thing that can be missing. Its excuse here used to
+    // say it reads the machine's libraries; it reads an index, and an import
+    // of a directory that is not there is the same question as the runs above.
+    examined += 1;
+    let run = run_in(&work, &["library", "import", "no-such-directory"]);
+    if run.status.success() {
+        quiet_successes.push("library import of a directory that is not there exited 0".into());
+    } else {
+        let said = String::from_utf8_lossy(&run.stderr);
+        if !said.contains("no-such-directory") {
+            unnamed.push("library import never said no-such-directory".into());
         }
     }
 

@@ -24,11 +24,15 @@ const NOT_RUN_BY_THE_GATE: &[(&str, &str)] = &[
     ("quality-gate.sh", "is the gate"),
     (
         "scheduled-gate.sh",
-        "runs the gate on a timer, so the gate running it would be a loop",
+        "runs the gate on a timer, so the gate running it would be a loop - what the gate \
+         does run is `scheduled-gate-selftest.sh`, which exercises the runner without \
+         starting one",
     ),
     (
         "setup-dev.sh",
-        "installs a developer's toolchain, which a gate must not do to the machine it runs on",
+        "installs a developer's toolchain, which a gate must not do to the machine it runs \
+         on - it is read rather than run, by the viewer case that asks it to name every \
+         tool the gate and the wasm build check for",
     ),
 ];
 
