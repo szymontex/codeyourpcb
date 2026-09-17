@@ -18,17 +18,10 @@ use std::process::Command;
 const PROMISES_FLOOR: usize = 5;
 
 /// A promise this case does not run, and why.
-const NOT_RUN: &[(&str, &str)] = &[
-    (
-        "library.rs",
-        "indexes the footprint libraries installed on the machine, which a \
-         check cannot assume are there",
-    ),
-    (
-        "route.rs",
-        "is the routing timeout, a number rather than a file",
-    ),
-];
+const NOT_RUN: &[(&str, &str)] = &[(
+    "route.rs",
+    "is the routing timeout, a number rather than a file",
+)];
 
 fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -204,6 +197,28 @@ fn a_default_the_help_promises_is_where_the_file_lands() {
             .unwrap_or_default()
     );
 
+    // library: the index named `cypcb-library.db` in the directory the command
+    // is run from. The excuse this replaced said the command reads the
+    // libraries installed on the machine - it reads an index, and makes one
+    // where the help says when there is none.
+    let indexed = root.join("target/tmp-defaults-library");
+    let _ = std::fs::remove_dir_all(&indexed);
+    std::fs::create_dir_all(&indexed).expect("a working directory");
+    let run = run_in(&indexed, &["library", "list"]);
+    assert!(
+        run.status.success(),
+        "library refused an empty index: {}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    assert!(
+        indexed.join("cypcb-library.db").is_file(),
+        "library promises cypcb-library.db in this directory and it holds {:?}",
+        std::fs::read_dir(&indexed)
+            .map(|entries| entries.flatten().map(|e| e.file_name()).collect::<Vec<_>>())
+            .unwrap_or_default()
+    );
+
+    let _ = std::fs::remove_dir_all(&indexed);
     let _ = std::fs::remove_dir_all(&drawn);
     let _ = std::fs::remove_dir_all(&exported);
     let _ = std::fs::remove_dir_all(&work);
