@@ -20,11 +20,6 @@ const PROMISES_FLOOR: usize = 5;
 /// A promise this case does not run, and why.
 const NOT_RUN: &[(&str, &str)] = &[
     (
-        "from_dxf.rs",
-        "needs a drawing rather than a board, and the DXF fixtures live with \
-         the importer's own cases",
-    ),
-    (
         "library.rs",
         "indexes the footprint libraries installed on the machine, which a \
          check cannot assume are there",
@@ -66,6 +61,23 @@ fn files_promising_a_default() -> Vec<String> {
     }
     found.sort();
     found
+}
+
+/// A drawing holding one closed rectangle, in millimetres.
+///
+/// The importer's own cases build richer ones; this is the smallest drawing
+/// that gives `from-dxf` an outline to take, because the question here is
+/// where the file lands rather than what is in it.
+fn rectangle_drawing(at: &Path) {
+    let mut entities = String::from("0\nLWPOLYLINE\n8\nOUTLINE\n90\n4\n70\n1\n");
+    for (x, y) in [(0.0, 0.0), (40.0, 0.0), (40.0, 30.0), (0.0, 30.0)] {
+        entities.push_str(&format!("10\n{x}\n20\n{y}\n"));
+    }
+    let text = format!(
+        "0\nSECTION\n2\nHEADER\n9\n$ACADVER\n1\nAC1009\n9\n$INSUNITS\n70\n4\n0\nENDSEC\n\
+         0\nSECTION\n2\nENTITIES\n{entities}0\nENDSEC\n0\nEOF\n"
+    );
+    std::fs::write(at, text).expect("the drawing is written");
 }
 
 fn run_in(dir: &Path, args: &[&str]) -> std::process::Output {
@@ -172,6 +184,27 @@ fn a_default_the_help_promises_is_where_the_file_lands() {
             .unwrap_or_default()
     );
 
+    // from-dxf: the drawing with a .cypcb suffix. A drawing rather than a
+    // board, which is what kept this one on the excused list.
+    let drawn = root.join("target/tmp-defaults-dxf");
+    let _ = std::fs::remove_dir_all(&drawn);
+    std::fs::create_dir_all(&drawn).expect("a working directory");
+    rectangle_drawing(&drawn.join("case.dxf"));
+    let run = run_in(&drawn, &["from-dxf", "case.dxf"]);
+    assert!(
+        run.status.success(),
+        "from-dxf refused the drawing: {}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    assert!(
+        drawn.join("case.cypcb").is_file(),
+        "from-dxf promises the drawing with a .cypcb suffix and wrote {:?}",
+        std::fs::read_dir(&drawn)
+            .map(|entries| entries.flatten().map(|e| e.file_name()).collect::<Vec<_>>())
+            .unwrap_or_default()
+    );
+
+    let _ = std::fs::remove_dir_all(&drawn);
     let _ = std::fs::remove_dir_all(&exported);
     let _ = std::fs::remove_dir_all(&work);
     let _ = std::fs::remove_dir_all(&back);
