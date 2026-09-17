@@ -128,3 +128,70 @@ fn the_help_promises_the_folder_the_export_writes_to() {
         broken.join("\n  ")
     );
 }
+
+/// The plot flags promise one file per copper layer, so a four-layer board
+/// gets four.
+///
+/// `examples/blink.cypcb` has two copper layers, and a plotter that only ever
+/// drew the outer pair would satisfy every check written against it. The
+/// count comes from the board rather than from this file: the example states
+/// `layers 4`, and the exporter has to agree with what the design declares.
+#[test]
+fn one_file_per_copper_layer_is_one_per_layer_the_board_declares() {
+    let root = repo_root();
+    let source = std::fs::read_to_string(root.join("examples/four-layer.cypcb"))
+        .expect("the four-layer example is there");
+    let declared: usize = source
+        .lines()
+        .find_map(|line| line.trim().strip_prefix("layers "))
+        .and_then(|count| count.trim().parse().ok())
+        .expect("the example declares a layer count");
+    assert!(
+        declared > 2,
+        "a board with {declared} copper layers cannot show that the inner ones are drawn"
+    );
+
+    for flag in ["--svg", "--dxf", "--pdf"] {
+        let out = root.join(format!("target/tmp-layers{}", flag.replace('-', "_")));
+        let _ = std::fs::remove_dir_all(&out);
+
+        let run = Command::new(env!("CARGO_BIN_EXE_cypcb"))
+            .current_dir(&root)
+            .args([
+                "export",
+                "examples/four-layer.cypcb",
+                "--output",
+                out.to_str().expect("a path this test made"),
+                flag,
+            ])
+            .output()
+            .expect("the binary runs");
+        assert!(
+            run.status.success(),
+            "{flag} did not export: {}",
+            String::from_utf8_lossy(&run.stderr)
+        );
+
+        let mut drawn: Vec<String> = std::fs::read_dir(out.join("plot"))
+            .expect("the plot folder is there")
+            .flatten()
+            .map(|entry| entry.file_name().to_string_lossy().to_string())
+            .collect();
+        drawn.sort();
+
+        assert_eq!(
+            drawn.len(),
+            declared,
+            "{flag} promises one file per copper layer, the board declares {declared}, \
+             and it wrote {drawn:?}"
+        );
+        for layer in ["F_Cu", "In1_Cu", "In2_Cu", "B_Cu"] {
+            assert!(
+                drawn.iter().any(|name| name.contains(layer)),
+                "{flag} drew {drawn:?}, with nothing for {layer}"
+            );
+        }
+
+        let _ = std::fs::remove_dir_all(&out);
+    }
+}
