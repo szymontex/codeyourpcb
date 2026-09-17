@@ -18,10 +18,11 @@ use std::process::Command;
 const PROMISES_FLOOR: usize = 5;
 
 /// A promise this case does not run, and why.
-const NOT_RUN: &[(&str, &str)] = &[(
-    "route.rs",
-    "is the routing timeout, a number rather than a file",
-)];
+///
+/// Empty, and kept: the list is where a promise goes when running it is not
+/// possible, and a reader should see that none is in that position rather than
+/// having to notice the absence of a list.
+const NOT_RUN: &[(&str, &str)] = &[];
 
 fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -71,6 +72,54 @@ fn rectangle_drawing(at: &Path) {
          0\nSECTION\n2\nENTITIES\n{entities}0\nENDSEC\n0\nEOF\n"
     );
     std::fs::write(at, text).expect("the drawing is written");
+}
+
+/// The figure a help line promises as a default, for a flag that takes a
+/// number rather than a file.
+///
+/// `route`'s timeout is the one promise here that no run can show: it is a
+/// number handed to a program this repository does not start. What can be
+/// held is that the sentence and the value agree, which is the half that
+/// drifts - a default changed in the attribute and left standing in the prose.
+fn promised_and_declared(file: &str, flag: &str) -> (String, String) {
+    let text =
+        std::fs::read_to_string(repo_root().join("crates/cypcb-cli/src/commands").join(file))
+            .expect("the command is there");
+    let lines: Vec<&str> = text.lines().collect();
+    let field = flag.trim_start_matches('-').replace('-', "_");
+
+    let declaration = lines
+        .iter()
+        .position(|line| line.trim().starts_with(&format!("pub {field}:")))
+        .unwrap_or_else(|| panic!("{file} declares no {flag}"));
+
+    let promised = lines[..declaration]
+        .iter()
+        .rev()
+        .find_map(|line| {
+            let trimmed = line.trim();
+            let doc = trimmed.strip_prefix("///")?;
+            let after = doc.split("(default:").nth(1)?;
+            Some(
+                after
+                    .trim_end_matches(')')
+                    .trim()
+                    .trim_end_matches(')')
+                    .to_string(),
+            )
+        })
+        .unwrap_or_else(|| panic!("{flag} promises no default"));
+
+    let declared = lines[..declaration]
+        .iter()
+        .rev()
+        .find_map(|line| {
+            let after = line.split("default_value = \"").nth(1)?;
+            Some(after.split('"').next()?.to_string())
+        })
+        .unwrap_or_else(|| panic!("{flag} declares no default value"));
+
+    (promised, declared)
 }
 
 fn run_in(dir: &Path, args: &[&str]) -> std::process::Output {
@@ -195,6 +244,13 @@ fn a_default_the_help_promises_is_where_the_file_lands() {
         std::fs::read_dir(&drawn)
             .map(|entries| entries.flatten().map(|e| e.file_name()).collect::<Vec<_>>())
             .unwrap_or_default()
+    );
+
+    // route's timeout: the one promise no run can show, held where it drifts.
+    let (promised, declared) = promised_and_declared("route.rs", "--timeout");
+    assert_eq!(
+        promised, declared,
+        "route's help promises a timeout of {promised} and the flag is declared with {declared}"
     );
 
     // library: the index named `cypcb-library.db` in the directory the command
