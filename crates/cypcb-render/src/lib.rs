@@ -2321,6 +2321,34 @@ fn parse_layer(layer_str: &str) -> Result<Layer, String> {
 mod tests {
     use super::*;
 
+    /// The routes file writes the layer with `{:?}`, so the debug spelling is
+    /// a wire format too.
+    ///
+    /// `cypcb route` writes `segment {net} {layer:?} ...` and the viewer reads
+    /// the file back through `load_routes`. That is a second pair on the same
+    /// parser: `Inner(0)` counts from zero where `Inner1` counts from one, and
+    /// the arm that reads each has to keep them apart.
+    #[test]
+    fn the_debug_spelling_the_routes_file_writes_reads_back_too() {
+        let mut checked = 0;
+        for layer in [Layer::TopCopper, Layer::BottomCopper]
+            .into_iter()
+            .chain((0..30u8).map(Layer::Inner))
+        {
+            let written = format!("{layer:?}");
+            assert_eq!(
+                parse_layer(&written),
+                Ok(layer),
+                "{written} is what the routes file holds and it did not read back"
+            );
+            checked += 1;
+        }
+        assert_eq!(
+            checked, 32,
+            "the round trip covered {checked} layers, not 32"
+        );
+    }
+
     /// A layer written out and read back is the layer it started on.
     ///
     /// `layer_name` writes `Layer::Inner(0)` as `Inner1` and `parse_layer`
