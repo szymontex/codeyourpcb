@@ -90,3 +90,52 @@ fn the_layer_a_routes_file_names_is_the_layer_the_snapshot_shows() {
         );
     }
 }
+
+/// A via names two layers, and the same file writes both of them.
+///
+/// `cypcb route` writes `via {net} {x} {y} {drill} {start:?} {end:?}` - the
+/// same debug spelling the segments use - and `load_routes` puts each through
+/// the same parser. A blind via is where it matters: one end on an inner
+/// layer is the case a zero-based reading moves.
+#[test]
+fn the_two_layers_a_via_names_both_arrive() {
+    let mut engine = PcbEngine::new();
+    let errors = engine.load_source(&example("four-layer.cypcb"));
+    assert!(
+        errors == "[]" || errors.is_empty(),
+        "the example did not load: {errors}"
+    );
+
+    let at_x = |engine: &mut PcbEngine, x: i64| -> Vec<(String, String)> {
+        engine
+            .build_snapshot()
+            .vias
+            .iter()
+            .filter(|via| (via.x - x as f64).abs() < 1.0)
+            .map(|via| (via.start_layer.clone(), via.end_layer.clone()))
+            .collect()
+    };
+
+    // The control: no via of the example's own stands where this one will.
+    let before = at_x(&mut engine, 5_000_000);
+    assert!(
+        before.is_empty(),
+        "the example already has a via there: {before:?}"
+    );
+
+    let errors = engine.load_routes(
+        "version 1
+via 1 5000000 1000000 300000 TopCopper Inner(1)
+",
+    );
+    assert!(
+        errors == "[]" || errors.is_empty(),
+        "the via line the CLI writes did not load: {errors}"
+    );
+
+    assert_eq!(
+        at_x(&mut engine, 5_000_000),
+        vec![("Top".to_string(), "Inner2".to_string())],
+        "the file said TopCopper to Inner(1), which is Top to Inner2 on the screen"
+    );
+}
