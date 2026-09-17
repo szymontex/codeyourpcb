@@ -73,8 +73,8 @@ pub struct ExportCommand {
     /// Before anything is soldered, a fabricator probes the board and checks
     /// that every point which should be connected is, and that no two which
     /// should not be are. The tester needs the design's own answer to compare
-    /// against, and this file carries it - one 80-column record per pad and
-    /// via, written into `netlist/` beside the Gerbers.
+    /// against, and this file carries it - one fixed-column record per pad and
+    /// via, each field at the column the 80-column layout gives it, written into `netlist/` beside the Gerbers.
     #[arg(long)]
     ipc356: bool,
 
