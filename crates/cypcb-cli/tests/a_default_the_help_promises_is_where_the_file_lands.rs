@@ -20,11 +20,6 @@ const PROMISES_FLOOR: usize = 5;
 /// A promise this case does not run, and why.
 const NOT_RUN: &[(&str, &str)] = &[
     (
-        "export.rs",
-        "writes a directory of files into the working directory, which a test \
-         must not leave behind in a checkout",
-    ),
-    (
         "from_dxf.rs",
         "needs a drawing rather than a board, and the DXF fixtures live with \
          the importer's own cases",
@@ -149,6 +144,35 @@ fn a_default_the_help_promises_is_where_the_file_lands() {
             .unwrap_or_default()
     );
 
+    // export: a folder named `output` beside the run, which is the default a
+    // person meets on their first command. It is run in a directory of its
+    // own, which is what the excuse this file used to carry was about.
+    let exported = root.join("target/tmp-defaults-export");
+    let _ = std::fs::remove_dir_all(&exported);
+    std::fs::create_dir_all(&exported).expect("a working directory");
+    std::fs::copy(
+        root.join("examples/blink.cypcb"),
+        exported.join("board.cypcb"),
+    )
+    .expect("the example copies");
+    let run = run_in(&exported, &["export", "board.cypcb"]);
+    assert!(
+        run.status.success(),
+        "export refused the board: {}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    let written = std::fs::read_dir(exported.join("output"))
+        .map(|entries| entries.flatten().count())
+        .unwrap_or(0);
+    assert!(
+        written > 0,
+        "export promises ./output and the working directory holds {:?}",
+        std::fs::read_dir(&exported)
+            .map(|entries| entries.flatten().map(|e| e.file_name()).collect::<Vec<_>>())
+            .unwrap_or_default()
+    );
+
+    let _ = std::fs::remove_dir_all(&exported);
     let _ = std::fs::remove_dir_all(&work);
     let _ = std::fs::remove_dir_all(&back);
 }
