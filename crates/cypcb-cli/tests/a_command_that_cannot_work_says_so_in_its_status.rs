@@ -32,21 +32,25 @@ const READS_A_FILE: &[(&str, &str)] = &[
 
 /// Subcommands run below in a shape of their own rather than as `<command>
 /// <file>`, with what stands in for the bad input.
-const RUN_ANOTHER_WAY: &[(&str, &str)] = &[(
-    "library",
-    "takes a subcommand, and the directory an import reads is the thing that can be missing",
-)];
+const RUN_ANOTHER_WAY: &[(&str, &str)] = &[
+    (
+        "library",
+        "takes a subcommand, and the directory an import reads is the thing that can be missing",
+    ),
+    (
+        "help",
+        "is the one command whose whole job is to succeed, so what is asked of it is that it \
+         does - and that a help request for a subcommand nobody wrote is refused",
+    ),
+];
 
 /// Subcommands this does not run, and why.
-const NOT_RUN: &[(&str, &str)] = &[
-    (
-        "watch",
-        "waits for the file to change and never returns on its own - it is driven by \
+const NOT_RUN: &[(&str, &str)] = &[(
+    "watch",
+    "waits for the file to change and never returns on its own - it is driven by \
          `a_saved_design_is_checked_again`, which saves a board and reads what the \
          watcher printed",
-    ),
-    ("help", "is the one command whose whole job is to succeed"),
-];
+)];
 
 fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -144,6 +148,31 @@ fn a_command_that_cannot_work_says_so_in_its_status() {
         let said = String::from_utf8_lossy(&run.stderr);
         if !said.contains("no-such-directory") {
             unnamed.push("library import never said no-such-directory".into());
+        }
+    }
+
+    // `help` is the one command asked to succeed. The rest of this block is the
+    // other half of that: a word the CLI does not know is refused, whether it
+    // arrives as a subcommand, as a request for help about one, or as a flag.
+    examined += 1;
+    let helped = run_in(&work, &["help"]);
+    assert!(
+        helped.status.success(),
+        "`cypcb help` is the one command whose whole job is to succeed and it did not"
+    );
+
+    for unknown in [
+        vec!["help", "nonsense"],
+        vec!["nonsense"],
+        vec!["--nonsense"],
+    ] {
+        examined += 1;
+        let run = run_in(&work, &unknown);
+        let said = String::from_utf8_lossy(&run.stderr);
+        if run.status.success() {
+            quiet_successes.push(format!("{unknown:?} exited 0"));
+        } else if !said.contains("nonsense") {
+            unnamed.push(format!("{unknown:?} was refused without naming the word"));
         }
     }
 
