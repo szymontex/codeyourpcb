@@ -37,7 +37,17 @@ pub struct RouteCommand {
     #[arg(value_name = "FILE")]
     pub file: PathBuf,
 
-    /// Output .routes file (default: input.routes)
+    /// Where the result is written, which depends on what ran.
+    ///
+    /// The built-in router on a `.cypcb` design writes a copy of the source
+    /// with the traces appended, and its default is `input.routed.cypcb`. The
+    /// built-in router on a `.kicad_pcb` writes the routed board, default
+    /// `input.routed.kicad_pcb`. Naming a FreeRouting jar writes the `.routes`
+    /// file the viewer loads, default `input.routes`.
+    ///
+    /// This used to name the last of the three and nothing else, which is the
+    /// one that runs least often: without a jar the built-in router does the
+    /// work, and `-o out.routes` then wrote a design rather than a routes file.
     #[arg(short, long)]
     pub output: Option<PathBuf>,
 
@@ -899,6 +909,31 @@ mod tests {
         assert_eq!(cli.route.file, PathBuf::from("design.cypcb"));
         assert_eq!(cli.route.timeout, 300);
         assert!(cli.route.output.is_none());
+    }
+
+    /// The flag's help names what it writes, for the path that actually runs.
+    ///
+    /// It said `Output .routes file (default: input.routes)`, and a person who
+    /// believed it ran `cypcb route board.cypcb -o board.routes` and received
+    /// a design: without a FreeRouting jar the built-in router does the work
+    /// and writes a copy of the source with the traces appended.
+    #[test]
+    fn the_help_for_the_output_flag_names_the_file_it_writes() {
+        use clap::CommandFactory;
+
+        #[derive(clap::Parser)]
+        struct TestCli {
+            #[command(flatten)]
+            route: RouteCommand,
+        }
+
+        let help = TestCli::command().render_long_help().to_string();
+        for named in ["routed.cypcb", "routed.kicad_pcb", "input.routes"] {
+            assert!(
+                help.contains(named),
+                "the help for --output does not name {named}:\n{help}"
+            );
+        }
     }
 
     #[test]
