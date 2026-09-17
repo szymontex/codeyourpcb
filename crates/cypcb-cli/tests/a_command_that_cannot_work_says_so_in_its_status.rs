@@ -34,7 +34,9 @@ const READS_A_FILE: &[(&str, &str)] = &[
 const NOT_RUN: &[(&str, &str)] = &[
     (
         "watch",
-        "waits for the file to change and never returns on its own",
+        "waits for the file to change and never returns on its own - it is driven by \
+         `a_saved_design_is_checked_again`, which saves a board and reads what the \
+         watcher printed",
     ),
     (
         "library",
