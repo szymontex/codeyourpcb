@@ -28,7 +28,13 @@ pub const CELL_TRACE: u8 = 1 << 1;
 /// with nowhere else to go may route through a halo cell, where routing
 /// through the centre line of another net's trace is a short.
 pub const CELL_HALO: u8 = 1 << 2;
-pub const CELL_ZONE: u8 = 1 << 2;
+/// A keepout region: the board says nothing may enter here.
+///
+/// It had the same bit as `CELL_HALO` until 2026-09-17, which made every
+/// keepout cell read as copper a trace merely brushes - yieldable to a net
+/// with nowhere else to go, and passable on the search's second attempt.
+/// A halo is a preference and a keepout is a prohibition.
+pub const CELL_ZONE: u8 = 1 << 5;
 pub const CELL_VIA: u8 = 1 << 3;
 /// Generic obstacle (clearance bloat, board edge, etc.)
 pub const CELL_OBSTACLE: u8 = 1 << 4;
@@ -1308,5 +1314,37 @@ mod tests {
         // number that would land on somebody else's layer.
         assert_eq!(layer_to_index(Layer::TopMask), None);
         assert_eq!(layer_to_index(Layer::TopSilk), None);
+    }
+
+    /// A keepout is not copper a net may brush past.
+    ///
+    /// `CELL_ZONE` marks the cells of a keepout zone and `CELL_HALO` marks the
+    /// copper a trace covers beside its centre line, and the search treats the
+    /// two differently on purpose: a halo cell is yielded to a net with nowhere
+    /// else to go, a keepout is a region the board says nothing may enter. They
+    /// are different questions and they need different bits.
+    #[test]
+    fn a_keepout_is_not_copper_a_net_may_brush_past() {
+        let mut grid = make_test_grid(10, 10, 100_000, 2);
+
+        grid.set_cell(1, 1, 0, CELL_HALO);
+        grid.set_cell(2, 2, 0, CELL_ZONE);
+
+        // The control: a halo cell is exactly what the second attempt yields.
+        assert!(
+            grid.is_halo_only(1, 1, 0),
+            "a halo cell stopped reading as one, so the case below proves nothing"
+        );
+        assert!(grid.is_free_ignoring_halo(1, 1, 0));
+
+        assert!(
+            !grid.is_halo_only(2, 2, 0),
+            "a keepout cell reads as the copper a trace brushes, so a net with \
+             nowhere else to go routes into a region the board forbids"
+        );
+        assert!(
+            !grid.is_free_ignoring_halo(2, 2, 0),
+            "the second attempt walks through a keepout"
+        );
     }
 }
