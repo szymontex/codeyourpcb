@@ -95,6 +95,10 @@ impl CheckCommand {
 
         // Report parse errors
         if result.has_errors() {
+            // The file first, because the diagnostics under it do not carry a
+            // name: a person running this over a directory sees a column and a
+            // line and no way to tell which board they belong to.
+            eprintln!("{}: {} error(s)", self.file.display(), result.errors.len());
             for err in result.errors {
                 eprintln!("{:?}", miette::Report::new(err));
             }

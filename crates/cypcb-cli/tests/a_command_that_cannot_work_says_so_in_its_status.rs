@@ -97,6 +97,7 @@ fn a_command_that_cannot_work_says_so_in_its_status() {
     }
 
     let mut quiet_successes = Vec::new();
+    let mut unnamed = Vec::new();
     let mut examined = 0;
 
     for (command, file) in READS_A_FILE {
@@ -115,13 +116,22 @@ fn a_command_that_cannot_work_says_so_in_its_status() {
                 "{command} on {what} failed with nothing on stderr - the status is right \
                  and the person is told nothing"
             );
+            // The name of the file they typed. A person running a command over
+            // a directory reads a line and a column and cannot tell which
+            // board they belong to without it.
+            let said = String::from_utf8_lossy(&run.stderr);
+            if !said.contains(input) {
+                unnamed.push(format!("{command} on {what} never said {input}"));
+            }
         }
     }
 
     println!(
-        "subcommands in the help: {}; runs examined: {examined}; exiting 0 on bad input: {}",
+        "subcommands in the help: {}; runs examined: {examined}; exiting 0 on bad input: {}; \
+         failing without naming the file: {}",
         names.len(),
-        quiet_successes.len()
+        quiet_successes.len(),
+        unnamed.len()
     );
 
     let _ = std::fs::remove_dir_all(&work);
@@ -131,5 +141,11 @@ fn a_command_that_cannot_work_says_so_in_its_status() {
         "a command could not do its work and reported success:\n  {}\
          \n  A build script reads the number, not the diagnostic.",
         quiet_successes.join("\n  ")
+    );
+    assert!(
+        unnamed.is_empty(),
+        "a command failed without naming the file it was given:\n  {}\
+         \n  The diagnostics underneath carry a line and a column and no name.",
+        unnamed.join("\n  ")
     );
 }
