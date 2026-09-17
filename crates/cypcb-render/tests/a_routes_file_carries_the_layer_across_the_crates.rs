@@ -15,6 +15,12 @@
 //!
 //! `cargo test -p cypcb-render --test a_routes_file_carries_the_layer_across_the_crates`
 
+// The engine reads a routes file only in the native build - the browser is
+// handed the copper rather than a file of it - and the gate compiles this
+// crate a second time as `--no-default-features --features wasm`. Without
+// this line that build fails on a method the browser was never meant to have.
+#![cfg(feature = "native")]
+
 use std::path::{Path, PathBuf};
 
 use cypcb_render::PcbEngine;
