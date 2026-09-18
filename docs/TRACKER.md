@@ -1,6 +1,6 @@
 # CodeYourPCB tracker - the control center
 
-Last updated: 2026-09-17. Update after every material step: add to DONE, pull the next item into NEXT-ACTION, in the same commit as the change.
+Last updated: 2026-09-18. Update after every material step: add to DONE, pull the next item into NEXT-ACTION, in the same commit as the change.
 
 **Before taking a NEXT-ACTION, measure whether it is still true.** Three of them were read on 2026-09-16 and all three described work that had already been done, in one case three weeks earlier - a fire acting on any of them would have written tests that exist or fixed a reader that reads correctly. The entries are notes left by an earlier fire, and the tree is what answers.
 
@@ -2542,6 +2542,9 @@ multi_ic        0.26: 13 iterations, converged false, [553, 339, 269, 270, 258, 
 - DONE: **components say which face they are on.** A `Side` component with the three questions a face answers - which copper its SMD pads take, which silkscreen it prints to, and its layer-mask bit. The KiCad importer reads `(layer "B.Cu")` from a footprint, which is the only place in the codebase where the side is data rather than inference; sync derives it from the footprint's copper and stores the answer so every rule reads the same one. The silkscreen rule takes it and falls back to the old guess only when nothing states it. Proven on a two-footprint board where one is `F.Cu` and one `B.Cu`: `[("R1", Top), ("R2", Bottom)]`.
 
 ### V2 - Autorouter and routing quality
+- DONE: **the scheduled run carried yesterday's work on a checkout of its own and it is green.** `VERDICT: green, all stages passed, 1030s, commit 40d0ec0, main fast-forwarded by 30` - thirty commits, among them the keepout bug and its flag check, the layer-bit and inner-name cases, the routes-file round trip, the IPC-D-356 column anchors, and the CLI's folder, default, refusal and exit-status guards. Both neighbour samples read `sharing=0 scanned=19 who=none`, so nothing else was writing into the build directory at either end.
+- **1030s against the previous run's 996s**, which is the same work plus eleven new test files rather than a slowdown worth chasing.
+- NEXT-ACTION: none. This vector is closed and the file's open items are the owner's: D10, D3, the teardrop variant, and a board written by real KiCad with a locked segment, a hatched pour and a non-2:1 ring.
 - DONE: **the second build was counted and it hides nothing: 19 suites compile either way, and the difference is inside the crate rather than in its test files.** `cypcb-render` has 17 integration test files and exactly one carries a `native` guard - the one added last fire. Running both builds: `cargo test -p cypcb-render` gives **19 suites, 101 tests**; `cargo test -p cypcb-render --no-default-features --features wasm` gives **19 suites, 58 tests**. The 43 that only run natively are already behind `#[cfg(feature = "native")]` inside the crate, and the sixteen other integration files call nothing the browser build lacks.
 - **So the guard belongs where it is rather than in a rule**, and what holds the class is the gate's third test command, which compiles every test target of that crate a second time. A check of my own would only repeat it.
 - Proof: the two commands above, run one after the other on a clean tree; the counts are their `test result` lines summed. `./scripts/quality-gate.sh` on the head -> `=== All stages passed ===` (the run recorded in the entry above).
