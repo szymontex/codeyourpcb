@@ -76,34 +76,44 @@ fn the_rule_count_it_states_is_the_number_registered() {
 fn the_stage_count_it_states_is_the_number_the_gate_runs() {
     let stated = number_before(&read(".gsd/DECISIONS.md"), "stages as of");
 
-    // Every stage announces itself as `echo "[i/total] name"`, which is also
-    // what the reader of a gate run counts.
+    // Every stage announces itself by calling `stage "name"`, which prints
+    // `[i/total]` with the numbers counted rather than typed. The total it
+    // counts against is declared once, at the top of the file.
     let gate = read("scripts/quality-gate.sh");
-    let headers: Vec<&str> = gate
+    let calls = gate
+        .lines()
+        .filter(|line| line.starts_with("stage \""))
+        .count();
+    let declared: usize = gate
+        .lines()
+        .find_map(|line| line.trim().strip_prefix("STAGES_DECLARED="))
+        .and_then(|value| value.parse().ok())
+        .expect("scripts/quality-gate.sh declares how many stages it has");
+
+    // The number must not go back to living in two places: a hand-typed
+    // header is what this case used to read, and the numbers in them had
+    // drifted apart from the run. The one header with a `$` in it is the
+    // printing inside `stage` itself, which is where the number is computed.
+    let typed: Vec<&str> = gate
         .lines()
         .map(str::trim_start)
-        .filter(|line| line.starts_with("echo \"["))
+        .filter(|line| line.starts_with("echo \"[") && !line.contains('$'))
         .collect();
+    assert!(
+        typed.is_empty(),
+        "a stage header types its own number instead of calling stage: {typed:?}"
+    );
 
-    for (index, header) in headers.iter().enumerate() {
-        let inside = header
-            .split_once('[')
-            .and_then(|(_, rest)| rest.split_once(']'))
-            .map(|(inside, _)| inside)
-            .unwrap_or_else(|| panic!("a stage header without brackets: {header}"));
-        let expected = format!("{}/{}", index + 1, headers.len());
-        assert_eq!(
-            inside, expected,
-            "scripts/quality-gate.sh announces stage `[{inside}]` where the run \
-             reaches `[{expected}]`"
-        );
-    }
+    println!("stage calls: {calls}; declared: {declared}; decision log: {stated}");
 
     assert_eq!(
-        stated,
-        headers.len(),
+        calls, declared,
+        "scripts/quality-gate.sh declares {declared} stages and calls stage {calls} times"
+    );
+
+    assert_eq!(
+        stated, calls,
         "the decision log says the gate runs {stated} stages and \
-         scripts/quality-gate.sh runs {}",
-        headers.len()
+         scripts/quality-gate.sh runs {calls}"
     );
 }

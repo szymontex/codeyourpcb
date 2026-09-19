@@ -116,7 +116,23 @@ printf 'GATE-LOCK waited=%s holder_pid=%s holder_ppid=%s holder_cmd=%s acquired=
 printf 'GATE-BUILDS %s dir=%s\n' \
   "$("$REPO_ROOT/scripts/who-is-building.sh" "$GATE_BUILD_DIR")" "$GATE_BUILD_DIR"
 
-pass() { echo "  ✓ $1"; }
+# How many stages this file declares, how many announced themselves, and how
+# many checks reported a pass. The closing line used to be an unconditional
+# echo: a stage deleted, commented out or short-circuited left every other
+# stage green and the same sentence at the bottom, and nothing in the run said
+# how many had been run. A run that skipped a stage is not a pass.
+STAGES_DECLARED=18
+STAGES_RUN=0
+CHECKS_PASSED=0
+
+# The label a reader sees is now counted rather than typed, which is the same
+# argument the comment below makes about numbers living in two places.
+stage() {
+  STAGES_RUN=$((STAGES_RUN + 1))
+  echo "[$STAGES_RUN/$STAGES_DECLARED] $1"
+}
+
+pass() { CHECKS_PASSED=$((CHECKS_PASSED + 1)); echo "  ✓ $1"; }
 fail() { echo "  ✗ $1"; exit 1; }
 
 echo "=== Quality Gate ==="
@@ -128,7 +144,7 @@ echo ""
 # in two places is one fact that goes wrong in one of them, and the label is
 # the place a reader looks.
 # Rust formatting
-echo "[1/18] cargo fmt --check"
+stage "cargo fmt --check"
 if cargo fmt --check 2>&1; then
   pass "cargo-fmt"
 else
@@ -144,7 +160,7 @@ echo ""
 # icon the macro refused, all found the first time anybody ran it. The
 # dependencies are in `scripts/setup-dev.sh` now, so the exclusion has nothing
 # left to protect and a crate nobody compiles is a crate nobody maintains.
-echo "[2/18] cargo clippy"
+stage "cargo clippy"
 # The second reader is behind a feature, so the plain run does not lint it
 # either - the same gap the test stage below had.
 if cargo clippy --workspace --all-targets -- -D warnings 2>&1 \
@@ -155,7 +171,7 @@ else
 fi
 echo ""
 
-echo "[3/18] cargo check --all-features"
+stage "cargo check --all-features"
 # Every feature this workspace declares, compiled. Eleven features exist and
 # **five are switched on by nothing** - not a stage, not a `default`, not a
 # dependent crate: `cypcb-drc/parallel`, `cypcb-library/jlcpcb` and the three
@@ -240,7 +256,7 @@ if [ -n "$UNTRACKED_PARSER" ]; then
   fail "untracked tree-sitter output"
 fi
 
-echo "[4/18] cargo test"
+stage "cargo test"
 # The Rust reader is what `parse` is now. The tests that check it against the
 # tree-sitter parser need that parser as well, which the plain run does not
 # build - named explicitly, because a test nobody runs is not a test.
@@ -278,7 +294,7 @@ echo ""
 #
 # tsconfig.json includes `src`, `e2e` and the root `*.ts`, which is what makes
 # this worth a stage: the specs and the dev server are code too.
-echo "[5/18] tsc --noEmit"
+stage "tsc --noEmit"
 TSC_LOG=$(mktemp)
 if (cd viewer && npx tsc --noEmit 2>&1 | tee "$TSC_LOG"); then
   pass "tsc"
@@ -292,7 +308,7 @@ fi
 rm -f "$TSC_LOG"
 echo ""
 
-echo "[6/18] eslint"
+stage "eslint"
 if (cd viewer && npx eslint src/ e2e/ *.ts) 2>&1; then
   pass "eslint"
 else
@@ -301,7 +317,7 @@ fi
 echo ""
 
 # Vitest
-echo "[7/18] vitest"
+stage "vitest"
 VITEST_LOG=$(mktemp)
 if (cd viewer && npx vitest run 2>&1 | tee "$VITEST_LOG"); then
   pass "vitest"
@@ -339,7 +355,7 @@ echo ""
 # That port is no longer 4321. It was, and 4321 is Astro's default, so a gate
 # run failed here because another repository's dev server in this container
 # held it. `CYPCB_E2E_PORT` overrides, and the default is 4327.
-echo "[8/18] playwright (rebuilding viewer/pkg first)"
+stage "playwright (rebuilding viewer/pkg first)"
 # The module is rebuilt, and then asked whether the committed one is the same.
 # The rebuild makes the browser suite honest about the working tree; the
 # question afterwards is about what a clean clone carries, and on 2026-08-27
@@ -442,7 +458,7 @@ rm -f "$PLAYWRIGHT_LOG"
 echo ""
 
 # Autorouter benchmark — regression gate + performance benchmark
-echo "[9/18] autorouter benchmark"
+stage "autorouter benchmark"
 if cargo test --release -p cypcb-autoroute -- benchmark_regression 2>&1; then
   pass "benchmark-regression"
 else
@@ -542,7 +558,7 @@ fi
 echo ""
 
 # Code duplication check
-echo "[10/18] jscpd"
+stage "jscpd"
 if (cd viewer && npx jscpd --exitCode 1) 2>&1; then
   pass "jscpd"
 else
@@ -557,7 +573,7 @@ echo ""
 # deleted - was found again by hand five weeks later. It keeps its list and
 # gains a number: the count of unreached methods has to be the one the script
 # records, so neither a new dead wrapper nor a deletion can pass unremarked.
-echo "[11/18] engine API reach"
+stage "engine API reach"
 if ./scripts/unused-engine-api.sh 2>&1; then
   pass "unused-engine-api"
 else
@@ -572,7 +588,7 @@ echo ""
 # nothing here started. It builds what it photographs first: the smoke test
 # refuses a bundle older than `viewer/src`, and the tree it was wired into had
 # a `viewer/dist` a week behind.
-echo "[12/18] desktop smoke"
+stage "desktop smoke"
 if (cd viewer && npm run build) >/dev/null 2>&1 \
     && cargo build -p cypcb-desktop >/dev/null 2>&1 \
     && ./scripts/desktop-smoke.sh; then
@@ -590,7 +606,7 @@ echo ""
 # and nothing ran it either, so the census was a number nobody had looked at
 # since the day it was taken. The list stays a person's call; the count is
 # held here, the way the engine API's is.
-echo "[13/18] claims in comments"
+stage "claims in comments"
 if ./scripts/claims-in-comments.sh; then
   pass "claims-in-comments"
 else
@@ -606,7 +622,7 @@ echo ""
 # The types it lists stay a diagnostic, because an exported interface beside
 # its function is ordinary style. The values are the gate, and the viewer is
 # already at zero.
-echo "[14/18] unused exports"
+stage "unused exports"
 if ./scripts/unused-exports.sh --values-only; then
   pass "unused-exports"
 else
@@ -621,7 +637,7 @@ echo ""
 # branch happened to line up, so four of its five publish outcomes had never
 # happened at all. This stage makes them happen, against throwaway
 # repositories in a temporary directory.
-echo "[15/18] scheduled-gate selftest"
+stage "scheduled-gate selftest"
 if ./scripts/scheduled-gate-selftest.sh 2>&1; then
   pass "scheduled-gate-selftest"
 else
@@ -652,7 +668,7 @@ echo ""
 # thirty-two tracked files written over four months - none of it about circuit
 # boards, all of it pasted out of a terminal by somebody who could see it and
 # forgot that a reader cannot. A patch would have let the next paste back in.
-echo "[16/18] no private paths"
+stage "no private paths"
 if ./scripts/no-private-paths.sh; then
   pass "no-private-paths"
 else
@@ -668,7 +684,7 @@ echo ""
 # width, a relief at nearly double what the Gerbers carried for the same board.
 # Each was found by hand, months apart, and the third only because the first
 # two made somebody look.
-echo "[17/18] no invented numbers"
+stage "no invented numbers"
 if ./scripts/no-invented-numbers.sh; then
   pass "no-invented-numbers"
 else
@@ -683,7 +699,7 @@ echo ""
 # those files carries no dot and stage 16 cannot see it. This check asks about
 # the act instead - turning a length into text happens in `coords.rs` and
 # nowhere else - which is the only shape that can fail there.
-echo "[18/18] one door out of nanometres"
+stage "one door out of nanometres"
 if ./scripts/one-door-coordinates.sh; then
   pass "one-door-coordinates"
 else
@@ -702,4 +718,12 @@ echo ""
 printf 'GATE-BUILDS-AT-END %s dir=%s\n' \
   "$("$REPO_ROOT/scripts/who-is-building.sh" "$GATE_BUILD_DIR")" "$GATE_BUILD_DIR"
 
-echo "=== All stages passed ==="
+if [ "$STAGES_RUN" -ne "$STAGES_DECLARED" ]; then
+  echo "=== $STAGES_RUN of $STAGES_DECLARED stages ran ==="
+  echo "  A stage that never announced itself was skipped, and every other"
+  echo "  stage passing says nothing about the one that did not run. Move"
+  echo "  STAGES_DECLARED in the commit that moves the stages."
+  exit 1
+fi
+
+echo "=== All stages passed: $STAGES_RUN of $STAGES_DECLARED stages, $CHECKS_PASSED checks ==="
