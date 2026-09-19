@@ -90,7 +90,28 @@ if [ "$control_caught" -ne 1 ] || [ "$control_url" -ne 0 ] || [ "$control_allowe
     exit 1
 fi
 
+# The denominator, before any verdict. A grep that finds nothing and a grep
+# that was handed nothing print the same green line: with the file list
+# emptied and nothing else touched, this script printed both of its passes and
+# exited 0. The count is stated on every run and held to a floor, so a list
+# that collapses - a checkout that is not a repository, a `git` that cannot
+# run - fails loudly instead of certifying an empty tree.
+#
+# The floor is a round number below half of what the tree holds today, because
+# what it has to catch is a list that collapsed rather than a repository that
+# shrank.
+FLOOR=800
+scanned=$(files | tr -dc '\0' | wc -c)
+
 status=0
+
+echo "no-private-paths: files offered to the check: $scanned (floor $FLOOR)"
+if [ "$scanned" -lt "$FLOOR" ]; then
+    echo "no-private-paths: the file list collapsed, so nothing below is a"
+    echo "  verdict - $scanned files were scanned and there were 1452 when this"
+    echo "  floor was written"
+    status=1
+fi
 
 FOUND=$(files | xargs -0 grep -InE "$PATTERN" 2>/dev/null | grep -vE "$ALLOWED")
 if [ -n "$FOUND" ]; then
