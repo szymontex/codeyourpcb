@@ -54,8 +54,8 @@
 # changed the module, so `viewer/pkg` belongs in the same commit as the edit.
 # That is the sentence that was missing when `315b227` was committed.
 #
-# Prints nothing and exits 0 when the committed module is current; says which
-# input moved and exits 1 when it is not.
+# Prints what it compared and exits 0 when the committed module is current;
+# says which input moved and exits 1 when it is not.
 #
 # `--print-inputs` prints the paths the first half asks about, one per line,
 # and answers nothing else. `--lock-packages OLD NEW` prints the closure
@@ -183,9 +183,30 @@ case "${1:-}" in
     ;;
 esac
 
+# The denominator, before any verdict. Every answer below is a statement about
+# a list this script builds itself, and the list reaches `git diff` as a
+# pathspec: a pathspec that matches nothing is not an error there, it is an
+# empty diff, which reads exactly like a tree where no input moved. So the
+# inputs are counted, checked for being on disk, and said out loud.
+INPUTS_FLOOR=8
+
+MISSING=()
+for source in "${SOURCES[@]}"; do
+  [ -e "$source" ] || MISSING+=("$source")
+done
+if [ "${#SOURCES[@]}" -lt "$INPUTS_FLOOR" ] || [ "${#MISSING[@]}" -gt 0 ]; then
+  echo "wasm-pkg-stale: the input list collapsed, so a pass proves nothing"
+  echo "  ${#SOURCES[@]} inputs (floor $INPUTS_FLOOR), and there were 11 when this floor was written"
+  if [ "${#MISSING[@]}" -gt 0 ]; then
+    printf '  not on disk, so nothing is compared for it: %s\n' "${MISSING[@]}"
+  fi
+  exit 1
+fi
+
 PKG_COMMIT=$(git log -1 --format=%H -- viewer/pkg)
 if [ -z "$PKG_COMMIT" ]; then
-  # Nothing committed under viewer/pkg: there is no artifact to be stale.
+  echo "wasm-pkg-stale: nothing is committed under viewer/pkg, so there is no"
+  echo "  artifact to be stale - ${#SOURCES[@]} inputs went unasked"
   exit 0
 fi
 
@@ -216,6 +237,8 @@ REBUILT=$(git status --porcelain -- viewer/pkg)
 
 case "$(verdict "$MOVED$LOCK_REASON" "$REBUILT")" in
   current)
+    echo "wasm-pkg-stale: viewer/pkg is current against ${#SOURCES[@]} inputs (floor $INPUTS_FLOOR),"
+    echo "  committed by $(git log -1 --format='%h %s' "$PKG_COMMIT")"
     exit 0
     ;;
   notice)
