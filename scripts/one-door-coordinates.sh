@@ -29,10 +29,10 @@
 #
 # Usage: scripts/one-door-coordinates.sh
 #
-# NOT WIRED INTO THE GATE YET. It passes on the tree today and its own controls
-# hold, but the browser stage has been red on a machine at load average 35 with
-# somebody else's work on it, so the full gate has not been able to answer.
-# Wiring it is a one-line change to scripts/quality-gate.sh once it can.
+# Stage 18 of scripts/quality-gate.sh. It was written unwired, because the full
+# gate could not answer at the time, and the sentence saying so outlived the
+# wiring by several weeks - which is the same fault this file is about: a
+# statement nobody re-measured.
 
 set -uo pipefail
 
@@ -80,15 +80,30 @@ scan() {
     '
 }
 
-scan_all() {
+# The files this rule is about, named once so the verdict and the denominator
+# are answers about the same set.
+sources() {
     for dir in "${DIRS[@]}"; do
         [ -d "$dir" ] || continue
         for file in "$dir"/*.rs; do
             [ -f "$file" ] || continue
-            scan "$file"
+            printf '%s\n' "$file"
         done
     done
 }
+
+scan_all() {
+    while IFS= read -r file; do
+        scan "$file"
+    done < <(sources)
+}
+
+# The denominator. A scan that finds no fault and a scan that was handed no
+# file end in the same sentence, and with both directories renamed this script
+# printed its pass, named the two directories that were not there as `Checked`,
+# and exited 0. The floor is below what the writers hold today, because what it
+# has to catch is a set that collapsed rather than a writer that lost a file.
+FILES_FLOOR=6
 
 # The controls, first. Two that must be caught and two that must pass, and the
 # passing pair is the more important: it is the reason this rule is written the
@@ -124,6 +139,15 @@ if [ "$caught" -ne 2 ]; then
     exit 1
 fi
 
+files=$(sources | wc -l)
+lines_examined=$(sources | while IFS= read -r file; do production "$file"; done | wc -l)
+if [ "$files" -lt "$FILES_FLOOR" ]; then
+    echo "one-door-coordinates: the file set collapsed, so a pass proves nothing"
+    echo "  $files files were offered to the check and there were 9 when this"
+    echo "  floor was written - the writers are ${DIRS[*]}"
+    exit 1
+fi
+
 found=$(scan_all)
 if [ -n "$found" ]; then
     echo "one-door-coordinates: a length becomes text outside coords.rs"
@@ -137,5 +161,5 @@ if [ -n "$found" ]; then
 fi
 
 echo "one-door-coordinates: every length in these writers goes through coords.rs"
-echo "  Checked: ${DIRS[*]}"
+echo "  Checked: $files files, $lines_examined production lines, in ${DIRS[*]}"
 exit 0
