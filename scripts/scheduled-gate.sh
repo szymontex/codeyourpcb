@@ -242,7 +242,17 @@ if [ -n "$WORKTREE" ]; then
 fi
 
 if [ "$CODE" -eq 0 ]; then
-    VERDICT="VERDICT: green, all stages passed, ${ELAPSED}s, commit $COMMIT"
+    # The gate states how many stages it ran in its closing line, and this is
+    # the one line a reader sees first: `all stages passed` reads the same
+    # whether eighteen stages ran or one, which is what the count is for. A
+    # gate that stated none is reported as having stated none rather than as
+    # having passed everything.
+    STAGES=$(grep -o 'All stages passed: .* stages, [0-9]* checks' "$BODY" | tail -1)
+    if [ -n "$STAGES" ]; then
+        VERDICT="VERDICT: green, ${STAGES#All stages passed: }, ${ELAPSED}s, commit $COMMIT"
+    else
+        VERDICT="VERDICT: green, the gate states no stage count, ${ELAPSED}s, commit $COMMIT"
+    fi
     [ "${LOG_INTEGRITY_BAD:-0}" -gt 0 ] && VERDICT="$VERDICT, ${LOG_INTEGRITY_BAD} damaged log(s) in this directory"
     if [ -n "$WORKTREE" ]; then
         VERDICT="$VERDICT, measured from the committed tip"

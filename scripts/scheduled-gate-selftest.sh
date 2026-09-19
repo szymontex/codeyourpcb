@@ -97,6 +97,24 @@ says_not() {
 
 echo "=== what the scheduled gate decides ==="
 
+# 0. The verdict carries the gate's own stage count. The line a reader meets
+# first is otherwise a word rather than a measurement, and a gate that ran one
+# stage and a gate that ran eighteen wrote the same sentence.
+new_case verdict-counts-stages
+printf '#!/bin/sh\necho "=== All stages passed: 18 of 18 stages, 26 checks ==="\n' \
+    > "$CASE/work/counting-gate.sh"
+chmod +x "$CASE/work/counting-gate.sh"
+git -C "$CASE/work" add counting-gate.sh
+git -C "$CASE/work" commit -qm "a gate that states its stage count"
+run_gate ./counting-gate.sh
+says "VERDICT: green, 18 of 18 stages, 26 checks" "a green verdict carries the count the gate printed"
+
+# The other half, which is the half that decides whether the first one means
+# anything: a gate whose log carries no count is reported as stating none.
+new_case verdict-without-a-count
+run_gate true
+says "VERDICT: green, the gate states no stage count" "a gate that stated no count is not reported as if it had"
+
 # 1. The ordinary night: green, and the branch is one commit ahead of main.
 new_case green-publishes
 run_gate true
