@@ -46,6 +46,27 @@ texts = {path: open(path).read() for path in files}
 kinds = r"function|const|class|enum" if values_only else r"function|const|class|interface|type|enum"
 exported = re.compile(rf"^export\s+(?:async\s+)?(?:{kinds})\s+([A-Za-z_][A-Za-z0-9_]*)", re.M)
 
+# The denominator. This check's baseline is zero, so "nothing is exported
+# that nothing else names" and "nothing was read" end in the same line:
+# with the root pointed at a directory that is not there, it printed
+# `total 0` and exited 0. Both counts are stated on every run and held to a
+# floor below what the viewer holds today.
+FILES_FLOOR = 60
+NAMES_FLOOR = 120
+
+examined = sum(len(exported.findall(text)) for text in texts.values())
+print(
+    f"scanned {len(files)} files (floor {FILES_FLOOR}), "
+    f"{examined} exported names (floor {NAMES_FLOOR})"
+)
+if len(files) < FILES_FLOOR or examined < NAMES_FLOOR:
+    print(
+        f"scripts/unused-exports.sh: the scan collapsed, so nothing below is "
+        f"a verdict - {len(files)} files and {examined} exported names were "
+        f"read, and there were 113 and 203 when these floors were written."
+    )
+    raise SystemExit(1)
+
 found = []
 for path, text in texts.items():
     for match in exported.finditer(text):
