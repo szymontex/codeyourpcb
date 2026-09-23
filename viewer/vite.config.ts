@@ -106,6 +106,13 @@ export default defineConfig({
     format: 'es',
     plugins: () => [wasm(), topLevelAwait()],
   },
+  // The port the client's WebSocket dials. `server.ts` listens on
+  // `CYPCB_WS_PORT` and starts this Vite with its own environment, so one
+  // variable moves both ends; the e2e config points it at a port nothing
+  // listens on.
+  define: {
+    __CYPCB_WS_PORT__: JSON.stringify(Number(process.env.CYPCB_WS_PORT ?? 4322)),
+  },
   envPrefix: ['VITE_', 'TAURI_ENV_*'],
   build: {
     target: process.env.TAURI_ENV_PLATFORM === 'windows'

@@ -16,6 +16,13 @@
 //! Whether spreading is desirable at all is a different question, and one the
 //! composite answers elsewhere: it charges per via. This metric's job is to
 //! say what it is named for.
+//!
+//! Every trace here is its own net, because `apply_routes_as` emits one `Trace`
+//! per net and layer. Until 2026-09-23 these fixtures put several entities on
+//! one net, a shape the router never produces, and the function counted
+//! entities, so the cases held for a reason the production path could not
+//! reach. The traces are all 28 mm long, so a count and a length agree here;
+//! `layer_balance_weighs_the_copper` holds the cases where they part.
 
 use cypcb_autoroute::scoring::score_board;
 use cypcb_core::{Nm, Point};
@@ -25,8 +32,8 @@ use cypcb_world::components::Layer;
 use cypcb_world::footprint::FootprintLibrary;
 use cypcb_world::BoardWorld;
 
-/// A board of `layers` copper layers carrying `per_layer` traces on each named
-/// layer.
+/// A board of `layers` copper layers carrying `count` traces of 28 mm on each
+/// named layer, one net per trace.
 fn board(layers: u8, spread: &[(Layer, usize)]) -> BoardWorld {
     let mut world = BoardWorld::new();
     world.set_board(
@@ -34,11 +41,12 @@ fn board(layers: u8, spread: &[(Layer, usize)]) -> BoardWorld {
         (Nm::from_mm(40.0), Nm::from_mm(40.0)),
         layers,
     );
-    let net = world.intern_net("SIG");
-
     let mut y = 2.0;
+    let mut nets = 0;
     for (layer, count) in spread {
         for _ in 0..*count {
+            let net = world.intern_net(&format!("N{nets}"));
+            nets += 1;
             world.spawn_entity((
                 Trace {
                     segments: vec![TraceSegment::new(

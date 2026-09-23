@@ -26,7 +26,7 @@
 //! - **drc_violations**: Number of DRC rule violations. Lower = better (0 = target).
 //! - **smoothness**: 0.0–1.0 where 1.0 = all bends at 45° multiples. Higher = better.
 //! - **crossings**: Same-layer inter-net segment intersections. Lower = better (0 = target).
-//! - **layer_balance**: min/max ratio of per-layer trace counts. 1.0 = balanced. Higher = better.
+//! - **layer_balance**: min/max ratio of copper length per layer. 1.0 = balanced. Higher = better.
 //! - **composite**: Weighted sum of all metrics, normalized. Lower = better.
 
 use bevy_ecs::prelude::*;
@@ -74,7 +74,8 @@ pub struct RoutingScore {
     pub shorts: u32,
     /// Number of same-layer inter-net segment crossings.
     pub crossings: u32,
-    /// Layer balance ratio (0.0–1.0). 1.0 = traces evenly distributed across layers.
+    /// Layer balance ratio (0.0–1.0): the least copper length on any layer over
+    /// the most. 1.0 = copper evenly distributed across layers.
     pub layer_balance: f64,
     /// Weighted composite score. Lower = better.
     pub composite: f64,
@@ -499,7 +500,17 @@ fn compute_crossings(world: &mut BoardWorld, traces: &[TraceData]) -> u32 {
 // Layer balance
 // ============================================================================
 
-/// Compute layer balance as min(counts) / max(counts).
+/// Copper length on each layer that carries a trace, in nanometres: every
+/// segment's length summed under the layer of the `Trace` holding it.
+fn copper_length_per_layer(traces: &[TraceData]) -> std::collections::HashMap<Layer, i64> {
+    let mut lengths = std::collections::HashMap::new();
+    for trace in traces {
+        *lengths.entry(trace.layer).or_insert(0) += trace.total_length();
+    }
+    lengths
+}
+
+/// Compute layer balance as the least copper length on a layer over the most.
 ///
 /// Returns 1.0 for single-layer boards or boards with no traces.
 fn compute_layer_balance(traces: &[TraceData], copper_layers: usize) -> f64 {
@@ -521,26 +532,28 @@ fn compute_layer_balance(traces: &[TraceData], copper_layers: usize) -> f64 {
     // Whether spreading is desirable at all is a separate question, and one
     // the composite already answers elsewhere - it charges per via. This
     // function's job is to say what it is named for.
+    //
+    // It also counted one per `Trace` entity, and `apply_routes_as` emits one
+    // entity per net and layer, so the ratio read how many nets reached each
+    // layer: one net holding nine tenths of the copper tied with one net
+    // holding the rest. It weighs the copper now.
     let layers = copper_layers.max(1);
-    let mut counts: std::collections::HashMap<Layer, u32> = std::collections::HashMap::new();
-    for trace in traces {
-        *counts.entry(trace.layer).or_insert(0) += 1;
-    }
+    let lengths = copper_length_per_layer(traces);
 
-    let max_count = *counts.values().max().unwrap_or(&0);
-    if max_count == 0 {
+    let max_length = *lengths.values().max().unwrap_or(&0);
+    if max_length == 0 {
         return 1.0;
     }
 
     // Unused layers count as zero, which is what makes a single-layer route on
     // a two-layer board score 0 rather than 1.
-    let min_count = if counts.len() < layers {
+    let min_length = if lengths.len() < layers {
         0
     } else {
-        *counts.values().min().unwrap_or(&0)
+        *lengths.values().min().unwrap_or(&0)
     };
 
-    min_count as f64 / max_count as f64
+    min_length as f64 / max_length as f64
 }
 
 // ============================================================================
@@ -752,7 +765,7 @@ mod tests {
             make_trace_data(Layer::TopCopper, 3),
             make_trace_data(Layer::BottomCopper, 4),
         ];
-        // min=1, max=4 → balance = 0.25
+        // 10 mm against 40 mm → balance = 0.25
         let balance = compute_layer_balance(&traces, 2);
         assert!(
             (balance - 0.25).abs() < 1e-10,

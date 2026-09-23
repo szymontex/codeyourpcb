@@ -61,10 +61,16 @@ import { groupByContact, morePlacesNote } from './violation-grouping';
 
 // WebSocket server URL for hot reload + FreeRouting.
 // Only used when `npm run start` (dev server with file watcher) is running.
+//
+// The port comes from `CYPCB_WS_PORT` through `vite.config.ts`, the variable
+// `server.ts` listens on. It was 4322 written in, so a page served on any
+// port dialled whichever `server.ts` held 4322 - an e2e run connected to a
+// developer's own server and received that server's board.
+declare const __CYPCB_WS_PORT__: number;
 function getWsUrl(): string {
   const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
   const host = window.location.hostname;
-  const port = 4322;
+  const port = __CYPCB_WS_PORT__;
   return `${proto}://${host}:${port}`;
 }
 const WS_URL = getWsUrl();
