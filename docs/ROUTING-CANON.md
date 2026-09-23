@@ -737,7 +737,7 @@ the same finding as part 1 seen from the tool side.
 
 ### R-11 Acceptance classes `[R]`
 
-*Verified: 2026-09-13*
+*Verified: 2026-09-23*
 
 *Applies when:* [output row] the board is graded. The full four-tier form needs a declared acceptance class; for a board graded by a house table see part 4 below.
 
@@ -842,21 +842,24 @@ by composite (`generate_variants` in `crates/cypcb-autoroute/src/variant.rs`).
 **In this repo:** the score prices every violation at 1000 regardless of kind
 (`compute_composite` in `crates/cypcb-autoroute/src/scoring.rs`), so tiers 3
 and 4 are indistinguishable inside it, and tier 1 is absent from the score
-altogether. The board that makes this concrete is `shift_driver` under
-`stop_at_own_copper`: its clearance reports go 7 to 18, its acute-angle count
-falls 12 to 2 and its pad-entry count 3 to 2. Under this rule that is a tier-3
-regression of 11 bought with a **tier-4 improvement of 11**, which is a bad trade
-stated in one line; under a flat price per violation the same board reads as a
-level total, 22 to 22, and says nothing about which kind moved. **That improvement read 7
-until 2026-09-13**, counting the acute angles and not the pad entries - trace
-entry is in the tier-4 list four lines above, and the second kind was never
-added to the sum.
+altogether. The board that made this concrete was `shift_driver` under
+`stop_at_own_copper`: its clearance reports went 7 to 18 while its acute-angle
+count fell 12 to 2 and its pad-entry count 3 to 2. Under this rule that was a
+tier-3 regression of 11 bought with a **tier-4 improvement of 11**, which is a
+bad trade stated in one line; under a flat price per violation the same board
+read as a level total, 22 to 22, and said nothing about which kind moved. **That
+improvement read 7 until 2026-09-13**, counting the acute angles and not the pad
+entries - trace entry is in the tier-4 list four lines above, and the second
+kind was never added to the sum.
 
-**And the trade is worse than the tiers make it look.** Thirteen of the 18
-clearance rows are shorts - copper touching copper, which this rule ranks tier 2
-and no quantity of tier 3 or tier 4 offsets. The direction swap the seeded
-frontier replaced gave 7 to 27, 12 to 5, 3 to 1 and nineteen shorts. Measured
-2026-09-23 by
+**The regression was not the flag's.** Thirteen of the 18 clearance rows were
+shorts, and `optimize_vias` drew them: it checked each segment it laid in place
+of a via pair against a list of other nets' copper that every caller passed
+empty. With that check real the board goes 12 to 2 acute, 5 to 5 clearance and 3
+to 2 pad entry - 20 to 9, no kind rising and no short either way. The flat price
+still cannot say which kind moved; on this board it no longer hides a bad trade.
+The direction swap the seeded frontier replaced gave 7 to 27, 12 to 5, 3 to 1
+and nineteen shorts, with the old optimizer behind it. Measured 2026-09-23 by
 `cargo test --release -p cypcb-autoroute --test which_rule_the_flag_moves`, which
 prints every kind on the board and is what holds these figures.
 
@@ -1612,7 +1615,7 @@ third, two distance-measuring constructors reporting no distance, was closed on
 
 ### R-19 The flat clearance minimum `[P]`
 
-*Verified: 2026-09-14*
+*Verified: 2026-09-23*
 
 *Applies when:* [copper] always. Two pieces of copper on one layer belonging to two
 different nets. No declaration needed, which is why this is the rule that fires
@@ -1715,25 +1718,24 @@ needs to see one has to measure geometry rather than clearance.**
 
 **In this repo:** enforced. `ClearanceRule` is the first entry in the registry
 (`crates/cypcb-drc/src/lib.rs:134`). Measured on one board rather than claimed
-for all six: on `shift_driver` with `stop_at_own_copper` on, **18 of 22 rows**
+for all six: on `shift_driver` with `stop_at_own_copper` on, **5 of 9 rows**
 carry the `Clearance` kind. That pair is held rather than quoted:
-`the_board_that_gets_worse_gets_worse_at_one_other_rule` asserts the 18 exactly
-and the share as a floor, printing `shift_driver clearance share 18 of 22`. On
-this board that kind is this rule - the
-fixture declares no zone, and `ZoneOverlapRule` is the only other rule that
-builds a clearance violation. Thirteen of the 18 are shorts, which R-11 ranks
-tier 2 rather than tier 3.
+`the_board_that_got_worse_was_paying_for_the_via_optimizer` asserts the 5
+exactly and the share as a floor, printing `shift_driver clearance share 5 of 9`.
+On this board that kind is this rule - the fixture declares no zone, and
+`ZoneOverlapRule` is the only other rule that builds a clearance violation. None
+of the 5 is a short.
 
 **It said 27 of 32 until 2026-09-13, and the denominator is what moved.**
 `PadEntryRule` joined the registry the day after this line was written and added
 a row to this board's report; the numerator was right and the fraction was not.
-So `the_board_that_gets_worse_gets_worse_at_one_other_rule` holds the share as a
-floor rather than as that pair - **an exact denominator fails on the next rule
-anybody registers, which is the event that already broke this sentence once**,
-while a floor fails when the proportion this rule actually claims stops being
-true. It said 27 of 33 until 2026-09-23, when the seeded frontier replaced the
-direction swap and both halves moved, which the exact numerator is there to
-catch.
+So the test holds the share as a floor rather than as that pair - **an exact
+denominator fails on the next rule anybody registers, which is the event that
+already broke this sentence once**, while a floor fails when the proportion this
+rule actually claims stops being true. It said 27 of 33 until the seeded frontier
+replaced the direction swap, and 18 of 22 until the via optimizer's check was
+made real, both on 2026-09-23. Thirteen of those 18 were shorts the optimizer
+drew, and with them gone the floor is a majority rather than three quarters.
 
 ## A rule with no subject cannot be tested
 

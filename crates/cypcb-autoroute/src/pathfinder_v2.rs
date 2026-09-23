@@ -36,7 +36,7 @@ use crate::postprocess;
 use crate::repair::Blocker;
 use crate::smoother::smooth_routes;
 use crate::strategy::RoutingStrategy;
-use crate::via_optimizer::optimize_vias;
+use crate::via_optimizer::{optimize_vias, BoardObstacles};
 use crate::AutorouteConfig;
 
 /// What a layer change on a pad's copper costs the search by default.
@@ -245,8 +245,12 @@ impl PathFinderStrategy {
         }
         all_segments = smoothed_segments;
 
-        let (optimized_segments, optimized_vias) =
-            optimize_vias(all_segments, all_vias, &[], min_clearance);
+        let (optimized_segments, optimized_vias) = optimize_vias(
+            all_segments,
+            all_vias,
+            &BoardObstacles::from_board(world, library),
+            min_clearance,
+        );
         all_segments = optimized_segments;
         all_vias = optimized_vias;
 
