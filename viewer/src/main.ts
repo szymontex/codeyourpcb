@@ -42,6 +42,7 @@ import { collectImportedFiles, importedPaths, readerForBaseUrl } from './imports
 import { createFilePicker, setupDropZone, readFileAsText } from './file-picker';
 import { openFile, saveFile } from './file-access';
 import { isDesktop, initDesktop } from './desktop';
+import { dialDevServer } from './dev-socket';
 import { decodeViewState } from './url-state';
 import { getSettings, getPreference, setPreference, subscribe as subscribeSettings } from './settings';
 import type { AppSettings, LayerColors, AutorouteParams } from './settings';
@@ -67,6 +68,8 @@ import { groupByContact, morePlacesNote } from './violation-grouping';
 // port dialled whichever `server.ts` held 4322 - an e2e run connected to a
 // developer's own server and received that server's board.
 declare const __CYPCB_WS_PORT__: number;
+// `CYPCB_DESKTOP_DEV_SOCKET=1` at build time; `dev-socket.ts` says why it is off.
+declare const __CYPCB_DESKTOP_DEV_SOCKET__: boolean;
 function getWsUrl(): string {
   const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
   const host = window.location.hostname;
@@ -137,11 +140,12 @@ function connectWebSocket(callbacks: WsCallbacks): WsConnection {
 
   function connect(): void {
     try {
-      ws = new WebSocket(WS_URL);
+      ws = dialDevServer(WS_URL, isDesktop(), __CYPCB_DESKTOP_DEV_SOCKET__);
     } catch {
       // WebSocket constructor can throw on invalid URLs
       return;
     }
+    if (!ws) return;
 
     ws.onopen = () => {
       console.log('[WS] Connected to dev server');
