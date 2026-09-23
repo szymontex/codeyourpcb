@@ -597,26 +597,25 @@ pub fn export_ipc2581_with(
     // section rather than an empty one: the schema wants at least one `Set`
     // inside a `LayerFeature`, so an empty section would be a document that
     // fails validation for saying nothing.
-    for (layer_name, _) in &layers {
+    for (index, (layer_name, _)) in layers.iter().enumerate() {
         let on_layer: Vec<&(String, Point, i32, String)> = placed
             .iter()
             .filter(|(layer, _, _, _)| layer == layer_name)
             .collect();
-        let layer = match layer_name.as_str() {
-            "F_Cu" => Layer::TopCopper,
-            "B_Cu" => Layer::BottomCopper,
-            _ => Layer::TopCopper,
+        // The sections come in stack order. Until 2026-09-24 every inner
+        // section was read as `TopCopper` and carried the top layer's tracks.
+        let layer = match index {
+            0 => Layer::TopCopper,
+            last if last + 1 == layers.len() => Layer::BottomCopper,
+            inner => Layer::Inner((inner - 1) as u8),
         };
         let on_this_layer: Vec<&(Trace, Option<Curve>)> = traces
             .iter()
             .filter(|(trace, _)| trace.layer == layer)
             .collect();
-        let carries_vias = vias.iter().any(|via| {
-            let spans = [via.start_layer, via.end_layer];
-            spans.contains(&layer)
-                || (matches!(via.start_layer, Layer::TopCopper)
-                    && matches!(via.end_layer, Layer::BottomCopper))
-        });
+        let carries_vias = vias
+            .iter()
+            .any(|via| via.copper_mask() & layer.to_copper_mask() != 0);
         let carries_pour = world.zones().into_iter().any(|(_, zone)| {
             zone.kind == cypcb_world::components::zone::ZoneKind::CopperPour
                 && zone.layer_mask & layer.to_copper_mask() != 0
@@ -712,12 +711,7 @@ pub fn export_ipc2581_with(
         // The vias that pass through this layer: the ring, and the hole.
         let through: Vec<&Via> = vias
             .iter()
-            .filter(|via| {
-                let spans = [via.start_layer, via.end_layer];
-                spans.contains(&layer)
-                    || (matches!(via.start_layer, Layer::TopCopper)
-                        && matches!(via.end_layer, Layer::BottomCopper))
-            })
+            .filter(|via| via.copper_mask() & layer.to_copper_mask() != 0)
             .collect();
         if !through.is_empty() {
             if house.hole_plus.is_none() || house.hole_minus.is_none() {
