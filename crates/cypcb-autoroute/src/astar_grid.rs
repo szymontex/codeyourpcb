@@ -181,10 +181,41 @@ impl GridSearchScratch {
 pub fn astar_grid<S, H, G>(
     scratch: &mut GridSearchScratch,
     start: GridNode,
+    successors: S,
+    heuristic: H,
+    success: G,
+) -> Option<&[GridNode]>
+where
+    S: FnMut(GridNode, &mut Vec<(GridNode, u64)>),
+    H: FnMut(GridNode) -> u64,
+    G: FnMut(GridNode) -> bool,
+{
+    astar_grid_from(scratch, &[start], successors, heuristic, success)
+}
+
+/// Find the cheapest path from any cell of `starts` to a cell `success`
+/// accepts.
+///
+/// Every start enters the frontier at cost zero, so the wave grows from all
+/// of them at once and the path begins at whichever one the goal is cheapest
+/// from. That is how PathFinder routes the next sink of a net: from the whole
+/// partial routing tree, not from one pad of it. With a single start this is
+/// `astar_grid` exactly - the same pushes in the same order.
+///
+/// The starts go into the frontier in the order given, and among equal keys
+/// the heap's order follows the pushes, so a caller that wants the same path
+/// on every run passes them in a fixed order. A start given twice is pushed
+/// once.
+///
+/// Returns the path from the start it grew from to the goal inclusive, or
+/// `None` - which is also the answer for no starts at all.
+pub fn astar_grid_from<'a, S, H, G>(
+    scratch: &'a mut GridSearchScratch,
+    starts: &[GridNode],
     mut successors: S,
     mut heuristic: H,
     mut success: G,
-) -> Option<&[GridNode]>
+) -> Option<&'a [GridNode]>
 where
     S: FnMut(GridNode, &mut Vec<(GridNode, u64)>),
     H: FnMut(GridNode) -> u64,
@@ -192,14 +223,19 @@ where
 {
     scratch.begin();
 
-    let start_cell = scratch.index(start);
-    scratch.cost[start_cell as usize] = 0;
-    scratch.parent[start_cell as usize] = start_cell;
-    scratch.stamp[start_cell as usize] = scratch.epoch;
-    scratch.frontier.push(Frontier {
-        key: Frontier::key(heuristic(start), 0),
-        cell: start_cell,
-    });
+    for &start in starts {
+        let start_cell = scratch.index(start);
+        if scratch.visited(start_cell) {
+            continue;
+        }
+        scratch.cost[start_cell as usize] = 0;
+        scratch.parent[start_cell as usize] = start_cell;
+        scratch.stamp[start_cell as usize] = scratch.epoch;
+        scratch.frontier.push(Frontier {
+            key: Frontier::key(heuristic(start), 0),
+            cell: start_cell,
+        });
+    }
 
     // One buffer for every expansion in this search.
     let mut neighbours: Vec<(GridNode, u64)> = Vec::with_capacity(16);
@@ -398,5 +434,67 @@ mod tests {
             path.map(<[GridNode]>::to_vec),
             Some(vec![(0, 0, 0), (0, 0, 1)])
         );
+    }
+
+    /// An open four-way grid searched from several starts at once.
+    fn open_grid_from(
+        scratch: &mut GridSearchScratch,
+        starts: &[GridNode],
+        end: GridNode,
+    ) -> Option<Vec<GridNode>> {
+        let (w, h) = (scratch.width, scratch.height);
+        astar_grid_from(
+            scratch,
+            starts,
+            |node, out| {
+                for (dx, dy) in [(0i32, 1i32), (1, 0), (0, -1), (-1, 0)] {
+                    let nx = node.0 as i32 + dx;
+                    let ny = node.1 as i32 + dy;
+                    if nx < 0 || ny < 0 || nx >= w as i32 || ny >= h as i32 {
+                        continue;
+                    }
+                    out.push(((nx as u16, ny as u16, node.2), 1));
+                }
+            },
+            |node| {
+                let dx = (node.0 as i64 - end.0 as i64).unsigned_abs();
+                let dy = (node.1 as i64 - end.1 as i64).unsigned_abs();
+                dx + dy
+            },
+            |node| node == end,
+        )
+        .map(|path| path.to_vec())
+    }
+
+    #[test]
+    fn a_wave_seeded_from_many_cells_leaves_from_the_nearest() {
+        // PathFinder's step for the next sink of a net: every cell the net
+        // already owns is a start at cost zero. The path has to leave from the
+        // one nearest the goal, not from the first one it was given - which is
+        // what a search seeded with one pad of the tree would do.
+        let mut scratch = GridSearchScratch::for_grid(20, 20, 1);
+        let starts = [(0, 0, 0), (1, 0, 0), (2, 0, 0), (14, 3, 0), (3, 0, 0)];
+        let path = open_grid_from(&mut scratch, &starts, (15, 10, 0)).unwrap();
+
+        assert_eq!(path.first(), Some(&(14, 3, 0)));
+        assert_eq!(path.last(), Some(&(15, 10, 0)));
+        // Manhattan distance from the nearest start, plus that start.
+        assert_eq!(path.len(), 1 + 7 + 1);
+    }
+
+    #[test]
+    fn one_start_is_the_single_start_search() {
+        // The control the router depends on: a net's first connection has no
+        // copper to seed from, and its path must not move.
+        let mut scratch = GridSearchScratch::for_grid(20, 20, 1);
+        let single = open_grid(&mut scratch, (2, 17, 0), (13, 4, 0));
+        let seeded = open_grid_from(&mut scratch, &[(2, 17, 0)], (13, 4, 0)).unwrap();
+        assert_eq!(single, seeded);
+    }
+
+    #[test]
+    fn no_start_is_no_path() {
+        let mut scratch = GridSearchScratch::for_grid(10, 10, 1);
+        assert_eq!(open_grid_from(&mut scratch, &[], (5, 5, 0)), None);
     }
 }
