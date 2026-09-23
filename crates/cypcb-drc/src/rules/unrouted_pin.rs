@@ -11,7 +11,8 @@
 use cypcb_core::{Nm, Point};
 use cypcb_world::components::trace::{Trace, Via};
 use cypcb_world::components::zone::{Zone, ZoneKind};
-use cypcb_world::components::{FootprintRef, NetConnections, NetId, Position, RefDes};
+use cypcb_world::components::{FootprintRef, NetConnections, NetId, Position, RefDes, Rotation};
+use cypcb_world::footprint::PadDef;
 use cypcb_world::BoardWorld;
 
 use crate::presets::DesignRules;
@@ -93,25 +94,8 @@ impl DrcRule for UnroutedPinRule {
                     continue;
                 }
 
-                let offset = rotate_point(pad.position, rotation.to_degrees());
-                let centre = Point::new(
-                    Nm(position.0.x.0 + offset.x.0),
-                    Nm(position.0.y.0 + offset.y.0),
-                );
-                let half = (pad.size.0 .0 / 2, pad.size.1 .0 / 2);
-                // A pad whose layer list names no copper this rule
-                // understands is treated as being on every layer rather than
-                // on none: reporting a pin because its footprint spells its
-                // layers in a way this code has not met would be reporting the
-                // reader, not the board.
-                let mask: u32 = pad
-                    .layers
-                    .iter()
-                    .filter_map(|layer| layer_bit(*layer))
-                    .fold(0, |mask, bit| mask | bit);
-                let mask = if mask == 0 { u32::MAX } else { mask };
-
-                if copper_reaches(&traces, &vias, &pours, net, centre, half, mask) {
+                let centre = pad_centre(pad, position, rotation);
+                if pad_is_reached(&traces, &vias, &pours, net, pad, centre) {
                     continue;
                 }
 
@@ -126,6 +110,41 @@ impl DrcRule for UnroutedPinRule {
 
         violations
     }
+}
+
+/// Where a pad's centre sits on the board.
+pub(crate) fn pad_centre(pad: &PadDef, position: &Position, rotation: &Rotation) -> Point {
+    let offset = rotate_point(pad.position, rotation.to_degrees());
+    Point::new(
+        Nm(position.0.x.0 + offset.x.0),
+        Nm(position.0.y.0 + offset.y.0),
+    )
+}
+
+/// Whether this rule counts the pad as reached by copper of `net`.
+///
+/// `NetSplitRule` asks it too, so that a pin nothing reaches is reported by
+/// one rule and not by both.
+pub(crate) fn pad_is_reached(
+    traces: &[Trace],
+    vias: &[Via],
+    pours: &[Zone],
+    net: NetId,
+    pad: &PadDef,
+    centre: Point,
+) -> bool {
+    let half = (pad.size.0 .0 / 2, pad.size.1 .0 / 2);
+    // A pad whose layer list names no copper this rule understands is treated
+    // as being on every layer rather than on none: reporting a pin because its
+    // footprint spells its layers in a way this code has not met would be
+    // reporting the reader, not the board.
+    let mask: u32 = pad
+        .layers
+        .iter()
+        .filter_map(|layer| layer_bit(*layer))
+        .fold(0, |mask, bit| mask | bit);
+    let mask = if mask == 0 { u32::MAX } else { mask };
+    copper_reaches(traces, vias, pours, net, centre, half, mask)
 }
 
 /// Whether any copper of `net` touches this pad, on a layer the pad is on.

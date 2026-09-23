@@ -155,6 +155,9 @@ pub fn run_drc(world: &mut BoardWorld, rules: &DesignRules) -> DrcResult {
         // schematic naming a net for a pin says nothing about whether anybody
         // laid the copper.
         Box::new(rules::UnroutedPinRule),
+        // And the question it cannot answer: every pin of a net cut in two is
+        // reached by copper, just not by the same copper.
+        Box::new(rules::NetSplitRule),
         Box::new(rules::AssertionRule),
         Box::new(rules::DiffPairSkewRule),
         Box::new(rules::StackupRule),

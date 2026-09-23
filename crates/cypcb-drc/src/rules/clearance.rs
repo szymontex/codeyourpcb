@@ -644,7 +644,7 @@ fn canonical_pair(a: u32, b: u32) -> (u32, u32) {
 /// by its boxes and outside it by its copper**, so the boxes are left alone.
 /// That test fails on the first board where the two disagree, and then this
 /// function is worth teaching about arcs.
-fn aabb_distance(a: &AABB<[i64; 2]>, b: &AABB<[i64; 2]>) -> i64 {
+pub(crate) fn aabb_distance(a: &AABB<[i64; 2]>, b: &AABB<[i64; 2]>) -> i64 {
     // Calculate gap in each dimension
     // If boxes overlap in a dimension, the gap is 0
     let dx = (a.lower()[0].max(b.lower()[0]) - a.upper()[0].min(b.upper()[0])).max(0);
@@ -674,11 +674,11 @@ fn aabb_center(aabb: &AABB<[i64; 2]>) -> Point {
 // ============================================================================
 
 /// Pre-collected trace data for clearance checking.
-struct TraceData {
+pub(crate) struct TraceData {
     /// Half of the trace width in nanometers.
-    half_width: i64,
+    pub(crate) half_width: i64,
     /// Segments as ([start_x, start_y], [end_x, end_y]).
-    segments: Vec<([i64; 2], [i64; 2])>,
+    pub(crate) segments: Vec<([i64; 2], [i64; 2])>,
 }
 
 /// Minimum distance between two line segments.
@@ -874,7 +874,7 @@ fn per_segment_to_boxes(trace: &TraceData, boxes: &[&AABB<[i64; 2]>]) -> Vec<(Po
 /// Computes the closest distance from any trace segment endpoint
 /// or perpendicular projection to the AABB edges. For AABB-to-segment,
 /// we test distance from each segment to each AABB edge segment.
-fn trace_to_aabb_distance(trace: &TraceData, aabb: &AABB<[i64; 2]>) -> (Point, i64) {
+pub(crate) fn trace_to_aabb_distance(trace: &TraceData, aabb: &AABB<[i64; 2]>) -> (Point, i64) {
     let lo = aabb.lower();
     let hi = aabb.upper();
     // AABB edge segments (4 sides)

@@ -132,9 +132,9 @@ lists 12 subcommands: `parse`, `check`, `route`, `export`, `parse-kicad`,
 (copper, mask, paste, silk, outline), Excellon, a job file, a bill of
 materials, a pick-and-place file and an assembly summary in JSON - and nothing
 else. It named neither of the two extra kinds it writes; exporting
-`examples/blink.cypcb` writes 14 files and every one of them is one of those. `crates/cypcb-drc/src/rules/` holds 39
+`examples/blink.cypcb` writes 14 files and every one of them is one of those. `crates/cypcb-drc/src/rules/` holds 40
 rules - it said twenty, and `ls crates/cypcb-drc/src/rules/*.rs | wc -l` and
-`grep -c 'Box::new(rules::' crates/cypcb-drc/src/lib.rs` both answer 39, so
+`grep -c 'Box::new(rules::' crates/cypcb-drc/src/lib.rs` both answer 40, so
 every rule written is a rule registered. Both figures are held by
 `cargo test -p cypcb-cli --test the_audit_counts_what_is_there`. The grammar
 opens a design with 19 keywords: `board`, `outline`, `text`, `dimension`,
