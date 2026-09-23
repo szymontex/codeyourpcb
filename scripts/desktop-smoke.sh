@@ -16,6 +16,15 @@ set -e
 # the file picker works, or that a menu click reaches the frontend. Those need
 # a person or a UI driver, and a smoke test that claimed them would be lying.
 #
+# What it loads: this tree's `viewer/dist`, embedded in the binary. A debug
+# build without Tauri's `custom-protocol` feature loads `devUrl` instead -
+# http://localhost:4321, whatever dev server answers there - and on 2026-09-23
+# that is what "Smoke passed" had been photographing while a dev server ran on
+# the same machine. The build below turns the feature on, and Tauri then
+# refuses to compile without `viewer/dist`. The page also has to prove where it
+# came from: the bundle dials its WebSocket on CYPCB_SMOKE_WS_PORT (default
+# 4329), this script listens there, and a window that never dialled fails.
+#
 # Needs Xvfb and ImageMagick's `import`, both of which the container already
 # has; `scripts/setup-dev.sh` installs neither, so this exits with a message
 # rather than a stack trace when they are missing.
@@ -26,13 +35,7 @@ APP=target/debug/cypcb-desktop
 FRONTEND=viewer/dist
 SECONDS_UP=${SECONDS_UP:-12}
 SHOT=${SHOT:-/tmp/cypcb-desktop-smoke.png}
-
-for tool in xvfb-run import; do
-    command -v "$tool" >/dev/null || {
-        echo "[SKIP] $tool not found. apt-get install -y xvfb imagemagick"
-        exit 0
-    }
-done
+WS_PORT=${CYPCB_SMOKE_WS_PORT:-4329}
 
 # A binary and a bundle are only as new as the last build, and this script
 # photographs both. On 2026-09-05 the tree had `viewer/dist` from 2026-08-27
@@ -56,43 +59,86 @@ fresher_than() {
     [ "$built" -ge "$sources" ]
 }
 
-[ -x "$APP" ] || {
-    echo "[ERROR] $APP is not built. cargo build -p cypcb-desktop"
-    exit 1
-}
-
-fresher_than "$APP" "the desktop binary" src-tauri crates || {
-    echo "[ERROR] $APP is older than the Rust it is built from."
-    echo "        cargo build -p cypcb-desktop"
-    exit 1
-}
-
 # tauri.conf.json points `frontendDist` here. Without it the window opens onto
 # nothing, which is a passing smoke test and a broken application - so the
 # absence is an error rather than something to discover from a white screen.
+# It comes before the check for the display tools, so a machine without them
+# still hears about a missing bundle rather than a skip.
 [ -d "$FRONTEND" ] && [ -n "$(ls -A "$FRONTEND" 2>/dev/null)" ] || {
     echo "[ERROR] $FRONTEND is empty; the app would open onto nothing."
-    echo "        cd viewer && npm run build"
+    echo "        cd viewer && CYPCB_WS_PORT=$WS_PORT npm run build"
     exit 1
 }
 
 fresher_than "$FRONTEND" "the frontend bundle" viewer/src viewer/index.html || {
     echo "[ERROR] $FRONTEND is older than viewer/src; the window would show"
     echo "        a build nobody wrote today."
-    echo "        cd viewer && npm run build"
+    echo "        cd viewer && CYPCB_WS_PORT=$WS_PORT npm run build"
     exit 1
 }
 
+for tool in xvfb-run import; do
+    command -v "$tool" >/dev/null || {
+        echo "[SKIP] $tool not found. apt-get install -y xvfb imagemagick"
+        exit 0
+    }
+done
+
+# Somebody else on the port would take the dial this script counts.
+if (exec 3<>"/dev/tcp/127.0.0.1/$WS_PORT") 2>/dev/null; then
+    echo "[ERROR] something already listens on $WS_PORT; set CYPCB_SMOKE_WS_PORT"
+    exit 1
+fi
+
+# The binary is built here, not trusted from whoever built it last: without
+# `custom-protocol` it would open the dev server's page, not this tree's.
+echo "[0/2] building $APP with Tauri's custom-protocol feature"
+if ! BUILD_OUT=$(cargo build -p cypcb-desktop --features tauri/custom-protocol 2>&1); then
+    echo "$BUILD_OUT" | tail -20
+    echo "[FAIL] $APP did not build against $FRONTEND"
+    exit 1
+fi
+
 echo "[1/2] starting $APP on a virtual display for ${SECONDS_UP}s"
 
-# Both temporary files, removed however this script ends. The two `rm -f "$LOG"`
+# The temporary files, removed however this script ends. The two `rm -f "$LOG"`
 # lines further down cover the paths that reach them; `set -e` is on, so any
 # failure before them exits without cleaning up, and an interrupted run never
 # reaches them either. A trap runs on the way out whatever the way out is, and
 # the runner script had no `rm` on those paths at all.
 RUNNER=$(mktemp)
 LOG=$(mktemp)
-trap 'rm -f "$RUNNER" "$LOG"' EXIT
+DIALS=$(mktemp)
+LISTENER=
+trap 'rm -f "$RUNNER" "$LOG" "$DIALS"; [ -z "$LISTENER" ] || kill "$LISTENER" 2>/dev/null' EXIT
+
+# Counts connections on the port the bundle was built to dial. It accepts and
+# hangs up; the page reconnects, and one connection is all the count needs.
+python3 - "$WS_PORT" "$DIALS" <<'PY' &
+import socket, sys, threading
+port, out = int(sys.argv[1]), sys.argv[2]
+count, lock = 0, threading.Lock()
+def serve(family, host):
+    global count
+    try:
+        server = socket.socket(family, socket.SOCK_STREAM)
+        server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        server.bind((host, port))
+        server.listen(16)
+    except OSError:
+        return
+    while True:
+        conn, _ = server.accept()
+        conn.close()
+        with lock:
+            count += 1
+            with open(out, "w") as f:
+                f.write(str(count))
+for family, host in ((socket.AF_INET, "127.0.0.1"), (socket.AF_INET6, "::1")):
+    threading.Thread(target=serve, args=(family, host), daemon=True).start()
+threading.Event().wait()
+PY
+LISTENER=$!
 cat > "$RUNNER" <<EOF
 #!/bin/bash
 "$PWD/$APP" &
@@ -124,6 +170,14 @@ if [ "$STATUS" -ne 0 ]; then
 fi
 rm -f "$LOG"
 echo "[OK] it was still running after ${SECONDS_UP}s"
+
+DIALLED=$(cat "$DIALS" 2>/dev/null)
+if [ -z "$DIALLED" ]; then
+    echo "[FAIL] the window never dialled $WS_PORT: it did not show this tree's"
+    echo "       $FRONTEND built with CYPCB_WS_PORT=$WS_PORT"
+    exit 1
+fi
+echo "[OK] the window dialled $WS_PORT ($DIALLED connections): its page is a bundle built for it"
 
 echo "[2/2] reading what it drew: $SHOT"
 python3 - "$SHOT" <<'PY'

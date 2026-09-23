@@ -593,10 +593,11 @@ echo ""
 # the only crate that reaches a person's machine as an application was the one
 # nothing here started. It builds what it photographs first: the smoke test
 # refuses a bundle older than `viewer/src`, and the tree it was wired into had
-# a `viewer/dist` a week behind.
+# a `viewer/dist` a week behind. The bundle dials its WebSocket on the smoke's
+# own port, not on a dev server's, and the script builds the binary itself so
+# that the window shows this bundle and not the page `devUrl` points at.
 stage "desktop smoke"
-if (cd viewer && npm run build) >/dev/null 2>&1 \
-    && cargo build -p cypcb-desktop >/dev/null 2>&1 \
+if (cd viewer && CYPCB_WS_PORT="${CYPCB_SMOKE_WS_PORT:-4329}" npm run build) >/dev/null 2>&1 \
     && ./scripts/desktop-smoke.sh; then
   pass "desktop-smoke"
 else
