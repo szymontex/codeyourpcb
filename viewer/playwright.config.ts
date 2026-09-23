@@ -14,6 +14,19 @@ import { defineConfig, devices } from '@playwright/test';
  */
 const PORT = Number(process.env.CYPCB_E2E_PORT ?? 4327);
 
+/**
+ * The port the e2e page's WebSocket dials, chosen so that nothing listens.
+ *
+ * The client dialled 4322 whatever served it, so a run with `npm start` up
+ * elsewhere in the container connected every spec to that server, which
+ * pushed its own board into the page and hid the project manager. The specs
+ * failed on a tree with nothing wrong in it. `vite.config.ts` hands
+ * `CYPCB_WS_PORT` to the client, and it is the variable `server.ts` listens on.
+ */
+const WS_PORT = Number(process.env.CYPCB_E2E_WS_PORT ?? 4328);
+// Set here so the specs can check the page dialled this port and no other.
+process.env.CYPCB_E2E_WS_PORT = String(WS_PORT);
+
 export default defineConfig({
   testDir: './e2e',
   timeout: 30_000,
@@ -65,6 +78,7 @@ export default defineConfig({
   ],
   webServer: {
     command: `npm run dev -- --port ${PORT} --strictPort`,
+    env: { CYPCB_WS_PORT: String(WS_PORT) },
     port: PORT,
     reuseExistingServer: !process.env.CI,
     timeout: 60_000,

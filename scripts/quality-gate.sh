@@ -355,6 +355,12 @@ echo ""
 # That port is no longer 4321. It was, and 4321 is Astro's default, so a gate
 # run failed here because another repository's dev server in this container
 # held it. `CYPCB_E2E_PORT` overrides, and the default is 4327.
+#
+# The page's WebSocket has a port of its own, and it was the one thing the
+# e2e port did not isolate: the client dialled 4322 whatever served it, so a
+# `npm start` running from another checkout answered every spec and pushed its
+# board into the page. `CYPCB_E2E_WS_PORT` overrides, the default is 4328, and
+# nothing listens there; `the-page-dials-its-own-websocket.spec.ts` checks it.
 stage "playwright (rebuilding viewer/pkg first)"
 # The module is rebuilt, and then asked whether the committed one is the same.
 # The rebuild makes the browser suite honest about the working tree; the
