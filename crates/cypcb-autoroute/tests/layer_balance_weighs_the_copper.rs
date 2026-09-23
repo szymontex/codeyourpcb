@@ -1,14 +1,12 @@
-//! `layer_balance` counts nets on a layer, not copper on it.
+//! `layer_balance` weighs the copper on a layer, not the nets on it.
 //!
-//! `cargo test -p cypcb-autoroute --test layer_balance_counts_nets_not_copper`
+//! `cargo test -p cypcb-autoroute --test layer_balance_weighs_the_copper`
 //!
-//! `apply_routes_as` emits one `Trace` per net and layer, and
-//! `compute_layer_balance` counts entities. So the ratio reads how many nets
-//! reached a layer, never how much copper did.
-//!
-//! `layer_balance_means_what_it_says` pins the same function against several
-//! entities on one net per layer, which is a shape the router never emits.
-//! These two cases use the production shape instead.
+//! `apply_routes_as` emits one `Trace` per net and layer. `compute_layer_balance`
+//! counted those entities until 2026-09-23, so the ratio read how many nets
+//! reached a layer and never how much copper did: ten times the copper on one
+//! side scored 1.0, and three short nets outweighed one long one. Both cases
+//! are built in the shape the router emits, and both now read lengths.
 
 use cypcb_autoroute::scoring::score_board;
 use cypcb_core::{Nm, Point};
@@ -57,19 +55,19 @@ fn balance_of(mut world: BoardWorld) -> f64 {
 }
 
 #[test]
-fn one_net_a_side_reads_balanced_however_the_copper_falls() {
+fn one_net_a_side_reads_the_copper_not_the_count() {
     let balance = balance_of(board(&[
         (Layer::TopCopper, "A", 50.0),
         (Layer::BottomCopper, "B", 5.0),
     ]));
-    assert_eq!(
-        balance, 1.0,
-        "ten times the copper on top scored {balance}, so the ratio never read a length"
+    assert!(
+        (balance - 0.1).abs() < 1e-9,
+        "5 mm against 50 mm is a tenth, got {balance}; 1.0 means one net a side was counted"
     );
 }
 
 #[test]
-fn three_small_nets_outweigh_one_large_one() {
+fn three_small_nets_do_not_outweigh_one_large_one() {
     let balance = balance_of(board(&[
         (Layer::TopCopper, "A", 2.0),
         (Layer::TopCopper, "B", 2.0),
@@ -77,7 +75,7 @@ fn three_small_nets_outweigh_one_large_one() {
         (Layer::BottomCopper, "D", 50.0),
     ]));
     assert!(
-        (balance - 1.0 / 3.0).abs() < 1e-9,
-        "the layer holding 6 mm of 56 mm scored {balance} against the layer holding the rest"
+        (balance - 0.12).abs() < 1e-9,
+        "6 mm against 50 mm is 0.12, got {balance}; a third means the nets were counted"
     );
 }

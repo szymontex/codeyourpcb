@@ -2079,7 +2079,7 @@ nothing, not tests that read the wrong thing.
 
 ### Board score
 
-*Verified: 2026-09-20*
+*Verified: 2026-09-23*
 
 `crates/cypcb-autoroute/src/scoring.rs` returns `RoutingScore` with nine
 fields. Six of them enter the composite.
@@ -2093,7 +2093,7 @@ fields. Six of them enter the composite.
 | `shorts` | clearance rows measured at 0.00 mm | `score_board`, through `cypcb_drc::shorts`, which is guarded on the kind | no |
 | `smoothness` | 0.0 to 1.0 | `compute_smoothness` | yes, `(1-s) * 100` |
 | `crossings` | segment intersections | `compute_crossings` | yes, x500 |
-| `layer_balance` | 0.0 to 1.0 | `compute_layer_balance` | yes, `(1-b) * 50` |
+| `layer_balance` | 0.0 to 1.0 | `compute_layer_balance`, over `copper_length_per_layer` | yes, `(1-b) * 50` |
 | `composite` | dimensionless, lower is better | `compute_composite` | - |
 
 Every term is multiplied by its `ScoreWeights` field before it is summed - the
@@ -2136,24 +2136,20 @@ re-discovered:
   sentence still stood in the function's own comment and in that test's header,
   which is why correcting the canon alone would have left the source in place.
 
-**`layer_balance` counts nets on a layer, not copper on it.**
-`compute_layer_balance` adds one to a layer's count per `Trace` entity, and
-`apply_routes_as` collects the router's output into one `Trace` per net and
-layer. For every board this router draws, the per-layer count is therefore the
-number of nets carrying copper there; no length, segment count or area reaches
-the ratio. Two consequences follow without measuring a board. A layer holding
-one net and nine tenths of the copper ties with a layer holding one net and the
-rest, and the pair scores 1.0. A layer holding three small nets against a layer
-holding one large one scores 0.333 while carrying the smaller share. The field's
-comment says "traces evenly distributed across layers", which is true only when
-"trace" is read as "net on a layer".
+**`layer_balance` weighs copper, not nets.** `copper_length_per_layer` sums
+every segment's length under the layer of the `Trace` holding it, and
+`compute_layer_balance` divides the least by the most. Until 2026-09-23 it
+added one per `Trace` entity instead, and `apply_routes_as` collects the
+router's output into one `Trace` per net and layer, so the ratio read how many
+nets reached each layer: one net holding 50 mm on top against one net holding
+5 mm underneath scored 1.0, and three nets of 2 mm against one of 50 mm scored
+0.333 while carrying the smaller share. `layer_balance_weighs_the_copper`
+holds both cases in the shape the router emits, at 0.1 and 0.12.
 
-`layer_balance_means_what_it_says` cannot see this. It builds several `Trace`
-entities on one net per layer, which is a shape `apply_routes_as` never emits,
-so it pins per-entity counting against a fixture the production path cannot
-produce. The behaviour it asserts is right; the set it asserts it over is not
-the set the number is computed over. `layer_balance_counts_nets_not_copper`
-takes the production shape instead.
+`layer_balance_means_what_it_says` built several `Trace` entities on one net
+per layer until the same day, a shape `apply_routes_as` never emits. It builds
+one net per trace now. Its traces are all one length, so it holds the rule
+about the layers the board has, and a count and a length agree there.
 
 **What `crossings` excludes.** `compute_crossings` skips every candidate that is
 not a `Trace` and every candidate on the same net, so a trace crossing a pad or
@@ -2291,7 +2287,7 @@ inside `score_board` by asking the violations a question the total does not.
 
 ### Properties nothing in the workspace computes
 
-*Verified: 2026-09-20*
+*Verified: 2026-09-23*
 
 Checked by grep over `crates/*/src` on 2026-09-14: no hits for "return path",
 "return current", "loop area", "split plane", "crosstalk", "parallel run",
@@ -2306,11 +2302,6 @@ ran, and this one is not left standing on its date:
 `a_recorded_search_of_the_tree_still_returns_what_it_says` runs the names below
 again at every gate, so the day any of them answers is the day this section
 goes red.
-
-Checked the same way on 2026-09-20, over `crates/*/src`: no hits for
-"copper_length_per_layer". The quantity is the one `layer_balance` is named
-after and does not read - every `TraceSegment` carries a length and every
-`Trace` a layer, so nothing is missing from the model.
 
 1. Return path coverage - for each segment, ask the spatial index whether
    continuous reference copper lies under its footprint on the adjacent layer,
@@ -2362,12 +2353,6 @@ after and does not read - every `TraceSegment` carries a length and every
    two this item still names correctly. It entered on 2026-09-11 and ran in no
    stage until the same day this line was corrected, so for three days the
    answer existed and nothing asked for it.
-8. Copper per layer - sum `TraceSegment::length` grouped by `Trace.layer` and
-   divide the smallest by the largest. `layer_balance` is named for this and
-   counts entities instead, which under `apply_routes_as` is one per net and
-   layer, so the ratio today reads how many nets reached a layer. A measurement
-   would be held as copper_length_per_layer, and that name answers no file
-   today.
 
 ### The wedge beside a corner, which R-08 measures and can miss
 

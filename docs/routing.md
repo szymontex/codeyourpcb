@@ -692,6 +692,8 @@ measuring what their names say:
 - **layer_balance** counted only the layers that carried copper, so a route
   using one layer of two scored a perfect 1.0 while a route using both scored
   0.200 on `led_blink`. It measures against the layers the board has now.
+  It also counted one per `Trace` entity, which the router emits per net and
+  layer, so it read nets per layer; since 2026-09-23 it weighs copper length.
 - **crossings** was correct, and it is charged twice. Two traces crossing at
   one point measure `crossings` 1, `drc_violations` 1, `shorts` 1: the
   composite pays 500 for the crossing and 1000 for the same contact called a
