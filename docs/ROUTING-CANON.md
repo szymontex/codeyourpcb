@@ -287,7 +287,7 @@ crossing that cannot be avoided, and what a two-layer board changes.
 
 ### R-06 Violations are reported per rule, not as one total `[S]`
 
-*Verified: 2026-09-20*
+*Verified: 2026-09-23*
 
 *Applies when:* [output row] always, because it is about the shape of the output rather than the board.
 
@@ -312,7 +312,7 @@ carries `kind: ViolationKind`, an enum running from `Clearance` to `AcidTrap`
 in `crates/cypcb-drc/src/violation.rs`, plus `actual` and `required` as numbers
 rather than prose. How many kinds it holds is counted by the command in the
 verification block rather than written here, and the reason is its own history:
-35 on 2026-08-29, 36 on 2026-09-11, 37 on 2026-09-12. **That said "inside one
+35 on 2026-08-29, 36 on 2026-09-11, 37 on 2026-09-12, 38 on 2026-09-23. **That said "inside one
 week" until 2026-09-13 and the span is a fortnight** - a figure loose enough
 that nobody would check it, attached to an argument about figures nobody
 checks.
@@ -484,7 +484,7 @@ where 45 belonged.
 
 In this repo: the angle is enforced and the teardrop is not. `PadEntryRule`
 is in the registry
-(`crates/cypcb-drc/src/lib.rs:165`) and reports through `entry_angle`
+(`crates/cypcb-drc/src/lib.rs:168`) and reports through `entry_angle`
 (`crates/cypcb-drc/src/rules/pad_entry.rs:211`) and `entry_angle_placed`
 (`:257`), the second of which is the change of frame and nothing else: it
 carries the trace's two points into a placed and rotated pad's own frame rather
@@ -560,7 +560,7 @@ what the design stated.
 
 ### R-09 Thermal relief at a pad in a pour `[P]`
 
-*Verified: 2026-09-13*
+*Verified: 2026-09-23*
 
 *Applies when:* [copper] a pad sits inside a pour on its own net. A board with no pour says nothing here.
 
@@ -610,7 +610,7 @@ silence: no rule in the registry checks a thermal relief at all.** Everything
 above is about the copper the export path draws. Nothing walks a board and asks
 whether a pad in a pour has spokes, how wide they are, or how much gap surrounds
 them - `grep -ci thermal crates/cypcb-drc/src/lib.rs` answers 0 against
-thirty-nine entries. "Partly enforced" was true of the drawing and read as
+forty entries. "Partly enforced" was true of the drawing and read as
 though it covered the checking.
 
 ### R-10 Mitring an acute junction `[P]`
@@ -862,6 +862,19 @@ The direction swap the seeded frontier replaced gave 7 to 27, 12 to 5, 3 to 1
 and nineteen shorts, with the old optimizer behind it. Measured 2026-09-23 by
 `cargo test --release -p cypcb-autoroute --test which_rule_the_flag_moves`, which
 prints every kind on the board and is what holds these figures.
+
+**Tier 1 has a second form, and the ranking counts only the first.** A
+connection the router gave up on is counted by the router and reported by
+`unrouted-pin`. A connection it made and a later pass cut is neither: every pin
+still has copper on it, so `unrouted-pin` is satisfied, and the router's count
+was taken before the cut. `net-split` (`NetSplitRule` in
+`crates/cypcb-drc/src/rules/net_split.rs`) reports it by joining each net's
+copper with the same touch `ClearanceRule` measures. The via optimizer cut
+nets this way until its check was made real. `generate_variants` ranks by the
+router's own count and does not read the rule. Measured 2026-09-23 by
+`cargo test -p cypcb-autoroute --test a_net_cut_after_routing_is_reported`,
+which replays the old elimination on `led_blink` and holds the rule to
+reporting the pin it cut off.
 
 *The field R-11 would need does not exist:* `DrcViolation` has no severity, so
 the tiers below have nowhere to live in a row of output. See R-18.
@@ -1293,9 +1306,9 @@ this page is a counter-example to that sentence on the same page.
 | rule | what enforces it |
 |---|---|
 | R-01 width against current | `TraceCurrentRule` (`crates/cypcb-drc/src/lib.rs:148`), silent on a net that declares no `current` |
-| R-03 acute angles | `AcuteAngleRule` (`crates/cypcb-drc/src/lib.rs:202`), reporting `ViolationKind::AcidTrap` |
+| R-03 acute angles | `AcuteAngleRule` (`crates/cypcb-drc/src/lib.rs:205`), reporting `ViolationKind::AcidTrap` |
 | R-07 annular ring and hole spacing | six rules - `AnnularRingRule`, `HoleToHoleRule`, `ViaDiameterRule`, `ViaDrillRule`, `PadLandRule`, `DrillAspectRatioRule` |
-| R-08 trace entry into a land | `PadEntryRule` (`crates/cypcb-drc/src/lib.rs:165`), reporting `ViolationKind::PadEntry`; the angle only. The teardrop half is not merely unwritten - the copper it would check is synthesised in the Gerber writer and is not in the board the checker walks |
+| R-08 trace entry into a land | `PadEntryRule` (`crates/cypcb-drc/src/lib.rs:168`), reporting `ViolationKind::PadEntry`; the angle only. The teardrop half is not merely unwritten - the copper it would check is synthesised in the Gerber writer and is not in the board the checker walks |
 | R-19 the flat clearance minimum | `ClearanceRule`, first in the registry, firing more than the rest together |
 
 **Bucket 2 - checkable today, nobody wrote the check. Ten.** Checkable is
@@ -2896,13 +2909,13 @@ grep -n "query_region_on_layers" crates/cypcb-autoroute/src/scoring.rs
 # an unanchored search for those names answers 15, because each is also
 # declared and re-exported, and a check whose output contradicts its own
 # comment is worse than no check.
-grep -c "Box::new(rules::" crates/cypcb-drc/src/lib.rs   # expect 39
+grep -c "Box::new(rules::" crates/cypcb-drc/src/lib.rs   # expect 40
 grep -cE "Box::new\(rules::(ClearanceRule|AnnularRingRule|HoleToHoleRule|ViaDiameterRule|ViaDrillRule|TraceCurrentRule|PadLandRule|DrillAspectRatioRule|AcuteAngleRule|PadEntryRule)\)" crates/cypcb-drc/src/lib.rs   # expect 10
 
 # R-06: how many fault kinds the enum carries, with its own control beneath it.
 # An awk range that stopped matching would answer 0 to the count and 0 to the
 # control, and a check that can only answer zero is not a check.
-awk '/pub enum ViolationKind \{/,/^}/' crates/cypcb-drc/src/violation.rs | grep -c '^    [A-Z]'   # expect 37
+awk '/pub enum ViolationKind \{/,/^}/' crates/cypcb-drc/src/violation.rs | grep -c '^    [A-Z]'   # expect 38
 awk '/pub enum ViolationKind \{/,/^}/' crates/cypcb-drc/src/violation.rs | grep -c '^    AcidTrap,$'   # expect 1
 
 # R-16: the acceptance classes that gate R-11, and the house presets that do not

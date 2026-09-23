@@ -122,6 +122,9 @@ pub enum ViolationKind {
     HatchTooFine,
     /// Copper meets copper at less than a right angle, and traps etchant.
     AcidTrap,
+    /// A net's copper is in more than one piece, and some of its pins are cut
+    /// off from the rest.
+    NetSplit,
 }
 
 /// The two features a clearance message is about.
@@ -252,6 +255,7 @@ impl std::fmt::Display for ViolationKind {
             ViolationKind::AcidTrap => write!(f, "acid-trap"),
             ViolationKind::SolidPourInBend => write!(f, "solid-pour-in-bend"),
             ViolationKind::HatchTooFine => write!(f, "hatch-too-fine"),
+            ViolationKind::NetSplit => write!(f, "net-split"),
         }
     }
 }
@@ -290,6 +294,50 @@ impl DrcViolation {
             other_entity: None,
             source_span: None,
             message: format!("{refdes}.{pin} is on a net that no copper reaches"),
+        }
+    }
+
+    /// Create a violation for a piece of a net cut off from the rest of it.
+    ///
+    /// Every pin in `cut_off` has copper reaching it, so `unrouted_pin` is
+    /// quiet about each of them; none of that copper reaches the pins in
+    /// `rest`.
+    pub fn net_split(
+        piece: Entity,
+        rest_of_net: Entity,
+        net: &str,
+        cut_off: &[String],
+        rest: &[String],
+        location: Point,
+    ) -> Self {
+        let list = |pins: &[String]| -> String {
+            const SHOWN: usize = 4;
+            let head = pins
+                .iter()
+                .take(SHOWN)
+                .cloned()
+                .collect::<Vec<_>>()
+                .join(", ");
+            if pins.len() > SHOWN {
+                format!("{head} and {} more", pins.len() - SHOWN)
+            } else {
+                head
+            }
+        };
+        DrcViolation {
+            kind: ViolationKind::NetSplit,
+            actual: None,
+            required: None,
+            area: None,
+            location,
+            entity: piece,
+            other_entity: Some(rest_of_net),
+            source_span: None,
+            message: format!(
+                "net {net} is in pieces: no copper joins {} to {}",
+                list(cut_off),
+                list(rest)
+            ),
         }
     }
 

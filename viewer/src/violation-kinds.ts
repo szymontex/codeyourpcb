@@ -54,6 +54,7 @@ export const VIOLATION_KIND_META: Record<string, ViolationKindMeta> = {
   'solid-pour-in-bend':  { icon: '🪤', label: 'Solid plane across a fold' },
   'hatch-too-fine':      { icon: '🕸️', label: 'Mesh finer than the fab etches' },
   'acid-trap':           { icon: '📐', label: 'Copper meeting copper too sharply' },
+  'net-split':           { icon: '✂️', label: 'Net cut into pieces' },
 };
 
 /** The icon and name for a kind, falling back to the slug the engine sent. */
