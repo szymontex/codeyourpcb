@@ -1180,14 +1180,7 @@ impl PcbEngine {
             let mut query = ecs.query::<(Entity, &Via)>();
             let vias: Vec<_> = query
                 .iter(ecs)
-                .map(|(e, v)| {
-                    (
-                        e,
-                        v.position,
-                        v.outer_diameter.0 / 2,
-                        v.start_layer.to_copper_mask() | v.end_layer.to_copper_mask(),
-                    )
-                })
+                .map(|(e, v)| (e, v.position, v.outer_diameter.0 / 2, v.copper_mask()))
                 .collect();
 
             for (entity, position, radius, layer_mask) in &vias {

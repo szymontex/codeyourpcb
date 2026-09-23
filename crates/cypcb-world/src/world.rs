@@ -517,8 +517,8 @@ impl BoardWorld {
                 let radius = via.outer_diameter.0 / 2;
                 let cx = via.position.x.0;
                 let cy = via.position.y.0;
-                // Via spans from start_layer to end_layer — use both masks
-                let layer_mask = via.start_layer.to_copper_mask() | via.end_layer.to_copper_mask();
+                // Every layer the hole is drilled through, not only its ends
+                let layer_mask = via.copper_mask();
                 entries.push(SpatialEntry::from_raw(
                     entity,
                     cx - radius,

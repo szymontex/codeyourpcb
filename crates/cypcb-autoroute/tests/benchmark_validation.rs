@@ -419,7 +419,20 @@ const DRC_RATCHETS: &[Ratchet] = &[
     // `buried_vias_allowed` were dropped before they reached a rule. New
     // ratchet is the routed value plus this board's own band of 34, the same
     // arithmetic as every other row: 437 + 34 = 471. Shorts unmoved at 175.
-    ("multi_ic.kicad_pcb", "multi_ic", 540, 93, 505, 78),
+    //
+    // 540 / 93 -> 578 / 125 on 2026-09-24, and the router did not move: the
+    // spatial index gave a via only the two layers it joins, so on this, the
+    // one four-layer board, a through via was invisible on both inner layers
+    // and a blind one on the layer it passes. The hole is plated wherever it
+    // is drilled and the Gerber export flashes its land there. Measured on
+    // the same tree both ways, the route set hashes identically and the
+    // checker finds 511 / 78 before and 543 / 110 after. All 32 new reports
+    // were classified against the via's circle: 21 tracks through the middle
+    // of a hole on an inner layer, 1 via stacked on another net's buried
+    // one, and 10 tracks 0.033mm from a land that the square envelope counts
+    // as touching - real under 0.10mm, reported as a short. Baselines
+    // re-measured at 543 / 110; ratchet is that plus the band, 35 / 15.
+    ("multi_ic.kicad_pcb", "multi_ic", 578, 125, 543, 110),
     ("shift_driver.kicad_pcb", "shift_driver", 45, 15, 19, 0),
     ("qfp_fanout.kicad_pcb", "qfp_fanout", 424, 177, 363, 131),
     // A band of zero is not a rounding: this board routes identically at every

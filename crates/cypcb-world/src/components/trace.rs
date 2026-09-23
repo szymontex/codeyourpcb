@@ -816,6 +816,51 @@ impl Via {
     pub fn is_through_hole(&self) -> bool {
         self.start_layer == Layer::TopCopper && self.end_layer == Layer::BottomCopper
     }
+
+    /// Every copper layer this via has copper on, in the bits
+    /// [`Layer::to_copper_mask`] uses.
+    ///
+    /// A hole is plated wherever it is drilled, so the barrel is copper on
+    /// every layer between `start_layer` and `end_layer` and not only on the
+    /// two it joins. A land there is optional to the fab - nonfunctional pads
+    /// may be removed - but this model has no way to say a via lacks one, and
+    /// the Gerber export flashes the full land on each layer of a span it
+    /// recognises. The
+    /// checks measure what the export makes: a Top-to-Inner2 via on a
+    /// four-layer board is copper on Top, Inner1 and Inner2.
+    ///
+    /// A span that ends on `BottomCopper` answers every inner layer below its
+    /// other end that there is a bit for; the layers a board does not have hold
+    /// no copper for it to meet.
+    pub fn copper_mask(&self) -> u32 {
+        let depth = |layer: Layer| -> Option<u16> {
+            match layer {
+                Layer::TopCopper => Some(0),
+                Layer::Inner(n) => Some(u16::from(n) + 1),
+                Layer::BottomCopper => Some(u16::MAX),
+                _ => None,
+            }
+        };
+        let (Some(start), Some(end)) = (depth(self.start_layer), depth(self.end_layer)) else {
+            return self.start_layer.to_copper_mask() | self.end_layer.to_copper_mask();
+        };
+        let (low, high) = (start.min(end), start.max(end));
+
+        let mut mask = 0;
+        if low == 0 {
+            mask |= Layer::TopCopper.to_copper_mask();
+        }
+        if high == u16::MAX {
+            mask |= Layer::BottomCopper.to_copper_mask();
+        }
+        for n in 0u8..30 {
+            let d = u16::from(n) + 1;
+            if low <= d && d <= high {
+                mask |= Layer::Inner(n).to_copper_mask();
+            }
+        }
+        mask
+    }
 }
 
 #[cfg(test)]
@@ -976,6 +1021,42 @@ mod tests {
             locked: false,
         };
         assert!(!blind_via.is_through_hole());
+    }
+
+    #[test]
+    fn a_via_is_copper_on_every_layer_it_is_drilled_through() {
+        let span = |start_layer, end_layer| Via {
+            position: Point::ORIGIN,
+            drill: Nm::from_mm(0.2),
+            outer_diameter: Nm::from_mm(0.4),
+            start_layer,
+            end_layer,
+            net_id: NetId::new(0),
+            locked: false,
+        };
+        let bits = |layers: &[Layer]| layers.iter().fold(0, |m, l| m | l.to_copper_mask());
+        let (top, bottom) = (Layer::TopCopper, Layer::BottomCopper);
+        let (in1, in2, in3) = (Layer::Inner(0), Layer::Inner(1), Layer::Inner(2));
+
+        // Blind from the top: the layer it passes is copper too, the far face is not.
+        assert_eq!(span(top, in2).copper_mask(), bits(&[top, in1, in2]));
+        // The order the ends are written in does not matter.
+        assert_eq!(span(in2, top).copper_mask(), bits(&[top, in1, in2]));
+        // Buried: neither face.
+        assert_eq!(span(in1, in3).copper_mask(), bits(&[in1, in2, in3]));
+        // Blind from the bottom: not the inner layers above it.
+        let from_bottom = span(in2, bottom).copper_mask();
+        assert_eq!(from_bottom & bits(&[top, in1]), 0);
+        assert_eq!(
+            from_bottom & bits(&[in2, in3, bottom]),
+            bits(&[in2, in3, bottom])
+        );
+        // Through: every layer, inner ones included.
+        let through = span(top, bottom).copper_mask();
+        assert_eq!(
+            through & bits(&[top, in1, in2, in3, bottom]),
+            bits(&[top, in1, in2, in3, bottom])
+        );
     }
 
     #[test]
