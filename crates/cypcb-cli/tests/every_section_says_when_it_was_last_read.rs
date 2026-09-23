@@ -345,7 +345,7 @@ fn every_rule_says_what_its_condition_runs_over() {
 
     assert!(
         rules >= 19,
-        "this check found {rules} rule sections and the canon has nineteen. Either rules were          deleted, or the heading it walks changed shape and the tally below is over nothing."
+        "this check found {rules} rule sections and the canon has nineteen headings. Either rules were          deleted, or the heading it walks changed shape and the tally below is over nothing."
     );
     assert!(
         untagged.is_empty(),
@@ -364,6 +364,12 @@ fn every_rule_says_what_its_condition_runs_over() {
     // The number the prose states, held to the number the walk finds. This is
     // the half that makes a claim about the other eighteen sections checkable
     // by the person writing the nineteenth.
+    //
+    // Both assertions read the paragraphs rather than the raw file. The tally
+    // fits on one line today and `canon.contains` found it; a rewrap of that
+    // paragraph would have reported the tally wrong while it was right, and a
+    // red that is wrong teaches a reader to stop looking.
+    let paragraphs = canon_paragraphs(&canon);
     let stated = format!(
         "**copper {}, output row {}, the tool {}, the canon {}, a component {}.**",
         tags.get("copper").copied().unwrap_or(0),
@@ -373,11 +379,32 @@ fn every_rule_says_what_its_condition_runs_over() {
         tags.get("a component").copied().unwrap_or(0),
     );
     assert!(
-        canon.contains(&stated),
+        paragraphs.iter().any(|paragraph| paragraph.contains(&stated)),
         "R-16 states the tally and the walk disagrees with it.\n  the file says: {stated}\n           and the line there reads: {TALLY}\n\
          \n  Whichever moved, the other follows in the same commit: a count in prose beside a \
          count in a walk is two places for one fact, and this document has seven recorded \
          cases of that going wrong."
+    );
+
+    // R-15 names which subjects a condition over a feature runs on, in the
+    // same shape: the sentence carries the numbers the walk produces.
+    let over_features = format!(
+        "is what the {} rules whose subject is `copper` run on; the {} whose subject is \
+         `the tool`, `the canon` or `output row` run on neither",
+        tags.get("copper").copied().unwrap_or(0),
+        tags.get("the tool").copied().unwrap_or(0)
+            + tags.get("the canon").copied().unwrap_or(0)
+            + tags.get("output row").copied().unwrap_or(0),
+    );
+    assert!(
+        paragraphs
+            .iter()
+            .any(|paragraph| paragraph.contains(&over_features)),
+        "R-15 says which subjects a condition over a feature runs on and the walk disagrees.\n  \
+         the walk builds: {over_features}\n\
+         \n  This is the third sentence in this file making a claim about what every other rule \
+         does - after R-15's own, corrected in `405b3c4`, and R-17's, in `34edb07`. The first two \
+         were caught by a reader. This one is caught here."
     );
 }
 
@@ -1437,7 +1464,15 @@ fn every_commit_the_canon_cites_is_a_commit_in_this_repository() {
 }
 
 /// Below this the extraction has stopped reading the sentence rather than found
-/// its list clean. One sentence carries six names today.
+/// its list clean. Three paragraphs carry the phrase and hand this check
+/// seventeen names between them: twelve and one over `crates/*/src`, four over
+/// `crates/cypcb-rules/src`. Paragraphs and scopes do not divide alike - two of
+/// the three share a scope, and each paragraph is counted on its own because
+/// the loop takes the first occurrence of the phrase in a paragraph and no
+/// more. This line said six while the file handed over twelve, and its first
+/// correction said two paragraphs while there were three: a count taken on one
+/// set and written down as the count of another, which is what everything
+/// below exists to catch.
 const NAMES_SEARCHED_FOR_FLOOR: usize = 5;
 
 #[test]
@@ -1449,6 +1484,7 @@ fn a_recorded_search_of_the_tree_still_returns_what_it_says() {
     // A sentence of the form: no hits for "a", "b" or "c", with the scope it
     // searched in backticks earlier in the same paragraph.
     let mut searched: Vec<(String, String)> = Vec::new();
+    let mut silent: Vec<String> = Vec::new();
     for (_, paragraph) in prose_paragraphs(&canon) {
         let flat = paragraph.split_whitespace().collect::<Vec<_>>().join(" ");
         let Some(at) = flat.find("no hits for") else {
@@ -1466,10 +1502,46 @@ fn a_recorded_search_of_the_tree_still_returns_what_it_says() {
         // list the moment the sentence was corrected for it.
         let rest = &flat[at..];
         let end = rest.find("\". ").map(|i| i + 1).unwrap_or(rest.len());
-        for name in rest[..end].split('"').skip(1).step_by(2) {
+        let names: Vec<&str> = rest[..end].split('"').skip(1).step_by(2).collect();
+        // A scope with no source under it greps clean whatever the tree holds,
+        // so the search below would pass by searching nothing. One control per
+        // scope, run the same way the search is, rather than a rule about what
+        // a scope may be named.
+        let populated = Command::new("sh")
+            .arg("-c")
+            .arg(format!(
+                "grep -rlF --include=*.rs -- \"$1\" {scope} 2>/dev/null | head -1",
+            ))
+            .arg("sh")
+            .arg("fn ")
+            .current_dir(&root)
+            .output()
+            .expect("grep runs");
+        // Both halves of this have happened in one sentence: the four
+        // signal-speed names were written in backticks, so the name pass took
+        // none of them, and that sentence's scope then parsed as `end_layer`,
+        // which no grep can reach.
+        if names.is_empty() || populated.stdout.is_empty() {
+            silent.push(format!(
+                "scope {scope:?}, {} names, at: {}",
+                names.len(),
+                rest.chars().take(80).collect::<String>()
+            ));
+            continue;
+        }
+        for name in names {
             searched.push((scope.clone(), name.to_string()));
         }
     }
+
+    assert!(
+        silent.is_empty(),
+        "a paragraph records a search and this check took nothing from it: {silent:#?}\n\
+         \n  Names go in straight double quotes, ending the list with a full stop, and the \
+         scope goes in backticks before the phrase, as a path a grep can reach. Written any \
+         other way the sentence reads as held and is held by nobody - which is worse than not \
+         writing it, because the next reader trusts it twice."
+    );
 
     assert!(
         searched.len() >= NAMES_SEARCHED_FOR_FLOOR,

@@ -287,7 +287,7 @@ crossing that cannot be avoided, and what a two-layer board changes.
 
 ### R-06 Violations are reported per rule, not as one total `[S]`
 
-*Verified: 2026-09-13*
+*Verified: 2026-09-20*
 
 *Applies when:* [output row] always, because it is about the shape of the output rather than the board.
 
@@ -307,7 +307,7 @@ the violation row and the 500 on the crossing - and landed in
 `cc1aaeb` on 2026-08-08. `cargo test -p cypcb-autoroute --test a_crossing_is_charged_twice`
 re-runs it against whatever the reader has.
 
-In this repo: the data is there and the aggregation is not. `DrcViolation`
+In this repo: the split is on one output and not on the other. `DrcViolation`
 carries `kind: ViolationKind`, an enum running from `Clearance` to `AcidTrap`
 in `crates/cypcb-drc/src/violation.rs`, plus `actual` and `required` as numbers
 rather than prose. How many kinds it holds is counted by the command in the
@@ -316,6 +316,20 @@ verification block rather than written here, and the reason is its own history:
 week" until 2026-09-13 and the span is a fortnight** - a figure loose enough
 that nobody would check it, attached to an argument about figures nobody
 checks.
+
+**Two outputs answer this rule differently, and naming only one of them is how
+this paragraph was wrong until today.** `cypcb check` already prints a count per
+kind: it keys a map by the violation's own kind, adds one per row and writes a
+`Summary:` block with a line for each kind present, and it has done so since
+`703e2cd` on 2026-08-05. The score does not. `RoutingScore` carries
+`drc_violations` as one total beside two splits done by hand - `shorts` and
+`clearance_contacts` - and `compute_composite` names `kind` zero times, so every
+kind is priced at the same 1000. The condition above says the score, the subject
+line above says the output row, and a reader who takes either as the whole
+answer gets a false one. What nothing anywhere does is act on the split: no
+ranking, no gate and no registry entry reads a per-kind count, so the report
+that carries the shape this rule asks for is the one output that cannot fail a
+board on it.
 
 **A line number is not a reference, and that is a rule rather than a style.** A
 symbol name is found by grep and breaks loudly when somebody renames it; a line
@@ -1138,7 +1152,7 @@ the rule working, not the rule missing.
 
 ### R-15 One component, one connection style `[R]` figures, `[P]` guidance
 
-*Verified: 2026-09-13*
+*Verified: 2026-09-20*
 
 *Applies when:* [a component] a two-terminal component has both pads inside pours. A board with no pour says nothing here.
 
@@ -1187,9 +1201,11 @@ that looks at a component at all. **The second was false twice over** - R-08
 measures through `entry_angle_placed(pad, at, rotation)`, which is the part's
 position and turn, and R-17 takes pad positions from footprints laid out by the
 same two, and both were written after that sentence was. A condition over a
-feature, or over a pair of features, is what the other eighteen run on. Symmetry is a property of a pair of pads that belong to one part, so
-a registry built to walk copper cannot express it without walking components
-too.
+feature, or over a pair of features, is what the 12 rules whose subject is
+`copper` run on; the 6 whose subject is `the tool`, `the canon` or `output row`
+run on neither. Symmetry is a property of a pair of pads that belong to one
+part, so a registry built to walk copper cannot express it without walking
+components too.
 
 **4. What this project holds - and three of these are a fire, not a gap.**
 
@@ -1224,7 +1240,7 @@ construction.
 
 ### R-16 What a rule must carry to be enforceable here `[S]`
 
-*Verified: 2026-09-13*
+*Verified: 2026-09-20*
 
 *Applies when:* [the canon] never, to a board. This is the canon reading itself.
 
@@ -1235,15 +1251,21 @@ than anybody's published criteria. The section landed in `643346d` on
 2026-09-11; the greps in the verification block re-take its counts against
 whatever commit the reader has.
 
-Nineteen rules, three states - and the five that read the canon rather than a
-board (R-12, R-16, R-18) or arrived after this census was written (R-17, R-19)
-are placed at the end of it. This section is the canon reading itself: which
+Nineteen headings, eighteen rules and one tombstone: R-12 moved out and kept
+its number, so a reference written before it left still lands where its author
+meant. Every count here that says rules means the eighteen, and the command in
+the verification block takes it as headings minus tombstones. Sixteen of them
+are in the three buckets below, whose tables hold seventeen rows because one of
+those rows is the tombstone. The two that are in no bucket are R-16 and R-18,
+which is not a gap: the three states say what a board is held to, and both of
+those rules say in their own opening that they never run over a board.
+This section is the canon reading itself: which
 rules the board is held to, which wait on somebody writing a check, and which
 wait on the data model - and then it counts the missing **fields** rather than
 the blocked rules, because a field that unblocks two rules is worth more than
 either of them.
 
-**What the nineteen rules are about, counted rather than described.** Each
+**What the nineteen headings are about, counted rather than described.** Each
 `*Applies when:*` line opens with the subject its **condition** runs over -
 not what the rule reads on the way there, which is why R-08 is `copper` though
 it reads a part's position and turn, and R-07 is `copper` though its subject
@@ -1276,7 +1298,7 @@ not the same as testable: see "A rule with no subject cannot be tested" for
 which of these have anything to fire on, measured on the six fixtures on
 2026-09-11 rather than argued. R-08 was the eleventh and the one this section said to write first,
 because its subject exists on all six boards; it was written, and it is in
-bucket 1 now. Every quantity these need is in the world already.
+bucket 1 now. Every quantity these need is in the world already. The table below has ten rows and nine live rules: the tenth row is R-12, which moved out and kept its number.
 
 | rule | why it is checkable, in one clause |
 |---|---|
@@ -1288,7 +1310,7 @@ bucket 1 now. Every quantity these need is in the world already.
 | R-12 rip-up and reroute | **moved to `docs/routing.md`** - its three conditions are measurements on code, not a check on a board |
 | R-13 return path, measured | same data as R-05; coverage and crossings are geometry, loop area an estimate by design |
 | R-14 via stitching | vias carry net, position and layer span, pours carry their pitch; the measurement is available, the thresholds are not |
-| R-15 thermal relief in manufacturing | spoke width, surviving spoke count and pad symmetry all read from data already present |
+| R-15 thermal relief in manufacturing | pad symmetry is the whole condition - both pads of a two-terminal component in the same connection style - and a filled pour already says which style each pad got |
 | R-17 the search grid | pad positions and a fab table are on every board; the check is a loop over pads with the router's own snap |
 
 **Not about a board at all. Two, since R-12 left.** R-16 is this section and
@@ -2057,7 +2079,7 @@ nothing, not tests that read the wrong thing.
 
 ### Board score
 
-*Verified: 2026-09-16*
+*Verified: 2026-09-20*
 
 `crates/cypcb-autoroute/src/scoring.rs` returns `RoutingScore` with nine
 fields. Six of them enter the composite.
@@ -2113,6 +2135,38 @@ re-discovered:
   began collecting segments into one `Trace` per net and layer. The same
   sentence still stood in the function's own comment and in that test's header,
   which is why correcting the canon alone would have left the source in place.
+
+**`layer_balance` counts nets on a layer, not copper on it.**
+`compute_layer_balance` adds one to a layer's count per `Trace` entity, and
+`apply_routes_as` collects the router's output into one `Trace` per net and
+layer. For every board this router draws, the per-layer count is therefore the
+number of nets carrying copper there; no length, segment count or area reaches
+the ratio. Two consequences follow without measuring a board. A layer holding
+one net and nine tenths of the copper ties with a layer holding one net and the
+rest, and the pair scores 1.0. A layer holding three small nets against a layer
+holding one large one scores 0.333 while carrying the smaller share. The field's
+comment says "traces evenly distributed across layers", which is true only when
+"trace" is read as "net on a layer".
+
+`layer_balance_means_what_it_says` cannot see this. It builds several `Trace`
+entities on one net per layer, which is a shape `apply_routes_as` never emits,
+so it pins per-entity counting against a fixture the production path cannot
+produce. The behaviour it asserts is right; the set it asserts it over is not
+the set the number is computed over. `layer_balance_counts_nets_not_copper`
+takes the production shape instead.
+
+**What `crossings` excludes.** `compute_crossings` skips every candidate that is
+not a `Trace` and every candidate on the same net, so a trace crossing a pad or
+a via is not a crossing, and a trace crossing its own net is not one either.
+Both stay clearance rows if they break the gap. The unit in the table above is
+same-layer segment intersections between two traces of different nets.
+
+**The score has a precondition, and the table does not carry it.** `score_board`
+requires the caller to have built the spatial index from the real footprints,
+and both the DRC count and the crossing count read that index. A caller that
+skips it gets a `RoutingScore` with no error and two fields under-reporting.
+Every ratchet in the benchmark file is set against numbers taken with the index
+built.
 
 ### Rule registry
 
@@ -2200,8 +2254,8 @@ scope cannot see it.
 
 **There are three kinds of control on a claim like this, and the third cannot
 exist.** A control on the instrument - the same command, the same scope, a word
-known to be present - says the search works: "clearance" answers 185 of those
-552 files. A control on the neighbourhood - the same command over a measurement
+known to be present - says the search works: "clearance" answers 187 of those
+563 files. A control on the neighbourhood - the same command over a measurement
 of the same kind that does exist - says a measurement of that shape would be
 found if it carried this document's name for it. **A control on the quantity
 itself is impossible by construction: it would have to be code computing the
@@ -2237,7 +2291,7 @@ inside `score_board` by asking the violations a question the total does not.
 
 ### Properties nothing in the workspace computes
 
-*Verified: 2026-09-14*
+*Verified: 2026-09-20*
 
 Checked by grep over `crates/*/src` on 2026-09-14: no hits for "return path",
 "return current", "loop area", "split plane", "crosstalk", "parallel run",
@@ -2252,6 +2306,11 @@ ran, and this one is not left standing on its date:
 `a_recorded_search_of_the_tree_still_returns_what_it_says` runs the names below
 again at every gate, so the day any of them answers is the day this section
 goes red.
+
+Checked the same way on 2026-09-20, over `crates/*/src`: no hits for
+"copper_length_per_layer". The quantity is the one `layer_balance` is named
+after and does not read - every `TraceSegment` carries a length and every
+`Trace` a layer, so nothing is missing from the model.
 
 1. Return path coverage - for each segment, ask the spatial index whether
    continuous reference copper lies under its footprint on the adjacent layer,
@@ -2303,6 +2362,12 @@ goes red.
    two this item still names correctly. It entered on 2026-09-11 and ran in no
    stage until the same day this line was corrected, so for three days the
    answer existed and nothing asked for it.
+8. Copper per layer - sum `TraceSegment::length` grouped by `Trace.layer` and
+   divide the smallest by the largest. `layer_balance` is named for this and
+   counts entities instead, which under `apply_routes_as` is one per net and
+   layer, so the ratio today reads how many nets reached a layer. A measurement
+   would be held as copper_length_per_layer, and that name answers no file
+   today.
 
 ### The wedge beside a corner, which R-08 measures and can miss
 
@@ -2730,8 +2795,11 @@ per net: nodes at segment ends, pads and vias; an edge per segment; a via
 joining nodes across `start_layer` to `end_layer`; pads joined by the same
 touch test the rule already uses. A leaf is then a degree-1 node that is
 neither pad nor via, and a stub is the path from a leaf to the nearest node of
-degree 3 or more. Second, no net declares a signal speed: no hits for
-`bit_rate`, `bitrate`, `data_rate` or `rise_time` anywhere in `crates/`, so the
+degree 3 or more. Second, no net declares a signal speed: searched in
+`crates/cypcb-rules/src`, no hits for "bit_rate", "bitrate", "data_rate" or
+"rise_time". The DRC crate is equally clean, and the narrow scope is deliberate:
+in the wider tree each name answers one file, and that file is the check that
+asserts their absence. Nothing declares a speed, so the
 divisor in `0.3 / BR` has no source. Until both exist, the useful thing to
 publish is the longest branch per net as a bare number, with no threshold.
 
@@ -2933,4 +3001,51 @@ cargo test --release -p cypcb-autoroute --test sharp_entry_anatomy -- --ignored 
 
 # no part on any fixture is turned: two placements carry a rotation, both zero
 grep -hE "^\s*\(at [-0-9.]+ [-0-9.]+ [-0-9.]+\)" tests/fixtures/benchmark/*.kicad_pcb
+
+# How many rules this canon has. A heading whose own title says it moved out is
+# a tombstone; the number of rules is headings minus tombstones, and every count
+# in R-16 that says rules means that number.
+grep -c '^### R-' docs/ROUTING-CANON.md                 # headings
+grep -c '^### R-.*moved out' docs/ROUTING-CANON.md      # tombstones
+awk '/^### R-/{h++; if($0 ~ /moved out/) t++} END{print h-t}' docs/ROUTING-CANON.md
+
+# Which rules carry a dated source or a commit. Each section is flattened first,
+# because a Source line can end before the date it carries and a line-at-a-time
+# grep reports the wrap rather than the fact. The second form names the ones
+# carrying neither.
+awk '/^### R-/{if(id)e();id=$2;b="";next}
+     /^## /{if(id){e();id=""};next}
+     {if(id)b=b" "$0}
+     function e(){ if (b ~ /read 20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]/ || b ~ /`[0-9a-f]{7}`/) n++ }
+     END{ if(id)e(); print n }' docs/ROUTING-CANON.md
+awk '/^### R-/{if(id)e();id=$2;b="";next}
+     /^## /{if(id){e();id=""};next}
+     {if(id)b=b" "$0}
+     function e(){ if (!(b ~ /read 20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]/ || b ~ /`[0-9a-f]{7}`/)) print id }
+     END{ if(id)e() }' docs/ROUTING-CANON.md
+
+# Which rules state a condition clause. The first form counts the one spelling
+# `Condition:`; the second counts all five the file uses, because `Conditions:`,
+# `Condition,`, `conditions,` and `condition,` are the same thing written
+# differently. The gap between the two answers is a count of spellings, not of
+# rules, and reading the first as the number of rules with a condition is how
+# this line came to be written.
+awk '/^### R-/{id=$2} /Condition:/{if(id && !(id in s)){s[id]=1;n++}} END{print n}' docs/ROUTING-CANON.md
+awk '/^### R-/{ if(id && f && !tomb) n++; id=$2; f=0; tomb=($0 ~ /moved out/) }
+     /[Cc]ondition[s]?[:,]/{ if(id) f=1 }
+     END{ if(id && f && !tomb) n++; print n }' docs/ROUTING-CANON.md
+
+# The three buckets under R-16, counted as rows of their own tables
+awk '/^\*\*Bucket 1 /{b=1} /^\*\*Bucket 2 /{b=2} /^\*\*Bucket 3 /{b=3} /^## /{b=0}
+     /^\| *R-/{ if(b) c[b]++ }
+     END{ printf "%d %d %d sum=%d\n", c[1],c[2],c[3],c[1]+c[2]+c[3] }' docs/ROUTING-CANON.md
+
+# Live rules inside those tables, and the rules that have no row at all. The
+# two answers together are why the tables hold seventeen rows for eighteen
+# rules: one row is the tombstone, and two rules run over no board.
+awk '/^\*\*Bucket [0-9] /{b=1} /^## /{b=0}
+     /^\| *R-/{ if(b && $0 !~ /moved to/) n++ } END{print n}' docs/ROUTING-CANON.md
+awk '/^### R-/{h[$2]=1} /^\*\*Bucket [0-9] /{b=1} /^## /{b=0}
+     /^\| *R-/{ if(b){ split($0,a,"[| ]+"); inb[a[2]]=1 } }
+     END{ for(r in h) if(!(r in inb)) print r }' docs/ROUTING-CANON.md | sort
 ```
