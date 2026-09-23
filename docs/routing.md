@@ -1468,12 +1468,16 @@ the net already owns, not one cell. The half-step it replaced ended on the net's
 own copper but kept a start pad, and turned the search round to start from the
 new one. That swap was blamed for `led_blink` going from zero shorts to one, and
 the blame was wrong: the seeded frontier has no swap and `led_blink` still goes
-zero to one. The short is a via pair removed after routing. `optimize_vias` is
-called with no other net's segments (`crates/cypcb-autoroute/src/pathfinder_v2.rs:249`),
-so its check that a direct segment is clear of foreign copper checks nothing,
-and a path that starts on the tree's bottom layer at a via gives it a pair that
-spans two paths. With that call disabled the flag takes `led_blink` 0 to 0
-shorts, measured 2026-09-23.
+zero to one. The short was a via pair removed after routing. `optimize_vias`
+was called with an empty list of other nets' segments, so its check that a
+direct segment is clear of foreign copper checked nothing, and a path that
+starts on the tree's bottom layer at a via gave it a pair that spans two paths.
+Removing the pair also cut the second path off the net, which no rule reports.
+Since 2026-09-23 the optimizer reads other nets' segments and vias out of what
+it is given, and the board's pads, drawn traces and keepouts through
+`BoardObstacles` (`crates/cypcb-autoroute/src/via_optimizer.rs`). It measures
+edge to edge and keeps a via that another branch of the net leaves from. The
+flag now takes `led_blink` 0 to 0 shorts with the optimizer on.
 
 **Three departures this project has, stated as conditions.**
 

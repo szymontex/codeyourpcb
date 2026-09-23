@@ -19,7 +19,7 @@ use crate::orchestrator::{extract_ratsnest, order_nets};
 use crate::pathfinder_v2::pathfinder_loop;
 use crate::postprocess;
 use crate::smoother::smooth_routes;
-use crate::via_optimizer::optimize_vias;
+use crate::via_optimizer::{optimize_vias, BoardObstacles};
 use crate::AutorouteConfig;
 
 /// A single routing stage with serializable segment data.
@@ -236,8 +236,12 @@ pub fn route_with_debug(
     };
 
     // Stage 4: Via optimization
-    let (final_segments, final_vias) =
-        optimize_vias(smoothed_segments, raw_vias, &[], min_clearance);
+    let (final_segments, final_vias) = optimize_vias(
+        smoothed_segments,
+        raw_vias,
+        &BoardObstacles::from_board(world, library),
+        min_clearance,
+    );
 
     let stage_viaopt = RoutingStage {
         name: "3. Via optimization".into(),

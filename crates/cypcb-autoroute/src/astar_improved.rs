@@ -24,7 +24,7 @@ use crate::pathfinder::{find_path_with_zones, GridNode, PadZone};
 use crate::postprocess;
 use crate::smoother::smooth_routes;
 use crate::strategy::RoutingStrategy;
-use crate::via_optimizer::optimize_vias;
+use crate::via_optimizer::{optimize_vias, BoardObstacles};
 use crate::AutorouteConfig;
 
 /// Improved A* routing strategy with congestion-aware cost and aggressive rip-up.
@@ -153,8 +153,12 @@ impl RoutingStrategy for ImprovedAStarStrategy {
         }
         all_segments = smoothed_segments;
 
-        let (optimized_segments, optimized_vias) =
-            optimize_vias(all_segments, all_vias, &[], min_clearance);
+        let (optimized_segments, optimized_vias) = optimize_vias(
+            all_segments,
+            all_vias,
+            &BoardObstacles::from_board(world, library),
+            min_clearance,
+        );
         all_segments = optimized_segments;
         all_vias = optimized_vias;
 

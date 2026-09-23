@@ -7,7 +7,9 @@
 //! 142 junctions to 21. One board went the other way - `shift_driver` from 22
 //! to 33 - and a total that improves while one board gets worse is a total
 //! that has to be broken down before a default is moved, because a board is
-//! fabricated on its own and not as a sixth of an average.
+//! fabricated on its own and not as a sixth of an average. Broken down, the
+//! loss turned out to belong to the via optimizer and not to the flag; since
+//! 2026-09-23 that board goes 20 to 9.
 //!
 //! The breakdown is per violation kind, which is what says whether the flag
 //! failed at its own job on that board or succeeded at it and cost something
@@ -145,28 +147,24 @@ fn the_flag_does_its_own_job_on_every_board() {
 }
 
 #[test]
-fn the_board_that_gets_worse_gets_worse_at_one_other_rule() {
-    // `shift_driver` was the board the totals lost on, 22 reports to 33, and a
-    // default cannot be argued either way until the extra reports have a name.
-    // They have one: the flag succeeds there at what it is for - with the
-    // seeded frontier 12 acute junctions become 2 - and pays for it in
-    // clearance, where 7 reports become 18 and the total comes back level. Clearance
-    // exempts pairs on the same net (`rules/clearance.rs:180`), so those are
-    // this board's copper coming closer to somebody else's, not a junction the
-    // new end test made with the net's own trace.
+fn the_board_that_got_worse_was_paying_for_the_via_optimizer() {
+    // `shift_driver` was the board the totals lost on, 22 reports to 33, and
+    // the extra reports had a name: the flag cut acute junctions 12 to 2 and
+    // clearance went 7 to 18, most of it shorts. The clearance half was not
+    // the flag's. `optimize_vias` checked each replacement segment against a
+    // list of other nets' copper that every caller passed empty, and the flag
+    // hands it more pairs to join. With the check real (2026-09-23) clearance
+    // is 5 either way and the board goes 20 to 9, so the flag costs this
+    // board nothing any rule counts.
     let off = by_kind("shift_driver.kicad_pcb", false);
     let on = by_kind("shift_driver.kicad_pcb", true);
 
-    // The figures R-11 and R-19 quote off this board, held here because this
-    // test already routes it twice and nothing else was holding them. They are
-    // exact on purpose: a change to the via price, the grid or the weights will
-    // move them, and when it does the two sections in the canon have to be read
+    // The figures R-11 and R-19 quote off this board. They are exact on
+    // purpose: a change to the via price, the grid or the weights will move
+    // them, and when it does the two sections in the canon have to be read
     // again rather than quietly left behind.
-    const CANON_FIGURES: &[(&str, usize, usize)] = &[
-        ("AcidTrap", 12, 2),
-        ("Clearance", 7, 18),
-        ("PadEntry", 3, 2),
-    ];
+    const CANON_FIGURES: &[(&str, usize, usize)] =
+        &[("AcidTrap", 12, 2), ("Clearance", 5, 5), ("PadEntry", 3, 2)];
     for (kind, before, after) in CANON_FIGURES {
         assert_eq!(
             (
@@ -179,35 +177,28 @@ fn the_board_that_gets_worse_gets_worse_at_one_other_rule() {
         );
     }
 
-    // R-19's share of this board's report, as a floor rather than as the pair
-    // it used to state. The pair was `27 of 32` and `PadEntryRule` joining the
-    // registry made it `27 of 33` without touching the rule R-19 is about: an
-    // exact denominator fails on the next rule anybody registers, which is the
-    // event that already broke that sentence once.
+    // R-19's share of this board's report, as a floor rather than as a pair:
+    // an exact denominator fails on the next rule anybody registers. It was
+    // three quarters, 18 of 22, while the optimizer was drawing shorts here;
+    // it is 5 of 9 without them, which is still most of the report.
     let total: usize = on.values().sum();
     let clearance = on.get("Clearance").copied().unwrap_or(0);
     println!("shift_driver clearance share {clearance} of {total}");
     assert!(
-        clearance * 4 >= total * 3,
+        clearance * 2 > total,
         "R-19 says this one rule is most of this board's report: {clearance} of {total}"
     );
 
+    // No kind rises. This is the assertion that would have caught the
+    // optimizer: it was the one rule going the other way.
     for kind in kinds_of(&off, &on) {
         let before = off.get(&kind).copied().unwrap_or(0);
         let after = on.get(&kind).copied().unwrap_or(0);
         println!("shift_driver {kind:<16} {before:>4} -> {after:>4}");
-        if kind == "Clearance" {
-            assert!(
-                after > before,
-                "the regression this test is about is gone: {kind} {before} -> {after}"
-            );
-        } else {
-            assert!(
-                after <= before,
-                "a second rule regressed and this test would have called it clearance: \
-                 {kind} {before} -> {after}"
-            );
-        }
+        assert!(
+            after <= before,
+            "the flag costs shift_driver a rule again: {kind} {before} -> {after}"
+        );
     }
 }
 
@@ -226,27 +217,34 @@ fn the_holes_come_off_the_boards_that_had_the_most() {
         after_total += on.get("HoleToHole").copied().unwrap_or(0);
     }
     println!("all six boards: HoleToHole {before_total} -> {after_total}");
+    // 65 -> 33 on 2026-09-23, the first run in which `optimize_vias` kept
+    // every pair whose replacement would cross another net. That is half
+    // rounded up, one hole short of the strict half this asserted while the
+    // optimizer was deleting vias it had no business deleting.
     assert!(
-        after_total * 2 < before_total,
+        after_total <= before_total.div_ceil(2),
         "HoleToHole {before_total} -> {after_total}"
     );
 }
 
 #[test]
-fn the_flag_puts_copper_on_copper_and_that_is_why_it_is_not_the_default() {
-    // The reason the default did not move on 2026-09-11, and the reason is
-    // R-11's own tier order rather than a preference. Counting violation rows
-    // says the flag is a clear win: 1150 reports become 859. Counting copper
-    // touching copper says something the row count hides - `led_blink`, the
-    // simplest board here and the only one that routes clean, comes out with a
-    // short. Under R-11 a short is tier 2 and no quantity of tier 3 or tier 4
-    // offsets one: a board with a short does not work, while a board with a
-    // gap under minimum is a yield risk a fabricator may still build.
+fn the_flag_shorts_no_board_the_default_routes_clean() {
+    // This was the pin on the reason the default did not move on 2026-09-11:
+    // `led_blink`, the one board that routes clean, came out of the flag with
+    // a short, and under R-11 a short is tier 2 and no quantity of tier 3 or
+    // tier 4 offsets one. The pin was written to fail when the short was
+    // removed, so the default would be reconsidered rather than forgotten.
     //
-    // This test is a pin on a defect rather than a claim that the defect is
-    // right. When the short is found and removed it fails, which is what
-    // forces the default to be reconsidered instead of forgotten.
-    let mut clean_boards_that_short = Vec::new();
+    // It failed on 2026-09-23. The short was never the flag's: `optimize_vias`
+    // joined a GND via pair straight across SW_OUT because the list of other
+    // nets' copper it checked against was empty. With the check real the
+    // flag leaves no board with more shorts than the default does - 270
+    // become 206 across the six - and this test now holds that.
+    //
+    // The default stays off, and that is a decision this test does not make.
+    // One tier-1 figure still goes the other way: `multi_ic` leaves 6 pins
+    // unrouted with the flag off and 7 with it on.
+    let mut boards_the_flag_shorts_more = Vec::new();
     let mut off_total = 0;
     let mut on_total = 0;
 
@@ -254,8 +252,8 @@ fn the_flag_puts_copper_on_copper_and_that_is_why_it_is_not_the_default() {
         let off = shorts_of(fixture, false);
         let on = shorts_of(fixture, true);
         println!("{fixture:<26} shorts {off:>4} -> {on:>4}");
-        if off == 0 && on > 0 {
-            clean_boards_that_short.push(*fixture);
+        if on > off {
+            boards_the_flag_shorts_more.push(*fixture);
         }
         off_total += off;
         on_total += on;
@@ -263,12 +261,7 @@ fn the_flag_puts_copper_on_copper_and_that_is_why_it_is_not_the_default() {
     println!("all six boards: shorts {off_total} -> {on_total}");
 
     assert!(
-        !clean_boards_that_short.is_empty(),
-        "no board goes from no shorts to shorts, so the reason recorded for \
-         keeping the default off no longer holds"
-    );
-    assert!(
-        !AutorouteConfig::default().stop_at_own_copper,
-        "the default was switched on while a board it routes clean still shorts"
+        boards_the_flag_shorts_more.is_empty(),
+        "the flag draws more shorts than the default on {boards_the_flag_shorts_more:?}"
     );
 }

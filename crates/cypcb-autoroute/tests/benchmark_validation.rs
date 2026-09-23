@@ -274,10 +274,15 @@ type Ratchet = (&'static str, &'static str, u32, u32, u32, u32);
 ///   ratchet above green.
 /// - **refused is a ceiling**: five today, all on `multi_ic`. A refusal is an
 ///   entry with no angle, so a rise here is measurement quietly going missing.
+///
+/// `multi_ic`'s floor fell 287 to 285 on 2026-09-23 and the rule did not stop
+/// looking: the two entries were copper `optimize_vias` laid across other
+/// nets' pads. With the optimizer switched off the board examines 285 as well,
+/// and with the old optimizer 287, on the same tree in one sitting.
 const ENTRY_CENSUS: [(usize, usize, usize); 6] = [
     (14, 0, 0),  // led_blink
     (180, 0, 1), // stm32_breakout
-    (287, 5, 2), // multi_ic
+    (285, 5, 2), // multi_ic
     (178, 0, 3), // shift_driver
     (178, 0, 5), // qfp_fanout
     (60, 0, 3),  // plane_board
@@ -376,14 +381,35 @@ const DRC_RATCHETS: &[Ratchet] = &[
     // shift_driver      19 /   5    26 / 15     33 /  20      45 /  20
     // qfp_fanout       371 / 150    61 / 46    332 / 196     432 / 196
     // plane_board       34 /  13     0 /  0     26 /  13      34 /  13
+    //
+    // Lowered 2026-09-23, and every figure that moved went down: `optimize_vias`
+    // checked each replacement segment against a list of other nets' copper
+    // that every caller passed empty, so it joined via pairs straight across
+    // other nets. With the check real it keeps those vias, and the copper it
+    // no longer lays was most of the shorts on four boards. Each field is
+    // re-baselined on its own, and only where the routed value plus the band
+    // comes out under the old ratchet:
+    //
+    // board            routed        band      ratchet was   ratchet is
+    // led_blink          1 /   0     0 /  0      1 /   0       1 /   0
+    // stm32_breakout   160 /  58    64 / 48    269 / 152     224 / 106
+    // multi_ic         509 /  78    35 / 15    540 / 149     540 /  93
+    // shift_driver      20 /   0    26 / 15     45 /  20      45 /  15
+    // qfp_fanout       363 / 131    61 / 46    432 / 196     424 / 177
+    // plane_board       29 /   3     0 /  0     38 /  13      29 /   3
+    //
+    // `multi_ic` and `shift_driver` keep their violation baselines of 505 and
+    // 19: the kept vias add two reports on the first and one on the second,
+    // routed plus band would raise the ratchet, and a ratchet is not raised
+    // for this. Both sit inside half a band of the old baseline.
     ("led_blink.kicad_pcb", "led_blink", 1, 0, 1, 0),
     (
         "stm32_breakout.kicad_pcb",
         "stm32_breakout",
-        269,
-        152,
-        205,
-        104,
+        224,
+        106,
+        160,
+        58,
     ),
     // Re-baselined 2026-08-23 for `ViaSpanRule`, and the router did not move:
     // measured with the rule unregistered, `multi_ic` routes to **381**
@@ -393,9 +419,9 @@ const DRC_RATCHETS: &[Ratchet] = &[
     // `buried_vias_allowed` were dropped before they reached a rule. New
     // ratchet is the routed value plus this board's own band of 34, the same
     // arithmetic as every other row: 437 + 34 = 471. Shorts unmoved at 175.
-    ("multi_ic.kicad_pcb", "multi_ic", 540, 149, 505, 134),
-    ("shift_driver.kicad_pcb", "shift_driver", 45, 20, 19, 5),
-    ("qfp_fanout.kicad_pcb", "qfp_fanout", 432, 196, 371, 150),
+    ("multi_ic.kicad_pcb", "multi_ic", 540, 93, 505, 78),
+    ("shift_driver.kicad_pcb", "shift_driver", 45, 15, 19, 0),
+    ("qfp_fanout.kicad_pcb", "qfp_fanout", 424, 177, 363, 131),
     // A band of zero is not a rounding: this board routes identically at every
     // via price from 0.22 to 0.28, 28 violations and 13 shorts each time. Its
     // ratchet is the measured value exactly, so any movement at all is a real
@@ -433,7 +459,10 @@ const DRC_RATCHETS: &[Ratchet] = &[
     // needs that much: the count moved because the checker measures the plane
     // the fab will make, and the router's own three numbers did not move at
     // all.
-    ("plane_board.kicad_pcb", "plane_board", 38, 13, 38, 13),
+    //
+    // 38 -> 29 on 2026-09-23, with the via optimizer's check made real; see
+    // the table above `led_blink`. Shorts 13 -> 3.
+    ("plane_board.kicad_pcb", "plane_board", 29, 3, 29, 3),
 ];
 
 /// Routes every fixture and holds the line on completeness and DRC count.

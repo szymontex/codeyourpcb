@@ -123,7 +123,10 @@ fn the_smoother_is_not_where_they_come_from() {
     // bent from the search and `smooth_routes` inherits it. It is not neutral
     // either, and the direction is the opposite of the accusation: it removes
     // corners on three boards (23 -> 18, 64 -> 56, 14 -> 12), leaves two
-    // unchanged, and adds three on qfp_fanout (97 -> 100).
+    // unchanged, and adds three on qfp_fanout (97 -> 100). Measured again
+    // 2026-09-23, after `optimize_vias` stopped joining pairs across other
+    // nets' copper: 23 -> 18, 62 -> 54, 14 -> 12, and 98 -> 101 - the same
+    // shape, two corners fewer on multi_ic in both columns.
     let mut table = Vec::new();
     for fixture in FIXTURES {
         let on = routed(fixture, true);
@@ -158,10 +161,13 @@ fn the_smoother_is_not_where_they_come_from() {
 
     // The positive control. Without it a rule that had stopped reporting
     // anything at all would satisfy every assertion above.
+    // 195 on 2026-09-11; 194 since 2026-09-23, when the via optimizer's
+    // replacement segments stopped crossing other nets and two of multi_ic's
+    // corners went with them while qfp_fanout gained one.
     let total: usize = table.iter().map(|(_, on, _)| on.acute).sum();
     assert!(
-        total >= 195,
-        "the six fixtures drew 195 acute corners between them on 2026-09-11 \
+        total >= 194,
+        "the six fixtures drew 194 acute corners between them on 2026-09-23 \
          and this run counted {total}"
     );
 }
