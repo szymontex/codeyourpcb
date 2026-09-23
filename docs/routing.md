@@ -1457,17 +1457,23 @@ graph (read 2026-09-11). Condition: either that comment gains a citation naming
 the router it came from, or it drops the words "the VPR optimisation" and
 stands as this project's own departure with its own measurement, tagged `[D]`.
 
-**Decomposition: the multi-sink wave is the standard and pad-to-pad is the
-deviation.** PathFinder seeds the frontier with the whole partial tree at cost 0
-(step [6]); this project seeds it with one pad and searches to another pad.
-Ending a connection on the net's own copper fixes the far end of that search and
-leaves the near end where it was, which is half of the published form. Checkable
-condition for full adoption: the first expansion frontier of connection `k`
-contains every cell the net already owns, not one cell. This project's own
-measurement says why the half-step is not enough - with the end test removed and
-only the start-and-end swap left, `led_blink` goes from zero shorts to one, so
-the asymmetry the swap introduces is a defect of having a start pad to choose at
-all, which the seeded frontier does not have.
+**Decomposition: the multi-sink wave is the standard, and behind
+`stop_at_own_copper` it is what this project does.** PathFinder seeds the
+frontier with the whole partial tree at cost 0 (step [6]); with the flag on,
+`pathfinder_loop` seeds connection `k` with every cell its net already owns and
+searches to the one pad the connection adds (`astar_grid_from` in
+`crates/cypcb-autoroute/src/astar_grid.rs`). Checkable condition, met on
+2026-09-23: the first expansion frontier of connection `k` contains every cell
+the net already owns, not one cell. The half-step it replaced ended on the net's
+own copper but kept a start pad, and turned the search round to start from the
+new one. That swap was blamed for `led_blink` going from zero shorts to one, and
+the blame was wrong: the seeded frontier has no swap and `led_blink` still goes
+zero to one. The short is a via pair removed after routing. `optimize_vias` is
+called with no other net's segments (`crates/cypcb-autoroute/src/pathfinder_v2.rs:249`),
+so its check that a direct segment is clear of foreign copper checks nothing,
+and a path that starts on the tree's bottom layer at a via gives it a pair that
+spans two paths. With that call disabled the flag takes `led_blink` 0 to 0
+shorts, measured 2026-09-23.
 
 **Three departures this project has, stated as conditions.**
 

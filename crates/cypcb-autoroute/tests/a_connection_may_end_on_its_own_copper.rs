@@ -9,14 +9,12 @@
 //! between two paths of one net on the six benchmark boards, against 0 cells
 //! repeated inside a single path** - a shared trunk, measured on 2026-09-11.
 //!
-//! `stop_at_own_copper` is the published fix, from a multi-sink Lee-Moore
-//! router: the search for a connection ends at the first cell of its own net's
-//! copper it reaches, so the second copy cannot be drawn rather than being
-//! removed afterwards. Two things had to move with it. The search runs from
-//! the pad that is not in the spanning tree yet towards the tree, because the
-//! other pad is inside the target set and a search that starts on its own goal
-//! draws nothing. And the heuristic has to be a lower bound for the nearest
-//! goal rather than for the far pad, which is what `TargetBounds` is for.
+//! `stop_at_own_copper` is the published fix, in the form PathFinder gives it:
+//! the search for connection `k` is seeded with every cell the net already
+//! owns, each at cost zero, and stops at the pad this connection adds, so the
+//! second copy of a trunk cannot be drawn rather than being removed
+//! afterwards. There is no start pad to choose and so no direction to swap,
+//! and the heuristic is the ordinary one to a single goal.
 //!
 //! The figures live behind the flag until they are measured, which is what
 //! this file does. It measures through `route_board`, the entry point a user

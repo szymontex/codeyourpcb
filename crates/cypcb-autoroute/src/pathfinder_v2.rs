@@ -23,10 +23,10 @@ use cypcb_rules::RoutingRuleSet;
 use cypcb_world::footprint::FootprintLibrary;
 use cypcb_world::BoardWorld;
 
-use crate::astar_grid::{astar_grid, GridSearchScratch};
+use crate::astar_grid::{astar_grid_from, GridSearchScratch};
 use crate::clearance_field::ClearanceField;
 use crate::congestion::CongestionMap;
-use crate::cost::{RoutingCost, TargetBounds};
+use crate::cost::RoutingCost;
 use crate::grid::{RoutingGrid, CELL_OBSTACLE, CELL_PAD};
 use crate::orchestrator::{
     build_spanning_tree, extract_ratsnest, is_multi_layer, order_nets, pad_to_grid_node, NetRoute,
@@ -668,23 +668,21 @@ pub fn pathfinder_loop(
                 // `build_spanning_tree` grows its tree one pad at a time, so
                 // `to_idx` is the pad that is not connected yet and
                 // `from_idx` is one that already is. A connection allowed to
-                // finish on its own net's copper therefore searches from the
-                // new pad towards the tree rather than the other way round:
-                // the pad it would otherwise start from is inside the target
-                // set, and a search that starts on its own goal draws nothing.
+                // use its own net's copper does not choose an end to start
+                // from: the search is seeded with every cell the net already
+                // owns, each at cost zero, and stops at the pad this
+                // connection adds - the step PathFinder itself takes
+                // (McMurchie and Ebeling, ACM/SIGDA FPGA 1995). The second
+                // copy of a trunk cannot be drawn, because the wave already
+                // stands on all of the first.
                 let own_copper = if config.stop_at_own_copper {
                     OwnCopper::of_paths(&net_paths)
                 } else {
                     None
                 };
-                let (search_from, search_to) = if own_copper.is_some() {
-                    (to_pad, from_pad)
-                } else {
-                    (from_pad, to_pad)
-                };
-                let start = pad_to_grid_node(grid, search_from);
-                let end = pad_to_grid_node(grid, search_to);
-                let any_end = is_multi_layer(search_to.layer_mask);
+                let start = pad_to_grid_node(grid, from_pad);
+                let end = pad_to_grid_node(grid, to_pad);
+                let any_end = is_multi_layer(to_pad.layer_mask);
 
                 // Route with congestion-augmented cost
                 let search = Search {
@@ -739,16 +737,7 @@ pub fn pathfinder_loop(
                 }
 
                 match path {
-                    Some(mut p) => {
-                        // A search that ran from the new pad towards the tree
-                        // hands its path back the way it walked it. Turn it
-                        // round so every path of a net reads the same
-                        // direction as before: from the copper the net already
-                        // has, out to the pad this connection adds.
-                        if own_copper.is_some() {
-                            p.reverse();
-                        }
-
+                    Some(p) => {
                         // Reserve the copper the trace actually covers, not
                         // the centre line the search walked. A minimum-width
                         // trace is 0.127mm on a 0.254mm cell, so the cell next
@@ -1062,37 +1051,31 @@ struct Search<'a> {
     clearance_barrier: f64,
 }
 
-/// The copper one net already holds, as a search can use it.
+/// The copper one net already holds, as the cells a search starts from.
 ///
-/// The cells are the end test and the box is the heuristic, and the two have
-/// to describe the same set or the search stops at a cell it was told was far
-/// away.
+/// Sorted, because every one of them enters the frontier at the same cost and
+/// the order they go in is the order ties come out: a set walked in hash
+/// order would route a different board on every run.
 struct OwnCopper {
-    cells: std::collections::HashSet<GridNode>,
-    bounds: TargetBounds,
+    cells: Vec<GridNode>,
 }
 
 impl OwnCopper {
     /// The copper of the paths already found for this net, or `None` while it
     /// has none - which is every net's first connection, and the case whose
     /// behaviour must not move.
-    ///
-    /// Only the cells the paths walked. A pad's own cells are not in here
-    /// unless a path went through them, because a set that holds the pad a
-    /// connection starts from is a search that finishes where it began.
     fn of_paths(paths: &[Vec<GridNode>]) -> Option<Self> {
-        let cells: std::collections::HashSet<GridNode> =
-            paths.iter().flat_map(|path| path.iter().copied()).collect();
-        let bounds = TargetBounds::of(cells.iter().copied())?;
-        Some(OwnCopper { cells, bounds })
+        let mut cells: Vec<GridNode> = paths.iter().flatten().copied().collect();
+        if cells.is_empty() {
+            return None;
+        }
+        cells.sort_unstable();
+        cells.dedup();
+        Some(OwnCopper { cells })
     }
 
-    fn holds(&self, node: GridNode) -> bool {
-        self.cells.contains(&node)
-    }
-
-    fn bounds(&self) -> &TargetBounds {
-        &self.bounds
+    fn cells(&self) -> &[GridNode] {
+        &self.cells
     }
 }
 
@@ -1169,16 +1152,8 @@ fn find_path_congestion_augmented(
         heuristic_weight,
     );
 
-    // A connection may finish on the copper its own net already holds, which
-    // is the whole point of passing a set: the second connection of a net
-    // stops where it meets the first instead of running on to the far pad and
-    // laying a second copy of the trunk between them.
+    // One goal, the pad this connection adds, wherever the wave started.
     let success = |node: GridNode| -> bool {
-        if let Some(own) = own_copper {
-            if own.holds(node) {
-                return true;
-            }
-        }
         node.0 == end.0 && node.1 == end.1 && (any_end_layer || node.2 == end.2)
     };
 
@@ -1382,20 +1357,21 @@ fn find_path_congestion_augmented(
         }
     };
 
-    // Heuristic remains unadulterated for admissibility. With a set of goals
-    // it has to be a lower bound for the nearest of them, not for `end`: a
-    // node that can finish on the net's own copper two cells away is not
-    // twenty cells from finishing, whatever the far pad's distance says.
-    let heuristic = |node: GridNode| -> u64 {
-        let to_end = cost_fn.heuristic(node, end);
-        let estimate = match own_copper {
-            Some(own) => to_end.min(cost_fn.heuristic_to_bounds(node, own.bounds())),
-            None => to_end,
-        };
-        float_to_int_cost(estimate)
-    };
+    // Heuristic remains unadulterated for admissibility. The goal is one cell
+    // however many the search starts from, so the estimate is the ordinary
+    // one to `end`.
+    let heuristic = |node: GridNode| -> u64 { float_to_int_cost(cost_fn.heuristic(node, end)) };
 
-    let path = astar_grid(scratch, start, successors, heuristic, success)?.to_vec();
+    // The net's own copper, every cell of it at cost zero, with the pad the
+    // tree already reached in front: that pad is on the tree whether or not a
+    // path has walked through its cell.
+    let seeds: Vec<GridNode> = match own_copper {
+        Some(own) => std::iter::once(start)
+            .chain(own.cells().iter().copied())
+            .collect(),
+        None => vec![start],
+    };
+    let path = astar_grid_from(scratch, &seeds, successors, heuristic, success)?.to_vec();
 
     // Mark path cells on grid
     for node in &path {

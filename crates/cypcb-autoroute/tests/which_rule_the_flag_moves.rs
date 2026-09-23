@@ -146,10 +146,11 @@ fn the_flag_does_its_own_job_on_every_board() {
 
 #[test]
 fn the_board_that_gets_worse_gets_worse_at_one_other_rule() {
-    // `shift_driver` is the board the totals lose on, and a default cannot be
-    // argued either way until the 13 extra reports have a name. They have one:
-    // the flag succeeds there at what it is for - 12 acute junctions become 5 -
-    // and pays for it in clearance, where 7 reports become 27. Clearance
+    // `shift_driver` was the board the totals lost on, 22 reports to 33, and a
+    // default cannot be argued either way until the extra reports have a name.
+    // They have one: the flag succeeds there at what it is for - with the
+    // seeded frontier 12 acute junctions become 2 - and pays for it in
+    // clearance, where 7 reports become 18 and the total comes back level. Clearance
     // exempts pairs on the same net (`rules/clearance.rs:180`), so those are
     // this board's copper coming closer to somebody else's, not a junction the
     // new end test made with the net's own trace.
@@ -162,9 +163,9 @@ fn the_board_that_gets_worse_gets_worse_at_one_other_rule() {
     // move them, and when it does the two sections in the canon have to be read
     // again rather than quietly left behind.
     const CANON_FIGURES: &[(&str, usize, usize)] = &[
-        ("AcidTrap", 12, 5),
-        ("Clearance", 7, 27),
-        ("PadEntry", 3, 1),
+        ("AcidTrap", 12, 2),
+        ("Clearance", 7, 18),
+        ("PadEntry", 3, 2),
     ];
     for (kind, before, after) in CANON_FIGURES {
         assert_eq!(
