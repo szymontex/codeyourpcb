@@ -1628,7 +1628,7 @@ third, two distance-measuring constructors reporting no distance, was closed on
 
 ### R-19 The flat clearance minimum `[P]`
 
-*Verified: 2026-09-23*
+*Verified: 2026-09-24*
 
 *Applies when:* [copper] always. Two pieces of copper on one layer belonging to two
 different nets. No declaration needed, which is why this is the rule that fires
@@ -1673,6 +1673,24 @@ them to it. **A rule can be right about the number it names and silent about
 the number beside it** - that silence is not a stale claim and no check over
 this document would have found it, because there was nothing written down to
 be wrong.
+
+**A via is copper on every layer it is drilled through, and until 2026-09-24
+the checker saw it on two.** The spatial index `ClearanceRule` queries, its copy
+in the viewer's engine and `net-split` all gave a via the layers it joins and no
+others, so on a four-layer board a through via was invisible on both inner
+layers and a `Top`-to-`Inner2` via on `Inner1`. The hole is plated wherever it
+is drilled. A land on a layer the via does not connect is the fab's option, not
+its requirement: AISLER's staff answer on community.aisler.net, read
+2026-09-24, is that inner annular rings may be removed and that other copper
+keeps 265 um from the barrel where they are removed. This model has no way to say a via
+lacks a land, and for every span the Gerber export recognises it flashes the full
+land on each layer the via passes, so the checker measures that land - copper to copper, not copper to hole.
+`Via::copper_mask` is the one answer all three read. Measured 2026-09-24 by
+`cargo test --release -p cypcb-autoroute --test benchmark_validation -- --ignored benchmark_all_fixtures_drc`:
+`multi_ic`, the only four-layer fixture, goes from 511 to 543 violations and
+from 78 to 110 shorts with its routes unchanged, and the other five boards do
+not move. Of the 32 new reports, 21 are tracks run through the middle of a
+hole, which is a short whether or not the land is kept.
 
 Source: JLCPCB capabilities page, read 2026-09-12 - minimum track width and
 spacing at 1 oz copper is 0.10 / 0.10 mm (4 / 4 mil) for one and two layers and

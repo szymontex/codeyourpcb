@@ -184,7 +184,7 @@ impl DrcRule for NetSplitRule {
             let (x, y) = (via.position.x.0, via.position.y.0);
             features.push(Feature {
                 shape: Shape::Solid,
-                layer_mask: via.start_layer.to_copper_mask() | via.end_layer.to_copper_mask(),
+                layer_mask: via.copper_mask(),
                 bounds: AABB::from_corners([x - radius, y - radius], [x + radius, y + radius]),
             });
         }
@@ -411,6 +411,21 @@ mod tests {
         ));
     }
 
+    fn blind_via(world: &mut BoardWorld, net: NetId, at: (f64, f64)) {
+        world.spawn_entity((
+            Via {
+                position: Point::from_mm(at.0, at.1),
+                drill: Nm::from_mm(0.3),
+                outer_diameter: Nm::from_mm(0.6),
+                start_layer: Layer::TopCopper,
+                end_layer: Layer::Inner(1),
+                net_id: net,
+                locked: false,
+            },
+            net,
+        ));
+    }
+
     fn splits(world: &mut BoardWorld) -> Vec<String> {
         NetSplitRule
             .check(world, &DesignRules::default())
@@ -490,6 +505,28 @@ mod tests {
         let found = splits(&mut build(false));
         assert_eq!(found.len(), 1, "{found:?}");
         assert!(found[0].contains("no copper joins R3.1 to R1.1, R2.1"));
+    }
+
+    #[test]
+    fn a_via_joins_the_layers_it_is_drilled_through_as_well_as_its_ends() {
+        // Two Top-to-Inner2 vias joined by a track on Inner1, the layer both
+        // pass through and neither names.
+        let build = |between: Layer| {
+            let mut world = BoardWorld::new();
+            let gnd = world.intern_net("GND");
+            let r1 = part(&mut world, "R1", (10.0, 10.0), gnd);
+            let r2 = part(&mut world, "R2", (30.0, 10.0), gnd);
+            trace(&mut world, gnd, Layer::TopCopper, &[r1, (15.0, r1.1)]);
+            trace(&mut world, gnd, Layer::TopCopper, &[(25.0, r2.1), r2]);
+            blind_via(&mut world, gnd, (15.0, r1.1));
+            blind_via(&mut world, gnd, (25.0, r2.1));
+            trace(&mut world, gnd, between, &[(15.0, r1.1), (25.0, r2.1)]);
+            world
+        };
+        assert!(splits(&mut build(Layer::Inner(0))).is_empty());
+        // The control: on the face the vias stop short of, nothing joins.
+        let found = splits(&mut build(Layer::BottomCopper));
+        assert_eq!(found.len(), 1, "{found:?}");
     }
 
     #[test]
