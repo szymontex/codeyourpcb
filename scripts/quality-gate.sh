@@ -595,9 +595,11 @@ echo ""
 # refuses a bundle older than `viewer/src`, and the tree it was wired into had
 # a `viewer/dist` a week behind. The bundle dials its WebSocket on the smoke's
 # own port, not on a dev server's, and the script builds the binary itself so
-# that the window shows this bundle and not the page `devUrl` points at.
+# that the window shows this bundle and not the page `devUrl` points at. The
+# desktop app dials no socket unless built with CYPCB_DESKTOP_DEV_SOCKET=1, so
+# the smoke's bundle is built with it: that dial is how it proves its origin.
 stage "desktop smoke"
-if (cd viewer && CYPCB_WS_PORT="${CYPCB_SMOKE_WS_PORT:-4329}" npm run build) >/dev/null 2>&1 \
+if (cd viewer && CYPCB_DESKTOP_DEV_SOCKET=1 CYPCB_WS_PORT="${CYPCB_SMOKE_WS_PORT:-4329}" npm run build) >/dev/null 2>&1 \
     && ./scripts/desktop-smoke.sh; then
   pass "desktop-smoke"
 else

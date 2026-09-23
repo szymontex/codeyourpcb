@@ -23,7 +23,9 @@ set -e
 # the same machine. The build below turns the feature on, and Tauri then
 # refuses to compile without `viewer/dist`. The page also has to prove where it
 # came from: the bundle dials its WebSocket on CYPCB_SMOKE_WS_PORT (default
-# 4329), this script listens there, and a window that never dialled fails.
+# 4329), this script listens there, and a window that never dialled fails. A
+# shipped desktop build dials nothing, so the bundle is built with
+# CYPCB_DESKTOP_DEV_SOCKET=1, the developer's switch that turns the dial on.
 #
 # Needs Xvfb and ImageMagick's `import`, both of which the container already
 # has; `scripts/setup-dev.sh` installs neither, so this exits with a message
@@ -66,14 +68,14 @@ fresher_than() {
 # still hears about a missing bundle rather than a skip.
 [ -d "$FRONTEND" ] && [ -n "$(ls -A "$FRONTEND" 2>/dev/null)" ] || {
     echo "[ERROR] $FRONTEND is empty; the app would open onto nothing."
-    echo "        cd viewer && CYPCB_WS_PORT=$WS_PORT npm run build"
+    echo "        cd viewer && CYPCB_DESKTOP_DEV_SOCKET=1 CYPCB_WS_PORT=$WS_PORT npm run build"
     exit 1
 }
 
 fresher_than "$FRONTEND" "the frontend bundle" viewer/src viewer/index.html || {
     echo "[ERROR] $FRONTEND is older than viewer/src; the window would show"
     echo "        a build nobody wrote today."
-    echo "        cd viewer && CYPCB_WS_PORT=$WS_PORT npm run build"
+    echo "        cd viewer && CYPCB_DESKTOP_DEV_SOCKET=1 CYPCB_WS_PORT=$WS_PORT npm run build"
     exit 1
 }
 
@@ -174,7 +176,7 @@ echo "[OK] it was still running after ${SECONDS_UP}s"
 DIALLED=$(cat "$DIALS" 2>/dev/null)
 if [ -z "$DIALLED" ]; then
     echo "[FAIL] the window never dialled $WS_PORT: it did not show this tree's"
-    echo "       $FRONTEND built with CYPCB_WS_PORT=$WS_PORT"
+    echo "       $FRONTEND built with CYPCB_DESKTOP_DEV_SOCKET=1 CYPCB_WS_PORT=$WS_PORT"
     exit 1
 fi
 echo "[OK] the window dialled $WS_PORT ($DIALLED connections): its page is a bundle built for it"

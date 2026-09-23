@@ -112,6 +112,7 @@ export default defineConfig({
   // listens on.
   define: {
     __CYPCB_WS_PORT__: JSON.stringify(Number(process.env.CYPCB_WS_PORT ?? 4322)),
+    __CYPCB_DESKTOP_DEV_SOCKET__: JSON.stringify(process.env.CYPCB_DESKTOP_DEV_SOCKET === '1'),
   },
   envPrefix: ['VITE_', 'TAURI_ENV_*'],
   build: {
