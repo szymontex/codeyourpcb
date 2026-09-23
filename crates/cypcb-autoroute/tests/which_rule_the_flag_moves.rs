@@ -228,20 +228,23 @@ fn the_holes_come_off_the_boards_that_had_the_most() {
 }
 
 #[test]
-fn the_flag_puts_copper_on_copper_and_that_is_why_it_is_not_the_default() {
-    // The reason the default did not move on 2026-09-11, and the reason is
-    // R-11's own tier order rather than a preference. Counting violation rows
-    // says the flag is a clear win: 1150 reports become 859. Counting copper
-    // touching copper says something the row count hides - `led_blink`, the
-    // simplest board here and the only one that routes clean, comes out with a
-    // short. Under R-11 a short is tier 2 and no quantity of tier 3 or tier 4
-    // offsets one: a board with a short does not work, while a board with a
-    // gap under minimum is a yield risk a fabricator may still build.
+fn the_flag_shorts_no_board_the_default_routes_clean() {
+    // This was the pin on the reason the default did not move on 2026-09-11:
+    // `led_blink`, the one board that routes clean, came out of the flag with
+    // a short, and under R-11 a short is tier 2 and no quantity of tier 3 or
+    // tier 4 offsets one. The pin was written to fail when the short was
+    // removed, so the default would be reconsidered rather than forgotten.
     //
-    // This test is a pin on a defect rather than a claim that the defect is
-    // right. When the short is found and removed it fails, which is what
-    // forces the default to be reconsidered instead of forgotten.
-    let mut clean_boards_that_short = Vec::new();
+    // It failed on 2026-09-23. The short was never the flag's: `optimize_vias`
+    // joined a GND via pair straight across SW_OUT because the list of other
+    // nets' copper it checked against was empty. With the check real the
+    // flag leaves no board with more shorts than the default does - 270
+    // become 206 across the six - and this test now holds that.
+    //
+    // The default stays off, and that is a decision this test does not make.
+    // One tier-1 figure still goes the other way: `multi_ic` leaves 6 pins
+    // unrouted with the flag off and 7 with it on.
+    let mut boards_the_flag_shorts_more = Vec::new();
     let mut off_total = 0;
     let mut on_total = 0;
 
@@ -249,8 +252,8 @@ fn the_flag_puts_copper_on_copper_and_that_is_why_it_is_not_the_default() {
         let off = shorts_of(fixture, false);
         let on = shorts_of(fixture, true);
         println!("{fixture:<26} shorts {off:>4} -> {on:>4}");
-        if off == 0 && on > 0 {
-            clean_boards_that_short.push(*fixture);
+        if on > off {
+            boards_the_flag_shorts_more.push(*fixture);
         }
         off_total += off;
         on_total += on;
@@ -258,12 +261,7 @@ fn the_flag_puts_copper_on_copper_and_that_is_why_it_is_not_the_default() {
     println!("all six boards: shorts {off_total} -> {on_total}");
 
     assert!(
-        !clean_boards_that_short.is_empty(),
-        "no board goes from no shorts to shorts, so the reason recorded for \
-         keeping the default off no longer holds"
-    );
-    assert!(
-        !AutorouteConfig::default().stop_at_own_copper,
-        "the default was switched on while a board it routes clean still shorts"
+        boards_the_flag_shorts_more.is_empty(),
+        "the flag draws more shorts than the default on {boards_the_flag_shorts_more:?}"
     );
 }
