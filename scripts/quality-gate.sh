@@ -481,7 +481,12 @@ echo ""
 
 # Autorouter benchmark — regression gate + performance benchmark
 stage "autorouter benchmark"
-if cargo test --release -p cypcb-autoroute -- benchmark_regression 2>&1; then
+# In the test profile, not `--release`. The routing crates are optimized
+# there too (see `[profile.test.package.*]` in Cargo.toml), and a release
+# build of the same crates cost 2m 41s after every router change in the
+# nightly run of 2026-09-23 for code no other stage uses. The six benchmark
+# boards route to the same hash of every segment and via in both profiles.
+if cargo test -p cypcb-autoroute -- benchmark_regression 2>&1; then
   pass "benchmark-regression"
 else
   fail "benchmark-regression"
@@ -494,7 +499,7 @@ fi
 # back: at least one case has to say it passed, and no binary may say FAILED.
 ignored_cases() {
   local out
-  out=$(cargo test --release -p cypcb-autoroute "$@" --ignored 2>&1)
+  out=$(cargo test -p cypcb-autoroute "$@" --ignored 2>&1)
   echo "$out"
   echo "$out" | grep -q "test result: FAILED" && return 1
   echo "$out" | grep -qE "test result: ok\. [1-9][0-9]* passed"
