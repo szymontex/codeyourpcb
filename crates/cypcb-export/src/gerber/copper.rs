@@ -10,6 +10,7 @@ use cypcb_core::Point;
 use cypcb_world::components::trace::{Trace, Via};
 use cypcb_world::components::{place_pad, FootprintRef, Position, Rotation};
 use cypcb_world::footprint::FootprintLibrary;
+use cypcb_world::in_build_order;
 use cypcb_world::teardrop::{inscribed_radius, teardrop, TeardropRatios};
 use cypcb_world::{BoardWorld, Layer};
 
@@ -172,11 +173,9 @@ fn export_pads(
     format: &CoordinateFormat,
 ) -> Result<(), ExportError> {
     // Query all components with position and footprint
-    let mut query = world
-        .ecs_mut()
-        .query::<(&Position, &FootprintRef, &Rotation)>();
-
-    for (position, footprint_ref, rotation) in query.iter(world.ecs()) {
+    for (position, footprint_ref, rotation) in
+        in_build_order::<(&Position, &FootprintRef, &Rotation)>(world.ecs_mut())
+    {
         // Look up footprint in library
         let footprint = library
             .get(&footprint_ref.0)
@@ -218,9 +217,7 @@ fn export_traces(
     format: &CoordinateFormat,
 ) {
     // Query all traces on this layer
-    let mut query = world.ecs_mut().query::<&Trace>();
-
-    for trace in query.iter(world.ecs()) {
+    for trace in in_build_order::<&Trace>(world.ecs_mut()) {
         // Skip traces on other layers
         if trace.layer != layer {
             continue;

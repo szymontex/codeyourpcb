@@ -19,10 +19,11 @@
 //! )
 //! ```
 
-use std::collections::HashSet;
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::io::Write;
 
 use cypcb_world::footprint::FootprintLibrary;
+use cypcb_world::in_build_order;
 use cypcb_world::BoardWorld;
 
 use thiserror::Error;
@@ -216,10 +217,11 @@ fn write_placement(
     writeln!(output, "  (placement")?;
 
     // Group components by footprint
-    let mut components_by_footprint: std::collections::HashMap<
+    // Sorted by name: a hash map drew a new order in every run of the program.
+    let mut components_by_footprint: BTreeMap<
         String,
         Vec<(String, cypcb_world::Position, cypcb_world::Rotation)>,
-    > = std::collections::HashMap::new();
+    > = BTreeMap::new();
 
     // Query components using ECS
     let ecs = world.ecs_mut();
@@ -279,7 +281,8 @@ fn write_library(
     writeln!(output, "  (library")?;
 
     // Collect unique footprints used in the design
-    let mut used_footprints: HashSet<String> = HashSet::new();
+    // Sorted by name, for the same reason as the placement.
+    let mut used_footprints: BTreeSet<String> = BTreeSet::new();
 
     let ecs = world.ecs_mut();
     let mut query = ecs.query::<&cypcb_world::FootprintRef>();
@@ -436,9 +439,9 @@ fn write_network(world: &mut BoardWorld, output: &mut impl Write) -> Result<(), 
         std::collections::HashMap::new();
 
     let ecs = world.ecs_mut();
-    let mut query = ecs.query::<(&cypcb_world::RefDes, &cypcb_world::NetConnections)>();
-
-    for (refdes, net_conns) in query.iter(ecs) {
+    for (refdes, net_conns) in
+        in_build_order::<(&cypcb_world::RefDes, &cypcb_world::NetConnections)>(ecs)
+    {
         for conn in net_conns.iter() {
             net_pins
                 .entry(conn.net)

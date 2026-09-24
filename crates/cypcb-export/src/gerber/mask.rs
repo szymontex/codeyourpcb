@@ -10,6 +10,7 @@ use crate::gerber::header::{write_header, GerberFileFunction, Side};
 use cypcb_core::Nm;
 use cypcb_world::components::{FootprintRef, Position, Rotation};
 use cypcb_world::footprint::FootprintLibrary;
+use cypcb_world::in_build_order;
 use cypcb_world::{BoardWorld, Layer};
 
 /// Configuration for mask and paste layer export.
@@ -252,11 +253,9 @@ fn export_mask_openings(
     config: &MaskPasteConfig,
 ) -> Result<(), ExportError> {
     // Query all components with position and footprint
-    let mut query = world
-        .ecs_mut()
-        .query::<(&Position, &FootprintRef, &Rotation)>();
-
-    for (position, footprint_ref, rotation) in query.iter(world.ecs()) {
+    for (position, footprint_ref, rotation) in
+        in_build_order::<(&Position, &FootprintRef, &Rotation)>(world.ecs_mut())
+    {
         // Look up footprint in library
         let footprint = library
             .get(&footprint_ref.0)
@@ -312,11 +311,9 @@ fn export_paste_openings(
     config: &MaskPasteConfig,
 ) -> Result<(), ExportError> {
     // Query all components with position and footprint
-    let mut query = world
-        .ecs_mut()
-        .query::<(&Position, &FootprintRef, &Rotation)>();
-
-    for (position, footprint_ref, rotation) in query.iter(world.ecs()) {
+    for (position, footprint_ref, rotation) in
+        in_build_order::<(&Position, &FootprintRef, &Rotation)>(world.ecs_mut())
+    {
         // Look up footprint in library
         let footprint = library
             .get(&footprint_ref.0)

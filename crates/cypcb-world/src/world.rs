@@ -862,6 +862,26 @@ impl Default for BoardWorld {
     }
 }
 
+/// Every row a query matches, in the order the board was built.
+///
+/// A bevy query walks its archetypes in the order of a hash map whose seed is
+/// drawn once per process. Rows of one kind that do not all carry the same
+/// components - parts with and without a `spec` block, traces with and without
+/// a curve - sit in more than one archetype, so one run of the program met them
+/// in one order and the next run in another, and every file written from that
+/// walk came out different. Sorting by entity puts the rows back in the order
+/// they were spawned, which is the order of the source.
+///
+/// A writer whose file follows the order of a query asks through this.
+pub fn in_build_order<D: bevy_ecs::query::ReadOnlyQueryData>(
+    world: &mut World,
+) -> Vec<bevy_ecs::query::ROQueryItem<'_, D>> {
+    let mut state = world.query::<(Entity, D)>();
+    let mut rows: Vec<_> = state.iter(world).collect();
+    rows.sort_by_key(|(entity, _)| *entity);
+    rows.into_iter().map(|(_, row)| row).collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
