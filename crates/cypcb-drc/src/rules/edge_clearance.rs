@@ -8,16 +8,18 @@ use cypcb_core::{Nm, Point};
 use cypcb_world::components::{BoardOutline, BoardSize};
 use cypcb_world::BoardWorld;
 
-use super::clearance::Copper;
+use super::clearance::{segment_distance, EntryCopper, Piece};
 use super::DrcRule;
 use crate::presets::DesignRules;
 use crate::violation::DrcViolation;
 
 /// Rule that checks minimum copper-to-board-edge clearance.
 ///
-/// For each entry in the spatial index, checks that its bounding box is
-/// at least `min_edge_clearance` away from all four board edges. The board
-/// is assumed to be rectangular with origin at (0, 0).
+/// For each entry in the spatial index, checks that the copper it stands for
+/// is at least `min_edge_clearance` away from the board edge: the outline
+/// where the board states one, the `BoardSize` rectangle with origin at
+/// (0, 0) otherwise. The copper is a pad, a via disc, a trace centreline
+/// grown by half its width, or a pour box.
 ///
 /// If no board size is defined, this rule silently passes (no violations).
 ///
@@ -80,7 +82,7 @@ impl DrcRule for EdgeClearanceRule {
         // was refused for copper it does not have - the same defect
         // `ClearanceRule` was fixed for, and the same collector fixes it:
         // where a component has pad geometry, its pads are what gets measured.
-        let pad_map = super::clearance::component_pads(world);
+        let copper = EntryCopper::collect(world);
 
         let mut entries: Vec<_> = world.spatial().iter().cloned().collect();
         for (entity, zone) in world.zones() {
@@ -102,51 +104,49 @@ impl DrcRule for EdgeClearanceRule {
         }
 
         for entry in &entries {
-            // The copper this entry stands for: a component's pads where it
-            // has them, the entry's own box otherwise - a trace or a pour is
-            // copper already.
-            // A pad is its core grown by a radius, as `ClearanceRule` measures
-            // it; the edge is as far from the copper as from the core, less
-            // the radius.
-            let coppers: Vec<Copper> = match pad_map.get(&entry.entity.index()) {
-                Some(pads) if !pads.is_empty() => pads.iter().map(|pad| pad.copper).collect(),
-                _ => vec![Copper::boxed(entry.envelope)],
-            };
+            // The copper this entry stands for, as `EntryCopper` gives it. A
+            // pad or a via is a core grown by a radius and a trace segment a
+            // centreline grown by half its width; the edge is as far from the
+            // copper as from the core or the centreline, less the radius.
+            let pieces = copper.pieces(entry);
 
-            let distance_of = |copper: &Copper| {
-                let (lo, hi) = (copper.core.lower(), copper.core.upper());
-                let (min_x, min_y, max_x, max_y) = (lo[0], lo[1], hi[0], hi[1]);
-                let to_core = match &outline {
-                    Some(outline) => distance_to_outline(outline, min_x, min_y, max_x, max_y),
-                    None => {
-                        // Distance to each edge (negative means outside board)
-                        let dist_left = min_x; // distance from left edge (x=0)
-                        let dist_bottom = min_y; // distance from bottom edge (y=0)
-                        let dist_right = board_w - max_x; // distance from right edge
-                        let dist_top = board_h - max_y; // distance from top edge
-                        dist_left.min(dist_bottom).min(dist_right).min(dist_top)
-                    }
-                };
-                to_core - copper.radius
+            // Distance to each edge of the rectangle, negative outside it.
+            let to_rectangle = |x: i64, y: i64| x.min(y).min(board_w - x).min(board_h - y);
+            let distance_of = |piece: &Piece| match *piece {
+                Piece::Area(copper) => {
+                    let (lo, hi) = (copper.core.lower(), copper.core.upper());
+                    let (min_x, min_y, max_x, max_y) = (lo[0], lo[1], hi[0], hi[1]);
+                    let to_core = match &outline {
+                        Some(outline) => distance_to_outline(outline, min_x, min_y, max_x, max_y),
+                        None => to_rectangle(min_x, min_y).min(to_rectangle(max_x, max_y)),
+                    };
+                    to_core - copper.radius
+                }
+                Piece::Stroke { from, to, radius } => {
+                    let to_axis = match &outline {
+                        Some(outline) => stroke_to_outline(outline, from, to),
+                        // A rectangle is convex, so a segment's nearest point to
+                        // its edge is one of the segment's ends.
+                        None => to_rectangle(from[0], from[1]).min(to_rectangle(to[0], to[1])),
+                    };
+                    to_axis - radius
+                }
             };
 
             // The nearest piece of this entry's copper, and one report per
             // entry rather than one per pad: a part too close to the edge is
             // one fault however many of its pads are out.
-            let Some(nearest) = coppers.iter().min_by_key(|copper| distance_of(copper)) else {
+            let Some(nearest) = pieces.iter().min_by_key(|piece| distance_of(piece)) else {
                 continue;
             };
             let min_dist = distance_of(nearest);
-            let (lo, hi) = (nearest.core.lower(), nearest.core.upper());
-            let (min_x, min_y, max_x, max_y) = (lo[0], lo[1], hi[0], hi[1]);
 
             if min_dist < min_edge.0 {
-                let center = Point::new(Nm((min_x + max_x) / 2), Nm((min_y + max_y) / 2));
                 violations.push(DrcViolation::edge_clearance(
                     entry.entity,
                     Nm(min_dist.max(0)), // clamp negative to 0
                     min_edge,
-                    center,
+                    nearest.centre(),
                 ));
             }
         }
@@ -190,6 +190,22 @@ pub(crate) fn distance_to_outline(
         }
     }
     nearest
+}
+
+/// How far a trace segment's centreline sits from the board's edge.
+///
+/// Measured against every edge of the ring, as a box is. A segment whose
+/// midpoint falls outside the ring reads as zero, for the reason a box does.
+fn stroke_to_outline(outline: &BoardOutline, from: [i64; 2], to: [i64; 2]) -> i64 {
+    let middle = Point::new(Nm((from[0] + to[0]) / 2), Nm((from[1] + to[1]) / 2));
+    if !outline.contains(middle) {
+        return 0;
+    }
+    outline
+        .edges()
+        .map(|(a, b)| segment_distance(from, to, [a.x.raw(), a.y.raw()], [b.x.raw(), b.y.raw()]))
+        .min()
+        .unwrap_or(i64::MAX)
 }
 
 #[cfg(test)]

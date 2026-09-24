@@ -688,6 +688,132 @@ pub(crate) fn trace_to_copper_distance(trace: &TraceData, copper: &Copper) -> (P
     (at, distance.saturating_sub(copper.radius).max(0))
 }
 
+/// One piece of the copper an index entry stands for, as the rules that
+/// measure copper against something other than copper see it: the board edge,
+/// a slot, a bare hole.
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum Piece {
+    /// A box grown by a radius: a pad, a via's disc, a pour.
+    Area(Copper),
+    /// A centreline grown by a radius: one segment of a trace.
+    Stroke {
+        from: [i64; 2],
+        to: [i64; 2],
+        radius: i64,
+    },
+}
+
+impl Piece {
+    /// Where a report about this piece points: the middle of its copper.
+    pub(crate) fn centre(&self) -> Point {
+        match self {
+            Piece::Area(copper) => aabb_center(&copper.core),
+            Piece::Stroke { from, to, .. } => midpoint_raw(*from, *to),
+        }
+    }
+}
+
+/// The copper behind each entry of the spatial index, for the rules that walk
+/// the index without measuring copper against copper.
+///
+/// The index holds boxes. A trace segment sits there as the box around it,
+/// grown by half its width, and a via as the square around its disc - and a
+/// diagonal segment's box has corners the copper never reaches. Measured as
+/// that box, a diagonal trace running beside the board edge, a slot or a
+/// mounting hole reads closer than it is. `ClearanceRule` measures a trace by
+/// its centreline and a via by its disc; so does everything that asks this.
+///
+/// A pour stays the box: `Zone` holds nothing but its bounds, so the box is
+/// the whole of what the model knows about its copper.
+pub(crate) struct EntryCopper {
+    pads: HashMap<u32, Vec<PadBox>>,
+    vias: HashMap<u32, Copper>,
+    traces: HashMap<u32, TraceData>,
+}
+
+impl EntryCopper {
+    pub(crate) fn collect(world: &mut BoardWorld) -> Self {
+        let pads = component_pads(world);
+        let ecs = world.ecs_mut();
+        let vias = ecs
+            .query::<(bevy_ecs::entity::Entity, &Via)>()
+            .iter(ecs)
+            .map(|(e, via)| {
+                (
+                    e.index(),
+                    Copper::circle(
+                        [via.position.x.0, via.position.y.0],
+                        via.outer_diameter.0 / 2,
+                    ),
+                )
+            })
+            .collect();
+        let traces = ecs
+            .query::<(bevy_ecs::entity::Entity, &Trace)>()
+            .iter(ecs)
+            .map(|(e, t)| {
+                let segments = t
+                    .segments
+                    .iter()
+                    .map(|s| ([s.start.x.0, s.start.y.0], [s.end.x.0, s.end.y.0]))
+                    .collect();
+                (
+                    e.index(),
+                    TraceData {
+                        half_width: t.width.0 / 2,
+                        segments,
+                    },
+                )
+            })
+            .collect();
+        EntryCopper { pads, vias, traces }
+    }
+
+    /// A component's pads, when the entity is one.
+    pub(crate) fn pads(&self, entity: bevy_ecs::entity::Entity) -> Option<&[PadBox]> {
+        self.pads.get(&entity.index()).map(Vec::as_slice)
+    }
+
+    /// The copper `entry` stands for: a component's pads where it has them, a
+    /// via's disc, the trace segment the entry was indexed for, and the
+    /// entry's own box for anything else.
+    pub(crate) fn pieces(&self, entry: &cypcb_world::SpatialEntry) -> Vec<Piece> {
+        let index = entry.entity.index();
+        if let Some(pads) = self.pads.get(&index).filter(|pads| !pads.is_empty()) {
+            return pads.iter().map(|pad| Piece::Area(pad.copper)).collect();
+        }
+        if let Some(via) = self.vias.get(&index) {
+            return vec![Piece::Area(*via)];
+        }
+        if let Some(trace) = self.traces.get(&index) {
+            // One entry per segment, each the segment's box grown by half the
+            // width, which is how the index is built; the segments whose grown
+            // box this is are the copper this entry stands for.
+            let radius = trace.half_width;
+            let own: Vec<Piece> = trace
+                .segments
+                .iter()
+                .filter(|(from, to)| {
+                    let grown = AABB::from_corners(
+                        [from[0].min(to[0]) - radius, from[1].min(to[1]) - radius],
+                        [from[0].max(to[0]) + radius, from[1].max(to[1]) + radius],
+                    );
+                    grown == entry.envelope
+                })
+                .map(|(from, to)| Piece::Stroke {
+                    from: *from,
+                    to: *to,
+                    radius,
+                })
+                .collect();
+            if !own.is_empty() {
+                return own;
+            }
+        }
+        vec![Piece::Area(Copper::boxed(entry.envelope))]
+    }
+}
+
 /// Closest approach between two components' pads, ignoring pad pairs that
 /// share a net.
 ///
@@ -927,8 +1053,7 @@ fn point_distance(a: [i64; 2], b: [i64; 2]) -> i64 {
 }
 
 /// Minimum distance from a point to a line segment.
-#[allow(dead_code)] // Kept for future DRC rules (e.g., pad-to-trace clearance)
-fn point_to_segment_distance(p: [i64; 2], s1: [i64; 2], s2: [i64; 2]) -> i64 {
+pub(crate) fn point_to_segment_distance(p: [i64; 2], s1: [i64; 2], s2: [i64; 2]) -> i64 {
     segment_distance(p, p, s1, s2)
 }
 

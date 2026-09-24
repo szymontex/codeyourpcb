@@ -24,7 +24,7 @@ use cypcb_core::{Nm, Point};
 use cypcb_world::components::{NetConnections, NetId};
 use cypcb_world::BoardWorld;
 
-use super::clearance::Copper;
+use super::clearance::{EntryCopper, Piece};
 use super::{holes_of, segment_distance, DrcRule, Hole};
 use crate::presets::DesignRules;
 use crate::violation::DrcViolation;
@@ -78,10 +78,11 @@ impl DrcRule for SlotClearanceRule {
         // this the hard way and pre-collects per-pad copper for exactly this
         // reason; the two now share the collector rather than each having one.
         //
-        // Traces need no such refinement: they are indexed one entry per
-        // segment with the half-width already in the box, so a trace's entry is
-        // already close to the copper it stands for.
-        let pad_map = super::clearance::component_pads(world);
+        // A trace is indexed one entry per segment as the box around it, and
+        // a diagonal segment's box has corners its copper never reaches: the
+        // segment's centreline, grown by half its width, is what is measured.
+        // A via is its disc for the same reason.
+        let copper = EntryCopper::collect(world);
         let entries: Vec<_> = world.spatial().iter().cloned().collect();
 
         for slot in &slots {
@@ -111,38 +112,45 @@ impl DrcRule for SlotClearanceRule {
                     continue;
                 }
 
-                // The copper this entry stands for: a component's pads when the
-                // entry is a courtyard, the entry's own box otherwise.
-                // A pad is its core grown by a radius, as `ClearanceRule`
-                // measures it.
-                let coppers: Vec<Copper> = match pad_map.get(&entry.entity.index()) {
-                    Some(pads) => pads.iter().map(|pad| pad.copper).collect(),
-                    None => vec![Copper::boxed(entry.envelope)],
-                };
-                let gap_of = |copper: &Copper| {
-                    let (lo, hi) = (copper.core.lower(), copper.core.upper());
-                    box_to_slot_gap(slot, lo[0], lo[1], hi[0], hi[1]) - copper.radius
+                // The copper this entry stands for, as `EntryCopper` gives it.
+                // A component with no pads has no copper to measure.
+                if copper
+                    .pads(entry.entity)
+                    .is_some_and(|pads| pads.is_empty())
+                {
+                    continue;
+                }
+                let pieces = copper.pieces(entry);
+                let gap_of = |piece: &Piece| match *piece {
+                    Piece::Area(copper) => {
+                        let (lo, hi) = (copper.core.lower(), copper.core.upper());
+                        box_to_slot_gap(slot, lo[0], lo[1], hi[0], hi[1]) - copper.radius
+                    }
+                    Piece::Stroke { from, to, radius } => {
+                        let (from, to) = (
+                            Point::new(Nm(from[0]), Nm(from[1])),
+                            Point::new(Nm(to[0]), Nm(to[1])),
+                        );
+                        segment_distance(from, to, slot.start, slot.end) - slot.radius - radius
+                    }
                 };
 
                 // The nearest piece of this entry's copper, and one report per
                 // entry rather than one per pad: a part too close to a slot is
                 // one fault, and naming it eight times is a checker somebody
                 // learns to ignore.
-                let Some(nearest) = coppers.iter().min_by_key(|copper| gap_of(copper)) else {
+                let Some(nearest) = pieces.iter().min_by_key(|piece| gap_of(piece)) else {
                     continue;
                 };
 
                 let gap = gap_of(nearest);
-                let (lo, hi) = (nearest.core.lower(), nearest.core.upper());
-                let (min_x, min_y, max_x, max_y) = (lo[0], lo[1], hi[0], hi[1]);
                 if gap < required.0 {
-                    let location = Point::new(Nm((min_x + max_x) / 2), Nm((min_y + max_y) / 2));
                     violations.push(DrcViolation::slot_clearance(
                         entry.entity,
                         slot.entity,
                         Nm(gap.max(0)),
                         required,
-                        location,
+                        nearest.centre(),
                     ));
                 }
             }

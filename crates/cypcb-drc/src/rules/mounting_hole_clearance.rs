@@ -17,6 +17,7 @@ use cypcb_core::{Nm, Point};
 use cypcb_world::components::{FootprintRef, Position, RefDes, Rotation};
 use cypcb_world::BoardWorld;
 
+use super::clearance::{point_to_segment_distance, Copper, EntryCopper, Piece};
 use super::DrcRule;
 use crate::presets::DesignRules;
 use crate::violation::DrcViolation;
@@ -108,7 +109,10 @@ impl DrcRule for MountingHoleClearanceRule {
         // clear - the drill cuts nothing of that part. `ClearanceRule` and the
         // edge rule both measure pads through this collector; so does this one
         // now.
-        let pad_map = super::clearance::component_pads(world);
+        // A trace segment and a via are measured the same way: a trace is its
+        // centreline grown by half its width and a via is its disc, not the
+        // box the index holds for either.
+        let copper = EntryCopper::collect(world);
 
         let mut entries: Vec<cypcb_world::SpatialEntry> = world.spatial().iter().cloned().collect();
         for (entity, zone) in world.zones() {
@@ -134,17 +138,14 @@ impl DrcRule for MountingHoleClearanceRule {
                     continue;
                 }
 
-                // The copper this entry stands for: a component's pads where
-                // it has them, its own box otherwise - a trace, a via or a
-                // pour is copper already.
-                let gap = match pad_map.get(&entry.entity.index()) {
-                    Some(pads) if !pads.is_empty() => pads
-                        .iter()
-                        .map(|pad| distance_to_pad(hole.centre, pad))
-                        .min()
-                        .unwrap_or(i64::MAX),
-                    _ => distance_to_box(hole.centre, entry),
-                } - hole.radius.raw();
+                // The copper this entry stands for, as `EntryCopper` gives it.
+                let gap = copper
+                    .pieces(entry)
+                    .iter()
+                    .map(|piece| distance_to_piece(hole.centre, piece))
+                    .min()
+                    .unwrap_or(i64::MAX)
+                    - hole.radius.raw();
                 if gap < required.raw() {
                     violations.push(DrcViolation::edge_clearance(
                         entry.entity,
@@ -168,10 +169,21 @@ impl DrcRule for MountingHoleClearanceRule {
     }
 }
 
-/// Distance in nanometres from a point to one pad's copper: to its core, less
-/// the radius the core is grown by.
-fn distance_to_pad(point: Point, pad: &super::clearance::PadBox) -> i64 {
-    let copper = &pad.copper;
+/// Distance in nanometres from a point to one piece of copper: to its core or
+/// its centreline, less the radius it is grown by.
+fn distance_to_piece(point: Point, piece: &Piece) -> i64 {
+    match *piece {
+        Piece::Area(copper) => distance_to_copper(point, &copper),
+        Piece::Stroke { from, to, radius } => {
+            let to_axis = point_to_segment_distance([point.x.raw(), point.y.raw()], from, to);
+            (to_axis - radius).max(0)
+        }
+    }
+}
+
+/// Distance in nanometres from a point to a box grown by a radius: to its
+/// core, less the radius.
+fn distance_to_copper(point: Point, copper: &Copper) -> i64 {
     let (min_x, min_y) = (copper.core.lower()[0], copper.core.lower()[1]);
     let (max_x, max_y) = (copper.core.upper()[0], copper.core.upper()[1]);
 
@@ -180,22 +192,4 @@ fn distance_to_pad(point: Point, pad: &super::clearance::PadBox) -> i64 {
 
     let to_core = (((dx as i128 * dx as i128 + dy as i128 * dy as i128) as f64).sqrt()) as i64;
     (to_core - copper.radius).max(0)
-}
-
-/// Distance in nanometres from a point to the nearest edge of a box, or zero
-/// when the point is inside it.
-fn distance_to_box(point: Point, entry: &cypcb_world::SpatialEntry) -> i64 {
-    let (min_x, min_y) = (entry.envelope.lower()[0], entry.envelope.lower()[1]);
-    let (max_x, max_y) = (entry.envelope.upper()[0], entry.envelope.upper()[1]);
-
-    let dx = (min_x - point.x.raw()).max(0).max(point.x.raw() - max_x);
-    let dy = (min_y - point.y.raw()).max(0).max(point.y.raw() - max_y);
-
-    if dx == 0 && dy == 0 {
-        return 0;
-    }
-    // Integer hypotenuse: the values are nanometres on a board, so the square
-    // fits an i128 with room to spare and the result is exact to the
-    // nanometre.
-    (((dx as i128 * dx as i128 + dy as i128 * dy as i128) as f64).sqrt()) as i64
 }
