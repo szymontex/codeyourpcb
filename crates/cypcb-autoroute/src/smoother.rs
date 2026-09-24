@@ -121,7 +121,33 @@ pub fn smooth_routes(
 /// two pieces. So every segment is cut at each anchor it passes through, the
 /// group is split at every anchor, and each piece is smoothed on its own: a
 /// via's point is an end the way a pad's is.
+///
+/// A branch can come apart the same way. When a later path of the net stops
+/// on the copper an earlier one laid, three pieces meet where it stopped, and
+/// a run carries only two of them through; the chamfer that cut that corner
+/// can leave the third piece behind. On `mains-sequencer`, with
+/// `stop_at_own_copper`, that cut PE and GND in two. Most such cuts still
+/// leave the branch on the diagonal, and holding every joint would give up
+/// those chamfers too, so the joints are held only when the smoothed copper
+/// is in more pieces than the copper it came from.
 fn smooth_net_layer_group(
+    group: &[RouteSegment],
+    others: &[RouteSegment],
+    anchors: &[Point],
+    min_clearance: Nm,
+    roundness: f64,
+) -> Vec<RouteSegment> {
+    let smoothed = smooth_held(group, others, anchors, min_clearance, roundness);
+    if pieces(&smoothed) <= pieces(group) {
+        return smoothed;
+    }
+    let mut held = anchors.to_vec();
+    held.extend(joints(group));
+    smooth_held(group, others, &held, min_clearance, roundness)
+}
+
+/// Smooth `group` with every point of `anchors` held where it is.
+fn smooth_held(
     group: &[RouteSegment],
     others: &[RouteSegment],
     anchors: &[Point],
@@ -141,23 +167,104 @@ fn smooth_net_layer_group(
     merge_collinear(&smoothed)
 }
 
-/// `seg` in pieces that end on each anchor lying strictly inside it.
-fn cut_at_anchors(seg: &RouteSegment, anchors: &[Point]) -> Vec<RouteSegment> {
+/// How many pieces the copper of `group` is in, where two segments are one
+/// piece when an end of either lies on the other.
+fn pieces(group: &[RouteSegment]) -> usize {
+    let on = |p: Point, seg: &RouteSegment| {
+        p == seg.start || p == seg.end || along_inside(seg, p).is_some()
+    };
+    let mut piece: Vec<usize> = (0..group.len()).collect();
+    fn root(piece: &mut [usize], mut at: usize) -> usize {
+        while piece[at] != at {
+            at = piece[at];
+        }
+        at
+    }
+    for (i, one) in group.iter().enumerate() {
+        for (j, other) in group.iter().enumerate().skip(i + 1) {
+            if on(one.start, other)
+                || on(one.end, other)
+                || on(other.start, one)
+                || on(other.end, one)
+            {
+                let (a, b) = (root(&mut piece, i), root(&mut piece, j));
+                piece[a] = b;
+            }
+        }
+    }
+    (0..group.len())
+        .filter(|&i| root(&mut piece, i) == i)
+        .count()
+}
+
+/// Every point the copper of `group` leaves in three or more directions.
+///
+/// Directions, not segments: a path that goes back over its own copper, or
+/// stops on a stretch of copper it then runs along, lays a second segment
+/// the same way as the first, and that point is still a corner the smoother
+/// may cut. On `qfp_fanout` holding such a corner left a VCC corner on an IO2
+/// via, and on `multi_ic` it kept GND drawn over itself.
+fn joints(group: &[RouteSegment]) -> Vec<Point> {
+    let mut ends: Vec<Point> = group.iter().flat_map(|seg| [seg.start, seg.end]).collect();
+    ends.sort_by_key(|p| (p.x.0, p.y.0));
+    ends.dedup();
+    ends.retain(|p| {
+        let mut ways: Vec<(i64, i64)> = group
+            .iter()
+            .flat_map(|seg| {
+                if seg.start == *p {
+                    vec![way(*p, seg.end)]
+                } else if seg.end == *p {
+                    vec![way(*p, seg.start)]
+                } else if along_inside(seg, *p).is_some() {
+                    vec![way(*p, seg.start), way(*p, seg.end)]
+                } else {
+                    Vec::new()
+                }
+            })
+            .filter(|way| *way != (0, 0))
+            .collect();
+        ways.sort_unstable();
+        ways.dedup();
+        ways.len() >= 3
+    });
+    ends
+}
+
+/// The direction from `from` to `to`, reduced so that every point along one
+/// ray gives the same pair.
+fn way(from: Point, to: Point) -> (i64, i64) {
+    let (dx, dy) = (to.x.0 - from.x.0, to.y.0 - from.y.0);
+    let (mut a, mut b) = (dx.abs(), dy.abs());
+    while b != 0 {
+        (a, b) = (b, a % b);
+    }
+    if a == 0 {
+        (0, 0)
+    } else {
+        (dx / a, dy / a)
+    }
+}
+
+/// How far along `seg` the point `p` lies, when it lies strictly inside it.
+fn along_inside(seg: &RouteSegment, p: Point) -> Option<i128> {
     let (dx, dy) = (
         (seg.end.x.0 - seg.start.x.0) as i128,
         (seg.end.y.0 - seg.start.y.0) as i128,
     );
-    let length_sq = dx * dx + dy * dy;
+    let (px, py) = (
+        (p.x.0 - seg.start.x.0) as i128,
+        (p.y.0 - seg.start.y.0) as i128,
+    );
+    let along = px * dx + py * dy;
+    (px * dy - py * dx == 0 && along > 0 && along < dx * dx + dy * dy).then_some(along)
+}
+
+/// `seg` in pieces that end on each anchor lying strictly inside it.
+fn cut_at_anchors(seg: &RouteSegment, anchors: &[Point]) -> Vec<RouteSegment> {
     let mut inside: Vec<(i128, Point)> = anchors
         .iter()
-        .filter_map(|p| {
-            let (px, py) = (
-                (p.x.0 - seg.start.x.0) as i128,
-                (p.y.0 - seg.start.y.0) as i128,
-            );
-            let along = px * dx + py * dy;
-            (px * dy - py * dx == 0 && along > 0 && along < length_sq).then_some((along, *p))
-        })
+        .filter_map(|p| along_inside(seg, *p).map(|along| (along, *p)))
         .collect();
     inside.sort_by_key(|(along, _)| *along);
     inside.dedup_by_key(|(along, _)| *along);

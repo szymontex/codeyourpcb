@@ -662,12 +662,12 @@ the verification block, and `stop_at_own_copper` moves it.
 **In this repo:** the junctions are counted and none are cut. `acute-angle`
 (`crates/cypcb-drc/src/rules/acute_angle.rs`) reports them; no pass in
 `crates/cypcb-autoroute` rewrites them. `chamfer_corners`
-(`crates/cypcb-autoroute/src/smoother.rs:416`) acts only on a 90 degree bend
+(`crates/cypcb-autoroute/src/smoother.rs:523`) acts only on a 90 degree bend
 and cannot reach this case: it classifies both segments and proceeds only when
 one is horizontal and the other vertical - `is_90_bend = (dir_a == Horizontal
 && dir_b == Vertical) || (dir_a == Vertical && dir_b == Horizontal)`, and `if
 !is_90_bend` pushes the segment through untouched
-(`crates/cypcb-autoroute/src/smoother.rs:378-388`).
+(`crates/cypcb-autoroute/src/smoother.rs:559-569`).
 
 #### What the sources bound, and what they do not
 
