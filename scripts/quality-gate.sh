@@ -127,13 +127,29 @@ CHECKS_PASSED=0
 
 # The label a reader sees is now counted rather than typed, which is the same
 # argument the comment below makes about numbers living in two places.
+#
+# Each stage closes with how long it took. The log used to carry one number
+# for the whole run, so a question about which stage the time goes to was
+# answered by reading `finished in` lines and guessing at what lay between
+# them. A failed stage closes too: the time to the first red is a number
+# somebody asks about.
 stage() {
+  stage_done
   STAGES_RUN=$((STAGES_RUN + 1))
+  STAGE_NAME=$1
+  STAGE_START=$(date +%s)
   echo "[$STAGES_RUN/$STAGES_DECLARED] $1"
 }
 
+stage_done() {
+  [ -n "${STAGE_NAME:-}" ] || return 0
+  printf 'STAGE-TIME %s/%s %ss %s\n' \
+    "$STAGES_RUN" "$STAGES_DECLARED" "$(( $(date +%s) - STAGE_START ))" "$STAGE_NAME"
+  STAGE_NAME=
+}
+
 pass() { CHECKS_PASSED=$((CHECKS_PASSED + 1)); echo "  ✓ $1"; }
-fail() { echo "  ✗ $1"; exit 1; }
+fail() { echo "  ✗ $1"; stage_done; exit 1; }
 
 echo "=== Quality Gate ==="
 echo ""
@@ -732,6 +748,8 @@ echo ""
 # have written into it. Diagnostic only, like the first - it never fails a run,
 # and its value is that a red carries evidence about the window rather than
 # about one moment of it.
+stage_done
+
 printf 'GATE-BUILDS-AT-END %s dir=%s\n' \
   "$("$REPO_ROOT/scripts/who-is-building.sh" "$GATE_BUILD_DIR")" "$GATE_BUILD_DIR"
 
