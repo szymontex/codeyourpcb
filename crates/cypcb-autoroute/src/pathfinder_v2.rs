@@ -767,8 +767,8 @@ pub fn pathfinder_loop(
                         for pair in p.windows(2) {
                             let (a, b) = (pair[0], pair[1]);
                             if a.2 != b.2 && a.0 == b.0 && a.1 == b.1 {
-                                let (lo, hi) = if a.2 <= b.2 { (a.2, b.2) } else { (b.2, a.2) };
-                                for layer in lo..=hi {
+                                let spanned = grid.via_layers(a.2, b.2);
+                                for layer in grid.layers_in(spanned) {
                                     net_hole_cells.push((a.0 as u32, a.1 as u32, layer));
                                 }
 
@@ -790,7 +790,10 @@ pub fn pathfinder_loop(
                                 // worse. This marks what the copper covers,
                                 // and only cells no other net already owns.
                                 if config.reserve_trace_footprint {
-                                    let via = [(a.0, a.1, a.2), (b.0, b.1, b.2)];
+                                    let via: Vec<GridNode> = grid
+                                        .layers_in(spanned)
+                                        .map(|layer| (a.0, a.1, layer))
+                                        .collect();
                                     for cell in
                                         grid.mark_route_footprint(&via, net_id, via_copper_cells)
                                     {
@@ -989,7 +992,7 @@ fn foreign_cells_in_via_keepout(
     let r = radius as i64;
     let mut routed = 0;
     let mut pads = 0;
-    for &layer in &[layers.0, layers.1] {
+    for layer in grid.layers_in(grid.via_layers(layers.0, layers.1)) {
         for dy in -r..=r {
             for dx in -r..=r {
                 if dx * dx + dy * dy > r * r {
@@ -1318,6 +1321,19 @@ fn find_path_congestion_augmented(
                 )
                 || grid.net_at(nx as u32, ny as u32, target_layer as usize) == Some(net_id)
             {
+                // The hole is drilled through every layer between the two, and
+                // on those it is copper as much as on the ends: another net's
+                // trace there is a short, not a gap to price.
+                let spanned = grid.via_layers(nl, target_layer);
+                let barrel_clear = grid.layers_in(spanned).all(|layer| {
+                    layer == nl
+                        || layer == target_layer
+                        || grid.is_free(nx as u32, ny as u32, layer as usize)
+                        || grid.net_at(nx as u32, ny as u32, layer as usize) == Some(net_id)
+                });
+                if !barrel_clear {
+                    continue;
+                }
                 let base = cost_fn.neighbor_cost(node, target);
                 let congestion = congestion_map.congestion_cost(nx as u32, ny as u32, target_layer);
 
@@ -1738,5 +1754,187 @@ mod tests {
             !result.unrouted.is_empty(),
             "Blocked net should be reported as unrouted"
         );
+    }
+
+    /// A net whose two pads sit one above the other, on the top copper and on
+    /// the second inner layer, and a net that runs straight under them on the
+    /// first inner layer.
+    fn a_via_over_a_track() -> Vec<crate::orchestrator::NetRoute> {
+        use crate::orchestrator::{NetRoute, PadTarget};
+        use cypcb_world::NetId;
+
+        let pad = |x: i64, y: i64, layer_mask: u32| PadTarget {
+            position: cypcb_core::Point::new(Nm::new(x), Nm::new(y)),
+            layer_mask,
+            pad_size: (Nm::new(100_000), Nm::new(100_000)),
+            pin: "1".into(),
+        };
+        vec![
+            NetRoute {
+                net_id: NetId::new(1),
+                net_name: "DOWN".into(),
+                pads: vec![
+                    pad(2_000_000, 2_000_000, 1 << TOP),
+                    pad(2_000_000, 2_000_000, 1 << INNER_1),
+                ],
+            },
+            NetRoute {
+                net_id: NetId::new(2),
+                net_name: "UNDER".into(),
+                pads: vec![
+                    pad(2_000_000, 300_000, 1 << INNER_0),
+                    pad(2_000_000, 3_700_000, 1 << INNER_0),
+                ],
+            },
+        ]
+    }
+
+    /// Routing indices in the order the layers are stacked, top first.
+    const TOP: u8 = 0;
+    const INNER_0: u8 = 2;
+    const INNER_1: u8 = 3;
+    const STACK: [u8; 4] = [TOP, INNER_0, INNER_1, 1];
+
+    #[test]
+    fn no_track_runs_through_the_barrel_of_a_via_that_passes_its_layer() {
+        // Until 2026-09-24 the router reserved a via's ring on the two layers
+        // it joins and nothing between, so a track on an inner layer ran
+        // straight through a Top-to-Inner2 hole. Both orders are tried: the
+        // via laid first and the track routed round it, and the track laid
+        // first and the via kept off it.
+        let rules = TestRules::new();
+        let constraints = rules.constraints_for_net(0).clone();
+        let resolution = 100_000;
+        // A track this close to the centre of the hole is copper in the hole.
+        let reach = constraints.min_via_drill.raw() / 2 + constraints.min_trace_width.raw() / 2;
+        // The price on foreign copper near a via is off: it moves a via off a
+        // track on this board by itself, and the refusal has to hold without it.
+        let config = AutorouteConfig {
+            via_foreign_copper_penalty: 0.0,
+            ..AutorouteConfig::default()
+        };
+        let ratsnest = a_via_over_a_track();
+
+        for order in [vec![0, 1], vec![1, 0]] {
+            let mut grid = make_test_grid(40, 40, resolution, 4);
+            let result = pathfinder_loop(&mut grid, &ratsnest, &order, &rules, &config, None);
+            assert!(
+                result.unrouted.is_empty(),
+                "order {order:?}: both nets route, unrouted {:?}",
+                result.unrouted
+            );
+
+            for (&net, paths) in &result.routed_paths {
+                for pair in paths.iter().flat_map(|path| path.windows(2)) {
+                    let (a, b) = (pair[0], pair[1]);
+                    if a.2 == b.2 {
+                        continue;
+                    }
+                    let depth = |layer: u8| STACK.iter().position(|&l| l == layer).unwrap();
+                    let (upper, lower) = (depth(a.2).min(depth(b.2)), depth(a.2).max(depth(b.2)));
+                    let drilled = &STACK[upper..=lower];
+
+                    for (&other, other_paths) in &result.routed_paths {
+                        if other == net {
+                            continue;
+                        }
+                        for node in other_paths.iter().flatten() {
+                            if !drilled.contains(&node.2) {
+                                continue;
+                            }
+                            let dx = (node.0 as i64 - a.0 as i64) * resolution;
+                            let dy = (node.1 as i64 - a.1 as i64) * resolution;
+                            assert!(
+                                dx * dx + dy * dy >= reach * reach,
+                                "order {order:?}: net {other} on layer {} runs through \
+                                 the hole of net {net}'s via at ({}, {}) from {} to {}",
+                                node.2,
+                                a.0,
+                                a.1,
+                                a.2,
+                                b.2
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_via_reserves_its_copper_on_the_layer_it_passes() {
+        // The grid is what the next net reads. A Top-to-Inner2 via is drilled
+        // through Inner1, and a later net has to find that cell taken there.
+        let rules = TestRules::new();
+        let ratsnest = a_via_over_a_track();
+        let mut grid = make_test_grid(40, 40, 100_000, 4);
+        let result = pathfinder_loop(
+            &mut grid,
+            &ratsnest,
+            &[0],
+            &rules,
+            &AutorouteConfig::default(),
+            None,
+        );
+        let via = result.routed_paths[&1]
+            .iter()
+            .flat_map(|path| path.windows(2))
+            .find(|pair| pair[0].2 != pair[1].2)
+            .map(|pair| pair[0])
+            .expect("a net from the top copper to the second inner layer needs a via");
+        assert_eq!(
+            grid.net_at(via.0 as u32, via.1 as u32, INNER_0 as usize),
+            Some(1),
+            "the via at ({}, {}) is copper on the first inner layer",
+            via.0,
+            via.1
+        );
+    }
+
+    #[test]
+    fn the_search_does_not_drill_through_another_nets_track() {
+        // One cell of another net on the first inner layer, right where the
+        // cheapest Top-to-Inner2 via would go. Nothing else is in the way.
+        let mut grid = make_test_grid(40, 40, 100_000, 4);
+        grid.mark_route(20, 20, INNER_0 as usize, 2);
+        let rules = TestRules::new();
+        let congestion = CongestionMap::new(40, 40, 4);
+        let search = Search {
+            rules: &rules,
+            net_id: 1,
+            pad_zones: &[],
+            via_cost_multiplier: 1.0,
+            layer_preference: 0.0,
+            block_foreign_copper: false,
+            via_foreign_copper_penalty: 0.0,
+            via_foreign_pad_penalty: 0.0,
+            foreign_pad_penalty: 0.0,
+            pad_layer_change_penalty: PAD_LAYER_CHANGE_PENALTY,
+            yield_halo: false,
+            heuristic_weight: 1.0,
+            field: None,
+            clearance_barrier: 0.0,
+        };
+        let mut scratch =
+            GridSearchScratch::for_grid(grid.width(), grid.height(), grid.layer_count() as usize);
+        let path = find_path_congestion_augmented(
+            &mut grid,
+            &mut scratch,
+            (20, 20, TOP),
+            (20, 20, INNER_1),
+            false,
+            None,
+            &congestion,
+            &search,
+        )
+        .expect("the via has somewhere else to go");
+        for pair in path.windows(2) {
+            assert!(
+                !(pair[0].2 != pair[1].2 && (pair[0].0, pair[0].1) == (20, 20)),
+                "a via at (20, 20) from {} to {} is drilled through net 2 on the first inner layer",
+                pair[0].2,
+                pair[1].2
+            );
+        }
     }
 }

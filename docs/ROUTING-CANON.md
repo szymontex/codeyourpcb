@@ -519,10 +519,11 @@ two halves of R-08 are not about the same junctions.** The angle half measures
 every segment crossing a land's boundary. The teardrop half can only ever reach
 a track's own end landing inside a pad - the exporter says so in its own words,
 "a track crossing a pad on its way elsewhere is not an entry and gets nothing".
-Counted on the six routed fixtures by `sharp_entry_anatomy`: **302 of the 897
-entries are track ends, and 3 of the 14 sharp ones are.** Two thirds of what
-the angle half measures could never receive a fillet, and a teardrop rule would
-reach three of the fourteen entries this vector has been chasing.
+Counted on the six routed fixtures by `sharp_entry_anatomy` on 2026-09-24:
+**320 of the 893 entries are track ends, and 3 of the 13 sharp ones are.** Two
+thirds of what the angle half measures could never receive a fillet, and a
+teardrop rule would reach three of the thirteen entries this vector has been
+chasing.
 
 Fourth, and this one settles where such a rule could stand: **the design-side
 condition R-08 implies is true of every junction on every board.** Read as a
@@ -1463,7 +1464,7 @@ last clause is the rule.
 
 **2. What the grid costs in accuracy, and it is worse than half a cell.** A pad
 centre is snapped by integer division, not by rounding: `nm_to_grid_x`
-(`crates/cypcb-autoroute/src/grid.rs:476`) computes `(nm - origin) / resolution`,
+(`crates/cypcb-autoroute/src/grid.rs:477`) computes `(nm - origin) / resolution`,
 which truncates toward zero. The node therefore sits at or below the pad centre
 on each axis, and the error approaches a whole cell per axis rather than half of
 one. Worst case radially is `resolution * sqrt(2)`.
@@ -1694,6 +1695,15 @@ routed four-layer board left out about half the vias. The checker was measured 2
 from 78 to 110 shorts with its routes unchanged, and the other five boards do
 not move. Of the 32 new reports, 21 are tracks run through the middle of a
 hole, which is a short whether or not the land is kept.
+
+The router made those 21, and it asks the same question now. It reserved a via's
+ring on the two layers the via joins, so a later net ran straight through the
+hole on the layer between. `RoutingGrid::via_layers` reads `Via::copper_mask`,
+and the ring, the reservation, the hole count and the keepout price cover every
+layer it names; the search refuses a layer change whose hole lands on another
+net's copper on any of them. Measured 2026-09-24 by the same benchmark:
+`multi_ic` routes to 513 violations and 73 shorts with no track through a hole,
+and the other five boards, all two-layer, route to the same copper.
 
 Source: JLCPCB capabilities page, read 2026-09-12 - minimum track width and
 spacing at 1 oz copper is 0.10 / 0.10 mm (4 / 4 mil) for one and two layers and
@@ -2642,18 +2652,20 @@ that a sharp entry on a circle clips the rim rather than crossing the land -
 is tested as the share of its own chord the segment consumes,
 `depth / (2 * sqrt(R^2 - p_axis^2))`, with a death line of 0.5, because a
 segment that passes the deepest point of its own crossing is not clipping
-anything. **Over the 4 sharp entries among the 175, the four ratios are 0.375,
-0.154, 0.122 and 0.111**, read on 2026-09-16 off the `depth/chord` column
+anything. **Over the 3 sharp entries among the 175, the three ratios are 0.154,
+0.122 and 0.111**, read on 2026-09-24 off the `depth/chord` column
 `a_circular_land_reads_the_same_from_its_own_geometry` prints for each sharp
 row - the same line also prints the depth against the radius, where the deepest
-of them reads 0.508 R, and the two denominators are why this figure used to be
-quoted as the wrong one - so the deepest stops at 37 percent of its chord and
-nothing contradicted the reading. The threshold is a ratio rather
+of them reads 0.237 R, and the two denominators are why this figure used to be
+quoted as the wrong one - so the deepest stops at 15 percent of its chord and
+nothing contradicted the reading. A fourth, 0.375 of its chord on `multi_ic`,
+was read on 2026-09-16 and left on 2026-09-24, when the router stopped running
+tracks through a via's barrel and that board routed to different copper. The threshold is a ratio rather
 than a length because a length does not carry: 0.15 mm is a third of the way
-across a 0.5 mm land and a ninth of the way across a 0.85 mm one. On these four
+across a 0.5 mm land and a ninth of the way across a 0.85 mm one. On these three
 the two forms agree row for row - the ratio changes no answer here and buys
-only that the next board can be measured against the same line. Four rows are
-four rows: that is not a distribution and this canon does not call it one. What can be said is exact -
+only that the next board can be measured against the same line. Three rows are
+three rows: that is not a distribution and this canon does not call it one. What can be said is exact -
 no sharp circular entry on these six boards passed the middle of the land it
 entered - and what cannot be said is that this is how circular lands behave.
 

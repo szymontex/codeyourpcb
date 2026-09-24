@@ -279,10 +279,17 @@ type Ratchet = (&'static str, &'static str, u32, u32, u32, u32);
 /// looking: the two entries were copper `optimize_vias` laid across other
 /// nets' pads. With the optimizer switched off the board examines 285 as well,
 /// and with the old optimizer 287, on the same tree in one sitting.
+///
+/// 285 / 5 / 2 -> 283 / 4 / 1 on `multi_ic` on 2026-09-24, and the rule did
+/// not stop looking: the change that moved it touches the router and nothing
+/// in `cypcb-drc`. The router stopped running tracks through the barrel of a
+/// via on an inner layer, the board routes to different copper - 205 vias to
+/// 200 - and that copper enters two fewer pads. The floor follows the copper
+/// down; sharp and refused fall by one each and are held there.
 const ENTRY_CENSUS: [(usize, usize, usize); 6] = [
     (14, 0, 0),  // led_blink
     (180, 0, 1), // stm32_breakout
-    (285, 5, 2), // multi_ic
+    (283, 4, 1), // multi_ic
     (178, 0, 3), // shift_driver
     (178, 0, 5), // qfp_fanout
     (60, 0, 3),  // plane_board
@@ -432,7 +439,18 @@ const DRC_RATCHETS: &[Ratchet] = &[
     // one, and 10 tracks 0.033mm from a land that the square envelope counts
     // as touching - real under 0.10mm, reported as a short. Baselines
     // re-measured at 543 / 110; ratchet is that plus the band, 35 / 15.
-    ("multi_ic.kicad_pcb", "multi_ic", 578, 125, 543, 110),
+    //
+    // 578 / 125 -> 548 / 88 on 2026-09-24, and this time the router moved.
+    // It reserved a via's ring on the two layers the via joins and on nothing
+    // between, so a later net ran its track straight through the hole on an
+    // inner layer - 21 segments on this board, 32 with `stop_at_own_copper`.
+    // The grid now asks `Via::copper_mask` which layers the hole passes and
+    // marks the same footprint on each, and the search refuses a layer change
+    // whose barrel lands on another net's copper. Every one of those segments
+    // is gone, and the other five boards route to the same hash: a two-layer
+    // via has no layer between its ends. Routed 513 / 73, vias 205 -> 200,
+    // 0 unrouted; ratchet is that plus the band, 35 / 15.
+    ("multi_ic.kicad_pcb", "multi_ic", 548, 88, 513, 73),
     ("shift_driver.kicad_pcb", "shift_driver", 45, 15, 19, 0),
     ("qfp_fanout.kicad_pcb", "qfp_fanout", 424, 177, 363, 131),
     // A band of zero is not a rounding: this board routes identically at every
