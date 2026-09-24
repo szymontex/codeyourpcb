@@ -24,6 +24,7 @@ use cypcb_core::{Nm, Point};
 use cypcb_world::components::{NetConnections, NetId};
 use cypcb_world::BoardWorld;
 
+use super::clearance::Copper;
 use super::{holes_of, segment_distance, DrcRule, Hole};
 use crate::presets::DesignRules;
 use crate::violation::DrcViolation;
@@ -112,38 +113,28 @@ impl DrcRule for SlotClearanceRule {
 
                 // The copper this entry stands for: a component's pads when the
                 // entry is a courtyard, the entry's own box otherwise.
-                let boxes: Vec<(i64, i64, i64, i64)> = match pad_map.get(&entry.entity.index()) {
-                    Some(pads) => pads
-                        .iter()
-                        .map(|pad| {
-                            (
-                                pad.box_.lower()[0],
-                                pad.box_.lower()[1],
-                                pad.box_.upper()[0],
-                                pad.box_.upper()[1],
-                            )
-                        })
-                        .collect(),
-                    None => vec![(
-                        entry.envelope.lower()[0],
-                        entry.envelope.lower()[1],
-                        entry.envelope.upper()[0],
-                        entry.envelope.upper()[1],
-                    )],
+                // A pad is its core grown by a radius, as `ClearanceRule`
+                // measures it.
+                let coppers: Vec<Copper> = match pad_map.get(&entry.entity.index()) {
+                    Some(pads) => pads.iter().map(|pad| pad.copper).collect(),
+                    None => vec![Copper::boxed(entry.envelope)],
+                };
+                let gap_of = |copper: &Copper| {
+                    let (lo, hi) = (copper.core.lower(), copper.core.upper());
+                    box_to_slot_gap(slot, lo[0], lo[1], hi[0], hi[1]) - copper.radius
                 };
 
                 // The nearest piece of this entry's copper, and one report per
                 // entry rather than one per pad: a part too close to a slot is
                 // one fault, and naming it eight times is a checker somebody
                 // learns to ignore.
-                let Some(&(min_x, min_y, max_x, max_y)) = boxes
-                    .iter()
-                    .min_by_key(|(a, b, c, d)| box_to_slot_gap(slot, *a, *b, *c, *d))
-                else {
+                let Some(nearest) = coppers.iter().min_by_key(|copper| gap_of(copper)) else {
                     continue;
                 };
 
-                let gap = box_to_slot_gap(slot, min_x, min_y, max_x, max_y);
+                let gap = gap_of(nearest);
+                let (lo, hi) = (nearest.core.lower(), nearest.core.upper());
+                let (min_x, min_y, max_x, max_y) = (lo[0], lo[1], hi[0], hi[1]);
                 if gap < required.0 {
                     let location = Point::new(Nm((min_x + max_x) / 2), Nm((min_y + max_y) / 2));
                     violations.push(DrcViolation::slot_clearance(

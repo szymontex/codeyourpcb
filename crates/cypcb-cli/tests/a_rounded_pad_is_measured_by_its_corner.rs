@@ -1,28 +1,28 @@
-//! A rounded pad is measured by the box it sits in, and what that costs.
+//! A rounded pad is measured by its corner, and what the corner is worth.
 //!
-//! `cargo test -p cypcb-cli --test a_rounded_pad_is_measured_by_its_box`
+//! `cargo test -p cypcb-cli --test a_rounded_pad_is_measured_by_its_corner`
 //!
-//! `ClearanceRule` measures pads as axis-aligned boxes: two pads meeting
-//! corner to corner are `sqrt(dx^2 + dy^2)` apart, between their sharp
-//! corners. A `roundrect` pad has no sharp corner - the arc pulls the nearest
-//! copper back along the diagonal by `r * (sqrt(2) - 1)` - so the copper is
-//! further apart than the checker thinks. The error is one-directional: the
-//! checker can refuse a board that is fine, and cannot pass one that is not.
+//! A `roundrect` pad has no sharp corner - the arc pulls the nearest copper
+//! back along the diagonal by `r * (sqrt(2) - 1)` - so two pads meeting corner
+//! to corner are further apart than the boxes around them say.
 //!
-//! The question this file answers is how much, measured rather than reasoned
-//! about, because the language learned to state a corner and nothing read it.
+//! Until 2026-09-24 this file was `a_rounded_pad_is_measured_by_its_box`, and
+//! it guarded a rule that measured every pad as its box: it asserted that no
+//! diagonal pad pair on these boards sat inside the limit by its boxes and
+//! outside it by its copper, so that the first board where the two disagreed
+//! would say so. `ClearanceRule` now measures a `roundrect` as its rectangle
+//! shrunk by the corner radius and grown back by it, and an oblong as its
+//! centre segment grown by half its short side - the geometry
+//! `a_pad_is_measured_by_its_shape` in `cypcb-drc` pins down - so that guard
+//! asked a question the rule no longer has. It was removed on purpose.
 //!
-//! Two answers, and they point different ways:
+//! What stays is what the rule's answer depends on:
 //!
 //! - the correction is **larger than the clearance it is measured against** -
-//!   207 microns on `charlieplex_3x3`, against JLCPCB's 127 micron minimum
-//! - and it changes **no verdict on any board in this repository**: not one
-//!   diagonal pad pair sits inside the limit by its boxes and outside it by
-//!   its copper
-//!
-//! So the rule is left alone and this is the guard that catches the day that
-//! stops being true. A board where the two disagree fails the second case
-//! here, and then the rule is worth teaching about corners.
+//!   207 microns on `charlieplex_3x3`, against JLCPCB's 127 micron minimum -
+//!   which is why measuring the corner is worth a rule at all
+//! - the reader carries the corner the file states, since a lost ratio makes
+//!   every corner square again and every measurement a box
 
 use cypcb_core::Nm;
 use cypcb_drc::rules::ClearanceRule;
@@ -111,12 +111,10 @@ fn pads_of(board: &str) -> Vec<Placed> {
     placed
 }
 
-/// The largest correction a rounded corner makes on this board, and how many
-/// pad pairs change side of the clearance limit because of it.
-fn corner_effect(board: &str) -> (f64, usize) {
+/// The largest correction a rounded corner makes on this board.
+fn corner_effect(board: &str) -> f64 {
     let pads = pads_of(board);
     let mut worst = 0.0f64;
-    let mut flipped = 0;
     for (i, a) in pads.iter().enumerate() {
         for b in &pads[i + 1..] {
             let dx = ((b.x - a.x).abs() - a.half_width - b.half_width).max(0.0);
@@ -127,18 +125,14 @@ fn corner_effect(board: &str) -> (f64, usize) {
             if dx <= 0.0 || dy <= 0.0 {
                 continue;
             }
-            let box_gap = (dx * dx + dy * dy).sqrt();
             // Exact where the two corners face along the same diagonal, an
             // upper bound otherwise: the arcs pull the nearest copper back by
             // `r * (sqrt(2) - 1)` each.
             let correction = (a.radius + b.radius) * (2f64.sqrt() - 1.0);
             worst = worst.max(correction);
-            if box_gap < MIN_CLEARANCE_NM && box_gap + correction >= MIN_CLEARANCE_NM {
-                flipped += 1;
-            }
         }
     }
-    (worst, flipped)
+    worst
 }
 
 #[test]
@@ -146,39 +140,22 @@ fn the_correction_is_larger_than_the_clearance_it_is_measured_against() {
     // `charlieplex_3x3` has 26 rounded pads of its 34. Not a small number
     // beside the limit - which is why this file exists rather than a sentence
     // in the tracker saying the difference is negligible.
-    let (worst, _) = corner_effect(
+    let worst = corner_effect(
         "tests/fixtures/kicad-tools/boards/02-charlieplex-led/charlieplex_3x3.kicad_pcb",
     );
     assert!(
         worst > MIN_CLEARANCE_NM,
         "the corners on this board correct by {worst:.0}nm, and the clearance \
          they are measured against is {MIN_CLEARANCE_NM:.0}nm - if this has \
-         become small, the reason this rule measures boxes is worth revisiting"
+         become small, the reason the rule measures the corner is worth revisiting"
     );
 }
 
 #[test]
-fn no_board_in_this_repository_has_a_verdict_that_turns_on_a_corner() {
-    // The measurement that decides whether the rule is worth teaching about
-    // corners. Zero on every board here: not one diagonal pair sits inside the
-    // limit by its boxes and outside it by its copper. A board that fails this
-    // is a board the checker refuses and a fab would make.
-    for board in BOARDS {
-        let (_, flipped) = corner_effect(board);
-        assert_eq!(
-            flipped, 0,
-            "{board} has {flipped} pad pair(s) the checker refuses for a corner \
-             that is not there - the clearance rule now has a reason to measure \
-             the arc"
-        );
-    }
-}
-
-#[test]
 fn a_pad_with_no_corner_stated_corrects_by_nothing() {
-    // The guard above is only worth its cost while the radius is real. A
-    // reader that lost the ratio would make every correction zero and both
-    // cases above would pass while saying nothing.
+    // The rule measures the corner only while the radius is real. A reader
+    // that lost the ratio would make every rounded pad a box again, and the
+    // case above would pass while saying nothing.
     let pads = pads_of("tests/fixtures/kicad-tools/tests/fixtures/routing-diagnostic.kicad_pcb");
     let rounded = pads.iter().filter(|pad| pad.radius > 0.0).count();
     assert!(
@@ -201,11 +178,9 @@ fn a_pad_with_no_corner_stated_corrects_by_nothing() {
 
 #[test]
 fn nothing_in_this_repository_is_refused_for_a_corner_today() {
-    // The other half of the same question, asked of the rule rather than of
-    // the geometry: `ClearanceRule` reports nothing on any of these boards, so
-    // no board here is being refused at all - with corners or without them.
-    // The day one of them is refused, the case above says whether a corner is
-    // the reason.
+    // The same boards asked of the rule: `ClearanceRule` reports nothing on
+    // any of them. It reported nothing when it measured boxes as well, and
+    // measuring the corner can only take a violation away, never add one.
     //
     // When this case was written the rule reported nothing for a different
     // reason: `parse_kicad_pcb` handed back a world whose spatial index was
@@ -223,10 +198,9 @@ fn nothing_in_this_repository_is_refused_for_a_corner_today() {
         let violations = ClearanceRule.check(&mut world, &rules);
         assert!(
             violations.is_empty(),
-            "{board} is refused for clearance now ({} violation(s)) - check the \
-             case above before changing anything: the checker measures pads as \
-             boxes, and a rounded pad has more copper-to-copper gap than its box \
-             says",
+            "{board} is refused for clearance now ({} violation(s)) - the \
+             checker measures a rounded pad by its corner, so the gap it reports \
+             is the copper's",
             violations.len()
         );
     }

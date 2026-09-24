@@ -18,6 +18,7 @@ use cypcb_world::BoardWorld;
 use crate::presets::DesignRules;
 use crate::violation::DrcViolation;
 
+use super::clearance::{copper_distance, pad_copper, trace_to_copper_distance, Copper, TraceData};
 use super::{layer_bit, rotate_point, DrcRule};
 
 /// Rule for pins a net names and no copper reaches.
@@ -95,7 +96,8 @@ impl DrcRule for UnroutedPinRule {
                 }
 
                 let centre = pad_centre(pad, position, rotation);
-                if pad_is_reached(&traces, &vias, &pours, net, pad, centre) {
+                let copper = pad_copper(pad, position.0, rotation.to_degrees());
+                if pad_is_reached(&traces, &vias, &pours, net, pad, &copper) {
                     continue;
                 }
 
@@ -131,9 +133,8 @@ pub(crate) fn pad_is_reached(
     pours: &[Zone],
     net: NetId,
     pad: &PadDef,
-    centre: Point,
+    copper: &Copper,
 ) -> bool {
-    let half = (pad.size.0 .0 / 2, pad.size.1 .0 / 2);
     // A pad whose layer list names no copper this rule understands is treated
     // as being on every layer rather than on none: reporting a pin because its
     // footprint spells its layers in a way this code has not met would be
@@ -144,26 +145,23 @@ pub(crate) fn pad_is_reached(
         .filter_map(|layer| layer_bit(*layer))
         .fold(0, |mask, bit| mask | bit);
     let mask = if mask == 0 { u32::MAX } else { mask };
-    copper_reaches(traces, vias, pours, net, centre, half, mask)
+    copper_reaches(traces, vias, pours, net, copper, mask)
 }
 
 /// Whether any copper of `net` touches this pad, on a layer the pad is on.
+///
+/// "Touches" is what `ClearanceRule` and `NetSplitRule` mean by it: no gap
+/// between the copper, a via and a round pad measured as discs and a trace as
+/// its centreline grown by half its width. A pour is its bounds, as
+/// `NetSplitRule` takes it.
 fn copper_reaches(
     traces: &[Trace],
     vias: &[Via],
     pours: &[Zone],
     net: NetId,
-    centre: Point,
-    half: (i64, i64),
+    copper: &Copper,
     mask: u32,
 ) -> bool {
-    let overlaps = |min_x: i64, min_y: i64, max_x: i64, max_y: i64| -> bool {
-        centre.x.0 + half.0 >= min_x
-            && centre.x.0 - half.0 <= max_x
-            && centre.y.0 + half.1 >= min_y
-            && centre.y.0 - half.1 <= max_y
-    };
-
     for trace in traces {
         if trace.net_id != net {
             continue;
@@ -172,15 +170,20 @@ fn copper_reaches(
             Some(bit) if mask & bit != 0 => {}
             _ => continue,
         }
-        let grow = trace.width.0 / 2;
-        if trace.segments.iter().any(|segment| {
-            overlaps(
-                segment.start.x.0.min(segment.end.x.0) - grow,
-                segment.start.y.0.min(segment.end.y.0) - grow,
-                segment.start.x.0.max(segment.end.x.0) + grow,
-                segment.start.y.0.max(segment.end.y.0) + grow,
-            )
-        }) {
+        let data = TraceData {
+            half_width: trace.width.0 / 2,
+            segments: trace
+                .segments
+                .iter()
+                .map(|segment| {
+                    (
+                        [segment.start.x.0, segment.start.y.0],
+                        [segment.end.x.0, segment.end.y.0],
+                    )
+                })
+                .collect(),
+        };
+        if trace_to_copper_distance(&data, copper).1 <= data.half_width {
             return true;
         }
     }
@@ -189,13 +192,11 @@ fn copper_reaches(
         if via.net_id != net {
             continue;
         }
-        let radius = via.outer_diameter.0 / 2;
-        if overlaps(
-            via.position.x.0 - radius,
-            via.position.y.0 - radius,
-            via.position.x.0 + radius,
-            via.position.y.0 + radius,
-        ) {
+        let disc = Copper::circle(
+            [via.position.x.0, via.position.y.0],
+            via.outer_diameter.0 / 2,
+        );
+        if copper_distance(&disc, copper) == 0 {
             return true;
         }
     }
@@ -204,12 +205,11 @@ fn copper_reaches(
         if pour.net != Some(net) || pour.layer_mask & mask == 0 {
             continue;
         }
-        if overlaps(
-            pour.bounds.min.x.0,
-            pour.bounds.min.y.0,
-            pour.bounds.max.x.0,
-            pour.bounds.max.y.0,
-        ) {
+        let bounds = Copper::boxed(rstar::AABB::from_corners(
+            [pour.bounds.min.x.0, pour.bounds.min.y.0],
+            [pour.bounds.max.x.0, pour.bounds.max.y.0],
+        ));
+        if copper_distance(&bounds, copper) == 0 {
             return true;
         }
     }

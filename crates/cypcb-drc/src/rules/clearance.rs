@@ -492,10 +492,8 @@ impl DrcRule for ClearanceRule {
 /// make its other pads GND, and treating it that way exempts a trace from
 /// copper it can genuinely short.
 pub(crate) struct PadBox {
-    pub(crate) box_: AABB<[i64; 2]>,
-    /// The copper itself, where it is not its box: a circular pad is its
-    /// disc. `box_` stays the extent, for the rules that only ask where a pad
-    /// reaches.
+    /// The copper itself: a circle, an oblong or a rounded rectangle is its
+    /// core grown by a radius, a rectangle is its box.
     pub(crate) copper: Copper,
     pub(crate) layer_mask: u32,
     pub(crate) net: Option<NetId>,
@@ -505,11 +503,11 @@ pub(crate) struct PadBox {
 ///
 /// Pads are placed the way the exporter and the renderer place them: the pad
 /// offset is rotated around the component origin and added to its position. A
-/// pad rotated off the axes is boxed by the extent of the rotated rectangle,
-/// which is never smaller than the copper - a checker may over-report, and may
-/// not under-report.
+/// pad rotated off the axes has its core boxed by the extent of the rotated
+/// core, which is never smaller than the copper - a checker may over-report,
+/// and may not under-report.
 pub(crate) fn component_pads(world: &mut BoardWorld) -> HashMap<u32, Vec<PadBox>> {
-    use cypcb_world::components::{FootprintRef, PadShape, Position, Rotation};
+    use cypcb_world::components::{FootprintRef, Position, Rotation};
 
     // Which net each pin is on, per component. `PadDef::number` and
     // `PinConnection::pin` are the same identifier seen from the footprint and
@@ -561,41 +559,18 @@ pub(crate) fn component_pads(world: &mut BoardWorld) -> HashMap<u32, Vec<PadBox>
             continue;
         };
 
-        let radians = degrees.to_radians();
-        let (sin, cos) = radians.sin_cos();
-
         let boxes = footprint
             .pads
             .iter()
             .map(|pad| {
-                let px = pad.position.x.0 as f64;
-                let py = pad.position.y.0 as f64;
-                let cx = position.x.0 + (px * cos - py * sin).round() as i64;
-                let cy = position.y.0 + (px * sin + py * cos).round() as i64;
-
-                let half_w = pad.size.0 .0 as f64 / 2.0;
-                let half_h = pad.size.1 .0 as f64 / 2.0;
-                let extent_x = (half_w * cos.abs() + half_h * sin.abs()).round() as i64;
-                let extent_y = (half_w * sin.abs() + half_h * cos.abs()).round() as i64;
+                let copper = pad_copper(pad, position, degrees);
 
                 let layer_mask = pad
                     .layers
                     .iter()
                     .fold(0u32, |mask, layer| mask | layer.to_copper_mask());
 
-                let box_ = AABB::from_corners(
-                    [cx - extent_x, cy - extent_y],
-                    [cx + extent_x, cy + extent_y],
-                );
-                // A circle is drawn with its width as the diameter, which is
-                // what `aperture_for_pad` sends to the fab.
-                let copper = match pad.shape {
-                    PadShape::Circle => Copper::circle([cx, cy], pad.size.0 .0 / 2),
-                    _ => Copper::boxed(box_),
-                };
-
                 PadBox {
-                    box_,
                     copper,
                     layer_mask,
                     net: pin_nets
@@ -610,6 +585,50 @@ pub(crate) fn component_pads(world: &mut BoardWorld) -> HashMap<u32, Vec<PadBox>
     }
 
     out
+}
+
+/// The copper of one pad of a part placed at `position`, turned `degrees`.
+///
+/// Every shape is a rectangle grown by a radius, and the copper says so:
+/// a circle is its centre grown by half its width, which is what
+/// `aperture_for_pad` sends to the fab; an oblong is the segment between the
+/// centres of its two ends, grown by half its short side; a `roundrect` is its
+/// rectangle shrunk by the corner radius on every side and grown back by it,
+/// the radius being the short side times `corner_ratio`, as the Gerber and SVG
+/// writers draw it. A pad turned off the axes keeps the box of its turned
+/// core, which is never smaller than the copper.
+pub(crate) fn pad_copper(
+    pad: &cypcb_world::footprint::PadDef,
+    position: Point,
+    degrees: f64,
+) -> Copper {
+    use cypcb_world::components::PadShape;
+
+    let (sin, cos) = degrees.to_radians().sin_cos();
+    let px = pad.position.x.0 as f64;
+    let py = pad.position.y.0 as f64;
+    let cx = position.x.0 + (px * cos - py * sin).round() as i64;
+    let cy = position.y.0 + (px * sin + py * cos).round() as i64;
+
+    let extent = |half_w: f64, half_h: f64| {
+        (
+            (half_w * cos.abs() + half_h * sin.abs()).round() as i64,
+            (half_w * sin.abs() + half_h * cos.abs()).round() as i64,
+        )
+    };
+    let (width, height) = (pad.size.0 .0, pad.size.1 .0);
+    let radius = match pad.shape {
+        PadShape::Circle => return Copper::circle([cx, cy], width / 2),
+        PadShape::Rect => 0,
+        PadShape::Oblong => width.min(height) / 2,
+        PadShape::RoundRect { corner_ratio } => width.min(height) * i64::from(corner_ratio) / 100,
+    };
+    let (core_x, core_y) = extent(
+        (width - 2 * radius) as f64 / 2.0,
+        (height - 2 * radius) as f64 / 2.0,
+    );
+    let core = AABB::from_corners([cx - core_x, cy - core_y], [cx + core_x, cy + core_y]);
+    Copper { core, radius }
 }
 
 /// The copper out of a list of pads, once the net filtering is done.
@@ -735,18 +754,9 @@ fn canonical_pair(a: u32, b: u32) -> (u32, u32) {
 /// The gap between two boxes, which is the gap between two sharp corners when
 /// the pair is diagonal.
 ///
-/// A `roundrect` pad has no sharp corner, so its copper is further from a
-/// diagonal neighbour than this says - by `r * (sqrt(2) - 1)` per pad, which
-/// on `charlieplex_3x3` is 207 microns against a 127 micron clearance. The
-/// error only ever refuses a board that is fine; it cannot pass one that is
-/// not.
-///
-/// Measured rather than argued about, and the measurement is a test:
-/// `cargo test -p cypcb-cli --test a_rounded_pad_is_measured_by_its_box`. On
-/// every KiCad board in this repository, **no pad pair sits inside the limit
-/// by its boxes and outside it by its copper**, so the boxes are left alone.
-/// That test fails on the first board where the two disagree, and then this
-/// function is worth teaching about arcs.
+/// Rounded copper is not measured here. A `roundrect`, an oblong, a circle
+/// and a via are each a `Copper`, a core box grown by a radius, and
+/// `copper_distance` takes the radii off the gap between the cores.
 pub(crate) fn aabb_distance(a: &AABB<[i64; 2]>, b: &AABB<[i64; 2]>) -> i64 {
     // Calculate gap in each dimension
     // If boxes overlap in a dimension, the gap is 0
