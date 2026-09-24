@@ -33,6 +33,7 @@ use cypcb_core::{Nm, Point};
 use cypcb_world::components::trace::{Curve, Trace, Via};
 use cypcb_world::components::{FootprintRef, Position, Rotation};
 use cypcb_world::footprint::FootprintLibrary;
+use cypcb_world::in_build_order;
 use cypcb_world::{BoardWorld, Layer, PadShape};
 use std::collections::BTreeMap;
 use std::fmt::Write;
@@ -230,11 +231,8 @@ pub fn export_ipc2581_with(
     let mut shapes: BTreeMap<String, String> = BTreeMap::new();
     let mut placed: Vec<(String, Point, i32, String)> = Vec::new();
     let parts: Vec<(Point, i32, String)> = {
-        let mut query = world
-            .ecs_mut()
-            .query::<(&Position, &Rotation, &FootprintRef)>();
-        query
-            .iter(world.ecs())
+        in_build_order::<(&Position, &Rotation, &FootprintRef)>(world.ecs_mut())
+            .into_iter()
             .map(|(position, rotation, footprint)| {
                 (position.0, rotation.0, footprint.as_str().to_string())
             })
@@ -309,9 +307,8 @@ pub fn export_ipc2581_with(
     // document, so every width the board uses has to be known before the first
     // segment is written.
     let traces: Vec<(Trace, Option<Curve>)> = {
-        let mut query = world.ecs_mut().query::<(&Trace, Option<&Curve>)>();
-        query
-            .iter(world.ecs())
+        in_build_order::<(&Trace, Option<&Curve>)>(world.ecs_mut())
+            .into_iter()
             .map(|(trace, curve)| (trace.clone(), curve.copied()))
             .collect()
     };

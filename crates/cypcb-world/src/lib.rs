@@ -146,7 +146,7 @@ pub use registry::NetRegistry;
 pub use spatial::{SpatialEntry, SpatialIndex};
 
 // Re-export BoardWorld
-pub use world::BoardWorld;
+pub use world::{in_build_order, BoardWorld};
 
 // Re-export Entity for convenience
 pub use bevy_ecs::entity::Entity;

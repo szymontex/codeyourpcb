@@ -31,6 +31,7 @@ use cypcb_world::components::{
     Stackup, StackupLayerKind, Value,
 };
 use cypcb_world::footprint::SilkShape;
+use cypcb_world::in_build_order;
 use cypcb_world::BoardWorld;
 
 /// The KiCad name for a copper layer.
@@ -512,7 +513,7 @@ fn write_footprints(
     let mut parts: Vec<Placed> = Vec::new();
     {
         let ecs = world.ecs_mut();
-        let mut query = ecs.query::<(
+        for (refdes, position, rotation, footprint, value, connections, side) in in_build_order::<(
             &RefDes,
             &Position,
             &Rotation,
@@ -520,8 +521,8 @@ fn write_footprints(
             Option<&Value>,
             Option<&NetConnections>,
             Option<&cypcb_world::components::Side>,
-        )>();
-        for (refdes, position, rotation, footprint, value, connections, side) in query.iter(ecs) {
+        )>(ecs)
+        {
             parts.push(Placed {
                 refdes: refdes.0.clone(),
                 footprint: footprint.0.clone(),
@@ -916,9 +917,8 @@ fn write_copper(
     type CurvedTrace = (Trace, Option<cypcb_world::components::trace::Curve>);
     let traces: Vec<CurvedTrace> = {
         let ecs = world.ecs_mut();
-        let mut query = ecs.query::<(&Trace, Option<&cypcb_world::components::trace::Curve>)>();
-        query
-            .iter(ecs)
+        in_build_order::<(&Trace, Option<&cypcb_world::components::trace::Curve>)>(ecs)
+            .into_iter()
             .map(|(trace, curve)| (trace.clone(), curve.copied()))
             .collect()
     };

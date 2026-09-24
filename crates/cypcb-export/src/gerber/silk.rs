@@ -17,6 +17,7 @@ use crate::gerber::header::{write_header, GerberFileFunction, Side};
 use cypcb_core::Nm;
 use cypcb_world::components::{FootprintRef, Position, Rotation};
 use cypcb_world::footprint::FootprintLibrary;
+use cypcb_world::in_build_order;
 use cypcb_world::{BoardWorld, Layer};
 
 /// Silkscreen export error types.
@@ -189,15 +190,14 @@ pub fn export_silkscreen_reporting(
     let mut unprintable_names = Vec::new();
 
     // Query all components with position and footprint
-    let mut query = world.ecs_mut().query::<(
+    for (position, footprint_ref, rotation, part_side, refdes) in in_build_order::<(
         &Position,
         &FootprintRef,
         &Rotation,
         Option<&cypcb_world::components::Side>,
         Option<&cypcb_world::components::RefDes>,
-    )>();
-
-    for (position, footprint_ref, rotation, part_side, refdes) in query.iter(world.ecs()) {
+    )>(world.ecs_mut())
+    {
         // Look up footprint in library
         let footprint = library
             .get(&footprint_ref.0)
