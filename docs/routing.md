@@ -1446,16 +1446,55 @@ the legal (i.e. non-congested) parts of the routing tree for high fanout nets,
 with the aim of reducing router execution time." Partial tearing therefore
 exists in practice and its unit is a pruned branch of the routing tree.
 
-**The claim this project makes about VPR is not supported by what was read.**
-`crates/cypcb-autoroute/src/pathfinder_v2.rs` describes re-routing only the nets
-that pass through an overused cell as the VPR optimisation. The primary paper
-says the opposite for PathFinder, and the VTR documentation read here does not
-state the narrower rule either; ripping up only the illegal routes is published,
-but for a different router - a just-in-time FPGA routing paper describes
-ripping up only illegal routes and then adjusting costs across the resource
-graph (read 2026-09-11). Condition: either that comment gains a citation naming
-the router it came from, or it drops the words "the VPR optimisation" and
-stands as this project's own departure with its own measurement, tagged `[D]`.
+**Re-routing only the congested nets is published, in PathFinder itself.**
+`crates/cypcb-autoroute/src/pathfinder_v2.rs` calls it the VPR optimisation.
+The base algorithm re-routes every net, but section 3.5 of the same paper,
+"Enhancements", names the subset as a speed-up: "Another enhancement is to
+route only the signals involved in congested nodes", and reports "To date we
+have not seen any cases where routing only congested nodes resulted in a
+lower-quality route. In our experience the number of iterations increases, but
+the total running time decreases." (read 2026-09-24). The VTR documentation read
+here does not state the rule. The comments in `pathfinder_v2.rs` cite section
+3.5 of McMurchie and Ebeling.
+
+**Where `pathfinder_v2.rs` departs from the paper.** Read against the text
+above on 2026-09-24, at `a38aee22`. The paper gives no numbers for its
+schedule: `p_n` is "gradually increased", `h_n` "increased slightly".
+
+| # | The paper | `pathfinder_v2.rs` | Where |
+|---|---|---|---|
+| 1 | `c_n = (b_n + h_n) * p_n`: history is added to the base cost, and the sum is multiplied by the sharing term. | `base + (1 + h) * (1 + overuse) - 1 + ring_penalty * rings`: history and sharing multiply each other and are added to the base, so a long detour and a shared cell trade at a fixed rate. | `congestion.rs:214-228`, `pathfinder_v2.rs:1256-1257` |
+| 2 | `p_n` is "related to the number of other signals presently using n". In iteration 1 it is one, "thus no penalty is imposed for the use of n regardless of how many signals occupy n". | The sharing term is `occupancy - capacity` with the routing net ripped up. A cell one other net holds reads 0, so the first net to share it pays nothing for sharing. | `congestion.rs:222-227` |
+| 3 | In later iterations "this penalty is gradually increased, depending on how many signals share n". | No present factor. The sharing term is the same in every iteration; the module comment names a `present_factor` the code does not have. | `congestion.rs:11`, `:227` |
+| 4 | "Each iteration that node C is shared, `h_n` is increased slightly." | Each overused cell gains `0.5 + 0.1 * (i - 1)` in iteration `i`, so the step itself grows. | `pathfinder_v2.rs:563-564`, `:891-892` |
+| 5 | Any node can be shared; the cost decides who leaves. The paper contrasts this with Nair, "which assigns a cost of infinity to resources whose capacity is exceeded". | Another net's cell is refused outright, as in Nair. It can be shared in three places only: inside a pad zone when `pad_zone_blocks_foreign_copper` is off, on a halo cell when the halo yields, and on a via ring, whose cells are counted in the occupancy. | `pathfinder_v2.rs:1238-1254`, `:1479-1496`, `:794-801` |
+| 6 | "While shared resources exist"; "The global router completes when no more shared resources exist." No cap. | Stops at 50 iterations, or after `stagnation_limit` (3) iterations with no new lowest overuse. | `pathfinder_v2.rs:52`, `:574`, `:611-622` |
+| 7 | Every net, every iteration; section 3.5 allows only the nets in congested nodes. | Only the nets through an overused cell. This is section 3.5. | `pathfinder_v2.rs:626` |
+| 8 | "Nets are ripped up and rerouted in the same order every" iteration. | The same `order` every iteration. Agrees. | `pathfinder_v2.rs:596-599` |
+
+**Moving the schedule towards the paper does not settle the boards.** Measured
+2026-09-24 on the variant winners of the six fixtures, flag off and on, one
+change at a time. No run converges under any of them.
+
+| change | shorts, flag off: stm32 / multi_ic / qfp | shorts, flag on: stm32 / multi_ic / qfp | unrouted pins, multi_ic off / on | verdict |
+|---|---|---|---|---|
+| none | 28 / 65 / 91 | 30 / 47 / 46 | 4 / 5 | - |
+| no stagnation break, cap 50 (the three winners' configurations) | 29 / 36 / 102 | not run | 4 / - | worse on two; 3.6x to 5.5x the time |
+| history step fixed at 0.5 | 27 / 47 / 63 | 38 / 51 / 42 | 4 / 5 | worse on two, flag on |
+| history step fixed at 1.0 | 62 / 47 / 53 | 32 / 68 / 76 | 4 / 4 | worse on four |
+| history step fixed at 0.25 | 31 / 57 / 67 | 16 / 64 / 67 | 4 / 5 | worse on three; plane_board 0 -> 1 |
+
+The sharing term was measured on the three winners' configurations, flag off,
+counting the routing net in the occupancy as the paper does: a constant factor,
+and factors from 0.5 rising 1.5x and 2x per iteration. Every setting left
+`multi_ic` with 5 unrouted pins against 4, so none went on to the six boards.
+In every run the overuse curve stops falling between the fifth and eighth
+iteration and oscillates - on `stm32_breakout` 1175, 1015, 914, 978, 846, 860,
+720, 642, 645, 615, 624, 712, 702 - so the schedule moves where it stops, not
+whether it ends. Row 5 of the table above, another net's cell as a hard
+obstacle, leaves little of the board to negotiate over; that is not measured
+here.
+
 
 **Decomposition: the multi-sink wave is the standard, and behind
 `stop_at_own_copper` it is what this project does.** PathFinder seeds the

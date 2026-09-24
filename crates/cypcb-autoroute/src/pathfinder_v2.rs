@@ -10,7 +10,8 @@
 //!
 //! 1. Route all nets on the grid using A* with congestion-augmented cost.
 //! 2. After all nets: update history costs on overused cells.
-//! 3. Re-route only nets passing through overused cells (VPR optimization).
+//! 3. Re-route only nets passing through overused cells (McMurchie and
+//!    Ebeling, *PathFinder*, ACM/SIGDA FPGA 1995, section 3.5).
 //! 4. Repeat until convergence or iteration cap (50).
 //!
 //! The congestion cost is added to the A* neighbor cost; the heuristic
@@ -1422,8 +1423,9 @@ fn find_path_congestion_augmented(
 /// Determine which nets need re-routing based on overused cells.
 ///
 /// A net needs re-routing if any of its cells overlap with the set of
-/// overused cells. This is the VPR optimization — only re-route affected
-/// nets instead of all nets.
+/// overused cells. The base algorithm re-routes every net every iteration;
+/// routing "only the signals involved in congested nodes" is the enhancement
+/// in section 3.5 of McMurchie and Ebeling, *PathFinder*, ACM/SIGDA FPGA 1995.
 fn nets_needing_reroute(
     order: &[usize],
     ratsnest: &[NetRoute],
