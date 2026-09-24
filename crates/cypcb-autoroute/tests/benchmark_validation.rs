@@ -450,6 +450,18 @@ const DRC_RATCHETS: &[Ratchet] = &[
     // shift_driver      15 /   0    26 / 15     41 /  15      41 /  15
     // qfp_fanout       296 / 112    61 / 46    358 / 158     357 / 158
     // plane_board       20 /   3     0 /  0     24 /   3      20 /   3
+    //
+    // Re-baselined 2026-09-24 a third time, and the router did not move: every
+    // route set hashes as it did. `ClearanceRule` left out the pads on a
+    // trace's own net, but measured a via against every pad of the part, so a
+    // via dropped onto its own pin read as a short with that pin. On
+    // `multi_ic` two such pairs were reported at 0.00mm whose nearest pad of
+    // another net clears the rule, and a third at 0.00mm is a gap to the next
+    // pin that is still under it. A via now leaves out the pads on its own
+    // net, as a trace does. Only `multi_ic` moves; routed plus band:
+    //
+    // board            routed        band      ratchet was   ratchet is
+    // multi_ic         505 /  63    35 / 15    541 /  81     540 /  78
     ("led_blink.kicad_pcb", "led_blink", 1, 0, 1, 0),
     (
         "stm32_breakout.kicad_pcb",
@@ -491,7 +503,7 @@ const DRC_RATCHETS: &[Ratchet] = &[
     // is gone, and the other five boards route to the same hash: a two-layer
     // via has no layer between its ends. Routed 513 / 73, vias 205 -> 200,
     // 0 unrouted; ratchet is that plus the band, 35 / 15.
-    ("multi_ic.kicad_pcb", "multi_ic", 541, 81, 506, 66),
+    ("multi_ic.kicad_pcb", "multi_ic", 540, 78, 505, 63),
     ("shift_driver.kicad_pcb", "shift_driver", 41, 15, 15, 0),
     ("qfp_fanout.kicad_pcb", "qfp_fanout", 357, 158, 296, 112),
     // A band of zero is not a rounding: this board routes identically at every

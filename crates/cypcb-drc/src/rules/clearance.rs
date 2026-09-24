@@ -361,10 +361,12 @@ impl DrcRule for ClearanceRule {
                     }
                     // Neither is a trace: vias and pads. A component stands for
                     // its pads, a via for its disc, anything else for its own
-                    // box.
+                    // box. A via leaves out the pads on its own net, as a trace
+                    // does: a via dropped onto its own pin is a join, and
+                    // measured against that pin it read as a short.
                     (None, None) => vec![{
-                        let a_boxes = copper_of(a_idx, candidate.layer_mask, None);
-                        let b_boxes = copper_of(b_idx, entry.layer_mask, None);
+                        let a_boxes = copper_of(a_idx, candidate.layer_mask, net_b);
+                        let b_boxes = copper_of(b_idx, entry.layer_mask, net_a);
                         if a_boxes.as_ref().is_some_and(|p| p.is_empty())
                             || b_boxes.as_ref().is_some_and(|p| p.is_empty())
                         {
