@@ -14,6 +14,14 @@
 //! has to collect pads through `component_pads`; a rule that does not walk it
 //! is not this file's business.
 //!
+//! The same box stood in for traces and vias. A trace segment sits in the
+//! index as the box around it, grown by half its width, and a via as the
+//! square around its disc; edge-, slot- and mounting-hole-clearance measured
+//! those boxes until 2026-09-24, so a diagonal trace read as close to the edge
+//! as the corner of its box. `EntryCopper` gives each entry's copper - pads,
+//! disc, centreline - and a rule outside `clearance` that reads an entry's
+//! `.envelope` itself is measuring the box again.
+//!
 //! What it cannot check is that the collected pads are then *used*. That is
 //! what the fixtures beside each rule are for - a body hanging over the edge,
 //! a body over a mounting hole - and this census is what makes a fifth rule
@@ -34,6 +42,7 @@ const NOT_ABOUT_COMPONENTS: [&str; 0] = [];
 fn every_rule_that_walks_the_index_collects_pads() {
     let mut readers = Vec::new();
     let mut offenders = Vec::new();
+    let mut box_readers = Vec::new();
 
     for entry in std::fs::read_dir(rules_dir()).expect("the rules live in one directory") {
         let path = entry.expect("a directory entry").path();
@@ -59,10 +68,22 @@ fn every_rule_that_walks_the_index_collects_pads() {
         if NOT_ABOUT_COMPONENTS.contains(&name.as_str()) {
             continue;
         }
-        if !source.contains("component_pads") {
-            offenders.push(name);
+        if !source.contains("component_pads") && !source.contains("EntryCopper") {
+            offenders.push(name.clone());
+        }
+        // `clearance` owns the broad phase and `EntryCopper` itself, and both
+        // read the box on purpose.
+        if name != "clearance" && source.contains(".envelope") {
+            box_readers.push(name);
         }
     }
+
+    assert!(
+        box_readers.is_empty(),
+        "these rules read an index entry's box as its copper, so a diagonal \
+         trace measures as close as the corner of its box and a via as the \
+         corner of its square: {box_readers:?}"
+    );
 
     assert!(
         offenders.is_empty(),
