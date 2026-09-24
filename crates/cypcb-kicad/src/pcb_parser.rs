@@ -502,6 +502,7 @@ pub fn parse_kicad_pcb_str(content: &str) -> Result<KicadPcbParseResult, KicadPc
             status: RoutingStatus::Complete,
             routes: route_segments,
             vias: via_placements,
+            smoothing: None,
         })
     };
 

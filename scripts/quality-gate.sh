@@ -550,11 +550,19 @@ fi
 # as unmeasured - a test nothing runs and a document that does not know it
 # exists are the same omission seen from two sides.
 #
+# A fourth joined on 2026-09-24: the smoother held to never cutting a net with
+# `stop_at_own_copper` on, the setting under which it cut `mains-sequencer`.
+# `benchmark_all_fixtures_drc` holds the same line with the setting off on the
+# boards it routes anyway; this one routes the six fixtures and that board
+# again, at 3.53s measured the day it was added.
+#
 # Each is run on its own, because libtest takes one filter and passing two
 # names in one invocation matches nothing.
 if ignored_cases --test routed_copper_reaches_the_files \
       -- --exact which_layers_the_router_joins_with_a_via \
   && ignored_cases --test benchmark_validation -- --exact benchmark_full_matrix \
+  && ignored_cases --test benchmark_validation \
+      -- --exact smoothing_never_adds_a_net_piece_on_its_own_copper \
   && ignored_cases --test the_same_pair_routed_from_either_end \
       -- --exact how_much_does_the_answer_depend_on_the_direction; then
   pass "the-cheap-ignored-assertions"

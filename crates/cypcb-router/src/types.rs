@@ -178,6 +178,28 @@ pub struct RoutingResult {
     pub routes: Vec<RouteSegment>,
     /// Generated via placements.
     pub vias: Vec<ViaPlacement>,
+    /// The copper on either side of the smoother, when it ran.
+    ///
+    /// Read by the benchmark, which holds the smoother to never adding a
+    /// piece to a net, and by nothing else - so it is not serialized.
+    #[serde(skip)]
+    pub smoothing: Option<Box<SmoothingSnapshot>>,
+}
+
+/// The copper just before and just after the smoother.
+///
+/// Kept so a board routed once can be measured twice: whatever the smoother
+/// did is the difference between `before` and `after` with the same vias, and
+/// no second routing, which would lay different copper, is needed to see it.
+#[derive(Debug, Clone)]
+pub struct SmoothingSnapshot {
+    /// The segments as the router laid them.
+    pub before: Vec<RouteSegment>,
+    /// The same segments as the smoother returned them, before the via
+    /// optimizer touches anything.
+    pub after: Vec<RouteSegment>,
+    /// The vias as the router placed them. The smoother holds them in place.
+    pub vias: Vec<ViaPlacement>,
 }
 
 impl RoutingResult {
@@ -187,6 +209,7 @@ impl RoutingResult {
             status: RoutingStatus::Complete,
             routes,
             vias,
+            smoothing: None,
         }
     }
 
@@ -200,6 +223,7 @@ impl RoutingResult {
             status: RoutingStatus::Partial { unrouted_count },
             routes,
             vias,
+            smoothing: None,
         }
     }
 
@@ -211,6 +235,7 @@ impl RoutingResult {
             },
             routes: Vec::new(),
             vias: Vec::new(),
+            smoothing: None,
         }
     }
 
@@ -242,6 +267,7 @@ impl Default for RoutingResult {
             status: RoutingStatus::Complete,
             routes: Vec::new(),
             vias: Vec::new(),
+            smoothing: None,
         }
     }
 }

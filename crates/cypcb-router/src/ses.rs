@@ -164,6 +164,7 @@ pub fn import_ses_from_str(
         status,
         routes,
         vias,
+        smoothing: None,
     })
 }
 

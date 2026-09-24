@@ -17,11 +17,14 @@ use cypcb_autoroute::scoring::{score_board, RoutingScore, ScoreWeights};
 use cypcb_autoroute::strategy::RoutingStrategy;
 use cypcb_autoroute::{route_board, AutorouteConfig};
 use cypcb_drc::rules::pad_entry::{measure_entries, EntryReport};
+use cypcb_drc::rules::{DrcRule, NetSplitRule};
 use cypcb_drc::{preset_for_world, ruleset_for_world, DesignRules};
 use cypcb_kicad::{parse_kicad_pcb, BENCHMARKS};
 use cypcb_router::apply_routes;
-use cypcb_router::types::RoutingStatus;
+use cypcb_router::types::{RouteSegment, RoutingResult, RoutingStatus};
 use cypcb_rules::presets::RulesPreset;
+use cypcb_world::footprint::FootprintLibrary;
+use cypcb_world::{sync_ast_to_world, BoardWorld};
 
 // ============================================================================
 // Helpers
@@ -51,10 +54,18 @@ fn fixture_path(filename: &str) -> std::path::PathBuf {
 /// project owed itself: every entry angle the router's own copper leaves
 /// behind, in the same pass that counts the violations, so the two cannot
 /// disagree about which board was measured.
+/// The fifth value is what `net-split` reports on either side of the
+/// smoother, from [`splits_around_smoothing`].
 fn route_and_score(
     strategy: &dyn RoutingStrategy,
     fixture: &str,
-) -> (RoutingScore, usize, usize, (EntryReport, Vec<String>)) {
+) -> (
+    RoutingScore,
+    usize,
+    usize,
+    (EntryReport, Vec<String>),
+    Option<Splits>,
+) {
     let parsed = parse_kicad_pcb(&fixture_path(fixture))
         .unwrap_or_else(|e| panic!("Failed to parse {}: {:?}", fixture, e));
     let mut world = parsed.world;
@@ -78,12 +89,14 @@ fn route_and_score(
         RoutingStatus::Failed { .. } => usize::MAX,
     };
 
+    let drc_rules = DesignRules::from_constraints(&preset.constraints());
+    let splits = splits_around_smoothing(&mut world, &library, &result, &drc_rules);
+
     apply_routes(&mut world, &result);
 
     // Rebuild spatial index for accurate scoring
     world.rebuild_spatial_index_from_library(&library);
 
-    let drc_rules = DesignRules::from_constraints(&preset.constraints());
     let score = score_board(&mut world, &drc_rules, &ScoreWeights::default());
 
     // The entries by name, and the denominator beside them. `score_board`
@@ -96,7 +109,75 @@ fn route_and_score(
     let (entries, report) = measure_entries(&mut world);
     let sharp: Vec<String> = entries.into_iter().map(|v| v.message).collect();
 
-    (score, route_count, unrouted, (report, sharp))
+    (score, route_count, unrouted, (report, sharp), splits)
+}
+
+/// What `net-split` reports before and after the smoother, one message per
+/// piece a net is cut into.
+type Splits = (Vec<String>, Vec<String>);
+
+/// `net-split` on the router's own segments and then on the smoother's, each
+/// with the router's vias. `None` when the smoother did not run.
+///
+/// Read from the copper the router keeps from either side of the smoother,
+/// not from a second routing with smoothing off. A second routing lays other
+/// copper - every later net and every repair pass reacts to what the earlier
+/// ones left - so the difference between two runs is not what the smoother
+/// did, and it costs a whole routing more.
+fn splits_around_smoothing(
+    world: &mut BoardWorld,
+    library: &FootprintLibrary,
+    result: &RoutingResult,
+    drc_rules: &DesignRules,
+) -> Option<Splits> {
+    let snapshot = result.smoothing.as_deref()?;
+    let mut splits = |routes: &[RouteSegment]| -> Vec<String> {
+        apply_routes(
+            world,
+            &RoutingResult::complete(routes.to_vec(), snapshot.vias.clone()),
+        );
+        world.rebuild_spatial_index_from_library(library);
+        NetSplitRule
+            .check(world, drc_rules)
+            .into_iter()
+            .map(|v| v.message)
+            .collect()
+    };
+    let before = splits(&snapshot.before);
+    let after = splits(&snapshot.after);
+    Some((before, after))
+}
+
+/// A net the router laid in one piece and the smoother cut, on one board.
+///
+/// Smoothing moves the corners of a run of segments and holds its ends, and
+/// until 2026-09-24 it held nothing where a third branch left a run: on
+/// `mains-sequencer` with `stop_at_own_copper` it chamfered two T junctions
+/// and cut PE and GND in two. Nothing in the gate could see it, because no
+/// stage measured the board with the smoother and without it. So `net-split`
+/// is read on both sides of the smoother on the board the stage routes anyway,
+/// and a piece more after it than before it is a failure. A board with no
+/// snapshot is a failure too: the comparison would pass without having been
+/// made.
+fn smoothing_added_a_piece(label: &str, splits: &Option<Splits>) -> Option<String> {
+    let Some((before, after)) = splits else {
+        return Some(format!(
+            "{label}: the router kept no copper from before the smoother, so nothing measured whether smoothing cut a net"
+        ));
+    };
+    eprintln!(
+        "      net-split: {} before the smoother, {} after it",
+        before.len(),
+        after.len()
+    );
+    (after.len() > before.len()).then(|| {
+        let added: Vec<&String> = after.iter().filter(|m| !before.contains(m)).collect();
+        format!(
+            "{label}: net-split {} before the smoother and {} after it - smoothing cut a net: {added:?}",
+            before.len(),
+            after.len()
+        )
+    })
 }
 
 // ============================================================================
@@ -565,8 +646,11 @@ fn benchmark_all_fixtures_drc() {
     eprintln!();
     print_table_header();
     let mut measured = Vec::new();
+    let mut smoothing = Vec::new();
     for (filename, label, _, _, _, _) in DRC_RATCHETS {
-        let (score, route_count, unrouted, entries) = route_and_score(&pathfinder, filename);
+        let (score, route_count, unrouted, entries, splits) =
+            route_and_score(&pathfinder, filename);
+        smoothing.push((label, splits));
         print_table_row(&BenchmarkResult::from_score(
             label,
             "PathFinder",
@@ -591,6 +675,11 @@ fn benchmark_all_fixtures_drc() {
     // question these numbers answer - is this setting worth its cost - cannot
     // be read off one row.
     let mut failures: Vec<String> = Vec::new();
+
+    for (label, splits) in &smoothing {
+        eprintln!("  {label}:");
+        failures.extend(smoothing_added_a_piece(label, splits));
+    }
 
     let mut sharp_total = 0usize;
     let mut examined_total = 0usize;
@@ -705,12 +794,64 @@ fn benchmark_all_fixtures_drc() {
     );
 }
 
+/// Routes a board with `stop_at_own_copper` and reads `net-split` on either
+/// side of the smoother.
+fn splits_on_own_copper(mut world: BoardWorld, library: FootprintLibrary) -> Option<Splits> {
+    let preset = preset_for_world(RulesPreset::JlcpcbStandard2Layer, &world);
+    let rules = ruleset_for_world(preset, &world);
+    let config = AutorouteConfig {
+        stop_at_own_copper: true,
+        ..AutorouteConfig::default()
+    };
+    let result = route_board(&mut world, &library, &rules, &config);
+    let drc_rules = DesignRules::from_constraints(&preset.constraints());
+    splits_around_smoothing(&mut world, &library, &result, &drc_rules)
+}
+
+/// The smoother held to the same line with `stop_at_own_copper`, the setting
+/// that ends a path on its net's own copper and so lays the T junctions the
+/// smoother used to cut. No other stage routes a board with it on, so this
+/// costs one routing of each board and measures nothing else.
+///
+/// None of the six fixtures has a junction the smoother before 2026-09-24
+/// cut: with that smoother put back, all six read the same `net-split` on
+/// both sides of it. `mains-sequencer` is the board it cut, so it is routed
+/// here too - without it this test would pass on the fault it exists for.
+#[test]
+#[ignore = "slow: routes every fixture and mains-sequencer with stop_at_own_copper"]
+fn smoothing_never_adds_a_net_piece_on_its_own_copper() {
+    let mut failures = Vec::new();
+    for (filename, label, _, _, _, _) in DRC_RATCHETS {
+        let parsed = parse_kicad_pcb(&fixture_path(filename))
+            .unwrap_or_else(|e| panic!("Failed to parse {}: {:?}", filename, e));
+        let splits = splits_on_own_copper(parsed.world, parsed.library);
+        eprintln!("  {label}:");
+        failures.extend(smoothing_added_a_piece(label, &splits));
+    }
+
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/mains-sequencer.cypcb");
+    let source = std::fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("Failed to read {}: {e}", path.display()));
+    let parsed = cypcb_parser::parse(&source);
+    let mut world = BoardWorld::new();
+    let mut library = FootprintLibrary::new();
+    let _ = sync_ast_to_world(&parsed.value, &source, &mut world, &mut library);
+    let splits = splits_on_own_copper(world, library);
+    eprintln!("  mains-sequencer:");
+    failures.extend(smoothing_added_a_piece("mains-sequencer", &splits));
+    assert!(
+        failures.is_empty(),
+        "FAIL smoothing_never_adds_a_net_piece_on_its_own_copper:\n  {}",
+        failures.join("\n  ")
+    );
+}
+
 /// Fast CI regression gate: routes led_blink with PathFinder and asserts
 /// score thresholds. Non-ignored so it runs in `cargo test --workspace`.
 #[test]
 fn benchmark_regression() {
     let pathfinder = PathFinderStrategy;
-    let (score, route_count, unrouted, _) = route_and_score(&pathfinder, "led_blink.kicad_pcb");
+    let (score, route_count, unrouted, _, _) = route_and_score(&pathfinder, "led_blink.kicad_pcb");
 
     // Print score table
     eprintln!();
@@ -832,7 +973,7 @@ fn benchmark_full_matrix() {
         for strategy in &strategies {
             eprintln!("  [{}] routing {} ...", strategy.name(), fixture_label);
 
-            let (score, route_count, unrouted, _) =
+            let (score, route_count, unrouted, _, _) =
                 route_and_score(strategy.as_ref(), benchmark.filename);
 
             let br = BenchmarkResult::from_score(
