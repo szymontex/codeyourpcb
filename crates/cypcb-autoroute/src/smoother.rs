@@ -42,6 +42,7 @@ pub fn is_valid_angle(start: Point, end: Point) -> bool {
 /// # Arguments
 /// * `segments` - All route segments for one or more nets on one or more layers
 /// * `other_net_segments` - Segments from other nets (used for DRC clearance checking)
+/// * `anchors` - Points the copper has to keep reaching: the vias of these nets
 /// * `min_clearance` - Minimum clearance distance in nanometers
 ///
 /// # Returns
@@ -49,6 +50,7 @@ pub fn is_valid_angle(start: Point, end: Point) -> bool {
 pub fn smooth_routes(
     segments: &[RouteSegment],
     other_net_segments: &[RouteSegment],
+    anchors: &[Point],
     min_clearance: Nm,
     roundness: f64,
 ) -> Vec<RouteSegment> {
@@ -76,8 +78,13 @@ pub fn smooth_routes(
 
     for (net_id, layer, group) in &groups {
         let group_segs: Vec<RouteSegment> = group.iter().map(|s| (*s).clone()).collect();
-        let smoothed =
-            smooth_net_layer_group(&group_segs, other_net_segments, min_clearance, roundness);
+        let smoothed = smooth_net_layer_group(
+            &group_segs,
+            other_net_segments,
+            anchors,
+            min_clearance,
+            roundness,
+        );
         tracing::debug!(
             net_id = net_id.id(),
             layer = ?layer,
@@ -103,7 +110,74 @@ pub fn smooth_routes(
 /// 1. Staircase-to-diagonal collapse
 /// 2. Corner chamfering
 /// 3. Collinear segment merge
+///
+/// A path starts and ends on a pad, and no pass moves the first or the last
+/// point of a run of connected segments, so a pad never loses its copper. A
+/// via is not always the end of a run: a segment can arrive at it and another
+/// leave it on the same layer, or a later path of the net can run straight
+/// across it, and either way the via's point was free to move. On
+/// `multi_ic`, with `stop_at_own_copper`, a Top segment of VCC_3V3 ran
+/// straight over a via, the smoother moved it off, and the net came out in
+/// two pieces. So every segment is cut at each anchor it passes through, the
+/// group is split at every anchor, and each piece is smoothed on its own: a
+/// via's point is an end the way a pad's is.
 fn smooth_net_layer_group(
+    group: &[RouteSegment],
+    others: &[RouteSegment],
+    anchors: &[Point],
+    min_clearance: Nm,
+    roundness: f64,
+) -> Vec<RouteSegment> {
+    let cut: Vec<RouteSegment> = group
+        .iter()
+        .flat_map(|seg| cut_at_anchors(seg, anchors))
+        .collect();
+    let smoothed: Vec<RouteSegment> = cut
+        .split_inclusive(|seg| anchors.contains(&seg.end))
+        .flat_map(|run| smooth_run(run, others, min_clearance, roundness))
+        .collect();
+    // A straight line through a via still covers it, so the pieces that
+    // came out collinear go back together.
+    merge_collinear(&smoothed)
+}
+
+/// `seg` in pieces that end on each anchor lying strictly inside it.
+fn cut_at_anchors(seg: &RouteSegment, anchors: &[Point]) -> Vec<RouteSegment> {
+    let (dx, dy) = (
+        (seg.end.x.0 - seg.start.x.0) as i128,
+        (seg.end.y.0 - seg.start.y.0) as i128,
+    );
+    let length_sq = dx * dx + dy * dy;
+    let mut inside: Vec<(i128, Point)> = anchors
+        .iter()
+        .filter_map(|p| {
+            let (px, py) = (
+                (p.x.0 - seg.start.x.0) as i128,
+                (p.y.0 - seg.start.y.0) as i128,
+            );
+            let along = px * dx + py * dy;
+            (px * dy - py * dx == 0 && along > 0 && along < length_sq).then_some((along, *p))
+        })
+        .collect();
+    inside.sort_by_key(|(along, _)| *along);
+    inside.dedup_by_key(|(along, _)| *along);
+
+    let mut pieces = Vec::with_capacity(inside.len() + 1);
+    let mut from = seg.start;
+    for (_, to) in inside {
+        pieces.push(RouteSegment::new(
+            seg.net_id, seg.layer, seg.width, from, to,
+        ));
+        from = to;
+    }
+    pieces.push(RouteSegment::new(
+        seg.net_id, seg.layer, seg.width, from, seg.end,
+    ));
+    pieces
+}
+
+/// Smooth one run of a (net_id, layer) group that no anchor interrupts.
+fn smooth_run(
     group: &[RouteSegment],
     others: &[RouteSegment],
     min_clearance: Nm,
@@ -625,7 +699,7 @@ mod tests {
             seg(step, 0, step, step),        // V
             seg(step, step, 2 * step, step), // H
         ];
-        let result = smooth_routes(&segments, &[], Nm(0), 0.5);
+        let result = smooth_routes(&segments, &[], &[], Nm(0), 0.5);
         // Should collapse to 1 diagonal + maybe 1 orthogonal
         assert!(
             result.len() <= 2,
@@ -655,7 +729,7 @@ mod tests {
             seg(2 * s, s, 2 * s, 2 * s),
             seg(2 * s, 2 * s, 3 * s, 2 * s),
         ];
-        let result = smooth_routes(&segments, &[], Nm(0), 0.5);
+        let result = smooth_routes(&segments, &[], &[], Nm(0), 0.5);
         assert!(
             result.len() <= 3,
             "5-step staircase should collapse to ≤3 segments, got {}",
@@ -686,7 +760,7 @@ mod tests {
                 segments.push(seg(x, y, x, y + s));
             }
         }
-        let result = smooth_routes(&segments, &[], Nm(0), 0.5);
+        let result = smooth_routes(&segments, &[], &[], Nm(0), 0.5);
         assert!(
             result.len() <= 3,
             "10-step staircase should produce ≤3 segments, got {}",
@@ -703,7 +777,7 @@ mod tests {
             seg(s, 0, 2 * s, 0), // same direction as previous — not alternating
             seg(2 * s, 0, 2 * s, s),
         ];
-        let result = smooth_routes(&segments, &[], Nm(0), 0.5);
+        let result = smooth_routes(&segments, &[], &[], Nm(0), 0.5);
         // Should still be valid but may not collapse as aggressively
         for s in &result {
             assert!(is_valid_angle(s.start, s.end));
@@ -719,7 +793,7 @@ mod tests {
             seg_mm(0.0, 0.0, 6.0, 0.0), // 6mm horizontal
             seg_mm(6.0, 0.0, 6.0, 6.0), // 6mm vertical
         ];
-        let result = smooth_routes(&segments, &[], Nm(0), 0.5);
+        let result = smooth_routes(&segments, &[], &[], Nm(0), 0.5);
         // Should have 3 segments after chamfering: shortened H + 45° chamfer + shortened V
         assert_eq!(
             result.len(),
@@ -739,7 +813,7 @@ mod tests {
         let segments = vec![
             seg_mm(0.0, 0.0, 3.0, 3.0), // 45° diagonal
         ];
-        let result = smooth_routes(&segments, &[], Nm(0), 0.5);
+        let result = smooth_routes(&segments, &[], &[], Nm(0), 0.5);
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].start, segments[0].start);
         assert_eq!(result[0].end, segments[0].end);
@@ -751,7 +825,7 @@ mod tests {
     fn merge_collinear_segments() {
         // Two horizontal segments end-to-end in the same direction
         let segments = vec![seg_mm(0.0, 0.0, 3.0, 0.0), seg_mm(3.0, 0.0, 7.0, 0.0)];
-        let result = smooth_routes(&segments, &[], Nm(0), 0.5);
+        let result = smooth_routes(&segments, &[], &[], Nm(0), 0.5);
         assert_eq!(result.len(), 1, "collinear segments should merge");
         assert_eq!(result[0].start, Point::from_mm(0.0, 0.0));
         assert_eq!(result[0].end, Point::from_mm(7.0, 0.0));
@@ -774,8 +848,8 @@ mod tests {
             Point::new(Nm(s / 2), Nm(s / 2 + 50_000)),
         );
 
-        let result = smooth_routes(&staircase, &[obstacle], Nm(200_000), 0.5); // 0.2mm clearance
-                                                                               // Should keep original staircase since diagonal violates clearance
+        let result = smooth_routes(&staircase, &[obstacle], &[], Nm(200_000), 0.5); // 0.2mm clearance
+                                                                                    // Should keep original staircase since diagonal violates clearance
         assert!(
             result.len() >= 3,
             "should keep original staircase when diagonal violates DRC, got {} segments",
@@ -787,14 +861,14 @@ mod tests {
 
     #[test]
     fn empty_input() {
-        let result = smooth_routes(&[], &[], Nm(0), 0.5);
+        let result = smooth_routes(&[], &[], &[], Nm(0), 0.5);
         assert!(result.is_empty());
     }
 
     #[test]
     fn single_segment() {
         let segments = vec![seg_mm(0.0, 0.0, 5.0, 0.0)];
-        let result = smooth_routes(&segments, &[], Nm(0), 0.5);
+        let result = smooth_routes(&segments, &[], &[], Nm(0), 0.5);
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].start, segments[0].start);
         assert_eq!(result[0].end, segments[0].end);
@@ -803,7 +877,7 @@ mod tests {
     #[test]
     fn zero_length_segment() {
         let segments = vec![seg_mm(1.0, 1.0, 1.0, 1.0)];
-        let result = smooth_routes(&segments, &[], Nm(0), 0.5);
+        let result = smooth_routes(&segments, &[], &[], Nm(0), 0.5);
         // Zero-length segment passes through (valid angle)
         assert_eq!(result.len(), 1);
     }
@@ -831,7 +905,7 @@ mod tests {
                 Point::from_mm(3.0, 3.0),
             ),
         ];
-        let result = smooth_routes(&segments, &[], Nm(0), 0.5);
+        let result = smooth_routes(&segments, &[], &[], Nm(0), 0.5);
         for s in &result {
             assert_eq!(s.net_id, net, "net_id must be preserved");
             assert_eq!(s.layer, layer, "layer must be preserved");

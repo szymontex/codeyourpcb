@@ -143,9 +143,15 @@ impl RoutingStrategy for ImprovedAStarStrategy {
                 .filter(|s| s.net_id != *net_id)
                 .cloned()
                 .collect();
+            let net_vias: Vec<_> = all_vias
+                .iter()
+                .filter(|v| v.net_id == *net_id)
+                .map(|v| v.position)
+                .collect();
             let smoothed = smooth_routes(
                 &net_segs,
                 &other_segs,
+                &net_vias,
                 min_clearance,
                 config.params.roundness,
             );
