@@ -560,7 +560,7 @@ pub fn generate_variants(
 
 /// Clear autorouted traces and vias from the world.
 fn clear_autorouted_traces(world: &mut BoardWorld) {
-    use cypcb_world::components::trace::{Trace, TraceSource, Via};
+    use cypcb_world::components::trace::{RouterPlaced, Trace, TraceSource, Via};
     use cypcb_world::Entity;
 
     let entities_to_remove: Vec<Entity> = {
@@ -573,13 +573,18 @@ fn clear_autorouted_traces(world: &mut BoardWorld) {
             .collect()
     };
 
+    // Vias this router put down, and only those - the same question
+    // `apply_routes` asks. This used to ask `!via.locked`, so every variant was
+    // routed and scored on a board without the vias the file declares: on
+    // `blind-via` each composite came out 2002 lower than the same routes
+    // scored on the board as written, on `stitched-plane` 16 lower.
     let via_entities: Vec<Entity> = {
         let ecs = world.ecs_mut();
-        let mut query = ecs.query::<(Entity, &Via)>();
+        let mut query = ecs.query::<(Entity, &Via, &RouterPlaced)>();
         query
             .iter(ecs)
-            .filter(|(_, via)| !via.locked)
-            .map(|(entity, _)| entity)
+            .filter(|(_, via, _)| !via.locked)
+            .map(|(entity, _, _)| entity)
             .collect()
     };
 

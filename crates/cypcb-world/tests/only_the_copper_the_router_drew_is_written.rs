@@ -11,7 +11,7 @@
 //! held two and copper drawn over itself is a defect the checker knows.
 
 use cypcb_core::{Nm, Point};
-use cypcb_world::components::trace::{Trace, TraceSegment, TraceSource, Via};
+use cypcb_world::components::trace::{RouterPlaced, Trace, TraceSegment, TraceSource, Via};
 use cypcb_world::components::Layer;
 use cypcb_world::dsl::{routed_traces_as_dsl, traces_as_dsl};
 use cypcb_world::BoardWorld;
@@ -77,26 +77,34 @@ fn the_writer_that_saves_a_whole_board_still_writes_all_of_it() {
 }
 
 #[test]
-fn a_via_the_source_locked_is_not_written_again_and_the_routers_is() {
-    // `apply_routes` despawns every unlocked via and spawns its own unlocked,
-    // so after it has run a locked via can only have come from the source -
-    // where `trace GND { locked, via ... }` puts one - and an unlocked one can
-    // only be this run's.
+fn a_via_the_source_declared_is_not_written_again_and_the_routers_is() {
+    // `apply_routes` despawns only the vias marked `RouterPlaced` and marks
+    // the ones it spawns, so after it has run a via without the mark came from
+    // the source - locked, as `trace GND { locked, via ... }` puts one, or not,
+    // as a plain `via` line on a trace does - and a marked one is this run's.
     let mut world = board();
     let net = world.intern_net("GND");
 
-    let mut declared = Via::new(Point::from_mm(5.0, 5.0), net);
-    declared.locked = true;
+    let mut locked = Via::new(Point::from_mm(5.0, 5.0), net);
+    locked.locked = true;
+    world.spawn_entity((locked, net));
+
+    let declared = Via::new(Point::from_mm(7.0, 7.0), net);
     world.spawn_entity((declared, net));
 
     let mine = Via::new(Point::from_mm(9.0, 9.0), net);
-    world.spawn_entity((mine, net));
+    world.spawn_entity((mine, net, RouterPlaced));
 
     let written = routed_traces_as_dsl(&mut world);
 
     assert!(
         !written.contains("via 5.000000mm,5.000000mm"),
         "the locked via is already in the file this is appended to:\n{written}"
+    );
+    assert!(
+        !written.contains("via 7.000000mm,7.000000mm"),
+        "the unlocked via the source declared is already in the file this is \
+         appended to:\n{written}"
     );
     assert!(
         written.contains("via 9.000000mm,9.000000mm"),
