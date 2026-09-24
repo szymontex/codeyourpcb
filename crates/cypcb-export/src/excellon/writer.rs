@@ -356,7 +356,10 @@ fn collect_drill_hits(
             slot_end: None, // A via is drilled, never milled.
             drill_diameter: via.drill,
             drill_type: DrillType::Plated, // Vias are always plated
-            span: (via.start_layer, via.end_layer),
+            // Top first, so a pair's file is named and stated one way
+            // whichever end the router wrote first. Written as it came, a
+            // Bottom-to-Inner1 via was a `Buried` pair `4,2`.
+            span: via.span(),
         });
     }
 

@@ -277,8 +277,9 @@ fn export_vias(
     let mut query = world.ecs_mut().query::<&Via>();
 
     for via in query.iter(world.ecs()) {
-        // Check if via spans this layer
-        if !via_spans_layer(via, layer) {
+        // The same answer the checks get, so the file carries the copper
+        // they measured.
+        if via.copper_mask() & layer.to_copper_mask() == 0 {
             continue;
         }
 
@@ -310,25 +311,6 @@ pub(crate) fn place_pad_millideg(
     rotation_millideg: i32,
 ) -> Point {
     place_pad(component_pos, pad_offset, Rotation(rotation_millideg))
-}
-
-/// Check if a via spans the specified copper layer.
-fn via_spans_layer(via: &Via, layer: Layer) -> bool {
-    // For simplicity, assume through-hole vias span all layers
-    // Blind/buried vias would need more complex logic
-    if via.is_through_hole() {
-        return layer.is_copper();
-    }
-
-    // For blind/buried vias, check if layer is between start and end
-    // This is a simplified check - real implementation would need layer ordering
-    match (via.start_layer, via.end_layer, layer) {
-        (Layer::TopCopper, Layer::Inner(_n), Layer::TopCopper) => true,
-        (Layer::TopCopper, Layer::Inner(n), Layer::Inner(m)) if m <= n => true,
-        (Layer::Inner(_n), Layer::BottomCopper, Layer::BottomCopper) => true,
-        (Layer::Inner(n), Layer::BottomCopper, Layer::Inner(m)) if m >= n => true,
-        _ => false,
-    }
 }
 
 /// Fill every copper pour on this layer, as Gerber regions.
@@ -633,13 +615,31 @@ mod tests {
     }
 
     #[test]
-    fn test_via_spans_layer_through_hole() {
+    fn a_through_via_is_flashed_on_every_copper_layer() {
+        let mut world = BoardWorld::new();
+        world.set_board("test".into(), (Nm::from_mm(20.0), Nm::from_mm(20.0)), 4);
         let net_id = NetId::new(0);
-        let via = Via::new(Point::ORIGIN, net_id);
-        assert!(via.is_through_hole());
-        assert!(via_spans_layer(&via, Layer::TopCopper));
-        assert!(via_spans_layer(&via, Layer::BottomCopper));
-        assert!(via_spans_layer(&via, Layer::Inner(0)));
+        let mut via = Via::new(Point::from_mm(10.0, 10.0), net_id);
+        // Written from the bottom up, the way the router writes a via it
+        // climbed.
+        via.start_layer = Layer::BottomCopper;
+        via.end_layer = Layer::TopCopper;
+        world.ecs_mut().spawn(via);
+        let library = FootprintLibrary::new();
+        let format = CoordinateFormat::FORMAT_MM_2_6;
+
+        for layer in [
+            Layer::TopCopper,
+            Layer::Inner(0),
+            Layer::Inner(1),
+            Layer::BottomCopper,
+        ] {
+            let gerber = export_copper_layer(&mut world, &library, layer, &format).unwrap();
+            assert!(
+                gerber.contains("X10000000Y10000000D03*"),
+                "{layer:?} has no flash for the via:\n{gerber}"
+            );
+        }
     }
 
     #[test]

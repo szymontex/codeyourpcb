@@ -1683,9 +1683,12 @@ is drilled. A land on a layer the via does not connect is the fab's option, not
 its requirement: AISLER's staff answer on community.aisler.net, read
 2026-09-24, is that inner annular rings may be removed and that other copper
 keeps 265 um from the barrel where they are removed. This model has no way to say a via
-lacks a land, and for every span the Gerber export recognises it flashes the full
-land on each layer the via passes, so the checker measures that land - copper to copper, not copper to hole.
-`Via::copper_mask` is the one answer all three read. Measured 2026-09-24 by
+lacks a land, and the copper files flash the full land on each layer the via
+passes, so the checker measures that land - copper to copper, not copper to hole.
+`Via::copper_mask` is the one answer all three read, and the Gerber, IPC-2581,
+IPC-356 and drill exports read it or `Via::span` beneath it. Until 2026-09-24
+each export read the two ends as the router wrote them, and the Gerber of a
+routed four-layer board left out about half the vias. The checker was measured 2026-09-24 by
 `cargo test --release -p cypcb-autoroute --test benchmark_validation -- --ignored benchmark_all_fixtures_drc`:
 `multi_ic`, the only four-layer fixture, goes from 511 to 543 violations and
 from 78 to 110 shorts with its routes unchanged, and the other five boards do

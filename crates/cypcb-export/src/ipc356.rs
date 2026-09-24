@@ -262,7 +262,8 @@ pub fn export_ipc356(
         query.iter(world.ecs()).cloned().collect()
     };
     for via in vias {
-        let through = via.start_layer == Layer::TopCopper && via.end_layer == Layer::BottomCopper;
+        let through = via.is_through_hole();
+        let (upper, lower) = via.span();
         let Some(net) = world.net_name(via.net_id).map(str::to_string) else {
             continue;
         };
@@ -273,7 +274,9 @@ pub fn export_ipc356(
             pin: String::new(),
             mid_net: true,
             drill: Some(via.drill),
-            access: if through { "00" } else { "02" },
+            // The face a blind via opens on is the face a tester reaches it
+            // from, the same answer a pad gets.
+            access: access_of(&[upper, lower]),
             x: via.position.x,
             y: via.position.y,
             size_x: via.outer_diameter,
