@@ -47,7 +47,12 @@ export default defineConfig({
   // Two rather than one: the stage is a hundred and twenty-six specs and one
   // worker makes the gate a great deal longer for a saving nobody asked for.
   // Two keeps the peak at two browsers, which is what this host can spare.
-  workers: 2,
+  //
+  // Three since 2026-09-24, by the owner's call: the test stage no longer
+  // takes every core (the gate caps it at five threads from the host's load),
+  // which leaves room for a third browser, and this stage was the longest one
+  // left in the gate.
+  workers: 3,
   // One retry, and it is a report rather than a cover.
   //
   // Stage 7 of the quality gate failed on three consecutive runs of one tree -
