@@ -12,7 +12,7 @@ use std::ops::Not;
 use cypcb_core::{Nm, Point};
 use cypcb_rules::RoutingRuleSet;
 use cypcb_world::footprint::FootprintLibrary;
-use cypcb_world::{BoardWorld, FootprintRef, NetConnections, NetId, Position, Rotation};
+use cypcb_world::{BoardWorld, Entity, FootprintRef, NetConnections, NetId, Position, Rotation};
 
 use crate::cost::RoutingCost;
 use crate::grid::{layer_to_index, RoutingGrid};
@@ -59,20 +59,35 @@ pub fn extract_ratsnest(world: &mut BoardWorld, library: &FootprintLibrary) -> V
     let _span = tracing::info_span!("extract_ratsnest").entered();
 
     // Collect component data: (position, rotation_deg, footprint_name, net_connections)
+    //
+    // In the order the world was built, not the order the query hands them
+    // over. bevy matches a query to its archetypes through a hash map seeded
+    // once per process, so a board whose parts do not all carry the same
+    // components (a `spec` block on one part and not the next) came back in a
+    // different order from one run of the program to the next. The pads of a
+    // net were then routed in a different order, and
+    // `examples/v2-constraints.cypcb` gave two different boards. An entity id
+    // follows the order the world was built in, which is the same every run.
     let components: Vec<(Point, f64, String, NetConnections)> = {
         let ecs = world.ecs_mut();
-        let mut query = ecs.query::<(&Position, &Rotation, &FootprintRef, &NetConnections)>();
-        query
+        let mut query =
+            ecs.query::<(Entity, &Position, &Rotation, &FootprintRef, &NetConnections)>();
+        let mut rows: Vec<(Entity, (Point, f64, String, NetConnections))> = query
             .iter(ecs)
-            .map(|(pos, rot, fp, nets)| {
+            .map(|(entity, pos, rot, fp, nets)| {
                 (
-                    pos.0,
-                    rot.to_degrees(),
-                    fp.as_str().to_string(),
-                    nets.clone(),
+                    entity,
+                    (
+                        pos.0,
+                        rot.to_degrees(),
+                        fp.as_str().to_string(),
+                        nets.clone(),
+                    ),
                 )
             })
-            .collect()
+            .collect();
+        rows.sort_by_key(|(entity, _)| *entity);
+        rows.into_iter().map(|(_, row)| row).collect()
     };
 
     // Copper pours, with the net each is poured to. A pad of that net sitting

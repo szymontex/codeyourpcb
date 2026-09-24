@@ -17,6 +17,12 @@
 //! randomises `HashMap` iteration order per process, so anything that orders
 //! work by walking a map produces a different board each run - which is the
 //! first thing to rule out.
+//!
+//! Each run is a separate process. The three runs used to share one, and
+//! bevy draws the seed of the map that orders a query's archetypes once per
+//! process: inside one process the order never moved, so the runs agreed
+//! while `examples/v2-constraints.cypcb` routed to two different boards from
+//! one run of the program to the next.
 
 use cypcb_autoroute::pathfinder_v2::PathFinderStrategy;
 use cypcb_autoroute::scoring::{score_board, ScoreWeights};
@@ -29,8 +35,12 @@ use cypcb_router::apply_routes;
 use cypcb_rules::presets::RulesPreset;
 
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 const RUNS: usize = 3;
+
+/// Set in a child, to the board it routes once and prints.
+const CHILD: &str = "CYPCB_REPEAT_ONE_BOARD";
 
 fn fixture_path(filename: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -82,9 +92,52 @@ fn route_once(filename: &str) -> Run {
     }
 }
 
+/// Route a board in a fresh process of this binary and read back its run.
+fn route_in_child(filename: &str) -> Run {
+    let exe = std::env::current_exe().expect("the test binary has a path");
+    let output = Command::new(exe)
+        .args([
+            "--exact",
+            "the_same_board_routed_twice_is_the_same_board",
+            "--include-ignored",
+            "--nocapture",
+        ])
+        .env(CHILD, filename)
+        .output()
+        .expect("the test binary starts again");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.success(),
+        "the child routing {filename} failed:\n{stdout}"
+    );
+    let fields: Vec<i64> = stdout
+        .lines()
+        .find_map(|line| line.strip_prefix("RUN "))
+        .unwrap_or_else(|| panic!("the child routing {filename} printed no run:\n{stdout}"))
+        .split_whitespace()
+        .map(|field| field.parse().expect("a run is five numbers"))
+        .collect();
+    Run {
+        violations: fields[0] as usize,
+        shorts: fields[1] as usize,
+        segments: fields[2] as usize,
+        vias: fields[3] as usize,
+        length_nm: fields[4],
+    }
+}
+
 #[test]
 #[ignore = "slow: routes every fixture three times"]
 fn the_same_board_routed_twice_is_the_same_board() {
+    if let Ok(filename) = std::env::var(CHILD) {
+        let run = route_once(&filename);
+        println!(
+            "RUN {} {} {} {} {}",
+            run.violations, run.shorts, run.segments, run.vias, run.length_nm
+        );
+        return;
+    }
+
     let mut unstable = Vec::new();
 
     eprintln!();
@@ -92,7 +145,9 @@ fn the_same_board_routed_twice_is_the_same_board() {
     eprintln!();
 
     for benchmark in BENCHMARKS {
-        let runs: Vec<Run> = (0..RUNS).map(|_| route_once(benchmark.filename)).collect();
+        let runs: Vec<Run> = (0..RUNS)
+            .map(|_| route_in_child(benchmark.filename))
+            .collect();
 
         let identical = runs.iter().all(|r| *r == runs[0]);
         eprintln!(
