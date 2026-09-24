@@ -236,6 +236,9 @@ impl RoutingGrid {
         // Mark locked traces as obstacles
         grid.populate_locked_traces(world, clearance_cells);
 
+        // And the vias already on the board, the same way
+        grid.populate_placed_vias(world, clearance_cells);
+
         Some(grid)
     }
 
@@ -434,6 +437,41 @@ impl RoutingGrid {
                         CELL_TRACE,
                     );
                 }
+            }
+        }
+    }
+
+    /// Populate the vias already on the board: placed in a `.cypcb` trace,
+    /// imported from KiCad, or dropped by a stitched pour.
+    ///
+    /// Only traces used to be marked, so a via the designer placed was
+    /// invisible to every route. It is marked as a hand trace is - copper with
+    /// no owner, on every layer its hole passes - and its own net is served
+    /// the way a trace's is, by `drop_pads_existing_copper_already_joins`.
+    fn populate_placed_vias(&mut self, world: &mut BoardWorld, clearance_cells: u32) {
+        let vias: Vec<Via> = {
+            let ecs = world.ecs_mut();
+            let mut query = ecs.query::<&Via>();
+            query.iter(ecs).copied().collect()
+        };
+
+        for via in &vias {
+            let (Some(from), Some(to)) = (
+                layer_to_index(via.start_layer),
+                layer_to_index(via.end_layer),
+            ) else {
+                continue;
+            };
+            let half_ring_nm = via.outer_diameter.raw() / 2;
+            let ring_cells = ((half_ring_nm + self.resolution - 1) / self.resolution) as u32;
+            for layer in self.layers_in(self.via_layers(from as u8, to as u8)) {
+                self.mark_obstacle_at_nm(
+                    via.position.x.raw(),
+                    via.position.y.raw(),
+                    layer as usize,
+                    ring_cells + clearance_cells,
+                    CELL_TRACE,
+                );
             }
         }
     }

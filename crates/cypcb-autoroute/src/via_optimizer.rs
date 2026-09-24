@@ -9,7 +9,7 @@ use cypcb_core::{Nm, Point, Rect};
 use cypcb_drc::rules::clearance::segment_distance;
 use cypcb_router::types::{RouteSegment, ViaPlacement};
 use cypcb_world::components::rotate_about_origin;
-use cypcb_world::components::trace::Trace;
+use cypcb_world::components::trace::{Trace, Via};
 use cypcb_world::footprint::FootprintLibrary;
 use cypcb_world::{BoardWorld, FootprintRef, Layer, NetConnections, NetId, Position, Rotation};
 
@@ -18,9 +18,9 @@ use crate::grid::layer_to_index;
 /// Copper and keepouts the board had before routing, which a replacement
 /// segment has to clear as much as the routed copper.
 ///
-/// These are the things `RoutingGrid` marks as obstacles: pads, traces already
-/// drawn, keepout zones. Pours are left out for the reason the grid leaves
-/// them out - they fill around traces rather than block them.
+/// These are the things `RoutingGrid` marks as obstacles: pads, traces and
+/// vias already on the board, keepout zones. Pours are left out for the reason
+/// the grid leaves them out - they fill around traces rather than block them.
 #[derive(Debug, Clone, Default)]
 pub struct BoardObstacles {
     pads: Vec<PadCopper>,
@@ -42,7 +42,7 @@ struct PadCopper {
 }
 
 impl BoardObstacles {
-    /// Read the pads, drawn traces and keepouts off the board.
+    /// Read the pads, placed vias, drawn traces and keepouts off the board.
     pub fn from_board(world: &mut BoardWorld, library: &FootprintLibrary) -> Self {
         let components: Vec<(Point, f64, String, Option<NetConnections>)> = {
             let ecs = world.ecs_mut();
@@ -87,6 +87,34 @@ impl BoardObstacles {
                     },
                 });
             }
+        }
+
+        // A via already on the board is a round pad of its net on every layer
+        // its hole passes. Left out, the pair the router dropped to get past
+        // it was taken away again and the direct segment ran through its ring.
+        let vias: Vec<Via> = {
+            let ecs = world.ecs_mut();
+            let mut query = ecs.query::<&Via>();
+            query.iter(ecs).copied().collect()
+        };
+        for via in &vias {
+            let copper = via.copper_mask();
+            let layers: Vec<Layer> = [Layer::TopCopper, Layer::BottomCopper]
+                .into_iter()
+                .chain((0..30).map(Layer::Inner))
+                .filter(|layer| layer.to_copper_mask() & copper != 0)
+                .collect();
+            // No layers here means an unplated hole, which every layer must
+            // clear; a via with no copper layer is not that.
+            if layers.is_empty() {
+                continue;
+            }
+            pads.push(PadCopper {
+                net: Some(via.net_id),
+                center: via.position,
+                radius: Nm::new(via.outer_diameter.raw() / 2),
+                layers,
+            });
         }
 
         let traces: Vec<Trace> = {
