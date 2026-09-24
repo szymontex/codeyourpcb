@@ -427,13 +427,36 @@ const DRC_RATCHETS: &[Ratchet] = &[
     // shift_driver      15 /   0    26 / 15     45 /  15      41 /  15
     // qfp_fanout       297 / 112    61 / 46    424 / 177     358 / 158
     // plane_board       24 /   3     0 /  0     29 /   3      24 /   3
+    //
+    // Re-baselined 2026-09-24 again, and the router did not move: every route set
+    // hashes as it did. A `roundrect` pad was measured as its box and an oblong
+    // as its box, so a trace passing a rounded corner read closer than the copper
+    // is. Each is now its core grown by its radius, and every report that went
+    // was classified against the pad's own outline: 9 trace-to-pad pairs over
+    // both flag settings were never under the rule, and every pair still reported
+    // has a nearest gap that is no larger than its copper's. The one short
+    // `qfp_fanout` gained with the flag on is a sixth segment whose copper
+    // overlaps the pad; five were reported before because two shared a contact
+    // point on the box. `multi_ic` gains an unrouted pin, R8.2, 0.0292mm from the
+    // nearest copper of its net, which `UnroutedPinRule` had counted as reached
+    // by a box of its own. Routed plus band where that comes out under the old
+    // ratchet; `multi_ic` is 507, one over its baseline and inside its band, and
+    // a ratchet is not raised for this:
+    //
+    // board            routed        band      ratchet was   ratchet is
+    // led_blink          1 /   0     0 /  0      1 /   0       1 /   0
+    // stm32_breakout   138 /  56    64 / 48    203 / 104     202 / 104
+    // multi_ic         507 /  66    35 / 15    541 /  81     541 /  81
+    // shift_driver      15 /   0    26 / 15     41 /  15      41 /  15
+    // qfp_fanout       296 / 112    61 / 46    358 / 158     357 / 158
+    // plane_board       20 /   3     0 /  0     24 /   3      20 /   3
     ("led_blink.kicad_pcb", "led_blink", 1, 0, 1, 0),
     (
         "stm32_breakout.kicad_pcb",
         "stm32_breakout",
-        203,
+        202,
         104,
-        139,
+        138,
         56,
     ),
     // Re-baselined 2026-08-23 for `ViaSpanRule`, and the router did not move:
@@ -470,7 +493,7 @@ const DRC_RATCHETS: &[Ratchet] = &[
     // 0 unrouted; ratchet is that plus the band, 35 / 15.
     ("multi_ic.kicad_pcb", "multi_ic", 541, 81, 506, 66),
     ("shift_driver.kicad_pcb", "shift_driver", 41, 15, 15, 0),
-    ("qfp_fanout.kicad_pcb", "qfp_fanout", 358, 158, 297, 112),
+    ("qfp_fanout.kicad_pcb", "qfp_fanout", 357, 158, 296, 112),
     // A band of zero is not a rounding: this board routes identically at every
     // via price from 0.22 to 0.28, 28 violations and 13 shorts each time. Its
     // ratchet is the measured value exactly, so any movement at all is a real
@@ -511,7 +534,10 @@ const DRC_RATCHETS: &[Ratchet] = &[
     //
     // 38 -> 29 on 2026-09-23, with the via optimizer's check made real; see
     // the table above `led_blink`. Shorts 13 -> 3.
-    ("plane_board.kicad_pcb", "plane_board", 24, 3, 24, 3),
+    //
+    // 24 -> 20 on 2026-09-24: four trace-to-pad pairs under `U1` measured by
+    // the pad's box rather than its copper; see the table above `led_blink`.
+    ("plane_board.kicad_pcb", "plane_board", 20, 3, 20, 3),
 ];
 
 /// Routes every fixture and holds the line on completeness and DRC count.

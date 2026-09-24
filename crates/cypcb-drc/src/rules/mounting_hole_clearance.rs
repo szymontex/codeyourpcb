@@ -168,18 +168,18 @@ impl DrcRule for MountingHoleClearanceRule {
     }
 }
 
-/// Distance in nanometres from a point to one pad's copper.
+/// Distance in nanometres from a point to one pad's copper: to its core, less
+/// the radius the core is grown by.
 fn distance_to_pad(point: Point, pad: &super::clearance::PadBox) -> i64 {
-    let (min_x, min_y) = (pad.box_.lower()[0], pad.box_.lower()[1]);
-    let (max_x, max_y) = (pad.box_.upper()[0], pad.box_.upper()[1]);
+    let copper = &pad.copper;
+    let (min_x, min_y) = (copper.core.lower()[0], copper.core.lower()[1]);
+    let (max_x, max_y) = (copper.core.upper()[0], copper.core.upper()[1]);
 
     let dx = (min_x - point.x.raw()).max(0).max(point.x.raw() - max_x);
     let dy = (min_y - point.y.raw()).max(0).max(point.y.raw() - max_y);
 
-    if dx == 0 && dy == 0 {
-        return 0;
-    }
-    (((dx as i128 * dx as i128 + dy as i128 * dy as i128) as f64).sqrt()) as i64
+    let to_core = (((dx as i128 * dx as i128 + dy as i128 * dy as i128) as f64).sqrt()) as i64;
+    (to_core - copper.radius).max(0)
 }
 
 /// Distance in nanometres from a point to the nearest edge of a box, or zero

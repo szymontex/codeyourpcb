@@ -8,6 +8,7 @@ use cypcb_core::{Nm, Point};
 use cypcb_world::components::{BoardOutline, BoardSize};
 use cypcb_world::BoardWorld;
 
+use super::clearance::Copper;
 use super::DrcRule;
 use crate::presets::DesignRules;
 use crate::violation::DrcViolation;
@@ -104,47 +105,40 @@ impl DrcRule for EdgeClearanceRule {
             // The copper this entry stands for: a component's pads where it
             // has them, the entry's own box otherwise - a trace or a pour is
             // copper already.
-            let boxes: Vec<(i64, i64, i64, i64)> = match pad_map.get(&entry.entity.index()) {
-                Some(pads) if !pads.is_empty() => pads
-                    .iter()
-                    .map(|pad| {
-                        (
-                            pad.box_.lower()[0],
-                            pad.box_.lower()[1],
-                            pad.box_.upper()[0],
-                            pad.box_.upper()[1],
-                        )
-                    })
-                    .collect(),
-                _ => vec![(
-                    entry.envelope.lower()[0],
-                    entry.envelope.lower()[1],
-                    entry.envelope.upper()[0],
-                    entry.envelope.upper()[1],
-                )],
+            // A pad is its core grown by a radius, as `ClearanceRule` measures
+            // it; the edge is as far from the copper as from the core, less
+            // the radius.
+            let coppers: Vec<Copper> = match pad_map.get(&entry.entity.index()) {
+                Some(pads) if !pads.is_empty() => pads.iter().map(|pad| pad.copper).collect(),
+                _ => vec![Copper::boxed(entry.envelope)],
             };
 
-            let distance_of = |(min_x, min_y, max_x, max_y): (i64, i64, i64, i64)| match &outline {
-                Some(outline) => distance_to_outline(outline, min_x, min_y, max_x, max_y),
-                None => {
-                    // Distance to each edge (negative means outside board)
-                    let dist_left = min_x; // distance from left edge (x=0)
-                    let dist_bottom = min_y; // distance from bottom edge (y=0)
-                    let dist_right = board_w - max_x; // distance from right edge
-                    let dist_top = board_h - max_y; // distance from top edge
-                    dist_left.min(dist_bottom).min(dist_right).min(dist_top)
-                }
+            let distance_of = |copper: &Copper| {
+                let (lo, hi) = (copper.core.lower(), copper.core.upper());
+                let (min_x, min_y, max_x, max_y) = (lo[0], lo[1], hi[0], hi[1]);
+                let to_core = match &outline {
+                    Some(outline) => distance_to_outline(outline, min_x, min_y, max_x, max_y),
+                    None => {
+                        // Distance to each edge (negative means outside board)
+                        let dist_left = min_x; // distance from left edge (x=0)
+                        let dist_bottom = min_y; // distance from bottom edge (y=0)
+                        let dist_right = board_w - max_x; // distance from right edge
+                        let dist_top = board_h - max_y; // distance from top edge
+                        dist_left.min(dist_bottom).min(dist_right).min(dist_top)
+                    }
+                };
+                to_core - copper.radius
             };
 
             // The nearest piece of this entry's copper, and one report per
             // entry rather than one per pad: a part too close to the edge is
             // one fault however many of its pads are out.
-            let Some((min_x, min_y, max_x, max_y)) =
-                boxes.into_iter().min_by_key(|&box_| distance_of(box_))
-            else {
+            let Some(nearest) = coppers.iter().min_by_key(|copper| distance_of(copper)) else {
                 continue;
             };
-            let min_dist = distance_of((min_x, min_y, max_x, max_y));
+            let min_dist = distance_of(nearest);
+            let (lo, hi) = (nearest.core.lower(), nearest.core.upper());
+            let (min_x, min_y, max_x, max_y) = (lo[0], lo[1], hi[0], hi[1]);
 
             if min_dist < min_edge.0 {
                 let center = Point::new(Nm((min_x + max_x) / 2), Nm((min_y + max_y) / 2));

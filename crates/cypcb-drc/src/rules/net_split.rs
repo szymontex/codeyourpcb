@@ -145,7 +145,7 @@ impl DrcRule for NetSplitRule {
                         label: format!("{}.{}", refdes.as_str(), pad.number),
                         entity: *entity,
                         at,
-                        reached: pad_is_reached(&traces, &vias, &pours, net, pad, at),
+                        reached: pad_is_reached(&traces, &vias, &pours, net, pad, &pad_box.copper),
                     }),
                     layer_mask,
                     bounds: pad_box.copper.bounds(),
