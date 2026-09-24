@@ -219,9 +219,9 @@ pub fn traces_as_dsl(world: &mut BoardWorld) -> String {
 /// while `cypcb route` reported none, because the world it measured held one.
 ///
 /// Copper already on a net is kept and left alone. `apply_routes` despawns
-/// every autorouted trace and every unlocked via before it spawns its own, so
-/// after it has run the world's autorouted traces are exactly this run's, and
-/// the rest is what the source said.
+/// every autorouted trace and every via marked `RouterPlaced` before it spawns
+/// its own, so after it has run the world's autorouted traces and marked vias
+/// are exactly this run's, and the rest is what the source said.
 pub fn routed_traces_as_dsl(world: &mut BoardWorld) -> String {
     traces_as_dsl_filtered(world, true)
 }
@@ -262,14 +262,19 @@ fn traces_as_dsl_filtered(world: &mut BoardWorld, only_routed: bool) -> String {
     // stitching on the next trip through.
     let via_data: Vec<Via> = {
         let ecs = world.ecs_mut();
-        let mut query =
-            ecs.query_filtered::<&Via, bevy_ecs::prelude::Without<crate::components::Stitched>>();
-        // A locked via is one the source declared and `apply_routes` kept, so
-        // it is already in the copy of the source this run appends to.
+        let mut query = ecs.query_filtered::<
+            (&Via, Option<&crate::components::trace::RouterPlaced>),
+            bevy_ecs::prelude::Without<crate::components::Stitched>,
+        >();
+        // A via without the mark is one the source declared, locked or not,
+        // and it is already in the copy of the source this run appends to.
+        // This asked `!via.locked`, which held only while every clear deleted
+        // unlocked vias; once the clears kept a declared via, `cypcb route`
+        // on `blind-via` wrote its two vias a second time.
         query
             .iter(ecs)
-            .filter(|via| !only_routed || !via.locked)
-            .copied()
+            .filter(|(_, placed)| !only_routed || placed.is_some())
+            .map(|(via, _)| *via)
             .collect()
     };
 

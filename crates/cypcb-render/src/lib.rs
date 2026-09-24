@@ -1202,7 +1202,7 @@ impl PcbEngine {
     }
     /// Clear autorouted traces and vias from the world.
     fn clear_autorouted_traces(&mut self) {
-        use cypcb_world::components::trace::{Trace, TraceSource, Via};
+        use cypcb_world::components::trace::{RouterPlaced, Trace, TraceSource, Via};
 
         // Collect entities to remove
         let entities_to_remove: Vec<Entity> = {
@@ -1216,13 +1216,15 @@ impl PcbEngine {
             trace_entities
         };
 
+        // Vias this router put down, and only those, as in `apply_routes`: a
+        // via the file declares is not the router's to delete.
         let via_entities_to_remove: Vec<Entity> = {
             let ecs = self.world.ecs_mut();
-            let mut via_query = ecs.query::<(Entity, &Via)>();
+            let mut via_query = ecs.query::<(Entity, &Via, &RouterPlaced)>();
             let via_entities: Vec<Entity> = via_query
                 .iter(ecs)
-                .filter(|(_, via)| !via.locked)
-                .map(|(entity, _)| entity)
+                .filter(|(_, via, _)| !via.locked)
+                .map(|(entity, _, _)| entity)
                 .collect();
             via_entities
         };
@@ -1279,7 +1281,7 @@ impl PcbEngine {
     /// Parse a via line from routes file.
     #[cfg(feature = "native")]
     fn parse_route_via(&mut self, line: &str) -> Result<(), String> {
-        use cypcb_world::components::trace::Via;
+        use cypcb_world::components::trace::{RouterPlaced, Via};
 
         // via net_id x y drill_nm start_layer end_layer
         let parts: Vec<&str> = line.split_whitespace().collect();
@@ -1307,7 +1309,9 @@ impl PcbEngine {
             locked: false,
         };
 
-        self.world.spawn_entity((via, NetId::new(net_id_num)));
+        // A routes file is router output, so the next clear may take it back.
+        self.world
+            .spawn_entity((via, NetId::new(net_id_num), RouterPlaced));
         Ok(())
     }
 
