@@ -18,7 +18,7 @@
 
 use std::collections::HashMap;
 
-use cypcb_router::types::RoutingResult;
+use cypcb_router::types::{RoutingResult, SmoothingSnapshot};
 use cypcb_rules::RoutingRuleSet;
 use cypcb_world::footprint::FootprintLibrary;
 use cypcb_world::BoardWorld;
@@ -249,6 +249,13 @@ impl PathFinderStrategy {
             );
             smoothed_segments.extend(smoothed);
         }
+        let smoothing = config.smoothing.then(|| {
+            Box::new(SmoothingSnapshot {
+                before: std::mem::take(&mut all_segments),
+                after: smoothed_segments.clone(),
+                vias: all_vias.clone(),
+            })
+        });
         all_segments = smoothed_segments;
 
         let (optimized_segments, optimized_vias) = optimize_vias(
@@ -278,7 +285,10 @@ impl PathFinderStrategy {
                 routing_strategy = self.name(),
                 "All nets routed successfully"
             );
-            RoutingResult::complete(all_segments, all_vias)
+            RoutingResult {
+                smoothing,
+                ..RoutingResult::complete(all_segments, all_vias)
+            }
         } else {
             tracing::warn!(
                 unrouted_nets = loop_result.unrouted.len(),
@@ -288,7 +298,10 @@ impl PathFinderStrategy {
                 routing_strategy = self.name(),
                 "Some nets could not be routed"
             );
-            RoutingResult::partial(all_segments, all_vias, loop_result.unrouted_connections)
+            RoutingResult {
+                smoothing,
+                ..RoutingResult::partial(all_segments, all_vias, loop_result.unrouted_connections)
+            }
         }
     }
 }
