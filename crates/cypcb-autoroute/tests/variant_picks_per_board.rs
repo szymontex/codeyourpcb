@@ -124,7 +124,7 @@ fn which_variant_each_board_picks() {
             let beaten_on_shorts = other.score.shorts < winner.score.shorts;
             let beaten_on_violations = other.score.drc_violations < winner.score.drc_violations;
             assert!(
-                !(beaten_on_shorts && beaten_on_violations && other.unrouted == 0),
+                !(beaten_on_shorts && beaten_on_violations && other.incomplete() == 0),
                 "best-of-{} on {} picked {} at {} violations / {} shorts, \
                  while {} routed everything at {} / {}",
                 results.len(),

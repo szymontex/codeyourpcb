@@ -83,12 +83,12 @@ fn variants_sorted_by_completeness_then_shorts_then_score() {
     // the distinctions the score cannot.
     for window in results.windows(2) {
         let (a_unrouted, a_shorts, a_composite) = (
-            window[0].unrouted,
+            window[0].incomplete(),
             window[0].score.shorts,
             window[0].score.composite,
         );
         let (b_unrouted, b_shorts, b_composite) = (
-            window[1].unrouted,
+            window[1].incomplete(),
             window[1].score.shorts,
             window[1].score.composite,
         );
@@ -96,7 +96,7 @@ fn variants_sorted_by_completeness_then_shorts_then_score() {
             || ((a_unrouted, a_shorts) == (b_unrouted, b_shorts) && a_composite <= b_composite);
         assert!(
             ordered,
-            "Variants not sorted: {} ({} unrouted, {} shorts, {}) before {} ({} unrouted, {} shorts, {})",
+            "Variants not sorted: {} ({} incomplete, {} shorts, {}) before {} ({} incomplete, {} shorts, {})",
             window[0].name,
             a_unrouted,
             a_shorts,

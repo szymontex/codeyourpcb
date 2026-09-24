@@ -265,6 +265,11 @@ fn score_json_serialization() {
         // sensitive number the ratchets are set against, and this one says how
         // many places on the board are actually in fault.
         "clearance_contacts",
+        // What the variant ranking reads for completeness beside the router's
+        // own count: pins no copper reaches and nets whose copper is in more
+        // than one piece.
+        "unrouted_pins",
+        "net_splits",
     ];
 
     for field in &expected_fields {
@@ -284,8 +289,8 @@ fn score_json_serialization() {
     let obj = parsed.as_object().unwrap();
     assert_eq!(
         obj.len(),
-        9,
-        "JSON object should have exactly 9 fields, got {}",
+        11,
+        "JSON object should have exactly 11 fields, got {}",
         obj.len()
     );
 

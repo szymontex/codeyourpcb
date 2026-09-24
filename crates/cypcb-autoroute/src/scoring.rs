@@ -34,7 +34,7 @@ use serde::Serialize;
 
 use cypcb_core::Nm;
 use cypcb_drc::rules::clearance::segment_distance;
-use cypcb_drc::{run_drc, DesignRules};
+use cypcb_drc::{run_drc, DesignRules, ViolationKind};
 use cypcb_world::components::trace::{Trace, Via};
 use cypcb_world::BoardWorld;
 
@@ -72,6 +72,17 @@ pub struct RoutingScore {
     /// spec is a yield risk a fab may still build. A ranking that adds them
     /// together prefers three near misses to one short, which is backwards.
     pub shorts: u32,
+    /// Pins of a net that no copper of that net reaches, as DRC's
+    /// `unrouted-pin` finds them.
+    ///
+    /// The router's own count is of connections it gave up on. It says
+    /// nothing about copper it laid that does not land, which is how
+    /// `multi_ic` routes every connection in twelve of its thirteen variants
+    /// and still leaves between 3 and 12 pins bare in each of them.
+    pub unrouted_pins: u32,
+    /// Nets whose copper is in more than one piece, as DRC's `net-split` finds
+    /// them: every pin reached, not by the same copper.
+    pub net_splits: u32,
     /// Number of same-layer inter-net segment crossings.
     pub crossings: u32,
     /// Layer balance ratio (0.0–1.0): the least copper length on any layer over
@@ -167,6 +178,18 @@ pub fn score_board(
     // a via with no annular ring is not counted here as a short.
     let shorts = cypcb_drc::shorts(&drc_result.violations) as u32;
     let clearance_contacts = cypcb_drc::clearance_contacts(&drc_result.violations) as u32;
+    // Read off the same run, not a second one: a separate `run_drc` costs
+    // nearly what the whole of `score_board` does, 464 ms against 490 ms over
+    // `multi_ic`'s thirteen variants.
+    let count = |kind: ViolationKind| {
+        drc_result
+            .violations
+            .iter()
+            .filter(|v| v.kind == kind)
+            .count() as u32
+    };
+    let unrouted_pins = count(ViolationKind::UnroutedPin);
+    let net_splits = count(ViolationKind::NetSplit);
 
     // 4. Smoothness
     let smoothness = compute_smoothness(&traces);
@@ -213,6 +236,8 @@ pub fn score_board(
         drc_violations,
         clearance_contacts,
         shorts,
+        unrouted_pins,
+        net_splits,
         smoothness,
         crossings,
         layer_balance,
@@ -963,6 +988,8 @@ mod tests {
             drc_violations: 0,
             clearance_contacts: 0,
             shorts: 0,
+            unrouted_pins: 0,
+            net_splits: 0,
             smoothness: 0.95,
             crossings: 1,
             layer_balance: 0.8,
