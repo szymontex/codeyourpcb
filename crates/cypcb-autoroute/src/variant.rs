@@ -378,6 +378,43 @@ pub fn all_variant_configs() -> Vec<VariantConfig> {
     configs
 }
 
+impl VariantResult {
+    /// How far this variant is from a board whose every net is one piece of
+    /// copper: the connections the router gave up on, plus the pins DRC finds
+    /// no copper on and the nets DRC finds cut in two.
+    ///
+    /// The router's count alone missed what it laid badly. On `multi_ic` it
+    /// ranked first a variant reporting 0 unrouted that DRC finds with 12
+    /// bare pins and 3 split nets, over one with 4 and 0.
+    pub fn incomplete(&self) -> usize {
+        self.unrouted + self.score.unrouted_pins as usize + self.score.net_splits as usize
+    }
+}
+
+/// Complete first, then fewest shorts, then the composite.
+fn rank_best_first(results: &mut [VariantResult]) {
+    // A complete board outranks an incomplete one whatever it scores, and
+    // among incomplete ones fewer missing connections wins. Only then does
+    // the composite decide. The alternative is a ranking that rewards giving
+    // up, which is the same defect the CI regression gate was fixed for.
+    results.sort_by(|a, b| {
+        a.incomplete()
+            .cmp(&b.incomplete())
+            // Copper touching copper next, whatever the totals say. A board
+            // with one short and one tight gap is not better than a board with
+            // three tight gaps: the first cannot work and the second is a
+            // yield risk. The composite charges every violation the same, so
+            // the ordering has to make the distinction the score cannot.
+            .then_with(|| a.score.shorts.cmp(&b.score.shorts))
+            .then_with(|| {
+                a.score
+                    .composite
+                    .partial_cmp(&b.score.composite)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+    });
+}
+
 /// Generate multiple routing variants sequentially on a single `&mut BoardWorld`.
 ///
 /// For each config:
@@ -489,26 +526,7 @@ pub fn generate_variants(
         drop(variant_span);
     }
 
-    // A complete board outranks an incomplete one whatever it scores, and
-    // among incomplete ones fewer abandoned connections wins. Only then does
-    // the composite decide. The alternative is a ranking that rewards giving
-    // up, which is the same defect the CI regression gate was fixed for.
-    results.sort_by(|a, b| {
-        a.unrouted
-            .cmp(&b.unrouted)
-            // Copper touching copper next, whatever the totals say. A board
-            // with one short and one tight gap is not better than a board with
-            // three tight gaps: the first cannot work and the second is a
-            // yield risk. The composite charges every violation the same, so
-            // the ordering has to make the distinction the score cannot.
-            .then_with(|| a.score.shorts.cmp(&b.score.shorts))
-            .then_with(|| {
-                a.score
-                    .composite
-                    .partial_cmp(&b.score.composite)
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            })
-    });
+    rank_best_first(&mut results);
 
     // Apply the best variant to the world
     if let Some(best) = results.first() {
@@ -665,6 +683,8 @@ mod tests {
                 layer_balance: 0.8,
                 composite: 42.5,
                 clearance_contacts: 0,
+                unrouted_pins: 0,
+                net_splits: 0,
             },
             routes: vec![RouteSegment::new(
                 cypcb_world::NetId::new(1),
@@ -704,6 +724,8 @@ mod tests {
                     layer_balance: 1.0,
                     composite: 10.0,
                     clearance_contacts: 0,
+                    unrouted_pins: 0,
+                    net_splits: 0,
                 },
                 routes: vec![],
                 vias: vec![],
@@ -722,6 +744,8 @@ mod tests {
                     layer_balance: 1.0,
                     composite: 20.0,
                     clearance_contacts: 0,
+                    unrouted_pins: 0,
+                    net_splits: 0,
                 },
                 routes: vec![],
                 vias: vec![],
@@ -736,5 +760,41 @@ mod tests {
         assert!(json.ends_with(']'));
         assert!(json.contains("\"name\":\"A\""));
         assert!(json.contains("\"name\":\"B\""));
+    }
+
+    fn ranked(name: &str, unrouted: usize, net_splits: u32, composite: f64) -> VariantResult {
+        VariantResult {
+            name: name.to_string(),
+            score: RoutingScore {
+                total_length: Nm(0),
+                via_count: 0,
+                drc_violations: net_splits,
+                shorts: 0,
+                smoothness: 1.0,
+                crossings: 0,
+                layer_balance: 1.0,
+                composite,
+                clearance_contacts: 0,
+                unrouted_pins: 0,
+                net_splits,
+            },
+            routes: vec![],
+            vias: vec![],
+            unrouted,
+            elapsed_ms: 0,
+        }
+    }
+
+    #[test]
+    fn a_net_cut_in_two_is_not_complete_whatever_the_router_says() {
+        // The router reports nothing unrouted for both. DRC finds the first
+        // one's net in two pieces, and it scores better, because the copper
+        // it did not lay costs no length and no violations.
+        let mut results = vec![ranked("split", 0, 1, 10.0), ranked("whole", 0, 0, 20.0)];
+        rank_best_first(&mut results);
+        assert_eq!(
+            results[0].name, "whole",
+            "a board with a net in two pieces won"
+        );
     }
 }

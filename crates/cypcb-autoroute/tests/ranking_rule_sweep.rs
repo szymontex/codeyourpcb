@@ -87,7 +87,7 @@ const RULES: &[Rule] = &[
 /// The variant a rule picks. Incomplete boards are never picked, by every rule:
 /// a net nobody routed leaves no copper to charge for.
 fn pick<'a>(rule: &Rule, results: &'a [VariantResult]) -> &'a VariantResult {
-    let complete: Vec<&VariantResult> = results.iter().filter(|r| r.unrouted == 0).collect();
+    let complete: Vec<&VariantResult> = results.iter().filter(|r| r.incomplete() == 0).collect();
     let pool: &[&VariantResult] = if complete.is_empty() {
         return results.first().expect("at least one variant routed");
     } else {
