@@ -22,6 +22,16 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 GATE="$SCRIPT_DIR/scheduled-gate.sh"
 FAILURES=0
 
+# The cases decide the runner's environment for themselves, so nothing is
+# inherited from the run this selftest is part of. It runs as a stage of the
+# quality gate, and when that gate is itself started by the scheduled runner
+# the environment already carries the runner's own `CARGO_TARGET_DIR` - which
+# the script under test honours before its default, so case 10 read the outer
+# run's directory instead of its own. The switches go for the same reason: a
+# `GATE_PUBLISH=0` from outside turns every publishing case into a failure.
+unset CARGO_TARGET_DIR GATE_COMMAND GATE_PUBLISH GATE_WORKTREE \
+    GATE_RETRY_ATTEMPTS GATE_RETRY_SECONDS
+
 export GIT_AUTHOR_NAME="gate selftest"
 export GIT_AUTHOR_EMAIL="selftest@example.invalid"
 export GIT_COMMITTER_NAME="$GIT_AUTHOR_NAME"
@@ -288,6 +298,59 @@ case $VERDICT_LINE in
     *"commit $STARTED_AT"*) bad "the verdict does not name the commit from before the wait" "the verdict reads '$VERDICT_LINE'" ;;
     *) ok "the verdict does not name the commit from before the wait" ;;
 esac
+
+# 10. A clean tree is measured in a directory of its own too, and builds into a
+#     target of its own.
+#
+#     A clean tree used to be measured in place, which put the run in the
+#     checkout's own `target/` beside every cargo typed there by hand. On
+#     2026-09-24 one of those compiled into it mid-run and a doc example saw two
+#     builds of one crate. The stage below refuses to pass in the checkout or
+#     with a build directory inside it, so green is where it ran.
+new_case clean-tree-builds-apart
+printf '#!/bin/sh\ncase "$(pwd -P)" in "$PROBE_CHECKOUT") exit 1 ;; esac\ncase "${CARGO_TARGET_DIR:-}" in ""|"$PROBE_CHECKOUT"/*) exit 1 ;; esac\nexit 0\n' \
+    > "$CASE/work/where-probe.sh"
+chmod +x "$CASE/work/where-probe.sh"
+git -C "$CASE/work" add where-probe.sh
+git -C "$CASE/work" commit -qm "a stage that says where it ran"
+export PROBE_CHECKOUT
+PROBE_CHECKOUT=$(cd "$CASE/work" && pwd -P)
+run_gate ./where-probe.sh
+unset PROBE_CHECKOUT
+says "VERDICT: green" "a clean tree is measured outside the checkout, with a build directory outside it"
+says "measures the committed tip" "and the run says what it measured"
+says "build directory: $CASE/logs/target" "and names the directory it built in"
+
+# 11. The checkout moves while the stages run, and `main` gets the commit the
+#     stages measured rather than the one the checkout moved to.
+#
+#     On 2026-09-24 a merge landed in the checkout at 04:42:03 while the stages
+#     were still on the commit before it. The publish step read `HEAD` after
+#     the stages, so a green run that night would have pushed a merge no stage
+#     had seen. The stage below is that merge.
+new_case commit-lands-during-the-stages
+printf '#!/bin/sh\ncd "$PROBE_CHECKOUT" && echo "a merge" >> board.txt && git commit -qam "the commit that landed during the stages"\n' \
+    > "$CASE/work/lands.sh"
+chmod +x "$CASE/work/lands.sh"
+git -C "$CASE/work" add lands.sh
+git -C "$CASE/work" commit -qm "a stage that commits in the checkout"
+MEASURED=$(git -C "$CASE/work" rev-parse HEAD)
+export PROBE_CHECKOUT
+PROBE_CHECKOUT=$(cd "$CASE/work" && pwd -P)
+run_gate ./lands.sh
+unset PROBE_CHECKOUT
+if [ "$(git -C "$CASE/work" rev-parse HEAD)" != "$MEASURED" ]; then
+    ok "the checkout really moved during the stages"
+else
+    bad "the checkout really moved during the stages" "the case did not reproduce: HEAD is still ${MEASURED:0:7}"
+fi
+PUBLISHED=$(git -C "$CASE/origin.git" rev-parse main)
+if [ "$PUBLISHED" = "$MEASURED" ]; then
+    ok "main is the commit the stages measured"
+else
+    bad "main is the commit the stages measured" "main=$PUBLISHED measured=$MEASURED"
+fi
+says "while the stages ran; the decision below is about ${MEASURED:0:7}" "and the run says the checkout moved under it"
 
 echo ""
 if [ "$FAILURES" -eq 0 ]; then

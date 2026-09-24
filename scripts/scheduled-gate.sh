@@ -176,12 +176,25 @@ done
 # hundreds of megabytes and identical, and a cargo target directory of its own
 # so a fire compiling at the same time neither waits for this nor is waited
 # for. `GATE_WORKTREE=0` turns it off and the old skip comes back.
+#
+# A clean tree gets the same directory, for a reason the busy tree never
+# showed. A clean tree used to be measured in place, and in place means the
+# checkout's own `target/`, which every cargo typed by hand in that checkout
+# writes to as well. Every scheduled run from 2026-09-15 to 2026-09-24 built
+# there. On 2026-09-24 something compiled into it at 04:41:42, a merge landed
+# in the same checkout at 04:42:03, and the doc example that ran a minute later
+# saw two builds of `cypcb_core` - the same kind of red as on
+# 2026-09-16. A quiet tree at 04:30 says nothing about the next half hour.
 WORKTREE=""
-if [ -n "$DIRTY" ] && [ "${GATE_WORKTREE:-1}" = "1" ]; then
+if [ "${GATE_WORKTREE:-1}" = "1" ]; then
     WORKTREE="$LOG_DIR/tip"
     rm -rf "$WORKTREE"
     if git worktree add --detach -f "$WORKTREE" HEAD >>"$BODY" 2>&1; then
-        say "the tree is busy, so this run measures the committed tip in $WORKTREE"
+        if [ -n "$DIRTY" ]; then
+            say "the tree is busy, so this run measures the committed tip in $WORKTREE"
+        else
+            say "this run measures the committed tip in $WORKTREE"
+        fi
         if [ -d "$REPO/viewer/node_modules" ] && [ ! -e "$WORKTREE/viewer/node_modules" ]; then
             ln -s "$REPO/viewer/node_modules" "$WORKTREE/viewer/node_modules"
         fi
@@ -191,6 +204,7 @@ if [ -n "$DIRTY" ] && [ "${GATE_WORKTREE:-1}" = "1" ]; then
         # about cargo's environment.
         mkdir -p "$CARGO_TARGET_DIR"
         [ -e "$WORKTREE/target" ] || ln -s "$CARGO_TARGET_DIR" "$WORKTREE/target"
+        say "build directory: $CARGO_TARGET_DIR"
         cd "$WORKTREE" || exit 2
         DIRTY=""
     else
@@ -222,6 +236,7 @@ fi
 # So the commit is read again here, from the directory the stages are about to
 # run in - the worktree when there is one, because that is the tree they see.
 COMMIT=$(git rev-parse --short HEAD)
+COMMIT_SHA=$(git rev-parse HEAD)
 if [ "$COMMIT" != "$COMMIT_AT_START" ]; then
     say "the commit changed while this run waited: $COMMIT_AT_START -> $COMMIT"
 fi
@@ -279,18 +294,26 @@ if [ "$CODE" -eq 0 ]; then
         if ! git fetch -q origin 2>>"$BODY"; then
             say "the fetch from origin failed: the decision below reads a cached origin/main"
         fi
+        # What goes to `main` is the commit the stages measured, named by its
+        # hash, and not whatever this checkout points at by now. On 2026-09-24
+        # the checkout moved from bdf0a96 to 84c3be94 at 04:42:03, while the
+        # stages were still running on bdf0a96; had that run been green,
+        # `HEAD` here would have published a merge no stage had seen.
+        if [ "$(git rev-parse HEAD)" != "$COMMIT_SHA" ]; then
+            say "the checkout moved to $(git rev-parse --short HEAD) while the stages ran; the decision below is about $COMMIT"
+        fi
         if [ "$BRANCH" = "HEAD" ]; then
             say "not publishing: this checkout is on a detached HEAD"
         elif ! git rev-parse --verify -q origin/main >/dev/null; then
             say "not publishing: origin has no main"
-        elif git merge-base --is-ancestor HEAD origin/main; then
+        elif git merge-base --is-ancestor "$COMMIT_SHA" origin/main; then
             say "main already carries this commit"
-        elif ! git merge-base --is-ancestor origin/main HEAD; then
+        elif ! git merge-base --is-ancestor origin/main "$COMMIT_SHA"; then
             say "not publishing: main has commits this branch does not - fast-forward would lose them"
         else
-            AHEAD=$(git rev-list --count origin/main..HEAD)
-            if git push -q origin "HEAD:refs/heads/main" 2>>"$BODY"; then
-                say "published: main fast-forwarded by $AHEAD commit(s) to $(git rev-parse --short HEAD)"
+            AHEAD=$(git rev-list --count "origin/main..$COMMIT_SHA")
+            if git push -q origin "$COMMIT_SHA:refs/heads/main" 2>>"$BODY"; then
+                say "published: main fast-forwarded by $AHEAD commit(s) to $COMMIT"
                 VERDICT="$VERDICT, main fast-forwarded by $AHEAD"
             else
                 say "publish failed: the push to main was refused, see above"
