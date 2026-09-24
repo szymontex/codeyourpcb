@@ -10,8 +10,8 @@
 //! This joins every feature of a net that touches another - pad, trace
 //! segment, via, pour - and reports each piece beyond the largest that carries
 //! a pin. "Touches" is `ClearanceRule`'s measurement at zero: the same pad
-//! boxes, the same segment-to-segment and segment-to-box distances less half
-//! the trace width, the same via box on the same two layers. Two features that
+//! copper, the same segment-to-segment and segment-to-copper distances less
+//! half the trace width, the same via disc on every layer it passes. Two features that
 //! `ClearanceRule` would find 0 apart if they were on different nets are joined
 //! here, and nothing else is.
 //!
@@ -35,7 +35,8 @@ use crate::presets::DesignRules;
 use crate::violation::DrcViolation;
 
 use super::clearance::{
-    aabb_distance, component_pads, segment_distance, trace_to_aabb_distance, TraceData,
+    aabb_distance, component_pads, copper_distance, segment_distance, trace_to_copper_distance,
+    Copper, TraceData,
 };
 use super::unrouted_pin::{pad_centre, pad_is_reached};
 use super::DrcRule;
@@ -59,7 +60,7 @@ enum Shape {
         b: [i64; 2],
         half_width: i64,
     },
-    /// A via or a pour: copper that is its box.
+    /// A via, a pour: copper measured as `ClearanceRule` measures it.
     Solid,
 }
 
@@ -68,6 +69,8 @@ struct Feature {
     layer_mask: u32,
     /// The copper's extent; for a segment, grown by half its width.
     bounds: AABB<[i64; 2]>,
+    /// The copper itself, for a pad, a via or a pour.
+    copper: Copper,
 }
 
 impl DrcRule for NetSplitRule {
@@ -145,7 +148,8 @@ impl DrcRule for NetSplitRule {
                         reached: pad_is_reached(&traces, &vias, &pours, net, pad, at),
                     }),
                     layer_mask,
-                    bounds: pad_box.box_,
+                    bounds: pad_box.copper.bounds(),
+                    copper: pad_box.copper,
                 });
             }
         }
@@ -165,13 +169,15 @@ impl DrcRule for NetSplitRule {
             for segment in &trace.segments {
                 let a = [segment.start.x.0, segment.start.y.0];
                 let b = [segment.end.x.0, segment.end.y.0];
+                let bounds = AABB::from_corners(
+                    [a[0].min(b[0]) - half_width, a[1].min(b[1]) - half_width],
+                    [a[0].max(b[0]) + half_width, a[1].max(b[1]) + half_width],
+                );
                 features.push(Feature {
                     shape: Shape::Segment { a, b, half_width },
                     layer_mask,
-                    bounds: AABB::from_corners(
-                        [a[0].min(b[0]) - half_width, a[1].min(b[1]) - half_width],
-                        [a[0].max(b[0]) + half_width, a[1].max(b[1]) + half_width],
-                    ),
+                    bounds,
+                    copper: Copper::boxed(bounds),
                 });
             }
         }
@@ -180,12 +186,15 @@ impl DrcRule for NetSplitRule {
             let Some(features) = by_net.get_mut(&via.net_id.id()) else {
                 continue;
             };
-            let radius = via.outer_diameter.0 / 2;
-            let (x, y) = (via.position.x.0, via.position.y.0);
+            let copper = Copper::circle(
+                [via.position.x.0, via.position.y.0],
+                via.outer_diameter.0 / 2,
+            );
             features.push(Feature {
                 shape: Shape::Solid,
                 layer_mask: via.copper_mask(),
-                bounds: AABB::from_corners([x - radius, y - radius], [x + radius, y + radius]),
+                bounds: copper.bounds(),
+                copper,
             });
         }
 
@@ -193,13 +202,15 @@ impl DrcRule for NetSplitRule {
             let Some(features) = pour.net.and_then(|net| by_net.get_mut(&net.id())) else {
                 continue;
             };
+            let bounds = AABB::from_corners(
+                [pour.bounds.min.x.0, pour.bounds.min.y.0],
+                [pour.bounds.max.x.0, pour.bounds.max.y.0],
+            );
             features.push(Feature {
                 shape: Shape::Solid,
                 layer_mask: pour.layer_mask,
-                bounds: AABB::from_corners(
-                    [pour.bounds.min.x.0, pour.bounds.min.y.0],
-                    [pour.bounds.max.x.0, pour.bounds.max.y.0],
-                ),
+                bounds,
+                copper: Copper::boxed(bounds),
             });
         }
 
@@ -319,22 +330,21 @@ fn touches(one: &Feature, other: &Feature) -> bool {
             },
         ) => segment_distance(*a1, *a2, *b1, *b2) <= wa + wb,
         (Shape::Segment { a, b, half_width }, _) => {
-            segment_touches_box(*a, *b, *half_width, &other.bounds)
+            segment_touches(*a, *b, *half_width, &other.copper)
         }
         (_, Shape::Segment { a, b, half_width }) => {
-            segment_touches_box(*a, *b, *half_width, &one.bounds)
+            segment_touches(*a, *b, *half_width, &one.copper)
         }
-        // Pads, vias and pours are their boxes, and the boxes already meet.
-        _ => true,
+        _ => copper_distance(&one.copper, &other.copper) == 0,
     }
 }
 
-fn segment_touches_box(a: [i64; 2], b: [i64; 2], half_width: i64, bounds: &AABB<[i64; 2]>) -> bool {
+fn segment_touches(a: [i64; 2], b: [i64; 2], half_width: i64, copper: &Copper) -> bool {
     let trace = TraceData {
         half_width,
         segments: vec![(a, b)],
     };
-    trace_to_aabb_distance(&trace, bounds).1 <= half_width
+    trace_to_copper_distance(&trace, copper).1 <= half_width
 }
 
 #[cfg(test)]

@@ -856,8 +856,11 @@ kind was never added to the sum.
 **The regression was not the flag's.** Thirteen of the 18 clearance rows were
 shorts, and `optimize_vias` drew them: it checked each segment it laid in place
 of a via pair against a list of other nets' copper that every caller passed
-empty. With that check real the board goes 12 to 2 acute, 5 to 5 clearance and 3
-to 2 pad entry - 20 to 9, no kind rising and no short either way. The flat price
+empty. With that check real the board went 12 to 2 acute, 5 to 5 clearance and 3
+to 2 pad entry - 20 to 9, no kind rising and no short either way. **The 5 went on
+2026-09-24**: every one measured a via as the square around it, and as a disc
+the nearest copper is 0.145mm or 0.175mm away against 0.127mm. The board now goes
+12 to 2, 0 to 0 and 3 to 2 - 15 to 4. The flat price
 still cannot say which kind moved; on this board it no longer hides a bad trade.
 The direction swap the seeded frontier replaced gave 7 to 27, 12 to 5, 3 to 1
 and nineteen shorts, with the old optimizer behind it. Measured 2026-09-23 by
@@ -1762,13 +1765,15 @@ needs to see one has to measure geometry rather than clearance.**
 
 **In this repo:** enforced. `ClearanceRule` is the first entry in the registry
 (`crates/cypcb-drc/src/lib.rs:134`). Measured on one board rather than claimed
-for all six: on `shift_driver` with `stop_at_own_copper` on, **5 of 9 rows**
-carry the `Clearance` kind. That pair is held rather than quoted:
-`the_board_that_got_worse_was_paying_for_the_via_optimizer` asserts the 5
-exactly and the share as a floor, printing `shift_driver clearance share 5 of 9`.
-On this board that kind is this rule - the fixture declares no zone, and
-`ZoneOverlapRule` is the only other rule that builds a clearance violation. None
-of the 5 is a short.
+for all six: on `shift_driver` with `stop_at_own_copper` on, **0 of 4 rows**
+carry the `Clearance` kind. That figure is held rather than quoted:
+`the_board_that_got_worse_was_paying_for_the_via_optimizer` asserts the 0
+exactly, printing `shift_driver clearance share 0 of 4`.
+
+**It said 5 of 9 until 2026-09-24, and all five were the rule's own error.**
+Each measured a via as the square around its disc, so a trace passing the
+corner read 0.051mm from copper that is 0.145mm or 0.175mm away. The share
+floor that held "most of this board's report" went with them.
 
 **It said 27 of 32 until 2026-09-13, and the denominator is what moved.**
 `PadEntryRule` joined the registry the day after this line was written and added

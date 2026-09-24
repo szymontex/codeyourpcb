@@ -4,7 +4,7 @@
 //! Uses the spatial index for efficient O(log n) candidate selection.
 
 use cypcb_core::{Nm, Point};
-use cypcb_world::components::trace::Trace;
+use cypcb_world::components::trace::{Trace, Via};
 use cypcb_world::components::{NetConnections, NetId};
 use cypcb_world::BoardWorld;
 use hashbrown::{HashMap, HashSet};
@@ -132,6 +132,36 @@ impl DrcRule for ClearanceRule {
                     )
                 })
                 .collect()
+        };
+
+        // A via is a disc of copper. Its entry in the spatial index is the
+        // square around that disc, and measured as the square a trace passing
+        // the corner reads 0.00mm from copper it clears: on `multi_ic`, a gap
+        // of 0.033mm reported as a short, and two vias whose discs are
+        // 0.166mm apart reported as touching.
+        let via_map: HashMap<u32, Copper> = {
+            let ecs = world.ecs_mut();
+            let mut query = ecs.query::<(bevy_ecs::entity::Entity, &Via)>();
+            query
+                .iter(ecs)
+                .map(|(e, via)| {
+                    (
+                        e.index(),
+                        Copper::circle(
+                            [via.position.x.0, via.position.y.0],
+                            via.outer_diameter.0 / 2,
+                        ),
+                    )
+                })
+                .collect()
+        };
+        // The copper of anything that is not a component: a via's disc, or
+        // the entry's own box.
+        let shape_of = |idx: u32, envelope: &AABB<[i64; 2]>| -> Copper {
+            via_map
+                .get(&idx)
+                .copied()
+                .unwrap_or_else(|| Copper::boxed(*envelope))
         };
 
         // Track checked pairs to avoid A-B and B-A duplicates
@@ -305,8 +335,10 @@ impl DrcRule for ClearanceRule {
                                 no_copper_in_reach = true;
                                 Vec::new()
                             }
-                            Some(pads) => per_segment_to_boxes(t, &boxes_of(&pads)),
-                            None => per_segment_to_boxes(t, &[&candidate.envelope]),
+                            Some(pads) => per_segment_to_copper(t, &copper_of_pads(&pads)),
+                            None => {
+                                per_segment_to_copper(t, &[&shape_of(b_idx, &candidate.envelope)])
+                            }
                         };
                         measured
                             .into_iter()
@@ -319,8 +351,8 @@ impl DrcRule for ClearanceRule {
                                 no_copper_in_reach = true;
                                 Vec::new()
                             }
-                            Some(pads) => per_segment_to_boxes(t, &boxes_of(&pads)),
-                            None => per_segment_to_boxes(t, &[&entry.envelope]),
+                            Some(pads) => per_segment_to_copper(t, &copper_of_pads(&pads)),
+                            None => per_segment_to_copper(t, &[&shape_of(a_idx, &entry.envelope)]),
                         };
                         measured
                             .into_iter()
@@ -328,7 +360,8 @@ impl DrcRule for ClearanceRule {
                             .collect()
                     }
                     // Neither is a trace: vias and pads. A component stands for
-                    // its pads; anything else stands for its own box.
+                    // its pads, a via for its disc, anything else for its own
+                    // box.
                     (None, None) => vec![{
                         let a_boxes = copper_of(a_idx, candidate.layer_mask, None);
                         let b_boxes = copper_of(b_idx, entry.layer_mask, None);
@@ -352,15 +385,18 @@ impl DrcRule for ClearanceRule {
                                         }
                                     }
                                 }
-                                (Some(a_pads), None) => {
-                                    nearest_pair(&boxes_of(&a_pads), &[&candidate.envelope])
-                                }
-                                (None, Some(b_pads)) => {
-                                    nearest_pair(&[&entry.envelope], &boxes_of(&b_pads))
-                                }
-                                (None, None) => {
-                                    nearest_pair(&[&entry.envelope], &[&candidate.envelope])
-                                }
+                                (Some(a_pads), None) => nearest_pair(
+                                    &copper_of_pads(&a_pads),
+                                    &[&shape_of(b_idx, &candidate.envelope)],
+                                ),
+                                (None, Some(b_pads)) => nearest_pair(
+                                    &[&shape_of(a_idx, &entry.envelope)],
+                                    &copper_of_pads(&b_pads),
+                                ),
+                                (None, None) => nearest_pair(
+                                    &[&shape_of(a_idx, &entry.envelope)],
+                                    &[&shape_of(b_idx, &candidate.envelope)],
+                                ),
                             }
                         }
                     }],
@@ -457,6 +493,10 @@ impl DrcRule for ClearanceRule {
 /// copper it can genuinely short.
 pub(crate) struct PadBox {
     pub(crate) box_: AABB<[i64; 2]>,
+    /// The copper itself, where it is not its box: a circular pad is its
+    /// disc. `box_` stays the extent, for the rules that only ask where a pad
+    /// reaches.
+    pub(crate) copper: Copper,
     pub(crate) layer_mask: u32,
     pub(crate) net: Option<NetId>,
 }
@@ -469,7 +509,7 @@ pub(crate) struct PadBox {
 /// which is never smaller than the copper - a checker may over-report, and may
 /// not under-report.
 pub(crate) fn component_pads(world: &mut BoardWorld) -> HashMap<u32, Vec<PadBox>> {
-    use cypcb_world::components::{FootprintRef, Position, Rotation};
+    use cypcb_world::components::{FootprintRef, PadShape, Position, Rotation};
 
     // Which net each pin is on, per component. `PadDef::number` and
     // `PinConnection::pin` are the same identifier seen from the footprint and
@@ -543,11 +583,20 @@ pub(crate) fn component_pads(world: &mut BoardWorld) -> HashMap<u32, Vec<PadBox>
                     .iter()
                     .fold(0u32, |mask, layer| mask | layer.to_copper_mask());
 
+                let box_ = AABB::from_corners(
+                    [cx - extent_x, cy - extent_y],
+                    [cx + extent_x, cy + extent_y],
+                );
+                // A circle is drawn with its width as the diameter, which is
+                // what `aperture_for_pad` sends to the fab.
+                let copper = match pad.shape {
+                    PadShape::Circle => Copper::circle([cx, cy], pad.size.0 .0 / 2),
+                    _ => Copper::boxed(box_),
+                };
+
                 PadBox {
-                    box_: AABB::from_corners(
-                        [cx - extent_x, cy - extent_y],
-                        [cx + extent_x, cy + extent_y],
-                    ),
+                    box_,
+                    copper,
                     layer_mask,
                     net: pin_nets
                         .get(&index)
@@ -563,9 +612,59 @@ pub(crate) fn component_pads(world: &mut BoardWorld) -> HashMap<u32, Vec<PadBox>
     out
 }
 
-/// The geometry out of a list of pads, once the net filtering is done.
-fn boxes_of<'a>(pads: &[&'a PadBox]) -> Vec<&'a AABB<[i64; 2]>> {
-    pads.iter().map(|pad| &pad.box_).collect()
+/// The copper out of a list of pads, once the net filtering is done.
+fn copper_of_pads<'a>(pads: &[&'a PadBox]) -> Vec<&'a Copper> {
+    pads.iter().map(|pad| &pad.copper).collect()
+}
+
+/// Copper as the checker measures it: a box grown by a radius.
+///
+/// A rectangle is its box and no radius. A disc - a via, a circular pad - is
+/// its centre, a box of no size, grown by its radius, and then the distance
+/// between two of them is the distance between their cores less both radii,
+/// which is exact. Measured as the square around it, a disc is closer to a
+/// diagonal neighbour than it is by `r * (sqrt(2) - 1)`, and on a 0.6mm via
+/// that is 0.124mm - near a whole 0.127mm clearance.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct Copper {
+    pub(crate) core: AABB<[i64; 2]>,
+    pub(crate) radius: i64,
+}
+
+impl Copper {
+    pub(crate) fn boxed(box_: AABB<[i64; 2]>) -> Self {
+        Copper {
+            core: box_,
+            radius: 0,
+        }
+    }
+
+    pub(crate) fn circle(centre: [i64; 2], radius: i64) -> Self {
+        Copper {
+            core: AABB::from_point(centre),
+            radius,
+        }
+    }
+
+    /// The box the copper fits in.
+    pub(crate) fn bounds(&self) -> AABB<[i64; 2]> {
+        let (lo, hi) = (self.core.lower(), self.core.upper());
+        AABB::from_corners(
+            [lo[0] - self.radius, lo[1] - self.radius],
+            [hi[0] + self.radius, hi[1] + self.radius],
+        )
+    }
+}
+
+/// The gap between two pieces of copper; 0 where they touch or overlap.
+pub(crate) fn copper_distance(a: &Copper, b: &Copper) -> i64 {
+    (aabb_distance(&a.core, &b.core) - a.radius - b.radius).max(0)
+}
+
+/// Closest approach from trace centrelines to a piece of copper.
+pub(crate) fn trace_to_copper_distance(trace: &TraceData, copper: &Copper) -> (Point, i64) {
+    let (at, distance) = trace_to_aabb_distance(trace, &copper.core);
+    (at, distance.saturating_sub(copper.radius).max(0))
 }
 
 /// Closest approach between two components' pads, ignoring pad pairs that
@@ -582,30 +681,34 @@ fn nearest_pad_pair(a: &[&PadBox], b: &[&PadBox]) -> Option<(Point, i64)> {
         })
         .map(|(pad_a, pad_b)| {
             (
-                midpoint(aabb_center(&pad_a.box_), aabb_center(&pad_b.box_)),
-                aabb_distance(&pad_a.box_, &pad_b.box_),
+                midpoint(
+                    aabb_center(&pad_a.copper.core),
+                    aabb_center(&pad_b.copper.core),
+                ),
+                copper_distance(&pad_a.copper, &pad_b.copper),
             )
         })
         .min_by_key(|(_, distance)| *distance)
 }
 
-/// Closest approach between a trace and the nearest of several boxes.
-fn trace_to_nearest(trace: &TraceData, boxes: &[&AABB<[i64; 2]>]) -> (Point, i64) {
-    boxes
+/// Closest approach between a trace and the nearest of several pieces of
+/// copper.
+fn trace_to_nearest(trace: &TraceData, copper: &[&Copper]) -> (Point, i64) {
+    copper
         .iter()
-        .map(|b| trace_to_aabb_distance(trace, b))
+        .map(|c| trace_to_copper_distance(trace, c))
         .min_by_key(|(_, distance)| *distance)
         .unwrap_or((Point::ORIGIN, i64::MAX))
 }
 
-/// Closest approach between two sets of boxes, and where it happens.
-fn nearest_pair(a: &[&AABB<[i64; 2]>], b: &[&AABB<[i64; 2]>]) -> (Point, i64) {
+/// Closest approach between two sets of copper, and where it happens.
+fn nearest_pair(a: &[&Copper], b: &[&Copper]) -> (Point, i64) {
     a.iter()
-        .flat_map(|box_a| {
-            b.iter().map(move |box_b| {
+        .flat_map(|copper_a| {
+            b.iter().map(move |copper_b| {
                 (
-                    midpoint(aabb_center(box_a), aabb_center(box_b)),
-                    aabb_distance(box_a, box_b),
+                    midpoint(aabb_center(&copper_a.core), aabb_center(&copper_b.core)),
+                    copper_distance(copper_a, copper_b),
                 )
             })
         })
@@ -854,8 +957,8 @@ fn per_segment_to_trace(a: &TraceData, b: &TraceData) -> Vec<(Point, i64)> {
 }
 
 /// One closest approach per segment of `trace`, against the nearest of several
-/// boxes.
-fn per_segment_to_boxes(trace: &TraceData, boxes: &[&AABB<[i64; 2]>]) -> Vec<(Point, i64)> {
+/// pieces of copper.
+fn per_segment_to_copper(trace: &TraceData, copper: &[&Copper]) -> Vec<(Point, i64)> {
     trace
         .segments
         .iter()
@@ -864,7 +967,7 @@ fn per_segment_to_boxes(trace: &TraceData, boxes: &[&AABB<[i64; 2]>]) -> Vec<(Po
                 half_width: trace.half_width,
                 segments: vec![*seg],
             };
-            trace_to_nearest(&one, boxes)
+            trace_to_nearest(&one, copper)
         })
         .collect()
 }
