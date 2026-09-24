@@ -13,8 +13,9 @@
 use cypcb_core::{Nm, Point};
 use cypcb_rules::RoutingRuleSet;
 use cypcb_world::components::rotate_about_origin;
+use cypcb_world::components::trace::Via;
 use cypcb_world::footprint::FootprintLibrary;
-use cypcb_world::{BoardWorld, Layer};
+use cypcb_world::{BoardWorld, Layer, NetId};
 
 /// Cell occupancy flags (bitfield).
 pub const CELL_FREE: u8 = 0;
@@ -844,7 +845,32 @@ impl RoutingGrid {
         marked
     }
 
-    /// The cells a via's copper covers on both of the layers it joins.
+    /// Every routing layer a via between `from` and `to` has copper on, one
+    /// bit per routing index.
+    ///
+    /// The search changes layer in one step, from any layer to any other, and
+    /// routing indices are not in stack order: `BottomCopper` is 1 and the
+    /// inner layers come after it. Which layers the hole passes is
+    /// [`Via::copper_mask`]'s answer, the one the checks and the exports read.
+    /// Until 2026-09-24 the router marked a via's ring on the two layers it
+    /// joins and nothing between, so a route on an inner layer could run
+    /// through the barrel of a via that passed it.
+    pub fn via_layers(&self, from: u8, to: u8) -> u32 {
+        let mut via = Via::new(Point::from_mm(0.0, 0.0), NetId::new(0));
+        via.start_layer = index_to_layer(from as usize);
+        via.end_layer = index_to_layer(to as usize);
+        let copper = via.copper_mask();
+        (0..self.layer_count)
+            .filter(|&index| copper & index_to_layer(index as usize).to_copper_mask() != 0)
+            .fold(0, |mask, index| mask | 1 << index)
+    }
+
+    /// The routing layers named by a mask from [`via_layers`](Self::via_layers).
+    pub fn layers_in(&self, mask: u32) -> impl Iterator<Item = u8> {
+        (0..self.layer_count).filter(move |&index| mask >> index & 1 == 1)
+    }
+
+    /// The cells a via's copper covers on every layer it passes.
     ///
     /// A path marks one cell where it changes layer, but a via's ring is far
     /// bigger than a cell - 0.554mm against 0.0635mm for JLCPCB, about nine
@@ -861,11 +887,7 @@ impl RoutingGrid {
         let r = radius as i64;
         let r_sq = r * r;
 
-        for layer in [layers.0, layers.1] {
-            let li = layer as usize;
-            if li >= self.layer_count as usize {
-                continue;
-            }
+        for layer in self.layers_in(self.via_layers(layers.0, layers.1)) {
             let min_x = (x as i64 - r).max(0) as u32;
             let max_x = ((x as i64 + r) as u32).min(self.width.saturating_sub(1));
             let min_y = (y as i64 - r).max(0) as u32;

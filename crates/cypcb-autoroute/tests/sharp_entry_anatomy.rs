@@ -427,15 +427,15 @@ fn the_sharp_entries_against_every_pad_that_could_have_been_one() {
     // measured a different board.
     assert_eq!(
         sharp.len(),
-        14,
-        "the census reports fourteen sharp entries across the six fixtures"
+        13,
+        "the census reports thirteen sharp entries across the six fixtures"
     );
 
     // The first reading, and the denominator that kills it. Every sharp pad is
     // off-grid - and so is essentially every pad on every board, including the
     // seven hundred and sixty-odd that are entered cleanly. A property shared
     // by the whole population explains no subset of it, so being off-grid is
-    // not what the fourteen have in common and no repair aimed at the grid can
+    // not what the thirteen have in common and no repair aimed at the grid can
     // be justified by them.
     assert_eq!(
         sharp_on_grid, 0,
@@ -444,7 +444,7 @@ fn the_sharp_entries_against_every_pad_that_could_have_been_one() {
     assert!(
         netted_on_grid * 100 < netted_total,
         "off-grid pads are the rule, not the exception: {netted_on_grid} of {netted_total} \
-         netted pads sit on a cell centre, so being off-grid cannot distinguish the fourteen"
+         netted pads sit on a cell centre, so being off-grid cannot distinguish the thirteen"
     );
 
     // The pair behind that ratio, pinned exactly, because the ratio alone does
@@ -483,7 +483,7 @@ fn the_sharp_entries_against_every_pad_that_could_have_been_one() {
         "no part on any benchmark fixture is turned, so rotation explains nothing here"
     );
 
-    // What the fourteen do have in common, and the reason the published
+    // What the thirteen do have in common, and the reason the published
     // rectangle arithmetic does not reach them: not one of these lands is a
     // plain rectangle. Every one is a rounded rectangle or an oblong, both of
     // which curve where the trace crosses, so the entry angle depends on the
@@ -854,7 +854,11 @@ fn a_circular_land_reads_the_same_from_its_own_geometry() {
     // left to the reader because the section used to state the share of the
     // radius while calling it the share of the chord - two denominators, one
     // sentence, and no line anywhere that would notice.
-    const CANON_SHARP_RATIOS: &[f64] = &[0.375, 0.154, 0.122, 0.111];
+    //
+    // The fourth, 0.375 on `multi_ic`'s J1.S2, left on 2026-09-24 with the
+    // router's fix for tracks run through a via's barrel: that board routes
+    // to different copper and the entry is no longer made.
+    const CANON_SHARP_RATIOS: &[f64] = &[0.154, 0.122, 0.111];
     let mut printed: Vec<f64> = readings
         .iter()
         .filter(|r| r.sharp)
