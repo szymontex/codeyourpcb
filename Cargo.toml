@@ -106,3 +106,32 @@ opt-level = 3        # A* hot path - speed matters
 inherits = "release"
 debug = true
 strip = false
+
+# The tests route real boards, and at opt-level 0 the router spends the gate:
+# `cargo test` took 675s of a 916s run, 13s of it compiling. The crates that
+# do the routing are optimized in the test profile; everything else, and the
+# test binaries themselves, stay at 0. Debug assertions and overflow checks
+# are profile settings of their own and stay on.
+[profile.test.package.cypcb-autoroute]
+opt-level = 3
+
+[profile.test.package.cypcb-router]
+opt-level = 3
+
+[profile.test.package.cypcb-drc]
+opt-level = 3
+
+[profile.test.package.cypcb-world]
+opt-level = 3
+
+[profile.test.package.cypcb-core]
+opt-level = 3
+
+[profile.test.package.pathfinding]
+opt-level = 3
+
+[profile.test.package.rstar]
+opt-level = 3
+
+[profile.test.package.smallvec]
+opt-level = 3
