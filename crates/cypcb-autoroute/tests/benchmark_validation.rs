@@ -409,14 +409,32 @@ const DRC_RATCHETS: &[Ratchet] = &[
     // 19: the kept vias add two reports on the first and one on the second,
     // routed plus band would raise the ratchet, and a ratchet is not raised
     // for this. Both sit inside half a band of the old baseline.
+    //
+    // Re-baselined 2026-09-24, and the router did not move: every route set
+    // hashes as it did. `ClearanceRule` measured a via and a circular pad as
+    // the square around the disc, so copper passing the square's corner read
+    // closer than it is - a 0.033mm gap as a short, two vias 0.166mm apart as
+    // touching. Measured as discs, every report that went was classified
+    // against the circle: 177 were never under the rule, 8 shorts are now the
+    // gaps they are, and where a pair lost a report its count now equals the
+    // places its trace comes under the rule. Same arithmetic as above, routed
+    // plus band where that comes out under the old ratchet:
+    //
+    // board            routed        band      ratchet was   ratchet is
+    // led_blink          1 /   0     0 /  0      1 /   0       1 /   0
+    // stm32_breakout   139 /  56    64 / 48    224 / 106     203 / 104
+    // multi_ic         506 /  66    35 / 15    548 /  88     541 /  81
+    // shift_driver      15 /   0    26 / 15     45 /  15      41 /  15
+    // qfp_fanout       297 / 112    61 / 46    424 / 177     358 / 158
+    // plane_board       24 /   3     0 /  0     29 /   3      24 /   3
     ("led_blink.kicad_pcb", "led_blink", 1, 0, 1, 0),
     (
         "stm32_breakout.kicad_pcb",
         "stm32_breakout",
-        224,
-        106,
-        160,
-        58,
+        203,
+        104,
+        139,
+        56,
     ),
     // Re-baselined 2026-08-23 for `ViaSpanRule`, and the router did not move:
     // measured with the rule unregistered, `multi_ic` routes to **381**
@@ -450,9 +468,9 @@ const DRC_RATCHETS: &[Ratchet] = &[
     // is gone, and the other five boards route to the same hash: a two-layer
     // via has no layer between its ends. Routed 513 / 73, vias 205 -> 200,
     // 0 unrouted; ratchet is that plus the band, 35 / 15.
-    ("multi_ic.kicad_pcb", "multi_ic", 548, 88, 513, 73),
-    ("shift_driver.kicad_pcb", "shift_driver", 45, 15, 19, 0),
-    ("qfp_fanout.kicad_pcb", "qfp_fanout", 424, 177, 363, 131),
+    ("multi_ic.kicad_pcb", "multi_ic", 541, 81, 506, 66),
+    ("shift_driver.kicad_pcb", "shift_driver", 41, 15, 15, 0),
+    ("qfp_fanout.kicad_pcb", "qfp_fanout", 358, 158, 297, 112),
     // A band of zero is not a rounding: this board routes identically at every
     // via price from 0.22 to 0.28, 28 violations and 13 shorts each time. Its
     // ratchet is the measured value exactly, so any movement at all is a real
@@ -493,7 +511,7 @@ const DRC_RATCHETS: &[Ratchet] = &[
     //
     // 38 -> 29 on 2026-09-23, with the via optimizer's check made real; see
     // the table above `led_blink`. Shorts 13 -> 3.
-    ("plane_board.kicad_pcb", "plane_board", 29, 3, 29, 3),
+    ("plane_board.kicad_pcb", "plane_board", 24, 3, 24, 3),
 ];
 
 /// Routes every fixture and holds the line on completeness and DRC count.

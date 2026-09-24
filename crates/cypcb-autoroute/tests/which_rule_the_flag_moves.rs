@@ -154,8 +154,9 @@ fn the_board_that_got_worse_was_paying_for_the_via_optimizer() {
     // the flag's. `optimize_vias` checked each replacement segment against a
     // list of other nets' copper that every caller passed empty, and the flag
     // hands it more pairs to join. With the check real (2026-09-23) clearance
-    // is 5 either way and the board goes 20 to 9, so the flag costs this
-    // board nothing any rule counts.
+    // was 5 either way and the board went 20 to 9. With a via measured as a
+    // disc (2026-09-24) clearance is 0 either way and the board goes 15 to 4,
+    // so the flag costs this board nothing any rule counts.
     let off = by_kind("shift_driver.kicad_pcb", false);
     let on = by_kind("shift_driver.kicad_pcb", true);
 
@@ -164,7 +165,7 @@ fn the_board_that_got_worse_was_paying_for_the_via_optimizer() {
     // them, and when it does the two sections in the canon have to be read
     // again rather than quietly left behind.
     const CANON_FIGURES: &[(&str, usize, usize)] =
-        &[("AcidTrap", 12, 2), ("Clearance", 5, 5), ("PadEntry", 3, 2)];
+        &[("AcidTrap", 12, 2), ("Clearance", 0, 0), ("PadEntry", 3, 2)];
     for (kind, before, after) in CANON_FIGURES {
         assert_eq!(
             (
@@ -177,17 +178,14 @@ fn the_board_that_got_worse_was_paying_for_the_via_optimizer() {
         );
     }
 
-    // R-19's share of this board's report, as a floor rather than as a pair:
-    // an exact denominator fails on the next rule anybody registers. It was
-    // three quarters, 18 of 22, while the optimizer was drawing shorts here;
-    // it is 5 of 9 without them, which is still most of the report.
+    // R-19 quoted this board as mostly its rule: 18 of 22 while the optimizer
+    // was drawing shorts here, 5 of 9 without them. All five measured a via
+    // as the square around it. As a disc the nearest copper is 0.145mm and
+    // 0.175mm away against 0.127mm (2026-09-24), and the board reports no
+    // clearance row with the flag off or on.
     let total: usize = on.values().sum();
     let clearance = on.get("Clearance").copied().unwrap_or(0);
     println!("shift_driver clearance share {clearance} of {total}");
-    assert!(
-        clearance * 2 > total,
-        "R-19 says this one rule is most of this board's report: {clearance} of {total}"
-    );
 
     // No kind rises. This is the assertion that would have caught the
     // optimizer: it was the one rule going the other way.
