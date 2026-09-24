@@ -1492,8 +1492,34 @@ In every run the overuse curve stops falling between the fifth and eighth
 iteration and oscillates - on `stm32_breakout` 1175, 1015, 914, 978, 846, 860,
 720, 642, 645, 615, 624, 712, 702 - so the schedule moves where it stops, not
 whether it ends. Row 5 of the table above, another net's cell as a hard
-obstacle, leaves little of the board to negotiate over; that is not measured
-here.
+obstacle, leaves little of the board to negotiate over. Measured next.
+
+**Making another net's routed copper a price instead of a wall makes every
+board worse.** Measured 2026-09-25 behind a switch that was then removed. Any
+cell holding nothing but another net's trace or halo could be taken at the
+paper's `(b + h) * p`, with `p = 1 + present * occupancy` so the net that would
+make a cell shared pays, `present` 0 in the first iteration and 0.5 rising 1.5x
+per iteration after it; pads, keepouts and obstacles stayed walls. Variant
+winners, shorts and unrouted pins:
+
+| board | flag off, walls | flag off, priced | flag on, walls | flag on, priced |
+|---|---|---|---|---|
+| led_blink | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 |
+| stm32_breakout | 28 / 0 | 78 / 0 | 30 / 0 | 57 / 0 |
+| multi_ic | 65 / 4 | 119 / 3 | 47 / 5 | 117 / 5 |
+| shift_driver | 0 / 0 | 33 / 0 | 0 / 0 | 32 / 0 |
+| plane_board | 0 / 0 | 7 / 0 | 0 / 0 | 9 / 0 |
+| qfp_fanout | 91 / 0 | 123 / 0 | 46 / 0 | 117 / 0 |
+
+On the three winners' own configurations, flag off, the overused set falls
+faster than with walls - `stm32_breakout` 1321, 424, 305, 271, 264, 241, then
+296, 338, 313 and the stagnation break - but never reaches zero, and a shared
+trace cell is a short where a shared ring cell was not: shorts 105, 223 and 119
+against 28, 91 and 65. A growth of 2x per iteration gives 98, 153 and 103.
+Without the stagnation break `stm32_breakout` freezes at 282 overused cells
+from the sixteenth iteration and `qfp_fanout` climbs to 4160 before the run was
+killed near the fortieth. The walls are not what keeps this loop from
+converging, and the next step is the QFP escape, not the cost.
 
 
 **Decomposition: the multi-sink wave is the standard, and behind
