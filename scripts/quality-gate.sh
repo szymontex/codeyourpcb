@@ -116,6 +116,24 @@ printf 'GATE-LOCK waited=%s holder_pid=%s holder_ppid=%s holder_cmd=%s acquired=
 printf 'GATE-BUILDS %s dir=%s\n' \
   "$("$REPO_ROOT/scripts/who-is-building.sh" "$GATE_BUILD_DIR")" "$GATE_BUILD_DIR"
 
+# Test threads follow the host's load at the start of the run, capped at five.
+#
+# `CARGO_BUILD_JOBS` limits compilation and nothing else: libtest starts one
+# thread per core for every test binary, so the test stage used every core the
+# host has. The owner's call on 2026-09-24 was four or five cores for running
+# tests, fewer when the host is already busy. The count is read once, here,
+# from the one-minute load, and the line below carries the load it came from,
+# so a slow run can be read against how busy the host was when it started.
+# Five is a ceiling whatever the host reports; two is a floor, so a busy host
+# still gets a run that finishes.
+GATE_LOAD1=$(cut -d' ' -f1 /proc/loadavg)
+GATE_CORES=$(nproc)
+GATE_TEST_THREADS=$(awk -v cores="$GATE_CORES" -v load="$GATE_LOAD1" \
+  'BEGIN { t = int(cores - load); if (t > 5) t = 5; if (t < 2) t = 2; print t }')
+export RUST_TEST_THREADS=$GATE_TEST_THREADS
+printf 'GATE-TEST-THREADS threads=%s load1=%s cores=%s\n' \
+  "$GATE_TEST_THREADS" "$GATE_LOAD1" "$GATE_CORES"
+
 # How many stages this file declares, how many announced themselves, and how
 # many checks reported a pass. The closing line used to be an unconditional
 # echo: a stage deleted, commented out or short-circuited left every other
