@@ -308,9 +308,34 @@ stage "cargo test"
 # `cypcb-library/jlcpcb`, and `cypcb-platform`'s `desktop`, `web` and
 # `native-dialogs`. They are not run here because nothing in them is a second
 # implementation of something the default build already has.
-if cargo test --workspace 2>&1 \
-  && cargo test -p cypcb-parser --features tree-sitter-parser 2>&1 \
-  && cargo test -p cypcb-render --no-default-features --features wasm 2>&1; then
+#
+# Where `cargo nextest` is installed it runs these, on the same thread count
+# as everything else. `cargo test` runs one test binary after another, and the
+# five slowest binaries alone were about fifty-four of this stage's hundred
+# seconds of execution, so extra threads inside one binary bought nothing: the
+# stage took 117 s on every core and 118-120 s on five. Nextest takes tests
+# from every binary into one pool of that size. Measured on 2026-09-24, same
+# tree, five threads, warm: 119-122 s with `cargo test`, 78-79 s with nextest,
+# the same 2860 tests passing and 81 skipped. Nextest does not run doctests,
+# so `cargo test --doc` runs them after it, and the line below says which
+# runner a log came from.
+if cargo nextest --version >/dev/null 2>&1; then
+  GATE_TEST_RUNNER=nextest
+else
+  GATE_TEST_RUNNER=cargo-test
+fi
+echo "GATE-TEST-RUNNER $GATE_TEST_RUNNER threads=$GATE_TEST_THREADS"
+run_tests() {
+  if [ "$GATE_TEST_RUNNER" = nextest ]; then
+    cargo nextest run --test-threads "$GATE_TEST_THREADS" "$@" 2>&1 \
+      && cargo test --doc "$@" 2>&1
+  else
+    cargo test "$@" 2>&1
+  fi
+}
+if run_tests --workspace \
+  && run_tests -p cypcb-parser --features tree-sitter-parser \
+  && run_tests -p cypcb-render --no-default-features --features wasm; then
   pass "cargo-test"
 else
   fail "cargo-test"
