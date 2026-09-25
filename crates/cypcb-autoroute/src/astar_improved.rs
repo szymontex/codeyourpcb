@@ -22,7 +22,7 @@ use crate::grid::RoutingGrid;
 use crate::orchestrator::{extract_ratsnest, NetRoute, PadTarget};
 use crate::pathfinder::{find_path_with_zones, GridNode, PadZone};
 use crate::postprocess;
-use crate::smoother::smooth_routes;
+use crate::smoother::smooth_routes_on_pads;
 use crate::strategy::RoutingStrategy;
 use crate::via_optimizer::{optimize_vias, BoardObstacles};
 use crate::AutorouteConfig;
@@ -131,6 +131,7 @@ impl RoutingStrategy for ImprovedAStarStrategy {
             ids
         };
 
+        let pads = cypcb_drc::rules::net_pads(world, library);
         let mut smoothed_segments = Vec::new();
         for net_id in &net_ids {
             let net_segs: Vec<_> = all_segments
@@ -148,10 +149,11 @@ impl RoutingStrategy for ImprovedAStarStrategy {
                 .filter(|v| v.net_id == *net_id)
                 .map(|v| v.position)
                 .collect();
-            let smoothed = smooth_routes(
+            let smoothed = smooth_routes_on_pads(
                 &net_segs,
                 &other_segs,
                 &net_vias,
+                &pads,
                 min_clearance,
                 config.params.roundness,
             );

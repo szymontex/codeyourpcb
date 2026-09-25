@@ -17,7 +17,7 @@ use cypcb_autoroute::scoring::{score_board, RoutingScore, ScoreWeights};
 use cypcb_autoroute::strategy::RoutingStrategy;
 use cypcb_autoroute::{route_board, AutorouteConfig};
 use cypcb_drc::rules::pad_entry::{measure_entries, EntryReport};
-use cypcb_drc::rules::{DrcRule, NetSplitRule};
+use cypcb_drc::rules::{DrcRule, NetSplitRule, UnroutedPinRule};
 use cypcb_drc::{preset_for_world, ruleset_for_world, DesignRules};
 use cypcb_kicad::{parse_kicad_pcb, BENCHMARKS};
 use cypcb_router::apply_routes;
@@ -54,8 +54,8 @@ fn fixture_path(filename: &str) -> std::path::PathBuf {
 /// project owed itself: every entry angle the router's own copper leaves
 /// behind, in the same pass that counts the violations, so the two cannot
 /// disagree about which board was measured.
-/// The fifth value is what `net-split` reports on either side of the
-/// smoother, from [`splits_around_smoothing`].
+/// The fifth value is what `net-split` and `unrouted-pin` report on either
+/// side of the smoother, from [`splits_around_smoothing`].
 fn route_and_score(
     strategy: &dyn RoutingStrategy,
     fixture: &str,
@@ -112,12 +112,17 @@ fn route_and_score(
     (score, route_count, unrouted, (report, sharp), splits)
 }
 
-/// What `net-split` reports before and after the smoother, one message per
-/// piece a net is cut into.
+/// What `net-split` and `unrouted-pin` report before and after the smoother,
+/// one message per piece a net is cut into and per pin no copper reaches.
 type Splits = (Vec<String>, Vec<String>);
 
-/// `net-split` on the router's own segments and then on the smoother's, each
-/// with the router's vias. `None` when the smoother did not run.
+/// `net-split` and `unrouted-pin` on the router's own segments and then on
+/// the smoother's, each with the router's vias. `None` when the smoother did
+/// not run.
+///
+/// A pin is read as well as a piece because `net-split` leaves a pin nothing
+/// reaches to `unrouted-pin`: on `multi_ic` the smoother took the VCC_3V3
+/// trunk off R8.2 and `net-split` read 0 on both sides of it.
 ///
 /// Read from the copper the router keeps from either side of the smoother,
 /// not from a second routing with smoothing off. A second routing lays other
@@ -137,11 +142,18 @@ fn splits_around_smoothing(
             &RoutingResult::complete(routes.to_vec(), snapshot.vias.clone()),
         );
         world.rebuild_spatial_index_from_library(library);
-        NetSplitRule
+        let mut read: Vec<String> = NetSplitRule
             .check(world, drc_rules)
             .into_iter()
             .map(|v| v.message)
-            .collect()
+            .collect();
+        read.extend(
+            UnroutedPinRule
+                .check(world, drc_rules)
+                .into_iter()
+                .map(|v| v.message),
+        );
+        read
     };
     let before = splits(&snapshot.before);
     let after = splits(&snapshot.after);
@@ -158,7 +170,8 @@ fn splits_around_smoothing(
 /// is read on both sides of the smoother on the board the stage routes anyway,
 /// and a piece more after it than before it is a failure. A board with no
 /// snapshot is a failure too: the comparison would pass without having been
-/// made.
+/// made. A pin the smoother leaves no copper on is the same failure, and is
+/// counted with the pieces.
 fn smoothing_added_a_piece(label: &str, splits: &Option<Splits>) -> Option<String> {
     let Some((before, after)) = splits else {
         return Some(format!(
@@ -166,14 +179,14 @@ fn smoothing_added_a_piece(label: &str, splits: &Option<Splits>) -> Option<Strin
         ));
     };
     eprintln!(
-        "      net-split: {} before the smoother, {} after it",
+        "      net-split and unrouted-pin: {} before the smoother, {} after it",
         before.len(),
         after.len()
     );
     (after.len() > before.len()).then(|| {
         let added: Vec<&String> = after.iter().filter(|m| !before.contains(m)).collect();
         format!(
-            "{label}: net-split {} before the smoother and {} after it - smoothing cut a net: {added:?}",
+            "{label}: net-split and unrouted-pin {} before the smoother and {} after it - smoothing cut a net or a pin off it: {added:?}",
             before.len(),
             after.len()
         )

@@ -18,7 +18,7 @@ use std::collections::HashMap;
 use crate::orchestrator::{extract_ratsnest, order_nets};
 use crate::pathfinder_v2::pathfinder_loop;
 use crate::postprocess;
-use crate::smoother::smooth_routes;
+use crate::smoother::smooth_routes_on_pads;
 use crate::via_optimizer::{optimize_vias, BoardObstacles};
 use crate::AutorouteConfig;
 
@@ -199,6 +199,7 @@ pub fn route_with_debug(
         ids
     };
 
+    let pads = cypcb_drc::rules::net_pads(world, library);
     let mut smoothed_segments = Vec::new();
     for net_id in &net_ids {
         let net_segs: Vec<_> = raw_segments
@@ -216,10 +217,11 @@ pub fn route_with_debug(
             .filter(|v| v.net_id == *net_id)
             .map(|v| v.position)
             .collect();
-        let smoothed = smooth_routes(
+        let smoothed = smooth_routes_on_pads(
             &net_segs,
             &other_segs,
             &net_vias,
+            &pads,
             min_clearance,
             config.params.roundness,
         );
