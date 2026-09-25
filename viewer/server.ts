@@ -20,8 +20,12 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 // CLI binary path (from cargo build)
-const CLI_PATH = resolve(__dirname, '../target/release/cypcb');
-const CLI_DEBUG_PATH = resolve(__dirname, '../target/debug/cypcb');
+// Cargo builds into CARGO_TARGET_DIR when it is set, relative to where it runs.
+const TARGET_DIR = process.env.CARGO_TARGET_DIR
+  ? resolve(process.env.CARGO_TARGET_DIR)
+  : resolve(__dirname, '../target');
+const CLI_PATH = resolve(TARGET_DIR, 'release/cypcb');
+const CLI_DEBUG_PATH = resolve(TARGET_DIR, 'debug/cypcb');
 
 // FreeRouting JAR path
 const FREEROUTING_JAR = resolve(__dirname, '../freerouting.jar');

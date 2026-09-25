@@ -109,7 +109,7 @@ cargo build \
 
 echo "  wasm-bindgen"
 wasm-bindgen \
-  target/wasm32-unknown-unknown/wasm-release/cypcb_render.wasm \
+  "${CARGO_TARGET_DIR:-target}"/wasm32-unknown-unknown/wasm-release/cypcb_render.wasm \
   --target web \
   --out-dir viewer/pkg \
   --out-name cypcb_render

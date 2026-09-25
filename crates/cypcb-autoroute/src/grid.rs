@@ -330,9 +330,9 @@ impl RoutingGrid {
                                     ),
                                 }
 
-                                // Whose pad it is, so a net's own zone can be
-                                // opened for its own pin and not for the pin
-                                // beside it.
+                                // Whose pad it is, priced by `foreign_pad_penalty`
+                                // (`PathFinder Pad Aware` and others); walled inside a
+                                // pad zone it lost twice, see docs/routing.md.
                                 if let Some((_, net)) =
                                     pins.iter().find(|(pin, _)| *pin == pad.number)
                                 {

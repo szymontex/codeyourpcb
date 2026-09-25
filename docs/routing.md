@@ -1557,6 +1557,46 @@ PA11's escape inside PA12's own pad zone: `pad_zone_open` opens another net's
 copper to the net whose pad the zone surrounds. That opening is examined next,
 before any escape.
 
+**Walling another net's pad inside a pad zone was measured a second time and
+still costs more than it buys.** Measured 2026-09-25 and reverted.
+`pad_zone_open` opens every cell of a net's pad zone to that net, whoever owns
+the copper there. The zone reaches the pad's larger half size plus three cells,
+six cells or 1.52mm round an LQFP pad on the 0.254mm grid, so it covers the
+neighbouring pads at 0.5mm pitch. A probe took the final shorts of each flag-off
+winner and split them by what met and by whether the short lies inside a pad
+zone of the trace's own net:
+
+| short | stm32_breakout | multi_ic | qfp_fanout |
+|---|---|---|---|
+| pad on trace, in zone | 11 | 32 | 17 |
+| trace on trace, in zone | 3 | 21 | 9 |
+| trace on via, in zone | 1 | 0 | 2 |
+| trace on via, outside | 12 | 0 | 55 |
+| other, outside | 1 | 12 | 8 |
+| total | 28 | 65 | 91 |
+
+The pad in every in-zone pad-on-trace short belongs to another net, so the rule
+tried was the narrow one: inside a net's pad zone, a cell whose `pad_owner` is
+another net stays a wall; another net's trace stays open, since a trace can
+still move in negotiation and a pad cannot. Variant winners, shorts flag off /
+flag on, unrouted pins where they moved, seconds for all variants:
+
+| | stm32_breakout | multi_ic | qfp_fanout |
+|---|---|---|---|
+| zone open to all copper | 28 / 30, 14.9 / 17.1 s | 65 / 47, pins 4 / 5, 51.2 / 63.8 s | 91 / 46, 8.9 / 10.2 s |
+| another net's pad walled | 65 / 63, pins 5 / 0, 39.8 / 39.3 s | 30 / 20, pins 9 / 8, 1 split, 62.1 / 72.7 s | 186 / 144, 10.3 / 9.5 s |
+
+`led_blink`, `shift_driver` and `plane_board` kept zero shorts and zero unrouted
+pins either way. `multi_ic` loses more than half its shorts and pays for it
+with unrouted pins; `stm32_breakout` and `qfp_fanout` more than double theirs.
+This is the wall 72bc62c2
+measured on 2026-08-07, 937 commits earlier, when `stm32_breakout` lost
+six connections and `multi_ic` went from 336 to 451 violations; the comment on
+the foreign-pad price in `pathfinder_v2.rs` records that run. The same rule
+measured twice points the same way, and the price stays. What the probe adds is
+where the rest of the shorts are: outside any pad zone the largest group is a
+trace on a via, 55 of 91 on `qfp_fanout` and 12 of 28 on `stm32_breakout`.
+
 
 **Decomposition: the multi-sink wave is the standard, and behind
 `stop_at_own_copper` it is what this project does.** PathFinder seeds the
