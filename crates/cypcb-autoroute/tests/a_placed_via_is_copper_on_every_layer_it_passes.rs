@@ -322,7 +322,7 @@ fn vias_kept_on_the_middle_layer(via_placed: bool) -> usize {
         ),
     ];
 
-    let (_, kept) = optimize_vias(segments, vias, &board, Nm::from_mm(0.127));
+    let (_, kept) = optimize_vias(segments, vias, &board, Nm::from_mm(0.127), Nm(0));
     kept.len()
 }
 
