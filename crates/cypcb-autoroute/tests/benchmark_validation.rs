@@ -367,10 +367,23 @@ type Ratchet = (&'static str, &'static str, u32, u32, u32, u32);
 /// via on an inner layer, the board routes to different copper - 205 vias to
 /// 200 - and that copper enters two fewer pads. The floor follows the copper
 /// down; sharp and refused fall by one each and are held there.
+///
+/// 283 / 4 / 1 -> 294 / 5 / 4 on `multi_ic` on 2026-09-25, and the entries
+/// that rose were not there to count before. A through-hole pad is now copper
+/// on every layer, so traces the router ended on an inner layer at a pin
+/// header reach it, and the board routes to different copper around them.
+/// Nine pins of J2, J3, J4 and J5 had no entry before and have one now -
+/// J2.S1, J3.2, J3.3, J3.4, J3.6, J3.10, J4.1, J5.1, J5.3 - and the four
+/// sharp entries are four of them, at 39.7, 40.2, 28.0 and 40.0 degrees; the
+/// one sharp entry before, C5.2, is gone with its route. The new refusal is T1.1,
+/// whose route changed with the rest of the board: two measured entries
+/// before, one measured and one `EdgeMissesLand` after. Those are wedges the
+/// router makes at a header, a routing-quality item as the other sharp
+/// entries are, and they are held here rather than filed away.
 const ENTRY_CENSUS: [(usize, usize, usize); 6] = [
     (14, 0, 0),  // led_blink
     (180, 0, 1), // stm32_breakout
-    (283, 4, 1), // multi_ic
+    (294, 5, 4), // multi_ic
     (178, 0, 3), // shift_driver
     (178, 0, 5), // qfp_fanout
     (60, 0, 3),  // plane_board
@@ -584,7 +597,22 @@ const DRC_RATCHETS: &[Ratchet] = &[
     // is gone, and the other five boards route to the same hash: a two-layer
     // via has no layer between its ends. Routed 513 / 73, vias 205 -> 200,
     // 0 unrouted; ratchet is that plus the band, 35 / 15.
-    ("multi_ic.kicad_pcb", "multi_ic", 540, 78, 505, 63),
+    //
+    // 540 / 78 -> 522 / 61 on 2026-09-25, and the model moved, not the
+    // router's rules. A through-hole pad is copper on every layer, and the
+    // grid, the checks and the copper files read it as two - the importer
+    // spells KiCad's `*.Cu` as the two faces. The router already ended traces
+    // on an inner layer at a pin header, which the checks then called open.
+    // All of them ask `PadDef::copper_mask` now; the grid marks the headers on
+    // the inner layers, so the board routes to different copper: 1069 -> 1077
+    // routes, 506 / 63 -> 487 / 46, unrouted pins 8 -> 2, net splits 3 -> 0.
+    // Every short the new copper added was measured against the other item's
+    // copper on the layer they share, pads of the track's own net left out:
+    // 5 new rows, each at a gap of 0. Routed plus band:
+    //
+    // board            routed        band      ratchet was   ratchet is
+    // multi_ic         487 /  46    35 / 15    540 /  78     522 /  61
+    ("multi_ic.kicad_pcb", "multi_ic", 522, 61, 487, 46),
     ("shift_driver.kicad_pcb", "shift_driver", 41, 15, 15, 0),
     ("qfp_fanout.kicad_pcb", "qfp_fanout", 357, 158, 296, 112),
     // A band of zero is not a rounding: this board routes identically at every

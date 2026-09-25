@@ -139,11 +139,7 @@ pub(crate) fn pad_is_reached(
     // as being on every layer rather than on none: reporting a pin because its
     // footprint spells its layers in a way this code has not met would be
     // reporting the reader, not the board.
-    let mask: u32 = pad
-        .layers
-        .iter()
-        .filter_map(|layer| layer_bit(*layer))
-        .fold(0, |mask, bit| mask | bit);
+    let mask: u32 = pad.copper_mask();
     let mask = if mask == 0 { u32::MAX } else { mask };
     copper_reaches(traces, vias, pours, net, copper, mask)
 }

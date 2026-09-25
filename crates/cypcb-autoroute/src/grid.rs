@@ -306,12 +306,38 @@ impl RoutingGrid {
                         continue;
                     }
 
-                    // Mark on each layer the pad exists on
-                    for layer in &pad.layers {
-                        if let Some(li) = layer_to_index(*layer) {
-                            if (li as u8) < self.layer_count {
+                    // Mark on each layer the pad has copper on. The routing
+                    // index of a layer is its bit in the copper mask.
+                    let copper = pad.copper_mask();
+                    for li in 0..usize::from(self.layer_count) {
+                        if copper & (1u32 << li) != 0 {
+                            match pad_rect_extra_cells {
+                                Some(extra) => self.mark_pad_rect_at_nm(
+                                    abs_x,
+                                    abs_y,
+                                    pad.size.0.raw() / 2,
+                                    pad.size.1.raw() / 2,
+                                    *rotation_deg,
+                                    li,
+                                    clearance_cells + extra as u32,
+                                    CELL_PAD,
+                                ),
+                                None => self.mark_obstacle_at_nm(
+                                    abs_x,
+                                    abs_y,
+                                    li,
+                                    pad_radius_cells + clearance_cells,
+                                    CELL_PAD,
+                                ),
+                            }
+
+                            // Whose pad it is, priced by `foreign_pad_penalty`
+                            // (`PathFinder Pad Aware` and others); walled inside a
+                            // pad zone it lost twice, see docs/routing.md.
+                            if let Some((_, net)) = pins.iter().find(|(pin, _)| *pin == pad.number)
+                            {
                                 match pad_rect_extra_cells {
-                                    Some(extra) => self.mark_pad_rect_at_nm(
+                                    Some(extra) => self.mark_pad_owner_rect_at_nm(
                                         abs_x,
                                         abs_y,
                                         pad.size.0.raw() / 2,
@@ -319,42 +345,15 @@ impl RoutingGrid {
                                         *rotation_deg,
                                         li,
                                         clearance_cells + extra as u32,
-                                        CELL_PAD,
+                                        *net,
                                     ),
-                                    None => self.mark_obstacle_at_nm(
+                                    None => self.mark_pad_owner_at_nm(
                                         abs_x,
                                         abs_y,
                                         li,
                                         pad_radius_cells + clearance_cells,
-                                        CELL_PAD,
+                                        *net,
                                     ),
-                                }
-
-                                // Whose pad it is, priced by `foreign_pad_penalty`
-                                // (`PathFinder Pad Aware` and others); walled inside a
-                                // pad zone it lost twice, see docs/routing.md.
-                                if let Some((_, net)) =
-                                    pins.iter().find(|(pin, _)| *pin == pad.number)
-                                {
-                                    match pad_rect_extra_cells {
-                                        Some(extra) => self.mark_pad_owner_rect_at_nm(
-                                            abs_x,
-                                            abs_y,
-                                            pad.size.0.raw() / 2,
-                                            pad.size.1.raw() / 2,
-                                            *rotation_deg,
-                                            li,
-                                            clearance_cells + extra as u32,
-                                            *net,
-                                        ),
-                                        None => self.mark_pad_owner_at_nm(
-                                            abs_x,
-                                            abs_y,
-                                            li,
-                                            pad_radius_cells + clearance_cells,
-                                            *net,
-                                        ),
-                                    }
                                 }
                             }
                         }

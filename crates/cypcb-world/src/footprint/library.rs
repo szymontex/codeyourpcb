@@ -126,6 +126,48 @@ impl PadDef {
         self.drill.is_some() && !self.layers.iter().any(|layer| layer.is_copper())
     }
 
+    /// Every copper layer this pad has copper on, in the bits
+    /// [`Layer::to_copper_mask`] uses.
+    ///
+    /// A plated hole is copper on every layer it is drilled through, and a
+    /// pad's hole goes through the whole board, so a through-hole pad is
+    /// copper on every copper layer the board has - the same answer
+    /// [`Via::copper_mask`](crate::components::trace::Via::copper_mask) gives
+    /// a Top-to-Bottom via. KiCad writes such a pad `(layers "*.Cu" ...)`,
+    /// which its file format documents as "all of the copper layers", and the
+    /// importer can only spell that as `TopCopper` and `BottomCopper` because
+    /// it does not know the layer count. Every question about where a pad's
+    /// copper is - the router's grid, the checks, the copper files - is
+    /// answered here; until 2026-09-25 each read `layers` itself, the router
+    /// ended traces on an inner layer at a through-hole pad and the checks
+    /// reported the pin as reached by nothing.
+    ///
+    /// An SMD pad is the copper layers it lists. A hole with no copper is
+    /// none. The layers a board does not have hold no copper for these bits
+    /// to meet.
+    pub fn copper_mask(&self) -> u32 {
+        if self.is_non_plated() {
+            return 0;
+        }
+        if self.is_through_hole() {
+            return Layer::TopCopper.to_copper_mask()
+                | Layer::BottomCopper.to_copper_mask()
+                | (0u8..30).fold(0, |mask, n| mask | Layer::Inner(n).to_copper_mask());
+        }
+        self.layers
+            .iter()
+            .fold(0, |mask, layer| mask | layer.to_copper_mask())
+    }
+
+    /// Whether this pad is on `layer`: for a copper layer, by
+    /// [`PadDef::copper_mask`]; for any other layer, by the list.
+    pub fn is_on(&self, layer: Layer) -> bool {
+        match layer.to_copper_mask() {
+            0 => self.layers.contains(&layer),
+            bit => self.copper_mask() & bit != 0,
+        }
+    }
+
     /// Whether this hole is a slot: milled along its length, not drilled.
     ///
     /// A pair that is square is a round hole written the long way, so it is

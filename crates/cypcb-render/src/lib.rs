@@ -1102,7 +1102,7 @@ impl PcbEngine {
                             let layer_mask = if pd.layers.is_empty() {
                                 0xFFFFFFFF
                             } else {
-                                pd.layers.iter().fold(0u32, |m, l| m | l.to_copper_mask())
+                                pd.copper_mask()
                             };
                             entries.push(SpatialEntry::from_raw(
                                 *entity,
@@ -1647,11 +1647,7 @@ impl PcbEngine {
                 body_height_nm = fp.bounds.height().0;
 
                 for pad in &fp.pads {
-                    let mut layer_mask: u32 = 0;
-                    for layer in &pad.layers {
-                        let layer: &Layer = layer;
-                        layer_mask |= layer.to_copper_mask();
-                    }
+                    let layer_mask: u32 = pad.copper_mask();
                     let drill_nm: Option<i64> = pad.drill.map(|d| d.0);
                     pads.push(PadInfo {
                         number: pad.number.clone(),

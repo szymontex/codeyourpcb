@@ -424,18 +424,21 @@ fn the_sharp_entries_against_every_pad_that_could_have_been_one() {
     eprintln!("most entries carried by one trace: {most_lands_on_one_trace}");
 
     // The census this is read beside. If the two disagree, one of them
-    // measured a different board.
+    // measured a different board. Thirteen until 2026-09-25, when a
+    // through-hole pad became copper on every layer and `multi_ic`'s header
+    // pins the router reached on an inner layer were counted as reached:
+    // J2.S1, J3.3, J3.4 and J3.6 came in sharp and C5.2 left with its route.
     assert_eq!(
         sharp.len(),
-        13,
-        "the census reports thirteen sharp entries across the six fixtures"
+        16,
+        "the census reports sixteen sharp entries across the six fixtures"
     );
 
     // The first reading, and the denominator that kills it. Every sharp pad is
     // off-grid - and so is essentially every pad on every board, including the
     // seven hundred and sixty-odd that are entered cleanly. A property shared
     // by the whole population explains no subset of it, so being off-grid is
-    // not what the thirteen have in common and no repair aimed at the grid can
+    // not what the sixteen have in common and no repair aimed at the grid can
     // be justified by them.
     assert_eq!(
         sharp_on_grid, 0,
@@ -444,7 +447,7 @@ fn the_sharp_entries_against_every_pad_that_could_have_been_one() {
     assert!(
         netted_on_grid * 100 < netted_total,
         "off-grid pads are the rule, not the exception: {netted_on_grid} of {netted_total} \
-         netted pads sit on a cell centre, so being off-grid cannot distinguish the thirteen"
+         netted pads sit on a cell centre, so being off-grid cannot distinguish the sixteen"
     );
 
     // The pair behind that ratio, pinned exactly, because the ratio alone does
@@ -483,7 +486,7 @@ fn the_sharp_entries_against_every_pad_that_could_have_been_one() {
         "no part on any benchmark fixture is turned, so rotation explains nothing here"
     );
 
-    // What the thirteen do have in common, and the reason the published
+    // What the sixteen do have in common, and the reason the published
     // rectangle arithmetic does not reach them: not one of these lands is a
     // plain rectangle. Every one is a rounded rectangle or an oblong, both of
     // which curve where the trace crosses, so the entry angle depends on the
@@ -858,7 +861,11 @@ fn a_circular_land_reads_the_same_from_its_own_geometry() {
     // The fourth, 0.375 on `multi_ic`'s J1.S2, left on 2026-09-24 with the
     // router's fix for tracks run through a via's barrel: that board routes
     // to different copper and the entry is no longer made.
-    const CANON_SHARP_RATIOS: &[f64] = &[0.154, 0.122, 0.111];
+    //
+    // 0.241, 0.205, 0.134 and 0.024 - J3.4, J3.6, J2.S1 and J3.3 on
+    // `multi_ic` - arrived on 2026-09-25, when a through-hole pad became
+    // copper on every layer and those pins were counted as reached.
+    const CANON_SHARP_RATIOS: &[f64] = &[0.241, 0.205, 0.154, 0.134, 0.122, 0.111, 0.024];
     let mut printed: Vec<f64> = readings
         .iter()
         .filter(|r| r.sharp)

@@ -15,7 +15,7 @@ use cypcb_world::footprint::FootprintLibrary;
 use cypcb_world::{BoardWorld, Entity, FootprintRef, NetConnections, NetId, Position, Rotation};
 
 use crate::cost::RoutingCost;
-use crate::grid::{layer_to_index, RoutingGrid};
+use crate::grid::RoutingGrid;
 use crate::pathfinder::{find_path_with_zones, GridNode, PadZone};
 use crate::AutorouteConfig;
 use cypcb_world::components::rotate_about_origin;
@@ -137,13 +137,8 @@ pub fn extract_ratsnest(world: &mut BoardWorld, library: &FootprintLibrary) -> V
                 Nm::new(comp_pos.y.raw() + pad_pos.y.raw()),
             );
 
-            // Compute layer mask from pad layers
-            let mut layer_mask = 0u32;
-            for layer in &pad_def.layers {
-                if let Some(idx) = layer_to_index(*layer) {
-                    layer_mask |= 1u32 << idx;
-                }
-            }
+            // The routing index of a layer is its bit in the copper mask.
+            let layer_mask = pad_def.copper_mask();
 
             if covered_by_pour(&pours, pin_conn.net, abs_pos, layer_mask) {
                 tracing::debug!(

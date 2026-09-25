@@ -200,7 +200,7 @@ pub fn copper_on_layer(
         let (sin, cos) = radians.sin_cos();
 
         for pad in &footprint.pads {
-            if !pad.layers.contains(&layer) {
+            if !pad.is_on(layer) {
                 continue;
             }
             let pad_net = pins

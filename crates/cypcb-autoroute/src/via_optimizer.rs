@@ -13,7 +13,7 @@ use cypcb_world::components::trace::{Trace, Via};
 use cypcb_world::footprint::FootprintLibrary;
 use cypcb_world::{BoardWorld, FootprintRef, Layer, NetConnections, NetId, Position, Rotation};
 
-use crate::grid::layer_to_index;
+use crate::grid::{index_to_layer, layer_to_index};
 
 /// Copper and keepouts the board had before routing, which a replacement
 /// segment has to clear as much as the routed copper.
@@ -79,10 +79,10 @@ impl BoardObstacles {
                     layers: if pad.is_non_plated() {
                         Vec::new()
                     } else {
-                        pad.layers
-                            .iter()
-                            .copied()
-                            .filter(|l| l.is_copper())
+                        let copper = pad.copper_mask();
+                        (0..32usize)
+                            .filter(|index| copper & (1u32 << index) != 0)
+                            .map(index_to_layer)
                             .collect()
                     },
                 });
