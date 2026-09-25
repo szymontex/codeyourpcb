@@ -44,6 +44,10 @@ struct PadCopper {
     /// circle reaches the neighbouring pads of any fine-pitch part. `None` for
     /// a pad turned by another angle, and for a via, which is round anyway.
     half_extent: Option<[i64; 2]>,
+    /// The hole on the board: the path of the bit's centre and its radius,
+    /// from [`PadDef::hole`](cypcb_world::footprint::PadDef::hole) for a pin
+    /// and the drill for a via. `None` for a surface pad.
+    hole: Option<([i64; 2], [i64; 2], i64)>,
 }
 
 impl BoardObstacles {
@@ -83,6 +87,13 @@ impl BoardObstacles {
                         [hh, hw]
                     }
                 });
+                let on_board = |p: Point| {
+                    let offset = rotate_about_origin(p, *rotation_deg);
+                    [comp_pos.x.0 + offset.x.0, comp_pos.y.0 + offset.y.0]
+                };
+                let hole = pad
+                    .hole()
+                    .map(|(start, end, radius)| (on_board(start), on_board(end), radius.0));
                 pads.push(PadCopper {
                     net: nets.as_ref().and_then(|n| n.pin_net(&pad.number)),
                     center: Point::new(
@@ -100,6 +111,7 @@ impl BoardObstacles {
                             .collect()
                     },
                     half_extent,
+                    hole,
                 });
             }
         }
@@ -130,6 +142,11 @@ impl BoardObstacles {
                 radius: Nm::new(via.outer_diameter.raw() / 2),
                 layers,
                 half_extent: None,
+                hole: Some((
+                    [via.position.x.0, via.position.y.0],
+                    [via.position.x.0, via.position.y.0],
+                    via.drill.0 / 2,
+                )),
             });
         }
 
@@ -205,7 +222,8 @@ impl BoardObstacles {
 /// * `board` - What was on the board before routing
 /// * `min_clearance` - Minimum clearance distance, edge to edge
 /// * `min_hole_to_hole` - Minimum distance between drilled holes, edge to edge,
-///   which a moved via keeps from every other via
+///   which a moved via keeps from every other via and from every hole that
+///   was on the board before routing, pins' holes included
 ///
 /// # Returns
 /// Tuple of (optimized segments, optimized vias)
@@ -635,11 +653,22 @@ impl Surroundings<'_> {
             .iter()
             .filter(|pad| pad.net != Some(net))
             .all(|pad| pad_gap(pad, at, at) >= c + r);
+        // A pin's hole is a hole whatever the pin's net: the checker measures
+        // a via beside a connector pin of its own net as it measures two vias.
+        let board_holes =
+            self.board
+                .pads
+                .iter()
+                .filter_map(|pad| pad.hole)
+                .all(|(start, end, radius)| {
+                    segment_distance(at, at, start, end) - radius - via.drill.0 / 2
+                        >= self.min_hole_to_hole.0
+                });
         let keepouts = [Layer::TopCopper, Layer::BottomCopper]
             .into_iter()
             .chain((0..30).map(Layer::Inner))
             .all(|layer| keepouts_clear(self.board, layer, at, at, Nm(2 * r)));
-        segments && vias && pads && keepouts
+        segments && vias && pads && board_holes && keepouts
     }
 }
 
@@ -1082,6 +1111,7 @@ mod tests {
                 radius: Nm::from_mm(0.4),
                 layers,
                 half_extent: None,
+                hole: None,
             }],
             ..BoardObstacles::default()
         }
@@ -1145,6 +1175,7 @@ mod tests {
                 radius: Nm::from_mm(0.62),
                 layers: pad_layers,
                 half_extent: None,
+                hole: None,
             }],
             ..BoardObstacles::default()
         };
@@ -1212,6 +1243,7 @@ mod tests {
             radius: Nm::from_mm(0.62),
             layers: vec![Layer::TopCopper],
             half_extent: Some([Nm::from_mm(0.6).0, Nm::from_mm(0.15).0]),
+            hole: None,
         };
         let mut pads = vec![pad(1, 0.0)];
         if neighbours {
@@ -1273,6 +1305,7 @@ mod tests {
             radius: Nm::from_mm(0.5),
             layers: vec![Layer::TopCopper],
             half_extent: None,
+            hole: None,
         });
 
         let (_, opt_vias) =

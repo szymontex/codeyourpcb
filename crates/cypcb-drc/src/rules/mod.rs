@@ -421,13 +421,11 @@ pub(crate) fn holes_of(world: &mut BoardWorld) -> Vec<Hole> {
         let degrees = rotation.to_degrees();
 
         for pad in &footprint.pads {
-            let Some(drill) = pad.drill else { continue };
-            let half = pad.slot_half_travel().unwrap_or(Point::ORIGIN);
-            let place = |dx: i64, dy: i64| {
-                let offset = rotate_point(
-                    Point::new(Nm(pad.position.x.0 + dx), Nm(pad.position.y.0 + dy)),
-                    degrees,
-                );
+            let Some((start, end, radius)) = pad.hole() else {
+                continue;
+            };
+            let place = |p: Point| {
+                let offset = rotate_point(p, degrees);
                 Point::new(
                     Nm(position.0.x.0 + offset.x.0),
                     Nm(position.0.y.0 + offset.y.0),
@@ -435,9 +433,9 @@ pub(crate) fn holes_of(world: &mut BoardWorld) -> Vec<Hole> {
             };
             holes.push(Hole {
                 entity: *entity,
-                start: place(-half.x.0, -half.y.0),
-                end: place(half.x.0, half.y.0),
-                radius: drill.0 / 2,
+                start: place(start),
+                end: place(end),
+                radius: radius.0,
                 // A drilled pad goes through the board.
                 span: (Layer::TopCopper, Layer::BottomCopper),
                 plated: !pad.is_non_plated(),
