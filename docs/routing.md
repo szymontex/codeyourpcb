@@ -1020,6 +1020,7 @@ stated.
 | Refuse a via whose keepout holds foreign copper | led_blink 3 -> 2, but stm32_breakout 180 -> 215 and multi_ic 128 -> 245, shorts 29 -> 111 |
 | Pad opening at 2 cells instead of 3 (tried twice) | Totals better - 87 fewer violations, 67 fewer shorts - but the gain is entirely on the two boards the value was fitted on; led_blink gains a 0.00mm via-to-pad short and stm32_breakout's band widens 30 -> 77 |
 | Finer grid, 0.127mm instead of the track pitch | stm32_breakout 15.88 -> 39.46 violations per 100mm of copper, time doubled |
+| Grid cell capped at half the finest pad pitch | multi_ic 43 -> 108 shorts, qfp_fanout 34 -> 45, nothing better; see below |
 | Best of N net orderings | identical results at 1, 3 and 5 attempts - every rotation of `order_nets` is worse, so the best-of always returns the unrotated one |
 | Return the iteration with the fewest overused cells | stm32_breakout 133 -> 152, multi_ic 140 -> 174 |
 | Seed the congestion map from ratsnest density | stm32_breakout 121 -> 142, multi_ic 73 -> 112 at the lightest weight; multi_ic segments 706 -> 1188 |
@@ -1370,6 +1371,92 @@ one regression is on the board with the least. A weight that varies with the
 board - or one swept per variant, since each of the eleven is a different cost
 model - is a different experiment from this one, and this is the measurement
 it would start from.
+
+### A grid cut to the pad pitch, measured and dropped (2026-09-25)
+
+The cell is computed from the rules and the board outline, never from the
+parts. `AutorouteConfig::resolve_grid_resolution`
+(`crates/cypcb-autoroute/src/lib.rs:382`) takes one trace plus one clearance;
+`resolve_adaptive_grid_resolution` (`crates/cypcb-autoroute/src/lib.rs:409`)
+doubles that on a board over 80mm and triples it over 200mm, on the stated
+assumption that "larger boards have proportionally wider trace spacing". On
+`multi_ic` that is 0.1 + 0.1 = 0.2mm from the 4-layer rules, doubled to 0.4mm
+because the board is 100 x 80mm - on a board whose finest pad pitch is 0.5mm.
+The assumption is false there.
+
+**When a trace fits between two pads at all.** With `p` the centre distance of
+two pads of different nets, `a` the pad's width across that gap, `w` the trace
+width and `c` the clearance, the copper gap is `g = p - a`, and a trace passes
+between the pads if and only if
+
+    g = p - a >= w + 2c
+
+That condition has nothing to do with the grid. The grid adds one more: the
+trace's centre line must fall on a node inside the corridor of width
+`L = g - w - 2c`, which is guaranteed only if `L >= r` for a cell of `r`. And a
+free node strictly between the two pads, whatever the router does with it, is
+guaranteed only if `p >= 2r`.
+
+Per board, the closest pair of pads on different nets, and what the grid does
+to every pair of different nets within two pitches of each other:
+
+| board | pitch p | pad a | gap g | w + 2c | trace fits | winner's r | pairs on adjacent nodes at r | at p/2 |
+|---|---|---|---|---|---|---|---|---|
+| led_blink | 0.96 | 0.56 | 0.40 | 0.381 | yes | 0.254 | 0 of 3 | - |
+| stm32_breakout | 0.50 | 0.30 | 0.20 | 0.381 | **no** | 0.169 | 0 of 91 | 0 |
+| multi_ic | 0.50 | 0.30 | 0.20 | 0.300 | **no** | 0.400 | **45 of 151** | 0 |
+| shift_driver | 1.90 | 1.00 | 0.90 | 0.381 | yes | 0.254 | 0 of 133 | - |
+| plane_board | 0.95 | 0.60 | 0.35 | 0.381 | **no** | 0.254 | 0 of 20 | - |
+| qfp_fanout | 0.50 | 0.30 | 0.20 | 0.381 | **no** | 0.254 | 0 of 129 | 0 |
+
+All lengths in mm. No pair of different nets snaps to the same node on any
+board at any of these cells. On `multi_ic` at 0.4mm the worst snap of a pad
+centre is 0.283mm, more than half the pitch; at 0.25mm it is 0.177mm.
+
+**The sentence that matters is the `no` column.** At a 0.5mm pitch a trace does
+not physically fit between two neighbouring pads on any of the three
+fine-pitch boards, at any grid. Every short at a QFP pad is therefore a
+question of how the trace leaves the pad outward, never of passing between
+pads - and that is how the fine-pitch short group should be read.
+
+**The variant.** A flag, off by default, set the cell to
+`min(r_adaptive, p_min / 2)`, with `p_min` the smallest centre distance between
+pads of two different nets. It only moves `multi_ic` (0.4 -> 0.25) and
+`qfp_fanout` (0.254 -> 0.25); `stm32_breakout` already routes below 0.25.
+Winners on all six boards with every variant, flag off and on - shorts /
+unconnected pins / seconds for the whole variant set:
+
+| board | off | on |
+|---|---|---|
+| led_blink | 0 / 0 / 0.05 | 0 / 0 / 0.05 |
+| stm32_breakout | 25 / 0 / 18.61 | 25 / 0 / 17.52 |
+| multi_ic | 43 / 0 / 95.09 | **108 / 0 / 203.88** |
+| shift_driver | 0 / 0 / 10.66 | 0 / 0 / 10.83 |
+| plane_board | 0 / 0 / 1.21 | 0 / 0 / 1.23 |
+| qfp_fanout | 34 / 0 / 12.07 | **45 / 0 / 11.97** |
+
+The two boards the flag touches both get worse, and nothing gets better. The
+winner on `multi_ic` changes from `PathFinder Clearance Priced` to
+`PathFinder Bare Centre Line`.
+
+**The pair it was meant to enable.** The pad wall refuses a foreign pad's
+cells to the routing net. On `multi_ic`, with the wall:
+
+| cell | winner | shorts | unconnected pins | seconds |
+|---|---|---|---|---|
+| 0.4mm, no wall (shipped) | `PathFinder Clearance Priced` | 43 | 0 | 95.09 |
+| 0.4mm, wall | `PathFinder High-Density` | 34 | 3 | 484.13 |
+| 0.25mm, wall | `PathFinder Eager Pads Priced Ring` | 28 | 26 | 273.04 |
+
+Both cut shorts and both leave pins unconnected on a board that ships with
+none, so the pair is dropped with the flag.
+
+**What this does not explain** is why a finer grid is worse at all. More nodes
+should be more room, not less. That is the open question this leaves, and the
+measurement it would start from.
+
+Measured with a throwaway probe and a flag that were both reverted; neither
+is in the tree.
 
 ## Rip-up and reroute, read out of the primary paper
 
