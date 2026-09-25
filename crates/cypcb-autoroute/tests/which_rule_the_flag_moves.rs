@@ -215,12 +215,14 @@ fn the_holes_come_off_the_boards_that_had_the_most() {
         after_total += on.get("HoleToHole").copied().unwrap_or(0);
     }
     println!("all six boards: HoleToHole {before_total} -> {after_total}");
-    // 65 -> 33 on 2026-09-23, the first run in which `optimize_vias` kept
-    // every pair whose replacement would cross another net. That is half
-    // rounded up, one hole short of the strict half this asserted while the
-    // optimizer was deleting vias it had no business deleting.
+    // 65 -> 33 on 2026-09-23, and 57 -> 25 on 2026-09-25 just before
+    // `optimize_vias` began merging two vias of one net on one spot. The fall
+    // was mostly those stacked pairs, which the flag avoided and the merge now
+    // removes with the flag in either position: 30 -> 24 once it did. What
+    // is left is still a fall, and a flag that stopped moving holes would
+    // leave the two counts equal, so equal fails.
     assert!(
-        after_total <= before_total.div_ceil(2),
+        after_total < before_total,
         "HoleToHole {before_total} -> {after_total}"
     );
 }

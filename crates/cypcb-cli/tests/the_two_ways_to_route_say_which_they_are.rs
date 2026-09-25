@@ -35,6 +35,15 @@ fn run(args: &[&str]) -> String {
     String::from_utf8_lossy(&output.stdout).to_string() + &String::from_utf8_lossy(&output.stderr)
 }
 
+/// How many variants `cypcb route` ranks, read from the list it ranks, so a
+/// variant added to the list does not break a sentence that counts them.
+fn ranked() -> String {
+    format!(
+        "{} variants",
+        cypcb_autoroute::variant::default_variant_configs().len()
+    )
+}
+
 #[test]
 fn each_page_says_which_routing_it_does() {
     let route = run(&["route", "--help"]);
@@ -70,7 +79,7 @@ fn the_commands_do_what_their_pages_say() {
         routed.to_str().expect("a path"),
     ]);
     assert!(
-        searched.contains("15 variants"),
+        searched.contains(&ranked()),
         "the search the page describes:\n{searched}"
     );
     assert!(
@@ -88,7 +97,7 @@ fn the_commands_do_what_their_pages_say() {
         fast.to_str().expect("a path"),
     ]);
     assert!(
-        !quick.contains("15 variants"),
+        !quick.contains(&ranked()),
         "`--fast` skips the search:\n{quick}"
     );
 

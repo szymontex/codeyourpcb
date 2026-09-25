@@ -50,6 +50,15 @@ fn route(board: &Path, extra: &[&str]) -> (String, String) {
     )
 }
 
+/// How many variants `cypcb route` ranks, read from the list it ranks, so a
+/// variant added to the list does not break a sentence that counts them.
+fn ranked() -> String {
+    format!(
+        "{} variants",
+        cypcb_autoroute::variant::default_variant_configs().len()
+    )
+}
+
 #[test]
 fn a_best_of_run_names_the_variant_it_kept() {
     let board = scratch("variants");
@@ -72,7 +81,7 @@ fn a_best_of_run_names_the_variant_it_kept() {
             .unwrap_or("")
     );
     assert!(
-        written.contains("best of 15 variants"),
+        written.contains(&format!("best of {}", ranked())),
         "and how many it was chosen from:\n{written}"
     );
 }

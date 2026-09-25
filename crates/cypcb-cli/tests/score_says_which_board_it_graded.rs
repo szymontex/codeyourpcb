@@ -51,6 +51,15 @@ fn score(board: &Path) -> (String, String) {
     )
 }
 
+/// How many variants `cypcb route` ranks, read from the list it ranks, so a
+/// variant added to the list does not break a sentence that counts them.
+fn ranked() -> String {
+    format!(
+        "{} variants",
+        cypcb_autoroute::variant::default_variant_configs().len()
+    )
+}
+
 #[test]
 fn an_unrouted_board_is_told_which_router_laid_the_copper() {
     let (said, json) = score(&example("blink.cypcb"));
@@ -60,7 +69,7 @@ fn an_unrouted_board_is_told_which_router_laid_the_copper() {
         "scoring routes the board itself, and how it routed decides every number below:\n{said}"
     );
     assert!(
-        said.contains("15 variants"),
+        said.contains(&ranked()),
         "and the other command produces a different board, which is worth knowing:\n{said}"
     );
     assert!(
