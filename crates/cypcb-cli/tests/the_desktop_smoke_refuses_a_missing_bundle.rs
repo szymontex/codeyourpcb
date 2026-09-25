@@ -34,10 +34,16 @@ fn tree_with_the_script(name: &str) -> cypcb_fixtures::ScratchDir {
 }
 
 fn run_smoke(root: &Path) -> (Option<i32>, String) {
-    let output = Command::new("bash")
-        .arg(root.join("scripts/desktop-smoke.sh"))
-        .output()
-        .expect("bash runs the smoke script");
+    run_smoke_on(root, None)
+}
+
+fn run_smoke_on(root: &Path, ws_port: Option<u16>) -> (Option<i32>, String) {
+    let mut command = Command::new("bash");
+    command.arg(root.join("scripts/desktop-smoke.sh"));
+    if let Some(port) = ws_port {
+        command.env("CYPCB_SMOKE_WS_PORT", port.to_string());
+    }
+    let output = command.output().expect("bash runs the smoke script");
     let text = format!(
         "{}{}",
         String::from_utf8_lossy(&output.stdout),
@@ -74,4 +80,39 @@ fn an_empty_bundle_is_an_error() {
     let root = tree_with_the_script("empty-bundle");
     std::fs::create_dir_all(root.join("viewer/dist")).expect("the scratch tree is writable");
     assert_refused(&root);
+}
+
+/// Somebody else on the smoke's port is an error, before anything is built.
+///
+/// Until 2026-09-25 the script connected to the port before the build and
+/// bound it after, and a failed bind was swallowed. Two smokes started
+/// together both saw it free, and the second app dialled the first run's
+/// listener. The port is now bound before the build and held; this case holds
+/// it first and expects the refusal.
+#[test]
+fn a_taken_port_is_an_error() {
+    let root = tree_with_the_script("taken-port");
+    std::fs::create_dir_all(root.join("viewer/dist")).expect("the scratch tree is writable");
+    std::fs::write(root.join("viewer/dist").join("index.html"), "<html></html>")
+        .expect("the scratch tree is writable");
+    let holder = std::net::TcpListener::bind("127.0.0.1:0").expect("a free port to hold");
+    let port = holder.local_addr().expect("a bound address").port();
+
+    let (code, text) = run_smoke_on(&root, Some(port));
+    drop(holder);
+    let _ = std::fs::remove_dir_all(&root);
+
+    assert_eq!(
+        code,
+        Some(1),
+        "the smoke did not fail on a taken port:\n{text}"
+    );
+    assert!(
+        text.contains(&format!("something already listens on {port}")),
+        "the smoke failed without naming the port:\n{text}"
+    );
+    assert!(
+        !text.contains("[SKIP]") && !text.contains("[0/2]"),
+        "the smoke got past the port before refusing:\n{text}"
+    );
 }

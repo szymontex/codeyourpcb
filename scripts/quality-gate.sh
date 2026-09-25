@@ -169,6 +169,17 @@ stage_done() {
 pass() { CHECKS_PASSED=$((CHECKS_PASSED + 1)); echo "  ✓ $1"; }
 fail() { echo "  ✗ $1"; stage_done; exit 1; }
 
+# A port nothing holds at this moment, for a stage that serves or listens.
+#
+# The gate locks its build directory, so two gates on two build directories
+# run side by side - the nightly one and a hand run, say - and a port written
+# into this file is one both of them take. The kernel hands out a port that is
+# free now; whoever binds it next keeps it, and a stage that loses it fails on
+# the bind rather than testing the other run's server.
+free_port() {
+  python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])'
+}
+
 echo "=== Quality Gate ==="
 echo ""
 
@@ -413,13 +424,18 @@ echo ""
 #
 # That port is no longer 4321. It was, and 4321 is Astro's default, so a gate
 # run failed here because another repository's dev server in this container
-# held it. `CYPCB_E2E_PORT` overrides, and the default is 4327.
+# held it. It was 4327 after that, and two gates on two build directories
+# both served there: the second stopped with "already used". The gate now
+# takes a free port and prints it; `CYPCB_E2E_PORT` overrides, and a hand run
+# of `npx playwright test` still defaults to 4327.
 #
 # The page's WebSocket has a port of its own, and it was the one thing the
 # e2e port did not isolate: the client dialled 4322 whatever served it, so a
 # `npm start` running from another checkout answered every spec and pushed its
 # board into the page. `CYPCB_E2E_WS_PORT` overrides, the default is 4328, and
 # nothing listens there; `the-page-dials-its-own-websocket.spec.ts` checks it.
+# That one stays fixed: a run only dials it and never binds it, so two runs
+# share it without meeting, and a free port would say nothing more about it.
 stage "playwright (rebuilding viewer/pkg first)"
 # The module is rebuilt, and then asked whether the committed one is the same.
 # The rebuild makes the browser suite honest about the working tree; the
@@ -508,7 +524,9 @@ if [ -n "$UNTRACKED_PKG" ]; then
   fail "untracked viewer/pkg output"
 fi
 PLAYWRIGHT_LOG=$(mktemp)
-if (cd viewer && CI=1 npx playwright test 2>&1 | tee "$PLAYWRIGHT_LOG"); then
+E2E_PORT=${CYPCB_E2E_PORT:-$(free_port)}
+echo "  e2e page served on port $E2E_PORT"
+if (cd viewer && CI=1 CYPCB_E2E_PORT="$E2E_PORT" npx playwright test 2>&1 | tee "$PLAYWRIGHT_LOG"); then
   pass "playwright"
 else
   # Which spec. The stage used to end in a bare "playwright FAILED" while the
@@ -670,9 +688,20 @@ echo ""
 # that the window shows this bundle and not the page `devUrl` points at. The
 # desktop app dials no socket unless built with CYPCB_DESKTOP_DEV_SOCKET=1, so
 # the smoke's bundle is built with it: that dial is how it proves its origin.
+#
+# The port is picked before the bundle is built, because the bundle carries it:
+# `__CYPCB_WS_PORT__` is written in by Vite, and the shipped app has no way to
+# be told a port at start that would not also be a way for anything on a
+# user's machine to point its editor at a socket. It was 4329 for every run,
+# and two gates on two build directories met there: on 2026-09-25 two smokes
+# started together, one passed with 6 connections and the other failed with
+# `never dialled 4329`. The script takes the port before it builds and holds
+# it to the end, so losing it is an error, not a dial counted by the wrong run.
 stage "desktop smoke"
-if (cd viewer && CYPCB_DESKTOP_DEV_SOCKET=1 CYPCB_WS_PORT="${CYPCB_SMOKE_WS_PORT:-4329}" npm run build) >/dev/null 2>&1 \
-    && ./scripts/desktop-smoke.sh; then
+SMOKE_WS_PORT=${CYPCB_SMOKE_WS_PORT:-$(free_port)}
+echo "  desktop smoke WebSocket port: $SMOKE_WS_PORT"
+if (cd viewer && CYPCB_DESKTOP_DEV_SOCKET=1 CYPCB_WS_PORT="$SMOKE_WS_PORT" npm run build) >/dev/null 2>&1 \
+    && CYPCB_SMOKE_WS_PORT="$SMOKE_WS_PORT" ./scripts/desktop-smoke.sh; then
   pass "desktop-smoke"
 else
   fail "desktop-smoke"

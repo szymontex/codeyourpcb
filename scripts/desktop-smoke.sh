@@ -22,8 +22,9 @@ set -e
 # that is what "Smoke passed" had been photographing while a dev server ran on
 # the same machine. The build below turns the feature on, and Tauri then
 # refuses to compile without `viewer/dist`. The page also has to prove where it
-# came from: the bundle dials its WebSocket on CYPCB_SMOKE_WS_PORT (default
-# 4329), this script listens there, and a window that never dialled fails. A
+# came from: the bundle dials its WebSocket on CYPCB_SMOKE_WS_PORT (4329 for a
+# hand run; the gate picks a free port and prints it), this script listens
+# there, and a window that never dialled fails. A
 # shipped desktop build dials nothing, so the bundle is built with
 # CYPCB_DESKTOP_DEV_SOCKET=1, the developer's switch that turns the dial on.
 #
@@ -84,18 +85,78 @@ fresher_than "$FRONTEND" "the frontend bundle" viewer/src viewer/index.html || {
     exit 1
 }
 
+# The temporary files, removed however this script ends. The two `rm -f "$LOG"`
+# lines further down cover the paths that reach them; `set -e` is on, so any
+# failure before them exits without cleaning up, and an interrupted run never
+# reaches them either. A trap runs on the way out whatever the way out is, and
+# the runner script had no `rm` on those paths at all.
+RUNNER=$(mktemp)
+LOG=$(mktemp)
+DIALS=$(mktemp)
+BOUND=$(mktemp)
+LISTENER=
+trap 'rm -f "$RUNNER" "$LOG" "$DIALS" "$BOUND"; [ -z "$LISTENER" ] || kill "$LISTENER" 2>/dev/null' EXIT
+
+# Counts connections on the port the bundle was built to dial. It accepts and
+# hangs up; the page reconnects, and one connection is all the count needs.
+#
+# It takes the port before the build, not after it, and a port it cannot take
+# is an error. The check here used to be a connect before the build and the
+# listener after it, with a failed bind swallowed. Two smokes started together
+# both found the port free, both built, and only the first listener got it:
+# the second app dialled the first run's listener, and on 2026-09-25 that run
+# passed with 6 connections while the second failed with `never dialled 4329`.
+# A dial counted by the wrong run can pass a window that loaded nothing, so
+# the port is held from here to the end, by this run alone.
+python3 - "$WS_PORT" "$DIALS" "$BOUND" <<'PY' &
+import socket, sys, threading
+port, out, bound = int(sys.argv[1]), sys.argv[2], sys.argv[3]
+count, lock = 0, threading.Lock()
+servers = []
+for family, host in ((socket.AF_INET, "127.0.0.1"), (socket.AF_INET6, "::1")):
+    try:
+        server = socket.socket(family, socket.SOCK_STREAM)
+        # Lets a rerun take the port past the last run's TIME_WAIT; it does
+        # not let two listeners share it on Linux.
+        server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        server.bind((host, port))
+        server.listen(16)
+        servers.append(server)
+    except OSError:
+        # IPv4 is required; a container without IPv6 loopback still smokes.
+        if family == socket.AF_INET:
+            sys.exit(3)
+with open(bound, "w") as f:
+    f.write("bound")
+def serve(server):
+    global count
+    while True:
+        conn, _ = server.accept()
+        conn.close()
+        with lock:
+            count += 1
+            with open(out, "w") as f:
+                f.write(str(count))
+for server in servers:
+    threading.Thread(target=serve, args=(server,), daemon=True).start()
+threading.Event().wait()
+PY
+LISTENER=$!
+until [ -s "$BOUND" ]; do
+    kill -0 "$LISTENER" 2>/dev/null || {
+        LISTENER=
+        echo "[ERROR] something already listens on $WS_PORT; set CYPCB_SMOKE_WS_PORT"
+        exit 1
+    }
+    sleep 0.1
+done
+
 for tool in xvfb-run import; do
     command -v "$tool" >/dev/null || {
         echo "[SKIP] $tool not found. apt-get install -y xvfb imagemagick"
         exit 0
     }
 done
-
-# Somebody else on the port would take the dial this script counts.
-if (exec 3<>"/dev/tcp/127.0.0.1/$WS_PORT") 2>/dev/null; then
-    echo "[ERROR] something already listens on $WS_PORT; set CYPCB_SMOKE_WS_PORT"
-    exit 1
-fi
 
 # The binary is built here, not trusted from whoever built it last: without
 # `custom-protocol` it would open the dev server's page, not this tree's.
@@ -107,45 +168,6 @@ if ! BUILD_OUT=$(cargo build -p cypcb-desktop --features tauri/custom-protocol 2
 fi
 
 echo "[1/2] starting $APP on a virtual display for ${SECONDS_UP}s"
-
-# The temporary files, removed however this script ends. The two `rm -f "$LOG"`
-# lines further down cover the paths that reach them; `set -e` is on, so any
-# failure before them exits without cleaning up, and an interrupted run never
-# reaches them either. A trap runs on the way out whatever the way out is, and
-# the runner script had no `rm` on those paths at all.
-RUNNER=$(mktemp)
-LOG=$(mktemp)
-DIALS=$(mktemp)
-LISTENER=
-trap 'rm -f "$RUNNER" "$LOG" "$DIALS"; [ -z "$LISTENER" ] || kill "$LISTENER" 2>/dev/null' EXIT
-
-# Counts connections on the port the bundle was built to dial. It accepts and
-# hangs up; the page reconnects, and one connection is all the count needs.
-python3 - "$WS_PORT" "$DIALS" <<'PY' &
-import socket, sys, threading
-port, out = int(sys.argv[1]), sys.argv[2]
-count, lock = 0, threading.Lock()
-def serve(family, host):
-    global count
-    try:
-        server = socket.socket(family, socket.SOCK_STREAM)
-        server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        server.bind((host, port))
-        server.listen(16)
-    except OSError:
-        return
-    while True:
-        conn, _ = server.accept()
-        conn.close()
-        with lock:
-            count += 1
-            with open(out, "w") as f:
-                f.write(str(count))
-for family, host in ((socket.AF_INET, "127.0.0.1"), (socket.AF_INET6, "::1")):
-    threading.Thread(target=serve, args=(family, host), daemon=True).start()
-threading.Event().wait()
-PY
-LISTENER=$!
 cat > "$RUNNER" <<EOF
 #!/bin/bash
 "$APP" &
