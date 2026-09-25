@@ -263,6 +263,24 @@ pub fn optimize_vias(
                     continue;
                 }
 
+                // The same holds for a pad. The router can reach a surface pad
+                // from the far side by stepping up onto it and straight back
+                // down, and then the short run between the two vias is the
+                // pad's only copper. On `multi_ic` that was U1.63: VCC_3V3
+                // came up onto the top-layer pad and went down again one cell
+                // later, the pair was replaced by a bottom-layer segment under
+                // the pad, and the pin was left with no copper at all.
+                if pad_needs_the_hop(
+                    board,
+                    *net_id,
+                    &kept_segments[between_seg_idx],
+                    original_layer,
+                    [via_a.position.x.0, via_a.position.y.0],
+                    [via_b.position.x.0, via_b.position.y.0],
+                ) {
+                    continue;
+                }
+
                 // Check if a direct segment on the original layer is DRC-clean
                 let direct_start = via_a.position;
                 let direct_end = via_b.position;
@@ -387,6 +405,36 @@ fn board_clear(
         });
 
     pads_clear && keepouts_clear
+}
+
+/// Whether a pad of the pair's own net is reached by the run between the two
+/// vias and would not be reached by the direct segment that replaces it.
+///
+/// The pad is the covering circle `BoardObstacles` keeps, so a run that only
+/// passes near a pad can read as reaching it. That errs toward keeping a pair,
+/// which costs two vias; the other way costs a pin.
+fn pad_needs_the_hop(
+    board: &BoardObstacles,
+    net_id: NetId,
+    between: &RouteSegment,
+    original_layer: Layer,
+    p1: [i64; 2],
+    p2: [i64; 2],
+) -> bool {
+    let a = [between.start.x.0, between.start.y.0];
+    let b = [between.end.x.0, between.end.y.0];
+    board
+        .pads
+        .iter()
+        .filter(|pad| pad.net == Some(net_id) && pad.layers.contains(&between.layer))
+        .any(|pad| {
+            let c = [pad.center.x.0, pad.center.y.0];
+            let reach = pad.radius.0 + between.width.0 / 2;
+            let reached_now = segment_distance(a, b, c, c) <= reach;
+            let reached_after =
+                pad.layers.contains(&original_layer) && segment_distance(p1, p2, c, c) <= reach;
+            reached_now && !reached_after
+        })
 }
 
 /// Whether a segment's centreline passes through a via's centre.
@@ -777,6 +825,55 @@ mod tests {
             let (_, opt_vias) = optimize_vias(segments, vias, &board, Nm::from_mm(0.15));
             assert!(opt_vias.is_empty(), "{board:?}");
         }
+    }
+
+    /// U1.63 on `multi_ic`, reduced: a net comes up onto a top-layer pad from
+    /// the bottom, runs one cell along it and goes back down. The run between
+    /// the vias is the only copper on the pad, so the pair stays.
+    fn a_hop_onto_a_surface_pad(
+        pad_layers: Vec<Layer>,
+    ) -> (Vec<RouteSegment>, Vec<ViaPlacement>, BoardObstacles) {
+        let segments = vec![
+            make_seg(1, Layer::BottomCopper, 0.0, 0.0, 5.0, 0.2),
+            make_seg(1, Layer::TopCopper, 5.0, 0.2, 5.0, -0.2),
+            make_seg(1, Layer::BottomCopper, 5.0, -0.2, 5.0, -5.0),
+        ];
+        let vias = vec![
+            make_via(1, 5.0, 0.2, Layer::BottomCopper, Layer::TopCopper),
+            make_via(1, 5.0, -0.2, Layer::TopCopper, Layer::BottomCopper),
+        ];
+        let board = BoardObstacles {
+            pads: vec![PadCopper {
+                net: Some(NetId::new(1)),
+                center: Point::from_mm(4.8, 0.0),
+                radius: Nm::from_mm(0.62),
+                layers: pad_layers,
+            }],
+            ..BoardObstacles::default()
+        };
+        (segments, vias, board)
+    }
+
+    #[test]
+    fn a_surface_pad_reached_only_between_the_vias_keeps_the_pair() {
+        let (segments, vias, board) = a_hop_onto_a_surface_pad(vec![Layer::TopCopper]);
+
+        let (opt_segs, opt_vias) = optimize_vias(segments, vias, &board, Nm::from_mm(0.1));
+
+        assert_eq!(opt_vias.len(), 2, "the pad's only copper was replaced");
+        assert!(opt_segs.iter().any(|s| s.layer == Layer::TopCopper));
+    }
+
+    #[test]
+    fn a_pad_the_direct_segment_also_reaches_does_not_keep_it() {
+        // The control: a through-hole pad is on the bottom too, the direct
+        // segment still lands on it, and the pair is as redundant as ever.
+        let (segments, vias, board) =
+            a_hop_onto_a_surface_pad(vec![Layer::TopCopper, Layer::BottomCopper]);
+
+        let (_, opt_vias) = optimize_vias(segments, vias, &board, Nm::from_mm(0.1));
+
+        assert!(opt_vias.is_empty());
     }
 
     #[test]
