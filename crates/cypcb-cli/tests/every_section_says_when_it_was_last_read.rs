@@ -2809,6 +2809,76 @@ fn a_rule_this_project_derived_itself_records_a_command() {
     );
 }
 
+/// **A rule tagged `[S]` names the commit it landed in, and the commit is
+/// here.** The legend says an `[S]` entry carries a commit instead of a read
+/// date: no outside page will confirm this project's own reasoning, so the
+/// history is the only place a reader can check what it looked like when it
+/// was written. The check above asks that a commit the canon cites resolves;
+/// this one asks that an `[S]` rule cites one at all, and asks the object
+/// store directly with `git cat-file -e`.
+#[test]
+fn a_rule_this_project_derived_itself_names_its_commit() {
+    let root = repo_root();
+    let canon =
+        std::fs::read_to_string(root.join("docs/ROUTING-CANON.md")).expect("the canon is there");
+
+    let mut derived = 0;
+    let mut without_a_commit: Vec<String> = Vec::new();
+    let mut not_here: Vec<String> = Vec::new();
+
+    for section in canon.split("\n### ").skip(1) {
+        let heading = section.lines().next().unwrap_or_default();
+        if !heading.starts_with("R-") || !heading.contains("[S]") {
+            continue;
+        }
+        derived += 1;
+        let rule = heading.split_whitespace().next().unwrap_or(heading);
+        let commits: BTreeSet<&str> = backticked(section)
+            .into_iter()
+            .filter(|t| looks_like_a_commit(t))
+            .collect();
+        if commits.is_empty() {
+            without_a_commit.push(heading.to_string());
+        }
+        for hash in commits {
+            let found = Command::new("git")
+                .arg("-C")
+                .arg(&root)
+                .arg("cat-file")
+                .arg("-e")
+                .arg(format!("{hash}^{{commit}}"))
+                .status()
+                .expect("git runs");
+            if !found.success() {
+                not_here.push(format!("{rule}: `{hash}`"));
+            }
+        }
+    }
+
+    eprintln!(
+        "rules tagged [S]: {derived} (floor {DERIVED_RULES_FLOOR}); naming no commit: {}; \
+         naming a commit that is not here: {}",
+        without_a_commit.len(),
+        not_here.len()
+    );
+
+    assert!(
+        derived >= DERIVED_RULES_FLOOR,
+        "this check found {derived} rules tagged `[S]`, below the floor of \
+         {DERIVED_RULES_FLOOR}; the sections stopped splitting on `### ` or the tag moved."
+    );
+    assert!(
+        without_a_commit.is_empty(),
+        "a rule tagged `[S]` names no commit: {without_a_commit:#?}\n\
+         \n  `[S]` carries the commit the reasoning landed in instead of a read date. Without \
+         one the rule is dated by nothing a reader can open."
+    );
+    assert!(
+        not_here.is_empty(),
+        "a rule tagged `[S]` names a commit this repository does not have: {not_here:#?}"
+    );
+}
+
 const MIL_PAIRS_FLOOR: usize = 4;
 
 /// **A figure written in both units is two claims, and one of them is
