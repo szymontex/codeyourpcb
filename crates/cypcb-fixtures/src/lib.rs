@@ -15,10 +15,17 @@
 //! one to hand rather than building a symmetric stack of its own, which is
 //! what the two test files that already do this both did.
 //!
+//! It also gives a test a directory of its own under the machine's temporary
+//! directory, [`scratch_dir`], so two runs of the suite never share one.
+//!
 //! It is a dev-dependency and `publish = false`: nothing that ships links it.
 
 use cypcb_core::Nm;
 use cypcb_world::components::{Stackup, StackupLayer, StackupLayerKind};
+
+mod scratch;
+
+pub use scratch::{scratch_dir, ScratchDir, ScratchPath};
 
 /// A four-layer stack on which every copper layer answers differently.
 ///
