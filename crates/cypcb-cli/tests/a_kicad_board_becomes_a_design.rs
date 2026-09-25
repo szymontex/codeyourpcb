@@ -25,8 +25,7 @@ fn repo_root() -> std::path::PathBuf {
 /// Run `from-kicad` on a fixture and hand back (success, stdout+stderr, the
 /// design it wrote if any).
 fn imported(fixture: &str, name: &str) -> (bool, String, String) {
-    let dir = std::env::temp_dir().join("cypcb-from-kicad");
-    std::fs::create_dir_all(&dir).expect("a place to work");
+    let dir = cypcb_fixtures::scratch_dir("cypcb-from-kicad");
     let out = dir.join(format!("{name}.cypcb"));
     let _ = std::fs::remove_file(&out);
 
@@ -188,8 +187,7 @@ fn routed_copper_survives_the_whole_loop() {
     //
     // The loop this checks is the whole promise in one line: a design routed
     // here, written out as a KiCad board, and read back as a design.
-    let dir = std::env::temp_dir().join("cypcb-from-kicad");
-    std::fs::create_dir_all(&dir).expect("a place to work");
+    let dir = cypcb_fixtures::scratch_dir("cypcb-from-kicad");
     let routed = dir.join("loop.cypcb");
     let board = dir.join("loop.kicad_pcb");
     let back = dir.join("loop-back.cypcb");

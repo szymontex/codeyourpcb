@@ -37,8 +37,7 @@ fn check(path: &std::path::Path) -> String {
 
 #[test]
 fn a_kicad_board_under_a_cypcb_name_is_still_a_kicad_board() {
-    let dir = std::env::temp_dir().join("cypcb-misnamed");
-    std::fs::create_dir_all(&dir).expect("a place to put the board");
+    let dir = cypcb_fixtures::scratch_dir("cypcb-misnamed");
     let misnamed = dir.join("board.cypcb");
     std::fs::copy(fixture("led_blink.kicad_pcb"), &misnamed).expect("the fixture is there");
 
@@ -64,8 +63,7 @@ fn a_kicad_board_under_a_cypcb_name_is_still_a_kicad_board() {
 fn a_design_that_is_really_broken_still_says_so() {
     // The other direction: content sniffing must not swallow a genuine parse
     // error in a real `.cypcb`.
-    let dir = std::env::temp_dir().join("cypcb-misnamed");
-    std::fs::create_dir_all(&dir).expect("a place to put the board");
+    let dir = cypcb_fixtures::scratch_dir("cypcb-misnamed");
     let broken = dir.join("broken.cypcb");
     std::fs::write(
         &broken,

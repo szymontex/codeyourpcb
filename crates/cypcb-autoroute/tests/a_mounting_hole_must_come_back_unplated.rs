@@ -77,7 +77,8 @@ const BOARD_WITH_A_MOUNTING_HOLE: &str = r#"(kicad_pcb (version 20240108) (gener
 /// them means one test truncating the file another is reading. It showed up as
 /// `SexprParseError("Root is not a list")` on whichever test lost the race.
 fn parsed(who: &str) -> cypcb_kicad::KicadPcbParseResult {
-    let dir = std::env::temp_dir().join("cypcb-mounting-hole");
+    let dir =
+        std::env::temp_dir().join(format!("cypcb-mounting-hole-{who}-{}", std::process::id()));
     std::fs::create_dir_all(&dir).expect("a place to put the board");
     let path = dir.join(format!("mounting_hole-{who}.kicad_pcb"));
     let mut file = std::fs::File::create(&path).expect("the board is writable");
@@ -85,7 +86,9 @@ fn parsed(who: &str) -> cypcb_kicad::KicadPcbParseResult {
         .expect("the board is written");
     drop(file);
 
-    parse_kicad_pcb(&path).unwrap_or_else(|e| panic!("the board must parse: {e:?}"))
+    let parsed = parse_kicad_pcb(&path).unwrap_or_else(|e| panic!("the board must parse: {e:?}"));
+    let _ = std::fs::remove_dir_all(&dir);
+    parsed
 }
 
 /// The hole sits at 130mm, 120mm in file coordinates. The board's origin is at
@@ -278,7 +281,7 @@ fn the_export_job_writes_the_unplated_file_every_preset_already_named() {
     // was the only place this was visible.
     let mut result = parsed("export-job");
     let preset = from_name("jlcpcb").expect("a known preset");
-    let output_dir = std::env::temp_dir().join("cypcb-npth-job");
+    let output_dir = std::env::temp_dir().join(format!("cypcb-npth-job-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&output_dir);
 
     let job = ExportJob {

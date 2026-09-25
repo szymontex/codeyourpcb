@@ -41,10 +41,8 @@ component R1 resistor "0402" {{
 }
 
 /// Export a design and hand back the output directory.
-fn export(source: &str, name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("cypcb-side-{name}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a place to work");
+fn export(source: &str, name: &str) -> cypcb_fixtures::ScratchPath {
+    let dir = cypcb_fixtures::scratch_dir(&format!("cypcb-side-{name}"));
 
     let file = dir.join("board.cypcb");
     std::fs::write(&file, source).expect("the board is written");
@@ -62,7 +60,7 @@ fn export(source: &str, name: &str) -> PathBuf {
         "the export failed:\n{}",
         String::from_utf8_lossy(&output.stderr)
     );
-    out
+    dir.holding(out)
 }
 
 /// How many pad flashes a Gerber holds.

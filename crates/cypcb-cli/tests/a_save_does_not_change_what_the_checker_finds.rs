@@ -90,9 +90,7 @@ fn saved_from(source_path: &Path, name: &str, into: &Path) -> PathBuf {
 
 #[test]
 fn a_module_and_an_import_survive_a_save() {
-    let dir = std::env::temp_dir().join("cypcb-save-is-the-same-board");
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a place to work");
+    let dir = cypcb_fixtures::scratch_dir("cypcb-save-is-the-same-board");
 
     for example in [
         "v2-modules.cypcb",
@@ -136,9 +134,7 @@ component U1 ic "SOT-23-5" {
 
 #[test]
 fn a_value_that_is_not_a_quantity_stays_a_string() {
-    let dir = std::env::temp_dir().join("cypcb-save-keeps-strings");
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a place to work");
+    let dir = cypcb_fixtures::scratch_dir("cypcb-save-keeps-strings");
 
     let original = dir.join("strings.cypcb");
     std::fs::write(&original, STRINGS).expect("the fixture is writable");
@@ -164,9 +160,7 @@ fn a_value_that_is_not_a_quantity_stays_a_string() {
 /// so a third one cannot join them quietly.
 #[test]
 fn every_example_survives_a_save() {
-    let dir = std::env::temp_dir().join("cypcb-save-every-example");
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a place to work");
+    let dir = cypcb_fixtures::scratch_dir("cypcb-save-every-example");
 
     let mut files: Vec<PathBuf> = std::fs::read_dir(repo_root().join("examples"))
         .expect("the examples are there")
@@ -209,9 +203,7 @@ fn every_example_survives_a_save() {
 /// A board with copper on it, which none of the examples above carry much of.
 #[test]
 fn a_routed_board_survives_a_save() {
-    let dir = std::env::temp_dir().join("cypcb-save-routed");
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a place to work");
+    let dir = cypcb_fixtures::scratch_dir("cypcb-save-routed");
 
     let routed = dir.join("routed.cypcb");
     let output = Command::new(env!("CARGO_BIN_EXE_cypcb"))
@@ -294,9 +286,7 @@ fn silk_gerber(board: &Path, into: &Path) -> String {
 
 #[test]
 fn the_legend_a_footprint_draws_survives_a_save() {
-    let dir = std::env::temp_dir().join("cypcb-save-keeps-silk");
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a place to work");
+    let dir = cypcb_fixtures::scratch_dir("cypcb-save-keeps-silk");
 
     let original = dir.join("marked.cypcb");
     std::fs::write(&original, MARKED).expect("the fixture is writable");
@@ -374,9 +364,7 @@ fn bom(board: &Path, into: &Path) -> String {
 
 #[test]
 fn the_part_to_buy_survives_a_save() {
-    let dir = std::env::temp_dir().join("cypcb-save-keeps-lcsc");
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a place to work");
+    let dir = cypcb_fixtures::scratch_dir("cypcb-save-keeps-lcsc");
 
     let original = dir.join("ordered.cypcb");
     std::fs::write(&original, ORDERED).expect("the fixture is writable");
@@ -443,9 +431,7 @@ fn exported(board: &Path, into: &Path, ends_with: &str) -> String {
 /// the pair of facts a placement file is about.
 #[test]
 fn the_holes_and_the_placements_survive_a_save() {
-    let dir = std::env::temp_dir().join("cypcb-save-keeps-manufacturing");
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a place to work");
+    let dir = cypcb_fixtures::scratch_dir("cypcb-save-keeps-manufacturing");
 
     for (example, file) in [
         ("slotted-connector.cypcb", "PTH.drl"),
@@ -505,9 +491,7 @@ fn without_the_clock(exported: &str) -> String {
 /// the placement or the bill of materials.
 #[test]
 fn the_job_file_survives_a_save() {
-    let dir = std::env::temp_dir().join("cypcb-save-keeps-the-job");
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a place to work");
+    let dir = cypcb_fixtures::scratch_dir("cypcb-save-keeps-the-job");
 
     for example in ["blind-via.cypcb", "rigid-flex.cypcb"] {
         let original = repo_root().join("examples").join(example);
@@ -541,9 +525,7 @@ fn the_job_file_survives_a_save() {
 /// iterated in whatever order it felt like would break that quietly.
 #[test]
 fn two_exports_of_one_board_differ_only_by_the_clock() {
-    let dir = std::env::temp_dir().join("cypcb-export-twice");
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a place to work");
+    let dir = cypcb_fixtures::scratch_dir("cypcb-export-twice");
 
     let board = repo_root().join("examples/blind-via.cypcb");
     let first = dir.join("first");

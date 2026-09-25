@@ -14,7 +14,7 @@
 //! The floor still wins where it is the wider of the two, which is the half a
 //! rule that simply believed the net would get wrong.
 
-use std::path::PathBuf;
+use std::path::Path;
 use std::process::Command;
 
 /// A net asking for more than its trace carries.
@@ -83,16 +83,14 @@ trace A {
 /// One board, in a directory of this test's own: cargo runs the tests here at
 /// the same time and a shared directory means one wiping what another is
 /// reading.
-fn board(who: &str, source: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("cypcb-stated-width-{who}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a place to work");
+fn board(who: &str, source: &str) -> cypcb_fixtures::ScratchPath {
+    let dir = cypcb_fixtures::scratch_dir(&format!("cypcb-stated-width-{who}"));
     let board = dir.join("board.cypcb");
     std::fs::write(&board, source).expect("the fixture is writable");
-    board
+    dir.holding(board)
 }
 
-fn run(command: &str, board: &PathBuf) -> String {
+fn run(command: &str, board: &Path) -> String {
     let output = Command::new(env!("CARGO_BIN_EXE_cypcb"))
         .arg(command)
         .arg(board)
@@ -102,7 +100,7 @@ fn run(command: &str, board: &PathBuf) -> String {
 }
 
 /// What `score` says it found, out of the JSON it prints.
-fn scored_violations(board: &PathBuf) -> u64 {
+fn scored_violations(board: &Path) -> u64 {
     let said = run("score", board);
     let start = said.find('{').expect("`score` prints an object");
     let end = said.rfind('}').expect("`score` prints an object");

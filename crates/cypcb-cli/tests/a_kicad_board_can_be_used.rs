@@ -104,8 +104,8 @@ fn the_copper_already_in_the_file_is_kept() {
 
 #[test]
 fn a_kicad_board_exports_to_fabrication_files() {
-    let out_dir = std::env::temp_dir().join("cypcb-kicad-export");
-    let _ = std::fs::remove_dir_all(&out_dir);
+    let out_dir_home = cypcb_fixtures::scratch_dir("cypcb-kicad-export");
+    let out_dir = out_dir_home.join("out");
 
     let output = cypcb()
         .arg("export")

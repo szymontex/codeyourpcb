@@ -31,9 +31,7 @@ fn repo_root() -> PathBuf {
 
 /// Write one example out to KiCad and return the file.
 fn to_kicad(who: &str, example: &str, preset: Option<&str>) -> String {
-    let dir = std::env::temp_dir().join(format!("cypcb-to-kicad-fab-{who}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a place to work");
+    let dir = cypcb_fixtures::scratch_dir(&format!("cypcb-to-kicad-fab-{who}"));
     let out = dir.join("board.kicad_pcb");
 
     let mut args: Vec<String> = vec![

@@ -244,3 +244,100 @@ fn no_source_names_a_path_that_belongs_to_a_machine() {
          in the name, or a path under `target/`."
     );
 }
+
+/// What each `temp_dir()` call in `source` is joined with, or `None` for a call
+/// that is not joined at all. Comment lines are skipped: a doc may describe
+/// the fixed name it replaced.
+fn temp_dir_joins(source: &str) -> Vec<Option<String>> {
+    let call = format!("{}()", "temp_dir");
+    let code: String = source
+        .lines()
+        .filter(|line| !line.trim_start().starts_with("//"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let mut joins = Vec::new();
+    let mut rest = code.as_str();
+    while let Some(at) = rest.find(&call) {
+        rest = &rest[at + call.len()..];
+        let Some(argument) = rest.trim_start().strip_prefix(".join(") else {
+            joins.push(None);
+            continue;
+        };
+        let mut depth = 1usize;
+        let mut end = argument.len();
+        for (i, c) in argument.char_indices() {
+            match c {
+                '(' => depth += 1,
+                ')' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        end = i;
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+        joins.push(Some(argument[..end].to_string()));
+    }
+    joins
+}
+
+#[test]
+fn no_test_writes_to_a_directory_another_run_shares() {
+    let root = repo_root();
+    let itself = root.join(file!());
+    let mut files = Vec::new();
+    every_rust_file(&root.join("crates"), &mut files);
+    files.sort();
+
+    let mut calls = 0usize;
+    let mut scratch = 0usize;
+    let mut offenders: Vec<String> = Vec::new();
+    for path in &files {
+        if path == &itself {
+            continue;
+        }
+        let Ok(source) = std::fs::read_to_string(path) else {
+            continue;
+        };
+        scratch += source.matches("scratch_dir(").count();
+        for join in temp_dir_joins(&source) {
+            calls += 1;
+            let unique = join
+                .as_deref()
+                .is_some_and(|arg| arg.contains("process::id()"));
+            if !unique {
+                offenders.push(format!(
+                    "{}: {}",
+                    path.strip_prefix(&root).unwrap_or(path).display(),
+                    join.as_deref().unwrap_or("(not joined)")
+                ));
+            }
+        }
+    }
+
+    eprintln!(
+        "rust files read: {}; temp_dir() calls: {calls}; scratch_dir calls: {scratch}; \
+         with a name another run shares: {}",
+        files.len(),
+        offenders.len()
+    );
+
+    assert!(
+        calls >= 10 && scratch >= 100,
+        "this walk found {calls} temp_dir() calls and {scratch} scratch_dir calls in {} files, \
+         which is too few to be reading the crates",
+        files.len()
+    );
+    assert!(
+        offenders.is_empty(),
+        "a test writes under the machine's temporary directory with a name that does not \
+         carry the process id: {offenders:#?}\n\
+         \n  Every run of the suite on the machine shares that directory, so the nightly gate \
+         and a gate started from another checkout empty it under each other. \
+         `saving_a_design_checks_it_again` ran out of time inside a full run that way. Use \
+         `cypcb_fixtures::scratch_dir(tag)`, or put `std::process::id()` in the name where \
+         that crate is not a dependency."
+    );
+}

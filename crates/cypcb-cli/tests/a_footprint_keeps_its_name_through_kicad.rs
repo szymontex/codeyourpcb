@@ -44,10 +44,8 @@ fn cypcb(args: &[&str]) -> String {
 }
 
 /// `examples/blink.cypcb` after a trip to KiCad and back.
-fn round_tripped(who: &str) -> (PathBuf, String) {
-    let dir = std::env::temp_dir().join(format!("cypcb-footprint-name-{who}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a place to work");
+fn round_tripped(who: &str) -> (cypcb_fixtures::ScratchPath, String) {
+    let dir = cypcb_fixtures::scratch_dir(&format!("cypcb-footprint-name-{who}"));
     let kicad = dir.join("blink.kicad_pcb");
     let back = dir.join("blink.cypcb");
 
@@ -64,7 +62,7 @@ fn round_tripped(who: &str) -> (PathBuf, String) {
         back.to_str().expect("a path that is text"),
     ]);
     let source = std::fs::read_to_string(&back).expect("the design came back");
-    (back, source)
+    (dir.holding(back), source)
 }
 
 #[test]

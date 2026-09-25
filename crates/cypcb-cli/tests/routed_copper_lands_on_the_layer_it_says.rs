@@ -32,14 +32,12 @@ fn repo_root() -> PathBuf {
 }
 
 /// A copy of a fixture in a scratch directory of its own.
-fn scratch_copy(fixture: &str, who: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("cypcb-layer-{who}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a place to work");
+fn scratch_copy(fixture: &str, who: &str) -> cypcb_fixtures::ScratchPath {
+    let dir = cypcb_fixtures::scratch_dir(&format!("cypcb-layer-{who}"));
     let source = repo_root().join("tests/fixtures/benchmark").join(fixture);
     let target = dir.join(fixture);
     std::fs::copy(&source, &target).expect("the fixture is copyable");
-    target
+    dir.holding(target)
 }
 
 /// Count `(segment ...)` nodes per layer, out of the file's own text.

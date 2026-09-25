@@ -16,22 +16,21 @@
 //! from: a design whose `board` block failed to parse, or whose import did not
 //! resolve, which gets the same green line as a board that was checked.
 
-use std::path::PathBuf;
+use std::path::Path;
 use std::process::Command;
 
 fn cypcb() -> Command {
     Command::new(env!("CARGO_BIN_EXE_cypcb"))
 }
 
-fn write(name: &str, source: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join("cypcb-no-board");
-    std::fs::create_dir_all(&dir).expect("a place to work");
+fn write(name: &str, source: &str) -> cypcb_fixtures::ScratchPath {
+    let dir = cypcb_fixtures::scratch_dir("cypcb-no-board");
     let path = dir.join(name);
     std::fs::write(&path, source).expect("the file is writable");
-    path
+    dir.holding(path)
 }
 
-fn run(path: &PathBuf) -> (bool, String) {
+fn run(path: &Path) -> (bool, String) {
     let output = cypcb()
         .arg("check")
         .arg(path)

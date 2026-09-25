@@ -130,7 +130,7 @@ fn what_the_router_lays_is_what_the_fabricator_gets() {
         world.rebuild_spatial_index_from_library(&library);
 
         let label = benchmark.filename.trim_end_matches(".kicad_pcb");
-        let dir = std::env::temp_dir().join(format!("cypcb-routed-{label}"));
+        let dir = std::env::temp_dir().join(format!("cypcb-routed-{label}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("a temp directory");
 
@@ -163,6 +163,7 @@ fn what_the_router_lays_is_what_the_fabricator_gets() {
                     .unwrap_or_default()
             })
             .collect();
+        let _ = std::fs::remove_dir_all(&dir);
 
         let routed: Vec<(Layer, Point2, Point2)> = {
             let ecs = world.ecs_mut();

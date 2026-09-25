@@ -122,9 +122,7 @@ fn an_assertion_that_is_false_is_reported() {
         "the assertion this test moves is still there"
     );
 
-    let dir = std::env::temp_dir().join("cypcb-roadmap-assert");
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a place to work");
+    let dir = cypcb_fixtures::scratch_dir("cypcb-roadmap-assert");
     let board = dir.join("moved.cypcb");
     std::fs::write(&board, broken).expect("the copy is writable");
 
@@ -139,9 +137,7 @@ fn an_assertion_that_is_false_is_reported() {
 fn a_module_is_held_to_the_interface_it_signs() {
     // The claim that was wrong in the phase map for weeks, kept here so it
     // cannot go wrong quietly again.
-    let dir = std::env::temp_dir().join("cypcb-roadmap-interface");
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a place to work");
+    let dir = cypcb_fixtures::scratch_dir("cypcb-roadmap-interface");
     let board = dir.join("iface.cypcb");
     std::fs::write(
         &board,

@@ -32,9 +32,8 @@ fn board_with(footprint_body: &str) -> String {
 }
 
 fn parse_fails(name: &str, source: &str) -> String {
-    let dir = std::env::temp_dir().join("cypcb-kicad-malformed");
-    std::fs::create_dir_all(&dir).expect("a place to put the board");
-    let path = dir.join(format!("{name}.kicad_pcb"));
+    let dir = tempfile::tempdir().expect("a place to put the board");
+    let path = dir.path().join(format!("{name}.kicad_pcb"));
     let mut file = std::fs::File::create(&path).expect("the board is writable");
     file.write_all(source.as_bytes())
         .expect("the board is written");
@@ -97,9 +96,8 @@ fn a_malformed_pad_position_size_or_drill_is_refused() {
 fn a_board_whose_numbers_are_all_numbers_still_parses() {
     // The other direction, and the one that matters more: refusing a good
     // board would be a worse defect than reading a bad one.
-    let dir = std::env::temp_dir().join("cypcb-kicad-malformed");
-    std::fs::create_dir_all(&dir).expect("a place to put the board");
-    let path = dir.join("good.kicad_pcb");
+    let dir = tempfile::tempdir().expect("a place to put the board");
+    let path = dir.path().join("good.kicad_pcb");
     std::fs::write(
         &path,
         board_with(

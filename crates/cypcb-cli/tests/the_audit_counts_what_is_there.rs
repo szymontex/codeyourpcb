@@ -181,8 +181,8 @@ fn the_paragraph_names_every_file_the_export_writes() {
     // answers it. The audit said Gerber, Excellon, a job file, a BOM and a
     // pick-and-place file; it wrote those, plus solder paste stencils and an
     // assembly summary in JSON, and said neither.
-    let out = std::env::temp_dir().join("cypcb-audit-export");
-    let _ = std::fs::remove_dir_all(&out);
+    let out_home = cypcb_fixtures::scratch_dir("cypcb-audit-export");
+    let out = out_home.join("out");
 
     let status = Command::new(env!("CARGO_BIN_EXE_cypcb"))
         .arg("export")
@@ -198,7 +198,7 @@ fn the_paragraph_names_every_file_the_export_writes() {
     );
 
     let mut written = Vec::new();
-    let mut stack = vec![out.clone()];
+    let mut stack = vec![out.to_path_buf()];
     while let Some(dir) = stack.pop() {
         for entry in std::fs::read_dir(&dir).expect("the export wrote a directory") {
             let path = entry.expect("a readable entry").path();

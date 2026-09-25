@@ -93,10 +93,10 @@ fn reading_it_back_gives_the_same_two_widths() {
     let mut world = board_with_a_neck();
     let text = write_board(&mut world, "cypcb-test");
 
-    let path = std::env::temp_dir().join("cypcb-neck-round-trip.kicad_pcb");
+    let dir = tempfile::tempdir().expect("a place to put the board");
+    let path = dir.path().join("cypcb-neck-round-trip.kicad_pcb");
     std::fs::write(&path, &text).expect("write the board out");
     let parsed = parse_kicad_pcb(&path).expect("read it back");
-    let _ = std::fs::remove_file(&path);
 
     let routes = parsed
         .reference_routes

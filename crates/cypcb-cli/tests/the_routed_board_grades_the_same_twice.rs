@@ -29,8 +29,7 @@ fn routed_then_checked(example: &str) -> (usize, usize, String) {
         .parent()
         .and_then(|path| path.parent())
         .expect("the crate sits two levels below the repo root");
-    let dir = std::env::temp_dir().join("cypcb-grade-twice");
-    std::fs::create_dir_all(&dir).expect("a place to work");
+    let dir = cypcb_fixtures::scratch_dir("cypcb-grade-twice");
     let out = dir.join(format!("{example}.routed.cypcb"));
 
     let routing = Command::new(env!("CARGO_BIN_EXE_cypcb"))

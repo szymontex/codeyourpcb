@@ -7,17 +7,16 @@
 //! rule, because ink over solderable copper starves the joint under it
 //! whoever put the letters there.
 
-use std::path::PathBuf;
 use std::process::Command;
 
 fn cypcb() -> Command {
     Command::new(env!("CARGO_BIN_EXE_cypcb"))
 }
 
-fn scratch(who: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("cypcb-boardtext-{who}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    dir
+fn scratch(who: &str) -> cypcb_fixtures::ScratchPath {
+    let dir_home = cypcb_fixtures::scratch_dir(&format!("cypcb-boardtext-{who}"));
+    let dir = dir_home.join("out");
+    dir_home.holding(dir)
 }
 
 const WITH_TEXT: &str = "version 1\n\nboard legend {\n    size 20mm x 10mm\n    layers 2\n}\n\ntext \"REV B\" {\n    at 10mm, 5mm\n    layer top\n    height 1.5mm\n}\n";
@@ -26,7 +25,8 @@ const WITHOUT: &str = "version 1\n\nboard legend {\n    size 20mm x 10mm\n    la
 
 /// Export this source and read back the top legend.
 fn top_silk(source: &str, who: &str) -> String {
-    let board = std::env::temp_dir().join(format!("cypcb-boardtext-{who}.cypcb"));
+    let home = cypcb_fixtures::scratch_dir(&format!("cypcb-boardtext-source-{who}"));
+    let board = home.join("board.cypcb");
     std::fs::write(&board, source).expect("the board is writable");
     let out = scratch(who);
 

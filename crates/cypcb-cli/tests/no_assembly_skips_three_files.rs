@@ -30,9 +30,7 @@ fn repo_root() -> PathBuf {
 
 /// Export the example, with the flag or without it, and list what was written.
 fn exported(who: &str, args: &[&str]) -> BTreeSet<String> {
-    let dir = std::env::temp_dir().join(format!("cypcb-no-assembly-{who}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a place to work");
+    let dir = cypcb_fixtures::scratch_dir(&format!("cypcb-no-assembly-{who}"));
 
     let output = Command::new(env!("CARGO_BIN_EXE_cypcb"))
         .arg("export")

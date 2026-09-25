@@ -34,20 +34,18 @@ fn repo_root() -> PathBuf {
 }
 
 /// A copy of the smallest benchmark board, in a directory of this test's own.
-fn scratch_copy(who: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("cypcb-route-flags-{who}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a place to work");
+fn scratch_copy(who: &str) -> cypcb_fixtures::ScratchPath {
+    let dir = cypcb_fixtures::scratch_dir(&format!("cypcb-route-flags-{who}"));
     let target = dir.join("led_blink.kicad_pcb");
     std::fs::copy(
         repo_root().join("tests/fixtures/benchmark/led_blink.kicad_pcb"),
         &target,
     )
     .expect("the fixture is copyable");
-    target
+    dir.holding(target)
 }
 
-fn route(board: &PathBuf, flags: &[&str]) -> String {
+fn route(board: &std::path::Path, flags: &[&str]) -> String {
     let output = cypcb()
         .arg("route")
         .arg(board)

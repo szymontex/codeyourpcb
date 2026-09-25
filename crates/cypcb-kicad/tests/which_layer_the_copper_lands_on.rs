@@ -220,10 +220,10 @@ fn a_board_written_here_comes_back_on_the_layers_it_left_on() {
         "one bottom trace was written; the file says {in_text:?}"
     );
 
-    let path = std::env::temp_dir().join("cypcb-which-layer.kicad_pcb");
+    let dir = tempfile::tempdir().expect("a place to put the board");
+    let path = dir.path().join("cypcb-which-layer.kicad_pcb");
     std::fs::write(&path, &text).expect("write the board out");
     let parsed = parse_kicad_pcb(&path).expect("read it back");
-    let _ = std::fs::remove_file(&path);
 
     let mut imported: BTreeMap<String, usize> = BTreeMap::new();
     for segment in &parsed

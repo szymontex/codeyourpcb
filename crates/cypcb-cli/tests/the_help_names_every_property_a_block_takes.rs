@@ -9,17 +9,14 @@
 //! told the block does not take a neck, which is worse than saying nothing:
 //! the list is the reason to trust the message.
 
-use std::path::PathBuf;
 use std::process::Command;
 
 fn cypcb() -> Command {
     Command::new(env!("CARGO_BIN_EXE_cypcb"))
 }
 
-fn scratch(who: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("cypcb-block-help-{who}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a place to work");
+fn scratch(who: &str) -> cypcb_fixtures::ScratchDir {
+    let dir = cypcb_fixtures::scratch_dir(&format!("cypcb-block-help-{who}"));
     dir
 }
 
@@ -61,7 +58,8 @@ trace SIG {{
 
 /// Check that source and return everything the command said.
 fn check(who: &str, source: &str) -> String {
-    let board = scratch(who).join("board.cypcb");
+    let home = scratch(who);
+    let board = home.join("board.cypcb");
     std::fs::write(&board, source).expect("the fixture is writable");
     let output = cypcb()
         .arg("check")

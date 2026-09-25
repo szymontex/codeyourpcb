@@ -34,14 +34,12 @@ fn repo_root() -> PathBuf {
 }
 
 /// A board KiCad 10.0.5 wrote, copied so nothing lands in the repo.
-fn kicad_board(who: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("cypcb-reads-{who}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a place to work");
+fn kicad_board(who: &str) -> cypcb_fixtures::ScratchPath {
+    let dir = cypcb_fixtures::scratch_dir(&format!("cypcb-reads-{who}"));
     let source = repo_root().join("crates/cypcb-kicad/tests/fixtures/kicad10-slotted.kicad_pcb");
     let target = dir.join("board.kicad_pcb");
     std::fs::copy(&source, &target).expect("the fixture is copyable");
-    target
+    dir.holding(target)
 }
 
 /// Whether the command took the board rather than turning it away.

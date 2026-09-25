@@ -96,9 +96,7 @@ fn hashes_under(dir: &Path) -> BTreeMap<String, u64> {
 /// One run of the program per command: the fabrication files with the
 /// IPC-2581 document, the DSN file, and the KiCad board.
 fn write_everything(name: &str, run_index: usize) -> BTreeMap<String, u64> {
-    let dir = std::env::temp_dir().join(format!("cypcb-every-run-{name}-{run_index}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("the scratch directory can be made");
+    let dir = cypcb_fixtures::scratch_dir(&format!("cypcb-every-run-{name}-{run_index}"));
 
     // `route --dry-run` writes the DSN file beside the design, so the design
     // is copied in first and taken out again before the files are hashed.

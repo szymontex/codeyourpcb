@@ -59,9 +59,7 @@ fn the_crate_count_is_the_workspace_it_describes() {
 
 #[test]
 fn the_export_file_count_is_what_export_writes() {
-    let dir = std::env::temp_dir().join("cypcb-architecture-count");
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a place to work");
+    let dir = cypcb_fixtures::scratch_dir("cypcb-architecture-count");
 
     let output = Command::new(env!("CARGO_BIN_EXE_cypcb"))
         .arg("export")

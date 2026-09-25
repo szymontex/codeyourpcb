@@ -36,8 +36,7 @@ component R1 resistor "0402" {{
 }
 
 fn check(source: &str, name: &str) -> String {
-    let dir = std::env::temp_dir().join("cypcb-layer-check");
-    std::fs::create_dir_all(&dir).expect("a place to put the board");
+    let dir = cypcb_fixtures::scratch_dir("cypcb-layer-check");
     let file = dir.join(format!("{name}.cypcb"));
     std::fs::write(&file, source).expect("the board is written");
 

@@ -35,8 +35,7 @@ component J1 connector "TINY" {
 "#;
 
 fn check_against(preset: &str) -> String {
-    let dir = std::env::temp_dir().join(format!("cypcb-land-{preset}"));
-    std::fs::create_dir_all(&dir).expect("a place to put the board");
+    let dir = cypcb_fixtures::scratch_dir(&format!("cypcb-land-{preset}"));
     let board = dir.join("board.cypcb");
     std::fs::write(&board, SMALL_LANDS).expect("the board is written");
 

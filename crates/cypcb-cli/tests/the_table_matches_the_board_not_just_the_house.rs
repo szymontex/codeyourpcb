@@ -30,8 +30,7 @@ fn board(layers: u8, fab: &str) -> String {
 
 /// The table `cypcb check` says it used.
 fn table_used(source: &str) -> String {
-    let dir = std::env::temp_dir().join("cypcb-preset-by-layers");
-    std::fs::create_dir_all(&dir).expect("a place to put the board");
+    let dir = cypcb_fixtures::scratch_dir("cypcb-preset-by-layers");
     // Named from the content, because these run in parallel and two boards of
     // the same length were sharing a file - which is how the first draft of
     // this test reported pcbway_standard for a jlcpcb board.

@@ -37,9 +37,7 @@ const SQUARE: &str = "version 1\n\nboard b {\n    size 20mm x 20mm\n    layers 2
 
 /// Export one design and hand back its top copper layer.
 fn top_copper(who: &str, source: &str) -> String {
-    let dir = std::env::temp_dir().join(format!("cypcb-round-{who}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a place to work");
+    let dir = cypcb_fixtures::scratch_dir(&format!("cypcb-round-{who}"));
     let design = dir.join("b.cypcb");
     std::fs::write(&design, source).expect("the design is writable");
 

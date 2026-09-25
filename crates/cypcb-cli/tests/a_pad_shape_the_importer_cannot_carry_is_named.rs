@@ -21,9 +21,7 @@ const CUSTOM: &str = include_str!("fixtures/a_custom_pad.kicad_pcb");
 
 /// Run `check` on a board written into a temp directory, and hand back stderr.
 fn warnings(who: &str, board: &str) -> String {
-    let dir = std::env::temp_dir().join(format!("cypcb-shape-{who}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a place to work");
+    let dir = cypcb_fixtures::scratch_dir(&format!("cypcb-shape-{who}"));
     let file: PathBuf = dir.join("board.kicad_pcb");
     std::fs::write(&file, board).expect("the board is writable");
 

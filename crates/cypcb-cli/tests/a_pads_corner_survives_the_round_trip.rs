@@ -123,7 +123,8 @@ fn a_board_out_of_kicad_keeps_the_corners_it_was_drawn_with() {
     // rounded pad in this repository states 0.25.
     let board =
         repo_root().join("tests/fixtures/kicad-tools/tests/fixtures/routing-diagnostic.kicad_pcb");
-    let out = std::env::temp_dir().join("cypcb-corner-round-trip.cypcb");
+    let out_dir = cypcb_fixtures::scratch_dir("cypcb-corner-round-trip");
+    let out = out_dir.join("cypcb-corner-round-trip.cypcb");
     let run = cypcb()
         .arg("from-kicad")
         .arg(&board)

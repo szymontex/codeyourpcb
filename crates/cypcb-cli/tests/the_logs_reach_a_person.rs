@@ -12,17 +12,15 @@
 //! Warnings are on by default now and go to stderr. Louder levels are asked
 //! for with `-v`, or named exactly through `RUST_LOG`.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 
 fn cypcb() -> Command {
     Command::new(env!("CARGO_BIN_EXE_cypcb"))
 }
 
-fn scratch_copy(who: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("cypcb-logs-{who}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a place to work");
+fn scratch_copy(who: &str) -> cypcb_fixtures::ScratchPath {
+    let dir = cypcb_fixtures::scratch_dir(&format!("cypcb-logs-{who}"));
     let source = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .and_then(|p| p.parent())
@@ -30,7 +28,7 @@ fn scratch_copy(who: &str) -> PathBuf {
         .join("tests/fixtures/benchmark/led_blink.kicad_pcb");
     let target = dir.join("led_blink.kicad_pcb");
     std::fs::copy(&source, &target).expect("the fixture is copyable");
-    target
+    dir.holding(target)
 }
 
 /// Route a board, returning stdout and stderr separately.

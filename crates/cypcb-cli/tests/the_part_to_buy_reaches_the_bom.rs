@@ -60,12 +60,11 @@ fn run(args: &[&str], file: &std::path::Path) -> (String, String) {
     )
 }
 
-fn board_file() -> std::path::PathBuf {
-    let dir = std::env::temp_dir().join("cypcb-lcsc");
-    std::fs::create_dir_all(&dir).expect("a place to put the board");
+fn board_file() -> cypcb_fixtures::ScratchPath {
+    let dir = cypcb_fixtures::scratch_dir("cypcb-lcsc");
     let file = dir.join("parts.cypcb");
     std::fs::write(&file, BOARD).expect("the board is written");
-    file
+    dir.holding(file)
 }
 
 #[test]
@@ -81,8 +80,8 @@ fn a_design_that_names_its_parts_is_accepted() {
 #[test]
 fn the_bom_says_which_part_to_buy() {
     let file = board_file();
-    let out = std::env::temp_dir().join("cypcb-lcsc-out");
-    let _ = std::fs::remove_dir_all(&out);
+    let out_home = cypcb_fixtures::scratch_dir("cypcb-lcsc-out");
+    let out = out_home.join("out");
     run(&["export", "-o", out.to_str().unwrap()], &file);
 
     let bom = std::fs::read_to_string(out.join("assembly/parts-BOM.csv"))
@@ -103,8 +102,8 @@ fn two_catalogue_parts_are_two_lines_even_when_they_look_alike() {
     // R1 and R2 are both 10k 0402s and are different things to order. Grouping
     // them together would have somebody buy twice as many of the wrong one.
     let file = board_file();
-    let out = std::env::temp_dir().join("cypcb-lcsc-out2");
-    let _ = std::fs::remove_dir_all(&out);
+    let out_home = cypcb_fixtures::scratch_dir("cypcb-lcsc-out2");
+    let out = out_home.join("out");
     run(&["export", "-o", out.to_str().unwrap()], &file);
 
     let bom = std::fs::read_to_string(out.join("assembly/parts-BOM.csv"))

@@ -27,9 +27,7 @@ fn repo_root() -> PathBuf {
 
 /// Import the fixture, returning what the command said and what it wrote.
 fn import(who: &str) -> (String, String) {
-    let dir = std::env::temp_dir().join(format!("cypcb-refused-pour-{who}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a place to work");
+    let dir = cypcb_fixtures::scratch_dir(&format!("cypcb-refused-pour-{who}"));
     let out = dir.join("board.cypcb");
 
     let output = Command::new(env!("CARGO_BIN_EXE_cypcb"))

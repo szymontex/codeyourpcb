@@ -34,8 +34,7 @@ fn guide() -> String {
 
 /// What the parser says a block takes, asked by mistyping a property in it.
 fn what_the_parser_says(block: &str, source: &str) -> Vec<String> {
-    let dir = std::env::temp_dir().join("cypcb-guide-lists");
-    std::fs::create_dir_all(&dir).expect("a place to work");
+    let dir = cypcb_fixtures::scratch_dir("cypcb-guide-lists");
     let file = dir.join(format!("{}.cypcb", block.replace(' ', "-")));
     std::fs::write(&file, source).expect("the board is writable");
 
@@ -195,8 +194,7 @@ trace A {{
 "#
     );
 
-    let dir = std::env::temp_dir().join("cypcb-guide-path");
-    std::fs::create_dir_all(&dir).expect("a place to work");
+    let dir = cypcb_fixtures::scratch_dir("cypcb-guide-path");
     let file = dir.join("path.cypcb");
     std::fs::write(&file, &board).expect("the board is writable");
 

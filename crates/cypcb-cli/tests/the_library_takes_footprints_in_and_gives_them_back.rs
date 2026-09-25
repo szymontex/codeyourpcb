@@ -33,9 +33,8 @@ const PARTS: &[&str] = &[
 ];
 
 /// A scratch directory holding one `.pretty` library of those footprints.
-fn library_of(who: &str) -> (PathBuf, usize) {
-    let dir = std::env::temp_dir().join(format!("cypcb-parts-{who}"));
-    let _ = fs::remove_dir_all(&dir);
+fn library_of(who: &str) -> (cypcb_fixtures::ScratchDir, usize) {
+    let dir = cypcb_fixtures::scratch_dir(&format!("cypcb-parts-{who}"));
     let pretty = dir.join("Parts.pretty");
     fs::create_dir_all(&pretty).expect("a place to work");
 
@@ -122,9 +121,7 @@ fn a_search_finds_what_was_imported_and_says_when_it_does_not() {
 fn a_directory_with_no_library_in_it_is_told_what_one_looks_like() {
     // The half that keeps the command usable: somebody points it at the wrong
     // folder, and a silent success would leave them searching an empty index.
-    let dir = std::env::temp_dir().join("cypcb-parts-empty");
-    let _ = fs::remove_dir_all(&dir);
-    fs::create_dir_all(&dir).expect("a place to work");
+    let dir = cypcb_fixtures::scratch_dir("cypcb-parts-empty");
 
     let said = cypcb(&dir, &["library", "import", "."]);
     assert!(

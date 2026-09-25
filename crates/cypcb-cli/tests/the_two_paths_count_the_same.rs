@@ -145,9 +145,7 @@ fn every_example_is_counted_the_same_by_both() {
 /// close enough to measure has to run on a board that still produces some.
 #[test]
 fn a_routed_board_is_counted_the_same_by_both() {
-    let dir = std::env::temp_dir().join("cypcb-two-paths-routed");
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a place to work");
+    let dir = cypcb_fixtures::scratch_dir("cypcb-two-paths-routed");
     let routed = dir.join("routed.kicad_pcb");
 
     let output = Command::new(env!("CARGO_BIN_EXE_cypcb"))

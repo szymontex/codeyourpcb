@@ -15,17 +15,15 @@
 //! file has nowhere for a segment to find a number. The routed copy is given
 //! the table it lacked, in the place this crate's own board writer puts one.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 
 fn cypcb() -> Command {
     Command::new(env!("CARGO_BIN_EXE_cypcb"))
 }
 
-fn scratch(who: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("cypcb-kicad10-route-{who}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a place to work");
+fn scratch(who: &str) -> cypcb_fixtures::ScratchPath {
+    let dir = cypcb_fixtures::scratch_dir(&format!("cypcb-kicad10-route-{who}"));
     let source = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .and_then(|p| p.parent())
@@ -33,7 +31,7 @@ fn scratch(who: &str) -> PathBuf {
         .join("crates/cypcb-kicad/tests/fixtures/kicad10-slotted.kicad_pcb");
     let board = dir.join("board.kicad_pcb");
     std::fs::copy(&source, &board).expect("the fixture is copyable");
-    board
+    dir.holding(board)
 }
 
 /// Route it, returning the routed file's text.

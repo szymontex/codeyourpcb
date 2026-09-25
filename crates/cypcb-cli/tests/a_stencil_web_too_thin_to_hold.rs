@@ -51,9 +51,7 @@ component U1 ic "PAIR" {
 "#;
 
 fn check(who: &str, pads: &str) -> String {
-    let dir = std::env::temp_dir().join(format!("cypcb-stencil-{who}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a place to work");
+    let dir = cypcb_fixtures::scratch_dir(&format!("cypcb-stencil-{who}"));
     let board = dir.join("board.cypcb");
     std::fs::write(&board, BOARD.replace("{PADS}", pads)).expect("the fixture is writable");
 
