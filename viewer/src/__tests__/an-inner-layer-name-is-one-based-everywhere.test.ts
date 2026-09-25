@@ -24,12 +24,27 @@ const MATCH_SITES_FLOOR = 4;
 
 /**
  * A site that reads the captured number without subtracting one, and why it
- * is right to.
+ * is right to - keyed by file and the function the site is in.
+ *
+ * It was keyed by line number, and an edit fifteen lines above the site moved
+ * it from 583 to 598 and failed the gate on a tree with nothing wrong in it.
+ * A function's name moves only when somebody renames the function, and an
+ * entry that no longer names a site is itself a failure, so a rename cannot
+ * leave an exception pointing at nothing.
  */
 const KEEPS_THE_NAMES_NUMBER: Record<string, string> = {
-  'layers.ts:598':
+  'layers.ts#layerDepth':
     'sorts by depth, where the name\'s own number is already the order',
 };
+
+/** The function a line sits in: the nearest `function name(` above it. */
+function enclosingFunction(lines: readonly string[], index: number): string {
+  for (let at = index; at >= 0; at--) {
+    const found = /\bfunction\s+(\w+)\s*\(/.exec(lines[at]);
+    if (found) return found[1];
+  }
+  return '(top level)';
+}
 
 function sourceFiles(dir: string): string[] {
   const out: string[] = [];
@@ -60,6 +75,7 @@ describe('an inner layer name is one-based everywhere', () => {
 
   it('subtracts the one back out at every site that matches the name', () => {
     const offenders: string[] = [];
+    const keysSeen = new Set<string>();
     let sites = 0;
 
     for (const path of sourceFiles(SRC)) {
@@ -67,11 +83,13 @@ describe('an inner layer name is one-based everywhere', () => {
       lines.forEach((line, index) => {
         if (!line.includes('Inner(\\d+)')) return;
         sites += 1;
-        const where = `${path.split('/').pop()}:${index + 1}`;
+        const file = path.split('/').pop();
+        const key = `${file}#${enclosingFunction(lines, index)}`;
+        keysSeen.add(key);
         const near = lines.slice(index, index + 6).join(' ');
         const subtracts = near.includes('- 1') || near.includes('-1');
-        if (!subtracts && !(where in KEEPS_THE_NAMES_NUMBER)) {
-          offenders.push(`${where}: ${line.trim()}`);
+        if (!subtracts && !(key in KEEPS_THE_NAMES_NUMBER)) {
+          offenders.push(`${file}:${index + 1} (${key}): ${line.trim()}`);
         }
       });
     }
@@ -83,5 +101,12 @@ describe('an inner layer name is one-based everywhere', () => {
 
     expect(sites).toBeGreaterThanOrEqual(MATCH_SITES_FLOOR);
     expect(offenders).toEqual([]);
+    expect(Object.keys(KEEPS_THE_NAMES_NUMBER).filter((key) => !keysSeen.has(key))).toEqual([]);
+  });
+
+  it('names the function a site is in, not the line it is on', () => {
+    const lines = ['function outer(a) {', '  const f = (x) => x;', '  return f(a);', '}'];
+    expect(enclosingFunction(lines, 2)).toBe('outer');
+    expect(enclosingFunction(['const x = 1;'], 0)).toBe('(top level)');
   });
 });

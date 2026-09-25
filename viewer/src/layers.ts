@@ -54,9 +54,9 @@ export const LAYER_MASK = {
  * A four-layer board drawn all at once is unreadable, which is the complaint
  * this exists to answer. Every serious PCB editor has this control and calls
  * it something different: Altium cycles hide/grey/monochrome with one key,
- * KiCad dims the inactive layers by an opacity slider. Three states is the
- * useful number - off, quieter, alone - because a fourth is one more press
- * between a person and the copper they are looking at.
+ * KiCad dims the inactive layers by an opacity slider. The states, in the
+ * order `X` walks them: `all` leaves the other layers alone, `ghost` draws
+ * them in grey, `dim` makes them faint, and `solo` hides them.
  */
 export type LayerFocus = 'all' | 'ghost' | 'dim' | 'solo';
 
@@ -578,6 +578,32 @@ export function applyLayerPreset(
     opacity: {},
     focus: preset.focus,
   };
+}
+
+/**
+ * The preset this view is, when it is one.
+ *
+ * A board opens showing every layer and the picker said nothing, because only
+ * a choice made in it counted as being on a preset. The view is what decides:
+ * the same layers on, the same weights and the same focus is the same view,
+ * however it was reached.
+ */
+export function presetShown(
+  visibility: LayerVisibility,
+  stack: readonly string[],
+): LayerPreset | undefined {
+  const names = [...stack, ...NON_COPPER_LAYERS.map((entry) => entry.id)];
+  return LAYER_PRESETS.find((preset) => {
+    const view = applyLayerPreset(visibility, preset, stack);
+    return (
+      (visibility.focus ?? 'all') === preset.focus &&
+      names.every(
+        (name) =>
+          isLayerVisible(name, visibility) === isLayerVisible(name, view) &&
+          layerOpacity(name, visibility) === layerOpacity(name, view),
+      )
+    );
+  });
 }
 
 /** The preset after this one, wrapping - what Ctrl+Tab walks. */

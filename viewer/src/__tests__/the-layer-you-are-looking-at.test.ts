@@ -8,6 +8,8 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import {
   createLayerVisibility,
   getTraceColor,
@@ -26,6 +28,9 @@ import {
   LAYER_FOCUS_BUTTON,
   applyLayerPreset,
   nextLayerPreset,
+  presetShown,
+  toggleLayerVisible,
+  NON_COPPER_LAYERS,
   isLayerVisible,
   LAYER_COLORS,
   DIMMED_ALPHA,
@@ -122,6 +127,20 @@ describe('the layer you are looking at', () => {
       expect(presetWords).not.toContain(name.toLowerCase());
     }
     expect(Object.keys(LAYER_FOCUS_BUTTON)).toEqual(Object.keys(LAYER_FOCUS_LABEL));
+  });
+
+  /**
+   * The comment above the type said three states for two releases after a
+   * fourth was added. It names each state now, and this holds it to the type.
+   */
+  it('describes every state the type has, and no count of them', () => {
+    const source = readFileSync(join(__dirname, '..', 'layers.ts'), 'utf8');
+    const at = source.indexOf('export type LayerFocus');
+    const comment = source.slice(source.lastIndexOf('/**', at), at);
+    for (const state of Object.keys(LAYER_FOCUS_LABEL)) {
+      expect(comment).toContain(`\`${state}\``);
+    }
+    expect(comment.toLowerCase()).not.toMatch(/\b(two|three|four|five) states\b/);
   });
 
   it('walks all, grey, dim, solo and back', () => {
@@ -333,5 +352,31 @@ describe('the layer you are looking at', () => {
   it('actually makes a hex colour transparent', () => {
     expect(colorWithAlpha('#C41E1E', 0.16)).toBe('rgba(196, 30, 30, 0.16)');
     expect(colorWithAlpha('#abc', 0.5)).toBe('rgba(170, 187, 204, 0.5)');
+  });
+});
+
+/**
+ * A board opens on a view, and the picker has to say which one. It said
+ * nothing, because only a choice made in the picker counted.
+ */
+describe('the preset a view is', () => {
+  const stack = ['Top', 'Inner1', 'Inner2', 'Bottom'];
+  const fresh = createLayerVisibility();
+
+  it('is Everything on a board that has just opened', () => {
+    expect(presetShown(fresh, stack)?.id).toBe('all');
+  });
+
+  it('is the preset a view was switched to', () => {
+    for (const preset of LAYER_PRESETS) {
+      expect(presetShown(applyLayerPreset(fresh, preset, stack), stack)?.id).toBe(preset.id);
+    }
+  });
+
+  it('is none once one layer is changed by hand', () => {
+    expect(presetShown(toggleLayerVisible(fresh, 'Inner1'), stack)).toBeUndefined();
+    expect(presetShown(toggleLayerVisible(fresh, NON_COPPER_LAYERS[0].id), stack)).toBeUndefined();
+    expect(presetShown(setLayerOpacity(fresh, 'Top', 0.5), stack)).toBeUndefined();
+    expect(presetShown({ ...fresh, focus: 'ghost' }, stack)).toBeUndefined();
   });
 });
