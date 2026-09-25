@@ -17,7 +17,7 @@
 //! fixture where the two happen to be equal would let either name drift into
 //! the other without a test noticing.
 
-use std::path::PathBuf;
+use std::path::Path;
 use std::process::Command;
 
 use cypcb_drc::{clearance_contacts, run_drc, Preset, PresetRules, ViolationKind};
@@ -66,13 +66,11 @@ trace SIG {
 }
 "#;
 
-fn fixture() -> PathBuf {
-    let dir = std::env::temp_dir().join("cypcb-two-commands");
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a place to work");
+fn fixture() -> cypcb_fixtures::ScratchPath {
+    let dir = cypcb_fixtures::scratch_dir("cypcb-two-commands");
     let board = dir.join("board.cypcb");
     std::fs::write(&board, BOARD).expect("the fixture is writable");
-    board
+    dir.holding(board)
 }
 
 /// Rows, clearance rows and contacts, as the library counts them.
@@ -100,7 +98,7 @@ fn what_the_rules_say() -> (usize, usize, usize) {
     )
 }
 
-fn run(command: &str, board: &PathBuf) -> String {
+fn run(command: &str, board: &Path) -> String {
     let output = Command::new(env!("CARGO_BIN_EXE_cypcb"))
         .arg(command)
         .arg(board)

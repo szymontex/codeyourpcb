@@ -237,8 +237,10 @@ mod tests {
 )"#;
 
         // Write to temp file
-        let temp_dir = std::env::temp_dir();
-        let test_file = temp_dir.join("test_r0805.kicad_mod");
+        let test_file = std::env::temp_dir().join(format!(
+            "cypcb-library-r0805-{}.kicad_mod",
+            std::process::id()
+        ));
         fs::write(&test_file, sexpr).unwrap();
 
         // Parse
@@ -276,7 +278,10 @@ mod tests {
   (fp_text reference REF** (at 0 0) (layer F.SilkS) (effects (font (size 1 1) (thickness 0.15))))
   (pad 1 smd rect (at -1 0) (size 1 0.95) (layers F.Cu F.Paste F.Mask))
 )"#;
-        let file = std::env::temp_dir().join("cypcb-library-tedit.kicad_mod");
+        let file = std::env::temp_dir().join(format!(
+            "cypcb-library-tedit-{}.kicad_mod",
+            std::process::id()
+        ));
         fs::write(&file, sexpr).unwrap();
 
         let component = parse_kicad_mod(&file, "Test").unwrap();
@@ -303,7 +308,10 @@ mod tests {
   (descr "Resistor SMD 0805")
   (pad "1" smd rect (at -1 0) (size 1 0.95) (layers "F.Cu" "F.Paste" "F.Mask"))
 )"#;
-        let file = std::env::temp_dir().join("cypcb-library-kicad6.kicad_mod");
+        let file = std::env::temp_dir().join(format!(
+            "cypcb-library-kicad6-{}.kicad_mod",
+            std::process::id()
+        ));
         fs::write(&file, sexpr).unwrap();
 
         let component = parse_kicad_mod(&file, "Resistor_SMD").unwrap();

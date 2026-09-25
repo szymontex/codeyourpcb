@@ -28,10 +28,8 @@ fn example(name: &str) -> PathBuf {
         .join(name)
 }
 
-fn scratch(who: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("cypcb-kicad-loss-{who}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a place to work");
+fn scratch(who: &str) -> cypcb_fixtures::ScratchDir {
+    let dir = cypcb_fixtures::scratch_dir(&format!("cypcb-kicad-loss-{who}"));
     dir
 }
 
@@ -87,11 +85,14 @@ fn a_design_that_states_its_drill_spans_is_told_they_are_dropped() {
         .filter(|line| !line.trim().starts_with("drill Top to Bottom"))
         .collect::<Vec<_>>()
         .join("\n");
-    let plain = std::env::temp_dir().join("cypcb-kicad-no-spans.cypcb");
+    let plain_dir = cypcb_fixtures::scratch_dir("cypcb-kicad-no-spans");
+    let plain = plain_dir.join("cypcb-kicad-no-spans.cypcb");
     std::fs::write(&plain, &plain_source).expect("the board is writable");
 
-    let stated = scratch("spans-stated").join("board.kicad_pcb");
-    let silent = scratch("spans-silent").join("board.kicad_pcb");
+    let stated_home = scratch("spans-stated");
+    let stated = stated_home.join("board.kicad_pcb");
+    let silent_home = scratch("spans-silent");
+    let silent = silent_home.join("board.kicad_pcb");
     to_kicad(&example("rigid-flex.cypcb"), &stated);
     to_kicad(&plain, &silent);
     let stated_text = std::fs::read_to_string(&stated).expect("the board was written");
@@ -158,7 +159,8 @@ fn a_design_that_asks_for_teardrops_is_told_kicad_keeps_its_own() {
     // and adds a `ZONE` to the board. **This comment said the opposite until
     // 2026-09-14.** The writer still does not put ours there, so it says so -
     // which is a statement about this writer and not about the format.
-    let board = std::env::temp_dir().join("cypcb-kicad-teardrops.cypcb");
+    let board_dir = cypcb_fixtures::scratch_dir("cypcb-kicad-teardrops");
+    let board = board_dir.join("cypcb-kicad-teardrops.cypcb");
     std::fs::write(&board, a_design_asking_for_teardrops()).expect("the board is writable");
 
     let warnings = to_kicad(&board, &scratch("teardrops").join("board.kicad_pcb"));
@@ -180,10 +182,12 @@ fn what_this_path_drops_is_not_in_the_board_it_writes() {
     // a fillet, because that is the only level at which the question has an
     // answer. One design, exported twice: the Gerber path carries what was
     // asked for, the KiCad path does not, and the operator is told which.
-    let board = std::env::temp_dir().join("cypcb-pair-teardrops.cypcb");
+    let board_dir = cypcb_fixtures::scratch_dir("cypcb-pair-teardrops");
+    let board = board_dir.join("cypcb-pair-teardrops.cypcb");
     std::fs::write(&board, a_design_asking_for_teardrops()).expect("the board is writable");
 
-    let kicad = scratch("pair-kicad").join("board.kicad_pcb");
+    let kicad_home = scratch("pair-kicad");
+    let kicad = kicad_home.join("board.kicad_pcb");
     let warnings = to_kicad(&board, &kicad);
     let written = std::fs::read_to_string(&kicad).expect("the board was written");
     let polygons = written.matches("gr_poly").count() + written.matches("fp_poly").count();

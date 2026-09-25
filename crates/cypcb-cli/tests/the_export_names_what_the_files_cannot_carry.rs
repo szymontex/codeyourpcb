@@ -37,10 +37,9 @@ fn repo_root() -> PathBuf {
 /// directory, with the timestamp lines dropped: every file this project writes
 /// carries the moment it was written, so two runs never compare equal without
 /// that.
-fn files_written(who: &str) -> std::collections::BTreeMap<String, String> {
-    let dir = std::env::temp_dir().join(format!("cypcb-export-says-{who}"));
+fn files_written(dir: &std::path::Path) -> std::collections::BTreeMap<String, String> {
     let mut found = std::collections::BTreeMap::new();
-    let mut stack = vec![dir.clone()];
+    let mut stack = vec![dir.to_path_buf()];
     while let Some(here) = stack.pop() {
         for entry in std::fs::read_dir(&here).into_iter().flatten().flatten() {
             let path = entry.path();
@@ -52,7 +51,7 @@ fn files_written(who: &str) -> std::collections::BTreeMap<String, String> {
                 continue; // a file this comparison cannot read is not compared
             };
             let relative = path
-                .strip_prefix(&dir)
+                .strip_prefix(dir)
                 .unwrap_or(&path)
                 .to_string_lossy()
                 .to_string();
@@ -67,10 +66,9 @@ fn files_written(who: &str) -> std::collections::BTreeMap<String, String> {
     found
 }
 
-fn export(who: &str, example: &str) -> String {
-    let dir = std::env::temp_dir().join(format!("cypcb-export-says-{who}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a place to work");
+fn export(who: &str, example: &str) -> (cypcb_fixtures::ScratchPath, String) {
+    let dir_home = cypcb_fixtures::scratch_dir(&format!("cypcb-export-says-{who}"));
+    let dir = dir_home.join("out");
 
     let output = Command::new(env!("CARGO_BIN_EXE_cypcb"))
         .args([
@@ -87,7 +85,9 @@ fn export(who: &str, example: &str) -> String {
         "`cypcb export {example}` failed:\n{}",
         String::from_utf8_lossy(&output.stderr)
     );
-    String::from_utf8_lossy(&output.stdout).to_string() + &String::from_utf8_lossy(&output.stderr)
+    let said = String::from_utf8_lossy(&output.stdout).to_string()
+        + &String::from_utf8_lossy(&output.stderr);
+    (dir_home.holding(dir), said)
 }
 
 #[test]
@@ -114,24 +114,22 @@ fn the_stiffener_reaches_exactly_one_file_and_it_is_not_the_copper() {
         "the example carries the line this test removes"
     );
 
-    let stated_dir = std::env::temp_dir().join("cypcb-stiffener-stated");
-    let plain_dir = std::env::temp_dir().join("cypcb-stiffener-plain");
+    let stated_dir = cypcb_fixtures::scratch_dir("cypcb-stiffener-stated");
+    let plain_dir = cypcb_fixtures::scratch_dir("cypcb-stiffener-plain");
     for (dir, text) in [(&stated_dir, &source), (&plain_dir, &plain_source)] {
-        let _ = std::fs::remove_dir_all(dir);
-        std::fs::create_dir_all(dir).expect("a place to work");
         std::fs::write(dir.join("board.cypcb"), text).expect("the board is writable");
     }
-    export(
+    let (stated_out, _) = export(
         "stiffener-stated",
         stated_dir.join("board.cypcb").to_str().unwrap(),
     );
-    export(
+    let (plain_out, _) = export(
         "stiffener-plain",
         plain_dir.join("board.cypcb").to_str().unwrap(),
     );
 
-    let stated = files_written("stiffener-stated");
-    let plain = files_written("stiffener-plain");
+    let stated = files_written(&stated_out);
+    let plain = files_written(&plain_out);
     assert!(
         stated.len() > 10,
         "the export wrote a set of files, or nothing below means anything: {} files",
@@ -184,7 +182,7 @@ fn the_stiffener_reaches_exactly_one_file_and_it_is_not_the_copper() {
 
 #[test]
 fn a_stated_stiffener_is_named_with_its_thickness_and_material() {
-    let said = export("flex", "examples/rigid-flex.cypcb");
+    let (_, said) = export("flex", "examples/rigid-flex.cypcb");
 
     assert!(
         said.contains("the stiffener this design states (0.200mm of FR4)"),
@@ -201,7 +199,7 @@ fn a_stated_stiffener_is_named_with_its_thickness_and_material() {
 fn a_board_with_no_stiffener_is_told_nothing_about_one() {
     // The half that keeps the other from being noise. `examples/four-layer.cypcb`
     // states a full stackup and no stiffener.
-    let said = export("rigid", "examples/four-layer.cypcb");
+    let (_, said) = export("rigid", "examples/four-layer.cypcb");
     assert!(
         !said.contains("stiffener"),
         "nothing was bonded to this board, so nothing is owed about one:\n{said}"

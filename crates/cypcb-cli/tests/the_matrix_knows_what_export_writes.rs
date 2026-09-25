@@ -47,9 +47,7 @@ fn our_cell(matrix: &str, feature: &str) -> String {
 /// Every file `export` says it would write, one path per entry.
 fn files_export_would_write(example: &str) -> Vec<String> {
     let board = repo_root().join("examples").join(example);
-    let dir = std::env::temp_dir().join("cypcb-matrix-export");
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a place to work");
+    let dir = cypcb_fixtures::scratch_dir("cypcb-matrix-export");
     let output = Command::new(env!("CARGO_BIN_EXE_cypcb"))
         .arg("export")
         .arg("--dry-run")
@@ -142,9 +140,7 @@ fn every_format_the_matrix_denies_is_a_file_nothing_writes() {
 #[test]
 fn the_list_is_the_commands_own() {
     let board = repo_root().join("examples/blink.cypcb");
-    let dir = std::env::temp_dir().join("cypcb-matrix-export-bare");
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a place to work");
+    let dir = cypcb_fixtures::scratch_dir("cypcb-matrix-export-bare");
     let output = Command::new(env!("CARGO_BIN_EXE_cypcb"))
         .arg("export")
         .arg("--dry-run")
@@ -169,8 +165,8 @@ fn the_list_is_the_commands_own() {
     // is about what export says under `--dry-run`. `--no-assembly` is a flag
     // about files, so the run that settles it is a real one: the assembly files
     // are absent from the disk, not only from the listing.
-    let real = std::env::temp_dir().join("cypcb-matrix-export-bare-run");
-    let _ = std::fs::remove_dir_all(&real);
+    let real_home = cypcb_fixtures::scratch_dir("cypcb-matrix-export-bare-run");
+    let real = real_home.join("out");
     let run = Command::new(env!("CARGO_BIN_EXE_cypcb"))
         .arg("export")
         .arg("--no-assembly")
@@ -181,7 +177,7 @@ fn the_list_is_the_commands_own() {
         .expect("the binary runs");
     assert!(run.status.success(), "the export failed");
     let mut names: Vec<String> = Vec::new();
-    let mut stack = vec![real.clone()];
+    let mut stack = vec![real.to_path_buf()];
     while let Some(dir) = stack.pop() {
         for entry in std::fs::read_dir(&dir).into_iter().flatten().flatten() {
             let path = entry.path();

@@ -29,9 +29,7 @@ fn repo_root() -> PathBuf {
 
 /// Route the smallest shipped board, and return what the command said.
 fn route(who: &str, args: &[&str], rust_log: Option<&str>) -> String {
-    let dir = std::env::temp_dir().join(format!("cypcb-verbose-{who}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a place to work");
+    let dir = cypcb_fixtures::scratch_dir(&format!("cypcb-verbose-{who}"));
     let out = dir.join("routed.cypcb");
 
     let mut command = Command::new(env!("CARGO_BIN_EXE_cypcb"));

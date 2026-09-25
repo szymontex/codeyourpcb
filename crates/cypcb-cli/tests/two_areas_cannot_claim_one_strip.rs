@@ -29,9 +29,7 @@ fn repo_root() -> PathBuf {
 /// board's path, so a directory named after the rule would make
 /// `contains("area-overlap")` true for a board with nothing wrong with it.
 fn check(source: &str, who: &str) -> String {
-    let dir = std::env::temp_dir().join(format!("cypcb-two-stacks-{who}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a place to work");
+    let dir = cypcb_fixtures::scratch_dir(&format!("cypcb-two-stacks-{who}"));
     let board = dir.join("board.cypcb");
     std::fs::write(&board, source).expect("the board is written");
 

@@ -94,15 +94,15 @@ fn hits(drill: &str) -> Vec<(f64, f64)> {
 
 /// Named per test: these run in parallel, and one output directory shared
 /// between them means one test deleting the files another is reading.
-fn exported(who: &str) -> (PathBuf, Vec<String>) {
+fn exported(who: &str) -> (cypcb_fixtures::ScratchPath, Vec<String>) {
     let (mut world, library) = built();
     let preset = from_name("jlcpcb").expect("a known preset");
-    let output_dir = std::env::temp_dir().join(format!("cypcb-screwed-down-{who}"));
-    let _ = std::fs::remove_dir_all(&output_dir);
+    let output_dir_home = cypcb_fixtures::scratch_dir(&format!("cypcb-screwed-down-{who}"));
+    let output_dir = output_dir_home.join("out");
 
     let job = ExportJob {
         source_path: PathBuf::from("bracket.cypcb"),
-        output_dir: output_dir.clone(),
+        output_dir: output_dir.to_path_buf(),
         preset,
         board_name: "bracket".to_string(),
     };
@@ -116,7 +116,7 @@ fn exported(who: &str) -> (PathBuf, Vec<String>) {
                 .map(|name| name.to_string_lossy().to_string())
         })
         .collect();
-    (output_dir, names)
+    (output_dir_home.holding(output_dir), names)
 }
 
 fn read(dir: &std::path::Path, subdir: &str, ending: &str, names: &[String]) -> String {
@@ -255,11 +255,11 @@ fn the_example_board_still_has_its_holes() {
     world.rebuild_spatial_index_from_library(&library);
 
     let preset = from_name("jlcpcb").expect("a known preset");
-    let output_dir = std::env::temp_dir().join("cypcb-example-panel-mount");
-    let _ = std::fs::remove_dir_all(&output_dir);
+    let output_dir_home = cypcb_fixtures::scratch_dir("cypcb-example-panel-mount");
+    let output_dir = output_dir_home.join("out");
     let job = ExportJob {
         source_path: path.clone(),
-        output_dir: output_dir.clone(),
+        output_dir: output_dir.to_path_buf(),
         preset,
         board_name: "panel-mount".to_string(),
     };

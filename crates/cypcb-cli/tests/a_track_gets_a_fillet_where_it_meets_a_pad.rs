@@ -25,10 +25,10 @@ fn example(name: &str) -> PathBuf {
         .join(name)
 }
 
-fn scratch(who: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("cypcb-teardrops-{who}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    dir
+fn scratch(who: &str) -> cypcb_fixtures::ScratchPath {
+    let dir_home = cypcb_fixtures::scratch_dir(&format!("cypcb-teardrops-{who}"));
+    let dir = dir_home.join("out");
+    dir_home.holding(dir)
 }
 
 /// Export the board and read back its top copper.
@@ -123,7 +123,8 @@ fn a_board_that_asks_for_them_needs_no_flag() {
         "the example carries the line this test edits"
     );
 
-    let board = std::env::temp_dir().join("cypcb-teardrops-asked.cypcb");
+    let board_dir = cypcb_fixtures::scratch_dir("cypcb-teardrops-asked");
+    let board = board_dir.join("cypcb-teardrops-asked.cypcb");
     std::fs::write(&board, &asked).expect("the board is writable");
 
     let filleted = top_copper(&board, &scratch("asked"), false);

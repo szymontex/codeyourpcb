@@ -32,8 +32,7 @@ fn design(fab_line: &str) -> String {
 
 /// How many violations `cypcb export` warned about on its way out.
 fn violations_reported(case: &str, fab_line: &str, flag: &str) -> usize {
-    let dir = std::env::temp_dir().join(format!("cypcb-export-fab-{case}"));
-    std::fs::create_dir_all(&dir).expect("a place to work in");
+    let dir = cypcb_fixtures::scratch_dir(&format!("cypcb-export-fab-{case}"));
     let board = dir.join("board.cypcb");
     std::fs::write(&board, design(fab_line)).expect("the board is written");
 

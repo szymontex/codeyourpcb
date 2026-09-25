@@ -39,7 +39,9 @@ cd "$(dirname "$0")/.."
 APP=$(realpath -m "${CARGO_TARGET_DIR:-target}")/debug/cypcb-desktop
 FRONTEND=viewer/dist
 SECONDS_UP=${SECONDS_UP:-12}
-SHOT=${SHOT:-/tmp/cypcb-desktop-smoke.png}
+# In the build directory rather than the machine's temporary one: another
+# checkout running this at the same time has a build directory of its own.
+SHOT=${SHOT:-$(realpath -m "${CARGO_TARGET_DIR:-target}")/desktop-smoke.png}
 WS_PORT=${CYPCB_SMOKE_WS_PORT:-4329}
 
 # A binary and a bundle are only as new as the last build, and this script

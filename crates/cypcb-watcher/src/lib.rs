@@ -128,14 +128,14 @@ mod tests {
 
     #[test]
     fn test_watcher_creation() {
-        let temp = std::env::temp_dir();
-        let watcher = FileWatcher::new(&temp);
+        // Watching reads a directory and writes nothing, so this crate's own does.
+        let watcher = FileWatcher::new(std::path::Path::new(env!("CARGO_MANIFEST_DIR")));
         assert!(watcher.is_ok());
     }
 
     #[test]
     fn test_watcher_detects_change() {
-        let temp = std::env::temp_dir().join("cypcb_watcher_test");
+        let temp = std::env::temp_dir().join(format!("cypcb_watcher_test-{}", std::process::id()));
         let _ = fs::create_dir_all(&temp);
 
         let watcher = FileWatcher::new(&temp).expect("Failed to create watcher");
@@ -160,7 +160,8 @@ mod tests {
 
     #[test]
     fn test_ignores_non_cypcb_files() {
-        let temp = std::env::temp_dir().join("cypcb_watcher_test_ignore");
+        let temp =
+            std::env::temp_dir().join(format!("cypcb_watcher_test_ignore-{}", std::process::id()));
         let _ = fs::create_dir_all(&temp);
 
         let watcher = FileWatcher::new(&temp).expect("Failed to create watcher");

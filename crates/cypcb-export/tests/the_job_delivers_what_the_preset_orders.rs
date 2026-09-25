@@ -74,7 +74,7 @@ fn board() -> (BoardWorld, FootprintLibrary) {
 }
 
 fn scratch_dir(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("cypcb-export-{name}"));
+    let dir = std::env::temp_dir().join(format!("cypcb-export-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     dir
 }
@@ -484,6 +484,7 @@ fn the_relief_a_pour_cuts_is_the_one_the_preset_asks_for() {
             })
             .expect("the top copper is written");
         let gerber = std::fs::read_to_string(&top.path).expect("the top copper reads back");
+        let _ = std::fs::remove_dir_all(&job.output_dir);
         // Drop the comment block: it carries the creation timestamp, so two
         // exports a second apart differ in a line that is not copper.
         gerber

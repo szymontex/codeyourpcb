@@ -60,9 +60,8 @@ fn commands() -> Vec<(Vec<String>, String)> {
 ///
 /// `route` leaves a `.routed.cypcb` beside its input and `from-kicad` leaves a
 /// `.cypcb` beside the board it read.
-fn workspace(who: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("cypcb-readme-run-{who}"));
-    let _ = std::fs::remove_dir_all(&dir);
+fn workspace(who: &str) -> cypcb_fixtures::ScratchDir {
+    let dir = cypcb_fixtures::scratch_dir(&format!("cypcb-readme-run-{who}"));
     std::fs::create_dir_all(dir.join("examples/lib")).expect("a place to work");
     std::fs::create_dir_all(dir.join("tests/fixtures/benchmark")).expect("a place to work");
 
@@ -233,9 +232,7 @@ fn the_two_numbers_the_prose_states_are_what_the_commands_print() {
 fn export_refuses_a_shorted_board_unless_forced() {
     // The claim beside the second command in the block, which no file in the
     // repository makes: `examples/blink.cypcb` is not shorted.
-    let dir = std::env::temp_dir().join("cypcb-readme-shorted");
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a place to work");
+    let dir = cypcb_fixtures::scratch_dir("cypcb-readme-shorted");
     let board = dir.join("shorted.cypcb");
     std::fs::write(
         &board,

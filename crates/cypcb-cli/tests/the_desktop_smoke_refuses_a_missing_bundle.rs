@@ -22,9 +22,8 @@ fn repo_root() -> PathBuf {
 
 /// A scratch tree holding only the smoke script, so `viewer/dist` is whatever
 /// the case puts there.
-fn tree_with_the_script(name: &str) -> PathBuf {
-    let root = std::env::temp_dir().join(format!("cypcb-smoke-{name}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&root);
+fn tree_with_the_script(name: &str) -> cypcb_fixtures::ScratchDir {
+    let root = cypcb_fixtures::scratch_dir(&format!("cypcb-smoke-{name}-{}", std::process::id()));
     std::fs::create_dir_all(root.join("scripts")).expect("the scratch tree is writable");
     std::fs::copy(
         repo_root().join("scripts/desktop-smoke.sh"),

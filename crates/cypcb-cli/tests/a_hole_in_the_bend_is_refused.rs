@@ -64,9 +64,7 @@ fn check(who: &str, at: &str) -> String {
     // draft called it `cypcb-flex-hole-...` and every report carries the
     // board's path, so the test that asserts the rule stays quiet read its
     // own temp directory as a violation.
-    let dir = std::env::temp_dir().join(format!("cypcb-bend-{who}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a place to work");
+    let dir = cypcb_fixtures::scratch_dir(&format!("cypcb-bend-{who}"));
     let board = dir.join("board.cypcb");
     std::fs::write(&board, BOARD.replace("{AT}", at)).expect("the fixture is writable");
 

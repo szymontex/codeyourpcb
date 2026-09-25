@@ -37,10 +37,8 @@ fn repo_root() -> PathBuf {
 /// them is one test deleting the files another is reading. That mistake has
 /// been made three times in this repository now, each time looking like a
 /// failure of the thing under test rather than of the harness.
-fn routed_and_exported(who: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("cypcb-four-layer-chain-{who}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a place to work");
+fn routed_and_exported(who: &str) -> cypcb_fixtures::ScratchDir {
+    let dir = cypcb_fixtures::scratch_dir(&format!("cypcb-four-layer-chain-{who}"));
     let routed = dir.join("four-layer.routed.cypcb");
 
     let route = cypcb()

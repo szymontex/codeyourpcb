@@ -79,9 +79,7 @@ impl Drop for Watched {
 
 #[test]
 fn saving_a_design_checks_it_again() {
-    let dir = std::env::temp_dir().join("cypcb-watch-test");
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a place to put the board");
+    let dir = cypcb_fixtures::scratch_dir("cypcb-watch-test");
     let board = dir.join("board.cypcb");
     std::fs::write(&board, BOARD).expect("the board is written");
     let log_path = dir.join("watch.log");

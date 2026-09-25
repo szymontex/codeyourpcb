@@ -131,8 +131,8 @@ fn test_check_runs_drc() {
 #[test]
 fn test_export_board_with_custom_footprint() {
     let example = examples_dir().join("custom-footprint.cypcb");
-    let out_dir = std::env::temp_dir().join("cypcb-export-custom-footprint");
-    let _ = std::fs::remove_dir_all(&out_dir);
+    let out_dir_home = cypcb_fixtures::scratch_dir("cypcb-export-custom-footprint");
+    let out_dir = out_dir_home.join("out");
 
     let output = Command::new(cypcb_binary())
         .arg("export")
@@ -161,8 +161,7 @@ fn test_check_sees_drills_of_inline_footprints() {
     // A footprint defined in the source, with a drill under every preset's
     // minimum. DRC rules used to build their own built-in-only library, so a
     // board like this passed the drill check by being invisible.
-    let dir = std::env::temp_dir().join("cypcb-inline-footprint-drc");
-    std::fs::create_dir_all(&dir).expect("temp dir");
+    let dir = cypcb_fixtures::scratch_dir("cypcb-inline-footprint-drc");
     let board = dir.join("tiny-drill.cypcb");
     std::fs::write(
         &board,
@@ -350,8 +349,8 @@ fn export_refuses_a_board_with_copper_touching_copper() {
     // written until someone says --force. drc-test.cypcb has one such short
     // among its faults.
     let example = examples_dir().join("drc-test.cypcb");
-    let out = std::env::temp_dir().join("cypcb-export-refuses");
-    let _ = std::fs::remove_dir_all(&out);
+    let out_home = cypcb_fixtures::scratch_dir("cypcb-export-refuses");
+    let out = out_home.join("out");
 
     let output = Command::new(cypcb_binary())
         .arg("export")
@@ -379,8 +378,8 @@ fn export_refuses_a_board_with_copper_touching_copper() {
 #[test]
 fn export_writes_the_files_when_forced() {
     let example = examples_dir().join("drc-test.cypcb");
-    let out = std::env::temp_dir().join("cypcb-export-forced");
-    let _ = std::fs::remove_dir_all(&out);
+    let out_home = cypcb_fixtures::scratch_dir("cypcb-export-forced");
+    let out = out_home.join("out");
 
     let output = Command::new(cypcb_binary())
         .arg("export")
@@ -415,8 +414,8 @@ fn export_resolves_imports_the_way_check_does() {
     // `use Divider ...` came back as `unknown module: 'Divider'`. The command
     // that produces the deliverable was the one that could not read the file.
     let example = examples_dir().join("v2-imports.cypcb");
-    let out = std::env::temp_dir().join("cypcb-export-imports");
-    let _ = std::fs::remove_dir_all(&out);
+    let out_home = cypcb_fixtures::scratch_dir("cypcb-export-imports");
+    let out = out_home.join("out");
 
     let output = Command::new(cypcb_binary())
         .arg("export")
@@ -468,16 +467,15 @@ fn export_says_a_library_is_a_library() {
     // interface contracts being held, which is its subject - so this writes
     // its own library instead. The message is what is under test, not which
     // file happens to lack a board this month.
-    let dir = std::env::temp_dir().join("cypcb-export-library-src");
-    std::fs::create_dir_all(&dir).expect("a place to put the library");
+    let dir = cypcb_fixtures::scratch_dir("cypcb-export-library-src");
     let example = dir.join("blocks-only.cypcb");
     std::fs::write(
         &example,
         "version 1\n\n         interface I2C {\n    pin SDA\n    pin SCL\n}\n",
     )
     .expect("the library is writable");
-    let out = std::env::temp_dir().join("cypcb-export-library");
-    let _ = std::fs::remove_dir_all(&out);
+    let out_home = cypcb_fixtures::scratch_dir("cypcb-export-library");
+    let out = out_home.join("out");
 
     let output = Command::new(cypcb_binary())
         .arg("export")
@@ -489,8 +487,13 @@ fn export_says_a_library_is_a_library() {
 
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(!output.status.success(), "a library cannot be exported");
+    let words = stderr
+        .split_whitespace()
+        .filter(|word| *word != "│")
+        .collect::<Vec<_>>()
+        .join(" ");
     assert!(
-        stderr.contains("declares no board"),
+        words.contains("declares no board"),
         "and the message should say why, got:\n{stderr}"
     );
 }
@@ -535,7 +538,8 @@ fn route_says_how_many_vias_are_blind_or_buried() {
     // before the files are sent anywhere. A two-layer board can only have
     // through vias, so it says nothing.
     let example = examples_dir().join("blink.cypcb");
-    let out = std::env::temp_dir().join("cypcb-route-vias.cypcb");
+    let out_dir = cypcb_fixtures::scratch_dir("cypcb-route-vias");
+    let out = out_dir.join("cypcb-route-vias.cypcb");
     let _ = std::fs::remove_file(&out);
 
     let output = Command::new(cypcb_binary())

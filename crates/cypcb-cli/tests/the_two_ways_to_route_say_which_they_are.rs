@@ -60,9 +60,7 @@ fn each_page_says_which_routing_it_does() {
 
 #[test]
 fn the_commands_do_what_their_pages_say() {
-    let dir = std::env::temp_dir().join("cypcb-two-ways-to-route");
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a place to work");
+    let dir = cypcb_fixtures::scratch_dir("cypcb-two-ways-to-route");
 
     let routed = dir.join("routed.cypcb");
     let searched = run(&[

@@ -20,7 +20,6 @@
 //! and fewer is the direction that matters - a board that passes is sent to a
 //! fabricator.
 
-use std::path::PathBuf;
 use std::process::Command;
 
 use cypcb_drc::{run_drc, Preset, PresetRules};
@@ -65,13 +64,11 @@ trace SIG {
 }
 "#;
 
-fn fixture() -> PathBuf {
-    let dir = std::env::temp_dir().join("cypcb-check-counts");
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a place to work");
+fn fixture() -> cypcb_fixtures::ScratchPath {
+    let dir = cypcb_fixtures::scratch_dir("cypcb-check-counts");
     let board = dir.join("board.cypcb");
     std::fs::write(&board, BOARD).expect("the fixture is writable");
-    board
+    dir.holding(board)
 }
 
 /// What the rules say about that board, built the way every other path builds
@@ -104,9 +101,10 @@ fn the_command_and_the_rules_agree_on_the_same_board() {
         "the fixture has to violate something"
     );
 
+    let board = fixture();
     let output = Command::new(env!("CARGO_BIN_EXE_cypcb"))
         .arg("check")
-        .arg(fixture())
+        .arg(&board)
         .output()
         .expect("the binary runs");
     let said = String::from_utf8_lossy(&output.stdout).to_string()

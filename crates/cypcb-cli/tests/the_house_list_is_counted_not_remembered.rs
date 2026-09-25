@@ -26,8 +26,8 @@ fn example(name: &str) -> PathBuf {
 
 /// What the command says when it is handed a house it cannot cut files for.
 fn refusal() -> String {
-    let out = std::env::temp_dir().join("cypcb-house-refusal");
-    let _ = std::fs::remove_dir_all(&out);
+    let out_home = cypcb_fixtures::scratch_dir("cypcb-house-refusal");
+    let out = out_home.join("out");
     let output = cypcb()
         .arg("export")
         .arg(example("blink.cypcb"))

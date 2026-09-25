@@ -65,9 +65,7 @@ trace SIG {
 "#;
 
 fn check(who: &str, fab: &str, drill: &str) -> String {
-    let dir = std::env::temp_dir().join(format!("cypcb-via-land-{who}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a place to work");
+    let dir = cypcb_fixtures::scratch_dir(&format!("cypcb-via-land-{who}"));
     let board = dir.join("board.cypcb");
     std::fs::write(
         &board,

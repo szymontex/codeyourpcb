@@ -121,9 +121,8 @@ const BOARD_WITH_A_RULE_AREA: &str = r#"(kicad_pcb (version 20240108) (generator
 "#;
 
 fn parse(who: &str, source: &str) -> cypcb_kicad::KicadPcbParseResult {
-    let dir = std::env::temp_dir().join("cypcb-kicad-zones");
-    std::fs::create_dir_all(&dir).expect("a place to put the board");
-    let path = dir.join(format!("{who}.kicad_pcb"));
+    let dir = tempfile::tempdir().expect("a place to put the board");
+    let path = dir.path().join(format!("{who}.kicad_pcb"));
     let mut file = std::fs::File::create(&path).expect("the board is writable");
     file.write_all(source.as_bytes())
         .expect("the board is written");

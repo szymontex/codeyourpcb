@@ -25,9 +25,7 @@ fn repo_root() -> PathBuf {
 }
 
 fn check(source: &str, who: &str) -> String {
-    let dir = std::env::temp_dir().join(format!("cypcb-bonded-sheet-{who}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a place to work");
+    let dir = cypcb_fixtures::scratch_dir(&format!("cypcb-bonded-sheet-{who}"));
     let board = dir.join("board.cypcb");
     std::fs::write(&board, source).expect("the board is written");
 

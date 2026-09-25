@@ -29,10 +29,10 @@ fn example(name: &str) -> PathBuf {
         .join(name)
 }
 
-fn scratch(who: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("cypcb-pdf-{who}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    dir
+fn scratch(who: &str) -> cypcb_fixtures::ScratchPath {
+    let dir_home = cypcb_fixtures::scratch_dir(&format!("cypcb-pdf-{who}"));
+    let dir = dir_home.join("out");
+    dir_home.holding(dir)
 }
 
 /// Export with pages and read one back as the bytes it is.

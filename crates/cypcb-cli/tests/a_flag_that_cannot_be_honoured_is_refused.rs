@@ -37,14 +37,12 @@ fn repo_root() -> PathBuf {
 }
 
 /// A copy of a board in a directory of this test's own.
-fn scratch_copy(from: &str, who: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("cypcb-refused-flags-{who}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a place to work");
+fn scratch_copy(from: &str, who: &str) -> cypcb_fixtures::ScratchPath {
+    let dir = cypcb_fixtures::scratch_dir(&format!("cypcb-refused-flags-{who}"));
     let source = repo_root().join(from);
     let target = dir.join(source.file_name().expect("the fixture has a name"));
     std::fs::copy(&source, &target).expect("the fixture is copyable");
-    target
+    dir.holding(target)
 }
 
 fn run(board: &Path, flags: &[&str]) -> (bool, String) {

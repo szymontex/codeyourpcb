@@ -86,15 +86,13 @@ fn export_to_temp(
     name: &str,
     world: &mut BoardWorld,
     library: &FootprintLibrary,
-) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("cypcb-sweep-{tag}-{}", name.replace('.', "-")));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a temp directory");
+) -> cypcb_fixtures::ScratchDir {
+    let dir = cypcb_fixtures::scratch_dir(&format!("cypcb-sweep-{tag}-{}", name.replace('.', "-")));
 
     let preset = cypcb_export::presets::from_name("jlcpcb").expect("the jlcpcb preset");
     let job = ExportJob {
         source_path: PathBuf::from(name),
-        output_dir: dir.clone(),
+        output_dir: dir.to_path_buf(),
         preset,
         board_name: name.trim_end_matches(".cypcb").to_string(),
     };

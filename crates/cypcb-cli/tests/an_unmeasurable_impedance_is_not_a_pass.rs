@@ -86,7 +86,8 @@ fn the_same_pair_without_a_stack_is_named_rather_than_passed() {
         "the stackup was not removed, so this case proves nothing"
     );
 
-    let file = std::env::temp_dir().join("cypcb-stackless-pair.cypcb");
+    let file_dir = cypcb_fixtures::scratch_dir("cypcb-stackless-pair");
+    let file = file_dir.join("cypcb-stackless-pair.cypcb");
     std::fs::write(&file, stackless).expect("a design to check");
 
     let output = Command::new(env!("CARGO_BIN_EXE_cypcb"))
@@ -161,7 +162,8 @@ trace SIG {
 }
 "#;
 
-    let file = std::env::temp_dir().join("cypcb-two-segments.cypcb");
+    let file_dir = cypcb_fixtures::scratch_dir("cypcb-two-segments");
+    let file = file_dir.join("cypcb-two-segments.cypcb");
     std::fs::write(&file, design).expect("a design to check");
 
     let output = Command::new(env!("CARGO_BIN_EXE_cypcb"))

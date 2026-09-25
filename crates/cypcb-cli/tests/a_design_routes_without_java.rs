@@ -12,7 +12,7 @@
 //! FreeRouting is still reachable. It is opt-in now, by naming its jar, which
 //! is what a Java program needs anyway.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 
 fn cypcb() -> Command {
@@ -20,10 +20,8 @@ fn cypcb() -> Command {
 }
 
 /// A copy of an example, so the routed output lands in the scratch directory.
-fn scratch_copy(who: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("cypcb-route-default-{who}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a place to work");
+fn scratch_copy(who: &str) -> cypcb_fixtures::ScratchPath {
+    let dir = cypcb_fixtures::scratch_dir(&format!("cypcb-route-default-{who}"));
     let source = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .and_then(|p| p.parent())
@@ -31,7 +29,7 @@ fn scratch_copy(who: &str) -> PathBuf {
         .join("examples/blink.cypcb");
     let target = dir.join("blink.cypcb");
     std::fs::copy(&source, &target).expect("the example is copyable");
-    target
+    dir.holding(target)
 }
 
 #[test]

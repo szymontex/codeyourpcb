@@ -89,9 +89,7 @@ trace SIG {{
 
 #[test]
 fn the_checker_still_says_what_the_guide_shows_it_saying() {
-    let dir = std::env::temp_dir().join("cypcb-guide-impedance");
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a place to work");
+    let dir = cypcb_fixtures::scratch_dir("cypcb-guide-impedance");
     let file = dir.join("sample.cypcb");
     std::fs::write(&file, board()).expect("the board is writable");
 

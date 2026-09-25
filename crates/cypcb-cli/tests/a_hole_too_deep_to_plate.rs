@@ -51,9 +51,7 @@ component J1 connector "ONE" {
 "#;
 
 fn check(who: &str, stack: &str, pad: &str) -> String {
-    let dir = std::env::temp_dir().join(format!("cypcb-deep-hole-{who}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a place to work");
+    let dir = cypcb_fixtures::scratch_dir(&format!("cypcb-deep-hole-{who}"));
     let board = dir.join("board.cypcb");
     std::fs::write(
         &board,
@@ -123,9 +121,7 @@ fn the_same_hole_on_a_house_that_plates_deeper_is_fine() {
     // The other number in the division: JLCPCB's advanced four-layer process
     // plates 12:1 where its standard one plates 8:1, so the same 0.15mm hole
     // through the same 1.6mm board reaches on one and not the other.
-    let dir = std::env::temp_dir().join("cypcb-deep-hole-advanced");
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a place to work");
+    let dir = cypcb_fixtures::scratch_dir("cypcb-deep-hole-advanced");
     let board = dir.join("board.cypcb");
     std::fs::write(
         &board,

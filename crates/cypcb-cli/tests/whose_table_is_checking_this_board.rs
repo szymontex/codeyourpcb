@@ -28,8 +28,7 @@ component R1 resistor "0402" {
 "#;
 
 fn check_against(preset: &str) -> String {
-    let dir = std::env::temp_dir().join(format!("cypcb-provenance-{preset}"));
-    std::fs::create_dir_all(&dir).expect("a place to put the board");
+    let dir = cypcb_fixtures::scratch_dir(&format!("cypcb-provenance-{preset}"));
     let board = dir.join("board.cypcb");
     std::fs::write(&board, A_BOARD).expect("the board is written");
 

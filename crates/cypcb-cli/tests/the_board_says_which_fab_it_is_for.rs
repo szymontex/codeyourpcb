@@ -26,8 +26,7 @@ fn design(fab_line: &str) -> String {
 
 /// Run `cypcb check` and hand back everything it said.
 fn check(case: &str, source: &str, flag: Option<&str>) -> String {
-    let dir = std::env::temp_dir().join(format!("cypcb-fab-{case}"));
-    std::fs::create_dir_all(&dir).expect("a place to put the board");
+    let dir = cypcb_fixtures::scratch_dir(&format!("cypcb-fab-{case}"));
     let board = dir.join("board.cypcb");
     std::fs::write(&board, source).expect("the board is written");
 

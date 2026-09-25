@@ -52,7 +52,8 @@ fn check_a_routed_board(tag: &str, name: &str) -> String {
     // deleted - it failed and passed on the same code depending on timing.
     // The same collision this crate already hit once, in
     // `the_table_matches_the_board_not_just_the_house`.
-    let out = std::env::temp_dir().join(format!("cypcb-one-row-{tag}-{name}"));
+    let out_home = cypcb_fixtures::scratch_dir(&format!("cypcb-one-row-{tag}-{name}"));
+    let out = out_home.join("out");
     let routed = Command::new(cypcb_binary())
         .arg("route")
         .arg(fixture(name))

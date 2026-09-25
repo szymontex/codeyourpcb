@@ -45,8 +45,8 @@ fn board(stackup: Option<&[(StackupLayerKind, Option<f64>)]>) -> BoardWorld {
 }
 
 /// Export into a directory of its own and read the job file back.
-fn exported(name: &str, world: &mut BoardWorld) -> (Value, PathBuf) {
-    let dir = std::env::temp_dir().join(format!("cypcb-jobfile-{name}"));
+fn exported(name: &str, world: &mut BoardWorld) -> (Value, Exported) {
+    let dir = std::env::temp_dir().join(format!("cypcb-jobfile-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
 
     let job = ExportJob {
@@ -63,8 +63,25 @@ fn exported(name: &str, world: &mut BoardWorld) -> (Value, PathBuf) {
         .unwrap_or_else(|err| panic!("no job file at {}: {err}", path.display()));
     (
         serde_json::from_str(&text).expect("the job file is JSON"),
-        dir,
+        Exported(dir),
     )
+}
+
+/// Where one export went, removed when the case is done with it.
+struct Exported(PathBuf);
+
+impl std::ops::Deref for Exported {
+    type Target = std::path::Path;
+
+    fn deref(&self) -> &std::path::Path {
+        &self.0
+    }
+}
+
+impl Drop for Exported {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
 }
 
 const FOUR_LAYER: &[(StackupLayerKind, Option<f64>)] = &[

@@ -385,7 +385,7 @@ mod tests {
     }
 
     fn temp_dir(tag: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("cypcb-imports-{tag}"));
+        let dir = std::env::temp_dir().join(format!("cypcb-imports-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         dir
@@ -465,6 +465,7 @@ module Filter {
                 .any(|d| matches!(d, Definition::Board(_))),
             "the importing file keeps its own board"
         );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -479,6 +480,7 @@ module Filter {
 
         assert!(errors.is_empty(), "{errors:?}");
         assert_eq!(module_names(&file), vec!["Divider"]);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -496,6 +498,7 @@ module Filter {
             matches!(&errors[0], ImportError::NotFound { name, .. } if name == "Regulator"),
             "{errors:?}"
         );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -509,6 +512,7 @@ module Filter {
             message.contains("lib/nope.cypcb") && message.contains("looked in"),
             "{message}"
         );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -529,6 +533,7 @@ module Filter {
             vec!["Divider"],
             "what outer took from inner comes through, and nothing else"
         );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -550,5 +555,6 @@ module Filter {
                 .any(|e| matches!(e, ImportError::Cycle { .. })),
             "{errors:?}"
         );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

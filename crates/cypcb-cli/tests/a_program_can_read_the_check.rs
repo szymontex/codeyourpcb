@@ -96,13 +96,11 @@ fn repo_root() -> PathBuf {
 }
 
 /// One board, in a directory of this test's own.
-fn board(who: &str, source: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("cypcb-check-json-{who}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a place to work");
+fn board(who: &str, source: &str) -> cypcb_fixtures::ScratchPath {
+    let dir = cypcb_fixtures::scratch_dir(&format!("cypcb-check-json-{who}"));
     let board = dir.join("board.cypcb");
     std::fs::write(&board, source).expect("the fixture is writable");
-    board
+    dir.holding(board)
 }
 
 fn check(args: &[&str]) -> Output {

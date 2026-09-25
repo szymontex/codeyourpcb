@@ -65,9 +65,7 @@ fn the_help_names_the_stamps_the_files_carry() {
         );
     }
 
-    let dir = std::env::temp_dir().join("cypcb-export-stamps");
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a place to work");
+    let dir = cypcb_fixtures::scratch_dir("cypcb-export-stamps");
     run(&[
         "export",
         "examples/blink.cypcb",

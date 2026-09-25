@@ -40,7 +40,7 @@ fn run(args: &[&str]) -> (Option<i32>, String) {
 }
 
 /// The imported design, written where the repository is not.
-fn imported() -> (PathBuf, String) {
+fn imported() -> (cypcb_fixtures::ScratchPath, String) {
     // One directory per case. All three cases call this, and it begins by
     // deleting the directory - so on a shared path they delete each other's
     // work under load. Seen once in a full workspace run from a fresh clone:
@@ -50,9 +50,7 @@ fn imported() -> (PathBuf, String) {
         .name()
         .unwrap_or("unnamed")
         .replace("::", "-");
-    let dir = std::env::temp_dir().join(format!("cypcb-usb-names-{case}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a place to work");
+    let dir = cypcb_fixtures::scratch_dir(&format!("cypcb-usb-names-{case}"));
     let out = dir.join("usb.cypcb");
 
     let (code, said) = run(&[
@@ -68,7 +66,7 @@ fn imported() -> (PathBuf, String) {
     );
 
     let source = std::fs::read_to_string(&out).expect("the design was written");
-    (out, source)
+    (dir.holding(out), source)
 }
 
 #[test]

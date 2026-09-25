@@ -29,7 +29,7 @@ fn example(name: &str) -> PathBuf {
         .join(name)
 }
 
-fn export_into(board: &str, dir: &PathBuf) -> String {
+fn export_into(board: &str, dir: &std::path::Path) -> String {
     let output = cypcb()
         .arg("export")
         .arg(example(board))
@@ -46,10 +46,10 @@ fn export_into(board: &str, dir: &PathBuf) -> String {
     )
 }
 
-fn scratch(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("cypcb-export-dir-{name}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    dir
+fn scratch(name: &str) -> cypcb_fixtures::ScratchPath {
+    let dir_home = cypcb_fixtures::scratch_dir(&format!("cypcb-export-dir-{name}"));
+    let dir = dir_home.join("out");
+    dir_home.holding(dir)
 }
 
 #[test]

@@ -59,7 +59,8 @@ trace SIG {
 "#;
 
 fn check(design: &str, name: &str) -> String {
-    let file = std::env::temp_dir().join(name);
+    let home = cypcb_fixtures::scratch_dir("cypcb-stack-layer");
+    let file = home.join(name);
     std::fs::write(&file, design).expect("a design to check");
     let output = Command::new(env!("CARGO_BIN_EXE_cypcb"))
         .arg("check")

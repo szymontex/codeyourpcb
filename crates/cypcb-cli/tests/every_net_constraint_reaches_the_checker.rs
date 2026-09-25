@@ -15,7 +15,7 @@
 //! of constraints is read back **from the binary's own help** - add a sixth to
 //! the language and this fails until it has a fixture here.
 
-use std::path::PathBuf;
+use std::path::Path;
 use std::process::Command;
 
 /// The board every case is cut from: two parts, one trace, a stack the
@@ -106,10 +106,8 @@ const CASES: &[Case] = &[
 /// A board with this statement in it, or without one, in a directory of its
 /// own: cargo runs these at the same time and a shared directory means one
 /// wiping what another is reading.
-fn board(who: &str, constraint: Option<&str>) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("cypcb-net-census-{who}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a place to work");
+fn board(who: &str, constraint: Option<&str>) -> cypcb_fixtures::ScratchPath {
+    let dir = cypcb_fixtures::scratch_dir(&format!("cypcb-net-census-{who}"));
 
     let source = match constraint {
         Some(stated) => BASE.replace("{CONSTRAINT}", &format!("[{stated}] ")),
@@ -117,10 +115,10 @@ fn board(who: &str, constraint: Option<&str>) -> PathBuf {
     };
     let board = dir.join("board.cypcb");
     std::fs::write(&board, source).expect("the fixture is writable");
-    board
+    dir.holding(board)
 }
 
-fn check(board: &PathBuf) -> String {
+fn check(board: &Path) -> String {
     let output = Command::new(env!("CARGO_BIN_EXE_cypcb"))
         .arg("check")
         .arg(board)
@@ -155,9 +153,7 @@ fn the_census_covers_every_constraint_the_block_takes() {
     // Read the list back from the binary rather than from a list somebody
     // maintains beside the reader: mistype inside a net block and the parser
     // answers with what the block does take.
-    let dir = std::env::temp_dir().join("cypcb-net-census-help");
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a place to work");
+    let dir = cypcb_fixtures::scratch_dir("cypcb-net-census-help");
     let board = dir.join("board.cypcb");
     std::fs::write(&board, BASE.replace("{CONSTRAINT}", "[nonsense 1mm] "))
         .expect("the fixture is writable");
@@ -238,17 +234,15 @@ trace A {
 "#;
 
 /// A board built from `WITH_CLASS`, in a directory of its own.
-fn class_board(who: &str, class: &str, constraint: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("cypcb-netclass-{who}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a place to work");
+fn class_board(who: &str, class: &str, constraint: &str) -> cypcb_fixtures::ScratchPath {
+    let dir = cypcb_fixtures::scratch_dir(&format!("cypcb-netclass-{who}"));
 
     let source = WITH_CLASS
         .replace("{CLASS}", class)
         .replace("{CONSTRAINT}", constraint);
     let board = dir.join("board.cypcb");
     std::fs::write(&board, source).expect("the fixture is writable");
-    board
+    dir.holding(board)
 }
 
 /// The class block used below: one rule, stated once, for a group of nets.

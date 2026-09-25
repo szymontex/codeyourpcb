@@ -10,7 +10,7 @@
 //! could not be reproduced from the file it produced, on a project where
 //! `router-is-repeatable` is a gate stage.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 
 fn cypcb() -> Command {
@@ -18,10 +18,8 @@ fn cypcb() -> Command {
 }
 
 /// A copy of an example, so the routed output lands in the scratch directory.
-fn scratch(who: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("cypcb-routed-header-{who}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a place to work");
+fn scratch(who: &str) -> cypcb_fixtures::ScratchPath {
+    let dir = cypcb_fixtures::scratch_dir(&format!("cypcb-routed-header-{who}"));
     let source = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .and_then(|p| p.parent())
@@ -29,7 +27,7 @@ fn scratch(who: &str) -> PathBuf {
         .join("examples/blink.cypcb");
     let board = dir.join("blink.cypcb");
     std::fs::copy(&source, &board).expect("the example is copyable");
-    board
+    dir.holding(board)
 }
 
 /// Route it, returning what it said and what it wrote.

@@ -27,10 +27,10 @@ fn fixture() -> PathBuf {
         .join("crates/cypcb-kicad/tests/fixtures/kicad10-slotted.kicad_pcb")
 }
 
-fn scratch(who: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("cypcb-kicad-export-{who}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    dir
+fn scratch(who: &str) -> cypcb_fixtures::ScratchPath {
+    let dir_home = cypcb_fixtures::scratch_dir(&format!("cypcb-kicad-export-{who}"));
+    let dir = dir_home.join("out");
+    dir_home.holding(dir)
 }
 
 fn export(out: &Path, extra: &[&str]) -> String {
@@ -104,7 +104,7 @@ fn the_dry_run_names_this_boards_files_too() {
 
     export(&out, &[]);
     let mut written = Vec::new();
-    let mut stack = vec![out.clone()];
+    let mut stack = vec![out.to_path_buf()];
     while let Some(at) = stack.pop() {
         for entry in std::fs::read_dir(&at).expect("the output directory is readable") {
             let path = entry.expect("a directory entry").path();

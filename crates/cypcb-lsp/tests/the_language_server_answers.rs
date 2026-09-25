@@ -471,7 +471,7 @@ fn hovering_a_current_gives_the_width_the_checker_would_demand() {
     );
 
     // And the command line says the same thing about the same board.
-    let dir = std::env::temp_dir().join("cypcb-lsp-current-card");
+    let dir = std::env::temp_dir().join(format!("cypcb-lsp-current-card-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).expect("a place to work");
     let board = dir.join("board.cypcb");
@@ -497,6 +497,7 @@ fn hovering_a_current_gives_the_width_the_checker_would_demand() {
         said.contains("IPC-2221 wants 0.300mm"),
         "the checker states the same figure to three decimals:\n{said}"
     );
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]

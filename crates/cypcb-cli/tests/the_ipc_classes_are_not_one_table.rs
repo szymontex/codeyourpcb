@@ -67,9 +67,7 @@ trace SIG {
 /// three wiped what another was reading, and it failed inside the gate while
 /// passing alone.
 fn check(who: &str, preset: &str) -> String {
-    let dir = std::env::temp_dir().join(format!("cypcb-ipc-{who}-{preset}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a place to work");
+    let dir = cypcb_fixtures::scratch_dir(&format!("cypcb-ipc-{who}-{preset}"));
     let board = dir.join("board.cypcb");
     std::fs::write(&board, BOARD).expect("the fixture is writable");
 

@@ -70,9 +70,7 @@ fn a_block_the_guide_marks_as_wrong_is_refused() {
          needs to be a deliberate addition rather than a number to update"
     );
 
-    let dir = std::env::temp_dir().join("cypcb-guide-wrong");
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a place to work");
+    let dir = cypcb_fixtures::scratch_dir("cypcb-guide-wrong");
 
     for (index, (_, body)) in wrong.iter().enumerate() {
         let path = dir.join(format!("wrong-{index}.cypcb"));

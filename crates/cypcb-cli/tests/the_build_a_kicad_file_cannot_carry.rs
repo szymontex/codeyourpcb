@@ -28,10 +28,8 @@ fn repo_root() -> PathBuf {
 }
 
 /// A directory of this test's own: cargo runs tests side by side.
-fn scratch(who: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("cypcb-kicad-build-{who}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a place to work");
+fn scratch(who: &str) -> cypcb_fixtures::ScratchDir {
+    let dir = cypcb_fixtures::scratch_dir(&format!("cypcb-kicad-build-{who}"));
     dir
 }
 

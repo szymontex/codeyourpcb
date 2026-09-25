@@ -71,9 +71,7 @@ trace SIG {
 "#;
 
 fn check(who: &str, y: &str) -> String {
-    let dir = std::env::temp_dir().join(format!("cypcb-screw-hole-{who}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a place to work");
+    let dir = cypcb_fixtures::scratch_dir(&format!("cypcb-screw-hole-{who}"));
     let board = dir.join("board.cypcb");
     std::fs::write(&board, BOARD.replace("{Y}", y)).expect("the fixture is writable");
 

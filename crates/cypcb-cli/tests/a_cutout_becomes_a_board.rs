@@ -28,10 +28,8 @@ fn example(name: &str) -> PathBuf {
         .join(name)
 }
 
-fn scratch(who: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("cypcb-fromdxf-{who}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("the scratch directory is made");
+fn scratch(who: &str) -> cypcb_fixtures::ScratchDir {
+    let dir = cypcb_fixtures::scratch_dir(&format!("cypcb-fromdxf-{who}"));
     dir
 }
 

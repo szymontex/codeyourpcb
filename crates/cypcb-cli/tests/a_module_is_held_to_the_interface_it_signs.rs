@@ -30,8 +30,7 @@ fn repo_root() -> PathBuf {
 
 /// Run `cypcb check` on a written-out design and return its status and report.
 fn check(name: &str, source: &str) -> (i32, String) {
-    let dir = std::env::temp_dir().join("cypcb-interface-contract");
-    std::fs::create_dir_all(&dir).expect("a place to put the design");
+    let dir = cypcb_fixtures::scratch_dir("cypcb-interface-contract");
     let path = dir.join(format!("{name}.cypcb"));
     std::fs::write(&path, source).expect("the design is writable");
 

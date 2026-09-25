@@ -91,8 +91,7 @@ fn lock_with(entries: &[(&str, &str)]) -> String {
 
 #[test]
 fn a_lock_entry_counts_when_the_module_links_that_package() {
-    let dir = std::env::temp_dir().join(format!("cypcb-lock-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).expect("a directory for two lock files");
+    let dir = cypcb_fixtures::scratch_dir(&format!("cypcb-lock-{}", std::process::id()));
 
     let before = dir.join("before.lock");
     std::fs::write(

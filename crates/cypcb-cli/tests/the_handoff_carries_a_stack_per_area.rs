@@ -27,9 +27,7 @@ fn repo_root() -> PathBuf {
 /// Export a board and hand back the handoff document and what was said while
 /// writing it.
 fn handoff(source: &str, who: &str) -> (String, String) {
-    let dir = std::env::temp_dir().join(format!("cypcb-stack-per-area-{who}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a place to work");
+    let dir = cypcb_fixtures::scratch_dir(&format!("cypcb-stack-per-area-{who}"));
 
     let board = dir.join("board.cypcb");
     std::fs::write(&board, source).expect("the board is written");
@@ -88,11 +86,9 @@ region connector_end {
 "#;
 
 /// Export the same board the ordinary way - Gerbers, drill, job file - and
-/// hand back what was said while writing it.
-fn gerbers(source: &str, who: &str) -> String {
-    let dir = std::env::temp_dir().join(format!("cypcb-stack-per-area-{who}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a place to work");
+/// hand back where it went and what was said while writing it.
+fn gerbers(source: &str, who: &str) -> (cypcb_fixtures::ScratchDir, String) {
+    let dir = cypcb_fixtures::scratch_dir(&format!("cypcb-stack-per-area-{who}"));
 
     let board = dir.join("board.cypcb");
     std::fs::write(&board, source).expect("the board is written");
@@ -114,7 +110,8 @@ fn gerbers(source: &str, who: &str) -> String {
         "export failed:\n{}",
         String::from_utf8_lossy(&output.stderr)
     );
-    String::from_utf8_lossy(&output.stderr).to_string()
+    let said = String::from_utf8_lossy(&output.stderr).to_string();
+    (dir, said)
 }
 
 fn group(document: &str, name: &str) -> String {
@@ -211,7 +208,7 @@ fn the_job_file_says_it_is_flattening_the_stack() {
     // notion of an area, so a rigid-flex design reads there as a board pressed
     // the same way end to end, and a fabricator quoting from it quotes the
     // wrong board.
-    let said = gerbers(RIGID_FLEX, "job-file");
+    let (dir, said) = gerbers(RIGID_FLEX, "job-file");
     assert!(
         said.contains("the job file states one stack and this design states a different one per area (bend, connector_end)"),
         "the job file names the areas it cannot hold:\n{said}"
@@ -227,7 +224,7 @@ fn the_job_file_says_it_is_flattening_the_stack() {
     // anywhere in the document. The count comes first - "the job file does not
     // mention an area" is true of an empty file, of a truncated write, and of a
     // file that was never created.
-    let written = job_file("job-file");
+    let written = job_file(&dir);
     assert_eq!(
         written.matches("\"MaterialStackup\"").count(),
         1,
@@ -251,7 +248,7 @@ fn the_job_file_says_it_is_flattening_the_stack() {
     let plain = RIGID_FLEX
         .replace(" covers bend", "")
         .replace(" covers connector_end", "");
-    let said = gerbers(&plain, "job-file-plain");
+    let (_, said) = gerbers(&plain, "job-file-plain");
     assert!(
         !said.contains("states a different one per area"),
         "one stack, nothing to say:\n{said}"
@@ -260,10 +257,8 @@ fn the_job_file_says_it_is_flattening_the_stack() {
 
 /// The job file a run of `gerbers` left behind, read from the directory that
 /// run wrote into.
-fn job_file(who: &str) -> String {
-    let out = std::env::temp_dir()
-        .join(format!("cypcb-stack-per-area-{who}"))
-        .join("out");
+fn job_file(dir: &std::path::Path) -> String {
+    let out = dir.join("out");
     let path = std::fs::read_dir(&out)
         .expect("the export wrote its directory")
         .filter_map(Result::ok)

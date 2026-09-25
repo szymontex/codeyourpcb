@@ -39,10 +39,8 @@ fn run(args: &[&str]) -> (Option<i32>, String) {
     (output.status.code(), said)
 }
 
-fn imported(who: &str) -> (PathBuf, String) {
-    let dir = std::env::temp_dir().join(format!("cypcb-pour-{who}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a place to work");
+fn imported(who: &str) -> (cypcb_fixtures::ScratchPath, String) {
+    let dir = cypcb_fixtures::scratch_dir(&format!("cypcb-pour-{who}"));
     let out = dir.join("board.cypcb");
 
     let (code, said) = run(&[
@@ -54,7 +52,7 @@ fn imported(who: &str) -> (PathBuf, String) {
     assert_eq!(code, Some(0), "the board has to import:\n{said}");
 
     let source = std::fs::read_to_string(&out).expect("the design was written");
-    (out, source)
+    (dir.holding(out), source)
 }
 
 #[test]

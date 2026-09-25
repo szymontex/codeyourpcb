@@ -29,8 +29,7 @@ fn cypcb_binary() -> std::path::PathBuf {
 
 /// Write a board to a temporary file and run a subcommand on it.
 fn run(name: &str, source: &str, args: &[&str]) -> String {
-    let dir = std::env::temp_dir().join("cypcb-error-rendering");
-    std::fs::create_dir_all(&dir).expect("a place to put the board");
+    let dir = cypcb_fixtures::scratch_dir("cypcb-error-rendering");
     let path = dir.join(format!("{name}.cypcb"));
     std::fs::write(&path, source).expect("the board is writable");
 
@@ -145,7 +144,8 @@ fn every_command_that_builds_the_board_says_what_it_assumed() {
 
     for args in commands {
         let mut args = args.to_vec();
-        let out_dir = std::env::temp_dir().join("cypcb-warning-export");
+        let out_dir_home = cypcb_fixtures::scratch_dir("cypcb-warning-export");
+        let out_dir = out_dir_home.join("out");
         if args.last() == Some(&"-o") {
             args.push(out_dir.to_str().expect("a utf-8 temp path"));
         }
@@ -168,8 +168,7 @@ fn every_command_that_builds_the_board_says_what_it_assumed() {
 fn a_warning_does_not_reach_machine_readable_output() {
     // `parse` writes JSON to stdout and something reads it. A warning on
     // stdout would break that reader.
-    let dir = std::env::temp_dir().join("cypcb-error-rendering");
-    std::fs::create_dir_all(&dir).expect("a place to put the board");
+    let dir = cypcb_fixtures::scratch_dir("cypcb-error-rendering");
     let path = dir.join("stdout-clean.cypcb");
     std::fs::write(&path, A_SIZE_WITHOUT_A_UNIT).expect("the board is writable");
 
@@ -227,8 +226,7 @@ fn a_house_export_cannot_cut_for_is_refused_with_the_reason() {
     // takes file conventions - what a house wants the Gerbers called - and
     // knows two. A reader who checks a board against oshpark and then cannot
     // export for it deserves the reason, not just a no.
-    let dir = std::env::temp_dir().join("cypcb-error-rendering");
-    std::fs::create_dir_all(&dir).expect("a place to put the board");
+    let dir = cypcb_fixtures::scratch_dir("cypcb-error-rendering");
     let path = dir.join("preset-gap.cypcb");
     std::fs::write(&path, A_PART).expect("the board is writable");
 
