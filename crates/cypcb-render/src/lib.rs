@@ -2639,6 +2639,22 @@ mod tests {
         assert!(!snapshot.contains("def456"));
     }
 
+    /// A pasted em dash used to panic inside the reader, and in the browser a
+    /// panic in the engine takes the whole viewer with it. It is a diagnostic
+    /// on the dash now, at the line and column the editor shows.
+    #[test]
+    fn a_stray_em_dash_is_a_diagnostic_not_a_dead_engine() {
+        let mut engine = PcbEngine::new();
+        let said = engine.load_source("board x { size 10mm x 10mm \u{2014} }\n");
+        assert!(said.contains("unexpected character"), "{said}");
+        let diagnostics = engine.get_diagnostics_json();
+        assert!(
+            diagnostics.contains("\"line\":1,\"column\":28,\"end_line\":1,\"end_column\":29"),
+            "{diagnostics}"
+        );
+        assert!(engine.get_snapshot().starts_with('{'));
+    }
+
     #[test]
     fn load_source_produces_a_snapshot_with_traces() {
         // The viewer keeps its own board model because the engine's snapshot

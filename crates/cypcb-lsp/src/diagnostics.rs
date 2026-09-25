@@ -273,6 +273,7 @@ fn parse_error_to_diagnostic(doc: &DocumentState, error: &ParseError) -> Option<
         ParseError::InvalidTolerance { message, span, .. } => {
             (format!("Invalid tolerance: {}", message), span)
         }
+        ParseError::UnexpectedCharacter { span, .. } => (error.to_string(), span),
         ParseError::UnknownProperty {
             block,
             found,
@@ -316,6 +317,7 @@ fn error_code(error: &ParseError) -> String {
         ParseError::InvalidPhysicalUnit { .. } => "invalid-physical-unit",
         ParseError::InvalidTolerance { .. } => "invalid-tolerance",
         ParseError::UnknownProperty { .. } => "unknown-property",
+        ParseError::UnexpectedCharacter { .. } => "unexpected-character",
     }
     .to_string()
 }
@@ -483,6 +485,26 @@ mod tests {
         doc.parse();
         doc.build_world();
         doc
+    }
+
+    /// A pasted em dash used to take the server down with the reader: the
+    /// tokenizer sliced the text inside the character and panicked. It is an
+    /// error on the dash now, and the column is the one an editor shows.
+    #[test]
+    fn a_stray_em_dash_is_an_error_on_the_dash() {
+        let doc = make_doc("board x { size 10mm x 10mm \u{2014} }\n");
+        let diagnostics = run_diagnostics(&doc);
+        let dash: Vec<&Diagnostic> = diagnostics
+            .iter()
+            .filter(|diagnostic| diagnostic.message.contains("unexpected character"))
+            .collect();
+        assert_eq!(dash.len(), 1, "{diagnostics:?}");
+        assert_eq!(
+            (dash[0].start_line, dash[0].start_col, dash[0].end_col),
+            (0, 27, 28),
+            "{:?}",
+            dash[0]
+        );
     }
 
     /// A board named a fab, the server did not have it, and nothing was said.

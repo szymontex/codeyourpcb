@@ -49,7 +49,8 @@ pub enum TokenKind {
     /// spelling the grammar uses.
     Op(String),
     /// Anything the language does not use, kept so the reader can complain
-    /// about it with a position rather than skipping it.
+    /// about it with a position rather than skipping it. Its span covers the
+    /// whole character, however many bytes it takes.
     Unknown(char),
 }
 
@@ -68,6 +69,11 @@ impl TokenKind {
 /// Comments and whitespace are dropped. Nothing here fails: an unexpected
 /// character becomes `Unknown` and the reader decides what to say about it,
 /// which keeps error messages in one place.
+///
+/// Every token the language has is ASCII, so the scan walks bytes, and a byte
+/// of a longer UTF-8 character never equals one of them. Only `Unknown` has
+/// to take the character whole: stepping one byte into it left `i` inside the
+/// character, and the next slice of `source` panicked.
 pub fn tokenize(source: &str) -> Vec<Token> {
     let bytes = source.as_bytes();
     let mut tokens = Vec::new();
@@ -75,7 +81,10 @@ pub fn tokenize(source: &str) -> Vec<Token> {
 
     while i < bytes.len() {
         let start = i;
-        let c = bytes[i] as char;
+        let c = source[start..]
+            .chars()
+            .next()
+            .expect("the scan only stops on a character boundary");
 
         // Whitespace
         if c.is_ascii_whitespace() {
@@ -180,7 +189,7 @@ pub fn tokenize(source: &str) -> Vec<Token> {
 
         // Operators, longest first so `>=` never reads as `>` then `=`.
         for spelling in ["+/-", "==", "!=", ">=", "<="] {
-            if source[i..].starts_with(spelling) {
+            if bytes[i..].starts_with(spelling.as_bytes()) {
                 i += spelling.len();
                 tokens.push(Token {
                     kind: TokenKind::Op(spelling.to_string()),
@@ -211,7 +220,7 @@ pub fn tokenize(source: &str) -> Vec<Token> {
             '=' => TokenKind::Equals,
             other => TokenKind::Unknown(other),
         };
-        i += 1;
+        i += c.len_utf8();
         tokens.push(Token {
             kind,
             span: Span::new(start, i),
@@ -308,6 +317,39 @@ mod tests {
         let tokens = tokenize(source);
         assert_eq!(&source[tokens[0].span.start..tokens[0].span.end], "board");
         assert_eq!(&source[tokens[1].span.start..tokens[1].span.end], "plate");
+    }
+
+    #[test]
+    fn a_character_outside_ascii_is_one_unknown_token_the_width_of_itself() {
+        let source = "10mm \u{2014} \u{105} \u{1F600} 2";
+        let tokens = tokenize(source);
+        let unknown: Vec<_> = tokens
+            .iter()
+            .filter_map(|t| match t.kind {
+                TokenKind::Unknown(c) => Some((c, &source[t.span.start..t.span.end])),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            unknown,
+            vec![
+                ('\u{2014}', "\u{2014}"),
+                ('\u{105}', "\u{105}"),
+                ('\u{1F600}', "\u{1F600}"),
+            ]
+        );
+        assert_eq!(tokens.last().unwrap().kind, TokenKind::Number(2.0));
+    }
+
+    #[test]
+    fn strings_and_comments_carry_any_utf8() {
+        assert_eq!(
+            kinds("\"Zasilanie \u{105}\u{119} \u{2014} \u{1F600}\" // \u{17c}\u{f3}\u{142}w \u{2014}\n/* \u{1F600} */ 2"),
+            vec![
+                TokenKind::Str("Zasilanie \u{105}\u{119} \u{2014} \u{1F600}".into()),
+                TokenKind::Number(2.0),
+            ]
+        );
     }
 
     #[test]
