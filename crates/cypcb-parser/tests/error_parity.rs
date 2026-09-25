@@ -82,6 +82,25 @@ const BAD: &[Case] = &[
         what: "a word an interface does not have",
         source: "interface I2C {\n    pinn SDA\n}\n",
     },
+    // A character outside ASCII where the grammar wants a token. The Rust
+    // reader panicked on these until 2026-09-25; `identifier` in grammar.js is
+    // `[a-zA-Z_][a-zA-Z0-9_]*`, so a name that needs other letters is a string.
+    Case {
+        what: "an em dash between two properties",
+        source: "board x { size 10mm x 10mm \u{2014} }\n",
+    },
+    Case {
+        what: "a Polish letter in a bare net name",
+        source: "board t { layers 2 }\nnet Zasilanie_\u{105} {\n    R1.1\n}\n",
+    },
+    Case {
+        what: "an emoji as a component name",
+        source: "component \u{1F600} resistor \"0402\" { at 1mm, 1mm }\n",
+    },
+    Case {
+        what: "a no-break space between two words",
+        source: "board t {\n    layers\u{a0}2\n}\n",
+    },
 ];
 
 const GOOD: &[Case] = &[
@@ -110,6 +129,14 @@ const GOOD: &[Case] = &[
     Case {
         what: "a board with a stackup",
         source: "board t {\n    size 30mm x 20mm\n    layers 4\n    stackup {\n        copper 0.035mm\n        prepreg 0.2mm\n        core 1.2mm\n        copper 0.035mm\n    }\n}\n",
+    },
+    Case {
+        what: "letters outside ASCII in strings and comments",
+        source: "// \u{17c}\u{f3}\u{142}w \u{2014} \u{1F600}\n\
+                 board t { size 30mm x 20mm layers 2 }\n\
+                 /* \u{2014} */\n\
+                 component R1 resistor \"0402\" { value \"\u{3a9} \u{2014} \u{1F600}\" at 5mm, 10mm }\n\
+                 net \"Zasilanie_\u{105}\u{119}\" { R1.1 }\n",
     },
 ];
 

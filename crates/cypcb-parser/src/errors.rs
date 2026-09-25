@@ -36,6 +36,34 @@ pub enum ParseError {
         span: SourceSpan,
     },
 
+    /// A character the language has no use for, outside a string or comment.
+    ///
+    /// Until 2026-09-25 the tokenizer stepped over such a character one byte
+    /// at a time, so one longer than a byte - an em dash pasted from a
+    /// datasheet, a Polish letter in a name - cut the source inside itself
+    /// and the reader panicked. Line and column count characters, from 1.
+    #[error("unexpected character '{character}' ({codepoint}) at line {line}, column {column}")]
+    #[diagnostic(
+        code(cypcb::parse::unexpected_character),
+        help("outside a string or a comment only ASCII is read; a net name that needs other letters can be quoted: net \"...\"")
+    )]
+    UnexpectedCharacter {
+        /// The character itself.
+        character: char,
+        /// Its code point, written `U+2014`.
+        codepoint: String,
+        /// The line it is on, from 1.
+        line: usize,
+        /// Its column on that line in characters, from 1.
+        column: usize,
+        /// The source code being parsed.
+        #[source_code]
+        src: String,
+        /// Where the character is.
+        #[label("not part of the language")]
+        span: SourceSpan,
+    },
+
     /// A word inside a block that the block does not have.
     ///
     /// Every block body in the Rust reader used to end in a silent skip, so

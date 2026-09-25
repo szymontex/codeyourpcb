@@ -50,6 +50,14 @@ const STACKUP_WORDS: &[&str] = &[
     "drill",
 ];
 
+/// 1-based line and column of a byte offset, the column in characters.
+fn line_and_column(source: &str, offset: usize) -> (usize, usize) {
+    let before = &source[..offset];
+    let line = before.matches('\n').count() + 1;
+    let line_start = before.rfind('\n').map_or(0, |nl| nl + 1);
+    (line, before[line_start..].chars().count() + 1)
+}
+
 /// Read a source file into the AST.
 ///
 /// Returns whatever it could read alongside the errors it hit, the way the
@@ -63,6 +71,7 @@ pub fn read(source: &str) -> ParseResult<SourceFile> {
         errors: Vec::new(),
         source,
     };
+    reader.report_unexpected_characters();
 
     let mut version = None;
     let mut definitions = Vec::new();
@@ -345,6 +354,9 @@ impl<'a> Reader<'a> {
     }
 
     fn unexpected(&mut self, wanted: &str) {
+        if self.at_unexpected_character() {
+            return;
+        }
         let span = self
             .tokens
             .get(self.at)
@@ -355,6 +367,33 @@ impl<'a> Reader<'a> {
             src: self.source.to_string(),
             span: span.to_miette(),
         });
+    }
+
+    /// One error for every character the language has no use for.
+    ///
+    /// Reported here, from the tokens, rather than wherever the reader trips
+    /// over one: a block that skips to its closing brace would otherwise step
+    /// over a stray character without a word.
+    fn report_unexpected_characters(&mut self) {
+        for token in &self.tokens {
+            if let TokenKind::Unknown(character) = token.kind {
+                let (line, column) = line_and_column(self.source, token.span.start);
+                self.errors.push(ParseError::UnexpectedCharacter {
+                    character,
+                    codepoint: format!("U+{:04X}", character as u32),
+                    line,
+                    column,
+                    src: self.source.to_string(),
+                    span: token.span.to_miette(),
+                });
+            }
+        }
+    }
+
+    /// Whether the next token is one `report_unexpected_characters` has
+    /// already reported, so nothing reports it a second time.
+    fn at_unexpected_character(&self) -> bool {
+        matches!(self.peek(), Some(TokenKind::Unknown(_)))
     }
 
     /// A word inside a block that the block does not have.
@@ -373,6 +412,10 @@ impl<'a> Reader<'a> {
             self.unexpected(&format!("a property of `{block}`"));
             return;
         };
+        if self.at_unexpected_character() {
+            self.skip_rest_of_line();
+            return;
+        }
         let span = token.span;
         let found = self.source[span.start..span.end].to_string();
         self.errors.push(ParseError::UnknownProperty {
