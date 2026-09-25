@@ -166,6 +166,7 @@ impl RoutingStrategy for ImprovedAStarStrategy {
             all_vias,
             &BoardObstacles::from_board(world, library),
             min_clearance,
+            rules.constraints_for_net(0).min_hole_to_hole,
         );
         all_segments = optimized_segments;
         all_vias = optimized_vias;

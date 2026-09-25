@@ -249,6 +249,7 @@ pub fn route_with_debug(
         raw_vias,
         &BoardObstacles::from_board(world, library),
         min_clearance,
+        rules.constraints_for_net(0).min_hole_to_hole,
     );
 
     let stage_viaopt = RoutingStage {
