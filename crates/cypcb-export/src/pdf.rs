@@ -173,7 +173,7 @@ pub fn plot_layer(world: &mut BoardWorld, library: &FootprintLibrary, layer: Lay
             continue;
         };
         for pad in &footprint.pads {
-            if !pad.layers.contains(&layer) {
+            if !pad.is_on(layer) {
                 continue;
             }
             let centre = place_pad_millideg(position, pad.position, rotation);

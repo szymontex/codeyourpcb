@@ -243,13 +243,15 @@ pub fn export_ipc2581_with(
             continue;
         };
         for pad in &footprint.pads {
-            for (layer_name, side) in &layers {
+            for (ordinal, (layer_name, side)) in layers.iter().enumerate() {
                 let layer = match *side {
                     "TOP" => Layer::TopCopper,
                     "BOTTOM" => Layer::BottomCopper,
-                    _ => continue,
+                    // `copper_layers` lists the inner layers between the two,
+                    // first inner layer at ordinal 1.
+                    _ => Layer::Inner((ordinal - 1) as u8),
                 };
-                if !pad.layers.contains(&layer) {
+                if !pad.is_on(layer) {
                     continue;
                 }
                 let (width, height) = pad.size;

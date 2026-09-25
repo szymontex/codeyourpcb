@@ -224,11 +224,10 @@ impl ClearanceField {
                     continue;
                 }
 
-                for layer in &pad.layers {
-                    if let Some(li) = layer_to_index(*layer) {
-                        if (li as u8) < self.layer_count {
-                            self.seed_disc(abs_x, abs_y, li, radius_cells, grid);
-                        }
+                let copper = pad.copper_mask();
+                for li in 0..usize::from(self.layer_count) {
+                    if copper & (1u32 << li) != 0 {
+                        self.seed_disc(abs_x, abs_y, li, radius_cells, grid);
                     }
                 }
             }

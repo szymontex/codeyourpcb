@@ -577,11 +577,7 @@ pub fn entry_records(world: &mut BoardWorld) -> Vec<EntryRecord> {
             // `UnroutedPinRule` treats it: refusing to measure because the
             // footprint spells its layers unfamiliarly would be reporting the
             // reader rather than the board.
-            let mask: u32 = pad
-                .layers
-                .iter()
-                .filter_map(|layer| layer_bit(*layer))
-                .fold(0, |mask, bit| mask | bit);
+            let mask: u32 = pad.copper_mask();
             let mask = if mask == 0 { u32::MAX } else { mask };
 
             for (trace_index, trace) in traces.iter().enumerate() {

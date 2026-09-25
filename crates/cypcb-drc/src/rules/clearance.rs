@@ -567,10 +567,7 @@ pub(crate) fn component_pads(world: &mut BoardWorld) -> HashMap<u32, Vec<PadBox>
             .map(|pad| {
                 let copper = pad_copper(pad, position, degrees);
 
-                let layer_mask = pad
-                    .layers
-                    .iter()
-                    .fold(0u32, |mask, layer| mask | layer.to_copper_mask());
+                let layer_mask = pad.copper_mask();
 
                 PadBox {
                     copper,

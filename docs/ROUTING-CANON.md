@@ -519,19 +519,19 @@ two halves of R-08 are not about the same junctions.** The angle half measures
 every segment crossing a land's boundary. The teardrop half can only ever reach
 a track's own end landing inside a pad - the exporter says so in its own words,
 "a track crossing a pad on its way elsewhere is not an entry and gets nothing".
-Counted on the six routed fixtures by `sharp_entry_anatomy` on 2026-09-24:
-**320 of the 893 entries are track ends, and 3 of the 13 sharp ones are.** Two
+Counted on the six routed fixtures by `sharp_entry_anatomy` on 2026-09-25:
+**321 of the 904 entries are track ends, and 3 of the 16 sharp ones are.** Two
 thirds of what the angle half measures could never receive a fillet, and a
-teardrop rule would reach three of the thirteen entries this vector has been
+teardrop rule would reach three of the sixteen entries this vector has been
 chasing.
 
 Fourth, and this one settles where such a rule could stand: **the design-side
 condition R-08 implies is true of every junction on every board.** Read as a
 property of the design rather than of the output, the second condition says a
 track end landing in a land wider than the track it carries is where a fillet
-belongs. `sharp_entry_anatomy` measures that population: **897 of the 897
+belongs. `sharp_entry_anatomy` measures that population: **904 of the 904
 entries on the six fixtures enter a land wider than the entering track, and so
-do all 302 of the track ends.** That is what a land is for - a pad narrower
+do all 321 of the track ends** (2026-09-25). That is what a land is for - a pad narrower
 than the track arriving at it is a pad the track covers - so the condition
 selects no subset of anything. A rule placed in front of the `teardrops`
 declaration would report every junction on six boards that no fabricator
@@ -1467,7 +1467,7 @@ last clause is the rule.
 
 **2. What the grid costs in accuracy, and it is worse than half a cell.** A pad
 centre is snapped by integer division, not by rounding: `nm_to_grid_x`
-(`crates/cypcb-autoroute/src/grid.rs:515`) computes `(nm - origin) / resolution`,
+(`crates/cypcb-autoroute/src/grid.rs:514`) computes `(nm - origin) / resolution`,
 which truncates toward zero. The node therefore sits at or below the pad centre
 on each axis, and the error approaches a whole cell per axis rather than half of
 one. Worst case radially is `resolution * sqrt(2)`.
@@ -1707,6 +1707,30 @@ layer it names; the search refuses a layer change whose hole lands on another
 net's copper on any of them. Measured 2026-09-24 by the same benchmark:
 `multi_ic` routes to 513 violations and 73 shorts with no track through a hole,
 and the other five boards, all two-layer, route to the same copper.
+
+**A through-hole pad is copper on every layer too, and until 2026-09-25 the
+router, the checks and the copper files read it as two.** KiCad writes a plated
+pad `(layers "*.Cu" "*.Mask")`, and its file format documents `*.Cu` as "all of
+the copper layers" (dev-docs.kicad.org, s-expression introduction, read
+2026-09-25). The importer reads a pad before it knows the layer count and
+spells that as `TopCopper` and `BottomCopper`. The router's goal already took
+any layer for a pad on more than one, so on `multi_ic` it ended traces on an
+inner layer at a pin header, and the checks, which saw no inner copper there,
+called three pins open that were reached; another net's track through the same
+pad on an inner layer was a short nothing reported. `PadDef::copper_mask` is
+the one answer now: a plated hole is copper on every layer of the board, an SMD
+pad on the layers it lists, a bare hole on none. The grid, `ClearanceRule`,
+`net-split`, `unrouted-pin`, R-08's entries, the Gerber copper files and
+IPC-2581 read it. Measured 2026-09-25 by the benchmark command above:
+`multi_ic` routes to 487 violations and 46 shorts, down from 506 and 63, and
+the other five boards route to the same hash.
+
+**Two kinds of change are held to two different criteria.** A change that makes
+the model or a measurement match the physics - the via above, this pad - may
+raise a count, because copper the checker could not see is still copper; each
+report it adds is classified true or false from the geometry, and the ratchet
+moves with an entry that says so. A change to the router is held to "no winner
+worse", counted on the model after its latest correction.
 
 Source: JLCPCB capabilities page, read 2026-09-12 - minimum track width and
 spacing at 1 oz copper is 0.10 / 0.10 mm (4 / 4 mil) for one and two layers and
@@ -2657,20 +2681,25 @@ that a sharp entry on a circle clips the rim rather than crossing the land -
 is tested as the share of its own chord the segment consumes,
 `depth / (2 * sqrt(R^2 - p_axis^2))`, with a death line of 0.5, because a
 segment that passes the deepest point of its own crossing is not clipping
-anything. **Over the 3 sharp entries among the 175, the three ratios are 0.154,
-0.122 and 0.111**, read on 2026-09-24 off the `depth/chord` column
-`a_circular_land_reads_the_same_from_its_own_geometry` prints for each sharp
-row - the same line also prints the depth against the radius, where the deepest
-of them reads 0.237 R, and the two denominators are why this figure used to be
-quoted as the wrong one - so the deepest stops at 15 percent of its chord and
-nothing contradicted the reading. A fourth, 0.375 of its chord on `multi_ic`,
-was read on 2026-09-16 and left on 2026-09-24, when the router stopped running
-tracks through a via's barrel and that board routed to different copper. The threshold is a ratio rather
+anything. **Over the 7 sharp entries among the 182, the seven ratios are 0.241,
+0.205, 0.154, 0.134, 0.122, 0.111 and 0.024**, read on 2026-09-25 off the
+`depth/chord` column `a_circular_land_reads_the_same_from_its_own_geometry`
+prints for each sharp row - the same line also prints the depth against the
+radius, where the deepest of them reads 0.312 R, and the two denominators are
+why this figure used to be quoted as the wrong one - so the deepest stops at 24
+percent of its chord and nothing contradicted the reading. Four of the seven -
+J3.4, J3.6, J2.S1 and J3.3 on `multi_ic` - arrived on 2026-09-25, when a
+through-hole pad became copper on every layer and pins the router reached on
+an inner layer were counted as reached. An earlier one, 0.375 of its chord on
+`multi_ic`, was read on 2026-09-16 and left on 2026-09-24, when the router
+stopped running tracks through a via's barrel and that board routed to
+different copper. The threshold is a ratio rather
 than a length because a length does not carry: 0.15 mm is a third of the way
-across a 0.5 mm land and a ninth of the way across a 0.85 mm one. On these three
-the two forms agree row for row - the ratio changes no answer here and buys
-only that the next board can be measured against the same line. Three rows are
-three rows: that is not a distribution and this canon does not call it one. What can be said is exact -
+across a 0.5 mm land and a ninth of the way across a 0.85 mm one. On the three
+rows read on 2026-09-24 the two forms agreed row for row - the ratio changed no
+answer and bought only that the next board can be measured against the same
+line; the four added on 2026-09-25 were read as ratios only. Seven rows are
+seven rows: that is not a distribution and this canon does not call it one. What can be said is exact -
 no sharp circular entry on these six boards passed the middle of the land it
 entered - and what cannot be said is that this is how circular lands behave.
 

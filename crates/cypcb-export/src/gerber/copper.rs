@@ -184,7 +184,7 @@ fn export_pads(
         // Iterate over pads
         for pad in &footprint.pads {
             // Check if pad is on this layer
-            if !pad.layers.contains(&layer) {
+            if !pad.is_on(layer) {
                 continue;
             }
 
@@ -375,7 +375,7 @@ fn export_teardrops(
                 .get(&footprint_ref.0)
                 .ok_or_else(|| ExportError::FootprintNotFound(footprint_ref.0.clone()))?;
             for pad in &footprint.pads {
-                if !pad.layers.contains(&layer) {
+                if !pad.is_on(layer) {
                     continue;
                 }
                 let centre = place_pad_millideg(position.0, pad.position, rotation.0);
