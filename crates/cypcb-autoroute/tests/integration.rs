@@ -517,10 +517,17 @@ fn benchmark_routing_time() {
 /// Strategy:
 /// - Components are placed in a grid layout on a proportionally-sized board
 /// - Each component uses the "0805" footprint (2-pad SMD)
-/// - Nets connect adjacent pairs (horizontal neighbors) for realistic connectivity
+/// - Net `i` joins pad "2" of component `i` to pad "1" of the component one
+///   row below it; the last rows wrap around to the first, so those nets run
+///   the height of the board
 /// - Board dimensions scale with sqrt(component_count) to maintain reasonable density
 ///
-/// Returns (BoardWorld, FootprintLibrary, net_count).
+/// Joining horizontal neighbours instead made every net one straight hop of
+/// about 1.1mm between facing pads, which the router finished in 0.01s with
+/// no via: the benchmark measured nothing. A net to the row below has to
+/// leave its pad, pass the pads between and come back, so the router works.
+///
+/// Every net has exactly two pads. Returns (BoardWorld, FootprintLibrary, net_count).
 fn generate_synthetic_board(component_count: usize) -> (BoardWorld, FootprintLibrary, usize) {
     use cypcb_core::Nm;
     use cypcb_world::{
@@ -547,76 +554,54 @@ fn generate_synthetic_board(component_count: usize) -> (BoardWorld, FootprintLib
         2,
     );
 
-    // Place components in a grid and connect horizontal neighbors
-    let mut net_id_counter: u32 = 0;
-    let mut placed = 0;
-
-    for row in 0..rows {
-        for col in 0..cols {
-            if placed >= component_count {
-                break;
-            }
-
-            let x_mm = margin_mm + (col as f64) * pitch_mm + pitch_mm / 2.0;
-            let y_mm = margin_mm + (row as f64) * pitch_mm + pitch_mm / 2.0;
-
-            // Build net connections for this component's 2 pads
-            let mut nets = NetConnections::new();
-
-            // Pad "1" connects to the net shared with the left neighbor (or a new net)
-            // Pad "2" connects to the net shared with the right neighbor (or a new net)
-            if col > 0 {
-                // Share net with left neighbor's pad "2"
-                // The left neighbor's pad "2" net_id is (net_id_counter - 1) since we
-                // assigned it in the previous iteration.
-                let shared_net = NetId(net_id_counter - 1);
-                nets.add(PinConnection::new("1", shared_net));
-                world.intern_net(&format!("N{}", shared_net.0));
-            } else {
-                // First in row: pad 1 gets a new net (will be unconnected unless
-                // we wrap around, which we don't — some nets will be single-pad)
-                let net = NetId(net_id_counter);
-                nets.add(PinConnection::new("1", net));
-                world.intern_net(&format!("N{}", net.0));
-                net_id_counter += 1;
-            }
-
-            // Pad "2" always gets a new net (right-side connection point)
-            let right_net = NetId(net_id_counter);
-            nets.add(PinConnection::new("2", right_net));
-            world.intern_net(&format!("N{}", right_net.0));
-            net_id_counter += 1;
-
-            let refdes = format!("R{}", placed + 1);
-            world.spawn_component(
-                RefDes::new(&refdes),
-                Value::new("100R"),
-                Position::from_mm(x_mm, y_mm),
-                Rotation::ZERO,
-                FootprintRef::new("0805"),
-                nets,
-            );
-
-            placed += 1;
-        }
+    // Net `i` owns pad "2" of component `i`; pad "1" of the component one row
+    // below takes the same net.
+    let below = |i: usize| (i + cols) % component_count;
+    let mut pad1_net = vec![0u32; component_count];
+    for i in 0..component_count {
+        pad1_net[below(i)] = i as u32;
     }
 
-    // Count nets that have >=2 pads (routable nets)
-    // With our scheme: each horizontal pair shares a net via pad1-pad2 connections.
-    // Nets shared between neighbors are the ones that matter.
-    // Total unique nets = net_id_counter, but many are single-pad (unroutable).
-    // The router's ratsnest extraction handles this — it only routes nets with >=2 pads.
-    let total_nets = net_id_counter as usize;
+    for (i, &pad1) in pad1_net.iter().enumerate() {
+        let (row, col) = (i / cols, i % cols);
+        let x_mm = margin_mm + (col as f64) * pitch_mm + pitch_mm / 2.0;
+        let y_mm = margin_mm + (row as f64) * pitch_mm + pitch_mm / 2.0;
+
+        let mut nets = NetConnections::new();
+        nets.add(PinConnection::new("1", NetId(pad1)));
+        nets.add(PinConnection::new("2", NetId(i as u32)));
+        world.intern_net(&format!("N{i}"));
+
+        world.spawn_component(
+            RefDes::new(format!("R{}", i + 1)),
+            Value::new("100R"),
+            Position::from_mm(x_mm, y_mm),
+            Rotation::ZERO,
+            FootprintRef::new("0805"),
+            nets,
+        );
+    }
 
     eprintln!(
-        "Synthetic board: {}x{}mm, {} components in {}x{} grid, {} total nets",
-        board_width_mm as u32, board_height_mm as u32, placed, cols, rows, total_nets,
+        "Synthetic board: {}x{}mm, {} components in {}x{} grid, {} nets of two pads",
+        board_width_mm as u32, board_height_mm as u32, component_count, cols, rows, component_count,
     );
 
-    (world, library, total_nets)
+    (world, library, component_count)
 }
 
-/// 500-component benchmark — target: <30s in release mode.
+/// Routing time budget for [`benchmark_500_component`]. Measured on 2026-09-25:
+/// 3.29s to 3.38s in the gate's debug build over three runs, 2.22s to 2.37s in
+/// release. The budget leaves room for a loaded machine, not for a router that
+/// got several times slower.
+const BENCHMARK_500_BUDGET_SECS: f64 = 15.0;
+
+/// A straight one-segment hop per net would give one segment per net. Measured
+/// on 2026-09-25: 2617 segments and 772 vias for 500 nets. Two per net is a floor
+/// a board the router does not have to work on cannot reach.
+const BENCHMARK_500_MIN_SEGMENTS_PER_NET: usize = 2;
+
+/// 500-component benchmark: every net routed, with work to do, within budget.
 ///
 /// Run with: `cargo test --release -p cypcb-autoroute -- benchmark_500 --ignored --nocapture`
 #[test]
@@ -677,37 +662,22 @@ fn benchmark_500_component() {
         metrics.total_length.raw() as f64 / 1_000_000.0,
         ""
     );
-
-    // Calculate routing completion rate
-    let routed_nets = match result.status {
-        RoutingStatus::Complete => total_nets,
-        RoutingStatus::Partial { unrouted_count, .. } => total_nets.saturating_sub(unrouted_count),
-        RoutingStatus::Failed { .. } => 0,
-    };
-    let completion_pct = if total_nets > 0 {
-        (routed_nets as f64 / total_nets as f64) * 100.0
-    } else {
-        100.0
-    };
-
-    eprintln!(
-        "║ Completion:     {:.1}% ({}/{}){:>33}║",
-        completion_pct, routed_nets, total_nets, ""
-    );
     eprintln!("╚══════════════════════════════════════════════════════════════╝\n");
 
-    // Primary assertion: <30s
     assert!(
-        elapsed_secs < 30.0,
-        "500-component routing took {:.2}s, exceeds 30s target",
-        elapsed_secs
+        matches!(result.status, RoutingStatus::Complete),
+        "every net of the synthetic board has two pads and a route; got {:?}",
+        result.status
     );
-
-    // Secondary assertion: at least 90% of routable nets completed
-    // (some may fail on a synthetic board with tight spacing)
+    let min_segments = BENCHMARK_500_MIN_SEGMENTS_PER_NET * total_nets;
     assert!(
-        completion_pct >= 90.0,
-        "Routing completion {:.1}% is below 90% threshold",
-        completion_pct
+        result.routes.len() >= min_segments,
+        "{} segments for {total_nets} nets, below the floor of {min_segments}; \
+         the board no longer makes the router work, so the time below measures nothing",
+        result.routes.len()
+    );
+    assert!(
+        elapsed_secs < BENCHMARK_500_BUDGET_SECS,
+        "500-component routing took {elapsed_secs:.2}s, over the {BENCHMARK_500_BUDGET_SECS}s budget"
     );
 }
