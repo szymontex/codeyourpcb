@@ -37,6 +37,7 @@ import {
   type LayerPreset,
   innerLayerColor,
   LAYER_FOCUS_LABEL,
+  LAYER_FOCUS_BUTTON,
 } from './layers';
 import { collectImportedFiles, importedPaths, readerForBaseUrl } from './imports';
 import { createFilePicker, setupDropZone, readFileAsText } from './file-picker';
@@ -706,9 +707,14 @@ async function init(): Promise<void> {
     if (focus) {
       const mode = layers.focus ?? 'all';
       focus.dataset.focus = mode;
-      focus.textContent =
-        mode === 'all' ? 'All' : mode === 'ghost' ? 'Grey' : mode === 'dim' ? 'Dim' : 'Solo';
-      focus.title = `${LAYER_FOCUS_LABEL[mode]} - X cycles all / dim / solo`;
+      focus.textContent = LAYER_FOCUS_BUTTON[mode];
+      focus.title = `${LAYER_FOCUS_LABEL[mode]} - click or X for the next`;
+      // The button looked clickable from the day it was added and only the
+      // key moved it: nothing listened for the click.
+      if (!focus.dataset.bound) {
+        focus.dataset.bound = 'yes';
+        focus.addEventListener('click', () => cycleLayerFocus());
+      }
     }
   }
 

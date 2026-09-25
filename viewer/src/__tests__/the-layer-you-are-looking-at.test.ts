@@ -22,6 +22,8 @@ import {
   GHOST_GREY,
   INNER_LAYER_COLORS,
   LAYER_PRESETS,
+  LAYER_FOCUS_LABEL,
+  LAYER_FOCUS_BUTTON,
   applyLayerPreset,
   nextLayerPreset,
   isLayerVisible,
@@ -101,6 +103,25 @@ describe('the layer you are looking at', () => {
     const topOnly = layerMaskBit('Top');
     expect(getPadColor(topOnly, view('Top', 'solo'))).not.toBeNull();
     expect(getPadColor(topOnly, view('Bottom', 'solo'))).toBeNull();
+  });
+
+  /**
+   * Two controls sit one above the other in the panel: this one, how loud the
+   * other layers are, and the saved views, which layers are on. The button
+   * said `All` above a view called `Everything`. No name on this axis may be
+   * a word the views use for "every layer".
+   */
+  it('names every state after the other layers, never after all of them', () => {
+    const presetWords = LAYER_PRESETS.map((preset) => preset.label.toLowerCase());
+    for (const name of [
+      ...Object.values(LAYER_FOCUS_LABEL),
+      ...Object.values(LAYER_FOCUS_BUTTON),
+    ]) {
+      expect(name).toMatch(/^Other/);
+      expect(name.toLowerCase()).not.toMatch(/\ball\b|\beverything\b/);
+      expect(presetWords).not.toContain(name.toLowerCase());
+    }
+    expect(Object.keys(LAYER_FOCUS_BUTTON)).toEqual(Object.keys(LAYER_FOCUS_LABEL));
   });
 
   it('walks all, grey, dim, solo and back', () => {
