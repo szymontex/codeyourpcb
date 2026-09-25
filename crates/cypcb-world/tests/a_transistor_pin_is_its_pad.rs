@@ -12,10 +12,6 @@
 //!
 //! Now a transistor pin is a pad number or a pad of that exact name. Any
 //! other name is an error that says what to write instead.
-//!
-//! The same error names the pin as the design wrote it. Until the same day a
-//! name an alias still reads - `LED1.A` on a footprint without pad `1` - was
-//! reported as "no pin '1'", a name that is nowhere in the design.
 
 use cypcb_parser::parse;
 use cypcb_world::footprint::FootprintLibrary;
@@ -182,35 +178,4 @@ net LOAD {
         "component 'U1' has no pin 'collector'. It has: 1, 2, 3"
     );
     assert!(errors[0].1.contains("U1.1"), "{}", errors[0].1);
-}
-
-#[test]
-fn an_alias_that_misses_every_pad_is_named_as_the_design_wrote_it() {
-    let (_world, errors) = sync(
-        r#"
-footprint TWO_LETTERS {
-    courtyard 4mm x 2mm
-    pad X rect at -1mm, 0mm size 1mm x 1mm
-    pad Y rect at 1mm, 0mm size 1mm x 1mm
-}
-
-component LED1 led "TWO_LETTERS" {
-    at 10mm, 10mm
-}
-
-net IN {
-    LED1.A
-}
-"#,
-    );
-    assert_eq!(errors.len(), 1, "{errors:?}");
-    assert_eq!(
-        errors[0].0,
-        "component 'LED1' has no pin 'A' (read as pin '1'). It has: X, Y"
-    );
-    assert!(
-        errors[0].1.contains("X, Y"),
-        "an LED keeps the plain help: {}",
-        errors[0].1
-    );
 }

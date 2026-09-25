@@ -2,14 +2,13 @@
 //!
 //! `cargo test -p cypcb-world --test a_pad_named_like_an_alias_is_that_pad`
 //!
-//! The language lets a diode be wired as `D1.A` and `D1.K` on footprints that
-//! number their pads, and reads those letters as numbers. A transistor had
-//! `Q1.B`, `Q1.C`, `Q1.E` read the same way until that map was found to have
-//! no source; `a_transistor_pin_is_its_pad` holds what replaced it. Until 2026-09-25 it read them as numbers always, so a
-//! footprint whose pads really are named `A`, `K` or `C` could not be wired by
-//! those names: a diode drawn with pads `A` and `K` was refused as having no
-//! pin `1`, and on a part with pads `1`, `2` and `C` the pin `U1.C` went to pad
-//! 2 without a word.
+//! The language used to read `D1.A`, `D1.K` and `Q1.C` as pad numbers. Until
+//! 2026-09-25 it did so always, so a footprint whose pads really are named
+//! `A`, `K` or `C` could not be wired by those names: a diode drawn with pads
+//! `A` and `K` was refused as having no pin `1`, and on a part with pads `1`,
+//! `2` and `C` the pin `U1.C` went to pad 2 without a word. The aliases are
+//! gone since; `a_transistor_pin_is_its_pad` and `a_diode_pin_is_its_pad`
+//! hold what replaced them.
 
 use cypcb_core::Point;
 use cypcb_parser::parse;
@@ -162,35 +161,5 @@ net OUT {
     assert_eq!(
         pins_of(&mut world, "D1"),
         pinned(&[("A", "IN"), ("K", "OUT")])
-    );
-}
-
-/// The reason the aliases exist: a diode or LED footprint numbers its pads,
-/// anode 1 and cathode 2, and a design names them by what they are.
-#[test]
-fn a_diode_numbered_1_and_2_still_takes_a_and_k() {
-    let source = r#"
-board t {
-    size 30mm x 20mm
-    layers 2
-}
-
-component LED1 led "0603" {
-    at 10mm, 10mm
-}
-
-net IN {
-    LED1.A
-}
-
-net OUT {
-    LED1.K
-}
-"#;
-    let (mut world, _library) = world_from(source);
-
-    assert_eq!(
-        pins_of(&mut world, "LED1"),
-        pinned(&[("1", "IN"), ("2", "OUT")])
     );
 }

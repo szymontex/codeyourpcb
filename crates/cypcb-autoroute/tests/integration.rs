@@ -25,8 +25,11 @@ fn workspace_path(relative: &str) -> std::path::PathBuf {
     manifest_dir.join("../..").join(relative)
 }
 
-/// Parse a .cypcb file into a BoardWorld.
-fn parse_board(relative_path: &str) -> BoardWorld {
+/// Parse a .cypcb file into a BoardWorld, with the library its footprint
+/// definitions were added to. A fresh library has only the built-in
+/// footprints, so routing with one leaves a design-defined part's pads
+/// out of the grid and its nets unrouted.
+fn parse_board(relative_path: &str) -> (BoardWorld, FootprintLibrary) {
     let path = workspace_path(relative_path);
     let path_str = path.display().to_string();
     let source = std::fs::read_to_string(&path).unwrap_or_else(|e| {
@@ -49,7 +52,7 @@ fn parse_board(relative_path: &str) -> BoardWorld {
         }
     }
 
-    world
+    (world, library)
 }
 
 /// Build rules for testing (JLCPCB 2-layer defaults).
@@ -60,8 +63,7 @@ fn test_rules() -> PresetRuleSet {
 
 #[test]
 fn grid_from_blink() {
-    let mut world = parse_board("examples/blink.cypcb");
-    let library = FootprintLibrary::new();
+    let (mut world, library) = parse_board("examples/blink.cypcb");
     let rules = test_rules();
     let config = AutorouteConfig::default();
     let resolution = config.resolve_grid_resolution(&rules);
@@ -111,8 +113,7 @@ fn grid_from_blink() {
 
 #[test]
 fn route_routing_test_board() {
-    let mut world = parse_board("examples/routing-test.cypcb");
-    let library = FootprintLibrary::new();
+    let (mut world, library) = parse_board("examples/routing-test.cypcb");
     let rules = test_rules();
     let config = AutorouteConfig::default();
 
@@ -154,8 +155,7 @@ fn route_routing_test_board() {
 
 #[test]
 fn route_blink_board() {
-    let mut world = parse_board("examples/blink.cypcb");
-    let library = FootprintLibrary::new();
+    let (mut world, library) = parse_board("examples/blink.cypcb");
     let rules = test_rules();
     let config = AutorouteConfig::default();
 
@@ -259,8 +259,7 @@ fn route_blink_board() {
 
 #[test]
 fn blink_apply_routes_compatibility() {
-    let mut world = parse_board("examples/blink.cypcb");
-    let library = FootprintLibrary::new();
+    let (mut world, library) = parse_board("examples/blink.cypcb");
     let rules = test_rules();
     let config = AutorouteConfig::default();
 
@@ -344,8 +343,7 @@ fn blink_apply_routes_compatibility() {
 fn routed_output_passes_drc() {
     use cypcb_drc::{run_drc, DesignRules, ViolationKind};
 
-    let mut world = parse_board("examples/blink.cypcb");
-    let library = FootprintLibrary::new();
+    let (mut world, library) = parse_board("examples/blink.cypcb");
     let rules = test_rules();
     let config = AutorouteConfig::default();
 
@@ -437,7 +435,6 @@ fn routed_output_passes_drc() {
 fn benchmark_routing_time() {
     use std::time::Instant;
 
-    let library = FootprintLibrary::new();
     let rules = test_rules();
     let config = AutorouteConfig::default();
 
@@ -447,7 +444,7 @@ fn benchmark_routing_time() {
 
     // Benchmark 1: Grid construction for blink.cypcb (60x40mm, 8 components)
     {
-        let mut world = parse_board("examples/blink.cypcb");
+        let (mut world, library) = parse_board("examples/blink.cypcb");
         let resolution = config.resolve_grid_resolution(&rules);
 
         let start = Instant::now();
@@ -463,7 +460,7 @@ fn benchmark_routing_time() {
 
     // Benchmark 2: Full routing of routing-test.cypcb (3 components, 3 nets)
     {
-        let mut world = parse_board("examples/routing-test.cypcb");
+        let (mut world, library) = parse_board("examples/routing-test.cypcb");
         let start = Instant::now();
         let result = route_board(&mut world, &library, &rules, &config);
         let elapsed = start.elapsed();
@@ -484,7 +481,7 @@ fn benchmark_routing_time() {
 
     // Benchmark 3: Full routing of blink.cypcb (8 components, 7 nets)
     {
-        let mut world = parse_board("examples/blink.cypcb");
+        let (mut world, library) = parse_board("examples/blink.cypcb");
         let start = Instant::now();
         let result = route_board(&mut world, &library, &rules, &config);
         let elapsed = start.elapsed();

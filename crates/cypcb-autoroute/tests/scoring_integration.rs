@@ -27,8 +27,11 @@ fn workspace_path(relative: &str) -> std::path::PathBuf {
     manifest_dir.join("../..").join(relative)
 }
 
-/// Parse a .cypcb file into a BoardWorld.
-fn parse_board(relative_path: &str) -> BoardWorld {
+/// Parse a .cypcb file into a BoardWorld, with the library its footprint
+/// definitions were added to. A fresh library has only the built-in
+/// footprints, so routing with one leaves a design-defined part's pads
+/// out of the grid and its nets unrouted.
+fn parse_board(relative_path: &str) -> (BoardWorld, FootprintLibrary) {
     let path = workspace_path(relative_path);
     let path_str = path.display().to_string();
     let source = std::fs::read_to_string(&path).unwrap_or_else(|e| {
@@ -51,7 +54,7 @@ fn parse_board(relative_path: &str) -> BoardWorld {
         }
     }
 
-    world
+    (world, library)
 }
 
 /// Build routing rules for testing (JLCPCB 2-layer defaults).
@@ -61,18 +64,17 @@ fn test_rules() -> PresetRuleSet {
 }
 
 /// Route a board and apply routes, returning the world ready for scoring.
-fn route_and_apply(world: &mut BoardWorld) {
-    let library = FootprintLibrary::new();
+fn route_and_apply(world: &mut BoardWorld, library: &FootprintLibrary) {
     let rules = test_rules();
     let config = AutorouteConfig::default();
 
-    let result = route_board(world, &library, &rules, &config);
+    let result = route_board(world, library, &rules, &config);
 
     // Apply routes to world (spawns Trace and Via entities)
     apply_routes(world, &result);
 
     // Rebuild spatial index with traces for accurate crossing/scoring
-    world.rebuild_spatial_index_from_library(&library);
+    world.rebuild_spatial_index_from_library(library);
 }
 
 // ============================================================================
@@ -81,8 +83,8 @@ fn route_and_apply(world: &mut BoardWorld) {
 
 #[test]
 fn score_routed_blink() {
-    let mut world = parse_board("examples/blink.cypcb");
-    route_and_apply(&mut world);
+    let (mut world, library) = parse_board("examples/blink.cypcb");
+    route_and_apply(&mut world, &library);
 
     let drc_rules = DesignRules::jlcpcb_2layer();
     let score = score_board(&mut world, &drc_rules, &ScoreWeights::default());
@@ -153,8 +155,8 @@ fn score_routed_blink() {
 
 #[test]
 fn score_routed_routing_test() {
-    let mut world = parse_board("examples/routing-test.cypcb");
-    route_and_apply(&mut world);
+    let (mut world, library) = parse_board("examples/routing-test.cypcb");
+    route_and_apply(&mut world, &library);
 
     let drc_rules = DesignRules::jlcpcb_2layer();
     let score = score_board(&mut world, &drc_rules, &ScoreWeights::default());
@@ -237,8 +239,8 @@ fn score_empty_board_is_valid() {
 
 #[test]
 fn score_json_serialization() {
-    let mut world = parse_board("examples/routing-test.cypcb");
-    route_and_apply(&mut world);
+    let (mut world, library) = parse_board("examples/routing-test.cypcb");
+    route_and_apply(&mut world, &library);
 
     let drc_rules = DesignRules::jlcpcb_2layer();
     let score = score_board(&mut world, &drc_rules, &ScoreWeights::default());

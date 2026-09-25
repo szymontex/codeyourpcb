@@ -71,13 +71,18 @@ fn the_parts_come_home_named_what_they_were_called() {
 
     // Two shapes the old writer could not keep: a name that starts with a
     // digit, and one with a hyphen in it.
-    for name in ["0402", "0805", "1206", "PIN-HDR-1x2", "SOIC-8"] {
+    for name in ["0402", "1206", "PIN-HDR-1x2", "SOIC-8"] {
         assert!(
             source.contains(&format!("footprint \"{name}\" {{")),
             "the design uses `{name}` and it has to come back under that \
              name:\n{source}"
         );
     }
+    // A name that is already an identifier comes back without quotes.
+    assert!(
+        source.contains("footprint LED_0805 {"),
+        "the design uses `LED_0805` and it has to come back under that name:\n{source}"
+    );
     assert!(
         !source.contains("_0402") && !source.contains("PIN_HDR"),
         "no name is rewritten into an identifier any more:\n{source}"
