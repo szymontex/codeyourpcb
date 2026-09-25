@@ -79,7 +79,7 @@ was written in March and was never a total of anything measurable today._
 **Goal:** Build core engine infrastructure: autorouter, 3D framework, DSL v2, test suite.
 
 **Delivered (backend/engine — user-facing quality still prototype):**
-- ✅ Custom autorouter (A*-based, constraint-aware, multi-layer, 0.05s for 500 components)
+- ✅ Custom autorouter (A*-based, constraint-aware, multi-layer, 2.2s release for 500 components with 500 two-pad nets)
 - ✅ 3D framework (Three.js lazy-loaded, geometry pipeline built — but renders empty in practice)
 - ✅ Manual trace editing skeleton in 2D viewer with live DRC feedback
 - ✅ DSL v2: modules, typed interfaces, physical units (23 variants), constraints (parse-level)
@@ -234,7 +234,7 @@ Current PCB tools (KiCad, Eagle, Altium) are GUI-first. The project file is a bi
 - **Platform:** Web-first (WASM), with Tauri for desktop standalone
 - **Rendering:** Canvas for 2D, Three.js for 3D
 - **Parser:** Tree-sitter (incremental, error-tolerant, LSP-ready)
-- **Performance:** Autorouter <30s for 500 components (actual: 0.05s), web load <3s (actual: 105ms), 3D at 60fps
+- **Performance:** Autorouter <30s for 500 components (actual: 2.2s release on the 500-net benchmark board), web load <3s (actual: 105ms), 3D at 60fps
 - **Determinism:** Same source file = identical output, always
 - **Compatibility:** Export to industry standard formats (Gerber, Excellon, BOM, CPL)
 
