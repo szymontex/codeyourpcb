@@ -53,13 +53,14 @@ fn test_component_positions() {
 
     let mut world = result.world;
 
-    // R1 is at (10, 8) mm
+    // R1 is at (10, 8) mm in the file, 8mm below the top edge of a board
+    // 20mm tall. The board's Y grows up, so on the board it is at (10, 12).
     let r1_entity = world.find_by_refdes("R1").expect("R1 should exist");
     let r1_pos = world
         .get::<cypcb_world::Position>(r1_entity)
         .expect("R1 should have Position");
     assert_eq!(r1_pos.0.x, Nm::from_mm(10.0), "R1 x position");
-    assert_eq!(r1_pos.0.y, Nm::from_mm(8.0), "R1 y position");
+    assert_eq!(r1_pos.0.y, Nm::from_mm(12.0), "R1 y position");
 
     // R1 should have 0 rotation
     let r1_rot = world
@@ -67,13 +68,14 @@ fn test_component_positions() {
         .expect("R1 should have Rotation");
     assert_eq!(r1_rot.0, 0, "R1 should have 0 rotation");
 
-    // LED1 is at (20, 12) mm with 90° rotation
+    // LED1 is at (20, 12) mm in the file with 90° rotation: (20, 8) on the
+    // board
     let led1_entity = world.find_by_refdes("LED1").expect("LED1 should exist");
     let led1_pos = world
         .get::<cypcb_world::Position>(led1_entity)
         .expect("LED1 should have Position");
     assert_eq!(led1_pos.0.x, Nm::from_mm(20.0), "LED1 x position");
-    assert_eq!(led1_pos.0.y, Nm::from_mm(12.0), "LED1 y position");
+    assert_eq!(led1_pos.0.y, Nm::from_mm(8.0), "LED1 y position");
 
     let led1_rot = world
         .get::<cypcb_world::Rotation>(led1_entity)
@@ -133,15 +135,16 @@ fn test_reference_routes_extracted() {
     assert_eq!(ref_routes.routes.len(), 1, "Should have 1 trace segment");
     assert_eq!(ref_routes.vias.len(), 1, "Should have 1 via");
 
-    // Verify segment positions
+    // Verify segment positions: y = 8 in the file is y = 12 on a board 20mm
+    // tall, whose Y grows up
     let seg = &ref_routes.routes[0];
-    assert_eq!(seg.start, cypcb_core::Point::from_mm(10.5, 8.0));
-    assert_eq!(seg.end, cypcb_core::Point::from_mm(20.0, 8.0));
+    assert_eq!(seg.start, cypcb_core::Point::from_mm(10.5, 12.0));
+    assert_eq!(seg.end, cypcb_core::Point::from_mm(20.0, 12.0));
     assert_eq!(seg.width, Nm::from_mm(0.25));
 
     // Verify via position
     let via = &ref_routes.vias[0];
-    assert_eq!(via.position, cypcb_core::Point::from_mm(20.0, 8.0));
+    assert_eq!(via.position, cypcb_core::Point::from_mm(20.0, 12.0));
     assert_eq!(via.drill, Nm::from_mm(0.4));
 
     // Verify metadata counts

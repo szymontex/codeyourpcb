@@ -402,7 +402,7 @@ rule with no subject, arriving here as a sentence rather than as a rule.
 
 ### R-08 Trace entry into a land `[P]` figure, `[S]` measurement
 
-*Verified: 2026-09-14*
+*Verified: 2026-09-25*
 
 *Applies when:* [copper] a trace ends on a pad. Every routed board.
 
@@ -524,6 +524,13 @@ Counted on the six routed fixtures by `sharp_entry_anatomy` on 2026-09-25:
 thirds of what the angle half measures could never receive a fillet, and a
 teardrop rule would reach three of the sixteen entries this vector has been
 chasing.
+
+**Those counts were taken on a mirror image of the boards.** Until 2026-09-25
+the KiCad reader kept the file's downward Y as the board's upward one, and the
+router does not route a reflection the same way. Read the right way up, the
+same walk counts **319 of the 900 entries as track ends, and 0 of the 8 sharp
+ones**: on these boards today a teardrop rule would reach none of the sharp
+entries at all.
 
 Fourth, and this one settles where such a rule could stand: **the design-side
 condition R-08 implies is true of every junction on every board.** Read as a
@@ -738,7 +745,7 @@ the same finding as part 1 seen from the tool side.
 
 ### R-11 Acceptance classes `[R]`
 
-*Verified: 2026-09-23*
+*Verified: 2026-09-25*
 
 *Applies when:* [output row] the board is graded. The full four-tier form needs a declared acceptance class; for a board graded by a house table see part 4 below.
 
@@ -866,6 +873,18 @@ The direction swap the seeded frontier replaced gave 7 to 27, 12 to 5, 3 to 1
 and nineteen shorts, with the old optimizer behind it. Measured 2026-09-23 by
 `cargo test --release -p cypcb-autoroute --test which_rule_the_flag_moves`, which
 prints every kind on the board and is what holds these figures.
+
+**Every figure in the two paragraphs above was measured on a mirror image of
+the board.** Until 2026-09-25 the KiCad reader kept the file's Y, which grows
+down the sheet, as the board's Y, which grows up, so all six benchmark boards
+were routed as their own reflection - and the router does not route a
+reflection the same way. Read the right way up, `shift_driver` under
+`stop_at_own_copper` goes **11 to 3 acute, 1 to 0 clearance and 2 to 2 pad
+entry - 16 to 10 in all - and two kinds rise: edge clearance 0 to 4 and hole
+to edge 0 to 1**, with hole to hole 2 to 0. So the sentence "no kind rising"
+no longer holds on this board: the flag is named as paying for its acute
+corners in edge reports, which is a trade the flat price still cannot weigh.
+Measured 2026-09-25 by the same test, which now holds that list of two.
 
 **Tier 1 has a second form, and the ranking counts only the first.** A
 connection the router gave up on is counted by the router and reported by
@@ -1632,7 +1651,7 @@ third, two distance-measuring constructors reporting no distance, was closed on
 
 ### R-19 The flat clearance minimum `[P]`
 
-*Verified: 2026-09-24*
+*Verified: 2026-09-25*
 
 *Applies when:* [copper] always. Two pieces of copper on one layer belonging to two
 different nets. No declaration needed, which is why this is the rule that fires
@@ -1805,10 +1824,15 @@ needs to see one has to measure geometry rather than clearance.**
 
 **In this repo:** enforced. `ClearanceRule` is the first entry in the registry
 (`crates/cypcb-drc/src/lib.rs:134`). Measured on one board rather than claimed
-for all six: on `shift_driver` with `stop_at_own_copper` on, **0 of 4 rows**
+for all six: on `shift_driver` with `stop_at_own_copper` on, **0 of 10 rows**
 carry the `Clearance` kind. That figure is held rather than quoted:
 `the_board_that_got_worse_was_paying_for_the_via_optimizer` asserts the 0
-exactly, printing `shift_driver clearance share 0 of 4`.
+exactly, printing `shift_driver clearance share 0 of 10`.
+
+**It said 0 of 4 until 2026-09-25, on a mirror image of the board.** The KiCad
+reader kept the file's downward Y as the board's upward one, and the router
+routed the reflection differently; read the right way up the same run reports
+ten rows, none of them clearance.
 
 **It said 5 of 9 until 2026-09-24, and all five were the rule's own error.**
 Each measured a via as the square around its disc, so a trace passing the
@@ -2590,6 +2614,11 @@ cleanly. A property the whole population has explains no subset of it, so the
 grid does not distinguish the fourteen and no repair aimed at it can be
 justified by them.
 
+**2 of 775 since 2026-09-25.** The grid is laid from the board's corner, and a
+board read the right way up rather than as the mirror image the KiCad reader
+used to make of it has that corner at the other end of the outline, so the
+lattice moved under the pads. 773 are off it; the reading does not change.
+
 The second reading is not refuted here but ruled out of court: **not one part on
 any of the six boards is turned.** Of the 174 footprints in the fixtures, two
 placements carry a rotation field at all and both of them read zero - counted with
@@ -2718,6 +2747,16 @@ line; the four added on 2026-09-25 were read as ratios only. Seven rows are
 seven rows: that is not a distribution and this canon does not call it one. What can be said is exact -
 no sharp circular entry on these six boards passed the middle of the land it
 entered - and what cannot be said is that this is how circular lands behave.
+
+**That exact statement no longer holds, and the seven rows above were read on a
+mirror image of the boards.** Until 2026-09-25 the KiCad reader kept the file's
+downward Y as the board's upward one. Read the right way up there are **6 sharp
+entries among 184 into a circular land, at 0.683, 0.241, 0.205, 0.156, 0.123
+and 0.116 of their chords** - J2.9, J3.4, J3.6, U2.13, U1.13 and J4.12 - and
+J2.9 passes the deepest point of its own crossing: past the line of 0.5, it is
+not clipping the rim. Five of six do; the claim that a sharp entry on a circle
+clips its rim is now a claim about most of them, not all, and the one that
+does not is the case to read first.
 
 **One statement about these entries is forced and must never be reported as
 evidence.** The distance from a pad centre to the line of a segment is at most

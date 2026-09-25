@@ -161,7 +161,8 @@ pub fn place_pad(component_pos: Point, pad_offset: Point, rotation: Rotation) ->
     )
 }
 
-/// Rotate a point about the origin, clockwise-positive to match [`Rotation`].
+/// Rotate a point about the origin, counter-clockwise-positive seen from the
+/// top of the board, which is the direction [`Rotation`] turns in.
 ///
 /// Zero is returned unchanged rather than run through the trigonometry, which
 /// keeps an unrotated board's coordinates exactly as written.

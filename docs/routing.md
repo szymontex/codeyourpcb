@@ -7,6 +7,45 @@ a week re-discovering them.
 
 Read this before changing anything in `crates/cypcb-autoroute`.
 
+## Every figure measured before 2026-09-25 was taken on a mirror image
+
+Until 2026-09-25 the KiCad reader kept the file's Y, which grows down the
+sheet, as the board's Y, which grows up. Every benchmark `.kicad_pcb` was
+therefore routed as its own reflection, and the router - a grid search with
+its own tie-breaking order - does not route a reflection the same way. The
+experiments below keep the numbers they were decided on, because those are
+the record of what was measured; where a sentence quotes a figure from one of
+the six boards, that figure belongs to the mirrored board.
+
+The same boards read the right way up, `cypcb route` with and without
+`--variants` and `cypcb check` on what it wrote (release build, 2026-09-25).
+Shorts are the `clearance` rows at 0.00mm; `esp32_starter` is written in this
+language, never went through the KiCad reader, and is the control:
+
+| board | winner, mirrored | shorts | hole-to-hole | rows | winner, read right | shorts | hole-to-hole | rows |
+|---|---|---|---|---|---|---|---|---|
+| led_blink | Guarded Pads | 0 | 0 | 1 | Bare Centre Line | 0 | 0 | 0 |
+| stm32_breakout | High-Density Near Holes | 7 | 5 | 105 | High-Density Vias Kept Off Traces | 19 | 14 | 141 |
+| multi_ic | Clearance Priced Near Holes | 19 | 7 | 489 | Guarded Pads | 25 | 17 | 564 |
+| shift_driver | Priced Via Rings Near Holes | 0 | 0 | 9 | Priced Via Rings Near Holes | 0 | 1 | 11 |
+| qfp_fanout | Vias Kept Off Traces | 23 | 13 | 166 | Vias Kept Off Traces | 15 | 11 | 153 |
+| plane_board | Pad Aware | 0 | 0 | 16 | Eager Pads Priced Ring | 0 | 0 | 8 |
+| esp32_starter | High-Density Vias Kept Off Traces | 0 | 0 | 116 | High-Density Vias Kept Off Traces | 0 | 0 | 116 |
+
+Without `--variants` (the fast route): stm32_breakout 33 to 39 shorts and 139
+to 149 rows, multi_ic 26 to 32 and 472 to 499, qfp_fanout 55 to 45 and 269 to
+225, shift_driver 0 to 1 and 15 to 16, plane_board 1 to 2 and 20 to 22,
+led_blink and esp32_starter unchanged.
+
+Of the eighteen variants, six win a board read the right way up: High-Density
+Vias Kept Off Traces (stm32_breakout, esp32_starter), Bare Centre Line
+(led_blink), Eager Pads Priced Ring (plane_board), Guarded Pads (multi_ic),
+Priced Via Rings Near Holes (shift_driver) and Vias Kept Off Traces
+(qfp_fanout). The other twelve win nowhere, among them the three chosen on
+the mirrored boards and not now - High-Density Near Holes, Clearance Priced
+Near Holes and Pad Aware. Nothing was removed on the strength of that; a
+variant is dropped by its own measurement, not by a table.
+
 ## The algorithm
 
 `PathFinder` (`pathfinder_v2.rs`) is negotiated congestion, the VPR algorithm:

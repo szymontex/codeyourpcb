@@ -238,8 +238,8 @@ fn courtyard_line(line: &Sexp) -> Option<Rect> {
     let (start_x, start_y) = find_xy_child(line, "start")?;
     let (end_x, end_y) = find_xy_child(line, "end")?;
     Some(Rect::from_points(
-        Point::from_mm(start_x, start_y),
-        Point::from_mm(end_x, end_y),
+        crate::frame::local_point(start_x, start_y),
+        crate::frame::local_point(end_x, end_y),
     ))
 }
 
@@ -443,12 +443,17 @@ mod tests {
     }
 
     #[test]
-    fn test_negative_pad_positions() {
-        // SOIC-8 has pads at negative X and Y positions
+    fn test_pin_one_lands_at_the_top_left() {
+        // The file writes pad 1 at (-2.7, -1.905): the top left, because a
+        // KiCad Y grows down the sheet. KiCad's own SOIC-8_3.9x4.9mm_P1.27mm
+        // puts it at (-2.475, -1.905), read 2026-09-25. This test demanded a
+        // negative Y until then, which held the importer to the mirror image:
+        // on the board, where Y grows up, the top left is a positive Y.
         let fp = import_footprint_from_str(SOIC8).unwrap();
 
-        let pad1 = fp.pads.iter().find(|p| p.number == "1").unwrap();
-        assert!(pad1.position.x.0 < 0, "Pad 1 should have negative X");
-        assert!(pad1.position.y.0 < 0, "Pad 1 should have negative Y");
+        let pad = |n: &str| fp.pads.iter().find(|p| p.number == n).unwrap();
+        assert_eq!(pad("1").position, Point::from_mm(-2.7, 1.905));
+        assert_eq!(pad("4").position, Point::from_mm(-2.7, -1.905));
+        assert_eq!(pad("8").position, Point::from_mm(2.7, 1.905));
     }
 }

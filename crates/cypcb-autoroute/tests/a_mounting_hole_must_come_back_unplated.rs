@@ -91,9 +91,11 @@ fn parsed(who: &str) -> cypcb_kicad::KicadPcbParseResult {
     parsed
 }
 
-/// The hole sits at 130mm, 120mm in file coordinates. The board's origin is at
-/// 100, 100, so it lands 30mm, 20mm from the corner.
-const HOLE_MM: (f64, f64) = (30.0, 20.0);
+/// The hole sits at 130mm, 120mm in file coordinates, on an outline from 100,
+/// 100 to 140, 130. The file's Y grows down and the board's up, so the board's
+/// corner is the file's 100, 130 and the hole lands 30mm right of it and 10mm
+/// up.
+const HOLE_MM: (f64, f64) = (30.0, 10.0);
 
 /// Millimetres out of an Excellon body, which keeps its decimal point.
 fn hits(drill: &str) -> Vec<(f64, f64)> {

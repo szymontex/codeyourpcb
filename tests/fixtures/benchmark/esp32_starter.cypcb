@@ -15,9 +15,10 @@
 // - CC pull-downs 5.1k (Rd, sink): USB Type-C Cable and Connector
 //   Specification Release 2.0, August 2019, Table 4-25
 // - pad geometry: KiCad footprint library, https://gitlab.com/kicad/libraries/kicad-footprints
-//   (RF_Module, Connector_USB, Package_TO_SOT_SMD, Button_Switch_SMD,
+//   (RF_Module, Connector_USB, Button_Switch_SMD,
 //   Connector_PinHeader_2.54mm), converted with Y negated because KiCad's Y
-//   grows down and a board's grows up. Module pads cross-checked against
+//   grows down and a board's grows up. The regulator uses the built-in
+//   SOT-23-5, pin 1 at the top left. Module pads cross-checked against
 //   datasheet Figure 11-1: 1.27mm pitch, 1.5 x 0.9mm pads, columns 17.5mm apart.
 //
 // What the language could not say, written as it is instead:
@@ -113,17 +114,6 @@ footprint USB_C_GCT_USB4105 {
     pad SH oblong at 4.32mm, -1.075mm size 1mm x 1.8mm drill 0.6mm x 1.4mm
 }
 
-footprint SOT23_5_KICAD {
-    description "SOT-23-5 (SOT25), JEDEC MO-178 AA"
-    courtyard 4.1mm x 3.4mm
-
-    pad 1 roundrect at -1.1375mm, 0.95mm size 1.325mm x 0.6mm corner 25%
-    pad 2 roundrect at -1.1375mm, 0mm size 1.325mm x 0.6mm corner 25%
-    pad 3 roundrect at -1.1375mm, -0.95mm size 1.325mm x 0.6mm corner 25%
-    pad 4 roundrect at 1.1375mm, -0.95mm size 1.325mm x 0.6mm corner 25%
-    pad 5 roundrect at 1.1375mm, 0.95mm size 1.325mm x 0.6mm corner 25%
-}
-
 footprint SW_TL3342 {
     description "TL3342 SMD tactile switch, pads 1-1 and 2-2 joined"
     courtyard 8.5mm x 6mm
@@ -176,7 +166,7 @@ component J1 connector "USB_C_GCT_USB4105" {
     at 17mm, 4.5mm
 }
 
-component U2 ic "SOT23_5_KICAD" {
+component U2 ic "SOT-23-5" {
     value "AP2112K-3.3"
     at 10mm, 15mm
 }

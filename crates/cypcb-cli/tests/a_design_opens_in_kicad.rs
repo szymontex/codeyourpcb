@@ -124,8 +124,9 @@ fn a_rotated_part_keeps_its_angle() {
     assert_eq!(r1, 0.0, "R1 is not turned:\n{written}");
     assert_eq!(r2, 90.0, "R2 is turned a quarter turn:\n{written}");
     assert!(
-        (x2 - x1 - 20.0).abs() < 0.001 && (y2 - y1 - 10.0).abs() < 0.001,
-        "the design puts R2 20mm right and 10mm below R1, and the file has \
+        (x2 - x1 - 20.0).abs() < 0.001 && (y2 - y1 + 10.0).abs() < 0.001,
+        "the design puts R2 20mm right of R1 and 10mm above it, which on a \
+         sheet whose Y grows down is -10mm, and the file has \
          {}mm and {}mm:\n{written}",
         x2 - x1,
         y2 - y1
@@ -197,7 +198,9 @@ fn a_board_that_is_not_a_rectangle_is_written_as_the_shape_it_is() {
     );
 
     // The shape, read back where the design draws it: the board is written
-    // onto the drawing sheet, so its corner is not at 0,0 in the file.
+    // onto the drawing sheet, so its corner is not at 0,0 in the file, and
+    // the sheet's Y grows down, so the slot cut down from the board's top
+    // edge (y = 30mm) to y = 10mm runs from the top of the drawing 20mm down.
     let left = edges
         .iter()
         .flat_map(|(x1, _, x2, _)| [*x1, *x2])
@@ -209,8 +212,8 @@ fn a_board_that_is_not_a_rectangle_is_written_as_the_shape_it_is() {
     let slot_wall = edges.iter().any(|(x1, y1, x2, y2)| {
         (x1 - left - 25.0).abs() < 0.001
             && (x2 - left - 25.0).abs() < 0.001
-            && (y1 - top - 30.0).abs() < 0.001
-            && (y2 - top - 10.0).abs() < 0.001
+            && (y1 - top).abs() < 0.001
+            && (y2 - top - 20.0).abs() < 0.001
     });
     assert!(
         slot_wall,

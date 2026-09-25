@@ -428,10 +428,13 @@ fn the_sharp_entries_against_every_pad_that_could_have_been_one() {
     // through-hole pad became copper on every layer and `multi_ic`'s header
     // pins the router reached on an inner layer were counted as reached:
     // J2.S1, J3.3, J3.4 and J3.6 came in sharp and C5.2 left with its route.
+    // Sixteen until 2026-09-25, when the boards stopped being read as their
+    // own mirror image: the router lays different copper on a board the right
+    // way up, and the census it is read beside counts eight.
     assert_eq!(
         sharp.len(),
-        16,
-        "the census reports sixteen sharp entries across the six fixtures"
+        8,
+        "the census reports eight sharp entries across the six fixtures"
     );
 
     // The first reading, and the denominator that kills it. Every sharp pad is
@@ -454,7 +457,7 @@ fn the_sharp_entries_against_every_pad_that_could_have_been_one() {
     // not hold either half of it. "Fewer than one in a hundred" stays true if
     // the walk finds two pads instead of seven hundred and seventy-five, which
     // is what a measurement that quietly disappeared looks like. The canon
-    // quotes these two as 772 of 775 and nothing else checked them.
+    // quotes these two as 773 of 775 and nothing else checked them.
     //
     // A ratchet, like `ENTRY_CENSUS`: they move when a fixture changes and not
     // otherwise, and a fixture change should be loud. Widening `ON_GRID_NM` to
@@ -465,10 +468,13 @@ fn the_sharp_entries_against_every_pad_that_could_have_been_one() {
         netted_total, 775,
         "the walk reaches the whole population of netted pads across the six fixtures"
     );
+    // 3 until 2026-09-25. The grid is laid from the board's corner, and a
+    // board read the right way up has its corner at the bottom of the file's
+    // outline rather than the top, so the lattice moved under the pads: 2.
     assert_eq!(
-        netted_on_grid, 3,
+        netted_on_grid, 2,
         "and this many of them sit on a cell centre, which is the figure the canon \
-         quotes as 772 of 775"
+         quotes as 773 of 775"
     );
 
     // The second reading does not get refuted here - it gets ruled out of
@@ -865,7 +871,12 @@ fn a_circular_land_reads_the_same_from_its_own_geometry() {
     // 0.241, 0.205, 0.134 and 0.024 - J3.4, J3.6, J2.S1 and J3.3 on
     // `multi_ic` - arrived on 2026-09-25, when a through-hole pad became
     // copper on every layer and those pins were counted as reached.
-    const CANON_SHARP_RATIOS: &[f64] = &[0.241, 0.205, 0.154, 0.134, 0.122, 0.111, 0.024];
+    //
+    // All of them were measured on the boards as the KiCad reader read them
+    // until 2026-09-25, a mirror image of the files. Read the right way up the
+    // sharp entries into a circular land are J2.9 0.683, J3.4 0.241, J3.6
+    // 0.205, U2.13 0.156, U1.13 0.123 and J4.12 0.116.
+    const CANON_SHARP_RATIOS: &[f64] = &[0.683, 0.241, 0.205, 0.156, 0.123, 0.116];
     let mut printed: Vec<f64> = readings
         .iter()
         .filter(|r| r.sharp)

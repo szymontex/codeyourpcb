@@ -90,8 +90,9 @@ fn imported_copper_sits_where_the_pads_it_joins_are() {
     // Inside the outline is necessary and not sufficient: copper shifted by
     // some other amount would still land on the board and connect nothing.
     // `led_blink`'s trace runs from (120.48, 65) to (124.25, 65) in a file
-    // whose board corner is at (95, 55), so it belongs at (25.48, 10) to
-    // (29.25, 10).
+    // whose outline spans (95, 55) to (135, 85). The file's Y grows down and
+    // the board's up, so the board's corner is the file's (95, 85) and the
+    // trace, 10mm below the top edge, belongs at (25.48, 20) to (29.25, 20).
     let parsed = parse_kicad_pcb(&fixture("led_blink.kicad_pcb")).expect("led_blink parses");
     let routes = parsed.reference_routes.expect("led_blink carries copper");
 
@@ -110,7 +111,7 @@ fn imported_copper_sits_where_the_pads_it_joins_are() {
             )
         });
 
-    assert!((first.start.y.to_mm() - 10.0).abs() < 0.001, "{first:?}");
+    assert!((first.start.y.to_mm() - 20.0).abs() < 0.001, "{first:?}");
     assert!((first.end.x.to_mm() - 29.25).abs() < 0.001, "{first:?}");
-    assert!((first.end.y.to_mm() - 10.0).abs() < 0.001, "{first:?}");
+    assert!((first.end.y.to_mm() - 20.0).abs() < 0.001, "{first:?}");
 }

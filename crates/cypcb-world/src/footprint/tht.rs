@@ -96,15 +96,14 @@ pub fn axial_300mil() -> Footprint {
 /// - Drill: 0.8mm
 /// - Pad: 1.6mm x 1.6mm oblong
 ///
-/// Pin numbering follows standard convention:
+/// Pin numbering, counter-clockwise seen from the top, pin 1 at the top left:
 /// ```text
-///        Pin 1  Pin 2  Pin 3  Pin 4
-///          |      |      |      |
-///        +---------------------------+
-///        |  U (notch)                |
-///        +---------------------------+
-///          |      |      |      |
-///        Pin 8  Pin 7  Pin 6  Pin 5
+///              +--U--+
+///     Pin 1  --|     |--  Pin 8
+///     Pin 2  --|     |--  Pin 7
+///     Pin 3  --|     |--  Pin 6
+///     Pin 4  --|     |--  Pin 5
+///              +-----+
 /// ```
 pub fn dip8() -> Footprint {
     let row_spacing = Nm::from_mil(300.0);
@@ -114,10 +113,7 @@ pub fn dip8() -> Footprint {
     let pad_width = Nm::from_mm(1.6);
     let pad_height = Nm::from_mm(1.6);
 
-    // 4 pins per side, centered around origin
-    // Pins 1-4 on top row (positive Y), pins 5-8 on bottom row (negative Y)
-    // Actually, standard DIP has pins 1-4 on one side, 5-8 on opposite side
-    // Pin 1 is at top-left, numbering goes counter-clockwise
+    // 4 pins per side, centred on the origin
 
     let mut pads = Vec::with_capacity(8);
 

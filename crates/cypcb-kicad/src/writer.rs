@@ -103,11 +103,15 @@ pub fn append_routing_declaring(
 
     let cut = source.rfind(')').ok_or(KicadWriteError::NotABoard)?;
 
+    // The origin is the one the reader measured the board from, so the
+    // routes land back on the sheet where the pads they join are.
+    let sheet_origin = cypcb_core::Point::from_mm(origin.0, origin.1);
     let to_file = |x: i64, y: i64| -> (String, String) {
-        (
-            mm(x + (origin.0 * 1_000_000.0).round() as i64),
-            mm(y + (origin.1 * 1_000_000.0).round() as i64),
-        )
+        let (x, y) = crate::frame::sheet_nm(
+            sheet_origin,
+            cypcb_core::Point::new(cypcb_core::Nm(x), cypcb_core::Nm(y)),
+        );
+        (mm(x.0), mm(y.0))
     };
 
     let mut out = String::with_capacity(source.len() + routing.routes.len() * 96);

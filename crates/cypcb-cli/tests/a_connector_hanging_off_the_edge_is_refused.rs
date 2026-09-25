@@ -17,6 +17,10 @@
 //! - its pad 3 at `(at 0 5.08)`, whose whole hole sits at y = 17.08mm, off the
 //!   board altogether
 //!
+//! Those are the file's numbers, whose Y grows down. On the board Y grows up
+//! from the bottom edge, so the checker reports that hole at 15 - 17.08 =
+//! -2.08mm: below the bottom edge.
+//!
 //! One `edge-clearance` report, because that rule names the component once
 //! however many of its pads are out - at the pad that is furthest out, pad 3;
 //! two `hole-to-edge` reports, because that one names each hole.
@@ -25,7 +29,8 @@
 //! the rule measured the box a component sits in the index as. A courtyard is
 //! not copper, so a part whose body overhangs the edge while its pads stay
 //! well inside was refused for copper it does not have. It measures pads now,
-//! which is why the case below names 17.080mm and not 14.540mm.
+//! which is why the case below names -2.080mm (17.08mm in the file) and not
+//! 0.460mm (14.54mm in the file).
 
 use cypcb_core::{Nm, Point, Rect};
 use cypcb_drc::rules::EdgeClearanceRule;
@@ -78,7 +83,7 @@ fn the_checker_names_the_connector_that_is_over_the_edge() {
     assert!(!report.trim().is_empty(), "the checker printed nothing");
 
     assert!(
-        report.contains("edge-clearance at (8.000mm, 17.080mm): J1"),
+        report.contains("edge-clearance at (8.000mm, -2.080mm): J1"),
         "the connector over the edge is not named:\n{report}"
     );
     // The pad's centre is 0.46mm from the edge and its copper is 0.85mm wide
