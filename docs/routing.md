@@ -1597,6 +1597,54 @@ measured twice points the same way, and the price stays. What the probe adds is
 where the rest of the shorts are: outside any pad zone the largest group is a
 trace on a via, 55 of 91 on `qfp_fanout` and 12 of 28 on `stm32_breakout`.
 
+**A via on another net's trace is placed by A\*, on copper the grid already
+knows, at a price and not a wall.** Measured 2026-09-25, no change kept. A log
+on each connection recorded who placed every via, in which PathFinder iteration
+and order, and which other nets owned grid cells around it at that moment. The
+winners' final trace-on-via shorts, zone or not, were 13 of 28 on
+`stm32_breakout` and 57 of 91 on `qfp_fanout`:
+
+| trace-on-via short | stm32_breakout | qfp_fanout |
+|---|---|---|
+| via placed by an A\* layer change | 13 | 57 |
+| via placed by `optimize_vias` | 0 | 0 |
+| short already in the raw route / made by the smoother | 13 / 0 | 56 / 1 |
+| trace laid first / via laid first | 8 / 5 | 32 / 25 |
+| grid knew the other net within the via's copper radius | 13 | 54 |
+
+No search in either log stepped on a cell another net owned. A layer change
+checks that the centre cell is free and that the barrel fits; the rest of the
+via's copper disc is only priced, by `foreign_cells_in_via_keepout` at
+`via_foreign_copper_penalty`, 0.25 a cell, the same for a cell whose copper
+touches the via as for one in the clearance ring round it. That is the cause.
+Where the via came first, the ring reservation skipped the cells the other
+trace owned, since `mark_route_footprint` never takes another net's cell; the
+trace was ripped up and came back to the same place. That is the same cause
+seen one iteration later, not a second one. The ring in grid cells is not too
+small: the winning High-Density variant routes on a 0.169mm grid, and the via
+radius the router models, drill / 2 plus the annular ring, and the radius it places, the drill,
+both round up to two cells of copper and three of clearance. A run with the
+placed radius gave the same six winners and the same shorts.
+
+A price for the touching cells was then swept: a cell of another net's trace
+whose centre lies nearer the via than drill plus half the minimum trace width,
+charged on top of the 0.25. Winner shorts, unrouted pins where they moved, and
+the trace-on-via shorts left on the two boards:
+
+| touching price | stm32_breakout | multi_ic | qfp_fanout | trace on via, stm32 / qfp |
+|---|---|---|---|---|
+| none | 28 | 65, pins 4 | 91 | 13 / 57 |
+| 2 | 30 | 64, pins 4 | 56 | 2 / 9 |
+| 5 | 56 | 71, pins 5 | 58 | 1 / 10 |
+| 20 | 42 | 69, pins 5 | 40 | 3 / 12 |
+| 1000 | 25 | 86, pins 4 | 34 | 4 / 1 |
+
+`led_blink`, `shift_driver` and `plane_board` kept zero shorts and zero unrouted
+pins at every price. Any price clears most of the group it aims at, and the
+shorts move to other kinds. No single price is better on every board, so the
+default stays; the price of 2 wins `qfp_fanout` and 1000 wins `stm32_breakout`
+and `qfp_fanout`, which makes them candidates for variants of their own.
+
 
 **Decomposition: the multi-sink wave is the standard, and behind
 `stop_at_own_copper` it is what this project does.** PathFinder seeds the
