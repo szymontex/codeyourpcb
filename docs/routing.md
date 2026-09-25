@@ -1575,6 +1575,13 @@ zone of the trace's own net:
 | other, outside | 1 | 12 | 8 |
 | total | 28 | 65 | 91 |
 
+The zones in this split are not the router's. The probe placed them on a
+0.254mm grid on every board but `multi_ic`, where it used 0.2mm; the router's
+grid is 0.169mm on `stm32_breakout`, 0.254mm on `qfp_fanout` and 0.4mm on
+`multi_ic`. The in-zone and outside columns therefore hold only for
+`qfp_fanout`. The kind of each short does not depend on the grid. The split
+was measured again on the router's own zones, below.
+
 The pad in every in-zone pad-on-trace short belongs to another net, so the rule
 tried was the narrow one: inside a net's pad zone, a cell whose `pad_owner` is
 another net stays a wall; another net's trace stays open, since a trace can
@@ -1684,6 +1691,44 @@ connections before shorts it would win that board with 119 shorts against 65.
 That is a trade to decide, not a win, and neither switch was added. The escape
 was not measured: it would take restoring an 832-line change across five
 files.
+
+**Where the winners' shorts are now: in the trace's own pad zone, on another
+net's pad, and already in the raw route.** Measured 2026-09-25 on the fifteen
+variants, flag off, no change kept. A probe replayed each winner with a dump
+of the grid at the end of the PathFinder loop - every net's trace, ring and
+hole cells, its pad zones and the owner of every pad cell - and the replay gave
+the same routes on all three boards. Each final short was matched one to one
+against the raw route and the smoothed one by kind and net pair within 1mm.
+Zones and cells are the router's own, at the resolutions above.
+
+| short | stm32_breakout | multi_ic | qfp_fanout |
+|---|---|---|---|
+| trace on pad, in the trace net's own pad zone | 14 | 30 | 19 |
+| trace on pad, outside | 0 | 0 | 0 |
+| trace on trace | 5 | 6 | 8 |
+| trace on via | 4 | 1 | 1 |
+| pad on via | 1 | 4 | 4 |
+| via on via | 1 | 2 | 2 |
+| total | 25 | 43 | 34 |
+
+Of the 102 shorts, 100 are already in the raw A\* route, 2 are made by the
+smoother, both trace on pad, one on `multi_ic` and one on `qfp_fanout`, and
+none by `optimize_vias`. Pad zones cover 8.5% of the cells on `stm32_breakout`,
+15.7% on `multi_ic` and 29.2% on `qfp_fanout`, and all 63 trace-on-pad shorts
+lie in one. The loop ends with both nets of a short on the same cell or a
+neighbour, same layer, for 20 of 25, 39 of 43 and 34 of 34. For trace on pad
+that count moves with the distance allowed: 6 / 9 / 12 on `stm32_breakout`,
+20 / 26 / 29 on `multi_ic` and 17 / 19 / 19 on `qfp_fanout` at zero, one and
+two cells. On `stm32_breakout` two of the pads have no pad owner in the grid.
+Kind and stage are the same with a match distance of 0.3mm and of 2mm.
+
+Against the split above, trace on via fell from 13 / 0 / 57 to 4 / 1 / 1,
+which is the two variants that keep vias off traces. Trace on pad did not
+fall: 14 / 30 / 19 now. On `multi_ic` the THT pad model and the winner changed
+in the same step, so what each did cannot be separated. The largest group
+left is trace on pad in the trace net's own zone on `multi_ic`, 30 of its 43
+shorts: 29 come out of the raw search and 26 lie on a cell where the loop
+ends with one net's pad and the other net's trace.
 
 
 **Decomposition: the multi-sink wave is the standard, and behind
