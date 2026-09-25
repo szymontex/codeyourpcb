@@ -1458,6 +1458,96 @@ measurement it would start from.
 Measured with a throwaway probe and a flag that were both reverted; neither
 is in the tree.
 
+### Constants counted in cells, measured and left alone (2026-09-25)
+
+The section above ends on an open question: at a 0.25mm cell `multi_ic` ends
+at 108 shorts against 43 at 0.4mm, although a finer grid is more room. One
+candidate is every quantity the router states in cells instead of nm, because
+such a quantity shrinks physically with the cell. This is the inventory of
+those quantities and the measurement of whether they carry the loss.
+
+**Inventory.** On `multi_ic`, at the shipped 0.4mm cell, at 0.267mm and at the
+0.25mm cell of the pitch flag, with paths under `crates/cypcb-autoroute/src/`:
+
+| quantity | source | unit | 0.4 | 0.267 | 0.25 |
+|---|---|---|---|---|---|
+| pad zone margin, default | `orchestrator.rs:738` | 3 cells | 1.200mm | 0.801mm | 0.750mm |
+| pad zone margin, one variant | `variant.rs:377` | 2 cells | 0.800mm | 0.534mm | 0.500mm |
+| improved A* zone clearance | `astar_improved.rs:723` | 3 cells | 1.200mm | 0.801mm | 0.750mm |
+| step cost | `cost.rs:125` | 1 per cell | 2.50 per mm | 3.75 per mm | 4.00 per mm |
+| via cost `V` | `presets/mod.rs:387` | per via | 0.400·V mm of trace | 0.267·V mm | 0.250·V mm |
+| `pad_layer_change_penalty` `P` | `pathfinder_v2.rs:1398` | per event | 0.400·P mm of trace | 0.267·P mm | 0.250·P mm |
+| `foreign_pad_penalty` | `pathfinder_v2.rs:1324` | per cell entered | same ratio to a step | same | same |
+| via crowding | `pathfinder_v2.rs:1409-1414` | per foreign cell in the keepout | x1.00 against trace | x1.50 | x1.60 |
+
+That makes three classes:
+
+1. Fixed cell counts, which shrink with the cell: both pad zone margins and
+   the improved A* zone clearance.
+2. Event costs without a unit. A step costs 1 per cell, so a via or a layer
+   change at a pad buys less trace as the cell shrinks.
+3. Via crowding. It counts foreign cells in an area, so it grows with `1/r²`
+   while trace cost grows with `1/r`.
+
+Everything else that reads as a length is computed from nm with a ceil and
+only rounds: the keepout (`grid.rs:228`), the pad radius
+(`orchestrator.rs:744`), the clearance field (`clearance_field.rs:215`, `281`)
+and the via radius (`pathfinder_v2.rs:667`). `stagnation_limit` and
+`MAX_PATHFINDER_ITERATIONS` count iterations, not lengths.
+
+**The experiment.** The pitch flag from the section above sets the cell on
+`multi_ic` to 0.25mm. Each class was then rescaled by `k = r_adaptive / r` to
+its physical size or price at 0.4mm, `k = 1.6`:
+
+- A: pad zone margins times `k`, rounded (3 to 5 cells, 2 to 3).
+- B: `via_cost_multiplier` and `pad_layer_change_penalty` times `k`.
+- C: the three via crowding penalties divided by `k`.
+
+Winners on `multi_ic`:
+
+| run | winner | shorts | DRC | unconnected pins | seconds |
+|---|---|---|---|---|---|
+| 0.25mm, nothing rescaled | `PathFinder Bare Centre Line` | 108 | 492 | 0 | 204.99 |
+| A | `PathFinder Guarded Pads` | 69 | 604 | 0 | 139.85 |
+| B | `PathFinder Bare Centre Line` | 118 | 470 | 0 | 173.83 |
+| C | `PathFinder Pad Aware` | 142 | 559 | 0 | 184.11 |
+| A + B + C | `PathFinder Guarded Pads` | 77 | 597 | 0 | 141.81 |
+
+No run returns to 43. Only A helps on its own; B and C each make the winner
+worse. Without rescaling, `PathFinder Clearance Priced` and
+`PathFinder Guarded Pads` reach 65 shorts each, but with one unconnected pin
+each, so the ranking places both below the 108 of a fully connected variant.
+
+**The fix it suggested, measured and rejected.** A is the only class that
+helps, so the margin was measured as a length at the shipped grids: three
+cells of 0.254mm, 0.762mm, rounded up to whole cells at each resolution. That
+is 2 cells (0.8mm) at 0.4mm and 3 cells at 0.254mm. Winners on all six boards,
+shorts with the margin in cells and with the margin in nm:
+
+| board | winner, cells | shorts | winner, nm | shorts |
+|---|---|---|---|---|
+| led_blink | `PathFinder Guarded Pads` | 0 | `PathFinder Guarded Pads` | 0 |
+| stm32_breakout | `PathFinder High-Density Vias Kept Off Traces` | 25 | `PathFinder High-Density` | **49** |
+| multi_ic | `PathFinder Clearance Priced` | 43 | `PathFinder Eager` | **53** |
+| shift_driver | `PathFinder Clearance Priced` | 0 | `PathFinder High-Density Vias Kept Off Traces` | 0 |
+| plane_board | `PathFinder Pad Aware` | 0 | `PathFinder Pad Aware` | 0 |
+| qfp_fanout | `PathFinder Vias Kept Off Traces` | 34 | `PathFinder Vias Kept Off Traces` | 34 |
+
+Two winners get worse and none gets better, so the margin stays in cells.
+
+**Reading.** The margin in cells acts as a parameter tuned to the grid it was
+tuned on, the 0.254mm grid its doc comment names. It is not a defect at the
+shipped grids. Nor do these classes explain the finer-grid loss: with all
+three rescaled, `multi_ic` ends at 77 shorts, not 43.
+
+**Not checked.**
+
+- The ring and stack penalties in `congestion.rs` are not in the inventory.
+- Two variants on `multi_ic` resolve the adaptive cell to 0.267mm instead of
+  0.4mm, so for them `k = 1.067`. Which two was not checked.
+
+Measured with a throwaway probe that was reverted; it is not in the tree.
+
 ## Rip-up and reroute, read out of the primary paper
 
 This lived in `docs/ROUTING-CANON.md` as R-12 until 2026-09-12 and does not
