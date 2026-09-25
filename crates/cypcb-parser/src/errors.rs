@@ -45,7 +45,7 @@ pub enum ParseError {
     #[error("unexpected character '{character}' ({codepoint}) at line {line}, column {column}")]
     #[diagnostic(
         code(cypcb::parse::unexpected_character),
-        help("outside a string or a comment only ASCII is read; a net name that needs other letters can be quoted: net \"...\"")
+        help("outside a string or a comment a name is ASCII letters, digits and `_`, starting with a letter or `_`, and a pin is a pad number or such a name; a net name that needs other characters can be quoted: net \"...\"")
     )]
     UnexpectedCharacter {
         /// The character itself.

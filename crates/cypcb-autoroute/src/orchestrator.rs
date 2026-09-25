@@ -51,6 +51,32 @@ pub struct Connection {
     pub to_idx: usize,
 }
 
+/// Net pins on the board that `library` has no pad for.
+///
+/// [`extract_ratsnest`] steps over a part whose footprint the library does
+/// not hold, and over a pin its footprint has no pad for, so those pads never
+/// reach the net list the router reports on. Two routing tests synchronised
+/// the board with one library and routed with a fresh one: the parts drawn
+/// with a footprint the design defined vanished from their nets, and the
+/// router said Complete over copper it never laid. [`route_board`] counts
+/// them with this and says Partial instead.
+///
+/// [`route_board`]: crate::route_board
+pub fn pins_the_library_cannot_place(world: &mut BoardWorld, library: &FootprintLibrary) -> usize {
+    let ecs = world.ecs_mut();
+    let mut query = ecs.query::<(&FootprintRef, &NetConnections)>();
+    query
+        .iter(ecs)
+        .map(|(footprint, nets)| match library.get(footprint.as_str()) {
+            None => nets.iter().count(),
+            Some(footprint) => nets
+                .iter()
+                .filter(|pin| footprint.pads.iter().all(|pad| pad.number != pin.pin))
+                .count(),
+        })
+        .sum()
+}
+
 /// Extract the ratsnest from a board world.
 ///
 /// For each net, collects all pin pads that belong to it by iterating
