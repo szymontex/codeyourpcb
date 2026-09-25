@@ -299,3 +299,37 @@ fn the_grammar_takes_the_same_insertions_without_a_panic() {
         &panics[..panics.len().min(10)]
     );
 }
+
+/// `C1.+` and `C1.-`: the character is ASCII, so the help may not blame
+/// ASCII. Until 2026-09-26 it said "only ASCII is read" to both.
+#[test]
+fn a_sign_as_a_pin_is_told_what_a_pin_is() {
+    use miette::Diagnostic;
+    for sign in ['+', '-'] {
+        let source = format!("version 1\nnet VBUS {{\n    C1.{sign}\n}}\n");
+        let result = parse(&source);
+        let about_it: Vec<&ParseError> = result
+            .errors
+            .iter()
+            .filter(|e| matches!(e, ParseError::UnexpectedCharacter { character, .. } if *character == sign))
+            .collect();
+        assert_eq!(about_it.len(), 1, "{sign}: {:?}", result.errors);
+        let help = about_it[0]
+            .help()
+            .map(|h| h.to_string())
+            .unwrap_or_default();
+        assert!(!help.contains("only ASCII"), "{sign} is ASCII: {help}");
+        assert!(
+            help.contains("a pin is a pad number or such a name"),
+            "{sign}: {help}"
+        );
+    }
+}
+
+/// The name the help describes is the name the reader takes: letters, digits
+/// and `_`, from a letter or `_`.
+#[test]
+fn the_name_the_help_describes_reads_as_a_pin() {
+    let result = parse("version 1\nnet VBUS {\n    C1._Pos_2\n}\n");
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+}

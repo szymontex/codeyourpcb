@@ -883,8 +883,20 @@ impl RouteCommand {
         }
         eprintln!("Chose {}", best.name);
 
+        // The winner's own count of what it gave up on. This used to be
+        // `RoutingResult::complete` whatever the winner left, so the default
+        // `cypcb route` never printed the warning `--fast` prints.
+        let result = if best.unrouted == 0 {
+            cypcb_router::types::RoutingResult::complete(best.routes.clone(), best.vias.clone())
+        } else {
+            cypcb_router::types::RoutingResult::partial(
+                best.routes.clone(),
+                best.vias.clone(),
+                best.unrouted,
+            )
+        };
         Ok((
-            cypcb_router::types::RoutingResult::complete(best.routes.clone(), best.vias.clone()),
+            result,
             format!("best of {} variants, `{}`", results.len(), best.name),
         ))
     }

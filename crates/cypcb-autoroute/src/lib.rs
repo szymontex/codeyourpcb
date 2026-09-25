@@ -43,7 +43,7 @@ pub mod via_optimizer;
 
 pub use noise_band::{noise_band, stacked_hole_band};
 
-use cypcb_router::types::RoutingResult;
+use cypcb_router::types::{RoutingResult, RoutingStatus};
 use cypcb_rules::RoutingRuleSet;
 use cypcb_world::footprint::FootprintLibrary;
 use cypcb_world::BoardWorld;
@@ -509,12 +509,33 @@ pub fn route_board(
 
     // Repair re-routes with PathFinder, so it only applies to a PathFinder
     // solution - handing it an A* result would silently swap strategies.
-    match effective_config.strategy {
+    let result = match effective_config.strategy {
         StrategyKind::PathFinder => {
             repair::repair_routes(world, library, rules, &effective_config, result)
         }
         StrategyKind::ImprovedAStar => result,
+    };
+
+    // A net pin whose pad the library does not hold was never in the net
+    // list, so the strategy's Complete does not cover it.
+    let unseen = orchestrator::pins_the_library_cannot_place(world, library);
+    if unseen == 0 {
+        return result;
     }
+    tracing::warn!(
+        pins = unseen,
+        "Net pins with no pad in the footprint library, left unrouted"
+    );
+    let status = match result.status {
+        RoutingStatus::Complete => RoutingStatus::Partial {
+            unrouted_count: unseen,
+        },
+        RoutingStatus::Partial { unrouted_count } => RoutingStatus::Partial {
+            unrouted_count: unrouted_count + unseen,
+        },
+        failed @ RoutingStatus::Failed { .. } => failed,
+    };
+    RoutingResult { status, ..result }
 }
 
 #[cfg(test)]
