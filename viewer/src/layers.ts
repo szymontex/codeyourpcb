@@ -63,12 +63,27 @@ export type LayerFocus = 'all' | 'ghost' | 'dim' | 'solo';
 /** The order `X` walks, and the order the button cycles. */
 const LAYER_FOCUS_ORDER: readonly LayerFocus[] = ['all', 'ghost', 'dim', 'solo'] as const;
 
-/** What each state is called where a person can read it. */
+/**
+ * What each state is called where a person can read it.
+ *
+ * Every name says "others", because the state is about the layers you are
+ * not drawing on. The button said `All` in its first state, one row above a
+ * saved view called `Everything`: two controls on different questions - how
+ * loud the other layers are, and which layers are on - named with one word.
+ */
 export const LAYER_FOCUS_LABEL: Record<LayerFocus, string> = {
-  all: 'All layers',
-  ghost: 'Others in grey',
-  dim: 'Dim others',
-  solo: 'Active only',
+  all: 'Other layers in full colour',
+  ghost: 'Other layers in grey',
+  dim: 'Other layers dimmed',
+  solo: 'Other layers hidden',
+};
+
+/** The same states, short enough for the button in the panel's header. */
+export const LAYER_FOCUS_BUTTON: Record<LayerFocus, string> = {
+  all: 'Others: Full',
+  ghost: 'Others: Grey',
+  dim: 'Others: Dim',
+  solo: 'Others: Hidden',
 };
 
 /**

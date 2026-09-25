@@ -84,4 +84,32 @@ test.describe('the layer panel', () => {
 
     await expect(page.locator('#lp-copper .lp-row')).toHaveCount(2);
   });
+
+  /**
+   * The two controls at the top of the panel, told apart by what a screen
+   * reader announces. The button said `All` above a saved view called
+   * `Everything`, and the button did nothing when clicked - only `X` moved
+   * it - so this clicks it through every state rather than pressing the key.
+   */
+  test('the button says it is about the other layers, and a click moves it', async ({
+    page,
+  }) => {
+    const button = page.getByRole('button', { name: /^Others: / });
+    const seen: string[] = [];
+    for (let i = 0; i < 5; i++) {
+      seen.push((await button.textContent())?.trim() ?? '');
+      await button.click();
+    }
+    expect(seen).toEqual([
+      'Others: Full',
+      'Others: Grey',
+      'Others: Dim',
+      'Others: Hidden',
+      'Others: Full',
+    ]);
+
+    const views = page.getByRole('combobox', { name: 'Saved view' });
+    await expect(views).toBeVisible();
+    await expect(views.locator('option').first()).toHaveText('Everything');
+  });
 });
