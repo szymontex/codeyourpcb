@@ -17,7 +17,7 @@
 //! one.
 
 use cypcb_core::{Nm, Point};
-use cypcb_world::components::{FootprintRef, Layer, Position, Rotation};
+use cypcb_world::components::{FootprintRef, Layer, NetConnections, NetId, Position, Rotation};
 use cypcb_world::BoardWorld;
 
 use super::{rotate_point, DrcRule};
@@ -32,6 +32,8 @@ struct PasteOpening {
     half_height: i64,
     /// Which face of the board the stencil is for.
     top_side: bool,
+    /// The net the pad is on, if the design puts it on one.
+    net: Option<NetId>,
 }
 
 /// Rule for checking the web between two paste stencil openings.
@@ -52,17 +54,18 @@ impl DrcRule for PasteClearanceRule {
                 &FootprintRef,
                 &Position,
                 &Rotation,
+                Option<&NetConnections>,
             )>();
             query
                 .iter(ecs)
-                .map(|(e, f, p, r)| (e, f.clone(), *p, *r))
+                .map(|(e, f, p, r, n)| (e, f.clone(), *p, *r, n.cloned()))
                 .collect()
         };
 
         let lib = world.footprints();
         let mut openings: Vec<PasteOpening> = Vec::new();
 
-        for (entity, footprint_ref, position, rotation) in &components {
+        for (entity, footprint_ref, position, rotation, nets) in &components {
             let Some(footprint) = lib.get(footprint_ref.as_str()) else {
                 continue; // Unknown footprint - sync already reported it
             };
@@ -103,6 +106,7 @@ impl DrcRule for PasteClearanceRule {
                         half_width: w / 2,
                         half_height: h / 2,
                         top_side,
+                        net: nets.as_ref().and_then(|n| n.pin_net(&pad.number)),
                     });
                 }
             }
@@ -129,6 +133,14 @@ impl DrcRule for PasteClearanceRule {
                 // separates them, so the wider gap is the web that has to
                 // hold.
                 let web = gap_x.max(gap_y);
+
+                // Two pads of one net that touch are one piece of copper, and
+                // their apertures are one hole: there is no web to tear. A
+                // web between them that does exist is still steel, whatever
+                // the nets, so only touching pads are let through.
+                if web <= 0 && a.net.is_some() && a.net == b.net {
+                    continue;
+                }
 
                 if web < min_web {
                     let location = Point::new(

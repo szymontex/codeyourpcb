@@ -19,23 +19,49 @@ the six boards, that figure belongs to the mirrored board.
 
 The same boards read the right way up, `cypcb route` with and without
 `--variants` and `cypcb check` on what it wrote (release build, 2026-09-25).
-Shorts are the `clearance` rows at 0.00mm; `esp32_starter` is written in this
-language, never went through the KiCad reader, and is the control:
+A short is what `cypcb_drc::shorts` counts: every `clearance` row whose
+measured distance is zero, before `check` folds a contact's rows into one.
+It is the figure `rank_best_first` ranks the variants on and the one `check`
+prints as "copper touching copper at 0.00mm". `esp32_starter` is written in
+this language, never went through the KiCad reader, and is the control; its
+row is measured on the fixture as merged, with the built-in SOT-23-5:
 
 | board | winner, mirrored | shorts | hole-to-hole | rows | winner, read right | shorts | hole-to-hole | rows |
 |---|---|---|---|---|---|---|---|---|
 | led_blink | Guarded Pads | 0 | 0 | 1 | Bare Centre Line | 0 | 0 | 0 |
-| stm32_breakout | High-Density Near Holes | 7 | 5 | 105 | High-Density Vias Kept Off Traces | 19 | 14 | 141 |
-| multi_ic | Clearance Priced Near Holes | 19 | 7 | 489 | Guarded Pads | 25 | 17 | 564 |
+| stm32_breakout | High-Density Near Holes | 13 | 5 | 105 | High-Density Vias Kept Off Traces | 30 | 14 | 141 |
+| multi_ic | Clearance Priced Near Holes | 34 | 7 | 489 | Guarded Pads | 33 | 17 | 564 |
 | shift_driver | Priced Via Rings Near Holes | 0 | 0 | 9 | Priced Via Rings Near Holes | 0 | 1 | 11 |
-| qfp_fanout | Vias Kept Off Traces | 23 | 13 | 166 | Vias Kept Off Traces | 15 | 11 | 153 |
+| qfp_fanout | Vias Kept Off Traces | 34 | 13 | 166 | Vias Kept Off Traces | 40 | 11 | 153 |
 | plane_board | Pad Aware | 0 | 0 | 16 | Eager Pads Priced Ring | 0 | 0 | 8 |
-| esp32_starter | High-Density Vias Kept Off Traces | 0 | 0 | 116 | High-Density Vias Kept Off Traces | 0 | 0 | 116 |
+| esp32_starter | - | - | - | - | High-Density Vias Kept Off Traces | 22 | 0 | 115 |
 
-Without `--variants` (the fast route): stm32_breakout 33 to 39 shorts and 139
-to 149 rows, multi_ic 26 to 32 and 472 to 499, qfp_fanout 55 to 45 and 269 to
-225, shift_driver 0 to 1 and 15 to 16, plane_board 1 to 2 and 20 to 22,
-led_blink and esp32_starter unchanged.
+Without `--variants` (the fast route): stm32_breakout 56 to 71 shorts and 139
+to 149 rows, multi_ic 46 to 64 and 472 to 499, qfp_fanout 105 to 98 and 269 to
+225, shift_driver 0 to 1 and 15 to 16, plane_board 3 to 4 and 20 to 22,
+led_blink unchanged; esp32_starter 54 shorts and 154 rows.
+
+The first version of this table counted something else: the rows `check`
+lists after that fold, one per contact, read with a pattern that missed every
+row carrying a file and line, which is every row of a `.cypcb` board. That is
+why it gave esp32_starter no shorts at all.
+
+On esp32_starter `cypcb route` and `cypcb check` disagree by one or two -
+52 and 54 fast, 21 and 22 with variants. Both call the same function on the
+same rules and agree on every other row. After the fast route, `route` holds
+its copper as 386 segments and `check` reads the file back as 85 traces; the
+rows that differ are two contacts `check` reports and `route` does not, and
+one that `route` places 0.314mm from where `check` places it. Why the cut
+changes the count was not traced further. The KiCad boards agree to the row
+with variants; `route --fast` on a KiCad file prints no DRC line to compare.
+
+Two corrections made after this table, the same day, move two of its rows.
+The router now reaches every pad of a pin a footprint draws more than once,
+as `check` always asked, and two pads of one net that touch are one land to
+the mask and stencil rules. multi_ic loses six rows, all between ground pads
+that overlap, and is otherwise the same; esp32_starter's receptacle and
+buttons are routed now, and the winner is the same variant at 16 shorts and
+88 rows (46 and 131 fast). The other five boards give the same report.
 
 Of the eighteen variants, six win a board read the right way up: High-Density
 Vias Kept Off Traces (stm32_breakout, esp32_starter), Bare Centre Line

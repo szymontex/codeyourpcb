@@ -117,44 +117,59 @@ pub fn extract_ratsnest(world: &mut BoardWorld, library: &FootprintLibrary) -> V
         };
 
         for pin_conn in net_conns.iter() {
-            // Find the pad definition for this pin
-            let pad_def = match footprint.get_pad(&pin_conn.pin) {
-                Some(p) => p,
-                None => {
-                    tracing::debug!(
-                        pin = %pin_conn.pin,
-                        footprint = %fp_name,
-                        "Pin not found in footprint"
-                    );
-                    continue;
-                }
-            };
-
-            // Compute absolute pad position
-            let pad_pos = rotate_about_origin(pad_def.position, *rotation_deg);
-            let abs_pos = Point::new(
-                Nm::new(comp_pos.x.raw() + pad_pos.x.raw()),
-                Nm::new(comp_pos.y.raw() + pad_pos.y.raw()),
-            );
-
-            // The routing index of a layer is its bit in the copper mask.
-            let layer_mask = pad_def.copper_mask();
-
-            if covered_by_pour(&pours, pin_conn.net, abs_pos, layer_mask) {
+            // Every pad the pin names. A footprint may draw one pin as several
+            // pads - a switch's two legs, a receptacle's four shield tabs - and
+            // KiCad's default is that each of them needs copper: "The ratsnest
+            // shows missing connections between same-numbered pads" unless the
+            // footprint says its duplicate numbers are jumpers (KiCad 10
+            // manual, "Jumper pads"; `updateJumperPads` in
+            // `connectivity_algo.cpp`, which joins them only when
+            // `GetDuplicatePadNumbersAreJumpers()` is set and the default is
+            // false; both read 2026-09-25). This language has no such flag, so
+            // every pad is a target, which is what `cypcb check` asks for.
+            // Until then only the first pad of the name was routed and the
+            // check reported the rest unrouted.
+            let pad_defs: Vec<_> = footprint
+                .pads
+                .iter()
+                .filter(|pad| pad.number == pin_conn.pin)
+                .collect();
+            if pad_defs.is_empty() {
                 tracing::debug!(
-                    net = pin_conn.net.id(),
                     pin = %pin_conn.pin,
-                    "Pad is inside a pour of its own net, nothing to route"
+                    footprint = %fp_name,
+                    "Pin not found in footprint"
                 );
                 continue;
             }
 
-            net_pads.entry(pin_conn.net).or_default().push(PadTarget {
-                position: abs_pos,
-                layer_mask,
-                pad_size: pad_def.size,
-                pin: pin_conn.pin.clone(),
-            });
+            for pad_def in pad_defs {
+                // Compute absolute pad position
+                let pad_pos = rotate_about_origin(pad_def.position, *rotation_deg);
+                let abs_pos = Point::new(
+                    Nm::new(comp_pos.x.raw() + pad_pos.x.raw()),
+                    Nm::new(comp_pos.y.raw() + pad_pos.y.raw()),
+                );
+
+                // The routing index of a layer is its bit in the copper mask.
+                let layer_mask = pad_def.copper_mask();
+
+                if covered_by_pour(&pours, pin_conn.net, abs_pos, layer_mask) {
+                    tracing::debug!(
+                        net = pin_conn.net.id(),
+                        pin = %pin_conn.pin,
+                        "Pad is inside a pour of its own net, nothing to route"
+                    );
+                    continue;
+                }
+
+                net_pads.entry(pin_conn.net).or_default().push(PadTarget {
+                    position: abs_pos,
+                    layer_mask,
+                    pad_size: pad_def.size,
+                    pin: pin_conn.pin.clone(),
+                });
+            }
         }
     }
 

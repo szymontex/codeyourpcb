@@ -16,7 +16,7 @@
 //! board the exporter then made with openings that touch.
 
 use cypcb_core::{Nm, Point};
-use cypcb_world::components::{FootprintRef, Layer, Position, Rotation};
+use cypcb_world::components::{FootprintRef, Layer, NetConnections, NetId, Position, Rotation};
 use cypcb_world::BoardWorld;
 
 use super::{rotate_point, DrcRule};
@@ -31,6 +31,8 @@ struct MaskOpening {
     half_height: i64,
     /// Which side of the board the opening is on.
     top_side: bool,
+    /// The net the pad is on, if the design puts it on one.
+    net: Option<NetId>,
 }
 
 /// Rule for checking minimum solder mask bridge width.
@@ -52,17 +54,18 @@ impl DrcRule for SolderMaskBridgeRule {
                 &FootprintRef,
                 &Position,
                 &Rotation,
+                Option<&NetConnections>,
             )>();
             query
                 .iter(ecs)
-                .map(|(e, f, p, r)| (e, f.clone(), *p, *r))
+                .map(|(e, f, p, r, n)| (e, f.clone(), *p, *r, n.cloned()))
                 .collect()
         };
 
         let lib = world.footprints();
         let mut openings: Vec<MaskOpening> = Vec::new();
 
-        for (entity, footprint_ref, position, rotation) in &components {
+        for (entity, footprint_ref, position, rotation, nets) in &components {
             let Some(footprint) = lib.get(footprint_ref.as_str()) else {
                 continue; // Unknown footprint - sync already reported it
             };
@@ -104,6 +107,7 @@ impl DrcRule for SolderMaskBridgeRule {
                         half_width: w / 2 + expansion,
                         half_height: h / 2 + expansion,
                         top_side,
+                        net: nets.as_ref().and_then(|n| n.pin_net(&pad.number)),
                     });
                 }
             }
@@ -123,6 +127,16 @@ impl DrcRule for SolderMaskBridgeRule {
                 }
                 if a.top_side != b.top_side {
                     continue; // Opposite sides of the board
+                }
+                // Solder across a web between two pads of one net joins what
+                // the net joins already. KiCad reports a mask bridge only
+                // between items "with different nets" (DRC reference, 9.0
+                // manual) and its checker skips a pair whose net codes match
+                // (`drc_test_provider_solder_mask.cpp`), both read 2026-09-25.
+                // Until then a USB-C receptacle, whose A1 and B12 are one GND
+                // land drawn twice, reported a 0.00mm web it does not have.
+                if a.net.is_some() && a.net == b.net {
+                    continue;
                 }
 
                 let gap_x = dx.abs() - a.half_width - b.half_width;
