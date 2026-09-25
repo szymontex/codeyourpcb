@@ -279,6 +279,33 @@ fn the_grid_marks_a_placed_via_on_every_layer_its_hole_passes() {
     );
 }
 
+#[test]
+fn a_placed_via_is_copper_its_own_net_may_cross() {
+    // Its own net is joined to it already, so to that net the via is not in
+    // the way; to every other net it is.
+    let (mut world, library) = board(vec![Layer::TopCopper], None, &[]);
+    let own = world.intern_net("OWN");
+    let other = world.intern_net("OTHER");
+    place_via(&mut world, own);
+    world.rebuild_spatial_index_from_library(&library);
+
+    let rules = PresetRuleSet::new(RulesPreset::from_name("jlcpcb").expect("the preset"));
+    let grid = RoutingGrid::from_board(&mut world, &library, &rules, 63_500).expect("a board");
+    let (x, y) = grid.nm_to_grid(Point::from_mm(VIA_AT.0, VIA_AT.1));
+    let top = layer_to_index(Layer::TopCopper).expect("a copper layer");
+    let bottom = layer_to_index(Layer::BottomCopper).expect("a copper layer");
+
+    assert!(grid.is_own_fixed_copper(x, y, top, own.id()), "its own via");
+    assert!(
+        !grid.is_own_fixed_copper(x, y, top, other.id()),
+        "another net's via"
+    );
+    assert!(
+        !grid.is_own_fixed_copper(x, y, bottom, own.id()),
+        "the hole does not reach the bottom"
+    );
+}
+
 /// How many of a via pair the optimizer keeps, when the direct segment it
 /// would put back runs along Inner(0) past the placed via, or past nothing.
 fn vias_kept_on_the_middle_layer(via_placed: bool) -> usize {

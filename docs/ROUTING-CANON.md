@@ -1467,7 +1467,7 @@ last clause is the rule.
 
 **2. What the grid costs in accuracy, and it is worse than half a cell.** A pad
 centre is snapped by integer division, not by rounding: `nm_to_grid_x`
-(`crates/cypcb-autoroute/src/grid.rs:514`) computes `(nm - origin) / resolution`,
+(`crates/cypcb-autoroute/src/grid.rs:614`) computes `(nm - origin) / resolution`,
 which truncates toward zero. The node therefore sits at or below the pad centre
 on each axis, and the error approaches a whole cell per axis rather than half of
 one. Worst case radially is `resolution * sqrt(2)`.
