@@ -744,6 +744,64 @@ What a real fix has to do is stop the search from putting a via where the board
 already has one, at any depth - which is a cost-model question, not a filter on
 the output.
 
+**Re-measured 2026-09-25, and on today's router the repeats are most of it.**
+Six boards, fast and with variants, 107 hole-to-hole rows. Each row's two vias
+traced to the step that placed them: all 107 came from the search's first
+pass; the via optimizer, repair and the output conversion placed none. 46 of
+the pairs were one net's two vias on one centre - 42 with equal spans, 4 whose
+spans overlap or meet on one layer, none with a gap between them.
+
+`merge_stacked_vias`, run at the end of `optimize_vias`, makes such a pair one
+via spanning both, which joins exactly the layers the two joined. Spans with a
+gap stay two vias, since one hole would join the layers between them, and two
+nets are never merged. The earlier attempt removed only equal spans and left
+every count as it was; this one takes hole-to-hole from 107 to 55 with no new
+row on any board and every variant winner unchanged:
+
+| board | fast | variants |
+|---|---|---|
+| multi_ic | 13 -> 6 | 11 -> 4 |
+| qfp_fanout | 29 -> 9 | 30 -> 13 |
+| stm32_breakout | 15 -> 15 | 9 -> 8 |
+| led_blink, plane_board, shift_driver | 0 -> 0 | 0 -> 0 |
+
+The other 55 are still the cost-model question above: 54 pairs of vias a
+fraction of a millimetre apart, and one pair of two nets on one centre
+(`qfp_fanout` fast, VCC and IO18), which the checker also reports as copper
+touching at 0.00mm.
+
+**Priced 2026-09-25: a via pays for every hole too close to it, as variants.**
+`via_near_hole_penalty` charges a layer change once per hole whose centre is
+closer than the two radii plus `min_hole_to_hole`: another route's via, and the
+holes on the board before routing - pins and slots from `PadDef::hole()`, and
+the designer's vias - measured to the path of the bit, so a slot keeps a via
+off its whole length. The price was swept with every variant carrying it at
+once. Winner on each board, shorts / total checks:
+
+| price | multi_ic | qfp_fanout | shift_driver | stm32_breakout | plane_board |
+|---|---|---|---|---|---|
+| 0 | 40 / 526 | 34 / 166 | 0 / 14 | 25 / 142 | 0 / 16 |
+| 2 | 34 / 489 | 44 / 241 | 0 / 9 | 23 / 131 | 0 / 18 |
+| 5 | 34 / 489 | 35 / 161 | 0 / 10 | 13 / 105 | 0 / 16 |
+| 10 | 42 / 526 | 46 / 224 | 0 / 9 | 23 / 145 | 0 / 16 |
+| 20 | 40 / 526 | 45 / 206 | 0 / 11 | 19 / 127 | 0 / 16 |
+| 50 | 42 / 487 | 58 / 267 | 0 / 11 | 22 / 168 | 0 / 16 |
+| 500 | 42 / 487 | 43 / 139 | 0 / 11 | 22 / 119 | 0 / 16 |
+
+`led_blink` is 1 check at every price. No price wins every board, and the
+counts do not fall as the price rises, so it is a variant and not a default:
+`Clearance Priced` at 5 wins `multi_ic`, `Priced Via Rings` at 2 wins
+`shift_driver`, `High-Density` at 5 wins `stm32_breakout`. `qfp_fanout` has no
+variant - at price 500 its composite fell from 176228.0 to 146721.7, but with
+43 shorts against 34, and the ranking reads shorts first. On the fast path,
+which does not rank, price 5 took `multi_ic` from 472 checks to 523.
+
+With the three variants in the list, hole-to-hole on the winners goes
+`multi_ic` 4 -> 7, `shift_driver` 0 -> 0, `stm32_breakout` 8 -> 5; the board
+comes out with fewer shorts on the two that had them and a lower composite on
+all three. `multi_ic` wins with three more hole-to-hole rows and six fewer
+shorts.
+
 ### The knob for that already exists, and it is the wrong lever
 
 `CongestionMap` tracks which cells each via's ring covers and charges

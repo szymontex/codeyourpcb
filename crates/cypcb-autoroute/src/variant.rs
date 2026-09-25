@@ -59,6 +59,9 @@ pub struct VariantConfig {
     /// What a via pays for each cell of another net's trace its copper
     /// touches. Zero everywhere but the variants that exist for it.
     pub via_touching_trace_penalty: f64,
+    /// What a via pays per hole closer to it than the hole-to-hole rule
+    /// allows. Zero everywhere but the variants that exist for it.
+    pub via_near_hole_penalty: f64,
 }
 
 impl VariantConfig {
@@ -79,6 +82,7 @@ impl VariantConfig {
             heuristic_weight: 1.0,
             clearance_barrier: 0.0,
             via_touching_trace_penalty: 0.0,
+            via_near_hole_penalty: 0.0,
         }
     }
 }
@@ -120,7 +124,7 @@ pub struct VariantResult {
 /// 3. ImprovedAStar default
 /// 4. PathFinder high-density (density=1.5)
 pub fn default_variant_configs() -> Vec<VariantConfig> {
-    vec![
+    let mut configs = vec![
         VariantConfig::tuned(
             "PathFinder Default",
             StrategyKind::PathFinder,
@@ -192,6 +196,7 @@ pub fn default_variant_configs() -> Vec<VariantConfig> {
             heuristic_weight: 1.0,
             clearance_barrier: 0.0,
             via_touching_trace_penalty: 0.0,
+            via_near_hole_penalty: 0.0,
         },
         VariantConfig {
             name: "PathFinder Guarded Pads".to_string(),
@@ -208,6 +213,7 @@ pub fn default_variant_configs() -> Vec<VariantConfig> {
             heuristic_weight: 1.0,
             clearance_barrier: 0.0,
             via_touching_trace_penalty: 0.0,
+            via_near_hole_penalty: 0.0,
         },
         // Reserving a trace's copper is the default since it was measured
         // better on every fixture and both columns. This is the control: the
@@ -249,6 +255,7 @@ pub fn default_variant_configs() -> Vec<VariantConfig> {
             heuristic_weight: 1.0,
             clearance_barrier: 0.0,
             via_touching_trace_penalty: 0.0,
+            via_near_hole_penalty: 0.0,
         },
         VariantConfig {
             name: "PathFinder Bare Centre Line".to_string(),
@@ -262,6 +269,7 @@ pub fn default_variant_configs() -> Vec<VariantConfig> {
             heuristic_weight: 1.0,
             clearance_barrier: 0.0,
             via_touching_trace_penalty: 0.0,
+            via_near_hole_penalty: 0.0,
         },
         // The opening around a pad, one cell narrower than the default. Every
         // cell of margin switches off obstacles that far from the pad, and on a
@@ -300,6 +308,7 @@ pub fn default_variant_configs() -> Vec<VariantConfig> {
             heuristic_weight: 1.25,
             clearance_barrier: 0.0,
             via_touching_trace_penalty: 0.0,
+            via_near_hole_penalty: 0.0,
         },
         // The two knobs that pay, together.
         //
@@ -328,6 +337,7 @@ pub fn default_variant_configs() -> Vec<VariantConfig> {
             heuristic_weight: 1.25,
             clearance_barrier: 0.0,
             via_touching_trace_penalty: 0.0,
+            via_near_hole_penalty: 0.0,
         },
         // Found 2026-08-21 by `is_the_best_variant_a_local_optimum`, which
         // moves one knob at a time around the point each board picks. Five of
@@ -352,6 +362,7 @@ pub fn default_variant_configs() -> Vec<VariantConfig> {
             heuristic_weight: 1.25,
             clearance_barrier: 0.0,
             via_touching_trace_penalty: 0.0,
+            via_near_hole_penalty: 0.0,
         },
         VariantConfig {
             name: "PathFinder Eager Light".to_string(),
@@ -365,6 +376,7 @@ pub fn default_variant_configs() -> Vec<VariantConfig> {
             heuristic_weight: 1.1,
             clearance_barrier: 0.0,
             via_touching_trace_penalty: 0.0,
+            via_near_hole_penalty: 0.0,
         },
         VariantConfig {
             name: "PathFinder Tight Pads".to_string(),
@@ -378,6 +390,7 @@ pub fn default_variant_configs() -> Vec<VariantConfig> {
             heuristic_weight: 1.0,
             clearance_barrier: 0.0,
             via_touching_trace_penalty: 0.0,
+            via_near_hole_penalty: 0.0,
         },
         // The clearance barrier, priced. Step 4 of `docs/router-plan.md`
         // measured k = 10 as the largest single improvement this vector has
@@ -403,8 +416,42 @@ pub fn default_variant_configs() -> Vec<VariantConfig> {
             heuristic_weight: 1.0,
             clearance_barrier: 10.0,
             via_touching_trace_penalty: 0.0,
+            via_near_hole_penalty: 0.0,
         },
-    ]
+    ];
+
+    // A via kept its distance from every hole: another route's via, a pin, a
+    // slot, a via the designer placed. Priced per hole closer than the
+    // hole-to-hole rule allows, and measured on all six fixtures with the
+    // price on every variant at once, 0 / 2 / 5 / 10 / 20 / 50 / 500. No price
+    // won every board and the boards did not agree on one, so each variant
+    // below carries the price its board ranked first, on the base it won with.
+    // Winner before and after, as the ranking reads it - shorts, then
+    // composite:
+    //
+    //   multi_ic      Clearance Priced   5    40 / 529284.4  ->  34 / 491270.5
+    //   shift_driver  Priced Via Rings   2     0 /  14118.2  ->   0 /   9122.2
+    //   stm32         High-Density       5    25 / 147172.7  ->  13 / 108670.2
+    //
+    // qfp_fanout has none: at every price its best board kept 35 shorts or
+    // more against 34 without one. Never the default: price 5 on the fast path
+    // took multi_ic from 472 violations to 523. The sweep is in
+    // `docs/routing.md`.
+    for (base, price) in [
+        ("PathFinder Clearance Priced", 5.0),
+        ("PathFinder Priced Via Rings", 2.0),
+        ("PathFinder High-Density", 5.0),
+    ] {
+        let mut variant = configs
+            .iter()
+            .find(|config| config.name == base)
+            .expect("a near-hole variant is built on a variant in this list")
+            .clone();
+        variant.name = format!("{base} Near Holes");
+        variant.via_near_hole_penalty = price;
+        configs.push(variant);
+    }
+    configs
 }
 
 /// The default opening, so a variant that does not care about it says so once.
@@ -514,6 +561,7 @@ pub fn generate_variants(
             heuristic_weight: config.heuristic_weight,
             clearance_barrier: config.clearance_barrier,
             via_touching_trace_penalty: config.via_touching_trace_penalty,
+            via_near_hole_penalty: config.via_near_hole_penalty,
             // Variant exploration compares many routings; paying for repair on
             // each one triples the wall clock to rank candidates that are about
             // to be thrown away. The winner can be repaired afterwards.
@@ -692,6 +740,22 @@ mod tests {
                 .any(|c| c.pad_zone_margin_cells
                     < crate::orchestrator::DEFAULT_PAD_ZONE_MARGIN_CELLS),
             "a variant has to narrow the pad opening: stm32_breakout picks it at 216/86"
+        );
+        assert!(
+            configs
+                .iter()
+                .any(|c| c.via_near_hole_penalty > 0.0 && c.name.ends_with("Near Holes")),
+            "no variant keeps a via off the holes"
+        );
+    }
+
+    #[test]
+    fn the_near_hole_price_is_a_variant_and_never_the_default() {
+        assert_eq!(AutorouteConfig::default().via_near_hole_penalty, 0.0);
+        assert_eq!(
+            VariantConfig::tuned("x", StrategyKind::PathFinder, AutorouteParams::default())
+                .via_near_hole_penalty,
+            0.0
         );
     }
 

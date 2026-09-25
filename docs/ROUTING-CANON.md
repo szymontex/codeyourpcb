@@ -1439,7 +1439,7 @@ sentence. A board whose pads collide on the grid is a board
 fault; the grid is only how it is detected.
 
 **1. What the resolution is a function of.** One cell is one legal track
-position. `resolve_grid_resolution` (`crates/cypcb-autoroute/src/lib.rs:383`)
+position. `resolve_grid_resolution` (`crates/cypcb-autoroute/src/lib.rs:391`)
 takes the fab table for net 0 and returns `min_trace_width + min_clearance`,
 floored at 10 um. The comment records the measurement that settled it: a
 half-clearance grid let two nets sit in adjacent cells whose copper overlapped -
@@ -1467,7 +1467,7 @@ last clause is the rule.
 
 **2. What the grid costs in accuracy, and it is worse than half a cell.** A pad
 centre is snapped by integer division, not by rounding: `nm_to_grid_x`
-(`crates/cypcb-autoroute/src/grid.rs:729`) computes `(nm - origin) / resolution`,
+(`crates/cypcb-autoroute/src/grid.rs:745`) computes `(nm - origin) / resolution`,
 which truncates toward zero. The node therefore sits at or below the pad centre
 on each axis, and the error approaches a whole cell per axis rather than half of
 one. Worst case radially is `resolution * sqrt(2)`.
@@ -2958,7 +2958,7 @@ sed -n '620,630p' crates/cypcb-autoroute/src/smoother.rs
 sed -n '565,598p' crates/cypcb-autoroute/src/scoring.rs
 
 # R-11: the tiered ordering that already exists for variants
-sed -n '496,512p' crates/cypcb-autoroute/src/variant.rs
+sed -n '543,559p' crates/cypcb-autoroute/src/variant.rs
 
 # R-12: net order - two keys, stable sort, no map iteration
 sed -n '192,216p' crates/cypcb-autoroute/src/orchestrator.rs
@@ -2967,7 +2967,7 @@ sed -n '192,216p' crates/cypcb-autoroute/src/orchestrator.rs
 grep -n "nets_needing_reroute" crates/cypcb-autoroute/src/pathfinder_v2.rs
 
 # R-12: the congestion term, and where it enters the total
-sed -n '214,228p' crates/cypcb-autoroute/src/congestion.rs
+sed -n '291,305p' crates/cypcb-autoroute/src/congestion.rs
 
 # R-12: what a net's routing is stored as
 grep -n "pub routed_paths" crates/cypcb-autoroute/src/pathfinder_v2.rs
@@ -3005,10 +3005,10 @@ awk '/pub enum ViolationKind \{/,/^}/' crates/cypcb-drc/src/violation.rs | grep 
 sed -n '56,63p' crates/cypcb-rules/src/presets/mod.rs
 
 # R-17: an explicit resolution returns before anything else touches it
-sed -n '398,412p' crates/cypcb-autoroute/src/lib.rs
+sed -n '406,420p' crates/cypcb-autoroute/src/lib.rs
 
 # R-17: the snap truncates, which is why the error is a cell and not half of one
-sed -n '468,478p' crates/cypcb-autoroute/src/grid.rs
+sed -n '474,484p' crates/cypcb-autoroute/src/grid.rs
 
 # R-18: the two constructors that used to discard their measurement - expect Some on both
 grep -n -A12 "pub fn hole_to_hole\|pub fn solder_mask_bridge" crates/cypcb-drc/src/violation.rs | grep "actual:"

@@ -185,6 +185,13 @@ pub struct AutorouteConfig {
     /// Zero reproduces the router before stacking was priced.
     pub via_stack_penalty: f64,
 
+    /// What a via pays per hole closer to it than `min_hole_to_hole` allows:
+    /// another route's via, a pin, a slot or a via the designer placed.
+    ///
+    /// Zero reproduces the router before it was priced. Never a default: it
+    /// is a variant's price, and the ranking picks it where it wins.
+    pub via_near_hole_penalty: f64,
+
     /// What one cell of another net's pad inside a via's keepout costs.
     ///
     /// Separate from `via_foreign_copper_penalty` because the two are not the
@@ -359,6 +366,7 @@ impl Default for AutorouteConfig {
             params: AutorouteParams::default(),
             via_ring_penalty: 0.0,
             via_stack_penalty: 0.0,
+            via_near_hole_penalty: 0.0,
             via_foreign_pad_penalty: 0.0,
             clearance_barrier: 0.0,
             pad_layer_change_penalty: crate::pathfinder_v2::PAD_LAYER_CHANGE_PENALTY,

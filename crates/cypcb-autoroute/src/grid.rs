@@ -136,6 +136,11 @@ pub struct RoutingGrid {
     /// in the copper is here: a route that stops on one ends on the wire, not
     /// beside it.
     hand_copper: HashMap<(u32, HandCell), Vec<HandCell>>,
+
+    /// The holes on the board before routing - pins, slots and the designer's
+    /// vias - as the path of the bit's centre and its radius, in nm. Filled
+    /// only for a search that prices a via's distance from them.
+    fixed_holes: Vec<([i64; 2], [i64; 2], i64)>,
 }
 
 /// A cell of hand copper as the search names it: x, y and layer.
@@ -246,6 +251,7 @@ impl RoutingGrid {
             pad_net,
             fixed_net,
             hand_copper: HashMap::new(),
+            fixed_holes: Vec::new(),
         };
 
         // Bloat obstacles by the clearance *plus half a trace*, because the
@@ -711,6 +717,16 @@ impl RoutingGrid {
         if !cells.is_empty() {
             self.hand_copper.insert((net, pad), cells);
         }
+    }
+
+    /// Record the holes on the board before routing.
+    pub fn set_fixed_holes(&mut self, holes: Vec<([i64; 2], [i64; 2], i64)>) {
+        self.fixed_holes = holes;
+    }
+
+    /// The holes on the board before routing, if anybody recorded them.
+    pub fn fixed_holes(&self) -> &[([i64; 2], [i64; 2], i64)] {
+        &self.fixed_holes
     }
 
     /// The hand copper the pad at `pad` sits on, sorted, or nothing.
@@ -1301,6 +1317,7 @@ pub fn make_test_grid(width: u32, height: u32, resolution_nm: i64, layers: u8) -
         pad_net: vec![u32::MAX; total],
         fixed_net: vec![u32::MAX; total],
         hand_copper: HashMap::new(),
+        fixed_holes: Vec::new(),
     }
 }
 

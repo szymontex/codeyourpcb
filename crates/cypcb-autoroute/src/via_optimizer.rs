@@ -51,6 +51,13 @@ struct PadCopper {
 }
 
 impl BoardObstacles {
+    /// Every hole on the board: pins and slots from
+    /// [`PadDef::hole`](cypcb_world::footprint::PadDef::hole), and the vias
+    /// the designer placed.
+    pub fn holes(&self) -> impl Iterator<Item = ([i64; 2], [i64; 2], i64)> + '_ {
+        self.pads.iter().filter_map(|pad| pad.hole)
+    }
+
     /// Read the pads, placed vias, drawn traces and keepouts off the board.
     pub fn from_board(world: &mut BoardWorld, library: &FootprintLibrary) -> Self {
         let components: Vec<(Point, f64, String, Option<NetConnections>)> = {

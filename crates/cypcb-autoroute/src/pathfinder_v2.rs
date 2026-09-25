@@ -135,6 +135,12 @@ impl PathFinderStrategy {
             }
         };
 
+        // The holes already drilled, for a search that keeps a new via its
+        // distance from them. Read only when it will be charged.
+        if config.via_near_hole_penalty > 0.0 {
+            grid.set_fixed_holes(BoardObstacles::from_board(world, library).holes().collect());
+        }
+
         // Step 4 of `docs/router-plan.md`. Built only when something will read
         // it, because the transform costs about twice what the grid does and a
         // barrier of zero would pay that for nothing.
@@ -620,6 +626,62 @@ fn via_reaches_layer(via: &cypcb_world::components::trace::Via, layer: cypcb_wor
     target >= low && target <= high
 }
 
+/// Price a via by the holes closer to it than the hole-to-hole rule allows.
+///
+/// A route's hole is spread over its neighbours as the map records it. A hole
+/// on the board before routing is spread here, once, over every cell whose
+/// centre is too close to it on every layer: a pin or a slot is drilled
+/// through the board. The distance is measured to the path of the bit, so a
+/// slot keeps a via off its whole length.
+fn mark_near_holes(
+    congestion_map: &mut CongestionMap,
+    grid: &RoutingGrid,
+    rules: &dyn RoutingRuleSet,
+    penalty: f64,
+) {
+    let constraints = rules.constraints_for_net(0);
+    let via_radius = constraints.min_via_drill.raw() / 2;
+    let spacing = constraints.min_hole_to_hole.raw();
+    congestion_map.set_near_hole_penalty(penalty, 2 * via_radius + spacing, grid.resolution());
+
+    let mut cells = Vec::new();
+    for &(start, end, radius) in grid.fixed_holes() {
+        let reach = via_radius + radius + spacing;
+        let low = grid.nm_to_grid(cypcb_core::Point::new(
+            cypcb_core::Nm::new(start[0].min(end[0]) - reach),
+            cypcb_core::Nm::new(start[1].min(end[1]) - reach),
+        ));
+        let high = grid.nm_to_grid(cypcb_core::Point::new(
+            cypcb_core::Nm::new(start[0].max(end[0]) + reach),
+            cypcb_core::Nm::new(start[1].max(end[1]) + reach),
+        ));
+        for gy in low.1..=high.1 {
+            for gx in low.0..=high.0 {
+                let at = grid.grid_to_nm(gx, gy);
+                if distance_to_path([at.x.raw(), at.y.raw()], start, end) < reach as f64 {
+                    for layer in 0..grid.layer_count() {
+                        cells.push((gx, gy, layer));
+                    }
+                }
+            }
+        }
+    }
+    congestion_map.mark_near_fixed_hole(&cells);
+}
+
+/// How far a point is from the segment `start`-`end`, in nm.
+fn distance_to_path(at: [i64; 2], start: [i64; 2], end: [i64; 2]) -> f64 {
+    let (px, py) = ((at[0] - start[0]) as f64, (at[1] - start[1]) as f64);
+    let (dx, dy) = ((end[0] - start[0]) as f64, (end[1] - start[1]) as f64);
+    let length = dx * dx + dy * dy;
+    let t = if length > 0.0 {
+        ((px * dx + py * dy) / length).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    ((px - t * dx).powi(2) + (py - t * dy).powi(2)).sqrt()
+}
+
 /// Run the PathFinder negotiated congestion iteration loop.
 ///
 /// This is the core algorithm:
@@ -652,6 +714,14 @@ pub fn pathfinder_loop(
     let mut overuse_per_iteration: Vec<usize> = Vec::new();
     congestion_map.set_ring_penalty(config.via_ring_penalty);
     congestion_map.set_stack_penalty(config.via_stack_penalty);
+    if config.via_near_hole_penalty > 0.0 {
+        mark_near_holes(
+            &mut congestion_map,
+            grid,
+            rules,
+            config.via_near_hole_penalty,
+        );
+    }
 
     // Per-net cell index: net_id -> cells occupied by this net.
     // Enables O(path_length) rip-up instead of scanning the entire grid.
@@ -1535,6 +1605,13 @@ fn find_path_congestion_augmented(
                 let stacking = congestion_map.stacking_cost(nx as u32, ny as u32, nl)
                     + congestion_map.stacking_cost(nx as u32, ny as u32, target_layer);
 
+                // A hole too close to another, anywhere the two spans share.
+                // Zero unless a variant prices it.
+                let near_holes = grid
+                    .layers_in(spanned)
+                    .map(|layer| congestion_map.near_hole_cost(nx as u32, ny as u32, layer))
+                    .fold(0.0, f64::max);
+
                 // A layer change on a pad's copper or inside its clearance is
                 // priced, not forbidden. Forbidding it was measured - it moved
                 // multi_ic from 140 violations to 375 by pushing the routing
@@ -1563,7 +1640,9 @@ fn find_path_congestion_augmented(
                 };
                 neighbors.push((
                     target,
-                    float_to_int_cost(base + congestion + crowding + pad_crossing + stacking),
+                    float_to_int_cost(
+                        base + congestion + crowding + pad_crossing + stacking + near_holes,
+                    ),
                 ));
             }
         }
@@ -1719,6 +1798,66 @@ fn float_to_int_cost(f: f64) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_hole_on_the_board_prices_every_cell_too_close_to_its_path() {
+        // The default rules: a 0.3 mm via drill and 0.5 mm between holes. A
+        // slot 0.7 mm wide then keeps a via's centre 1.0 mm off its path.
+        let mut grid = make_test_grid(60, 20, 100_000, 2);
+        grid.set_fixed_holes(vec![(
+            [1_050_000, 1_050_000],
+            [2_050_000, 1_050_000],
+            350_000,
+        )]);
+        let mut map = CongestionMap::new(60, 20, 2);
+        mark_near_holes(&mut map, &grid, &TestRules::new(), 5.0);
+        for layer in 0..2 {
+            assert_eq!(map.near_hole_cost(15, 10, layer), 5.0, "on the path");
+            assert_eq!(map.near_hole_cost(15, 19, layer), 5.0, "0.9 mm beside it");
+            assert_eq!(
+                map.near_hole_cost(29, 10, layer),
+                5.0,
+                "0.9 mm past its end"
+            );
+            assert_eq!(
+                map.near_hole_cost(0, 10, layer),
+                0.0,
+                "1.0 mm before its start"
+            );
+        }
+    }
+
+    #[test]
+    fn a_route_via_keeps_another_two_drills_and_the_rule_away() {
+        // 0.15 + 0.15 + 0.5 mm between the centres of two route vias.
+        let grid = make_test_grid(60, 20, 100_000, 2);
+        let mut map = CongestionMap::new(60, 20, 2);
+        mark_near_holes(&mut map, &grid, &TestRules::new(), 5.0);
+        map.mark_holes(&[(50, 10, 0)]);
+        assert_eq!(map.near_hole_cost(57, 10, 0), 5.0, "0.7 mm away");
+        assert_eq!(map.near_hole_cost(58, 10, 0), 0.0, "0.8 mm away");
+    }
+
+    #[test]
+    fn a_slot_keeps_a_via_off_its_whole_length() {
+        let (start, end) = ([0, 0], [10, 0]);
+        assert_eq!(
+            distance_to_path([5, 3], start, end),
+            3.0,
+            "beside the middle"
+        );
+        assert_eq!(distance_to_path([13, 4], start, end), 5.0, "past the end");
+        assert_eq!(
+            distance_to_path([-3, -4], start, end),
+            5.0,
+            "before the start"
+        );
+        assert_eq!(
+            distance_to_path([3, 4], [0, 0], [0, 0]),
+            5.0,
+            "a round hole"
+        );
+    }
     use crate::grid::make_test_grid;
     use cypcb_core::Nm;
     use cypcb_rules::{DesignConstraints, RoutingRuleSet};

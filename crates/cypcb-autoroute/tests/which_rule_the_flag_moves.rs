@@ -219,9 +219,10 @@ fn the_holes_come_off_the_boards_that_had_the_most() {
     // `optimize_vias` began merging two vias of one net on one spot. The fall
     // was mostly those stacked pairs, which the flag avoided and the merge now
     // removes with the flag in either position: 30 -> 24 once it did. What
-    // the flag still owes is not to add a hole.
+    // is left is still a fall, and a flag that stopped moving holes would
+    // leave the two counts equal, so equal fails.
     assert!(
-        after_total <= before_total,
+        after_total < before_total,
         "HoleToHole {before_total} -> {after_total}"
     );
 }

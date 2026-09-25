@@ -33,7 +33,9 @@ struct Cell {
     /// How many via rings cover it.
     ring: u16,
     /// How many via holes are in it.
-    holes: u32,
+    holes: u16,
+    /// How many holes are closer to its centre than a via here may be.
+    near: u16,
 }
 
 pub struct CongestionMap {
@@ -81,6 +83,14 @@ pub struct CongestionMap {
 
     /// What it costs to change layer where a hole already is.
     stack_penalty: f64,
+
+    /// What a via pays per hole closer to it than the hole-to-hole rule
+    /// allows. Zero leaves `near` unmarked and uncharged.
+    near_penalty: f64,
+
+    /// The cells round a route's hole that a second hole would be too close
+    /// to, as offsets from its own cell.
+    near_reach: Vec<(i32, i32)>,
 }
 
 impl CongestionMap {
@@ -100,6 +110,8 @@ impl CongestionMap {
             capacity: 1,
             ring_penalty: 0.0,
             stack_penalty: 0.0,
+            near_penalty: 0.0,
+            near_reach: Vec::new(),
         }
     }
 
@@ -113,6 +125,28 @@ impl CongestionMap {
         self.stack_penalty = penalty;
     }
 
+    /// Set what a via pays per hole within `reach_nm` of its centre.
+    ///
+    /// `reach_nm` is the centre distance two route vias need: both radii plus
+    /// the hole-to-hole rule. A cell counts when its centre is closer than
+    /// that, the same strict comparison the checker makes.
+    pub fn set_near_hole_penalty(&mut self, penalty: f64, reach_nm: i64, resolution_nm: i64) {
+        self.near_penalty = penalty;
+        self.near_reach = if penalty > 0.0 && resolution_nm > 0 {
+            let cells = (reach_nm / resolution_nm) as i32 + 1;
+            let reach = reach_nm as i128 * reach_nm as i128;
+            let step = resolution_nm as i128;
+            (-cells..=cells)
+                .flat_map(|dy| (-cells..=cells).map(move |dx| (dx, dy)))
+                .filter(|&(dx, dy)| {
+                    (dx as i128 * dx as i128 + dy as i128 * dy as i128) * step * step < reach
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
+    }
+
     /// Record the cells a net's vias pass through, one per layer spanned.
     pub fn mark_holes(&mut self, cells: &[(u32, u32, u8)]) {
         for &(x, y, layer) in cells {
@@ -120,6 +154,7 @@ impl CongestionMap {
                 self.cells[idx].holes = self.cells[idx].holes.saturating_add(1);
             }
         }
+        self.spread_near(cells, true);
     }
 
     /// Forget a net's holes, before ripping it up.
@@ -128,6 +163,48 @@ impl CongestionMap {
             if let Some(idx) = self.cell_index(x, y, layer) {
                 self.cells[idx].holes = self.cells[idx].holes.saturating_sub(1);
             }
+        }
+        self.spread_near(cells, false);
+    }
+
+    /// Count each of these holes on every cell within `near_reach` of it.
+    fn spread_near(&mut self, cells: &[(u32, u32, u8)], add: bool) {
+        if self.near_reach.is_empty() {
+            return;
+        }
+        for &(x, y, layer) in cells {
+            for &(dx, dy) in &self.near_reach {
+                let (nx, ny) = (x as i64 + dx as i64, y as i64 + dy as i64);
+                if nx < 0 || ny < 0 {
+                    continue;
+                }
+                if let Some(idx) = self.cell_index(nx as u32, ny as u32, layer) {
+                    let near = &mut self.cells[idx].near;
+                    *near = if add {
+                        near.saturating_add(1)
+                    } else {
+                        near.saturating_sub(1)
+                    };
+                }
+            }
+        }
+    }
+
+    /// Record cells too close to a hole that is on the board before routing:
+    /// a pin, a slot or a via the designer placed. Never forgotten.
+    pub fn mark_near_fixed_hole(&mut self, cells: &[(u32, u32, u8)]) {
+        for &(x, y, layer) in cells {
+            if let Some(idx) = self.cell_index(x, y, layer) {
+                self.cells[idx].near = self.cells[idx].near.saturating_add(1);
+            }
+        }
+    }
+
+    /// What a via at this cell pays for the holes too close to it.
+    pub fn near_hole_cost(&self, x: u32, y: u32, layer: u8) -> f64 {
+        match self.cell_index(x, y, layer) {
+            Some(idx) => self.near_penalty * self.cells[idx].near as f64,
+            None => 0.0,
         }
     }
 
@@ -423,5 +500,65 @@ mod tests {
         // (2,2) has history 1.0, no overuse: cost = (1+1)*(1+0) - 1 = 1.0
         let cost = map.congestion_cost(2, 2, 0);
         assert!((cost - 1.0).abs() < 1e-9, "Expected 1.0, got {cost}");
+    }
+
+    /// A map pricing near holes at 10 on a 0.1 mm grid, reaching `reach_nm`.
+    fn near_map(reach_nm: i64) -> CongestionMap {
+        let mut map = CongestionMap::new(20, 20, 2);
+        map.set_near_hole_penalty(10.0, reach_nm, 100_000);
+        map
+    }
+
+    #[test]
+    fn a_hole_prices_the_cells_too_close_to_it_on_its_own_layer() {
+        let mut map = near_map(250_000);
+        map.mark_holes(&[(10, 10, 0)]);
+        assert_eq!(map.near_hole_cost(10, 10, 0), 10.0);
+        assert_eq!(map.near_hole_cost(12, 10, 0), 10.0, "0.2 mm away");
+        assert_eq!(map.near_hole_cost(12, 11, 0), 10.0, "0.224 mm away");
+        assert_eq!(map.near_hole_cost(12, 12, 0), 0.0, "0.283 mm away");
+        assert_eq!(map.near_hole_cost(13, 10, 0), 0.0, "0.3 mm away");
+        assert_eq!(map.near_hole_cost(10, 10, 1), 0.0, "another layer");
+    }
+
+    #[test]
+    fn a_via_exactly_at_the_reach_is_far_enough() {
+        let mut map = near_map(200_000);
+        map.mark_holes(&[(10, 10, 0)]);
+        assert_eq!(map.near_hole_cost(12, 10, 0), 0.0);
+        assert_eq!(map.near_hole_cost(11, 11, 0), 10.0);
+    }
+
+    #[test]
+    fn two_holes_near_one_cell_cost_twice() {
+        let mut map = near_map(250_000);
+        map.mark_holes(&[(9, 10, 0), (11, 10, 0)]);
+        assert_eq!(map.near_hole_cost(10, 10, 0), 20.0);
+    }
+
+    #[test]
+    fn a_ripped_up_hole_costs_nothing() {
+        let mut map = near_map(250_000);
+        map.mark_holes(&[(10, 10, 0)]);
+        map.unmark_holes(&[(10, 10, 0)]);
+        assert_eq!(map.near_hole_cost(10, 10, 0), 0.0);
+        assert_eq!(map.near_hole_cost(11, 10, 0), 0.0);
+    }
+
+    #[test]
+    fn a_hole_on_the_board_before_routing_stays_priced() {
+        let mut map = near_map(250_000);
+        map.mark_near_fixed_hole(&[(5, 5, 1)]);
+        map.mark_holes(&[(5, 5, 1)]);
+        map.unmark_holes(&[(5, 5, 1)]);
+        assert_eq!(map.near_hole_cost(5, 5, 1), 10.0);
+    }
+
+    #[test]
+    fn without_a_price_a_hole_marks_no_neighbour() {
+        let mut map = CongestionMap::new(20, 20, 2);
+        map.set_near_hole_penalty(0.0, 250_000, 100_000);
+        map.mark_holes(&[(10, 10, 0)]);
+        assert!(map.cells.iter().all(|cell| cell.near == 0));
     }
 }
