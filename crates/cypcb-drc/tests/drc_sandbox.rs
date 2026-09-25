@@ -950,11 +950,13 @@ mod solder_mask {
     #[test]
     fn parts_placed_on_top_of_each_other_bridge() {
         let mut world = world_with_board();
-        let net = world.intern_net("SIG");
+        let sig = world.intern_net("SIG");
+        let gnd = world.intern_net("GND");
         // 0402 pads are 0.6mm wide on a 1.0mm span; half a millimetre apart the
-        // facing openings overlap outright.
-        spawn_component(&mut world, "R1", (10.0, 15.0), net, net);
-        spawn_component(&mut world, "R2", (10.5, 15.0), net, net);
+        // facing openings overlap outright, and R1.2 on GND overlaps R2.1 on
+        // SIG.
+        spawn_component(&mut world, "R1", (10.0, 15.0), sig, gnd);
+        spawn_component(&mut world, "R2", (10.5, 15.0), sig, gnd);
         rebuild_spatial(&mut world, vec![]);
         assert!(
             count_violations(
@@ -962,6 +964,29 @@ mod solder_mask {
                 &DesignRules::jlcpcb_2layer(),
                 ViolationKind::SolderMaskBridge
             ) > 0
+        );
+    }
+
+    /// The same two parts with every pad on one net. Solder across the mask
+    /// between them joins what the net joins already, and KiCad reports a mask
+    /// bridge only between items with different nets, so the mask rule is
+    /// silent. The parts still sit on top of each other, and that is the
+    /// courtyard rule's to say.
+    #[test]
+    fn parts_on_one_net_placed_on_top_of_each_other_are_a_courtyard_fault() {
+        let mut world = world_with_board();
+        let sig = world.intern_net("SIG");
+        spawn_component(&mut world, "R1", (10.0, 15.0), sig, sig);
+        spawn_component(&mut world, "R2", (10.5, 15.0), sig, sig);
+        world.rebuild_spatial_index_from_library(&cypcb_world::footprint::FootprintLibrary::new());
+        let rules = DesignRules::jlcpcb_2layer();
+        assert_eq!(
+            count_violations(&mut world, &rules, ViolationKind::SolderMaskBridge),
+            0
+        );
+        assert_eq!(
+            count_violations(&mut world, &rules, ViolationKind::CourtyardClearance),
+            1
         );
     }
 }
