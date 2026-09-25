@@ -112,4 +112,28 @@ test.describe('the layer panel', () => {
     await expect(views).toBeVisible();
     await expect(views.locator('option').first()).toHaveText('Everything');
   });
+
+  test('the picker names the view a board opens on', async ({ page }) => {
+    // It was empty: only a choice made in it counted as being on a preset.
+    const views = page.getByRole('combobox', { name: 'Saved view' });
+    await expect(views).toHaveValue('all');
+    await expect(views.locator('option:checked')).toHaveText('Everything');
+  });
+
+  /**
+   * A button's text is its name before its title is, so each eye in the panel
+   * was announced as the symbol it draws. Every button in the panel has to be
+   * named in words, and the eye's name has to follow what a click would do.
+   */
+  test('every button in the panel is named in words', async ({ page }) => {
+    const snapshot = await page.locator('#layers-panel').ariaSnapshot();
+    const names = [...snapshot.matchAll(/button "([^"]*)"/g)].map((found) => found[1]);
+    expect(names.length).toBeGreaterThan(8);
+    expect(names.filter((name) => !/[A-Za-z]/.test(name))).toEqual([]);
+
+    await page.getByRole('button', { name: 'Hide Inner1' }).click();
+    await expect(page.getByRole('button', { name: 'Show Inner1' })).toBeVisible();
+    await page.getByRole('button', { name: 'Hide Silkscreen' }).click();
+    await expect(page.getByRole('button', { name: 'Show Silkscreen' })).toBeVisible();
+  });
 });

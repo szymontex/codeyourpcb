@@ -34,6 +34,7 @@ import {
   LAYER_PRESETS,
   applyLayerPreset,
   nextLayerPreset,
+  presetShown,
   type LayerPreset,
   innerLayerColor,
   LAYER_FOCUS_LABEL,
@@ -692,6 +693,9 @@ async function init(): Promise<void> {
       if (eye) {
         eye.textContent = visible ? '\u25c9' : '\u25cb';
         eye.title = visible ? `Hide ${name}` : `Show ${name}`;
+        // A button's text is its name before its title is, so a screen
+        // reader said the symbol and nothing else.
+        eye.setAttribute('aria-label', eye.title);
       }
 
       const weight = row.querySelector('.lp-weight') as HTMLInputElement | null;
@@ -756,8 +760,10 @@ async function init(): Promise<void> {
     }
     // A hand-made change to one layer is no longer any saved view, and saying
     // so beats a dropdown that claims you are looking at the front when you
-    // have just turned the back on.
-    select.value = activePreset ?? '';
+    // have just turned the back on. Nothing chosen yet is not the same as no
+    // view: a board opens on one, and the picker names it.
+    select.value =
+      activePreset ?? presetShown(layers, copperLayerNames(boardLayerCount()))?.id ?? '';
   }
 
   /** The colour the renderer paints a copper layer in, as a plain hex string. */
@@ -859,7 +865,11 @@ async function init(): Promise<void> {
       row.dataset.visible = String(visible);
       row.title = visible ? `Hide ${entry?.label ?? id}` : `Show ${entry?.label ?? id}`;
       const eye = row.querySelector('.lp-eye') as HTMLElement | null;
-      if (eye) eye.textContent = visible ? '\u25c9' : '\u25cb';
+      if (eye) {
+        eye.textContent = visible ? '\u25c9' : '\u25cb';
+        eye.title = row.title;
+        eye.setAttribute('aria-label', row.title);
+      }
     }
   }
 
