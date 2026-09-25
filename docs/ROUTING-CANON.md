@@ -628,7 +628,7 @@ asymmetric.
 new points then runs on a multiple of 45 degrees and the two joints it creates
 are 90 and 135 degrees. A symmetric cut - equal trim on both arms - puts the
 chord at 112.5 degrees, which is not a multiple of 45 and which this project's
-own `is_valid_angle` (`crates/cypcb-autoroute/src/smoother.rs:22`) rejects.
+own `is_valid_angle` (`crates/cypcb-autoroute/src/smoother.rs:23`) rejects.
 
 **The floor.** `a >= 1.5 * w`, where `w` is trace width. Two bands of width `w`
 whose centre lines meet at 45 degrees have already merged into one piece of
@@ -662,12 +662,12 @@ the verification block, and `stop_at_own_copper` moves it.
 **In this repo:** the junctions are counted and none are cut. `acute-angle`
 (`crates/cypcb-drc/src/rules/acute_angle.rs`) reports them; no pass in
 `crates/cypcb-autoroute` rewrites them. `chamfer_corners`
-(`crates/cypcb-autoroute/src/smoother.rs:523`) acts only on a 90 degree bend
+(`crates/cypcb-autoroute/src/smoother.rs:584`) acts only on a 90 degree bend
 and cannot reach this case: it classifies both segments and proceeds only when
 one is horizontal and the other vertical - `is_90_bend = (dir_a == Horizontal
 && dir_b == Vertical) || (dir_a == Vertical && dir_b == Horizontal)`, and `if
 !is_90_bend` pushes the segment through untouched
-(`crates/cypcb-autoroute/src/smoother.rs:559-569`).
+(`crates/cypcb-autoroute/src/smoother.rs:620-630`).
 
 #### What the sources bound, and what they do not
 
@@ -1731,6 +1731,22 @@ raise a count, because copper the checker could not see is still copper; each
 report it adds is classified true or false from the geometry, and the ratchet
 moves with an entry that says so. A change to the router is held to "no winner
 worse", counted on the model after its latest correction.
+
+**The smoother keeps a pad its net's copper touched.** It holds the ends of a
+run, and a path ends on a pad, but a path can also turn a corner on a pad it
+does not end on: on `multi_ic` the VCC_3V3 trunk turned on R8 pad 2, the
+chamfer took the corner 0.514mm off it, and the pin was open. A pad that the
+copper of its own net touched before smoothing and not after has the segments
+that touched it held whole, and the group is smoothed again; "touched" is
+`unrouted-pin`'s measure, through `NetPad`. Holding every segment on a pad
+instead gives up chamfers that keep the pad: of the 74 routings of the 37
+examples and fixtures, with `stop_at_own_copper` off and on, it changed the
+copper of 19, where this changes the 2 of `multi_ic`. `benchmark_all_fixtures_drc` and
+`smoothing_never_adds_a_net_piece_on_its_own_copper` read `unrouted-pin`
+beside `net-split` on either side of the smoother and fail on a pin more
+after it. Measured 2026-09-25 by the benchmark command above: `multi_ic`
+routes to 486 violations and 46 shorts, and the other five boards route to
+the same hash; the best variant of each of the six fixtures is the one it was.
 
 Source: JLCPCB capabilities page, read 2026-09-12 - minimum track width and
 spacing at 1 oz copper is 0.10 / 0.10 mm (4 / 4 mil) for one and two layers and
@@ -2935,7 +2951,7 @@ cargo test --release -p cypcb-autoroute \
 sed -n '58,63p' crates/cypcb-world/src/arc.rs
 
 # R-10: chamfer_corners refuses anything that is not a 90 degree bend
-sed -n '376,390p' crates/cypcb-autoroute/src/smoother.rs
+sed -n '620,630p' crates/cypcb-autoroute/src/smoother.rs
 
 # R-11: the composite prices violation rows at 1000 and never reads the
 # contact count

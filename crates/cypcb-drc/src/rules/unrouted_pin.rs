@@ -12,7 +12,7 @@ use cypcb_core::{Nm, Point};
 use cypcb_world::components::trace::{Trace, Via};
 use cypcb_world::components::zone::{Zone, ZoneKind};
 use cypcb_world::components::{FootprintRef, NetConnections, NetId, Position, RefDes, Rotation};
-use cypcb_world::footprint::PadDef;
+use cypcb_world::footprint::{FootprintLibrary, PadDef};
 use cypcb_world::BoardWorld;
 
 use crate::presets::DesignRules;
@@ -112,6 +112,56 @@ impl DrcRule for UnroutedPinRule {
 
         violations
     }
+}
+
+/// A pad on a net, with the copper and layers this rule reaches it by.
+///
+/// For code outside the checker that has to keep a pad reached: the smoother
+/// asks it whether a segment it is about to move touched a pad, and whether
+/// the segment it moved there still does.
+#[derive(Clone, Debug)]
+pub struct NetPad {
+    /// The net the pad is on.
+    pub net: NetId,
+    /// The copper layers the pad is on, as `PadDef::copper_mask()` gives them.
+    pub mask: u32,
+    copper: Copper,
+}
+
+impl NetPad {
+    /// Whether a trace of `half_width` from `from` to `to` touches the pad,
+    /// as `UnroutedPinRule` measures it. The layer is the caller's question.
+    pub fn touched_by(&self, from: Point, to: Point, half_width: i64) -> bool {
+        let trace = TraceData {
+            half_width,
+            segments: vec![([from.x.0, from.y.0], [to.x.0, to.y.0])],
+        };
+        trace_to_copper_distance(&trace, &self.copper).1 <= half_width
+    }
+}
+
+/// Every pad of `world` that is on a net, with its copper.
+pub fn net_pads(world: &mut BoardWorld, library: &FootprintLibrary) -> Vec<NetPad> {
+    let ecs = world.ecs_mut();
+    let mut query = ecs.query::<(&FootprintRef, &NetConnections, &Position, &Rotation)>();
+    let mut pads = Vec::new();
+    for (footprint_ref, nets, position, rotation) in query.iter(ecs) {
+        let Some(footprint) = library.get(footprint_ref.as_str()) else {
+            continue;
+        };
+        for pad in &footprint.pads {
+            let Some(net) = nets.pin_net(&pad.number) else {
+                continue;
+            };
+            let mask = pad.copper_mask();
+            pads.push(NetPad {
+                net,
+                mask: if mask == 0 { u32::MAX } else { mask },
+                copper: pad_copper(pad, position.0, rotation.to_degrees()),
+            });
+        }
+    }
+    pads
 }
 
 /// Where a pad's centre sits on the board.

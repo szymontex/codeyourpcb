@@ -127,7 +127,7 @@ pub use solid_pour_in_bend::SolidPourInBendRule;
 pub use stackup::StackupRule;
 pub use trace_current::TraceCurrentRule;
 pub use trace_width::MinTraceWidthRule;
-pub use unrouted_pin::UnroutedPinRule;
+pub use unrouted_pin::{net_pads, NetPad, UnroutedPinRule};
 pub use via_diameter::ViaDiameterRule;
 pub use via_drill::ViaDrillRule;
 pub use via_span::ViaSpanRule;

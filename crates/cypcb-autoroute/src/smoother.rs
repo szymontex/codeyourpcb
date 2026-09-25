@@ -11,6 +11,7 @@
 
 use cypcb_core::{Nm, Point};
 use cypcb_drc::rules::clearance::segment_distance;
+use cypcb_drc::rules::NetPad;
 use cypcb_router::types::RouteSegment;
 use cypcb_world::{Layer, NetId};
 
@@ -54,6 +55,26 @@ pub fn smooth_routes(
     min_clearance: Nm,
     roundness: f64,
 ) -> Vec<RouteSegment> {
+    smooth_routes_on_pads(
+        segments,
+        other_net_segments,
+        anchors,
+        &[],
+        min_clearance,
+        roundness,
+    )
+}
+
+/// [`smooth_routes`], keeping every pad of `pads` that the copper of its own
+/// net touched before smoothing touched after it.
+pub fn smooth_routes_on_pads(
+    segments: &[RouteSegment],
+    other_net_segments: &[RouteSegment],
+    anchors: &[Point],
+    pads: &[NetPad],
+    min_clearance: Nm,
+    roundness: f64,
+) -> Vec<RouteSegment> {
     if segments.is_empty() {
         return Vec::new();
     }
@@ -78,10 +99,15 @@ pub fn smooth_routes(
 
     for (net_id, layer, group) in &groups {
         let group_segs: Vec<RouteSegment> = group.iter().map(|s| (*s).clone()).collect();
+        let group_pads: Vec<&NetPad> = pads
+            .iter()
+            .filter(|pad| pad.net == *net_id && pad.mask & layer.to_copper_mask() != 0)
+            .collect();
         let smoothed = smooth_net_layer_group(
             &group_segs,
             other_net_segments,
             anchors,
+            &group_pads,
             min_clearance,
             roundness,
         );
@@ -112,8 +138,8 @@ pub fn smooth_routes(
 /// 3. Collinear segment merge
 ///
 /// A path starts and ends on a pad, and no pass moves the first or the last
-/// point of a run of connected segments, so a pad never loses its copper. A
-/// via is not always the end of a run: a segment can arrive at it and another
+/// point of a run of connected segments, so a pad a path ends on never loses
+/// its copper. A via is not always the end of a run: a segment can arrive at it and another
 /// leave it on the same layer, or a later path of the net can run straight
 /// across it, and either way the via's point was free to move. On
 /// `multi_ic`, with `stop_at_own_copper`, a Top segment of VCC_3V3 ran
@@ -130,20 +156,55 @@ pub fn smooth_routes(
 /// leave the branch on the diagonal, and holding every joint would give up
 /// those chamfers too, so the joints are held only when the smoothed copper
 /// is in more pieces than the copper it came from.
+///
+/// A path does not always reach a pad at its end. It can pass over the pad,
+/// or turn a corner beside it with only its width on the copper, and then the
+/// point that touched the pad is a corner the smoother may cut. On
+/// `multi_ic` the VCC_3V3 trunk turned 0.12mm from R8.2 and the chamfer
+/// moved it 0.514mm off, leaving the pin open. So a pad the group touched and
+/// the smoothed copper no longer touches has the segments that touched it
+/// held whole, both ends, and the group is smoothed again. Only then: most
+/// corners beside a pad can be cut and still leave copper on it, and holding
+/// every segment on a pad would give those chamfers up too.
 fn smooth_net_layer_group(
     group: &[RouteSegment],
     others: &[RouteSegment],
     anchors: &[Point],
+    pads: &[&NetPad],
     min_clearance: Nm,
     roundness: f64,
 ) -> Vec<RouteSegment> {
-    let smoothed = smooth_held(group, others, anchors, min_clearance, roundness);
-    if pieces(&smoothed) <= pieces(group) {
+    let mut held = anchors.to_vec();
+    let mut smoothed = smooth_held(group, others, &held, min_clearance, roundness);
+    if pieces(&smoothed) > pieces(group) {
+        held.extend(joints(group));
+        smoothed = smooth_held(group, others, &held, min_clearance, roundness);
+    }
+    let lost: Vec<&NetPad> = pads
+        .iter()
+        .copied()
+        .filter(|pad| touches(group, pad) && !touches(&smoothed, pad))
+        .collect();
+    if lost.is_empty() {
         return smoothed;
     }
-    let mut held = anchors.to_vec();
-    held.extend(joints(group));
+    held.extend(
+        group
+            .iter()
+            .filter(|seg| {
+                lost.iter()
+                    .any(|pad| touches(std::slice::from_ref(seg), pad))
+            })
+            .flat_map(|seg| [seg.start, seg.end]),
+    );
     smooth_held(group, others, &held, min_clearance, roundness)
+}
+
+/// Whether any segment of `group` touches `pad`.
+fn touches(group: &[RouteSegment], pad: &NetPad) -> bool {
+    group
+        .iter()
+        .any(|seg| pad.touched_by(seg.start, seg.end, seg.width.0 / 2))
 }
 
 /// Smooth `group` with every point of `anchors` held where it is.

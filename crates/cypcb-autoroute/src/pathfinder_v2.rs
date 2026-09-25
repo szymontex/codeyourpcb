@@ -35,7 +35,7 @@ use crate::orchestrator::{
 use crate::pathfinder::{GridNode, PadZone};
 use crate::postprocess;
 use crate::repair::Blocker;
-use crate::smoother::smooth_routes;
+use crate::smoother::smooth_routes_on_pads;
 use crate::strategy::RoutingStrategy;
 use crate::via_optimizer::{optimize_vias, BoardObstacles};
 use crate::AutorouteConfig;
@@ -218,6 +218,7 @@ impl PathFinderStrategy {
             ids
         };
 
+        let pads = cypcb_drc::rules::net_pads(world, library);
         let mut smoothed_segments = Vec::new();
         for net_id in &net_ids {
             if !config.smoothing {
@@ -241,10 +242,11 @@ impl PathFinderStrategy {
                 .filter(|v| v.net_id == *net_id)
                 .map(|v| v.position)
                 .collect();
-            let smoothed = smooth_routes(
+            let smoothed = smooth_routes_on_pads(
                 &net_segs,
                 &other_segs,
                 &net_vias,
+                &pads,
                 min_clearance,
                 config.params.roundness,
             );

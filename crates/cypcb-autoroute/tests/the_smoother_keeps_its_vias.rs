@@ -3,8 +3,8 @@
 //! `cargo test -p cypcb-autoroute --test the_smoother_keeps_its_vias`
 //!
 //! The smoother never moves the first or the last point of a run of connected
-//! segments, and a path starts and ends on a pad, so a pad keeps its copper
-//! without the smoother knowing pads exist. A via is not always such an end.
+//! segments, and a path starts and ends on a pad, so a pad a path ends on
+//! keeps its copper. A via is not always such an end.
 //! Two boards showed what happens when it is not:
 //!
 //! - `multi_ic` with `stop_at_own_copper`, USB_DM: a path came down to a via
