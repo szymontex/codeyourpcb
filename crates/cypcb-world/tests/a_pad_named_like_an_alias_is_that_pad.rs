@@ -2,9 +2,10 @@
 //!
 //! `cargo test -p cypcb-world --test a_pad_named_like_an_alias_is_that_pad`
 //!
-//! The language lets a diode be wired as `D1.A` and `D1.K` and a transistor as
-//! `Q1.B`, `Q1.C`, `Q1.E` on footprints that number their pads, and reads those
-//! letters as numbers. Until 2026-09-25 it read them as numbers always, so a
+//! The language lets a diode be wired as `D1.A` and `D1.K` on footprints that
+//! number their pads, and reads those letters as numbers. A transistor had
+//! `Q1.B`, `Q1.C`, `Q1.E` read the same way until that map was found to have
+//! no source; `a_transistor_pin_is_its_pad` holds what replaced it. Until 2026-09-25 it read them as numbers always, so a
 //! footprint whose pads really are named `A`, `K` or `C` could not be wired by
 //! those names: a diode drawn with pads `A` and `K` was refused as having no
 //! pin `1`, and on a part with pads `1`, `2` and `C` the pin `U1.C` went to pad
@@ -62,8 +63,8 @@ fn pinned(pairs: &[(&str, &str)]) -> Vec<(String, String)> {
         .collect()
 }
 
-/// Pads `1`, `2` and `C`: the letter a transistor alias reads as `2` is also a
-/// pad this part really has.
+/// Pads `1`, `2` and `C`: the letter the transistor alias used to read as `2`
+/// is also a pad this part really has.
 const PADS_1_2_AND_C: &str = r#"
 board t {
     size 30mm x 20mm
