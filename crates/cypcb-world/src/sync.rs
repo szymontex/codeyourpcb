@@ -1402,12 +1402,38 @@ fn sync_component(
     component_entities.insert(refdes_str, entity);
 }
 
-/// Synchronize a net definition to the world.
+/// The pad a pin reference in the design lands on.
+///
+/// The one place a written pin becomes a pad name; nets and traces both ask
+/// here, and everything after sync compares that pad name with `pad.number`.
+///
+/// A pad whose name is exactly what the design wrote wins. Only when the
+/// footprint has no such pad, or is not known yet, is a logical name read as
+/// a number. Until 2026-09-25 the alias came first, so a footprint with a pad
+/// named `C` could never be wired to it: `U1.C` went to pad 2, silently when
+/// pad 2 existed, and a diode drawn with pads `A` and `K` was refused as
+/// having no pin `1`.
+fn pad_for_pin(pin: &AstPinId, footprint: Option<&Footprint>) -> String {
+    match pin {
+        AstPinId::Number(n) => n.to_string(),
+        AstPinId::Name(name) => {
+            let drawn = footprint
+                .is_some_and(|footprint| footprint.pads.iter().any(|pad| pad.number == *name));
+            if drawn {
+                name.clone()
+            } else {
+                normalize_pin_name(name)
+            }
+        }
+    }
+}
+
 /// Normalize logical pin names to physical pin numbers.
 ///
 /// Standard electronic components use conventional logical names (A/K for diodes,
 /// +/- for polar caps) but footprints number pads as 1/2. This maps them so the
-/// DSN network section matches the library section.
+/// DSN network section matches the library section. Called only through
+/// [`pad_for_pin`], after a pad of the exact name was looked for.
 fn normalize_pin_name(name: &str) -> String {
     match name.to_lowercase().as_str() {
         // Diode / LED: anode=1, cathode=2
@@ -1425,6 +1451,7 @@ fn normalize_pin_name(name: &str) -> String {
     }
 }
 
+/// Synchronize a net definition to the world.
 fn sync_net(
     net: &NetDef,
     source: &str,
@@ -1484,21 +1511,17 @@ fn sync_net(
 
         // Look up component entity
         if let Some(&entity) = component_entities.get(comp_name) {
-            // Convert pin ID to string, normalizing logical names to physical numbers
-            let pin_str = match &pin_ref.pin {
-                AstPinId::Number(n) => n.to_string(),
-                AstPinId::Name(s) => normalize_pin_name(s),
-            };
+            let footprint = world
+                .get::<FootprintRef>(entity)
+                .and_then(|f| footprint_lib.get(f.as_str()));
+            let pin_str = pad_for_pin(&pin_ref.pin, footprint);
 
             // The pin has to be one the part actually has.
             //
             // Only checked when the footprint is known: a part fetched from a
             // supplier has no pads until its fetch lands, and erroring on those
             // would refuse every board using one.
-            let footprint_name = world
-                .get::<FootprintRef>(entity)
-                .map(|f| f.as_str().to_string());
-            if let Some(footprint) = footprint_name.and_then(|name| footprint_lib.get(&name)) {
+            if let Some(footprint) = footprint {
                 if !footprint.pads.is_empty()
                     && !footprint.pads.iter().any(|pad| pad.number == pin_str)
                 {
@@ -2066,21 +2089,18 @@ fn get_pin_position(
     // calling it "a good approximation": a `trace VCC { from R1.1 to C1.1 }`
     // came out as copper between two part centres, touching neither pad, and
     // that copper is what the Gerber carries.
-    let pin = match &pin_ref.pin {
-        AstPinId::Number(n) => n.to_string(),
-        AstPinId::Name(name) => normalize_pin_name(name),
-    };
-
-    let pad_offset = world
+    let footprint = world
         .get::<crate::components::FootprintRef>(entity)
-        .and_then(|footprint| library.get(footprint.as_str()))
-        .and_then(|footprint| {
-            footprint
-                .pads
-                .iter()
-                .find(|pad| pad.number == pin)
-                .map(|pad| pad.position)
-        });
+        .and_then(|footprint| library.get(footprint.as_str()));
+    let pin = pad_for_pin(&pin_ref.pin, footprint);
+
+    let pad_offset = footprint.and_then(|footprint| {
+        footprint
+            .pads
+            .iter()
+            .find(|pad| pad.number == pin)
+            .map(|pad| pad.position)
+    });
 
     let Some(offset) = pad_offset else {
         // A footprint nobody registered, or a pin the footprint does not have.
