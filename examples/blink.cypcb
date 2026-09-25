@@ -49,7 +49,19 @@ component R3 resistor "0402" {
     at 50mm, 20mm
 }
 
-component LED1 led "0805" {
+// An LED on the built-in 0805 land pattern, with its pads named for what
+// they are and the cathode marked on the silkscreen. The built-in "0805"
+// carries no polarity mark, so nothing on it says which way round the LED
+// goes.
+footprint LED_0805 {
+    description "0805 LED, anode left, cathode marked right"
+    courtyard 4mm x 2mm
+    pad A rect at -0.95mm, 0mm size 1mm x 1.45mm
+    pad K rect at 0.95mm, 0mm size 1mm x 1.45mm
+    silk line 1.75mm, -0.9mm to 1.75mm, 0.9mm width 0.12mm
+}
+
+component LED1 led "LED_0805" {
     value "RED"
     at 55mm, 20mm
 }

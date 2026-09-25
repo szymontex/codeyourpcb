@@ -89,7 +89,7 @@ net Y {
 
 /// Where U1's GA and GB sit on the board, where XC and YD meet, and the
 /// middle of the 0.05mm gap between GE and GF. Two letters, because a pin
-/// named `A`, `B`, `C`, `E`, `K`, `N` or `P` alone is read as a diode,
+/// named `A`, `B`, `C`, `E`, `K`, `N` or `P` alone was once read as a diode,
 /// transistor or polarity alias for a number.
 const ONE_NET_X: f64 = 10.0;
 const TWO_NETS_X: f64 = 13.75;
