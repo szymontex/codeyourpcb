@@ -201,6 +201,25 @@ impl PadDef {
             Point::new(Nm(0), Nm((height.0 - width.0) / 2))
         })
     }
+
+    /// The hole as the path of the bit's centre, in the footprint's frame,
+    /// and the bit's radius: the pad's position twice for a round hole, the
+    /// two ends of the travel for a slot. `None` for a pad with no hole.
+    ///
+    /// The checker's hole-to-hole rule and the router's via optimizer both
+    /// read a pin's hole here, so the two cannot disagree on where it is or
+    /// how wide it is. The optimizer used to know pads only as copper, and
+    /// moved a via 0.40mm from a pin's hole the checker then reported.
+    pub fn hole(&self) -> Option<(Point, Point, Nm)> {
+        let drill = self.drill?;
+        let half = self.slot_half_travel().unwrap_or(Point::ORIGIN);
+        let (x, y) = (self.position.x.0, self.position.y.0);
+        Some((
+            Point::new(Nm(x - half.x.0), Nm(y - half.y.0)),
+            Point::new(Nm(x + half.x.0), Nm(y + half.y.0)),
+            Nm(drill.0 / 2),
+        ))
+    }
 }
 
 impl Footprint {
