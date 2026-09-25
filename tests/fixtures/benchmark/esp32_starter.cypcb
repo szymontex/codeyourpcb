@@ -1,0 +1,446 @@
+// esp32_starter.cypcb - an ESP32-S3 starter board, written by hand as a benchmark.
+//
+// ESP32-S3-WROOM-1 because its USB is native (IO19/IO20), so the board needs no
+// USB-to-UART bridge: USB-C in, a 3.3V regulator, BOOT and RESET buttons, a
+// power LED, a user LED and 24 header pins.
+//
+// Every pin and value below comes from a public source, read 2026-09-25:
+// - module pins, EN delay (10k + 1uF), 3V3 bypass (22uF + 0.1uF), IO0 to GND
+//   for BOOT: ESP32-S3-WROOM-1 datasheet v1.8, 2026-03-02, Table 3-1 and
+//   Figure 9-1, https://www.espressif.com/sites/default/files/documentation/esp32-s3-wroom-1_wroom-1u_datasheet_en.pdf
+// - regulator AP2112K-3.3, SOT25: 1 VIN, 2 GND, 3 EN, 4 NC, 5 VOUT, 600mA,
+//   stable with 1uF: Diodes DS39724 Rev. 2-2, https://www.diodes.com/assets/Datasheets/AP2112.pdf
+// - receptacle GCT USB4105 pin map (A6/B6 D+, A7/B7 D-, A5 CC1, B5 CC2):
+//   drawing dated 18/12/23, https://gct.co/files/drawings/usb4105.pdf
+// - CC pull-downs 5.1k (Rd, sink): USB Type-C Cable and Connector
+//   Specification Release 2.0, August 2019, Table 4-25
+// - pad geometry: KiCad footprint library, https://gitlab.com/kicad/libraries/kicad-footprints
+//   (RF_Module, Connector_USB, Package_TO_SOT_SMD, Button_Switch_SMD,
+//   Connector_PinHeader_2.54mm), converted with Y negated because KiCad's Y
+//   grows down and a board's grows up. Module pads cross-checked against
+//   datasheet Figure 11-1: 1.27mm pitch, 1.5 x 0.9mm pads, columns 17.5mm apart.
+//
+// What the language could not say, written as it is instead:
+// - `kicad::<name>` does not resolve, so every footprint is inline;
+// - an inline hole is always plated, so the receptacle's two 0.65mm pegs are
+//   plated holes with no ring;
+// - a courtyard is one rectangle round the origin, so the module's antenna
+//   clearance is a keepout on the board;
+// - the module's 12 thermal vias (0.2mm drill) under the ground pad are left
+//   out: the fab's smallest drill is 0.3mm, and the datasheet says soldering
+//   the pad is optional;
+// - there is no way to mark a pin as not connected, so the module's spare
+//   pins, the receptacle's SBU pins and the regulator's NC pin are reported.
+//
+// Check and route it with:
+//   cypcb check tests/fixtures/benchmark/esp32_starter.cypcb
+//   cypcb route tests/fixtures/benchmark/esp32_starter.cypcb
+
+version 1
+
+footprint ESP32_S3_WROOM_1 {
+    description "ESP32-S3-WROOM-1 module, 41 pads"
+    courtyard 19.5mm x 27mm
+
+    pad 1 rect at -8.75mm, 5.26mm size 1.5mm x 0.9mm
+    pad 2 rect at -8.75mm, 3.99mm size 1.5mm x 0.9mm
+    pad 3 rect at -8.75mm, 2.72mm size 1.5mm x 0.9mm
+    pad 4 rect at -8.75mm, 1.45mm size 1.5mm x 0.9mm
+    pad 5 rect at -8.75mm, 0.18mm size 1.5mm x 0.9mm
+    pad 6 rect at -8.75mm, -1.09mm size 1.5mm x 0.9mm
+    pad 7 rect at -8.75mm, -2.36mm size 1.5mm x 0.9mm
+    pad 8 rect at -8.75mm, -3.63mm size 1.5mm x 0.9mm
+    pad 9 rect at -8.75mm, -4.9mm size 1.5mm x 0.9mm
+    pad 10 rect at -8.75mm, -6.17mm size 1.5mm x 0.9mm
+    pad 11 rect at -8.75mm, -7.44mm size 1.5mm x 0.9mm
+    pad 12 rect at -8.75mm, -8.71mm size 1.5mm x 0.9mm
+    pad 13 rect at -8.75mm, -9.98mm size 1.5mm x 0.9mm
+    pad 14 rect at -8.75mm, -11.25mm size 1.5mm x 0.9mm
+    pad 15 rect at -6.985mm, -12.5mm size 0.9mm x 1.5mm
+    pad 16 rect at -5.715mm, -12.5mm size 0.9mm x 1.5mm
+    pad 17 rect at -4.445mm, -12.5mm size 0.9mm x 1.5mm
+    pad 18 rect at -3.175mm, -12.5mm size 0.9mm x 1.5mm
+    pad 19 rect at -1.905mm, -12.5mm size 0.9mm x 1.5mm
+    pad 20 rect at -0.635mm, -12.5mm size 0.9mm x 1.5mm
+    pad 21 rect at 0.635mm, -12.5mm size 0.9mm x 1.5mm
+    pad 22 rect at 1.905mm, -12.5mm size 0.9mm x 1.5mm
+    pad 23 rect at 3.175mm, -12.5mm size 0.9mm x 1.5mm
+    pad 24 rect at 4.445mm, -12.5mm size 0.9mm x 1.5mm
+    pad 25 rect at 5.715mm, -12.5mm size 0.9mm x 1.5mm
+    pad 26 rect at 6.985mm, -12.5mm size 0.9mm x 1.5mm
+    pad 27 rect at 8.75mm, -11.25mm size 1.5mm x 0.9mm
+    pad 28 rect at 8.75mm, -9.98mm size 1.5mm x 0.9mm
+    pad 29 rect at 8.75mm, -8.71mm size 1.5mm x 0.9mm
+    pad 30 rect at 8.75mm, -7.44mm size 1.5mm x 0.9mm
+    pad 31 rect at 8.75mm, -6.17mm size 1.5mm x 0.9mm
+    pad 32 rect at 8.75mm, -4.9mm size 1.5mm x 0.9mm
+    pad 33 rect at 8.75mm, -3.63mm size 1.5mm x 0.9mm
+    pad 34 rect at 8.75mm, -2.36mm size 1.5mm x 0.9mm
+    pad 35 rect at 8.75mm, -1.09mm size 1.5mm x 0.9mm
+    pad 36 rect at 8.75mm, 0.18mm size 1.5mm x 0.9mm
+    pad 37 rect at 8.75mm, 1.45mm size 1.5mm x 0.9mm
+    pad 38 rect at 8.75mm, 2.72mm size 1.5mm x 0.9mm
+    pad 39 rect at 8.75mm, 3.99mm size 1.5mm x 0.9mm
+    pad 40 rect at 8.75mm, 5.26mm size 1.5mm x 0.9mm
+    pad 41 rect at -1.5mm, -2.46mm size 3.9mm x 3.9mm
+}
+
+footprint USB_C_GCT_USB4105 {
+    description "GCT USB4105 USB 2.0 Type-C receptacle, 16 contacts"
+    courtyard 10.64mm x 8.94mm
+
+    pad NPTH circle at -2.89mm, 2.605mm size 0.65mm x 0.65mm drill 0.65mm
+    pad NPTH circle at 2.89mm, 2.605mm size 0.65mm x 0.65mm drill 0.65mm
+    pad A1 roundrect at -3.2mm, 3.68mm size 0.6mm x 1.15mm corner 25%
+    pad A4 roundrect at -2.4mm, 3.68mm size 0.6mm x 1.15mm corner 25%
+    pad A5 roundrect at -1.25mm, 3.68mm size 0.3mm x 1.15mm corner 25%
+    pad A6 roundrect at -0.25mm, 3.68mm size 0.3mm x 1.15mm corner 25%
+    pad A7 roundrect at 0.25mm, 3.68mm size 0.3mm x 1.15mm corner 25%
+    pad A8 roundrect at 1.25mm, 3.68mm size 0.3mm x 1.15mm corner 25%
+    pad A9 roundrect at 2.4mm, 3.68mm size 0.6mm x 1.15mm corner 25%
+    pad A12 roundrect at 3.2mm, 3.68mm size 0.6mm x 1.15mm corner 25%
+    pad B1 roundrect at 3.2mm, 3.68mm size 0.6mm x 1.15mm corner 25%
+    pad B4 roundrect at 2.4mm, 3.68mm size 0.6mm x 1.15mm corner 25%
+    pad B5 roundrect at 1.75mm, 3.68mm size 0.3mm x 1.15mm corner 25%
+    pad B6 roundrect at 0.75mm, 3.68mm size 0.3mm x 1.15mm corner 25%
+    pad B7 roundrect at -0.75mm, 3.68mm size 0.3mm x 1.15mm corner 25%
+    pad B8 roundrect at -1.75mm, 3.68mm size 0.3mm x 1.15mm corner 25%
+    pad B9 roundrect at -2.4mm, 3.68mm size 0.6mm x 1.15mm corner 25%
+    pad B12 roundrect at -3.2mm, 3.68mm size 0.6mm x 1.15mm corner 25%
+    pad SH oblong at -4.32mm, 3.105mm size 1mm x 2.1mm drill 0.6mm x 1.7mm
+    pad SH oblong at -4.32mm, -1.075mm size 1mm x 1.8mm drill 0.6mm x 1.4mm
+    pad SH oblong at 4.32mm, 3.105mm size 1mm x 2.1mm drill 0.6mm x 1.7mm
+    pad SH oblong at 4.32mm, -1.075mm size 1mm x 1.8mm drill 0.6mm x 1.4mm
+}
+
+footprint SOT23_5_KICAD {
+    description "SOT-23-5 (SOT25), JEDEC MO-178 AA"
+    courtyard 4.1mm x 3.4mm
+
+    pad 1 roundrect at -1.1375mm, 0.95mm size 1.325mm x 0.6mm corner 25%
+    pad 2 roundrect at -1.1375mm, 0mm size 1.325mm x 0.6mm corner 25%
+    pad 3 roundrect at -1.1375mm, -0.95mm size 1.325mm x 0.6mm corner 25%
+    pad 4 roundrect at 1.1375mm, -0.95mm size 1.325mm x 0.6mm corner 25%
+    pad 5 roundrect at 1.1375mm, 0.95mm size 1.325mm x 0.6mm corner 25%
+}
+
+footprint SW_TL3342 {
+    description "TL3342 SMD tactile switch, pads 1-1 and 2-2 joined"
+    courtyard 8.5mm x 6mm
+
+    pad 1 rect at -3.15mm, 1.9mm size 1.7mm x 1mm
+    pad 1 rect at 3.15mm, 1.9mm size 1.7mm x 1mm
+    pad 2 rect at -3.15mm, -1.9mm size 1.7mm x 1mm
+    pad 2 rect at 3.15mm, -1.9mm size 1.7mm x 1mm
+}
+
+footprint PINHDR_1X12 {
+    description "Pin header 1x12, 2.54mm, vertical"
+    courtyard 3.54mm x 31.48mm
+
+    pad 1 rect at 0mm, 0mm size 1.7mm x 1.7mm drill 1mm
+    pad 2 circle at 0mm, -2.54mm size 1.7mm x 1.7mm drill 1mm
+    pad 3 circle at 0mm, -5.08mm size 1.7mm x 1.7mm drill 1mm
+    pad 4 circle at 0mm, -7.62mm size 1.7mm x 1.7mm drill 1mm
+    pad 5 circle at 0mm, -10.16mm size 1.7mm x 1.7mm drill 1mm
+    pad 6 circle at 0mm, -12.7mm size 1.7mm x 1.7mm drill 1mm
+    pad 7 circle at 0mm, -15.24mm size 1.7mm x 1.7mm drill 1mm
+    pad 8 circle at 0mm, -17.78mm size 1.7mm x 1.7mm drill 1mm
+    pad 9 circle at 0mm, -20.32mm size 1.7mm x 1.7mm drill 1mm
+    pad 10 circle at 0mm, -22.86mm size 1.7mm x 1.7mm drill 1mm
+    pad 11 circle at 0mm, -25.4mm size 1.7mm x 1.7mm drill 1mm
+    pad 12 circle at 0mm, -27.94mm size 1.7mm x 1.7mm drill 1mm
+}
+
+
+board esp32_starter {
+    size 34mm x 50mm
+    layers 2
+    fab jlcpcb
+}
+
+// The antenna end of the module sits on the top edge. No copper under it on
+// either side: Figure 11-1 marks the top 6mm of the module as antenna area.
+keepout antenna {
+    bounds 8mm, 44mm to 26mm, 50mm
+    layer all
+}
+
+component U1 ic "ESP32_S3_WROOM_1" {
+    value "ESP32-S3-WROOM-1"
+    at 17mm, 37.25mm
+}
+
+component J1 connector "USB_C_GCT_USB4105" {
+    value "USB4105"
+    at 17mm, 4.5mm
+}
+
+component U2 ic "SOT23_5_KICAD" {
+    value "AP2112K-3.3"
+    at 10mm, 15mm
+}
+
+component C1 capacitor "0603" {
+    value "1uF"
+    at 6mm, 15mm
+    rotate 90
+}
+
+component C2 capacitor "0805" {
+    value "22uF"
+    at 14.5mm, 15mm
+    rotate 90
+}
+
+component C3 capacitor "0402" {
+    value "0.1uF"
+    at 17.5mm, 15mm
+    rotate 90
+}
+
+component R1 resistor "0402" {
+    value "10k"
+    at 8mm, 20.5mm
+}
+
+component C4 capacitor "0402" {
+    value "1uF"
+    at 11mm, 20.5mm
+}
+
+component R2 resistor "0402" {
+    value "5.1k"
+    at 14mm, 11.5mm
+    rotate 90
+}
+
+component R3 resistor "0402" {
+    value "5.1k"
+    at 20.5mm, 11.5mm
+    rotate 90
+}
+
+// LEDs: pad 1 is the cathode.
+component D1 led "0603" {
+    value "PWR"
+    at 24mm, 15mm
+}
+
+component R4 resistor "0402" {
+    value "1k"
+    at 24mm, 18mm
+}
+
+component D2 led "0603" {
+    value "USR"
+    at 28mm, 15mm
+}
+
+component R5 resistor "0402" {
+    value "1k"
+    at 28mm, 18.5mm
+}
+
+component SW1 generic "SW_TL3342" {
+    value "RESET"
+    at 6.5mm, 5mm
+}
+
+component SW2 generic "SW_TL3342" {
+    value "BOOT"
+    at 27.5mm, 5mm
+}
+
+component J2 connector "PINHDR_1X12" {
+    value "GPIO left"
+    at 2.54mm, 45mm
+}
+
+component J3 connector "PINHDR_1X12" {
+    value "GPIO right"
+    at 31.46mm, 45mm
+}
+
+net VBUS [width 0.5mm] {
+    J1.A4
+    J1.A9
+    J1.B4
+    J1.B9
+    U2.1
+    U2.3
+    C1.1
+    J3.1
+}
+
+net GND {
+    J1.A1
+    J1.A12
+    J1.B1
+    J1.B12
+    J1.SH
+    U2.2
+    C1.2
+    C2.2
+    C3.2
+    C4.2
+    R2.2
+    R3.2
+    D1.1
+    D2.1
+    SW1.2
+    SW2.2
+    U1.1
+    U1.40
+    U1.41
+    J2.2
+    J3.2
+}
+
+net V3V3 [width 0.4mm] {
+    U2.5
+    C2.1
+    C3.1
+    U1.2
+    R1.1
+    R4.1
+    J2.1
+}
+
+net EN {
+    U1.3
+    R1.2
+    C4.1
+    SW1.1
+}
+
+net BOOT {
+    U1.27
+    SW2.1
+}
+
+net USB_DP {
+    J1.A6
+    J1.B6
+    U1.14
+}
+
+net USB_DM {
+    J1.A7
+    J1.B7
+    U1.13
+}
+
+diffpair USB {
+    USB_DP
+    USB_DM
+}
+
+net CC1 {
+    J1.A5
+    R2.1
+}
+
+net CC2 {
+    J1.B5
+    R3.1
+}
+
+net LED_PWR {
+    R4.2
+    D1.2
+}
+
+net IO21 {
+    U1.23
+    R5.1
+}
+
+net LED_USR {
+    R5.2
+    D2.2
+}
+
+// Left header, top to bottom, in the order the module's left pins run.
+net IO4 {
+    U1.4
+    J2.3
+}
+net IO5 {
+    U1.5
+    J2.4
+}
+net IO6 {
+    U1.6
+    J2.5
+}
+net IO7 {
+    U1.7
+    J2.6
+}
+net IO15 {
+    U1.8
+    J2.7
+}
+net IO16 {
+    U1.9
+    J2.8
+}
+net IO17 {
+    U1.10
+    J2.9
+}
+net IO18 {
+    U1.11
+    J2.10
+}
+net IO8 {
+    U1.12
+    J2.11
+}
+net IO3 {
+    U1.15
+    J2.12
+}
+
+// Right header, top to bottom, in the order the module's right pins run.
+net IO1 {
+    U1.39
+    J3.3
+}
+net IO2 {
+    U1.38
+    J3.4
+}
+net TXD0 {
+    U1.37
+    J3.5
+}
+net RXD0 {
+    U1.36
+    J3.6
+}
+net IO42 {
+    U1.35
+    J3.7
+}
+net IO41 {
+    U1.34
+    J3.8
+}
+net IO40 {
+    U1.33
+    J3.9
+}
+net IO39 {
+    U1.32
+    J3.10
+}
+net IO38 {
+    U1.31
+    J3.11
+}
+net IO14 {
+    U1.22
+    J3.12
+}
