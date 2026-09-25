@@ -115,7 +115,20 @@ pub struct RoutingGrid {
     /// 109 of stm32_breakout's 118 part-to-trace faults sit in exactly those
     /// cells.
     pad_net: Vec<u32>,
+
+    /// Which net the copper already on the board belongs to - a trace the
+    /// designer drew or a via they placed - or `u32::MAX` for none.
+    ///
+    /// Kept apart from `net_map` for the reason `pad_net` is: a rip-up clears
+    /// that one, and hand copper is not ripped up. Without it the grid marked
+    /// hand copper as belonging to nobody, so its own net could not cross it
+    /// either and went round its own wire - measured on a two-pad board, a
+    /// detour through two vias to reach a pad the hand trace already touched.
+    fixed_net: Vec<u32>,
 }
+
+/// A cell two nets' hand copper both reach: nobody's to cross.
+const FIXED_CONTESTED: u32 = u32::MAX - 1;
 
 impl RoutingGrid {
     /// Build a routing grid from a board world and design rules.
@@ -203,6 +216,7 @@ impl RoutingGrid {
         let total = cell_count * routing_layers as usize;
         let layers_vec: Vec<u8> = vec![CELL_FREE; total];
         let pad_net: Vec<u32> = vec![u32::MAX; total];
+        let fixed_net: Vec<u32> = vec![u32::MAX; total];
         let net_map: Vec<u32> = vec![u32::MAX; total];
 
         let mut grid = RoutingGrid {
@@ -216,6 +230,7 @@ impl RoutingGrid {
             layers: layers_vec,
             net_map,
             pad_net,
+            fixed_net,
         };
 
         // Bloat obstacles by the clearance *plus half a trace*, because the
@@ -435,6 +450,13 @@ impl RoutingGrid {
                         radius_cells,
                         CELL_TRACE,
                     );
+                    self.claim_fixed_segment(
+                        [seg.start.x.raw(), seg.start.y.raw()],
+                        [seg.end.x.raw(), seg.end.y.raw()],
+                        layer_idx,
+                        radius_cells,
+                        trace.net_id.id(),
+                    );
                 }
             }
         }
@@ -444,9 +466,10 @@ impl RoutingGrid {
     /// imported from KiCad, or dropped by a stitched pour.
     ///
     /// Only traces used to be marked, so a via the designer placed was
-    /// invisible to every route. It is marked as a hand trace is - copper with
-    /// no owner, on every layer its hole passes - and its own net is served
-    /// the way a trace's is, by `drop_pads_existing_copper_already_joins`.
+    /// invisible to every route. It is marked as a hand trace is - copper on
+    /// every layer its hole passes, owned by its net in `fixed_net` - and its
+    /// own net is served the way a trace's is, by
+    /// `drop_pads_existing_copper_already_joins`.
     fn populate_placed_vias(&mut self, world: &mut BoardWorld, clearance_cells: u32) {
         let vias: Vec<Via> = {
             let ecs = world.ecs_mut();
@@ -470,6 +493,13 @@ impl RoutingGrid {
                     layer as usize,
                     ring_cells + clearance_cells,
                     CELL_TRACE,
+                );
+                self.claim_fixed_disc(
+                    self.nm_to_grid_x(via.position.x.raw()),
+                    self.nm_to_grid_y(via.position.y.raw()),
+                    layer as usize,
+                    ring_cells + clearance_cells,
+                    via.net_id.id(),
                 );
             }
         }
@@ -503,6 +533,76 @@ impl RoutingGrid {
 
             self.mark_obstacle(gx, gy, layer, radius_cells, flag);
         }
+    }
+
+    /// Record `net` as the owner of the cells a hand segment marks, stepping
+    /// along it the way `rasterize_segment` does.
+    fn claim_fixed_segment(
+        &mut self,
+        from: [i64; 2],
+        to: [i64; 2],
+        layer: usize,
+        radius_cells: u32,
+        net: u32,
+    ) {
+        let dx = to[0] - from[0];
+        let dy = to[1] - from[1];
+        let length_nm = ((dx as f64).powi(2) + (dy as f64).powi(2)).sqrt() as i64;
+        let steps = (length_nm / self.resolution).max(1);
+
+        for i in 0..=steps {
+            let t = i as f64 / steps as f64;
+            let gx = self.nm_to_grid_x(from[0] + (dx as f64 * t) as i64);
+            let gy = self.nm_to_grid_y(from[1] + (dy as f64 * t) as i64);
+            self.claim_fixed_disc(gx, gy, layer, radius_cells, net);
+        }
+    }
+
+    /// Record `net` as the owner of hand copper over the disc
+    /// `mark_obstacle` covers. A cell two nets reach is nobody's.
+    fn claim_fixed_disc(&mut self, cx: u32, cy: u32, layer: usize, radius_cells: u32, net: u32) {
+        if layer >= self.layer_count as usize {
+            return;
+        }
+        let r = radius_cells as i64;
+        let min_x = (cx as i64 - r).max(0) as u32;
+        let max_x = (cx as i64 + r).min(self.width as i64 - 1) as u32;
+        let min_y = (cy as i64 - r).max(0) as u32;
+        let max_y = (cy as i64 + r).min(self.height as i64 - 1) as u32;
+
+        for y in min_y..=max_y {
+            for x in min_x..=max_x {
+                let (ddx, ddy) = (x as i64 - cx as i64, y as i64 - cy as i64);
+                if ddx * ddx + ddy * ddy > r * r {
+                    continue;
+                }
+                let idx = self.cell_index(x, y, layer);
+                let owner = &mut self.fixed_net[idx];
+                if *owner == u32::MAX {
+                    *owner = net;
+                } else if *owner != net {
+                    *owner = FIXED_CONTESTED;
+                }
+            }
+        }
+    }
+
+    /// Whether this cell is blocked only by copper already on the board that
+    /// belongs to `net_id`.
+    ///
+    /// A net may run over its own hand trace: it is the same conductor. It may
+    /// not use that to get past anything else in the cell - a pad, a zone,
+    /// another net's route or another net's hand copper.
+    #[inline]
+    pub fn is_own_fixed_copper(&self, x: u32, y: u32, layer: usize, net_id: u32) -> bool {
+        if x >= self.width || y >= self.height || layer >= self.layer_count as usize {
+            return false;
+        }
+        let idx = self.cell_index(x, y, layer);
+        let routed = self.net_map[idx];
+        self.fixed_net[idx] == net_id
+            && (routed == u32::MAX || routed == net_id)
+            && self.layers[idx] & !(CELL_TRACE | CELL_HALO) == 0
     }
 
     // ========================================================================
@@ -1084,6 +1184,7 @@ pub fn make_test_grid(width: u32, height: u32, resolution_nm: i64, layers: u8) -
         layers: vec![CELL_FREE; total],
         net_map: vec![u32::MAX; total],
         pad_net: vec![u32::MAX; total],
+        fixed_net: vec![u32::MAX; total],
     }
 }
 
@@ -1096,6 +1197,44 @@ mod tests {
     /// had to be edited in step whenever the grid's shape changed.
     fn make_test_grid(width: u32, height: u32, resolution_nm: i64, layers: u8) -> RoutingGrid {
         super::make_test_grid(width, height, resolution_nm, layers)
+    }
+
+    #[test]
+    fn a_net_may_cross_only_its_own_hand_copper() {
+        let mut grid = make_test_grid(20, 20, 100_000, 2);
+        grid.mark_obstacle(5, 5, 0, 2, CELL_TRACE);
+        grid.claim_fixed_disc(5, 5, 0, 2, 7);
+
+        assert!(grid.is_own_fixed_copper(5, 5, 0, 7), "its own wire");
+        assert!(!grid.is_own_fixed_copper(5, 5, 0, 8), "another net's wire");
+        assert!(!grid.is_own_fixed_copper(5, 5, 1, 7), "the other layer");
+        assert!(
+            !grid.is_own_fixed_copper(15, 15, 0, 7),
+            "a free cell is not hand copper"
+        );
+
+        // Hand copper does not open what else is in the cell.
+        grid.set_cell(6, 5, 0, CELL_PAD);
+        assert!(
+            !grid.is_own_fixed_copper(6, 5, 0, 7),
+            "a pad under the wire"
+        );
+        grid.mark_route(4, 5, 0, 8);
+        assert!(
+            !grid.is_own_fixed_copper(4, 5, 0, 7),
+            "another net routed there"
+        );
+
+        // Two nets' hand copper reaching one cell: neither crosses it.
+        grid.claim_fixed_disc(5, 7, 0, 0, 8);
+        assert!(
+            !grid.is_own_fixed_copper(5, 7, 0, 7),
+            "contested, first net"
+        );
+        assert!(
+            !grid.is_own_fixed_copper(5, 7, 0, 8),
+            "contested, second net"
+        );
     }
 
     #[test]

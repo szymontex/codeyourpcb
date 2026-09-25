@@ -1278,6 +1278,7 @@ fn find_path_congestion_augmented(
                     block_foreign_copper,
                 )
                 || grid.net_at(ux, uy, nl as usize) == Some(net_id)
+                || grid.is_own_fixed_copper(ux, uy, nl as usize, net_id)
             {
                 let base = cost_fn.neighbor_cost(node, target);
                 let congestion = congestion_map.congestion_cost(ux, uy, nl);
@@ -1365,6 +1366,7 @@ fn find_path_congestion_augmented(
                     block_foreign_copper,
                 )
                 || grid.net_at(nx as u32, ny as u32, target_layer as usize) == Some(net_id)
+                || grid.is_own_fixed_copper(nx as u32, ny as u32, target_layer as usize, net_id)
             {
                 // The hole is drilled through every layer between the two, and
                 // on those it is copper as much as on the ends: another net's
@@ -1375,6 +1377,7 @@ fn find_path_congestion_augmented(
                         || layer == target_layer
                         || grid.is_free(nx as u32, ny as u32, layer as usize)
                         || grid.net_at(nx as u32, ny as u32, layer as usize) == Some(net_id)
+                        || grid.is_own_fixed_copper(nx as u32, ny as u32, layer as usize, net_id)
                 });
                 if !barrel_clear {
                     continue;

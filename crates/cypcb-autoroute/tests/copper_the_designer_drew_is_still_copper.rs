@@ -408,3 +408,223 @@ fn a_ground_plane_connects_the_pins_that_sit_in_it() {
         "three ground pins in a ground plane need no wires between them"
     );
 }
+
+#[test]
+fn a_net_crosses_its_own_hand_trace_to_reach_its_pad() {
+    // The grid marked a hand trace as copper belonging to nobody, so the net
+    // it belongs to could not cross it either. Here the designer ringed J1
+    // with its own net and tied the pad to the ring; the only way in from J2
+    // is over that ring, because the bottom layer is kept out. The router
+    // gave the connection up.
+    use cypcb_core::Rect as CoreRect;
+    use cypcb_world::components::trace::Trace;
+    use cypcb_world::components::zone::{Zone, ZoneKind};
+
+    let mut world = BoardWorld::new();
+    world.set_board("t".to_string(), (Nm::from_mm(30.0), Nm::from_mm(20.0)), 2);
+
+    let mut library = cypcb_world::footprint::FootprintLibrary::new();
+    library.register(Footprint {
+        name: "PAD1".into(),
+        description: String::new(),
+        bounds: CoreRect::new(Point::ORIGIN, Point::ORIGIN),
+        courtyard: CoreRect::new(Point::ORIGIN, Point::ORIGIN),
+        silk: Vec::new(),
+        pads: vec![PadDef {
+            number: "1".into(),
+            shape: PadShape::Rect,
+            position: Point::ORIGIN,
+            size: (Nm::from_mm(1.0), Nm::from_mm(1.0)),
+            drill: None,
+            slot: None,
+            layers: vec![Layer::TopCopper],
+            mask_margin: None,
+        }],
+    });
+    world.set_footprints(library.clone());
+
+    let net = world.intern_net("SIG");
+    for (refdes, at) in [("J1", (10.0, 10.0)), ("J2", (25.0, 10.0))] {
+        let mut connections = NetConnections::new();
+        connections.add(PinConnection::new("1".to_string(), net));
+        world.spawn_component(
+            RefDes::new(refdes),
+            Value::new(""),
+            Position(Point::from_mm(at.0, at.1)),
+            Rotation::ZERO,
+            FootprintRef::new("PAD1"),
+            connections,
+        );
+    }
+
+    // A ring of SIG round J1, and a spoke from the pad out to it.
+    let mut ring = Trace::new(net);
+    ring.layer = Layer::TopCopper;
+    ring.width = Nm::from_mm(0.2);
+    ring.source = TraceSource::Manual;
+    let corners = [
+        (7.0, 7.0),
+        (13.0, 7.0),
+        (13.0, 13.0),
+        (7.0, 13.0),
+        (7.0, 7.0),
+    ];
+    for pair in corners.windows(2) {
+        ring.add_segment(TraceSegment::new(
+            Point::from_mm(pair[0].0, pair[0].1),
+            Point::from_mm(pair[1].0, pair[1].1),
+        ));
+    }
+    ring.add_segment(TraceSegment::new(
+        Point::from_mm(10.0, 10.0),
+        Point::from_mm(13.0, 10.0),
+    ));
+    world.ecs_mut().spawn((ring, net));
+
+    world.spawn_entity(Zone {
+        bounds: CoreRect {
+            min: Point::from_mm(0.0, 0.0),
+            max: Point::from_mm(30.0, 20.0),
+        },
+        kind: ZoneKind::Keepout,
+        layer_mask: Layer::BottomCopper.to_copper_mask(),
+        name: Some("no bottom".to_string()),
+        net: None,
+    });
+    world.rebuild_spatial_index_from_library(&library);
+
+    let rules = PresetRuleSet::new(RulesPreset::from_name("jlcpcb").expect("the preset"));
+    let result = route_board(&mut world, &library, &rules, &AutorouteConfig::default());
+
+    assert!(
+        matches!(result.status, cypcb_router::RoutingStatus::Complete),
+        "J2 reaches J1 over J1's own ring: {:?}",
+        result.status
+    );
+}
+
+/// A board where the designer drew SIG down a strip along y = 10mm on every
+/// layer, from x = 8mm to the far edge, wide enough to fill the gap the
+/// keepouts leave at the router's 0.254mm cells. J1 is on top at the left, where the
+/// top is open; J2 is on the bottom at the right, where the bottom is open.
+/// Everywhere else each layer is kept out, so the one place the route can
+/// change layer is on SIG's own strip, with SIG's copper on both sides.
+fn strip_board(layer_count: u8) -> (BoardWorld, cypcb_world::footprint::FootprintLibrary) {
+    use cypcb_core::Rect as CoreRect;
+    use cypcb_world::components::trace::Trace;
+    use cypcb_world::components::zone::{Zone, ZoneKind};
+
+    let mut world = BoardWorld::new();
+    world.set_board(
+        "t".to_string(),
+        (Nm::from_mm(30.0), Nm::from_mm(20.0)),
+        layer_count,
+    );
+
+    let mut library = cypcb_world::footprint::FootprintLibrary::new();
+    for (name, layer) in [("TOP1", Layer::TopCopper), ("BOT1", Layer::BottomCopper)] {
+        library.register(Footprint {
+            name: name.into(),
+            description: String::new(),
+            bounds: CoreRect::new(Point::ORIGIN, Point::ORIGIN),
+            courtyard: CoreRect::new(Point::ORIGIN, Point::ORIGIN),
+            silk: Vec::new(),
+            pads: vec![PadDef {
+                number: "1".into(),
+                shape: PadShape::Rect,
+                position: Point::ORIGIN,
+                size: (Nm::from_mm(0.6), Nm::from_mm(0.6)),
+                drill: None,
+                slot: None,
+                layers: vec![layer],
+                mask_margin: None,
+            }],
+        });
+    }
+    world.set_footprints(library.clone());
+
+    let net = world.intern_net("SIG");
+    for (refdes, at, footprint) in [("J1", (4.0, 10.0), "TOP1"), ("J2", (20.0, 15.0), "BOT1")] {
+        let mut connections = NetConnections::new();
+        connections.add(PinConnection::new("1".to_string(), net));
+        world.spawn_component(
+            RefDes::new(refdes),
+            Value::new(""),
+            Position(Point::from_mm(at.0, at.1)),
+            Rotation::ZERO,
+            FootprintRef::new(footprint),
+            connections,
+        );
+    }
+
+    let mut layers = vec![Layer::TopCopper, Layer::BottomCopper];
+    for inner in 0..layer_count.saturating_sub(2) {
+        layers.push(Layer::Inner(inner));
+    }
+    let keep_out = |world: &mut BoardWorld, layer: Layer, min: (f64, f64), max: (f64, f64)| {
+        world.spawn_entity(Zone {
+            bounds: CoreRect {
+                min: Point::from_mm(min.0, min.1),
+                max: Point::from_mm(max.0, max.1),
+            },
+            kind: ZoneKind::Keepout,
+            layer_mask: layer.to_copper_mask(),
+            name: None,
+            net: None,
+        });
+    };
+    for layer in layers {
+        let mut strip = Trace::new(net);
+        strip.layer = layer;
+        strip.width = Nm::from_mm(1.6);
+        strip.source = TraceSource::Manual;
+        strip.add_segment(TraceSegment::new(
+            Point::from_mm(8.0, 10.0),
+            Point::from_mm(29.0, 10.0),
+        ));
+        world.ecs_mut().spawn((strip, net));
+
+        match layer {
+            // Open at the left, where J1 is; the strip only to the right.
+            Layer::TopCopper => {
+                keep_out(&mut world, layer, (10.0, 0.0), (30.0, 9.0));
+                keep_out(&mut world, layer, (10.0, 11.0), (30.0, 20.0));
+            }
+            // Open at the right, where J2 is; nothing under J1.
+            Layer::BottomCopper => keep_out(&mut world, layer, (0.0, 0.0), (10.0, 20.0)),
+            // The strip and nothing else.
+            _ => {
+                keep_out(&mut world, layer, (0.0, 0.0), (30.0, 9.0));
+                keep_out(&mut world, layer, (0.0, 11.0), (30.0, 20.0));
+            }
+        }
+    }
+    world.rebuild_spatial_index_from_library(&library);
+    (world, library)
+}
+
+#[test]
+fn a_net_changes_layer_on_its_own_hand_trace() {
+    let (mut world, library) = strip_board(2);
+    let rules = PresetRuleSet::new(RulesPreset::from_name("jlcpcb").expect("the preset"));
+    let result = route_board(&mut world, &library, &rules, &AutorouteConfig::default());
+
+    assert!(
+        matches!(result.status, cypcb_router::RoutingStatus::Complete),
+        "J2 comes up through SIG's own strip: {:?}",
+        result.status
+    );
+}
+
+#[test]
+fn a_via_hole_passes_through_its_own_hand_trace_on_the_inner_layers() {
+    let (mut world, library) = strip_board(4);
+    let rules = PresetRuleSet::new(RulesPreset::from_name("jlcpcb").expect("the preset"));
+    let result = route_board(&mut world, &library, &rules, &AutorouteConfig::default());
+
+    assert!(
+        matches!(result.status, cypcb_router::RoutingStatus::Complete),
+        "J2 comes up through SIG's own strip on every inner layer: {:?}",
+        result.status
+    );
+}
