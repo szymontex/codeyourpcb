@@ -99,6 +99,18 @@ about the router.
 
 To regenerate: `python3 tests/fixtures/benchmark/make_qfp_fanout.py`
 
+### esp32_starter.cypcb - Medium, written in this language
+
+- **Source:** Written by hand in `.cypcb`, not read from KiCad. The file's own header names the public datasheet behind every pin and value, with the date it was read
+- **License:** Same as project (MIT-equivalent)
+- **Original project:** N/A - an ESP32-S3-WROOM-1 starter board: USB-C in, AP2112K 3.3V regulator, BOOT and RESET buttons, two LEDs, two 1x12 GPIO headers
+- **Complexity tier:** Medium
+- **Components:** 18
+- **Layers:** 2 (F.Cu, B.Cu)
+- **Board size:** 34x50 mm
+- **Traces:** none - the router lays them
+- **Guarded by:** `cargo test -p cypcb-cli --test the_esp32_starter_is_a_board` - it parses, every part has a footprint, the module, receptacle and regulator pins are on the nets their datasheets name, and it routes
+
 ## Usage
 
 These files are parsed by `cypcb-kicad::pcb_parser::parse_kicad_pcb()` and used as benchmark inputs for:
