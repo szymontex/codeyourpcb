@@ -1521,6 +1521,42 @@ from the sixteenth iteration and `qfp_fanout` climbs to 4160 before the run was
 killed near the fortieth. The walls are not what keeps this loop from
 converging, and the next step is the QFP escape, not the cost.
 
+**A fixed straight escape out of every fine-pitch QFP pad moves the shorts
+instead of removing them.** Measured 2026-09-25 behind a switch that was then
+removed. A footprint was taken as four rows when its surface pads stand on four
+sides - pads long along x at the largest |x|, pads long along y at the largest
+|y|, at least two per side - which picked out the LQFP-48, LQFP-64, LQFP-100 and
+QFN-24 on the six boards and nothing else, with no footprint name read. A pad got
+an escape when the bare gap to its row neighbour, 0.2mm on all four, was
+narrower than a trace and two clearances (0.381mm, 0.3mm on `multi_ic`): no
+trace passes between such pads, so every route leaves straight out. The escape
+ran from the pad centre to its outer edge plus one clearance and half a trace,
+the first point where a trace can turn along the row clear of the next pad; it
+was reserved before the first net routed, and the search started and ended at
+its far end. Variant winners, shorts flag off / flag on, unrouted pins where
+they moved:
+
+| variant | stm32_breakout | multi_ic | qfp_fanout |
+|---|---|---|---|
+| no escape | 28 / 30 | 65 / 47, pins 4 / 5 | 91 / 46 |
+| 1: straight out | 38 / 44 | 87 / 66 | 85 / 64 |
+| 1b: every second escape one via and one clearance longer | 30 / 23 | 89 / 88, pins 4 / 4 | 76 / 47 |
+| 1c: 1b, no pad zone round an escaped pad | 58 / 44 | 53 / 32, pins 5 / 5 | 135 / 109 |
+| 1d: 1b, another net's escape closed inside a pad zone | 38 / 21 | 50 / 49, pins 5 / 5 | 67 / 51 |
+
+`led_blink`, `shift_driver` and `plane_board` kept zero shorts in every variant.
+Variant 1b lengthens an escape only when two pitches less a trace hold a via
+and two clearances (0.873mm against 0.808mm). On `stm32_breakout`, flag off,
+the shorts are all born in the raw search (30, 30, 28 through raw, smoothed and
+final without the escape, 38, 38, 38 with it), and variant 1 trades trace on a
+U1 pad 11 to 7 for via involved 16 to 24 and trace on trace 3 to 7: the escape
+ends stand in one line at 0.5mm, where neither a via nor a turn fits between
+neighbours. On `multi_ic` variant 1b leaves U1's pads at 30 shorts and takes
+trace on trace from 22 to 37, and one of them (41.8, 39.4) is PA12 routed along
+PA11's escape inside PA12's own pad zone: `pad_zone_open` opens another net's
+copper to the net whose pad the zone surrounds. That opening is examined next,
+before any escape.
+
 
 **Decomposition: the multi-sink wave is the standard, and behind
 `stop_at_own_copper` it is what this project does.** PathFinder seeds the
