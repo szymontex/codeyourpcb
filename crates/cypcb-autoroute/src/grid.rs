@@ -10,6 +10,8 @@
 //! Board positions in nanometers are converted to grid indices via integer
 //! division by the grid resolution.
 
+use std::collections::HashMap;
+
 use cypcb_core::{Nm, Point};
 use cypcb_rules::RoutingRuleSet;
 use cypcb_world::components::rotate_about_origin;
@@ -125,7 +127,19 @@ pub struct RoutingGrid {
     /// either and went round its own wire - measured on a two-pad board, a
     /// detour through two vias to reach a pad the hand trace already touched.
     fixed_net: Vec<u32>,
+
+    /// The cells inside each piece of hand copper a pad of the ratsnest sits
+    /// on, keyed by net and by the pad's own cell.
+    ///
+    /// The piece and the pad are one conductor, so a connection that reaches
+    /// any of these cells has reached the pad. Only a cell whose centre lies
+    /// in the copper is here: a route that stops on one ends on the wire, not
+    /// beside it.
+    hand_copper: HashMap<(u32, HandCell), Vec<HandCell>>,
 }
+
+/// A cell of hand copper as the search names it: x, y and layer.
+type HandCell = (u16, u16, u8);
 
 /// A cell two nets' hand copper both reach: nobody's to cross.
 const FIXED_CONTESTED: u32 = u32::MAX - 1;
@@ -231,6 +245,7 @@ impl RoutingGrid {
             net_map,
             pad_net,
             fixed_net,
+            hand_copper: HashMap::new(),
         };
 
         // Bloat obstacles by the clearance *plus half a trace*, because the
@@ -603,6 +618,106 @@ impl RoutingGrid {
         self.fixed_net[idx] == net_id
             && (routed == u32::MAX || routed == net_id)
             && self.layers[idx] & !(CELL_TRACE | CELL_HALO) == 0
+    }
+
+    /// The cells whose centre lies inside a segment `reach_nm` wide on each
+    /// side of its centre line, on `layer`.
+    ///
+    /// Whose else copper a cell is near does not matter here: these are where
+    /// a search stands, not where it steps, and every step out of one is
+    /// judged by the rules any step is.
+    fn copper_cells_within(
+        &self,
+        from: Point,
+        to: Point,
+        reach_nm: i64,
+        layer: usize,
+    ) -> Vec<(u16, u16, u8)> {
+        if layer >= self.layer_count as usize {
+            return Vec::new();
+        }
+        let (x0, y0) = (from.x.raw() as f64, from.y.raw() as f64);
+        let (dx, dy) = (to.x.raw() as f64 - x0, to.y.raw() as f64 - y0);
+        let length_sq = dx * dx + dy * dy;
+        let reach = reach_nm as f64;
+        let min_x = self.nm_to_grid_x(from.x.raw().min(to.x.raw()) - reach_nm);
+        let max_x = self.nm_to_grid_x(from.x.raw().max(to.x.raw()) + reach_nm);
+        let min_y = self.nm_to_grid_y(from.y.raw().min(to.y.raw()) - reach_nm);
+        let max_y = self.nm_to_grid_y(from.y.raw().max(to.y.raw()) + reach_nm);
+
+        let mut cells = Vec::new();
+        for y in min_y..=max_y {
+            for x in min_x..=max_x {
+                let (px, py) = (
+                    self.grid_to_nm_x(x) as f64 - x0,
+                    self.grid_to_nm_y(y) as f64 - y0,
+                );
+                let t = if length_sq > 0.0 {
+                    ((px * dx + py * dy) / length_sq).clamp(0.0, 1.0)
+                } else {
+                    0.0
+                };
+                let (ex, ey) = (px - t * dx, py - t * dy);
+                if ex * ex + ey * ey > reach * reach {
+                    continue;
+                }
+                cells.push((x as u16, y as u16, layer as u8));
+            }
+        }
+        cells
+    }
+
+    /// The cells inside a hand segment's copper: `half_width_nm` either side
+    /// of its centre line.
+    pub fn copper_cells_of_segment(
+        &self,
+        from: Point,
+        to: Point,
+        half_width_nm: i64,
+        layer: usize,
+    ) -> Vec<(u16, u16, u8)> {
+        self.copper_cells_within(from, to, half_width_nm, layer)
+    }
+
+    /// The cells inside a placed via's ring, on every layer its hole passes.
+    pub fn copper_cells_of_via(&self, via: &Via) -> Vec<(u16, u16, u8)> {
+        let (Some(from), Some(to)) = (
+            layer_to_index(via.start_layer),
+            layer_to_index(via.end_layer),
+        ) else {
+            return Vec::new();
+        };
+        self.layers_in(self.via_layers(from as u8, to as u8))
+            .flat_map(|layer| {
+                self.copper_cells_within(
+                    via.position,
+                    via.position,
+                    via.outer_diameter.raw() / 2,
+                    layer as usize,
+                )
+            })
+            .collect()
+    }
+
+    /// Record the hand copper the pad at `pad` sits on, for its net.
+    pub fn set_hand_copper(
+        &mut self,
+        net: u32,
+        pad: (u16, u16, u8),
+        mut cells: Vec<(u16, u16, u8)>,
+    ) {
+        cells.sort_unstable();
+        cells.dedup();
+        if !cells.is_empty() {
+            self.hand_copper.insert((net, pad), cells);
+        }
+    }
+
+    /// The hand copper the pad at `pad` sits on, sorted, or nothing.
+    pub fn hand_copper(&self, net: u32, pad: (u16, u16, u8)) -> &[(u16, u16, u8)] {
+        self.hand_copper
+            .get(&(net, pad))
+            .map_or(&[], |cells| cells.as_slice())
     }
 
     // ========================================================================
@@ -1185,6 +1300,7 @@ pub fn make_test_grid(width: u32, height: u32, resolution_nm: i64, layers: u8) -
         net_map: vec![u32::MAX; total],
         pad_net: vec![u32::MAX; total],
         fixed_net: vec![u32::MAX; total],
+        hand_copper: HashMap::new(),
     }
 }
 
