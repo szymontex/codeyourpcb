@@ -717,6 +717,7 @@ pub fn pathfinder_loop(
                     layer_preference: config.params.layer_preference,
                     block_foreign_copper: config.pad_zone_blocks_foreign_copper,
                     via_foreign_copper_penalty: config.via_foreign_copper_penalty,
+                    via_touching_trace_penalty: config.via_touching_trace_penalty,
                     via_foreign_pad_penalty: config.via_foreign_pad_penalty,
                     foreign_pad_penalty: config.foreign_pad_penalty,
                     pad_layer_change_penalty: config.pad_layer_change_penalty,
@@ -1008,10 +1009,13 @@ fn foreign_cells_in_via_keepout(
     layers: (u8, u8),
     net_id: u32,
     radius: u32,
-) -> (u32, u32) {
+    touch_nm: i64,
+) -> (u32, u32, u32) {
     let r = radius as i64;
+    let res = grid.resolution();
     let mut routed = 0;
     let mut pads = 0;
+    let mut touching = 0;
     for layer in grid.layers_in(grid.via_layers(layers.0, layers.1)) {
         for dy in -r..=r {
             for dx in -r..=r {
@@ -1028,6 +1032,14 @@ fn foreign_cells_in_via_keepout(
                     Some(owner) if owner != net_id
                 ) {
                     routed += 1;
+                    // Counted apart: a trace cell this near is not crowding the
+                    // via, it is a short the moment the via is drilled.
+                    if grid.cell(cx as u32, cy as u32, layer as usize) & crate::grid::CELL_TRACE
+                        != 0
+                        && (dx * dx + dy * dy) * res * res < touch_nm * touch_nm
+                    {
+                        touching += 1;
+                    }
                 } else if matches!(
                     grid.pad_owner(cx as u32, cy as u32, layer as usize),
                     Some(owner) if owner != net_id
@@ -1045,7 +1057,7 @@ fn foreign_cells_in_via_keepout(
             }
         }
     }
-    (routed, pads)
+    (routed, pads, touching)
 }
 
 /// Everything the search charges for beyond distance, and the net it is
@@ -1063,6 +1075,8 @@ struct Search<'a> {
     layer_preference: f64,
     block_foreign_copper: bool,
     via_foreign_copper_penalty: f64,
+    /// What one cell of another net's trace touching a via's copper costs.
+    via_touching_trace_penalty: f64,
     /// What one cell of another net's **pad** inside a via's keepout costs.
     via_foreign_pad_penalty: f64,
     foreign_pad_penalty: f64,
@@ -1125,6 +1139,7 @@ fn find_path_congestion_augmented(
         layer_preference,
         block_foreign_copper,
         via_foreign_copper_penalty,
+        via_touching_trace_penalty,
         via_foreign_pad_penalty,
         foreign_pad_penalty,
         pad_layer_change_penalty,
@@ -1157,6 +1172,13 @@ fn find_path_congestion_augmented(
         ((keepout_nm + grid.resolution() - 1) / grid.resolution()).max(0) as u32
     } else {
         0
+    };
+    // How near a trace's centre line may come before its copper meets the
+    // via's: the via is placed with a diameter of twice the drill, so its
+    // radius is the drill, and the trace adds half its width.
+    let via_touch_nm = {
+        let constraints = rules.constraints_for_net(net_id);
+        constraints.min_via_drill.raw() + constraints.min_trace_width.raw() / 2
     };
 
     // Validate bounds
@@ -1376,16 +1398,18 @@ fn find_path_congestion_augmented(
                     0.0
                 };
                 let crowding = if via_keepout_cells > 0 {
-                    let (routed, pads) = foreign_cells_in_via_keepout(
+                    let (routed, pads, touching) = foreign_cells_in_via_keepout(
                         grid,
                         nx as u32,
                         ny as u32,
                         (nl, target_layer),
                         net_id,
                         via_keepout_cells,
+                        via_touch_nm,
                     );
                     routed as f64 * via_foreign_copper_penalty
                         + pads as f64 * via_foreign_pad_penalty
+                        + touching as f64 * via_touching_trace_penalty
                 } else {
                     0.0
                 };
@@ -1575,6 +1599,7 @@ mod tests {
             block_foreign_copper: false,
             via_foreign_copper_penalty: 0.0,
             via_foreign_pad_penalty: 0.0,
+            via_touching_trace_penalty: 0.0,
             foreign_pad_penalty: 0.0,
             pad_layer_change_penalty: PAD_LAYER_CHANGE_PENALTY,
             yield_halo: false,
@@ -1929,6 +1954,7 @@ mod tests {
             block_foreign_copper: false,
             via_foreign_copper_penalty: 0.0,
             via_foreign_pad_penalty: 0.0,
+            via_touching_trace_penalty: 0.0,
             foreign_pad_penalty: 0.0,
             pad_layer_change_penalty: PAD_LAYER_CHANGE_PENALTY,
             yield_halo: false,

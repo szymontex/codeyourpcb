@@ -74,7 +74,7 @@ fn a_best_of_run_names_the_variant_it_kept() {
             .unwrap_or("")
     );
     assert!(
-        written.contains("best of 13 variants"),
+        written.contains("best of 15 variants"),
         "and how many it was chosen from:\n{written}"
     );
 }

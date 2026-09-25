@@ -2,7 +2,7 @@
 //!
 //! `cargo test -p cypcb-cli --test the_two_ways_to_route_say_which_they_are`
 //!
-//! `route` ranks thirteen cost models and keeps the winner; `score` runs the
+//! `route` ranks fifteen cost models and keeps the winner; `score` runs the
 //! shipped defaults once; `route --fast` runs the defaults and says so. All
 //! three are defensible and the pages said none of it, so two numbers taken
 //! from the same board by two commands looked comparable and were not.
@@ -72,7 +72,7 @@ fn the_commands_do_what_their_pages_say() {
         routed.to_str().expect("a path"),
     ]);
     assert!(
-        searched.contains("13 variants"),
+        searched.contains("15 variants"),
         "the search the page describes:\n{searched}"
     );
     assert!(
@@ -90,7 +90,7 @@ fn the_commands_do_what_their_pages_say() {
         fast.to_str().expect("a path"),
     ]);
     assert!(
-        !quick.contains("13 variants"),
+        !quick.contains("15 variants"),
         "`--fast` skips the search:\n{quick}"
     );
 

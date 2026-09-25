@@ -1439,7 +1439,7 @@ sentence. A board whose pads collide on the grid is a board
 fault; the grid is only how it is detected.
 
 **1. What the resolution is a function of.** One cell is one legal track
-position. `resolve_grid_resolution` (`crates/cypcb-autoroute/src/lib.rs:372`)
+position. `resolve_grid_resolution` (`crates/cypcb-autoroute/src/lib.rs:383`)
 takes the fab table for net 0 and returns `min_trace_width + min_clearance`,
 floored at 10 um. The comment records the measurement that settled it: a
 half-clearance grid let two nets sit in adjacent cells whose copper overlapped -
@@ -1983,7 +1983,7 @@ something with the fourth.
   free on a board with no vias.
 - `the_ranked_line_says_how_many_contacts_the_violations_describe` **cannot open
   anything, and finding out why is the useful part.** A default route ranks its
-  candidates and writes one: thirteen lines, one board. Twelve of the thirteen
+  candidates and writes one: fifteen lines, one board. Fourteen of the fifteen
   describe copper that never reached a disk. It belongs with the dry runs, and
   its name is already honest - it is about a line.
 

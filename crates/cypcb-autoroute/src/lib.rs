@@ -295,6 +295,16 @@ pub struct AutorouteConfig {
     /// which is the behaviour before this existed.
     pub via_foreign_copper_penalty: f64,
 
+    /// What a via pays, on top of `via_foreign_copper_penalty`, for each cell
+    /// of another net's trace close enough that the two coppers touch.
+    ///
+    /// The keepout price charges a cell whose copper would overlap the via
+    /// the same as one in the clearance ring round it, and every trace-on-via
+    /// short the winners carried on stm32_breakout and qfp_fanout came from a
+    /// layer change the search took on such copper. Zero is the router
+    /// without it; `docs/routing.md` has the sweep, and why it is a variant.
+    pub via_touching_trace_penalty: f64,
+
     /// What crossing another net's pad copper costs the search, per cell.
     ///
     /// A net's pad zone opens every cell near any of its own pins so a route
@@ -358,6 +368,7 @@ impl Default for AutorouteConfig {
             stop_at_own_copper: false,
             reserve_trace_footprint: true,
             via_foreign_copper_penalty: 0.25,
+            via_touching_trace_penalty: 0.0,
             foreign_pad_penalty: 0.0,
             smoothing: true,
             stagnation_limit: 3,

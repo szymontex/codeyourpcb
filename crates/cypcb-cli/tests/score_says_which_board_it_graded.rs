@@ -3,7 +3,7 @@
 //! `cargo test -p cypcb-cli --test score_says_which_board_it_graded`
 //!
 //! `score` routes a file that carries no copper, and it routes it **once with
-//! the default settings**. `cypcb route` on the same file ranks thirteen
+//! the default settings**. `cypcb route` on the same file ranks fifteen
 //! variants and keeps the best, which is a different board - measured on
 //! `examples/blink.cypcb` in this project's own notes: one run gives 9
 //! violations with 6 shorts, best-of gives 5 with 3.
@@ -62,7 +62,7 @@ fn an_unrouted_board_is_told_which_router_laid_the_copper() {
         "scoring routes the board itself, and how it routed decides every number below:\n{said}"
     );
     assert!(
-        said.contains("13 variants"),
+        said.contains("15 variants"),
         "and the other command produces a different board, which is worth knowing:\n{said}"
     );
     assert!(
