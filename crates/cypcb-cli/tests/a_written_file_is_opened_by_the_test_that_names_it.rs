@@ -122,7 +122,7 @@ const MESSAGE_ONLY_BY_RIGHT: &[(&str, &str)] = &[
 /// did not write.
 const NOTHING_TO_OPEN: &[(&str, &str)] = &[(
     "the_ranked_line_says_how_many_contacts_the_violations_describe",
-    "a default route ranks thirteen candidates and writes one, so twelve of the thirteen lines \
+    "a default route ranks fifteen candidates and writes one, so fourteen of the fifteen lines \
      describe copper that never reached a disk",
 )];
 

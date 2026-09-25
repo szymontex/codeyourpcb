@@ -128,7 +128,7 @@ enum Commands {
     Library(commands::LibraryCommand),
     /// Route a .cypcb or .kicad_pcb board and print quality metrics as JSON
     ///
-    /// The shipped defaults, once - no variant search. `route` ranks thirteen
+    /// The shipped defaults, once - no variant search. `route` ranks fifteen
     /// cost models and keeps the winner, so its board is usually the better
     /// one and its numbers are not these numbers; `route --fast` is the run
     /// that matches this one. Scoring measures a board rather than searching

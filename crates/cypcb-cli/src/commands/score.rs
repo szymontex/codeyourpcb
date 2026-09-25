@@ -128,16 +128,18 @@ impl ScoreCommand {
         };
 
         if already_routed == 0 {
-            // Which router, said out loud. `cypcb route` ranks thirteen
-            // variants and keeps the best; this routes once with the defaults,
+            // Which router, said out loud. `cypcb route` ranks every
+            // default variant and keeps the best; this routes once with the defaults,
             // because scoring is a measurement of a board rather than a search
             // for one. The two therefore grade different copper from the same
             // file, and a reader comparing the numbers deserves to know that
             // before wondering which is wrong.
+            // Counted from the list, so the sentence cannot fall behind it.
             eprintln!(
                 "No traces in the file - routing it once with the default settings. \
-                 `cypcb route` ranks 13 variants and keeps the best, so it produces a \
-                 different board."
+                 `cypcb route` ranks {} variants and keeps the best, so it produces a \
+                 different board.",
+                cypcb_autoroute::variant::default_variant_configs().len()
             );
             let config = AutorouteConfig::default();
             let routing_result = route_board(&mut world, &library, &rules, &config);

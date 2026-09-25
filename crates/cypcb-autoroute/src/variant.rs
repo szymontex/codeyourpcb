@@ -56,6 +56,9 @@ pub struct VariantConfig {
     /// on one board and a regression of the same size on another, which is a
     /// variant's question rather than a default's.
     pub clearance_barrier: f64,
+    /// What a via pays for each cell of another net's trace its copper
+    /// touches. Zero everywhere but the variants that exist for it.
+    pub via_touching_trace_penalty: f64,
 }
 
 impl VariantConfig {
@@ -75,6 +78,7 @@ impl VariantConfig {
             pad_zone_margin_cells: cypcb_autoroute_default_margin(),
             heuristic_weight: 1.0,
             clearance_barrier: 0.0,
+            via_touching_trace_penalty: 0.0,
         }
     }
 }
@@ -138,6 +142,38 @@ pub fn default_variant_configs() -> Vec<VariantConfig> {
                 ..AutorouteParams::default()
             },
         ),
+        // A via kept off another net's trace. The keepout price charges a cell
+        // whose copper would touch the via the same as one in the clearance
+        // ring round it, and every trace-on-via short the winners carried on
+        // stm32_breakout and qfp_fanout came from a layer change onto such
+        // copper. Priced at 1000 per touching cell, measured on all six
+        // fixtures against the thirteen variants before it, as shorts:
+        //
+        //   stm32_breakout  High-Density 28  ->  High-Density kept off 25
+        //   qfp_fanout      High-Density 91  ->  Default kept off      34
+        //
+        // The other four boards keep their winners. Each of the two wins one
+        // board and loses the other, so both are variants; a price of 2 was
+        // measured too and won nowhere. `docs/routing.md` has the sweep.
+        VariantConfig {
+            via_touching_trace_penalty: 1000.0,
+            ..VariantConfig::tuned(
+                "PathFinder Vias Kept Off Traces",
+                StrategyKind::PathFinder,
+                AutorouteParams::default(),
+            )
+        },
+        VariantConfig {
+            via_touching_trace_penalty: 1000.0,
+            ..VariantConfig::tuned(
+                "PathFinder High-Density Vias Kept Off Traces",
+                StrategyKind::PathFinder,
+                AutorouteParams {
+                    density: 1.5,
+                    ..AutorouteParams::default()
+                },
+            )
+        },
         // The two settings this project measured into existence. Neither is a
         // good default - each helps one benchmark board and hurts the other -
         // and that is exactly what a variant is for: the board picks, not the
@@ -155,6 +191,7 @@ pub fn default_variant_configs() -> Vec<VariantConfig> {
             pad_zone_margin_cells: cypcb_autoroute_default_margin(),
             heuristic_weight: 1.0,
             clearance_barrier: 0.0,
+            via_touching_trace_penalty: 0.0,
         },
         VariantConfig {
             name: "PathFinder Guarded Pads".to_string(),
@@ -170,6 +207,7 @@ pub fn default_variant_configs() -> Vec<VariantConfig> {
             pad_zone_margin_cells: cypcb_autoroute_default_margin(),
             heuristic_weight: 1.0,
             clearance_barrier: 0.0,
+            via_touching_trace_penalty: 0.0,
         },
         // Reserving a trace's copper is the default since it was measured
         // better on every fixture and both columns. This is the control: the
@@ -210,6 +248,7 @@ pub fn default_variant_configs() -> Vec<VariantConfig> {
             pad_zone_margin_cells: cypcb_autoroute_default_margin(),
             heuristic_weight: 1.0,
             clearance_barrier: 0.0,
+            via_touching_trace_penalty: 0.0,
         },
         VariantConfig {
             name: "PathFinder Bare Centre Line".to_string(),
@@ -222,6 +261,7 @@ pub fn default_variant_configs() -> Vec<VariantConfig> {
             pad_zone_margin_cells: cypcb_autoroute_default_margin(),
             heuristic_weight: 1.0,
             clearance_barrier: 0.0,
+            via_touching_trace_penalty: 0.0,
         },
         // The opening around a pad, one cell narrower than the default. Every
         // cell of margin switches off obstacles that far from the pad, and on a
@@ -259,6 +299,7 @@ pub fn default_variant_configs() -> Vec<VariantConfig> {
             pad_zone_margin_cells: cypcb_autoroute_default_margin(),
             heuristic_weight: 1.25,
             clearance_barrier: 0.0,
+            via_touching_trace_penalty: 0.0,
         },
         // The two knobs that pay, together.
         //
@@ -286,6 +327,7 @@ pub fn default_variant_configs() -> Vec<VariantConfig> {
             pad_zone_margin_cells: cypcb_autoroute_default_margin(),
             heuristic_weight: 1.25,
             clearance_barrier: 0.0,
+            via_touching_trace_penalty: 0.0,
         },
         // Found 2026-08-21 by `is_the_best_variant_a_local_optimum`, which
         // moves one knob at a time around the point each board picks. Five of
@@ -309,6 +351,7 @@ pub fn default_variant_configs() -> Vec<VariantConfig> {
             pad_zone_margin_cells: cypcb_autoroute_default_margin(),
             heuristic_weight: 1.25,
             clearance_barrier: 0.0,
+            via_touching_trace_penalty: 0.0,
         },
         VariantConfig {
             name: "PathFinder Eager Light".to_string(),
@@ -321,6 +364,7 @@ pub fn default_variant_configs() -> Vec<VariantConfig> {
             pad_zone_margin_cells: cypcb_autoroute_default_margin(),
             heuristic_weight: 1.1,
             clearance_barrier: 0.0,
+            via_touching_trace_penalty: 0.0,
         },
         VariantConfig {
             name: "PathFinder Tight Pads".to_string(),
@@ -333,6 +377,7 @@ pub fn default_variant_configs() -> Vec<VariantConfig> {
             pad_zone_margin_cells: 2,
             heuristic_weight: 1.0,
             clearance_barrier: 0.0,
+            via_touching_trace_penalty: 0.0,
         },
         // The clearance barrier, priced. Step 4 of `docs/router-plan.md`
         // measured k = 10 as the largest single improvement this vector has
@@ -357,6 +402,7 @@ pub fn default_variant_configs() -> Vec<VariantConfig> {
             pad_zone_margin_cells: cypcb_autoroute_default_margin(),
             heuristic_weight: 1.0,
             clearance_barrier: 10.0,
+            via_touching_trace_penalty: 0.0,
         },
     ]
 }
@@ -467,6 +513,7 @@ pub fn generate_variants(
             pad_zone_margin_cells: config.pad_zone_margin_cells,
             heuristic_weight: config.heuristic_weight,
             clearance_barrier: config.clearance_barrier,
+            via_touching_trace_penalty: config.via_touching_trace_penalty,
             // Variant exploration compares many routings; paying for repair on
             // each one triples the wall clock to rank candidates that are about
             // to be thrown away. The winner can be repaired afterwards.

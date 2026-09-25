@@ -1645,6 +1645,46 @@ shorts move to other kinds. No single price is better on every board, so the
 default stays; the price of 2 wins `qfp_fanout` and 1000 wins `stm32_breakout`
 and `qfp_fanout`, which makes them candidates for variants of their own.
 
+**Two of those prices are now variants, and the board picks them.** Measured
+2026-09-25. `via_touching_trace_penalty` carries the touching price as a
+setting, zero by default. Three candidates were added to the thirteen variants
+and measured on all six fixtures: High-Density priced at 2, High-Density
+priced at 1000 and Default priced at 1000. The price of 2 won no board and was
+taken out again. Winners, shorts, before and after:
+
+| board | 13 variants | 15 variants |
+|---|---|---|
+| led_blink | Guarded Pads, 0 | Guarded Pads, 0 |
+| stm32_breakout | High-Density, 28 | High-Density Vias Kept Off Traces, 25 |
+| multi_ic | Low-Via, 65, pins 4 | Low-Via, 65, pins 4 |
+| shift_driver | Clearance Priced, 0 | Clearance Priced, 0 |
+| plane_board | Pad Aware, 0 | Pad Aware, 0 |
+| qfp_fanout | High-Density, 91 | Vias Kept Off Traces, 34 |
+
+No winner is worse, which the ranking guarantees and the table confirms, and
+each new variant wins one board. Choosing a variant took 87.5 s summed over
+the six boards with thirteen and 104.7 s with fifteen, one run each on a
+release build.
+
+The same probe put three switches measured and refused earlier onto all fifteen
+variants, to ask whether any would win a board as a variant of its own. Winner
+with the switch on, shorts and unrouted pins, against the fifteen above:
+
+| switch | stm32_breakout | multi_ic | qfp_fanout | the other three |
+|---|---|---|---|---|
+| another net's pad walled in a pad zone | 85, pins 2 | 30, pins 9, 1 split | 168 | 0 shorts each |
+| soft sharing of another net's trace | 78 | 119, pins 3 | 123 | led 0, shift 33, plane 7 |
+| fixed escape out of fine-pitch pads | not measured | not measured | not measured | |
+
+The wall wins nothing on shorts; on `led_blink`, `shift_driver` and
+`plane_board` it ties at zero shorts and the ranking would decide on the
+composite, which the probe did not print. Soft sharing leaves `multi_ic` one
+unrouted pin fewer, 3 against 4, and since the ranking counts incomplete
+connections before shorts it would win that board with 119 shorts against 65.
+That is a trade to decide, not a win, and neither switch was added. The escape
+was not measured: it would take restoring an 832-line change across five
+files.
+
 
 **Decomposition: the multi-sink wave is the standard, and behind
 `stop_at_own_copper` it is what this project does.** PathFinder seeds the
