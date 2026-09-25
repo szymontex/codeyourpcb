@@ -56,6 +56,10 @@ struct Run {
     /// two are acute. Any other value had to come from a stage that joins two
     /// points which were never neighbours on the grid.
     angles: Vec<String>,
+    /// Junctions the rule reports without an angle, because copper ends in
+    /// the middle of its own trace and the rule does not compute that angle.
+    /// Each one is a report, not a measured acute corner.
+    not_computed: Vec<String>,
 }
 
 /// Route one fixture and count what the rule says about the copper.
@@ -108,11 +112,18 @@ fn routed(fixture: &str, smoothing: bool) -> Run {
         })
         .collect();
 
+    let not_computed = acute
+        .iter()
+        .filter(|violation| violation.message.contains("not computed"))
+        .map(|violation| violation.message.clone())
+        .collect();
+
     Run {
         acute: acute.len(),
         routes,
         vias,
         angles,
+        not_computed,
     }
 }
 
@@ -127,15 +138,50 @@ fn the_smoother_is_not_where_they_come_from() {
     // 2026-09-23, after `optimize_vias` stopped joining pairs across other
     // nets' copper: 23 -> 18, 62 -> 54, 14 -> 12, and 98 -> 101 - the same
     // shape, two corners fewer on multi_ic in both columns.
+    //
+    // Every figure above was taken on the boards as the KiCad reader then read
+    // them, a mirror image of the files. Read the right way up (2026-09-25):
+    //
+    //   board           on  off   not computed on / off
+    //   led_blink        1    0   1 / 0
+    //   stm32_breakout  24   30   4 / 3
+    //   multi_ic        65   71   6 / 6
+    //   shift_driver    11   14   2 / 2
+    //   qfp_fanout      59   58   2 / 2
+    //   plane_board      6    6   0 / 0
+    //
+    // What it claimed: no board draws a corner with the smoother that it does
+    // not draw without it. What the measurement shows: led_blink does - one
+    // report with the smoother, none without. That report is not an acute
+    // corner. It is `copper ends in the middle of its own trace ... the angle
+    // of that junction is not computed`: in `cypcb route --fast` on the same
+    // board it is GND at (20.447mm, 15.113mm), a segment starting halfway along
+    // another GND segment, the two running (+1, -1) and (+1, +1) - a T at 90
+    // degrees. stm32_breakout gains one of the same kind (4 against 3).
+    //
+    // What it claims now: the smoother is not the source of any corner whose
+    // angle is measured, and the boards where it leaves a junction the rule
+    // cannot measure are named, so the finding stays in sight until the rule
+    // measures a T.
     let mut table = Vec::new();
     for fixture in FIXTURES {
         let on = routed(fixture, true);
         let off = routed(fixture, false);
         println!(
             "{fixture:<26} smoothing on {:>4} acute / {:>4} routes / {:>3} vias   \
-             off {:>4} acute / {:>4} routes / {:>3} vias",
-            on.acute, on.routes, on.vias, off.acute, off.routes, off.vias
+             off {:>4} acute / {:>4} routes / {:>3} vias   not computed on {} off {}",
+            on.acute,
+            on.routes,
+            on.vias,
+            off.acute,
+            off.routes,
+            off.vias,
+            on.not_computed.len(),
+            off.not_computed.len()
         );
+        for message in &on.not_computed {
+            println!("    on: {message}");
+        }
         table.push((*fixture, on, off));
     }
 
@@ -150,24 +196,37 @@ fn the_smoother_is_not_where_they_come_from() {
          second column is not a measurement"
     );
 
+    let measured = |run: &Run| run.acute - run.not_computed.len();
     for (fixture, on, off) in &table {
         assert!(
-            on.acute == 0 || off.acute > 0,
+            measured(on) == 0 || measured(off) > 0,
             "{fixture}: {} acute corners with the smoother and none without it, \
              which would make the smoother the source",
-            on.acute
+            measured(on)
         );
     }
+    let unmeasured_by_smoother: Vec<&str> = table
+        .iter()
+        .filter(|(_, on, off)| on.not_computed.len() > off.not_computed.len())
+        .map(|(fixture, _, _)| *fixture)
+        .collect();
+    assert_eq!(
+        unmeasured_by_smoother,
+        ["led_blink.kicad_pcb", "stm32_breakout.kicad_pcb"],
+        "the boards where the smoother leaves more junctions the rule does not \
+         measure than the search does"
+    );
 
     // The positive control. Without it a rule that had stopped reporting
     // anything at all would satisfy every assertion above.
     // 195 on 2026-09-11; 194 since 2026-09-23, when the via optimizer's
     // replacement segments stopped crossing other nets and two of multi_ic's
-    // corners went with them while qfp_fanout gained one.
+    // corners went with them while qfp_fanout gained one. 166 since
+    // 2026-09-25, on the boards read the right way up rather than mirrored.
     let total: usize = table.iter().map(|(_, on, _)| on.acute).sum();
     assert!(
-        total >= 194,
-        "the six fixtures drew 194 acute corners between them on 2026-09-23 \
+        total >= 166,
+        "the six fixtures drew 166 acute corners between them on 2026-09-25 \
          and this run counted {total}"
     );
 }

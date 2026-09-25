@@ -25,6 +25,7 @@
 
 pub mod board_writer;
 pub mod footprint;
+pub mod frame;
 pub mod library;
 pub mod pcb_parser;
 pub mod project;

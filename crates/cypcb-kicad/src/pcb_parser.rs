@@ -26,6 +26,8 @@ use std::fs;
 use std::path::Path;
 
 use cypcb_core::{Nm, Point, Rect};
+
+use crate::frame;
 use cypcb_router::types::{RouteSegment, RoutingResult, RoutingStatus, ViaPlacement};
 use cypcb_world::components::zone::Zone;
 use cypcb_world::components::{BoardOutline, EdgeConnector, Layer, PadShape, Side, StackupSheet};
@@ -359,14 +361,15 @@ pub fn parse_kicad_pcb_str(content: &str) -> Result<KicadPcbParseResult, KicadPc
 
     // 4. Extract board outline from Edge.Cuts
     let board_bounds = extract_board_outline(elements);
-    // Board origin in KiCad coordinates — component positions are absolute,
-    // so we translate them relative to the board's top-left corner.
+    // Board origin in KiCad coordinates - component positions are absolute,
+    // so they are measured from the board's own corner, the bottom-left one,
+    // with Y turned the board's way up. `frame` says why.
     let board_origin = board_bounds
         .as_ref()
         .map(|b| {
-            (
+            frame::origin(
                 b.min.x.0 as f64 / 1_000_000.0,
-                b.min.y.0 as f64 / 1_000_000.0,
+                b.max.y.0 as f64 / 1_000_000.0,
             )
         })
         .unwrap_or((0.0, 0.0));
@@ -1332,8 +1335,8 @@ fn parse_footprint(
     }
 
     // Convert position mm → nm, translating from absolute KiCad coords
-    // to board-relative coords (origin at board's top-left corner)
-    let position = Position::from_mm(pos_x - board_origin_mm.0, pos_y - board_origin_mm.1);
+    // to board-relative coords, Y up, from the board's bottom-left corner
+    let position = Position(frame::board_point(board_origin_mm, pos_x, pos_y));
     // Convert angle degrees → millidegrees
     let rotation = Rotation((angle * 1000.0).round() as i32);
 
@@ -1459,7 +1462,7 @@ pub(crate) fn parse_pad(
                         if list.len() >= 3 {
                             let x = coordinate(&list[1], "pad position x")?;
                             let y = coordinate(&list[2], "pad position y")?;
-                            local_pos = Point::from_mm(x, y);
+                            local_pos = frame::local_point(x, y);
                         }
                     }
                 }
@@ -1661,7 +1664,7 @@ fn parse_zone(
                             if pt_list.len() >= 3 {
                                 let x = coordinate(&pt_list[1], "zone outline x")?;
                                 let y = coordinate(&pt_list[2], "zone outline y")?;
-                                points.push((x - origin.0, y - origin.1));
+                                points.push(frame::board_mm(origin, x, y));
                             }
                         }
                     }
@@ -1833,7 +1836,7 @@ fn parse_segment(
                         if sub.len() >= 3 {
                             let x = coordinate(&sub[1], "segment start x")?;
                             let y = coordinate(&sub[2], "segment start y")?;
-                            start = Some(Point::from_mm(x - origin.0, y - origin.1));
+                            start = Some(frame::board_point(origin, x, y));
                         }
                     }
                 }
@@ -1842,7 +1845,7 @@ fn parse_segment(
                         if sub.len() >= 3 {
                             let x = coordinate(&sub[1], "segment end x")?;
                             let y = coordinate(&sub[2], "segment end y")?;
-                            end = Some(Point::from_mm(x - origin.0, y - origin.1));
+                            end = Some(frame::board_point(origin, x, y));
                         }
                     }
                 }
@@ -1933,7 +1936,7 @@ fn parse_track_arc(
                     if sub.len() >= 3 {
                         let x = coordinate(&sub[1], "arc x")?;
                         let y = coordinate(&sub[2], "arc y")?;
-                        let point = Point::from_mm(x - origin.0, y - origin.1);
+                        let point = frame::board_point(origin, x, y);
                         match name.as_str() {
                             "start" => start = Some(point),
                             "mid" => mid = Some(point),
@@ -2051,7 +2054,7 @@ fn parse_via(
                         if sub.len() >= 3 {
                             let x = coordinate(&sub[1], "via position x")?;
                             let y = coordinate(&sub[2], "via position y")?;
-                            position = Some(Point::from_mm(x - origin.0, y - origin.1));
+                            position = Some(frame::board_point(origin, x, y));
                         }
                     }
                 }
@@ -2288,7 +2291,7 @@ fn extract_board_ring(elements: &[Sexp], origin: (f64, f64)) -> Option<Vec<Point
                     let Ok(pt_list) = pt.list() else { continue };
                     if pt_list.len() >= 3 {
                         if let (Some(x), Some(y)) = (get_f64(&pt_list[1]), get_f64(&pt_list[2])) {
-                            points.push(Point::from_mm(x - origin.0, y - origin.1));
+                            points.push(frame::board_point(origin, x, y));
                         }
                     }
                 }
@@ -2308,8 +2311,8 @@ fn extract_board_ring(elements: &[Sexp], origin: (f64, f64)) -> Option<Vec<Point
         if let (Some(start), Some(end)) = (find_xy_child(elem, "start"), find_xy_child(elem, "end"))
         {
             segments.push((
-                Point::from_mm(start.0 - origin.0, start.1 - origin.1),
-                Point::from_mm(end.0 - origin.0, end.1 - origin.1),
+                frame::board_point(origin, start.0, start.1),
+                frame::board_point(origin, end.0, end.1),
             ));
         }
     }

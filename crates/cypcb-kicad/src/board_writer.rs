@@ -75,7 +75,8 @@ fn mm(nm: Nm) -> String {
 const SHEET_WIDTH: Nm = Nm(297_000_000);
 const SHEET_HEIGHT: Nm = Nm(210_000_000);
 
-/// Where the design's own origin lands on the drawing sheet.
+/// Where the design's own origin - its bottom-left corner - lands on the
+/// drawing sheet.
 ///
 /// A design counts from its own corner, and those numbers used to be written
 /// straight out - so every board opened in KiCad sat jammed into the top-left
@@ -87,13 +88,21 @@ fn sheet_origin(size: cypcb_world::BoardSize) -> cypcb_core::Point {
     const MARGIN: i64 = 10_000_000;
     cypcb_core::Point::new(
         Nm(((SHEET_WIDTH.0 - size.width.0) / 2).max(MARGIN)),
-        Nm(((SHEET_HEIGHT.0 - size.height.0) / 2).max(MARGIN)),
+        Nm(((SHEET_HEIGHT.0 - size.height.0) / 2).max(MARGIN) + size.height.0),
     )
 }
 
-/// A board coordinate, written where it lands on the sheet.
+/// A board coordinate, written where it lands on the sheet. The sheet's Y
+/// grows down, so [`crate::frame`] turns it over.
 fn on_sheet(origin: cypcb_core::Point, x: Nm, y: Nm) -> (String, String) {
-    (mm(Nm(origin.x.0 + x.0)), mm(Nm(origin.y.0 + y.0)))
+    let (x, y) = crate::frame::sheet_nm(origin, cypcb_core::Point::new(x, y));
+    (mm(x), mm(y))
+}
+
+/// A Y inside a footprint, written the way a footprint in the file states
+/// it: turned over by [`crate::frame`], as every Y on the sheet is.
+fn local_y(y: Nm) -> String {
+    mm(Nm(-y.0))
 }
 
 /// KiCad's name for a pad shape.
@@ -624,7 +633,7 @@ fn write_footprints(
                 "    (pad \"{}\" {kind} {shape} (at {} {}) (size {} {}) (layers {layers})",
                 pad.number,
                 mm(pad.position.x),
-                mm(pad.position.y),
+                local_y(pad.position.y),
                 mm(pad.size.0),
                 mm(pad.size.1),
             );
@@ -683,9 +692,9 @@ fn write_legend(
                         out,
                         "    (fp_line (start {} {}) (end {} {}) (stroke (width {}) (type solid)) (layer \"{layer}\"))",
                         mm(start.x),
-                        mm(start.y),
+                        local_y(start.y),
                         mm(end.x),
-                        mm(end.y),
+                        local_y(end.y),
                         mm(width)
                     );
                 }
@@ -698,9 +707,9 @@ fn write_legend(
                         out,
                         "    (fp_circle (center {} {}) (end {} {}) (stroke (width {}) (type solid)) (fill none) (layer \"{layer}\"))",
                         mm(centre.x),
-                        mm(centre.y),
+                        local_y(centre.y),
                         mm(cypcb_core::Nm(centre.x.0 + radius.0)),
-                        mm(centre.y),
+                        local_y(centre.y),
                         mm(width)
                     );
                 }
@@ -734,9 +743,9 @@ fn write_legend(
             out,
             "    (fp_line (start {} {}) (end {} {}) (stroke (width {}) (type solid)) (layer \"{layer}\"))",
             mm(x1),
-            mm(y1),
+            local_y(y1),
             mm(x2),
-            mm(y2),
+            local_y(y2),
             stroke
         );
     }

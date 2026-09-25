@@ -202,7 +202,9 @@ fn a_polygon_edge_is_read_from_the_boards_corner_too() {
 
     // The ring spans 110,70 to 150,95 on the sheet and has a bite out of its
     // bottom left, so it is 40 by 25 and cannot be recovered from the size.
-    // Every corner of it belongs at the board's own origin.
+    // Every corner of it belongs at the board's own origin, the bottom-left
+    // corner, 110,95 on the sheet, with Y turned up: the bite is the bottom
+    // left of the board too, 25 wide and 10 tall.
     assert!(
         source.contains("size 40.000000mm x 25.000000mm"),
         "the board is the size of its ring:\n{source}"
@@ -210,10 +212,10 @@ fn a_polygon_edge_is_read_from_the_boards_corner_too() {
     assert_eq!(
         numbers_after(&source, "point "),
         vec![
-            (0.0, 0.0),
-            (0.0, 15.0),
-            (25.0, 15.0),
-            (25.0, 25.0),
+            (0.0, 10.0),
+            (0.0, 25.0),
+            (25.0, 0.0),
+            (25.0, 10.0),
             (40.0, 0.0),
             (40.0, 25.0),
         ],
@@ -221,7 +223,7 @@ fn a_polygon_edge_is_read_from_the_boards_corner_too() {
     );
     assert_eq!(
         numbers_after(&source, "at "),
-        vec![(10.0, 10.0)],
+        vec![(10.0, 15.0)],
         "and so is the part, which is the same fault seen from the other \
          side:\n{source}"
     );

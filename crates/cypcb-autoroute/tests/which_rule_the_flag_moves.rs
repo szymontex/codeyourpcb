@@ -15,6 +15,12 @@
 //! failed at its own job on that board or succeeded at it and cost something
 //! elsewhere. The two have opposite answers: the first would mean the design
 //! is wrong, the second means the price is named and can be paid or refused.
+//!
+//! Every figure in this file up to 2026-09-25 was measured on the boards as
+//! the KiCad reader then read them: a mirror image of the files, which the
+//! router does not route the same way. The figures taken the right way up are
+//! written beside the old ones, which stay as the record of what was measured
+//! when.
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -163,9 +169,11 @@ fn the_board_that_got_worse_was_paying_for_the_via_optimizer() {
     // The figures R-11 and R-19 quote off this board. They are exact on
     // purpose: a change to the via price, the grid or the weights will move
     // them, and when it does the two sections in the canon have to be read
-    // again rather than quietly left behind.
+    // again rather than quietly left behind. They read 12 to 2, 0 to 0 and 3
+    // to 2 until 2026-09-25, on the mirrored board; read the right way up they
+    // are 11 to 3, 1 to 0 and 2 to 2.
     const CANON_FIGURES: &[(&str, usize, usize)] =
-        &[("AcidTrap", 12, 2), ("Clearance", 0, 0), ("PadEntry", 3, 2)];
+        &[("AcidTrap", 11, 3), ("Clearance", 1, 0), ("PadEntry", 2, 2)];
     for (kind, before, after) in CANON_FIGURES {
         assert_eq!(
             (
@@ -187,17 +195,27 @@ fn the_board_that_got_worse_was_paying_for_the_via_optimizer() {
     let clearance = on.get("Clearance").copied().unwrap_or(0);
     println!("shift_driver clearance share {clearance} of {total}");
 
-    // No kind rises. This is the assertion that would have caught the
-    // optimizer: it was the one rule going the other way.
+    // What it claimed until 2026-09-25: no kind rises. That was the assertion
+    // that would have caught the optimizer, the one rule going the other way.
+    // Measured on the board read the right way up, the flag takes the report
+    // from 16 rows to 10 and two kinds do rise: edge clearance 0 to 4 and hole
+    // to edge 0 to 1. What it claims now: those two, and only those, rise - a
+    // price the flag is named as paying on this board, held exactly so a third
+    // kind joining them, or either of them going, is read rather than missed.
+    let mut rising = Vec::new();
     for kind in kinds_of(&off, &on) {
         let before = off.get(&kind).copied().unwrap_or(0);
         let after = on.get(&kind).copied().unwrap_or(0);
         println!("shift_driver {kind:<16} {before:>4} -> {after:>4}");
-        assert!(
-            after <= before,
-            "the flag costs shift_driver a rule again: {kind} {before} -> {after}"
-        );
+        if after > before {
+            rising.push(kind);
+        }
     }
+    assert_eq!(
+        rising,
+        ["EdgeClearance", "HoleToEdge"],
+        "the kinds the flag costs shift_driver"
+    );
 }
 
 #[test]
@@ -252,7 +270,13 @@ fn the_flag_shorts_no_board_the_default_routes_clean() {
     // than a reason to stop looking: the board is named here so the test holds
     // every other board to the old line, and fails - to be read, and the name
     // taken out - the day the flag stops shorting `multi_ic` more.
-    const THE_FLAG_SHORTS_MORE: &[&str] = &["multi_ic.kicad_pcb"];
+    //
+    // It stopped on 2026-09-25, and not because the flag changed: the boards
+    // had been read as their own mirror image, and read the right way up
+    // `multi_ic` goes 64 -> 51 with the flag while `qfp_fanout` goes 98 -> 101.
+    // Across the six, 238 -> 204. The board the flag shorts more is now
+    // `qfp_fanout`, named for the same reason `multi_ic` was.
+    const THE_FLAG_SHORTS_MORE: &[&str] = &["qfp_fanout.kicad_pcb"];
     let mut boards_the_flag_shorts_more = Vec::new();
     let mut off_total = 0;
     let mut on_total = 0;

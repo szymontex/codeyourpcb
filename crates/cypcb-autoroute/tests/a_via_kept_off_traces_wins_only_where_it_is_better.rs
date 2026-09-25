@@ -6,6 +6,30 @@
 //! another board worse. A variant only earns its place if the ranking picks it
 //! on the first board and not on the second, so each is run side by side with
 //! its base, both taken from the shipped list by name.
+//!
+//! What it claimed until 2026-09-25: Default with vias kept off traces wins
+//! `qfp_fanout` and loses `stm32_breakout`. Those runs were on the boards as
+//! the KiCad reader then read them, a mirror image of the files. Read the right
+//! way up, each pair on every benchmark board (shorts, variant against base):
+//!
+//! | board          | High-Density pair       | Default pair       |
+//! |----------------|-------------------------|--------------------|
+//! | led_blink      | 0 against 0, base wins  | 0 against 0, base  |
+//! | stm32_breakout | 30 against 38, wins     | 61 against 71, wins|
+//! | multi_ic       | 68 against 74, wins     | 61 against 64, wins|
+//! | shift_driver   | 0 against 8 but 30      | 0 against 1, wins  |
+//! |                | incomplete against 24,  |                    |
+//! |                | base wins               |                    |
+//! | qfp_fanout     | 72 against 68, base wins| 40 against 98, wins|
+//! | plane_board    | 4 against 4, wins       | 4 against 4, wins  |
+//!
+//! What it claims now: the High-Density variant still has a board it helps
+//! and a board it hurts, and the ranking picks it on the first and not the
+//! second. The Default variant no longer has a board it hurts - it routes
+//! none of the six with more shorts than Default - so the half of the claim
+//! that needs one cannot be tested on it; what is tested is that it wins
+//! where it takes shorts off and that the base keeps a board where the two
+//! tie.
 
 use std::path::Path;
 
@@ -88,7 +112,22 @@ fn default_kept_off_traces_wins_qfp_fanout() {
 }
 
 #[test]
-fn default_kept_off_traces_loses_stm32_breakout() {
+fn default_kept_off_traces_wins_stm32_breakout() {
     let pair = [DEFAULT, DEFAULT_KEPT_OFF];
-    assert_eq!(winner_on("stm32_breakout.kicad_pcb", pair), DEFAULT);
+    assert_eq!(
+        winner_on("stm32_breakout.kicad_pcb", pair),
+        DEFAULT_KEPT_OFF
+    );
+}
+
+#[test]
+fn default_keeps_led_blink_where_the_two_tie() {
+    let pair = [DEFAULT, DEFAULT_KEPT_OFF];
+    assert_eq!(winner_on("led_blink.kicad_pcb", pair), DEFAULT);
+}
+
+#[test]
+fn high_density_kept_off_traces_loses_qfp_fanout() {
+    let pair = [HIGH_DENSITY, HIGH_DENSITY_KEPT_OFF];
+    assert_eq!(winner_on("qfp_fanout.kicad_pcb", pair), HIGH_DENSITY);
 }

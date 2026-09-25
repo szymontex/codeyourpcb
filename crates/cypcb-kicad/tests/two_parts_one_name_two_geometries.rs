@@ -157,11 +157,12 @@ fn two_geometries_under_one_name_stay_two_geometries() {
     let j1 = &placed[0].1;
     let j2 = &placed[1].1;
 
-    // J1's second pad is 2.54mm below its first; J2's is 2.54mm to the right.
+    // J1's second pad is 2.54mm below its first - a lower Y, since the
+    // board's Y grows up; J2's is 2.54mm to the right.
     assert_eq!(j1[1].0 - j1[0].0, 0, "J1 runs along y: its pads share an x");
     assert_eq!(
         j1[1].1 - j1[0].1,
-        2_540_000,
+        -2_540_000,
         "J1's pads are a pitch apart in y"
     );
     assert_eq!(j2[1].1 - j2[0].1, 0, "J2 runs along x: its pads share a y");

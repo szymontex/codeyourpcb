@@ -13,8 +13,10 @@
 //!
 //! # Pin Numbering
 //!
-//! All IC packages use counter-clockwise pin numbering starting from pin 1
-//! at the bottom-left (standard IC convention).
+//! Every package counts its pins counter-clockwise seen from the top,
+//! starting from pin 1 at the top left: the zero orientation of IPC-7351 as
+//! KiCad's library conventions state it in rule F4.2. The frame is the one
+//! [`crate::footprint`] states - Y grows up.
 //!
 //! # Example
 //!
@@ -61,18 +63,18 @@ fn smd_layers() -> Vec<Layer> {
 ///
 /// # Pin Numbering
 ///
-/// Pins are numbered counter-clockwise starting from bottom-left:
-/// - Left side: pins 1 to n/2 (bottom to top)
-/// - Right side: pins n to n/2+1 (top to bottom)
+/// Pins are numbered counter-clockwise seen from the top, starting from
+/// pin 1 at the top left:
+/// - Left side: pins 1 to n/2, top to bottom
+/// - Right side: pins n/2+1 to n, bottom to top, so pin n sits opposite pin 1
 ///
 /// ```text
-///     Pin n/2  ...  Pin 2  Pin 1
-///         |          |      |
-///       +-------------------+
-///       |                   |
-///       +-------------------+
-///         |          |      |
-///     Pin n/2+1 ... Pin n-1 Pin n
+///              +-----+
+///     Pin 1   -|  o  |-  Pin n
+///     Pin 2   -|     |-  Pin n-1
+///      ...     |     |    ...
+///     Pin n/2 -|     |-  Pin n/2+1
+///              +-----+
 /// ```
 ///
 /// # Panics
@@ -104,10 +106,10 @@ pub fn gullwing_footprint(
     let total_height = Nm(pitch.0 * (pins_per_side - 1) as i64);
     let y_offset = Nm(total_height.0 / 2);
 
-    // Left side (pins 1 to pins_per_side), bottom to top
+    // Left side (pins 1 to pins_per_side), top to bottom
     for i in 0..pins_per_side {
         let pin_num = i + 1;
-        let y = Nm(i as i64 * pitch.0) - y_offset;
+        let y = y_offset - Nm(i as i64 * pitch.0);
 
         pads.push(PadDef {
             number: pin_num.to_string(),
@@ -121,10 +123,10 @@ pub fn gullwing_footprint(
         });
     }
 
-    // Right side (pins pin_count down to pins_per_side+1), top to bottom
+    // Right side (pins pins_per_side+1 to pin_count), bottom to top
     for i in 0..pins_per_side {
-        let pin_num = pin_count - i;
-        let y = Nm((pins_per_side - 1 - i) as i64 * pitch.0) - y_offset;
+        let pin_num = pins_per_side + 1 + i;
+        let y = Nm(i as i64 * pitch.0) - y_offset;
 
         pads.push(PadDef {
             number: pin_num.to_string(),
@@ -229,23 +231,21 @@ pub fn soic14() -> Footprint {
 /// - Voltage references
 /// - Single-gate logic
 ///
-/// Pin layout (asymmetric):
+/// Pin layout, seen from the top (asymmetric):
 /// ```text
-///         Pin 3
-///           |
-///     +----------+
-///     |          |
-///     +----------+
-///       |      |
-///     Pin 1  Pin 2
+///            +---+
+///     Pin 1 -|   |
+///            |   |- Pin 3
+///     Pin 2 -|   |
+///            +---+
 /// ```
 ///
 /// Dimensions:
-/// - Pin 1: left side at (-0.95mm, -1.0mm)
-/// - Pin 2: right side at (0.95mm, -1.0mm)
-/// - Pin 3: top center at (0mm, 1.0mm)
-/// - Pad size: 0.6mm x 1.0mm
-/// - Body: 3.0mm x 2.5mm
+/// - Pin 1: left side, top, at (-1.0mm, 0.95mm)
+/// - Pin 2: left side, bottom, at (-1.0mm, -0.95mm)
+/// - Pin 3: right side, centre, at (1.0mm, 0mm)
+/// - Pad size: 1.0mm x 0.6mm
+/// - Body: 2.5mm x 3.0mm
 ///
 /// # Example
 ///
@@ -262,41 +262,41 @@ pub fn sot23() -> Footprint {
         name: "SOT-23".into(),
         description: "Small Outline Transistor, 3 pins".into(),
         pads: vec![
-            // Pin 1: left side bottom
+            // Pin 1: left side, top
             PadDef {
                 number: "1".into(),
                 shape: PadShape::Rect,
-                position: Point::new(Nm::from_mm(-0.95), Nm::from_mm(-1.0)),
-                size: (Nm::from_mm(0.6), Nm::from_mm(1.0)),
+                position: Point::new(Nm::from_mm(-1.0), Nm::from_mm(0.95)),
+                size: (Nm::from_mm(1.0), Nm::from_mm(0.6)),
                 drill: None,
                 slot: None,
                 layers: layers.clone(),
                 mask_margin: None,
             },
-            // Pin 2: right side bottom
+            // Pin 2: left side, bottom
             PadDef {
                 number: "2".into(),
                 shape: PadShape::Rect,
-                position: Point::new(Nm::from_mm(0.95), Nm::from_mm(-1.0)),
-                size: (Nm::from_mm(0.6), Nm::from_mm(1.0)),
+                position: Point::new(Nm::from_mm(-1.0), Nm::from_mm(-0.95)),
+                size: (Nm::from_mm(1.0), Nm::from_mm(0.6)),
                 drill: None,
                 slot: None,
                 layers: layers.clone(),
                 mask_margin: None,
             },
-            // Pin 3: top center
+            // Pin 3: right side, centre
             PadDef {
                 number: "3".into(),
                 shape: PadShape::Rect,
-                position: Point::new(Nm::ZERO, Nm::from_mm(1.0)),
-                size: (Nm::from_mm(0.6), Nm::from_mm(1.0)),
+                position: Point::new(Nm::from_mm(1.0), Nm::ZERO),
+                size: (Nm::from_mm(1.0), Nm::from_mm(0.6)),
                 drill: None,
                 slot: None,
                 layers,
                 mask_margin: None,
             },
         ],
-        bounds: Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(3.0), Nm::from_mm(2.5))),
+        bounds: Rect::from_center_size(Point::ORIGIN, (Nm::from_mm(2.5), Nm::from_mm(3.0))),
         silk: Vec::new(),
         courtyard: Rect::default(),
     }
@@ -310,19 +310,19 @@ pub fn sot23() -> Footprint {
 /// - Op-amps (MCP6001)
 /// - Analog switches
 ///
-/// Pin layout:
+/// Pin layout, seen from the top:
 /// ```text
-///     Pin 3  Pin 4
-///       |      |
-///     +----------+
-///     |          |
-///     +----------+
-///       |    |
-///     Pin 1  |  Pin 5
-///          Pin 2
+///            +---+
+///     Pin 1 -|   |- Pin 5
+///     Pin 2 -|   |
+///     Pin 3 -|   |- Pin 4
+///            +---+
 /// ```
 ///
-/// Pins 1-3 on left side (bottom to top), pins 4-5 on right side (top to bottom).
+/// Pins 1-3 on the left side (top to bottom), pins 4-5 on the right side
+/// (bottom to top). This drawing and the pads below were a mirror image of
+/// the part until 2026-09-25: pin 1 at the bottom left, the pins counting
+/// clockwise, so a regulator placed from it was soldered the wrong way round.
 ///
 /// Dimensions:
 /// - Pitch: 0.95mm
@@ -347,11 +347,11 @@ pub fn sot23_5() -> Footprint {
         name: "SOT-23-5".into(),
         description: "Small Outline Transistor, 5 pins".into(),
         pads: vec![
-            // Pins 1-3: left side, bottom to top
+            // Pins 1-3: left side, top to bottom
             PadDef {
                 number: "1".into(),
                 shape: PadShape::Rect,
-                position: Point::new(-half_span, -pitch),
+                position: Point::new(-half_span, pitch),
                 size: (Nm::from_mm(1.0), Nm::from_mm(0.6)),
                 drill: None,
                 slot: None,
@@ -371,18 +371,18 @@ pub fn sot23_5() -> Footprint {
             PadDef {
                 number: "3".into(),
                 shape: PadShape::Rect,
-                position: Point::new(-half_span, pitch),
+                position: Point::new(-half_span, -pitch),
                 size: (Nm::from_mm(1.0), Nm::from_mm(0.6)),
                 drill: None,
                 slot: None,
                 layers: layers.clone(),
                 mask_margin: None,
             },
-            // Pins 4-5: right side, top to bottom
+            // Pins 4-5: right side, bottom to top
             PadDef {
                 number: "4".into(),
                 shape: PadShape::Rect,
-                position: Point::new(half_span, pitch),
+                position: Point::new(half_span, -pitch),
                 size: (Nm::from_mm(1.0), Nm::from_mm(0.6)),
                 drill: None,
                 slot: None,
@@ -392,7 +392,7 @@ pub fn sot23_5() -> Footprint {
             PadDef {
                 number: "5".into(),
                 shape: PadShape::Rect,
-                position: Point::new(half_span, -pitch),
+                position: Point::new(half_span, pitch),
                 size: (Nm::from_mm(1.0), Nm::from_mm(0.6)),
                 drill: None,
                 slot: None,
@@ -413,18 +413,19 @@ pub fn sot23_5() -> Footprint {
 /// - Microcontrollers (ATmega328, STM32)
 /// - Interface ICs
 ///
-/// Pin numbering (counter-clockwise from bottom-left):
+/// Pin numbering, counter-clockwise seen from the top, pin 1 at the top of
+/// the left side:
 /// ```text
-///            17 18 19 20 21 22 23 24
+///            32 31 30 29 28 27 26 25
 ///             |  |  |  |  |  |  |  |
 ///         +---------------------------+
-///      16-|                           |-9
-///      15-|                           |-10
-///      14-|                           |-11
-///      13-|                           |-12
+///       1-| o                         |-24
+///       2-|                           |-23
+///      ..-|                           |-..
+///       8-|                           |-17
 ///         +---------------------------+
 ///             |  |  |  |  |  |  |  |
-///             1  2  3  4  5  6  7  8
+///             9 10 11 12 13 14 15 16
 /// ```
 ///
 /// Dimensions:
@@ -460,70 +461,48 @@ pub fn tqfp32() -> Footprint {
     let offset = Nm(side_length.0 / 2);
 
     let mut pin_num = 1;
+    let mut side = |pads: &mut Vec<PadDef>, at: &dyn Fn(Nm) -> Point, size: (Nm, Nm)| {
+        for i in 0..pins_per_side {
+            pads.push(PadDef {
+                number: pin_num.to_string(),
+                shape: PadShape::Rect,
+                position: at(Nm(i as i64 * pitch.0)),
+                size,
+                drill: None,
+                slot: None,
+                layers: layers.clone(),
+                mask_margin: None,
+            });
+            pin_num += 1;
+        }
+    };
+    let horizontal = (pad_length, pad_width);
+    let vertical = (pad_width, pad_length);
 
-    // Bottom side (left to right): pins 1-8
-    for i in 0..pins_per_side {
-        let x = Nm(i as i64 * pitch.0) - offset;
-        pads.push(PadDef {
-            number: pin_num.to_string(),
-            shape: PadShape::Rect,
-            position: Point::new(x, -half_span),
-            size: (pad_width, pad_length), // Vertical pad
-            drill: None,
-            slot: None,
-            layers: layers.clone(),
-            mask_margin: None,
-        });
-        pin_num += 1;
-    }
-
-    // Right side (bottom to top): pins 9-16
-    for i in 0..pins_per_side {
-        let y = Nm(i as i64 * pitch.0) - offset;
-        pads.push(PadDef {
-            number: pin_num.to_string(),
-            shape: PadShape::Rect,
-            position: Point::new(half_span, y),
-            size: (pad_length, pad_width), // Horizontal pad
-            drill: None,
-            slot: None,
-            layers: layers.clone(),
-            mask_margin: None,
-        });
-        pin_num += 1;
-    }
-
-    // Top side (right to left): pins 17-24
-    for i in 0..pins_per_side {
-        let x = offset - Nm(i as i64 * pitch.0);
-        pads.push(PadDef {
-            number: pin_num.to_string(),
-            shape: PadShape::Rect,
-            position: Point::new(x, half_span),
-            size: (pad_width, pad_length), // Vertical pad
-            drill: None,
-            slot: None,
-            layers: layers.clone(),
-            mask_margin: None,
-        });
-        pin_num += 1;
-    }
-
-    // Left side (top to bottom): pins 25-32
-    for i in 0..pins_per_side {
-        let y = offset - Nm(i as i64 * pitch.0);
-        pads.push(PadDef {
-            number: pin_num.to_string(),
-            shape: PadShape::Rect,
-            position: Point::new(-half_span, y),
-            size: (pad_length, pad_width), // Horizontal pad
-            drill: None,
-            slot: None,
-            layers: layers.clone(),
-            mask_margin: None,
-        });
-        pin_num += 1;
-    }
+    // Left side, top to bottom: pins 1-8
+    side(
+        &mut pads,
+        &|step| Point::new(-half_span, offset - step),
+        horizontal,
+    );
+    // Bottom side, left to right: pins 9-16
+    side(
+        &mut pads,
+        &|step| Point::new(step - offset, -half_span),
+        vertical,
+    );
+    // Right side, bottom to top: pins 17-24
+    side(
+        &mut pads,
+        &|step| Point::new(half_span, step - offset),
+        horizontal,
+    );
+    // Top side, right to left: pins 25-32
+    side(
+        &mut pads,
+        &|step| Point::new(offset - step, half_span),
+        vertical,
+    );
 
     Footprint {
         name: "TQFP-32".into(),
@@ -557,13 +536,13 @@ mod tests {
     fn test_soic8_pin_positions() {
         let fp = soic8();
 
-        // Pin 1 should be on left side (negative X)
+        // Pin 1 at the top left, pin 8 opposite it on the right
         let pin1 = fp.get_pad("1").unwrap();
-        assert!(pin1.position.x.0 < 0);
+        assert!(pin1.position.x.0 < 0 && pin1.position.y.0 > 0);
 
-        // Pin 8 should be on right side (positive X)
         let pin8 = fp.get_pad("8").unwrap();
         assert!(pin8.position.x.0 > 0);
+        assert_eq!(pin8.position.y, pin1.position.y);
 
         // Row span should be 5.4mm
         let row_span = (pin8.position.x.0 - pin1.position.x.0).abs();
@@ -593,15 +572,14 @@ mod tests {
         let pin2 = fp.get_pad("2").unwrap();
         let pin3 = fp.get_pad("3").unwrap();
 
-        // Pins 1 and 2 on bottom
-        assert_eq!(pin1.position.y, pin2.position.y);
-        assert!(pin1.position.y.0 < 0);
+        // Pins 1 and 2 on the left, pin 1 above pin 2
+        assert_eq!(pin1.position.x, pin2.position.x);
+        assert!(pin1.position.x.0 < 0);
+        assert!(pin1.position.y.0 > pin2.position.y.0);
 
-        // Pin 3 on top
-        assert!(pin3.position.y.0 > 0);
-
-        // Pin 3 centered horizontally
-        assert_eq!(pin3.position.x, Nm::ZERO);
+        // Pin 3 alone on the right, centred vertically
+        assert!(pin3.position.x.0 > 0);
+        assert_eq!(pin3.position.y, Nm::ZERO);
     }
 
     #[test]
@@ -610,12 +588,15 @@ mod tests {
         assert_eq!(fp.name, "SOT-23-5");
         assert_eq!(fp.pads.len(), 5);
 
-        // Pins 1-3 on left, 4-5 on right
+        // Pins 1-3 on the left, 4-5 on the right, pin 1 at the top left and
+        // pin 5 opposite it
         let pin1 = fp.get_pad("1").unwrap();
         let pin4 = fp.get_pad("4").unwrap();
+        let pin5 = fp.get_pad("5").unwrap();
 
-        assert!(pin1.position.x.0 < 0);
-        assert!(pin4.position.x.0 > 0);
+        assert!(pin1.position.x.0 < 0 && pin1.position.y.0 > 0);
+        assert!(pin4.position.x.0 > 0 && pin4.position.y.0 < 0);
+        assert_eq!(pin5.position.y, pin1.position.y);
     }
 
     #[test]
@@ -638,21 +619,21 @@ mod tests {
     fn test_tqfp32_pin_positions() {
         let fp = tqfp32();
 
-        // Pin 1 should be on bottom
+        // Pin 1 at the top of the left side
         let pin1 = fp.get_pad("1").unwrap();
-        assert!(pin1.position.y.0 < 0);
+        assert!(pin1.position.x.0 < 0 && pin1.position.y.0 > 0);
 
-        // Pin 9 should be on right
+        // Pin 9 at the left end of the bottom side
         let pin9 = fp.get_pad("9").unwrap();
-        assert!(pin9.position.x.0 > 0);
+        assert!(pin9.position.y.0 < 0 && pin9.position.x.0 < 0);
 
-        // Pin 17 should be on top
+        // Pin 17 at the bottom of the right side
         let pin17 = fp.get_pad("17").unwrap();
-        assert!(pin17.position.y.0 > 0);
+        assert!(pin17.position.x.0 > 0 && pin17.position.y.0 < 0);
 
-        // Pin 25 should be on left
+        // Pin 25 at the right end of the top side
         let pin25 = fp.get_pad("25").unwrap();
-        assert!(pin25.position.x.0 < 0);
+        assert!(pin25.position.y.0 > 0 && pin25.position.x.0 > 0);
     }
 
     #[test]
