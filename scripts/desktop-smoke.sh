@@ -33,7 +33,10 @@ set -e
 
 cd "$(dirname "$0")/.."
 
-APP=target/debug/cypcb-desktop
+# Cargo builds into $CARGO_TARGET_DIR when it is set, so the binary is
+# looked for there too; resolved to an absolute path because it is run by
+# name further down.
+APP=$(realpath -m "${CARGO_TARGET_DIR:-target}")/debug/cypcb-desktop
 FRONTEND=viewer/dist
 SECONDS_UP=${SECONDS_UP:-12}
 SHOT=${SHOT:-/tmp/cypcb-desktop-smoke.png}
@@ -143,7 +146,7 @@ PY
 LISTENER=$!
 cat > "$RUNNER" <<EOF
 #!/bin/bash
-"$PWD/$APP" &
+"$APP" &
 APP_PID=\$!
 sleep $SECONDS_UP
 # Still there? A crash would have taken the pid with it.

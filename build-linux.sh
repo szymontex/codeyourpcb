@@ -4,7 +4,7 @@ echo "Building CodeYourPCB Desktop Installer"
 echo "============================================"
 echo ""
 echo "This will create production installers for Linux."
-echo "Output will be in: target/release/bundle/"
+echo "Output will be in: ${CARGO_TARGET_DIR:-target}/release/bundle/"
 echo ""
 echo "NOTE: This may take 10-20 minutes on first build."
 echo ""
@@ -56,8 +56,8 @@ if ! npm run build:desktop -- --bundles "$BUNDLES"; then
         echo "own - the cause is recorded in docs/TRACKER.md. Tauri reports the"
         echo "whole build as failed, so anything it did produce first is listed"
         echo "here rather than left unmentioned:"
-        ls -lh ../target/release/bundle/deb/*.deb \
-               ../target/release/bundle/rpm/*.rpm 2>/dev/null \
+        ls -lh "${CARGO_TARGET_DIR:-../target}"/release/bundle/deb/*.deb \
+               "${CARGO_TARGET_DIR:-../target}"/release/bundle/rpm/*.rpm 2>/dev/null \
           || echo "  (nothing)"
         echo ""
         echo "Run without CYPCB_APPIMAGE=1 for the two formats that do build."
@@ -79,7 +79,7 @@ echo ""
 # exist and never did. This script announced that path and then looked in it,
 # so a build that produced two installers reported "(not created)" for both,
 # directly under the words "Build complete!".
-BUNDLE=../target/release/bundle
+BUNDLE="${CARGO_TARGET_DIR:-../target}"/release/bundle
 
 echo "Installers created:"
 echo ""
