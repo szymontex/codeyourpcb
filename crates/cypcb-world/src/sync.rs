@@ -134,11 +134,19 @@ pub enum SyncError {
     /// the only thing reported was that R1.1 and R1.2 were unconnected - which
     /// reads as the design's fault rather than a typo. The connection the user
     /// asked for simply did not exist.
+    ///
+    /// `pin` is what the design wrote. Until 2026-09-25 it was the pad an
+    /// alias read it as, so `LED1.A` on a footprint without pad `1` was
+    /// reported as "no pin '1'", a name that appears nowhere in the design.
     UnknownPin {
         /// The component whose footprint was consulted.
         component: String,
-        /// The pin the net asked for.
+        /// The pin the net asked for, as the design wrote it.
         pin: String,
+        /// The pad an alias read `pin` as, when one did.
+        read_as: Option<String>,
+        /// Whether the part is a transistor, whose pins no alias names.
+        transistor: bool,
         /// The pins the footprint does have, in order.
         available: Vec<String>,
         /// Source code for miette display.
@@ -287,14 +295,15 @@ impl fmt::Display for SyncError {
             SyncError::UnknownPin {
                 component,
                 pin,
+                read_as,
                 available,
                 ..
             } => {
-                write!(
-                    f,
-                    "component '{component}' has no pin '{pin}'. It has: {}",
-                    available.join(", ")
-                )
+                write!(f, "component '{component}' has no pin '{pin}'")?;
+                if let Some(pad) = read_as {
+                    write!(f, " (read as pin '{pad}')")?;
+                }
+                write!(f, ". It has: {}", available.join(", "))
             }
             SyncError::MissingNet { net, .. } => {
                 write!(f, "trace references undefined net: '{}'", net)
@@ -400,6 +409,15 @@ impl Diagnostic for SyncError {
                     available.join(", ")
                 )
             })),
+            SyncError::UnknownPin {
+                transistor: true,
+                component,
+                ..
+            } => Some(Box::new(format!(
+                "write the pad number from the part's datasheet, e.g. {component}.1, or use a \
+                 footprint whose pads are named B, C and E: parts in the same package put base, \
+                 emitter and collector on different pads"
+            ))),
             SyncError::UnknownPin { available, .. } => Some(Box::new(format!(
                 "use one of the pins the footprint declares: {}",
                 available.join(", ")
@@ -1434,6 +1452,13 @@ fn pad_for_pin(pin: &AstPinId, footprint: Option<&Footprint>) -> String {
 /// +/- for polar caps) but footprints number pads as 1/2. This maps them so the
 /// DSN network section matches the library section. Called only through
 /// [`pad_for_pin`], after a pad of the exact name was looked for.
+///
+/// A transistor has no such map. Until 2026-09-25 `B`, `C` and `E` read as
+/// pads 1, 2 and 3, an order no datasheet read gives: onsemi's SOT-23 outline
+/// (98ASB42226B, CASE 318) lists base, emitter, collector (STYLE 6, the
+/// BC847 and MMBT3904) and emitter, base, collector (STYLE 7), and none with
+/// the collector on pin 2. A transistor pin is its pad number, or a pad of
+/// that name; anything else is refused with [`is_transistor_pin_name`]'s help.
 fn normalize_pin_name(name: &str) -> String {
     match name.to_lowercase().as_str() {
         // Diode / LED: anode=1, cathode=2
@@ -1442,13 +1467,18 @@ fn normalize_pin_name(name: &str) -> String {
         // Polar capacitor / power: positive=1, negative=2
         "+" | "pos" | "positive" | "p" => "1".to_string(),
         "-" | "neg" | "negative" | "n" => "2".to_string(),
-        // Transistor BJT: base=1, collector=2, emitter=3
-        "b" | "base" => "1".to_string(),
-        "c" | "collector" => "2".to_string(),
-        "e" | "emitter" => "3".to_string(),
         // Pass through unchanged (already numeric or unknown logical name)
         _ => name.to_string(),
     }
+}
+
+/// Whether a pin name is one the transistor alias used to read, so a part
+/// declared as something else still gets the transistor's help.
+fn is_transistor_pin_name(name: &str) -> bool {
+    matches!(
+        name.to_lowercase().as_str(),
+        "b" | "base" | "c" | "collector" | "e" | "emitter"
+    )
 }
 
 /// Synchronize a net definition to the world.
@@ -1525,9 +1555,18 @@ fn sync_net(
                 if !footprint.pads.is_empty()
                     && !footprint.pads.iter().any(|pad| pad.number == pin_str)
                 {
+                    let written = match &pin_ref.pin {
+                        AstPinId::Number(n) => n.to_string(),
+                        AstPinId::Name(name) => name.clone(),
+                    };
+                    let transistor = world.get::<ComponentKind>(entity)
+                        == Some(&ComponentKind::Transistor)
+                        || is_transistor_pin_name(&written);
                     result.errors.push(SyncError::UnknownPin {
                         component: comp_name.clone(),
-                        pin: pin_str.clone(),
+                        read_as: (written != pin_str).then(|| pin_str.clone()),
+                        pin: written,
+                        transistor,
                         available: footprint.pads.iter().map(|p| p.number.clone()).collect(),
                         src: source.to_string(),
                         span: span_to_source_span(&pin_ref.component.span),
