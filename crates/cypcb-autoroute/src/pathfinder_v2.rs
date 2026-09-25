@@ -163,7 +163,7 @@ impl PathFinderStrategy {
 
         // Extract ratsnest
         let mut ratsnest = extract_ratsnest(world, library);
-        drop_pads_existing_copper_already_joins(world, &mut ratsnest);
+        drop_pads_existing_copper_already_joins(world, &mut grid, &mut ratsnest);
         if ratsnest.is_empty() {
             tracing::info!("No nets to route");
             return RoutingResult::complete(Vec::new(), Vec::new());
@@ -345,7 +345,15 @@ pub struct PathFinderLoopResult {
 /// Approximate on purpose: a pad counts as on a trace when its box overlaps a
 /// segment grown by half the trace width. Over-connecting would drop a route
 /// that is needed, so the test is the strict one - the pad has to touch.
-fn drop_pads_existing_copper_already_joins(world: &mut BoardWorld, ratsnest: &mut [NetRoute]) {
+///
+/// The pad kept for a piece of copper hands that piece to the grid: a route
+/// to the pad may start or stop anywhere on it, instead of running beside the
+/// wire to reach the pad at its end.
+fn drop_pads_existing_copper_already_joins(
+    world: &mut BoardWorld,
+    grid: &mut RoutingGrid,
+    ratsnest: &mut [NetRoute],
+) {
     use cypcb_world::components::trace::{Trace, Via};
 
     let traces: Vec<Trace> = {
@@ -364,8 +372,11 @@ fn drop_pads_existing_copper_already_joins(world: &mut BoardWorld, ratsnest: &mu
     };
 
     for net in ratsnest.iter_mut() {
-        // Which of this net's traces each pad sits on.
+        // Which of this net's traces each pad sits on: the first in
+        // `on_trace`, any other in `also_on`. A pad two traces meet on joins
+        // them.
         let mut on_trace: Vec<Option<usize>> = vec![None; net.pads.len()];
+        let mut also_on: Vec<(usize, usize)> = Vec::new();
         for (trace_index, trace) in traces.iter().enumerate() {
             if trace.net_id != net.net_id {
                 continue;
@@ -379,9 +390,6 @@ fn drop_pads_existing_copper_already_joins(world: &mut BoardWorld, ratsnest: &mu
                 .filter(|index| *index < 32)
                 .map(|index| 1u32 << index);
             for (pad_index, pad) in net.pads.iter().enumerate() {
-                if on_trace[pad_index].is_some() {
-                    continue;
-                }
                 match trace_layer_bit {
                     Some(bit) if pad.layer_mask & bit != 0 => {}
                     _ => continue,
@@ -398,7 +406,10 @@ fn drop_pads_existing_copper_already_joins(world: &mut BoardWorld, ratsnest: &mu
                         && pad.position.y.0 - half_h <= max_y
                 });
                 if touches {
-                    on_trace[pad_index] = Some(trace_index);
+                    match on_trace[pad_index] {
+                        Some(first) => also_on.push((first, trace_index)),
+                        None => on_trace[pad_index] = Some(trace_index),
+                    }
                 }
             }
         }
@@ -408,6 +419,42 @@ fn drop_pads_existing_copper_already_joins(world: &mut BoardWorld, ratsnest: &mu
         // a net that meet only through a via read as two pieces and the router
         // adds a connection between them that already exists.
         let mut piece: Vec<usize> = (0..traces.len()).collect();
+        // Each via of this net and one trace it lands on.
+        let mut landed: Vec<(&Via, usize)> = Vec::new();
+
+        // Two traces meet where a pad joins them, and where their copper
+        // touches on one layer: a designer draws a wire in as many pieces as
+        // it has bends and ends one where the next begins. Read as separate
+        // pieces, each kept a pad and the router drew a connection the board
+        // already had.
+        for &(first, other) in &also_on {
+            let (a, b) = (find(&mut piece, first), find(&mut piece, other));
+            if a != b {
+                piece[a] = b;
+            }
+        }
+        for (a_index, a) in traces.iter().enumerate() {
+            if a.net_id != net.net_id {
+                continue;
+            }
+            for (b_index, b) in traces.iter().enumerate().skip(a_index + 1) {
+                if b.net_id != net.net_id || b.layer != a.layer {
+                    continue;
+                }
+                let reach = (a.width.0 + b.width.0) / 2;
+                let touch = a.segments.iter().any(|sa| {
+                    b.segments
+                        .iter()
+                        .any(|sb| segments_within(sa.start, sa.end, sb.start, sb.end, reach))
+                });
+                if touch {
+                    let (ra, rb) = (find(&mut piece, a_index), find(&mut piece, b_index));
+                    if ra != rb {
+                        piece[ra] = rb;
+                    }
+                }
+            }
+        }
         fn find(piece: &mut [usize], index: usize) -> usize {
             let mut root = index;
             while piece[root] != root {
@@ -452,6 +499,9 @@ fn drop_pads_existing_copper_already_joins(world: &mut BoardWorld, ratsnest: &mu
                     touched.push(trace_index);
                 }
             }
+            if let Some(&first) = touched.first() {
+                landed.push((via, first));
+            }
             for pair in touched.windows(2) {
                 let (a, b) = (find(&mut piece, pair[0]), find(&mut piece, pair[1]));
                 if a != b {
@@ -474,8 +524,33 @@ fn drop_pads_existing_copper_already_joins(world: &mut BoardWorld, ratsnest: &mu
                         "pad already connected by copper on the board"
                     );
                 }
-                Some(trace_index) => {
-                    kept_traces.push(trace_index);
+                Some(root) => {
+                    kept_traces.push(root);
+                    let net_raw = net.net_id.id();
+                    let mut cells = Vec::new();
+                    for (trace_index, trace) in traces.iter().enumerate() {
+                        if trace.net_id != net.net_id || find(&mut piece, trace_index) != root {
+                            continue;
+                        }
+                        let Some(layer) = crate::grid::layer_to_index(trace.layer) else {
+                            continue;
+                        };
+                        for segment in &trace.segments {
+                            cells.extend(grid.copper_cells_of_segment(
+                                segment.start,
+                                segment.end,
+                                trace.width.0 / 2,
+                                layer,
+                            ));
+                        }
+                    }
+                    for &(via, on) in &landed {
+                        if find(&mut piece, on) == root {
+                            cells.extend(grid.copper_cells_of_via(via));
+                        }
+                    }
+                    let at = crate::orchestrator::pad_to_grid_node(grid, pad);
+                    grid.set_hand_copper(net_raw, at, cells);
                     pads.push(pad.clone());
                 }
                 None => pads.push(pad.clone()),
@@ -483,6 +558,45 @@ fn drop_pads_existing_copper_already_joins(world: &mut BoardWorld, ratsnest: &mu
         }
         net.pads = pads;
     }
+}
+
+/// Whether two segments come within `reach` of each other.
+///
+/// Two segments that do not cross are nearest at an end of one of them, so
+/// the four end-to-segment distances decide it unless they cross.
+fn segments_within(
+    a0: cypcb_core::Point,
+    a1: cypcb_core::Point,
+    b0: cypcb_core::Point,
+    b1: cypcb_core::Point,
+    reach: i64,
+) -> bool {
+    fn to_segment(p: cypcb_core::Point, s0: cypcb_core::Point, s1: cypcb_core::Point) -> f64 {
+        let (px, py) = ((p.x.0 - s0.x.0) as f64, (p.y.0 - s0.y.0) as f64);
+        let (dx, dy) = ((s1.x.0 - s0.x.0) as f64, (s1.y.0 - s0.y.0) as f64);
+        let length_sq = dx * dx + dy * dy;
+        let t = if length_sq > 0.0 {
+            ((px * dx + py * dy) / length_sq).clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+        ((px - t * dx).powi(2) + (py - t * dy).powi(2)).sqrt()
+    }
+    fn side(p: cypcb_core::Point, s0: cypcb_core::Point, s1: cypcb_core::Point) -> f64 {
+        ((s1.x.0 - s0.x.0) as f64) * ((p.y.0 - s0.y.0) as f64)
+            - ((s1.y.0 - s0.y.0) as f64) * ((p.x.0 - s0.x.0) as f64)
+    }
+    let crosses =
+        side(b0, a0, a1) * side(b1, a0, a1) < 0.0 && side(a0, b0, b1) * side(a1, b0, b1) < 0.0;
+    crosses
+        || [
+            to_segment(a0, b0, b1),
+            to_segment(a1, b0, b1),
+            to_segment(b0, a0, a1),
+            to_segment(b1, a0, a1),
+        ]
+        .iter()
+        .any(|distance| *distance <= reach as f64)
 }
 
 /// Whether a via reaches a given copper layer.
@@ -688,7 +802,7 @@ pub fn pathfinder_loop(
             let mut net_paths: Vec<Vec<GridNode>> = Vec::new();
             let mut net_ok = true;
 
-            for conn in &connections {
+            for (conn_index, conn) in connections.iter().enumerate() {
                 let from_pad = &net.pads[conn.from_idx];
                 let to_pad = &net.pads[conn.to_idx];
 
@@ -710,6 +824,25 @@ pub fn pathfinder_loop(
                 let start = pad_to_grid_node(grid, from_pad);
                 let end = pad_to_grid_node(grid, to_pad);
                 let any_end = is_multi_layer(to_pad.layer_mask);
+
+                // Copper the designer drew is one conductor with the pad it
+                // touches. A connection may leave from any piece a pad of the
+                // tree sits on - the tree is the first pad and every pad
+                // reached since, because a connection that fails ends the
+                // net - and has arrived when it touches the piece its new pad
+                // sits on. Without this a pad wired half-way by hand was
+                // routed to in full, alongside its own wire.
+                let mut hand_seeds: Vec<GridNode> = std::iter::once(connections[0].from_idx)
+                    .chain(connections[..conn_index].iter().map(|c| c.to_idx))
+                    .flat_map(|pad| {
+                        grid.hand_copper(net_id, pad_to_grid_node(grid, &net.pads[pad]))
+                            .iter()
+                            .copied()
+                    })
+                    .collect();
+                hand_seeds.sort_unstable();
+                hand_seeds.dedup();
+                let hand_goals = grid.hand_copper(net_id, end).to_vec();
 
                 // Route with congestion-augmented cost
                 let search = Search {
@@ -736,6 +869,8 @@ pub fn pathfinder_loop(
                     end,
                     any_end,
                     own_copper.as_ref(),
+                    &hand_seeds,
+                    &hand_goals,
                     &congestion_map,
                     &search,
                 );
@@ -759,6 +894,8 @@ pub fn pathfinder_loop(
                         end,
                         any_end,
                         own_copper.as_ref(),
+                        &hand_seeds,
+                        &hand_goals,
                         &congestion_map,
                         &relaxed,
                     );
@@ -1131,6 +1268,8 @@ fn find_path_congestion_augmented(
     end: GridNode,
     any_end_layer: bool,
     own_copper: Option<&OwnCopper>,
+    hand_seeds: &[GridNode],
+    hand_goals: &[GridNode],
     congestion_map: &CongestionMap,
     search: &Search<'_>,
 ) -> Option<Vec<GridNode>> {
@@ -1204,9 +1343,12 @@ fn find_path_congestion_augmented(
         heuristic_weight,
     );
 
-    // One goal, the pad this connection adds, wherever the wave started.
+    // One goal, the pad this connection adds, wherever the wave started - or
+    // any cell of the hand copper that pad sits on, which is the same
+    // conductor. `hand_goals` is sorted.
     let success = |node: GridNode| -> bool {
-        node.0 == end.0 && node.1 == end.1 && (any_end_layer || node.2 == end.2)
+        (node.0 == end.0 && node.1 == end.1 && (any_end_layer || node.2 == end.2))
+            || hand_goals.binary_search(&node).is_ok()
     };
 
     // 8-directional movement offsets
@@ -1427,19 +1569,48 @@ fn find_path_congestion_augmented(
         }
     };
 
-    // Heuristic remains unadulterated for admissibility. The goal is one cell
-    // however many the search starts from, so the estimate is the ordinary
-    // one to `end`.
-    let heuristic = |node: GridNode| -> u64 { float_to_int_cost(cost_fn.heuristic(node, end)) };
+    // Heuristic remains unadulterated for admissibility. The goal is the pad
+    // however many cells the search starts from, so the estimate is the
+    // ordinary one to `end` - or, when the pad sits on hand copper, to the
+    // nearer of `end` and the box around that copper, which is never further
+    // than any cell of it.
+    let goal_box = hand_goals
+        .iter()
+        .fold(None::<(u16, u16, u16, u16)>, |bounds, node| {
+            Some(match bounds {
+                None => (node.0, node.1, node.0, node.1),
+                Some((x0, y0, x1, y1)) => (
+                    x0.min(node.0),
+                    y0.min(node.1),
+                    x1.max(node.0),
+                    y1.max(node.1),
+                ),
+            })
+        });
+    let heuristic = |node: GridNode| -> u64 {
+        let to_pad = cost_fn.heuristic(node, end);
+        let estimate = match goal_box {
+            Some((x0, y0, x1, y1)) => {
+                let nearest = (node.0.clamp(x0, x1), node.1.clamp(y0, y1), node.2);
+                to_pad.min(cost_fn.heuristic(node, nearest))
+            }
+            None => to_pad,
+        };
+        float_to_int_cost(estimate)
+    };
 
     // The net's own copper, every cell of it at cost zero, with the pad the
     // tree already reached in front: that pad is on the tree whether or not a
-    // path has walked through its cell.
+    // path has walked through its cell. Hand copper the tree's pads sit on
+    // comes last.
     let seeds: Vec<GridNode> = match own_copper {
         Some(own) => std::iter::once(start)
             .chain(own.cells().iter().copied())
+            .chain(hand_seeds.iter().copied())
             .collect(),
-        None => vec![start],
+        None => std::iter::once(start)
+            .chain(hand_seeds.iter().copied())
+            .collect(),
     };
     let path = astar_grid_from(scratch, &seeds, successors, heuristic, success)?.to_vec();
 
@@ -1624,6 +1795,8 @@ mod tests {
             (19, 19, 0),
             false,
             None,
+            &[],
+            &[],
             &congestion,
             &search,
         );
@@ -1977,6 +2150,8 @@ mod tests {
             (20, 20, INNER_1),
             false,
             None,
+            &[],
+            &[],
             &congestion,
             &search,
         )

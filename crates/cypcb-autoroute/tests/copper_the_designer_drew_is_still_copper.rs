@@ -627,4 +627,13 @@ fn a_via_hole_passes_through_its_own_hand_trace_on_the_inner_layers() {
         "J2 comes up through SIG's own strip on every inner layer: {:?}",
         result.status
     );
+    // One hole from top to bottom. Refused through the strip, the search can
+    // still change layer one at a time on it - top, inner, inner, bottom -
+    // and every one of those steps is a via of its own.
+    assert_eq!(
+        result.vias.len(),
+        1,
+        "one via drilled through the strip, not one per layer: {:?}",
+        result.vias
+    );
 }
