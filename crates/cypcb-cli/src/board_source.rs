@@ -120,3 +120,75 @@ pub fn load_kicad(path: &Path) -> Result<LoadedBoard> {
         source,
     })
 }
+
+/// Read a `.cypcb` design into a board, the way `cypcb check` reads a file.
+///
+/// `path` is where the text lives or will live: imports resolve against its
+/// directory. `cypcb route` hands this the text it is about to write, so the
+/// DRC line it prints is the checker's answer about the written file rather
+/// than about the board it held in memory. Those two used to disagree on
+/// `esp32_starter` - 44 shorts reported, 46 in the file - with the same
+/// segments on both sides, because the reader makes one trace entity per
+/// `path` where the router holds one per net and layer, and the clearance
+/// check counts contacts per pair of entities.
+///
+/// Every diagnostic is printed as it is found. `warnings` is off for a board
+/// whose warnings were printed already, when it was read the first time.
+pub fn read_cypcb(path: &Path, source: &str, warnings: bool) -> Result<LoadedBoard> {
+    let result = cypcb_parser::parse(source);
+
+    // Report parse errors
+    if result.has_errors() {
+        // The file first, because the diagnostics under it do not carry a
+        // name: a person running this over a directory sees a column and a
+        // line and no way to tell which board they belong to.
+        eprintln!("{}: {} error(s)", path.display(), result.errors.len());
+        let count = result.errors.len();
+        for err in result.errors {
+            eprintln!("{:?}", miette::Report::new(err));
+        }
+        return Err(miette::miette!(
+            "{}: {count} parse error(s)",
+            path.display()
+        ));
+    }
+
+    let ast = result.value;
+
+    // Bring in whatever the file imports, resolved against its own
+    // directory. Errors are collected rather than fatal so the rest of the
+    // design is still checked.
+    let mut import_errors = Vec::new();
+    let ast = cypcb_parser::resolve_imports(&ast, path, &mut import_errors);
+    for error in &import_errors {
+        eprintln!("Import error: {error}");
+    }
+
+    // Semantic validation: build the board model from the AST.
+    let mut world = BoardWorld::new();
+    let mut library = FootprintLibrary::new();
+    let sync_result = cypcb_world::sync_ast_to_world(&ast, source, &mut world, &mut library);
+
+    if !sync_result.errors.is_empty() {
+        for err in &sync_result.errors {
+            eprintln!("{:?}", miette::Report::new(err.clone()));
+        }
+        return Err(miette::miette!(
+            "{}: {} semantic error(s)",
+            path.display(),
+            sync_result.errors.len()
+        ));
+    }
+
+    if warnings {
+        for warning in &sync_result.warnings {
+            eprintln!("{:?}", miette::Report::new(warning.clone()));
+        }
+    }
+
+    Ok(LoadedBoard {
+        world,
+        library,
+        source: source.to_string(),
+    })
+}

@@ -2,10 +2,12 @@
 //!
 //! `cargo test -p cypcb-cli --test which_violations_the_file_adds -- --ignored --nocapture`
 //!
-//! `route` measures the world it routed and `check` measures the file it
-//! wrote, and on `examples/blink.cypcb` they answer 4 and 5. This prints both
-//! lists side by side so the difference is a name and a coordinate rather than
-//! a count.
+//! `route` measured the world it routed and `check` measures the file it
+//! wrote, and on `examples/blink.cypcb` they answered 4 and 5. `route` reports
+//! on the written file now; this still compares the world in memory with the
+//! same board read back, which is where a writer that loses something shows.
+//! This prints both lists side by side so the difference is a name and a
+//! coordinate rather than a count.
 
 use cypcb_drc::{run_drc, DesignRules};
 use cypcb_rules::presets::RulesPreset;
