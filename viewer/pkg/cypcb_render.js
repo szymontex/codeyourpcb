@@ -177,6 +177,31 @@ export class PcbEngine {
         }
     }
     /**
+     * The whole board as a `.cypcb` design - the text `from-kicad` writes.
+     *
+     * A KiCad board is saved as a design of this language, beside the file it
+     * came from and never over it: the importer does not carry everything a
+     * `.kicad_pcb` holds, so writing the board back as KiCad would lose what
+     * it drops, and splicing trace blocks onto the KiCad text lost the copper.
+     * @returns {string}
+     */
+    design_as_dsl() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            wasm.pcbengine_design_as_dsl(retptr, this.__wbg_ptr);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            deferred1_0 = r0;
+            deferred1_1 = r1;
+            return getStringFromWasm0(r0, r1);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            wasm.__wbindgen_export4(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
      * Export all traces and vias as DSL `trace` blocks.
      *
      * Iterates all Trace and Via entities in the ECS, groups them by net,

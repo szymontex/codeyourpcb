@@ -393,3 +393,60 @@ component U1 ic "ARRIVES_LATE" {
     expect(await seen(page)).toEqual({ board: 'untitled', components: [], traces: [] });
   });
 });
+
+test.describe('Nothing of the last design is shown on the next one', () => {
+  test.beforeEach(async ({ page }) => {
+    await fakeFileSystem(page);
+    await ready(page);
+  });
+
+  const title = (page: Page) => page.evaluate(() => document.title);
+
+  test('the window title names the file on screen', async ({ page }) => {
+    // It was written only when copper was marked or saved, so it went on
+    // naming the file opened before.
+    await dropFile(page, 'first.cypcb', withTrace('first', 22));
+    expect(await title(page)).toMatch(/^first\.cypcb /);
+    await dropFile(page, 'second.cypcb', withTrace('second', 20));
+    expect(await title(page)).toMatch(/^second\.cypcb /);
+  });
+
+  test('the last design\'s unsaved copper is not marked on the next', async ({ page }) => {
+    await dropFile(page, 'first.cypcb', withTrace('first', 22));
+    await selectTheTrace(page, (await seen(page)).traces[0]);
+    await page.keyboard.press('Delete');
+    await expect.poll(() => title(page), { message: 'the control: a deleted trace is unsaved' }).toMatch(/^• first\.cypcb/);
+    await dropFile(page, 'second.cypcb', withTrace('second', 20));
+    expect(await title(page)).toMatch(/^second\.cypcb /);
+  });
+
+  test('a net highlighted on the last design is not highlighted on the next', async ({ page }) => {
+    const highlighted = () => page.evaluate(() => (window as never as { __renderState: { highlightedNet: string | null } }).__renderState.highlightedNet);
+    await dropFile(page, 'first.cypcb', withTrace('first', 22));
+    await selectTheTrace(page, (await seen(page)).traces[0]);
+    expect(await highlighted(), 'the control: selecting a trace lights its net').toBe('SIG');
+    // The next design has a net of the same name, which is what kept it lit.
+    await dropFile(page, 'second.cypcb', withTrace('second', 20));
+    expect(await highlighted()).toBeNull();
+  });
+
+  test('the route debug panel of the last design closes', async ({ page }) => {
+    await dropFile(page, 'first.cypcb', board('first', 22));
+    await page.evaluate(() => (window as never as { __debugRoute(): void }).__debugRoute());
+    await expect(page.locator('#route-debug-panel'), 'the control: the debug run shows its panel').toBeVisible({ timeout: 30_000 });
+    await newBlank(page);
+    await expect(page.locator('#route-debug-panel')).toHaveCount(0);
+  });
+
+  test('a route debug run still going does not open its panel on the next design', async ({ page }) => {
+    await dropFile(page, 'first.cypcb', board('first', 22));
+    await showProjectManager(page);
+    // One step, so the run cannot finish between them.
+    await page.evaluate(() => {
+      (window as never as { __debugRoute(): void }).__debugRoute();
+      (document.querySelector('[data-template-blank]') as HTMLElement).click();
+    });
+    await page.waitForTimeout(5_000);
+    await expect(page.locator('#route-debug-panel')).toHaveCount(0);
+  });
+});

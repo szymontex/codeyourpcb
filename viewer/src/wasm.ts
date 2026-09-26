@@ -239,6 +239,12 @@ export interface PcbEngine {
    */
   export_traces_as_dsl(): string;
 
+  /**
+   * The whole board as a `.cypcb` design, copper included - what `from-kicad`
+   * writes. How a KiCad board is saved.
+   */
+  design_as_dsl(): string;
+
   /** Get minimum copper clearance in nanometers from active design rules. */
   get_min_clearance_nm(): number;
 
@@ -329,6 +335,7 @@ export interface WasmPcbEngine {
   run_drc_incremental(): number;
   trace_count(): number;
   export_traces_as_dsl(): string;
+  design_as_dsl(): string;
   get_min_clearance_nm(): bigint;
   min_trace_width_for_current_ma(current_ma: number): number;
   trace_width_notes_for_current_ma(current_ma: number): string;
@@ -780,6 +787,15 @@ export class WasmPcbEngineAdapter implements PcbEngine {
     return '';
   }
 
+  design_as_dsl(): string {
+    // No quiet fallback: an empty design saved under a board's name is a lost
+    // board.
+    if (typeof this.wasmEngine.design_as_dsl !== 'function') {
+      throw new Error('This engine cannot write the board as a .cypcb design');
+    }
+    return this.wasmEngine.design_as_dsl();
+  }
+
   get_min_clearance_nm(): number {
     if (typeof this.wasmEngine.get_min_clearance_nm === 'function') {
       // The engine answers in a `u64`, which reaches JavaScript as a BigInt.
@@ -1029,6 +1045,12 @@ export class MockPcbEngine implements PcbEngine {
 
   export_traces_as_dsl(): string {
     return ''; // Mock engine: no export
+  }
+
+  design_as_dsl(): string {
+    // The mock has no KiCad reader, so the board this is asked for never
+    // reaches it; it holds a snapshot, not a design it could write.
+    return '';
   }
 
   get_min_clearance_nm(): number {

@@ -8,6 +8,7 @@ export const pcbengine_auto_route: (a: number, b: number) => void;
 export const pcbengine_auto_route_debug: (a: number, b: number, c: number, d: number) => void;
 export const pcbengine_auto_route_variants: (a: number, b: number) => void;
 export const pcbengine_auto_route_with_params: (a: number, b: number, c: number, d: number) => void;
+export const pcbengine_design_as_dsl: (a: number, b: number) => void;
 export const pcbengine_export_traces_as_dsl: (a: number, b: number) => void;
 export const pcbengine_get_diagnostics_json: (a: number, b: number) => void;
 export const pcbengine_get_min_clearance_nm: (a: number) => bigint;

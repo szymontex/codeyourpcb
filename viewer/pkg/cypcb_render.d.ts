@@ -72,6 +72,15 @@ export class PcbEngine {
      */
     auto_route_with_params(params_json: string): string;
     /**
+     * The whole board as a `.cypcb` design - the text `from-kicad` writes.
+     *
+     * A KiCad board is saved as a design of this language, beside the file it
+     * came from and never over it: the importer does not carry everything a
+     * `.kicad_pcb` holds, so writing the board back as KiCad would lose what
+     * it drops, and splicing trace blocks onto the KiCad text lost the copper.
+     */
+    design_as_dsl(): string;
+    /**
      * Export all traces and vias as DSL `trace` blocks.
      *
      * Iterates all Trace and Via entities in the ECS, groups them by net,
@@ -286,6 +295,7 @@ export interface InitOutput {
     readonly pcbengine_auto_route_debug: (a: number, b: number, c: number, d: number) => void;
     readonly pcbengine_auto_route_variants: (a: number, b: number) => void;
     readonly pcbengine_auto_route_with_params: (a: number, b: number, c: number, d: number) => void;
+    readonly pcbengine_design_as_dsl: (a: number, b: number) => void;
     readonly pcbengine_export_traces_as_dsl: (a: number, b: number) => void;
     readonly pcbengine_get_diagnostics_json: (a: number, b: number) => void;
     readonly pcbengine_get_min_clearance_nm: (a: number) => bigint;
