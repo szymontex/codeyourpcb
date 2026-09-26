@@ -23,11 +23,14 @@
 //! process: inside one process the order never moved, so the runs agreed
 //! while `examples/v2-constraints.cypcb` routed to two different boards from
 //! one run of the program to the next.
+//!
+//! Each run goes the way `cypcb route --fast` goes: footprints and spatial
+//! index set up first, then `route_board`, which repairs after the strategy.
+//! This used to call the strategy alone, so the repair pass and the index the
+//! command builds before routing were never asked whether they repeat.
 
-use cypcb_autoroute::pathfinder_v2::PathFinderStrategy;
 use cypcb_autoroute::scoring::{score_board, ScoreWeights};
-use cypcb_autoroute::strategy::RoutingStrategy;
-use cypcb_autoroute::AutorouteConfig;
+use cypcb_autoroute::{route_board, AutorouteConfig};
 use cypcb_drc::presets::DesignRules;
 use cypcb_drc::{preset_for_world, ruleset_for_world};
 use cypcb_kicad::{parse_kicad_pcb, BENCHMARKS};
@@ -66,16 +69,23 @@ struct Run {
 fn route_once(filename: &str) -> Run {
     let parsed = parse_kicad_pcb(&fixture_path(filename))
         .unwrap_or_else(|e| panic!("failed to parse {filename}: {e:?}"));
+    let library = parsed.library.clone();
     let mut world = parsed.world;
-    let library = parsed.library;
+    world.set_footprints(library.clone());
+    world.rebuild_spatial_index_from_library(&library);
     // The board's own table. `multi_ic` has four copper layers, and a run that
     // is repeatable under the wrong rules says nothing about the one shipped.
+    // The command takes a flag first and the board's `fab` second; no fixture
+    // names a fab, so both land on JLCPCB sized to the board, as here.
+    assert!(
+        world.fab().is_none(),
+        "{filename} names a fab, and the command would route it under that table"
+    );
     let preset = preset_for_world(RulesPreset::JlcpcbStandard2Layer, &world);
     let rules = ruleset_for_world(preset, &world);
     let drc_rules = DesignRules::from_constraints(&preset.constraints());
-    let config = AutorouteConfig::default();
 
-    let result = PathFinderStrategy.route(&mut world, &library, &rules, &config);
+    let result = route_board(&mut world, &library, &rules, &AutorouteConfig::default());
     let segments = result.routes.len();
     let vias = result.vias.len();
 
