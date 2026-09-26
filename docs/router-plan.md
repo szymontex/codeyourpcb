@@ -140,7 +140,9 @@ being marked on.
 - **The repair pass wins by emptying the board.** On multi_ic it accepted an
   attempt carrying 108 routes against 945: `measure` applies the previous
   result before the next attempt, so the ratsnest is nearly empty and 40
-  violations on an eighth of a board beats 256 on a whole one.
+  violations on an eighth of a board beats 256 on a whole one. Fixed
+  2026-09-26: each attempt starts from a board with no router copper, and an
+  attempt is kept only when the variant ranking puts it ahead.
 - **Vias stack at different depths.** 4, 7 and 15 hole-to-hole on the three
   dense boards, and the drill files show different layer spans, so they are not
   duplicates to filter. Two holes at one point at different depths is a routing

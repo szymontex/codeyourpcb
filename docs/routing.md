@@ -1503,8 +1503,8 @@ it would start from.
 
 The cell is computed from the rules and the board outline, never from the
 parts. `AutorouteConfig::resolve_grid_resolution`
-(`crates/cypcb-autoroute/src/lib.rs:382`) takes one trace plus one clearance;
-`resolve_adaptive_grid_resolution` (`crates/cypcb-autoroute/src/lib.rs:409`)
+(`crates/cypcb-autoroute/src/lib.rs:383`) takes one trace plus one clearance;
+`resolve_adaptive_grid_resolution` (`crates/cypcb-autoroute/src/lib.rs:410`)
 doubles that on a board over 80mm and triples it over 200mm, on the stated
 assumption that "larger boards have proportionally wider trace spacing". On
 `multi_ic` that is 0.1 + 0.1 = 0.2mm from the 4-layer rules, doubled to 0.4mm

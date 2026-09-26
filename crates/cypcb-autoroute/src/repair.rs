@@ -12,9 +12,10 @@
 //!
 //! Two properties keep it honest:
 //!
-//! - A candidate is kept only when the violation count drops *and* the board is
-//!   still complete, so repair can never buy a prettier number with an
-//!   abandoned connection. The worst it can cost is time.
+//! - A candidate is kept only when it is still complete *and* the variant
+//!   ranking puts it ahead of the best so far, so repair can never buy a
+//!   prettier number with an abandoned connection or a new short. The worst it
+//!   can cost is time.
 //! - How far around a violation to forbid is not a tuned constant. Each radius
 //!   in [`AutorouteConfig::repair_block_radii`] is tried as its own attempt and
 //!   the measured winner is kept, because radius 0 helps one benchmark board
@@ -35,6 +36,8 @@ use cypcb_world::BoardWorld;
 
 use crate::grid::layer_to_index;
 use crate::pathfinder_v2::PathFinderStrategy;
+use crate::scoring::{score_board, ScoreWeights};
+use crate::variant::RankKey;
 use crate::AutorouteConfig;
 
 /// A place the router may not use, in board coordinates.
@@ -83,8 +86,9 @@ pub fn repair_routes(
     let resolution = PathFinderStrategy::resolution_for(world, rules, config);
 
     let mut best = initial;
-    let (mut best_count, baseline_violations) = measure(world, library, &best, &design_rules);
-    let before = best_count;
+    let (mut best_key, baseline_violations) = measure(world, library, &best, &design_rules);
+    let before = best_key;
+    let mut best_count = baseline_violations.len();
     if best_count == 0 {
         return best;
     }
@@ -98,6 +102,11 @@ pub fn repair_routes(
         let mut blockers = dedup(blockers_from(&baseline_violations, radius), resolution);
 
         for pass in 1..=config.repair_passes {
+            // The board still carries the copper `measure` laid, and the router
+            // leaves alone a net that copper already joins - so without this an
+            // attempt routes nothing, and an empty board has no contacts.
+            apply_routes(world, &RoutingResult::complete(Vec::new(), Vec::new()));
+            world.rebuild_spatial_index_from_library(library);
             let candidate =
                 PathFinderStrategy.route_with_blockers(world, library, rules, config, &blockers);
 
@@ -111,12 +120,14 @@ pub fn repair_routes(
                 break;
             }
 
-            let (count, violations) = measure(world, library, &candidate, &design_rules);
+            let (key, violations) = measure(world, library, &candidate, &design_rules);
+            let count = violations.len();
             tracing::info!(
                 radius,
                 pass,
                 violations = count,
-                best = best_count,
+                key = ?key,
+                best = ?best_key,
                 blocked_cells = blockers.len(),
                 // How much copper the attempt actually carries. A pass that
                 // wins on violations while carrying a fraction of the routes
@@ -126,7 +137,11 @@ pub fn repair_routes(
                 "Repair attempt measured"
             );
 
-            if count < best_count {
+            // Kept only when the ranking would put it ahead of the best so
+            // far. Judged by the pass's own count of contacts, attempts that
+            // gave up connections or traded tight gaps for shorts were kept.
+            if key.cmp_rank(&best_key) == std::cmp::Ordering::Less {
+                best_key = key;
                 best_count = count;
                 best = candidate;
                 accepted += 1;
@@ -148,7 +163,8 @@ pub fn repair_routes(
     }
 
     tracing::info!(
-        violations_before = before,
+        before = ?before,
+        after = ?best_key,
         violations_after = best_count,
         accepted_attempts = accepted,
         winning_radius,
@@ -164,22 +180,21 @@ pub fn repair_routes(
 
 /// Apply a result, index it and run the real DRC over it.
 ///
-/// Returns the count of violations this pass could act on, and for each of
-/// them where it was and which copper layers it touched. The layers are
-/// resolved here because a later attempt despawns these entities.
+/// Returns where the board stands in the variant ranking, and each violation
+/// this pass could act on: where it was and which copper layers it touched.
+/// The layers are resolved here because a later attempt despawns these
+/// entities.
 ///
-/// The count deliberately excludes everything rerouting cannot move - a part
-/// placed off the board edge, silkscreen over a pad, a pin nobody connected.
-/// Judging attempts on a total dominated by violations the pass is powerless
-/// over is how a pass ends up looking like it failed when it did not, and on
-/// a board where the fixed part of the total moves for its own reasons, how
-/// it accepts an attempt that made its own work worse.
+/// The contacts deliberately exclude everything rerouting cannot move - a part
+/// placed off the board edge, silkscreen over a pad, a pin nobody connected -
+/// because they are what the next attempt blocks. Whether an attempt is kept
+/// is the ranking's question, not theirs.
 fn measure(
     world: &mut BoardWorld,
     library: &FootprintLibrary,
     result: &RoutingResult,
     design_rules: &DesignRules,
-) -> (usize, Vec<Contact>) {
+) -> (RankKey, Vec<Contact>) {
     apply_routes(world, result);
     world.rebuild_spatial_index_from_library(library);
 
@@ -200,7 +215,12 @@ fn measure(
         })
         .collect();
 
-    (contacts.len(), contacts)
+    let unrouted = match result.status {
+        RoutingStatus::Partial { unrouted_count } => unrouted_count,
+        _ => 0,
+    };
+    let score = score_board(world, design_rules, &ScoreWeights::default());
+    (RankKey::of(unrouted, &score), contacts)
 }
 
 /// Can rerouting copper change this kind of violation?

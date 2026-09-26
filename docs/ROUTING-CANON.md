@@ -1436,7 +1436,7 @@ measurement in part 1 - 238 violations in 127.8 s at half a clearance against
 its times belong to the machine that made it**, which is why nothing asserts
 them: a violation count can be reproduced and a duration cannot. It is the
 comment
-`a0ee08f` left at `crates/cypcb-autoroute/src/lib.rs:380` on 2026-08-05 when it
+`a0ee08f` left at `crates/cypcb-autoroute/src/lib.rs:381` on 2026-08-05 when it
 made the grid a track pitch. The rule in part 4 is this canon's own and landed
 with R-16 and R-18 in `643346d` on 2026-09-11. The exception is part 3, a search
 that found nothing, which is dated there because it is a fact about the world
@@ -1458,7 +1458,7 @@ sentence. A board whose pads collide on the grid is a board
 fault; the grid is only how it is detected.
 
 **1. What the resolution is a function of.** One cell is one legal track
-position. `resolve_grid_resolution` (`crates/cypcb-autoroute/src/lib.rs:391`)
+position. `resolve_grid_resolution` (`crates/cypcb-autoroute/src/lib.rs:392`)
 takes the fab table for net 0 and returns `min_trace_width + min_clearance`,
 floored at 10 um. The comment records the measurement that settled it: a
 half-clearance grid let two nets sit in adjacent cells whose copper overlapped -

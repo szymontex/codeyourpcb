@@ -113,6 +113,11 @@ pub struct VariantResult {
     /// which of the eight the wait belonged to. Zero on wasm32, which has no
     /// clock this code may read.
     pub elapsed_ms: u64,
+    /// Whether this is the winner with the repair pass run over it.
+    ///
+    /// The name stays the config's own, so everything that asks which
+    /// settings won still gets an answer it can look up.
+    pub repaired: bool,
 }
 
 /// Return the default set of variant configurations.
@@ -479,32 +484,148 @@ impl VariantResult {
     /// ranked first a variant reporting 0 unrouted that DRC finds with 12
     /// bare pins and 3 split nets, over one with 4 and 0.
     pub fn incomplete(&self) -> usize {
-        self.unrouted + self.score.unrouted_pins as usize + self.score.net_splits as usize
+        self.rank_key().incomplete
+    }
+
+    /// Where this variant stands in the ranking.
+    pub fn rank_key(&self) -> RankKey {
+        RankKey::of(self.unrouted, &self.score)
     }
 }
 
-/// Complete first, then fewest shorts, then the composite.
-fn rank_best_first(results: &mut [VariantResult]) {
-    // A complete board outranks an incomplete one whatever it scores, and
-    // among incomplete ones fewer missing connections wins. Only then does
-    // the composite decide. The alternative is a ranking that rewards giving
-    // up, which is the same defect the CI regression gate was fixed for.
-    results.sort_by(|a, b| {
-        a.incomplete()
-            .cmp(&b.incomplete())
+/// What the ranking reads off a routed board, and the one order it reads it in.
+///
+/// The variants are ranked by it and the repair pass accepts an attempt by it,
+/// so an attempt the pass keeps is one the ranking would also have put ahead.
+/// The pass used to judge by its own count of contacts, and kept attempts the
+/// ranking then placed below the board they started from.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct RankKey {
+    /// Connections given up on, bare pins and nets DRC finds cut in two.
+    pub incomplete: usize,
+    /// Copper touching copper.
+    pub shorts: u32,
+    /// Everything else, weighted.
+    pub composite: f64,
+}
+
+impl RankKey {
+    /// The key of a board the router left `unrouted` connections on.
+    pub fn of(unrouted: usize, score: &RoutingScore) -> Self {
+        RankKey {
+            incomplete: unrouted + score.unrouted_pins as usize + score.net_splits as usize,
+            shorts: score.shorts,
+            composite: score.composite,
+        }
+    }
+
+    /// Complete first, then fewest shorts, then the composite; `Less` is better.
+    pub fn cmp_rank(&self, other: &Self) -> std::cmp::Ordering {
+        // A complete board outranks an incomplete one whatever it scores, and
+        // among incomplete ones fewer missing connections wins. Only then does
+        // the composite decide. The alternative is a ranking that rewards giving
+        // up, which is the same defect the CI regression gate was fixed for.
+        self.incomplete
+            .cmp(&other.incomplete)
             // Copper touching copper next, whatever the totals say. A board
             // with one short and one tight gap is not better than a board with
             // three tight gaps: the first cannot work and the second is a
             // yield risk. The composite charges every violation the same, so
             // the ordering has to make the distinction the score cannot.
-            .then_with(|| a.score.shorts.cmp(&b.score.shorts))
+            .then_with(|| self.shorts.cmp(&other.shorts))
             .then_with(|| {
-                a.score
-                    .composite
-                    .partial_cmp(&b.score.composite)
+                self.composite
+                    .partial_cmp(&other.composite)
                     .unwrap_or(std::cmp::Ordering::Equal)
             })
-    });
+    }
+}
+
+/// Complete first, then fewest shorts, then the composite.
+fn rank_best_first(results: &mut [VariantResult]) {
+    results.sort_by(|a, b| a.rank_key().cmp_rank(&b.rank_key()));
+}
+
+/// Repair passes the winner gets once the variants are ranked.
+const WINNER_REPAIR_PASSES: u32 = 2;
+
+impl VariantConfig {
+    /// How this variant routes, with `repair_passes` of repair after it.
+    pub fn autoroute_config(&self, repair_passes: u32) -> AutorouteConfig {
+        AutorouteConfig {
+            strategy: self.strategy,
+            params: self.params.clone(),
+            via_ring_penalty: self.via_ring_penalty,
+            pad_zone_blocks_foreign_copper: self.pad_zone_blocks_foreign_copper,
+            reserve_trace_footprint: self.reserve_trace_footprint,
+            foreign_pad_penalty: self.foreign_pad_penalty,
+            pad_zone_margin_cells: self.pad_zone_margin_cells,
+            heuristic_weight: self.heuristic_weight,
+            clearance_barrier: self.clearance_barrier,
+            via_touching_trace_penalty: self.via_touching_trace_penalty,
+            via_near_hole_penalty: self.via_near_hole_penalty,
+            repair_passes,
+            ..AutorouteConfig::default()
+        }
+    }
+}
+
+/// The winner repaired, when the repair ranks ahead of it; otherwise `None`.
+///
+/// Measured on the seven benchmark boards on 2026-09-26: repair on every
+/// variant cost 2.1x to 5.6x the ranking's wall clock on the boards that take
+/// longer than a second, and on the winner alone at most 1.46x. The repaired
+/// board is kept only when it ranks strictly ahead, so a board repair cannot
+/// improve comes out exactly as it went in.
+fn repair_winner(
+    world: &mut BoardWorld,
+    library: &FootprintLibrary,
+    rules: &dyn RoutingRuleSet,
+    design_rules: &DesignRules,
+    config: &VariantConfig,
+    winner: &VariantResult,
+) -> Option<VariantResult> {
+    // Repair re-routes a complete board; one with connections missing is
+    // returned untouched, so there is nothing to spend.
+    if winner.unrouted > 0 {
+        return None;
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    let start = std::time::Instant::now();
+
+    clear_autorouted_traces(world);
+    let initial = RoutingResult::complete(winner.routes.clone(), winner.vias.clone());
+    let repaired = crate::repair::repair_routes(
+        world,
+        library,
+        rules,
+        &config.autoroute_config(WINNER_REPAIR_PASSES),
+        initial,
+    );
+
+    apply_routes(world, &repaired);
+    rebuild_spatial_index(world, library);
+    let score = score_board(world, design_rules, &ScoreWeights::default());
+    let candidate = VariantResult {
+        name: winner.name.clone(),
+        score,
+        routes: repaired.routes,
+        vias: repaired.vias,
+        unrouted: 0,
+        #[cfg(not(target_arch = "wasm32"))]
+        elapsed_ms: winner.elapsed_ms + start.elapsed().as_millis() as u64,
+        #[cfg(target_arch = "wasm32")]
+        elapsed_ms: 0,
+        repaired: true,
+    };
+    tracing::info!(
+        name = %winner.name,
+        before = ?winner.rank_key(),
+        after = ?candidate.rank_key(),
+        "Winner repaired"
+    );
+    (candidate.rank_key().cmp_rank(&winner.rank_key()) == std::cmp::Ordering::Less)
+        .then_some(candidate)
 }
 
 /// Generate multiple routing variants sequentially on a single `&mut BoardWorld`.
@@ -548,25 +669,11 @@ pub fn generate_variants(
         // 1. Clear previous variant's entities
         clear_autorouted_traces(world);
 
-        // 2. Route the board with this config
-        let autoroute_config = AutorouteConfig {
-            strategy: config.strategy,
-            params: config.params.clone(),
-            via_ring_penalty: config.via_ring_penalty,
-            pad_zone_blocks_foreign_copper: config.pad_zone_blocks_foreign_copper,
-            reserve_trace_footprint: config.reserve_trace_footprint,
-            foreign_pad_penalty: config.foreign_pad_penalty,
-            pad_zone_margin_cells: config.pad_zone_margin_cells,
-            heuristic_weight: config.heuristic_weight,
-            clearance_barrier: config.clearance_barrier,
-            via_touching_trace_penalty: config.via_touching_trace_penalty,
-            via_near_hole_penalty: config.via_near_hole_penalty,
-            // Variant exploration compares many routings; paying for repair on
-            // each one triples the wall clock to rank candidates that are about
-            // to be thrown away. The winner can be repaired afterwards.
-            repair_passes: 0,
-            ..AutorouteConfig::default()
-        };
+        // 2. Route the board with this config. Exploration compares many
+        // routings, and repair on each one costs 2.1x to 5.6x the wall clock to
+        // rank candidates that are about to be thrown away, so only the winner
+        // is repaired, after the ranking - see `repair_winner`.
+        let autoroute_config = config.autoroute_config(0);
 
         let routing_result = route_board(world, library, rules, &autoroute_config);
 
@@ -615,12 +722,24 @@ pub fn generate_variants(
             elapsed_ms: variant_start.elapsed().as_millis() as u64,
             #[cfg(target_arch = "wasm32")]
             elapsed_ms: 0,
+            repaired: false,
         });
 
         drop(variant_span);
     }
 
     rank_best_first(&mut results);
+
+    let winner_config = results
+        .first()
+        .and_then(|best| configs.iter().find(|config| config.name == best.name));
+    if let Some(config) = winner_config {
+        if let Some(repaired) =
+            repair_winner(world, library, rules, design_rules, config, &results[0])
+        {
+            results.insert(0, repaired);
+        }
+    }
 
     // Apply the best variant to the world
     if let Some(best) = results.first() {
@@ -809,6 +928,7 @@ mod tests {
             )],
             unrouted: 0,
             elapsed_ms: 0,
+            repaired: false,
         };
 
         let json = serde_json::to_string(&result).expect("VariantResult should serialize");
@@ -840,6 +960,7 @@ mod tests {
                 vias: vec![],
                 unrouted: 0,
                 elapsed_ms: 0,
+                repaired: false,
             },
             VariantResult {
                 name: "B".to_string(),
@@ -860,6 +981,7 @@ mod tests {
                 vias: vec![],
                 unrouted: 0,
                 elapsed_ms: 0,
+                repaired: false,
             },
         ];
 
@@ -891,6 +1013,7 @@ mod tests {
             vias: vec![],
             unrouted,
             elapsed_ms: 0,
+            repaired: false,
         }
     }
 
