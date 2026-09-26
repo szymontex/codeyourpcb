@@ -311,7 +311,7 @@ export interface PcbEngine {
 /**
  * Raw WASM PcbEngine interface (what Rust actually exports)
  */
-interface WasmPcbEngine {
+export interface WasmPcbEngine {
   /** Read `.cypcb` and build the board from it. Exported since the engine
    *  carries the Rust reader; before that the host parsed and sent a snapshot. */
   load_source(source: string): string;
@@ -322,13 +322,14 @@ interface WasmPcbEngine {
   load_snapshot(snapshot: BoardSnapshot): string;
   get_snapshot(): BoardSnapshot;
   query_point(x_nm: bigint, y_nm: bigint): string[];
+  add_trace(net_name: string, layer_str: string, width_nm: bigint, segments_flat: BigInt64Array): number;
   add_trace_json(net_name: string, layer_str: string, width_nm: bigint, segments_json: string): number;
   remove_trace(trace_id: number): boolean;
   get_trace_at_point(x_nm: bigint, y_nm: bigint, tolerance_nm: bigint): number;
   run_drc_incremental(): number;
   trace_count(): number;
   export_traces_as_dsl(): string;
-  get_min_clearance_nm(): number;
+  get_min_clearance_nm(): bigint;
   min_trace_width_for_current_ma(current_ma: number): number;
   trace_width_notes_for_current_ma(current_ma: number): string;
   get_violations_json(): string;
@@ -340,6 +341,7 @@ interface WasmPcbEngine {
   auto_route_debug(params_json: string): string;
   register_footprint(name: string, pads: PadInfo[], silk: SilkShape[]): string;
   register_3d_model(package_name: string, model: string): void;
+  get_diagnostics_json(): string;
   free(): void;
 }
 
@@ -606,7 +608,7 @@ export class WasmPcbEngineAdapter implements PcbEngine {
   }
 
   get_diagnostics_json(): string {
-    return (this.wasmEngine as unknown as { get_diagnostics_json(): string }).get_diagnostics_json();
+    return this.wasmEngine.get_diagnostics_json();
   }
 
   load_source_with_imports(source: string, files: Record<string, string>): string {
@@ -780,7 +782,9 @@ export class WasmPcbEngineAdapter implements PcbEngine {
 
   get_min_clearance_nm(): number {
     if (typeof this.wasmEngine.get_min_clearance_nm === 'function') {
-      return this.wasmEngine.get_min_clearance_nm();
+      // The engine answers in a `u64`, which reaches JavaScript as a BigInt.
+      // Passed on as it came, it broke arithmetic with every number it met.
+      return Number(this.wasmEngine.get_min_clearance_nm());
     }
     return 150_000; // Default 0.15mm fallback
   }
@@ -850,7 +854,7 @@ export class WasmPcbEngineAdapter implements PcbEngine {
  * Mock PCB engine for development/testing without WASM.
  * Uses the same JavaScript parser as the WASM adapter.
  */
-class MockPcbEngine implements PcbEngine {
+export class MockPcbEngine implements PcbEngine {
   private snapshot: BoardSnapshot = { board: null, components: [], nets: [], violations: [], traces: [], vias: [], ratsnest: [] };
   /** Footprints handed to the engine that did not come from source. */
   private registered = new Map<string, { pads: PadInfo[]; silk: SilkShape[] }>();

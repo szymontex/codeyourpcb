@@ -34,7 +34,11 @@ engine = open("crates/cypcb-render/src/lib.rs").read()
 methods = sorted(set(re.findall(r"^\s*pub fn ([a-z_0-9]+)\s*\(", engine, re.M)))
 
 viewer = {}
-for base, _, names in os.walk("viewer/src"):
+for base, dirs, names in os.walk("viewer/src"):
+    # A test is not the application. The contract test calls every method
+    # the mock has, on the real engine, and read as a caller it counted three
+    # methods the browser never reaches as reached.
+    dirs[:] = [d for d in dirs if d != "__tests__"]
     for name in names:
         if name.endswith(".ts"):
             path = os.path.join(base, name)
