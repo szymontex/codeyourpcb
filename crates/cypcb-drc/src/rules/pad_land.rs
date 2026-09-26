@@ -19,8 +19,8 @@
 //! comfortable 0.15mm ring and is still smaller than anything JLCPCB will
 //! image.
 
-use cypcb_core::{Nm, Point};
-use cypcb_world::components::{FootprintRef, Position, RefDes};
+use cypcb_world::components::{place_pad, FootprintRef, Position, RefDes, Rotation};
+use cypcb_world::in_build_order;
 use cypcb_world::BoardWorld;
 
 use super::DrcRule;
@@ -41,19 +41,23 @@ impl DrcRule for PadLandRule {
 
         let components: Vec<_> = {
             let ecs = world.ecs_mut();
-            let mut query =
-                ecs.query::<(bevy_ecs::entity::Entity, &RefDes, &FootprintRef, &Position)>();
-            query
-                .iter(ecs)
-                .map(|(e, r, f, p)| (e, r.clone(), f.clone(), *p))
-                .collect()
+            in_build_order::<(
+                bevy_ecs::entity::Entity,
+                &RefDes,
+                &FootprintRef,
+                &Position,
+                &Rotation,
+            )>(ecs)
+            .into_iter()
+            .map(|(e, r, f, p, rot)| (e, r.clone(), f.clone(), *p, *rot))
+            .collect()
         };
 
         // The board carries the table it was synced with, including any
         // footprint the source defined inline; a fresh library would see the
         // built-ins only.
         let library = world.footprints();
-        for (entity, refdes, footprint_ref, position) in components {
+        for (entity, refdes, footprint_ref, position, rotation) in components {
             let Some(footprint) = library.get(footprint_ref.as_str()) else {
                 continue; // Unknown footprint - sync already reported it
             };
@@ -77,10 +81,7 @@ impl DrcRule for PadLandRule {
                 // 0.3mm however long it is.
                 let land = pad.size.0.min(pad.size.1);
                 if land < min_land {
-                    let location = Point::new(
-                        Nm(position.0.x.0 + pad.position.x.0),
-                        Nm(position.0.y.0 + pad.position.y.0),
-                    );
+                    let location = place_pad(position.0, pad.position, rotation);
                     violations.push(DrcViolation::pad_land(
                         entity,
                         format!("{}.{}", refdes.as_str(), pad.number),
@@ -101,11 +102,23 @@ impl DrcRule for PadLandRule {
 mod tests {
     use super::*;
     use crate::ViolationKind;
-    use cypcb_world::components::{Layer, NetConnections, PadShape, Rotation, Value};
+    use cypcb_core::{Nm, Point};
+    use cypcb_world::components::{Layer, NetConnections, PadShape, Value};
     use cypcb_world::footprint::{Footprint, FootprintLibrary, PadDef};
 
     /// A board with one part whose single drilled pad is `land` wide.
     fn board_with_land(land_mm: f64, drill_mm: f64) -> BoardWorld {
+        board_with_land_at(land_mm, drill_mm, Point::ORIGIN, Rotation::ZERO)
+    }
+
+    /// The same part with its pad at `pad` in the footprint and the part
+    /// turned by `rotation`.
+    fn board_with_land_at(
+        land_mm: f64,
+        drill_mm: f64,
+        pad: Point,
+        rotation: Rotation,
+    ) -> BoardWorld {
         let mut world = BoardWorld::new();
         world.set_board("land".into(), (Nm::from_mm(20.0), Nm::from_mm(20.0)), 2);
 
@@ -119,7 +132,7 @@ mod tests {
             pads: vec![PadDef {
                 number: "1".to_string(),
                 shape: PadShape::Circle,
-                position: Point::ORIGIN,
+                position: pad,
                 size: (Nm::from_mm(land_mm), Nm::from_mm(land_mm)),
                 drill: Some(Nm::from_mm(drill_mm)),
                 slot: None,
@@ -134,7 +147,7 @@ mod tests {
             RefDes::new("J1"),
             Value::new(""),
             Position::from_mm(10.0, 10.0),
-            Rotation::ZERO,
+            rotation,
             FootprintRef::new("pin"),
             NetConnections::new(),
         );
@@ -152,6 +165,25 @@ mod tests {
             violations[0].message.contains("J1.1"),
             "the message names the pin: {}",
             violations[0].message
+        );
+    }
+
+    #[test]
+    fn a_turned_part_is_reported_where_its_pad_is() {
+        // The pad sits 2mm along x in the footprint. Turned a quarter, the
+        // part carries it to 2mm along y, and the row has to point there: a
+        // row at the unturned offset points at bare board.
+        let mut world = board_with_land_at(
+            0.4,
+            0.2,
+            Point::new(Nm::from_mm(2.0), Nm::ZERO),
+            Rotation::from_degrees(90.0),
+        );
+        let violations = PadLandRule.check(&mut world, &DesignRules::jlcpcb_2layer());
+        assert_eq!(violations.len(), 1, "{violations:?}");
+        assert_eq!(
+            violations[0].location,
+            Point::new(Nm::from_mm(10.0), Nm::from_mm(12.0)),
         );
     }
 

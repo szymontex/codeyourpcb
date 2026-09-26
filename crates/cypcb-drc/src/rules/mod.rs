@@ -44,6 +44,7 @@ pub mod via_drill;
 pub mod via_span;
 pub mod zone_overlap;
 
+use cypcb_world::in_build_order;
 use cypcb_world::BoardWorld;
 
 /// Placement geometry, from the crate that owns the model.
@@ -383,9 +384,8 @@ pub(crate) fn holes_of(world: &mut BoardWorld) -> Vec<Hole> {
 
     let mut holes: Vec<Hole> = {
         let ecs = world.ecs_mut();
-        let mut query = ecs.query::<(bevy_ecs::entity::Entity, &Via)>();
-        query
-            .iter(ecs)
+        in_build_order::<(bevy_ecs::entity::Entity, &Via)>(ecs)
+            .into_iter()
             .map(|(entity, via)| Hole {
                 entity,
                 start: via.position,
@@ -400,16 +400,15 @@ pub(crate) fn holes_of(world: &mut BoardWorld) -> Vec<Hole> {
 
     let components: Vec<_> = {
         let ecs = world.ecs_mut();
-        let mut query = ecs.query::<(
+        in_build_order::<(
             bevy_ecs::entity::Entity,
             &FootprintRef,
             &Position,
             &Rotation,
-        )>();
-        query
-            .iter(ecs)
-            .map(|(e, f, p, r)| (e, f.clone(), *p, *r))
-            .collect()
+        )>(ecs)
+        .into_iter()
+        .map(|(e, f, p, r)| (e, f.clone(), *p, *r))
+        .collect()
     };
 
     // The board carries the table it was synced with, including any footprint

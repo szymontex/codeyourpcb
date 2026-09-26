@@ -32,6 +32,7 @@
 use cypcb_core::{Nm, Point};
 use cypcb_world::components::{FootprintRef, Position, RefDes, Rotation, Side};
 use cypcb_world::footprint::{Footprint, SilkShape};
+use cypcb_world::in_build_order;
 use cypcb_world::{BoardWorld, Layer};
 
 use crate::presets::DesignRules;
@@ -349,27 +350,26 @@ struct Placed {
 
 fn collect_placed(world: &mut BoardWorld) -> Vec<Placed> {
     let ecs = world.ecs_mut();
-    let mut query = ecs.query::<(
+    in_build_order::<(
         bevy_ecs::entity::Entity,
         &RefDes,
         &FootprintRef,
         &Position,
         &Rotation,
         Option<&Side>,
-    )>();
-    query
-        .iter(ecs)
-        .map(
-            |(entity, refdes, footprint, position, rotation, side)| Placed {
-                entity,
-                refdes: refdes.as_str().to_string(),
-                footprint: footprint.as_str().to_string(),
-                position: position.0,
-                rotation_deg: rotation.to_degrees(),
-                side: side.copied(),
-            },
-        )
-        .collect()
+    )>(ecs)
+    .into_iter()
+    .map(
+        |(entity, refdes, footprint, position, rotation, side)| Placed {
+            entity,
+            refdes: refdes.as_str().to_string(),
+            footprint: footprint.as_str().to_string(),
+            position: position.0,
+            rotation_deg: rotation.to_degrees(),
+            side: side.copied(),
+        },
+    )
+    .collect()
 }
 
 /// The four sides of a placed component's courtyard, in board coordinates.

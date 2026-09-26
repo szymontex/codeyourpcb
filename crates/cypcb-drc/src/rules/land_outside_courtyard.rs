@@ -12,6 +12,7 @@
 //! parts use it, at the first of its pads that reaches out on the first part
 //! by reference designator.
 
+use cypcb_world::in_build_order;
 use std::collections::BTreeMap;
 
 use cypcb_world::components::{place_pad, FootprintRef, Position, RefDes, Rotation};
@@ -32,25 +33,24 @@ impl DrcRule for LandOutsideCourtyardRule {
     fn check(&self, world: &mut BoardWorld, _rules: &DesignRules) -> Vec<DrcViolation> {
         let mut components: Vec<_> = {
             let ecs = world.ecs_mut();
-            let mut query = ecs.query::<(
+            in_build_order::<(
                 bevy_ecs::entity::Entity,
                 &RefDes,
                 &FootprintRef,
                 &Position,
                 Option<&Rotation>,
-            )>();
-            query
-                .iter(ecs)
-                .map(|(e, r, f, p, rot)| {
-                    (
-                        e,
-                        r.as_str().to_string(),
-                        f.as_str().to_string(),
-                        p.0,
-                        rot.copied().unwrap_or(Rotation::ZERO),
-                    )
-                })
-                .collect()
+            )>(ecs)
+            .into_iter()
+            .map(|(e, r, f, p, rot)| {
+                (
+                    e,
+                    r.as_str().to_string(),
+                    f.as_str().to_string(),
+                    p.0,
+                    rot.copied().unwrap_or(Rotation::ZERO),
+                )
+            })
+            .collect()
         };
 
         // First part per footprint, by reference designator, so the row lands

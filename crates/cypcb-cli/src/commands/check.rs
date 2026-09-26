@@ -1,6 +1,7 @@
 //! Check command implementation.
 
 use clap::Args;
+use cypcb_world::in_build_order;
 use miette::{IntoDiagnostic, Result, WrapErr};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -116,8 +117,7 @@ impl CheckCommand {
         if world.board_entity().is_none() {
             let parts = {
                 let ecs = world.ecs_mut();
-                let mut query = ecs.query::<&cypcb_world::components::RefDes>();
-                query.iter(ecs).count()
+                in_build_order::<&cypcb_world::components::RefDes>(ecs).len()
             };
             if parts > 0 {
                 return Err(miette::miette!(

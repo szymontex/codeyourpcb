@@ -4,6 +4,7 @@
 //! This prevents physical interference during assembly.
 
 use cypcb_core::{Nm, Point};
+use cypcb_world::in_build_order;
 use cypcb_world::BoardWorld;
 
 use crate::presets::DesignRules;
@@ -96,23 +97,22 @@ fn component_courtyards(world: &mut BoardWorld) -> Vec<Courtyard> {
         String,
     )> = {
         let ecs = world.ecs_mut();
-        let mut query = ecs.query::<(
+        in_build_order::<(
             bevy_ecs::entity::Entity,
             &Position,
             &Rotation,
             &FootprintRef,
-        )>();
-        query
-            .iter(ecs)
-            .map(|(entity, position, rotation, footprint)| {
-                (
-                    entity,
-                    position.0,
-                    *rotation,
-                    footprint.as_str().to_string(),
-                )
-            })
-            .collect()
+        )>(ecs)
+        .into_iter()
+        .map(|(entity, position, rotation, footprint)| {
+            (
+                entity,
+                position.0,
+                *rotation,
+                footprint.as_str().to_string(),
+            )
+        })
+        .collect()
     };
 
     let library = world.footprints();

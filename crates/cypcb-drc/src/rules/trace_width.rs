@@ -14,6 +14,7 @@
 //! - PCBWay standard: 0.15mm
 //! - Prototype: 0.25mm (10 mil)
 
+use cypcb_world::in_build_order;
 use std::collections::HashMap;
 
 use cypcb_core::{Nm, Point};
@@ -86,10 +87,9 @@ impl DrcRule for MinTraceWidthRule {
         };
 
         let ecs = world.ecs_mut();
-        let mut query = ecs.query::<(bevy_ecs::entity::Entity, &Trace)>();
 
-        query
-            .iter(ecs)
+        in_build_order::<(bevy_ecs::entity::Entity, &Trace)>(ecs)
+            .into_iter()
             .filter_map(|(entity, trace)| {
                 let required = net_width
                     .get(&trace.net_id.id())

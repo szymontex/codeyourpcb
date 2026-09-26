@@ -3,6 +3,7 @@
 //! Checks that via outer diameters meet minimum requirements.
 
 use cypcb_world::components::trace::Via;
+use cypcb_world::in_build_order;
 use cypcb_world::BoardWorld;
 
 use crate::presets::DesignRules;
@@ -23,9 +24,8 @@ impl DrcRule for ViaDiameterRule {
         let min_diameter = rules.min_via_diameter;
 
         let ecs = world.ecs_mut();
-        let mut query = ecs.query::<(bevy_ecs::entity::Entity, &Via)>();
-        let vias: Vec<_> = query
-            .iter(ecs)
+        let vias: Vec<_> = in_build_order::<(bevy_ecs::entity::Entity, &Via)>(ecs)
+            .into_iter()
             .map(|(e, v)| (e, v.position, v.outer_diameter))
             .collect();
 

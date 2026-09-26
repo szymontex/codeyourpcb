@@ -39,6 +39,7 @@ use cypcb_core::{Nm, Point};
 use cypcb_world::components::trace::Trace;
 use cypcb_world::components::{FootprintRef, NetConnections, Position, RefDes, Rotation};
 use cypcb_world::footprint::PadDef;
+use cypcb_world::in_build_order;
 use cypcb_world::BoardWorld;
 use cypcb_world::{Pad, PadShape};
 
@@ -540,23 +541,21 @@ pub struct EntryRecord {
 pub fn entry_records(world: &mut BoardWorld) -> Vec<EntryRecord> {
     let traces: Vec<Trace> = {
         let ecs = world.ecs_mut();
-        let mut query = ecs.query::<&Trace>();
-        query.iter(ecs).cloned().collect()
+        in_build_order::<&Trace>(ecs).into_iter().cloned().collect()
     };
     let components: Vec<_> = {
         let ecs = world.ecs_mut();
-        let mut query = ecs.query::<(
+        in_build_order::<(
             Entity,
             &RefDes,
             &FootprintRef,
             &NetConnections,
             &Position,
             &Rotation,
-        )>();
-        query
-            .iter(ecs)
-            .map(|(e, r, f, n, p, rot)| (e, r.clone(), f.clone(), n.clone(), *p, *rot))
-            .collect()
+        )>(ecs)
+        .into_iter()
+        .map(|(e, r, f, n, p, rot)| (e, r.clone(), f.clone(), n.clone(), *p, *rot))
+        .collect()
     };
 
     let library = world.footprints();

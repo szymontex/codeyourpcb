@@ -17,6 +17,7 @@
 //! asked for copper with slivers of laminate in it.
 
 use cypcb_world::components::{Hatch, Zone};
+use cypcb_world::in_build_order;
 use cypcb_world::BoardWorld;
 
 use crate::presets::DesignRules;
@@ -35,9 +36,8 @@ impl DrcRule for HatchEtchableRule {
     fn check(&self, world: &mut BoardWorld, rules: &DesignRules) -> Vec<DrcViolation> {
         let meshed: Vec<(bevy_ecs::entity::Entity, Zone, Hatch)> = {
             let ecs = world.ecs_mut();
-            let mut query = ecs.query::<(bevy_ecs::entity::Entity, &Zone, &Hatch)>();
-            query
-                .iter(ecs)
+            in_build_order::<(bevy_ecs::entity::Entity, &Zone, &Hatch)>(ecs)
+                .into_iter()
                 .map(|(entity, zone, hatch)| (entity, zone.clone(), *hatch))
                 .collect()
         };

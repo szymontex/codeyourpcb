@@ -18,6 +18,7 @@
 //! invented here is one a designer gets turned away for.
 
 use cypcb_world::components::{BendRadius, Zone};
+use cypcb_world::in_build_order;
 use cypcb_world::BoardWorld;
 
 use crate::presets::DesignRules;
@@ -40,9 +41,8 @@ impl DrcRule for BendRadiusRule {
 
         let folds: Vec<(bevy_ecs::entity::Entity, Zone, cypcb_core::Nm)> = {
             let ecs = world.ecs_mut();
-            let mut query = ecs.query::<(bevy_ecs::entity::Entity, &Zone, &BendRadius)>();
-            query
-                .iter(ecs)
+            in_build_order::<(bevy_ecs::entity::Entity, &Zone, &BendRadius)>(ecs)
+                .into_iter()
                 .filter(|(_, zone, _)| zone.is_flex())
                 .map(|(entity, zone, radius)| (entity, zone.clone(), radius.0))
                 .collect()

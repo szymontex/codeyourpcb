@@ -27,6 +27,7 @@
 //! table's answer standing.
 
 use cypcb_world::components::trace::Via;
+use cypcb_world::in_build_order;
 use cypcb_world::BoardWorld;
 
 use crate::presets::DesignRules;
@@ -83,9 +84,8 @@ impl DrcRule for ViaSpanRule {
 
         let vias: Vec<(bevy_ecs::entity::Entity, Via)> = {
             let ecs = world.ecs_mut();
-            let mut query = ecs.query::<(bevy_ecs::entity::Entity, &Via)>();
-            query
-                .iter(ecs)
+            in_build_order::<(bevy_ecs::entity::Entity, &Via)>(ecs)
+                .into_iter()
                 .map(|(entity, via)| (entity, *via))
                 .collect()
         };

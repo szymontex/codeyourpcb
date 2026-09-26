@@ -4,6 +4,7 @@
 //! incomplete designs before manufacturing.
 
 use cypcb_world::components::{FootprintRef, NetConnections, Position, RefDes};
+use cypcb_world::in_build_order;
 use cypcb_world::BoardWorld;
 
 use super::DrcRule;
@@ -44,17 +45,16 @@ impl DrcRule for UnconnectedPinRule {
         // Collect components first to avoid borrow issues
         let components: Vec<_> = {
             let ecs = world.ecs_mut();
-            let mut query = ecs.query::<(
+            in_build_order::<(
                 bevy_ecs::entity::Entity,
                 &RefDes,
                 &FootprintRef,
                 &NetConnections,
                 &Position,
-            )>();
-            query
-                .iter(ecs)
-                .map(|(e, r, f, n, p)| (e, r.clone(), f.clone(), n.clone(), *p))
-                .collect()
+            )>(ecs)
+            .into_iter()
+            .map(|(e, r, f, n, p)| (e, r.clone(), f.clone(), n.clone(), *p))
+            .collect()
         };
 
         // The board carries the table it was synced with, including any footprint

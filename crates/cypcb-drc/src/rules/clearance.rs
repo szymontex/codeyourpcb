@@ -6,6 +6,7 @@
 use cypcb_core::{Nm, Point};
 use cypcb_world::components::trace::{Trace, Via};
 use cypcb_world::components::{NetConnections, NetId};
+use cypcb_world::in_build_order;
 use cypcb_world::BoardWorld;
 use hashbrown::{HashMap, HashSet};
 use rstar::{Envelope, AABB};
@@ -67,8 +68,10 @@ impl DrcRule for ClearanceRule {
         // generate clearance violations — they're intentionally connected.
         let net_map: HashMap<u32, NetId> = {
             let ecs = world.ecs_mut();
-            let mut query = ecs.query::<(bevy_ecs::entity::Entity, &NetId)>();
-            query.iter(ecs).map(|(e, n)| (e.index(), *n)).collect()
+            in_build_order::<(bevy_ecs::entity::Entity, &NetId)>(ecs)
+                .into_iter()
+                .map(|(e, n)| (e.index(), *n))
+                .collect()
         };
 
         // What each net's own block asks for. A design that writes
@@ -92,9 +95,8 @@ impl DrcRule for ClearanceRule {
         // any of the component's pin nets.
         let net_connections_map: HashMap<u32, Vec<NetId>> = {
             let ecs = world.ecs_mut();
-            let mut query = ecs.query::<(bevy_ecs::entity::Entity, &NetConnections)>();
-            query
-                .iter(ecs)
+            in_build_order::<(bevy_ecs::entity::Entity, &NetConnections)>(ecs)
+                .into_iter()
                 .map(|(e, nc)| {
                     let nets: Vec<NetId> = nc.iter().map(|pc| pc.net).collect();
                     (e.index(), nets)
@@ -116,9 +118,8 @@ impl DrcRule for ClearanceRule {
         // Each trace entity maps to (half_width, segments) for exact distance.
         let trace_map: HashMap<u32, TraceData> = {
             let ecs = world.ecs_mut();
-            let mut query = ecs.query::<(bevy_ecs::entity::Entity, &Trace)>();
-            query
-                .iter(ecs)
+            in_build_order::<(bevy_ecs::entity::Entity, &Trace)>(ecs)
+                .into_iter()
                 .map(|(e, t)| {
                     let segs: Vec<([i64; 2], [i64; 2])> = t
                         .segments
@@ -143,9 +144,8 @@ impl DrcRule for ClearanceRule {
         // 0.166mm apart reported as touching.
         let via_map: HashMap<u32, Copper> = {
             let ecs = world.ecs_mut();
-            let mut query = ecs.query::<(bevy_ecs::entity::Entity, &Via)>();
-            query
-                .iter(ecs)
+            in_build_order::<(bevy_ecs::entity::Entity, &Via)>(ecs)
+                .into_iter()
                 .map(|(e, via)| {
                     (
                         e.index(),
@@ -753,9 +753,8 @@ pub(crate) fn component_pads(world: &mut BoardWorld) -> HashMap<u32, Vec<PadBox>
     // from the schematic.
     let pin_nets: HashMap<u32, HashMap<String, NetId>> = {
         let ecs = world.ecs_mut();
-        let mut query = ecs.query::<(bevy_ecs::entity::Entity, &NetConnections)>();
-        query
-            .iter(ecs)
+        in_build_order::<(bevy_ecs::entity::Entity, &NetConnections)>(ecs)
+            .into_iter()
             .map(|(entity, connections)| {
                 let by_pin = connections
                     .iter()
@@ -768,23 +767,22 @@ pub(crate) fn component_pads(world: &mut BoardWorld) -> HashMap<u32, Vec<PadBox>
 
     let placements: Vec<(u32, Point, f64, String)> = {
         let ecs = world.ecs_mut();
-        let mut query = ecs.query::<(
+        in_build_order::<(
             bevy_ecs::entity::Entity,
             &Position,
             &Rotation,
             &FootprintRef,
-        )>();
-        query
-            .iter(ecs)
-            .map(|(entity, position, rotation, footprint)| {
-                (
-                    entity.index(),
-                    position.0,
-                    rotation.to_degrees(),
-                    footprint.as_str().to_string(),
-                )
-            })
-            .collect()
+        )>(ecs)
+        .into_iter()
+        .map(|(entity, position, rotation, footprint)| {
+            (
+                entity.index(),
+                position.0,
+                rotation.to_degrees(),
+                footprint.as_str().to_string(),
+            )
+        })
+        .collect()
     };
 
     let library = world.footprints();
@@ -965,9 +963,8 @@ impl EntryCopper {
     pub(crate) fn collect(world: &mut BoardWorld) -> Self {
         let pads = component_pads(world);
         let ecs = world.ecs_mut();
-        let vias = ecs
-            .query::<(bevy_ecs::entity::Entity, &Via)>()
-            .iter(ecs)
+        let vias = in_build_order::<(bevy_ecs::entity::Entity, &Via)>(ecs)
+            .into_iter()
             .map(|(e, via)| {
                 (
                     e.index(),
@@ -978,9 +975,8 @@ impl EntryCopper {
                 )
             })
             .collect();
-        let traces = ecs
-            .query::<(bevy_ecs::entity::Entity, &Trace)>()
-            .iter(ecs)
+        let traces = in_build_order::<(bevy_ecs::entity::Entity, &Trace)>(ecs)
+            .into_iter()
             .map(|(e, t)| {
                 let segments = t
                     .segments

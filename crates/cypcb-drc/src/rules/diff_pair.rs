@@ -17,6 +17,7 @@
 use cypcb_core::{Nm, Point};
 use cypcb_world::components::trace::Trace;
 use cypcb_world::components::NetId;
+use cypcb_world::in_build_order;
 use cypcb_world::BoardWorld;
 
 use crate::presets::DesignRules;
@@ -44,8 +45,7 @@ impl DrcRule for DiffPairSkewRule {
             std::collections::HashMap::new();
         {
             let ecs = world.ecs_mut();
-            let mut query = ecs.query::<&Trace>();
-            for trace in query.iter(ecs) {
+            for trace in in_build_order::<&Trace>(ecs) {
                 for segment in &trace.segments {
                     let run = distance(segment.start, segment.end);
                     let total = length.entry(trace.net_id).or_insert(Nm(0));

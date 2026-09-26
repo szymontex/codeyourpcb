@@ -15,6 +15,7 @@
 
 use cypcb_core::{Nm, Point};
 use cypcb_world::components::{place_pad, FootprintRef, Position, RefDes, Rotation};
+use cypcb_world::in_build_order;
 use cypcb_world::BoardWorld;
 
 use super::clearance::{point_to_segment_distance, Copper, EntryCopper, Piece};
@@ -63,14 +64,14 @@ impl DrcRule for MountingHoleClearanceRule {
         let mut holes: Vec<BareHole> = Vec::new();
         {
             let ecs = world.ecs_mut();
-            let mut query = ecs.query::<(
+            for (entity, refdes, position, rotation, footprint_ref) in in_build_order::<(
                 cypcb_world::Entity,
                 &RefDes,
                 &Position,
                 &Rotation,
                 &FootprintRef,
-            )>();
-            for (entity, refdes, position, rotation, footprint_ref) in query.iter(ecs) {
+            )>(ecs)
+            {
                 let Some(footprint) = library.get(&footprint_ref.0) else {
                     continue;
                 };

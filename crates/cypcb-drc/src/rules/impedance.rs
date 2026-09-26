@@ -23,6 +23,7 @@
 //! quietly goes unchecked is the failure this rule exists to prevent, and it
 //! looks exactly like a pass.
 
+use cypcb_world::in_build_order;
 use std::collections::BTreeSet;
 
 use cypcb_core::{Nm, Point};
@@ -65,9 +66,8 @@ impl DrcRule for ImpedanceRule {
 
         let traces: Vec<(bevy_ecs::entity::Entity, NetId, Layer, Nm, Point)> = {
             let ecs = world.ecs_mut();
-            let mut query = ecs.query::<(bevy_ecs::entity::Entity, &Trace)>();
-            query
-                .iter(ecs)
+            in_build_order::<(bevy_ecs::entity::Entity, &Trace)>(ecs)
+                .into_iter()
                 .filter_map(|(entity, trace)| {
                     Some((
                         entity,
@@ -201,9 +201,8 @@ pub fn width_for(environment: CopperEnvironment, target_x100: u32) -> Option<Nm>
 fn unchecked_without_a_stack(world: &mut BoardWorld) -> Vec<DrcViolation> {
     let traces: Vec<(bevy_ecs::entity::Entity, NetId, Point)> = {
         let ecs = world.ecs_mut();
-        let mut query = ecs.query::<(bevy_ecs::entity::Entity, &Trace)>();
-        query
-            .iter(ecs)
+        in_build_order::<(bevy_ecs::entity::Entity, &Trace)>(ecs)
+            .into_iter()
             .filter_map(|(entity, trace)| Some((entity, trace.net_id, midpoint(trace)?)))
             .collect()
     };
