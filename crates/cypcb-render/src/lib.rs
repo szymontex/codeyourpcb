@@ -91,7 +91,14 @@ use wasm_bindgen::prelude::*;
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 pub struct PcbEngine {
     world: BoardWorld,
+    /// The library of the design loaded now: built from scratch by every load
+    /// and published on the world, so sync, the checker and the router all
+    /// resolve pads through the same table.
     footprint_lib: FootprintLibrary,
+    /// Footprints the host fetched, by name. They outlive a load - the host
+    /// registers once and re-parses many times - and every load starts from
+    /// them and the built-ins.
+    fetched_footprints: std::collections::HashMap<String, cypcb_world::footprint::Footprint>,
     source: String,
     /// DRC violations from the last load.
     violations: Vec<DrcViolation>,
@@ -117,6 +124,7 @@ impl PcbEngine {
         PcbEngine {
             world: BoardWorld::new(),
             footprint_lib: FootprintLibrary::new(),
+            fetched_footprints: std::collections::HashMap::new(),
             source: String::new(),
             violations: Vec::new(),
             diagnostics: Vec::new(),
@@ -394,7 +402,9 @@ impl PcbEngine {
             errors.push(message);
         }
 
-        // Sync AST to world
+        // Sync AST to world, from a library nothing earlier brought in. Sync
+        // publishes it on the world itself.
+        self.footprint_lib = self.library_to_load_into();
         let sync_result =
             sync_ast_to_world(&resolved, source, &mut self.world, &mut self.footprint_lib);
 
@@ -1405,18 +1415,23 @@ impl PcbEngine {
         // Register footprints from snapshot data (needed for DRC)
         // If snapshot has pads, use those. Otherwise use builtin library.
         // Note: JS parser doesn't populate pads, so we fall back to builtin library.
+        // The library starts from nothing a previous load brought in, and the
+        // world gets the same one: the checker reads the world's, the router
+        // this engine's.
+        let mut library = self.library_to_load_into();
         let mut registered: std::collections::HashSet<String> = std::collections::HashSet::new();
         for comp in &snapshot.components {
             if !comp.footprint.is_empty() && !registered.contains(&comp.footprint) {
                 if !comp.pads.is_empty() {
                     // Use pads from snapshot (custom footprint)
-                    let footprint = self.footprint_from_pads(&comp.footprint, &comp.pads);
-                    self.footprint_lib.register(footprint);
+                    library.register(self.footprint_from_pads(&comp.footprint, &comp.pads));
                 }
-                // If pads are empty, the builtin library (loaded in new()) should have it
+                // If pads are empty, the builtin library should have it
                 registered.insert(comp.footprint.clone());
             }
         }
+        self.footprint_lib = library;
+        self.world.set_footprints(self.footprint_lib.clone());
 
         // Create component entities with proper NetConnections
         for comp in &snapshot.components {
@@ -1483,7 +1498,20 @@ impl PcbEngine {
     fn register_footprint_pads(&mut self, name: &str, pads: &[PadInfo], silk: &[SilkInfo]) {
         let mut footprint = self.footprint_from_pads(name, pads);
         footprint.silk = silk.iter().flat_map(SilkInfo::to_shapes).collect();
+        self.fetched_footprints
+            .insert(name.to_string(), footprint.clone());
         self.footprint_lib.register(footprint);
+        self.world.set_footprints(self.footprint_lib.clone());
+    }
+
+    /// The library a load starts from: the built-ins and what the host
+    /// fetched, and nothing an earlier load brought in.
+    fn library_to_load_into(&self) -> FootprintLibrary {
+        let mut library = FootprintLibrary::new();
+        for footprint in self.fetched_footprints.values() {
+            library.register(footprint.clone());
+        }
+        library
     }
 
     fn footprint_from_pads(
