@@ -54,6 +54,24 @@ pub enum KicadPcbError {
     #[error("S-expression parse error: {0}")]
     SexprParseError(String),
 
+    /// Something follows the board's closing parenthesis.
+    ///
+    /// A `.kicad_pcb` is one `(kicad_pcb ...)` and nothing after it. The
+    /// S-expression reader stops at the first closing parenthesis and ignores
+    /// the rest, so a board with a design appended to it - what the viewer's
+    /// save once wrote - read as the board alone, with its copper gone and no
+    /// error.
+    #[error(
+        "text after the board's closing parenthesis at line {line}, column {column}: \
+         a .kicad_pcb holds one (kicad_pcb ...) and nothing after it"
+    )]
+    TrailingContent {
+        /// One-based line of the first character after the board.
+        line: usize,
+        /// One-based column of that character, in characters.
+        column: usize,
+    },
+
     /// Required field missing from the PCB file.
     #[error("Missing field '{field}' in {context}")]
     MissingField {
@@ -282,6 +300,50 @@ pub fn parse_kicad_pcb(path: &Path) -> Result<KicadPcbParseResult, KicadPcbError
     parse_kicad_pcb_str(&content)
 }
 
+/// Refuse a file with anything but whitespace after its first expression.
+///
+/// Strings are skipped with their escapes, so a `)` inside a property value
+/// does not end the board early. An expression that never closes is left for
+/// the S-expression reader to report.
+fn refuse_trailing_content(content: &str) -> Result<(), KicadPcbError> {
+    let mut depth = 0usize;
+    let mut in_string = false;
+    let mut escaped = false;
+    let mut end = None;
+    for (at, c) in content.char_indices() {
+        if in_string {
+            match (escaped, c) {
+                (true, _) => escaped = false,
+                (false, '\\') => escaped = true,
+                (false, '"') => in_string = false,
+                _ => {}
+            }
+            continue;
+        }
+        match c {
+            '"' => in_string = true,
+            '(' => depth += 1,
+            ')' if depth > 0 => {
+                depth -= 1;
+                if depth == 0 {
+                    end = Some(at + 1);
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+    let Some(end) = end else { return Ok(()) };
+    let rest = &content[end..];
+    let Some(offset) = rest.find(|c: char| !c.is_whitespace()) else {
+        return Ok(());
+    };
+    let before = &content[..end + offset];
+    let line = before.matches('\n').count() + 1;
+    let column = before.rsplit('\n').next().map_or(0, |l| l.chars().count()) + 1;
+    Err(KicadPcbError::TrailingContent { line, column })
+}
+
 /// Parse a KiCad PCB from a string.
 ///
 /// This is the core parser. It:
@@ -295,6 +357,8 @@ pub fn parse_kicad_pcb(path: &Path) -> Result<KicadPcbParseResult, KicadPcbError
 ///
 /// Returns a [`KicadPcbError`] variant describing the failure.
 pub fn parse_kicad_pcb_str(content: &str) -> Result<KicadPcbParseResult, KicadPcbError> {
+    refuse_trailing_content(content)?;
+
     // Parse S-expression tree
     let sexp = symbolic_expressions::parser::parse_str(content)
         .map_err(|e| KicadPcbError::SexprParseError(format!("{}", e)))?;

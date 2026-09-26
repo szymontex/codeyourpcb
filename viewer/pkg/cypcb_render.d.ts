@@ -81,6 +81,15 @@ export class PcbEngine {
      */
     design_as_dsl(): string;
     /**
+     * What [`Self::design_as_dsl`] cannot write, one line per kind, joined by
+     * newlines: `2 zone(s) not written: ...`. Empty when the design is the
+     * whole board.
+     *
+     * A person who saves a KiCad board as a design believes they have their
+     * board, so what the file leaves out is shown to them, not left in it.
+     */
+    design_not_written(): string;
+    /**
      * Export all traces and vias as DSL `trace` blocks.
      *
      * Iterates all Trace and Via entities in the ECS, groups them by net,
@@ -296,6 +305,7 @@ export interface InitOutput {
     readonly pcbengine_auto_route_variants: (a: number, b: number) => void;
     readonly pcbengine_auto_route_with_params: (a: number, b: number, c: number, d: number) => void;
     readonly pcbengine_design_as_dsl: (a: number, b: number) => void;
+    readonly pcbengine_design_not_written: (a: number, b: number) => void;
     readonly pcbengine_export_traces_as_dsl: (a: number, b: number) => void;
     readonly pcbengine_get_diagnostics_json: (a: number, b: number) => void;
     readonly pcbengine_get_min_clearance_nm: (a: number) => bigint;

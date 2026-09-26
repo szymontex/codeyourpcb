@@ -1131,7 +1131,7 @@ the pour is present on both sides and nothing foreign is in the way on either
 outer layer. The via itself is fixed at a 0.3 mm hole in a 0.6 mm pad with
 0.3 mm clearance (`StitchSpec::at`, `crates/cypcb-world/src/stitch.rs:32-42`).
 Generated vias are marked `Stitched` so the writer does not emit them back as
-hand-placed copper (`crates/cypcb-world/src/dsl.rs:267`).
+hand-placed copper (`crates/cypcb-world/src/dsl.rs:276`).
 
 *The finding.* Because the generator drops every grid point that is blocked,
 **the declared pitch is not the spacing the board gets.** Where routing is

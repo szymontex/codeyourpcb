@@ -151,7 +151,8 @@ impl FromKicadCommand {
             }
         }
 
-        let source = cypcb_world::dsl::board_as_dsl(&mut world);
+        let written = cypcb_world::dsl::board_as_dsl_reporting(&mut world);
+        let source = written.source;
 
         let output = self
             .output
@@ -192,6 +193,10 @@ impl FromKicadCommand {
             .chain(parsed.metadata.stackup_refusals.iter())
         {
             eprintln!("Warning: {refusal}");
+        }
+        // And what the board held that the design language cannot yet say.
+        for line in &written.not_written {
+            eprintln!("Warning: {line}");
         }
 
         // A design that will not read back is not an import, and the cost of

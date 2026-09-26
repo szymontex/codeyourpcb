@@ -148,3 +148,33 @@ fn a_board_the_reader_covers_still_reports_what_it_cannot_read() {
         "a board with no name is an error, got none"
     );
 }
+
+#[test]
+fn both_readers_place_a_courtyard_where_the_file_says() {
+    // No example states a courtyard's centre, so the corpus above cannot tell
+    // a reader that ignores `at` from one that reads it. A KiCad footprint's
+    // origin is often pin 1, and this is the form a saved KiCad board uses.
+    let source =
+        "footprint HEADER {\n    pad 1 rect at 0mm, 0mm size 1.7mm x 1.7mm drill 1mm\n    \
+                  courtyard 2.2mm x 4.74mm at 0mm, -1.27mm\n}\n\
+                  footprint PLAIN {\n    courtyard 2mm x 1mm\n}\n";
+    let (expected, actual) = (parse(source), reader::read(source));
+    assert!(expected.errors.is_empty(), "{:?}", expected.errors);
+    assert!(actual.errors.is_empty(), "{:?}", actual.errors);
+    assert_eq!(shape(&expected.value), shape(&actual.value));
+
+    let centres: Vec<Option<(f64, f64)>> = actual
+        .value
+        .definitions
+        .iter()
+        .filter_map(|definition| match definition {
+            cypcb_parser::Definition::Footprint(fp) => Some(
+                fp.courtyard_centre
+                    .as_ref()
+                    .map(|(x, y)| (x.value, y.value)),
+            ),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(centres, vec![Some((0.0, -1.27)), None]);
+}

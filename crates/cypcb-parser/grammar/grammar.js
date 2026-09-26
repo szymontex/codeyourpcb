@@ -712,12 +712,22 @@ module.exports = grammar({
 
     pad_shape: $ => choice('rect', 'circle', 'roundrect', 'oblong'),
 
-    // courtyard W x H
+    // courtyard W x H [at X, Y]
+    //
+    // Centred on the footprint's origin unless `at` says where its centre is.
+    // A KiCad footprint's origin is often pin 1, not the middle of the part,
+    // and a courtyard written without its place came back centred on pin 1.
     courtyard_property: $ => seq(
       'courtyard',
       field('width', $.dimension),
       'x',
       field('height', $.dimension),
+      optional(seq(
+        'at',
+        field('x', $.dimension),
+        ',',
+        field('y', $.dimension),
+      )),
     ),
 
     // zone NAME { ... }, keepout NAME { ... }, flex NAME { ... } or

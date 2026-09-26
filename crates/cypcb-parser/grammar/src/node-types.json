@@ -331,6 +331,26 @@
             "named": true
           }
         ]
+      },
+      "x": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "dimension",
+            "named": true
+          }
+        ]
+      },
+      "y": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "dimension",
+            "named": true
+          }
+        ]
       }
     }
   },

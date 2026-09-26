@@ -2264,7 +2264,14 @@ fn convert_footprint_def(fp_def: &FootprintDef, copper_layers: u8) -> Footprint 
     let courtyard = fp_def
         .courtyard
         .as_ref()
-        .map(|(w, h)| Rect::from_center_size(Point::ORIGIN, (w.to_nm(), h.to_nm())))
+        .map(|(w, h)| {
+            let centre = fp_def
+                .courtyard_centre
+                .as_ref()
+                .map(|(x, y)| Point::new(x.to_nm(), y.to_nm()))
+                .unwrap_or(Point::ORIGIN);
+            Rect::from_center_size(centre, (w.to_nm(), h.to_nm()))
+        })
         .unwrap_or_else(|| bounds.expand(Nm::from_mm(0.5)));
 
     Footprint {

@@ -144,4 +144,18 @@ describe('the desktop app asks the same guard', () => {
     expect(handler.indexOf('engine.design_as_dsl()', kicad)).toBeGreaterThan(kicad);
     expect(kicad).toBeLessThan(handler.indexOf('mergeTracesIntoDsl('));
   });
+
+  it('names what the design leaves out before the desktop writes it', () => {
+    // The desktop reports no status after its own save, so the list goes up
+    // while the content is handed over. The browser test sees only the web
+    // path.
+    const main = readFileSync(new URL('../main.ts', import.meta.url), 'utf-8');
+    const start = main.indexOf("window.addEventListener('desktop:content-request'");
+    const handler = main.slice(start, main.indexOf('window.addEventListener(', start + 1));
+    const kicad = handler.indexOf("if (loadedKind === 'kicad_pcb')");
+    const note = handler.indexOf('notWrittenNote()', kicad);
+    expect(note, 'a KiCad board is saved on the desktop without saying what it lost').toBeGreaterThan(kicad);
+    expect(handler.indexOf('statusText.textContent', note)).toBeGreaterThan(note);
+    expect(note).toBeLessThan(handler.indexOf("'desktop:content-response'", kicad));
+  });
 });

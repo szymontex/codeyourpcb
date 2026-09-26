@@ -2491,6 +2491,43 @@
             "type": "SYMBOL",
             "name": "dimension"
           }
+        },
+        {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SEQ",
+              "members": [
+                {
+                  "type": "STRING",
+                  "value": "at"
+                },
+                {
+                  "type": "FIELD",
+                  "name": "x",
+                  "content": {
+                    "type": "SYMBOL",
+                    "name": "dimension"
+                  }
+                },
+                {
+                  "type": "STRING",
+                  "value": ","
+                },
+                {
+                  "type": "FIELD",
+                  "name": "y",
+                  "content": {
+                    "type": "SYMBOL",
+                    "name": "dimension"
+                  }
+                }
+              ]
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
         }
       ]
     },

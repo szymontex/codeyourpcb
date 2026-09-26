@@ -202,6 +202,31 @@ export class PcbEngine {
         }
     }
     /**
+     * What [`Self::design_as_dsl`] cannot write, one line per kind, joined by
+     * newlines: `2 zone(s) not written: ...`. Empty when the design is the
+     * whole board.
+     *
+     * A person who saves a KiCad board as a design believes they have their
+     * board, so what the file leaves out is shown to them, not left in it.
+     * @returns {string}
+     */
+    design_not_written() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            wasm.pcbengine_design_not_written(retptr, this.__wbg_ptr);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            deferred1_0 = r0;
+            deferred1_1 = r1;
+            return getStringFromWasm0(r0, r1);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            wasm.__wbindgen_export4(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
      * Export all traces and vias as DSL `trace` blocks.
      *
      * Iterates all Trace and Via entities in the ECS, groups them by net,

@@ -1083,6 +1083,7 @@ impl CypcbParser {
         let mut description: Option<String> = None;
         let mut pads: Vec<PadDef> = Vec::new();
         let mut courtyard: Option<(Dimension, Dimension)> = None;
+        let mut courtyard_centre: Option<(Dimension, Dimension)> = None;
         let mut silk: Vec<SilkDef> = Vec::new();
 
         let mut cursor = node.walk();
@@ -1116,6 +1117,12 @@ impl CypcbParser {
                         if let (Some(w), Some(h)) = (width, height) {
                             courtyard = Some((w, h));
                         }
+                        // `at X, Y`, the same field the hand reader takes.
+                        let x = get_child_by_field(&prop, "x")
+                            .and_then(|n| self.convert_dimension(source, &n, errors));
+                        let y = get_child_by_field(&prop, "y")
+                            .and_then(|n| self.convert_dimension(source, &n, errors));
+                        courtyard_centre = x.zip(y);
                     }
                     "silk_line" => {
                         let dim = |field: &str, errors: &mut Vec<ParseError>| {
@@ -1164,6 +1171,7 @@ impl CypcbParser {
             description,
             pads,
             courtyard,
+            courtyard_centre,
             silk,
             span: span_of(node),
         })

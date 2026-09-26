@@ -514,8 +514,18 @@ impl PcbEngine {
 
         // The copper the file already carries. Without it a routed board opens
         // as an unrouted one.
+        //
+        // Drawn by hand, as `from-kicad` marks it: the person drew it in KiCad,
+        // and the router's own copper is what a reroute clears. Marked as the
+        // router's, a KiCad board's copper was ripped up by the first autoroute
+        // in the viewer and not by the same run on the command line, and a save
+        // reported it as routed copper written down as drawn by hand.
         if let Some(routes) = parsed.reference_routes {
-            cypcb_router::apply_routes(&mut self.world, &routes);
+            cypcb_router::apply_routes_as(
+                &mut self.world,
+                &routes,
+                cypcb_world::components::trace::TraceSource::Manual,
+            );
             self.world
                 .rebuild_spatial_index_from_library(&self.footprint_lib);
         }
@@ -742,6 +752,18 @@ impl PcbEngine {
     /// it drops, and splicing trace blocks onto the KiCad text lost the copper.
     pub fn design_as_dsl(&mut self) -> String {
         cypcb_world::dsl::board_as_dsl(&mut self.world)
+    }
+
+    /// What [`Self::design_as_dsl`] cannot write, one line per kind, joined by
+    /// newlines: `2 zone(s) not written: ...`. Empty when the design is the
+    /// whole board.
+    ///
+    /// A person who saves a KiCad board as a design believes they have their
+    /// board, so what the file leaves out is shown to them, not left in it.
+    pub fn design_not_written(&mut self) -> String {
+        cypcb_world::dsl::board_as_dsl_reporting(&mut self.world)
+            .not_written
+            .join("\n")
     }
 
     /// Get the minimum copper clearance in nanometers.
